@@ -32,3 +32,7 @@ class Connection:
     def leds_off(self):
         r = requests.get(f"{self.esp_ip}/off")
         logger.info(f"LEDs off response: {r.status_code}, {r.text}")
+        
+    def read_card(self, msg: str = "Zeskanuj karte"):
+        card = input(msg)
+        return card

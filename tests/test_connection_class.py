@@ -29,8 +29,13 @@ def test_leds_set_and_off(conn):
     sleep(5)
     conn.leds_off()
 
+def test_read_card(conn):
+    card = conn.read_card("Please scan your card: ")
+    print("Scanned card:", card)
+
 if __name__ == "__main__":
     conn = Connection("http://192.168.1.50")
     test_connection(conn)
     test_scan_board(conn)
     test_leds_set_and_off(conn)
+    test_read_card(conn)
