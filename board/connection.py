@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 class Connection:
     def __init__(self, esp_ip:str = "http://192.168.0.77"):
-        self.led_config = json.load(open('src/arduino/led_positions.json', 'r'))
+        self.led_config = json.load(open('board/led_positions.json', 'r'))
         self.esp_ip = esp_ip
 
     def scan_board(self):
