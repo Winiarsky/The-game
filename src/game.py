@@ -40,7 +40,7 @@ class Game:
         self.conn: Connection | None = None
         self.state: State = Start()
     
-    def run_state_action(self, action_name: str, *args, **kwargs):
+    def run_action(self, action_name: str, *args, **kwargs):
         """Wywołaj akcję stanu i obsłuż ewentualną zmianę stanu."""
         action: Any = getattr(self.state, action_name, None)
         if not callable(action):
