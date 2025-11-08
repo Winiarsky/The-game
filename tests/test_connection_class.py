@@ -10,7 +10,7 @@ from time import sleep
 
 def test_connection(conn):
     assert conn is not None
-    assert conn.esp_ip == "http://192.168.1.50"
+    assert conn.esp_ip == "http://192.168.0.77"
 
 def test_scan_board(conn):
     data = conn.scan_board()
@@ -34,7 +34,7 @@ def test_read_card(conn):
     print("Scanned card:", card)
 
 if __name__ == "__main__":
-    conn = Connection("http://192.168.1.50")
+    conn = Connection()
     test_connection(conn)
     test_scan_board(conn)
     test_leds_set_and_off(conn)
