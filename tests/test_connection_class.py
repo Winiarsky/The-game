@@ -18,14 +18,22 @@ def test_scan_board(conn):
     print("Scanned board data:", data)
 
 def test_leds_set_and_off(conn):
-    leds = [
-        (0, [255, 0, 0]),     # LED 1 - czerwony
-        (1, [0, 255, 0]),     # LED 2 - zielony
-        (2, [0, 0, 255]),     # LED 3 - niebieski
-        (3, [255, 255, 0]),   # LED 4 - żółty
-        (4, [255, 0, 255]),   # LED 5 - fioletowy
+    fields = [
+        (0, 0),     # LED 1 - czerwony
+        (1, 1),     # LED 2 - zielony
+        (2, 2),     # LED 3 - niebieski
+        (3, 3),   # LED 4 - żółty
+        (4, 4),
     ]
-    conn.set_leds(leds)
+    conn.set_leds(fields, [0,200,0])
+    sleep(5)
+    conn.leds_off()
+    sleep(5)
+    conn.set_leds(fields, [200,0,0])
+    sleep(5)
+    conn.leds_off()
+    sleep(5)
+    conn.set_leds(fields, [0,0,200])
     sleep(5)
     conn.leds_off()
 
