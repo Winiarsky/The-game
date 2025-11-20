@@ -3,7 +3,6 @@ import sys
 from pathlib import Path
 import logging
 from typing import Any
-from player import Player
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -11,6 +10,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from board import Connection
 from states import Start, State
+from hero import Hero
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -21,8 +21,8 @@ class Game:
             self.led_positions = json.load(led_file)
         with open('src/scenarios/scenario_1.json', 'r') as scenario_file:
             self.scenario = json.load(scenario_file)
-        self.conn: Connection | None = None
-        self.players: list[Player] = []
+        self.conn: Connection = Connection()
+        self.heroes: list[Hero] = []
         self.state: State = Start(self)
     
     def run_action(self, action_name: str, *args, **kwargs):

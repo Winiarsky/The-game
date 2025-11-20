@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
-
+# to do make hero scrpt, 
 @dataclass
 class Hero:
     position: Optional[Tuple[int, int]] = None
@@ -16,6 +16,9 @@ class Hero:
     def __repr__(self):
         return f"position: {self.position}"
 
+    def __hash__(self):
+        return hash(self.position)
+    
     def __eq__(self, other):
         return self.position == other.position
 
