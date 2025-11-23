@@ -8,8 +8,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from board import Connection, consts
-from hero import Hero
 from actions.base import ActionContext
 from actions.actions_registy import get_action, list_actions
 
@@ -42,5 +40,5 @@ class HeroesTurn(State):
             return self
 
         ctx = ActionContext(game=self.game, heroes_turn=self)
-        action.run(ctx)
+        action.execute(ctx)
         return self
