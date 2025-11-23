@@ -24,7 +24,7 @@ class Game:
             self.scenario = json.load(scenario_file)
         with open('src/board/config.json', 'r') as config_file:
             self.config = json.load(config_file)
-        self.conn: Connection = Connection()
+        self.conn: Connection = self._init_connection()
         self.heroes: list[Hero] = []
         self.board = self._init_board()
         self.state: State = Start(self)
@@ -33,6 +33,14 @@ class Game:
         rows = self.config['n_rows']
         cols = self.config['n_cols']
         return BoardGrid(rows, cols)
+
+    def _init_connection(self) -> Connection:
+        conn = Connection()
+        if conn is not None:
+            logger.info("Connected to board.")
+            return conn
+        logger.error("Failed to connect to board.")
+        raise ConnectionError("Could not connect to board.")
 
     def run_action(self, action_name: str, *args, **kwargs):
         """Wywołaj akcję stanu i obsłuż ewentualną zmianę stanu."""

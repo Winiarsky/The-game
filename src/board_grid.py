@@ -10,7 +10,7 @@ class Occupant(Protocol):
     def set_position(self, position: Optional[Tuple[int, int]]) -> None: ...
 
 
-@dataclass(slots=True)
+@dataclass(slots=True) # do przeneisienia do innego folderu
 class BasicTerrain:
     name: str = "basic"
     walkable: bool = True

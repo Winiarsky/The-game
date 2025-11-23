@@ -10,7 +10,6 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from actions.base import ActionContext
 from actions.actions_registy import get_action, list_actions
-
 from .base import State
 
 
@@ -18,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class HeroesTurn(State):
+
 
     def on_enter(self):
         logger.info("Tura bohaterow!")
@@ -32,7 +32,7 @@ class HeroesTurn(State):
             return self
 
         logger.info("Dostępne akcje: %s", ", ".join(sorted(available)))
-        choice = input("Wpisz nazwę akcji: ").strip()
+        choice = self.game.conn.read_card("Wpisz nazwę akcji: ", ["move", "attack"]).strip()
         try:
             action = get_action(choice)
         except KeyError:
@@ -42,3 +42,4 @@ class HeroesTurn(State):
         ctx = ActionContext(game=self.game, heroes_turn=self)
         action.execute(ctx)
         return self
+    
