@@ -11,20 +11,29 @@ if str(PROJECT_ROOT) not in sys.path:
 from board import Connection
 from states import Start, State
 from hero import Hero
+from board_grid import BoardGrid
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class Game:
     def __init__(self):
-        with open('src/arduino/led_positions.json', 'r') as led_file:
+        with open('src/board/led_positions.json', 'r') as led_file:
             self.led_positions = json.load(led_file)
         with open('src/scenarios/scenario_1.json', 'r') as scenario_file:
             self.scenario = json.load(scenario_file)
+        with open('src/board/config.json', 'r') as config_file:
+            self.config = json.load(config_file)
         self.conn: Connection = Connection()
         self.heroes: list[Hero] = []
+        self.board = self._init_board()
         self.state: State = Start(self)
-    
+
+    def _init_board(self) -> BoardGrid:
+        rows = self.config['n_rows']
+        cols = self.config['n_cols']
+        return BoardGrid(rows, cols)
+
     def run_action(self, action_name: str, *args, **kwargs):
         """Wywołaj akcję stanu i obsłuż ewentualną zmianę stanu."""
         action: Any = getattr(self.state, action_name, None)

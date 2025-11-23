@@ -22,9 +22,13 @@ class Hero:
     def __eq__(self, other):
         return self.position == other.position
 
-    def set_position(self, position: Tuple[int, int]):
+    def set_position(self, position: Optional[Tuple[int, int]]):
         self.position = position
-        self.position_x, self.position_y = position
+        if position is None:
+            self.position_x = None
+            self.position_y = None
+        else:
+            self.position_x, self.position_y = position
 
     def make_move(self, action: str, connection):
         pass

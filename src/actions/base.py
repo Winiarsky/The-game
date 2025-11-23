@@ -14,11 +14,10 @@ class ActionContext(NamedTuple):
 class BaseAction(ABC):
     prompt_source = "Wybierz bohatera"
     prompt_target = None  # akcje nie zawsze potrzebują celu
-
-    def run(self, ctx: ActionContext):
-        source = ctx.game.conn.scan_board() if self.prompt_source else None
-        target = ctx.game.conn.scan_board() if self.prompt_target else None
-        self.execute(ctx, source, target)
-
+    name = "base_action"
+    
     @abstractmethod
-    def execute(self, ctx: ActionContext, source, target): ...
+    def on_choose_info(self, ctx: ActionContext): ...
+    
+    @abstractmethod
+    def execute(self, ctx: ActionContext): ...

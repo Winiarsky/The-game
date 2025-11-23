@@ -54,7 +54,11 @@ class Start(State):
             pos = conn.scan_board(starting_positions) # dodac check na zajetosc pola
             conn.leds_off()
             hero = Hero()
-            hero.set_position(pos)
+            try:
+                self.game.board.place(hero, pos)
+            except ValueError as exc:
+                logger.error("Nie można ustawić bohatera: %s", exc)
+                continue
             heroes.append(hero)
             logger.info(
                 f"Bohater ustawiony na pozycji {pos}."
