@@ -7,6 +7,24 @@ boardElement.style.gridTemplateColumns = `repeat(${dims.cols}, 32px)`;
 
 const cells = Array.from({ length: dims.rows }, () => Array(dims.cols).fill(null));
 
+function colorToDisplay(rgb) {
+    if (!Array.isArray(rgb)) {
+        return null;
+    }
+    const [r = 0, g = 0, b = 0] = rgb.map((component) => Math.max(0, Math.min(255, Number(component) || 0)));
+    const maxValue = Math.max(r, g, b);
+    if (maxValue <= 0) {
+        return null;
+    }
+    const normalized = [
+        Math.round((r / maxValue) * 255),
+        Math.round((g / maxValue) * 255),
+        Math.round((b / maxValue) * 255),
+    ];
+    const alpha = Math.min(1, maxValue / 255);
+    return { rgb: normalized, alpha };
+}
+
 function createCell(row, col) {
     const cell = document.createElement("div");
     cell.className = "cell";
@@ -47,9 +65,10 @@ function applyBoardState(state) {
     for (let row = 0; row < dims.rows; row += 1) {
         for (let col = 0; col < dims.cols; col += 1) {
             const cell = cells[row][col];
-            const color = state?.[row]?.[col];
-            if (Array.isArray(color)) {
-                cell.style.backgroundColor = `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
+            const display = colorToDisplay(state?.[row]?.[col]);
+            if (display) {
+                const [r, g, b] = display.rgb;
+                cell.style.backgroundColor = `rgba(${r}, ${g}, ${b}, ${display.alpha.toFixed(3)})`;
                 cell.classList.add("active");
             } else {
                 cell.style.backgroundColor = "";
