@@ -1,7 +1,7 @@
 import requests
 import json
 import logging
-import consts
+from . import consts
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

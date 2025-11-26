@@ -1,0 +1,100 @@
+:root {
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    color: #111;
+    background-color: #f6f6f6;
+}
+
+body {
+    margin: 0 auto;
+    padding: 1.5rem;
+    max-width: 960px;
+}
+
+header {
+    margin-bottom: 1rem;
+}
+
+header h1 {
+    margin: 0;
+}
+
+.status-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background: #fff;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+    font-size: 0.95rem;
+}
+
+.board {
+    display: grid;
+    gap: 4px;
+    width: fit-content;
+    background: #ddd;
+    padding: 6px;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+.cell {
+    width: 32px;
+    height: 32px;
+    border-radius: 4px;
+    background: #fff;
+    border: 1px solid #ccc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    color: #333;
+    cursor: pointer;
+    transition: transform 0.1s ease, box-shadow 0.2s ease;
+}
+
+.cell:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 6px rgba(0, 0, 0, 0.3);
+}
+
+.cell.active {
+    color: #fff;
+    font-weight: 600;
+    text-shadow: 0 0 4px rgba(0, 0, 0, 0.4);
+}
+
+.toast {
+    position: fixed;
+    bottom: 1rem;
+    right: 1rem;
+    background: rgba(0, 0, 0, 0.85);
+    color: #fff;
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: toast 3s ease forwards;
+}
+
+@keyframes toast {
+    0% {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    10% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    90% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+}

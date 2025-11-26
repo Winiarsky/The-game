@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Symulator planszy 15x20</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <header>
+        <h1>Symulator planszy</h1>
+        <p>Kliknij pole aby odpowiedzieć na <code>scan_board</code>. Podświetlenia pokazują wynik <code>set_leds</code>.</p>
+    </header>
+
+    <section class="status-panel">
+        <div id="pending-indicator">Brak aktywnych zapytań scan_board.</div>
+        <div id="last-click">Nie zarejestrowano kliknięć.</div>
+    </section>
+
+    <section id="board"
+             class="board"
+             data-rows="{{ rows }}"
+             data-cols="{{ cols }}">
+    </section>
+
+    <template id="toast-template">
+        <div class="toast"></div>
+    </template>
+
+    <script>
+        window.BOARD_DIMENSIONS = {rows: {{ rows }}, cols: {{ cols }}};
+    </script>
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
