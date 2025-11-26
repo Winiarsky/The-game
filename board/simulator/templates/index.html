@@ -17,12 +17,34 @@
         <div id="last-click">Nie zarejestrowano kliknięć.</div>
     </section>
 
+    <section class="mode-toggle">
+        <span>Tryb pracy:</span>
+        <label>
+            <input type="radio" name="board-mode" value="board" checked>
+            Plansza (klikanie wywołuje <code>scan_board</code>)
+        </label>
+        <label>
+            <input type="radio" name="board-mode" value="move">
+            Przesuwanie figurek (bez wywołań)
+        </label>
+    </section>
+
     <section class="background-controls">
         <label class="file-input">
             <span>Ustaw tło planszy:</span>
             <input type="file" id="background-input" accept="image/*">
         </label>
         <button id="background-clear" type="button">Usuń tło</button>
+    </section>
+
+    <section class="figures-panel">
+        <div class="panel-header">
+            <strong>Figurki</strong>
+            <button id="add-figure" type="button">Dodaj figurkę</button>
+        </div>
+        <div id="figures-list" class="figures-list">
+            <p class="figures-empty">Brak figurek. Dodaj nową, aby rozpocząć.</p>
+        </div>
     </section>
 
     <section id="board"

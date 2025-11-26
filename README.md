@@ -12,4 +12,8 @@ Do szybszego testowania logiki gry możesz użyć wbudowanej aplikacji webowej (
 
 Na stronie zobaczysz podświetlenia wysłane przez `set_leds`, a każde kliknięcie pola zasymuluje odpowiedź `scan_board` (żądanie GET blokuje się do czasu kliknięcia). Przycisk `leds_off` w kodzie gry czyści całą tablicę.
 
-W zakładce symulatora możesz także ustawić własne tło planszy (np. skan mapy scenariusza) przez wczytanie obrazu lub usunięcie go jednym kliknięciem.
+### Dodatkowe narzędzia symulatora
+
+- **Tryby pracy** – włącz „Tryb planszy”, aby kliknięcia wysyłały zdarzenia do gry, lub „Tryb przesuwania figurek”, by swobodnie rozstawiać pionki bez wywołań HTTP.
+- **Generator figurek** – w panelu „Figurki” dodasz żetony (litery + kolory), zaznaczysz je i ustawisz na polach w trybie przesuwania. Kliknięcie pola z figurką bez wybranej figurki zaznaczy ją, dzięki czemu łatwo ją przenieść.
+- **Tło planszy** – ustaw własny obraz (np. mapę scenariusza) lub usuń go jednym kliknięciem.

@@ -3,11 +3,32 @@ const pendingIndicator = document.getElementById("pending-indicator");
 const lastClickLabel = document.getElementById("last-click");
 const backgroundInput = document.getElementById("background-input");
 const backgroundClearButton = document.getElementById("background-clear");
+const modeInputs = document.querySelectorAll('input[name="board-mode"]');
+const figuresListElement = document.getElementById("figures-list");
+const addFigureButton = document.getElementById("add-figure");
 const dims = window.BOARD_DIMENSIONS || { rows: 15, cols: 20 };
 
 boardElement.style.gridTemplateColumns = `repeat(${dims.cols}, 32px)`;
 
 const cells = Array.from({ length: dims.rows }, () => Array(dims.cols).fill(null));
+const MODE_BOARD = "board";
+const MODE_MOVE = "move";
+let currentMode = MODE_BOARD;
+
+const FIGURE_COLORS = [
+    "#f94144",
+    "#f3722c",
+    "#f9c74f",
+    "#90be6d",
+    "#43aa8b",
+    "#577590",
+    "#b5179e",
+    "#ff7b00",
+];
+
+const figures = [];
+let nextFigureNumber = 1;
+let selectedFigureId = null;
 
 function colorToDisplay(rgb) {
     if (!Array.isArray(rgb)) {
@@ -46,6 +67,9 @@ function createCell(row, col) {
     cell.dataset.col = col;
     cell.title = `R${row} C${col}`;
     cell.addEventListener("click", () => handleCellClick(row, col));
+    const figureMarker = document.createElement("div");
+    figureMarker.className = "figure-marker";
+    cell.appendChild(figureMarker);
     return cell;
 }
 
@@ -58,6 +82,10 @@ for (let row = 0; row < dims.rows; row += 1) {
 }
 
 async function handleCellClick(row, col) {
+    if (currentMode === MODE_MOVE) {
+        handleMoveModeClick(row, col);
+        return;
+    }
     try {
         const response = await fetch("/simulate/click", {
             method: "POST",
@@ -90,6 +118,7 @@ function applyBoardState(state) {
             }
         }
     }
+    updateFigureMarkers();
 }
 
 function updatePendingIndicator(count) {
@@ -127,6 +156,150 @@ function showToast(message) {
 refreshState();
 setInterval(refreshState, 600);
 
+function findFigureById(id) {
+    return figures.find((figure) => figure.id === id);
+}
+
+function findFigureAt(row, col) {
+    return figures.find(
+        (figure) => figure.position && figure.position.row === row && figure.position.col === col,
+    );
+}
+
+function updateFigureMarkers() {
+    for (let row = 0; row < dims.rows; row += 1) {
+        for (let col = 0; col < dims.cols; col += 1) {
+            const cell = cells[row][col];
+            const marker = cell.querySelector(".figure-marker");
+            const figure = findFigureAt(row, col);
+            if (figure) {
+                cell.classList.add("has-figure");
+                marker.textContent = figure.label;
+                marker.style.backgroundColor = figure.color;
+            } else {
+                cell.classList.remove("has-figure");
+                marker.textContent = "";
+            }
+        }
+    }
+}
+
+function renderFiguresList() {
+    if (!figuresListElement) return;
+    figuresListElement.innerHTML = "";
+    if (!figures.length) {
+        const empty = document.createElement("p");
+        empty.className = "figures-empty";
+        empty.textContent = "Brak figurek. Dodaj nową, aby rozpocząć.";
+        figuresListElement.appendChild(empty);
+        return;
+    }
+
+    figures.forEach((figure) => {
+        const row = document.createElement("div");
+        row.className = "figure-row";
+
+        const selectButton = document.createElement("button");
+        selectButton.type = "button";
+        selectButton.className = `figure-select${figure.id === selectedFigureId ? " active" : ""}`;
+
+        const dot = document.createElement("span");
+        dot.className = "figure-dot";
+        dot.style.backgroundColor = figure.color;
+
+        const label = document.createElement("span");
+        label.textContent = figure.label;
+
+        selectButton.append(dot, label);
+        selectButton.addEventListener("click", () => {
+            if (selectedFigureId === figure.id) {
+                selectedFigureId = null;
+            } else {
+                selectedFigureId = figure.id;
+            }
+            renderFiguresList();
+        });
+
+        const deleteButton = document.createElement("button");
+        deleteButton.type = "button";
+        deleteButton.className = "figure-delete";
+        deleteButton.title = "Usuń figurkę";
+        deleteButton.textContent = "×";
+        deleteButton.addEventListener("click", (event) => {
+            event.stopPropagation();
+            removeFigure(figure.id);
+        });
+
+        row.append(selectButton, deleteButton);
+        figuresListElement.appendChild(row);
+    });
+}
+
+function addFigure() {
+    const figureNumber = nextFigureNumber;
+    nextFigureNumber += 1;
+    const figure = {
+        id: `F${figureNumber}`,
+        label: `F${figureNumber}`,
+        color: FIGURE_COLORS[(figureNumber - 1) % FIGURE_COLORS.length],
+        position: null,
+    };
+    figures.push(figure);
+    selectedFigureId = figure.id;
+    renderFiguresList();
+    showToast(`Dodano figurkę ${figure.label}. Kliknij na planszy w trybie przesuwania, aby ją ustawić.`);
+}
+
+function removeFigure(id) {
+    const index = figures.findIndex((figure) => figure.id === id);
+    if (index === -1) return;
+    figures.splice(index, 1);
+    if (selectedFigureId === id) {
+        selectedFigureId = null;
+    }
+    renderFiguresList();
+    updateFigureMarkers();
+}
+
+function handleMoveModeClick(row, col) {
+    if (!selectedFigureId) {
+        const figureAtCell = findFigureAt(row, col);
+        if (figureAtCell) {
+            selectedFigureId = figureAtCell.id;
+            renderFiguresList();
+            showToast(`Zaznaczono ${figureAtCell.label}.`);
+        } else {
+            showToast("Wybierz figurkę z panelu, aby ją przenieść.");
+        }
+        return;
+    }
+    const figure = findFigureById(selectedFigureId);
+    if (!figure) {
+        selectedFigureId = null;
+        renderFiguresList();
+        return;
+    }
+    const occupied = findFigureAt(row, col);
+    if (occupied && occupied.id !== figure.id) {
+        showToast("To pole jest już zajęte inną figurką.");
+        return;
+    }
+
+    figure.position = { row, col };
+    updateFigureMarkers();
+    renderFiguresList();
+    showToast(`Przeniesiono ${figure.label} na (${row}, ${col}).`);
+}
+
+function setMode(mode) {
+    currentMode = mode;
+    if (mode === MODE_BOARD) {
+        showToast("Tryb planszy: kliknięcia wysyłają scan_board.");
+    } else {
+        showToast("Tryb przesuwania figurek: kliknięcia tylko ustawiają figurki.");
+    }
+}
+
 function handleBackgroundFile(event) {
     const file = event.target.files?.[0];
     if (!file) {
@@ -156,3 +329,15 @@ backgroundClearButton?.addEventListener("click", () => {
     clearBoardBackground();
     showToast("Usunięto tło planszy.");
 });
+
+modeInputs.forEach((input) => {
+    input.addEventListener("change", (event) => {
+        if (event.target.checked) {
+            setMode(event.target.value === MODE_MOVE ? MODE_MOVE : MODE_BOARD);
+        }
+    });
+});
+
+addFigureButton?.addEventListener("click", addFigure);
+
+renderFiguresList();
