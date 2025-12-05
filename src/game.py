@@ -7,6 +7,9 @@ from typing import Any
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+SRC_ROOT = Path(__file__).resolve().parent
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
 
 from board import Connection
 from states import Start, State
@@ -17,17 +20,18 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class Game:
-    def __init__(self):
-        with open('src/board/led_positions.json', 'r') as led_file:
+    def __init__(self, conn: Connection | None = None):
+        with open('board/led_positions.json', 'r') as led_file:
             self.led_positions = json.load(led_file)
-        with open('src/scenarios/scenario_1.json', 'r') as scenario_file:
+        with open('scenarios/scenario_1.json', 'r') as scenario_file:
             self.scenario = json.load(scenario_file)
-        with open('src/board/config.json', 'r') as config_file:
+        with open('board/config.json', 'r') as config_file:
             self.config = json.load(config_file)
-        self.conn: Connection = self._init_connection()
+        self.conn: Connection = self._init_connection() if conn is None else conn
         self.heroes: list[Hero] = []
         self.board = self._init_board()
         self.state: State = Start(self)
+        
 
     def _init_board(self) -> BoardGrid:
         rows = self.config['n_rows']

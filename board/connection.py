@@ -18,9 +18,10 @@ class Connection:
                 r = requests.get(f"{self.esp_ip}/scan_board")
                 r.raise_for_status()
                 data = r.json()
-                response = (int(data['col']), int(data['row']))
+                response = (int(data['col']-1), int(data['row']-1)) # to fix on board
                 if acceptable_responses and response not in acceptable_responses:
                     logger.warning(f"Nieakceptowalna odpowiedz: {response}")
+                    logger.warning(f"Acceptable responses: {acceptable_responses}")
                     continue
                 logger.info(f"Scanned board data: {json.dumps(data, indent=2)}")
                 return response
