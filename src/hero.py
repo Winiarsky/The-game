@@ -20,6 +20,8 @@ class Hero:
         return hash(self.position)
     
     def __eq__(self, other):
+        if not isinstance(other, Hero):
+            return False
         return self.position == other.position
 
     def set_position(self, position: Optional[tuple[int, int]]):

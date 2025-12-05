@@ -47,11 +47,10 @@ class MoveAction(BaseAction):
                 ctx.game.conn.set_leds(valid_neighbors, consts.MOVE_FIELD_RGB)
                 target = ctx.game.conn.scan_board(valid_neighbors)
                 ctx.game.conn.leds_off()
-                if target == moving_hero.position and board.occupant_at(target) == None:
+                if target == moving_hero.position and board.occupant_at(target) is None:
                     board.move(source, target)
                     logger.info("Zakończono ruch.")
                     return
                 else:
                     moving_hero.set_position(target)
                     continue
-
