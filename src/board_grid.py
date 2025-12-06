@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field as dataclass_field
 from typing import List, Optional, Protocol, Tuple
 
+from obstacle import Obstacle
+
 
 class Occupant(Protocol):
     position: Optional[Tuple[int, int]]
@@ -34,6 +36,7 @@ class BoardGrid:
         self._grid: List[List[GridCell]] = [
             [GridCell() for _ in range(cols)] for _ in range(rows)
         ]
+        self.walls: set[frozenset[Tuple[int, int]]] = set()
 
     def in_bounds(self, position: Tuple[int, int]) -> bool:
         row, col = position
@@ -44,6 +47,11 @@ class BoardGrid:
             raise ValueError(f"Pozycja {position} znajduje się poza planszą.")
         row, col = position
         return self._grid[row][col]
+
+    def set_field(self, position: Tuple[int, int], terrain: BasicTerrain) -> None:
+        """Ustaw typ pola (np. teren nieprzechodni)."""
+        cell = self.cell_at(position)
+        cell.field = terrain
 
     def occupant_at(self, position: Tuple[int, int]) -> Optional[Occupant]:
         return self.cell_at(position).occupant
@@ -65,6 +73,39 @@ class BoardGrid:
         if include_position:
             result.append(position)
         return result
+
+    def add_wall(self, a: Tuple[int, int], b: Tuple[int, int]) -> None:
+        """Dodaj ścianę blokującą przejście między polami."""
+        if a == b:
+            raise ValueError("Ściana musi łączyć dwa różne pola.")
+        if not (self.in_bounds(a) and self.in_bounds(b)):
+            raise ValueError("Ściana poza planszą.")
+        self.walls.add(frozenset((a, b)))
+
+    def is_blocked(self, a: Tuple[int, int], b: Tuple[int, int]) -> bool:
+        return frozenset((a, b)) in self.walls
+
+    def _is_obstacle(self, occupant: Optional[Occupant]) -> bool:
+        return isinstance(occupant, Obstacle)
+
+    def can_enter(self, position: Tuple[int, int], allow_occupied: bool = False) -> bool:
+        """Sprawdź czy pole można zająć/przejść (teren przechodni, brak ściany i brak przeszkody)."""
+        cell = self.cell_at(position)
+        if not cell.field.walkable:
+            return False
+        if cell.occupant is None:
+            return True
+        if self._is_obstacle(cell.occupant):
+            return False
+        return allow_occupied
+
+    def can_traverse(self, a: Tuple[int, int], b: Tuple[int, int], allow_occupied: bool = False) -> bool:
+        """Czy z pola a można przejść na b (brak ściany, teren przechodni, brak przeszkody)."""
+        if not (self.in_bounds(a) and self.in_bounds(b)):
+            return False
+        if self.is_blocked(a, b):
+            return False
+        return self.can_enter(b, allow_occupied=allow_occupied)
 
     def place(self, occupant: Occupant, position: Tuple[int, int]) -> None:
         cell = self.cell_at(position)

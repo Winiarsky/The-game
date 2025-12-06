@@ -23,11 +23,14 @@ class MoveAction(BaseAction):
     def on_choose_info(self, ctx: ActionContext):
         logger.info("Wybierz bohatera do wykonania akcji ruchu oraz pole docelowe.")
 
-    def _validate_neighbors(self, ctx: ActionContext, neighbours: list[Tuple[int, int]]) -> list[Tuple[int, int]]:
-        validated = []
+    def _validate_neighbors(self, ctx: ActionContext, current: Tuple[int, int], neighbours: list[Tuple[int, int]]) -> list[Tuple[int, int]]:
+        validated: list[Tuple[int, int]] = []
+        board = ctx.game.board
         for neighbor in neighbours:
-            _cell = ctx.game.board.cell_at(neighbor)
-            if _cell.field.walkable:
+            if neighbor == current:
+                validated.append(neighbor)
+                continue
+            if board.can_traverse(current, neighbor, allow_occupied=True):
                 validated.append(neighbor)
         return validated
             
@@ -43,7 +46,7 @@ class MoveAction(BaseAction):
         if moving_hero and moving_hero.position is not None:
             while True:
                 neighbors = board.get_neighbors(moving_hero.position)
-                valid_neighbors = self._validate_neighbors(ctx, neighbors)
+                valid_neighbors = self._validate_neighbors(ctx, moving_hero.position, neighbors)
                 ctx.game.conn.set_leds(valid_neighbors, consts.MOVE_FIELD_RGB)
                 target = ctx.game.conn.scan_board(valid_neighbors)
                 ctx.game.conn.leds_off()
