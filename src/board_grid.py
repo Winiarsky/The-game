@@ -82,13 +82,14 @@ class BoardGrid:
         *,
         hardness: int | None = None,
         features: Optional[dict[str, object]] = None,
+        wall_cls: type[Wall] = Wall,
     ) -> Wall:
         """Dodaj ścianę blokującą przejście między polami."""
         if a == b:
             raise ValueError("Ściana musi łączyć dwa różne pola.")
         if not (self.in_bounds(a) and self.in_bounds(b)):
             raise ValueError("Ściana poza planszą.")
-        wall = Wall(a=a, b=b, hardness=hardness, features=features or {})
+        wall = wall_cls(a=a, b=b, hardness=hardness, features=features or {})
         self.walls[wall.key] = wall
         return wall
 

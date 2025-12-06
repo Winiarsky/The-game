@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Edytor scenariuszy</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body class="scenario-editor">
+    <header class="page-header">
+        <div>
+            <h1>Edytor scenariuszy</h1>
+            <p>Dodawaj tereny, przeszkody i ściany, a następnie zapisz je jako plik JSON w folderze <code>scenarios/</code>.</p>
+        </div>
+        <a class="link-back" href="/">⬅ Powrót do symulatora</a>
+    </header>
+
+    <section class="background-controls">
+        <label class="file-input">
+            <span>Ustaw tło planszy:</span>
+            <input type="file" id="background-input" accept="image/*">
+        </label>
+        <button id="background-clear" type="button">Usuń tło</button>
+    </section>
+
+    <main class="editor-layout">
+        <section class="board-panel">
+            <div class="toolbar">
+                <div class="mode-buttons" id="mode-buttons">
+                    <button type="button" data-mode="terrain-basic" class="mode-btn active">Teren: basic</button>
+                    <button type="button" data-mode="terrain-blocked" class="mode-btn">Teren: blocked</button>
+                    <button type="button" data-mode="obstacle" class="mode-btn">Obstacle</button>
+                    <button type="button" data-mode="wall" class="mode-btn">Wall</button>
+                </div>
+                <div class="toolbar-actions">
+                    <button type="button" id="reset-wall-selection">Reset wyboru ściany</button>
+                    <button type="button" id="clear-board">Wyczyść obiekty</button>
+                </div>
+            </div>
+
+            <div id="board" class="board" data-rows="{{ rows }}" data-cols="{{ cols }}"></div>
+        </section>
+
+        <aside class="side-panel">
+            <section class="panel">
+                <h2>Scenariusz</h2>
+                <div class="form-row">
+                    <label for="scenario-select">Istniejące pliki:</label>
+                    <div class="inline-group">
+                        <select id="scenario-select"></select>
+                        <button type="button" id="load-scenario">Wczytaj</button>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <label for="scenario-name">Nazwa zapisu (.json):</label>
+                    <input id="scenario-name" type="text" placeholder="scenario_edited">
+                    <div class="inline-group">
+                        <button type="button" id="save-scenario">Zapisz w /scenarios</button>
+                        <button type="button" id="download-scenario">Pobierz JSON</button>
+                    </div>
+                </div>
+                <p id="starting-info" class="muted">Pozycje startowe zostaną zachowane z wczytanego scenariusza.</p>
+            </section>
+
+            <section class="panel">
+                <h2>Ustawienia ściany</h2>
+                <p id="selection-info" class="muted">W trybie Wall kliknij dwa pola, aby dodać ścianę.</p>
+                <div class="form-row">
+                    <label for="wall-type">Typ ściany:</label>
+                    <select id="wall-type"></select>
+                </div>
+                <div class="form-row">
+                    <label for="wall-hardness">Hardness:</label>
+                    <input id="wall-hardness" type="number" inputmode="numeric" placeholder="np. 10">
+                </div>
+                <div class="features-panel">
+                    <div class="features-header">
+                        <strong>Features</strong>
+                        <button type="button" id="add-feature">Dodaj feature</button>
+                    </div>
+                    <div id="features-list" class="features-list"></div>
+                </div>
+            </section>
+
+            <section class="panel">
+                <h2>Ściany (lista)</h2>
+                <div id="walls-list" class="walls-list"></div>
+            </section>
+        </aside>
+    </main>
+
+    <template id="feature-row-template">
+        <div class="feature-row">
+            <input type="text" class="feature-key" placeholder="klucz">
+            <input type="text" class="feature-value" placeholder="wartość">
+            <button type="button" class="feature-remove">×</button>
+        </div>
+    </template>
+
+    <template id="toast-template">
+        <div class="toast"></div>
+    </template>
+
+    <script>
+        window.BOARD_DIMENSIONS = {rows: {{ rows }}, cols: {{ cols }}};
+        window.WALL_PRESETS = [
+            { id: 'wall', label: 'Wall (default)', hardness: null, features: {} },
+            { id: 'mur', label: 'Mur (hardness=100)', hardness: 100, features: {} },
+        ];
+    </script>
+    <script src="{{ url_for('static', filename='scenario_editor.js') }}"></script>
+</body>
+</html>

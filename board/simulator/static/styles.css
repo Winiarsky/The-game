@@ -10,6 +10,35 @@ body {
     max-width: 960px;
 }
 
+body.scenario-editor {
+    max-width: 1200px;
+}
+
+.page-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+}
+
+.link-back {
+    align-self: center;
+    text-decoration: none;
+    color: #0a5ca8;
+    font-weight: 600;
+}
+
+.link-secondary {
+    color: #0a5ca8;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.link-secondary:hover {
+    text-decoration: underline;
+}
+
 header {
     margin-bottom: 1rem;
 }
@@ -76,6 +105,7 @@ header h1 {
     background-size: cover;
     background-repeat: no-repeat;
     background-position: center;
+    position: relative;
 }
 
 .board.has-background-image {
@@ -245,5 +275,226 @@ header h1 {
     100% {
         opacity: 0;
         transform: translateY(20px);
+    }
+}
+
+/* Edytor scenariuszy */
+.editor-layout {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 1rem;
+}
+
+.board-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.toolbar {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    padding: 0.65rem 0.75rem;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+}
+
+.mode-buttons {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.mode-btn {
+    border: 1px solid #ccc;
+    background: #f8f8f8;
+    padding: 0.4rem 0.6rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.mode-btn.active {
+    border-color: #0a5ca8;
+    background: #e6f2ff;
+    color: #0a5ca8;
+    font-weight: 600;
+}
+
+.toolbar-actions {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+}
+
+.side-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.panel {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.panel h2 {
+    margin: 0;
+    font-size: 1.05rem;
+}
+
+.form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.form-row input,
+.form-row select,
+.panel button {
+    padding: 0.45rem 0.55rem;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    font-size: 0.95rem;
+}
+
+.panel button {
+    background: #f7f7f7;
+    cursor: pointer;
+}
+
+.panel button:hover {
+    background: #eef5ff;
+}
+
+.inline-group {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+}
+
+.muted {
+    color: #666;
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+.walls-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.wall-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.5rem;
+    background: #f8f8f8;
+    border-radius: 6px;
+    border: 1px solid #e2e2e2;
+}
+
+.wall-label {
+    font-size: 0.93rem;
+}
+
+.wall-remove {
+    background: #fee;
+    border: 1px solid #f4b7b7;
+    color: #b00020;
+}
+
+.features-panel {
+    background: #f9fafb;
+    border: 1px dashed #ccc;
+    border-radius: 6px;
+    padding: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.features-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.95rem;
+}
+
+.features-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.feature-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 0.35rem;
+    align-items: center;
+}
+
+.feature-remove {
+    background: #fee;
+    border: 1px solid #f4b7b7;
+    color: #b00020;
+    padding: 0.35rem 0.55rem;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.cell.terrain-blocked {
+    background: repeating-linear-gradient(135deg, #c44 0, #c44 6px, #fdd 6px, #fdd 12px);
+}
+
+.cell.has-obstacle {
+    background: #333;
+    border-color: #222;
+    box-shadow: inset 0 0 0 2px #777;
+}
+
+.wall-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.wall-line {
+    position: absolute;
+    background: #0a5ca8;
+    opacity: 0.9;
+    border-radius: 4px;
+}
+
+.wall-line-h {
+    height: 6px;
+}
+
+.wall-line-v {
+    width: 6px;
+}
+
+.wall-line-diag {
+    border-radius: 50%;
+    width: 10px;
+    height: 10px;
+}
+
+@media (max-width: 1024px) {
+    .editor-layout {
+        grid-template-columns: 1fr;
+    }
+    .side-panel {
+        order: -1;
     }
 }

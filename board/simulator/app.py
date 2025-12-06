@@ -12,6 +12,7 @@ from flask import Flask, jsonify, render_template, request
 BASE_DIR = Path(__file__).resolve().parents[1]
 CONFIG_PATH = BASE_DIR / "config.json"
 LED_POSITIONS_PATH = BASE_DIR / "led_positions.json"
+SCENARIOS_DIR = BASE_DIR.parent / "scenarios"
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -63,6 +64,16 @@ def _load_led_mapping(rows: int, cols: int) -> dict[int, tuple[int, int]]:
     return led_to_cell
 
 
+def _scenario_path(name: str) -> Path:
+    safe_name = Path(name).stem  # usuń rozszerzenia / ścieżki
+    if not safe_name:
+        raise ValueError("Nazwa scenariusza jest wymagana.")
+    if "/" in name or "\\" in name:
+        raise ValueError("Nazwa scenariusza nie może zawierać separatorów katalogów.")
+    SCENARIOS_DIR.mkdir(parents=True, exist_ok=True)
+    return SCENARIOS_DIR / f"{safe_name}.json"
+
+
 BOARD_ROWS, BOARD_COLS = _load_board_config()
 LED_TO_CELL = _load_led_mapping(BOARD_ROWS, BOARD_COLS)
 
@@ -83,6 +94,51 @@ def _set_cell_color(row: int, col: int, rgb: list[int] | None) -> None:
 @app.route("/")
 def index():
     return render_template("index.html", rows=BOARD_ROWS, cols=BOARD_COLS)
+
+
+@app.route("/scenario-editor")
+def scenario_editor():
+    return render_template("scenario_editor.html", rows=BOARD_ROWS, cols=BOARD_COLS)
+
+
+@app.get("/api/scenarios")
+def list_scenarios():
+    scenarios = sorted(path.stem for path in SCENARIOS_DIR.glob("*.json")) if SCENARIOS_DIR.exists() else []
+    return jsonify({"scenarios": scenarios})
+
+
+@app.get("/api/scenarios/<name>")
+def load_scenario(name: str):
+    try:
+        path = _scenario_path(name)
+        if not path.exists():
+            return jsonify({"ok": False, "error": "Scenariusz nie istnieje."}), 404
+        with path.open("r", encoding="utf-8") as file:
+            data = json.load(file)
+        return jsonify({"ok": True, "scenario": data})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    except Exception as exc:  # pragma: no cover - zabezpieczenie
+        logger.exception("Błąd podczas wczytywania scenariusza")
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
+@app.post("/api/scenarios/<name>")
+def save_scenario(name: str):
+    try:
+        scenario_data = request.get_json(force=True, silent=True)
+        if not isinstance(scenario_data, dict):
+            return jsonify({"ok": False, "error": "Brak danych scenariusza."}), 400
+        path = _scenario_path(name)
+        with path.open("w", encoding="utf-8") as file:
+            json.dump(scenario_data, file, ensure_ascii=False, indent=4)
+        logger.info("Zapisano scenariusz do %s", path)
+        return jsonify({"ok": True, "path": str(path)}), 201
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    except Exception as exc:  # pragma: no cover - zabezpieczenie
+        logger.exception("Błąd podczas zapisu scenariusza")
+        return jsonify({"ok": False, "error": str(exc)}), 500
 
 
 @app.get("/state")

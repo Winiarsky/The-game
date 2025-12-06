@@ -12,7 +12,6 @@ import logging
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
-#trzeba poprawic wysylke pozycji zbey bylo zgodne z ledami teraz board przesyla pozycje +1
 simulator_conn = Connection(esp_ip="http://127.0.0.1:5000/")
 game = Game(conn=simulator_conn)
 game.conn.leds_off()

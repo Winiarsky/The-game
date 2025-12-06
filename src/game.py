@@ -16,6 +16,7 @@ from states import Start, State
 from hero import Hero
 from board_grid import BoardGrid, BasicTerrain
 from obstacle import Obstacle
+from wall import Wall, Mur
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -51,13 +52,19 @@ class Game:
             except ValueError as exc:
                 logger.error("Nie można ustawić przeszkody na %s: %s", pos, exc)
 
-        # Ustaw ściany między polami
-        for wall in scenario.get("walls", []):
+        # Ustaw ściany między polami (format obiektowy)
+        for wall_data in scenario.get("walls", []):
             try:
-                a, b = wall
-                board.add_wall(tuple(a), tuple(b))
+                a = tuple(wall_data["a"])
+                b = tuple(wall_data["b"])
+                wall_type = wall_data.get("type", "wall").lower()
+                hardness = wall_data.get("hardness")
+                features = wall_data.get("features") or {}
+
+                wall_cls = Mur if wall_type == "mur" else Wall
+                board.add_wall(a, b, hardness=hardness, features=features, wall_cls=wall_cls)
             except Exception as exc:  # szeroki wyjątek, bo format scenariusza może być błędny
-                logger.error("Nie można dodać ściany %s: %s", wall, exc)
+                logger.error("Nie można dodać ściany %s: %s", wall_data, exc)
 
         return board
 
