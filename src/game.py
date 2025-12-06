@@ -14,7 +14,8 @@ if str(SRC_ROOT) not in sys.path:
 from board import Connection
 from states import Start, State
 from hero import Hero
-from board_grid import BoardGrid
+from board_grid import BoardGrid, BasicTerrain
+from obstacle import Obstacle
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -36,7 +37,29 @@ class Game:
     def _init_board(self) -> BoardGrid:
         rows = self.config['n_rows']
         cols = self.config['n_cols']
-        return BoardGrid(rows, cols)
+        board = BoardGrid(rows, cols)
+        scenario = self.scenario
+
+        # Ustaw tereny nieprzechodnie
+        for pos in scenario.get("blocked_fields", []):
+            board.set_field(tuple(pos), BasicTerrain(name="blocked", walkable=False))
+
+        # Ustaw przeszkody (zajmują pole i blokują przejście)
+        for pos in scenario.get("obstacles", []):
+            try:
+                board.place(Obstacle(), tuple(pos))
+            except ValueError as exc:
+                logger.error("Nie można ustawić przeszkody na %s: %s", pos, exc)
+
+        # Ustaw ściany między polami
+        for wall in scenario.get("walls", []):
+            try:
+                a, b = wall
+                board.add_wall(tuple(a), tuple(b))
+            except Exception as exc:  # szeroki wyjątek, bo format scenariusza może być błędny
+                logger.error("Nie można dodać ściany %s: %s", wall, exc)
+
+        return board
 
     def _init_connection(self) -> Connection:
         conn = Connection()
