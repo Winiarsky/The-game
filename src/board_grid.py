@@ -4,6 +4,7 @@ from dataclasses import dataclass, field as dataclass_field
 from typing import List, Optional, Protocol, Tuple
 
 from obstacle import Obstacle
+from wall import Wall
 
 
 class Occupant(Protocol):
@@ -36,7 +37,7 @@ class BoardGrid:
         self._grid: List[List[GridCell]] = [
             [GridCell() for _ in range(cols)] for _ in range(rows)
         ]
-        self.walls: set[frozenset[Tuple[int, int]]] = set()
+        self.walls: dict[frozenset[Tuple[int, int]], Wall] = {}
 
     def in_bounds(self, position: Tuple[int, int]) -> bool:
         row, col = position
@@ -74,13 +75,25 @@ class BoardGrid:
             result.append(position)
         return result
 
-    def add_wall(self, a: Tuple[int, int], b: Tuple[int, int]) -> None:
+    def add_wall(
+        self,
+        a: Tuple[int, int],
+        b: Tuple[int, int],
+        *,
+        hardness: int | None = None,
+        features: Optional[dict[str, object]] = None,
+    ) -> Wall:
         """Dodaj ścianę blokującą przejście między polami."""
         if a == b:
             raise ValueError("Ściana musi łączyć dwa różne pola.")
         if not (self.in_bounds(a) and self.in_bounds(b)):
             raise ValueError("Ściana poza planszą.")
-        self.walls.add(frozenset((a, b)))
+        wall = Wall(a=a, b=b, hardness=hardness, features=features or {})
+        self.walls[wall.key] = wall
+        return wall
+
+    def get_wall(self, a: Tuple[int, int], b: Tuple[int, int]) -> Optional[Wall]:
+        return self.walls.get(frozenset((a, b)))
 
     def is_blocked(self, a: Tuple[int, int], b: Tuple[int, int]) -> bool:
         return frozenset((a, b)) in self.walls
