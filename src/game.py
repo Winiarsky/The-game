@@ -43,20 +43,26 @@ class Game:
 
         # Ustaw tereny nieprzechodnie
         for pos in scenario.get("blocked_fields", []):
-            board.set_field(tuple(pos), BasicTerrain(name="blocked", walkable=False))
+            row, col = pos
+            board.set_field((col, row), BasicTerrain(name="blocked", walkable=False))
 
         # Ustaw przeszkody (zajmują pole i blokują przejście)
         for pos in scenario.get("obstacles", []):
             try:
-                board.place(Obstacle(), tuple(pos))
+                row, col = pos
+                board.place(Obstacle(), (col, row))
             except ValueError as exc:
                 logger.error("Nie można ustawić przeszkody na %s: %s", pos, exc)
 
         # Ustaw ściany między polami (format obiektowy)
         for wall_data in scenario.get("walls", []):
             try:
-                a = tuple(wall_data["a"])
-                b = tuple(wall_data["b"])
+                a_raw = tuple(wall_data["a"])
+                b_raw = tuple(wall_data["b"])
+                # Dane scenariusza traktujemy jako (row, col), ale wewnętrznie dodajemy ścianę z zamienionymi osiami,
+                # bo logika ruchu operuje na (row, col) w innej konwencji (obserwowane przesunięcie blokady).
+                a = (a_raw[1], a_raw[0])
+                b = (b_raw[1], b_raw[0])
                 wall_type = wall_data.get("type", "wall").lower()
                 hardness = wall_data.get("hardness")
                 features = wall_data.get("features") or {}

@@ -57,17 +57,26 @@ class BoardGrid:
     def occupant_at(self, position: Tuple[int, int]) -> Optional[Occupant]:
         return self.cell_at(position).occupant
 
-    def get_neighbors(self, position: Tuple[int, int], include_position: bool = True) -> list[Tuple[int, int]]:
-        """Zwróć wszystkie pola sąsiadujące (również po skosie) w obrębie planszy."""
+    def get_neighbors(self, position: Tuple[int, int], include_position: bool = True, diagonal: bool = True) -> list[Tuple[int, int]]:
+        """Zwróć pola sąsiadujące w obrębie planszy.
+
+        diagonal=False – tylko ortogonalne (góra/dół/lewo/prawo).
+        """
         if not self.in_bounds(position):
             raise ValueError(f"Pozycja {position} znajduje się poza planszą.")
         row, col = position
         offsets = (-1, 0, 1)
         result: list[Tuple[int, int]] = []
-        for dr in offsets:
-            for dc in offsets:
-                if dr == 0 and dc == 0:
-                    continue
+        if diagonal:
+            for dr in offsets:
+                for dc in offsets:
+                    if dr == 0 and dc == 0:
+                        continue
+                    neighbor = (row + dr, col + dc)
+                    if self.in_bounds(neighbor):
+                        result.append(neighbor)
+        else:
+            for dr, dc in ((-1, 0), (1, 0), (0, -1), (0, 1)):
                 neighbor = (row + dr, col + dc)
                 if self.in_bounds(neighbor):
                     result.append(neighbor)

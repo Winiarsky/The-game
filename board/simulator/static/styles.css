@@ -71,6 +71,37 @@ header h1 {
     font-size: 0.9rem;
 }
 
+.scenario-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.85rem;
+    margin-bottom: 1rem;
+    background: #fff;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+}
+
+.scenario-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.scenario-controls select,
+.scenario-controls button {
+    padding: 0.35rem 0.5rem;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    background: #f8f8f8;
+    cursor: pointer;
+}
+
+.scenario-controls button:hover {
+    background: #eef5ff;
+}
+
 .mode-toggle label {
     display: flex;
     gap: 0.5rem;
