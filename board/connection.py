@@ -2,6 +2,7 @@ import requests
 import json
 import logging
 from . import consts
+from time import sleep
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -17,6 +18,7 @@ class Connection:
             try:
                 r = requests.get(f"{self.esp_ip}/scan_board")
                 r.raise_for_status()
+                sleep(consts.RESPONSE_DELAY)  # wait for esp to process
                 data = r.json()
                 response = (int(data['col']-1), int(data['row']-1)) # to fix on board
                 if acceptable_responses and response not in acceptable_responses:
