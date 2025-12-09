@@ -165,6 +165,33 @@ header h1 {
     box-shadow: 0 0 6px rgba(0, 0, 0, 0.3);
 }
 
+.cell.starting-position {
+    background: #e5f4db;
+    border-color: #6ba34f;
+    box-shadow: 0 0 0 2px rgba(107, 163, 79, 0.35);
+}
+
+.start-marker {
+    position: absolute;
+    top: -6px;
+    left: -6px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #6ba34f;
+    color: #fff;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 700;
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.25);
+}
+
+.cell.starting-position .start-marker {
+    display: flex;
+}
+
 .cell.active {
     color: #fff;
     font-weight: 600;
@@ -410,6 +437,33 @@ header h1 {
     display: flex;
     gap: 0.4rem;
     align-items: center;
+}
+
+.starting-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.starting-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.35rem 0.5rem;
+    border-radius: 6px;
+    border: 1px solid #e2e2e2;
+    background: #f8fbf5;
+}
+
+.starting-label {
+    font-weight: 600;
+}
+
+.starting-remove {
+    background: #fff5f5;
+    border: 1px solid #f4b7b7;
+    color: #b00020;
+    cursor: pointer;
 }
 
 .muted {

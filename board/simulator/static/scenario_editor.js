@@ -14,6 +14,8 @@ const loadScenarioButton = document.getElementById("load-scenario");
 const saveScenarioButton = document.getElementById("save-scenario");
 const downloadScenarioButton = document.getElementById("download-scenario");
 const startingInfo = document.getElementById("starting-info");
+const startingListElement = document.getElementById("starting-list");
+const clearStartingButton = document.getElementById("clear-starting");
 const toastTemplate = document.getElementById("toast-template");
 const featureTemplate = document.getElementById("feature-row-template");
 const backgroundInput = document.getElementById("background-input");
@@ -26,6 +28,7 @@ const MODE_TERRAIN_BASIC = "terrain-basic";
 const MODE_TERRAIN_BLOCKED = "terrain-blocked";
 const MODE_OBSTACLE = "obstacle";
 const MODE_WALL = "wall";
+const MODE_STARTING = "starting";
 
 let currentMode = MODE_TERRAIN_BASIC;
 let wallSelection = { first: null, second: null };
@@ -93,12 +96,33 @@ function clearBoardBackground() {
 }
 
 function renderCells() {
+    const startingIndexByKey = new Map();
+    state.startingPositions.forEach(([row, col], index) => {
+        startingIndexByKey.set(posKey(row, col), index + 1);
+    });
+
     for (let r = 0; r < dims.rows; r += 1) {
         for (let c = 0; c < dims.cols; c += 1) {
             const cell = cells[r][c];
             const key = posKey(r, c);
             cell.classList.toggle("terrain-blocked", state.blockedFields.has(key));
             cell.classList.toggle("has-obstacle", state.obstacles.has(key));
+            const startIndex = startingIndexByKey.get(key);
+            cell.classList.toggle("starting-position", Boolean(startIndex));
+
+            let marker = cell.querySelector(".start-marker");
+            if (!marker) {
+                marker = document.createElement("div");
+                marker.className = "start-marker";
+                cell.appendChild(marker);
+            }
+            if (startIndex) {
+                marker.textContent = startIndex;
+                marker.style.display = "flex";
+            } else {
+                marker.textContent = "";
+                marker.style.display = "none";
+            }
         }
     }
     renderWallOverlay();
@@ -146,6 +170,49 @@ function resetWallSelection() {
     wallSelection = { first: null, second: null };
     selectionInfo.textContent = "W trybie Wall kliknij dwa pola, aby dodać ścianę.";
     renderCells();
+}
+
+function updateStartingInfo() {
+    if (!startingInfo) return;
+    const count = state.startingPositions.length;
+    startingInfo.textContent =
+        count === 0
+            ? "Brak pozycji startowych. W trybie Start klikaj pola, aby je dodać."
+            : `Pozycje startowe: ${count}. Kolejność wg dodawania.`;
+}
+
+function renderStartingList() {
+    if (!startingListElement) return;
+    startingListElement.innerHTML = "";
+    if (!state.startingPositions.length) {
+        const empty = document.createElement("p");
+        empty.className = "muted";
+        empty.textContent = "Brak pozycji startowych.";
+        startingListElement.appendChild(empty);
+        return;
+    }
+    state.startingPositions.forEach(([row, col], index) => {
+        const rowEl = document.createElement("div");
+        rowEl.className = "starting-row";
+
+        const label = document.createElement("span");
+        label.className = "starting-label";
+        label.textContent = `#${index + 1}: (${row}, ${col})`;
+
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "starting-remove";
+        removeBtn.textContent = "Usuń";
+        removeBtn.addEventListener("click", () => {
+            state.startingPositions.splice(index, 1);
+            renderCells();
+            renderStartingList();
+            updateStartingInfo();
+        });
+
+        rowEl.append(label, removeBtn);
+        startingListElement.appendChild(rowEl);
+    });
 }
 
 function applyPresetToControls(presetId) {
@@ -217,6 +284,22 @@ function handleCellClick(row, col) {
             state.obstacles.add(key);
         }
         renderCells();
+        return;
+    }
+    if (currentMode === MODE_STARTING) {
+        const existingIndex = state.startingPositions.findIndex(
+            ([r, c]) => r === row && c === col,
+        );
+        if (existingIndex >= 0) {
+            state.startingPositions.splice(existingIndex, 1);
+        } else {
+            state.blockedFields.delete(key);
+            state.obstacles.delete(key);
+            state.startingPositions.push([row, col]);
+        }
+        renderCells();
+        renderStartingList();
+        updateStartingInfo();
         return;
     }
     if (currentMode === MODE_WALL) {
@@ -358,7 +441,8 @@ function setStateFromScenario(scenario) {
         }))
         : [];
 
-    startingInfo.textContent = `Pozycje startowe: ${state.startingPositions.length} (nieedytowane tutaj).`;
+    renderStartingList();
+    updateStartingInfo();
     renderCells();
     renderWallsList();
 }
@@ -409,8 +493,11 @@ function clearObjects() {
     state.blockedFields.clear();
     state.obstacles.clear();
     state.walls = [];
+    state.startingPositions = [];
     resetWallSelection();
     renderWallsList();
+    renderStartingList();
+    updateStartingInfo();
     renderCells();
 }
 
@@ -497,12 +584,21 @@ function wireEvents() {
         clearBoardBackground();
         showToast("Usunięto tło planszy.");
     });
+    clearStartingButton?.addEventListener("click", () => {
+        state.startingPositions = [];
+        renderCells();
+        renderStartingList();
+        updateStartingInfo();
+        showToast("Wyczyszczono pozycje startowe.");
+    });
 }
 
 function init() {
     buildBoard();
     renderWallTypeOptions();
     renderCells();
+    renderStartingList();
+    updateStartingInfo();
     wireEvents();
     refreshScenarioList();
     showToast("Edytor scenariuszy gotowy.");

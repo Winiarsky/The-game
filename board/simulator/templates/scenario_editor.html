@@ -30,6 +30,7 @@
                     <button type="button" data-mode="terrain-basic" class="mode-btn active">Teren: basic</button>
                     <button type="button" data-mode="terrain-blocked" class="mode-btn">Teren: blocked</button>
                     <button type="button" data-mode="obstacle" class="mode-btn">Obstacle</button>
+                    <button type="button" data-mode="starting" class="mode-btn">Start</button>
                     <button type="button" data-mode="wall" class="mode-btn">Wall</button>
                 </div>
                 <div class="toolbar-actions">
@@ -59,7 +60,16 @@
                         <button type="button" id="download-scenario">Pobierz JSON</button>
                     </div>
                 </div>
-                <p id="starting-info" class="muted">Pozycje startowe zostaną zachowane z wczytanego scenariusza.</p>
+                <p id="starting-info" class="muted">Pozycje startowe: 0.</p>
+            </section>
+
+            <section class="panel">
+                <h2>Pozycje startowe</h2>
+                <p class="muted">W trybie Start klikaj pola na planszy, aby dodać lub usunąć kolejne pozycje.</p>
+                <div class="inline-group">
+                    <button type="button" id="clear-starting">Wyczyść starty</button>
+                </div>
+                <div id="starting-list" class="starting-list"></div>
             </section>
 
             <section class="panel">
