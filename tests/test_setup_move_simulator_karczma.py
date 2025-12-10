@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 simulator_conn = Connection(esp_ip="http://127.0.0.1:5000/")
-game = Game(conn=simulator_conn, scenario="karczma_pop")
+game = Game(conn=simulator_conn, scenario="karczma")
 game.conn.leds_off()
 game.run_action('set_heroes_starting_positions')
 # check the positions
