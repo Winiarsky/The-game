@@ -33,7 +33,7 @@ class Connection:
 
     def set_leds(self, positions: list[tuple[int, int]], rgb_color: list[int]):
         logger.info(positions)
-        leds_to_light = [(self.led_config[str(row)][str(col)], rgb_color) for row, col in positions]
+        leds_to_light = [(self.led_config[str(col)][str(row)], rgb_color) for col, row in positions]
         logger.info(f"Setting LEDs: {leds_to_light}")
         payload = {
             "leds": [{"i": i+1, "rgb": rgb} for i, rgb in leds_to_light]
