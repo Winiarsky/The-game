@@ -32,7 +32,9 @@ class Connection:
                 raise RuntimeError("Failed to scan board") from e
 
     def set_leds(self, positions: list[tuple[int, int]], rgb_color: list[int]):
+        logger.info(positions)
         leds_to_light = [(self.led_config[str(row)][str(col)], rgb_color) for row, col in positions]
+        logger.info(f"Setting LEDs: {leds_to_light}")
         payload = {
             "leds": [{"i": i+1, "rgb": rgb} for i, rgb in leds_to_light]
         }

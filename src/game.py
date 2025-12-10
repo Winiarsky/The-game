@@ -18,15 +18,22 @@ from board_grid import BoardGrid, BasicTerrain
 from obstacle import Obstacle
 from wall import Wall, Mur
 
+try:
+    from game_objects_loader import scan_game_objects
+except Exception:  # pragma: no cover - gdy pakiet nie istnieje
+    scan_game_objects = None  # type: ignore
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class Game:
-    def __init__(self, conn: Connection | None = None):
+    def __init__(self, conn: Connection | None = None, scenario: str = "scenario_1"):
         with open('board/led_positions.json', 'r') as led_file:
             self.led_positions = json.load(led_file)
-        with open('scenarios/scenario_1.json', 'r') as scenario_file:
+        
+        with open(f'scenarios/{scenario}.json', 'r') as scenario_file:
             self.scenario = json.load(scenario_file)
+    
         with open('board/config.json', 'r') as config_file:
             self.config = json.load(config_file)
         self.conn: Connection = self._init_connection() if conn is None else conn
@@ -41,12 +48,21 @@ class Game:
         board = BoardGrid(rows, cols)
         scenario = self.scenario
 
-        # Ustaw tereny nieprzechodnie
+        # Wczytaj obiekty z nowego formatu (objects), a w razie braku z legacy pól.
+        if scan_game_objects is not None:
+            self._apply_objects(board, scenario)
+        else:
+            logger.warning("Brak scan_game_objects - używam legacy pól.")
+            self._apply_legacy(board, scenario)
+
+        return board
+
+    def _apply_legacy(self, board: BoardGrid, scenario: dict[str, Any]) -> None:
+        """Obsługa starego formatu scenariusza."""
         for pos in scenario.get("blocked_fields", []):
             row, col = pos
             board.set_field((col, row), BasicTerrain(name="blocked", walkable=False))
 
-        # Ustaw przeszkody (zajmują pole i blokują przejście)
         for pos in scenario.get("obstacles", []):
             try:
                 row, col = pos
@@ -54,7 +70,6 @@ class Game:
             except ValueError as exc:
                 logger.error("Nie można ustawić przeszkody na %s: %s", pos, exc)
 
-        # Ustaw ściany między polami (format obiektowy)
         for wall_data in scenario.get("walls", []):
             try:
                 a_raw = tuple(wall_data["a"])
@@ -72,7 +87,56 @@ class Game:
             except Exception as exc:  # szeroki wyjątek, bo format scenariusza może być błędny
                 logger.error("Nie można dodać ściany %s: %s", wall_data, exc)
 
-        return board
+    def _apply_objects(self, board: BoardGrid, scenario: dict[str, Any]) -> None:
+        """Nowy format scenariusza oparty o GameObjects."""
+        definitions = scan_game_objects(Path(__file__).resolve().parent / "GameObjects")
+        registry = {
+            (definition.meta.category, definition.meta.object_id): definition for definition in definitions
+        }
+
+        if not isinstance(scenario.get("objects"), list):
+            logger.info("Brak pola objects w scenariuszu - używam legacy pól.")
+            self._apply_legacy(board, scenario)
+            return
+
+        for obj in scenario.get("objects", []):
+            category = obj.get("category")
+            object_id = obj.get("object_id")
+            definition = registry.get((category, object_id))
+            logic_cls = definition.logic_cls if definition else None
+            placement = obj.get("placement", "cell")
+
+            if placement == "edge":
+                for edge in obj.get("edges", []):
+                    try:
+                        a_raw = tuple(edge["a"])
+                        b_raw = tuple(edge["b"])
+                        a = (a_raw[0], a_raw[1])
+                        b = (b_raw[0], b_raw[1])
+                        wall_cls = logic_cls if isinstance(logic_cls, type) and issubclass(logic_cls, Wall) else Wall
+                        board.add_wall(a, b, wall_cls=wall_cls)
+                    except Exception as exc:
+                        logger.error("Nie można dodać krawędzi %s: %s", edge, exc)
+                continue
+
+            if placement == "cell":
+                for pos in obj.get("positions", []):
+                    try:
+                        row, col = pos
+                        # Tereny
+                        if isinstance(logic_cls, type) and issubclass(logic_cls, BasicTerrain):
+                            board.set_field((row, col), logic_cls())
+                            continue
+                        # Przeszkody / inne obiekty zajmujące pole
+                        if isinstance(logic_cls, type) and issubclass(logic_cls, Obstacle):
+                            board.place(logic_cls(), (row, col))
+                            continue
+                        # Domyślnie traktujemy jako obstawienie pola przeszkodą.
+                        board.place(Obstacle(), (row, col))
+                    except ValueError as exc:
+                        logger.error("Pole %s jest zajęte, nie można ustawić %s: %s", pos, object_id, exc)
+                    except Exception as exc:
+                        logger.error("Nie można ustawić obiektu %s na %s: %s", object_id, pos, exc)
 
     def _init_connection(self) -> Connection:
         conn = Connection()

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
 from pathlib import Path
 from queue import Queue
 from threading import Lock
@@ -13,6 +14,8 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 CONFIG_PATH = BASE_DIR / "config.json"
 LED_POSITIONS_PATH = BASE_DIR / "led_positions.json"
 SCENARIOS_DIR = BASE_DIR.parent / "scenarios"
+SRC_DIR = BASE_DIR.parent / "src"
+GAME_OBJECTS_DIR = SRC_DIR / "GameObjects"
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -74,6 +77,16 @@ def _scenario_path(name: str) -> Path:
     return SCENARIOS_DIR / f"{safe_name}.json"
 
 
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+try:
+    from game_objects_loader import scan_game_objects, serialize_meta
+except Exception as exc:  # pragma: no cover - zabezpieczenie gdy pakiet nie istnieje
+    logger.warning("Nie udało się zaimportować game_objects_loader: %s", exc)
+    scan_game_objects = None  # type: ignore
+    serialize_meta = None  # type: ignore
+
+
 BOARD_ROWS, BOARD_COLS = _load_board_config()
 LED_TO_CELL = _load_led_mapping(BOARD_ROWS, BOARD_COLS)
 
@@ -105,6 +118,22 @@ def scenario_editor():
 def list_scenarios():
     scenarios = sorted(path.stem for path in SCENARIOS_DIR.glob("*.json")) if SCENARIOS_DIR.exists() else []
     return jsonify({"scenarios": scenarios})
+
+
+@app.get("/api/game-objects")
+def list_game_objects():
+    if scan_game_objects is None or serialize_meta is None:
+        return jsonify({"ok": False, "error": "Brak loadera GameObjects."}), 500
+    definitions = scan_game_objects(GAME_OBJECTS_DIR)
+    metas = serialize_meta(definitions)
+    categories: dict[str, list[dict[str, object]]] = {}
+    for meta in metas:
+        categories.setdefault(meta["category"], []).append(meta)
+    grouped = [
+        {"category": name, "objects": sorted(items, key=lambda obj: obj["label"] or "")}
+        for name, items in sorted(categories.items(), key=lambda pair: pair[0])
+    ]
+    return jsonify({"ok": True, "categories": grouped})
 
 
 @app.get("/api/scenarios/<name>")

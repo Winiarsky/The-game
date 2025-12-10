@@ -198,6 +198,33 @@ header h1 {
     text-shadow: 0 0 4px rgba(0, 0, 0, 0.4);
 }
 
+.cell-objects {
+    position: absolute;
+    bottom: 2px;
+    left: 2px;
+    display: flex;
+    gap: 2px;
+    pointer-events: none;
+}
+
+.object-marker {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    font-weight: 700;
+    box-shadow: 0 0 3px rgba(0, 0, 0, 0.35);
+    position: relative;
+}
+
+.object-marker.more-marker {
+    background: #444;
+}
+
 .cell.has-figure {
     border-color: #999;
 }
@@ -388,6 +415,18 @@ header h1 {
     align-items: center;
 }
 
+.inline-label {
+    font-weight: 600;
+}
+
+.icon-btn {
+    padding: 0.4rem 0.5rem;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    background: #f8f8f8;
+    cursor: pointer;
+}
+
 .side-panel {
     display: flex;
     flex-direction: column;
@@ -439,37 +478,51 @@ header h1 {
     align-items: center;
 }
 
-.starting-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-}
-
-.starting-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.35rem 0.5rem;
-    border-radius: 6px;
-    border: 1px solid #e2e2e2;
-    background: #f8fbf5;
-}
-
-.starting-label {
-    font-weight: 600;
-}
-
-.starting-remove {
-    background: #fff5f5;
-    border: 1px solid #f4b7b7;
-    color: #b00020;
-    cursor: pointer;
-}
-
 .muted {
     color: #666;
     margin: 0;
     font-size: 0.9rem;
+}
+
+.object-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    max-height: 360px;
+    overflow-y: auto;
+}
+
+.object-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.45rem 0.5rem;
+    border: 1px solid #e2e2e2;
+    border-radius: 6px;
+    background: #f9f9f9;
+}
+
+.object-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.object-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 1px solid #ccc;
+}
+
+.object-label {
+    font-weight: 600;
+}
+
+.object-actions {
+    display: flex;
+    gap: 0.35rem;
 }
 
 .walls-list {

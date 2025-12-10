@@ -1,0 +1,2 @@
+"""Kategorie ścian."""
+

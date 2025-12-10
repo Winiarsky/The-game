@@ -27,14 +27,13 @@
         <section class="board-panel">
             <div class="toolbar">
                 <div class="mode-buttons" id="mode-buttons">
-                    <button type="button" data-mode="terrain-basic" class="mode-btn active">Teren: basic</button>
-                    <button type="button" data-mode="terrain-blocked" class="mode-btn">Teren: blocked</button>
-                    <button type="button" data-mode="obstacle" class="mode-btn">Obstacle</button>
-                    <button type="button" data-mode="starting" class="mode-btn">Start</button>
-                    <button type="button" data-mode="wall" class="mode-btn">Wall</button>
+                    <label class="inline-label" for="category-select">Kategoria:</label>
+                    <select id="category-select"></select>
+                    <button type="button" id="category-visibility" class="icon-btn" title="Pokaż/ukryj kategorię">👁</button>
+                    <button type="button" id="reset-selection">Reset zaznaczenia</button>
                 </div>
                 <div class="toolbar-actions">
-                    <button type="button" id="reset-wall-selection">Reset wyboru ściany</button>
+                    <button type="button" id="delete-mode">Tryb usuwania: wyłączony</button>
                     <button type="button" id="clear-board">Wyczyść obiekty</button>
                 </div>
             </div>
@@ -60,52 +59,19 @@
                         <button type="button" id="download-scenario">Pobierz JSON</button>
                     </div>
                 </div>
-                <p id="starting-info" class="muted">Pozycje startowe: 0.</p>
-            </section>
-
-            <section class="panel">
-                <h2>Pozycje startowe</h2>
-                <p class="muted">W trybie Start klikaj pola na planszy, aby dodać lub usunąć kolejne pozycje.</p>
                 <div class="inline-group">
+                    <p id="starting-info" class="muted">Pozycje startowe: 0.</p>
                     <button type="button" id="clear-starting">Wyczyść starty</button>
                 </div>
-                <div id="starting-list" class="starting-list"></div>
             </section>
 
             <section class="panel">
-                <h2>Ustawienia ściany</h2>
-                <p id="selection-info" class="muted">W trybie Wall kliknij dwa pola, aby dodać ścianę.</p>
-                <div class="form-row">
-                    <label for="wall-type">Typ ściany:</label>
-                    <select id="wall-type"></select>
-                </div>
-                <div class="form-row">
-                    <label for="wall-hardness">Hardness:</label>
-                    <input id="wall-hardness" type="number" inputmode="numeric" placeholder="np. 10">
-                </div>
-                <div class="features-panel">
-                    <div class="features-header">
-                        <strong>Features</strong>
-                        <button type="button" id="add-feature">Dodaj feature</button>
-                    </div>
-                    <div id="features-list" class="features-list"></div>
-                </div>
-            </section>
-
-            <section class="panel">
-                <h2>Ściany (lista)</h2>
-                <div id="walls-list" class="walls-list"></div>
+                <h2>Obiekty z wybranej kategorii</h2>
+                <p id="selection-info" class="muted">Kliknij „Użyj”, aby wybrać obiekt i wstawiać go klikając pola. Ikonka oka ukrywa/odsłania obiekty.</p>
+                <div id="object-list" class="object-list"></div>
             </section>
         </aside>
     </main>
-
-    <template id="feature-row-template">
-        <div class="feature-row">
-            <input type="text" class="feature-key" placeholder="klucz">
-            <input type="text" class="feature-value" placeholder="wartość">
-            <button type="button" class="feature-remove">×</button>
-        </div>
-    </template>
 
     <template id="toast-template">
         <div class="toast"></div>
@@ -113,10 +79,6 @@
 
     <script>
         window.BOARD_DIMENSIONS = {rows: {{ rows }}, cols: {{ cols }}};
-        window.WALL_PRESETS = [
-            { id: 'wall', label: 'Wall (default)', hardness: null, features: {} },
-            { id: 'mur', label: 'Mur (hardness=100)', hardness: 100, features: {} },
-        ];
     </script>
     <script src="{{ url_for('static', filename='scenario_editor.js') }}"></script>
 </body>

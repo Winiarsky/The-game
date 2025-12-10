@@ -27,6 +27,7 @@ class Start(State):
         heroes: list[Hero] = self.game.heroes
         starting_positions = [tuple(pos) for pos in self.game.scenario['starting_positions']]
         logger.info("Ustawianie pozycji startowych bohaterów.")
+        logger.info(starting_positions)
         while True:
             response = self.game.conn.read_card(
                 "Skanuj karte ACCEPT by ustawic figurke na polu startowym, lub DECLINE by zakonczyc setup",
