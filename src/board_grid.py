@@ -27,26 +27,26 @@ class GridCell:
 
 
 class BoardGrid:
-    """Dwuwymiarowa siatka pól gry."""
+    """Dwuwymiarowa siatka pól gry (pozycje przekazujemy jako krotki (col, row))."""
 
     def __init__(self, rows: int, cols: int):
         if rows <= 0 or cols <= 0:
             raise ValueError("Wymiary planszy muszą być dodatnie.")
-        self.rows = rows
-        self.cols = cols
+        self.rows = rows  # liczba rzędów (drugi element w krotce pozycji)
+        self.cols = cols  # liczba kolumn (pierwszy element w krotce pozycji)
         self._grid: List[List[GridCell]] = [
             [GridCell() for _ in range(cols)] for _ in range(rows)
         ]
         self.walls: dict[frozenset[Tuple[int, int]], Wall] = {}
 
     def in_bounds(self, position: Tuple[int, int]) -> bool:
-        row, col = position
+        col, row = position
         return 0 <= row < self.rows and 0 <= col < self.cols
 
     def cell_at(self, position: Tuple[int, int]) -> GridCell:
         if not self.in_bounds(position):
             raise ValueError(f"Pozycja {position} znajduje się poza planszą.")
-        row, col = position
+        col, row = position
         return self._grid[row][col]
 
     def set_field(self, position: Tuple[int, int], terrain: BasicTerrain) -> None:
@@ -64,7 +64,7 @@ class BoardGrid:
         """
         if not self.in_bounds(position):
             raise ValueError(f"Pozycja {position} znajduje się poza planszą.")
-        row, col = position
+        col, row = position
         offsets = (-1, 0, 1)
         result: list[Tuple[int, int]] = []
         if diagonal:
@@ -72,12 +72,12 @@ class BoardGrid:
                 for dc in offsets:
                     if dr == 0 and dc == 0:
                         continue
-                    neighbor = (row + dr, col + dc)
+                    neighbor = (col + dc, row + dr)
                     if self.in_bounds(neighbor):
                         result.append(neighbor)
         else:
             for dr, dc in ((-1, 0), (1, 0), (0, -1), (0, 1)):
-                neighbor = (row + dr, col + dc)
+                neighbor = (col + dc, row + dr)
                 if self.in_bounds(neighbor):
                     result.append(neighbor)
         if include_position:

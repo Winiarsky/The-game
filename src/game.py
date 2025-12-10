@@ -60,12 +60,12 @@ class Game:
     def _apply_legacy(self, board: BoardGrid, scenario: dict[str, Any]) -> None:
         """Obsługa starego formatu scenariusza."""
         for pos in scenario.get("blocked_fields", []):
-            row, col = pos
+            col, row = pos
             board.set_field((col, row), BasicTerrain(name="blocked", walkable=False))
 
         for pos in scenario.get("obstacles", []):
             try:
-                row, col = pos
+                col, row = pos
                 board.place(Obstacle(), (col, row))
             except ValueError as exc:
                 logger.error("Nie można ustawić przeszkody na %s: %s", pos, exc)
@@ -74,10 +74,8 @@ class Game:
             try:
                 a_raw = tuple(wall_data["a"])
                 b_raw = tuple(wall_data["b"])
-                # Dane scenariusza traktujemy jako (row, col), ale wewnętrznie dodajemy ścianę z zamienionymi osiami,
-                # bo logika ruchu operuje na (row, col) w innej konwencji (obserwowane przesunięcie blokady).
-                a = (a_raw[1], a_raw[0])
-                b = (b_raw[1], b_raw[0])
+                a = (a_raw[0], a_raw[1])
+                b = (b_raw[0], b_raw[1])
                 wall_type = wall_data.get("type", "wall").lower()
                 hardness = wall_data.get("hardness")
                 features = wall_data.get("features") or {}
@@ -122,17 +120,17 @@ class Game:
             if placement == "cell":
                 for pos in obj.get("positions", []):
                     try:
-                        row, col = pos
+                        col, row = pos
                         # Tereny
                         if isinstance(logic_cls, type) and issubclass(logic_cls, BasicTerrain):
-                            board.set_field((row, col), logic_cls())
+                            board.set_field((col, row), logic_cls())
                             continue
                         # Przeszkody / inne obiekty zajmujące pole
                         if isinstance(logic_cls, type) and issubclass(logic_cls, Obstacle):
-                            board.place(logic_cls(), (row, col))
+                            board.place(logic_cls(), (col, row))
                             continue
                         # Domyślnie traktujemy jako obstawienie pola przeszkodą.
-                        board.place(Obstacle(), (row, col))
+                        board.place(Obstacle(), (col, row))
                     except ValueError as exc:
                         logger.error("Pole %s jest zajęte, nie można ustawić %s: %s", pos, object_id, exc)
                     except Exception as exc:
