@@ -37,6 +37,23 @@ let nextFigureNumber = 1;
 let selectedFigureId = null;
 let latestBoardState = [];
 
+function normalizeScenarioPos(pos) {
+    if (Array.isArray(pos) && pos.length >= 2) {
+        return [Number(pos[0]), Number(pos[1])];
+    }
+    if (pos && typeof pos === "object" && "row" in pos && "col" in pos) {
+        return [Number(pos.col), Number(pos.row)];
+    }
+    return null;
+}
+
+function fromScenarioPosition(pos) {
+    const normalized = normalizeScenarioPos(pos);
+    if (!normalized) return null;
+    const [col, row] = normalized;
+    return { row, col };
+}
+
 const scenarioState = {
     name: null,
     blocked: new Set(),
@@ -349,21 +366,29 @@ function handleBackgroundFile(event) {
 }
 
 function setScenarioData(scenario) {
-    scenarioState.blocked = new Set(
-        Array.isArray(scenario?.blocked_fields)
-            ? scenario.blocked_fields.map((p) => `${p[0]},${p[1]}`)
-            : [],
-    );
-    scenarioState.obstacles = new Set(
-        Array.isArray(scenario?.obstacles)
-            ? scenario.obstacles.map((p) => `${p[0]},${p[1]}`)
-            : [],
-    );
+    const blocked = Array.isArray(scenario?.blocked_fields)
+        ? scenario.blocked_fields
+              .map((pos) => fromScenarioPosition(pos))
+              .filter((pos) => pos !== null)
+        : [];
+    scenarioState.blocked = new Set(blocked.map((pos) => `${pos.row},${pos.col}`));
+
+    const obstacles = Array.isArray(scenario?.obstacles)
+        ? scenario.obstacles
+              .map((pos) => fromScenarioPosition(pos))
+              .filter((pos) => pos !== null)
+        : [];
+    scenarioState.obstacles = new Set(obstacles.map((pos) => `${pos.row},${pos.col}`));
+
     scenarioState.walls = Array.isArray(scenario?.walls)
-        ? scenario.walls.map((w) => ({
-              a: { row: w.a[0], col: w.a[1] },
-              b: { row: w.b[0], col: w.b[1] },
-          }))
+        ? scenario.walls
+              .map((wall) => {
+                  const a = fromScenarioPosition(wall?.a);
+                  const b = fromScenarioPosition(wall?.b);
+                  if (!a || !b) return null;
+                  return { a, b };
+              })
+              .filter((wall) => wall !== null)
         : [];
     applyBoardState();
 }
