@@ -612,6 +612,7 @@ header h1 {
     background: #0a5ca8;
     opacity: 0.9;
     border-radius: 4px;
+    transform-origin: center;
 }
 
 .wall-line-h {
@@ -623,9 +624,16 @@ header h1 {
 }
 
 .wall-line-diag {
-    border-radius: 50%;
-    width: 10px;
-    height: 10px;
+    height: 6px;
+    border-radius: 3px;
+}
+
+.wall-line-diag-asc {
+    transform: rotate(-45deg);
+}
+
+.wall-line-diag-desc {
+    transform: rotate(45deg);
 }
 
 @media (max-width: 1024px) {

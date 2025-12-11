@@ -258,10 +258,15 @@ function renderEdgeOverlay() {
             segment.classList.add("wall-line-diag");
             const midX = (a.x + b.x) / 2;
             const midY = (a.y + b.y) / 2;
-            segment.style.left = `${midX - dotSize / 2}px`;
-            segment.style.top = `${midY - dotSize / 2}px`;
-            segment.style.width = `${dotSize}px`;
-            segment.style.height = `${dotSize}px`;
+            const diagLength = Math.hypot(cellA.getBoundingClientRect().width, cellA.getBoundingClientRect().height) * 0.65;
+            const dr = edge.b.row - edge.a.row;
+            const dc = edge.b.col - edge.a.col;
+            const orientationClass = dr * dc > 0 ? "wall-line-diag-desc" : "wall-line-diag-asc";
+            segment.classList.add(orientationClass);
+            segment.style.left = `${midX - diagLength / 2}px`;
+            segment.style.top = `${midY - thickness / 2}px`;
+            segment.style.width = `${diagLength}px`;
+            segment.style.height = `${thickness}px`;
         }
 
         wallOverlay.appendChild(segment);

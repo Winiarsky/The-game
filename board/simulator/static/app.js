@@ -464,14 +464,21 @@ function renderScenarioWalls() {
             segment.style.width = `${width}px`;
             segment.style.height = `${thickness}px`;
         } else {
-            // diagonalna -> kropka
+            // diagonalna -> mała skosna kreska (orientacja / lub \)
             segment.classList.add("wall-line-diag");
-            const midX = (rectA.left + rectA.width / 2 + rectB.left + rectB.width / 2) / 2 - boardRect.left;
-            const midY = (rectA.top + rectA.height / 2 + rectB.top + rectB.height / 2) / 2 - boardRect.top;
-            segment.style.left = `${midX - dotSize / 2}px`;
-            segment.style.top = `${midY - dotSize / 2}px`;
-            segment.style.width = `${dotSize}px`;
-            segment.style.height = `${dotSize}px`;
+            const midX =
+                (rectA.left + rectA.width / 2 + rectB.left + rectB.width / 2) / 2 - boardRect.left;
+            const midY =
+                (rectA.top + rectA.height / 2 + rectB.top + rectB.height / 2) / 2 - boardRect.top;
+            const diagLength = Math.hypot(rectA.width, rectA.height) * 0.65;
+            const dr = wall.b.row - wall.a.row;
+            const dc = wall.b.col - wall.a.col;
+            const orientationClass = dr * dc > 0 ? "wall-line-diag-desc" : "wall-line-diag-asc";
+            segment.classList.add(orientationClass);
+            segment.style.left = `${midX - diagLength / 2}px`;
+            segment.style.top = `${midY - thickness / 2}px`;
+            segment.style.width = `${diagLength}px`;
+            segment.style.height = `${thickness}px`;
         }
 
         wallOverlay.appendChild(segment);
