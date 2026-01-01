@@ -120,6 +120,9 @@ class BoardGrid:
         cell = self.cell_at(position)
         if not cell.field.walkable:
             return False
+        # Interactables mogą blokować wejście (np. drzwi do otwarcia z boku).
+        if any(getattr(obj, "blocks_movement", False) or not getattr(obj, "allow_same_cell_interact", True) for obj in cell.interactables):
+            return False
         if cell.occupant is None:
             return True
         if self._is_obstacle(cell.occupant):
@@ -162,12 +165,20 @@ class BoardGrid:
 
     def get_interactables_in_range(
         self, position: Tuple[int, int], *, include_position: bool = True, diagonal: bool = True
-    ) -> list[Tuple[int, int]]:
-        """Zwróć pozycje z obiektami interaktywnymi w zasięgu sąsiadów."""
-        result: list[Tuple[int, int]] = []
+    ) -> list[tuple[Tuple[int, int], list[Interactable]]]:
+        """Zwróć pozycje z obiektami interaktywnymi w zasięgu sąsiadów (1 pole)."""
+        result: list[tuple[Tuple[int, int], list[Interactable]]] = []
         for candidate in self.get_neighbors(position, include_position=include_position, diagonal=diagonal):
-            if self.interactables_at(candidate):
-                result.append(candidate)
+            interactables = self.interactables_at(candidate)
+            if not interactables:
+                continue
+            # filtrowanie: jeśli obiekt nie pozwala na interakcję z tego samego pola, pomijamy
+            if candidate == position:
+                filtered = [i for i in interactables if getattr(i, "allow_same_cell_interact", True)]
+            else:
+                filtered = interactables
+            if filtered:
+                result.append((candidate, filtered))
         return result
     
     def move(self, source: Tuple[int, int], target: Tuple[int, int]) -> None:

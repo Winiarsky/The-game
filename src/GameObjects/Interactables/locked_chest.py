@@ -7,6 +7,7 @@ class LockedChest(Interactable):
 
     def __init__(self, loot: list[str] | None = None, locked: bool = True):
         super().__init__(position=None)
+        self.allow_same_cell_interact = False  # można stać na polu ze skrzynią
         self.locked = locked
         self.opened = False
         self.loot = loot or ["gold_coin", "gem"]

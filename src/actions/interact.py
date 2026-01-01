@@ -38,11 +38,12 @@ class InteractAction(BaseAction):
     def _choose_interactable(self, ctx: ActionContext, hero_pos):
         board = ctx.game.board
         candidates = board.get_interactables_in_range(hero_pos, include_position=True, diagonal=True)
-        if not candidates:
+        positions = [pos for pos, _objs in candidates]
+        if not positions:
             logger.info("Brak obiektów do interakcji w sąsiedztwie.")
             return None
-        ctx.game.conn.set_leds(candidates, consts.INTERACT_FIELD_RGB)
-        target = ctx.game.conn.scan_board(candidates)
+        ctx.game.conn.set_leds(positions, consts.INTERACT_FIELD_RGB)
+        target = ctx.game.conn.scan_board(positions)
         ctx.game.conn.leds_off()
         return target
 

@@ -8,9 +8,11 @@ class InventoryCarrier(Protocol):
 
 @dataclass
 class Interactable:
-    """Obiekt, z którym można wchodzić w interakcję (nie blokuje ruchu)."""
+    """Obiekt, z którym można wchodzić w interakcję."""
 
     position: Optional[Tuple[int, int]] = None
+    blocks_movement: bool = False  # jeśli True: traktujemy jak przeszkodę, nie da się wejść na pole
+    allow_same_cell_interact: bool = True  # jeśli False: wymagaj stania obok
 
     def set_position(self, position: Optional[Tuple[int, int]]) -> None:
         self.position = position
