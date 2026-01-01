@@ -32,7 +32,7 @@ class HeroesTurn(State):
             return self
 
         logger.info("Dostępne akcje: %s", ", ".join(sorted(available)))
-        choice = self.game.conn.read_card("Wpisz nazwę akcji: ", ["move", "attack"]).strip()
+        choice = self.game.conn.read_card("Wpisz nazwę akcji: ", list(available.keys())).strip()
         try:
             action = get_action(choice)
         except KeyError:

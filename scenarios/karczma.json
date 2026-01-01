@@ -160,6 +160,19 @@
             ]
         },
         {
+            "category": "Interactables",
+            "object_id": "locked_chest",
+            "label": "Zamknięta skrzynia",
+            "color": "#c58f22",
+            "placement": "cell",
+            "positions": [
+                [
+                    1,
+                    12
+                ]
+            ]
+        },
+        {
             "category": "Walls",
             "object_id": "basic_wall",
             "label": "Ściana",

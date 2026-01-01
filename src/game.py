@@ -17,6 +17,7 @@ from hero import Hero
 from board_grid import BoardGrid, BasicTerrain
 from obstacle import Obstacle
 from wall import Wall, Mur
+from interactable import Interactable
 
 try:
     from game_objects_loader import scan_game_objects
@@ -128,6 +129,9 @@ class Game:
                         # Przeszkody / inne obiekty zajmujące pole
                         if isinstance(logic_cls, type) and issubclass(logic_cls, Obstacle):
                             board.place(logic_cls(), (col, row))
+                            continue
+                        if isinstance(logic_cls, type) and issubclass(logic_cls, Interactable):
+                            board.add_interactable(logic_cls(), (col, row))
                             continue
                         # Domyślnie traktujemy jako obstawienie pola przeszkodą.
                         board.place(Obstacle(), (col, row))

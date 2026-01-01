@@ -2,3 +2,4 @@
 
 # Import actions for side effects (registration via decorator)
 from . import move  # noqa: F401
+from . import interact  # noqa: F401

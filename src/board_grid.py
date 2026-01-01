@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field as dataclass_field
 from typing import List, Optional, Protocol, Tuple
+from interactable import Interactable
 
 from obstacle import Obstacle
 from wall import Wall
@@ -22,8 +23,8 @@ class BasicTerrain:
 @dataclass(slots=True)
 class GridCell:
     field: BasicTerrain = dataclass_field(default_factory=BasicTerrain)
-    occupant: Optional[Occupant] = None 
-    # trzeba bedze dodać inne rzeczy jak przeszkody, skarby itp.
+    occupant: Optional[Occupant] = None
+    interactables: list[Interactable] = dataclass_field(default_factory=list)
 
 
 class BoardGrid:
@@ -56,6 +57,9 @@ class BoardGrid:
 
     def occupant_at(self, position: Tuple[int, int]) -> Optional[Occupant]:
         return self.cell_at(position).occupant
+
+    def interactables_at(self, position: Tuple[int, int]) -> list[Interactable]:
+        return list(self.cell_at(position).interactables)
 
     def get_neighbors(self, position: Tuple[int, int], include_position: bool = True, diagonal: bool = True) -> list[Tuple[int, int]]:
         """Zwróć pola sąsiadujące w obrębie planszy.
@@ -144,6 +148,27 @@ class BoardGrid:
             cell.occupant = None
             occupant.set_position(None)
         return occupant
+
+    def add_interactable(self, interactable: Interactable, position: Tuple[int, int]) -> None:
+        cell = self.cell_at(position)
+        cell.interactables.append(interactable)
+        interactable.set_position(position)
+
+    def remove_interactable(self, interactable: Interactable, position: Tuple[int, int]) -> None:
+        cell = self.cell_at(position)
+        if interactable in cell.interactables:
+            cell.interactables.remove(interactable)
+            interactable.set_position(None)
+
+    def get_interactables_in_range(
+        self, position: Tuple[int, int], *, include_position: bool = True, diagonal: bool = True
+    ) -> list[Tuple[int, int]]:
+        """Zwróć pozycje z obiektami interaktywnymi w zasięgu sąsiadów."""
+        result: list[Tuple[int, int]] = []
+        for candidate in self.get_neighbors(position, include_position=include_position, diagonal=diagonal):
+            if self.interactables_at(candidate):
+                result.append(candidate)
+        return result
     
     def move(self, source: Tuple[int, int], target: Tuple[int, int]) -> None:
         occupant = self.occupant_at(source)

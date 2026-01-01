@@ -8,6 +8,7 @@ class Hero:
     position_x: Optional[int] = None
     position_y: Optional[int] = None
     neighbors: List[tuple[int, int]] = field(default_factory=list)
+    inventory: List[str] = field(default_factory=list)
 
     def __post_init__(self):
         if self.position is not None:
