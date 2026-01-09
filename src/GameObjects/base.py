@@ -16,3 +16,4 @@ class GameObjectMeta:
     placement: PlacementType = "cell"
     description: Optional[str] = None
     logic_cls: Optional[type[Any]] = None  # wskaźnik na klasę używaną w logice gry (nieserializowany)
+    default_config: Optional[dict[str, Any]] = None

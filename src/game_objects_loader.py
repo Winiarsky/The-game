@@ -79,7 +79,7 @@ def serialize_meta(definitions: Iterable[GameObjectDefinition]) -> list[dict[str
                 "color": meta.color,
                 "placement": meta.placement,
                 "description": meta.description,
+                "default_config": meta.default_config,
             }
         )
     return result
-

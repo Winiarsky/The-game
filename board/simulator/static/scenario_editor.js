@@ -71,6 +71,102 @@ function showToast(message) {
     setTimeout(() => toast.remove(), 2800);
 }
 
+function openConfigEditor(meta, existingConfig = undefined) {
+    return new Promise((resolve) => {
+        const overlay = document.createElement("div");
+        overlay.className = "config-overlay";
+        overlay.style.position = "fixed";
+        overlay.style.inset = "0";
+        overlay.style.background = "rgba(0,0,0,0.45)";
+        overlay.style.display = "flex";
+        overlay.style.alignItems = "center";
+        overlay.style.justifyContent = "center";
+        overlay.style.zIndex = "9999";
+
+        const panel = document.createElement("div");
+        panel.className = "config-panel";
+        panel.style.width = "420px";
+        panel.style.maxWidth = "90vw";
+        panel.style.background = "#fff";
+        panel.style.borderRadius = "8px";
+        panel.style.boxShadow = "0 10px 30px rgba(0,0,0,0.35)";
+        panel.style.padding = "16px";
+        panel.style.display = "flex";
+        panel.style.flexDirection = "column";
+        panel.style.gap = "10px";
+
+        const title = document.createElement("h3");
+        title.textContent = `Konfiguracja: ${meta.label || meta.object_id}`;
+        title.style.margin = "0";
+
+        const hint = document.createElement("p");
+        hint.textContent = 'Wpisz JSON (np. {"loot":["gold"]}). Puste pole oznacza domyślne wartości.';
+        hint.style.margin = "0";
+        hint.style.color = "#444";
+        hint.style.fontSize = "0.9rem";
+
+        const textarea = document.createElement("textarea");
+        textarea.style.width = "100%";
+        textarea.style.minHeight = "160px";
+        textarea.style.fontFamily = "monospace";
+        textarea.style.fontSize = "0.9rem";
+        textarea.style.padding = "8px";
+        textarea.style.borderRadius = "6px";
+        textarea.style.border = "1px solid #ccc";
+        textarea.value = existingConfig ? JSON.stringify(existingConfig, null, 2) : "";
+
+        const error = document.createElement("div");
+        error.style.color = "#b00020";
+        error.style.fontSize = "0.9rem";
+        error.style.minHeight = "1.2em";
+
+        const actions = document.createElement("div");
+        actions.style.display = "flex";
+        actions.style.gap = "8px";
+        actions.style.justifyContent = "flex-end";
+
+        const btnCancel = document.createElement("button");
+        btnCancel.textContent = "Anuluj";
+        btnCancel.type = "button";
+        const btnSave = document.createElement("button");
+        btnSave.textContent = "Zapisz";
+        btnSave.type = "button";
+
+        actions.append(btnCancel, btnSave);
+        panel.append(title, hint, textarea, error, actions);
+        overlay.append(panel);
+        document.body.appendChild(overlay);
+
+        const cleanup = () => overlay.remove();
+
+        btnCancel.addEventListener("click", () => {
+            cleanup();
+            resolve(null);
+        });
+        overlay.addEventListener("click", (event) => {
+            if (event.target === overlay) {
+                cleanup();
+                resolve(null);
+            }
+        });
+        btnSave.addEventListener("click", () => {
+            const raw = textarea.value.trim();
+            if (!raw) {
+                cleanup();
+                resolve(undefined);
+                return;
+            }
+            try {
+                const parsed = JSON.parse(raw);
+                cleanup();
+                resolve(parsed);
+            } catch (err) {
+                error.textContent = "Niepoprawny JSON.";
+            }
+        });
+    });
+}
+
 function ensureCell(row, col) {
     return cells?.[row]?.[col];
 }
@@ -92,6 +188,10 @@ function createCell(row, col) {
     cell.dataset.col = col;
     cell.title = `R${row} C${col}`;
     cell.addEventListener("click", (event) => handleCellClick(row, col, event));
+    cell.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        handleCellClick(row, col, event, true);
+    });
 
     const startMarker = document.createElement("div");
     startMarker.className = "start-marker";
@@ -404,7 +504,7 @@ function handleStartingPlacement(row, col) {
     renderCellObjects(row, col);
 }
 
-function handleCellClick(row, col, event) {
+async function handleCellClick(row, col, event, forceConfig = false) {
     const meta = state.selection;
     if (meta && meta.object_id === VIRTUAL_START_META.object_id) {
         handleStartingPlacement(row, col);
@@ -423,28 +523,25 @@ function handleCellClick(row, col, event) {
         handleEdgePlacement(meta, row, col);
         return;
     }
-    const wantsConfig = event?.altKey || event?.metaKey || event?.ctrlKey;
+    const wantsConfig =
+        forceConfig ||
+        event?.altKey ||
+        event?.metaKey ||
+        event?.ctrlKey ||
+        event?.shiftKey ||
+        event?.button === 2 ||
+        (event?.detail >= 2); // double-click jako skrót do konfiguracji
     if (wantsConfig && !state.deleteMode) {
+        event?.preventDefault?.();
+        event?.stopPropagation?.();
         const key = posKey(row, col);
         const existing = (state.cellObjects.get(key) || []).find(
             (obj) => obj.category === meta.category && obj.object_id === meta.object_id,
         );
-        const currentConfig = existing?.config ? JSON.stringify(existing.config, null, 2) : "{}";
-        const input = window.prompt("Podaj config JSON dla tego obiektu (Alt/CTRL klik).", currentConfig);
-        if (input === null) {
-            return;
-        }
-        let parsed = undefined;
-        const trimmed = input.trim();
-        if (trimmed) {
-            try {
-                parsed = JSON.parse(trimmed);
-            } catch (error) {
-                showToast("Niepoprawny JSON konfiguracji.");
-                return;
-            }
-        }
-        addCellObject(meta, row, col, parsed);
+        const defaultCfg = meta.default_config || meta.defaultConfig;
+        const config = await openConfigEditor(meta, existing?.config ?? defaultCfg);
+        if (config === null) return; // anulowano
+        addCellObject(meta, row, col, config);
         renderCellObjects(row, col);
         return;
     }
