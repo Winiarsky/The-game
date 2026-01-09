@@ -95,13 +95,36 @@ class Game:
 
         def build_instance(cls, cfg: dict[str, Any] | None):
             if not isinstance(cls, type):
+                logger.error("logic_cls %s nie jest klasą", cls)
                 return None
             try:
-                if cfg:
-                    return cls(**cfg)
-                return cls()
-            except TypeError:
-                return cls()
+                return cls(**(cfg or {}))
+            except TypeError as exc:
+                logger.error("Nie udało się utworzyć %s z configiem %s: %s", cls.__name__, cfg, exc)
+                try:
+                    return cls()
+                except Exception:
+                    return None
+
+        handlers: list[tuple[type, callable]] = [
+            (BasicTerrain, lambda obj, pos: board.set_field(pos, obj)),
+            (Obstacle, lambda obj, pos: board.place(obj, pos)),
+            (Interactable, lambda obj, pos: board.add_interactable(obj, pos)),
+        ]
+
+        def place_logic(logic_cls, pos: tuple[int, int], cfg: dict[str, Any] | None):
+            instance = build_instance(logic_cls, cfg)
+            if instance is None:
+                return
+            for base, action in handlers:
+                if isinstance(instance, base):
+                    action(instance, pos)
+                    return
+            # fallback gdy nie pasuje do znanych typów – traktuj jako przeszkodę
+            try:
+                board.place(Obstacle(), pos)
+            except Exception as exc:
+                logger.error("Fallback obstacle na %s nie powiódł się: %s", pos, exc)
 
         if not isinstance(scenario.get("objects"), list):
             logger.info("Brak pola objects w scenariuszu - używam legacy pól.")
@@ -130,24 +153,13 @@ class Game:
 
             if placement == "cell":
                 # Nowy format per instancja: {"position":[col,row],"config":{...}}
-                instances = obj.get("instances") or []
-                for inst in instances:
+                for inst in obj.get("instances") or []:
+                    raw_pos = inst.get("position") or inst.get("pos")
+                    if not raw_pos:
+                        continue
                     try:
-                        raw_pos = inst.get("position") or inst.get("pos")
-                        if not raw_pos:
-                            continue
                         col, row = raw_pos
-                        config = inst.get("config") or {}
-                        if isinstance(logic_cls, type) and issubclass(logic_cls, BasicTerrain):
-                            board.set_field((col, row), build_instance(logic_cls, config))
-                            continue
-                        if isinstance(logic_cls, type) and issubclass(logic_cls, Obstacle):
-                            board.place(build_instance(logic_cls, config), (col, row))
-                            continue
-                        if isinstance(logic_cls, type) and issubclass(logic_cls, Interactable):
-                            board.add_interactable(build_instance(logic_cls, config), (col, row))
-                            continue
-                        board.place(Obstacle(), (col, row))
+                        place_logic(logic_cls, (col, row), inst.get("config") or {})
                     except ValueError as exc:
                         logger.error("Pole %s jest zajęte, nie można ustawić %s: %s", raw_pos, object_id, exc)
                     except Exception as exc:
@@ -157,19 +169,7 @@ class Game:
                 for pos in obj.get("positions", []):
                     try:
                         col, row = pos
-                        # Tereny
-                        if isinstance(logic_cls, type) and issubclass(logic_cls, BasicTerrain):
-                            board.set_field((col, row), logic_cls())
-                            continue
-                        # Przeszkody / inne obiekty zajmujące pole
-                        if isinstance(logic_cls, type) and issubclass(logic_cls, Obstacle):
-                            board.place(logic_cls(), (col, row))
-                            continue
-                        if isinstance(logic_cls, type) and issubclass(logic_cls, Interactable):
-                            board.add_interactable(logic_cls(), (col, row))
-                            continue
-                        # Domyślnie traktujemy jako obstawienie pola przeszkodą.
-                        board.place(Obstacle(), (col, row))
+                        place_logic(logic_cls, (col, row), {})
                     except ValueError as exc:
                         logger.error("Pole %s jest zajęte, nie można ustawić %s: %s", pos, object_id, exc)
                     except Exception as exc:
