@@ -91,7 +91,7 @@ function createCell(row, col) {
     cell.dataset.row = row;
     cell.dataset.col = col;
     cell.title = `R${row} C${col}`;
-    cell.addEventListener("click", () => handleCellClick(row, col));
+    cell.addEventListener("click", (event) => handleCellClick(row, col, event));
 
     const startMarker = document.createElement("div");
     startMarker.className = "start-marker";
@@ -289,12 +289,26 @@ function toggleDeleteMode() {
     deleteModeButton.textContent = state.deleteMode ? "Tryb usuwania: włączony" : "Tryb usuwania: wyłączony";
 }
 
-function addCellObject(meta, row, col) {
+function addCellObject(meta, row, col, config = undefined) {
     const key = posKey(row, col);
     const list = state.cellObjects.get(key) || [];
     const exists = list.some((obj) => obj.category === meta.category && obj.object_id === meta.object_id);
     if (!exists) {
-        list.push({ category: meta.category, object_id: meta.object_id, label: meta.label, color: meta.color });
+        list.push({
+            category: meta.category,
+            object_id: meta.object_id,
+            label: meta.label,
+            color: meta.color,
+            config,
+        });
+        state.cellObjects.set(key, list);
+    } else if (config !== undefined) {
+        // Uaktualnij istniejący wpis konfigiem.
+        list.forEach((obj) => {
+            if (obj.category === meta.category && obj.object_id === meta.object_id) {
+                obj.config = config;
+            }
+        });
         state.cellObjects.set(key, list);
     }
 }
@@ -318,14 +332,14 @@ function removeAllFromCell(row, col) {
     );
 }
 
-function toggleCellObject(meta, row, col) {
+function toggleCellObject(meta, row, col, config = undefined) {
     const key = posKey(row, col);
     const list = state.cellObjects.get(key) || [];
     const exists = list.some((obj) => obj.category === meta.category && obj.object_id === meta.object_id);
     if (exists) {
         removeCellObject(meta, row, col);
     } else {
-        addCellObject(meta, row, col);
+        addCellObject(meta, row, col, config);
     }
 }
 
@@ -390,7 +404,7 @@ function handleStartingPlacement(row, col) {
     renderCellObjects(row, col);
 }
 
-function handleCellClick(row, col) {
+function handleCellClick(row, col, event) {
     const meta = state.selection;
     if (meta && meta.object_id === VIRTUAL_START_META.object_id) {
         handleStartingPlacement(row, col);
@@ -407,6 +421,31 @@ function handleCellClick(row, col) {
     }
     if (meta.placement === "edge") {
         handleEdgePlacement(meta, row, col);
+        return;
+    }
+    const wantsConfig = event?.altKey || event?.metaKey || event?.ctrlKey;
+    if (wantsConfig && !state.deleteMode) {
+        const key = posKey(row, col);
+        const existing = (state.cellObjects.get(key) || []).find(
+            (obj) => obj.category === meta.category && obj.object_id === meta.object_id,
+        );
+        const currentConfig = existing?.config ? JSON.stringify(existing.config, null, 2) : "{}";
+        const input = window.prompt("Podaj config JSON dla tego obiektu (Alt/CTRL klik).", currentConfig);
+        if (input === null) {
+            return;
+        }
+        let parsed = undefined;
+        const trimmed = input.trim();
+        if (trimmed) {
+            try {
+                parsed = JSON.parse(trimmed);
+            } catch (error) {
+                showToast("Niepoprawny JSON konfiguracji.");
+                return;
+            }
+        }
+        addCellObject(meta, row, col, parsed);
+        renderCellObjects(row, col);
         return;
     }
     if (state.deleteMode) {
@@ -551,11 +590,15 @@ function buildScenarioPayload() {
             const meta = getMeta(obj.category, obj.object_id) || obj;
             const objectKey = metaKey(meta);
             if (!objectsByKey.has(objectKey)) {
-                objectsByKey.set(objectKey, { ...meta, positions: [] });
+                objectsByKey.set(objectKey, { ...meta, positions: [], instances: [] });
             }
             const scenarioPos = toScenarioPosition(key.split(",").map(Number));
             if (!Array.isArray(scenarioPos)) return;
-            objectsByKey.get(objectKey).positions.push(scenarioPos);
+            if (obj.config !== undefined) {
+                objectsByKey.get(objectKey).instances.push({ position: scenarioPos, config: obj.config });
+            } else {
+                objectsByKey.get(objectKey).positions.push(scenarioPos);
+            }
         });
     });
 
@@ -579,6 +622,7 @@ function buildScenarioPayload() {
             color: o.color,
             placement: "cell",
             positions: o.positions,
+            instances: o.instances,
         })),
         ...Array.from(edgesByKey.values(), (o) => ({
             category: o.category,
@@ -680,6 +724,13 @@ function applyObjects(objects = []) {
                     { row: aRow, col: aCol },
                     { row: bRow, col: bCol },
                 );
+            });
+        } else if (Array.isArray(obj.instances)) {
+            obj.instances.forEach((inst) => {
+                const normalized = fromScenarioPosition(inst.position || inst.pos);
+                if (!Array.isArray(normalized)) return;
+                const [row, col] = normalized;
+                addCellObject(obj, row, col, inst.config);
             });
         } else if (Array.isArray(obj.positions)) {
             obj.positions.forEach((pos) => {

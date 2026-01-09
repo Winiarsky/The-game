@@ -93,6 +93,16 @@ class Game:
             (definition.meta.category, definition.meta.object_id): definition for definition in definitions
         }
 
+        def build_instance(cls, cfg: dict[str, Any] | None):
+            if not isinstance(cls, type):
+                return None
+            try:
+                if cfg:
+                    return cls(**cfg)
+                return cls()
+            except TypeError:
+                return cls()
+
         if not isinstance(scenario.get("objects"), list):
             logger.info("Brak pola objects w scenariuszu - używam legacy pól.")
             self._apply_legacy(board, scenario)
@@ -119,6 +129,31 @@ class Game:
                 continue
 
             if placement == "cell":
+                # Nowy format per instancja: {"position":[col,row],"config":{...}}
+                instances = obj.get("instances") or []
+                for inst in instances:
+                    try:
+                        raw_pos = inst.get("position") or inst.get("pos")
+                        if not raw_pos:
+                            continue
+                        col, row = raw_pos
+                        config = inst.get("config") or {}
+                        if isinstance(logic_cls, type) and issubclass(logic_cls, BasicTerrain):
+                            board.set_field((col, row), build_instance(logic_cls, config))
+                            continue
+                        if isinstance(logic_cls, type) and issubclass(logic_cls, Obstacle):
+                            board.place(build_instance(logic_cls, config), (col, row))
+                            continue
+                        if isinstance(logic_cls, type) and issubclass(logic_cls, Interactable):
+                            board.add_interactable(build_instance(logic_cls, config), (col, row))
+                            continue
+                        board.place(Obstacle(), (col, row))
+                    except ValueError as exc:
+                        logger.error("Pole %s jest zajęte, nie można ustawić %s: %s", raw_pos, object_id, exc)
+                    except Exception as exc:
+                        logger.error("Nie można ustawić obiektu %s na %s: %s", object_id, raw_pos, exc)
+
+                # Legacy lista pozycji bez konfiguracji.
                 for pos in obj.get("positions", []):
                     try:
                         col, row = pos
