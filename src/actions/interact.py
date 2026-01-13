@@ -66,5 +66,24 @@ class InteractAction(BaseAction):
             logger.info("Nie możesz teraz wejść w interakcję z tym obiektem.")
             return
 
-        message = interactable.interact(hero, ctx.game)
+        action_id = self._choose_action(interactable)
+        message = interactable.interact(hero, ctx.game, action_id=action_id)
         logger.info(message)
+
+    def _choose_action(self, interactable):
+        actions = getattr(interactable, "available_actions", lambda: [])()
+        if not actions:
+            return None
+        print("Możliwe akcje:")
+        for idx, action in enumerate(actions, start=1):
+            desc = f" — {action.description}" if action.description else ""
+            print(f"{idx}. {action.label}{desc}")
+        choice = input("Wybierz numer akcji (Enter aby wyjść): ").strip()
+        if not choice:
+            return None
+        if not choice.isdigit():
+            return None
+        index = int(choice) - 1
+        if index < 0 or index >= len(actions):
+            return None
+        return actions[index].id

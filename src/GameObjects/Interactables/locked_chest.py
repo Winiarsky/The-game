@@ -1,56 +1,357 @@
+import random
 from GameObjects.base import GameObjectMeta
-from interactable import Interactable
+from typing import Optional
 
+from interactable import Interactable, Interaction
+import logging
+from board import consts
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class LockedChest(Interactable):
     """Prosta skrzynia: otwórz, aby zebrać skarb."""
 
-    def __init__(self, loot: list[str] | None = None, locked: bool = True):
-        super().__init__(position=None)
-        self.allow_same_cell_interact = False
-        self.blocks_movement = True
+    def __init__(
+        self,
+        loot: list[str],
+        locked: bool,
+        allow_same_cell_interact: bool,
+        blocks_movement: bool,
+        thievery_dc: int,
+        force_open_dc: int,
+        push_dc: int,
+        ac: int,
+        hp: int,
+        hardness: int,
+        working_keys: Optional[list[str]],
+        inspection_msg: Optional[str],
+        max_crit_failures: int,
+        max_failures: int,
+        ):
+        super().__init__(position=None, allow_same_cell_interact=True)
+        # pozwala stać na tym samym polu po wskoczeniu, ale domyślnie blokuje ruch zwykły
+        self.allow_same_cell_interact = allow_same_cell_interact
+        self.blocks_movement = blocks_movement
         self.locked = locked
-        self.opened = False
-        self.loot = loot or ["gold_coin", "gem"]
-        self.dc = 12  # trudność otwarcia skrzyni
-        self.ac = 20  # klasa pancerza skrzyni dla ataków
-        self.hp = 10
-        self.hardness = 5
-        self.allowed_actions = ['thievery', 'attack', 'key']
+        self.interactable = True
+        self.loot = list(loot)
+        self.thievery_dc = thievery_dc  # trudność otwarcia skrzyni
+        self.force_open_dc = force_open_dc
+        self.ac = ac  # klasa pancerza skrzyni dla ataków
+        self.hp = hp
+        self.hardness = hardness
+        self.working_keys = list(working_keys) if working_keys is not None else ["master_key"]
+        self.is_open = False
+        self.destroyed = False
+        self.register_default_actions()
+        self.inspection_msg = inspection_msg
+        self.max_crit_failures = max_crit_failures
+        self.max_failures = max_failures
+        self.crit_failures = 0
+        self.failures = 0
+        self.push_dc = push_dc  # trudność przesunięcia skrzyni
+        self.someone_inside = None  # przechowuje postać, która wskoczyła do skrzyni
 
     def can_interact(self, actor, game) -> bool:
-        return not self.opened
+        return self.interactable
 
-    def interact(self, actor, game):
+    # --- Narzędzia ---
+    def _get_results(self, msg: str) -> int:
+        while True:
+            try:
+                return int(input(msg))
+            except ValueError:
+                continue
+
+    def _skill_check(self, dc: int, roll_msg: str) -> tuple[str, int]:
+        roll = self._get_results(roll_msg)
+        if roll >= dc + 10:
+            outcome = "critical_success"
+        elif roll >= dc:
+            outcome = "success"
+        elif roll <= dc - 10:
+            outcome = "critical_failure"
+        else:
+            outcome = "failure"
+        return outcome, roll
+
+    def _describe_loot(self) -> str:
+        msg = ", ".join(self.loot) if self.loot else "Tu nic nie ma!"
+        return msg
+
+    # --- Akcje ---
+    def register_default_actions(self) -> None:
+        """Rejestruje zestaw domyślnych akcji skrzyni."""
+        self.register_action(
+            Interaction(
+                id="inspect",
+                label="Obejrzyj",
+                description="Sprawdź stan skrzyni.",
+                handler=LockedChest.action_inspect,
+            )
+        )
+        self.register_action(
+            Interaction(
+                id="open",
+                label="Otwórz",
+                description="Spróbuj otworzyć (jeśli odblokowana).",
+                handler=LockedChest.action_open,
+            )
+        )
+        self.register_action(
+            Interaction(
+                id="close",
+                label="Zamknij",
+                description="Zamknij wieko otwartej skrzyni.",
+                handler=LockedChest.action_close,
+            )
+        )
+        self.register_action(
+            Interaction(
+                id="use_key",
+                label="Użyj klucza",
+                description="Włóż klucz i spróbuj odblokować.",
+                handler=LockedChest.action_use_key,
+            )
+        )
+        self.register_action(
+            Interaction(
+                id="unlock_thievery",
+                label="Wytrych",
+                description="Test Złodziejstwa vs DC.",
+                handler=LockedChest.action_unlock_thievery,
+            )
+        )
+        self.register_action(
+            Interaction(
+                id="force_open",
+                label="Wyrwij/wyważ",
+                description="Athletics vs DC, próba sforsowania.",
+                handler=LockedChest.action_force_open,
+            )
+        )
+        self.register_action(
+            Interaction(
+                id="attack",
+                label="Atakuj",
+                description="Uderz w skrzynię bronią.",
+                handler=LockedChest.action_attack,
+            )
+        )
+        self.register_action(
+            Interaction(
+                id="push",
+                label="Przesuń",
+                description="Spróbuj przesunąć skrzynię na sąsiednie pole.",
+                handler=LockedChest.action_push,
+            )
+        )
+        self.register_action(
+            Interaction(
+                id="jump_on",
+                label="Wskocz na skrzynię",
+                description="Wskocz do skrzyni aby otrzymac bonus do ukrywania i zaslone. (Tylko dla postaci o maym lub mniejszym rozmiarze)",
+                handler=LockedChest.action_jump_in,
+            )
+        )
+        self.register_action(
+            Interaction(
+                id="loot",
+                label="Zbierz łup",
+                description="Weź wszystko ze środka (jeśli otwarte).",
+                handler=LockedChest.action_loot,
+            )
+        )
+        self.register_action(
+            Interaction(
+                id="leave",
+                label="Zrezygnuj",
+                description="Zakończ interakcję.",
+                handler=lambda _self, _actor, _game, _payload=None: "Koniec akcji.",
+            )
+        )
+
+    def action_inspect(self, actor, game, _payload: Optional[dict] = None) -> str:
+        if self.inspection_msg:
+            return self.inspection_msg
+        state = "otwarta" if self.is_open else "zamknięta"
+        lock_state = "odblokowana" if not self.locked else "zakluczona"
+        destroyed = " (rozbita)" if self.destroyed else ""
+        loot_info = f" W środku: {self._describe_loot()}." if self.is_open or self.destroyed else ""
+        return f"Skrzynia jest {state}, {lock_state}{destroyed}.{loot_info}"
+
+    def action_open(self, actor, game, _payload: Optional[dict] = None) -> str:
+        if self.destroyed:
+            self.is_open = True
+            return "Skrzynia jest zniszczona."
+        if self.locked:
+            return "Skrzynia jest zakluczona, użyj klucza lub innej metody, by ją odblokować."
+        if self.is_open and not self.loot:
+            return "Skrzynia zostala juz wyeksplorowana."
+        self.is_open = True
+        return f"Otwierasz skrzynię. Widzisz: {self._describe_loot()}."
+
+    def action_close(self, actor, game, _payload: Optional[dict] = None) -> str:
+        if self.destroyed:
+            return "Nie da się zamknąć rozbitej skrzyni."
+        if not self.is_open:
+            return "Wieko już jest zamknięte."
+        self.is_open = False
+        return "Zamykasz wieko skrzyni."
+
+    def action_use_key(self, actor, game, _payload: Optional[dict] = None) -> str:
         if not self.locked:
-            return "Skrzynia jest już odblokowana."
-        action = input("wybierz akcje ktora chesz wykonac")
-        if action not in self.allowed_actions:
-            return f"Akcja '{action}' nie jest dozwolona dla tej skrzyni."
-        match action:
-            case 'key':
-                self.locked = False
-                return "Używasz klucza, aby odblokować skrzynię."
-            case 'thievery':
-                return self.attempt_unlock(actor, game)
-            case 'attack':
-                return self.attempt_attack(actor, game)
-            
-    def attempt_unlock(self, actor, game) -> str:
-        if not self.locked:
-            return "Skrzynia jest już odblokowana."
-        # Tutaj można dodać logikę rzutu kością i porównania z DC
-        self.locked = False
-        return "Udało ci się otworzyć skrzynię metodą włamywania!"
-    
-    def attempt_attack(self, actor, game) -> str:
-        # Tutaj można dodać logikę ataku na skrzynię
-        self.hp -= 5  # przykładowe obrażenia
-        if self.hp <= 0:
+            return "Zamek już odblokowany."
+        key_name = input("Podaj nazwę klucza, którego używasz: ").strip()
+        if not key_name:
+            return "Nie użyto klucza."
+        if key_name in self.working_keys:
             self.locked = False
-            return "Skrzynia została zniszczona i otwarta!"
-        return f"Skrzynia została trafiona! Pozostało jej {self.hp} punktów życia."
+            return f"Używasz {key_name}. Zamek klika i luzuje się."
+        return f"{key_name} nie pasuje do zamka."
+
+    def action_unlock_thievery(self, actor, game, _payload: Optional[dict] = None) -> str:
+        if not self.locked:
+            return "Zamek już odblokowany."
+        if self.failures >= self.max_failures or self.crit_failures >= self.max_crit_failures:
+            return "Zamek jest zbyt uszkodzony od poprzednich prób, by kontynuować."
+        outcome, total = self._skill_check(self.thievery_dc, "Rzuć na Thievery (podaj ostateczny wynik): ")
+        match outcome:
+            case "critical_success":
+                self.locked = False
+                self.is_open = True
+                return f"Kryt! ({total}) Cicho otwierasz zamek i uchylasz wieko. Łup: {self._describe_loot()}."
+            case "success":
+                self.locked = False
+                return f"Sukces ({total}). Zamek ustępuje."
+            case "failure":
+                self.failures += 1
+                return f"Porażka ({total}). Zamek nadal zamknięty."
+            case "critical_failure":
+                self.crit_failures += 1
+                self.thievery_dc += 2
+                return f"Krytyczna porażka ({total})! Zamek się klinuje; kolejne próby będą trudniejsze."
+        return "Nieoczekiwany wynik testu."
+
+    def action_force_open(self, actor, game, _payload: Optional[dict] = None) -> str:
+        if not self.locked:
+            return "Zamek już odblokowany - nie ma czego wyważać."
+        outcome, total = self._skill_check(self.force_open_dc, "Rzuć na Athletics (podaj ostateczny wynik): ")
+        match outcome:
+            case "critical_success":
+                self.locked = False
+                self.is_open = True
+                return f"Krytyk siłowy ({total})! Zawiasy pękają, wieko odskakuje. Łup: {self._describe_loot()}."
+            case "success":
+                self.locked = False
+                return f"Udało się wyważyć ({total}). Skrzynia jest odblokowana."
+            case "failure":
+                self.failures += 1
+                return f"Porażka ({total}). Zamek wciąż trzyma."
+            case "critical_failure":
+                self.crit_failures += 1
+                self.locked = True
+                self.force_open_dc += 2
+                return f"Fatalne pudło ({total})! Zamek się klinuje, następne próby mogą być trudniejsze."
+        return "Nieoczekiwany wynik testu."
+
+    def action_attack(self, actor, game, _payload: Optional[dict] = None) -> str:
+        if self.destroyed:
+            return "Skrzynia już rozbita."
+        attack_roll = self._get_results("Rzuć na atak (podaj ostateczny wynik): ") # po zaimplementowaniu walki, to powinno korzystać z mechaniki walki
+        if attack_roll < self.ac:
+            return f"Atak ({attack_roll}) nie trafia skrzyni (AC {self.ac})."
+        damage = self._get_results("Podaj zadaną ilość obrażeń: ")
+        effective_damage = max(0, damage - self.hardness)
+        self.hp -= effective_damage
+        if self.hp <= 0:
+            self.destroyed = True
+            self.locked = False
+            self.is_open = True
+            return f"Skrzynia pęka pod uderzeniem! Łup wypada: {self._describe_loot()}."
+        return f"Trafienie ({attack_roll}). Zadajesz {effective_damage} obrażeń (po Hardness {self.hardness}). HP skrzyni: {self.hp}."
+
+    def action_push(self, actor, game, _payload: Optional[dict] = None) -> str:
+        if self.destroyed:
+            return "To już kupa desek, przesuwanie nie ma sensu."
+        if self.position is None:
+            return "Skrzynia nie jest na planszy."
+        outcome, total = self._skill_check(self.push_dc, "Rzuć na Athletics (podaj ostateczny wynik): ")
+        if outcome == "failure":
+            return f"Nie udaje się przesunąć skrzyni ({total})."
+        if outcome == "critical_failure":
+            return f"Krytyczna porażka ({total})! Potykasz się i upadasz, nie przesuwając skrzyni otrzymujesz {random.randint(1, 3)} obrażeń."
+
+        board = game.board
+        current_pos = self.position
+        passenger = None
+        if self.someone_inside:
+            occupant = board.occupant_at(current_pos)
+            if occupant is self.someone_inside:
+                passenger = occupant
+            else:
+                # pasażer wyszedł ze skrzyni – wyczyść znacznik
+                self.someone_inside = None
+
+        neighbors = board.get_neighbors(current_pos)
+        valid_targets = [
+            pos for pos in neighbors
+            if pos != current_pos and board.can_traverse(current_pos, pos, allow_occupied=False)
+        ]
+
+        if not valid_targets:
+            return f"Sukces testu ({total}), ale brak dostępnych pól do przesunięcia skrzyni."
+
+        game.conn.set_leds(valid_targets, consts.MOVE_FIELD_RGB)
+        while True:
+            try:
+                target = game.conn.scan_board(valid_targets)
+                if target not in valid_targets:
+                    logger.info("Wybrano nieprawidłowe pole.")
+                    continue
+                game.conn.leds_off()
+                break
+            except Exception as e:
+                continue
+
+        if passenger is not None:
+            try:
+                board.move(current_pos, target)
+            except ValueError as exc:
+                return f"Nie da się przesunąć skrzyni z pasażerem: {exc}"
+
+        board.remove_interactable(self, current_pos)
+        board.add_interactable(self, target)
+        return f"Przesuwasz skrzynię na {target} (test {total})."
+
+    def action_jump_in(self, actor, game, _payload: Optional[dict] = None) -> str:
+        if self.position is None:
+            return "Skrzynia nie jest na planszy."
+        board = game.board
+        if self.someone_inside:
+            return "Skrzynia jest już przez kogos zajęta."
+
+        occupant = board.occupant_at(self.position)
+        if occupant is not None and occupant is not actor:
+            return "Ktoś już zajmuje to pole."
+
+        if actor.position is not None:
+            board.remove(actor.position)
+        board.place(actor, self.position)  # w przyszlosci mozna dodac zaslone
+        self.someone_inside = actor
+        return f"Wskakujesz do skrzyni, otrzymujesz bonus do ukrywania sie + {random.randint(1, 6)} oraz poowiczna zaslone."
     
+    def action_loot(self, actor, game, _payload: Optional[dict] = None) -> str:
+        if self.locked and not self.destroyed:
+            return "Najpierw odblokuj skrzynię."
+        if not self.is_open and not self.destroyed:
+            return "Otwórz skrzynię, by sięgnąć do środka."
+        if not self.loot:
+            return "W środku jest pusto."
+        loot_items = self.loot[:]
+        self.loot = []
+        return f"Zabierasz: {', '.join(loot_items)}."
 
 
 META = GameObjectMeta(
@@ -61,5 +362,20 @@ META = GameObjectMeta(
     placement="cell",
     description="Skrzynia ze skarbem, interakcja: otwórz i zabierz łup.",
     logic_cls=LockedChest,
-    default_config={"locked": True, "loot": ["gold_coin", "gem"]},
+    default_config={
+        "loot": [],
+        "locked": True,
+        "allow_same_cell_interact": True,
+        "blocks_movement": True,
+        "thievery_dc": 12,
+        "force_open_dc": 15,
+        "push_dc": 13,
+        "ac": 20,
+        "hp": 10,
+        "hardness": 5,
+        "working_keys": ["12345"],
+        "inspection_msg": None,
+        "max_crit_failures": 3,
+        "max_failures": 5,
+    },
 )

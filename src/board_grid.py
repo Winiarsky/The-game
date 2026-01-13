@@ -148,6 +148,10 @@ class BoardGrid:
         cell = self.cell_at(position)
         occupant = cell.occupant
         if occupant is not None:
+            # jeśli obiekt interaktywny śledzi pasażera (np. skrzynia), wyczyść go przy opuszczaniu pola
+            for interactable in cell.interactables:
+                if getattr(interactable, "someone_inside", None) is occupant:
+                    interactable.someone_inside = None
             cell.occupant = None
             occupant.set_position(None)
         return occupant
