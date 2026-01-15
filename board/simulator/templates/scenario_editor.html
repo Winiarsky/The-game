@@ -68,6 +68,23 @@
             <section class="panel">
                 <h2>Obiekty z wybranej kategorii</h2>
                 <p id="selection-info" class="muted">Kliknij „Użyj”, aby wybrać obiekt i wstawiać go klikając pola. Ikonka oka ukrywa/odsłania obiekty.</p>
+                <section id="rooms-panel" class="rooms-panel" hidden>
+                    <div class="form-row rooms-inline">
+                        <label for="room-name">Nazwa pokoju</label>
+                        <input id="room-name" type="text" placeholder="np. Komnata skarbów">
+                    </div>
+                    <div class="form-row rooms-inline">
+                        <label for="room-color">Kolor</label>
+                        <input id="room-color" type="color" value="#7c6bf3">
+                    </div>
+                    <div class="inline-group">
+                        <button type="button" id="add-room">+ Dodaj pokój</button>
+                        <button type="button" id="clear-room-selection">Wyczyść zaznaczenie pól</button>
+                        <button type="button" id="clear-room-assignments">Usuń przydział z zaznaczonych pól</button>
+                    </div>
+                    <p id="room-selection-info" class="muted">Zaznacz pola na planszy, a następnie kliknij „Przydziel” przy wybranym pokoju.</p>
+                    <div id="rooms-list" class="rooms-list"></div>
+                </section>
                 <div id="object-list" class="object-list"></div>
             </section>
         </aside>

@@ -18,6 +18,7 @@ class Occupant(Protocol):
 class BasicTerrain:
     name: str = "basic"
     walkable: bool = True
+    room: str = "basic room"
 
 
 @dataclass(slots=True)

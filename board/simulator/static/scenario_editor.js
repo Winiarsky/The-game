@@ -16,6 +16,14 @@ const selectionInfo = document.getElementById("selection-info");
 const toastTemplate = document.getElementById("toast-template");
 const backgroundInput = document.getElementById("background-input");
 const backgroundClearButton = document.getElementById("background-clear");
+const roomsPanel = document.getElementById("rooms-panel");
+const roomsListElement = document.getElementById("rooms-list");
+const roomNameInput = document.getElementById("room-name");
+const roomColorInput = document.getElementById("room-color");
+const addRoomButton = document.getElementById("add-room");
+const clearRoomSelectionButton = document.getElementById("clear-room-selection");
+const clearRoomAssignmentsButton = document.getElementById("clear-room-assignments");
+const roomSelectionInfo = document.getElementById("room-selection-info");
 
 const dims = window.BOARD_DIMENSIONS || { rows: 15, cols: 20 };
 
@@ -26,6 +34,8 @@ const VIRTUAL_START_META = {
     color: "#6ba34f",
     placement: "cell",
 };
+
+const ROOMS_CATEGORY = "Rooms";
 
 const state = {
     startingPositions: [],
@@ -38,6 +48,9 @@ const state = {
     selection: null, // meta
     deleteMode: false,
     pendingEdgeStart: null, // {row,col}
+    rooms: [], // [{id,name,color}]
+    roomAssignments: new Map(), // key -> roomId
+    roomSelection: new Set(), // Set<posKey>
 };
 
 let cells = [];
@@ -62,6 +75,31 @@ const normalizePosition = (pos) => {
 const swapRowCol = (pos) => (Array.isArray(pos) && pos.length >= 2 ? [pos[1], pos[0]] : pos);
 const toScenarioPosition = (pos) => swapRowCol(normalizePosition(pos));
 const fromScenarioPosition = (pos) => swapRowCol(normalizePosition(pos));
+const isRoomsCategory = () => categorySelect?.value === ROOMS_CATEGORY;
+const hslToHex = (h, s, l) => {
+    const a = (s / 100) * Math.min(l / 100, 1 - l / 100);
+    const f = (n) => {
+        const k = (n + h / 30) % 12;
+        const color = l / 100 - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+        return Math.round(255 * color)
+            .toString(16)
+            .padStart(2, "0");
+    };
+    return `#${f(0)}${f(8)}${f(4)}`;
+};
+const randomRoomColor = () => hslToHex(Math.floor(Math.random() * 360), 60, 65);
+
+function getRoomById(roomId) {
+    return state.rooms.find((room) => room.id === roomId);
+}
+
+function countAssignments(roomId) {
+    let count = 0;
+    state.roomAssignments.forEach((value) => {
+        if (value === roomId) count += 1;
+    });
+    return count;
+}
 
 function showToast(message) {
     if (!toastTemplate) return;
@@ -197,6 +235,10 @@ function createCell(row, col) {
     startMarker.className = "start-marker";
     cell.appendChild(startMarker);
 
+    const roomMarker = document.createElement("div");
+    roomMarker.className = "room-marker";
+    cell.appendChild(roomMarker);
+
     return cell;
 }
 
@@ -258,6 +300,46 @@ function renderStartingMarkers() {
     }
 }
 
+function updateRoomSelectionInfo() {
+    if (!roomSelectionInfo) return;
+    const count = state.roomSelection.size;
+    roomSelectionInfo.textContent =
+        count === 0
+            ? "Zaznacz pola na planszy, a następnie kliknij „Przydziel” przy wybranym pokoju."
+            : `Zaznaczone pola: ${count}. Kliknij „Przydziel”, aby nadać pokój.`;
+}
+
+function renderRoomOverlay() {
+    const roomsActive = isRoomsCategory();
+    if (boardElement) {
+        boardElement.classList.toggle("rooms-mode", roomsActive);
+    }
+    for (let r = 0; r < dims.rows; r += 1) {
+        for (let c = 0; c < dims.cols; c += 1) {
+            const cell = ensureCell(r, c);
+            const marker = cell.querySelector(".room-marker");
+            const key = posKey(r, c);
+            const roomId = state.roomAssignments.get(key);
+            const room = roomId ? getRoomById(roomId) : null;
+            const selected = state.roomSelection.has(key);
+
+            cell.classList.toggle("rooms-active", roomsActive && Boolean(room));
+            cell.classList.toggle("room-selected", roomsActive && selected);
+
+            if (roomsActive && room) {
+                cell.style.setProperty("--room-color", room.color || "#888");
+                marker.textContent = room.name || "Room";
+                marker.style.display = "flex";
+                marker.style.background = room.color || "#888";
+            } else {
+                cell.style.removeProperty("--room-color");
+                marker.textContent = "";
+                marker.style.display = "none";
+            }
+        }
+    }
+}
+
 function getObjectsAtCell(row, col, { includeHidden = false } = {}) {
     const items = state.cellObjects.get(posKey(row, col)) || [];
     return items.filter((item) => {
@@ -298,6 +380,7 @@ function renderCells() {
         }
     }
     renderStartingMarkers();
+    renderRoomOverlay();
     renderEdgeOverlay();
 }
 
@@ -371,6 +454,90 @@ function renderEdgeOverlay() {
 
         wallOverlay.appendChild(segment);
     });
+}
+
+function clearRoomSelection() {
+    state.roomSelection.clear();
+    updateRoomSelectionInfo();
+    renderRoomOverlay();
+}
+
+function toggleRoomSelection(row, col) {
+    const key = posKey(row, col);
+    if (state.roomSelection.has(key)) {
+        state.roomSelection.delete(key);
+    } else {
+        state.roomSelection.add(key);
+    }
+    updateRoomSelectionInfo();
+    renderRoomOverlay();
+}
+
+function assignRoom(roomId) {
+    if (!state.roomSelection.size) {
+        showToast("Najpierw zaznacz pola na planszy.");
+        return;
+    }
+    state.roomSelection.forEach((key) => {
+        state.roomAssignments.set(key, roomId);
+    });
+    clearRoomSelection();
+    renderRoomsList();
+    showToast("Przydzielono pokój do zaznaczonych pól.");
+}
+
+function clearAssignmentsForSelection() {
+    if (!state.roomSelection.size) {
+        showToast("Brak zaznaczonych pól do wyczyszczenia.");
+        return;
+    }
+    let removed = 0;
+    state.roomSelection.forEach((key) => {
+        if (state.roomAssignments.delete(key)) {
+            removed += 1;
+        }
+    });
+    clearRoomSelection();
+    renderRoomsList();
+    showToast(removed ? `Usunięto przydział z ${removed} pól.` : "Zaznaczone pola nie miały przypisanych pokoi.");
+}
+
+function addRoom(name, color) {
+    const safeName = (name || "").trim() || "Nowy pokój";
+    const roomColor = color || randomRoomColor();
+    const idBase = safeName.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "") || "room";
+    let uniqueId = idBase;
+    let idx = 1;
+    while (state.rooms.some((room) => room.id === uniqueId)) {
+        uniqueId = `${idBase}-${idx += 1}`;
+    }
+    state.rooms.push({ id: uniqueId, name: safeName, color: roomColor });
+    if (roomColorInput) {
+        roomColorInput.value = roomColor.startsWith("#") ? roomColor : roomColor;
+    }
+    if (roomNameInput) {
+        roomNameInput.value = "";
+    }
+    renderRoomsList();
+    showToast(`Dodano pokój: ${safeName}.`);
+}
+
+function removeRoom(roomId) {
+    const before = state.rooms.length;
+    state.rooms = state.rooms.filter((room) => room.id !== roomId);
+    if (before !== state.rooms.length) {
+        let removedAssignments = 0;
+        state.roomAssignments.forEach((value, key) => {
+            if (value === roomId) {
+                state.roomAssignments.delete(key);
+                removedAssignments += 1;
+            }
+        });
+        clearRoomSelection();
+        renderRoomsList();
+        renderRoomOverlay();
+        showToast(`Usunięto pokój (${removedAssignments} pól bez przydziału).`);
+    }
 }
 
 function setSelection(meta) {
@@ -505,6 +672,10 @@ function handleStartingPlacement(row, col) {
 }
 
 async function handleCellClick(row, col, event, forceConfig = false) {
+    if (isRoomsCategory()) {
+        toggleRoomSelection(row, col);
+        return;
+    }
     const meta = state.selection;
     if (meta && meta.object_id === VIRTUAL_START_META.object_id) {
         handleStartingPlacement(row, col);
@@ -585,9 +756,63 @@ function toggleObjectVisibility(meta) {
     renderObjectList();
 }
 
+function renderRoomsList() {
+    if (!roomsListElement) return;
+    roomsListElement.innerHTML = "";
+    if (!state.rooms.length) {
+        const empty = document.createElement("p");
+        empty.className = "muted";
+        empty.textContent = "Brak zdefiniowanych pokoi. Dodaj nazwę i kolor, a potem kliknij „+ Dodaj pokój”.";
+        roomsListElement.append(empty);
+        return;
+    }
+
+    state.rooms.forEach((room) => {
+        const row = document.createElement("div");
+        row.className = "room-row";
+
+        const color = document.createElement("span");
+        color.className = "room-color";
+        color.style.background = room.color || "#7c6bf3";
+
+        const name = document.createElement("span");
+        name.className = "room-name";
+        name.textContent = room.name || room.id;
+
+        const meta = document.createElement("span");
+        meta.className = "room-meta";
+        meta.textContent = `${countAssignments(room.id)} pól`;
+
+        const actions = document.createElement("div");
+        actions.className = "room-actions";
+
+        const assignBtn = document.createElement("button");
+        assignBtn.type = "button";
+        assignBtn.textContent = "Przydziel";
+        assignBtn.addEventListener("click", () => assignRoom(room.id));
+
+        const deleteBtn = document.createElement("button");
+        deleteBtn.type = "button";
+        deleteBtn.className = "room-delete";
+        deleteBtn.textContent = "Usuń";
+        deleteBtn.addEventListener("click", () => removeRoom(room.id));
+
+        actions.append(assignBtn, deleteBtn);
+        row.append(color, name, meta, actions);
+        roomsListElement.append(row);
+    });
+}
+
 function renderObjectList() {
     if (!objectListElement) return;
     objectListElement.innerHTML = "";
+    if (isRoomsCategory()) {
+        const info = document.createElement("p");
+        info.className = "muted";
+        info.textContent = "Tryb pokoi: zaznacz pola na planszy, a poniżej dodaj/podepnij pokój.";
+        objectListElement.append(info);
+        return;
+    }
     const category = categorySelect.value;
     const group = state.library.find((g) => g.category === category);
     if (!group) {
@@ -653,11 +878,33 @@ function renderCategoryOptions() {
     }
 }
 
+function updateCategoryUI() {
+    const roomsActive = isRoomsCategory();
+    if (roomsPanel) roomsPanel.hidden = !roomsActive;
+    if (roomsActive) {
+        state.selection = null;
+        state.pendingEdgeStart = null;
+        if (selectionInfo) {
+            selectionInfo.textContent = "Tryb pokoi: zaznacz pola na planszy, potem kliknij „Przydziel”.";
+        }
+        updateRoomSelectionInfo();
+    } else if (!state.selection && selectionInfo) {
+        selectionInfo.textContent = "Kliknij „Użyj”, aby wybrać obiekt i wstawiać go klikając pola. Ikonka oka ukrywa/odsłania obiekty.";
+    }
+    if (!roomsActive) {
+        clearRoomSelection();
+    }
+    renderRoomsList();
+    renderRoomOverlay();
+    renderObjectList();
+}
+
 async function loadGameObjects() {
     try {
         const response = await fetch("/api/game-objects");
         const data = await response.json();
         const categories = data.categories || [];
+        categories.push({ category: ROOMS_CATEGORY, objects: [] });
         // dodaj wirtualną kategorię startów
         categories.push({ category: VIRTUAL_START_META.category, objects: [VIRTUAL_START_META] });
         state.library = categories;
@@ -669,9 +916,14 @@ async function loadGameObjects() {
         });
         renderCategoryOptions();
         renderObjectList();
-        if (categories.length && categories[0].objects.length) {
-            setSelection(categories[0].objects[0]);
+        const firstRealCategory = categories.find(
+            (group) => group.category !== ROOMS_CATEGORY && group.category !== VIRTUAL_START_META.category && group.objects.length,
+        );
+        if (firstRealCategory) {
+            categorySelect.value = firstRealCategory.category;
+            setSelection(firstRealCategory.objects[0]);
         }
+        updateCategoryUI();
     } catch (error) {
         console.error("Nie udało się pobrać GameObjects", error);
         showToast("Błąd ładowania GameObjects.");
@@ -681,6 +933,7 @@ async function loadGameObjects() {
 function buildScenarioPayload() {
     const objectsByKey = new Map();
     const edgesByKey = new Map();
+    const roomPositions = new Map();
 
     state.cellObjects.forEach((list, key) => {
         list.forEach((obj) => {
@@ -710,6 +963,22 @@ function buildScenarioPayload() {
         if (!Array.isArray(aPos) || !Array.isArray(bPos)) return;
         edgesByKey.get(objectKey).edges.push({ a: aPos, b: bPos });
     });
+
+    state.roomAssignments.forEach((roomId, key) => {
+        const coords = key.split(",").map(Number);
+        const scenarioPos = toScenarioPosition(coords);
+        if (!Array.isArray(scenarioPos)) return;
+        const list = roomPositions.get(roomId) || [];
+        list.push(scenarioPos);
+        roomPositions.set(roomId, list);
+    });
+
+    const rooms = state.rooms.map((room) => ({
+        id: room.id,
+        name: room.name,
+        color: room.color,
+        positions: roomPositions.get(room.id) || [],
+    }));
 
     const objects = [
         ...Array.from(objectsByKey.values(), (o) => ({
@@ -754,6 +1023,7 @@ function buildScenarioPayload() {
         starting_positions: state.startingPositions
             .map((pos) => toScenarioPosition(pos))
             .filter((pos) => Array.isArray(pos)),
+        rooms,
         objects,
         blocked_fields,
         obstacles,
@@ -840,12 +1110,40 @@ function applyObjects(objects = []) {
     });
 }
 
+function applyRooms(rooms = []) {
+    state.rooms = [];
+    state.roomAssignments.clear();
+    const usedIds = new Set();
+    rooms.forEach((room, index) => {
+        const baseId = (room?.id || room?.name || `room-${index + 1}`).toString();
+        let uniqueId = baseId;
+        let suffix = 1;
+        while (usedIds.has(uniqueId)) {
+            uniqueId = `${baseId}-${suffix += 1}`;
+        }
+        usedIds.add(uniqueId);
+        const name = room?.name || uniqueId;
+        const color = room?.color || randomRoomColor();
+        state.rooms.push({ id: uniqueId, name, color });
+
+        const positions = Array.isArray(room?.positions) ? room.positions : [];
+        positions.forEach((pos) => {
+            const normalized = fromScenarioPosition(pos);
+            if (!Array.isArray(normalized)) return;
+            const [row, col] = normalized;
+            state.roomAssignments.set(posKey(row, col), uniqueId);
+        });
+    });
+}
+
 function setStateFromScenario(scenario) {
     state.startingPositions = Array.isArray(scenario?.starting_positions)
         ? scenario.starting_positions
               .map((p) => fromScenarioPosition(p))
               .filter((pos) => Array.isArray(pos))
         : [];
+
+    applyRooms(Array.isArray(scenario?.rooms) ? scenario.rooms : []);
 
     // Wczytaj nowe pole objects (jeśli jest).
     if (Array.isArray(scenario?.objects)) {
@@ -912,6 +1210,8 @@ function setStateFromScenario(scenario) {
     updateStartingInfo();
     renderCells();
     renderObjectList();
+    renderRoomsList();
+    renderRoomOverlay();
 }
 
 async function loadScenario(name) {
@@ -960,12 +1260,16 @@ function clearObjects() {
     state.cellObjects.clear();
     state.edgeObjects = [];
     state.pendingEdgeStart = null;
+    state.roomAssignments.clear();
+    clearRoomSelection();
+    renderRoomsList();
+    renderRoomOverlay();
     renderCells();
 }
 
 function wireEvents() {
     categorySelect?.addEventListener("change", () => {
-        renderObjectList();
+        updateCategoryUI();
     });
     categoryVisibilityButton?.addEventListener("click", toggleCategoryVisibility);
     resetSelectionButton?.addEventListener("click", () => setSelection(null));
@@ -1005,6 +1309,9 @@ function wireEvents() {
         renderStartingMarkers();
         showToast("Wyczyszczono pozycje startowe.");
     });
+    addRoomButton?.addEventListener("click", () => addRoom(roomNameInput?.value, roomColorInput?.value));
+    clearRoomSelectionButton?.addEventListener("click", clearRoomSelection);
+    clearRoomAssignmentsButton?.addEventListener("click", clearAssignmentsForSelection);
 }
 
 async function init() {
