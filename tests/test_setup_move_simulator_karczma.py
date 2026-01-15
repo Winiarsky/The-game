@@ -17,14 +17,14 @@ game = Game(conn=simulator_conn, scenario="karczma")
 game.conn.leds_off()
 game.run_action('set_heroes_starting_positions')
 # check the positions
-for hero in game.heroes:
-    position = hero.position
-    if position is None:
-        continue
-    print(f"Hero at position: {position}")
-    game.conn.set_leds([position], [150, 0, 0])  # Red for hero position
-    sleep(5)
-    game.conn.leds_off()
+# for hero in game.heroes:
+#     position = hero.position
+#     if position is None:
+#         continue
+#     print(f"Hero at position: {position}")
+#     game.conn.set_leds([position], [150, 0, 0])  # Red for hero position
+#     sleep(1)
+#     game.conn.leds_off()
 # trzeba zmienic logike zapalania ledow, gra powinna trymac ledy ktore sa do zapalania a funkcja set leds, po prostu powinna wyolywac zapalanie tych ledow, ta lista powinna dosyc dynamiczna, czyli powinnismy miec mozliwosc doawania i usuwania ledow oraz zapalania roznych sekcji
 # set_leds(move) albo set_leds(goal) itp
 stop = False

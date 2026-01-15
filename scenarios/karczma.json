@@ -157,7 +157,8 @@
                     11,
                     0
                 ]
-            ]
+            ],
+            "instances": []
         },
         {
             "category": "Interactables",
@@ -165,11 +166,34 @@
             "label": "Zamknięta skrzynia",
             "color": "#c58f22",
             "placement": "cell",
-            "positions": [
-                [
-                    1,
-                    12
-                ]
+            "positions": [],
+            "instances": [
+                {
+                    "position": [
+                        1,
+                        12
+                    ],
+                    "config": {
+                        "ac": 20,
+                        "allow_same_cell_interact": true,
+                        "blocks_movement": true,
+                        "force_open_dc": 15,
+                        "hardness": 5,
+                        "hp": 10,
+                        "inspection_msg": null,
+                        "locked": true,
+                        "loot": [
+                            "gold"
+                        ],
+                        "max_crit_failures": 3,
+                        "max_failures": 5,
+                        "push_dc": 13,
+                        "thievery_dc": 12,
+                        "working_keys": [
+                            "12345"
+                        ]
+                    }
+                }
             ]
         },
         {

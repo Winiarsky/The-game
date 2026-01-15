@@ -29,7 +29,7 @@ class LockedChest(Interactable):
         max_crit_failures: int,
         max_failures: int,
         ):
-        super().__init__(position=None, allow_same_cell_interact=True)
+        super().__init__(position=None, allow_same_cell_interact=allow_same_cell_interact)
         # pozwala stać na tym samym polu po wskoczeniu, ale domyślnie blokuje ruch zwykły
         self.allow_same_cell_interact = allow_same_cell_interact
         self.blocks_movement = blocks_movement
@@ -89,6 +89,7 @@ class LockedChest(Interactable):
                 label="Obejrzyj",
                 description="Sprawdź stan skrzyni.",
                 handler=LockedChest.action_inspect,
+                end_interaction=False,
             )
         )
         self.register_action(
@@ -97,6 +98,7 @@ class LockedChest(Interactable):
                 label="Otwórz",
                 description="Spróbuj otworzyć (jeśli odblokowana).",
                 handler=LockedChest.action_open,
+                end_interaction=False,
             )
         )
         self.register_action(
@@ -105,6 +107,7 @@ class LockedChest(Interactable):
                 label="Zamknij",
                 description="Zamknij wieko otwartej skrzyni.",
                 handler=LockedChest.action_close,
+                end_interaction=False,
             )
         )
         self.register_action(
@@ -113,6 +116,7 @@ class LockedChest(Interactable):
                 label="Użyj klucza",
                 description="Włóż klucz i spróbuj odblokować.",
                 handler=LockedChest.action_use_key,
+                end_interaction=False,
             )
         )
         self.register_action(
@@ -121,6 +125,7 @@ class LockedChest(Interactable):
                 label="Wytrych",
                 description="Test Złodziejstwa vs DC.",
                 handler=LockedChest.action_unlock_thievery,
+                end_interaction=False,
             )
         )
         self.register_action(
@@ -129,6 +134,7 @@ class LockedChest(Interactable):
                 label="Wyrwij/wyważ",
                 description="Athletics vs DC, próba sforsowania.",
                 handler=LockedChest.action_force_open,
+                end_interaction=False,
             )
         )
         self.register_action(
@@ -137,6 +143,7 @@ class LockedChest(Interactable):
                 label="Atakuj",
                 description="Uderz w skrzynię bronią.",
                 handler=LockedChest.action_attack,
+                end_interaction=False,
             )
         )
         self.register_action(
@@ -150,7 +157,7 @@ class LockedChest(Interactable):
         self.register_action(
             Interaction(
                 id="jump_on",
-                label="Wskocz na skrzynię",
+                label="Wskocz do skrzynię",
                 description="Wskocz do skrzyni aby otrzymac bonus do ukrywania i zaslone. (Tylko dla postaci o maym lub mniejszym rozmiarze)",
                 handler=LockedChest.action_jump_in,
             )
@@ -195,6 +202,8 @@ class LockedChest(Interactable):
     def action_close(self, actor, game, _payload: Optional[dict] = None) -> str:
         if self.destroyed:
             return "Nie da się zamknąć rozbitej skrzyni."
+        if self.locked:
+            return "Skrzynia jest juz zamknieta i zakluczona."
         if not self.is_open:
             return "Wieko już jest zamknięte."
         self.is_open = False
@@ -203,17 +212,26 @@ class LockedChest(Interactable):
     def action_use_key(self, actor, game, _payload: Optional[dict] = None) -> str:
         if not self.locked:
             return "Zamek już odblokowany."
+        if self.destroyed:
+            return "Skrzynia jest rozwalona, zaden klucz juz tu nie pomoze."
+        if self.is_open:
+            return "Skrzynia jest juz otwarta."
         key_name = input("Podaj nazwę klucza, którego używasz: ").strip()
         if not key_name:
             return "Nie użyto klucza."
         if key_name in self.working_keys:
             self.locked = False
+            self.is_open = True
             return f"Używasz {key_name}. Zamek klika i luzuje się."
         return f"{key_name} nie pasuje do zamka."
 
     def action_unlock_thievery(self, actor, game, _payload: Optional[dict] = None) -> str:
         if not self.locked:
             return "Zamek już odblokowany."
+        if self.destroyed:
+            return "Skrzynia jest rozwalona, nic juz nie da sie z tym zrobic."
+        if self.is_open:
+            return "Skrzynia jest juz otwarta."
         if self.failures >= self.max_failures or self.crit_failures >= self.max_crit_failures:
             return "Zamek jest zbyt uszkodzony od poprzednich prób, by kontynuować."
         outcome, total = self._skill_check(self.thievery_dc, "Rzuć na Thievery (podaj ostateczny wynik): ")
@@ -237,6 +255,10 @@ class LockedChest(Interactable):
     def action_force_open(self, actor, game, _payload: Optional[dict] = None) -> str:
         if not self.locked:
             return "Zamek już odblokowany - nie ma czego wyważać."
+        if self.destroyed:
+            return "Skrzynia jest rozwalona, nic juz nie da sie z tym zrobic."
+        if self.is_open:
+            return "Skrzynia jest juz otwarta."
         outcome, total = self._skill_check(self.force_open_dc, "Rzuć na Athletics (podaj ostateczny wynik): ")
         match outcome:
             case "critical_success":
@@ -326,6 +348,12 @@ class LockedChest(Interactable):
         return f"Przesuwasz skrzynię na {target} (test {total})."
 
     def action_jump_in(self, actor, game, _payload: Optional[dict] = None) -> str:
+        if self.destroyed:
+            return "Skrzynia jest rozwalona, nie da sie juz do niej wskoczyc."
+        if self.locked:
+            return "Musisz najpierw otworzyc skrzynie."
+        if not self.is_open:
+            return "Musisz najpierw otworzyc skrzynie."
         if self.position is None:
             return "Skrzynia nie jest na planszy."
         board = game.board

@@ -18,6 +18,7 @@ class Interaction:
     description: str = ""
     handler: InteractionHandler = lambda *_args, **_kwargs: "Brak akcji."
     enabled: bool = True
+    end_interaction: bool = True  # jeśli False, po wykonaniu akcji wracamy do menu akcji
 
     def execute(self, interactable: "Interactable", actor: "Occupant", game, payload: Optional[dict] = None) -> str:
         if not self.enabled:

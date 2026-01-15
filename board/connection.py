@@ -46,9 +46,18 @@ class Connection:
         logger.info(f"LEDs off response: {r.status_code}, {r.text}")
         
     def read_card(self, msg: str = "Zeskanuj karte", acceptable_responses: list[str] | None = None) -> str:
+        translate_map = {
+            "+": "ACCEPT",
+            "-": "DECLINE",
+            "1": "move",
+            "2": "interact"
+        }
+        
         while True:
             card = input(msg) #trzeba bedze dodac slownik do mapowania
-            if acceptable_responses and card not in acceptable_responses:
-                logger.warning(f"Nieakceptowalna odpowiedz: {card}")
+            card_response = translate_map.get(card, card)
+            logger.info(f"Scanned {card}: {card_response}")
+            if acceptable_responses and card_response not in acceptable_responses:
+                logger.warning(f"Nieakceptowalna odpowiedz: {card_response}")
                 continue
-            return card
+            return card_response

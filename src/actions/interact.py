@@ -67,8 +67,18 @@ class InteractAction(BaseAction):
             return
 
         action_id = self._choose_action(interactable)
-        message = interactable.interact(hero, ctx.game, action_id=action_id)
-        logger.info(message)
+        while True:
+            message = interactable.interact(hero, ctx.game, action_id=action_id)
+            if message:
+                logger.info(message)
+
+            interaction = interactable.actions.get(action_id) if action_id else None
+            if interaction is None or interaction.end_interaction:
+                break
+
+            action_id = self._choose_action(interactable)
+            if not action_id:
+                break
 
     def _choose_action(self, interactable):
         actions = getattr(interactable, "available_actions", lambda: [])()
