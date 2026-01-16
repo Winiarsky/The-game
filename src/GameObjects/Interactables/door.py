@@ -1,0 +1,344 @@
+import logging
+from typing import Optional
+
+from GameObjects.base import GameObjectMeta
+from interactable import Interaction, Interactable
+from interactions.common import (
+    DestructibleMixin,
+    HiddenMixin,
+    LockableMixin,
+    TrappableMixin,
+    prompt_for_roll,
+    resolve_skill_check,
+)
+
+logger = logging.getLogger(__name__)
+
+
+class Door(LockableMixin, TrappableMixin, HiddenMixin, DestructibleMixin, Interactable):
+    """Drzwi z obsługą zamka, pułapki, ukrycia i niszczenia."""
+
+    def __init__(
+        self,
+        *,
+        locked: bool = True,
+        allow_same_cell_interact: bool = True,
+        thievery_dc: int = 16,
+        force_open_dc: int = 18,
+        working_keys: Optional[list[str]] = None,
+        trap_armed: bool = False,
+        trap_detection_dc: int = 16,
+        trap_disable_dc: int = 18,
+        trap_effect: str = "Pułapka zadaje obrażenia lub uruchamia alarm.",
+        hidden: bool = False,
+        reveal_dc: int = 18,
+        ac: int = 18,
+        hp: int = 10,
+        hardness: int = 5,
+    ):
+        Interactable.__init__(self, position=None, blocks_movement=False, allow_same_cell_interact=allow_same_cell_interact)
+        # atrybuty zamka
+        self.locked = locked
+        self.working_keys = working_keys or ["door_key"]
+        self.thievery_dc = thievery_dc
+        self.force_open_dc = force_open_dc
+        self.jammed = False
+
+        # pułapka
+        self.trap_armed = trap_armed
+        self.trap_detected = False
+        self.trap_detection_dc = trap_detection_dc
+        self.trap_disable_dc = trap_disable_dc
+        self.trap_effect = trap_effect
+
+        # ukrycie
+        self.hidden = hidden
+        self.revealed = not hidden
+        self.reveal_dc = reveal_dc
+
+        # niszczenie
+        self.ac = ac
+        self.hp = hp
+        self.hardness = hardness
+        self.destroyed = False
+
+        self.is_open = False
+        self.edge: tuple[tuple[int, int], tuple[int, int]] | None = None  # para pól, między którymi stoją drzwi
+        self.register_default_actions()
+        self._sync_block_state()
+
+    # --- narzędzia ---
+    def _sync_block_state(self) -> None:
+        """Aktualizuje blokowanie ruchu na podstawie stanu drzwi."""
+        self.blocks_movement = not self.is_open and not self.destroyed
+
+    def blocks_passage(self, a, b) -> bool:
+        """Używane przez BoardGrid do blokowania przejścia między polami a-b."""
+        return not self.is_open and not self.destroyed
+
+    def can_interact(self, actor, game) -> bool:
+        return True  # pozwalamy na ślepe próby nawet dla ukrytych drzwi
+
+    # --- akcje ---
+    def register_default_actions(self) -> None:
+        self.register_action(
+            Interaction(
+                id="inspect",
+                label="Obejrzyj",
+                description="Sprawdź stan drzwi.",
+                handler=Door.action_inspect,
+                end_interaction=False,
+            )
+        )
+        self.register_action(
+            Interaction(
+                id="listen",
+                label="Nasłuchuj",
+                description="Przykładasz ucho do drzwi.",
+                handler=Door.action_listen,
+                end_interaction=False,
+            )
+        )
+        self.register_action(
+            Interaction(
+                id="open",
+                label="Otwórz",
+                description="Otwórz, jeśli się da.",
+                handler=Door.action_open,
+                end_interaction=False,
+            )
+        )
+        self.register_action(
+            Interaction(
+                id="close",
+                label="Zamknij",
+                description="Zamknij otwarte drzwi.",
+                handler=Door.action_close,
+                end_interaction=False,
+            )
+        )
+        self.register_action(
+            Interaction(
+                id="use_key",
+                label="Klucz",
+                description="Użyj właściwego klucza.",
+                handler=Door.action_use_key,
+                end_interaction=False,
+            )
+        )
+        self.register_action(
+            Interaction(
+                id="pick_lock",
+                label="Wytrych",
+                description="Test Złodziejstwa vs DC zamka.",
+                handler=Door.action_pick_lock,
+                end_interaction=False,
+            )
+        )
+        self.register_action(
+            Interaction(
+                id="force_open",
+                label="Wyważ",
+                description="Athletics vs DC zamka.",
+                handler=Door.action_force_open,
+                end_interaction=False,
+            )
+        )
+        self.register_action(
+            Interaction(
+                id="attack",
+                label="Atakuj",
+                description="Próbuj zniszczyć drzwi.",
+                handler=Door.action_attack,
+                end_interaction=False,
+            )
+        )
+        self.register_action(
+            Interaction(
+                id="search_trap",
+                label="Szukaj pułapki",
+                description="Perception vs DC wykrycia.",
+                handler=Door.action_search_trap,
+                end_interaction=False,
+            )
+        )
+        self.register_action(
+            Interaction(
+                id="disable_trap",
+                label="Rozbrój pułapkę",
+                description="Thievery vs DC rozbrojenia.",
+                handler=Door.action_disable_trap,
+                end_interaction=False,
+            )
+        )
+        self.register_action(
+            Interaction(
+                id="search_secret",
+                label="Przeszukaj",
+                description="Próba wykrycia ukrytych drzwi.",
+                handler=Door.action_search_secret,
+                end_interaction=False,
+            )
+        )
+        self.register_action(
+            Interaction(
+                id="blind_probe",
+                label="Ślepy strzał",
+                description="Macanie bez podpowiedzi (dla ukrytych elementów).",
+                handler=Door.action_blind_probe,
+                end_interaction=False,
+            )
+        )
+        self.register_action(
+            Interaction(
+                id="leave",
+                label="Zakończ",
+                description="Zakończ interakcję.",
+                handler=lambda _self, _actor, _game, _payload=None: "Koniec interakcji.",
+                end_interaction=True,
+            )
+        )
+
+    def action_inspect(self, actor, game, _payload=None) -> str:
+        state = "otwarte" if self.is_open else "zamknięte"
+        lock = "odblokowane" if not self.locked else "zakluczone"
+        jam = " (zaklinowane)" if self.jammed else ""
+        destroyed = " (zniszczone)" if self.destroyed else ""
+        trap = ""
+        if self.trap_armed and self.trap_detected:
+            trap = " Pułapka wykryta."
+        if self.hidden and not self.revealed:
+            return "Nie dostrzegasz tu drzwi."
+        return f"Drzwi są {state}, {lock}{jam}{destroyed}.{trap}"
+
+    def action_listen(self, actor, game, _payload=None) -> str:
+        return "Nasłuchujesz za drzwiami. Nic wyraźnego nie słychać."
+
+    def action_open(self, actor, game, _payload=None) -> str:
+        if self.destroyed:
+            self.is_open = True
+            self._sync_block_state()
+            return "Tu już nie ma czego otwierać."
+        if self.hidden and not self.revealed:
+            return "Nie znajdujesz uchwytu ani szczeliny."
+        if self.locked or self.jammed:
+            return "Drzwi są zablokowane."
+        if self.is_open:
+            return "Drzwi już są otwarte."
+        if self.trap_armed:
+            effect = self.trigger_trap()
+            self.is_open = True
+            self._sync_block_state()
+            return f"Pułapka odpala przy otwieraniu! {effect}"
+        self.is_open = True
+        self._sync_block_state()
+        return "Otwierasz drzwi."
+
+    def action_close(self, actor, game, _payload=None) -> str:
+        if self.destroyed:
+            return "Zniszczonych drzwi nie zamkniesz."
+        if self.hidden and not self.revealed:
+            return "Nie wiesz, co zamykać."
+        if not self.is_open:
+            return "Drzwi już są zamknięte."
+        self.is_open = False
+        self._sync_block_state()
+        return "Zamykasz drzwi."
+
+    def action_use_key(self, actor, game, _payload=None) -> str:
+        if self.destroyed:
+            return "Nie ma zamka do otwarcia."
+        key_name = input("Podaj nazwę klucza: ").strip()
+        if not key_name:
+            return "Nie użyto klucza."
+        success, msg = self.try_key(key_name)
+        if success:
+            self.is_open = True
+            self._sync_block_state()
+        return msg
+
+    def action_pick_lock(self, actor, game, _payload=None) -> str:
+        if self.destroyed:
+            return "Zamek zniszczony, wytrych niepotrzebny."
+        roll = prompt_for_roll("Rzuć na Thievery (wynik końcowy): ")
+        outcome, msg = self.pick_lock(roll)
+        if outcome in ("critical_success",):
+            self.is_open = True
+        self._sync_block_state()
+        return msg
+
+    def action_force_open(self, actor, game, _payload=None) -> str:
+        if self.destroyed:
+            return "Zamek i zawiasy już zniszczone."
+        roll = prompt_for_roll("Rzuć na Athletics (wyważanie): ")
+        outcome, msg = self.force_lock(roll)
+        if outcome in ("critical_success", "success"):
+            self.is_open = True
+        self._sync_block_state()
+        return msg
+
+    def action_attack(self, actor, game, _payload=None) -> str:
+        attack_roll = prompt_for_roll("Rzut na atak: ")
+        damage = prompt_for_roll("Zadane obrażenia: ")
+        hit, dealt, msg = self.apply_damage(attack_roll, damage)
+        if hit and self.destroyed:
+            self.is_open = True
+            self.locked = False
+            self._sync_block_state()
+            return msg + " Przejście jest otwarte."
+        self._sync_block_state()
+        return msg
+
+    def action_search_trap(self, actor, game, _payload=None) -> str:
+        roll = prompt_for_roll("Rzuć na Perception (szukanie pułapki): ")
+        outcome, msg = self.detect_trap(roll)
+        return f"{msg} (wynik: {outcome})"
+
+    def action_disable_trap(self, actor, game, _payload=None) -> str:
+        roll = prompt_for_roll("Rzuć na Thievery (rozbrajanie): ")
+        outcome, msg = self.disable_trap(roll)
+        return f"{msg} (wynik: {outcome})"
+
+    def action_search_secret(self, actor, game, _payload=None) -> str:
+        roll = prompt_for_roll("Rzuć na Perception (szukanie sekretu): ")
+        outcome, msg = self.try_reveal(roll)
+        return f"{msg} (wynik: {outcome})"
+
+    def action_blind_probe(self, actor, game, _payload=None) -> str:
+        if not self.hidden:
+            return "Tu nic nie jest ukryte – ślepy strzał nic nie da."
+        if self.revealed:
+            return "Sekret już odkryty."
+        roll = prompt_for_roll("Ślepy strzał (Perception) – wynik: ")
+        outcome = resolve_skill_check(self.reveal_dc + 2, roll)  # utrudnienie dla ślepego macania
+        if outcome in ("success", "critical_success"):
+            self.revealed = True
+            return "Udaje się namacać ukryte drzwi."
+        return "Nie znajdujesz niczego konkretnego."
+
+
+META = GameObjectMeta(
+    object_id="door",
+    label="Drzwi",
+    color="#8b5",
+    category="Interactables",
+    placement="edge",
+    description="Drzwi z obsługą zamka, pułapki i sekretów.",
+    logic_cls=Door,
+    default_config={
+        "locked": True,
+        "allow_same_cell_interact": True,
+        "thievery_dc": 16,
+        "force_open_dc": 18,
+        "working_keys": ["door_key"],
+        "trap_armed": False,
+        "trap_detection_dc": 16,
+        "trap_disable_dc": 18,
+        "trap_effect": "Pułapka zadaje 2k6 obrażeń.",
+        "hidden": False,
+        "reveal_dc": 18,
+        "ac": 18,
+        "hp": 10,
+        "hardness": 5,
+    },
+)

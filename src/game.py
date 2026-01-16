@@ -145,8 +145,15 @@ class Game:
                         b_raw = tuple(edge["b"])
                         a = (a_raw[0], a_raw[1])
                         b = (b_raw[0], b_raw[1])
-                        wall_cls = logic_cls if isinstance(logic_cls, type) and issubclass(logic_cls, Wall) else Wall
-                        board.add_wall(a, b, wall_cls=wall_cls)
+                        config = edge.get("config") or {}
+                        if isinstance(logic_cls, type) and issubclass(logic_cls, Interactable):
+                            instance = build_instance(logic_cls, config)
+                            if instance is None:
+                                continue
+                            board.add_edge_interactable(instance, a, b)
+                        else:
+                            wall_cls = logic_cls if isinstance(logic_cls, type) and issubclass(logic_cls, Wall) else Wall
+                            board.add_wall(a, b, wall_cls=wall_cls)
                     except Exception as exc:
                         logger.error("Nie można dodać krawędzi %s: %s", edge, exc)
                 continue

@@ -39,6 +39,8 @@ class BoardGrid:
         self._grid: List[List[GridCell]] = [
             [GridCell() for _ in range(cols)] for _ in range(rows)
         ]
+        # Interactables na krawędziach (np. drzwi między polami).
+        self.edge_interactables: dict[frozenset[Tuple[int, int]], list[Interactable]] = {}
         self.walls: dict[frozenset[Tuple[int, int]], Wall] = {}
 
     def in_bounds(self, position: Tuple[int, int]) -> bool:
@@ -60,7 +62,20 @@ class BoardGrid:
         return self.cell_at(position).occupant
 
     def interactables_at(self, position: Tuple[int, int]) -> list[Interactable]:
-        return list(self.cell_at(position).interactables)
+        """Obiekty interaktywne na polu + krawędziach stykających się z polem."""
+        cell_objs = list(self.cell_at(position).interactables)
+        edge_objs: list[Interactable] = []
+        for key, objects in self.edge_interactables.items():
+            if position in key:
+                edge_objs.extend(objects)
+        seen: set[int] = set()
+        result: list[Interactable] = []
+        for obj in cell_objs + edge_objs:
+            if id(obj) in seen:
+                continue
+            seen.add(id(obj))
+            result.append(obj)
+        return result
 
     def get_neighbors(self, position: Tuple[int, int], include_position: bool = True, diagonal: bool = True) -> list[Tuple[int, int]]:
         """Zwróć pola sąsiadujące w obrębie planszy.
@@ -136,6 +151,11 @@ class BoardGrid:
             return False
         if self.is_blocked(a, b):
             return False
+        # Obiekty krawędziowe (np. drzwi) mogą blokować przejście.
+        for edge_obj in self.edge_interactables_between(a, b):
+            blocks_passage = getattr(edge_obj, "blocks_passage", None)
+            if callable(blocks_passage) and blocks_passage(a, b):
+                return False
         return self.can_enter(b, allow_occupied=allow_occupied)
 
     def place(self, occupant: Occupant, position: Tuple[int, int]) -> None:
@@ -162,6 +182,24 @@ class BoardGrid:
         cell.interactables.append(interactable)
         interactable.set_position(position)
 
+    def add_edge_interactable(self, interactable: Interactable, a: Tuple[int, int], b: Tuple[int, int]) -> None:
+        """Dodaj obiekt interaktywny między dwoma polami (np. drzwi)."""
+        if a == b:
+            raise ValueError("Obiekt krawędziowy wymaga dwóch różnych pól.")
+        if not (self.in_bounds(a) and self.in_bounds(b)):
+            raise ValueError("Krawędź poza planszą.")
+        key = frozenset((a, b))
+        self.edge_interactables.setdefault(key, []).append(interactable)
+        if hasattr(interactable, "edge"):
+            try:
+                interactable.edge = (a, b)  # type: ignore[attr-defined]
+            except Exception:
+                pass
+        interactable.set_position(None)
+
+    def edge_interactables_between(self, a: Tuple[int, int], b: Tuple[int, int]) -> list[Interactable]:
+        return list(self.edge_interactables.get(frozenset((a, b)), []))
+
     def remove_interactable(self, interactable: Interactable, position: Tuple[int, int]) -> None:
         cell = self.cell_at(position)
         if interactable in cell.interactables:
@@ -184,6 +222,11 @@ class BoardGrid:
                 filtered = interactables
             if filtered:
                 result.append((candidate, filtered))
+        # Obiekty krawędziowe między polem a sąsiadami wybieramy klikając sąsiada.
+        for neighbor in self.get_neighbors(position, include_position=False, diagonal=diagonal):
+            edge_objs = self.edge_interactables_between(position, neighbor)
+            if edge_objs:
+                result.append((neighbor, edge_objs))
         return result
     
     def move(self, source: Tuple[int, int], target: Tuple[int, int]) -> None:

@@ -761,6 +761,51 @@
             ]
         },
         {
+            "category": "Interactables",
+            "object_id": "trap_tile",
+            "label": "Pułapka",
+            "color": "#e85",
+            "placement": "cell",
+            "positions": [],
+            "instances": [
+                {
+                    "position": [
+                        4,
+                        9
+                    ],
+                    "config": {
+                        "trap_armed": true,
+                        "trap_detection_dc": 16,
+                        "trap_disable_dc": 18,
+                        "trap_effect": "Pułapka zadaje 2k6 obrażeń."
+                    }
+                }
+            ]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "hidden_cache",
+            "label": "Ukryty element",
+            "color": "#6ab",
+            "placement": "cell",
+            "positions": [],
+            "instances": [
+                {
+                    "position": [
+                        6,
+                        9
+                    ],
+                    "config": {
+                        "hidden": true,
+                        "loot": [
+                            "ktos zostawil na krzesle, portfel"
+                        ],
+                        "reveal_dc": 18
+                    }
+                }
+            ]
+        },
+        {
             "category": "Walls",
             "object_id": "basic_wall",
             "label": "Ściana",
@@ -4175,6 +4220,35 @@
                     "b": [
                         1,
                         9
+                    ]
+                }
+            ]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "door",
+            "label": "Drzwi",
+            "color": "#8b5",
+            "placement": "edge",
+            "edges": [
+                {
+                    "a": [
+                        4,
+                        12
+                    ],
+                    "b": [
+                        4,
+                        11
+                    ]
+                },
+                {
+                    "a": [
+                        5,
+                        11
+                    ],
+                    "b": [
+                        5,
+                        12
                     ]
                 }
             ]

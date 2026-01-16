@@ -401,7 +401,7 @@ function renderEdgeOverlay() {
         };
     };
 
-    state.edgeObjects.forEach((edge) => {
+    state.edgeObjects.forEach((edge, idx) => {
         if (state.hiddenCategories.has(edge.category) || state.hiddenObjects.has(metaKey(edge))) {
             return;
         }
@@ -452,6 +452,10 @@ function renderEdgeOverlay() {
             segment.style.height = `${thickness}px`;
         }
 
+        segment.dataset.edgeIndex = String(idx);
+        segment.title = `${edge.label || edge.object_id || "edge"} (${edge.a.row},${edge.a.col}) ↔ (${edge.b.row},${edge.b.col})`;
+        segment.addEventListener("click", (event) => handleEdgeClick(edge, event));
+        segment.addEventListener("dblclick", (event) => handleEdgeClick(edge, event, true));
         wallOverlay.appendChild(segment);
     });
 }
@@ -460,6 +464,31 @@ function clearRoomSelection() {
     state.roomSelection.clear();
     updateRoomSelectionInfo();
     renderRoomOverlay();
+}
+
+async function handleEdgeClick(edge, event, forceConfig = false) {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    const meta = getMeta(edge.category, edge.object_id) || edge;
+    if (state.deleteMode) {
+        removeEdgeObject(meta, edge.a, edge.b);
+        renderCells();
+        showToast("Usunięto krawędź.");
+        return;
+    }
+    const wantsConfig =
+        forceConfig ||
+        event?.altKey ||
+        event?.metaKey ||
+        event?.ctrlKey ||
+        event?.shiftKey ||
+        event?.button === 2 ||
+        (event?.detail >= 2);
+    if (!wantsConfig) return;
+    const defaultCfg = meta.default_config || meta.defaultConfig;
+    const config = await openConfigEditor(meta, edge.config ?? defaultCfg);
+    if (config === null) return;
+    edge.config = config;
 }
 
 function toggleRoomSelection(row, col) {
@@ -615,7 +644,7 @@ function findEdge(meta, a, b) {
     return state.edgeObjects.find((edge) => edgeKey(edge.a, edge.b) === key && metaKey(edge) === metaKey(meta));
 }
 
-function addEdgeObject(meta, a, b) {
+function addEdgeObject(meta, a, b, config = undefined) {
     if (findEdge(meta, a, b)) return;
     state.edgeObjects.push({
         category: meta.category,
@@ -624,6 +653,7 @@ function addEdgeObject(meta, a, b) {
         color: meta.color,
         a,
         b,
+        config,
     });
 }
 
@@ -634,7 +664,7 @@ function removeEdgeObject(meta, a, b) {
     );
 }
 
-function handleEdgePlacement(meta, row, col) {
+async function handleEdgePlacement(meta, row, col, event, forceConfig = false) {
     if (!state.pendingEdgeStart) {
         state.pendingEdgeStart = { row, col };
         selectionInfo.textContent = `Wybrano pierwszy punkt: (${row}, ${col}). Kliknij drugi.`;
@@ -644,16 +674,42 @@ function handleEdgePlacement(meta, row, col) {
     const end = { row, col };
     state.pendingEdgeStart = null;
     const already = findEdge(meta, start, end);
+    const wantsConfig =
+        forceConfig ||
+        event?.altKey ||
+        event?.metaKey ||
+        event?.ctrlKey ||
+        event?.shiftKey ||
+        event?.button === 2 ||
+        (event?.detail >= 2);
     if (state.deleteMode) {
         if (already) {
             removeEdgeObject(meta, start, end);
             showToast("Usunięto krawędź.");
         }
     } else if (already) {
-        removeEdgeObject(meta, start, end);
-        showToast("Usunięto istniejącą krawędź (toggle).");
+        if (wantsConfig) {
+            const defaultCfg = meta.default_config || meta.defaultConfig;
+            const config = await openConfigEditor(meta, already.config ?? defaultCfg);
+            if (config !== null) {
+                already.config = config;
+                showToast("Zapisano konfigurację krawędzi.");
+            }
+        } else {
+            removeEdgeObject(meta, start, end);
+            showToast("Usunięto istniejącą krawędź (toggle).");
+        }
     } else {
-        addEdgeObject(meta, start, end);
+        let config;
+        if (wantsConfig) {
+            const defaultCfg = meta.default_config || meta.defaultConfig;
+            config = await openConfigEditor(meta, defaultCfg);
+            if (config === null) {
+                renderCells();
+                return;
+            }
+        }
+        addEdgeObject(meta, start, end, config);
         showToast("Dodano krawędź.");
     }
     renderCells();
@@ -691,7 +747,7 @@ async function handleCellClick(row, col, event, forceConfig = false) {
         return;
     }
     if (meta.placement === "edge") {
-        handleEdgePlacement(meta, row, col);
+        await handleEdgePlacement(meta, row, col, event, forceConfig);
         return;
     }
     const wantsConfig =
@@ -880,7 +936,10 @@ function renderCategoryOptions() {
 
 function updateCategoryUI() {
     const roomsActive = isRoomsCategory();
-    if (roomsPanel) roomsPanel.hidden = !roomsActive;
+    if (roomsPanel) {
+        roomsPanel.hidden = !roomsActive;
+        roomsPanel.style.display = roomsActive ? "flex" : "none";
+    }
     if (roomsActive) {
         state.selection = null;
         state.pendingEdgeStart = null;
@@ -893,6 +952,12 @@ function updateCategoryUI() {
     }
     if (!roomsActive) {
         clearRoomSelection();
+        if (roomSelectionInfo) {
+            roomSelectionInfo.textContent = "";
+        }
+        if (roomsListElement) {
+            roomsListElement.innerHTML = "";
+        }
     }
     renderRoomsList();
     renderRoomOverlay();
@@ -961,7 +1026,11 @@ function buildScenarioPayload() {
         const aPos = toScenarioPosition([edge.a.row, edge.a.col]);
         const bPos = toScenarioPosition([edge.b.row, edge.b.col]);
         if (!Array.isArray(aPos) || !Array.isArray(bPos)) return;
-        edgesByKey.get(objectKey).edges.push({ a: aPos, b: bPos });
+        const edgePayload = { a: aPos, b: bPos };
+        if (edge.config !== undefined) {
+            edgePayload.config = edge.config;
+        }
+        edgesByKey.get(objectKey).edges.push(edgePayload);
     });
 
     state.roomAssignments.forEach((roomId, key) => {
@@ -1090,6 +1159,7 @@ function applyObjects(objects = []) {
                     obj,
                     { row: aRow, col: aCol },
                     { row: bRow, col: bCol },
+                    edge.config,
                 );
             });
         } else if (Array.isArray(obj.instances)) {

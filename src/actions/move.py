@@ -76,3 +76,15 @@ class MoveAction(BaseAction):
                     continue
                 source_pos = target
                 current_pos = target
+                # Automatyczne wyzwalacze po wejściu na pole (np. pułapki).
+                triggered = False
+                for obj in board.interactables_at(current_pos):
+                    on_enter = getattr(obj, "on_enter", None)
+                    if callable(on_enter):
+                        result = on_enter(moving_hero, ctx.game)
+                        if result:
+                            logger.info(result)
+                            triggered = True
+                if triggered:
+                    logger.info("Ruch zakończony na %s przez zdarzenie na polu.", current_pos)
+                    return

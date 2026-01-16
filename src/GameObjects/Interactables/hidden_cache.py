@@ -1,0 +1,114 @@
+from typing import Optional
+
+from GameObjects.base import GameObjectMeta
+from interactable import Interaction, Interactable
+from interactions.common import HiddenMixin, prompt_for_roll
+
+
+class HiddenCache(HiddenMixin, Interactable):
+    """Ukryty schowek/sekretne przejście do wykrycia lub ślepego trafienia."""
+
+    def __init__(self, *, loot: Optional[list[str]] = None, hidden: bool = True, reveal_dc: int = 18):
+        Interactable.__init__(self, position=None, allow_same_cell_interact=True, blocks_movement=False)
+        self.hidden = hidden
+        self.revealed = not hidden
+        self.reveal_dc = reveal_dc
+        self.loot = list(loot or [])
+        self.opened = False
+        self.register_default_actions()
+
+    def register_default_actions(self) -> None:
+        self.register_action(
+            Interaction(
+                id="search",
+                label="Przeszukaj",
+                description="Perception vs DC sekretu.",
+                handler=HiddenCache.action_search,
+                end_interaction=False,
+            )
+        )
+        self.register_action(
+            Interaction(
+                id="blind_probe",
+                label="Ślepy strzał",
+                description="Macanie bez podpowiedzi.",
+                handler=HiddenCache.action_blind_probe,
+                end_interaction=False,
+            )
+        )
+        self.register_action(
+            Interaction(
+                id="open",
+                label="Otwórz",
+                description="Otwórz, jeśli sekret odkryty.",
+                handler=HiddenCache.action_open,
+                end_interaction=False,
+            )
+        )
+        self.register_action(
+            Interaction(
+                id="loot",
+                label="Zbierz",
+                description="Weź zawartość schowka.",
+                handler=HiddenCache.action_loot,
+                end_interaction=False,
+            )
+        )
+        self.register_action(
+            Interaction(
+                id="leave",
+                label="Zakończ",
+                description="Zakończ interakcję.",
+                handler=lambda *_: "Koniec interakcji.",
+            )
+        )
+
+    def action_search(self, actor, game, _payload=None) -> str:
+        roll = prompt_for_roll("Perception (wynik): ")
+        outcome, msg = self.try_reveal(roll)
+        return f"{msg} (wynik: {outcome})"
+
+    def action_blind_probe(self, actor, game, _payload=None) -> str:
+        if not self.hidden:
+            return "Ten element nie jest ukryty."
+        if self.revealed:
+            return "Sekret już odkryty."
+        roll = prompt_for_roll("Ślepy strzał (Perception): ")
+        # trudniej bez kontekstu
+        if roll >= self.reveal_dc + 2:
+            self.revealed = True
+            return "Udaje się namacać ukryty mechanizm."
+        return "Macasz na ślepo, nic nie znajdujesz."
+
+    def action_open(self, actor, game, _payload=None) -> str:
+        if not self.revealed:
+            return "Nie widzisz tu nic do otwarcia."
+        if self.opened:
+            return "Sekret już otwarty."
+        self.opened = True
+        return "Odsuwasz panel, odkrywając skrytkę."
+
+    def action_loot(self, actor, game, _payload=None) -> str:
+        if not self.opened:
+            return "Najpierw musisz otworzyć skrytkę."
+        if not self.loot:
+            return "W środku pusto."
+        loot_items = self.loot[:]
+        self.loot = []
+        return f"Zabierasz: {', '.join(loot_items)}."
+
+
+META = GameObjectMeta(
+    object_id="hidden_cache",
+    label="Ukryty element",
+    color="#6ab",
+    category="Interactables",
+    placement="cell",
+    description="Sekretny schowek lub przejście wymagające wykrycia.",
+    logic_cls=HiddenCache,
+    default_config={
+        "loot": [],
+        "hidden": True,
+        "reveal_dc": 18,
+    },
+)

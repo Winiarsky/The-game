@@ -12,6 +12,7 @@ const scenarioLoadButton = document.getElementById("scenario-load");
 const scenarioToggleButton = document.getElementById("scenario-toggle");
 const scenarioStatus = document.getElementById("scenario-status");
 const dims = window.BOARD_DIMENSIONS || { rows: 15, cols: 20 };
+const posKey = (row, col) => `${row},${col}`;
 
 boardElement.style.gridTemplateColumns = `repeat(${dims.cols}, 32px)`;
 
@@ -59,6 +60,8 @@ const scenarioState = {
     blocked: new Set(),
     obstacles: new Set(),
     walls: [],
+    cellObjects: new Map(), // key -> [{label,color}]
+    edgeObjects: [], // [{a:{row,col}, b:{row,col}, color, label, category, object_id}]
     visible: false,
 };
 
@@ -102,6 +105,9 @@ function createCell(row, col) {
     const figureMarker = document.createElement("div");
     figureMarker.className = "figure-marker";
     cell.appendChild(figureMarker);
+    const scenarioMarkers = document.createElement("div");
+    scenarioMarkers.className = "cell-objects scenario-objects";
+    cell.appendChild(scenarioMarkers);
     return cell;
 }
 
@@ -161,7 +167,8 @@ function applyBoardState(state) {
             cell.classList.toggle("has-obstacle", scenarioOn && scenarioState.obstacles.has(key));
         }
     }
-    renderScenarioWalls();
+    renderScenarioObjects();
+    renderScenarioEdgesAndWalls();
     updateFigureMarkers();
 }
 
@@ -386,10 +393,52 @@ function setScenarioData(scenario) {
                   const a = fromScenarioPosition(wall?.a);
                   const b = fromScenarioPosition(wall?.b);
                   if (!a || !b) return null;
-                  return { a, b };
+                  return { a, b, color: wall?.color || "#555", label: wall?.type || "wall" };
               })
               .filter((wall) => wall !== null)
         : [];
+
+    scenarioState.cellObjects = new Map();
+    scenarioState.edgeObjects = [];
+    const objects = Array.isArray(scenario?.objects) ? scenario.objects : [];
+    objects.forEach((obj) => {
+        if (!obj || obj.category === "Rooms" || obj.category === "Starting") return;
+        const placement = obj.placement || "cell";
+        if (placement === "cell") {
+            const addObj = (pos) => {
+                const normalized = fromScenarioPosition(pos);
+                if (!normalized) return;
+                const key = posKey(normalized.row, normalized.col);
+                const list = scenarioState.cellObjects.get(key) || [];
+                list.push({
+                    label: obj.label || obj.object_id || "?",
+                    color: obj.color || "#555",
+                });
+                scenarioState.cellObjects.set(key, list);
+            };
+            if (Array.isArray(obj.instances)) {
+                obj.instances.forEach((inst) => addObj(inst.position || inst.pos));
+            }
+            if (Array.isArray(obj.positions)) {
+                obj.positions.forEach((pos) => addObj(pos));
+            }
+        } else if (placement === "edge" && Array.isArray(obj.edges)) {
+            obj.edges.forEach((edge) => {
+                if (!edge?.a || !edge?.b) return;
+                const a = fromScenarioPosition(edge.a);
+                const b = fromScenarioPosition(edge.b);
+                if (!a || !b) return;
+                scenarioState.edgeObjects.push({
+                    a,
+                    b,
+                    color: obj.color || "#555",
+                    label: obj.label || obj.object_id || "edge",
+                    category: obj.category,
+                    object_id: obj.object_id,
+                });
+            });
+        }
+    });
     applyBoardState();
 }
 
@@ -424,7 +473,38 @@ async function refreshScenarioList(selectName) {
     }
 }
 
-function renderScenarioWalls() {
+function renderScenarioObjects() {
+    const scenarioOn = scenarioState.visible;
+    for (let row = 0; row < dims.rows; row += 1) {
+        for (let col = 0; col < dims.cols; col += 1) {
+            const cell = cells[row][col];
+            const container = cell.querySelector(".scenario-objects");
+            if (!container) continue;
+            container.innerHTML = "";
+            if (!scenarioOn) continue;
+            const objects = scenarioState.cellObjects.get(posKey(row, col)) || [];
+            if (!objects.length) continue;
+            const maxMarkers = 3;
+            objects.slice(0, maxMarkers).forEach((obj, idx) => {
+                const marker = document.createElement("div");
+                marker.className = "object-marker";
+                marker.style.background = obj.color || "#555";
+                marker.textContent = (obj.label?.[0] || "?").toUpperCase();
+                marker.style.left = `${idx * 14}px`;
+                container.appendChild(marker);
+            });
+            if (objects.length > maxMarkers) {
+                const more = document.createElement("div");
+                more.className = "object-marker more-marker";
+                more.textContent = `+${objects.length - maxMarkers}`;
+                more.style.left = `${maxMarkers * 14}px`;
+                container.appendChild(more);
+            }
+        }
+    }
+}
+
+function renderScenarioEdgesAndWalls() {
     if (!wallOverlay) return;
     wallOverlay.innerHTML = "";
     if (!scenarioState.visible) return;
@@ -433,18 +513,16 @@ function renderScenarioWalls() {
     const thickness = 6;
     const dotSize = 10;
 
-    scenarioState.walls.forEach((wall) => {
-        const cellA = cells?.[wall.a.row]?.[wall.a.col];
-        const cellB = cells?.[wall.b.row]?.[wall.b.col];
+    const renderSegment = (a, b, color) => {
+        const cellA = cells?.[a.row]?.[a.col];
+        const cellB = cells?.[b.row]?.[b.col];
         if (!cellA || !cellB) return;
         const rectA = cellA.getBoundingClientRect();
         const rectB = cellB.getBoundingClientRect();
-
         const segment = document.createElement("div");
         segment.className = "wall-line";
-
-        if (wall.a.row === wall.b.row) {
-            // ściana pionowa między sąsiadami w poziomie
+        segment.style.background = color || "#555";
+        if (a.row === b.row) {
             segment.classList.add("wall-line-v");
             const left = (rectA.right + rectB.left) / 2 - boardRect.left;
             const top = Math.min(rectA.top, rectB.top) - boardRect.top;
@@ -453,8 +531,7 @@ function renderScenarioWalls() {
             segment.style.top = `${top}px`;
             segment.style.width = `${thickness}px`;
             segment.style.height = `${height}px`;
-        } else if (wall.a.col === wall.b.col) {
-            // ściana pozioma między sąsiadami w pionie
+        } else if (a.col === b.col) {
             segment.classList.add("wall-line-h");
             const top = (rectA.bottom + rectB.top) / 2 - boardRect.top;
             const left = Math.min(rectA.left, rectB.left) - boardRect.left;
@@ -464,15 +541,14 @@ function renderScenarioWalls() {
             segment.style.width = `${width}px`;
             segment.style.height = `${thickness}px`;
         } else {
-            // diagonalna -> mała skosna kreska (orientacja / lub \)
             segment.classList.add("wall-line-diag");
             const midX =
                 (rectA.left + rectA.width / 2 + rectB.left + rectB.width / 2) / 2 - boardRect.left;
             const midY =
                 (rectA.top + rectA.height / 2 + rectB.top + rectB.height / 2) / 2 - boardRect.top;
             const diagLength = Math.hypot(rectA.width, rectA.height) * 0.65;
-            const dr = wall.b.row - wall.a.row;
-            const dc = wall.b.col - wall.a.col;
+            const dr = b.row - a.row;
+            const dc = b.col - a.col;
             const orientationClass = dr * dc > 0 ? "wall-line-diag-desc" : "wall-line-diag-asc";
             segment.classList.add(orientationClass);
             segment.style.left = `${midX - diagLength / 2}px`;
@@ -480,8 +556,14 @@ function renderScenarioWalls() {
             segment.style.width = `${diagLength}px`;
             segment.style.height = `${thickness}px`;
         }
-
         wallOverlay.appendChild(segment);
+    };
+
+    scenarioState.walls.forEach((wall) => {
+        renderSegment(wall.a, wall.b, wall.color || "#555");
+    });
+    scenarioState.edgeObjects.forEach((edge) => {
+        renderSegment(edge.a, edge.b, edge.color || "#8b5");
     });
 }
 
