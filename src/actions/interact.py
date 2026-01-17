@@ -1,6 +1,7 @@
 import logging
 from pathlib import Path
 import sys
+from time import sleep
 
 from .actions_registy import register
 from .base import ActionContext, BaseAction
@@ -48,7 +49,7 @@ class InteractAction(BaseAction):
         ]
         if positions_visible:
             ctx.game.conn.set_leds(positions_visible, consts.INTERACT_FIELD_RGB)
-        target = ctx.game.conn.scan_board(positions_all or None)
+        target = ctx.game.conn.scan_board(None) # tu musi byc None zeby moc zakonczyc akcje
         ctx.game.conn.leds_off()
         if target not in positions_all:
             logger.info("Nie ma tu nic ciekawego.")
@@ -82,6 +83,9 @@ class InteractAction(BaseAction):
             if getattr(interactable, "allow_hidden_interaction", False):
                 interactable.revealed = True
                 logger.info("Odkrywasz ukryty element.")
+                ctx.game.conn.set_leds([target], consts.HIDDEN_REVEAL_RGB)
+                sleep(consts.RESPONSE_DELAY)
+                ctx.game.conn.leds_off()
             else:
                 logger.info("Nic tu nie znajdujesz.")
                 return

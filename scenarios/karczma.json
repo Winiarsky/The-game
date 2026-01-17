@@ -800,7 +800,8 @@
                         "loot": [
                             "ktos zostawil na krzesle, portfel"
                         ],
-                        "reveal_dc": 18
+                        "reveal_dc": 18,
+                        "allow_hidden_interaction": true
                     }
                 }
             ]
@@ -4239,7 +4240,11 @@
                     "b": [
                         4,
                         11
-                    ]
+                    ],
+                    "config": {
+                        "allow_hidden_interaction": true,
+                        "require_same_cell_interact": true
+                    }
                 },
                 {
                     "a": [
@@ -4249,7 +4254,11 @@
                     "b": [
                         5,
                         12
-                    ]
+                    ],
+                    "config": {
+                        "allow_hidden_interaction": true,
+                        "require_same_cell_interact": true
+                    }
                 }
             ]
         }

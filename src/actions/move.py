@@ -1,4 +1,5 @@
 import logging
+from time import sleep
 
 from hero import Hero
 from pathlib import Path
@@ -79,12 +80,17 @@ class MoveAction(BaseAction):
                 # Automatyczne wyzwalacze po wejściu na pole (np. pułapki).
                 triggered = False
                 for obj in board.interactables_at(current_pos):
+                    was_hidden = getattr(obj, "hidden", False) and not getattr(obj, "revealed", False)
                     on_enter = getattr(obj, "on_enter", None)
                     if callable(on_enter):
                         result = on_enter(moving_hero, ctx.game)
                         if result:
                             logger.info(result)
                             triggered = True
+                        if was_hidden and getattr(obj, "revealed", False):
+                            ctx.game.conn.set_leds([current_pos], consts.HIDDEN_REVEAL_RGB)
+                            sleep(consts.RESPONSE_DELAY)
+                            ctx.game.conn.leds_off()
                 if triggered:
                     logger.info("Ruch zakończony na %s przez zdarzenie na polu.", current_pos)
                     return
