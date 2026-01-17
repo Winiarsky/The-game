@@ -23,6 +23,8 @@ class Door(LockableMixin, TrappableMixin, HiddenMixin, DestructibleMixin, Intera
         *,
         locked: bool = True,
         allow_same_cell_interact: bool = True,
+        allow_hidden_interaction: bool = True,
+        require_same_cell_interact: bool = True,
         thievery_dc: int = 16,
         force_open_dc: int = 18,
         working_keys: Optional[list[str]] = None,
@@ -35,8 +37,17 @@ class Door(LockableMixin, TrappableMixin, HiddenMixin, DestructibleMixin, Intera
         ac: int = 18,
         hp: int = 10,
         hardness: int = 5,
+        auto_reveal_on_enter: bool = False,
+        auto_trigger_on_enter: bool = False,
     ):
-        Interactable.__init__(self, position=None, blocks_movement=False, allow_same_cell_interact=allow_same_cell_interact)
+        Interactable.__init__(
+            self,
+            position=None,
+            blocks_movement=False,
+            allow_same_cell_interact=allow_same_cell_interact,
+            require_same_cell_interact=require_same_cell_interact,
+            allow_hidden_interaction=allow_hidden_interaction,
+        )
         # atrybuty zamka
         self.locked = locked
         self.working_keys = working_keys or ["door_key"]
@@ -55,6 +66,8 @@ class Door(LockableMixin, TrappableMixin, HiddenMixin, DestructibleMixin, Intera
         self.hidden = hidden
         self.revealed = not hidden
         self.reveal_dc = reveal_dc
+        self.auto_reveal_on_enter = auto_reveal_on_enter
+        self.auto_trigger_on_enter = auto_trigger_on_enter
 
         # niszczenie
         self.ac = ac
@@ -78,6 +91,13 @@ class Door(LockableMixin, TrappableMixin, HiddenMixin, DestructibleMixin, Intera
 
     def can_interact(self, actor, game) -> bool:
         return True  # pozwalamy na ślepe próby nawet dla ukrytych drzwi
+
+    def _neighboring_positions(self) -> list[tuple[int, int]]:
+        """Zwróć pola sąsiadujące z krawędzią drzwi (a,b)."""
+        if not self.edge:
+            return []
+        a, b = self.edge
+        return [a, b]
 
     # --- akcje ---
     def register_default_actions(self) -> None:
@@ -316,6 +336,22 @@ class Door(LockableMixin, TrappableMixin, HiddenMixin, DestructibleMixin, Intera
             return "Udaje się namacać ukryte drzwi."
         return "Nie znajdujesz niczego konkretnego."
 
+    def on_enter(self, actor, game) -> str | None:
+        """Wejście na pola sąsiadujące z krawędzią drzwi."""
+        if not self.edge:
+            return None
+        if actor.position not in self._neighboring_positions():
+            return None
+        messages: list[str] = []
+        if self.auto_trigger_on_enter and self.trap_armed:
+            effect = self.trigger_trap()
+            messages.append(f"Pułapka przy drzwiach odpala! {effect}")
+        if self.auto_reveal_on_enter and self.hidden and not self.revealed:
+            roll = prompt_for_roll("Perception (auto-check na sekret drzwi): ")
+            outcome, msg = self.try_reveal(roll)
+            messages.append(f"{msg} (wynik: {outcome})")
+        return " ".join(messages) if messages else None
+
 
 META = GameObjectMeta(
     object_id="door",
@@ -328,6 +364,8 @@ META = GameObjectMeta(
     default_config={
         "locked": True,
         "allow_same_cell_interact": True,
+        "allow_hidden_interaction": True,
+        "require_same_cell_interact": True,
         "thievery_dc": 16,
         "force_open_dc": 18,
         "working_keys": ["door_key"],
@@ -337,6 +375,8 @@ META = GameObjectMeta(
         "trap_effect": "Pułapka zadaje 2k6 obrażeń.",
         "hidden": False,
         "reveal_dc": 18,
+        "auto_reveal_on_enter": False,
+        "auto_trigger_on_enter": False,
         "ac": 18,
         "hp": 10,
         "hardness": 5,

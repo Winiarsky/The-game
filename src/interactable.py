@@ -33,6 +33,8 @@ class Interactable:
     position: Optional[Tuple[int, int]] = None
     blocks_movement: bool = False  # jeśli True: traktujemy jak przeszkodę, nie da się wejść na pole
     allow_same_cell_interact: bool = True  # jeśli False: wymagaj stania obok
+    require_same_cell_interact: bool = False  # jeśli True: interakcja tylko z tego pola
+    allow_hidden_interaction: bool = False  # jeśli True: można kliknąć ukryty obiekt (odsłania go)
     dc: int = 15  # trudność interakcji
     critical_failure_dc: int = dc - 10   # próg krytycznej porażki
     critical_success_dc: int = dc + 10  # próg krytycznego sukcesu

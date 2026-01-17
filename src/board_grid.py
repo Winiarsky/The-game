@@ -207,24 +207,45 @@ class BoardGrid:
             interactable.set_position(None)
 
     def get_interactables_in_range(
-        self, position: Tuple[int, int], *, include_position: bool = True, diagonal: bool = True
+        self,
+        position: Tuple[int, int],
+        *,
+        include_position: bool = True,
+        diagonal: bool = True,
+        include_hidden: bool = False,
     ) -> list[tuple[Tuple[int, int], list[Interactable]]]:
         """Zwróć pozycje z obiektami interaktywnymi w zasięgu sąsiadów (1 pole)."""
+
+        def _eligible(objs: list[Interactable]) -> list[Interactable]:
+            """Uwzględnia filtr ukrycia."""
+            result: list[Interactable] = []
+            for obj in objs:
+                if getattr(obj, "hidden", False) and not getattr(obj, "revealed", False):
+                    if not include_hidden or not getattr(obj, "allow_hidden_interaction", False):
+                        continue
+                result.append(obj)
+            return result
+
+        def _filter_by_reach(objs: list[Interactable], candidate_pos: Tuple[int, int]) -> list[Interactable]:
+            """Uwzględnij ograniczenia interakcji względem pozycji bohatera."""
+            filtered: list[Interactable] = []
+            for obj in objs:
+                if candidate_pos == position and not getattr(obj, "allow_same_cell_interact", True):
+                    continue
+                if candidate_pos != position and getattr(obj, "require_same_cell_interact", False):
+                    continue
+                filtered.append(obj)
+            return filtered
+
         result: list[tuple[Tuple[int, int], list[Interactable]]] = []
         for candidate in self.get_neighbors(position, include_position=include_position, diagonal=diagonal):
-            interactables = self.interactables_at(candidate)
+            interactables = _filter_by_reach(_eligible(self.interactables_at(candidate)), candidate)
             if not interactables:
                 continue
-            # filtrowanie: jeśli obiekt nie pozwala na interakcję z tego samego pola, pomijamy
-            if candidate == position:
-                filtered = [i for i in interactables if getattr(i, "allow_same_cell_interact", True)]
-            else:
-                filtered = interactables
-            if filtered:
-                result.append((candidate, filtered))
+            result.append((candidate, interactables))
         # Obiekty krawędziowe między polem a sąsiadami wybieramy klikając sąsiada.
         for neighbor in self.get_neighbors(position, include_position=False, diagonal=diagonal):
-            edge_objs = self.edge_interactables_between(position, neighbor)
+            edge_objs = _filter_by_reach(_eligible(self.edge_interactables_between(position, neighbor)), neighbor)
             if edge_objs:
                 result.append((neighbor, edge_objs))
         return result

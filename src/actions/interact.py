@@ -37,14 +37,22 @@ class InteractAction(BaseAction):
 
     def _choose_interactable(self, ctx: ActionContext, hero_pos):
         board = ctx.game.board
-        candidates = board.get_interactables_in_range(hero_pos, include_position=True, diagonal=True)
-        positions = [pos for pos, _objs in candidates]
-        if not positions:
-            logger.info("Brak obiektów do interakcji w sąsiedztwie.")
-            return None
-        ctx.game.conn.set_leds(positions, consts.INTERACT_FIELD_RGB)
-        target = ctx.game.conn.scan_board(positions)
+        candidates = board.get_interactables_in_range(
+            hero_pos, include_position=True, diagonal=True, include_hidden=True
+        )
+        positions_all = [pos for pos, _objs in candidates]
+        positions_visible = [
+            pos
+            for pos, objs in candidates
+            if any(not getattr(obj, "hidden", False) or getattr(obj, "revealed", False) for obj in objs)
+        ]
+        if positions_visible:
+            ctx.game.conn.set_leds(positions_visible, consts.INTERACT_FIELD_RGB)
+        target = ctx.game.conn.scan_board(positions_all or None)
         ctx.game.conn.leds_off()
+        if target not in positions_all:
+            logger.info("Nie ma tu nic ciekawego.")
+            return None
         return target
 
     def execute(self, ctx: ActionContext):
@@ -56,12 +64,30 @@ class InteractAction(BaseAction):
         if target is None:
             return
 
-        interactables = ctx.game.board.interactables_at(target)
+        interactables = [
+            i
+            for i in ctx.game.board.interactables_at(target)
+            if (not getattr(i, "hidden", False) or getattr(i, "revealed", False) or getattr(i, "allow_hidden_interaction", False))
+        ]
+        if target != hero_pos:
+            interactables = [
+                i for i in interactables if not getattr(i, "require_same_cell_interact", False)
+            ]
         if not interactables:
             logger.info("Wybrane pole nie ma obiektu do interakcji.")
             return
 
         interactable = interactables[0]  # na razie pierwszy z listy
+        if getattr(interactable, "hidden", False) and not getattr(interactable, "revealed", False):
+            if getattr(interactable, "allow_hidden_interaction", False):
+                interactable.revealed = True
+                logger.info("Odkrywasz ukryty element.")
+            else:
+                logger.info("Nic tu nie znajdujesz.")
+                return
+        if getattr(interactable, "require_same_cell_interact", False) and target != hero_pos:
+            logger.info("Musisz stanąć na tym polu, aby wejść w interakcję.")
+            return
         if not interactable.can_interact(hero, ctx.game):
             logger.info("Nie możesz teraz wejść w interakcję z tym obiektem.")
             return

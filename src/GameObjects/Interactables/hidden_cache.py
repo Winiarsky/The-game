@@ -8,13 +8,32 @@ from interactions.common import HiddenMixin, prompt_for_roll
 class HiddenCache(HiddenMixin, Interactable):
     """Ukryty schowek/sekretne przejście do wykrycia lub ślepego trafienia."""
 
-    def __init__(self, *, loot: Optional[list[str]] = None, hidden: bool = True, reveal_dc: int = 18):
-        Interactable.__init__(self, position=None, allow_same_cell_interact=True, blocks_movement=False)
+    def __init__(
+        self,
+        *,
+        loot: Optional[list[str]] = None,
+        hidden: bool = True,
+        allow_hidden_interaction: bool = True,
+        reveal_dc: int = 18,
+        auto_reveal_on_enter: bool = False,
+        auto_trigger_on_enter: bool = False,
+        trap_effect: str | None = None,
+    ):
+        Interactable.__init__(
+            self,
+            position=None,
+            allow_same_cell_interact=True,
+            allow_hidden_interaction=allow_hidden_interaction,
+            blocks_movement=False,
+        )
         self.hidden = hidden
         self.revealed = not hidden
         self.reveal_dc = reveal_dc
         self.loot = list(loot or [])
         self.opened = False
+        self.auto_reveal_on_enter = auto_reveal_on_enter
+        self.auto_trigger_on_enter = auto_trigger_on_enter
+        self.trap_effect = trap_effect or "Cichy alarm – czujesz niepokój."
         self.register_default_actions()
 
     def register_default_actions(self) -> None:
@@ -97,6 +116,19 @@ class HiddenCache(HiddenMixin, Interactable):
         self.loot = []
         return f"Zabierasz: {', '.join(loot_items)}."
 
+    def on_enter(self, actor, game) -> str | None:
+        """Wejście na pole: opcjonalne auto-odkrycie/wyzwolenie efektu."""
+        messages: list[str] = []
+        if self.auto_reveal_on_enter and self.hidden and not self.revealed:
+            roll = prompt_for_roll("Perception (auto-check na sekret przy wejściu): ")
+            outcome, msg = self.try_reveal(roll)
+            messages.append(f"{msg} (wynik: {outcome})")
+        if self.auto_trigger_on_enter and self.trap_effect and self.hidden:
+            # ukryty czujnik – odpala nawet jeśli nie odkryto
+            messages.append(f"Wyzwalasz ukryty efekt: {self.trap_effect}")
+            self.auto_trigger_on_enter = False
+        return " ".join(messages) if messages else None
+
 
 META = GameObjectMeta(
     object_id="hidden_cache",
@@ -109,6 +141,10 @@ META = GameObjectMeta(
     default_config={
         "loot": [],
         "hidden": True,
+        "allow_hidden_interaction": True,
         "reveal_dc": 18,
+        "auto_reveal_on_enter": False,
+        "auto_trigger_on_enter": False,
+        "trap_effect": None,
     },
 )
