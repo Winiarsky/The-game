@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Callable, Optional
 
 
 def prompt_for_roll(prompt: str) -> int:
@@ -25,6 +25,78 @@ def resolve_skill_check(dc: int, roll: int) -> str:
     if roll <= dc - 10:
         return "critical_failure"
     return "failure"
+
+
+# --- Dialog / społeczności ---
+
+AttitudeLabel = str
+
+
+def clamp(value: int, low: int, high: int) -> int:
+    return max(low, min(high, value))
+
+
+def attitude_label(attitude: int) -> AttitudeLabel:
+    """Mapuje liczbę na etykietę postawy."""
+    if attitude <= -2:
+        return "wrogi"
+    if attitude == -1:
+        return "podejrzliwy"
+    if attitude == 0:
+        return "neutralny"
+    if attitude == 1:
+        return "życzliwy"
+    return "przyjacielski"
+
+
+@dataclass
+class SocialMixin:
+    attitude: int = 0  # -2 wrogi, -1 podejrzliwy, 0 neutralny, 1 życzliwy, 2+ przyjacielski
+    min_attitude: int = -2
+    max_attitude: int = 2
+
+    def adjust_attitude(self, delta: int) -> tuple[int, AttitudeLabel]:
+        self.attitude = clamp(self.attitude + delta, self.min_attitude, self.max_attitude)
+        return self.attitude, attitude_label(self.attitude)
+
+
+@dataclass
+class TradeItem:
+    item_id: str
+    name: str
+    price: int
+
+
+@dataclass
+class TradeMixin:
+    inventory: list[TradeItem] = None
+    base_price_modifier: float = 1.0
+
+    def price_multiplier(self, attitude: int) -> float:
+        """Prosty mnożnik ceny zależny od nastawienia."""
+        table = {
+            -2: 1.6,
+            -1: 1.3,
+            0: 1.0,
+            1: 0.9,
+            2: 0.85,
+        }
+        return table.get(attitude, 1.0) * self.base_price_modifier
+
+
+@dataclass
+class PickpocketMixin:
+    pickpocket_dc: int = 16
+    pickpocket_loot: list[str] = None
+    pickpocket_fail_attitude_delta: int = -1
+
+    def resolve_pickpocket(self, roll: int) -> tuple[str, Optional[str]]:
+        """Zwraca (outcome, zdobyty_przedmiot_lub_None)."""
+        outcome = resolve_skill_check(self.pickpocket_dc, roll)
+        if outcome in ("success", "critical_success"):
+            loot = (self.pickpocket_loot or ["sakiewka"])[0]
+            return outcome, loot
+        return outcome, None
 
 
 @dataclass

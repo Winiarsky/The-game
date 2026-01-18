@@ -93,14 +93,16 @@ class Game:
             (definition.meta.category, definition.meta.object_id): definition for definition in definitions
         }
 
-        def build_instance(cls, cfg: dict[str, Any] | None):
+        def build_instance(cls, cfg: dict[str, Any] | None, default_cfg: dict[str, Any] | None = None):
             if not isinstance(cls, type):
                 logger.error("logic_cls %s nie jest klasą", cls)
                 return None
+            # użyj default_config obiektu, jeśli brak/empty config
+            effective_cfg = cfg if cfg not in (None, {}) else (default_cfg or {})
             try:
-                return cls(**(cfg or {}))
+                return cls(**effective_cfg)
             except TypeError as exc:
-                logger.error("Nie udało się utworzyć %s z configiem %s: %s", cls.__name__, cfg, exc)
+                logger.error("Nie udało się utworzyć %s z configiem %s: %s", cls.__name__, effective_cfg, exc)
                 try:
                     return cls()
                 except Exception:
@@ -112,8 +114,14 @@ class Game:
             (Interactable, lambda obj, pos: board.add_interactable(obj, pos)),
         ]
 
-        def place_logic(logic_cls, pos: tuple[int, int], cfg: dict[str, Any] | None):
-            instance = build_instance(logic_cls, cfg)
+        def place_logic(
+            logic_cls,
+            definition,
+            pos: tuple[int, int],
+            cfg: dict[str, Any] | None,
+        ):
+            default_cfg = getattr(definition.meta, "default_config", None) if definition else None
+            instance = build_instance(logic_cls, cfg, default_cfg)
             if instance is None:
                 return
             for base, action in handlers:
@@ -146,8 +154,9 @@ class Game:
                         a = (a_raw[0], a_raw[1])
                         b = (b_raw[0], b_raw[1])
                         config = edge.get("config") or {}
+                        default_cfg = definition.meta.default_config if definition else None
                         if isinstance(logic_cls, type) and issubclass(logic_cls, Interactable):
-                            instance = build_instance(logic_cls, config)
+                            instance = build_instance(logic_cls, config, default_cfg)
                             if instance is None:
                                 continue
                             board.add_edge_interactable(instance, a, b)
@@ -166,7 +175,7 @@ class Game:
                         continue
                     try:
                         col, row = raw_pos
-                        place_logic(logic_cls, (col, row), inst.get("config") or {})
+                        place_logic(logic_cls, definition, (col, row), inst.get("config") or {})
                     except ValueError as exc:
                         logger.error("Pole %s jest zajęte, nie można ustawić %s: %s", raw_pos, object_id, exc)
                     except Exception as exc:
@@ -176,7 +185,7 @@ class Game:
                 for pos in obj.get("positions", []):
                     try:
                         col, row = pos
-                        place_logic(logic_cls, (col, row), {})
+                        place_logic(logic_cls, definition, (col, row), {})
                     except ValueError as exc:
                         logger.error("Pole %s jest zajęte, nie można ustawić %s: %s", pos, object_id, exc)
                     except Exception as exc:

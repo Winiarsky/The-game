@@ -796,15 +796,29 @@
                         9
                     ],
                     "config": {
+                        "allow_hidden_interaction": true,
                         "hidden": true,
                         "loot": [
                             "ktos zostawil na krzesle, portfel"
                         ],
-                        "reveal_dc": 18,
-                        "allow_hidden_interaction": true
+                        "reveal_dc": 18
                     }
                 }
             ]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "npc",
+            "label": "NPC",
+            "color": "#075f07",
+            "placement": "cell",
+            "positions": [
+                [
+                    3,
+                    3
+                ]
+            ],
+            "instances": []
         },
         {
             "category": "Walls",
