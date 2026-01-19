@@ -49,7 +49,7 @@ const state = {
     deleteMode: false,
     pendingEdgeStart: null, // {row,col}
     rooms: [], // [{id,name,color}]
-    roomAssignments: new Map(), // key -> roomId
+    roomAssignments: new Map(), // key -> Set<roomId>
     roomSelection: new Set(), // Set<posKey>
 };
 
@@ -96,7 +96,7 @@ function getRoomById(roomId) {
 function countAssignments(roomId) {
     let count = 0;
     state.roomAssignments.forEach((value) => {
-        if (value === roomId) count += 1;
+        if (value?.has?.(roomId)) count += 1;
     });
     return count;
 }
@@ -319,21 +319,35 @@ function renderRoomOverlay() {
             const cell = ensureCell(r, c);
             const marker = cell.querySelector(".room-marker");
             const key = posKey(r, c);
-            const roomId = state.roomAssignments.get(key);
-            const room = roomId ? getRoomById(roomId) : null;
+            const roomIds = state.roomAssignments.get(key) || new Set();
+            const rooms = Array.from(roomIds)
+                .map((id) => getRoomById(id))
+                .filter(Boolean);
             const selected = state.roomSelection.has(key);
 
-            cell.classList.toggle("rooms-active", roomsActive && Boolean(room));
+            cell.classList.toggle("rooms-active", roomsActive && rooms.length > 0);
             cell.classList.toggle("room-selected", roomsActive && selected);
 
-            if (roomsActive && room) {
-                cell.style.setProperty("--room-color", room.color || "#888");
-                marker.textContent = room.name || "Room";
+            marker.innerHTML = "";
+            if (roomsActive && rooms.length) {
+                const primary = rooms[0];
+                cell.style.setProperty("--room-color", primary?.color || "#888");
                 marker.style.display = "flex";
-                marker.style.background = room.color || "#888";
+                rooms.slice(0, 3).forEach((room, index) => {
+                    const pill = document.createElement("span");
+                    pill.className = "room-pill";
+                    pill.textContent = room.name || room.id || `Room ${index + 1}`;
+                    pill.style.background = room.color || "#888";
+                    marker.append(pill);
+                });
+                if (rooms.length > 3) {
+                    const more = document.createElement("span");
+                    more.className = "room-pill room-pill-more";
+                    more.textContent = `+${rooms.length - 3}`;
+                    marker.append(more);
+                }
             } else {
                 cell.style.removeProperty("--room-color");
-                marker.textContent = "";
                 marker.style.display = "none";
             }
         }
@@ -508,7 +522,9 @@ function assignRoom(roomId) {
         return;
     }
     state.roomSelection.forEach((key) => {
-        state.roomAssignments.set(key, roomId);
+        const existing = state.roomAssignments.get(key) || new Set();
+        existing.add(roomId);
+        state.roomAssignments.set(key, existing);
     });
     clearRoomSelection();
     renderRoomsList();
@@ -556,12 +572,19 @@ function removeRoom(roomId) {
     state.rooms = state.rooms.filter((room) => room.id !== roomId);
     if (before !== state.rooms.length) {
         let removedAssignments = 0;
+        const keysToCleanup = [];
         state.roomAssignments.forEach((value, key) => {
-            if (value === roomId) {
-                state.roomAssignments.delete(key);
+            if (value?.has?.(roomId)) {
+                value.delete(roomId);
                 removedAssignments += 1;
+                if (value.size === 0) {
+                    keysToCleanup.push(key);
+                } else {
+                    state.roomAssignments.set(key, value);
+                }
             }
         });
+        keysToCleanup.forEach((key) => state.roomAssignments.delete(key));
         clearRoomSelection();
         renderRoomsList();
         renderRoomOverlay();
@@ -1033,13 +1056,15 @@ function buildScenarioPayload() {
         edgesByKey.get(objectKey).edges.push(edgePayload);
     });
 
-    state.roomAssignments.forEach((roomId, key) => {
+    state.roomAssignments.forEach((roomIds, key) => {
         const coords = key.split(",").map(Number);
         const scenarioPos = toScenarioPosition(coords);
         if (!Array.isArray(scenarioPos)) return;
-        const list = roomPositions.get(roomId) || [];
-        list.push(scenarioPos);
-        roomPositions.set(roomId, list);
+        Array.from(roomIds || []).forEach((roomId) => {
+            const list = roomPositions.get(roomId) || [];
+            list.push(scenarioPos);
+            roomPositions.set(roomId, list);
+        });
     });
 
     const rooms = state.rooms.map((room) => ({
@@ -1201,7 +1226,10 @@ function applyRooms(rooms = []) {
             const normalized = fromScenarioPosition(pos);
             if (!Array.isArray(normalized)) return;
             const [row, col] = normalized;
-            state.roomAssignments.set(posKey(row, col), uniqueId);
+            const key = posKey(row, col);
+            const existing = state.roomAssignments.get(key) || new Set();
+            existing.add(uniqueId);
+            state.roomAssignments.set(key, existing);
         });
     });
 }

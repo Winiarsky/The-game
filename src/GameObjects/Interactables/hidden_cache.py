@@ -15,6 +15,7 @@ class HiddenCache(HiddenMixin, Interactable):
         hidden: bool = True,
         allow_hidden_interaction: bool = True,
         reveal_dc: int = 18,
+        seekable: bool = True,
         auto_reveal_on_enter: bool = False,
         auto_trigger_on_enter: bool = False,
         trap_effect: str | None = None,
@@ -29,6 +30,7 @@ class HiddenCache(HiddenMixin, Interactable):
         self.hidden = hidden
         self.revealed = not hidden
         self.reveal_dc = reveal_dc
+        self.seekable = seekable
         self.loot = list(loot or [])
         self.opened = False
         self.auto_reveal_on_enter = auto_reveal_on_enter
@@ -143,6 +145,7 @@ META = GameObjectMeta(
         "hidden": True,
         "allow_hidden_interaction": True,
         "reveal_dc": 18,
+        "seekable": True,
         "auto_reveal_on_enter": False,
         "auto_trigger_on_enter": False,
         "trap_effect": None,

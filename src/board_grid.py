@@ -26,6 +26,7 @@ class GridCell:
     field: BasicTerrain = dataclass_field(default_factory=BasicTerrain)
     occupant: Optional[Occupant] = None
     interactables: list[Interactable] = dataclass_field(default_factory=list)
+    rooms: set[str] = dataclass_field(default_factory=set)
 
 
 class BoardGrid:
@@ -42,6 +43,10 @@ class BoardGrid:
         # Interactables na krawędziach (np. drzwi między polami).
         self.edge_interactables: dict[frozenset[Tuple[int, int]], list[Interactable]] = {}
         self.walls: dict[frozenset[Tuple[int, int]], Wall] = {}
+        self.room_positions: dict[str, set[Tuple[int, int]]] = {}
+        self.rooms_meta: dict[str, dict[str, object]] = {}
+        self.room_seek_locked: set[str] = set()
+        self.room_seek_fail_counts: dict[str, int] = {}
 
     def in_bounds(self, position: Tuple[int, int]) -> bool:
         col, row = position
@@ -57,6 +62,65 @@ class BoardGrid:
         """Ustaw typ pola (np. teren nieprzechodni)."""
         cell = self.cell_at(position)
         cell.field = terrain
+
+    def rooms_at(self, position: Tuple[int, int]) -> set[str]:
+        """Zwróć zestaw identyfikatorów pokoi przypisanych do pola."""
+        if not self.in_bounds(position):
+            raise ValueError(f"Pozycja {position} znajduje się poza planszą.")
+        return set(self.cell_at(position).rooms)
+
+    def positions_in_rooms(self, room_ids: set[str] | list[str]) -> set[Tuple[int, int]]:
+        """Zwróć wszystkie pola należące do wskazanych pokoi."""
+        result: set[Tuple[int, int]] = set()
+        for room_id in room_ids:
+            result.update(self.room_positions.get(room_id, set()))
+        return result
+
+    def apply_rooms(self, rooms: list[dict[str, object]]) -> None:
+        """Zastąp informacje o pokojach na planszy (wspiera wiele pokoi na jednym polu)."""
+        self.room_positions.clear()
+        self.rooms_meta.clear()
+        self.room_seek_locked.clear()
+        self.room_seek_fail_counts.clear()
+        for grid_row in self._grid:
+            for cell in grid_row:
+                cell.rooms.clear()
+
+        for room in rooms or []:
+            room_id = str(room.get("id") or room.get("name") or "").strip()
+            if not room_id:
+                continue
+            room_name = room.get("name") or room_id
+            room_color = room.get("color")
+            self.rooms_meta[room_id] = {"name": room_name, "color": room_color}
+
+            positions = room.get("positions") or []
+            for raw_pos in positions:
+                try:
+                    col, row_idx = raw_pos
+                    pos = (int(col), int(row_idx))
+                except Exception:
+                    continue
+                if not self.in_bounds(pos):
+                    continue
+                cell = self.cell_at(pos)
+                cell.rooms.add(room_id)
+                self.room_positions.setdefault(room_id, set()).add(pos)
+
+    # --- Seek state ---
+    def is_room_seek_locked(self, room_id: str) -> bool:
+        return room_id in self.room_seek_locked
+
+    def lock_room_seek(self, room_id: str) -> None:
+        self.room_seek_locked.add(room_id)
+
+    def room_seek_failures(self, room_id: str) -> int:
+        return self.room_seek_fail_counts.get(room_id, 0)
+
+    def increment_room_seek_fail(self, room_id: str) -> int:
+        current = self.room_seek_fail_counts.get(room_id, 0) + 1
+        self.room_seek_fail_counts[room_id] = current
+        return current
 
     def occupant_at(self, position: Tuple[int, int]) -> Optional[Occupant]:
         return self.cell_at(position).occupant

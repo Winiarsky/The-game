@@ -174,101 +174,6 @@
             ]
         },
         {
-            "id": "zewii",
-            "name": "zew_II",
-            "color": "#0a4b02",
-            "positions": [
-                [
-                    10,
-                    11
-                ],
-                [
-                    10,
-                    10
-                ],
-                [
-                    10,
-                    9
-                ],
-                [
-                    10,
-                    8
-                ],
-                [
-                    10,
-                    7
-                ],
-                [
-                    10,
-                    6
-                ],
-                [
-                    10,
-                    5
-                ],
-                [
-                    10,
-                    4
-                ],
-                [
-                    10,
-                    3
-                ],
-                [
-                    10,
-                    2
-                ],
-                [
-                    10,
-                    1
-                ],
-                [
-                    10,
-                    0
-                ],
-                [
-                    9,
-                    0
-                ],
-                [
-                    8,
-                    0
-                ],
-                [
-                    7,
-                    0
-                ],
-                [
-                    6,
-                    0
-                ],
-                [
-                    5,
-                    0
-                ],
-                [
-                    4,
-                    0
-                ],
-                [
-                    3,
-                    0
-                ],
-                [
-                    2,
-                    0
-                ],
-                [
-                    1,
-                    0
-                ],
-                [
-                    0,
-                    0
-                ]
-            ]
-        },
-        {
             "id": "parter",
             "name": "parter",
             "color": "#682f08",
@@ -721,6 +626,124 @@
                     3
                 ]
             ]
+        },
+        {
+            "id": "zewii",
+            "name": "zew_II",
+            "color": "#0c0345",
+            "positions": [
+                [
+                    10,
+                    14
+                ],
+                [
+                    10,
+                    12
+                ],
+                [
+                    10,
+                    13
+                ],
+                [
+                    10,
+                    11
+                ],
+                [
+                    10,
+                    10
+                ],
+                [
+                    10,
+                    9
+                ],
+                [
+                    10,
+                    8
+                ],
+                [
+                    10,
+                    7
+                ],
+                [
+                    10,
+                    6
+                ],
+                [
+                    10,
+                    5
+                ],
+                [
+                    10,
+                    4
+                ],
+                [
+                    10,
+                    3
+                ],
+                [
+                    10,
+                    2
+                ],
+                [
+                    10,
+                    1
+                ],
+                [
+                    10,
+                    0
+                ]
+            ]
+        },
+        {
+            "id": "zew3",
+            "name": "zew_3",
+            "color": "#09ec95",
+            "positions": [
+                [
+                    10,
+                    0
+                ],
+                [
+                    0,
+                    0
+                ],
+                [
+                    1,
+                    0
+                ],
+                [
+                    2,
+                    0
+                ],
+                [
+                    3,
+                    0
+                ],
+                [
+                    4,
+                    0
+                ],
+                [
+                    5,
+                    0
+                ],
+                [
+                    6,
+                    0
+                ],
+                [
+                    7,
+                    0
+                ],
+                [
+                    8,
+                    0
+                ],
+                [
+                    9,
+                    0
+                ]
+            ]
         }
     ],
     "objects": [
@@ -788,7 +811,16 @@
             "label": "Ukryty element",
             "color": "#6ab",
             "placement": "cell",
-            "positions": [],
+            "positions": [
+                [
+                    4,
+                    0
+                ],
+                [
+                    10,
+                    5
+                ]
+            ],
             "instances": [
                 {
                     "position": [
@@ -803,22 +835,40 @@
                         ],
                         "reveal_dc": 18
                     }
+                },
+                {
+                    "position": [
+                        8,
+                        12
+                    ],
+                    "config": {
+                        "allow_hidden_interaction": true,
+                        "auto_reveal_on_enter": false,
+                        "auto_trigger_on_enter": false,
+                        "hidden": true,
+                        "loot": [],
+                        "reveal_dc": 18,
+                        "seekable": true,
+                        "trap_effect": null
+                    }
+                },
+                {
+                    "position": [
+                        0,
+                        13
+                    ],
+                    "config": {
+                        "allow_hidden_interaction": true,
+                        "auto_reveal_on_enter": false,
+                        "auto_trigger_on_enter": false,
+                        "hidden": true,
+                        "loot": [],
+                        "reveal_dc": 18,
+                        "seekable": false,
+                        "trap_effect": null
+                    }
                 }
             ]
-        },
-        {
-            "category": "Interactables",
-            "object_id": "npc",
-            "label": "NPC",
-            "color": "#075f07",
-            "placement": "cell",
-            "positions": [
-                [
-                    3,
-                    3
-                ]
-            ],
-            "instances": []
         },
         {
             "category": "Walls",

@@ -50,7 +50,8 @@ class Connection:
             "+": "ACCEPT",
             "-": "DECLINE",
             "1": "move",
-            "2": "interact"
+            "2": "interact",
+            "3": "seek"
         }
         
         while True:

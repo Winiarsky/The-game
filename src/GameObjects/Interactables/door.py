@@ -34,6 +34,7 @@ class Door(LockableMixin, TrappableMixin, HiddenMixin, DestructibleMixin, Intera
         trap_effect: str = "Pułapka zadaje obrażenia lub uruchamia alarm.",
         hidden: bool = False,
         reveal_dc: int = 18,
+        seekable: bool = True,
         ac: int = 18,
         hp: int = 10,
         hardness: int = 5,
@@ -66,6 +67,7 @@ class Door(LockableMixin, TrappableMixin, HiddenMixin, DestructibleMixin, Intera
         self.hidden = hidden
         self.revealed = not hidden
         self.reveal_dc = reveal_dc
+        self.seekable = seekable
         self.auto_reveal_on_enter = auto_reveal_on_enter
         self.auto_trigger_on_enter = auto_trigger_on_enter
 
@@ -375,6 +377,7 @@ META = GameObjectMeta(
         "trap_effect": "Pułapka zadaje 2k6 obrażeń.",
         "hidden": False,
         "reveal_dc": 18,
+        "seekable": True,
         "auto_reveal_on_enter": False,
         "auto_trigger_on_enter": False,
         "ac": 18,

@@ -56,6 +56,7 @@ class Game:
             logger.warning("Brak scan_game_objects - używam legacy pól.")
             self._apply_legacy(board, scenario)
 
+        self._apply_rooms(board, scenario)
         return board
 
     def _apply_legacy(self, board: BoardGrid, scenario: dict[str, Any]) -> None:
@@ -190,6 +191,12 @@ class Game:
                         logger.error("Pole %s jest zajęte, nie można ustawić %s: %s", pos, object_id, exc)
                     except Exception as exc:
                         logger.error("Nie można ustawić obiektu %s na %s: %s", object_id, pos, exc)
+
+    def _apply_rooms(self, board: BoardGrid, scenario: dict[str, Any]) -> None:
+        """Zastosuj definicje pokoi z scenariusza (wspiera wiele pokoi na polu)."""
+        rooms = scenario.get("rooms")
+        if isinstance(rooms, list):
+            board.apply_rooms(rooms)
 
     def _init_connection(self) -> Connection:
         conn = Connection()
