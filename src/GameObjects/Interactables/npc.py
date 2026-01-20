@@ -221,7 +221,14 @@ class NPC(SocialMixin, TradeMixin, PickpocketMixin, Interactable):
 
     # --- Kradzież ---
     def action_pickpocket(self, actor, _game, _payload=None) -> str:
+        statuses = set(getattr(actor, "statuses", []))
+        if "stealth" not in statuses:
+            return "Musisz być w ukryciu, aby spróbować podkraść."
         roll = prompt_for_roll("Rzut na Thievery (podkradanie): ")
+        bonus = getattr(actor, "stealth_bonus", 0)
+        if bonus:
+            logger.info("Premia za ukrycie: +%s do testu.", bonus)
+            roll += bonus
         outcome = resolve_skill_check(self.pickpocket_dc, roll)
         if outcome in ("success", "critical_success"):
             loot = (self.pickpocket_loot or ["drobne"])[0]

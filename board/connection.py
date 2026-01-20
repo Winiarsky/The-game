@@ -51,7 +51,8 @@ class Connection:
             "-": "DECLINE",
             "1": "move",
             "2": "interact",
-            "3": "seek"
+            "3": "seek",
+            "4": "stealth"
         }
         
         while True:

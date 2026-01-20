@@ -18,6 +18,7 @@ from board_grid import BoardGrid, BasicTerrain
 from obstacle import Obstacle
 from wall import Wall, Mur
 from interactable import Interactable
+from object_registry import get_object
 
 try:
     from game_objects_loader import scan_game_objects
@@ -222,3 +223,7 @@ class Game:
             self.state.on_enter()
 
         return result
+
+    def find_object(self, object_id: str):
+        """Szybkie wyszukiwanie obiektu po jego globalnym id."""
+        return get_object(object_id)

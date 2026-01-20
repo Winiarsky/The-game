@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
 from typing import Callable, Optional, Tuple, TYPE_CHECKING, Any
 
+from object_registry import assign_id
+
 if TYPE_CHECKING:
     from board_grid import Occupant
 
@@ -30,6 +32,7 @@ class Interaction:
 class Interactable:
     """Obiekt, z którym można wchodzić w interakcję."""
 
+    object_id: str = field(init=False)
     position: Optional[Tuple[int, int]] = None
     blocks_movement: bool = False  # jeśli True: traktujemy jak przeszkodę, nie da się wejść na pole
     allow_same_cell_interact: bool = True  # jeśli False: wymagaj stania obok
@@ -38,8 +41,11 @@ class Interactable:
     dc: int = 15  # trudność interakcji
     critical_failure_dc: int = dc - 10   # próg krytycznej porażki
     critical_success_dc: int = dc + 10  # próg krytycznego sukcesu
+    stealth_impact: int = 0
     actions: dict[str, Interaction] = field(default_factory=dict, init=False, repr=False)
-    
+
+    def __post_init__(self):
+        self.object_id = assign_id(self)
 
     def set_position(self, position: Optional[Tuple[int, int]]) -> None:
         self.position = position
@@ -57,6 +63,9 @@ class Interactable:
 
     def available_actions(self) -> list[Interaction]:
         return [i for i in self.actions.values() if i.enabled]
+
+    def on_critical_stealth_fail(self):
+        return None
 
     def _prompt_action_choice(self) -> Optional[str]:
         """Prosta konsolowa selekcja akcji."""

@@ -1,15 +1,21 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Tuple
 
+from object_registry import assign_id
+
 
 @dataclass(slots=True)
 class Wall:
     """Ściana blokująca przejście między dwoma polami."""
 
+    object_id: str = field(init=False)
     a: Tuple[int, int]
     b: Tuple[int, int]
     hardness: Optional[int] = None
     features: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self):
+        self.object_id = assign_id(self)
 
     @property
     def key(self) -> frozenset[Tuple[int, int]]:

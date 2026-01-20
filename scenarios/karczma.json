@@ -811,16 +811,7 @@
             "label": "Ukryty element",
             "color": "#6ab",
             "placement": "cell",
-            "positions": [
-                [
-                    4,
-                    0
-                ],
-                [
-                    10,
-                    5
-                ]
-            ],
+            "positions": [],
             "instances": [
                 {
                     "position": [
@@ -866,6 +857,38 @@
                         "reveal_dc": 18,
                         "seekable": false,
                         "trap_effect": null
+                    }
+                }
+            ]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "guard_npc",
+            "label": "Strażnik",
+            "color": "#8b0000",
+            "placement": "cell",
+            "positions": [],
+            "instances": [
+                {
+                    "position": [
+                        5,
+                        12
+                    ],
+                    "config": {
+                        "allow_same_cell_interact": true,
+                        "attitude": -2,
+                        "base_price_modifier": 1,
+                        "blocks_movement": true,
+                        "inventory": [],
+                        "name": "Strażnik",
+                        "perception_bonus": 4,
+                        "pickpocket_dc": 16,
+                        "pickpocket_loot": [
+                            "kilka monet"
+                        ],
+                        "require_same_cell_interact": false,
+                        "watch_disabled": false,
+                        "watch_disturbed": 0
                     }
                 }
             ]
