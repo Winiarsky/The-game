@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import random
 import logging
 from typing import Callable, Optional
@@ -51,6 +51,42 @@ def attitude_label(attitude: int) -> AttitudeLabel:
     if attitude == 1:
         return "życzliwy"
     return "przyjacielski"
+
+
+@dataclass
+class StatusMixin:
+    """Prosty mixin do zarządzania statusami (unikalna lista str)."""
+
+    statuses: list[str] = field(default_factory=list)
+
+    def has_status(self, status: str) -> bool:
+        return status in self.statuses
+
+    def add_status(self, status: str) -> bool:
+        if status not in self.statuses:
+            self.statuses.append(status)
+            return True
+        return False
+
+    def remove_status(self, status: str) -> bool:
+        try:
+            self.statuses.remove(status)
+            return True
+        except ValueError:
+            return False
+
+    def clear_statuses(self, *statuses: str) -> int:
+        """Usuń podane statusy, zwróć liczbę usuniętych wpisów."""
+        to_remove = set(statuses) if statuses else set(self.statuses)
+        removed = 0
+        remaining: list[str] = []
+        for status in self.statuses:
+            if status in to_remove:
+                removed += 1
+                continue
+            remaining.append(status)
+        self.statuses = remaining
+        return removed
 
 
 @dataclass
@@ -266,15 +302,15 @@ class WatchfulMixin:
     def attempt_spot(self, hero, game) -> tuple[bool, str]:
         """Próba wykrycia ukrytego bohatera; zwraca (wykryto, komunikat)."""
         dc = getattr(hero, "stealth_detection_dc", None)
-        statuses = set(getattr(hero, "statuses", []))
-        if dc is None or "stealth" not in statuses:
+        if dc is None or not getattr(hero, "has_status", lambda _s: False)("stealth"):
             return False, "Cel nie jest ukryty."
         roll = random.randint(1, 20) + self.perception_bonus
         if roll >= dc:
-            if "stealth" in hero.statuses:
-                hero.statuses.remove("stealth")
-            if "observable" not in hero.statuses:
-                hero.statuses.append("observable")
+            try:
+                hero.remove_status("stealth")  # type: ignore[attr-defined]
+                hero.add_status("observable")  # type: ignore[attr-defined]
+            except AttributeError:
+                pass
             if hasattr(hero, "stealth_bonus"):
                 hero.stealth_bonus = 0
             hero.stealth_detection_dc = None
@@ -336,8 +372,14 @@ class HideInMixin:
         board.place(actor, position)
         setattr(self, "someone_inside", actor)
 
-        statuses = getattr(actor, "statuses", None)
-        if isinstance(statuses, list) and self.hide_status not in statuses:
-            statuses.append(self.hide_status)
+        if hasattr(actor, "add_status"):
+            try:
+                actor.add_status(self.hide_status)  # type: ignore[attr-defined]
+            except Exception:
+                pass
+        else:
+            statuses = getattr(actor, "statuses", None)
+            if isinstance(statuses, list) and self.hide_status not in statuses:
+                statuses.append(self.hide_status)
         setattr(actor, "hide_stealth_bonus", getattr(actor, "hide_stealth_bonus", 0) + self.hide_stealth_bonus)
         return "Ukrywasz się w środku i zyskujesz osłonę."

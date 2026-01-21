@@ -49,11 +49,8 @@ class MoveAction(BaseAction):
         board = ctx.game.board
         moving_hero = board.occupant_at(source)
         if moving_hero and moving_hero.position is not None:
-            if "stealth" in getattr(moving_hero, "statuses", []):
-                try:
-                    moving_hero.statuses.remove("stealth")
-                except ValueError:
-                    pass
+            if getattr(moving_hero, "has_status", lambda _s: False)("stealth"):
+                moving_hero.remove_status("stealth")  # type: ignore[attr-defined]
                 if hasattr(moving_hero, "stealth_bonus"):
                     moving_hero.stealth_bonus = 0
                 logger.info("Zdejmuję status stealth – poruszasz się jawnie.")

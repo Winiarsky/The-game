@@ -107,8 +107,9 @@ class BaseNPC(SocialMixin, TradeMixin, PickpocketMixin, Interactable):
 
     # --- Kradzież ---
     def action_pickpocket(self, actor, _game, _payload=None) -> str:
-        statuses = set(getattr(actor, "statuses", []))
-        if "stealth" not in statuses:
+        has_status = getattr(actor, "has_status", None)
+        is_stealthed = has_status("stealth") if callable(has_status) else "stealth" in getattr(actor, "statuses", [])
+        if not is_stealthed:
             return "Musisz być w ukryciu, aby spróbować podkraść."
         roll = prompt_for_roll("Rzut na Thievery (podkradanie): ")
         bonus = getattr(actor, "stealth_bonus", 0)

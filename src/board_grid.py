@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field as dataclass_field
 from typing import List, Optional, Protocol, Tuple
 from interactable import Interactable
+from interactions.common import StatusMixin
 
 from obstacle import Obstacle
 from wall import Wall
@@ -244,12 +245,15 @@ class BoardGrid:
             for interactable in cell.interactables:
                 if getattr(interactable, "someone_inside", None) is occupant:
                     interactable.someone_inside = None
-            statuses = getattr(occupant, "statuses", None)
-            if isinstance(statuses, list):
-                try:
-                    statuses.remove("hide")
-                except ValueError:
-                    pass
+            if isinstance(occupant, StatusMixin):
+                occupant.remove_status("hide")
+            else:
+                statuses = getattr(occupant, "statuses", None)
+                if isinstance(statuses, list):
+                    try:
+                        statuses.remove("hide")
+                    except ValueError:
+                        pass
             if hasattr(occupant, "hide_stealth_bonus"):
                 try:
                     occupant.hide_stealth_bonus = 0  # type: ignore[attr-defined]

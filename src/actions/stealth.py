@@ -110,20 +110,14 @@ class StealthAction(BaseAction):
             hero.stealth_fail_counts[room_id] = current
             if critical or current >= consts.STEALTH_FAIL_MAX_ATTEMPTS:
                 hero.blocked_stealth_rooms.add(room_id)
-        if "stealth" in hero.statuses:
-            try:
-                hero.statuses.remove("stealth")
-            except ValueError:
-                pass
+        hero.remove_status("stealth")
         hero.stealth_detection_dc = None
         hero.stealth_bonus = 0
 
     def _apply_success(self, hero, rooms_here: set[str], roll: int) -> int:
         hero.stealth_detection_dc = roll
-        if "observable" in hero.statuses:
-            hero.statuses.remove("observable")
-        if "stealth" not in hero.statuses:
-            hero.statuses.append("stealth")
+        hero.remove_status("observable")
+        hero.add_status("stealth")
         for room_id in rooms_here:
             hero.stealth_fail_counts[room_id] = 0
         bonus = 0
@@ -162,17 +156,17 @@ class StealthAction(BaseAction):
 
         board = ctx.game.board
         rooms_here = board.rooms_at(hero_pos)
-        has_hide_status = "hide" in getattr(hero, "statuses", [])
+        has_hide_status = hero.has_status("hide")
         watchers = iter_watchers_in_rooms(board, rooms_here, ignore_obj=hero) if not has_hide_status else []
         penalty, blockers = summarize_watchers(watchers) if watchers else (0, [])
-        if "observable" in getattr(hero, "statuses", []):
+        if hero.has_status("observable"):
             logger.info("Masz status observable – nie możesz wejść w ukrycie.")
             return
         if rooms_here and any(room in hero.blocked_stealth_rooms for room in rooms_here):
             logger.info("Ten bohater ma zablokowane próby stealth w tym pokoju.")
             return
 
-        already_stealth = "stealth" in getattr(hero, "statuses", [])
+        already_stealth = hero.has_status("stealth")
         if not already_stealth:
             if blockers:
                 positions = [pos for _watcher, pos in blockers]
@@ -183,7 +177,7 @@ class StealthAction(BaseAction):
                     ctx.game.conn.leds_off()
                 return
             modifier, details = self._compute_modifier(ctx, hero_pos)
-            if "hide" in getattr(hero, "statuses", []):
+            if hero.has_status("hide"):
                 bonus_hide = getattr(hero, "hide_stealth_bonus", 0)
                 if bonus_hide:
                     modifier += bonus_hide

@@ -1,17 +1,17 @@
 from dataclasses import dataclass, field
 from typing import List, Optional
 
+from interactions.common import StatusMixin
 from object_registry import assign_id
 
 # to do make hero scrpt, 
 @dataclass
-class Hero:
+class Hero(StatusMixin):
     object_id: str = field(init=False)
     position: Optional[tuple[int, int]] = None
     position_x: Optional[int] = None
     position_y: Optional[int] = None
     neighbors: List[tuple[int, int]] = field(default_factory=list)
-    statuses: List[str] = field(default_factory=list)
     stealth_detection_dc: Optional[int] = None
     stealth_bonus: int = 0
     blocked_stealth_rooms: set[str] = field(default_factory=set)
