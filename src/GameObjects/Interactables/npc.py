@@ -2,21 +2,19 @@ import logging
 from typing import Optional
 
 from GameObjects.base import GameObjectMeta
-from interactable import Interaction, Interactable
+from interactable import Interaction
+from GameObjects.Interactables.base_npc import BaseNPC
 from interactions.common import (
-    SocialMixin,
-    TradeMixin,
-    TradeItem,
-    PickpocketMixin,
     prompt_for_roll,
     resolve_skill_check,
     attitude_label,
+    TradeItem,
 )
 
 logger = logging.getLogger(__name__)
 
 
-class NPC(SocialMixin, TradeMixin, PickpocketMixin, Interactable):
+class NPC(BaseNPC):
     """Podstawowy NPC z dialogiem, handlem i próbą kradzieży."""
 
     def __init__(
@@ -33,27 +31,18 @@ class NPC(SocialMixin, TradeMixin, PickpocketMixin, Interactable):
         pickpocket_dc: int = 16,
         pickpocket_loot: Optional[list[str]] = None,
     ):
-        Interactable.__init__(
-            self,
-            position=None,
-            blocks_movement=blocks_movement,
+        super().__init__(
+            name=name,
+            dialog=dialog,
             allow_same_cell_interact=allow_same_cell_interact,
             require_same_cell_interact=require_same_cell_interact,
+            blocks_movement=blocks_movement,
+            attitude=attitude,
+            inventory=inventory,
+            base_price_modifier=base_price_modifier,
+            pickpocket_dc=pickpocket_dc,
+            pickpocket_loot=pickpocket_loot,
         )
-        # mixiny
-        self.attitude = attitude
-        raw_inventory = inventory or []
-        self.inventory = [
-            item if isinstance(item, TradeItem) else TradeItem(**item) for item in raw_inventory
-        ]
-        self.base_price_modifier = base_price_modifier
-        self.pickpocket_dc = pickpocket_dc
-        self.pickpocket_loot = pickpocket_loot or ["kilka monet"]
-        self._dialog_used: set[str] = set()
-
-        self.name = name
-        self.dialog = dialog or self._default_dialog()
-        self.register_default_actions()
 
     def register_default_actions(self) -> None:
         self.register_action(

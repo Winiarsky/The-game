@@ -2,21 +2,14 @@ import logging
 from typing import Optional
 
 from GameObjects.base import GameObjectMeta
-from interactable import Interaction, Interactable
-from interactions.common import WatchfulMixin
-from interactions.common import (
-    SocialMixin,
-    TradeMixin,
-    TradeItem,
-    PickpocketMixin,
-    prompt_for_roll,
-    resolve_skill_check,
-)
+from interactable import Interaction
+from GameObjects.Interactables.base_npc import BaseNPC
+from interactions.common import WatchfulMixin, prompt_for_roll, resolve_skill_check, TradeItem
 
 logger = logging.getLogger(__name__)
 
 
-class GuardNPC(WatchfulMixin, SocialMixin, TradeMixin, PickpocketMixin, Interactable):
+class GuardNPC(BaseNPC, WatchfulMixin):
     """Prosty strażnik z czujnością pokojową (WatchfulMixin)."""
 
     def __init__(
@@ -36,43 +29,24 @@ class GuardNPC(WatchfulMixin, SocialMixin, TradeMixin, PickpocketMixin, Interact
         watch_disabled: bool = False,
         perception_bonus: int = 4,
     ):
-        # Inicjalizacja Interactable (pozycja zostanie ustawiona przy dodaniu na planszę).
-        Interactable.__init__(
-            self,
-            position=None,
-            blocks_movement=blocks_movement,
+        super().__init__(
+            name=name,
+            dialog=dialog,
             allow_same_cell_interact=allow_same_cell_interact,
             require_same_cell_interact=require_same_cell_interact,
+            blocks_movement=blocks_movement,
+            attitude=attitude,
+            inventory=inventory,
+            base_price_modifier=base_price_modifier,
+            pickpocket_dc=pickpocket_dc,
+            pickpocket_loot=pickpocket_loot,
         )
-
-        # Inicjalizacja mixinów (brak dataclass init).
-        self.watch_disturbed = watch_disturbed
-        self.watch_disabled = watch_disabled
-        self.perception_bonus = perception_bonus
-
-        self.attitude = attitude
-        SocialMixin.__init__(self)
-        TradeMixin.__init__(self)
-        PickpocketMixin.__init__(self)
-
-        self.blocks_movement = blocks_movement
-        self.allow_same_cell_interact = allow_same_cell_interact
-        self.require_same_cell_interact = require_same_cell_interact
-
-        raw_inventory = inventory or []
-        self.inventory = [
-            item if isinstance(item, TradeItem) else TradeItem(**item) for item in raw_inventory
-        ]
-        self.base_price_modifier = base_price_modifier
-        self.pickpocket_dc = pickpocket_dc
-        self.pickpocket_loot = pickpocket_loot or ["kilka monet"]
-        self._dialog_used: set[str] = set()
-
-        self.name = name
-        self.dialog = dialog or self._default_dialog()
-        self.register_default_actions()
-        self.hidden = False
-        self.revealed = False
+        WatchfulMixin.__init__(
+            self,
+            watch_disturbed=watch_disturbed,
+            watch_disabled=watch_disabled,
+            perception_bonus=perception_bonus,
+        )
 
     # --- Dialog jak w NPC ---
     def _default_dialog(self) -> dict:

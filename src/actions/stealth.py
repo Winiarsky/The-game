@@ -6,8 +6,10 @@ from typing import Tuple
 
 from .actions_registy import register
 from .base import ActionContext, BaseAction
+from .move_utils import perform_movement, default_on_enter
 from board import consts
-from interactions.common import prompt_for_roll, iter_watchers_in_rooms, summarize_watchers
+from interactions.common import prompt_for_roll
+from awareness import iter_watchers_in_rooms, summarize_watchers
 from obstacle import Obstacle
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -160,8 +162,9 @@ class StealthAction(BaseAction):
 
         board = ctx.game.board
         rooms_here = board.rooms_at(hero_pos)
-        watchers = iter_watchers_in_rooms(board, rooms_here, ignore_obj=hero)
-        penalty, blockers = summarize_watchers(watchers)
+        has_hide_status = "hide" in getattr(hero, "statuses", [])
+        watchers = iter_watchers_in_rooms(board, rooms_here, ignore_obj=hero) if not has_hide_status else []
+        penalty, blockers = summarize_watchers(watchers) if watchers else (0, [])
         if "observable" in getattr(hero, "statuses", []):
             logger.info("Masz status observable – nie możesz wejść w ukrycie.")
             return
@@ -180,6 +183,11 @@ class StealthAction(BaseAction):
                     ctx.game.conn.leds_off()
                 return
             modifier, details = self._compute_modifier(ctx, hero_pos)
+            if "hide" in getattr(hero, "statuses", []):
+                bonus_hide = getattr(hero, "hide_stealth_bonus", 0)
+                if bonus_hide:
+                    modifier += bonus_hide
+                    details.append(f"ukrycie +{bonus_hide}")
             if penalty:
                 modifier -= penalty
                 details.append(f"strażnicy czujności {-(penalty)}")
@@ -217,46 +225,13 @@ class StealthAction(BaseAction):
 
     def _stealth_move(self, ctx: ActionContext, hero, start_pos: Tuple[int, int]) -> None:
         board = ctx.game.board
-        current_pos = hero.position
-        source_pos = start_pos
-        while True:
-            neighbors = board.get_neighbors(current_pos)
-            valid_neighbors = self._validate_neighbors(ctx, current_pos, neighbors)
-            ctx.game.conn.set_leds(valid_neighbors, consts.STEALTH_MOVE_RGB)
-            target = ctx.game.conn.scan_board(valid_neighbors)
-            ctx.game.conn.leds_off()
-            if target == current_pos:
-                logger.info("Kończysz ruch w ukryciu.")
-                return
-            if not board.can_traverse(current_pos, target, allow_occupied=True):
-                logger.info("Nie można wejść na to pole.")
-                continue
-
-            occupant = board.occupant_at(target)
-            if occupant is not None and occupant is not hero:
-                current_pos = target
-                continue
-
-            try:
-                board.move(source_pos, target)
-            except ValueError as exc:
-                logger.error("Nie można wykonać ruchu: %s", exc)
-                continue
-            source_pos = target
-            current_pos = target
-            triggered = False
-            for obj in board.interactables_at(current_pos):
-                was_hidden = getattr(obj, "hidden", False) and not getattr(obj, "revealed", False)
-                on_enter = getattr(obj, "on_enter", None)
-                if callable(on_enter):
-                    result = on_enter(hero, ctx.game)
-                    if result:
-                        logger.info(result)
-                        triggered = True
-                    if was_hidden and getattr(obj, "revealed", False):
-                        ctx.game.conn.set_leds([current_pos], consts.HIDDEN_REVEAL_RGB)
-                        sleep(consts.RESPONSE_DELAY)
-                        ctx.game.conn.leds_off()
-            if triggered:
-                logger.info("Ruch zakończony na %s przez zdarzenie na polu.", current_pos)
-                return
+        perform_movement(
+            ctx,
+            hero,
+            start_pos,
+            lambda current: self._validate_neighbors(ctx, current, board.get_neighbors(current)),
+            led_color=consts.STEALTH_MOVE_RGB,
+            end_message="Kończysz ruch w ukryciu.",
+            allow_occupied=True,
+            on_enter=default_on_enter,
+        )

@@ -1,0 +1,52 @@
+{
+  "start": {
+    "text": "Strażnik patrzy surowo: \"Czego tu szukasz?\"",
+    "options": [
+      { "id": "greet", "label": "Przywitaj się uprzejmie." },
+      { "id": "bribe", "label": "Spróbuj przekupić (Thievery DC 16)." },
+      { "id": "insult", "label": "Obrażasz strażnika." }
+    ]
+  },
+  "greet": {
+    "text": "\"Dzień dobry.\"\nStrażnik lekko się rozluźnia.",
+    "options": [
+      { "id": "start", "label": "Zakończ rozmowę.", "attitude_delta": 1 }
+    ]
+  },
+  "bribe": {
+    "text": "Wyciągasz sakiewkę, dyskretnie oferując złoto.",
+    "options": [
+      {
+        "id": "bribe_check",
+        "label": "Rzuć na Thievery",
+        "check": {
+          "skill": "Thievery",
+          "dc": 16,
+          "on_success": "bribe_success",
+          "on_failure": "bribe_fail",
+          "attitude_delta_success": 1,
+          "attitude_delta_failure": -1
+        }
+      },
+      { "id": "start", "label": "Wycofaj się." }
+    ]
+  },
+  "bribe_success": {
+    "text": "Strażnik przyjmuje łapówkę. \"Nie widziałem cię.\"",
+    "options": [
+      { "id": "start", "label": "Odejdź.", "attitude_delta": 1 }
+    ]
+  },
+  "bribe_fail": {
+    "text": "\"To obraza!\" Strażnik jest wściekły.",
+    "options": [
+      { "id": "start", "label": "Odejdź pod groźbą aresztu.", "attitude_delta": -1 }
+    ]
+  },
+  "insult": {
+    "text": "Rzucasz obelgi. Strażnik czerwienieje.",
+    "options": [
+      { "id": "start", "label": "Ucieknij zanim będzie gorzej.", "attitude_delta": -2 }
+    ]
+  }
+}

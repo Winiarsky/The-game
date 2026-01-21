@@ -871,12 +871,12 @@
             "instances": [
                 {
                     "position": [
-                        5,
+                        7,
                         12
                     ],
                     "config": {
                         "allow_same_cell_interact": true,
-                        "attitude": -2,
+                        "attitude": 0,
                         "base_price_modifier": 1,
                         "blocks_movement": true,
                         "inventory": [],

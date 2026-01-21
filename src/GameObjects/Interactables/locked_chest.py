@@ -3,13 +3,14 @@ from GameObjects.base import GameObjectMeta
 from typing import Optional
 
 from interactable import Interactable, Interaction
+from interactions.common import HideInMixin
 import logging
 from board import consts
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-class LockedChest(Interactable):
+class LockedChest(Interactable, HideInMixin):
     """Prosta skrzynia: otwórz, aby zebrać skarb."""
 
     def __init__(
@@ -52,6 +53,7 @@ class LockedChest(Interactable):
         self.failures = 0
         self.push_dc = push_dc  # trudność przesunięcia skrzyni
         self.someone_inside = None  # przechowuje postać, która wskoczyła do skrzyni
+        HideInMixin.__init__(self, hide_stealth_bonus=2)
 
     def can_interact(self, actor, game) -> bool:
         return self.interactable
@@ -347,28 +349,21 @@ class LockedChest(Interactable):
         board.add_interactable(self, target)
         return f"Przesuwasz skrzynię na {target} (test {total})."
 
-    def action_jump_in(self, actor, game, _payload: Optional[dict] = None) -> str:
+    def _hide_in_precheck(self, actor, game) -> Optional[str]:
         if self.destroyed:
             return "Skrzynia jest rozwalona, nie da sie juz do niej wskoczyc."
         if self.locked:
             return "Musisz najpierw otworzyc skrzynie."
         if not self.is_open:
             return "Musisz najpierw otworzyc skrzynie."
-        if self.position is None:
-            return "Skrzynia nie jest na planszy."
-        board = game.board
-        if self.someone_inside:
-            return "Skrzynia jest już przez kogos zajęta."
+        return None
 
-        occupant = board.occupant_at(self.position)
-        if occupant is not None and occupant is not actor:
-            return "Ktoś już zajmuje to pole."
-
-        if actor.position is not None:
-            board.remove(actor.position)
-        board.place(actor, self.position)  # w przyszlosci mozna dodac zaslone
-        self.someone_inside = actor
-        return f"Wskakujesz do skrzyni, otrzymujesz bonus do ukrywania sie + {random.randint(1, 6)} oraz poowiczna zaslone."
+    def action_jump_in(self, actor, game, _payload: Optional[dict] = None) -> str:
+        msg = self.hide_in(actor, game)
+        if msg.startswith("Ukrywasz się"):
+            bonus = self.hide_stealth_bonus
+            return f"Wskakujesz do skrzyni, otrzymujesz bonus do ukrywania się +{bonus} oraz połowiczną zasłonę."
+        return msg
     
     def action_loot(self, actor, game, _payload: Optional[dict] = None) -> str:
         if self.locked and not self.destroyed:

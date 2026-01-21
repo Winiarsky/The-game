@@ -24,6 +24,9 @@ class BasicTerrain:
     def on_critical_stealth_fail(self):
         return None
 
+    def on_enter(self, _actor, _game):
+        return None
+
 
 @dataclass(slots=True)
 class GridCell:
@@ -241,6 +244,17 @@ class BoardGrid:
             for interactable in cell.interactables:
                 if getattr(interactable, "someone_inside", None) is occupant:
                     interactable.someone_inside = None
+            statuses = getattr(occupant, "statuses", None)
+            if isinstance(statuses, list):
+                try:
+                    statuses.remove("hide")
+                except ValueError:
+                    pass
+            if hasattr(occupant, "hide_stealth_bonus"):
+                try:
+                    occupant.hide_stealth_bonus = 0  # type: ignore[attr-defined]
+                except Exception:
+                    pass
             cell.occupant = None
             occupant.set_position(None)
         return occupant

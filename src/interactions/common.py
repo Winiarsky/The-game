@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import random
 import logging
-from typing import Callable, Optional, Iterable, Tuple
+from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -245,11 +245,23 @@ class HiddenMixin:
         return outcome, "Nie dostrzegasz niczego niezwykłego."
 
 
-@dataclass
+@dataclass(init=False)
 class WatchfulMixin:
     watch_disturbed: int = 0  # 0 blokuje stealth w pokoju, >0 daje karę do testu
     watch_disabled: bool = False
     perception_bonus: int = 0
+
+    def __init__(
+        self,
+        *,
+        watch_disturbed: int = 0,
+        watch_disabled: bool = False,
+        perception_bonus: int = 0,
+        **_kwargs,
+    ) -> None:
+        self.watch_disturbed = watch_disturbed
+        self.watch_disabled = watch_disabled
+        self.perception_bonus = perception_bonus
 
     def attempt_spot(self, hero, game) -> tuple[bool, str]:
         """Próba wykrycia ukrytego bohatera; zwraca (wykryto, komunikat)."""
@@ -281,57 +293,51 @@ class WatchfulMixin:
         return None
 
 
-def _is_watchful(obj) -> bool:
-    return hasattr(obj, "watch_disabled") and hasattr(obj, "watch_disturbed") and not getattr(obj, "watch_disabled", False)
+@dataclass(init=False)
+class HideInMixin:
+    """Mixin dający możliwość ukrycia pasażera w obiekcie."""
 
+    hide_status: str = "hide"
+    hide_stealth_bonus: int = 2
 
-def iter_watchers_in_rooms(board, rooms: Iterable[str], ignore_obj=None) -> list[tuple[object, tuple[int, int]]]:
-    """Zwraca listę (watcher, pozycja) z pokoi bohatera, pomija wyłączonych i duplikaty."""
-    watchers: list[tuple[object, tuple[int, int]]] = []
-    seen: set[int] = set()
-    for room_id in rooms or []:
-        for pos in board.room_positions.get(room_id, set()):
-            try:
-                cell = board.cell_at(pos)
-            except Exception:
-                continue
-            occ = getattr(cell, "occupant", None)
-            if occ is not None and occ is not ignore_obj and _is_watchful(occ) and id(occ) not in seen:
-                seen.add(id(occ))
-                watchers.append((occ, pos))
-            for obj in getattr(cell, "interactables", []):
-                if obj is ignore_obj:
-                    continue
-                if _is_watchful(obj) and id(obj) not in seen:
-                    seen.add(id(obj))
-                    watchers.append((obj, pos))
-    return watchers
+    def __init__(
+        self,
+        *,
+        hide_status: str = "hide",
+        hide_stealth_bonus: int = 2,
+        **_kwargs,
+    ) -> None:
+        self.hide_status = hide_status
+        self.hide_stealth_bonus = hide_stealth_bonus
+        # obiekty mogą mieć atrybut someone_inside; jeśli brak, ustawiany przy pierwszym użyciu
 
+    def _hide_in_precheck(self, actor, game) -> Optional[str]:
+        """Opcjonalne pre-checki; zwróć komunikat błędu by zablokować."""
+        return None
 
-def summarize_watchers(watchers: Iterable[tuple[object, tuple[int, int]]]) -> tuple[int, list[tuple[object, tuple[int, int]]]]:
-    """Zwraca (łączna_kara, lista_blokujących_strażników)."""
-    penalty = 0
-    blockers: list[tuple[object, tuple[int, int]]] = []
-    for watcher, pos in watchers:
-        if getattr(watcher, "watch_disabled", False):
-            continue
-        disturbed = getattr(watcher, "watch_disturbed", 0) or 0
-        if disturbed <= 0:
-            blockers.append((watcher, pos))
-        else:
-            penalty += disturbed
-    return penalty, blockers
+    def hide_in(self, actor, game) -> str:
+        """Umieść aktora w obiekcie, nadaj status hide i premię do stealth."""
+        failure = self._hide_in_precheck(actor, game)
+        if failure:
+            return failure
+        position = getattr(self, "position", None)
+        if position is None:
+            return "Obiekt nie jest na planszy."
+        board = game.board
+        occupant = board.occupant_at(position)
+        passenger = getattr(self, "someone_inside", None)
+        if passenger is not None and passenger is not actor:
+            return "Obiekt jest już zajęty."
+        if occupant is not None and occupant is not actor:
+            return "Ktoś już zajmuje to pole."
 
+        if actor.position is not None:
+            board.remove(actor.position)
+        board.place(actor, position)
+        setattr(self, "someone_inside", actor)
 
-def trigger_watchers(game, hero, hero_pos: tuple[int, int]) -> None:
-    """Room-based wykrywanie – wywołuje attempt_spot dla strażników w tych samych pokojach."""
-    board = game.board
-    rooms_here = board.rooms_at(hero_pos)
-    watchers = iter_watchers_in_rooms(board, rooms_here, ignore_obj=hero)
-    for watcher, _pos in watchers:
-        attempt = getattr(watcher, "attempt_spot", None)
-        if not callable(attempt):
-            continue
-        spotted, msg = attempt(hero, game)
-        if msg:
-            logger.info(msg)
+        statuses = getattr(actor, "statuses", None)
+        if isinstance(statuses, list) and self.hide_status not in statuses:
+            statuses.append(self.hide_status)
+        setattr(actor, "hide_stealth_bonus", getattr(actor, "hide_stealth_bonus", 0) + self.hide_stealth_bonus)
+        return "Ukrywasz się w środku i zyskujesz osłonę."
