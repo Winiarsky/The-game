@@ -9,7 +9,9 @@ if str(PROJECT_ROOT / "src") not in sys.path:
 from board_grid import BoardGrid  # noqa: E402
 from awareness import iter_watchers_in_rooms, summarize_watchers  # noqa: E402
 from interactable import Interactable  # noqa: E402
-from interactions.common import WatchfulMixin  # noqa: E402
+from interactions.common import StatusMixin, WatchfulMixin  # noqa: E402
+from actions.stealth import StealthAction  # noqa: E402
+from hero import Hero  # noqa: E402
 
 
 class DummyWatchful(WatchfulMixin, Interactable):
@@ -45,3 +47,61 @@ def test_summarize_watchers_blocks_and_penalizes():
     assert penalty == 5
     assert (blocker, (0, 0)) in blockers
     assert all(w[0] is not penalizer for w in blockers)
+
+
+def test_attempt_spot_applies_hero_perception_penalty(monkeypatch):
+    class DummyHero(StatusMixin):
+        def __init__(self):
+            super().__init__()
+            self.perception_penalty = 5
+            self.stealth_detection_dc = 12
+            self.stealth_bonus = 2
+
+    hero = DummyHero()
+    hero.add_status("stealth")
+
+    watcher = DummyWatchful(watch_disturbed=0)
+    monkeypatch.setattr("interactions.common.random.randint", lambda *_args, **_kwargs: 15)
+
+    spotted, msg = watcher.attempt_spot(hero, None)
+    assert not spotted
+    assert "r=10" in msg
+    assert hero.has_status("stealth")
+    assert hero.stealth_detection_dc == 12
+
+
+def test_stealth_reactivation_triggers_watchers_once(monkeypatch):
+    board = BoardGrid(2, 2)
+    board.apply_rooms([{"id": "room", "positions": [(0, 0), (0, 1)]}])
+
+    class CountingWatchful(DummyWatchful):
+        def __init__(self):
+            super().__init__(watch_disturbed=0)
+            self.spot_calls = 0
+
+        def attempt_spot(self, hero, game):
+            self.spot_calls += 1
+            return False, "czujny strażnik"
+
+    guard = CountingWatchful()
+    hero = Hero(position=(0, 0))
+    hero.add_status("stealth")
+    hero.stealth_detection_dc = 30
+
+    board.place(hero, (0, 0))
+    board.add_interactable(guard, (0, 1))
+
+    conn = types.SimpleNamespace(
+        set_leds=lambda *_args, **_kwargs: None,
+        scan_board=lambda positions: positions[0],
+        leds_off=lambda: None,
+    )
+    game = types.SimpleNamespace(board=board, conn=conn, heroes=[hero])
+
+    monkeypatch.setattr("actions.stealth.perform_movement", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("interactions.common.random.randint", lambda *_args, **_kwargs: 5)
+
+    sa = StealthAction()
+    sa.execute(types.SimpleNamespace(game=game))
+
+    assert guard.spot_calls == 1

@@ -214,6 +214,13 @@ class StealthAction(BaseAction):
                 logger.info("Wchodzisz w ukrycie (DC wykrycia %s).", result)
         else:
             logger.info("Już jesteś w ukryciu – przejdź w trybie stealth.")
+            for watcher, _pos in watchers:
+                attempt = getattr(watcher, "attempt_spot", None)
+                if not callable(attempt):
+                    continue
+                _spotted, msg = attempt(hero, ctx.game)
+                if msg:
+                    logger.info(msg)
 
         self._stealth_move(ctx, hero, hero_pos)
 

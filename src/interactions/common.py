@@ -305,6 +305,8 @@ class WatchfulMixin:
         if dc is None or not getattr(hero, "has_status", lambda _s: False)("stealth"):
             return False, "Cel nie jest ukryty."
         roll = random.randint(1, 20) + self.perception_bonus
+        penalty = getattr(hero, "perception_penalty", 0) or 0
+        roll -= penalty
         if roll >= dc:
             try:
                 hero.remove_status("stealth")  # type: ignore[attr-defined]
@@ -326,6 +328,10 @@ class WatchfulMixin:
 
     def on_spot(self, hero, game) -> Optional[str]:
         """Hook wywoływany przy sukcesie wykrycia."""
+        return None
+
+    def on_move_action(self, hero, game) -> Optional[str]:
+        """Hook dla akcji Move (placeholder na przyszłe triggery)."""
         return None
 
 
