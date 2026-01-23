@@ -54,6 +54,44 @@ class MoveAction(BaseAction):
                 if hasattr(moving_hero, "stealth_bonus"):
                     moving_hero.stealth_bonus = 0
                 logger.info("Zdejmuję status stealth – poruszasz się jawnie.")
+
+            started_in_combat = getattr(ctx.game.state, "__class__", None).__name__ == "Combat"
+
+            def _trigger_combat_if_enemy_in_room(pos: tuple[int, int]) -> None:
+                if getattr(ctx.game.state, "__class__", None).__name__ == "Combat":
+                    return
+                rooms_here = board.rooms_at(pos)
+                if not rooms_here:
+                    return
+                for enemy in ctx.game.enemies:
+                    if getattr(enemy, "position", None) is None:
+                        continue
+                    enemy_rooms = board.rooms_at(enemy.position)
+                    if rooms_here.intersection(enemy_rooms):
+                        logger.info("W pokoju są wrogowie – wywołuję walkę.")
+                        try:
+                            enemy.trigger_combat(ctx.game)  # type: ignore[attr-defined]
+                        except Exception as exc:
+                            logger.error("Nie udało się uruchomić walki: %s", exc)
+                        break
+
+            # sprawdź startową pozycję przed ruchem
+            try:
+                _trigger_combat_if_enemy_in_room(moving_hero.position)
+            except Exception as exc:
+                logger.error("Błąd sprawdzania wrogów w pokoju: %s", exc)
+
+            def _on_enter_wrapper(context, hero_obj, current_pos: tuple[int, int]) -> bool:
+                stopped = default_on_enter(context, hero_obj, current_pos)
+                try:
+                    _trigger_combat_if_enemy_in_room(current_pos)
+                except Exception as exc:
+                    logger.error("Błąd przy sprawdzaniu walki po wejściu na pole: %s", exc)
+                # jeśli w trakcie weszliśmy w combat, zatrzymaj dalszy ruch
+                if not started_in_combat and getattr(ctx.game.state, "__class__", None).__name__ == "Combat":
+                    return True
+                return stopped
+
             perform_movement(
                 ctx,
                 moving_hero,
@@ -62,5 +100,5 @@ class MoveAction(BaseAction):
                 led_color=consts.MOVE_FIELD_RGB,
                 end_message="Zakończono ruch.",
                 allow_occupied=True,
-                on_enter=default_on_enter,
+                on_enter=_on_enter_wrapper,
             )

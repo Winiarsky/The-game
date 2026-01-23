@@ -13,7 +13,9 @@ if str(SRC_ROOT) not in sys.path:
 
 from board import Connection
 from states import Start, State
+from states.combat import Combat
 from hero import Hero
+from GameObjects.Enemies.basic_enemy import Enemy
 from board_grid import BoardGrid, BasicTerrain
 from obstacle import Obstacle
 from wall import Wall, Mur
@@ -25,7 +27,7 @@ try:
 except Exception:  # pragma: no cover - gdy pakiet nie istnieje
     scan_game_objects = None  # type: ignore
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 class Game:
@@ -40,6 +42,7 @@ class Game:
             self.config = json.load(config_file)
         self.conn: Connection = self._init_connection() if conn is None else conn
         self.heroes: list[Hero] = []
+        self.enemies: list[Enemy] = []
         self.board = self._init_board()
         self.state: State = Start(self)
         
@@ -110,10 +113,17 @@ class Game:
                 except Exception:
                     return None
 
+        from GameObjects.Enemies.basic_enemy import Enemy
+
+        def _place_enemy(obj, pos):
+            board.place(obj, pos)
+            self.enemies.append(obj)
+
         handlers: list[tuple[type, callable]] = [
             (BasicTerrain, lambda obj, pos: board.set_field(pos, obj)),
             (Obstacle, lambda obj, pos: board.place(obj, pos)),
             (Interactable, lambda obj, pos: board.add_interactable(obj, pos)),
+            (Enemy, _place_enemy),
         ]
 
         def place_logic(
@@ -215,7 +225,14 @@ class Game:
                 f"Stan {self.state.__class__.__name__} nie posiada akcji '{action_name}'"
             )
 
+        current_state = self.state
         result: Any = action(*args, **kwargs)
+
+        # Jeśli stan został zmieniony w trakcie akcji (np. trigger combat), nie nadpisuj go wynikiem.
+        if self.state is not current_state:
+            logger.debug("Stan zmienił się w trakcie akcji (%s -> %s); pomijam wynik %s.",
+                         current_state.__class__.__name__, self.state.__class__.__name__, result)
+            return result
 
         if isinstance(result, State) and result is not self.state:
             self.state.on_exit()
@@ -227,3 +244,15 @@ class Game:
     def find_object(self, object_id: str):
         """Szybkie wyszukiwanie obiektu po jego globalnym id."""
         return get_object(object_id)
+
+    def start_combat(self, trigger: object | None = None) -> None:
+        """Wejście w stan walki (ignorowane, jeśli już walczymy)."""
+        if isinstance(self.state, Combat):
+            logger.info("Walka już trwa – ignoruję wywołanie.")
+            return
+        if not isinstance(self.state, State):
+            logger.error("Brak aktywnego stanu – nie mogę rozpocząć walki.")
+            return
+        self.state.on_exit()
+        self.state = Combat(self)
+        self.state.on_enter()

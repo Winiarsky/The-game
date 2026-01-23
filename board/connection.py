@@ -52,7 +52,8 @@ class Connection:
             "1": "move",
             "2": "interact",
             "3": "seek",
-            "4": "stealth"
+            "4": "stealth",
+            "5": "test_attack",
         }
         
         while True:

@@ -213,7 +213,11 @@ class BoardGrid:
             return False
         if cell.occupant is None:
             return True
-        if self._is_obstacle(cell.occupant):
+        occupant = cell.occupant
+        # blokada ruchu dla przeszkód i przeciwników (blocks_movement)
+        if self._is_obstacle(occupant):
+            return False
+        if getattr(occupant, "blocks_movement", False):
             return False
         return allow_occupied
 

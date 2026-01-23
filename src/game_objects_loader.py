@@ -25,6 +25,8 @@ def _load_module(module_name: str, module_path: Path):
     if spec is None or spec.loader is None:
         raise ImportError(f"Brak spec dla {module_name}")
     module = importlib.util.module_from_spec(spec)
+    # wpychamy moduł do sys.modules przed exec_module, by dataclasses miały prawidłowy __module__
+    sys.modules[module_name] = module
     spec.loader.exec_module(module)
     return module
 

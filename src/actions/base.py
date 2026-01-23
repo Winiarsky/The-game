@@ -3,12 +3,12 @@ from typing import NamedTuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.game import Game
-    from src.states.heroes_turns import HeroesTurn
+    from src.states.base import State
 
 
 class ActionContext(NamedTuple):
     game: "Game"
-    heroes_turn: "HeroesTurn"
+    heroes_turn: "State"
 
 
 class BaseAction(ABC):

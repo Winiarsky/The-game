@@ -894,6 +894,32 @@
             ]
         },
         {
+            "category": "Enemies",
+            "object_id": "basic_enemy",
+            "label": "Wrogi NPC",
+            "color": "#b00",
+            "placement": "cell",
+            "positions": [],
+            "instances": [
+                {
+                    "position": [
+                        10,
+                        0
+                    ],
+                    "config": {
+                        "ac": 14,
+                        "attack_bonus": 5,
+                        "behavior_id": "basic_melee",
+                        "hp": 12,
+                        "initiative_bonus": 2,
+                        "move_points": 3,
+                        "name": "Wrogi strażnik",
+                        "strength": 2
+                    }
+                }
+            ]
+        },
+        {
             "category": "Walls",
             "object_id": "basic_wall",
             "label": "Ściana",

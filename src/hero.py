@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-from interactions.common import StatusMixin
+from interactions.common import StatusMixin, prompt_for_roll
 from object_registry import assign_id
 
 # to do make hero scrpt, 
@@ -16,6 +16,9 @@ class Hero(StatusMixin):
     stealth_bonus: int = 0
     blocked_stealth_rooms: set[str] = field(default_factory=set)
     stealth_fail_counts: dict[str, int] = field(default_factory=dict)
+    initiative: Optional[int] = None
+    wounds: int = 0
+    enemy_attack_bonus: int = 0
 
     def __post_init__(self):
         self.object_id = assign_id(self)
@@ -49,3 +52,9 @@ class Hero(StatusMixin):
 
     def _light_tiles(self, connection):
         pass
+
+    def roll_for_initiative(self) -> int:
+        """Poproś gracza o wynik testu inicjatywy i ustaw go na bohaterze."""
+        roll = prompt_for_roll(f"Inicjatywa dla bohatera {self.object_id} (podaj wynik): ")
+        self.initiative = roll
+        return roll
