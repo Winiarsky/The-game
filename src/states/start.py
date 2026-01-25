@@ -22,11 +22,13 @@ class Start(State):
     
     def welcome_message(self):
         logger.info("Witamy w grze planszowej!")
+        self.game.ui_log("Witamy w grze planszowej!")
         
     def set_heroes_starting_positions(self) -> State:
         heroes: list[Hero] = self.game.heroes
         starting_positions = [tuple(pos) for pos in self.game.scenario['starting_positions']]
         logger.info("Ustawianie pozycji startowych bohaterów.")
+        self.game.ui_log("Ustawianie pozycji startowych bohaterów.")
         logger.info(starting_positions)
         while True:
             response = self.game.conn.read_card(
@@ -35,6 +37,7 @@ class Start(State):
             )
             if response.upper() == "DECLINE":
                 logger.info("Setup graczy zakonczony.")
+                self.game.ui_log("Setup bohaterów zakończony.")
                 break
             if response.upper() == "ACCEPT":
                 logger.info("Ustaw figurke swojego bohatera na wolnym polu startowym.")
@@ -52,5 +55,7 @@ class Start(State):
             logger.info(
                 f"Bohater ustawiony na pozycji {pos}."
             )
+            self.game.ui_hero(hero, note=f"Ustawiony na polu startowym {pos}")
+            self.game.ui_log(f"Bohater ustawiony na pozycji {pos}.")
         self.game.heroes = heroes
         return HeroesTurn(self.game)

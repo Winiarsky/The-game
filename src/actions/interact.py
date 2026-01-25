@@ -96,24 +96,49 @@ class InteractAction(BaseAction):
             logger.info("Nie możesz teraz wejść w interakcję z tym obiektem.")
             return
 
-        action_id = self._choose_action(interactable)
+        action_id = self._choose_action(interactable, ctx.game)
         while True:
             message = interactable.interact(hero, ctx.game, action_id=action_id)
             if message:
                 logger.info(message)
+                ctx.game.ui_log(message)
+                ctx.game.ui_event("info", {"text": message})
 
             interaction = interactable.actions.get(action_id) if action_id else None
             if interaction is None or interaction.end_interaction:
                 break
 
-            action_id = self._choose_action(interactable)
+            action_id = self._choose_action(interactable, ctx.game)
             if not action_id:
                 break
 
-    def _choose_action(self, interactable):
+    def _choose_action(self, interactable, game):
         actions = getattr(interactable, "available_actions", lambda: [])()
         if not actions:
             return None
+        ui = getattr(game, "ui", None)
+        if ui and ui.enabled:
+            choices = [
+                f"{idx}: {action.label}{' — ' + action.description if action.description else ''}"
+                for idx, action in enumerate(actions, start=1)
+            ]
+            ans = ui.prompt_choice("Wybierz akcję (numer lub nazwa): ", choices=choices, source="interaction")
+            if ans:
+                normalized = ans.strip()
+                if normalized.isdigit():
+                    idx = int(normalized) - 1
+                    if 0 <= idx < len(actions):
+                        return actions[idx].id
+                for act in actions:
+                    if normalized.lower() in (act.id.lower(), act.label.lower()):
+                        return act.id
+                if ":" in normalized:
+                    prefix = normalized.split(":")[0].strip()
+                    if prefix.isdigit():
+                        idx = int(prefix) - 1
+                        if 0 <= idx < len(actions):
+                            return actions[idx].id
+
         print("Możliwe akcje:")
         for idx, action in enumerate(actions, start=1):
             desc = f" — {action.description}" if action.description else ""

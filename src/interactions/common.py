@@ -5,11 +5,23 @@ import random
 import logging
 from typing import Callable, Optional
 
+from ui_client import get_ui_client
+
 logger = logging.getLogger(__name__)
 
 
 def prompt_for_roll(prompt: str) -> int:
-    """Poproś o rzut i zwróć liczbę całkowitą."""
+    """Poproś o rzut i zwróć liczbę całkowitą.
+
+    Priorytetowo korzysta z aplikacji UI (jeśli skonfigurowana w PLAYER_UI_URL),
+    a w razie braku/awarii wraca do inputu w konsoli.
+    """
+    ui_client = get_ui_client()
+    if ui_client.enabled:
+        ui_answer = ui_client.prompt_roll(prompt, source="game")
+        if isinstance(ui_answer, int):
+            return ui_answer
+
     while True:
         raw = input(prompt).strip()
         if not raw:

@@ -32,11 +32,13 @@ class Combat(State):
 
     def on_enter(self):
         logger.info("Walka rozpoczęta.")
+        self.game.ui_log("Walka rozpoczęta.")
         self._reset_heroes_initiative()
         self._ensure_initiative_order()
 
     def on_exit(self):
         logger.info("Zakończenie walki.")
+        self.game.ui_log("Zakończenie walki.")
         self._clear_initiatives()
 
     # --- Initiative helpers ---
@@ -65,6 +67,8 @@ class Combat(State):
                 hero.roll_for_initiative()  # type: ignore[attr-defined]
             except Exception as exc:
                 logger.error("Nie udało się ustawić inicjatywy: %s", exc)
+            else:
+                self.game.ui_hero(hero, note="Ustawiono inicjatywę")
             pending = [h for h in heroes if getattr(h, "initiative", None) is None]
 
     def _roll_enemy_initiatives(self) -> None:
@@ -95,6 +99,8 @@ class Combat(State):
         self.delayed.clear()
         self._initiatives_ready = True
         logger.info("Kolejność inicjatywy: %s", self.initiative_order)
+        order = [getattr(obj, "name", None) or getattr(obj, "object_id", str(obj)) for obj in self.initiative_order]
+        self.game.ui_log(f"Kolejność inicjatywy: {order}")
 
     def _clear_initiatives(self) -> None:
         for hero in self.game.heroes:
@@ -155,11 +161,13 @@ class Combat(State):
         if decision in ("2", "DELAY"):
             if hero in self.delayed:
                 logger.info("Już opóźniałeś turę w tej rundzie.")
+                self.game.ui_log("Już opóźniałeś turę w tej rundzie.")
             else:
                 current = self.initiative_order.pop(self.turn_index)
                 self.initiative_order.append(current)
                 self.delayed.add(hero)
                 logger.info("Bohater opóźnia ruch – trafia na koniec kolejki.")
+                self.game.ui_log("Bohater opóźnia ruch – trafia na koniec kolejki.")
             self.actions_used[hero] = 0
             return self
 
@@ -176,6 +184,7 @@ class Combat(State):
                 spent = basic_melee(enemy, self.game, self, actions_left=limit - used)
             except Exception as exc:
                 logger.error("AI przeciwnika nie powiodło się: %s", exc)
+                self.game.ui_log(f"AI przeciwnika nie powiodło się: {exc}")
                 break
             spent = int(spent or 0)
             used += spent
@@ -201,20 +210,24 @@ class Combat(State):
         if actor in self.game.enemies:
             remaining = self.ACTION_LIMIT - self.actions_used.get(actor, 0)
             logger.info("Tura przeciwnika: %s (akcje pozostałe: %s/%s)", getattr(actor, "name", "Enemy"), remaining, self.ACTION_LIMIT)
+            self.game.ui_log(f"Tura przeciwnika: {getattr(actor, 'name', 'Enemy')} (akcje {remaining}/{self.ACTION_LIMIT})")
             return self._process_enemy_turn(actor)
 
         # Hero turn
         used = self.actions_used.get(actor, 0)
         self.actions_used[actor] = used
         logger.info("Tura bohatera (%s). Akcje: %s/%s", actor, used, self.ACTION_LIMIT)
+        self.game.ui_hero(actor, note=f"Akcje: {used}/{self.ACTION_LIMIT}")
 
         available = list_actions()
         if not available:
             logger.warning("Brak zarejestrowanych akcji.")
+            self.game.ui_log("Brak zarejestrowanych akcji dla bohatera.")
             self._advance_turn()
             return self
 
         logger.info("Dostępne akcje: %s (DECLINE aby zakończyć turę).", ", ".join(sorted(available)))
+        self.game.ui_log(f"Dostępne akcje: {', '.join(sorted(available))} (DECLINE aby zakończyć turę).")
         choice = self.game.conn.read_card(
             "Wpisz nazwę akcji lub DECLINE by zakończyć turę: ",
             list(available.keys()) + ["DECLINE"],

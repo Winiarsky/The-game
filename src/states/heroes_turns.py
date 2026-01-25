@@ -21,22 +21,27 @@ class HeroesTurn(State):
 
     def on_enter(self):
         logger.info("Tura bohaterow!")
+        self.game.ui_log("Tura bohaterów!")
 
     def on_exit(self):
         logger.info("Koniec tury bohaterow.")
+        self.game.ui_log("Koniec tury bohaterów.")
 
     def choose_action(self) -> State:
         available = list_actions()
         if not available:
             logger.warning("Brak zarejestrowanych akcji.")
+            self.game.ui_log("Brak zarejestrowanych akcji.")
             return self
 
         logger.info("Dostępne akcje: %s", ", ".join(sorted(available)))
+        self.game.ui_log(f"Dostępne akcje: {', '.join(sorted(available))}")
         choice = self.game.conn.read_card("Wpisz nazwę akcji: ", list(available.keys())).strip()
         try:
             action = get_action(choice)
         except KeyError:
             logger.error("Nieznana akcja '%s'", choice)
+            self.game.ui_log(f"Nieznana akcja '{choice}'")
             return self
 
         ctx = ActionContext(game=self.game, heroes_turn=self)

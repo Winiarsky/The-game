@@ -1,0 +1,344 @@
+:root {
+    --bg: #0d0a08;
+    --fg: #f6eddc;
+    --accent: #c18a3a;
+    --accent-2: #7c4c2c;
+    --muted: #c1b5a3;
+    --panel: #1a120d;
+    --border: #3a2a1e;
+    --shadow: 0 10px 26px rgba(0, 0, 0, 0.45);
+    --font: "IBM Plex Sans", "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    background: radial-gradient(circle at 30% 20%, rgba(193, 138, 58, 0.08) 0, transparent 30%),
+                radial-gradient(circle at 70% 30%, rgba(124, 76, 44, 0.08) 0, transparent 28%),
+                radial-gradient(circle at 50% 70%, rgba(193, 138, 58, 0.06) 0, transparent 35%),
+                var(--bg);
+    color: var(--fg);
+    font-family: var(--font);
+    letter-spacing: 0.1px;
+}
+
+.frame {
+    max-width: 1100px;
+    margin: 24px auto;
+    padding: 0 16px 24px;
+}
+
+.topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(90deg, rgba(193, 138, 58, 0.18), rgba(124, 76, 44, 0.18));
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    box-shadow: var(--shadow);
+}
+
+.logo {
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.menu button {
+    margin-left: 8px;
+}
+
+button {
+    background: var(--panel);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-family: var(--font);
+    cursor: pointer;
+    transition: transform 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+button:hover:not(.disabled) {
+    border-color: var(--accent);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(193, 138, 58, 0.25);
+}
+
+button.disabled, button:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+
+.panel {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0));
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    margin-top: 18px;
+    overflow: hidden;
+}
+
+.panel-header {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    text-transform: uppercase;
+    font-size: 12px;
+    letter-spacing: 0.8px;
+    color: var(--muted);
+}
+
+.panel-body {
+    padding: 14px;
+}
+
+.screen.hidden {
+    display: none;
+}
+
+.layout {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 14px;
+}
+
+.column {
+    display: flex;
+    flex-direction: column;
+}
+
+.scenario-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.scenario-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.scenario-btn {
+    min-width: 140px;
+    border-color: var(--accent);
+}
+
+.hero-name {
+    font-size: 20px;
+    margin-bottom: 6px;
+}
+
+.hero-stats {
+    color: var(--muted);
+    margin-bottom: 8px;
+}
+
+.hero-notes {
+    color: var(--fg);
+    opacity: 0.85;
+}
+
+.prompt-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.prompt-card {
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.prompt-title {
+    color: var(--accent);
+    margin-bottom: 8px;
+}
+
+.choices {
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 6px;
+}
+
+.prompt-card form {
+    display: flex;
+    gap: 8px;
+}
+
+.prompt-card input {
+    flex: 1;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: #0d1523;
+    color: var(--fg);
+    font-family: var(--font);
+}
+
+.empty-note {
+    color: var(--muted);
+    font-size: 14px;
+}
+
+.log-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.log-item {
+    border-left: 3px solid var(--accent);
+    padding-left: 10px;
+    color: var(--fg);
+    line-height: 1.4;
+}
+
+.log-item .meta {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+/* Heroes */
+.heroes-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.hero-card {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.02);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+}
+
+.hero-card.active {
+    border-color: var(--accent);
+    box-shadow: 0 6px 18px rgba(193, 138, 58, 0.25);
+    transform: translateY(-2px);
+}
+
+.hero-name {
+    font-size: 18px;
+    margin-bottom: 4px;
+}
+
+.hero-stats {
+    color: var(--muted);
+    margin-bottom: 4px;
+}
+
+.hero-notes {
+    color: var(--fg);
+    opacity: 0.9;
+}
+
+/* Modal */
+.modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal.hidden {
+    display: none;
+}
+
+.modal-card {
+    display: flex;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
+    max-width: 780px;
+    width: 90%;
+    overflow: hidden;
+}
+
+.modal-illustration {
+    width: 220px;
+    background: linear-gradient(160deg, rgba(193, 138, 58, 0.18), rgba(124, 76, 44, 0.18));
+    border-right: 1px solid var(--border);
+}
+
+.modal-content {
+    padding: 18px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.modal-title {
+    font-size: 18px;
+    color: var(--accent);
+}
+
+.modal-text {
+    color: var(--fg);
+    line-height: 1.4;
+}
+
+.modal-choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.modal-desc {
+    color: var(--muted);
+    font-size: 14px;
+    min-height: 18px;
+}
+
+.choice-pill {
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    cursor: pointer;
+}
+
+.choice-pill:hover {
+    border-color: var(--accent);
+}
+
+#modal-form {
+    display: flex;
+    gap: 10px;
+}
+
+#modal-answer {
+    flex: 1;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: #120d0a;
+    color: var(--fg);
+    font-family: var(--font);
+}
+
+.choice-pill.selected {
+    border-color: var(--accent);
+    background: rgba(193, 138, 58, 0.14);
+}
+
+#modal-answer.input-hidden {
+    display: none;
+}

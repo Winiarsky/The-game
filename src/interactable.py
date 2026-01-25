@@ -67,11 +67,36 @@ class Interactable:
     def on_critical_stealth_fail(self):
         return None
 
-    def _prompt_action_choice(self) -> Optional[str]:
-        """Prosta konsolowa selekcja akcji."""
+    def _prompt_action_choice(self, game) -> Optional[str]:
+        """Prosta selekcja akcji – najpierw UI, potem konsola."""
         actions = self.available_actions()
         if not actions:
             return None
+
+        ui = getattr(game, "ui", None)
+        if ui and ui.enabled:
+            choices = [f"{idx}: {act.label}" for idx, act in enumerate(actions, start=1)]
+            ans = ui.prompt_choice("Wybierz akcję (numer lub nazwa): ", choices=choices, source="interaction")
+            if ans:
+                normalized = ans.strip()
+                # numer z listy
+                if normalized.isdigit():
+                    idx = int(normalized) - 1
+                    if 0 <= idx < len(actions):
+                        return actions[idx].id
+                # dopasowanie po id lub etykiecie (case-insensitive)
+                for act in actions:
+                    if normalized.lower() in (act.id.lower(), act.label.lower()):
+                        return act.id
+                # jeśli UI zwrócił pełny wpis "1: label"
+                if ":" in normalized:
+                    prefix = normalized.split(":")[0].strip()
+                    if prefix.isdigit():
+                        idx = int(prefix) - 1
+                        if 0 <= idx < len(actions):
+                            return actions[idx].id
+
+        # fallback: konsola
         print("Dostępne akcje:")
         for idx, action in enumerate(actions, start=1):
             suffix = f" — {action.description}" if action.description else ""
@@ -89,7 +114,7 @@ class Interactable:
     def interact(self, actor: "Occupant", game, action_id: Optional[str] = None, payload: Optional[dict] = None):
         """Zwraca krótką wiadomość o wyniku interakcji."""
         if action_id is None:
-            action_id = self._prompt_action_choice()
+            action_id = self._prompt_action_choice(game)
         if action_id is None:
             return "Przerywasz interakcję."
         interaction = self.actions.get(action_id)

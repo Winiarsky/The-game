@@ -270,7 +270,12 @@ class Door(LockableMixin, TrappableMixin, HiddenMixin, DestructibleMixin, Intera
     def action_use_key(self, actor, game, _payload=None) -> str:
         if self.destroyed:
             return "Nie ma zamka do otwarcia."
-        key_name = input("Podaj nazwę klucza: ").strip()
+        ui = getattr(game, "ui", None)
+        key_name = None
+        if ui and ui.enabled:
+            key_name = ui.prompt_choice("Podaj nazwę klucza:", source="interaction")
+        if not key_name:
+            key_name = input("Podaj nazwę klucza: ").strip()
         if not key_name:
             return "Nie użyto klucza."
         success, msg = self.try_key(key_name)

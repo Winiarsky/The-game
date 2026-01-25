@@ -3,7 +3,7 @@ from GameObjects.base import GameObjectMeta
 from typing import Optional
 
 from interactable import Interactable, Interaction
-from interactions.common import HideInMixin
+from interactions.common import HideInMixin, prompt_for_roll
 import logging
 from board import consts
 
@@ -59,15 +59,8 @@ class LockedChest(Interactable, HideInMixin):
         return self.interactable
 
     # --- Narzędzia ---
-    def _get_results(self, msg: str) -> int:
-        while True:
-            try:
-                return int(input(msg))
-            except ValueError:
-                continue
-
     def _skill_check(self, dc: int, roll_msg: str) -> tuple[str, int]:
-        roll = self._get_results(roll_msg)
+        roll = prompt_for_roll(roll_msg)
         if roll >= dc + 10:
             outcome = "critical_success"
         elif roll >= dc:
@@ -218,7 +211,12 @@ class LockedChest(Interactable, HideInMixin):
             return "Skrzynia jest rozwalona, zaden klucz juz tu nie pomoze."
         if self.is_open:
             return "Skrzynia jest juz otwarta."
-        key_name = input("Podaj nazwę klucza, którego używasz: ").strip()
+        ui = getattr(game, "ui", None)
+        key_name = None
+        if ui and ui.enabled:
+            key_name = ui.prompt_choice("Podaj nazwę klucza, którego używasz:", source="interaction")
+        if not key_name:
+            key_name = input("Podaj nazwę klucza, którego używasz: ").strip()
         if not key_name:
             return "Nie użyto klucza."
         if key_name in self.working_keys:
@@ -283,10 +281,10 @@ class LockedChest(Interactable, HideInMixin):
     def action_attack(self, actor, game, _payload: Optional[dict] = None) -> str:
         if self.destroyed:
             return "Skrzynia już rozbita."
-        attack_roll = self._get_results("Rzuć na atak (podaj ostateczny wynik): ") # po zaimplementowaniu walki, to powinno korzystać z mechaniki walki
+        attack_roll = prompt_for_roll("Rzuć na atak (podaj ostateczny wynik): ") # po zaimplementowaniu walki, to powinno korzystać z mechaniki walki
         if attack_roll < self.ac:
             return f"Atak ({attack_roll}) nie trafia skrzyni (AC {self.ac})."
-        damage = self._get_results("Podaj zadaną ilość obrażeń: ")
+        damage = prompt_for_roll("Podaj zadaną ilość obrażeń: ")
         effective_damage = max(0, damage - self.hardness)
         self.hp -= effective_damage
         if self.hp <= 0:

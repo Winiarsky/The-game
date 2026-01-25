@@ -21,6 +21,7 @@ from obstacle import Obstacle
 from wall import Wall, Mur
 from interactable import Interactable
 from object_registry import get_object
+from ui_client import get_ui_client
 
 try:
     from game_objects_loader import scan_game_objects
@@ -41,6 +42,7 @@ class Game:
         with open('board/config.json', 'r') as config_file:
             self.config = json.load(config_file)
         self.conn: Connection = self._init_connection() if conn is None else conn
+        self.ui = get_ui_client()
         self.heroes: list[Hero] = []
         self.enemies: list[Enemy] = []
         self.board = self._init_board()
@@ -256,3 +258,27 @@ class Game:
         self.state.on_exit()
         self.state = Combat(self)
         self.state.on_enter()
+
+    # --- UI helpery ---
+    def ui_event(self, event_type: str, payload: dict[str, Any]) -> bool:
+        """Bezpieczne wysyłanie eventów do UI (ignoruje brak UI)."""
+        try:
+            if not getattr(self, "ui", None) or not self.ui.enabled:
+                return False
+            return bool(self.ui.send_event(event_type, payload))
+        except Exception:
+            return False
+
+    def ui_log(self, message: str) -> None:
+        self.ui_event("log", {"message": message})
+
+    def ui_hero(self, hero: Hero, note: str | None = None) -> None:
+        payload = {
+            "name": getattr(hero, "name", None) or getattr(hero, "object_id", "Bohater"),
+            "statuses": getattr(hero, "statuses", []),
+            "note": note,
+            "pos": getattr(hero, "position", None),
+            "wounds": getattr(hero, "wounds", None),
+            "initiative": getattr(hero, "initiative", None),
+        }
+        self.ui_event("hero", payload)

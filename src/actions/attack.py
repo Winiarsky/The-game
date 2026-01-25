@@ -53,8 +53,22 @@ def _choose_enemy(ctx: ActionContext, hero_pos: tuple[int, int] | None) -> tuple
     return enemy, pos
 
 
-def _choose_damage_type() -> Optional[str]:
+def _choose_damage_type(game) -> Optional[str]:
     options = ["sieczne", "obuchowe", "ogień", "lód", "brak obrażeń"]
+    ui = getattr(game, "ui", None)
+    if ui and ui.enabled:
+        choice = ui.prompt_choice("Wybierz typ obrażeń:", choices=[f"{i+1}: {opt}" for i, opt in enumerate(options)], source="attack")
+        if choice:
+            normalized = choice.strip().lower()
+            if normalized.isdigit():
+                idx = int(normalized) - 1
+                if 0 <= idx < len(options):
+                    picked = options[idx]
+                    return None if picked == "brak obrażeń" else picked
+            for opt in options:
+                if opt.lower() == normalized:
+                    return None if opt == "brak obrażeń" else opt
+    # fallback do konsoli
     print("Typy obrażeń:")
     for idx, name in enumerate(options, start=1):
         print(f"{idx}. {name}")
@@ -95,9 +109,12 @@ class TestAttackAction(BaseAction):
             return
 
         logger.info("Trafienie! (r=%s vs AC %s) Cel na %s.", roll, getattr(enemy, "ac", "?"), enemy_pos)
-        dmg_type = _choose_damage_type()
+        if ctx.game.ui:
+            ctx.game.ui_log(f"Trafienie! (r={roll} vs AC {getattr(enemy, 'ac', '?')}) Cel na {enemy_pos}.")
+        dmg_type = _choose_damage_type(ctx.game)
         if dmg_type is None:
             logger.info("Brak przydzielonych obrażeń – kończę akcję ataku.")
+            ctx.game.ui_log("Brak przydzielonych obrażeń – koniec akcji ataku.")
             return
         amount = prompt_for_roll(f"Ile obrażeń {dmg_type} zadajesz? ")
         _, defeated = enemy.apply_damage(amount, dmg_type)
@@ -112,5 +129,7 @@ class TestAttackAction(BaseAction):
                 logger.error("Nie udało się usunąć przeciwnika z planszy: %s", exc)
             enemy.position = None
             logger.info("Przeciwnik pokonany.")
+            ctx.game.ui_log("Przeciwnik pokonany.")
         else:
             logger.info("Obrażenia przyjęte, cel żyje (HP %s).", enemy.hp)
+            ctx.game.ui_log(f"Obrażenia przyjęte, cel żyje (HP {enemy.hp}).")

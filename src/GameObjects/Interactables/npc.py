@@ -136,37 +136,62 @@ class NPC(BaseNPC):
             },
         }
 
-    def _run_dialog(self) -> str:
-        """Prosta pętla dialogowa; zwraca ostatni komunikat."""
+    def _run_dialog(self, game=None) -> str:
+        """Prosta pętla dialogowa; zwraca ostatni komunikat. Wysyła tekst i wybory do UI jeśli dostępny."""
         node_id = "start"
         last_msg = ""
+        ui = getattr(game, "ui", None) if game else None
         while True:
             node = self.dialog.get(node_id)
             if not node:
                 return "NPC milczy, coś jest nie tak z dialogiem."
             text = node.get("text", "")
-            # ewentualna zmiana nastawienia na wejściu
             delta = node.get("attitude_delta")
             if delta:
                 new_att, label = self.adjust_attitude(delta)
                 logger.info(f"Nastawienie {self.name}: {label} ({new_att}).")
+                if ui and ui.enabled:
+                    game.ui_log(f"Nastawienie {self.name}: {label} ({new_att}).")
             options = [
                 opt
                 for opt in node.get("options", [])
                 if not opt.get("once") or opt["id"] not in self._dialog_used
             ]
-            print(text)
-            if not options:
-                return text
-            for idx, opt in enumerate(options, start=1):
-                print(f"{idx}. {opt.get('label', '...')}")
-            choice_raw = input("Wybierz opcję (Enter aby wyjść): ").strip()
-            if not choice_raw or not choice_raw.isdigit():
-                return "Kończysz rozmowę."
-            idx = int(choice_raw) - 1
-            if idx < 0 or idx >= len(options):
-                return "Kończysz rozmowę."
-            chosen = options[idx]
+
+            if ui and ui.enabled:
+                game.ui_log(text)
+                if not options:
+                    return text
+                choices = [f"{idx}: {opt.get('label', '...')}" for idx, opt in enumerate(options, start=1)]
+                ans = ui.prompt_choice("Wybierz opcję (Enter aby wyjść): ", choices=choices, source="dialog")
+                if not ans:
+                    return "Kończysz rozmowę."
+                normalized = ans.strip()
+                if normalized.isdigit():
+                    idx = int(normalized) - 1
+                else:
+                    idx = None
+                    for j, opt in enumerate(options):
+                        if normalized.lower() == str(opt.get("label", "")).lower():
+                            idx = j
+                            break
+                if idx is None or idx < 0 or idx >= len(options):
+                    return "Kończysz rozmowę."
+                chosen = options[idx]
+            else:
+                print(text)
+                if not options:
+                    return text
+                for idx, opt in enumerate(options, start=1):
+                    print(f"{idx}. {opt.get('label', '...')}")
+                choice_raw = input("Wybierz opcję (Enter aby wyjść): ").strip()
+                if not choice_raw or not choice_raw.isdigit():
+                    return "Kończysz rozmowę."
+                idx = int(choice_raw) - 1
+                if idx < 0 or idx >= len(options):
+                    return "Kończysz rozmowę."
+                chosen = options[idx]
+
             if chosen.get("once"):
                 self._dialog_used.add(chosen["id"])
             if "check" in chosen:
@@ -179,23 +204,31 @@ class NPC(BaseNPC):
                     if "attitude_delta_success" in check:
                         new_att, label = self.adjust_attitude(check["attitude_delta_success"])
                         logger.info(f"Nastawienie {self.name}: {label} ({new_att}).")
+                        if ui and ui.enabled:
+                            game.ui_log(f"Nastawienie {self.name}: {label} ({new_att}).")
                     node_id = check.get("on_success") or node_id
                 else:
                     if "attitude_delta_failure" in check:
                         new_att, label = self.adjust_attitude(check["attitude_delta_failure"])
                         logger.info(f"Nastawienie {self.name}: {label} ({new_att}).")
+                        if ui and ui.enabled:
+                            game.ui_log(f"Nastawienie {self.name}: {label} ({new_att}).")
                     node_id = check.get("on_failure") or node_id
                 continue
             if "attitude_delta" in chosen:
                 new_att, label = self.adjust_attitude(chosen["attitude_delta"])
                 logger.info(f"Nastawienie {self.name}: {label} ({new_att}).")
+                if ui and ui.enabled:
+                    game.ui_log(f"Nastawienie {self.name}: {label} ({new_att}).")
             last_msg = chosen.get("label", "")
             node_id = chosen.get("id")
             if not node_id:
                 return text
+            # przejdź do kolejnego węzła
+            continue
 
     def action_talk(self, _actor, _game, _payload=None) -> str:
-        return self._run_dialog()
+        return self._run_dialog(_game)
 
     # --- Handel ---
     def action_trade(self, _actor, _game, _payload=None) -> str:

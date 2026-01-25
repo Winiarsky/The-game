@@ -17,3 +17,11 @@ Na stronie zobaczysz podświetlenia wysłane przez `set_leds`, a każde kliknię
 - **Tryby pracy** – włącz „Tryb planszy”, aby kliknięcia wysyłały zdarzenia do gry, lub „Tryb przesuwania figurek”, by swobodnie rozstawiać pionki bez wywołań HTTP.
 - **Generator figurek** – w panelu „Figurki” dodasz żetony (litery + kolory), zaznaczysz je i ustawisz na polach w trybie przesuwania. Kliknięcie pola z figurką bez wybranej figurki zaznaczy ją, dzięki czemu łatwo ją przenieść.
 - **Tło planszy** – ustaw własny obraz (np. mapę scenariusza) lub usuń go jednym kliknięciem.
+
+## UI graczy (oddzielna aplikacja)
+
+Lekka aplikacja webowa do wyświetlania informacji dla graczy (log, dialogi, prompty na rzuty).
+
+1. Uruchom: `python -m player_ui.app` (domyślnie `http://127.0.0.1:5100`).
+2. Domyślny adres UI możesz wpisać w `src/consts.py` (`PLAYER_UI_URL="http://127.0.0.1:5100"`). Możesz go też nadpisać zmienną środowiskową `PLAYER_UI_URL` lub `PLAYER_UI_BASE_URL`, aby prompty na rzuty kierować do UI (fallback to konsoli, jeśli brak UI).
+3. W przeglądarce otwórz `http://127.0.0.1:5100`, wybierz „Nowa gra” → scenariusz „karczma”.
