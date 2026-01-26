@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import logging
 import random
+import time
+from types import SimpleNamespace
 
 from board import consts
+from actions.move_utils import find_path, follow_path, default_on_enter
 
 logger = logging.getLogger(__name__)
 
@@ -101,77 +104,87 @@ def basic_melee(enemy, game, combat_state, actions_left: int = 1) -> int:
         if remaining <= 0:
             break
         move_budget = max(1, getattr(enemy, "move_points", 3))
-        moved = False
-        steps_left = move_budget
-        while steps_left > 0:
-            adj_now = _heroes_in_range(game, enemy.position)
-            if adj_now:
-                break
-            nearest_pos, dist = _nearest_hero(game, enemy.position)
+        move_used = False
+        path_id = None
+        try:
+            if _heroes_in_range(game, enemy.position):
+                logger.info("%s stoi obok bohatera – pomijam ruch.", enemy.name)
+                actions_used += 1
+                continue
+
+            nearest_pos, _dist = _nearest_hero(game, enemy.position)
             if nearest_pos is None:
                 logger.info("%s nie widzi celu, kończy turę.", enemy.name)
-                steps_left = 0
+                actions_used = actions_left
                 break
 
-            neighbors = board.get_neighbors(enemy.position, include_position=False, diagonal=False)
-            walkable: list[tuple[int, int]] = [
-                pos for pos in neighbors if board.can_traverse(enemy.position, pos, allow_occupied=False)
-            ]
-            if not walkable:
-                logger.info("%s nie ma gdzie się poruszyć, kończy turę.", enemy.name)
-                steps_left = 0
+            # szukaj najbliższego pola wokół bohatera, na które można wejść
+            neighbor_targets = board.get_neighbors(nearest_pos, include_position=False, diagonal=True)
+            reachable_paths: list[tuple[list[tuple[int, int]], tuple[int, int]]] = []
+            for cand in neighbor_targets:
+                if not board.can_enter(cand, allow_occupied=False):
+                    continue
+                path = find_path(
+                    board,
+                    enemy.position,
+                    cand,
+                    allow_diagonal=True,
+                    allow_occupied=False,
+                )
+                if path:
+                    reachable_paths.append((path, cand))
+
+            if not reachable_paths:
+                logger.info("%s nie ma ścieżki do celu – kończy turę.", enemy.name)
+                actions_used = actions_left
                 break
 
-            # wybierz kierunek, który skraca dystans do najbliższego bohatera
-            dist_now = abs(enemy.position[0] - nearest_pos[0]) + abs(enemy.position[1] - nearest_pos[1])
-            better_steps = [
-                pos for pos in walkable
-                if (abs(pos[0] - nearest_pos[0]) + abs(pos[1] - nearest_pos[1])) < dist_now
-            ]
-            if better_steps:
-                # deterministycznie wybierz jedno pole (najmniejszy dystans)
-                target_candidates = sorted(
-                    better_steps,
-                    key=lambda p: abs(p[0] - nearest_pos[0]) + abs(p[1] - nearest_pos[1])
-                )[:1]
-            else:
-                target_candidates = walkable[:1]
-
-            game.conn.set_leds(target_candidates, consts.ENEMY_MOVE_RGB)
+            # wybierz najkrótszą ścieżkę
+            reachable_paths.sort(key=lambda p: len(p[0]))
+            full_path, goal = reachable_paths[0]
+            # ogranicz do budżetu ruchu
+            truncated = full_path[: move_budget + 1]
+            dest = truncated[-1]
+            path_id = f"enemy-path-{time.time_ns()}"
+            game.ui_event("path_preview", {"id": path_id, "steps": len(truncated) - 1, "target": dest})
+            game.conn.set_leds(truncated[1:], consts.ENEMY_MOVE_RGB)
             logger.info(
-                "%s (ruch w akcji: %s/%s) próbuje podejść do najbliższego bohatera (na %s, dystans %s). "
-                "Przesuń figurkę i zeskanuj pole docelowe.",
+                "%s (budżet ruchu %s) – ścieżka do %s (%s pól). Przenieś figurkę na cel i zeskanuj.",
                 enemy.name,
-                (move_budget - steps_left + 1),
                 move_budget,
-                nearest_pos,
-                dist,
+                dest,
+                len(truncated) - 1,
             )
             try:
-                target = game.conn.scan_board(target_candidates)
+                confirm = game.conn.scan_board([dest])
             finally:
                 game.conn.leds_off()
+            if confirm != dest:
+                logger.info("Zeskanowano inne pole – akcja ruchu anulowana.")
+                actions_used += 1
+                continue
 
-            if target not in walkable:
-                logger.info("Wybrano nieprawidłowe pole – kończę akcję ruchu.")
-                steps_left = 0
-                break
+            ctx = SimpleNamespace(game=game)
+            completed, stop_pos, reason = follow_path(
+                ctx,
+                enemy,
+                truncated,
+                led_color=consts.ENEMY_MOVE_RGB,
+                on_enter=default_on_enter,
+                allow_occupied=False,
+                step_delay=0.08,
+            )
+            move_used = True
+            if not completed:
+                logger.info("Ruch przeciwnika zatrzymany na %s (powód: %s).", stop_pos, reason)
+        finally:
+            if path_id:
+                game.ui_event("path_clear", {"id": path_id})
+            game.conn.leds_off()
 
-            try:
-                board.move(enemy.position, target)
-                moved = True
-                logger.info("%s przesuwa się na %s.", enemy.name, target)
-            except Exception as exc:
-                logger.error("Nie udało się przesunąć %s: %s", enemy.name, exc)
-                steps_left = 0
-                break
-
-            steps_left -= 1
-
-        if moved:
+        if move_used:
             actions_used += 1
             continue
-        # jeśli nie ruszył się w ogóle, zakończ akcję bez dalszych prób
         actions_used += 1
         break
 
