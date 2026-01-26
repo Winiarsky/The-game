@@ -1,12 +1,12 @@
 import logging
 from pathlib import Path
 import sys
-from typing import Tuple, List, Optional
+import time
+from typing import Tuple
 
-from hero import Hero
 from .base import ActionContext, BaseAction
 from .actions_registy import register
-from .move_utils import perform_movement, default_on_enter
+from .move_utils import perform_movement, default_on_enter, find_path, follow_path
 from board import consts
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -38,6 +38,19 @@ class MoveAction(BaseAction):
             if board.can_traverse(current, neighbor, allow_occupied=True):
                 validated.append(neighbor)
         return validated
+
+    def _is_adjacent(self, board, source: Tuple[int, int], target: Tuple[int, int]) -> bool:
+        return target in board.get_neighbors(source, include_position=False, diagonal=True)
+
+    def _wait_for_destination(self, ctx: ActionContext, board) -> Tuple[int, int] | None:
+        """Czeka na kliknięcie pola na planszy, odrzuca wybory poza planszą."""
+        while True:
+            target = ctx.game.conn.scan_board(None)
+            if board.in_bounds(target):
+                return target
+            logger.info("Wybrane pole %s jest poza planszą.", target)
+            ctx.game.ui_log("Wybrane pole jest poza planszą.")
+            ctx.game.conn.leds_off()
             
             
     def execute(self, ctx: ActionContext):
@@ -45,7 +58,7 @@ class MoveAction(BaseAction):
         ctx.game.conn.set_leds(heroes_positions, consts.HERO_HIGHLIGHT_RGB)  # niebieskie pola z bohaterami
         source = ctx.game.conn.scan_board(heroes_positions)
         ctx.game.conn.leds_off()
-        
+
         board = ctx.game.board
         moving_hero = board.occupant_at(source)
         if moving_hero and moving_hero.position is not None:
@@ -92,13 +105,123 @@ class MoveAction(BaseAction):
                     return True
                 return stopped
 
-            perform_movement(
-                ctx,
-                moving_hero,
-                moving_hero.position,
-                lambda current: self._validate_neighbors(ctx, current, board.get_neighbors(current)),
-                led_color=consts.MOVE_FIELD_RGB,
-                end_message="Zakończono ruch.",
-                allow_occupied=True,
-                on_enter=_on_enter_wrapper,
-            )
+            active_path_id: str | None = None
+            try:
+                while True:
+                    target = self._wait_for_destination(ctx, board)
+                    if target is None or moving_hero.position is None:
+                        if active_path_id:
+                            ctx.game.ui_event("path_clear", {"id": active_path_id})
+                        return
+                    if target == moving_hero.position:
+                        logger.info("Kliknięto bieżące pole – kończę akcję ruchu.")
+                        if active_path_id:
+                            ctx.game.ui_event("path_clear", {"id": active_path_id})
+                        return
+
+                    if self._is_adjacent(board, moving_hero.position, target):
+                        perform_movement(
+                            ctx,
+                            moving_hero,
+                            moving_hero.position,
+                            lambda current: self._validate_neighbors(ctx, current, board.get_neighbors(current)),
+                            led_color=consts.MOVE_FIELD_RGB,
+                            end_message="Zakończono ruch.",
+                            allow_occupied=True,
+                            on_enter=_on_enter_wrapper,
+                        )
+                        if active_path_id:
+                            ctx.game.ui_event("path_clear", {"id": active_path_id})
+                        return
+
+                    if not board.can_enter(target, allow_occupied=False):
+                        logger.info("Pole docelowe %s jest zablokowane lub zajęte.", target)
+                        ctx.game.ui_log("Nie możesz stanąć na tym polu.")
+                        continue
+
+                    path = find_path(
+                        board,
+                        moving_hero.position,
+                        target,
+                        allow_diagonal=True,
+                        allow_occupied=True,
+                    )
+                    if not path or len(path) <= 1:
+                        logger.info("Brak możliwej ścieżki do %s.", target)
+                        ctx.game.ui_log("Nie da się tam dojść.")
+                        continue
+
+                    path_preview = path[1:]
+                    steps = len(path_preview)
+                    path_id = f"path-{time.time_ns()}"
+                    active_path_id = path_id
+                    preview_msg = f"Ścieżka do {target}: {steps} pól. Kliknij cel ponownie, aby potwierdzić."
+                    ctx.game.ui_event("path_preview", {"id": path_id, "steps": steps, "target": target})
+                    logger.info(preview_msg)
+                    ctx.game.conn.set_leds(path_preview, consts.MOVE_FIELD_RGB)
+                    confirm = ctx.game.conn.scan_board(None)
+                    ctx.game.conn.leds_off()
+
+                    if confirm != target:
+                        if active_path_id:
+                            ctx.game.ui_event("path_clear", {"id": active_path_id})
+                            active_path_id = None
+                        # potraktuj inne kliknięcie jako zmianę celu i spróbuj ponownie
+                        target = confirm
+                        if not board.in_bounds(target):
+                            ctx.game.ui_log("Wybrane pole jest poza planszą.")
+                            logger.info("Kliknięto poza planszą – wybierz ponownie.")
+                            continue
+                        if target == moving_hero.position:
+                            logger.info("Kliknięto bieżące pole – kończę akcję ruchu.")
+                            return
+                        if self._is_adjacent(board, moving_hero.position, target):
+                            perform_movement(
+                                ctx,
+                                moving_hero,
+                                moving_hero.position,
+                                lambda current: self._validate_neighbors(ctx, current, board.get_neighbors(current)),
+                                led_color=consts.MOVE_FIELD_RGB,
+                                end_message="Zakończono ruch.",
+                                allow_occupied=True,
+                                on_enter=_on_enter_wrapper,
+                            )
+                            if active_path_id:
+                                ctx.game.ui_event("path_clear", {"id": active_path_id})
+                            return
+                        # w pozostałych przypadkach przejdź do kolejnego obrotu pętli z nowym celem
+                        continue
+
+                    completed, stop_pos, reason = follow_path(
+                        ctx,
+                        moving_hero,
+                        path,
+                        led_color=consts.MOVE_FIELD_RGB,
+                        on_enter=_on_enter_wrapper,
+                        allow_occupied=True,
+                        step_delay=0.1,
+                    )
+                    if active_path_id:
+                        ctx.game.ui_event("path_clear", {"id": active_path_id})
+                        active_path_id = None
+                    if completed:
+                        logger.info("Zakończono ruch.")
+                        return
+
+                    reason_map = {
+                        "blocked": "Ruch zatrzymany – ścieżka zablokowana.",
+                        "occupied": "Ruch zatrzymany – pole zajęte.",
+                        "move_error": "Ruch przerwany przez błąd przesunięcia.",
+                        "on_enter": "Ruch zatrzymany przez zdarzenie na polu.",
+                    }
+                    msg = reason_map.get(reason or "", "Ruch zatrzymany.")
+                    ctx.game.ui_log(msg)
+                    logger.info(msg)
+                    if stop_pos:
+                        ctx.game.conn.set_leds([stop_pos], consts.MOVE_FIELD_RGB)
+                        # czekaj na kliknięcie pola, na którym zatrzymaliśmy się, aby domknąć akcję
+                        ctx.game.conn.scan_board([stop_pos])
+                        ctx.game.conn.leds_off()
+                    return
+            finally:
+                ctx.game.conn.leds_off()

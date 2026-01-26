@@ -22,6 +22,8 @@ const modalChoices = document.getElementById("modal-choices");
 const modalDesc = document.getElementById("modal-desc");
 const modalForm = document.getElementById("modal-form");
 const modalAnswer = document.getElementById("modal-answer");
+const pathToast = document.getElementById("path-toast");
+let activePathId = null;
 
 function showMenu() {
     screenMenu.classList.remove("hidden");
@@ -97,6 +99,14 @@ function handleEvent(event) {
         });
         renderHeroes();
         addLogEntry(`Aktualny bohater: ${payload.name || ""}`, meta);
+        return;
+    }
+    if (type === "path_preview") {
+        showPathInfo(payload);
+        return;
+    }
+    if (type === "path_clear") {
+        clearPathInfo(payload && payload.id);
         return;
     }
     // domyślnie traktujemy jako log
@@ -363,6 +373,23 @@ function normalizeChoices(prompt) {
         const effectiveKey = mapped || key || (title.length === 1 ? title : "");
         return { raw: norm, label, desc, key: effectiveKey };
     });
+}
+
+// --- Path info toast ---
+
+function showPathInfo(payload = {}) {
+    const id = payload.id || `path-${Date.now()}`;
+    activePathId = id;
+    const steps = payload.steps != null ? `Ścieżka: ${payload.steps} pól` : "Wyznaczam trasę...";
+    const target = payload.target ? ` → ${payload.target}` : "";
+    pathToast.textContent = `${steps}${target}`;
+    pathToast.classList.remove("hidden");
+}
+
+function clearPathInfo(id = null) {
+    if (id && activePathId && id !== activePathId) return;
+    activePathId = null;
+    pathToast.classList.add("hidden");
 }
 
 // --- Heroes rendering ---

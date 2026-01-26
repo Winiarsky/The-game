@@ -56,6 +56,7 @@ class Combat(State):
             positions = [h.position for h in pending if h.position is not None]
             if not positions:
                 break
+            self.game.conn.leds_off()
             self.game.conn.set_leds(positions, consts.HERO_HIGHLIGHT_RGB)
             pos = self.game.conn.scan_board(positions)
             self.game.conn.leds_off()

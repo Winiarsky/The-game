@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import logging
+import heapq
 from time import sleep
 from typing import Callable, Iterable, Tuple
 
 from board import consts
 
 logger = logging.getLogger(__name__)
+
+# Przybliżony koszt przekątnej (sqrt(2)), wystarczający do wyznaczania ścieżki.
+DIAGONAL_COST = 1.4
 
 
 def default_on_enter(ctx, hero, current_pos: Tuple[int, int]) -> bool:
@@ -87,3 +91,107 @@ def perform_movement(
         if on_enter(ctx, hero, current_pos):
             logger.info("Ruch zakończony na %s przez zdarzenie na polu.", current_pos)
             return
+
+
+def _octile_heuristic(a: tuple[int, int], b: tuple[int, int]) -> float:
+    """Heurystyka dla siatki z przekątnymi."""
+    dx = abs(a[0] - b[0])
+    dy = abs(a[1] - b[1])
+    return max(dx, dy) + (DIAGONAL_COST - 1.0) * min(dx, dy)
+
+
+def find_path(
+    board,
+    start: tuple[int, int],
+    goal: tuple[int, int],
+    *,
+    allow_diagonal: bool = True,
+    allow_occupied: bool = True,
+) -> list[tuple[int, int]] | None:
+    """Znajdź najkrótszą ścieżkę A* między polami (łącznie ze startem i celem)."""
+    if start == goal:
+        return [start]
+    if not (board.in_bounds(start) and board.in_bounds(goal)):
+        return None
+
+    open_set: list[tuple[float, tuple[int, int]]] = []
+    heapq.heappush(open_set, (0.0, start))
+    came_from: dict[tuple[int, int], tuple[int, int]] = {}
+    g_score: dict[tuple[int, int], float] = {start: 0.0}
+
+    while open_set:
+        _f, current = heapq.heappop(open_set)
+        if current == goal:
+            path = [current]
+            while current in came_from:
+                current = came_from[current]
+                path.append(current)
+            path.reverse()
+            return path
+
+        for neighbor in board.get_neighbors(current, include_position=False, diagonal=allow_diagonal):
+            if not board.can_traverse(current, neighbor, allow_occupied=allow_occupied):
+                continue
+            step_cost = 1.0 if (neighbor[0] == current[0] or neighbor[1] == current[1]) else DIAGONAL_COST
+            tentative = g_score[current] + step_cost
+            if tentative >= g_score.get(neighbor, float("inf")):
+                continue
+            came_from[neighbor] = current
+            g_score[neighbor] = tentative
+            f_score = tentative + _octile_heuristic(neighbor, goal)
+            heapq.heappush(open_set, (f_score, neighbor))
+    return None
+
+
+def follow_path(
+    ctx,
+    hero,
+    path: list[tuple[int, int]],
+    *,
+    led_color: list[int],
+    on_enter: Callable[[object, object, Tuple[int, int]], bool] = default_on_enter,
+    allow_occupied: bool = True,
+    step_delay: float = 0.0,
+) -> tuple[bool, tuple[int, int] | None, str | None]:
+    """Wykonaj ruch wzdłuż wyznaczonej ścieżki.
+
+    Zwraca (ukończono_całość, ostatnia_pozycja, powód_przerwania).
+    Powody: blocked (ściana/teren), occupied, move_error, on_enter.
+    """
+    if not path:
+        return False, None, "blocked"
+    if len(path) == 1:
+        return True, path[0], None
+
+    board = ctx.game.board
+    current = path[0]
+    remaining = list(path[1:])
+    ctx.game.conn.set_leds(remaining, led_color)
+    try:
+        for idx, step in enumerate(remaining):
+            if not board.can_traverse(current, step, allow_occupied=allow_occupied):
+                return False, current, "blocked"
+
+            try:
+                board.move(current, step)
+            except ValueError as exc:
+                logger.error("Nie można wykonać ruchu na %s: %s", step, exc)
+                return False, current, "move_error"
+
+            previous = current
+            current = step
+            if on_enter(ctx, hero, current):
+                return False, current, "on_enter"
+
+            tail = remaining[idx + 1 :]
+            ctx.game.conn.set_leds([previous], [0, 0, 0])
+            if step_delay > 0:
+                sleep(step_delay)
+            if tail:
+                ctx.game.conn.set_leds(tail, led_color)
+        return True, current, None
+    finally:
+        try:
+            ctx.game.conn.set_leds(path, [0, 0, 0])
+        except Exception:
+            pass
