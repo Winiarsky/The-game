@@ -22,6 +22,8 @@ class HeroesTurn(State):
     def on_enter(self):
         logger.info("Tura bohaterow!")
         self.game.ui_log("Tura bohaterów!")
+        self.game.ui_event("initiative", {"round": None, "order": [], "active_id": None})
+        self.game.ui_log("Press Enter aby kontynuować turę bohaterów.")
 
     def on_exit(self):
         logger.info("Koniec tury bohaterow.")

@@ -209,6 +209,59 @@ button.disabled, button:disabled {
     font-size: 12px;
 }
 
+/* Initiative */
+.initiative-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.initiative-card {
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.02);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.initiative-card.hero {
+    border-color: #2f7d49;
+}
+
+.initiative-card.enemy {
+    border-color: #9c2d2d;
+}
+
+.initiative-card.active {
+    box-shadow: 0 6px 18px rgba(193, 138, 58, 0.25);
+    border-width: 3px;
+}
+
+.initiative-card.done {
+    opacity: 0.55;
+    border-style: dashed;
+}
+
+.initiative-round {
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+}
+
+.initiative-name {
+    font-weight: 600;
+}
+
+.initiative-vals {
+    color: var(--muted);
+    font-size: 14px;
+}
+
 /* Heroes */
 .heroes-list {
     display: flex;

@@ -25,6 +25,9 @@ class InteractAction(BaseAction):
         logger.info("Akcja interakcji: wybierz bohatera, potem obiekt w zasięgu.")
 
     def _choose_hero(self, ctx: ActionContext):
+        actor = getattr(ctx, "actor", None)
+        if actor in ctx.game.heroes and getattr(actor, "position", None) is not None:
+            return actor, getattr(actor, "position", None)
         heroes_positions = [hero.position for hero in ctx.game.heroes if hero.position is not None]
         if not heroes_positions:
             logger.warning("Brak bohaterów na planszy.")

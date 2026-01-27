@@ -2,6 +2,7 @@ const screenMenu = document.getElementById("screen-menu");
 const screenGame = document.getElementById("screen-game");
 const logList = document.getElementById("log-list");
 const heroesList = document.getElementById("heroes-list");
+const initiativeList = document.getElementById("initiative-list");
 
 let currentScenario = null;
 let eventSource = null;
@@ -24,6 +25,7 @@ const modalForm = document.getElementById("modal-form");
 const modalAnswer = document.getElementById("modal-answer");
 const pathToast = document.getElementById("path-toast");
 let activePathId = null;
+let initiativeState = { order: [], activeId: null, round: 1 };
 
 function showMenu() {
     screenMenu.classList.remove("hidden");
@@ -107,6 +109,15 @@ function handleEvent(event) {
     }
     if (type === "path_clear") {
         clearPathInfo(payload && payload.id);
+        return;
+    }
+    if (type === "initiative") {
+        initiativeState = {
+            order: payload.order || [],
+            activeId: payload.active_id || payload.activeId || null,
+            round: payload.round || 1,
+        };
+        renderInitiative();
         return;
     }
     // domyślnie traktujemy jako log
@@ -406,5 +417,44 @@ function renderHeroes() {
             <div class="hero-notes">${hero.note || ""}</div>
         `;
         heroesList.appendChild(card);
+    });
+}
+
+function renderInitiative() {
+    if (!initiativeList) return;
+    const { order, activeId, round } = initiativeState;
+    if (!order || order.length === 0) {
+        initiativeList.classList.add("empty-note");
+        initiativeList.textContent = "Brak danych o inicjatywie.";
+        return;
+    }
+    initiativeList.classList.remove("empty-note");
+    initiativeList.innerHTML = "";
+    const roundInfo = document.createElement("div");
+    roundInfo.className = "initiative-round";
+    roundInfo.textContent = `Runda ${round}`;
+    initiativeList.appendChild(roundInfo);
+
+    order.forEach((entry) => {
+        const card = document.createElement("div");
+        card.className = "initiative-card " + (entry.kind === "hero" ? "hero" : "enemy");
+        if (String(entry.id) === String(activeId)) {
+            card.classList.add("active");
+        }
+        if (entry.done) {
+            card.classList.add("done");
+        }
+        const name = document.createElement("div");
+        name.className = "initiative-name";
+        name.textContent = entry.name || "aktor";
+        const vals = document.createElement("div");
+        vals.className = "initiative-vals";
+        const base = entry.base ?? entry.current;
+        const current = entry.current ?? base;
+        const hasDelta = entry.delta && entry.delta !== 0;
+        vals.textContent = hasDelta ? `${current} (${base})` : `${current}`;
+        card.appendChild(name);
+        card.appendChild(vals);
+        initiativeList.appendChild(card);
     });
 }

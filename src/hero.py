@@ -29,12 +29,12 @@ class Hero(StatusMixin):
         return f"position: {self.position}"
 
     def __hash__(self):
-        return hash(self.position)
+        return hash(self.object_id)
     
     def __eq__(self, other):
         if not isinstance(other, Hero):
             return False
-        return self.position == other.position
+        return self.object_id == other.object_id
 
     def set_position(self, position: Optional[tuple[int, int]]):
         self.position = position

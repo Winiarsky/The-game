@@ -63,6 +63,8 @@ class Connection:
             "3": "seek",
             "4": "stealth",
             "5": "test_attack",
+            "6": "delay",
+            "7": "end",
         }
         
         while True:

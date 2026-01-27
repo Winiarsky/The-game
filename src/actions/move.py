@@ -54,13 +54,16 @@ class MoveAction(BaseAction):
             
             
     def execute(self, ctx: ActionContext):
-        heroes_positions = [hero.position for hero in ctx.game.heroes if hero.position is not None]
-        ctx.game.conn.set_leds(heroes_positions, consts.HERO_HIGHLIGHT_RGB)  # niebieskie pola z bohaterami
-        source = ctx.game.conn.scan_board(heroes_positions)
-        ctx.game.conn.leds_off()
-
         board = ctx.game.board
-        moving_hero = board.occupant_at(source)
+        # jeśli mamy wskazanego aktora, użyj go; w przeciwnym razie stary tryb wyboru
+        moving_hero = getattr(ctx, "actor", None)
+        if moving_hero not in ctx.game.heroes or getattr(moving_hero, "position", None) is None:
+            heroes_positions = [hero.position for hero in ctx.game.heroes if hero.position is not None]
+            ctx.game.conn.set_leds(heroes_positions, consts.HERO_HIGHLIGHT_RGB)  # niebieskie pola z bohaterami
+            source = ctx.game.conn.scan_board(heroes_positions)
+            ctx.game.conn.leds_off()
+            moving_hero = board.occupant_at(source)
+
         if moving_hero and moving_hero.position is not None:
             if getattr(moving_hero, "has_status", lambda _s: False)("stealth"):
                 moving_hero.remove_status("stealth")  # type: ignore[attr-defined]

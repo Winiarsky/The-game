@@ -29,6 +29,9 @@ class StealthAction(BaseAction):
         logger.info("Akcja stealth: test ukrycia, a potem ruch jak w Move (kliknięcie bieżącego pola kończy).")
 
     def _choose_hero(self, ctx: ActionContext):
+        actor = getattr(ctx, "actor", None)
+        if actor in ctx.game.heroes and getattr(actor, "position", None) is not None:
+            return actor, getattr(actor, "position", None)
         heroes_positions = [hero.position for hero in ctx.game.heroes if hero.position is not None]
         if not heroes_positions:
             logger.warning("Brak bohaterów na planszy.")

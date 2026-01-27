@@ -4,6 +4,7 @@ import logging
 import sys
 from pathlib import Path
 from typing import Any, List, Optional
+from interactions.common import prompt_for_roll
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
@@ -29,10 +30,16 @@ class Combat(State):
         self.actions_used: dict[Any, int] = {}
         self.delayed: set[Any] = set()
         self._initiatives_ready = False
+        self.base_initiative: dict[Any, int] = {}
+        self.temp_initiative: dict[Any, int] = {}
+        self.base_order: list[Any] = []      # stała kolejność bazowa
+        self.round_queue: list[Any] = []     # kolejka na bieżącą rundę (konsumowana)
+        self.round_index: int = 1
 
     def on_enter(self):
         logger.info("Walka rozpoczęta.")
         self.game.ui_log("Walka rozpoczęta.")
+        self.game.ui_log("Press Enter aby kontynuować walkę.")
         self._reset_heroes_initiative()
         self._ensure_initiative_order()
 
@@ -75,7 +82,8 @@ class Combat(State):
     def _roll_enemy_initiatives(self) -> None:
         for enemy in self.game.enemies:
             try:
-                enemy.roll_initiative()
+                val = enemy.roll_initiative()
+                self.base_initiative[enemy] = val
             except Exception as exc:
                 logger.error("Rzut inicjatywy wroga nie powiódł się: %s", exc)
 
@@ -88,20 +96,24 @@ class Combat(State):
         for hero in self.game.heroes:
             if getattr(hero, "position", None) is None:
                 continue
+            self.base_initiative.setdefault(hero, getattr(hero, "initiative", -1))
             participants.append(hero)
         for enemy in self.game.enemies:
             if getattr(enemy, "position", None) is None:
                 continue
+            self.base_initiative.setdefault(enemy, getattr(enemy, "initiative", -1))
             participants.append(enemy)
-        participants.sort(key=lambda obj: getattr(obj, "initiative", -1), reverse=True)
-        self.initiative_order = participants
-        self.turn_index = 0
+        participants.sort(key=self._effective_initiative_sort_key, reverse=True)
+        self.base_order = participants
+        self.round_queue = list(self.base_order)
+        self.initiative_order = list(self.base_order)
         self.actions_used.clear()
         self.delayed.clear()
         self._initiatives_ready = True
-        logger.info("Kolejność inicjatywy: %s", self.initiative_order)
-        order = [getattr(obj, "name", None) or getattr(obj, "object_id", str(obj)) for obj in self.initiative_order]
+        logger.info("Kolejność inicjatywy: %s", self.base_order)
+        order = [getattr(obj, "name", None) or getattr(obj, "object_id", str(obj)) for obj in self.base_order]
         self.game.ui_log(f"Kolejność inicjatywy: {order}")
+        self._send_initiative_event()
 
     def _clear_initiatives(self) -> None:
         for hero in self.game.heroes:
@@ -112,36 +124,59 @@ class Combat(State):
         for enemy in self.game.enemies:
             enemy.initiative = None
         self._initiatives_ready = False
+        self.base_initiative.clear()
+        self.temp_initiative.clear()
+        self.delayed.clear()
+        self.base_order.clear()
+        self.round_queue.clear()
 
     # --- Turn helpers ---
     def _cleanup_removed(self) -> None:
-        alive_participants: list[Any] = []
-        for obj in self.initiative_order:
-            if obj in self.game.heroes:
-                if getattr(obj, "position", None) is None:
-                    continue
-            elif obj in self.game.enemies:
-                if getattr(obj, "position", None) is None or getattr(obj, "hp", 1) <= 0:
-                    continue
-            alive_participants.append(obj)
-        self.initiative_order = alive_participants
-        if self.turn_index >= len(self.initiative_order):
-            self.turn_index = 0
+        def _alive(objs: list[Any]) -> list[Any]:
+            alive: list[Any] = []
+            for obj in objs:
+                if obj in self.game.heroes:
+                    if getattr(obj, "position", None) is None:
+                        continue
+                elif obj in self.game.enemies:
+                    if getattr(obj, "position", None) is None or getattr(obj, "hp", 1) <= 0:
+                        continue
+                alive.append(obj)
+            return alive
+
+        self.base_order = _alive(self.base_order)
+        self.round_queue = _alive(self.round_queue)
+        self.initiative_order = list(self.base_order)
+        # usuń martwe z map inicjatywy
+        for mapping in (self.base_initiative, self.temp_initiative):
+            for dead in [k for k in list(mapping.keys()) if k not in self.base_order]:
+                mapping.pop(dead, None)
 
     def _current_actor(self):
         self._cleanup_removed()
-        if not self.initiative_order:
+        if not self.round_queue:
             return None
-        if self.turn_index >= len(self.initiative_order):
-            self.turn_index = 0
-        return self.initiative_order[self.turn_index]
+        return self.round_queue[0]
 
     def _advance_turn(self):
-        self.turn_index = (self.turn_index + 1) % max(1, len(self.initiative_order))
+        if not self.round_queue:
+            return
+        try:
+            self.round_queue.pop(0)
+        except IndexError:
+            return
+        if not self.round_queue:
+            # nowa runda: reset opóźnień do bazowych inicjatyw
+            self.round_index += 1
+            self.temp_initiative.clear()
+            self.delayed.clear()
+            self.round_queue = list(self.base_order)
+        self.initiative_order = list(self.round_queue)
         actor = self._current_actor()
         if actor is not None:
             self.actions_used[actor] = 0
             logger.debug("Nowa tura dla %s – reset licznika akcji.", actor)
+        self._send_initiative_event()
 
     # --- Combat flow ---
     def _end_combat_if_no_enemies(self) -> Optional[State]:
@@ -151,28 +186,102 @@ class Combat(State):
         logger.info("Brak wrogów na planszy – koniec walki.")
         return HeroesTurn(self.game)
 
+    def _actor_id(self, actor: Any) -> str:
+        return getattr(actor, "object_id", None) or getattr(actor, "name", None) or str(id(actor))
+
+    def _effective_initiative(self, actor: Any) -> int:
+        if actor in self.temp_initiative:
+            return self.temp_initiative[actor]
+        if actor in self.base_initiative:
+            return self.base_initiative[actor]
+        return getattr(actor, "initiative", -1)
+
+    def _effective_initiative_sort_key(self, actor: Any) -> int:
+        return self._effective_initiative(actor)
+
+    def _send_initiative_event(self) -> None:
+        """Wyślij kolejkę inicjatywy do UI."""
+        if not getattr(self.game, "ui", None):
+            return
+        order_payload: list[dict[str, Any]] = []
+        done_set = set(self.base_order) - set(self.round_queue)
+        # kolejność: najpierw obecna kolejka rundy, potem już-ograne (w bazowej kolejności)
+        ordered_objs = list(self.round_queue) + [obj for obj in self.base_order if obj not in self.round_queue]
+        for obj in ordered_objs:
+            base = self.base_initiative.get(obj, getattr(obj, "initiative", -1))
+            eff = self._effective_initiative(obj)
+            delta = eff - base
+            order_payload.append(
+                {
+                    "id": self._actor_id(obj),
+                    "name": getattr(obj, "name", None) or getattr(obj, "object_id", "actor"),
+                    "kind": "hero" if obj in self.game.heroes else "enemy",
+                    "base": base,
+                    "current": eff,
+                    "delta": delta,
+                    "done": obj in done_set,
+                }
+            )
+        active = self._current_actor()
+        self.game.ui_event(
+            "initiative",
+            {
+                "round": self.round_index,
+                "order": order_payload,
+                "active_id": self._actor_id(active) if active else None,
+            },
+        )
+
+    def _confirm_actor_position(self, actor) -> bool:
+        return True
+
     def _handle_hero_decline(self, hero) -> State:
+        if not self._confirm_actor_position(hero):
+            logger.info("Nie potwierdzono pozycji bohatera – przerwano wybór END/DELAY.")
+            return self
         used = self.actions_used.get(hero, 0)
         remaining = self.ACTION_LIMIT - used
         if remaining <= 0:
-            prompt = "Limit akcji wyczerpany. END – koniec tury, DELAY – koniec kolejki"
+            prompt = "Limit akcji wyczerpany. END – koniec tury, DELAY – opóźnij (z obniżką inicjatywy)"
         else:
-            prompt = f"Masz {remaining} niewykorzystanych akcji. END – koniec tury, DELAY – koniec kolejki"
-        decision = self.game.conn.read_card(prompt, ["1", "2", "END", "DELAY"]).strip().upper()
-        if decision in ("2", "DELAY"):
+            prompt = f"Masz {remaining} niewykorzystanych akcji. END – koniec tury, DELAY – opóźnij (z obniżką inicjatywy)"
+        decision = self.game.conn.read_card(prompt, ["END", "DELAY", "6", "7"]).strip().lower()
+        if decision in ("2", "delay", "6"):
             if hero in self.delayed:
                 logger.info("Już opóźniałeś turę w tej rundzie.")
                 self.game.ui_log("Już opóźniałeś turę w tej rundzie.")
-            else:
-                current = self.initiative_order.pop(self.turn_index)
-                self.initiative_order.append(current)
-                self.delayed.add(hero)
-                logger.info("Bohater opóźnia ruch – trafia na koniec kolejki.")
-                self.game.ui_log("Bohater opóźnia ruch – trafia na koniec kolejki.")
+                return self
+
+            delta = prompt_for_roll("O ile obniżasz inicjatywę w tej rundzie? (liczba) ")
+            try:
+                delta = max(0, int(delta))
+            except Exception:
+                delta = 0
+            base_init = self.base_initiative.get(hero, getattr(hero, "initiative", 0))
+            new_init = max(0, base_init - delta)
+            self.temp_initiative[hero] = new_init
+            self.delayed.add(hero)
+
+            # w bieżącej kolejce usuń aktora z przodu (jeśli tam był) i wstaw wg nowej inicjatywy malejąco
+            if self.round_queue and self.round_queue[0] is hero:
+                self.round_queue.pop(0)
+            inserted = False
+            for idx, obj in enumerate(self.round_queue):
+                if self._effective_initiative(obj) < new_init:
+                    self.round_queue.insert(idx, hero)
+                    inserted = True
+                    break
+            if not inserted:
+                self.round_queue.append(hero)
+
+            logger.info("Bohater opóźnia turę – inicjatywa %s -> %s.", base_init, new_init)
+            self.game.ui_log(f"Bohater opóźnia turę – inicjatywa {base_init} -> {new_init}.")
             self.actions_used[hero] = 0
+            self._send_initiative_event()
             return self
 
         logger.info("Bohater kończy turę.")
+        self.game.ui_log("Bohater kończy turę.")
         self._advance_turn()
         return self
 
@@ -227,13 +336,33 @@ class Combat(State):
             self._advance_turn()
             return self
 
-        logger.info("Dostępne akcje: %s (DECLINE aby zakończyć turę).", ", ".join(sorted(available)))
-        self.game.ui_log(f"Dostępne akcje: {', '.join(sorted(available))} (DECLINE aby zakończyć turę).")
-        choice = self.game.conn.read_card(
-            "Wpisz nazwę akcji lub DECLINE by zakończyć turę: ",
-            list(available.keys()) + ["DECLINE"],
+        # podświetl aktywnego bohatera, żeby było jasne kto działa
+        highlighted = False
+        try:
+            pos = getattr(actor, "position", None)
+            if pos is not None:
+                self.game.conn.set_leds([pos], consts.HERO_HIGHLIGHT_RGB)
+                highlighted = True
+        except Exception:
+            pass
+
+        logger.info("Dostępne akcje: %s (END=7 / DELAY=6).", ", ".join(sorted(available)))
+        self.game.ui_log(f"Dostępne akcje: {', '.join(sorted(available))} (END=7 / DELAY=6).")
+        raw_choice = self.game.conn.read_card(
+            "Wpisz nazwę akcji lub 7=END / 6=DELAY: ",
+            list(available.keys()) + ["END", "DELAY", "6", "7"],
         ).strip()
-        if choice.upper() == "DECLINE":
+        if highlighted:
+            try:
+                self.game.conn.leds_off()
+            except Exception:
+                pass
+        choice = raw_choice.lower()
+        if choice in ("end", "7"):
+            self.game.ui_log("Bohater kończy turę (END).")
+            self._advance_turn()
+            return self
+        if choice in ("delay", "6"):
             return self._handle_hero_decline(actor)
 
         try:
@@ -242,7 +371,7 @@ class Combat(State):
             logger.error("%s", exc)
             return self
 
-        ctx = ActionContext(game=self.game, heroes_turn=self)
+        ctx = ActionContext(game=self.game, heroes_turn=self, actor=actor)
         action.execute(ctx)
         self.actions_used[actor] = self.actions_used.get(actor, 0) + 1
         if self.actions_used[actor] >= self.ACTION_LIMIT:

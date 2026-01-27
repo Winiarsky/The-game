@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import NamedTuple, TYPE_CHECKING
+from typing import NamedTuple, TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from src.game import Game
@@ -9,6 +9,7 @@ if TYPE_CHECKING:
 class ActionContext(NamedTuple):
     game: "Game"
     heroes_turn: "State"
+    actor: Optional[object] = None
 
 
 class BaseAction(ABC):
