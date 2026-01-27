@@ -3,6 +3,9 @@ from __future__ import annotations
 import itertools
 import json
 import time
+import os
+import threading
+import webbrowser
 from queue import Empty, Queue
 from threading import Lock
 from typing import Any
@@ -177,4 +180,20 @@ def set_prompt_response(prompt_id: str):
 
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5100, debug=True, threaded=True)
+    host = os.environ.get("PLAYER_UI_HOST", "127.0.0.1")
+    port = int(os.environ.get("PLAYER_UI_PORT", "5100"))
+    debug_flag = str(os.environ.get("FLASK_DEBUG", "1")).lower() not in ("0", "false", "no")
+
+    # Opcjonalne auto-otwarcie przeglądarki – wyłącz przez PLAYER_UI_NO_BROWSER=1.
+    def _open_browser() -> None:
+        try:
+            webbrowser.open(f"http://{host}:{port}/")
+        except Exception:
+            pass
+
+    if os.environ.get("PLAYER_UI_NO_BROWSER") not in ("1", "true", "yes"):
+        # W debug mode reloader odpala kod 2x; otwieramy tylko w głównym procesie.
+        if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not app.debug:
+            threading.Timer(0.8, _open_browser).start()
+
+    app.run(host=host, port=port, debug=debug_flag, threaded=True)

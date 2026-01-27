@@ -11,7 +11,7 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from ui_client import get_ui_client
+from src.ui_client import get_ui_client
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

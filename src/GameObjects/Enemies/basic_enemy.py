@@ -6,14 +6,14 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from GameObjects.base import GameObjectMeta
-from interactions.common import StatusMixin
+from interactions.common import StatusMixin, WatchfulMixin
 from object_registry import assign_id
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
-class Enemy(StatusMixin):
+class Enemy(StatusMixin, WatchfulMixin):
     """Prosty przeciwnik do walki turowej."""
 
     name: str = "Enemy"
@@ -24,6 +24,9 @@ class Enemy(StatusMixin):
     attack_bonus: int = 0
     strength: int = 0
     behavior_id: str | None = "basic_melee"
+    watch_disturbed: int = 0  # 0 blokuje wejście w stealth w pokoju
+    watch_disabled: bool = False
+    perception_bonus: int = 4
     initiative: Optional[int] = None
     position: Optional[tuple[int, int]] = None
     statuses: list[str] = field(default_factory=list)
@@ -46,6 +49,18 @@ class Enemy(StatusMixin):
 
     def set_position(self, position: Optional[tuple[int, int]]) -> None:
         self.position = position
+
+    def on_spot(self, hero, game) -> Optional[str]:
+        """Po wykryciu bohatera przeciwnik wywołuje walkę."""
+        try:
+            state = getattr(game, "state", None)
+            in_combat = getattr(state, "__class__", None).__name__ == "Combat"
+            if not in_combat:
+                self.trigger_combat(game)
+            return f"{self.name} zauważa bohatera i szykuje się do walki."
+        except Exception as exc:
+            logger.error("Nie udało się uruchomić walki po wykryciu: %s", exc)
+            return f"{self.name} dostrzega ruch, ale coś poszło nie tak."
 
     def roll_initiative(self) -> int:
         """Losowy rzut inicjatywy dla wrogów."""
@@ -86,5 +101,8 @@ META = GameObjectMeta(
         "attack_bonus": 5,
         "strength": 2,
         "behavior_id": "basic_melee",
+        "watch_disturbed": 0,
+        "watch_disabled": False,
+        "perception_bonus": 4,
     },
 )

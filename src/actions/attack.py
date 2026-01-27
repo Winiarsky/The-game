@@ -29,22 +29,13 @@ def _choose_hero(ctx: ActionContext) -> tuple[Optional[Hero], Optional[tuple[int
     return hero, pos
 
 
-def _choose_enemy(ctx: ActionContext, hero_pos: tuple[int, int] | None) -> tuple[Optional[Enemy], Optional[tuple[int, int]]]:
-    board = ctx.game.board
-    hero_rooms = board.rooms_at(hero_pos) if hero_pos is not None else set()
-    enemy_positions: list[tuple[int, int]] = []
-    for enemy in ctx.game.enemies:
-        if enemy.position is None:
-            continue
-        if not hero_rooms:
-            enemy_positions.append(enemy.position)
-            continue
-        enemy_rooms = board.rooms_at(enemy.position)
-        if hero_rooms.intersection(enemy_rooms):
-            enemy_positions.append(enemy.position)
-
+def _choose_enemy(ctx: ActionContext) -> tuple[Optional[Enemy], Optional[tuple[int, int]]]:
+    """Podświetla wszystkich wrogów na planszy – gracz wybiera cel na własną odpowiedzialność (zasięg/linie)."""
+    enemy_positions: list[tuple[int, int]] = [
+        enemy.position for enemy in ctx.game.enemies if getattr(enemy, "position", None) is not None
+    ]
     if not enemy_positions:
-        logger.info("Brak wrogów w tych pokojach.")
+        logger.info("Brak wrogów na planszy.")
         return None, None
     ctx.game.conn.set_leds(enemy_positions, consts.INTERACT_FIELD_RGB)
     pos = ctx.game.conn.scan_board(enemy_positions)
@@ -99,7 +90,7 @@ class TestAttackAction(BaseAction):
         hero, hero_pos = _choose_hero(ctx)
         if hero is None:
             return
-        enemy, enemy_pos = _choose_enemy(ctx, hero_pos)
+        enemy, enemy_pos = _choose_enemy(ctx)
         if enemy is None or enemy_pos is None:
             return
         roll = prompt_for_roll(f"Podaj wynik testu ataku przeciwko {getattr(enemy, 'name', 'przeciwnik')} (AC {getattr(enemy, 'ac', '?')}): ")

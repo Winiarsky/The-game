@@ -214,13 +214,8 @@ class StealthAction(BaseAction):
                 logger.info("Wchodzisz w ukrycie (DC wykrycia %s).", result)
         else:
             logger.info("Już jesteś w ukryciu – przejdź w trybie stealth.")
-            for watcher, _pos in watchers:
-                attempt = getattr(watcher, "attempt_spot", None)
-                if not callable(attempt):
-                    continue
-                _spotted, msg = attempt(hero, ctx.game)
-                if msg:
-                    logger.info(msg)
+            if self._attempt_spot_here(ctx, hero, hero_pos):
+                return
 
         self._stealth_move(ctx, hero, hero_pos)
 
@@ -236,3 +231,19 @@ class StealthAction(BaseAction):
             allow_occupied=True,
             on_enter=default_on_enter,
         )
+
+    def _attempt_spot_here(self, ctx: ActionContext, hero, position: Tuple[int, int]) -> bool:
+        """Wywołaj próby wykrycia w obecnych pokojach; True jeśli ktoś zauważył."""
+        spotted_any = False
+        rooms = ctx.game.board.rooms_at(position)
+        watchers_here = iter_watchers_in_rooms(ctx.game.board, rooms, ignore_obj=hero)
+        for watcher, _pos in watchers_here:
+            attempt = getattr(watcher, "attempt_spot", None)
+            if not callable(attempt):
+                continue
+            spotted, msg = attempt(hero, ctx.game)
+            if msg:
+                logger.info(msg)
+                ctx.game.ui_log(msg)
+            spotted_any = spotted_any or spotted
+        return spotted_any

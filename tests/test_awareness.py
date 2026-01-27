@@ -12,6 +12,7 @@ from interactable import Interactable  # noqa: E402
 from interactions.common import StatusMixin, WatchfulMixin  # noqa: E402
 from actions.stealth import StealthAction  # noqa: E402
 from hero import Hero  # noqa: E402
+from GameObjects.Enemies.basic_enemy import Enemy  # noqa: E402
 
 
 class DummyWatchful(WatchfulMixin, Interactable):
@@ -105,3 +106,34 @@ def test_stealth_reactivation_triggers_watchers_once(monkeypatch):
     sa.execute(types.SimpleNamespace(game=game))
 
     assert guard.spot_calls == 1
+
+
+def test_enemy_watchful_spots_hero_and_triggers_combat(monkeypatch):
+    board = BoardGrid(1, 1)
+    board.apply_rooms([{"id": "room", "positions": [(0, 0)]}])
+
+    enemy = Enemy(position=(0, 0), watch_disturbed=0, watch_disabled=False, perception_bonus=10)
+    board.place(enemy, (0, 0))
+
+    hero = Hero(position=(0, 0))
+    hero.add_status("stealth")
+    hero.stealth_detection_dc = 5
+
+    class DummyGame:
+        def __init__(self):
+            self.board = board
+            self.start_combat_calls = 0
+
+        def start_combat(self, trigger=None):
+            self.start_combat_calls += 1
+
+    game = DummyGame()
+    monkeypatch.setattr("interactions.common.random.randint", lambda *_args, **_kwargs: 20)
+
+    spotted, msg = enemy.attempt_spot(hero, game)
+
+    assert spotted
+    assert "zauważa" in msg
+    assert game.start_combat_calls == 1
+    assert hero.has_status("observable")
+    assert not hero.has_status("stealth")

@@ -180,3 +180,9 @@ def get_ui_client() -> UIClient:
     if _default_client is None:
         _default_client = UIClient()
     return _default_client
+
+
+def set_default_ui_client(client: UIClient) -> None:
+    """Ustaw domyślnego klienta UI (np. gdy uruchamiasz UI z kodu)."""
+    global _default_client
+    _default_client = client
