@@ -97,6 +97,7 @@ def basic_melee(enemy, game, combat_state, actions_left: int = 1) -> int:
 
     Zwraca liczbę zużytych akcji w tej turze (dla wrógów)."""
     board = game.board
+    logger.info("[AI] Start tury wroga %s, pozycja %s, akcje_do_wykorzystania=%s", enemy.name, enemy.position, actions_left)
     if enemy.position is None:
         logger.info("%s nie jest na planszy – pomijam turę.", enemy.name)
         return 0
@@ -105,9 +106,11 @@ def basic_melee(enemy, game, combat_state, actions_left: int = 1) -> int:
     attack_cost = 1
     while actions_used < actions_left:
         remaining = actions_left - actions_used
+        logger.debug("[AI] Pętla akcji wroga: użyte=%s, pozostalo=%s", actions_used, remaining)
         # próbuj zaatakować, jeśli w zasięgu i masz akcję
         adj = _heroes_in_range(game, enemy.position)
         if adj and remaining >= attack_cost:
+            logger.info("[AI] Wróg %s ma cel w zasięgu (%s) – próba ataku.", enemy.name, adj)
             _attack_hero(enemy, game, adj)
             actions_used += attack_cost
             continue
@@ -126,6 +129,7 @@ def basic_melee(enemy, game, combat_state, actions_left: int = 1) -> int:
                 break
 
             # szukaj najbliższego pola wokół bohatera, na które można wejść
+            logger.info("[AI] Wróg %s szuka ruchu w stronę bohatera na %s (budżet ruchu %s).", enemy.name, nearest_pos, move_budget)
             neighbor_targets = [
                 cand
                 for cand in board.get_neighbors(nearest_pos, include_position=False, diagonal=True)
@@ -146,7 +150,7 @@ def basic_melee(enemy, game, combat_state, actions_left: int = 1) -> int:
                     reachable_paths.append((path, cand))
 
             if not reachable_paths:
-                logger.info("%s nie ma ścieżki do celu – kończy turę.", enemy.name)
+                logger.info("[AI] %s nie ma ścieżki do żadnego sąsiedniego pola celu – kończy turę.", enemy.name)
                 actions_used = actions_left
                 break
 
@@ -163,6 +167,7 @@ def basic_melee(enemy, game, combat_state, actions_left: int = 1) -> int:
             # ogranicz do budżetu ruchu
             truncated = full_path[: move_budget + 1]
             dest = truncated[-1]
+            logger.info("[AI] Najkrótsza ścieżka do %s: %s kroków (przycięta do %s). Cel skanu: %s", goal, len(full_path) - 1, len(truncated) - 1, dest)
             path_id = f"enemy-path-{time.time_ns()}"
             game.ui_event("path_preview", {"id": path_id, "steps": len(truncated) - 1, "target": dest})
 
@@ -186,7 +191,7 @@ def basic_melee(enemy, game, combat_state, actions_left: int = 1) -> int:
                 else:
                     game.conn.leds_off()
             if confirm != dest:
-                logger.info("Zeskanowano inne pole – akcja ruchu anulowana.")
+                logger.info("[AI] Zeskanowano inne pole (%s) zamiast %s – akcja ruchu anulowana.", confirm, dest)
                 actions_used += 1
                 continue
 

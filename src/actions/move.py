@@ -221,10 +221,8 @@ class MoveAction(BaseAction):
                     ctx.game.ui_log(msg)
                     logger.info(msg)
                     if stop_pos:
+                        # podświetl zatrzymanie informacyjnie, ale nie blokuj akcji na skan
                         ctx.game.conn.set_leds([stop_pos], consts.MOVE_FIELD_RGB)
-                        # czekaj na kliknięcie pola, na którym zatrzymaliśmy się, aby domknąć akcję
-                        ctx.game.conn.scan_board([stop_pos])
-                        ctx.game.conn.leds_off()
                     return
             finally:
                 ctx.game.conn.leds_off()
