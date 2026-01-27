@@ -60,5 +60,9 @@ def trigger_watchers(game, hero, hero_pos: tuple[int, int]) -> None:
         if not callable(attempt):
             continue
         spotted, msg = attempt(hero, game)
-        if msg:
+        if msg and not hasattr(watcher, "_log_watch_event"):
+            # WatchfulMixin już loguje + wysyła do UI; dla innych wspomagamy tutaj.
             logger.info(msg)
+            ui_log = getattr(game, "ui_log", None)
+            if callable(ui_log):
+                ui_log(msg)

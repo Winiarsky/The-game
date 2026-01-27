@@ -299,6 +299,19 @@ class WatchfulMixin:
     watch_disabled: bool = False
     perception_bonus: int = 0
 
+    def _log_watch_event(self, message: str, game) -> None:
+        """Wyślij komunikat do logów oraz (jeśli to możliwe) do UI."""
+        if not message:
+            return
+        logger.info(message)
+        ui_log = getattr(game, "ui_log", None)
+        if callable(ui_log):
+            try:
+                ui_log(message)
+            except Exception:
+                # UI jest opcjonalne; gdy nie działa, nie blokujemy gry.
+                logger.debug("Nie udało się wysłać komunikatu do UI.", exc_info=True)
+
     def __init__(
         self,
         *,
@@ -335,8 +348,11 @@ class WatchfulMixin:
                     spotted_msg = f"{spotted_msg} {extra}"
             except Exception:
                 pass
+            self._log_watch_event(spotted_msg, game)
             return True, spotted_msg
-        return False, f"Nie dostrzegasz bohatera (r={roll} vs DC {dc})."
+        miss_msg = f"Nie dostrzegasz bohatera (r={roll} vs DC {dc})."
+        self._log_watch_event(miss_msg, game)
+        return False, miss_msg
 
     def on_spot(self, hero, game) -> Optional[str]:
         """Hook wywoływany przy sukcesie wykrycia."""

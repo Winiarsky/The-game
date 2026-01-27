@@ -3,10 +3,8 @@ from __future__ import annotations
 import logging
 import random
 import time
-from types import SimpleNamespace
-
 from board import consts
-from actions.move_utils import find_path, follow_path, default_on_enter
+from actions.move_utils import find_path
 
 logger = logging.getLogger(__name__)
 
@@ -40,9 +38,10 @@ def _nearest_hero(game, enemy_pos: tuple[int, int]) -> tuple[tuple[int, int] | N
 
 def _attack_hero(enemy, game, targets: list[tuple[int, int]]) -> None:
     """Prosty atak wręcz na wskazanego bohatera."""
-    conn = game.conn
     board = game.board
-    conn.set_leds(targets, consts.ENEMY_MOVE_RGB)
+    conn = game.conn
+
+    conn.set_leds(targets, consts.MOVE_FIELD_RGB)  # zielone: cel ataku
     try:
         target_pos = conn.scan_board(targets)
     finally:
@@ -56,6 +55,7 @@ def _attack_hero(enemy, game, targets: list[tuple[int, int]]) -> None:
     attack_bonus = getattr(enemy, "attack_bonus", 0)
     target_bonus = getattr(hero, "enemy_attack_bonus", 0)
     roll = random.randint(1, 20) + attack_bonus + target_bonus
+
     prompt = (
         f"{getattr(enemy, 'name', 'wróg')} atakuje bohatera na {target_pos}: "
         f"r={roll} (1d20 + {attack_bonus} + bonus celu {target_bonus}). "
@@ -71,13 +71,12 @@ def _attack_hero(enemy, game, targets: list[tuple[int, int]]) -> None:
         hero.wounds += damage  # type: ignore[attr-defined]
     except Exception:
         pass
-    logger.info(
-        "%s zadaje %s obrażeń (1d6 + %s). Rany bohatera: %s.",
-        getattr(enemy, "name", "wróg"),
-        damage,
-        getattr(enemy, "strength", 0),
-        getattr(hero, "wounds", '?'),
+    dmg_msg = (
+        f"{getattr(enemy, 'name', 'wróg')} zadaje {damage} obrażeń (1d6 + {getattr(enemy, 'strength', 0)}). "
+        f"Rany bohatera: {getattr(hero, 'wounds', '?')}."
     )
+    logger.info(dmg_msg)
+    game.ui_log(dmg_msg)
 
 
 def basic_melee(enemy, game, combat_state, actions_left: int = 1) -> int:
@@ -107,11 +106,6 @@ def basic_melee(enemy, game, combat_state, actions_left: int = 1) -> int:
         move_used = False
         path_id = None
         try:
-            if _heroes_in_range(game, enemy.position):
-                logger.info("%s stoi obok bohatera – pomijam ruch.", enemy.name)
-                actions_used += 1
-                continue
-
             nearest_pos, _dist = _nearest_hero(game, enemy.position)
             if nearest_pos is None:
                 logger.info("%s nie widzi celu, kończy turę.", enemy.name)
@@ -139,6 +133,13 @@ def basic_melee(enemy, game, combat_state, actions_left: int = 1) -> int:
                 actions_used = actions_left
                 break
 
+            # Podświetl wroga (czerwony) i cel (zielony); bez potwierdzenia kliknięciem celu.
+            try:
+                game.conn.set_leds([enemy.position], consts.ENEMY_MOVE_RGB)
+                game.conn.set_leds([nearest_pos], consts.MOVE_FIELD_RGB)
+            except Exception:
+                pass
+
             # wybierz najkrótszą ścieżkę
             reachable_paths.sort(key=lambda p: len(p[0]))
             full_path, goal = reachable_paths[0]
@@ -147,6 +148,7 @@ def basic_melee(enemy, game, combat_state, actions_left: int = 1) -> int:
             dest = truncated[-1]
             path_id = f"enemy-path-{time.time_ns()}"
             game.ui_event("path_preview", {"id": path_id, "steps": len(truncated) - 1, "target": dest})
+
             game.conn.set_leds(truncated[1:], consts.ENEMY_MOVE_RGB)
             logger.info(
                 "%s (budżet ruchu %s) – ścieżka do %s (%s pól). Przenieś figurkę na cel i zeskanuj.",
@@ -158,25 +160,24 @@ def basic_melee(enemy, game, combat_state, actions_left: int = 1) -> int:
             try:
                 confirm = game.conn.scan_board([dest])
             finally:
-                game.conn.leds_off()
+                # zostaw widoczny cel (zielony) jeśli to inne pole
+                if nearest_pos != dest:
+                    try:
+                        game.conn.set_leds([nearest_pos], consts.MOVE_FIELD_RGB)
+                    except Exception:
+                        pass
+                else:
+                    game.conn.leds_off()
             if confirm != dest:
                 logger.info("Zeskanowano inne pole – akcja ruchu anulowana.")
                 actions_used += 1
                 continue
 
-            ctx = SimpleNamespace(game=game)
-            completed, stop_pos, reason = follow_path(
-                ctx,
-                enemy,
-                truncated,
-                led_color=consts.ENEMY_MOVE_RGB,
-                on_enter=default_on_enter,
-                allow_occupied=False,
-                step_delay=0.08,
-            )
-            move_used = True
-            if not completed:
-                logger.info("Ruch przeciwnika zatrzymany na %s (powód: %s).", stop_pos, reason)
+            try:
+                board.move(enemy.position, dest)
+                move_used = True
+            except ValueError as exc:
+                logger.error("Nie można przesunąć przeciwnika na %s: %s", dest, exc)
         finally:
             if path_id:
                 game.ui_event("path_clear", {"id": path_id})

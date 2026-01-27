@@ -242,7 +242,8 @@ class StealthAction(BaseAction):
             if not callable(attempt):
                 continue
             spotted, msg = attempt(hero, ctx.game)
-            if msg:
+            if msg and not hasattr(watcher, "_log_watch_event"):
+                # WatchfulMixin loguje samodzielnie; inne implementacje wspieramy tutaj.
                 logger.info(msg)
                 ctx.game.ui_log(msg)
             spotted_any = spotted_any or spotted

@@ -61,6 +61,7 @@ class UIClient:
     base_url: Optional[str] = None
     poll_interval: float = 0.75
     request_timeout: float = 5.0
+    max_wait: Optional[float] = None  # None = czekaj na UI bez limitu; można nadpisać env PLAYER_UI_MAX_WAIT
     enabled: bool = field(init=False)
 
     def __post_init__(self) -> None:
@@ -70,6 +71,16 @@ class UIClient:
         self.enabled = bool(self.base_url)
         if self.enabled and self.base_url and self.base_url.endswith("/"):
             self.base_url = self.base_url.rstrip("/")
+        env_wait = os.environ.get("PLAYER_UI_MAX_WAIT")
+        if env_wait is not None:
+            try:
+                value = float(env_wait)
+                if value < 0:
+                    self.max_wait = None
+                else:
+                    self.max_wait = value
+            except ValueError:
+                logger.warning("PLAYER_UI_MAX_WAIT musi być liczbą (sekundy); ignoruję wartość: %s", env_wait)
 
     # --- Public API ---
 
@@ -96,7 +107,7 @@ class UIClient:
         prompt_id = self._create_prompt(prompt, source=source)
         if prompt_id is None:
             return None
-        return self._wait_for_answer(prompt_id)
+        return self._wait_for_answer(prompt_id, max_wait=self.max_wait)
 
     def prompt_choice(
         self, prompt: str, choices: list[str] | None = None, source: str | None = None
@@ -107,7 +118,7 @@ class UIClient:
         prompt_id = self._create_prompt(prompt, kind="choice", source=source, choices=choices)
         if prompt_id is None:
             return None
-        return self._wait_for_text_answer(prompt_id)
+        return self._wait_for_text_answer(prompt_id, max_wait=self.max_wait)
 
     # --- Helpers ---
 
@@ -136,8 +147,9 @@ class UIClient:
             logger.warning("Nie udało się utworzyć promptu w UI: %s", exc)
             return None
 
-    def _wait_for_answer(self, prompt_id: str) -> Optional[int]:
+    def _wait_for_answer(self, prompt_id: str, *, max_wait: Optional[float] = None) -> Optional[int]:
         url = f"{self.base_url}/api/prompts/{prompt_id}"
+        start = time.time()
         while True:
             try:
                 resp = requests.get(url, timeout=self.request_timeout)
@@ -153,10 +165,14 @@ class UIClient:
             except Exception as exc:  # pragma: no cover - fallback na CLI
                 logger.warning("Błąd podczas oczekiwania na odpowiedź UI: %s", exc)
                 return None
+            if max_wait is not None and (time.time() - start) >= max_wait:
+                logger.warning("UI nie odpowiedziało na prompt %s w %ss – wracam do CLI.", prompt_id, max_wait)
+                return None
             time.sleep(self.poll_interval)
 
-    def _wait_for_text_answer(self, prompt_id: str) -> Optional[str]:
+    def _wait_for_text_answer(self, prompt_id: str, *, max_wait: Optional[float] = None) -> Optional[str]:
         url = f"{self.base_url}/api/prompts/{prompt_id}"
+        start = time.time()
         while True:
             try:
                 resp = requests.get(url, timeout=self.request_timeout)
@@ -167,6 +183,9 @@ class UIClient:
                     return str(answer) if answer is not None else None
             except Exception as exc:  # pragma: no cover
                 logger.warning("Błąd podczas oczekiwania na odpowiedź UI: %s", exc)
+                return None
+            if max_wait is not None and (time.time() - start) >= max_wait:
+                logger.warning("UI nie odpowiedziało na prompt %s w %ss – wracam do CLI.", prompt_id, max_wait)
                 return None
             time.sleep(self.poll_interval)
 
