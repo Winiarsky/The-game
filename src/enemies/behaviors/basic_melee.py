@@ -15,7 +15,7 @@ def _heroes_in_range(game, enemy_pos: tuple[int, int], include_diagonal: bool = 
     positions: list[tuple[int, int]] = []
     for pos in neighbors:
         occ = board.occupant_at(pos)
-        if occ in game.heroes:
+        if occ in game.heroes and _adjacent_reachable(board, enemy_pos, pos):
             positions.append(pos)
     return positions
 
@@ -34,6 +34,19 @@ def _nearest_hero(game, enemy_pos: tuple[int, int]) -> tuple[tuple[int, int] | N
             best_dist = dist
             best_pos = hero.position
     return best_pos, best_dist
+
+
+def _adjacent_reachable(board, a: tuple[int, int], b: tuple[int, int]) -> bool:
+    """Sprawdza, czy między sąsiadami nie ma ściany/blokera na krawędzi (ignoruje zajętość pól)."""
+    if not (board.in_bounds(a) and board.in_bounds(b)):
+        return False
+    if board.is_blocked(a, b):
+        return False
+    for edge_obj in board.edge_interactables_between(a, b):
+        blocks_passage = getattr(edge_obj, "blocks_passage", None)
+        if callable(blocks_passage) and blocks_passage(a, b):
+            return False
+    return True
 
 
 def _attack_hero(enemy, game, targets: list[tuple[int, int]]) -> None:
@@ -113,7 +126,11 @@ def basic_melee(enemy, game, combat_state, actions_left: int = 1) -> int:
                 break
 
             # szukaj najbliższego pola wokół bohatera, na które można wejść
-            neighbor_targets = board.get_neighbors(nearest_pos, include_position=False, diagonal=True)
+            neighbor_targets = [
+                cand
+                for cand in board.get_neighbors(nearest_pos, include_position=False, diagonal=True)
+                if _adjacent_reachable(board, cand, nearest_pos)
+            ]
             reachable_paths: list[tuple[list[tuple[int, int]], tuple[int, int]]] = []
             for cand in neighbor_targets:
                 if not board.can_enter(cand, allow_occupied=False):
