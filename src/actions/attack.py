@@ -46,34 +46,47 @@ def _choose_enemy(ctx: ActionContext) -> tuple[Optional[Enemy], Optional[tuple[i
 
 def _choose_damage_type(game) -> Optional[str]:
     options = ["sieczne", "obuchowe", "ogień", "lód", "brak obrażeń"]
+
+    def _normalize(raw: str) -> Optional[str]:
+        text = raw.strip().lower()
+        if not text:
+            return None
+        # obsługa formatu "1: sieczne" / "1 sieczne"
+        if ":" in text:
+            parts = text.split(":", 1)
+            left, right = parts[0].strip(), parts[1].strip()
+            if left.isdigit():
+                idx = int(left) - 1
+                if 0 <= idx < len(options):
+                    picked = options[idx]
+                    return None if picked == "brak obrażeń" else picked
+            text = right
+        if text.isdigit():
+            idx = int(text) - 1
+            if 0 <= idx < len(options):
+                picked = options[idx]
+                return None if picked == "brak obrażeń" else picked
+        for opt in options:
+            if opt.lower() == text:
+                return None if opt == "brak obrażeń" else opt
+        return None
+
     ui = getattr(game, "ui", None)
     if ui and ui.enabled:
         choice = ui.prompt_choice("Wybierz typ obrażeń:", choices=[f"{i+1}: {opt}" for i, opt in enumerate(options)], source="attack")
         if choice:
-            normalized = choice.strip().lower()
-            if normalized.isdigit():
-                idx = int(normalized) - 1
-                if 0 <= idx < len(options):
-                    picked = options[idx]
-                    return None if picked == "brak obrażeń" else picked
-            for opt in options:
-                if opt.lower() == normalized:
-                    return None if opt == "brak obrażeń" else opt
+            parsed = _normalize(choice)
+            if parsed is not None:
+                return parsed
     # fallback do konsoli
     print("Typy obrażeń:")
     for idx, name in enumerate(options, start=1):
         print(f"{idx}. {name}")
     while True:
         choice = input("Wybierz typ obrażeń (numer lub nazwa): ").strip().lower()
-        if not choice:
-            continue
-        if choice.isdigit():
-            idx = int(choice) - 1
-            if 0 <= idx < len(options):
-                return None if options[idx] == "brak obrażeń" else options[idx]
-        for opt in options:
-            if opt.lower() == choice:
-                return None if opt == "brak obrażeń" else opt
+        parsed = _normalize(choice)
+        if parsed is not None:
+            return parsed
         print("Nieprawidłowy wybór, spróbuj ponownie.")
 
 
