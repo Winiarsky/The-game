@@ -273,9 +273,15 @@ class Game:
         self.ui_event("log", {"message": message})
 
     def ui_hero(self, hero: Hero, note: str | None = None) -> None:
+        statuses = getattr(hero, "statuses", [])
+        if hasattr(hero, "status_labels"):
+            try:
+                statuses = hero.status_labels()  # type: ignore[attr-defined]
+            except Exception:
+                statuses = getattr(hero, "statuses", [])
         payload = {
             "name": getattr(hero, "name", None) or getattr(hero, "object_id", "Bohater"),
-            "statuses": getattr(hero, "statuses", []),
+            "statuses": statuses,
             "note": note,
             "pos": getattr(hero, "position", None),
             "wounds": getattr(hero, "wounds", None),

@@ -5,6 +5,8 @@ import random
 import logging
 from typing import Callable, Optional
 
+from statuses import HIDE_STATUS, HideStatus, Status
+
 from ui_client import get_ui_client
 
 logger = logging.getLogger(__name__)
@@ -67,38 +69,58 @@ def attitude_label(attitude: int) -> AttitudeLabel:
 
 @dataclass
 class StatusMixin:
-    """Prosty mixin do zarządzania statusami (unikalna lista str)."""
+    """Mixin do zarządzania statusami (unikalna lista Status, kompatybilna ze stringami)."""
 
-    statuses: list[str] = field(default_factory=list)
+    statuses: list[Status] = field(default_factory=list)
 
-    def has_status(self, status: str) -> bool:
-        return status in self.statuses
+    def _normalize(self, status: str | Status) -> Status:
+        return status if isinstance(status, Status) else Status(id=status)
 
-    def add_status(self, status: str) -> bool:
-        if status not in self.statuses:
-            self.statuses.append(status)
-            return True
+    def _ensure_status_objects(self) -> None:
+        if not self.statuses:
+            return
+        if all(isinstance(s, Status) for s in self.statuses):
+            return
+        self.statuses = [self._normalize(s) for s in self.statuses]
+
+    def has_status(self, status: str | Status) -> bool:
+        self._ensure_status_objects()
+        return any(s == status for s in self.statuses)
+
+    def add_status(self, status: str | Status) -> bool:
+        self._ensure_status_objects()
+        normalized = self._normalize(status)
+        if any(s == normalized for s in self.statuses):
+            return False
+        self.statuses.append(normalized)
+        return True
+
+    def remove_status(self, status: str | Status) -> bool:
+        self._ensure_status_objects()
+        for idx, item in enumerate(self.statuses):
+            if item == status:
+                del self.statuses[idx]
+                return True
         return False
 
-    def remove_status(self, status: str) -> bool:
-        try:
-            self.statuses.remove(status)
-            return True
-        except ValueError:
-            return False
-
-    def clear_statuses(self, *statuses: str) -> int:
+    def clear_statuses(self, *statuses: str | Status) -> int:
         """Usuń podane statusy, zwróć liczbę usuniętych wpisów."""
-        to_remove = set(statuses) if statuses else set(self.statuses)
+        self._ensure_status_objects()
+        to_remove = {self._normalize(s).id for s in statuses} if statuses else {s.id for s in self.statuses}
+        new_statuses: list[Status] = []
         removed = 0
-        remaining: list[str] = []
         for status in self.statuses:
-            if status in to_remove:
+            if status.id in to_remove:
                 removed += 1
                 continue
-            remaining.append(status)
-        self.statuses = remaining
+            new_statuses.append(status)
+        self.statuses = new_statuses
         return removed
+
+    def status_labels(self) -> list[str]:
+        """Zwraca listę etykiet (label -> id) do logów/UI."""
+        self._ensure_status_objects()
+        return [s.display_label for s in self.statuses]
 
 
 @dataclass
@@ -367,17 +389,18 @@ class WatchfulMixin:
 class HideInMixin:
     """Mixin dający możliwość ukrycia pasażera w obiekcie."""
 
-    hide_status: str = "hide"
+    hide_status: str | Status = HIDE_STATUS
     hide_stealth_bonus: int = 2
 
     def __init__(
         self,
         *,
-        hide_status: str = "hide",
+        hide_status: str | Status = HIDE_STATUS,
         hide_stealth_bonus: int = 2,
         **_kwargs,
     ) -> None:
-        self.hide_status = hide_status
+        # pozwól podać string lub Status; w razie potrzeby utwórz nowy obiekt HideStatus
+        self.hide_status = hide_status if hide_status is not None else HideStatus()
         self.hide_stealth_bonus = hide_stealth_bonus
         # obiekty mogą mieć atrybut someone_inside; jeśli brak, ustawiany przy pierwszym użyciu
 

@@ -7,6 +7,7 @@ from typing import Optional
 
 from GameObjects.base import GameObjectMeta
 from interactions.common import StatusMixin, WatchfulMixin
+from statuses import Status
 from object_registry import assign_id
 
 logger = logging.getLogger(__name__)
@@ -29,7 +30,7 @@ class Enemy(StatusMixin, WatchfulMixin):
     perception_bonus: int = 4
     initiative: Optional[int] = None
     position: Optional[tuple[int, int]] = None
-    statuses: list[str] = field(default_factory=list)
+    statuses: list[Status] = field(default_factory=list)
     blocks_movement: bool = True
     object_id: str = field(init=False)
 

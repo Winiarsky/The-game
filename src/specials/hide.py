@@ -2,6 +2,7 @@ import logging
 
 from interactions.common import StatusMixin
 from specials.registry import register_special
+from statuses import HideStatus
 
 logger = logging.getLogger(__name__)
 
@@ -14,18 +15,21 @@ logger = logging.getLogger(__name__)
 )
 def hide_ability(hero, ctx) -> bool:
     """Nadaj status 'hide' aktywnemu bohaterowi."""
-    statuses = getattr(hero, "statuses", None)
-    if isinstance(statuses, list):
-        if "hide" not in statuses:
-            statuses.append("hide")
-    elif isinstance(hero, StatusMixin):
-        hero.add_status("hide")  # type: ignore[attr-defined]
-    else:
-        try:
-            hero.statuses = ["hide"]  # type: ignore[attr-defined]
-        except Exception:
-            logger.warning("Nie mogę ustawić statusu hide na %s", hero)
-            return False
+    try:
+        if hasattr(hero, "add_status"):
+            added = hero.add_status(HideStatus())  # type: ignore[attr-defined]
+            if not added:
+                logger.info("Bohater już ma status hide.")
+        else:
+            statuses = getattr(hero, "statuses", None)
+            if isinstance(statuses, list):
+                if "hide" not in statuses:
+                    statuses.append(HideStatus())
+            else:
+                hero.statuses = [HideStatus()]  # type: ignore[attr-defined]
+    except Exception:
+        logger.warning("Nie mogę ustawić statusu hide na %s", hero)
+        return False
 
     logger.info("Zdolność: %s otrzymuje status hide.", getattr(hero, "name", "Bohater"))
     try:
