@@ -87,6 +87,20 @@ function handleEvent(event) {
         addLogEntry(`Nowy rzut: ${payload.prompt}`, meta, "info", "Rzut");
         return;
     }
+    if (type === "special_preview") {
+        const title = payload.name || payload.slug || "Zdolność specjalna";
+        actionTitle.textContent = title;
+        actionText.textContent = payload.desc || "";
+        if (payload.image) {
+            actionIllustration.style.backgroundImage = `url(${payload.image})`;
+            actionIllustration.style.backgroundSize = "cover";
+            actionIllustration.style.backgroundPosition = "center";
+        } else {
+            actionIllustration.style.backgroundImage = "";
+        }
+        addLogEntry(`Zdolność: ${title}`, meta, "info", "Special");
+        return;
+    }
     if (type === "info") {
         renderPrompt({
             id: `info-${Date.now()}`,
@@ -446,16 +460,20 @@ function statusTone(name = "") {
 function normalizeChoices(prompt) {
     const rawChoices = Array.isArray(prompt.choices) ? prompt.choices : [];
     const cardMap = {
-        ACCEPT: "+",
-        DECLINE: "-",
+        accept: "+",
+        decline: "-",
         move: "1",
         interact: "2",
         seek: "3",
         stealth: "4",
         test_attack: "5",
+        special: "6",
+        delay: "7",
+        end: "8",
     };
     return rawChoices.map((raw) => {
         const norm = String(raw).trim();
+        const lowerNorm = norm.toLowerCase();
         let key = "";
         let head = norm;
         // prefiks przed ":" traktuj jako key (np. "1: Otwórz")
@@ -469,7 +487,11 @@ function normalizeChoices(prompt) {
         const parts = head.split("—");
         const title = parts[0].trim();
         const desc = parts.slice(1).join("—").trim();
-        const mapped = cardMap[title] || cardMap[norm] || key;
+        const mapped =
+            cardMap[title.toLowerCase()] ||
+            cardMap[lowerNorm] ||
+            (key ? cardMap[key.toLowerCase()] : undefined) ||
+            key;
         const label = mapped ? `${mapped} · ${title}` : title;
         const effectiveKey = mapped || key || (title.length === 1 ? title : "");
         return { raw: norm, label, desc, key: effectiveKey };

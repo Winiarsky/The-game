@@ -10,6 +10,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from actions.base import ActionContext
 from actions.actions_registy import get_action, list_actions
+import actions  # noqa: F401  # rejestracja dostępnych akcji
 from .base import State
 
 

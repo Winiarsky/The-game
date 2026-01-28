@@ -12,6 +12,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from actions.actions_registy import get_action, list_actions
 from actions.base import ActionContext
+import actions  # noqa: F401  # rejestracja akcji przy starcie stanu walki
 from board import consts
 from enemies import basic_melee
 from .base import State
@@ -242,11 +243,11 @@ class Combat(State):
         used = self.actions_used.get(hero, 0)
         remaining = self.ACTION_LIMIT - used
         if remaining <= 0:
-            prompt = "Limit akcji wyczerpany. END – koniec tury, DELAY – opóźnij (z obniżką inicjatywy)"
+            prompt = "Limit akcji wyczerpany. END – koniec tury (8), DELAY – opóźnij (7, obniża inicjatywę)"
         else:
-            prompt = f"Masz {remaining} niewykorzystanych akcji. END – koniec tury, DELAY – opóźnij (z obniżką inicjatywy)"
-        decision = self.game.conn.read_card(prompt, ["END", "DELAY", "6 END", "7 DELAY", "6", "7"]).strip().lower()
-        if decision in ("2", "delay", "6", "6 delay", "6 end", "6delay", "6end"):
+            prompt = f"Masz {remaining} niewykorzystanych akcji. END – koniec tury (8), DELAY – opóźnij (7, obniża inicjatywę)"
+        decision = self.game.conn.read_card(prompt, ["end", "delay"]).strip().lower()
+        if decision in ("delay", "7", "7 delay", "7 end", "7delay", "7end"):
             if hero in self.delayed:
                 logger.info("Już opóźniałeś turę w tej rundzie.")
                 self.game.ui_log("Już opóźniałeś turę w tej rundzie.")
@@ -346,11 +347,23 @@ class Combat(State):
         except Exception:
             pass
 
-        logger.info("Dostępne akcje: %s (6 END / 7 DELAY).", ", ".join(sorted(available)))
-        self.game.ui_log(f"Dostępne akcje: {', '.join(sorted(available))} (6 END / 7 DELAY).")
+        priority_order = ["move", "interact", "seek", "stealth", "test_attack", "special", "delay", "end"]
+        available_keys = set(available.keys())
+        ordered_choices: list[str] = []
+        seen: set[str] = set()
+        for name in priority_order:
+            if name in seen:
+                continue
+            if name in ("delay", "end") or name in available_keys:
+                ordered_choices.append(name)
+                seen.add(name)
+
+        log_actions = [name for name in ordered_choices if name not in ("delay", "end")]
+        logger.info("Dostępne akcje: %s (6 SPECIAL / 7 DELAY / 8 END).", ", ".join(log_actions))
+        self.game.ui_log(f"Dostępne akcje: {', '.join(log_actions)} (6 SPECIAL / 7 DELAY / 8 END).")
         raw_choice = self.game.conn.read_card(
-            "Wpisz nazwę akcji lub karta 6 END / 7 DELAY: ",
-            list(available.keys()) + ["END", "DELAY", "6 END", "7 DELAY", "6", "7"],
+            "Wpisz nazwę akcji lub karta 6 SPECIAL / 7 DELAY / 8 END: ",
+            ordered_choices,
         ).strip()
         if highlighted:
             try:
@@ -358,11 +371,11 @@ class Combat(State):
             except Exception:
                 pass
         choice = raw_choice.lower()
-        if choice in ("end", "7", "7 delay", "7 end", "7delay", "7end"):
+        if choice in ("end", "8", "8 end", "8end"):
             self.game.ui_log("Bohater kończy turę (END).")
             self._advance_turn()
             return self
-        if choice in ("delay", "6", "6 delay", "6 end", "6delay", "6end"):
+        if choice in ("delay", "7", "7 delay", "7 end", "7delay", "7end"):
             return self._handle_hero_decline(actor)
 
         try:
@@ -372,8 +385,10 @@ class Combat(State):
             return self
 
         ctx = ActionContext(game=self.game, heroes_turn=self, actor=actor)
-        action.execute(ctx)
-        self.actions_used[actor] = self.actions_used.get(actor, 0) + 1
-        if self.actions_used[actor] >= self.ACTION_LIMIT:
-            logger.info("Wykorzystano limit %s akcji. Użyj DECLINE aby zakończyć turę lub kontynuuj innymi efektami.", self.ACTION_LIMIT)
+        result = action.execute(ctx)
+        consumed = True if result is None else bool(result)
+        if consumed:
+            self.actions_used[actor] = self.actions_used.get(actor, 0) + 1
+            if self.actions_used[actor] >= self.ACTION_LIMIT:
+                logger.info("Wykorzystano limit %s akcji. Użyj DECLINE aby zakończyć turę lub kontynuuj innymi efektami.", self.ACTION_LIMIT)
         return self

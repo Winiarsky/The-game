@@ -40,13 +40,27 @@ class Connection:
                 logger.error(f"Error scanning board: {e}")
                 raise RuntimeError("Failed to scan board") from e
 
-    def set_leds(self, positions: list[tuple[int, int]], rgb_color: list[int]):
+    def set_leds(self, positions: list[tuple[int, int]], rgb_color):
+        """Ustaw diody; rgb_color może być listą [r,g,b] lub listą list (per pozycja)."""
         logger.info(positions)
-        leds_to_light = [(self.led_config[str(col)][str(row)], rgb_color) for col, row in positions]
+        if not positions:
+            return
+
+        per_position: list[list[int]] = []
+        if isinstance(rgb_color, list) and rgb_color and isinstance(rgb_color[0], list):
+            # lista kolorów – musi odpowiadać długości positions
+            if len(rgb_color) != len(positions):
+                raise ValueError("rgb_color length must match positions length when passing per-position colors.")
+            per_position = [list(map(int, color)) for color in rgb_color]
+        else:
+            per_position = [list(map(int, rgb_color)) for _ in positions]  # type: ignore[arg-type]
+
+        leds_to_light = []
+        for (col, row), color in zip(positions, per_position):
+            leds_to_light.append((self.led_config[str(col)][str(row)], color))
+
         logger.info(f"Setting LEDs: {leds_to_light}")
-        payload = {
-            "leds": [{"i": i+1, "rgb": rgb} for i, rgb in leds_to_light]
-        }
+        payload = {"leds": [{"i": idx + 1, "rgb": rgb} for idx, rgb in leds_to_light]}
         r = requests.post(f"{self.esp_ip}/set", json=payload)
         logger.info(f"Set LEDs response: {r.status_code}, {r.text}")
 
@@ -63,8 +77,9 @@ class Connection:
             "3": "seek",
             "4": "stealth",
             "5": "test_attack",
-            "6": "delay",
-            "7": "end",
+            "6": "special",
+            "7": "delay",
+            "8": "end",
         }
         
         while True:
