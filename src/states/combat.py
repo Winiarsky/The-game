@@ -245,8 +245,8 @@ class Combat(State):
             prompt = "Limit akcji wyczerpany. END – koniec tury, DELAY – opóźnij (z obniżką inicjatywy)"
         else:
             prompt = f"Masz {remaining} niewykorzystanych akcji. END – koniec tury, DELAY – opóźnij (z obniżką inicjatywy)"
-        decision = self.game.conn.read_card(prompt, ["END", "DELAY", "6", "7"]).strip().lower()
-        if decision in ("2", "delay", "6"):
+        decision = self.game.conn.read_card(prompt, ["END", "DELAY", "6 END", "7 DELAY", "6", "7"]).strip().lower()
+        if decision in ("2", "delay", "6", "6 delay", "6 end", "6delay", "6end"):
             if hero in self.delayed:
                 logger.info("Już opóźniałeś turę w tej rundzie.")
                 self.game.ui_log("Już opóźniałeś turę w tej rundzie.")
@@ -346,11 +346,11 @@ class Combat(State):
         except Exception:
             pass
 
-        logger.info("Dostępne akcje: %s (END=7 / DELAY=6).", ", ".join(sorted(available)))
-        self.game.ui_log(f"Dostępne akcje: {', '.join(sorted(available))} (END=7 / DELAY=6).")
+        logger.info("Dostępne akcje: %s (6 END / 7 DELAY).", ", ".join(sorted(available)))
+        self.game.ui_log(f"Dostępne akcje: {', '.join(sorted(available))} (6 END / 7 DELAY).")
         raw_choice = self.game.conn.read_card(
-            "Wpisz nazwę akcji lub 7=END / 6=DELAY: ",
-            list(available.keys()) + ["END", "DELAY", "6", "7"],
+            "Wpisz nazwę akcji lub karta 6 END / 7 DELAY: ",
+            list(available.keys()) + ["END", "DELAY", "6 END", "7 DELAY", "6", "7"],
         ).strip()
         if highlighted:
             try:
@@ -358,11 +358,11 @@ class Combat(State):
             except Exception:
                 pass
         choice = raw_choice.lower()
-        if choice in ("end", "7"):
+        if choice in ("end", "7", "7 delay", "7 end", "7delay", "7end"):
             self.game.ui_log("Bohater kończy turę (END).")
             self._advance_turn()
             return self
-        if choice in ("delay", "6"):
+        if choice in ("delay", "6", "6 delay", "6 end", "6delay", "6end"):
             return self._handle_hero_decline(actor)
 
         try:

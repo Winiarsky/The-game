@@ -7,13 +7,14 @@
 </head>
 <body>
     <div class="frame">
-        <header class="topbar">
+        <header class="topbar" id="topbar">
             <div class="logo">The Game · UI</div>
             <div class="menu">
                 <button id="btn-new-game">Nowa gra</button>
                 <button id="btn-load" class="disabled" title="Jeszcze nieaktywne" disabled>Wczytaj</button>
                 <button id="btn-quit">Quit</button>
             </div>
+            <button class="bar-toggle" id="topbar-toggle" title="Schowaj pasek">▲</button>
         </header>
 
         <section id="screen-menu" class="panel">
@@ -27,26 +28,50 @@
         </section>
 
         <section id="screen-game" class="screen hidden">
-            <div class="layout">
-                <div class="column heroes-col">
-                    <div class="panel">
+            <div class="game-layout">
+                <div class="initiative-bar">
+                    <div id="initiative-summary" class="initiative-summary hidden">
+                        <div class="init-active">
+                            <div class="label">Aktywny</div>
+                            <div id="init-active-name" class="value">-</div>
+                        </div>
+                        <div class="init-next">
+                            <div class="label">Następny</div>
+                            <div id="init-next-name" class="value">-</div>
+                        </div>
+                        <div class="init-round">
+                            <div class="label">Runda</div>
+                            <div id="init-round-num" class="value">-</div>
+                        </div>
+                    </div>
+                    <div id="initiative-list" class="initiative-list empty-note">Brak danych o inicjatywie.</div>
+                </div>
+
+                <div class="main-area">
+                    <div class="panel heroes-panel">
                         <div class="panel-header">Bohaterowie</div>
                         <div class="panel-body">
                             <div id="heroes-list" class="heroes-list"></div>
                         </div>
                     </div>
-                </div>
-                <div class="column log-col">
-                    <div class="panel">
-                        <div class="panel-header">Inicjatywa</div>
-                        <div class="panel-body">
-                            <div id="initiative-list" class="initiative-list empty-note">Brak danych o inicjatywie.</div>
-                        </div>
-                    </div>
-                    <div class="panel log-panel">
-                        <div class="panel-header">Log</div>
-                        <div class="panel-body">
-                            <ul id="log-list" class="log-list"></ul>
+
+                    <div class="panel action-panel">
+                        <div class="panel-body action-body">
+                            <div class="action-illustration" id="action-illustration"></div>
+                            <div class="action-content">
+                                <div class="action-badges">
+                                    <span class="badge" id="action-kind"></span>
+                                    <span class="badge" id="action-source"></span>
+                                </div>
+                                <div class="action-title" id="action-title">Czekam na działania...</div>
+                                <div class="action-text" id="action-text"></div>
+                                <div class="action-choices" id="action-choices"></div>
+                                <div class="action-desc" id="action-desc"></div>
+                                <form id="action-form" class="action-form">
+                                    <input type="text" id="action-answer" autocomplete="off" placeholder="Wpisz odpowiedź lub wybierz kartę..." />
+                                    <button type="submit">OK</button>
+                                </form>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -56,20 +81,10 @@
 
     <div id="path-toast" class="toast hidden"></div>
 
-    <div id="prompt-modal" class="modal hidden">
-        <div class="modal-card">
-            <div class="modal-illustration"></div>
-            <div class="modal-content">
-                <div class="modal-title" id="modal-title">Akcja</div>
-                <div class="modal-text" id="modal-text">Opis</div>
-                <div class="modal-choices" id="modal-choices"></div>
-                <div class="modal-desc" id="modal-desc"></div>
-                <form id="modal-form">
-                    <input type="text" id="modal-answer" autocomplete="off" placeholder="Twoja odpowiedź..." required />
-                    <button type="submit">Wyślij</button>
-                </form>
-            </div>
-        </div>
+    <div id="log-drawer" class="log-drawer collapsed">
+        <button id="log-toggle" class="log-toggle" title="Pokaż logi">Log</button>
+        <div class="log-last" id="log-last">Logi będą tu widoczne.</div>
+        <ul id="log-list" class="log-list"></ul>
     </div>
 
     <script src="{{ url_for('static', filename='app.js') }}"></script>
