@@ -269,8 +269,23 @@ class Game:
         except Exception:
             return False
 
-    def ui_log(self, message: str) -> None:
-        self.ui_event("log", {"message": message})
+    def ui_log(
+        self,
+        message: str,
+        *,
+        level: str | None = None,
+        tag: str | None = None,
+        image: str | None = None,
+    ) -> None:
+        """Wyślij komunikat do logów UI (opcjonalnie z levelem, tagiem lub obrazkiem)."""
+        payload: dict[str, Any] = {"message": message}
+        if level:
+            payload["level"] = level
+        if tag:
+            payload["tag"] = tag
+        if image:
+            payload["image"] = image
+        self.ui_event("log", payload)
 
     def ui_hero(self, hero: Hero, note: str | None = None) -> None:
         statuses = getattr(hero, "statuses", [])

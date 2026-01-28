@@ -50,12 +50,16 @@ function showGame() {
     screenGame.classList.remove("hidden");
 }
 
-function addLogEntry(text, meta, variant = "", tag = "") {
+function addLogEntry(text, meta, variant = "", tag = "", image = "") {
     const item = document.createElement("li");
     item.className = "log-item" + (variant ? ` ${variant}` : "");
+    const thumb = image ? `<div class="log-thumb-wrap"><img class="log-thumb" src="${image}" alt=""></div>` : "";
     item.innerHTML = `
-        <div>${tag ? `<span class="tag">${tag}</span>` : ""}${text}</div>
-        <div class="meta">${meta || ""}</div>
+        ${thumb}
+        <div class="log-body">
+            <div class="log-text">${tag ? `<span class="tag">${tag}</span>` : ""}${text}</div>
+            <div class="meta">${meta || ""}</div>
+        </div>
     `;
     logList.prepend(item);
     if (logLast) {
@@ -159,7 +163,7 @@ function handleEvent(event) {
     let variant = "";
     if (level === "error") variant = "error";
     else if (level === "warn" || level === "warning") variant = "warning";
-    addLogEntry(payload.message || type, meta, variant);
+    addLogEntry(payload.message || type, meta, variant, payload.tag || "", payload.image || "");
 }
 
 function connectStream() {
