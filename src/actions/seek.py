@@ -6,7 +6,7 @@ from time import sleep
 from .actions_registy import register
 from .base import ActionContext, BaseAction
 from board import consts
-from interactions.common import prompt_for_roll
+from interactions_mixin import prompt_for_roll
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:

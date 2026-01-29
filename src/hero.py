@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-from interactions.common import StatusMixin, prompt_for_roll
+from interactions_mixin import StatusMixin, prompt_for_roll
 from object_registry import assign_id
 
 # to do make hero scrpt, 

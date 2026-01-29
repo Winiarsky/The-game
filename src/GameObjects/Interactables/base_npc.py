@@ -3,7 +3,7 @@ from typing import Optional, Callable, Iterable
 
 from GameObjects.base import GameObjectMeta
 from interactable import Interaction, Interactable
-from interactions.common import (
+from interactions_mixin import (
     SocialMixin,
     TradeMixin,
     TradeItem,

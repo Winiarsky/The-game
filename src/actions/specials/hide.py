@@ -1,7 +1,7 @@
 import logging
 
-from interactions.common import StatusMixin
-from specials.registry import register_special
+from interactions_mixin import StatusMixin
+from .registry import register_special
 from statuses import HideStatus
 
 logger = logging.getLogger(__name__)

@@ -1,13 +1,13 @@
 import logging
 from typing import Optional, Tuple
 
-import specials  # noqa: F401  # zapewnia rejestrację zdolności przy imporcie akcji
+from . import specials  # noqa: F401  # zapewnia rejestrację zdolności przy imporcie akcji
 
 from actions.actions_registy import register
 from actions.base import ActionContext, BaseAction
 from board import consts
 from hero import Hero
-from specials.registry import get_special, list_specials
+from .specials.registry import get_special, list_specials
 
 logger = logging.getLogger(__name__)
 

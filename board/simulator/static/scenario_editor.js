@@ -1105,12 +1105,13 @@ function buildScenarioPayload() {
             obstacles.push(...(obj.positions || []));
         }
     });
+    const wallIds = new Set(["simple_wall", "basic_wall"]);
     const walls = state.edgeObjects
-        .filter((edge) => edge.category === "Walls" && edge.object_id === "basic_wall")
+        .filter((edge) => edge.category === "Walls" && wallIds.has(edge.object_id))
         .map((edge) => ({
             a: toScenarioPosition([edge.a.row, edge.a.col]),
             b: toScenarioPosition([edge.b.row, edge.b.col]),
-            type: edge.object_id,
+            type: edge.object_id === "basic_wall" ? "simple_wall" : edge.object_id,
         }));
 
     return {
@@ -1257,12 +1258,26 @@ function setStateFromScenario(scenario) {
         const obstacles = Array.isArray(scenario?.obstacles) ? scenario.obstacles : [];
         const walls = Array.isArray(scenario?.walls) ? scenario.walls : [];
 
+        const defaultPlainMeta = getMeta("Terrains", "plain_field") || {
+            category: "Terrains",
+            object_id: "plain_field",
+            label: "Zwykłe pole",
+            color: "#7cb342",
+            placement: "cell",
+        };
+
         const blockedMeta = getMeta("Terrains", "blocked_field") || {
             category: "Terrains",
             object_id: "blocked_field",
             label: "Pole zablokowane",
             color: "#c44",
         };
+        // Jeśli brak pól blokujących, wypełnij edytor zwykłym terenem, by pokazać plan.
+        if (!blocked.length) {
+            state.cellObjects.clear();
+            // w scenariuszu brak terenu => pokaż zwykłe pola jako domyślne (bez zapisywania).
+            // Zakładamy rozmiar z mapy (rooms/start/objects już ustawiły w state), więc tu nic nie dodajemy.
+        }
         blocked.forEach((pos) => {
             const normalized = fromScenarioPosition(pos);
             if (!Array.isArray(normalized)) return;
@@ -1283,13 +1298,15 @@ function setStateFromScenario(scenario) {
             addCellObject(obstacleMeta, row, col);
         });
 
-        const wallMeta = getMeta("Walls", "basic_wall") || {
-            category: "Walls",
-            object_id: "basic_wall",
-            label: "Ściana",
-            color: "#555",
-            placement: "edge",
-        };
+        const defaultWallMeta =
+            getMeta("Walls", "simple_wall") ||
+            getMeta("Walls", "basic_wall") || {
+                category: "Walls",
+                object_id: "simple_wall",
+                label: "Ściana",
+                color: "#555",
+                placement: "edge",
+            };
         walls.forEach((wall) => {
             if (!wall?.a || !wall?.b) return;
             const aPos = fromScenarioPosition(wall.a);
@@ -1297,6 +1314,8 @@ function setStateFromScenario(scenario) {
             if (!Array.isArray(aPos) || !Array.isArray(bPos)) return;
             const [aRow, aCol] = aPos;
             const [bRow, bCol] = bPos;
+            const wallType = wall?.type || wall?.object_id;
+            const wallMeta = getMeta("Walls", wallType) || defaultWallMeta;
             addEdgeObject(
                 wallMeta,
                 { row: aRow, col: aCol },

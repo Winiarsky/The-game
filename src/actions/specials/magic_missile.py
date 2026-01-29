@@ -4,8 +4,8 @@ from typing import Iterable, Tuple
 
 from actions.attack import _choose_enemy
 from board import consts
-from interactions.common import prompt_for_roll
-from specials.registry import register_special
+from interactions_mixin import prompt_for_roll
+from .registry import register_special
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ def _can_traverse(board, a: tuple[int, int], b: tuple[int, int], goal: tuple[int
     if b == goal:
         return True
     occupant = cell.occupant
-    from obstacle import Obstacle  # lokalny import żeby uniknąć cykli
+    from GameObjects.Obstacles.basic_obstacle import Obstacle  # lokalny import żeby uniknąć cykli
 
     if isinstance(occupant, Obstacle):
         return False

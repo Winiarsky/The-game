@@ -15,10 +15,11 @@ from board import Connection
 from states import Start, State
 from states.combat import Combat
 from hero import Hero
-from GameObjects.Enemies.basic_enemy import Enemy
-from board_grid import BoardGrid, BasicTerrain
-from obstacle import Obstacle
-from wall import Wall, Mur
+from GameObjects.Enemies.simple_enemy import Enemy
+from GameObjects.Obstacles.basic_obstacle import Obstacle
+from GameObjects.Terrains.basic_terrain import BasicTerrain
+from GameObjects.Walls.basic_wall import Wall, Mur
+from board_grid import BoardGrid
 from interactable import Interactable
 from object_registry import get_object
 from ui_client import get_ui_client
@@ -115,7 +116,7 @@ class Game:
                 except Exception:
                     return None
 
-        from GameObjects.Enemies.basic_enemy import Enemy
+        from GameObjects.Enemies.simple_enemy import Enemy
 
         def _place_enemy(obj, pos):
             board.place(obj, pos)

@@ -9,7 +9,7 @@ if str(PROJECT_ROOT / "src") not in sys.path:
 
 from GameObjects.Interactables.base_npc import BaseNPC  # noqa: E402
 from interactable import Interaction  # noqa: E402
-from interactions.common import TradeItem  # noqa: E402
+from interactions_mixin import TradeItem  # noqa: E402
 
 
 def test_flags_disable_actions():

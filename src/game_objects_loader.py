@@ -43,8 +43,12 @@ def scan_game_objects(base_dir: Path, *, ensure_src_on_path: bool = True) -> lis
         if not category_dir.is_dir():
             continue
         category = category_dir.name
+        base_skip = {"basic_obstacle", "basic_terrain", "basic_wall", "basic_enemy"}
         for module_file in category_dir.glob("*.py"):
             if module_file.stem == "__init__":
+                continue
+            # Bazowe klasy wspólne, nie obiekty do rejestru.
+            if module_file.stem in base_skip:
                 continue
             module_name = f"GameObjects.{category}.{module_file.stem}"
             try:

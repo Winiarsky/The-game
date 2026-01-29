@@ -1,5 +1,5 @@
 from GameObjects.base import GameObjectMeta
-from board_grid import BasicTerrain
+from GameObjects.Terrains.basic_terrain import BasicTerrain
 
 
 class BlockedField(BasicTerrain):

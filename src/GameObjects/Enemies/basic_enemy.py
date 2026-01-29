@@ -5,8 +5,7 @@ import random
 from dataclasses import dataclass, field
 from typing import Optional
 
-from GameObjects.base import GameObjectMeta
-from interactions.common import StatusMixin, WatchfulMixin
+from interactions_mixin import StatusMixin, WatchfulMixin
 from statuses import Status
 from object_registry import assign_id
 
@@ -14,8 +13,8 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class Enemy(StatusMixin, WatchfulMixin):
-    """Prosty przeciwnik do walki turowej."""
+class BasicEnemy(StatusMixin, WatchfulMixin):
+    """Bazowa klasa przeciwnika do walki turowej."""
 
     name: str = "Enemy"
     hp: int = 10
@@ -41,7 +40,7 @@ class Enemy(StatusMixin, WatchfulMixin):
         return hash(self.object_id)
 
     def __eq__(self, other):
-        if not isinstance(other, Enemy):
+        if not isinstance(other, BasicEnemy):
             return False
         return self.object_id == other.object_id
 
@@ -83,27 +82,3 @@ class Enemy(StatusMixin, WatchfulMixin):
             game.start_combat(trigger=self)
         except Exception as exc:
             logger.error("Nie udało się uruchomić walki: %s", exc)
-
-
-META = GameObjectMeta(
-    object_id="basic_enemy",
-    label="Wrogi NPC",
-    color="#b00",
-    category="Enemies",
-    placement="cell",
-    description="Podstawowy przeciwnik do walki turowej.",
-    logic_cls=Enemy,
-    default_config={
-        "name": "Wrogi strażnik",
-        "hp": 12,
-        "ac": 14,
-        "initiative_bonus": 2,
-        "move_points": 3,
-        "attack_bonus": 5,
-        "strength": 2,
-        "behavior_id": "basic_melee",
-        "watch_disturbed": 0,
-        "watch_disabled": False,
-        "perception_bonus": 4,
-    },
-)

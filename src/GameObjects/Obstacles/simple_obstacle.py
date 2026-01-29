@@ -1,5 +1,5 @@
 from GameObjects.base import GameObjectMeta
-from obstacle import Obstacle
+from GameObjects.Obstacles.basic_obstacle import Obstacle
 
 
 class SimpleObstacle(Obstacle):

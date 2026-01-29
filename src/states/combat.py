@@ -4,7 +4,7 @@ import logging
 import sys
 from pathlib import Path
 from typing import Any, List, Optional
-from interactions.common import prompt_for_roll
+from interactions_mixin import prompt_for_roll
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
@@ -14,7 +14,7 @@ from actions.actions_registy import get_action, list_actions
 from actions.base import ActionContext
 import actions  # noqa: F401  # rejestracja akcji przy starcie stanu walki
 from board import consts
-from enemies import basic_melee
+from GameObjects.Enemies.behaviors.basic_melee import basic_melee
 from .base import State
 from .heroes_turns import HeroesTurn
 
@@ -236,17 +236,21 @@ class Combat(State):
     def _confirm_actor_position(self, actor) -> bool:
         return True
 
-    def _handle_hero_decline(self, hero) -> State:
+    def _handle_hero_decline(self, hero, *, auto_delay: bool = False) -> State:
         if not self._confirm_actor_position(hero):
             logger.info("Nie potwierdzono pozycji bohatera – przerwano wybór END/DELAY.")
             return self
-        used = self.actions_used.get(hero, 0)
-        remaining = self.ACTION_LIMIT - used
-        if remaining <= 0:
-            prompt = "Limit akcji wyczerpany. END – koniec tury (8), DELAY – opóźnij (7, obniża inicjatywę)"
-        else:
-            prompt = f"Masz {remaining} niewykorzystanych akcji. END – koniec tury (8), DELAY – opóźnij (7, obniża inicjatywę)"
-        decision = self.game.conn.read_card(prompt, ["end", "delay"]).strip().lower()
+        decision = "delay" if auto_delay else None
+        if decision is None:
+            used = self.actions_used.get(hero, 0)
+            remaining = self.ACTION_LIMIT - used
+            prompt = (
+                "Limit akcji wyczerpany. END – koniec tury (8), DELAY – opóźnij (7, obniża inicjatywę)"
+                if remaining <= 0
+                else f"Masz {remaining} niewykorzystanych akcji. END – koniec tury (8), DELAY – opóźnij (7, obniża inicjatywę)"
+            )
+            decision = self.game.conn.read_card(prompt, ["end", "delay"]).strip().lower()
+
         if decision in ("delay", "7", "7 delay", "7 end", "7delay", "7end"):
             if hero in self.delayed:
                 logger.info("Już opóźniałeś turę w tej rundzie.")
@@ -376,7 +380,7 @@ class Combat(State):
             self._advance_turn()
             return self
         if choice in ("delay", "7", "7 delay", "7 end", "7delay", "7end"):
-            return self._handle_hero_decline(actor)
+            return self._handle_hero_decline(actor, auto_delay=True)
 
         try:
             action = get_action(choice)

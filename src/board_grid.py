@@ -3,30 +3,17 @@ from __future__ import annotations
 from dataclasses import dataclass, field as dataclass_field
 from typing import List, Optional, Protocol, Tuple
 from interactable import Interactable
-from interactions.common import StatusMixin
+from interactions_mixin import StatusMixin
 
-from obstacle import Obstacle
-from wall import Wall
+from GameObjects.Obstacles.basic_obstacle import Obstacle
+from GameObjects.Terrains.basic_terrain import BasicTerrain
+from GameObjects.Walls.basic_wall import Wall
 
 
 class Occupant(Protocol):
     position: Optional[Tuple[int, int]]
 
     def set_position(self, position: Optional[Tuple[int, int]]) -> None: ...
-
-
-@dataclass(slots=True) # do przeneisienia do innego folderu
-class BasicTerrain:
-    name: str = "basic"
-    walkable: bool = True
-    room: str = "basic room"
-    stealth_impact: int = 0
-
-    def on_critical_stealth_fail(self):
-        return None
-
-    def on_enter(self, _actor, _game):
-        return None
 
 
 @dataclass(slots=True)

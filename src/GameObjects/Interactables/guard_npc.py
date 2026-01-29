@@ -4,7 +4,7 @@ from typing import Optional
 from GameObjects.base import GameObjectMeta
 from interactable import Interaction
 from GameObjects.Interactables.base_npc import BaseNPC
-from interactions.common import WatchfulMixin, prompt_for_roll, resolve_skill_check, TradeItem
+from interactions_mixin import WatchfulMixin, prompt_for_roll, resolve_skill_check, TradeItem
 
 logger = logging.getLogger(__name__)
 

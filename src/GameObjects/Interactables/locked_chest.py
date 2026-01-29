@@ -3,7 +3,7 @@ from GameObjects.base import GameObjectMeta
 from typing import Optional
 
 from interactable import Interactable, Interaction
-from interactions.common import HideInMixin, prompt_for_roll
+from interactions_mixin import HideInMixin, prompt_for_roll
 import logging
 from board import consts
 

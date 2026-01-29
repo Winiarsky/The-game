@@ -4,13 +4,15 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT / "src") not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT / "src"))
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from GameObjects.Interactables.locked_chest import LockedChest  # noqa: E402
 from GameObjects.Interactables.guard_npc import GuardNPC  # noqa: E402
 from actions.stealth import StealthAction  # noqa: E402
 from board_grid import BoardGrid  # noqa: E402
 from hero import Hero  # noqa: E402
-from awareness import iter_watchers_in_rooms, summarize_watchers  # noqa: E402
+from GameObjects.Interactables.utils.awareness import iter_watchers_in_rooms, summarize_watchers  # noqa: E402
 
 
 class DummyConn:
@@ -70,9 +72,9 @@ def test_hide_allows_stealth_despite_watchful():
     # stealth powinien być dozwolony mimo strażnika
     sa = StealthAction()
     # podmieniamy prompt na stały wynik >= STEALTH_FAIL, by nie wejść w gałąź porażki
-    from interactions import common as common_mod
+    import interactions_mixin.prompt_utils as prompt_utils
 
-    common_mod.prompt_for_roll = lambda *_: 15
+    prompt_utils.prompt_for_roll = lambda *_: 15
     # wymuszamy brak podświetleń (DummyConn) i sprawdzamy, że nie ma blockerów
     board = game.board
     rooms_here = board.rooms_at(hero.position)

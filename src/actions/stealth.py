@@ -8,9 +8,9 @@ from .actions_registy import register
 from .base import ActionContext, BaseAction
 from .move_utils import perform_movement, default_on_enter
 from board import consts
-from interactions.common import prompt_for_roll
-from awareness import iter_watchers_in_rooms, summarize_watchers
-from obstacle import Obstacle
+from interactions_mixin import prompt_for_roll
+from GameObjects.Interactables.utils.awareness import iter_watchers_in_rooms, summarize_watchers
+from GameObjects.Obstacles.basic_obstacle import Obstacle
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
