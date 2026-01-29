@@ -14,7 +14,7 @@ from actions.actions_registy import get_action, list_actions
 from actions.base import ActionContext
 import actions  # noqa: F401  # rejestracja akcji przy starcie stanu walki
 from board import consts
-from GameObjects.Enemies.behaviors.basic_melee import basic_melee
+from GameObjects.Enemies.behaviors import get_behavior
 from .base import State
 from .heroes_turns import HeroesTurn
 
@@ -294,11 +294,12 @@ class Combat(State):
         logger.info("Tura przeciwnika: %s", getattr(enemy, "name", "Enemy"))
         used = self.actions_used.get(enemy, 0)
         limit = self.ACTION_LIMIT
+        behavior_fn = get_behavior(getattr(enemy, "behavior_id", None))
         while used < limit:
             try:
-                spent = basic_melee(enemy, self.game, self, actions_left=limit - used)
+                spent = behavior_fn(enemy, self.game, self, actions_left=limit - used)
             except Exception as exc:
-                logger.error("AI przeciwnika nie powiodło się: %s", exc)
+                logger.error("AI przeciwnika (%s) nie powiodło się: %s", behavior_fn.__name__, exc)
                 self.game.ui_log(f"AI przeciwnika nie powiodło się: {exc}")
                 break
             spent = int(spent or 0)
