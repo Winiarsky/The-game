@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field as dataclass_field
 from typing import List, Optional, Protocol, Tuple
 from interactable import Interactable
-from interactions_mixin import StatusMixin
+from GameObjects.interactions_mixin import StatusMixin
 
 from GameObjects.Obstacles.basic_obstacle import Obstacle
 from GameObjects.Terrains.basic_terrain import BasicTerrain

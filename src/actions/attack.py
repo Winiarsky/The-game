@@ -7,7 +7,7 @@ from hero import Hero
 from .base import ActionContext, BaseAction
 from .actions_registy import register
 from board import consts
-from interactions_mixin import prompt_for_roll
+from GameObjects.interactions_mixin import prompt_for_roll
 from GameObjects.Enemies.simple_enemy import Enemy
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]

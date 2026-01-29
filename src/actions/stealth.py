@@ -8,7 +8,7 @@ from .actions_registy import register
 from .base import ActionContext, BaseAction
 from .move_utils import perform_movement, default_on_enter
 from board import consts
-from interactions_mixin import prompt_for_roll
+from GameObjects.interactions_mixin import prompt_for_roll
 from GameObjects.Interactables.utils.awareness import iter_watchers_in_rooms, summarize_watchers
 from GameObjects.Obstacles.basic_obstacle import Obstacle
 

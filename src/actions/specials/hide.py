@@ -1,6 +1,6 @@
 import logging
 
-from interactions_mixin import StatusMixin
+from GameObjects.interactions_mixin import StatusMixin
 from .registry import register_special
 from statuses import HideStatus
 

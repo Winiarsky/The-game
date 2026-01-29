@@ -2,7 +2,7 @@ from typing import Optional
 
 from GameObjects.base import GameObjectMeta
 from interactable import Interaction, Interactable
-from interactions_mixin import HiddenMixin, prompt_for_roll
+from GameObjects.interactions_mixin import HiddenMixin, prompt_for_roll
 
 
 class HiddenCache(HiddenMixin, Interactable):

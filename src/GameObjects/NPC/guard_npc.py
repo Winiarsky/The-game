@@ -2,9 +2,8 @@ import logging
 from typing import Optional
 
 from GameObjects.base import GameObjectMeta
-from interactable import Interaction
-from GameObjects.Interactables.base_npc import BaseNPC
-from interactions_mixin import WatchfulMixin, prompt_for_roll, resolve_skill_check, TradeItem
+from GameObjects.NPC.base_npc import BaseNPC
+from GameObjects.interactions_mixin import WatchfulMixin, prompt_for_roll, resolve_skill_check, TradeItem
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +16,7 @@ class GuardNPC(BaseNPC, WatchfulMixin):
         *,
         name: str = "Strażnik",
         dialog: Optional[dict] = None,
+        dialog_path: Optional[str] = None,
         allow_same_cell_interact: bool = True,
         require_same_cell_interact: bool = False,
         blocks_movement: bool = True,
@@ -32,6 +32,7 @@ class GuardNPC(BaseNPC, WatchfulMixin):
         super().__init__(
             name=name,
             dialog=dialog,
+            dialog_path=dialog_path,
             allow_same_cell_interact=allow_same_cell_interact,
             require_same_cell_interact=require_same_cell_interact,
             blocks_movement=blocks_movement,
@@ -56,25 +57,6 @@ class GuardNPC(BaseNPC, WatchfulMixin):
                 "options": [{"id": "leave", "label": "Odejdź."}],
             }
         }
-
-    def register_default_actions(self) -> None:
-        self.register_action(
-            Interaction(
-                id="talk",
-                label="Zagadaj",
-                description="Krótka wymiana zdań.",
-                handler=lambda _self, _actor, _game, _payload=None: "Strażnik kiwa głową.",
-                end_interaction=False,
-            )
-        )
-        self.register_action(
-            Interaction(
-                id="leave",
-                label="Odejdź",
-                description="Zakończ rozmowę.",
-                handler=lambda _self, _actor, _game, _payload=None: "Kończysz rozmowę.",
-            )
-        )
 
     # --- Pickpocket jak w NPC ---
     def action_pickpocket(self, actor, _game, _payload=None) -> str:
@@ -113,6 +95,7 @@ META = GameObjectMeta(
         "blocks_movement": True,
         "allow_same_cell_interact": True,
         "require_same_cell_interact": False,
+        "dialog_path": "guard_dialog.json",
         "attitude": 0,
         "inventory": [],
         "base_price_modifier": 1.0,

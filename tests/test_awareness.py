@@ -11,7 +11,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from board_grid import BoardGrid  # noqa: E402
 from GameObjects.Interactables.utils.awareness import iter_watchers_in_rooms, summarize_watchers  # noqa: E402
 from interactable import Interactable  # noqa: E402
-from interactions_mixin import StatusMixin, WatchfulMixin  # noqa: E402
+from GameObjects.interactions_mixin import StatusMixin, WatchfulMixin  # noqa: E402
 from actions.stealth import StealthAction  # noqa: E402
 from hero import Hero  # noqa: E402
 from GameObjects.Enemies.simple_enemy import Enemy  # noqa: E402
@@ -64,7 +64,7 @@ def test_attempt_spot_applies_hero_perception_penalty(monkeypatch):
     hero.add_status("stealth")
 
     watcher = DummyWatchful(watch_disturbed=0)
-    monkeypatch.setattr("interactions_mixin.watchful_mixin.random.randint", lambda *_args, **_kwargs: 15)
+    monkeypatch.setattr("GameObjects.interactions_mixin.watchful_mixin.random.randint", lambda *_args, **_kwargs: 15)
 
     spotted, msg = watcher.attempt_spot(hero, None)
     assert not spotted
@@ -102,7 +102,7 @@ def test_stealth_reactivation_triggers_watchers_once(monkeypatch):
     game = types.SimpleNamespace(board=board, conn=conn, heroes=[hero])
 
     monkeypatch.setattr("actions.stealth.perform_movement", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr("interactions_mixin.watchful_mixin.random.randint", lambda *_args, **_kwargs: 5)
+    monkeypatch.setattr("GameObjects.interactions_mixin.watchful_mixin.random.randint", lambda *_args, **_kwargs: 5)
 
     sa = StealthAction()
     sa.execute(types.SimpleNamespace(game=game))
@@ -130,7 +130,7 @@ def test_enemy_watchful_spots_hero_and_triggers_combat(monkeypatch):
             self.start_combat_calls += 1
 
     game = DummyGame()
-    monkeypatch.setattr("interactions_mixin.watchful_mixin.random.randint", lambda *_args, **_kwargs: 20)
+    monkeypatch.setattr("GameObjects.interactions_mixin.watchful_mixin.random.randint", lambda *_args, **_kwargs: 20)
 
     spotted, msg = enemy.attempt_spot(hero, game)
 

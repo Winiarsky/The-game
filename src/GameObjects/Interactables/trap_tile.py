@@ -1,6 +1,6 @@
 from GameObjects.base import GameObjectMeta
 from interactable import Interaction, Interactable
-from interactions_mixin import TrappableMixin, prompt_for_roll
+from GameObjects.interactions_mixin import TrappableMixin, prompt_for_roll
 
 
 class TrapTile(TrappableMixin, Interactable):

@@ -8,7 +8,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from GameObjects.Interactables.locked_chest import LockedChest  # noqa: E402
-from GameObjects.Interactables.guard_npc import GuardNPC  # noqa: E402
+from GameObjects.NPC.guard_npc import GuardNPC  # noqa: E402
 from actions.stealth import StealthAction  # noqa: E402
 from board_grid import BoardGrid  # noqa: E402
 from hero import Hero  # noqa: E402
@@ -72,7 +72,7 @@ def test_hide_allows_stealth_despite_watchful():
     # stealth powinien być dozwolony mimo strażnika
     sa = StealthAction()
     # podmieniamy prompt na stały wynik >= STEALTH_FAIL, by nie wejść w gałąź porażki
-    import interactions_mixin.prompt_utils as prompt_utils
+    import GameObjects.interactions_mixin.prompt_utils as prompt_utils
 
     prompt_utils.prompt_for_roll = lambda *_: 15
     # wymuszamy brak podświetleń (DummyConn) i sprawdzamy, że nie ma blockerów

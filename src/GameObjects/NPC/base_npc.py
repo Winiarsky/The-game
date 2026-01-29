@@ -1,9 +1,11 @@
+import json
 import logging
+from pathlib import Path
 from typing import Optional, Callable, Iterable
 
 from GameObjects.base import GameObjectMeta
 from interactable import Interaction, Interactable
-from interactions_mixin import (
+from GameObjects.interactions_mixin import (
     SocialMixin,
     TradeMixin,
     TradeItem,
@@ -14,6 +16,8 @@ from interactions_mixin import (
 )
 
 logger = logging.getLogger(__name__)
+
+DIALOGS_DIR = Path(__file__).resolve().parents[1] / "dialogs"
 
 
 class BaseNPC(SocialMixin, TradeMixin, PickpocketMixin, Interactable):
@@ -26,6 +30,7 @@ class BaseNPC(SocialMixin, TradeMixin, PickpocketMixin, Interactable):
         *,
         name: str = "NPC",
         dialog: Optional[dict | str] = None,
+        dialog_path: Optional[str] = None,
         allow_same_cell_interact: bool = True,
         require_same_cell_interact: bool = False,
         blocks_movement: bool = True,
@@ -64,8 +69,35 @@ class BaseNPC(SocialMixin, TradeMixin, PickpocketMixin, Interactable):
         self._on_trade = on_trade
 
         self.name = name
-        self.dialog = self._normalize_dialog(dialog) or self._default_dialog()
+        self.dialog = self._load_dialog(dialog, dialog_path) or self._default_dialog()
         self.register_default_actions()
+
+    def _load_dialog(self, dialog: Optional[dict | str], dialog_path: Optional[str]) -> Optional[dict]:
+        """Normalizuj dialog, próbując wczytać z pliku jeśli podano dialog_path."""
+        normalized = self._normalize_dialog(dialog)
+        if normalized:
+            return normalized
+        if dialog_path:
+            loaded = self._load_dialog_from_path(dialog_path)
+            if loaded:
+                return loaded
+        # fallback: bazowy plik domyślny, jeśli istnieje
+        fallback = self._load_dialog_from_path("default_npc_dialog.json")
+        return fallback
+
+    def _load_dialog_from_path(self, dialog_path: str) -> Optional[dict]:
+        path = Path(dialog_path)
+        if not path.is_absolute():
+            path = DIALOGS_DIR / path
+        try:
+            if not path.exists():
+                return None
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return data
+        except Exception as exc:
+            logger.warning("Nie udało się wczytać dialogu z %s: %s", path, exc)
+        return None
 
     # --- Dialog ---
     def _normalize_dialog(self, dialog: Optional[dict | str]) -> Optional[dict]:

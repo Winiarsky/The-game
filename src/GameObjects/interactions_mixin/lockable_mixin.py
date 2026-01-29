@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
-from interactions_mixin.skill_checks import resolve_skill_check
+from .skill_checks import resolve_skill_check
 
 
 @dataclass

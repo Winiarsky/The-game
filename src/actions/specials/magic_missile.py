@@ -4,7 +4,7 @@ from typing import Iterable, Tuple
 
 from actions.attack import _choose_enemy
 from board import consts
-from interactions_mixin import prompt_for_roll
+from GameObjects.interactions_mixin import prompt_for_roll
 from .registry import register_special
 
 logger = logging.getLogger(__name__)

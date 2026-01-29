@@ -5,7 +5,7 @@ import random
 from dataclasses import dataclass, field
 from typing import Optional
 
-from interactions_mixin import StatusMixin, WatchfulMixin
+from GameObjects.interactions_mixin import StatusMixin, WatchfulMixin
 from statuses import Status
 from object_registry import assign_id
 

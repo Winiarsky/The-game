@@ -7,9 +7,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT / "src") not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from GameObjects.Interactables.base_npc import BaseNPC  # noqa: E402
+from GameObjects.NPC.base_npc import BaseNPC  # noqa: E402
 from interactable import Interaction  # noqa: E402
-from interactions_mixin import TradeItem  # noqa: E402
+from GameObjects.interactions_mixin import TradeItem  # noqa: E402
 
 
 def test_flags_disable_actions():
@@ -44,7 +44,7 @@ def test_on_trade_callback_adds_line(monkeypatch):
 
 def test_on_pickpocket_fail_callback(monkeypatch):
     # force fail: roll=1, dc=16
-    monkeypatch.setattr("GameObjects.Interactables.base_npc.prompt_for_roll", lambda *_: 1)
+    monkeypatch.setattr("GameObjects.NPC.base_npc.prompt_for_roll", lambda *_: 1)
     actor = type("A", (), {"statuses": ["stealth"], "stealth_bonus": 0})()
     called = {}
 

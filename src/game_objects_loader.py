@@ -39,11 +39,14 @@ def scan_game_objects(base_dir: Path, *, ensure_src_on_path: bool = True) -> lis
         if str(src_root) not in sys.path:
             sys.path.insert(0, str(src_root))
 
+    skip_categories = {"interactions_mixin", "dialogs"}
     for category_dir in base_dir.iterdir():
         if not category_dir.is_dir():
             continue
+        if category_dir.name in skip_categories:
+            continue
         category = category_dir.name
-        base_skip = {"basic_obstacle", "basic_terrain", "basic_wall", "basic_enemy"}
+        base_skip = {"basic_obstacle", "basic_terrain", "basic_wall", "basic_enemy", "base_npc"}
         for module_file in category_dir.glob("*.py"):
             if module_file.stem == "__init__":
                 continue

@@ -4,7 +4,7 @@ import logging
 import sys
 from pathlib import Path
 from typing import Any, List, Optional
-from interactions_mixin import prompt_for_roll
+from GameObjects.interactions_mixin import prompt_for_roll
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
