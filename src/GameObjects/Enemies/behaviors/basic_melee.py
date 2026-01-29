@@ -4,7 +4,7 @@ import logging
 import random
 import time
 from board import consts
-from actions.move_utils import find_path
+from actions.move_utils import find_path, path_cost_feet, trim_path_to_feet
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +118,7 @@ def basic_melee(enemy, game, combat_state, actions_left: int = 1) -> int:
         # spróbuj ruchu (1 akcja)
         if remaining <= 0:
             break
-        move_budget = max(1, getattr(enemy, "move_points", 3))
+        move_budget_feet = max(1, getattr(enemy, "move_points", 3)) * 5
         move_used = False
         path_id = None
         try:
@@ -129,13 +129,18 @@ def basic_melee(enemy, game, combat_state, actions_left: int = 1) -> int:
                 break
 
             # szukaj najbliższego pola wokół bohatera, na które można wejść
-            logger.info("[AI] Wróg %s szuka ruchu w stronę bohatera na %s (budżet ruchu %s).", enemy.name, nearest_pos, move_budget)
+            logger.info(
+                "[AI] Wróg %s szuka ruchu w stronę bohatera na %s (budżet ruchu %s stóp).",
+                enemy.name,
+                nearest_pos,
+                move_budget_feet,
+            )
             neighbor_targets = [
                 cand
                 for cand in board.get_neighbors(nearest_pos, include_position=False, diagonal=True)
                 if _adjacent_reachable(board, cand, nearest_pos)
             ]
-            reachable_paths: list[tuple[list[tuple[int, int]], tuple[int, int]]] = []
+            reachable_paths: list[tuple[list[tuple[int, int]], tuple[int, int], int]] = []
             for cand in neighbor_targets:
                 if not board.can_enter(cand, allow_occupied=False):
                     continue
@@ -147,7 +152,7 @@ def basic_melee(enemy, game, combat_state, actions_left: int = 1) -> int:
                     allow_occupied=False,
                 )
                 if path:
-                    reachable_paths.append((path, cand))
+                    reachable_paths.append((path, cand, path_cost_feet(path)))
 
             if not reachable_paths:
                 logger.info("[AI] %s nie ma ścieżki do żadnego sąsiedniego pola celu – kończy turę.", enemy.name)
@@ -156,28 +161,43 @@ def basic_melee(enemy, game, combat_state, actions_left: int = 1) -> int:
 
             # Podświetl wroga (czerwony) i cel (zielony); bez potwierdzenia kliknięciem celu.
             try:
-                game.conn.set_leds([enemy.position], consts.ENEMY_MOVE_RGB)
+                game.conn.set_leds([enemy.position], consts.ENEMY_START_RGB)
                 game.conn.set_leds([nearest_pos], consts.MOVE_FIELD_RGB)
             except Exception:
                 pass
 
             # wybierz najkrótszą ścieżkę
-            reachable_paths.sort(key=lambda p: len(p[0]))
-            full_path, goal = reachable_paths[0]
+            reachable_paths.sort(key=lambda p: p[2])
+            full_path, goal, full_feet = reachable_paths[0]
             # ogranicz do budżetu ruchu
-            truncated = full_path[: move_budget + 1]
+            truncated, used_feet = trim_path_to_feet(full_path, move_budget_feet)
+            if len(truncated) < 2:
+                logger.info("[AI] %s nie może wykonać nawet jednego kroku w budżecie %s stóp.", enemy.name, move_budget_feet)
+                actions_used = actions_left
+                break
             dest = truncated[-1]
-            logger.info("[AI] Najkrótsza ścieżka do %s: %s kroków (przycięta do %s). Cel skanu: %s", goal, len(full_path) - 1, len(truncated) - 1, dest)
-            path_id = f"enemy-path-{time.time_ns()}"
-            game.ui_event("path_preview", {"id": path_id, "steps": len(truncated) - 1, "target": dest})
-
-            game.conn.set_leds(truncated[1:], consts.ENEMY_MOVE_RGB)
             logger.info(
-                "%s (budżet ruchu %s) – ścieżka do %s (%s pól). Przenieś figurkę na cel i zeskanuj.",
+                "[AI] Najkrótsza ścieżka do %s: %s pól / %s stóp (przycięta do %s pól / %s stóp). Cel skanu: %s",
+                goal,
+                len(full_path) - 1,
+                full_feet,
+                len(truncated) - 1,
+                used_feet,
+                dest,
+            )
+            path_id = f"enemy-path-{time.time_ns()}"
+            game.ui_event("path_preview", {"id": path_id, "steps": len(truncated) - 1, "feet": used_feet, "target": dest})
+
+            start_and_path = [enemy.position] + truncated[1:]
+            colors = [consts.ENEMY_START_RGB] + [consts.ENEMY_MOVE_RGB] * (len(truncated) - 1)
+            game.conn.set_leds(start_and_path, colors)
+            logger.info(
+                "%s (budżet ruchu %s stóp) – ścieżka do %s (%s pól / %s stóp). Przenieś figurkę na cel i zeskanuj.",
                 enemy.name,
-                move_budget,
+                move_budget_feet,
                 dest,
                 len(truncated) - 1,
+                used_feet,
             )
             try:
                 confirm = game.conn.scan_board([dest])

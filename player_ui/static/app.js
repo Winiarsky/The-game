@@ -507,7 +507,10 @@ function normalizeChoices(prompt) {
 function showPathInfo(payload = {}) {
     const id = payload.id || `path-${Date.now()}`;
     activePathId = id;
-    const steps = payload.steps != null ? `Ścieżka: ${payload.steps} pól` : "Wyznaczam trasę...";
+    const parts = [];
+    if (payload.steps != null) parts.push(`${payload.steps} pól`);
+    if (payload.feet != null) parts.push(`${payload.feet} stóp`);
+    const steps = parts.length ? `Ścieżka: ${parts.join(" · ")}` : "Wyznaczam trasę...";
     const target = payload.target ? ` → cel ${payload.target}` : "";
     pathToast.textContent = `${steps}${target}`;
     pathToast.classList.remove("hidden");

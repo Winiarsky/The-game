@@ -6,7 +6,7 @@ from typing import Tuple
 
 from .base import ActionContext, BaseAction
 from .actions_registy import register
-from .move_utils import perform_movement, default_on_enter, find_path, follow_path
+from .move_utils import perform_movement, default_on_enter, find_path, follow_path, path_cost_feet
 from board import consts
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -156,12 +156,15 @@ class MoveAction(BaseAction):
 
                     path_preview = path[1:]
                     steps = len(path_preview)
+                    feet = path_cost_feet(path)
                     path_id = f"path-{time.time_ns()}"
                     active_path_id = path_id
-                    preview_msg = f"Ścieżka do {target}: {steps} pól. Kliknij cel ponownie, aby potwierdzić."
-                    ctx.game.ui_event("path_preview", {"id": path_id, "steps": steps, "target": target})
+                    preview_msg = f"Ścieżka do {target}: {steps} pól / {feet} stóp. Kliknij cel ponownie, aby potwierdzić."
+                    ctx.game.ui_event("path_preview", {"id": path_id, "steps": steps, "feet": feet, "target": target})
                     logger.info(preview_msg)
-                    ctx.game.conn.set_leds(path_preview, consts.MOVE_FIELD_RGB)
+                    leds_positions = [moving_hero.position] + path_preview
+                    leds_colors = [consts.MOVE_START_RGB] + [consts.MOVE_FIELD_RGB] * len(path_preview)
+                    ctx.game.conn.set_leds(leds_positions, leds_colors)
                     confirm = ctx.game.conn.scan_board(None)
                     ctx.game.conn.leds_off()
 
