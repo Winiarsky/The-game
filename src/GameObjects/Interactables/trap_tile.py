@@ -1,9 +1,9 @@
 from GameObjects.base import GameObjectMeta
-from interactable import Interaction, Interactable
+from GameObjects.interactions_mixin.base_interaction import Interaction, InteractableMixin
 from GameObjects.interactions_mixin import TrappableMixin, prompt_for_roll
 
 
-class TrapTile(TrappableMixin, Interactable):
+class TrapTile(TrappableMixin, InteractableMixin):
     """Prosta pułapka wolnostojąca: wykryj/rozbrój/aktywuj."""
 
     def __init__(
@@ -14,7 +14,7 @@ class TrapTile(TrappableMixin, Interactable):
         trap_disable_dc: int = 18,
         trap_effect: str = "Obrażenia lub efekt statusu.",
     ) -> None:
-        Interactable.__init__(self, position=None, allow_same_cell_interact=True, blocks_movement=False)
+        InteractableMixin.__init__(self, position=None, allow_same_cell_interact=True, blocks_movement=False)
         self.trap_armed = trap_armed
         self.trap_detected = False
         self.trap_detection_dc = trap_detection_dc

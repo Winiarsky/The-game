@@ -10,7 +10,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from board_grid import BoardGrid  # noqa: E402
 from GameObjects.Interactables.utils.awareness import iter_watchers_in_rooms, summarize_watchers  # noqa: E402
-from interactable import Interactable  # noqa: E402
+from GameObjects.interactions_mixin.base_interaction import InteractableMixin as Interactable  # noqa: E402
 from GameObjects.interactions_mixin import StatusMixin, WatchfulMixin  # noqa: E402
 from actions.stealth import StealthAction  # noqa: E402
 from hero import Hero  # noqa: E402

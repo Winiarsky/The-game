@@ -8,7 +8,7 @@ if str(PROJECT_ROOT / "src") not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from GameObjects.NPC.base_npc import BaseNPC  # noqa: E402
-from interactable import Interaction  # noqa: E402
+from GameObjects.interactions_mixin.base_interaction import Interaction  # noqa: E402
 from GameObjects.interactions_mixin import TradeItem  # noqa: E402
 
 

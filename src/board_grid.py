@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field as dataclass_field
 from typing import List, Optional, Protocol, Tuple
-from interactable import Interactable
-from GameObjects.interactions_mixin import StatusMixin
 
+from GameObjects.interactions_mixin import StatusMixin
+from GameObjects.interactions_mixin.base_interaction import InteractableMixin
 from GameObjects.Obstacles.basic_obstacle import Obstacle
 from GameObjects.Terrains.basic_terrain import BasicTerrain
 from GameObjects.Walls.basic_wall import Wall
@@ -20,7 +20,7 @@ class Occupant(Protocol):
 class GridCell:
     field: BasicTerrain = dataclass_field(default_factory=BasicTerrain)
     occupant: Optional[Occupant] = None
-    interactables: list[Interactable] = dataclass_field(default_factory=list)
+    interactables: list[InteractableMixin] = dataclass_field(default_factory=list)
     rooms: set[str] = dataclass_field(default_factory=set)
 
 
@@ -120,10 +120,10 @@ class BoardGrid:
     def occupant_at(self, position: Tuple[int, int]) -> Optional[Occupant]:
         return self.cell_at(position).occupant
 
-    def interactables_at(self, position: Tuple[int, int]) -> list[Interactable]:
+    def interactables_at(self, position: Tuple[int, int]) -> list[InteractableMixin]:
         """Obiekty interaktywne na polu + krawędziach stykających się z polem."""
         cell_objs = list(self.cell_at(position).interactables)
-        edge_objs: list[Interactable] = []
+        edge_objs: list[InteractableMixin] = []
         for key, objects in self.edge_interactables.items():
             if position in key:
                 edge_objs.extend(objects)

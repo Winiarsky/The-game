@@ -20,7 +20,6 @@ from GameObjects.Obstacles.basic_obstacle import Obstacle
 from GameObjects.Terrains.basic_terrain import BasicTerrain
 from GameObjects.Walls.basic_wall import Wall, Mur
 from board_grid import BoardGrid
-from interactable import Interactable
 from object_registry import get_object
 from ui_client import get_ui_client
 
@@ -122,10 +121,12 @@ class Game:
             board.place(obj, pos)
             self.enemies.append(obj)
 
+        from GameObjects.interactions_mixin.base_interaction import InteractableMixin
+
         handlers: list[tuple[type, callable]] = [
             (BasicTerrain, lambda obj, pos: board.set_field(pos, obj)),
             (Obstacle, lambda obj, pos: board.place(obj, pos)),
-            (Interactable, lambda obj, pos: board.add_interactable(obj, pos)),
+            (InteractableMixin, lambda obj, pos: board.add_interactable(obj, pos)),
             (Enemy, _place_enemy),
         ]
 
@@ -170,7 +171,9 @@ class Game:
                         b = (b_raw[0], b_raw[1])
                         config = edge.get("config") or {}
                         default_cfg = definition.meta.default_config if definition else None
-                        if isinstance(logic_cls, type) and issubclass(logic_cls, Interactable):
+                        if isinstance(logic_cls, type) and issubclass(
+                            logic_cls, InteractableMixin  # type: ignore[arg-type]
+                        ):
                             instance = build_instance(logic_cls, config, default_cfg)
                             if instance is None:
                                 continue

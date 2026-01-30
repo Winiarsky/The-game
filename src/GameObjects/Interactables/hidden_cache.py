@@ -1,11 +1,11 @@
 from typing import Optional
 
 from GameObjects.base import GameObjectMeta
-from interactable import Interaction, Interactable
+from GameObjects.interactions_mixin.base_interaction import Interaction, InteractableMixin
 from GameObjects.interactions_mixin import HiddenMixin, prompt_for_roll
 
 
-class HiddenCache(HiddenMixin, Interactable):
+class HiddenCache(HiddenMixin, InteractableMixin):
     """Ukryty schowek/sekretne przejście do wykrycia lub ślepego trafienia."""
 
     def __init__(
@@ -20,7 +20,7 @@ class HiddenCache(HiddenMixin, Interactable):
         auto_trigger_on_enter: bool = False,
         trap_effect: str | None = None,
     ):
-        Interactable.__init__(
+        InteractableMixin.__init__(
             self,
             position=None,
             allow_same_cell_interact=True,

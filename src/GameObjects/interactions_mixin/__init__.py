@@ -13,6 +13,7 @@ from GameObjects.interactions_mixin.hidden_mixin import HiddenMixin
 from GameObjects.interactions_mixin.watchful_mixin import WatchfulMixin
 from GameObjects.interactions_mixin.hide_in_mixin import HideInMixin
 from GameObjects.interactions_mixin.reactive_mixin import ReactiveMixin
+from GameObjects.interactions_mixin.base_interaction import Interaction, InteractableMixin, InteractionHandler
 
 __all__ = [
     "prompt_for_roll",
@@ -32,4 +33,7 @@ __all__ = [
     "WatchfulMixin",
     "HideInMixin",
     "ReactiveMixin",
+    "Interaction",
+    "InteractableMixin",
+    "InteractionHandler",
 ]

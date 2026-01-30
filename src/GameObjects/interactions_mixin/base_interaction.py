@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from typing import Callable, Optional, Tuple, TYPE_CHECKING, Any
 
@@ -5,7 +7,6 @@ from object_registry import assign_id
 
 if TYPE_CHECKING:
     from board_grid import Occupant
-
 
 # luźny typ handlera, by dopuścić metody podklas
 InteractionHandler = Callable[[Any, "Occupant", Any, Optional[dict]], str]
@@ -22,15 +23,15 @@ class Interaction:
     enabled: bool = True
     end_interaction: bool = True  # jeśli False, po wykonaniu akcji wracamy do menu akcji
 
-    def execute(self, interactable: "Interactable", actor: "Occupant", game, payload: Optional[dict] = None) -> str:
+    def execute(self, interactable: "InteractableMixin", actor: "Occupant", game, payload: Optional[dict] = None) -> str:
         if not self.enabled:
             return f"Akcja '{self.label}' jest niedostępna."
         return self.handler(interactable, actor, game, payload or {})
 
 
 @dataclass
-class Interactable:
-    """Obiekt, z którym można wchodzić w interakcję."""
+class InteractableMixin:
+    """Mixin dla obiektów, z którymi można wchodzić w interakcję."""
 
     object_id: str = field(init=False)
     position: Optional[Tuple[int, int]] = None

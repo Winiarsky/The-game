@@ -2,7 +2,7 @@ import random
 from GameObjects.base import GameObjectMeta
 from typing import Optional
 
-from interactable import Interactable, Interaction
+from GameObjects.interactions_mixin.base_interaction import InteractableMixin, Interaction
 from GameObjects.interactions_mixin import HideInMixin, prompt_for_roll
 import logging
 from board import consts
@@ -10,7 +10,7 @@ from board import consts
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-class LockedChest(Interactable, HideInMixin):
+class LockedChest(InteractableMixin, HideInMixin):
     """Prosta skrzynia: otwórz, aby zebrać skarb."""
 
     def __init__(

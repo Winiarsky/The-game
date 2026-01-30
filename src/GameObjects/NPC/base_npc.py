@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Optional, Callable, Iterable
 
 from GameObjects.base import GameObjectMeta
-from interactable import Interaction, Interactable
+from GameObjects.interactions_mixin.base_interaction import Interaction, InteractableMixin
 from GameObjects.interactions_mixin import (
     SocialMixin,
     TradeMixin,
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 DIALOGS_DIR = Path(__file__).resolve().parents[1] / "dialogs"
 
 
-class BaseNPC(SocialMixin, TradeMixin, PickpocketMixin, Interactable):
+class BaseNPC(SocialMixin, TradeMixin, PickpocketMixin, InteractableMixin):
     """Bazowy NPC z dialogiem, handlem i próbą kradzieży."""
 
     meta: Optional[GameObjectMeta] = None  # do ustawiania w klasach pochodnych
@@ -45,7 +45,7 @@ class BaseNPC(SocialMixin, TradeMixin, PickpocketMixin, Interactable):
         on_pickpocket_fail: Optional[Callable[[object, object], Optional[str]]] = None,
         on_trade: Optional[Callable[[object, object], Optional[str]]] = None,
     ):
-        Interactable.__init__(
+        InteractableMixin.__init__(
             self,
             position=None,
             blocks_movement=blocks_movement,

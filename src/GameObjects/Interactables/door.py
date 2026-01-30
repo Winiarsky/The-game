@@ -2,7 +2,7 @@ import logging
 from typing import Optional
 
 from GameObjects.base import GameObjectMeta
-from interactable import Interaction, Interactable
+from GameObjects.interactions_mixin.base_interaction import Interaction, InteractableMixin
 from GameObjects.interactions_mixin import (
     DestructibleMixin,
     HiddenMixin,
@@ -15,7 +15,7 @@ from GameObjects.interactions_mixin import (
 logger = logging.getLogger(__name__)
 
 
-class Door(LockableMixin, TrappableMixin, HiddenMixin, DestructibleMixin, Interactable):
+class Door(LockableMixin, TrappableMixin, HiddenMixin, DestructibleMixin, InteractableMixin):
     """Drzwi z obsługą zamka, pułapki, ukrycia i niszczenia."""
 
     def __init__(
@@ -41,7 +41,7 @@ class Door(LockableMixin, TrappableMixin, HiddenMixin, DestructibleMixin, Intera
         auto_reveal_on_enter: bool = False,
         auto_trigger_on_enter: bool = False,
     ):
-        Interactable.__init__(
+        InteractableMixin.__init__(
             self,
             position=None,
             blocks_movement=False,
