@@ -5,8 +5,31 @@ import random
 import time
 from board import consts
 from actions.move_utils import find_path, path_cost_feet, trim_path_to_feet
+from combat import refresh_flanking_statuses, flat_footed_penalty
+from combat.reactions import dispatch_reactions
 
 logger = logging.getLogger(__name__)
+
+
+def _dispatch_move_reactions(game, mover, src: tuple[int, int], dst: tuple[int, int]) -> None:
+    leaving = False
+    for reactor in list(getattr(game, "heroes", [])) + list(getattr(game, "enemies", [])):
+        if reactor is mover:
+            continue
+        rpos = getattr(reactor, "position", None)
+        if rpos is None:
+            continue
+        reach = getattr(reactor, "reach", 1) or 1
+        dx = abs(rpos[0] - src[0])
+        dy = abs(rpos[1] - src[1])
+        if max(dx, dy) <= reach:
+            dx2 = abs(rpos[0] - dst[0])
+            dy2 = abs(rpos[1] - dst[1])
+            if max(dx2, dy2) > reach:
+                leaving = True
+                break
+    event = {"actor": mover, "action_tags": {"move"}, "from_pos": src, "to_pos": dst, "leaving_reach": leaving}
+    dispatch_reactions(game, event)
 
 
 def _heroes_in_range(game, enemy_pos: tuple[int, int], include_diagonal: bool = True) -> list[tuple[int, int]]:
@@ -66,12 +89,13 @@ def _attack_hero(enemy, game, targets: list[tuple[int, int]]) -> None:
         return
 
     attack_bonus = getattr(enemy, "attack_bonus", 0)
-    target_bonus = getattr(hero, "enemy_attack_bonus", 0)
-    roll = random.randint(1, 20) + attack_bonus + target_bonus
+    roll = random.randint(1, 20) + attack_bonus
+    penalty = flat_footed_penalty(hero)
+    penalty_note = f" (cel flankowany: -{penalty} do AC)" if penalty else ""
 
     prompt = (
         f"{getattr(enemy, 'name', 'wróg')} atakuje bohatera na {target_pos}: "
-        f"r={roll} (1d20 + {attack_bonus} + bonus celu {target_bonus}). "
+        f"r={roll} (1d20 + {attack_bonus}){penalty_note}. "
         "Potwierdź trafienie: ACCEPT/DECLINE"
     )
     response = conn.read_card(prompt, ["ACCEPT", "DECLINE"])
@@ -107,6 +131,10 @@ def basic_melee(enemy, game, combat_state, actions_left: int = 1) -> int:
     while actions_used < actions_left:
         remaining = actions_left - actions_used
         logger.debug("[AI] Pętla akcji wroga: użyte=%s, pozostalo=%s", actions_used, remaining)
+        try:
+            refresh_flanking_statuses(game)
+        except Exception as exc:
+            logger.error("Nie udało się odświeżyć flankowania: %s", exc)
         # próbuj zaatakować, jeśli w zasięgu i masz akcję
         adj = _heroes_in_range(game, enemy.position)
         if adj and remaining >= attack_cost:
@@ -216,6 +244,7 @@ def basic_melee(enemy, game, combat_state, actions_left: int = 1) -> int:
                 continue
 
             try:
+                _dispatch_move_reactions(game, enemy, enemy.position, dest)
                 board.move(enemy.position, dest)
                 move_used = True
             except ValueError as exc:
@@ -226,6 +255,10 @@ def basic_melee(enemy, game, combat_state, actions_left: int = 1) -> int:
             game.conn.leds_off()
 
         if move_used:
+            try:
+                refresh_flanking_statuses(game)
+            except Exception as exc:
+                logger.error("Nie udało się odświeżyć flankowania po ruchu wroga: %s", exc)
             actions_used += 1
             continue
         actions_used += 1

@@ -1,12 +1,13 @@
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-from GameObjects.interactions_mixin import StatusMixin, prompt_for_roll
+from GameObjects.interactions_mixin import StatusMixin, ReactiveMixin, prompt_for_roll
+from combat.reactions import OpportunityAttack
 from object_registry import assign_id
 
 # to do make hero scrpt, 
 @dataclass
-class Hero(StatusMixin):
+class Hero(StatusMixin, ReactiveMixin):
     object_id: str = field(init=False)
     position: Optional[tuple[int, int]] = None
     position_x: Optional[int] = None
@@ -24,6 +25,8 @@ class Hero(StatusMixin):
         self.object_id = assign_id(self)
         if self.position is not None:
             self.position_x, self.position_y = self.position
+        if not self.reactions:
+            self.reactions.append(OpportunityAttack())
 
     def __repr__(self):
         return f"position: {self.position}"

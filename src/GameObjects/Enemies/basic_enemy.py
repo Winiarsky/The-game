@@ -5,7 +5,8 @@ import random
 from dataclasses import dataclass, field
 from typing import Optional
 
-from GameObjects.interactions_mixin import StatusMixin, WatchfulMixin
+from GameObjects.interactions_mixin import StatusMixin, WatchfulMixin, ReactiveMixin
+from combat.reactions import OpportunityAttack
 from statuses import Status
 from object_registry import assign_id
 
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class BasicEnemy(StatusMixin, WatchfulMixin):
+class BasicEnemy(StatusMixin, WatchfulMixin, ReactiveMixin):
     """Bazowa klasa przeciwnika do walki turowej."""
 
     name: str = "Enemy"
@@ -24,6 +25,7 @@ class BasicEnemy(StatusMixin, WatchfulMixin):
     attack_bonus: int = 0
     strength: int = 0
     behavior_id: str | None = "basic_melee"
+    reach: int = 1
     watch_disturbed: int = 0  # 0 blokuje wejście w stealth w pokoju
     watch_disabled: bool = False
     perception_bonus: int = 4
@@ -35,6 +37,11 @@ class BasicEnemy(StatusMixin, WatchfulMixin):
 
     def __post_init__(self):
         self.object_id = assign_id(self)
+        if not self.reactions:
+            try:
+                self.reactions.append(OpportunityAttack())
+            except Exception:
+                pass
 
     def __hash__(self):
         return hash(self.object_id)

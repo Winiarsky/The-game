@@ -8,12 +8,38 @@ from time import sleep
 from typing import Callable, Iterable, Tuple
 
 from board import consts
+from combat.reactions import dispatch_reactions
 
 logger = logging.getLogger(__name__)
 
 # Koszt ruchu w stopach: kardynał 5, diagonalnie naprzemiennie 5/10.
 CARDINAL_COST_FEET = 5
 DIAGONAL_COSTS_FEET = (5, 10)
+
+
+def _maybe_dispatch_move_reactions(ctx, mover, src: tuple[int, int], dst: tuple[int, int]) -> None:
+    """Wyślij event ruchu dla reakcji (atak okazyjny itp.)."""
+    game = getattr(ctx, "game", None)
+    if game is None:
+        return
+    leaving = False
+    for reactor in list(getattr(game, "heroes", [])) + list(getattr(game, "enemies", [])):
+        if reactor is mover:
+            continue
+        rpos = getattr(reactor, "position", None)
+        if rpos is None:
+            continue
+        reach = getattr(reactor, "reach", 1) or 1
+        dx = abs(rpos[0] - src[0])
+        dy = abs(rpos[1] - src[1])
+        if max(dx, dy) <= reach:
+            dx2 = abs(rpos[0] - dst[0])
+            dy2 = abs(rpos[1] - dst[1])
+            if max(dx2, dy2) > reach:
+                leaving = True
+                break
+    event = {"actor": mover, "action_tags": {"move"}, "from_pos": src, "to_pos": dst, "leaving_reach": leaving}
+    dispatch_reactions(game, event)
 
 
 def _is_diagonal(a: tuple[int, int], b: tuple[int, int]) -> bool:
@@ -125,6 +151,11 @@ def perform_movement(
             continue
 
         try:
+            _maybe_dispatch_move_reactions(ctx, hero, current_pos, target)
+        except Exception as exc:
+            logger.error("Reakcje ruchu nie powiodły się: %s", exc)
+
+        try:
             board.move(source_pos, target)
         except ValueError as exc:
             logger.error("Nie można wykonać ruchu: %s", exc)
@@ -233,6 +264,11 @@ def follow_path(
         for idx, step in enumerate(remaining):
             if not board.can_traverse(current, step, allow_occupied=allow_occupied):
                 return False, current, "blocked"
+
+            try:
+                _maybe_dispatch_move_reactions(ctx, hero, current, step)
+            except Exception as exc:
+                logger.error("Reakcje ruchu nie powiodły się: %s", exc)
 
             try:
                 board.move(current, step)

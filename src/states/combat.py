@@ -157,7 +157,16 @@ class Combat(State):
         self._cleanup_removed()
         if not self.round_queue:
             return None
-        return self.round_queue[0]
+        actor = self.round_queue[0]
+        if actor not in self.actions_used:
+            self.actions_used[actor] = 0
+            reset_react = getattr(actor, "reset_reactions", None)
+            if callable(reset_react):
+                try:
+                    reset_react()
+                except Exception as exc:
+                    logger.error("Nie udało się zresetować reakcji dla %s: %s", actor, exc)
+        return actor
 
     def _advance_turn(self):
         if not self.round_queue:
@@ -177,6 +186,12 @@ class Combat(State):
         if actor is not None:
             self.actions_used[actor] = 0
             logger.debug("Nowa tura dla %s – reset licznika akcji.", actor)
+            reset_react = getattr(actor, "reset_reactions", None)
+            if callable(reset_react):
+                try:
+                    reset_react()
+                except Exception as exc:
+                    logger.error("Nie udało się zresetować reakcji dla %s: %s", actor, exc)
         self._send_initiative_event()
 
     # --- Combat flow ---

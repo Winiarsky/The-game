@@ -12,6 +12,7 @@ from GameObjects.interactions_mixin.trappable_mixin import TrappableMixin
 from GameObjects.interactions_mixin.hidden_mixin import HiddenMixin
 from GameObjects.interactions_mixin.watchful_mixin import WatchfulMixin
 from GameObjects.interactions_mixin.hide_in_mixin import HideInMixin
+from GameObjects.interactions_mixin.reactive_mixin import ReactiveMixin
 
 __all__ = [
     "prompt_for_roll",
@@ -30,4 +31,5 @@ __all__ = [
     "HiddenMixin",
     "WatchfulMixin",
     "HideInMixin",
+    "ReactiveMixin",
 ]

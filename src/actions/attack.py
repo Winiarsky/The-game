@@ -3,6 +3,7 @@ from pathlib import Path
 import sys
 from typing import Optional
 
+from combat import effective_ac, flat_footed_penalty, refresh_flanking_statuses
 from hero import Hero
 from .base import ActionContext, BaseAction
 from .actions_registy import register
@@ -109,15 +110,26 @@ class TestAttackAction(BaseAction):
         enemy, enemy_pos = _choose_enemy(ctx)
         if enemy is None or enemy_pos is None:
             return
-        roll = prompt_for_roll(f"Podaj wynik testu ataku przeciwko {getattr(enemy, 'name', 'przeciwnik')} (AC {getattr(enemy, 'ac', '?')}): ")
-        hit = roll >= getattr(enemy, "ac", 10)
+        refresh_flanking_statuses(ctx.game)
+        target_ac = effective_ac(enemy)
+        base_ac = getattr(enemy, "ac", target_ac)
+        penalty = flat_footed_penalty(enemy)
+        if penalty:
+            prompt_ac = f"{target_ac} (bazowe {base_ac}, -{penalty} flankowanie)"
+        else:
+            prompt_ac = str(base_ac)
+        roll = prompt_for_roll(
+            f"Podaj wynik testu ataku przeciwko {getattr(enemy, 'name', 'przeciwnik')} (AC {prompt_ac}): "
+        )
+        hit = roll >= target_ac
         if not hit:
-            logger.info("Pudło (r=%s vs AC %s).", roll, getattr(enemy, "ac", "?"))
+            logger.info("Pudło (r=%s vs AC %s).", roll, target_ac)
             return
 
-        logger.info("Trafienie! (r=%s vs AC %s) Cel na %s.", roll, getattr(enemy, "ac", "?"), enemy_pos)
+        ac_note = "" if target_ac == base_ac else f" (po karach z flankowania, bazowe AC {base_ac})"
+        logger.info("Trafienie! (r=%s vs AC %s%s) Cel na %s.", roll, target_ac, ac_note, enemy_pos)
         if ctx.game.ui:
-            ctx.game.ui_log(f"Trafienie! (r={roll} vs AC {getattr(enemy, 'ac', '?')}) Cel na {enemy_pos}.")
+            ctx.game.ui_log(f"Trafienie! (r={roll} vs AC {target_ac}) Cel na {enemy_pos}.")
         dmg_type = _choose_damage_type(ctx.game)
         if dmg_type is None:
             logger.info("Brak przydzielonych obrażeń – kończę akcję ataku.")
@@ -140,3 +152,7 @@ class TestAttackAction(BaseAction):
         else:
             logger.info("Obrażenia przyjęte, cel żyje (HP %s).", enemy.hp)
             ctx.game.ui_log(f"Obrażenia przyjęte, cel żyje (HP {enemy.hp}).")
+        try:
+            refresh_flanking_statuses(ctx.game)
+        except Exception as exc:
+            logger.error("Nie udało się odświeżyć flankowania po ataku: %s", exc)

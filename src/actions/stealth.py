@@ -8,6 +8,7 @@ from .actions_registy import register
 from .base import ActionContext, BaseAction
 from .move_utils import perform_movement, default_on_enter
 from board import consts
+from combat import refresh_flanking_statuses
 from GameObjects.interactions_mixin import prompt_for_roll
 from GameObjects.Interactables.utils.awareness import iter_watchers_in_rooms, summarize_watchers
 from GameObjects.Obstacles.basic_obstacle import Obstacle
@@ -224,16 +225,22 @@ class StealthAction(BaseAction):
 
     def _stealth_move(self, ctx: ActionContext, hero, start_pos: Tuple[int, int]) -> None:
         board = ctx.game.board
-        perform_movement(
-            ctx,
-            hero,
-            start_pos,
-            lambda current: self._validate_neighbors(ctx, current, board.get_neighbors(current)),
-            led_color=consts.STEALTH_MOVE_RGB,
-            end_message="Kończysz ruch w ukryciu.",
-            allow_occupied=True,
-            on_enter=default_on_enter,
-        )
+        try:
+            perform_movement(
+                ctx,
+                hero,
+                start_pos,
+                lambda current: self._validate_neighbors(ctx, current, board.get_neighbors(current)),
+                led_color=consts.STEALTH_MOVE_RGB,
+                end_message="Kończysz ruch w ukryciu.",
+                allow_occupied=True,
+                on_enter=default_on_enter,
+            )
+        finally:
+            try:
+                refresh_flanking_statuses(ctx.game)
+            except Exception as exc:
+                logger.error("Nie udało się odświeżyć flankowania po ruchu w stealth: %s", exc)
 
     def _attempt_spot_here(self, ctx: ActionContext, hero, position: Tuple[int, int]) -> bool:
         """Wywołaj próby wykrycia w obecnych pokojach; True jeśli ktoś zauważył."""
