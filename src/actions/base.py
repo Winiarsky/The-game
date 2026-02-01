@@ -10,6 +10,7 @@ class ActionContext(NamedTuple):
     game: "Game"
     heroes_turn: "State"
     actor: Optional[object] = None
+    action_tags: Optional[list[str]] = None  # opcjonalne: wstępnie znane tagi
 
 
 class BaseAction(ABC):

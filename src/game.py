@@ -43,6 +43,8 @@ class Game:
             self.config = json.load(config_file)
         self.conn: Connection = self._init_connection() if conn is None else conn
         self.ui = get_ui_client()
+        from action_events import ActionEventBus
+        self.events = ActionEventBus(self)
         self.heroes: list[Hero] = []
         self.enemies: list[Enemy] = []
         self.board = self._init_board()

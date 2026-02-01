@@ -32,6 +32,16 @@ def _dispatch_move_reactions(game, mover, src: tuple[int, int], dst: tuple[int, 
                 leaving = True
                 break
     event = {"actor": mover, "action_tags": {"move"}, "from_pos": src, "to_pos": dst, "leaving_reach": leaving}
+
+    game.events.safe_emit_action(
+        actor=mover,
+        action_id="enemy_move",
+        action_tags=["move"],
+        from_pos=src,
+        to_pos=dst,
+        leaving_reach=leaving,
+    )
+
     dispatch_reactions(game, event)
 
 
@@ -117,6 +127,15 @@ def _attack_hero(enemy, game, targets: list[tuple[int, int]]) -> None:
     )
     logger.info(dmg_msg)
     game.ui_log(dmg_msg)
+
+    game.events.safe_emit_action(
+        actor=enemy,
+        action_id="enemy_attack_melee",
+        action_tags=["attack_melee"],
+        target=hero,
+        target_pos=target_pos,
+        damage=damage,
+    )
 
 
 def basic_melee(enemy, game, combat_state, actions_left: int = 1) -> int:

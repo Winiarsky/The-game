@@ -22,6 +22,7 @@ class Interaction:
     handler: InteractionHandler = lambda *_args, **_kwargs: "Brak akcji."
     enabled: bool = True
     end_interaction: bool = True  # jeśli False, po wykonaniu akcji wracamy do menu akcji
+    tags: list[str] = field(default_factory=list)  # słownikowe tagi akcji (do eventów)
 
     def execute(self, interactable: "InteractableMixin", actor: "Occupant", game, payload: Optional[dict] = None) -> str:
         if not self.enabled:

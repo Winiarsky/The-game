@@ -10,6 +10,7 @@ from .actions_registy import register
 from board import consts
 from GameObjects.interactions_mixin import prompt_for_roll
 from GameObjects.Enemies.simple_enemy import Enemy
+from action_events import ActionEventBus
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
@@ -118,16 +119,32 @@ class TestAttackAction(BaseAction):
             prompt_ac = f"{target_ac} (bazowe {base_ac}, -{penalty} flankowanie)"
         else:
             prompt_ac = str(base_ac)
+
+        # emit wstępny – pozwala reakcjom blokować/przerywać atak
+        ctx.game.events.safe_emit_action(
+            actor=hero,
+            action_id="attack_pre",
+            action_tags=ctx.action_tags or ["attack_melee"],
+            target=enemy,
+            target_pos=enemy_pos,
+        )
         roll = prompt_for_roll(
             f"Podaj wynik testu ataku przeciwko {getattr(enemy, 'name', 'przeciwnik')} (AC {prompt_ac}): "
         )
         hit = roll >= target_ac
         if not hit:
-            logger.info("Pudło (r=%s vs AC %s).", roll, target_ac)
+            ctx.game.events.safe_emit_action(
+                actor=hero,
+                action_id="attack_miss",
+                action_tags=ctx.action_tags or ["attack_melee"],
+                target=enemy,
+                target_pos=enemy_pos,
+            )
             return
 
         ac_note = "" if target_ac == base_ac else f" (po karach z flankowania, bazowe AC {base_ac})"
         logger.info("Trafienie! (r=%s vs AC %s%s) Cel na %s.", roll, target_ac, ac_note, enemy_pos)
+        
         if ctx.game.ui:
             ctx.game.ui_log(f"Trafienie! (r={roll} vs AC {target_ac}) Cel na {enemy_pos}.")
         dmg_type = _choose_damage_type(ctx.game)
@@ -137,6 +154,17 @@ class TestAttackAction(BaseAction):
             return
         amount = prompt_for_roll(f"Ile obrażeń {dmg_type} zadajesz? ")
         _, defeated = enemy.apply_damage(amount, dmg_type)
+
+        # --- event akcji ---
+        ctx.game.events.safe_emit_action(
+            actor=hero,
+            action_id="attack",
+            action_tags=ctx.action_tags or ["attack_melee"],
+            target=enemy,
+            target_pos=enemy_pos,
+            damage=amount,
+            damage_type=dmg_type,
+        )
         if defeated:
             try:
                 ctx.game.board.remove(enemy_pos)

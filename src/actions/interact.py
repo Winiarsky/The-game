@@ -101,6 +101,18 @@ class InteractAction(BaseAction):
 
         action_id = self._choose_action(interactable, ctx.game)
         while True:
+            interaction = interactable.actions.get(action_id) if action_id else None
+
+            # emit przed wykonaniem (widoczny w UI/reakcjach)
+            tags = interaction.tags if interaction and getattr(interaction, "tags", None) else ["interact", "manipulate"]
+            ctx.game.events.safe_emit_action(
+                actor=hero,
+                action_id=action_id or "interaction",
+                action_tags=tags,
+                target=interactable,
+                target_pos=target,
+            )
+
             message = interactable.interact(hero, ctx.game, action_id=action_id)
             if message:
                 logger.info(message)
@@ -109,6 +121,13 @@ class InteractAction(BaseAction):
 
             interaction = interactable.actions.get(action_id) if action_id else None
             if interaction is None or interaction.end_interaction:
+                ctx.game.events.safe_emit_action(
+                    actor=hero,
+                    action_id="interaction_end",
+                    action_tags=["interaction_end"],
+                    target=interactable,
+                    target_pos=target,
+                )
                 break
 
             action_id = self._choose_action(interactable, ctx.game)

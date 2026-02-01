@@ -34,6 +34,16 @@ def _dispatch_move_reactions(game, mover, src: tuple[int, int], dst: tuple[int, 
                 leaving = True
                 break
     event = {"actor": mover, "action_tags": {"move"}, "from_pos": src, "to_pos": dst, "leaving_reach": leaving}
+
+    game.events.safe_emit_action(
+        actor=mover,
+        action_id="enemy_move",
+        action_tags=["move"],
+        from_pos=src,
+        to_pos=dst,
+        leaving_reach=leaving,
+    )
+
     dispatch_reactions(game, event)
 
 

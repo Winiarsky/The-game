@@ -75,6 +75,13 @@ class SpecialAction(BaseAction):
                 logger.info("Odrzucono zdolność %s – wracam do wyboru zdolności.", special.name)
                 continue
 
+            ctx.game.events.safe_emit_action(
+                actor=hero,
+                action_id="special_pre",
+                action_tags=["special", special.slug],
+                special=special.slug,
+            )
+
             try:
                 result = special.execute(hero, ctx)
             except Exception as exc:
@@ -83,4 +90,11 @@ class SpecialAction(BaseAction):
                 return False
 
             # result=False oznacza brak zużycia akcji (np. brak ścieżki) – wracamy do wyboru akcji
+            ctx.game.events.safe_emit_action(
+                actor=hero,
+                action_id="special",
+                action_tags=["special", special.slug],
+                special=special.slug,
+                success=bool(result),
+            )
             return bool(result)

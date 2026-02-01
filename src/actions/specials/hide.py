@@ -36,4 +36,9 @@ def hide_ability(hero, ctx) -> bool:
         ctx.game.ui_log(f"{getattr(hero, 'name', 'Bohater')} ukrywa się.")
     except Exception:
         pass
+    ctx.game.events.safe_emit_action(
+        actor=hero,
+        action_id="special_hide",
+        action_tags=["special", "hide", "stealth"],
+    )
     return True

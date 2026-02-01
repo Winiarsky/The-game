@@ -44,6 +44,13 @@ class SeekAction(BaseAction):
         if hero is None or hero_pos is None:
             return
 
+        ctx.game.events.safe_emit_action(
+            actor=hero,
+            action_id="seek_start",
+            action_tags=["seek", "perception"],
+            pos=hero_pos,
+        )
+
         roll = prompt_for_roll("Podaj wynik testu Przeszukiwania/Perception: ")
         board = ctx.game.board
         rooms_here = board.rooms_at(hero_pos)
@@ -105,6 +112,13 @@ class SeekAction(BaseAction):
             return
 
         logger.info("Ujawniono %s ukrytych obiektów w %s polach.", revealed_count, len(newly_revealed_positions))
+        ctx.game.events.safe_emit_action(
+            actor=hero,
+            action_id="seek_reveal",
+            action_tags=["seek", "reveal"],
+            revealed=list(newly_revealed_positions),
+            count=revealed_count,
+        )
         ctx.game.conn.set_leds(list(newly_revealed_positions), consts.HIDDEN_REVEAL_RGB)
         sleep(getattr(consts, "SEEK_REVEAL_SECONDS", 3))
         ctx.game.conn.leds_off()

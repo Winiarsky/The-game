@@ -139,6 +139,15 @@ def magic_missile_ability(hero, ctx) -> bool:
         game.ui_log("Brak możliwej ścieżki – pocisk nie może dotrzeć do celu.")
         return False
 
+    game.events.safe_emit_action(
+        actor=hero,
+        action_id="cast_magic_missile",
+        action_tags=["cast", "attack_ranged", "magic"],
+        target=enemy,
+        target_pos=enemy_pos,
+        path=path,
+    )
+
     # Rzut na obrażenia – gracz podaje wynik k4 (lub inny, wg mocy czaru).
     dmg = prompt_for_roll("Magic Missle: podaj wynik k4 (lub modyfikowany) obrażeń: ")
     logger.info("Magic Missle zadaje %s obrażeń magicznych wzdłuż ścieżki %s.", dmg, path)
@@ -165,8 +174,26 @@ def magic_missile_ability(hero, ctx) -> bool:
         enemy.position = None
         logger.info("Przeciwnik pokonany przez Magic Missle.")
         game.ui_log("Przeciwnik pokonany przez Magic Missle.")
+        game.events.safe_emit_action(
+            actor=hero,
+            action_id="cast_magic_missile_hit",
+            action_tags=["cast", "attack_ranged", "magic"],
+            target=enemy,
+            target_pos=enemy_pos,
+            damage=dmg,
+            defeated=True,
+        )
+        return True
     else:
         logger.info("Magic Missle trafia – przeciwnik żyje (HP %s).", getattr(enemy, "hp", "?"))
         game.ui_log(f"Magic Missle trafia – przeciwnik żyje (HP {getattr(enemy, 'hp', '?')}).")
-
+        game.events.safe_emit_action(
+            actor=hero,
+            action_id="cast_magic_missile_hit",
+            action_tags=["cast", "attack_ranged", "magic"],
+            target=enemy,
+            target_pos=enemy_pos,
+            damage=dmg,
+            defeated=False,
+        )
     return True

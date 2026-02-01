@@ -180,6 +180,12 @@ class StealthAction(BaseAction):
                     sleep(consts.WATCH_ALERT_SECONDS)
                     ctx.game.conn.leds_off()
                 return
+            ctx.game.events.safe_emit_action(
+                actor=hero,
+                action_id="stealth_start",
+                action_tags=["stealth", "skill", "move"],
+                pos=hero_pos,
+            )
             modifier, details = self._compute_modifier(ctx, hero_pos)
             if hero.has_status("hide"):
                 bonus_hide = getattr(hero, "hide_stealth_bonus", 0)
@@ -235,6 +241,13 @@ class StealthAction(BaseAction):
                 end_message="Kończysz ruch w ukryciu.",
                 allow_occupied=True,
                 on_enter=default_on_enter,
+            )
+            ctx.game.events.safe_emit_action(
+                actor=hero,
+                action_id="stealth_move",
+                action_tags=["stealth", "move"],
+                from_pos=start_pos,
+                to_pos=getattr(hero, "position", None),
             )
         finally:
             try:

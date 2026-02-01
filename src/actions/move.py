@@ -99,6 +99,15 @@ class MoveAction(BaseAction):
                 except Exception as exc:
                     logger.error("Błąd sprawdzania wrogów w pokoju: %s", exc)
 
+                def _emit_move_event(src_pos: tuple[int, int], dst_pos: tuple[int, int]) -> None:
+                    ctx.game.events.safe_emit_action(
+                        actor=moving_hero,
+                        action_id="move",
+                        action_tags=["move"],
+                        from_pos=src_pos,
+                        to_pos=dst_pos,
+                    )
+
                 def _on_enter_wrapper(context, hero_obj, current_pos: tuple[int, int]) -> bool:
                     stopped = default_on_enter(context, hero_obj, current_pos)
                     try:
@@ -125,6 +134,7 @@ class MoveAction(BaseAction):
                             return
 
                         if self._is_adjacent(board, moving_hero.position, target):
+                            start_pos = moving_hero.position
                             perform_movement(
                                 ctx,
                                 moving_hero,
@@ -135,6 +145,7 @@ class MoveAction(BaseAction):
                                 allow_occupied=True,
                                 on_enter=_on_enter_wrapper,
                             )
+                            _emit_move_event(start_pos, moving_hero.position)
                             if active_path_id:
                                 ctx.game.ui_event("path_clear", {"id": active_path_id})
                             return
@@ -184,6 +195,7 @@ class MoveAction(BaseAction):
                                 logger.info("Kliknięto bieżące pole – kończę akcję ruchu.")
                                 return
                             if self._is_adjacent(board, moving_hero.position, target):
+                                start_pos = moving_hero.position
                                 perform_movement(
                                     ctx,
                                     moving_hero,
@@ -194,9 +206,10 @@ class MoveAction(BaseAction):
                                     allow_occupied=True,
                                     on_enter=_on_enter_wrapper,
                                 )
+                                _emit_move_event(start_pos, moving_hero.position)
                                 if active_path_id:
                                     ctx.game.ui_event("path_clear", {"id": active_path_id})
-                                return
+                                    return
                             # w pozostałych przypadkach przejdź do kolejnego obrotu pętli z nowym celem
                             continue
 

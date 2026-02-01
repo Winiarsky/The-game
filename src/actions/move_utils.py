@@ -8,8 +8,6 @@ from time import sleep
 from typing import Callable, Iterable, Tuple
 
 from board import consts
-from combat.reactions import dispatch_reactions
-
 logger = logging.getLogger(__name__)
 
 # Koszt ruchu w stopach: kardynał 5, diagonalnie naprzemiennie 5/10.
@@ -41,8 +39,15 @@ def _maybe_dispatch_move_reactions(ctx, mover, src: tuple[int, int], dst: tuple[
             if max(dx2, dy2) > reach:
                 leaving = True
                 break
-    event = {"actor": mover, "action_tags": {"move"}, "from_pos": src, "to_pos": dst, "leaving_reach": leaving}
-    dispatch_reactions(game, event)
+    tags = ctx.action_tags if getattr(ctx, "action_tags", None) else ["move"]
+    game.events.safe_emit_action(
+        actor=mover,
+        action_id="move",
+        action_tags=tags,
+        from_pos=src,
+        to_pos=dst,
+        leaving_reach=leaving,
+    )
 
 
 def _is_diagonal(a: tuple[int, int], b: tuple[int, int]) -> bool:

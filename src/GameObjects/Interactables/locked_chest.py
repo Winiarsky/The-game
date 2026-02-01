@@ -83,6 +83,7 @@ class LockedChest(InteractableMixin, HideInMixin):
                 id="inspect",
                 label="Obejrzyj",
                 description="Sprawdź stan skrzyni.",
+                tags=["interact", "manipulate"],
                 handler=LockedChest.action_inspect,
                 end_interaction=False,
             )
@@ -92,6 +93,7 @@ class LockedChest(InteractableMixin, HideInMixin):
                 id="open",
                 label="Otwórz",
                 description="Spróbuj otworzyć (jeśli odblokowana).",
+                tags=["interact", "manipulate"],
                 handler=LockedChest.action_open,
                 end_interaction=False,
             )
@@ -101,6 +103,7 @@ class LockedChest(InteractableMixin, HideInMixin):
                 id="close",
                 label="Zamknij",
                 description="Zamknij wieko otwartej skrzyni.",
+                tags=["interact", "manipulate"],
                 handler=LockedChest.action_close,
                 end_interaction=False,
             )
@@ -110,6 +113,7 @@ class LockedChest(InteractableMixin, HideInMixin):
                 id="use_key",
                 label="Użyj klucza",
                 description="Włóż klucz i spróbuj odblokować.",
+                tags=["interact", "manipulate"],
                 handler=LockedChest.action_use_key,
                 end_interaction=False,
             )
@@ -119,6 +123,7 @@ class LockedChest(InteractableMixin, HideInMixin):
                 id="unlock_thievery",
                 label="Wytrych",
                 description="Test Złodziejstwa vs DC.",
+                tags=["interact", "manipulate", "thievery"],
                 handler=LockedChest.action_unlock_thievery,
                 end_interaction=False,
             )
@@ -128,6 +133,7 @@ class LockedChest(InteractableMixin, HideInMixin):
                 id="force_open",
                 label="Wyrwij/wyważ",
                 description="Athletics vs DC, próba sforsowania.",
+                tags=["interact", "manipulate", "athletics"],
                 handler=LockedChest.action_force_open,
                 end_interaction=False,
             )
@@ -137,6 +143,7 @@ class LockedChest(InteractableMixin, HideInMixin):
                 id="attack",
                 label="Atakuj",
                 description="Uderz w skrzynię bronią.",
+                tags=["attack_melee"],
                 handler=LockedChest.action_attack,
                 end_interaction=False,
             )
@@ -146,6 +153,7 @@ class LockedChest(InteractableMixin, HideInMixin):
                 id="push",
                 label="Przesuń",
                 description="Spróbuj przesunąć skrzynię na sąsiednie pole.",
+                tags=["interact", "manipulate", "athletics", "move"],
                 handler=LockedChest.action_push,
             )
         )
@@ -154,6 +162,7 @@ class LockedChest(InteractableMixin, HideInMixin):
                 id="jump_on",
                 label="Wskocz do skrzynię",
                 description="Wskocz do skrzyni aby otrzymac bonus do ukrywania i zaslone. (Tylko dla postaci o maym lub mniejszym rozmiarze)",
+                tags=["interact", "move"],
                 handler=LockedChest.action_jump_in,
             )
         )
@@ -162,6 +171,7 @@ class LockedChest(InteractableMixin, HideInMixin):
                 id="loot",
                 label="Zbierz łup",
                 description="Weź wszystko ze środka (jeśli otwarte).",
+                tags=["interact", "manipulate"],
                 handler=LockedChest.action_loot,
             )
         )
@@ -170,6 +180,7 @@ class LockedChest(InteractableMixin, HideInMixin):
                 id="leave",
                 label="Zrezygnuj",
                 description="Zakończ interakcję.",
+                tags=["interaction_end"],
                 handler=lambda _self, _actor, _game, _payload=None: "Koniec akcji.",
             )
         )
