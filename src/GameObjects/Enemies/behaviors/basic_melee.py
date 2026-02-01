@@ -12,6 +12,9 @@ logger = logging.getLogger(__name__)
 
 
 def _dispatch_move_reactions(game, mover, src: tuple[int, int], dst: tuple[int, int]) -> None:
+    state = getattr(game, "state", None)
+    if getattr(getattr(state, "__class__", None), "__name__", "") != "Combat":
+        return
     leaving = False
     for reactor in list(getattr(game, "heroes", [])) + list(getattr(game, "enemies", [])):
         if reactor is mover:

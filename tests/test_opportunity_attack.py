@@ -1,4 +1,10 @@
 import types
+from pathlib import Path
+import sys
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from combat.reactions import OpportunityAttack, dispatch_reactions
 from GameObjects.interactions_mixin.reactive_mixin import ReactiveMixin
@@ -86,6 +92,7 @@ class DummyEnemy(ReactiveMixin):
 
 def test_enemy_opportunity_attack_triggers_on_leaving_reach(monkeypatch):
     game = DummyGame()
+    game.state = type("Combat", (), {})()
     hero = DummyHero(pos=(0, 0))
     enemy = DummyEnemy(pos=(0, 1))
     game.heroes = [hero]
@@ -103,6 +110,7 @@ def test_enemy_opportunity_attack_triggers_on_leaving_reach(monkeypatch):
 
 def test_hero_opportunity_attack_prompts_and_deals_damage(monkeypatch):
     game = DummyGame()
+    game.state = type("Combat", (), {})()
     hero = DummyHero(pos=(0, 0))
     enemy = DummyEnemy(pos=(0, 1), hp=6)
     game.heroes = [hero]

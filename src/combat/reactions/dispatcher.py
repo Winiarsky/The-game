@@ -29,14 +29,27 @@ def iter_reactors(game) -> Iterable[object]:
 
 def dispatch_reactions(game, event: dict[str, object]) -> None:
     """Obsługa reakcji dla zdarzenia. Wrogowie reagują automatycznie, bohaterowie przez prompt."""
+    state = getattr(game, "state", None)
+    if getattr(getattr(state, "__class__", None), "__name__", "") != "Combat":
+        return
+
     actor = event.get("actor")
     target_pos = getattr(actor, "position", None)
     board = getattr(game, "board", None)
     if board is None:
         return
 
+    heroes = list(getattr(game, "heroes", []))
+    enemies = list(getattr(game, "enemies", []))
+    actor_side = "hero" if actor in heroes else "enemy" if actor in enemies else None
+
     for reactor in iter_reactors(game):
         if reactor is actor:
+            continue
+        # tylko przeciwna strona
+        if actor_side == "hero" and reactor in heroes:
+            continue
+        if actor_side == "enemy" and reactor in enemies:
             continue
         if not _in_reach(board, reactor, target_pos):
             continue

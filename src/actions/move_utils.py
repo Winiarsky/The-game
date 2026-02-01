@@ -22,6 +22,9 @@ def _maybe_dispatch_move_reactions(ctx, mover, src: tuple[int, int], dst: tuple[
     game = getattr(ctx, "game", None)
     if game is None:
         return
+    state = getattr(game, "state", None)
+    if getattr(getattr(state, "__class__", None), "__name__", "") != "Combat":
+        return
     leaving = False
     for reactor in list(getattr(game, "heroes", [])) + list(getattr(game, "enemies", [])):
         if reactor is mover:
