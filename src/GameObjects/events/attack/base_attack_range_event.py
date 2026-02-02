@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 import math
+from typing import Sequence
+
 from combat import effective_ac
 from GameObjects.interactions_mixin import RangeAttackAffectMixin, prompt_for_roll
 from statuses import Status
@@ -18,9 +20,9 @@ class BaseRangeAttackEvent(GameEvent):
     """Wspólna logika dla ataków dystansowych (łuki, kusze itd.)."""
 
     weapon_label: str = "bronią dystansową"
-    damage_prompt: str = "1k6 + DEX"
+    damage_prompt: str | Sequence[str] = "1k6 + DEX"
     action_id_base: str = "attack_ranged"
-    damage_type: str = "piercing"
+    damage_type: str | Sequence[str] = "piercing"
     range_increment_ft: int = 60
     max_range_increments: int = 6
     feet_per_cell: int = 5
@@ -145,10 +147,10 @@ class BaseRangeAttackEvent(GameEvent):
                 self._apply_range_attacker_status(hero)
                 return EventResult(success=True, consumed_action=self.consumes_action, message="Strzał chybia.")
 
-            damage = prompt_for_roll(f"Trafienie! Podaj obrażenia {self.damage_prompt}: ")
+            damage_components = self._collect_damage_components()
             defeated = False
             try:
-                _, defeated = enemy.apply_damage(damage, self.damage_type)
+                defeated = self._apply_damage_components(enemy, damage_components)
             except Exception as exc:
                 logger.error("Błąd przy zadawaniu obrażeń: %s", exc)
                 return EventResult(success=False, consumed_action=False, message=str(exc))
@@ -159,8 +161,8 @@ class BaseRangeAttackEvent(GameEvent):
                 action_tags=self._effective_tags(ctx),
                 target=enemy,
                 target_pos=target_pos,
-                damage=damage,
-                damage_type=self.damage_type,
+                damage=sum(d for _, d in damage_components),
+                damage_components=damage_components,
                 defeated=defeated,
                 cover=cover_type,
                 range_penalty=range_penalty,
@@ -196,6 +198,32 @@ class BaseRangeAttackEvent(GameEvent):
 
     def _cover_rank(self, cover_type: CoverType) -> int:
         return self.COVER_RANK.get(cover_type, 0)
+
+    # --- damage helpers ---
+    def _collect_damage_components(self) -> list[tuple[str, int]]:
+        """Pozyskaj wartości obrażeń dla 1+ typów."""
+        if isinstance(self.damage_type, str):
+            dmg = prompt_for_roll(f"Trafienie! Podaj obrażenia {self.damage_prompt}: ")
+            return [(self.damage_type, dmg)]
+
+        damage_types = list(self.damage_type)
+        components: list[tuple[str, int]] = []
+        for idx, dtype in enumerate(damage_types):
+            prompt = self.damage_prompt
+            if isinstance(prompt, (list, tuple)):
+                prompt_text = prompt[idx] if idx < len(prompt) else prompt[-1]
+            else:
+                prompt_text = prompt
+            roll = prompt_for_roll(f"Trafienie! Podaj obrażenia {prompt_text} ({dtype}): ")
+            components.append((dtype, roll))
+        return components
+
+    @staticmethod
+    def _apply_damage_components(target, comps):
+        defeated = False
+        for dmg_type, amount in comps:
+            _, defeated = target.apply_damage(amount, dmg_type)
+        return defeated
 
     def _line_cells(self, start: tuple[int, int], end: tuple[int, int]) -> list[tuple[int, int]]:
         """Prosty Bresenham na siatce."""

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Iterable, Sequence
 
 from board import consts
 from combat import effective_ac, flat_footed_penalty, refresh_flanking_statuses
@@ -16,11 +17,13 @@ class BasicMeleeAttackEvent(GameEvent):
 
     # konfiguracja per broń
     weapon_label: str = "bronią"
-    damage_prompt: str = "1k6 + STR"
+    damage_prompt: str | Sequence[str] = "1k6 + STR"
     action_id_base: str = "attack_melee"
     damage_type: str = "slashing"
     default_tags = ["attack_melee"]
     consumes_action = True
+    # może być str lub lista str przy wielu typach obrażeń
+    damage_type: str | Sequence[str] = "slashing"
 
     # --- główna logika ---
     def execute(self, ctx: EventContext) -> EventResult:  # noqa: C901 - złożone ale liniowe
@@ -78,9 +81,10 @@ class BasicMeleeAttackEvent(GameEvent):
             return EventResult(success=True, consumed_action=self.consumes_action, message=f"Atak {self.weapon_label}: pudło.")
 
         damage = prompt_for_roll(f"Trafienie! Podaj obrażenia {self.damage_prompt}: ")
+        damage_components = self._collect_damage_components(damage)
         defeated = False
         try:
-            _, defeated = enemy.apply_damage(damage, self.damage_type)
+            defeated = self._apply_damage_components(enemy, damage_components)
         except Exception as exc:
             logger.error("Nie udało się zadać obrażeń: %s", exc)
             return EventResult(success=False, consumed_action=False, message=str(exc))
@@ -91,7 +95,8 @@ class BasicMeleeAttackEvent(GameEvent):
             action_tags=self._effective_tags(ctx),
             target=enemy,
             target_pos=enemy_pos,
-            damage=damage,
+            damage=sum(d for _, d in damage_components),
+            damage_components=damage_components,
             defeated=defeated,
         )
 
@@ -118,6 +123,26 @@ class BasicMeleeAttackEvent(GameEvent):
         return EventResult(success=True, consumed_action=self.consumes_action, message=msg)
 
     # --- helpers ---
+    def _collect_damage_components(self, first_roll: int) -> list[tuple[str, int]]:
+        """Zwraca listę (typ, obrażenia) – obsługa wielu typów."""
+        if isinstance(self.damage_type, str):
+            return [(self.damage_type, first_roll)]
+        components: list[tuple[str, int]] = []
+        damage_types = list(self.damage_type)
+        components.append((damage_types[0], first_roll))
+        for idx, dtype in enumerate(damage_types[1:], start=1):
+            prompt = f"Trafienie! Podaj dodatkowe obrażenia ({dtype}): "
+            roll = prompt_for_roll(prompt)
+            components.append((dtype, roll))
+        return components
+
+    @staticmethod
+    def _apply_damage_components(target, comps: Iterable[tuple[str, int]]) -> bool:
+        defeated = False
+        for dmg_type, amount in comps:
+            _, defeated = target.apply_damage(amount, dmg_type)
+        return defeated
+
     @staticmethod
     def _adjacent_enemies(game, pos):
         board = game.board

@@ -118,10 +118,12 @@ def test_attack_sword_applies_damage(monkeypatch):
     game.board = FakeBoard(hero.position, enemy.position, enemy)
 
     # zapewnij trafienie i 5 obrażeń
+    from GameObjects.events.attack import basic_melee_attack_event as bmae
+
     rolls = iter([20, 5])
-    monkeypatch.setattr(attack_sword_event, "prompt_for_roll", lambda prompt: next(rolls))
+    monkeypatch.setattr(bmae, "prompt_for_roll", lambda prompt: next(rolls))
     # wyłącz kosztowny refresh flankowania
-    monkeypatch.setattr(attack_sword_event, "refresh_flanking_statuses", lambda *a, **k: None)
+    monkeypatch.setattr(bmae, "refresh_flanking_statuses", lambda *a, **k: None)
 
     ctx = EventContext(game=game, actor=hero)
     result = dispatch_event("attack_sword", ctx)
