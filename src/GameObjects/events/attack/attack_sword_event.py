@@ -6,8 +6,8 @@ from board import consts
 from combat import effective_ac, flat_footed_penalty, refresh_flanking_statuses
 from GameObjects.interactions_mixin import prompt_for_roll
 
-from .base import EventContext, EventResult, GameEvent
-from .registry import register_event
+from ..base import EventContext, EventResult, GameEvent
+from ..registry import register_event
 
 logger = logging.getLogger(__name__)
 

@@ -8,8 +8,8 @@ from actions.move_utils import find_path, path_cost_feet, trim_path_to_feet
 from combat import refresh_flanking_statuses
 from combat.reactions import dispatch_reactions
 
-from .base import EventContext, EventResult, GameEvent
-from .registry import register_event
+from ..base import EventContext, EventResult, GameEvent
+from ..registry import register_event
 
 logger = logging.getLogger(__name__)
 

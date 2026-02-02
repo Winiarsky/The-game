@@ -6,8 +6,8 @@ import random
 from board import consts
 from combat import flat_footed_penalty
 
-from .base import EventContext, EventResult, GameEvent
-from .registry import register_event
+from ..base import EventContext, EventResult, GameEvent
+from ..registry import register_event
 
 logger = logging.getLogger(__name__)
 
@@ -85,4 +85,3 @@ class EnemyMeleeAttackEvent(GameEvent):
         )
 
         return EventResult(success=True, consumed_action=True, message="Atak wroga wykonany.")
-

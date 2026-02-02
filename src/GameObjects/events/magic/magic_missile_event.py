@@ -5,8 +5,8 @@ import logging
 from board import consts
 from actions.specials.magic_missile import magic_missile_ability
 
-from .base import EventContext, EventResult, GameEvent
-from .registry import register_event
+from ..base import EventContext, EventResult, GameEvent
+from ..registry import register_event
 
 logger = logging.getLogger(__name__)
 
