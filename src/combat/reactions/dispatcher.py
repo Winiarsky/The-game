@@ -43,8 +43,21 @@ def dispatch_reactions(game, event: dict[str, object]) -> None:
     enemies = list(getattr(game, "enemies", []))
     actor_side = "hero" if actor in heroes else "enemy" if actor in enemies else None
 
+    def _has_status(actor, status_id: str) -> bool:
+        statuses = getattr(actor, "statuses", None)
+        if hasattr(actor, "has_status"):
+            try:
+                return bool(actor.has_status(status_id))  # type: ignore[arg-type]
+            except Exception:
+                pass
+        if isinstance(statuses, list):
+            return any(getattr(s, "id", s) == status_id for s in statuses)
+        return False
+
     for reactor in iter_reactors(game):
         if reactor is actor:
+            continue
+        if _has_status(reactor, "range_attacker"):
             continue
         # tylko przeciwna strona
         if actor_side == "hero" and reactor in heroes:

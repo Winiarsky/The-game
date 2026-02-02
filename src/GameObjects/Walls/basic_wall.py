@@ -2,11 +2,12 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Tuple
 
 from GameObjects.base import GameObjectMeta
+from GameObjects.interactions_mixin import RangeAttackAffectMixin
 from object_registry import assign_id
 
 
 @dataclass(slots=True)
-class Wall:
+class Wall(RangeAttackAffectMixin):
     """Ściana blokująca przejście między dwoma polami."""
 
     object_id: str = field(init=False)
@@ -42,6 +43,7 @@ class Mur(Wall):
 
 class BasicWall(Wall):
     """Ściana między dwoma polami."""
+    cover_type = "block"
 
 
 # Ściana między dwoma polami (mapowana na walls w scenariuszu).

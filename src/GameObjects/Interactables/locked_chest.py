@@ -3,15 +3,16 @@ from GameObjects.base import GameObjectMeta
 from typing import Optional
 
 from GameObjects.interactions_mixin.base_interaction import InteractableMixin, Interaction
-from GameObjects.interactions_mixin import HideInMixin, prompt_for_roll
+from GameObjects.interactions_mixin import HideInMixin, prompt_for_roll, RangeAttackAffectMixin
 import logging
 from board import consts
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-class LockedChest(InteractableMixin, HideInMixin):
+class LockedChest(RangeAttackAffectMixin, InteractableMixin, HideInMixin):
     """Prosta skrzynia: otwórz, aby zebrać skarb."""
+    cover_type = "minor"
 
     def __init__(
         self,

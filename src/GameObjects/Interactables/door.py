@@ -8,6 +8,7 @@ from GameObjects.interactions_mixin import (
     HiddenMixin,
     LockableMixin,
     TrappableMixin,
+    RangeAttackAffectMixin,
     prompt_for_roll,
     resolve_skill_check,
 )
@@ -15,8 +16,9 @@ from GameObjects.interactions_mixin import (
 logger = logging.getLogger(__name__)
 
 
-class Door(LockableMixin, TrappableMixin, HiddenMixin, DestructibleMixin, InteractableMixin):
+class Door(RangeAttackAffectMixin, LockableMixin, TrappableMixin, HiddenMixin, DestructibleMixin, InteractableMixin):
     """Drzwi z obsługą zamka, pułapki, ukrycia i niszczenia."""
+    cover_type = "greater"
 
     def __init__(
         self,
