@@ -10,13 +10,14 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from actions.actions_registy import get_action, list_actions
-from actions.base import ActionContext
 import actions  # noqa: F401  # rejestracja akcji przy starcie stanu walki
 from board import consts
 from GameObjects.Enemies.behaviors import get_behavior
 from .base import State
 from .heroes_turns import HeroesTurn
+from GameObjects.events import EventContext
+from GameObjects.events.registry import dispatch_event, list_events
+import GameObjects.events.all_events  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -350,10 +351,14 @@ class Combat(State):
         logger.info("Tura bohatera (%s). Akcje: %s/%s", actor, used, self.ACTION_LIMIT)
         self.game.ui_hero(actor, note=f"Akcje: {used}/{self.ACTION_LIMIT}")
 
-        available = list_actions()
-        if not available:
-            logger.warning("Brak zarejestrowanych akcji.")
-            self.game.ui_log("Brak zarejestrowanych akcji dla bohatera.")
+        available_events = {
+            name: cls
+            for name, cls in list_events().items()
+            if getattr(cls, "available_in_combat", True)
+        }
+        if not available_events:
+            logger.warning("Brak zarejestrowanych eventów dla walki.")
+            self.game.ui_log("Brak akcji do wykonania.")
             self._advance_turn()
             return self
 
@@ -367,48 +372,45 @@ class Combat(State):
         except Exception:
             pass
 
-        priority_order = ["move", "interact", "seek", "stealth", "test_attack", "special", "delay", "end"]
-        available_keys = set(available.keys())
-        ordered_choices: list[str] = []
-        seen: set[str] = set()
-        for name in priority_order:
-            if name in seen:
-                continue
-            if name in ("delay", "end") or name in available_keys:
-                ordered_choices.append(name)
-                seen.add(name)
-
-        log_actions = [name for name in ordered_choices if name not in ("delay", "end")]
-        logger.info("Dostępne akcje: %s (6 SPECIAL / 7 DELAY / 8 END).", ", ".join(log_actions))
-        self.game.ui_log(f"Dostępne akcje: {', '.join(log_actions)} (6 SPECIAL / 7 DELAY / 8 END).")
+        ordered_choices = sorted(available_events.keys())
+        logger.info("Dostępne akcje: %s", ", ".join(ordered_choices))
+        self.game.ui_log(
+            f"Aktywny: {getattr(actor, 'name', actor)}. Dostępne akcje: {', '.join(ordered_choices)}."
+        )
         raw_choice = self.game.conn.read_card(
-            "Wpisz nazwę akcji lub karta 6 SPECIAL / 7 DELAY / 8 END: ",
-            ordered_choices,
-        ).strip()
+            "Wpisz nazwę akcji (np. move, attack_sword, delay, end_turn): ",
+            [],
+        ).strip().lower()
+        aliases = {"end": "end_turn", "8": "end_turn", "delay": "delay", "7": "delay"}
+        raw_choice = aliases.get(raw_choice, raw_choice)
         if highlighted:
             try:
                 self.game.conn.leds_off()
             except Exception:
                 pass
-        choice = raw_choice.lower()
-        if choice in ("end", "8", "8 end", "8end"):
-            self.game.ui_log("Bohater kończy turę (END).")
-            self._advance_turn()
-            return self
-        if choice in ("delay", "7", "7 delay", "7 end", "7delay", "7end"):
-            return self._handle_hero_decline(actor, auto_delay=True)
 
-        try:
-            action = get_action(choice)
-        except KeyError as exc:
-            logger.error("%s", exc)
+        if raw_choice not in available_events:
+            logger.error("Nieznana akcja '%s'", raw_choice)
+            self.game.ui_log(f"Nieznana akcja '{raw_choice}'")
             return self
 
-        ctx = ActionContext(game=self.game, heroes_turn=self, actor=actor)
-        result = action.execute(ctx)
-        consumed = True if result is None else bool(result)
-        if consumed:
+        ctx = EventContext(game=self.game, actor=actor)
+        result = dispatch_event(raw_choice, ctx)
+
+        # delay/end_turn mogą nie zużywać akcji
+        if result.consumed_action:
             self.actions_used[actor] = self.actions_used.get(actor, 0) + 1
             if self.actions_used[actor] >= self.ACTION_LIMIT:
-                logger.info("Wykorzystano limit %s akcji. Użyj DECLINE aby zakończyć turę lub kontynuuj innymi efektami.", self.ACTION_LIMIT)
+                logger.info(
+                    "Wykorzystano limit %s akcji. Użyj end_turn lub delay aby zakończyć turę.",
+                    self.ACTION_LIMIT,
+                )
+        if result.message:
+            self.game.ui_log(result.message)
+        else:
+            status = "powiodła się" if result.success else "nie powiodła się"
+            self.game.ui_log(f"Akcja '{raw_choice}' {status}.")
+        # end_turn i delay same wywołują zmianę kolejki; jeśli aktywny uległ zmianie, nie ruszaj tutaj
+        if raw_choice in ("end_turn",):
+            return self
         return self

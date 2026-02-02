@@ -8,17 +8,20 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from actions.base import ActionContext
-from actions.actions_registy import get_action, list_actions
-import actions  # noqa: F401  # rejestracja dostępnych akcji
 from .base import State
 
+from GameObjects.events import EventContext
+from GameObjects.events.registry import dispatch_event, list_events
+import GameObjects.events.all_events  # noqa: F401  # rejestruj eventy
+from board import consts
 
 logger = logging.getLogger(__name__)
 
 
 class HeroesTurn(State):
-
+    def __init__(self, game):
+        super().__init__(game)
+        self.active_hero = None
 
     def on_enter(self):
         logger.info("Tura bohaterow!")
@@ -30,24 +33,54 @@ class HeroesTurn(State):
         logger.info("Koniec tury bohaterow.")
         self.game.ui_log("Koniec tury bohaterów.")
 
+    def _choose_active_hero(self):
+        heroes_positions = [hero.position for hero in self.game.heroes if hero.position is not None]
+        if not heroes_positions:
+            logger.warning("Brak bohaterów na planszy.")
+            self.game.ui_log("Brak bohaterów na planszy.")
+            return None
+        self.game.conn.set_leds(heroes_positions, consts.HERO_HIGHLIGHT_RGB)
+        pos = self.game.conn.scan_board(heroes_positions)
+        self.game.conn.leds_off()
+        hero = self.game.board.occupant_at(pos)
+        return hero
+
     def choose_action(self) -> State:
-        available = list_actions()
+        available = {
+            name: cls
+            for name, cls in list_events().items()
+            if getattr(cls, "available_in_exploration", True)
+        }
         if not available:
-            logger.warning("Brak zarejestrowanych akcji.")
-            self.game.ui_log("Brak zarejestrowanych akcji.")
+            logger.warning("Brak zarejestrowanych eventów dla eksploracji.")
+            self.game.ui_log("Brak akcji do wykonania.")
             return self
 
-        logger.info("Dostępne akcje: %s", ", ".join(sorted(available)))
-        self.game.ui_log(f"Dostępne akcje: {', '.join(sorted(available))}")
-        choice = self.game.conn.read_card("Wpisz nazwę akcji: ", list(available.keys())).strip()
-        try:
-            action = get_action(choice)
-        except KeyError:
+        # wybierz aktywnego bohatera tylko jeśli jeszcze nie ma
+        if self.active_hero is None or getattr(self.active_hero, "position", None) is None:
+            hero = self._choose_active_hero()
+            if hero is None:
+                return self
+            self.active_hero = hero
+        hero = self.active_hero
+
+        # Nie logujemy listy akcji – nazwy są na fizycznych kartach.
+        choice = self.game.conn.read_card("Nazwa akcji (wpisz): ", []).strip().lower()
+        aliases = {"end": "end_turn", "cancel": "cancel_action"}
+        choice = aliases.get(choice, choice)
+        if choice not in available:
             logger.error("Nieznana akcja '%s'", choice)
             self.game.ui_log(f"Nieznana akcja '{choice}'")
             return self
 
-        ctx = ActionContext(game=self.game, heroes_turn=self)
-        action.execute(ctx)
+        ctx = EventContext(game=self.game, actor=hero)
+        result = dispatch_event(choice, ctx)
+        if result.message:
+            self.game.ui_log(result.message)
+        else:
+            status = "powiodła się" if result.success else "nie powiodła się"
+            self.game.ui_log(f"Akcja '{choice}' {status}.")
+        if choice == "end_turn" and result.success:
+            self.active_hero = None  # wymuś wybór kolejnego bohatera
         return self
     

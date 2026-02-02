@@ -93,18 +93,34 @@ class ActionEventBus:
         self.add_listener(_listener)
 
     def _register_ui_listener(self) -> None:
+        def _serialize(obj: Any) -> Any:
+            """Zwraca prostą strukturę JSON-safe dla aktora/celu."""
+            if obj is None:
+                return None
+            return {
+                "id": getattr(obj, "object_id", None) or getattr(obj, "name", None) or str(obj),
+                "name": getattr(obj, "name", None),
+                "pos": getattr(obj, "position", None),
+                "kind": "hero" if obj in getattr(self.game, "heroes", []) else ("enemy" if obj in getattr(self.game, "enemies", []) else None),
+            }
+
         def _listener(event: ActionEvent) -> None:
             ui_event = getattr(self.game, "ui_event", None)
             ui_log = getattr(self.game, "ui_log", None)
             if callable(ui_event):
                 try:
-                    ui_event("action", dict(event))
+                    safe_event = dict(event)
+                    for key in ("actor", "target"):
+                        if key in safe_event:
+                            safe_event[key] = _serialize(safe_event[key])
+                    ui_event("action", safe_event)
                 except Exception:  # pragma: no cover - logowanie poniżej
                     logger.debug("Nie udało się wysłać eventu akcji do UI", exc_info=True)
             # prosty wpis do logów UI, by użytkownik widział zdarzenie
             if callable(ui_log):
                 try:
-                    actor_name = getattr(event.get("actor"), "name", None) or getattr(event.get("actor"), "object_id", "?")
+                    actor = event.get("actor")
+                    actor_name = getattr(actor, "name", None) or getattr(actor, "object_id", None) or "actor"
                     ui_log(
                         f"[akcja] {actor_name}: {event.get('action_id')} {event.get('action_tags')}",
                         tag="action_event",
