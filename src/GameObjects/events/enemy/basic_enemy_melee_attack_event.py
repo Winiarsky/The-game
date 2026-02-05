@@ -4,7 +4,7 @@ import logging
 import random
 
 from board import consts
-from combat import flat_footed_penalty
+from combat import effective_ac
 
 from ..base import EventContext, EventResult, GameEvent
 
@@ -50,13 +50,21 @@ class BasicEnemyMeleeAttackEvent(GameEvent):
             return EventResult(success=False, consumed_action=True, message="Wybrano cel niebędący bohaterem.")
 
         attack_bonus = getattr(enemy, self.attack_bonus_attr, 0)
-        roll = random.randint(1, 20) + attack_bonus
-        penalty = flat_footed_penalty(hero)
-        penalty_note = f" (cel flankowany: -{penalty} do AC)" if penalty else ""
+        bonus_mixin = getattr(enemy, "compute_modifier", None)
+        extra_mod = 0
+        if callable(bonus_mixin):
+            try:
+                extra_mod = bonus_mixin("attack_melee", target=hero)
+            except Exception:
+                extra_mod = 0
+        roll = random.randint(1, 20) + attack_bonus + extra_mod
+
+        target_ac = effective_ac(hero)
 
         prompt = (
             f"{getattr(enemy, 'name', 'wróg')} {self.weapon_label} na {target_pos}: "
-            f"r={roll} (1d20 + {attack_bonus}){penalty_note}. "
+            f"r={roll} (1d20 + {attack_bonus} {'+' if extra_mod >=0 else ''}{extra_mod}). "
+            f"AC celu: {target_ac}. "
             "Potwierdź trafienie: ACCEPT/DECLINE"
         )
         response = conn.read_card(prompt, ["ACCEPT", "DECLINE"])

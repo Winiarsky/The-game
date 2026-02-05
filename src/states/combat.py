@@ -154,12 +154,29 @@ class Combat(State):
             for dead in [k for k in list(mapping.keys()) if k not in self.base_order]:
                 mapping.pop(dead, None)
 
+    def _clear_start_of_turn_effects(self, actor) -> None:
+        """Usuń efekty jednorundowe (np. raise_shield) na początku inicjatywy bohatera."""
+        if actor in getattr(self.game, "heroes", []):
+            tick = getattr(actor, "tick_bonuses_turn", None)
+            if callable(tick):
+                try:
+                    tick()
+                except Exception:
+                    logger.debug("Nie udało się odliczyć bonusów dla %s", actor)
+            remover = getattr(actor, "remove_bonuses_with_prefix", None)
+            if callable(remover):
+                try:
+                    remover("raise_shield:")
+                except Exception:
+                    logger.debug("Nie udało się wyczyścić efektów raise_shield dla %s", actor)
+
     def _current_actor(self):
         self._cleanup_removed()
         if not self.round_queue:
             return None
         actor = self.round_queue[0]
         if actor not in self.actions_used:
+            self._clear_start_of_turn_effects(actor)
             self.actions_used[actor] = 0
             reset_react = getattr(actor, "reset_reactions", None)
             if callable(reset_react):
@@ -185,6 +202,7 @@ class Combat(State):
         self.initiative_order = list(self.round_queue)
         actor = self._current_actor()
         if actor is not None:
+            self._clear_start_of_turn_effects(actor)
             self.actions_used[actor] = 0
             logger.debug("Nowa tura dla %s – reset licznika akcji.", actor)
             reset_react = getattr(actor, "reset_reactions", None)
@@ -346,6 +364,14 @@ class Combat(State):
             return self._process_enemy_turn(actor)
 
         # Hero turn
+        # Wyczyść jednorundowe bonusy osłon (np. raise_shield) na początku tury bohatera
+        remover = getattr(actor, "remove_bonuses_with_prefix", None)
+        if callable(remover):
+            try:
+                remover("raise_shield:")
+            except Exception:
+                logger.debug("Nie udało się wyczyścić efektów raise_shield dla %s", actor)
+
         used = self.actions_used.get(actor, 0)
         self.actions_used[actor] = used
         logger.info("Tura bohatera (%s). Akcje: %s/%s", actor, used, self.ACTION_LIMIT)

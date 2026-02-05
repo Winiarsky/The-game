@@ -4,6 +4,7 @@ import logging
 from typing import Iterable, Sequence
 
 from statuses import Status, FLAT_FOOTED_STATUS
+from bonuses import BonusEffect, BonusType
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +121,7 @@ def _apply_flat_footed(target, ac_penalty: int) -> None:
 
 
 def refresh_flanking_statuses(game, ac_penalty: int = 2) -> None:
-    """Zaktualizuj status flat_footed/bonusy ataku dla bohaterów i wrogów."""
+    """Zaktualizuj status flat_footed oraz karę do AC flankowanego celu."""
     board = getattr(game, "board", None)
     if board is None:
         return
@@ -128,11 +129,36 @@ def refresh_flanking_statuses(game, ac_penalty: int = 2) -> None:
     heroes = [h for h in getattr(game, "heroes", []) if getattr(h, "position", None) is not None]
     enemies = [e for e in getattr(game, "enemies", []) if getattr(e, "position", None) is not None]
 
+    # Wyczyść stare efekty flankowania
+    for actor in heroes + enemies:
+        remover = getattr(actor, "remove_bonuses_with_prefix", None)
+        if callable(remover):
+            try:
+                remover("flanked:")
+            except Exception:
+                pass
+
     for enemy in getattr(game, "enemies", []):
         pos = getattr(enemy, "position", None)
         flanked = is_flanked(board, pos, heroes)
         if flanked:
             _apply_flat_footed(enemy, ac_penalty)
+            # kara do AC
+            adder = getattr(enemy, "add_bonus", None)
+            if callable(adder):
+                try:
+                    adder(
+                        BonusEffect(
+                            type=BonusType.STATUS,
+                            value=ac_penalty,
+                            tag="ac",
+                            is_penalty=True,
+                            source=f"flanked:{getattr(enemy, 'object_id', 'enemy')}",
+                            label="flankowany",
+                        )
+                    )
+                except Exception:
+                    pass
         else:
             _remove_flat_footed(enemy)
 
@@ -141,6 +167,21 @@ def refresh_flanking_statuses(game, ac_penalty: int = 2) -> None:
         flanked = is_flanked(board, pos, enemies)
         if flanked:
             _apply_flat_footed(hero, ac_penalty)
+            adder = getattr(hero, "add_bonus", None)
+            if callable(adder):
+                try:
+                    adder(
+                        BonusEffect(
+                            type=BonusType.STATUS,
+                            value=ac_penalty,
+                            tag="ac",
+                            is_penalty=True,
+                            source=f"flanked:{getattr(hero, 'object_id', 'hero')}",
+                            label="flankowany",
+                        )
+                    )
+                except Exception:
+                    pass
         else:
             _remove_flat_footed(hero)
 
@@ -166,5 +207,15 @@ def effective_ac(target) -> int:
     base_ac = getattr(target, "ac", None)
     if base_ac is None:
         return 10
-    penalty = max(0, flat_footed_penalty(target))
-    return int(base_ac) - penalty
+
+    modifier = 0
+    compute = getattr(target, "compute_modifier", None)
+    if callable(compute):
+        try:
+            modifier += compute("ac")
+        except Exception:
+            modifier += 0
+    else:
+        modifier -= max(0, flat_footed_penalty(target))
+
+    return int(base_ac + modifier)

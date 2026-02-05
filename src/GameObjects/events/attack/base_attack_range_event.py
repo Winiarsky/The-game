@@ -5,6 +5,7 @@ import math
 from typing import Sequence
 
 from combat import effective_ac
+from bonuses import BonusEffect, BonusType, compute_total_modifier
 from GameObjects.interactions_mixin import RangeAttackAffectMixin, prompt_for_roll
 from statuses import Status
 
@@ -111,7 +112,21 @@ class BaseRangeAttackEvent(GameEvent):
             increments = target_analysis["increments"]
 
             base_ac = getattr(enemy, "ac", effective_ac(enemy))
-            target_ac = base_ac + cover_bonus
+            enemy_bonuses = list(getattr(enemy, "bonuses", [])) if hasattr(enemy, "bonuses") else []
+            if cover_bonus:
+                enemy_bonuses.append(
+                    BonusEffect(
+                        type=BonusType.CIRCUMSTANCE,
+                        value=cover_bonus,
+                        tag="ac",
+                        source=f"cover:{cover_type}",
+                        target_id=getattr(hero, "object_id", None),
+                        label=f"osłona ({cover_type})",
+                    )
+                )
+            # uwzględnij modyfikatory AC (flat-footed itd.) oraz osłonę jako circumstance
+            modifier = compute_total_modifier(enemy_bonuses, "ac", getattr(hero, "object_id", None)) if enemy_bonuses else 0
+            target_ac = base_ac + modifier
 
             game.events.safe_emit_action(
                 actor=hero,
@@ -127,9 +142,21 @@ class BaseRangeAttackEvent(GameEvent):
             if range_penalty:
                 mods.append(f"-{range_penalty} zasięg ({increments}x{self.range_increment_ft} stóp)")
             mods_note = "; ".join(mods) if mods else "brak"
+
+            action_tag = (self._effective_tags(ctx) or ["attack_ranged"])[0]
+            bonus_info = ""
+            formatter = getattr(hero, "format_prompt", None)
+            if callable(formatter):
+                try:
+                    formatted = formatter(action_tag, target=enemy)
+                    if formatted:
+                        bonus_info = f"\nModyfikatory ({action_tag}):\n{formatted}\n"
+                except Exception:
+                    bonus_info = ""
+
             roll = prompt_for_roll(
-                f"Atak {self.weapon_label} na AC {target_ac} (bazowe {base_ac}, modyfikatory: {mods_note}). "
-                "Podaj wynik k20 + DEX po modyfikatorach: "
+                f"Atak {self.weapon_label} na AC {target_ac} (bazowe {base_ac}, modyfikatory: {mods_note})."
+                f"{bonus_info}Podaj wynik k20 + DEX po modyfikatorach: "
             )
             hit = roll >= target_ac
             if not hit:

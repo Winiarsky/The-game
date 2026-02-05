@@ -4,6 +4,7 @@ from GameObjects.interactions_mixin.prompt_utils import prompt_for_roll
 from GameObjects.interactions_mixin.skill_checks import resolve_skill_check
 from GameObjects.interactions_mixin.social_mixin import SocialMixin, attitude_label, clamp, AttitudeLabel
 from GameObjects.interactions_mixin.status_mixin import StatusMixin
+from GameObjects.interactions_mixin.bonus_mixin import BonusMixin
 from GameObjects.interactions_mixin.trade_mixin import TradeItem, TradeMixin
 from GameObjects.interactions_mixin.pickpocket_mixin import PickpocketMixin
 from GameObjects.interactions_mixin.destructible_mixin import DestructibleMixin
@@ -24,6 +25,7 @@ __all__ = [
     "clamp",
     "AttitudeLabel",
     "StatusMixin",
+    "BonusMixin",
     "TradeItem",
     "TradeMixin",
     "PickpocketMixin",

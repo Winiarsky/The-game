@@ -11,6 +11,7 @@ from . import delay_event  # noqa: F401
 from .attack import attack_sword_event  # noqa: F401
 from .attack import attack_dagger_event  # noqa: F401
 from .attack import attack_range_long_bow  # noqa: F401
+from . import raise_shield_event  # noqa: F401
 from .magic import magic_missile_event  # noqa: F401
 from . import phase_events  # noqa: F401
 from .enemy import enemy_move_event  # noqa: F401

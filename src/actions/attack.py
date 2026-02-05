@@ -3,7 +3,7 @@ from pathlib import Path
 import sys
 from typing import Optional
 
-from combat import effective_ac, flat_footed_penalty, refresh_flanking_statuses
+from combat import effective_ac, refresh_flanking_statuses
 from hero import Hero
 from .base import ActionContext, BaseAction
 from .actions_registy import register
@@ -114,11 +114,12 @@ class TestAttackAction(BaseAction):
         refresh_flanking_statuses(ctx.game)
         target_ac = effective_ac(enemy)
         base_ac = getattr(enemy, "ac", target_ac)
-        penalty = flat_footed_penalty(enemy)
-        if penalty:
-            prompt_ac = f"{target_ac} (bazowe {base_ac}, -{penalty} flankowanie)"
-        else:
-            prompt_ac = str(base_ac)
+        modifier_note = ""
+        if target_ac != base_ac:
+            delta = target_ac - base_ac
+            sign = "+" if delta > 0 else ""
+            modifier_note = f" (bazowe {base_ac}, modyfikatory {sign}{delta})"
+        prompt_ac = f"{target_ac}{modifier_note}"
 
         # emit wstępny – pozwala reakcjom blokować/przerywać atak
         ctx.game.events.safe_emit_action(
@@ -128,8 +129,19 @@ class TestAttackAction(BaseAction):
             target=enemy,
             target_pos=enemy_pos,
         )
+        action_tag = (ctx.action_tags or ["attack_melee"])[0]
+        bonus_info = ""
+        formatter = getattr(hero, "format_prompt", None)
+        if callable(formatter):
+            try:
+                formatted = formatter(action_tag, target=enemy)
+                if formatted:
+                    bonus_info = f"\nModyfikatory ({action_tag}):\n{formatted}\n"
+            except Exception:
+                bonus_info = ""
+
         roll = prompt_for_roll(
-            f"Podaj wynik testu ataku przeciwko {getattr(enemy, 'name', 'przeciwnik')} (AC {prompt_ac}): "
+            f"Podaj wynik testu ataku przeciwko {getattr(enemy, 'name', 'przeciwnik')} (AC {prompt_ac}):{bonus_info}"
         )
         hit = roll >= target_ac
         if not hit:
