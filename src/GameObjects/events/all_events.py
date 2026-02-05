@@ -14,6 +14,7 @@ from .attack import attack_range_long_bow  # noqa: F401
 from . import raise_shield_event  # noqa: F401
 from . import take_cover_event  # noqa: F401
 from . import step_event  # noqa: F401
+from . import leap_event  # noqa: F401
 from . import prone_event  # noqa: F401
 from . import stand_event  # noqa: F401
 from .magic import magic_missile_event  # noqa: F401
