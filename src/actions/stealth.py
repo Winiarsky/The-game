@@ -171,8 +171,10 @@ class StealthAction(BaseAction):
             return
 
         already_stealth = hero.has_status("stealth")
+        covered = hero.has_status("covered")
+
         if not already_stealth:
-            if blockers:
+            if blockers and not covered:
                 positions = [pos for _watcher, pos in blockers]
                 logger.info("Nie możesz wejść w ukrycie – ktoś cię obserwuje.")
                 if positions:
@@ -192,6 +194,9 @@ class StealthAction(BaseAction):
                 if bonus_hide:
                     modifier += bonus_hide
                     details.append(f"ukrycie +{bonus_hide}")
+            if covered:
+                modifier += 2
+                details.append("osłona +2")
             if penalty:
                 modifier -= penalty
                 details.append(f"strażnicy czujności {-(penalty)}")
@@ -242,13 +247,15 @@ class StealthAction(BaseAction):
                 allow_occupied=True,
                 on_enter=default_on_enter,
             )
-            ctx.game.events.safe_emit_action(
-                actor=hero,
-                action_id="stealth_move",
-                action_tags=["stealth", "move"],
-                from_pos=start_pos,
-                to_pos=getattr(hero, "position", None),
-            )
+            events = getattr(ctx.game, "events", None)
+            if events and hasattr(events, "safe_emit_action"):
+                events.safe_emit_action(
+                    actor=hero,
+                    action_id="stealth_move",
+                    action_tags=["stealth", "move"],
+                    from_pos=start_pos,
+                    to_pos=getattr(hero, "position", None),
+                )
         finally:
             try:
                 refresh_flanking_statuses(ctx.game)

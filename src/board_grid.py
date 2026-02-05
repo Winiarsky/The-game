@@ -238,6 +238,7 @@ class BoardGrid:
                     interactable.someone_inside = None
             if isinstance(occupant, StatusMixin):
                 occupant.remove_status("hide")
+                occupant.remove_status("covered")
             else:
                 statuses = getattr(occupant, "statuses", None)
                 if isinstance(statuses, list):
@@ -245,9 +246,20 @@ class BoardGrid:
                         statuses.remove("hide")
                     except ValueError:
                         pass
+                    try:
+                        statuses.remove("covered")
+                    except ValueError:
+                        pass
             if hasattr(occupant, "hide_stealth_bonus"):
                 try:
                     occupant.hide_stealth_bonus = 0  # type: ignore[attr-defined]
+                except Exception:
+                    pass
+            # zdejmij premie z akcji take cover
+            remover = getattr(occupant, "remove_bonuses_with_prefix", None)
+            if callable(remover):
+                try:
+                    remover("take_cover:")
                 except Exception:
                     pass
             cell.occupant = None
