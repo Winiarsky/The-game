@@ -5,6 +5,9 @@ import sys
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+SRC_ROOT = PROJECT_ROOT / "src"
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
 
 from combat.reactions import OpportunityAttack, dispatch_reactions
 from GameObjects.interactions_mixin.reactive_mixin import ReactiveMixin
@@ -129,3 +132,27 @@ def test_hero_opportunity_attack_prompts_and_deals_damage(monkeypatch):
 
     assert enemy.hp < 6  # otrzymał obrażenia
     assert hero.reactions_left == 0
+
+
+def test_step_does_not_trigger_opportunity_attack():
+    """Akcja step nie powinna uruchamiać OA mimo że wykonuje ruch obok wroga."""
+    game = DummyGame()
+    game.state = type("Combat", (), {})()
+
+    hero = DummyHero(pos=(0, 0))
+    enemy = DummyEnemy(pos=(0, 1))
+    game.heroes = [hero]
+    game.enemies = [enemy]
+
+    # Step – brak tagu 'move' i leaving_reach=False
+    event = {
+        "actor": hero,
+        "action_tags": {"step"},
+        "from_pos": (0, 0),
+        "to_pos": (1, 0),  # wciąż w zasięgu wroga
+        "leaving_reach": False,
+    }
+    dispatch_reactions(game, event)
+
+    assert hero.wounds == 0
+    assert enemy.reactions_left == enemy.reactions_max
