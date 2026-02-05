@@ -28,6 +28,8 @@ class RaiseShieldEvent(GameEvent):
         hero = ctx.actor
         if hero is None:
             return EventResult(success=False, consumed_action=False, message="Brak wybranego bohatera.")
+        if getattr(hero, "has_status", lambda _s: False)("prone"):
+            return EventResult.cancelled(message="Nie możesz podnieść tarczy będąc prone.")
 
         # wyczyść wcześniejsze podniesienia tarczy
         remover = getattr(hero, "remove_bonuses_with_prefix", None)

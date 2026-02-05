@@ -119,6 +119,66 @@ class MoveAction(BaseAction):
                         return True
                     return stopped
 
+                is_prone = getattr(moving_hero, "has_status", lambda _s: False)("prone")
+                if is_prone:
+                    hero_pos = moving_hero.position
+                    neighbors = board.get_neighbors(hero_pos, include_position=False, diagonal=True)
+                    available: list[tuple[int, int]] = []
+                    for pos in neighbors:
+                        if not board.can_traverse(hero_pos, pos, allow_occupied=False):
+                            continue
+                        occupant = board.occupant_at(pos)
+                        # nie wchodzimy na bohaterów ani wrogów
+                        if occupant in getattr(ctx.game, "heroes", []) or occupant in getattr(ctx.game, "enemies", []):
+                            continue
+                        available.append(pos)
+
+                    if not available:
+                        ctx.game.ui_log("Leżąc (prone) nie masz wolnych pól w zasięgu 1.")
+                        return
+
+                    positions = [hero_pos] + available
+                    colors = [consts.MOVE_START_RGB] + [consts.PRONE_MOVE_RGB] * len(available)
+                    try:
+                        ctx.game.conn.set_leds(positions, colors)
+                        choice = ctx.game.conn.scan_board(positions)
+                    finally:
+                        ctx.game.conn.leds_off()
+
+                    if choice == hero_pos:
+                        logger.info("Ruch z pozycji prone anulowany.")
+                        return
+                    if choice not in available:
+                        ctx.game.ui_log("Wybierz jedno z podświetlonych pól obok bohatera.")
+                        return
+
+                    path = [hero_pos, choice]
+                    completed, stop_pos, reason = follow_path(
+                        ctx,
+                        moving_hero,
+                        path,
+                        led_color=consts.PRONE_MOVE_RGB,
+                        on_enter=_on_enter_wrapper,
+                        allow_occupied=False,
+                        step_delay=0.0,
+                    )
+                    if not completed:
+                        reason_map = {
+                            "blocked": "Ruch zatrzymany – ścieżka zablokowana.",
+                            "occupied": "Ruch zatrzymany – pole zajęte.",
+                            "move_error": "Ruch przerwany przez błąd przesunięcia.",
+                            "on_enter": "Ruch zatrzymany przez zdarzenie na polu.",
+                        }
+                        msg = reason_map.get(reason or "", "Ruch zatrzymany.")
+                        ctx.game.ui_log(msg)
+                        logger.info(msg)
+                        if stop_pos:
+                            ctx.game.conn.set_leds([stop_pos], consts.PRONE_MOVE_RGB)
+                        return
+
+                    _emit_move_event(hero_pos, moving_hero.position)
+                    return
+
                 active_path_id: str | None = None
                 try:
                     while True:

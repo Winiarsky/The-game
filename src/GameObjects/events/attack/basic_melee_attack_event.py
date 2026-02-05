@@ -4,15 +4,16 @@ import logging
 from typing import Iterable, Sequence
 
 from board import consts
-from combat import effective_ac, refresh_flanking_statuses
+from combat import refresh_flanking_statuses
 from GameObjects.interactions_mixin import prompt_for_roll
 
-from ..base import EventContext, EventResult, GameEvent
+from .attack_base import AttackEventBase
+from ..base import EventContext, EventResult
 
 logger = logging.getLogger(__name__)
 
 
-class BasicMeleeAttackEvent(GameEvent):
+class BasicMeleeAttackEvent(AttackEventBase):
     """Wspólna logika dla prostych ataków bronią białą."""
 
     # konfiguracja per broń
@@ -49,13 +50,11 @@ class BasicMeleeAttackEvent(GameEvent):
         if enemy is None:
             return EventResult.cancelled(message="Nie wybrano celu.")
 
-        target_ac = effective_ac(enemy)
-        base_ac = getattr(enemy, "ac", target_ac)
+        target_ac, base_ac, modifier = self._ac_with_bonuses(enemy, attacker=hero)
         modifier_note = ""
-        if target_ac != base_ac:
-            delta = target_ac - base_ac
-            sign = "+" if delta > 0 else ""
-            modifier_note = f" (bazowe {base_ac}, modyfikatory {sign}{delta})"
+        if modifier:
+            sign = "+" if modifier > 0 else ""
+            modifier_note = f" (bazowe {base_ac}, modyfikatory {sign}{modifier})"
         prompt_ac = f"{target_ac}{modifier_note}"
 
         ctx.game.events.safe_emit_action(
@@ -67,15 +66,7 @@ class BasicMeleeAttackEvent(GameEvent):
         )
 
         action_tag = (self._effective_tags(ctx) or ["attack_melee"])[0]
-        bonus_info = ""
-        formatter = getattr(hero, "format_prompt", None)
-        if callable(formatter):
-            try:
-                formatted = formatter(action_tag, target=enemy)
-                if formatted:
-                    bonus_info = f"\nModyfikatory ({action_tag}):\n{formatted}\n"
-            except Exception:
-                bonus_info = ""
+        bonus_info = self._format_bonus_info(hero, action_tag, target=enemy)
 
         roll = prompt_for_roll(f"Atak {self.weapon_label} przeciwko AC {prompt_ac}.{bonus_info}Podaj wynik k20: ")
         hit = roll >= target_ac

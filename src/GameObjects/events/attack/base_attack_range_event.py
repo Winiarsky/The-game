@@ -4,12 +4,12 @@ import logging
 import math
 from typing import Sequence
 
-from combat import effective_ac
-from bonuses import BonusEffect, BonusType, compute_total_modifier
+from bonuses import BonusEffect, BonusType
 from GameObjects.interactions_mixin import RangeAttackAffectMixin, prompt_for_roll
 from statuses import Status
 
-from ..base import EventContext, EventResult, GameEvent
+from .attack_base import AttackEventBase
+from ..base import EventContext, EventResult
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 CoverType = str
 
 
-class BaseRangeAttackEvent(GameEvent):
+class BaseRangeAttackEvent(AttackEventBase):
     """Wspólna logika dla ataków dystansowych (łuki, kusze itd.)."""
 
     weapon_label: str = "bronią dystansową"
@@ -111,22 +111,22 @@ class BaseRangeAttackEvent(GameEvent):
             range_penalty = target_analysis["range_penalty"]
             increments = target_analysis["increments"]
 
-            base_ac = getattr(enemy, "ac", effective_ac(enemy))
-            enemy_bonuses = list(getattr(enemy, "bonuses", [])) if hasattr(enemy, "bonuses") else []
+            cover_bonus_effect = None
             if cover_bonus:
-                enemy_bonuses.append(
-                    BonusEffect(
-                        type=BonusType.CIRCUMSTANCE,
-                        value=cover_bonus,
-                        tag="ac",
-                        source=f"cover:{cover_type}",
-                        target_id=getattr(hero, "object_id", None),
-                        label=f"osłona ({cover_type})",
-                    )
+                cover_bonus_effect = BonusEffect(
+                    type=BonusType.CIRCUMSTANCE,
+                    value=cover_bonus,
+                    tag="ac",
+                    source=f"cover:{cover_type}",
+                    target_id=getattr(hero, "object_id", None),
+                    label=f"osłona ({cover_type})",
                 )
-            # uwzględnij modyfikatory AC (flat-footed itd.) oraz osłonę jako circumstance
-            modifier = compute_total_modifier(enemy_bonuses, "ac", getattr(hero, "object_id", None)) if enemy_bonuses else 0
-            target_ac = base_ac + modifier
+
+            target_ac, base_ac, modifier = self._ac_with_bonuses(
+                enemy,
+                attacker=hero,
+                extra_bonuses=[cover_bonus_effect] if cover_bonus_effect else None,
+            )
 
             game.events.safe_emit_action(
                 actor=hero,
@@ -144,15 +144,7 @@ class BaseRangeAttackEvent(GameEvent):
             mods_note = "; ".join(mods) if mods else "brak"
 
             action_tag = (self._effective_tags(ctx) or ["attack_ranged"])[0]
-            bonus_info = ""
-            formatter = getattr(hero, "format_prompt", None)
-            if callable(formatter):
-                try:
-                    formatted = formatter(action_tag, target=enemy)
-                    if formatted:
-                        bonus_info = f"\nModyfikatory ({action_tag}):\n{formatted}\n"
-                except Exception:
-                    bonus_info = ""
+            bonus_info = self._format_bonus_info(hero, action_tag, target=enemy)
 
             roll = prompt_for_roll(
                 f"Atak {self.weapon_label} na AC {target_ac} (bazowe {base_ac}, modyfikatory: {mods_note})."
@@ -345,6 +337,10 @@ class BaseRangeAttackEvent(GameEvent):
                         cover_type = ctype
                     if ctype == "block":
                         blocked = True
+
+        if getattr(target, "has_status", lambda _s: False)("prone"):
+            if self._cover_rank("greater") > self._cover_rank(cover_type):
+                cover_type = "greater"
 
         return {
             "target_pos": end,
