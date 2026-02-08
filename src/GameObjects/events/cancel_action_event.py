@@ -6,7 +6,7 @@ from .registry import register_event
 
 @register_event
 class CancelActionEvent(GameEvent):
-    name = "cancel_action"
+    name = "cancel"
     default_tags = ["cancel"]
     consumes_action = False
 

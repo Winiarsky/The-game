@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 @register_event
 class EndTurnEvent(GameEvent):
-    name = "end_turn"
+    name = "end"
     default_tags = ["turn", "end"]
     consumes_action = False
 

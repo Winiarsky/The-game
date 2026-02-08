@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class RaiseShieldEvent(GameEvent):
     """Podniesienie tarczy – +2 circumstance do AC do początku kolejnej tury bohatera."""
 
-    name = "raise_shield"
+    name = "shield"
     default_tags = ["raise_shield", "defense"]
     available_in_combat = True
     available_in_exploration = False

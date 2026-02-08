@@ -6,7 +6,7 @@ from .base_attack_range_event import BaseRangeAttackEvent
 
 @register_event
 class LongBowAttackEvent(BaseRangeAttackEvent):
-    name = "attack_range_long_bow"
+    name = "longbow"
     weapon_label = "długim łukiem"
     damage_prompt = "1k8 + DEX"
     action_id_base = "attack_long_bow"

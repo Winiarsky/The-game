@@ -6,7 +6,7 @@ from .basic_melee_attack_event import BasicMeleeAttackEvent
 
 @register_event
 class DaggerAttackEvent(BasicMeleeAttackEvent):
-    name = "attack_dagger"
+    name = "dagger"
     weapon_label = "sztyletem"
     damage_prompt = "1k4 + STR"
     action_id_base = "attack_dagger"

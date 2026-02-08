@@ -8,7 +8,7 @@ from .basic_melee_attack_event import BasicMeleeAttackEvent
 
 @register_event
 class SwordAttackEvent(BasicMeleeAttackEvent):
-    name = "attack_sword"
+    name = "sword"
     weapon_label = "mieczem"
     damage_prompt = "1k8 + STR"
     action_id_base = "attack_sword"
