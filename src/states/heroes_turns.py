@@ -46,12 +46,8 @@ class HeroesTurn(State):
         return hero
 
     def choose_action(self) -> State:
-        available = {
-            name: cls
-            for name, cls in list_events().items()
-            if getattr(cls, "available_in_exploration", True)
-        }
-        if not available:
+        all_events = list_events()
+        if not all_events:
             logger.warning("Brak zarejestrowanych eventów dla eksploracji.")
             self.game.ui_log("Brak akcji do wykonania.")
             return self
@@ -66,9 +62,7 @@ class HeroesTurn(State):
 
         # Nie logujemy listy akcji – nazwy są na fizycznych kartach.
         choice = self.game.conn.read_card("Nazwa akcji (wpisz): ", []).strip().lower()
-        aliases = {"end": "end_turn", "cancel": "cancel_action"}
-        choice = aliases.get(choice, choice)
-        if choice not in available:
+        if choice not in all_events:
             logger.error("Nieznana akcja '%s'", choice)
             self.game.ui_log(f"Nieznana akcja '{choice}'")
             return self
@@ -80,7 +74,7 @@ class HeroesTurn(State):
         else:
             status = "powiodła się" if result.success else "nie powiodła się"
             self.game.ui_log(f"Akcja '{choice}' {status}.")
-        if choice == "end_turn" and result.success:
+        if choice == "end" and result.success:
             self.active_hero = None  # wymuś wybór kolejnego bohatera
         return self
     

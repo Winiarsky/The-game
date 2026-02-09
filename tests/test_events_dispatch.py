@@ -104,7 +104,7 @@ def test_end_turn_calls_advance(monkeypatch):
     game.state = fake_state
 
     ctx = CombatCtx(game=game)
-    result = dispatch_event("end_turn", ctx)
+    result = dispatch_event("end", ctx)
     assert result.success
     assert getattr(fake_state, "called", False)
 
@@ -126,6 +126,6 @@ def test_attack_sword_applies_damage(monkeypatch):
     monkeypatch.setattr(bmae, "refresh_flanking_statuses", lambda *a, **k: None)
 
     ctx = EventContext(game=game, actor=hero)
-    result = dispatch_event("attack_sword", ctx)
+    result = dispatch_event("sword", ctx)
     assert result.success
     assert enemy.hp == 5

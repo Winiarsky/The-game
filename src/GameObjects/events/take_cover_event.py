@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class TakeCoverEvent(GameEvent):
     """Przygarnięcie się do pobliskiej osłony, aby uzyskać lepszą ochronę."""
 
-    name = "take_cover"
+    name = "cover"
     default_tags = ["take_cover", "defense", "skill"]
     available_in_combat = True
     available_in_exploration = False

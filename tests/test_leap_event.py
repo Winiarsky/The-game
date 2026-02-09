@@ -10,6 +10,7 @@ for path in (PROJECT_ROOT, SRC_ROOT):
         sys.path.insert(0, str(path))
 
 from GameObjects.events.leap_event import LeapEvent  # noqa: E402
+from GameObjects.interactions_mixin import LeapBlockerMixin  # noqa: E402
 
 
 class DummyConn:
@@ -35,6 +36,7 @@ class DummyBoard:
         self.blocked_edges = set()
         self.bounds = (5, 5)
         self.moves = []
+        self.interactables = {}
 
     def in_bounds(self, pos):
         x, y = pos
@@ -51,6 +53,9 @@ class DummyBoard:
 
     def edge_interactables_between(self, a, b):
         return []
+
+    def interactables_at(self, pos):
+        return self.interactables.get(pos, [])
 
     def can_traverse(self, a, b, allow_occupied=False):
         if not (self.in_bounds(a) and self.in_bounds(b)):
@@ -113,6 +118,14 @@ class DummyCtx:
         self.tags = None
 
 
+class DummyLeapBlocker(LeapBlockerMixin):
+    def __init__(self, blocked_pos):
+        self.blocked_pos = blocked_pos
+
+    def blocks_leap(self, _from, to):
+        return to == self.blocked_pos
+
+
 def test_leap_highlights_only_distance_two(monkeypatch):
     board = DummyBoard()
     hero = DummyHero((2, 2))
@@ -160,3 +173,102 @@ def test_leap_cancels_when_landing_occupied_by_ally(monkeypatch):
 
     assert not res.success
     assert not board.moves
+
+
+def test_leap_not_offered_when_blocked_by_interactable():
+    board = DummyBoard()
+    hero = DummyHero((1, 1))
+    target = (3, 1)
+    board.occupants = {hero.position: hero}
+    board.interactables[target] = [DummyLeapBlocker(target)]
+    conn = DummyConn(choice=target)
+    game = DummyGame(board, conn)
+    game.heroes = [hero]
+
+    res = LeapEvent().execute(DummyCtx(game, hero, in_combat=True))
+
+    assert not res.success
+    assert target not in (conn.last_positions or [])
+    assert not board.moves
+
+
+def test_leap_not_offered_when_wall_in_path():
+    board = DummyBoard()
+    hero = DummyHero((0, 0))
+    target = (0, 2)
+    board.occupants = {hero.position: hero}
+    board.blocked_edges.add(frozenset(((0, 0), (0, 1))))
+    conn = DummyConn(choice=target)
+    game = DummyGame(board, conn)
+    game.heroes = [hero]
+
+    res = LeapEvent().execute(DummyCtx(game, hero, in_combat=True))
+
+    assert not res.success
+    assert target not in (conn.last_positions or [])
+    assert not board.moves
+
+
+def test_leap_not_offered_when_blocker_on_path_tile():
+    mid = (1, 1)
+    target = (2, 2)
+
+    class MidBlocker(DummyLeapBlocker):
+        def __init__(self):
+            super().__init__(mid)
+            self.position = mid
+
+    board = DummyBoard()
+    hero = DummyHero((0, 0))
+    board.occupants = {hero.position: hero, mid: MidBlocker()}
+    conn = DummyConn(choice=target)
+    game = DummyGame(board, conn)
+    game.heroes = [hero]
+
+    res = LeapEvent().execute(DummyCtx(game, hero, in_combat=True))
+
+    assert not res.success
+    assert target not in (conn.last_positions or [])
+    assert not board.moves
+
+
+def test_leap_not_offered_when_mid_occupant_without_mixin():
+    mid = (1, 0)
+    target = (2, 0)
+
+    class PlainOccupant:
+        def __init__(self):
+            self.position = mid
+
+    board = DummyBoard()
+    hero = DummyHero((0, 0))
+    board.occupants = {hero.position: hero, mid: PlainOccupant()}
+    conn = DummyConn(choice=target)
+    game = DummyGame(board, conn)
+    game.heroes = [hero]
+
+    res = LeapEvent().execute(DummyCtx(game, hero, in_combat=True))
+
+    assert not res.success
+    assert target not in (conn.last_positions or [])
+    assert not board.moves
+
+
+def test_leap_allows_landing_on_nonblocking_interactable():
+    class NonBlocking(LeapBlockerMixin):
+        def blocks_leap(self, _from, to):
+            return False
+
+    board = DummyBoard()
+    hero = DummyHero((0, 0))
+    target = (0, 2)
+    board.occupants = {hero.position: hero}
+    board.interactables[target] = [NonBlocking()]
+    conn = DummyConn(choice=target)
+    game = DummyGame(board, conn)
+    game.heroes = [hero]
+
+    res = LeapEvent().execute(DummyCtx(game, hero, in_combat=True))
+
+    assert res.success
+    assert board.moves[-1] == ((0, 0), target)

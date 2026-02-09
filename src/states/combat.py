@@ -377,12 +377,11 @@ class Combat(State):
         logger.info("Tura bohatera (%s). Akcje: %s/%s", actor, used, self.ACTION_LIMIT)
         self.game.ui_hero(actor, note=f"Akcje: {used}/{self.ACTION_LIMIT}")
 
+        all_events = list_events()
         available_events = {
-            name: cls
-            for name, cls in list_events().items()
-            if getattr(cls, "available_in_combat", True)
+            name: cls for name, cls in all_events.items() if getattr(cls, "available_in_combat", True)
         }
-        if not available_events:
+        if not all_events:
             logger.warning("Brak zarejestrowanych eventów dla walki.")
             self.game.ui_log("Brak akcji do wykonania.")
             self._advance_turn()
@@ -404,18 +403,15 @@ class Combat(State):
             f"Aktywny: {getattr(actor, 'name', actor)}. Dostępne akcje: {', '.join(ordered_choices)}."
         )
         raw_choice = self.game.conn.read_card(
-            "Wpisz nazwę akcji (np. move, attack_sword, delay, end_turn): ",
-            [],
+            "Podaj nazwę akcji",
         ).strip().lower()
-        aliases = {"end": "end_turn", "8": "end_turn", "delay": "delay", "7": "delay"}
-        raw_choice = aliases.get(raw_choice, raw_choice)
         if highlighted:
             try:
                 self.game.conn.leds_off()
             except Exception:
                 pass
 
-        if raw_choice not in available_events:
+        if raw_choice not in all_events:
             logger.error("Nieznana akcja '%s'", raw_choice)
             self.game.ui_log(f"Nieznana akcja '{raw_choice}'")
             return self
@@ -423,12 +419,12 @@ class Combat(State):
         ctx = EventContext(game=self.game, actor=actor)
         result = dispatch_event(raw_choice, ctx)
 
-        # delay/end_turn mogą nie zużywać akcji
+        # delay/end mogą nie zużywać akcji
         if result.consumed_action:
             self.actions_used[actor] = self.actions_used.get(actor, 0) + 1
             if self.actions_used[actor] >= self.ACTION_LIMIT:
                 logger.info(
-                    "Wykorzystano limit %s akcji. Użyj end_turn lub delay aby zakończyć turę.",
+                    "Wykorzystano limit %s akcji. Użyj end lub delay aby zakończyć turę.",
                     self.ACTION_LIMIT,
                 )
         if result.message:
@@ -436,7 +432,7 @@ class Combat(State):
         else:
             status = "powiodła się" if result.success else "nie powiodła się"
             self.game.ui_log(f"Akcja '{raw_choice}' {status}.")
-        # end_turn i delay same wywołują zmianę kolejki; jeśli aktywny uległ zmianie, nie ruszaj tutaj
-        if raw_choice in ("end_turn",):
+        # end i delay same wywołują zmianę kolejki; jeśli aktywny uległ zmianie, nie ruszaj tutaj
+        if raw_choice in ("end",):
             return self
         return self

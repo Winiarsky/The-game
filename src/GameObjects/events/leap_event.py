@@ -5,6 +5,7 @@ from typing import Iterable
 
 from board import consts
 from actions.move_utils import _maybe_dispatch_move_reactions
+from GameObjects.interactions_mixin import LeapBlockerMixin
 from .base import EventContext, EventResult, GameEvent
 from .registry import register_event
 
@@ -18,8 +19,9 @@ class LeapEvent(GameEvent):
     name = "leap"
     default_tags = ["move", "leap"]
     available_in_combat = True
-    available_in_exploration = False
+    available_in_exploration = True
     consumes_action = True
+
 
     def _candidates(self, board, origin: tuple[int, int]) -> Iterable[tuple[int, int]]:
         ox, oy = origin
@@ -35,9 +37,82 @@ class LeapEvent(GameEvent):
                     continue
                 yield pos
 
+    @staticmethod
+    def _sign(v: int) -> int:
+        return (v > 0) - (v < 0)
+
+    @staticmethod
+    def _blocks_leap(obj, origin: tuple[int, int], target: tuple[int, int]) -> bool:
+        if not isinstance(obj, LeapBlockerMixin):
+            return False
+        fn = getattr(obj, "blocks_leap", None)
+        if callable(fn):
+            try:
+                return bool(fn(origin, target))
+            except Exception:
+                return True
+        return True
+
+    def _landing_blockers(self, board, origin: tuple[int, int], target: tuple[int, int]) -> list[LeapBlockerMixin]:
+        blockers: list[LeapBlockerMixin] = []
+        seen: set[int] = set()
+
+        occupant = board.occupant_at(target)
+        if occupant is not None and self._blocks_leap(occupant, origin, target):
+            blockers.append(occupant)
+            seen.add(id(occupant))
+
+        interactables_at = getattr(board, "interactables_at", None)
+        if callable(interactables_at):
+            for obj in interactables_at(target):
+                if id(obj) in seen:
+                    continue
+                # tylko obiekty realnie na polu (nie krawędziowe) powinny blokować lądowanie
+                pos = getattr(obj, "position", None)
+                if pos is not None and pos != target:
+                    continue
+                if self._blocks_leap(obj, origin, target):
+                    blockers.append(obj)
+                seen.add(id(obj))
+
+        return blockers
+
+    def _path_clear(self, board, origin: tuple[int, int], target: tuple[int, int]) -> bool:
+        """Sprawdź krawędź po krawędzi czy po drodze nie ma ścian ani blokujących obiektów."""
+        if board.is_blocked(origin, target):
+            return False
+        current = origin
+        dx = target[0] - origin[0]
+        dy = target[1] - origin[1]
+        interactables_at = getattr(board, "interactables_at", None)
+        while current != target:
+            step = (self._sign(dx), self._sign(dy))
+            next_pos = (current[0] + step[0], current[1] + step[1])
+            if not board.in_bounds(next_pos):
+                return False
+            if board.is_blocked(current, next_pos):
+                return False
+            for edge_obj in board.edge_interactables_between(current, next_pos):
+                if self._blocks_leap(edge_obj, origin, next_pos):
+                    return False
+            # środkowe pola nie mogą zawierać obiektów ani LeapBlockerów
+            if next_pos != target:
+                occupant = board.occupant_at(next_pos)
+                if occupant:
+                    return False
+                if callable(interactables_at):
+                    for obj in interactables_at(next_pos):
+                        pos = getattr(obj, "position", None)
+                        if pos is not None and pos != next_pos:
+                            continue
+                        if self._blocks_leap(obj, origin, next_pos):
+                            return False
+            current = next_pos
+            dx = target[0] - current[0]
+            dy = target[1] - current[1]
+        return True
+
     def execute(self, ctx: EventContext) -> EventResult:
-        if not ctx.in_combat:
-            return EventResult.cancelled(message="Leap dostępny tylko w walce.")
 
         hero = ctx.actor
         if hero is None:
@@ -59,10 +134,14 @@ class LeapEvent(GameEvent):
 
         possible: list[tuple[int, int]] = []
         for pos in self._candidates(board, origin):
-            if not board.can_traverse(origin, pos, allow_occupied=False):
+            if not board.can_enter(pos, allow_occupied=False):
+                continue
+            if not self._path_clear(board, origin, pos):
                 continue
             occupant = board.occupant_at(pos)
             if occupant in getattr(ctx.game, "heroes", []) or occupant in getattr(ctx.game, "enemies", []):
+                continue
+            if self._landing_blockers(board, origin, pos):
                 continue
             possible.append(pos)
 

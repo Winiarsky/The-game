@@ -114,7 +114,7 @@ def test_longbow_hits_without_cover(monkeypatch):
     rolls = iter([20, 5])  # hit, dmg
     monkeypatch.setattr(base_attack_range_event, "prompt_for_roll", lambda prompt: next(rolls))
 
-    result = dispatch_event("attack_range_long_bow", _ctx(game, hero))
+    result = dispatch_event("longbow", _ctx(game, hero))
     assert result.success
     assert enemy.hp == 3
     # status range_attacker nadany
@@ -130,7 +130,7 @@ def test_longbow_blocked_by_wall(monkeypatch):
     game.board.occupants = {hero.position: hero, enemy.position: enemy}
     game.board.blocked_edges.add(frozenset(((0, 0), (1, 0))))
 
-    result = dispatch_event("attack_range_long_bow", _ctx(game, hero))
+    result = dispatch_event("longbow", _ctx(game, hero))
     assert not result.success
     assert "zasięgu" in (result.message or "") or "linia" in (result.message or "")
     assert enemy.hp == 12
