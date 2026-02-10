@@ -101,8 +101,18 @@ class GuardNPC(BaseNPC, WatchfulMixin):
             return "Strażnik nie chce już słuchać twoich argumentów."
 
         tags = ["diplomacy", "convince", "noble"]
-        ctx = EventContext(game=game, actor=actor, tags=tags, metadata={"dc": self._diplomacy_dc(), "target": self})
-        result = dispatch_event("diplomacy_check", ctx)
+        ctx = EventContext(
+            game=game,
+            actor=actor,
+            tags=tags,
+            metadata={
+                "dc": self._diplomacy_dc(),
+                "target": self,
+                "skill_id": "diplomacy",
+                "skill_label": "Diplomacy",
+            },
+        )
+        result = dispatch_event("skill_check", ctx)
 
         outcome = result.data.get("outcome") if result.data else None
         if outcome == "critical_success":

@@ -1,17 +1,8 @@
 """Pakiet eventów testów umiejętności."""
 
-from .skill_check_event import (  # noqa: F401
-    SkillCheckEvent,
-    DiplomacyCheckEvent,
-    AthleticsCheckEvent,
-    AcrobaticsCheckEvent,
-    StealthCheckEvent,
-)
+from .skill_check_event import SkillCheckEvent, GenericSkillCheckEvent  # noqa: F401
 
 __all__ = [
     "SkillCheckEvent",
-    "DiplomacyCheckEvent",
-    "AthleticsCheckEvent",
-    "AcrobaticsCheckEvent",
-    "StealthCheckEvent",
+    "GenericSkillCheckEvent",
 ]

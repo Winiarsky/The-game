@@ -183,8 +183,13 @@ class BaseNPC(SocialMixin, TradeMixin, PickpocketMixin, InteractableMixin):
         if self.is_noble:
             tags.append("noble")
 
-        ctx = EventContext(game=game, actor=actor, tags=tags, metadata={"dc": dc})
-        result = dispatch_event("diplomacy_check", ctx)
+        ctx = EventContext(
+            game=game,
+            actor=actor,
+            tags=tags,
+            metadata={"dc": dc, "skill_id": "diplomacy", "skill_label": "Diplomacy"},
+        )
+        result = dispatch_event("skill_check", ctx)
 
         outcome = result.data.get("outcome") if result.data else None
         if outcome in ("success", "critical_success"):

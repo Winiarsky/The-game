@@ -21,10 +21,10 @@ class SkillCheckEvent(GameEvent):
     default_tags: Sequence[str] | None = None
     consumes_action: bool = False  # testy dialogowe nie pochłaniają akcji tury
 
-    def _all_tags(self, ctx: EventContext) -> list[str]:
+    def _all_tags(self, ctx: EventContext, skill_id: str) -> list[str]:
         tags = self._effective_tags(ctx)
-        if self.skill_id not in tags:
-            tags.append(self.skill_id)
+        if skill_id not in tags:
+            tags.append(skill_id)
         return tags
 
     def execute(self, ctx: EventContext) -> EventResult:
@@ -36,10 +36,13 @@ class SkillCheckEvent(GameEvent):
         if not isinstance(dc, int):
             return EventResult.cancelled(message="Brak DC dla testu umiejętności.")
 
-        tags = self._all_tags(ctx)
+        skill_id = ctx.metadata.get("skill_id", self.skill_id) if isinstance(ctx.metadata, dict) else self.skill_id
+        skill_label = ctx.metadata.get("skill_label", self.skill_label) if isinstance(ctx.metadata, dict) else self.skill_label
+
+        tags = self._all_tags(ctx, skill_id)
 
         result = resolve_skill_check_with_sources(
-            skill_id=self.skill_id,
+            skill_id=skill_id,
             dc=dc,
             actor=actor,
             target=ctx.metadata.get("target"),
@@ -50,7 +53,7 @@ class SkillCheckEvent(GameEvent):
         try:
             ctx.game.events.safe_emit_action(
                 actor=actor,
-                action_id=self.skill_id,
+                action_id=skill_id,
                 action_tags=tags,
                 outcome=result.outcome,
                 dc=dc,
@@ -65,7 +68,7 @@ class SkillCheckEvent(GameEvent):
         return EventResult(
             success=True,
             consumed_action=self.consumes_action,
-            message=f"{self.skill_label}: {result.outcome}",
+            message=f"{skill_label}: {result.outcome}",
             data={
                 "outcome": result.outcome,
                 "total": result.total,
@@ -73,37 +76,17 @@ class SkillCheckEvent(GameEvent):
                 "modifier": result.modifier,
                 "dc": dc,
                 "notes": result.notes,
+                "skill_id": skill_id,
+                "skill_label": skill_label,
             },
         )
 
 
 @register_event
-class DiplomacyCheckEvent(SkillCheckEvent):
-    name = "diplomacy_check"
-    skill_id = "diplomacy"
-    skill_label = "Diplomacy"
-    default_tags = ["skill_check", "diplomacy"]
+class GenericSkillCheckEvent(SkillCheckEvent):
+    """Jeden punkt wejścia – skill_id w metadata."""
 
-
-@register_event
-class AthleticsCheckEvent(SkillCheckEvent):
-    name = "athletics_check"
-    skill_id = "athletics"
-    skill_label = "Athletics"
-    default_tags = ["skill_check", "athletics"]
-
-
-@register_event
-class AcrobaticsCheckEvent(SkillCheckEvent):
-    name = "acrobatics_check"
-    skill_id = "acrobatics"
-    skill_label = "Acrobatics"
-    default_tags = ["skill_check", "acrobatics"]
-
-
-@register_event
-class StealthCheckEvent(SkillCheckEvent):
-    name = "stealth_check"
-    skill_id = "stealth"
-    skill_label = "Stealth"
-    default_tags = ["skill_check", "stealth"]
+    name = "skill_check"
+    skill_id = "skill"
+    skill_label = "Umiejętność"
+    default_tags = ["skill_check"]
