@@ -16,6 +16,7 @@ from GameObjects.interactions_mixin import (
 )
 from GameObjects.events.base import EventContext
 from GameObjects.events.registry import dispatch_event
+from skills import Skill
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +147,7 @@ class BaseNPC(SocialMixin, TradeMixin, PickpocketMixin, InteractableMixin):
     # --- Kradzież ---
     def action_pickpocket(self, actor, _game, _payload=None) -> str:
         has_status = getattr(actor, "has_status", None)
-        is_stealthed = has_status("stealth") if callable(has_status) else "stealth" in getattr(actor, "statuses", [])
+        is_stealthed = has_status(Skill.STEALTH.value) if callable(has_status) else Skill.STEALTH.value in getattr(actor, "statuses", [])
         if not is_stealthed:
             return "Musisz być w ukryciu, aby spróbować podkraść."
         result = dispatch_event(
@@ -154,10 +155,10 @@ class BaseNPC(SocialMixin, TradeMixin, PickpocketMixin, InteractableMixin):
             EventContext(
                 game=None,
                 actor=actor,
-                tags=["thievery", "pickpocket"],
+                tags=[Skill.THIEVERY.value, "pickpocket"],
                 metadata={
                     "dc": self.pickpocket_dc,
-                    "skill_id": "thievery",
+                    "skill_id": Skill.THIEVERY.value,
                     "skill_label": "Thievery",
                     "apply_modifiers": False,
                 },
@@ -188,7 +189,7 @@ class BaseNPC(SocialMixin, TradeMixin, PickpocketMixin, InteractableMixin):
 
     def action_diplomacy(self, actor, game, _payload=None) -> str:
         dc = self._diplomacy_dc()
-        tags = ["diplomacy", "convince"]
+        tags = [Skill.DIPLOMACY.value, "convince"]
         if self.is_noble:
             tags.append("noble")
 
@@ -196,7 +197,7 @@ class BaseNPC(SocialMixin, TradeMixin, PickpocketMixin, InteractableMixin):
             game=game,
             actor=actor,
             tags=tags,
-            metadata={"dc": dc, "skill_id": "diplomacy", "skill_label": "Diplomacy"},
+            metadata={"dc": dc, "skill_id": Skill.DIPLOMACY.value, "skill_label": "Diplomacy"},
         )
         result = dispatch_event("skill_check", ctx)
 

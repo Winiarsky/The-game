@@ -3,9 +3,10 @@ from typing import Optional
 
 from GameObjects.base import GameObjectMeta
 from GameObjects.NPC.base_npc import BaseNPC
-from GameObjects.interactions_mixin import WatchfulMixin, TradeItem, Interaction
+from GameObjects.interactions_mixin import WatchfulMixin, TradeItem, Interaction, resolve_skill_check
 from GameObjects.events.base import EventContext
 from GameObjects.events.registry import dispatch_event
+from skills import Skill
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +72,7 @@ class GuardNPC(BaseNPC, WatchfulMixin):
     # --- Pickpocket jak w NPC ---
     def action_pickpocket(self, actor, _game, _payload=None) -> str:
         has_status = getattr(actor, "has_status", None)
-        is_stealthed = has_status("stealth") if callable(has_status) else "stealth" in getattr(actor, "statuses", [])
+        is_stealthed = has_status(Skill.STEALTH.value) if callable(has_status) else Skill.STEALTH.value in getattr(actor, "statuses", [])
         if not is_stealthed:
             return "Musisz być w ukryciu, aby spróbować podkraść."
         result = dispatch_event(
@@ -79,10 +80,10 @@ class GuardNPC(BaseNPC, WatchfulMixin):
             EventContext(
                 game=_game,
                 actor=actor,
-                tags=["thievery", "pickpocket"],
+                tags=[Skill.THIEVERY.value, "pickpocket"],
                 metadata={
                     "dc": self.pickpocket_dc,
-                    "skill_id": "thievery",
+                    "skill_id": Skill.THIEVERY.value,
                     "skill_label": "Thievery",
                     "apply_modifiers": False,
                 },
@@ -111,7 +112,7 @@ class GuardNPC(BaseNPC, WatchfulMixin):
         if self.diplomacy_blocked:
             return "Strażnik nie chce już słuchać twoich argumentów."
 
-        tags = ["diplomacy", "convince", "noble"]
+        tags = [Skill.DIPLOMACY.value, "convince", "noble"]
         ctx = EventContext(
             game=game,
             actor=actor,
@@ -119,7 +120,7 @@ class GuardNPC(BaseNPC, WatchfulMixin):
             metadata={
                 "dc": self._diplomacy_dc(),
                 "target": self,
-                "skill_id": "diplomacy",
+                "skill_id": Skill.DIPLOMACY.value,
                 "skill_label": "Diplomacy",
             },
         )
@@ -151,7 +152,7 @@ class GuardNPC(BaseNPC, WatchfulMixin):
                     description="Spróbuj przekonać strażnika.",
                     handler=type(self).action_diplomacy_guard,
                     end_interaction=False,
-                    tags=["diplomacy", "convince"],
+                    tags=[Skill.DIPLOMACY.value, "convince"],
                 )
             )
         return actions

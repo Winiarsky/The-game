@@ -10,6 +10,7 @@ from GameObjects.interactions_mixin import prompt_for_roll
 from GameObjects.Interactables.utils.awareness import iter_watchers_in_rooms, summarize_watchers
 from GameObjects.Obstacles.basic_obstacle import Obstacle
 from actions.move_utils import perform_movement, default_on_enter
+from skills import Skill
 
 from .base import EventContext, EventResult, GameEvent
 from .registry import register_event, dispatch_event
@@ -20,7 +21,7 @@ logger = logging.getLogger(__name__)
 @register_event
 class StealthEvent(GameEvent):
     name = "stealth"
-    default_tags = ["stealth", "move"]
+    default_tags = [Skill.STEALTH.value, "move"]
     consumes_action = True
 
     def execute(self, ctx: EventContext) -> EventResult:
@@ -52,7 +53,7 @@ class StealthEvent(GameEvent):
             logger.info("Ten bohater ma zablokowane próby stealth w tym pokoju.")
             return EventResult.noop(message="Pokój zablokowany dla stealth.")
 
-        already_stealth = hero.has_status("stealth")
+        already_stealth = hero.has_status(Skill.STEALTH.value)
         covered = hero.has_status("covered")
 
         if not already_stealth:
@@ -87,7 +88,7 @@ class StealthEvent(GameEvent):
                     tags=tags,
                     metadata={
                         "dc": consts.STEALTH_FAIL,
-                        "skill_id": "stealth",
+                        "skill_id": Skill.STEALTH.value,
                         "skill_label": "Stealth",
                         "base_modifier": base_modifier,
                         "details": details_txt,

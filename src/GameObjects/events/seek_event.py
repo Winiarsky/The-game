@@ -4,6 +4,7 @@ import logging
 
 from board import consts
 from GameObjects.interactions_mixin.skill_check_resolver import resolve_skill_check_with_sources
+from skills import Skill
 
 from .base import EventContext, EventResult, GameEvent
 from .registry import register_event
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 @register_event
 class SeekEvent(GameEvent):
     name = "seek"
-    default_tags = ["seek", "perception"]
+    default_tags = ["seek", Skill.PERCEPTION.value]
     consumes_action = True
 
     def execute(self, ctx: EventContext) -> EventResult:
@@ -62,11 +63,11 @@ class SeekEvent(GameEvent):
         search_positions.add(hero_pos)
 
         check = resolve_skill_check_with_sources(
-            skill_id="perception",
+            skill_id=Skill.PERCEPTION.value,
             dc=consts.SEEK_FAIL,
             actor=actor,
             target=None,
-            tags=["seek", "perception"],
+            tags=["seek", Skill.PERCEPTION.value],
             game=game,
             apply_modifiers=False,
         )

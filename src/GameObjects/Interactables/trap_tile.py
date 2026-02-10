@@ -2,6 +2,7 @@ from GameObjects.base import GameObjectMeta
 from GameObjects.interactions_mixin.base_interaction import Interaction, InteractableMixin
 from GameObjects.interactions_mixin import TrappableMixin
 from GameObjects.interactions_mixin.skill_check_resolver import resolve_skill_check_with_sources
+from skills import Skill
 
 
 class TrapTile(TrappableMixin, InteractableMixin):
@@ -78,11 +79,11 @@ class TrapTile(TrappableMixin, InteractableMixin):
 
     def action_search(self, actor, game, _payload=None) -> str:
         result = resolve_skill_check_with_sources(
-            skill_id="perception",
+            skill_id=Skill.PERCEPTION.value,
             dc=self.trap_detection_dc,
             actor=actor,
             target=None,
-            tags=["perception", "trap", "search"],
+            tags=[Skill.PERCEPTION.value, "trap", "search"],
             game=game,
             apply_modifiers=False,
         )
@@ -91,11 +92,11 @@ class TrapTile(TrappableMixin, InteractableMixin):
 
     def action_disable(self, actor, game, _payload=None) -> str:
         result = resolve_skill_check_with_sources(
-            skill_id="thievery",
+            skill_id=Skill.THIEVERY.value,
             dc=self.trap_disable_dc,
             actor=actor,
             target=None,
-            tags=["thievery", "trap", "disable"],
+            tags=[Skill.THIEVERY.value, "trap", "disable"],
             game=game,
             apply_modifiers=False,
         )

@@ -3,6 +3,7 @@ from __future__ import annotations
 from statuses.base import Status
 from statuses.check_effects import CheckEffect
 from bonuses import BonusEffect, BonusType
+from skills import Skill
 
 
 def HideStatus() -> Status:
@@ -14,7 +15,7 @@ def HideStatus() -> Status:
         check_effects=[
             CheckEffect(
                 applies_to="source",
-                skills=["stealth"],
+                skills=[Skill.STEALTH.value],
                 tags_required=["try_stealth"],
                 bonus_effects=[
                     BonusEffect(

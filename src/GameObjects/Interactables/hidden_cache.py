@@ -4,6 +4,7 @@ from GameObjects.base import GameObjectMeta
 from GameObjects.interactions_mixin.base_interaction import Interaction, InteractableMixin
 from GameObjects.interactions_mixin import HiddenMixin
 from GameObjects.interactions_mixin.skill_check_resolver import resolve_skill_check_with_sources
+from skills import Skill
 
 
 class HiddenCache(HiddenMixin, InteractableMixin):
@@ -87,11 +88,11 @@ class HiddenCache(HiddenMixin, InteractableMixin):
 
     def action_search(self, actor, game, _payload=None) -> str:
         result = resolve_skill_check_with_sources(
-            skill_id="perception",
+            skill_id=Skill.PERCEPTION.value,
             dc=self.reveal_dc,
             actor=actor,
             target=None,
-            tags=["perception", "seek", "hidden_cache"],
+            tags=[Skill.PERCEPTION.value, "seek", "hidden_cache"],
             game=game,
             apply_modifiers=False,
         )
@@ -104,11 +105,11 @@ class HiddenCache(HiddenMixin, InteractableMixin):
         if self.revealed:
             return "Sekret już odkryty."
         result = resolve_skill_check_with_sources(
-            skill_id="perception",
+            skill_id=Skill.PERCEPTION.value,
             dc=self.reveal_dc + 2,
             actor=actor,
             target=None,
-            tags=["perception", "seek", "hidden_cache"],
+            tags=[Skill.PERCEPTION.value, "seek", "hidden_cache"],
             game=game,
             apply_modifiers=False,
         )
@@ -141,11 +142,11 @@ class HiddenCache(HiddenMixin, InteractableMixin):
         messages: list[str] = []
         if self.auto_reveal_on_enter and self.hidden and not self.revealed:
             result = resolve_skill_check_with_sources(
-                skill_id="perception",
+                skill_id=Skill.PERCEPTION.value,
                 dc=self.reveal_dc,
                 actor=actor,
                 target=None,
-                tags=["perception", "seek", "hidden_cache"],
+                tags=[Skill.PERCEPTION.value, "seek", "hidden_cache"],
                 game=game,
                 apply_modifiers=False,
             )
