@@ -3,7 +3,9 @@ from typing import Optional
 
 from GameObjects.base import GameObjectMeta
 from GameObjects.NPC.base_npc import BaseNPC
-from GameObjects.interactions_mixin import WatchfulMixin, prompt_for_roll, resolve_skill_check, TradeItem
+from GameObjects.interactions_mixin import WatchfulMixin, TradeItem, Interaction
+from GameObjects.events.base import EventContext
+from GameObjects.events.registry import dispatch_event
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +30,14 @@ class GuardNPC(BaseNPC, WatchfulMixin):
         watch_disturbed: int = 0,
         watch_disabled: bool = False,
         perception_bonus: int = 4,
+        enable_diplomacy: bool = True,
+        **kwargs,
     ):
+        # ustaw zanim BaseNPC wywoła extra_actions
+        self.enable_diplomacy = enable_diplomacy
+        self.diplomacy_blocked = False
+        self.diplomacy_letter_given = False
+
         super().__init__(
             name=name,
             dialog=dialog,
@@ -41,6 +50,7 @@ class GuardNPC(BaseNPC, WatchfulMixin):
             base_price_modifier=base_price_modifier,
             pickpocket_dc=pickpocket_dc,
             pickpocket_loot=pickpocket_loot,
+            **kwargs,
         )
         WatchfulMixin.__init__(
             self,
@@ -80,6 +90,50 @@ class GuardNPC(BaseNPC, WatchfulMixin):
     # --- Watchful hook ---
     def on_spot(self, hero, game) -> Optional[str]:
         return f"{self.name} zauważa ruch."
+
+    # --- Diplomacy dla strażnika ---
+    def _diplomacy_dc(self) -> int:
+        base_dc = 16
+        return base_dc - 2 * self.attitude
+
+    def action_diplomacy_guard(self, actor, game, _payload=None) -> str:
+        if self.diplomacy_blocked:
+            return "Strażnik nie chce już słuchać twoich argumentów."
+
+        tags = ["diplomacy", "convince", "noble"]
+        ctx = EventContext(game=game, actor=actor, tags=tags, metadata={"dc": self._diplomacy_dc(), "target": self})
+        result = dispatch_event("diplomacy_check", ctx)
+
+        outcome = result.data.get("outcome") if result.data else None
+        if outcome == "critical_success":
+            self.diplomacy_letter_given = True
+            att, label = self.adjust_attitude(1)
+            return f"Otrzymujesz pismo od strażnika. Nastawienie: {label} ({att})."
+        if outcome == "success":
+            self.diplomacy_letter_given = True
+            return "Otrzymujesz pismo od strażnika."
+        if outcome == "failure":
+            return "Strażnik nie daje się przekonać."
+        if outcome == "critical_failure":
+            self.diplomacy_blocked = True
+            return "Zdenerwowałeś strażnika. Nie będzie dalszych rozmów."
+
+        return result.message or "Nie udało się przeprowadzić testu."
+
+    def extra_actions(self):
+        actions = super().extra_actions()
+        if self.enable_diplomacy:
+            actions.append(
+                Interaction(
+                    id="diplomacy",
+                    label="Perswazja (Diplomacy)",
+                    description="Spróbuj przekonać strażnika.",
+                    handler=type(self).action_diplomacy_guard,
+                    end_interaction=False,
+                    tags=["diplomacy", "convince"],
+                )
+            )
+        return actions
 
 
 META = GameObjectMeta(

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 
+from .check_effects import CheckEffect
 
 @dataclass(frozen=True)
 class Status:
@@ -14,6 +15,7 @@ class Status:
     source: Optional[str] = None
     stacks: bool = False
     data: dict[str, Any] = field(default_factory=dict)
+    check_effects: Optional[Sequence[CheckEffect]] = None  # reguły dla testów umiejętności
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, Status):

@@ -14,6 +14,8 @@ from GameObjects.interactions_mixin import (
     resolve_skill_check,
     attitude_label,
 )
+from GameObjects.events.base import EventContext
+from GameObjects.events.registry import dispatch_event
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +41,8 @@ class BaseNPC(SocialMixin, TradeMixin, PickpocketMixin, InteractableMixin):
         base_price_modifier: float = 1.0,
         pickpocket_dc: int = 16,
         pickpocket_loot: Optional[list[str]] = None,
+        enable_diplomacy: bool = True,
+        is_noble: bool = False,
         enable_talk: bool = True,
         enable_trade: bool = True,
         enable_pickpocket: bool = True,
@@ -62,6 +66,8 @@ class BaseNPC(SocialMixin, TradeMixin, PickpocketMixin, InteractableMixin):
         self.pickpocket_dc = pickpocket_dc
         self.pickpocket_loot = pickpocket_loot or ["kilka monet"]
         self._dialog_used: set[str] = set()
+        self.enable_diplomacy = enable_diplomacy
+        self.is_noble = is_noble
         self.enable_talk = enable_talk
         self.enable_trade = enable_trade
         self.enable_pickpocket = enable_pickpocket
@@ -164,6 +170,41 @@ class BaseNPC(SocialMixin, TradeMixin, PickpocketMixin, InteractableMixin):
                 msg = f"{msg} {extra}"
         return msg
 
+    # --- Diplomacy check (tagowy SkillCheckEvent) ---
+    def _diplomacy_dc(self) -> int:
+        """DC zależne od nastawienia (-2..2): wrogi trudniej, przyjacielski łatwiej."""
+        base_dc = 15
+        # niższe DC dla pozytywnego nastawienia, wyższe dla negatywnego
+        return base_dc - 2 * self.attitude
+
+    def action_diplomacy(self, actor, game, _payload=None) -> str:
+        dc = self._diplomacy_dc()
+        tags = ["diplomacy", "convince"]
+        if self.is_noble:
+            tags.append("noble")
+
+        ctx = EventContext(game=game, actor=actor, tags=tags, metadata={"dc": dc})
+        result = dispatch_event("diplomacy_check", ctx)
+
+        outcome = result.data.get("outcome") if result.data else None
+        if outcome in ("success", "critical_success"):
+            delta = 2 if outcome == "critical_success" else 1
+            new_att, label = self.adjust_attitude(delta)
+            return (
+                f"Udana perswazja ({outcome}). Nastawienie rośnie do: {label} ({new_att}). "
+                f"{result.message or ''}"
+            ).strip()
+
+        if outcome in ("failure", "critical_failure"):
+            delta = -2 if outcome == "critical_failure" else -1
+            new_att, label = self.adjust_attitude(delta)
+            return (
+                f"Nie udało się przekonać ({outcome}). Nastawienie spada do: {label} ({new_att}). "
+                f"{result.message or ''}"
+            ).strip()
+
+        return result.message or "Test dyplomacji nie został przeprowadzony."
+
     def register_default_actions(self) -> None:
         """Tworzy standardowe akcje (dialog, handel, kradzież, wyjście) wg flag."""
         if self.enable_talk:
@@ -174,6 +215,17 @@ class BaseNPC(SocialMixin, TradeMixin, PickpocketMixin, InteractableMixin):
                     description="Rozmowa.",
                     handler=type(self).action_talk,
                     end_interaction=False,
+                )
+            )
+        if self.enable_diplomacy:
+            self.register_action(
+                Interaction(
+                    id="diplomacy",
+                    label="Przekonaj (Diplomacy)",
+                    description="Próba perswazji zależna od nastawienia.",
+                    handler=type(self).action_diplomacy,
+                    end_interaction=False,
+                    tags=["diplomacy", "convince"],
                 )
             )
         if self.enable_trade:
