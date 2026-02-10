@@ -6,6 +6,7 @@ from typing import Iterable, Sequence
 from board import consts
 from combat import refresh_flanking_statuses
 from GameObjects.interactions_mixin import prompt_for_roll
+from damage_types import DamageType
 
 from .attack_base import AttackEventBase
 from ..base import EventContext, EventResult
@@ -20,11 +21,10 @@ class BasicMeleeAttackEvent(AttackEventBase):
     weapon_label: str = "bronią"
     damage_prompt: str | Sequence[str] = "1k6 + STR"
     action_id_base: str = "attack_melee"
-    damage_type: str = "slashing"
+    damage_type: str | Sequence[str] = DamageType.SLASHING.value
     default_tags = ["attack_melee"]
     consumes_action = True
     # może być str lub lista str przy wielu typach obrażeń
-    damage_type: str | Sequence[str] = "slashing"
 
     # --- główna logika ---
     def execute(self, ctx: EventContext) -> EventResult:  # noqa: C901 - złożone ale liniowe

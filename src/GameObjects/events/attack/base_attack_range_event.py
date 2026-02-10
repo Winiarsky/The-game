@@ -7,6 +7,7 @@ from typing import Sequence
 from bonuses import BonusEffect, BonusType
 from GameObjects.interactions_mixin import RangeAttackAffectMixin, prompt_for_roll
 from statuses import Status
+from damage_types import DamageType
 
 from .attack_base import AttackEventBase
 from ..base import EventContext, EventResult
@@ -23,7 +24,7 @@ class BaseRangeAttackEvent(AttackEventBase):
     weapon_label: str = "bronią dystansową"
     damage_prompt: str | Sequence[str] = "1k6 + DEX"
     action_id_base: str = "attack_ranged"
-    damage_type: str | Sequence[str] = "piercing"
+    damage_type: str | Sequence[str] = DamageType.PIERCING.value
     range_increment_ft: int = 60
     max_range_increments: int = 6
     feet_per_cell: int = 5

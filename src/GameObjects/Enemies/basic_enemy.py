@@ -9,6 +9,7 @@ from GameObjects.interactions_mixin import BonusMixin, StatusMixin, WatchfulMixi
 from combat.reactions import OpportunityAttack
 from statuses import Status
 from object_registry import assign_id
+from damage_types import DamageType
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +77,7 @@ class BasicEnemy(StatusMixin, BonusMixin, WatchfulMixin, ReactiveMixin):
         logger.info("%s rzuca inicjatywę: %s (bonus %s).", self.name, roll, self.initiative_bonus)
         return roll
 
-    def apply_damage(self, amount: int, damage_type: str = "normal") -> tuple[int, bool]:
+    def apply_damage(self, amount: int, damage_type: str = DamageType.NORMAL.value) -> tuple[int, bool]:
         """Odejmij HP i zwróć (aktualne_hp, czy_pokonany)."""
         self.hp -= amount
         defeated = self.hp <= 0

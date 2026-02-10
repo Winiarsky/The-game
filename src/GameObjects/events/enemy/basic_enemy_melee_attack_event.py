@@ -5,6 +5,7 @@ import random
 
 from board import consts
 from combat import effective_ac
+from damage_types import DamageType
 
 from ..base import EventContext, EventResult, GameEvent
 
@@ -23,7 +24,7 @@ class BasicEnemyMeleeAttackEvent(GameEvent):
     weapon_label: str = "atak wręcz"
     action_id_base: str = "enemy_attack_melee"
     damage_die_sides: int = 6
-    damage_type: str = "slashing"
+    damage_type: str = DamageType.SLASHING.value
     attack_bonus_attr: str = "attack_bonus"
     strength_attr: str = "strength"
 
