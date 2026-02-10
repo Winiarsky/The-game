@@ -54,14 +54,14 @@ class Hero:
 
 
 def test_source_bonus_and_target_penalty(monkeypatch):
-    rolls = iter([13, 13])
-    monkeypatch.setattr("GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll", lambda *_: next(rolls))
+    # gracz podaje wynik końcowy już z premią +2 (13+2=15)
+    monkeypatch.setattr("GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll", lambda *_: 15)
 
     actor = Hero(statuses=[NOBLE_PERSON_STATUS])
     target = Hero(statuses=[STUBBORN_STATUS])
     res = resolve_skill_check_with_sources(skill_id="diplomacy", dc=15, actor=actor, target=target, tags=["diplomacy", "noble"])
-    assert res.modifier == 2  # bonus z noble_person
-    # 13 + 2 = 15 -> success, ale demote z targetu => failure
+    assert res.modifier == 2  # bonus z noble_person (pokazywany w promptcie)
+    # wejściowy success 15 -> demote o 1 (stubborn) => failure
     assert res.outcome == "failure"
     assert any("szlacheckie" in note or "oporny" in note for note in res.notes) or res.notes
 

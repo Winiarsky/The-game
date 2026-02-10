@@ -12,7 +12,7 @@ from GameObjects.Obstacles.basic_obstacle import Obstacle
 from actions.move_utils import perform_movement, default_on_enter
 
 from .base import EventContext, EventResult, GameEvent
-from .registry import register_event
+from .registry import register_event, dispatch_event
 
 logger = logging.getLogger(__name__)
 
@@ -70,29 +70,40 @@ class StealthEvent(GameEvent):
                 action_tags=self._effective_tags(ctx),
                 pos=hero_pos,
             )
-            modifier, details = self._compute_modifier(ctx, hero_pos)
-            if hero.has_status("hide"):
-                bonus_hide = getattr(hero, "hide_stealth_bonus", 0)
-                if bonus_hide:
-                    modifier += bonus_hide
-                    details.append(f"ukrycie +{bonus_hide}")
+            base_modifier, details = self._compute_modifier(ctx, hero_pos)
             if covered:
-                modifier += 2
+                base_modifier += 2
                 details.append("osłona +2")
             if penalty:
-                modifier -= penalty
+                base_modifier -= penalty
                 details.append(f"strażnicy czujności {-(penalty)}")
+            tags = self._effective_tags(ctx) + ["try_stealth"]
             details_txt = ", ".join(details) if details else "brak modyfikatorów"
-            roll = prompt_for_roll(
-                f"Podaj końcowy wynik testu Stealth (modyfikator {modifier:+d}: {details_txt}): "
+            result = dispatch_event(
+                "skill_check",
+                EventContext(
+                    game=game,
+                    actor=hero,
+                    tags=tags,
+                    metadata={
+                        "dc": consts.STEALTH_FAIL,
+                        "skill_id": "stealth",
+                        "skill_label": "Stealth",
+                        "base_modifier": base_modifier,
+                        "details": details_txt,
+                        "apply_modifiers": False,  # gracz podaje ostateczny wynik
+                    },
+                ),
             )
-            result = roll
-            if result < consts.STEALTH_CRITICAL_FAIL:
+            outcome = result.data.get("outcome") if result.data else None
+            total = result.data.get("total") if result.data else 0
+
+            if outcome == "critical_failure" or total < consts.STEALTH_CRITICAL_FAIL:
                 self._apply_fail(hero, rooms_here, critical=True)
                 self._trigger_critical_fail_effects(ctx, hero_pos)
                 logger.info("Krytyczna porażka – pokój zablokowany dla stealth.")
                 return EventResult.noop(message="Krytyczna porażka stealth.")
-            if result < consts.STEALTH_FAIL:
+            if outcome in ("failure", None) or total < consts.STEALTH_FAIL:
                 self._apply_fail(hero, rooms_here, critical=False)
                 for room_id in rooms_here:
                     fails = hero.stealth_fail_counts.get(room_id, 0)
@@ -101,14 +112,14 @@ class StealthEvent(GameEvent):
                 logger.info("Nie udaje się wejść w ukrycie.")
                 return EventResult.noop(message="Nie weszto w stealth.")
 
-            bonus = self._apply_success(hero, rooms_here, result)
+            bonus = self._apply_success(hero, rooms_here, total)
             game.conn.set_leds([hero_pos], consts.STEALTH_SUCCESS_RGB)
             sleep(consts.RESPONSE_DELAY)
             game.conn.leds_off()
             if bonus > 0:
-                logger.info("Wchodzisz w ukrycie (DC wykrycia %s, premia stealth +%s).", result, bonus)
+                logger.info("Wchodzisz w ukrycie (DC wykrycia %s, premia stealth +%s).", total, bonus)
             else:
-                logger.info("Wchodzisz w ukrycie (DC wykrycia %s).", result)
+                logger.info("Wchodzisz w ukrycie (DC wykrycia %s).", total)
         else:
             logger.info("Już jesteś w ukryciu – przejdź w trybie stealth.")
             if self._attempt_spot_here(ctx, hero, hero_pos):

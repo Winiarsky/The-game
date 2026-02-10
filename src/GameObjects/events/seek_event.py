@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 
 from board import consts
-from GameObjects.interactions_mixin import prompt_for_roll
+from GameObjects.interactions_mixin.skill_check_resolver import resolve_skill_check_with_sources
 
 from .base import EventContext, EventResult, GameEvent
 from .registry import register_event
@@ -41,7 +41,6 @@ class SeekEvent(GameEvent):
             pos=hero_pos,
         )
 
-        roll = prompt_for_roll("Podaj wynik testu Przeszukiwania/Perception: ")
         board = game.board
         rooms_here = board.rooms_at(hero_pos)
 
@@ -61,6 +60,17 @@ class SeekEvent(GameEvent):
 
         search_positions = board.positions_in_rooms(set(allowed_rooms)) if allowed_rooms else set()
         search_positions.add(hero_pos)
+
+        check = resolve_skill_check_with_sources(
+            skill_id="perception",
+            dc=consts.SEEK_FAIL,
+            actor=actor,
+            target=None,
+            tags=["seek", "perception"],
+            game=game,
+            apply_modifiers=False,
+        )
+        roll = check.total
 
         if rooms_here and roll < consts.SEEK_CRITICAL_FAIL:
             for room_id in rooms_here:

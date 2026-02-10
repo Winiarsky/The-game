@@ -120,7 +120,8 @@ class EnemyMoveEvent(GameEvent):
 
         reachable_paths.sort(key=lambda p: p[2])
         full_path, goal, full_feet = reachable_paths[0]
-        truncated, used_feet = trim_path_to_feet(full_path, move_budget_feet)
+        truncated = trim_path_to_feet(full_path, move_budget_feet)
+        used_feet = path_cost_feet(truncated)
         if len(truncated) < 2:
             return EventResult(success=False, consumed_action=True, message="Nie można wykonać kroku w budżecie ruchu.")
         dest = truncated[-1]

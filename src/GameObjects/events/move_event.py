@@ -34,7 +34,7 @@ class MoveEvent(GameEvent):
         for neighbor in neighbours:
             if neighbor == current:
                 continue
-            if board.can_traverse(current, neighbor, allow_occupied=True):
+            if board.can_traverse(current, neighbor, allow_occupied=False):
                 validated.append(neighbor)
         return validated
 
@@ -99,12 +99,63 @@ class MoveEvent(GameEvent):
                         logger.error("Nie udało się uruchomić walki: %s", exc)
                     break
 
+        def _fade_leds(positions: list[tuple[int, int]] | None, colors) -> None:
+            """Wygaszanie wzdłuż ścieżki: co krok gasi kolejny LED od startu do celu."""
+            nonlocal last_led_positions, last_led_colors
+            if not positions:
+                try:
+                    game.conn.leds_off()
+                except Exception:
+                    pass
+                return
+            if isinstance(colors, list) and colors and isinstance(colors[0], list):
+                per_pos = [list(map(int, c)) for c in colors]
+            else:
+                per_pos = [list(map(int, colors)) for _ in positions]  # type: ignore[arg-type]
+            try:
+                fading = [col[:] for col in per_pos]
+                for idx in range(len(positions)):
+                    fading[idx] = [0, 0, 0]  # utrzymaj wcześniejsze już wygaszone
+                    game.conn.set_leds(positions, fading)
+                    time.sleep(0.05)
+                game.conn.leds_off()
+            except Exception:
+                try:
+                    game.conn.leds_off()
+                except Exception:
+                    pass
+            last_led_positions = None
+            last_led_colors = None
+
+        last_led_positions: list[tuple[int, int]] | None = None
+        last_led_colors: list[list[int]] | None = None
+
+        def _set_leds(positions: list[tuple[int, int]], colors) -> None:
+            nonlocal last_led_positions, last_led_colors
+            game.conn.set_leds(positions, colors)
+            if isinstance(colors, list) and colors and isinstance(colors[0], list):
+                per_pos = [list(map(int, c)) for c in colors]
+            else:
+                per_pos = [list(map(int, colors)) for _ in positions]  # type: ignore[arg-type]
+            last_led_positions = positions
+            last_led_colors = per_pos
+
         try:
+            fade_on_exit = False
             # sprawdź startową pozycję przed ruchem
             try:
                 _trigger_combat_if_enemy_in_room(moving_hero.position)
             except Exception as exc:
                 logger.error("Błąd sprawdzania wrogów w pokoju: %s", exc)
+            if not started_in_combat and getattr(game.state, "__class__", None).__name__ == "Combat":
+                logger.info("Walka rozpoczęta podczas wyboru ruchu – kończę akcję.")
+                return EventResult(success=True, consumed_action=self.consumes_action, message="Rozpoczęto walkę – ruch zakończony.")
+
+            # natychmiast podświetl pole startowe po wejściu w akcję ruchu
+            try:
+                _set_leds([moving_hero.position], consts.MOVE_START_RGB)
+            except Exception:
+                pass
 
             def _emit_move_event(src_pos: tuple[int, int], dst_pos: tuple[int, int]) -> None:
                 game.events.safe_emit_action(
@@ -117,6 +168,19 @@ class MoveEvent(GameEvent):
 
             def _on_enter_wrapper(context, hero_obj, current_pos: tuple[int, int]) -> bool:
                 stopped = default_on_enter(context, hero_obj, current_pos)
+                # sprawdź on_enter na obiektach pola (np. pułapki); zatrzymaj jeśli coś zwróci komunikat
+                try:
+                    for obj in board.interactables_at(current_pos):
+                        on_enter = getattr(obj, "on_enter", None)
+                        if callable(on_enter):
+                            msg = on_enter(hero_obj, game)
+                            if msg:
+                                game.ui_log(msg)
+                                logger.info("on_enter zatrzymał ruch: %s", msg)
+                                stopped = True
+                                break
+                except Exception as exc:
+                    logger.error("Błąd on_enter obiektu na polu %s: %s", current_pos, exc)
                 try:
                     _trigger_combat_if_enemy_in_room(current_pos)
                 except Exception as exc:
@@ -145,10 +209,10 @@ class MoveEvent(GameEvent):
                 positions = [hero_pos] + available
                 colors = [consts.MOVE_START_RGB] + [consts.PRONE_MOVE_RGB] * len(available)
                 try:
-                    game.conn.set_leds(positions, colors)
+                    _set_leds(positions, colors)
                     choice = game.conn.scan_board(positions)
                 finally:
-                    game.conn.leds_off()
+                    _fade_leds(last_led_positions, last_led_colors)
 
                 if choice == hero_pos:
                     logger.info("Ruch z pozycji prone anulowany.")
@@ -178,7 +242,7 @@ class MoveEvent(GameEvent):
                     game.ui_log(msg)
                     logger.info(msg)
                     if stop_pos:
-                        game.conn.set_leds([stop_pos], consts.PRONE_MOVE_RGB)
+                        _set_leds([stop_pos], consts.PRONE_MOVE_RGB)
                     return EventResult.noop(message=msg)
 
                 _emit_move_event(hero_pos, moving_hero.position)
@@ -207,7 +271,7 @@ class MoveEvent(GameEvent):
                             lambda current: self._validate_neighbors(ctx, current, board.get_neighbors(current)),
                             led_color=consts.MOVE_FIELD_RGB,
                             end_message="Zakończono ruch.",
-                            allow_occupied=True,
+                            allow_occupied=False,
                             on_enter=_on_enter_wrapper,
                         )
                         _emit_move_event(start_pos, moving_hero.position)
@@ -225,7 +289,7 @@ class MoveEvent(GameEvent):
                         moving_hero.position,
                         target,
                         allow_diagonal=True,
-                        allow_occupied=True,
+                        allow_occupied=False,
                     )
                     if not path or len(path) <= 1:
                         logger.info("Brak możliwej ścieżki do %s.", target)
@@ -241,15 +305,24 @@ class MoveEvent(GameEvent):
                     game.ui_event("path_preview", {"id": path_id, "steps": steps, "feet": feet, "target": target})
                     logger.info(preview_msg)
                     leds_positions = [moving_hero.position] + path_preview
-                    leds_colors = [consts.MOVE_START_RGB] + [consts.MOVE_FIELD_RGB] * len(path_preview)
-                    game.conn.set_leds(leds_positions, leds_colors)
+                    leds_colors = [consts.MOVE_START_RGB]
+                    if path_preview:
+                        if len(path_preview) > 1:
+                            leds_colors += [consts.MOVE_FIELD_RGB] * (len(path_preview) - 1)
+                        leds_colors.append(consts.MOVE_TARGET_RGB)
+                    _set_leds(leds_positions, leds_colors)
                     confirm = game.conn.scan_board(None)
-                    game.conn.leds_off()
 
                     if confirm != target:
                         if active_path_id:
                             game.ui_event("path_clear", {"id": active_path_id})
                             active_path_id = None
+                        last_led_positions = None
+                        last_led_colors = None
+                        try:
+                            game.conn.leds_off()
+                        except Exception:
+                            pass
                         target = confirm
                         if not board.in_bounds(target):
                             game.ui_log("Wybrane pole jest poza planszą.")
@@ -267,7 +340,7 @@ class MoveEvent(GameEvent):
                                 lambda current: self._validate_neighbors(ctx, current, board.get_neighbors(current)),
                                 led_color=consts.MOVE_FIELD_RGB,
                                 end_message="Zakończono ruch.",
-                                allow_occupied=True,
+                                allow_occupied=False,
                                 on_enter=_on_enter_wrapper,
                             )
                             _emit_move_event(start_pos, moving_hero.position)
@@ -276,13 +349,14 @@ class MoveEvent(GameEvent):
                             return EventResult(success=True, consumed_action=self.consumes_action, message="Ruch wykonany.")
                         continue
 
+                    fade_on_exit = True
                     completed, stop_pos, reason = follow_path(
                         ctx,
                         moving_hero,
                         path,
                         led_color=consts.MOVE_FIELD_RGB,
                         on_enter=_on_enter_wrapper,
-                        allow_occupied=True,
+                        allow_occupied=False,
                         step_delay=0.1,
                     )
                     if active_path_id:
@@ -291,6 +365,11 @@ class MoveEvent(GameEvent):
                     if completed:
                         logger.info("Zakończono ruch.")
                         return EventResult(success=True, consumed_action=self.consumes_action, message="Ruch wykonany.")
+
+                    if (reason == "on_enter") and (not started_in_combat) and getattr(game.state, "__class__", None).__name__ == "Combat":
+                        msg = "Rozpoczęto walkę – ruch zakończony."
+                        logger.info(msg)
+                        return EventResult(success=True, consumed_action=self.consumes_action, message=msg)
 
                     reason_map = {
                         "blocked": "Ruch zatrzymany – ścieżka zablokowana.",
@@ -302,10 +381,16 @@ class MoveEvent(GameEvent):
                     game.ui_log(msg)
                     logger.info(msg)
                     if stop_pos:
-                        game.conn.set_leds([stop_pos], consts.MOVE_FIELD_RGB)
+                        _set_leds([stop_pos], consts.MOVE_FIELD_RGB)
                     return EventResult.noop(message=msg)
             finally:
-                game.conn.leds_off()
+                if fade_on_exit:
+                    _fade_leds(last_led_positions, last_led_colors)
+                else:
+                    try:
+                        game.conn.leds_off()
+                    except Exception:
+                        pass
         finally:
             try:
                 refresh_flanking_statuses(game)

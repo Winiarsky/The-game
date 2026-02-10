@@ -95,6 +95,8 @@ def resolve_skill_check_with_sources(
     tags: Sequence[str],
     target=None,
     game=None,
+    base_modifier: int = 0,
+    apply_modifiers: bool = False,
 ) -> SkillCheckResolution:
     """Policz wynik testu umiejętności z bonusami i efektami statusów."""
 
@@ -112,15 +114,22 @@ def resolve_skill_check_with_sources(
     tgt_effects, promote_tgt, demote_tgt, notes_tgt = _collect_from_statuses(_status_list(target), skill_id, tags, "target") if target else ([], [], [], [])
     all_effects.extend(tgt_effects)
 
-    modifier = compute_total_modifier(all_effects, skill_id) if all_effects else 0
+    modifier = base_modifier + (compute_total_modifier(all_effects, skill_id) if all_effects else 0)
     breakdown = _format_breakdown(all_effects, skill_id)
     notes = list(notes_src) + list(notes_tgt)
 
-    roll = prompt_for_roll(
-        f"Test {skill_id} (DC {dc}). Podaj wynik rzutu (bez premii sytuacyjnych). "
-        f"Premie/kary: {', '.join(breakdown) if breakdown else 'brak'} (łącznie {modifier:+d})."
+    prompt_msg = (
+        f"Test {skill_id} (DC {dc}). "
+        + (
+            "Podaj wynik rzutu (bez premii sytuacyjnych). "
+            if apply_modifiers
+            else "Podaj końcowy wynik (uwzględnij swoje premie/kary). "
+        )
+        + f"Premie/kary: {', '.join(breakdown) if breakdown else 'brak'} (suma {modifier:+d}, "
+        + ("doliczana automatycznie)." if apply_modifiers else "nie jest doliczana automatycznie).")
     )
-    total = roll + modifier
+    roll = prompt_for_roll(prompt_msg)
+    total = roll + modifier if apply_modifiers else roll
     outcome = resolve_skill_check(dc, total)
 
     # przesunięcia sukcesu

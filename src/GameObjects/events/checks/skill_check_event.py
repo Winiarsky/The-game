@@ -48,6 +48,8 @@ class SkillCheckEvent(GameEvent):
             target=ctx.metadata.get("target"),
             tags=tags,
             game=ctx.game,
+            base_modifier=ctx.metadata.get("base_modifier", 0),
+            apply_modifiers=ctx.metadata.get("apply_modifiers", False),
         )
 
         try:

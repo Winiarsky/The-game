@@ -146,10 +146,8 @@ def test_stealth_event_respects_hide_status(monkeypatch):
     game = FakeGame(conn=conn, board=board)
     game.heroes = [hero]
 
-    # zablokuj prompt_for_roll żeby nie czekał
-    import GameObjects.events.stealth_event as stealth_event_module
-
-    monkeypatch.setattr(stealth_event_module, "prompt_for_roll", lambda *_, **__: 20)
+    # zablokuj prompt_for_roll w resolverze skill_check
+    monkeypatch.setattr("GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll", lambda *_, **__: 20)
     ctx = EventContext(game=game, actor=hero)
     result = dispatch_event("stealth", ctx)
 

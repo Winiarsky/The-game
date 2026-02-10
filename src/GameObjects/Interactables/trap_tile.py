@@ -1,6 +1,7 @@
 from GameObjects.base import GameObjectMeta
 from GameObjects.interactions_mixin.base_interaction import Interaction, InteractableMixin
-from GameObjects.interactions_mixin import TrappableMixin, prompt_for_roll
+from GameObjects.interactions_mixin import TrappableMixin
+from GameObjects.interactions_mixin.skill_check_resolver import resolve_skill_check_with_sources
 
 
 class TrapTile(TrappableMixin, InteractableMixin):
@@ -76,13 +77,29 @@ class TrapTile(TrappableMixin, InteractableMixin):
         return "Wygląda zwyczajnie... chyba że to pułapka."
 
     def action_search(self, actor, game, _payload=None) -> str:
-        roll = prompt_for_roll("Perception (wynik): ")
-        outcome, msg = self.detect_trap(roll)
+        result = resolve_skill_check_with_sources(
+            skill_id="perception",
+            dc=self.trap_detection_dc,
+            actor=actor,
+            target=None,
+            tags=["perception", "trap", "search"],
+            game=game,
+            apply_modifiers=False,
+        )
+        outcome, msg = self.detect_trap(result.total)
         return f"{msg} (wynik: {outcome})"
 
     def action_disable(self, actor, game, _payload=None) -> str:
-        roll = prompt_for_roll("Thievery (wynik): ")
-        outcome, msg = self.disable_trap(roll)
+        result = resolve_skill_check_with_sources(
+            skill_id="thievery",
+            dc=self.trap_disable_dc,
+            actor=actor,
+            target=None,
+            tags=["thievery", "trap", "disable"],
+            game=game,
+            apply_modifiers=False,
+        )
+        outcome, msg = self.disable_trap(result.total)
         return f"{msg} (wynik: {outcome})"
 
     def action_trigger(self, actor, game, _payload=None) -> str:

@@ -74,10 +74,21 @@ class GuardNPC(BaseNPC, WatchfulMixin):
         is_stealthed = has_status("stealth") if callable(has_status) else "stealth" in getattr(actor, "statuses", [])
         if not is_stealthed:
             return "Musisz być w ukryciu, aby spróbować podkraść."
-        roll = prompt_for_roll("Rzut na Thievery (podkradanie): ")
-        bonus = getattr(actor, "stealth_bonus", 0)
-        roll += bonus
-        outcome = resolve_skill_check(self.pickpocket_dc, roll)
+        result = dispatch_event(
+            "skill_check",
+            EventContext(
+                game=_game,
+                actor=actor,
+                tags=["thievery", "pickpocket"],
+                metadata={
+                    "dc": self.pickpocket_dc,
+                    "skill_id": "thievery",
+                    "skill_label": "Thievery",
+                    "apply_modifiers": False,
+                },
+            ),
+        )
+        outcome = result.data.get("outcome") if result.data else resolve_skill_check(self.pickpocket_dc, 0)
         if outcome in ("success", "critical_success"):
             loot = (self.pickpocket_loot or ["drobne"])[0]
             return f"Udało się podkraść: {loot} (wynik: {outcome})."

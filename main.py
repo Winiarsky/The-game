@@ -12,6 +12,14 @@ from typing import Callable, Iterable
 
 import requests
 
+# Ensure project `src/` is on sys.path so imports like `actions.*` work even
+# when running the script directly (python main.py).
+ROOT_DIR = Path(__file__).resolve().parent
+SRC_DIR = ROOT_DIR / "src"
+for path in (ROOT_DIR, SRC_DIR):
+    if str(path) not in sys.path:
+        sys.path.insert(0, str(path))
+
 from board import Connection
 from src.game import Game
 from src import ui_client

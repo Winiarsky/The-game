@@ -60,8 +60,25 @@ class HeroesTurn(State):
             self.active_hero = hero
         hero = self.active_hero
 
+        # podświetl aktywnego bohatera podczas wyboru akcji
+        highlighted = False
+        try:
+            pos = getattr(hero, "position", None)
+            if pos is not None:
+                self.game.conn.set_leds([pos], consts.HERO_HIGHLIGHT_RGB)
+                highlighted = True
+        except Exception:
+            pass
+
         # Nie logujemy listy akcji – nazwy są na fizycznych kartach.
         choice = self.game.conn.read_card("Nazwa akcji (wpisz): ", []).strip().lower()
+
+        if highlighted:
+            try:
+                self.game.conn.leds_off()
+            except Exception:
+                pass
+
         if choice not in all_events:
             logger.error("Nieznana akcja '%s'", choice)
             self.game.ui_log(f"Nieznana akcja '{choice}'")
