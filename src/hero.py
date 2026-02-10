@@ -3,6 +3,8 @@ from typing import List, Optional
 
 from GameObjects.interactions_mixin import BonusMixin, StatusMixin, ReactiveMixin, prompt_for_roll
 from combat.reactions import OpportunityAttack
+from combat.damage_utils import apply_damage_resistance
+from damage_types import DamageType
 from object_registry import assign_id
 
 # to do make hero scrpt, 
@@ -61,3 +63,12 @@ class Hero(StatusMixin, BonusMixin, ReactiveMixin):
         roll = prompt_for_roll(f"Inicjatywa dla bohatera {self.object_id} (podaj wynik): ")
         self.initiative = roll
         return roll
+
+    def apply_damage(self, amount: int, damage_type: str = DamageType.NORMAL.value) -> tuple[int, bool]:
+        """Zastosuj obrażenia na bohaterze (uwzględnia redukcje ze statusów)."""
+        effective, _ = apply_damage_resistance(self, amount, damage_type)
+        try:
+            self.wounds += effective  # type: ignore[attr-defined]
+        except Exception:
+            self.wounds = getattr(self, "wounds", 0) + effective  # type: ignore[attr-defined]
+        return self.wounds, False

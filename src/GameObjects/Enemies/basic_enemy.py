@@ -7,6 +7,7 @@ from typing import Optional
 
 from GameObjects.interactions_mixin import BonusMixin, StatusMixin, WatchfulMixin, ReactiveMixin
 from combat.reactions import OpportunityAttack
+from combat.damage_utils import apply_damage_resistance
 from statuses import Status
 from object_registry import assign_id
 from damage_types import DamageType
@@ -79,9 +80,18 @@ class BasicEnemy(StatusMixin, BonusMixin, WatchfulMixin, ReactiveMixin):
 
     def apply_damage(self, amount: int, damage_type: str = DamageType.NORMAL.value) -> tuple[int, bool]:
         """Odejmij HP i zwróć (aktualne_hp, czy_pokonany)."""
-        self.hp -= amount
+        effective, reduced = apply_damage_resistance(self, amount, damage_type)
+        self.hp -= effective
         defeated = self.hp <= 0
-        logger.info("%s otrzymuje %s obrażeń %s (HP: %s).", self.name, amount, damage_type, self.hp)
+        reduction_note = f" (zredukowano o {reduced})" if reduced else ""
+        logger.info(
+            "%s otrzymuje %s obrażeń %s%s (HP: %s).",
+            self.name,
+            effective,
+            damage_type,
+            reduction_note,
+            self.hp,
+        )
         return self.hp, defeated
 
     def trigger_combat(self, game) -> None:
