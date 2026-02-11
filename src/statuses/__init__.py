@@ -4,6 +4,7 @@ from .flat_footed import FlatFootedStatus, FLAT_FOOTED_STATUS
 from .covered import CoveredStatus, COVERED_STATUS
 from .prone import ProneStatus, PRONE_STATUS, apply_prone_effects, clear_prone_effects
 from .presets import NOBLE_PERSON_STATUS, SILVER_TONGUE_STATUS, STUBBORN_STATUS
+from .in_dark import InDarkStatus, IN_DARK_STATUS
 from .race.dwarf import (
     AncientBloodedDwarfStatus,
     ANCIENT_BLOODED_DWARF_STATUS,
@@ -16,6 +17,18 @@ from .race.dwarf import (
     StrongBloodedDwarfStatus,
     STRONG_BLOODED_DWARF_STATUS,
 )
+from .race.elf import (
+    ArcticElfStatus,
+    ARCTIC_ELF_STATUS,
+    CavernElfStatus,
+    CAVERN_ELF_STATUS,
+    SeerElfStatus,
+    SEER_ELF_STATUS,
+    WhispererElfStatus,
+    WHISPERER_ELF_STATUS,
+    WoodlandElfStatus,
+    WOODLAND_ELF_STATUS,
+)
 
 __all__ = [
     "Status",
@@ -25,6 +38,8 @@ __all__ = [
     "FLAT_FOOTED_STATUS",
     "CoveredStatus",
     "COVERED_STATUS",
+    "InDarkStatus",
+    "IN_DARK_STATUS",
     "ProneStatus",
     "PRONE_STATUS",
     "apply_prone_effects",
@@ -42,4 +57,14 @@ __all__ = [
     "ROCK_DWARF_STATUS",
     "StrongBloodedDwarfStatus",
     "STRONG_BLOODED_DWARF_STATUS",
+    "ArcticElfStatus",
+    "ARCTIC_ELF_STATUS",
+    "CavernElfStatus",
+    "CAVERN_ELF_STATUS",
+    "SeerElfStatus",
+    "SEER_ELF_STATUS",
+    "WhispererElfStatus",
+    "WHISPERER_ELF_STATUS",
+    "WoodlandElfStatus",
+    "WOODLAND_ELF_STATUS",
 ]

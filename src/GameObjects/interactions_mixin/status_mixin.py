@@ -28,6 +28,14 @@ class StatusMixin:
     def add_status(self, status: str | Status) -> bool:
         self._ensure_status_objects()
         normalized = self._normalize(status)
+        # Cavern Elf: immunitet na InDark
+        if normalized.id == "in_dark":
+            for s in self.statuses:
+                if s == "heritage_cavern_elf" or getattr(s, "id", None) == "heritage_cavern_elf":
+                    return False
+                ignore_tags = getattr(s, "data", {}).get("ignore_effect_tags") if hasattr(s, "data") else None
+                if ignore_tags and "dark" in ignore_tags:
+                    return False
         if any(s == normalized for s in self.statuses):
             return False
         self.statuses.append(normalized)

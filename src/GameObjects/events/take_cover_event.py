@@ -59,6 +59,13 @@ class TakeCoverEvent(GameEvent):
             return EventResult.cancelled(message="Bohater nie stoi na planszy.")
 
         neighbors = self._neighbors_with_cover(ctx.game, hero_pos)
+        woodland_cover_used = False
+        if not neighbors:
+            forest_cover = _forest_cover_if_woodland_elf(ctx, hero, hero_pos)
+            if forest_cover:
+                neighbors = [(hero_pos[0], hero_pos[1], forest_cover)]
+                woodland_cover_used = True
+
         if not neighbors:
             return EventResult.cancelled(message="Brak pobliskiej osłony.")
 
@@ -131,9 +138,18 @@ class TakeCoverEvent(GameEvent):
             except Exception:
                 pass
 
-        logger.info("Bohater bierze osłonę: %s -> %s (+%d AC circumstance).", current_cover, upgraded, cover_bonus)
+        logger.info(
+            "Bohater bierze osłonę: %s -> %s (+%d AC circumstance).%s",
+            current_cover,
+            upgraded,
+            cover_bonus,
+            " (forest)" if woodland_cover_used else "",
+        )
         try:
-            ctx.game.ui_log(f"Bierzesz osłonę: {current_cover} -> {upgraded} (+{cover_bonus} AC circumstance).")
+            ctx.game.ui_log(
+                f"Bierzesz osłonę: {current_cover} -> {upgraded} (+{cover_bonus} AC circumstance)."
+                + (" (Woodland Elf w lesie)" if woodland_cover_used else "")
+            )
         except Exception:
             pass
 
@@ -145,3 +161,49 @@ def RangeCoverBonusValue(cover_type: str) -> Optional[int]:
 
     mapping = {"minor": 1, "standard": 2, "greater": 4}
     return mapping.get(cover_type)
+
+
+def _has_status(hero, status_id: str) -> bool:
+    checker = getattr(hero, "has_status", None)
+    if callable(checker):
+        try:
+            return bool(checker(status_id))
+        except Exception:
+            pass
+    statuses = getattr(hero, "statuses", None)
+    if not statuses:
+        return False
+    for status in statuses:
+        if status == status_id:
+            return True
+        if getattr(status, "id", None) == status_id:
+            return True
+    return False
+
+
+def _forest_cover_if_woodland_elf(ctx: EventContext, hero, hero_pos):
+    """Zwróć obiekt osłony, jeżeli Woodland Elf stoi na terenie forest."""
+    if not _has_status(hero, "heritage_woodland_elf"):
+        # alternatywnie respektuj flagę w data
+        statuses = getattr(hero, "statuses", None) or []
+        if not any(getattr(s, "data", {}).get("forest_take_cover") for s in statuses if hasattr(s, "data")):
+            return None
+
+    board = getattr(ctx, "game", None)
+    board = getattr(board, "board", None)
+    if board is None or not hasattr(board, "cell_at"):
+        return None
+    try:
+        field = board.cell_at(hero_pos).field
+    except Exception:
+        return None
+    terrain_tags = getattr(field, "terrain_tags", ()) or ()
+    name = getattr(field, "name", "")
+    if "forest" not in terrain_tags and name != "forest":
+        return None
+
+    class _ForestCover(RangeAttackAffectMixin):
+        cover_type = "standard"
+        cover_label = "forest"
+
+    return _ForestCover()

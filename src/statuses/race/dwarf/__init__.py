@@ -12,6 +12,20 @@ from .heritages import (
     StrongBloodedDwarfStatus,
     STRONG_BLOODED_DWARF_STATUS,
 )
+from .feats import (
+    DwarvenLoreStatus,
+    DWARVEN_LORE_STATUS,
+    DwarvenWeaponFamiliarityStatus,
+    DWARVEN_WEAPON_FAMILIARITY_STATUS,
+    RockRunnerStatus,
+    ROCK_RUNNER_STATUS,
+    StoneCunningStatus,
+    STONE_CUNNING_STATUS,
+    UnburdenedIronStatus,
+    UNBURDENED_IRON_STATUS,
+    VengefulHatredStatus,
+    VENGEFUL_HATRED_STATUS,
+)
 
 __all__ = [
     "AncientBloodedDwarfStatus",
@@ -24,4 +38,16 @@ __all__ = [
     "ROCK_DWARF_STATUS",
     "StrongBloodedDwarfStatus",
     "STRONG_BLOODED_DWARF_STATUS",
+    "DwarvenLoreStatus",
+    "DWARVEN_LORE_STATUS",
+    "DwarvenWeaponFamiliarityStatus",
+    "DWARVEN_WEAPON_FAMILIARITY_STATUS",
+    "RockRunnerStatus",
+    "ROCK_RUNNER_STATUS",
+    "StoneCunningStatus",
+    "STONE_CUNNING_STATUS",
+    "UnburdenedIronStatus",
+    "UNBURDENED_IRON_STATUS",
+    "VengefulHatredStatus",
+    "VENGEFUL_HATRED_STATUS",
 ]
