@@ -12,6 +12,22 @@ from .heritages import (
     WoodlandElfStatus,
     WOODLAND_ELF_STATUS,
 )
+from .feats import (
+    AncestralLongevityStatus,
+    ANCESTRAL_LONGEVITY_STATUS,
+    ElvenLoreStatus,
+    ELVEN_LORE_STATUS,
+    ElvenWeaponMilitaryStatus,
+    ELVEN_WEAPON_MILITARY_STATUS,
+    ForlornStatus,
+    FORLORN_STATUS,
+    NimbleElfStatus,
+    NIMBLE_ELF_STATUS,
+    OtherworldlyMagicStatus,
+    OTHERWORLDLY_MAGIC_STATUS,
+    UnwaveringMienStatus,
+    UNWAVERING_MIEN_STATUS,
+)
 
 __all__ = [
     "ArcticElfStatus",
@@ -24,4 +40,18 @@ __all__ = [
     "WHISPERER_ELF_STATUS",
     "WoodlandElfStatus",
     "WOODLAND_ELF_STATUS",
+    "AncestralLongevityStatus",
+    "ANCESTRAL_LONGEVITY_STATUS",
+    "ElvenLoreStatus",
+    "ELVEN_LORE_STATUS",
+    "ElvenWeaponMilitaryStatus",
+    "ELVEN_WEAPON_MILITARY_STATUS",
+    "ForlornStatus",
+    "FORLORN_STATUS",
+    "NimbleElfStatus",
+    "NIMBLE_ELF_STATUS",
+    "OtherworldlyMagicStatus",
+    "OTHERWORLDLY_MAGIC_STATUS",
+    "UnwaveringMienStatus",
+    "UNWAVERING_MIEN_STATUS",
 ]
