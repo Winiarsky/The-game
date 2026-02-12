@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Iterable
+import random
 
 from GameObjects.interactions_mixin import prompt_for_roll
 from damage_types import DamageType
@@ -65,11 +66,13 @@ def process_persistent_damage(actor, game) -> None:
                 pass
 
         # flat check ST 15
-        roll = 0
-        try:
-            roll = int(prompt_for_roll("Flat check na zakończenie persistent (ST 15): "))
-        except Exception:
-            roll = 0
+        if is_hero:
+            try:
+                roll = int(prompt_for_roll("Flat check na zakończenie persistent (ST 15): "))
+            except Exception:
+                roll = 0
+        else:
+            roll = int(random.randint(1, 20))
 
         if roll >= 15:
             for st in list(statuses_same_type):

@@ -1,7 +1,7 @@
 """Magic-related events and helpers."""
 
 from .magic_event import MagicEvent, MagicEventResolver  # noqa: F401
-from .acidcplash_event import AcidSplashEvent  # noqa: F401
+from .acid_splash_event import AcidSplashEvent  # noqa: F401
 from .magic_missile_event import MagicMissileEvent  # noqa: F401
 from .magic_utils import grid_distance_feet, pick_target_in_range  # noqa: F401
 from .spell_types import SpellTradition  # noqa: F401
