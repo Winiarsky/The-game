@@ -15,13 +15,9 @@ class Hero(StatusMixin, BonusMixin, ReactiveMixin):
     position_x: Optional[int] = None
     position_y: Optional[int] = None
     neighbors: List[tuple[int, int]] = field(default_factory=list)
-    stealth_detection_dc: Optional[int] = None
-    stealth_bonus: int = 0
-    blocked_stealth_rooms: set[str] = field(default_factory=set)
-    stealth_fail_counts: dict[str, int] = field(default_factory=dict)
     initiative: Optional[int] = None
     wounds: int = 0
-    enemy_attack_bonus: int = 0
+    level: int = 1
 
     def __post_init__(self):
         self.object_id = assign_id(self)

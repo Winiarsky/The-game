@@ -11,6 +11,7 @@ from GameObjects.Interactables.utils.awareness import iter_watchers_in_rooms, su
 from GameObjects.Obstacles.basic_obstacle import Obstacle
 from actions.move_utils import perform_movement, default_on_enter
 from skills import Skill
+from statuses import OBSERVABLE_STATUS, STEALTH_STATUS, StealthStatus, Status
 
 from .base import EventContext, EventResult, GameEvent
 from .registry import register_event, dispatch_event
@@ -18,11 +19,54 @@ from .registry import register_event, dispatch_event
 logger = logging.getLogger(__name__)
 
 
+def _get_stealth_memory(hero) -> tuple[set[str], dict[str, int]]:
+    """Zwróć (blocked_rooms, fail_counts) przechowywane w statusie stealth_memory."""
+    statuses = getattr(hero, "statuses", None) or []
+    for status in statuses:
+        if isinstance(status, Status) and status.id == "stealth_memory":
+            data = getattr(status, "data", {}) or {}
+            blocked = data.setdefault("blocked_rooms", set())
+            fails = data.setdefault("fail_counts", {})
+            return blocked, fails
+
+    # jeśli brak – utwórz
+    data = {"blocked_rooms": set(), "fail_counts": {}}
+    mem_status = Status(id="stealth_memory", label="Stealth Memory", data=data)
+    adder = getattr(hero, "add_status", None)
+    if callable(adder):
+        try:
+            adder(mem_status)
+        except Exception:
+            pass
+    else:
+        if isinstance(statuses, list):
+            statuses.append(mem_status)
+    return data["blocked_rooms"], data["fail_counts"]  # type: ignore[index]
+
+
 @register_event
 class StealthEvent(GameEvent):
     name = "stealth"
     default_tags = [Skill.STEALTH.value, "move"]
     consumes_action = True
+
+    @staticmethod
+    def _stealth_stats(hero) -> tuple[int | None, int]:
+        """
+        Odczytaj (detection_dc, stealth_bonus) z aktywnego StealthStatus.
+        Preferuje helper get_status_data z StatusMixin; w razie braku skanuje listę statuses.
+        """
+        getter = getattr(hero, "get_status_data", None)
+        if callable(getter):
+            dc = getter("stealth", "stealth_detection_dc", None)
+            bonus = getter("stealth", "stealth_bonus", 0)
+            return dc, bonus
+        statuses = getattr(hero, "statuses", None) or []
+        for status in statuses:
+            if getattr(status, "id", None) == "stealth":
+                data = getattr(status, "data", {}) or {}
+                return data.get("stealth_detection_dc"), data.get("stealth_bonus", 0)
+        return None, 0
 
     def execute(self, ctx: EventContext) -> EventResult:
         game = ctx.game
@@ -43,17 +87,18 @@ class StealthEvent(GameEvent):
         board = game.board
         hero_pos = hero.position
         rooms_here = board.rooms_at(hero_pos)
+        blocked_rooms, fail_counts = _get_stealth_memory(hero)
         has_hide_status = hero.has_status("hide")
         watchers = iter_watchers_in_rooms(board, rooms_here, ignore_obj=hero) if not has_hide_status else []
         penalty, blockers = summarize_watchers(watchers) if watchers else (0, [])
-        if hero.has_status("observable"):
+        if hero.has_status(OBSERVABLE_STATUS):
             logger.info("Masz status observable – nie możesz wejść w ukrycie.")
             return EventResult.noop(message="Status observable blokuje stealth.")
-        if rooms_here and any(room in hero.blocked_stealth_rooms for room in rooms_here):
+        if rooms_here and any(room in blocked_rooms for room in rooms_here):
             logger.info("Ten bohater ma zablokowane próby stealth w tym pokoju.")
             return EventResult.noop(message="Pokój zablokowany dla stealth.")
 
-        already_stealth = hero.has_status(Skill.STEALTH.value)
+        already_stealth = hero.has_status(STEALTH_STATUS)
         covered = hero.has_status("covered")
 
         if not already_stealth:
@@ -106,10 +151,6 @@ class StealthEvent(GameEvent):
                 return EventResult.noop(message="Krytyczna porażka stealth.")
             if outcome in ("failure", None) or total < consts.STEALTH_FAIL:
                 self._apply_fail(hero, rooms_here, critical=False)
-                for room_id in rooms_here:
-                    fails = hero.stealth_fail_counts.get(room_id, 0)
-                    if fails >= consts.STEALTH_FAIL_MAX_ATTEMPTS:
-                        hero.blocked_stealth_rooms.add(room_id)
                 logger.info("Nie udaje się wejść w ukrycie.")
                 return EventResult.noop(message="Nie weszto w stealth.")
 
@@ -122,7 +163,8 @@ class StealthEvent(GameEvent):
             else:
                 logger.info("Wchodzisz w ukrycie (DC wykrycia %s).", total)
         else:
-            logger.info("Już jesteś w ukryciu – przejdź w trybie stealth.")
+            dc, bonus = self._stealth_stats(hero)
+            logger.info("Już jesteś w ukryciu – przejdź w trybie stealth. (DC=%s, bonus=%s)", dc, bonus)
             if self._attempt_spot_here(ctx, hero, hero_pos):
                 return EventResult.noop(message="Zostałeś dostrzeżony.")
 
@@ -193,25 +235,26 @@ class StealthEvent(GameEvent):
         return total, details
 
     def _apply_fail(self, hero, rooms_here: set[str], *, critical: bool) -> None:
+        blocked_rooms, fail_counts = _get_stealth_memory(hero)
         for room_id in rooms_here:
-            current = hero.stealth_fail_counts.get(room_id, 0) + 1
-            hero.stealth_fail_counts[room_id] = current
+            current = fail_counts.get(room_id, 0) + 1
+            fail_counts[room_id] = current
             if critical or current >= consts.STEALTH_FAIL_MAX_ATTEMPTS:
-                hero.blocked_stealth_rooms.add(room_id)
-        hero.remove_status("stealth")
-        hero.stealth_detection_dc = None
-        hero.stealth_bonus = 0
+                blocked_rooms.add(room_id)
+        hero.remove_status(STEALTH_STATUS)
 
     def _apply_success(self, hero, rooms_here: set[str], roll: int) -> int:
-        hero.stealth_detection_dc = roll
-        hero.remove_status("observable")
-        hero.add_status("stealth")
-        for room_id in rooms_here:
-            hero.stealth_fail_counts[room_id] = 0
+        blocked_rooms, fail_counts = _get_stealth_memory(hero)
+        hero.remove_status(OBSERVABLE_STATUS)
+        hero.remove_status(STEALTH_STATUS)  # odśwież dane statusu
         bonus = 0
         if roll >= 20:
             bonus = 1 + (roll - 20) // 5
-        hero.stealth_bonus = bonus
+        for room_id in rooms_here:
+            fail_counts[room_id] = 0
+            if room_id in blocked_rooms:
+                blocked_rooms.discard(room_id)
+        hero.add_status(StealthStatus(detection_dc=roll, stealth_bonus=bonus))
         return bonus
 
     def _trigger_critical_fail_effects(self, ctx: EventContext, pos: Tuple[int, int]) -> None:

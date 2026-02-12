@@ -15,6 +15,7 @@ from GameObjects.interactions_mixin import StatusMixin, WatchfulMixin  # noqa: E
 from actions.stealth import StealthAction  # noqa: E402
 from hero import Hero  # noqa: E402
 from GameObjects.Enemies.simple_enemy import Enemy  # noqa: E402
+from statuses import StealthStatus  # noqa: E402
 
 
 class DummyWatchful(WatchfulMixin, Interactable):
@@ -56,21 +57,18 @@ def test_attempt_spot_applies_hero_perception_penalty(monkeypatch):
     class DummyHero(StatusMixin):
         def __init__(self):
             super().__init__()
-            self.perception_penalty = 5
-            self.stealth_detection_dc = 12
-            self.stealth_bonus = 2
+            self.add_status(StealthStatus(detection_dc=12, stealth_bonus=2))
 
     hero = DummyHero()
-    hero.add_status("stealth")
 
     watcher = DummyWatchful(watch_disturbed=0)
-    monkeypatch.setattr("GameObjects.interactions_mixin.watchful_mixin.random.randint", lambda *_args, **_kwargs: 15)
+    monkeypatch.setattr("GameObjects.interactions_mixin.watchful_mixin.random.randint", lambda *_args, **_kwargs: 10)
 
     spotted, msg = watcher.attempt_spot(hero, None)
     assert not spotted
     assert "r=10" in msg
     assert hero.has_status("stealth")
-    assert hero.stealth_detection_dc == 12
+    assert hero.get_status_data("stealth", "stealth_detection_dc") == 12
 
 
 def test_stealth_reactivation_triggers_watchers_once(monkeypatch):
@@ -88,8 +86,7 @@ def test_stealth_reactivation_triggers_watchers_once(monkeypatch):
 
     guard = CountingWatchful()
     hero = Hero(position=(0, 0))
-    hero.add_status("stealth")
-    hero.stealth_detection_dc = 30
+    hero.add_status(StealthStatus(detection_dc=30))
 
     board.place(hero, (0, 0))
     board.add_interactable(guard, (0, 1))
@@ -118,8 +115,7 @@ def test_enemy_watchful_spots_hero_and_triggers_combat(monkeypatch):
     board.place(enemy, (0, 0))
 
     hero = Hero(position=(0, 0))
-    hero.add_status("stealth")
-    hero.stealth_detection_dc = 5
+    hero.add_status(StealthStatus(detection_dc=5))
 
     class DummyGame:
         def __init__(self):

@@ -44,6 +44,13 @@ def dispatch_event(name: str, ctx: EventContext) -> EventResult:
     event_cls = get_event_cls(name)
     event = event_cls()
 
+    # Magiczne eventy wymagają dodatkowej walidacji (koszt akcji, tryb tury)
+    try:
+        from .magic.magic_event import MagicEvent, MagicEventResolver
+    except Exception:  # pragma: no cover - brak zależności magicznych
+        MagicEvent = None  # type: ignore
+        MagicEventResolver = None  # type: ignore
+
     # dostępność fazowa
     if ctx.in_combat and not event.available_in_combat:
         msg = f"Event '{name}' niedostępny w walce."
@@ -54,16 +61,23 @@ def dispatch_event(name: str, ctx: EventContext) -> EventResult:
         logger.info(msg)
         return EventResult(success=False, consumed_action=False, message=msg)
 
-    result = event.run(ctx)
+    if MagicEvent and isinstance(event, MagicEvent):
+        result = MagicEventResolver.resolve(event, ctx)  # type: ignore[arg-type]
+    else:
+        result = event.run(ctx)
     if result is None:  # type: ignore[unreachable]
         result = EventResult()
     # Jeśli wynik nie określił consumed_action, przyjmij flagę z klasy.
     if result.consumed_action is None:  # pragma: no cover - defensywnie
         result.consumed_action = event.consumes_action
+    if result.actions_spent is None and result.consumed_action:
+        try:
+            result.actions_spent = getattr(event, "actions_cost", 1)
+        except Exception:
+            result.actions_spent = 1
     return result
 
 
 def iter_event_names() -> Iterable[str]:
     for name in _registry:
         yield name
-

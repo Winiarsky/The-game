@@ -163,12 +163,20 @@ class Combat(State):
                     tick()
                 except Exception:
                     logger.debug("Nie udało się odliczyć bonusów dla %s", actor)
-            remover = getattr(actor, "remove_bonuses_with_prefix", None)
-            if callable(remover):
-                try:
-                    remover("raise_shield:")
-                except Exception:
-                    logger.debug("Nie udało się wyczyścić efektów raise_shield dla %s", actor)
+                remover = getattr(actor, "remove_bonuses_with_prefix", None)
+                if callable(remover):
+                    try:
+                        remover("raise_shield:")
+                    except Exception:
+                        logger.debug("Nie udało się wyczyścić efektów raise_shield dla %s", actor)
+
+        # obrażenia ciągłe na początku inicjatywy
+        try:
+            from statuses import process_persistent_damage
+
+            process_persistent_damage(actor, self.game)
+        except Exception as exc:
+            logger.debug("Nie udało się przetworzyć persistent damage dla %s: %s", actor, exc)
 
     def _current_actor(self):
         self._cleanup_removed()
@@ -421,7 +429,14 @@ class Combat(State):
 
         # delay/end mogą nie zużywać akcji
         if result.consumed_action:
-            self.actions_used[actor] = self.actions_used.get(actor, 0) + 1
+            spent = getattr(result, "actions_spent", None)
+            if spent is None:
+                spent = result.data.get("actions_spent", None) if isinstance(getattr(result, "data", None), dict) else None
+            try:
+                spent = int(spent) if spent is not None else 1
+            except Exception:
+                spent = 1
+            self.actions_used[actor] = self.actions_used.get(actor, 0) + spent
             if self.actions_used[actor] >= self.ACTION_LIMIT:
                 logger.info(
                     "Wykorzystano limit %s akcji. Użyj end lub delay aby zakończyć turę.",

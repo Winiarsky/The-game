@@ -12,6 +12,22 @@ from .heritages import (
     UnbreakableGoblinStatus,
     UNBREAKABLE_GOBLIN_STATUS,
 )
+from .feats import (
+    BurnItStatus,
+    BURN_IT_STATUS,
+    CityScavengerStatus,
+    CITY_SCAVENGER_STATUS,
+    GoblinLoreStatus,
+    GOBLIN_LORE_STATUS,
+    GoblinScuttleStatus,
+    GOBLIN_SCUTTLE_STATUS,
+    GoblinWeaponFamiliarityStatus,
+    GOBLIN_WEAPON_FAMILIARITY_STATUS,
+    JunkTinkerStatus,
+    JUNK_TINKER_STATUS,
+    VerySneakyStatus,
+    VERY_SNEAKY_STATUS,
+)
 
 __all__ = [
     "CharhideGoblinStatus",
@@ -24,4 +40,18 @@ __all__ = [
     "SNOW_GOBLIN_STATUS",
     "UnbreakableGoblinStatus",
     "UNBREAKABLE_GOBLIN_STATUS",
+    "BurnItStatus",
+    "BURN_IT_STATUS",
+    "CityScavengerStatus",
+    "CITY_SCAVENGER_STATUS",
+    "GoblinLoreStatus",
+    "GOBLIN_LORE_STATUS",
+    "GoblinScuttleStatus",
+    "GOBLIN_SCUTTLE_STATUS",
+    "GoblinWeaponFamiliarityStatus",
+    "GOBLIN_WEAPON_FAMILIARITY_STATUS",
+    "JunkTinkerStatus",
+    "JUNK_TINKER_STATUS",
+    "VerySneakyStatus",
+    "VERY_SNEAKY_STATUS",
 ]

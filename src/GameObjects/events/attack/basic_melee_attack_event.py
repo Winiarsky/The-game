@@ -7,6 +7,7 @@ from board import consts
 from combat import refresh_flanking_statuses
 from GameObjects.interactions_mixin import prompt_for_roll
 from damage_types import DamageType
+from statuses import Status
 
 from .attack_base import AttackEventBase
 from ..base import EventContext, EventResult
@@ -37,7 +38,7 @@ class BasicMeleeAttackEvent(AttackEventBase):
             logger.info("Bohater nie jest na planszy.")
             return EventResult(success=False, consumed_action=False, message="Bohater nie jest na planszy.")
         try:
-            hero.remove_status("range_attacker")  # powrót OA po ataku wręcz
+            hero.remove_status(Status(id="range_attacker"))  # powrót OA po ataku wręcz
         except Exception:
             pass
 
@@ -69,6 +70,7 @@ class BasicMeleeAttackEvent(AttackEventBase):
         bonus_info = self._format_bonus_info(hero, action_tag, target=enemy)
 
         roll = prompt_for_roll(f"Atak {self.weapon_label} przeciwko AC {prompt_ac}.{bonus_info}Podaj wynik k20: ")
+        critical = roll >= target_ac + 10
         hit = roll >= target_ac
         if not hit:
             ctx.game.events.safe_emit_action(
@@ -82,7 +84,8 @@ class BasicMeleeAttackEvent(AttackEventBase):
             )
             return EventResult(success=True, consumed_action=self.consumes_action, message=f"Atak {self.weapon_label}: pudło.")
 
-        damage = prompt_for_roll(f"Trafienie! Podaj obrażenia {self.damage_prompt}: ")
+        dmg_prompt = f"{'Trafienie krytyczne! ' if critical else 'Trafienie! '}Podaj obrażenia {self.damage_prompt}: "
+        damage = prompt_for_roll(dmg_prompt)
         damage_components = self._collect_damage_components(damage)
         defeated = False
         try:
@@ -99,8 +102,8 @@ class BasicMeleeAttackEvent(AttackEventBase):
             target_pos=enemy_pos,
             damage=sum(d for _, d in damage_components),
             damage_components=damage_components,
-            defeated=defeated,
-        )
+                defeated=defeated,
+            )
 
         if defeated:
             try:
@@ -121,8 +124,8 @@ class BasicMeleeAttackEvent(AttackEventBase):
         except Exception as exc:
             logger.error("Nie udało się odświeżyć flankowania: %s", exc)
 
-        msg = "Przeciwnik pokonany." if defeated else f"Atak {self.weapon_label} trafia."
-        return EventResult(success=True, consumed_action=self.consumes_action, message=msg)
+        msg = "Przeciwnik pokonany." if defeated else ("Trafienie krytyczne!" if critical else f"Atak {self.weapon_label} trafia.")
+        return EventResult(success=True, consumed_action=self.consumes_action, message=msg, data={"critical": critical})
 
     # --- helpers ---
     def _collect_damage_components(self, first_roll: int) -> list[tuple[str, int]]:

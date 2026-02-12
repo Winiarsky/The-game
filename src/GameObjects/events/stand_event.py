@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from statuses import clear_prone_effects
+from statuses import clear_prone_effects, PRONE_STATUS, STEALTH_STATUS
 from .base import EventContext, EventResult, GameEvent
 from .registry import register_event
 
@@ -27,18 +27,16 @@ class StandEvent(GameEvent):
         if hero is None:
             return EventResult.cancelled(message="Brak bohatera do akcji stand.")
 
-        if getattr(hero, "has_status", lambda _s: False)("stealth"):
+        if getattr(hero, "has_status", lambda _s: False)(STEALTH_STATUS):
             try:
-                hero.remove_status("stealth")
-                if hasattr(hero, "stealth_bonus"):
-                    hero.stealth_bonus = 0  # type: ignore[attr-defined]
+                hero.remove_status(STEALTH_STATUS)
             except Exception:
                 logger.debug("Nie udało się zdjąć stealth przy stand.", exc_info=True)
 
         removed_status = False
-        if getattr(hero, "has_status", lambda _s: False)("prone"):
+        if getattr(hero, "has_status", lambda _s: False)(PRONE_STATUS):
             try:
-                removed_status = hero.remove_status("prone")
+                removed_status = hero.remove_status(PRONE_STATUS)
             except Exception:
                 logger.debug("Nie udało się usunąć statusu prone.", exc_info=True)
         clear_prone_effects(hero)

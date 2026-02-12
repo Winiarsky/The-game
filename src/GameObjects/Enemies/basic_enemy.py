@@ -5,7 +5,10 @@ import random
 from dataclasses import dataclass, field
 from typing import Optional
 
-from GameObjects.interactions_mixin import BonusMixin, StatusMixin, WatchfulMixin, ReactiveMixin
+from GameObjects.interactions_mixin.bonus_mixin import BonusMixin
+from GameObjects.interactions_mixin.status_mixin import StatusMixin
+from GameObjects.interactions_mixin.watchful_mixin import WatchfulMixin
+from GameObjects.interactions_mixin.reactive_mixin import ReactiveMixin
 from combat.reactions import OpportunityAttack
 from combat.damage_utils import apply_damage_resistance
 from statuses import Status

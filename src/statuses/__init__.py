@@ -5,6 +5,8 @@ from .covered import CoveredStatus, COVERED_STATUS
 from .prone import ProneStatus, PRONE_STATUS, apply_prone_effects, clear_prone_effects
 from .presets import NOBLE_PERSON_STATUS, SILVER_TONGUE_STATUS, STUBBORN_STATUS
 from .in_dark import InDarkStatus, IN_DARK_STATUS
+from .stealth import StealthStatus, STEALTH_STATUS, ObservableStatus, OBSERVABLE_STATUS
+from .persistent_damage import PERSISTENT_DAMAGE_STATUS, make_persistent_damage, process_persistent_damage
 from .race.dwarf import (
     AncientBloodedDwarfStatus,
     ANCIENT_BLOODED_DWARF_STATUS,
@@ -48,12 +50,19 @@ __all__ = [
     "Status",
     "HideStatus",
     "HIDE_STATUS",
+    "StealthStatus",
+    "STEALTH_STATUS",
+    "ObservableStatus",
+    "OBSERVABLE_STATUS",
     "FlatFootedStatus",
     "FLAT_FOOTED_STATUS",
     "CoveredStatus",
     "COVERED_STATUS",
     "InDarkStatus",
     "IN_DARK_STATUS",
+    "PERSISTENT_DAMAGE_STATUS",
+    "make_persistent_damage",
+    "process_persistent_damage",
     "ProneStatus",
     "PRONE_STATUS",
     "apply_prone_effects",

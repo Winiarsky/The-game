@@ -130,6 +130,11 @@ def test_stealth_success_with_hide_bonus(monkeypatch):
     assert result.success
     # status stealth nadany
     assert hero.has_status("stealth")
-    # DC wykrycia ustawione na wynik testu
-    assert hero.stealth_detection_dc == 10
+    # DC wykrycia ustawione na wynik testu (w danych statusu)
+    dc = next(
+        s.data["stealth_detection_dc"]
+        for s in hero.statuses
+        if getattr(s, "id", None) == "stealth"
+    )
+    assert dc == 10
     assert any("stealth_start" in a.get("action_id", "") or True for a in game.events.emitted)

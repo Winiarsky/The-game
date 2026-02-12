@@ -3,7 +3,10 @@ from __future__ import annotations
 import logging
 import random
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from statuses import Status
 
 logger = logging.getLogger(__name__)
 
@@ -39,24 +42,45 @@ class WatchfulMixin:
         self.watch_disabled = watch_disabled
         self.perception_bonus = perception_bonus
 
+    def _stealth_dc_from_status(self, hero) -> tuple[int | None, int]:
+        """Zwraca (dc, bonus) z aktywnego statusu stealth."""
+        statuses = getattr(hero, "statuses", None) or []
+        from statuses import Status  # lokalny import, unika cykli
+        for status in statuses:
+            if isinstance(status, Status) and status.id == "stealth":
+                data = getattr(status, "data", {}) or {}
+                return data.get("stealth_detection_dc"), data.get("stealth_bonus", 0)
+        return None, 0
+
     def attempt_spot(self, hero, game) -> tuple[bool, str]:
         """Próba wykrycia ukrytego bohatera; zwraca (wykryto, komunikat)."""
-        dc = getattr(hero, "stealth_detection_dc", None)
-        if dc is None or not getattr(hero, "has_status", lambda _s: False)("stealth"):
+        from statuses import OBSERVABLE_STATUS, STEALTH_STATUS  # lokalnie, by unikać cykli
+
+        dc, _bonus = self._stealth_dc_from_status(hero)
+        if dc is None or not getattr(hero, "has_status", lambda _s: False)(STEALTH_STATUS):
             return False, "Cel nie jest ukryty."
         roll = random.randint(1, 20) + self.perception_bonus
-        penalty = getattr(hero, "perception_penalty", 0) or 0
-        roll -= penalty
         if roll >= dc:
             try:
-                hero.remove_status("stealth")  # type: ignore[attr-defined]
-                hero.add_status("observable")  # type: ignore[attr-defined]
+                hero.remove_status(STEALTH_STATUS)  # type: ignore[attr-defined]
+                hero.add_status(OBSERVABLE_STATUS)  # type: ignore[attr-defined]
             except AttributeError:
                 pass
-            if hasattr(hero, "stealth_bonus"):
-                hero.stealth_bonus = 0
-            hero.stealth_detection_dc = None
             spotted_msg = f"Wykryto bohatera (r={roll} vs DC {dc})."
+            try:
+                events = getattr(game, "events", None)
+                if events and hasattr(events, "safe_emit_action"):
+                    events.safe_emit_action(
+                        actor=self,
+                        target=hero,
+                        action_id="spot_stealth",
+                        action_tags=["perception", "spot_stealth"],
+                        outcome="success",
+                        roll=roll,
+                        dc=dc,
+                    )
+            except Exception:
+                logger.debug("Nie udało się wysłać eventu spot_stealth (success).", exc_info=True)
             try:
                 extra = self.on_spot(hero, game)
                 if extra:
@@ -66,6 +90,20 @@ class WatchfulMixin:
             self._log_watch_event(spotted_msg, game)
             return True, spotted_msg
         miss_msg = f"Nie dostrzegasz bohatera (r={roll} vs DC {dc})."
+        try:
+            events = getattr(game, "events", None)
+            if events and hasattr(events, "safe_emit_action"):
+                events.safe_emit_action(
+                    actor=self,
+                    target=hero,
+                    action_id="spot_stealth",
+                    action_tags=["perception", "spot_stealth"],
+                    outcome="failure",
+                    roll=roll,
+                    dc=dc,
+                )
+        except Exception:
+            logger.debug("Nie udało się wysłać eventu spot_stealth (failure).", exc_info=True)
         self._log_watch_event(miss_msg, game)
         return False, miss_msg
 

@@ -6,6 +6,7 @@ from typing import Iterable
 from board import consts
 from actions.move_utils import _maybe_dispatch_move_reactions
 from GameObjects.interactions_mixin import LeapBlockerMixin
+from statuses import STEALTH_STATUS
 from .base import EventContext, EventResult, GameEvent
 from .registry import register_event
 
@@ -121,12 +122,20 @@ class LeapEvent(GameEvent):
         if origin is None:
             return EventResult.cancelled(message="Bohater nie stoi na planszy.")
 
+        try:
+            ctx.game.events.safe_emit_action(
+                actor=hero,
+                action_id="leap_start",
+                action_tags=self._effective_tags(ctx),
+                from_pos=origin,
+            )
+        except Exception:
+            logger.debug("Nie udało się wysłać eventu leap_start.", exc_info=True)
+
         # zdejmij stealth jak przy ruchu
         try:
-            if getattr(hero, "has_status", lambda _s: False)("stealth"):
-                hero.remove_status("stealth")
-                if hasattr(hero, "stealth_bonus"):
-                    hero.stealth_bonus = 0
+            if getattr(hero, "has_status", lambda _s: False)(STEALTH_STATUS):
+                hero.remove_status(STEALTH_STATUS)
         except Exception:
             logger.debug("Nie udało się zdjąć stealth przed leap.", exc_info=True)
 

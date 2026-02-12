@@ -151,6 +151,7 @@ class BaseRangeAttackEvent(AttackEventBase):
                 f"Atak {self.weapon_label} na AC {target_ac} (bazowe {base_ac}, modyfikatory: {mods_note})."
                 f"{bonus_info}Podaj wynik k20 + DEX po modyfikatorach: "
             )
+            critical = roll >= target_ac + 10
             hit = roll >= target_ac
             if not hit:
                 game.events.safe_emit_action(
@@ -167,7 +168,8 @@ class BaseRangeAttackEvent(AttackEventBase):
                 self._apply_range_attacker_status(hero)
                 return EventResult(success=True, consumed_action=self.consumes_action, message="Strzał chybia.")
 
-            damage_components = self._collect_damage_components()
+            prompt_prefix = "Trafienie krytyczne! " if critical else "Trafienie! "
+            damage_components = self._collect_damage_components(prompt_prefix=prompt_prefix)
             defeated = False
             try:
                 defeated = self._apply_damage_components(enemy, damage_components)
@@ -186,6 +188,7 @@ class BaseRangeAttackEvent(AttackEventBase):
                 defeated=defeated,
                 cover=cover_type,
                 range_penalty=range_penalty,
+                critical=critical,
             )
 
             if defeated:
@@ -200,8 +203,8 @@ class BaseRangeAttackEvent(AttackEventBase):
                 enemy.position = None
 
             self._apply_range_attacker_status(hero)
-            msg = "Przeciwnik pokonany." if defeated else f"Atak {self.weapon_label} trafia."
-            return EventResult(success=True, consumed_action=self.consumes_action, message=msg)
+            msg = "Przeciwnik pokonany." if defeated else ("Trafienie krytyczne!" if critical else f"Atak {self.weapon_label} trafia.")
+            return EventResult(success=True, consumed_action=self.consumes_action, message=msg, data={"critical": critical})
         finally:
             try:
                 game.conn.leds_off()
@@ -220,10 +223,10 @@ class BaseRangeAttackEvent(AttackEventBase):
         return self.COVER_RANK.get(cover_type, 0)
 
     # --- damage helpers ---
-    def _collect_damage_components(self) -> list[tuple[str, int]]:
+    def _collect_damage_components(self, *, prompt_prefix: str = "") -> list[tuple[str, int]]:
         """Pozyskaj wartości obrażeń dla 1+ typów."""
         if isinstance(self.damage_type, str):
-            dmg = prompt_for_roll(f"Trafienie! Podaj obrażenia {self.damage_prompt}: ")
+            dmg = prompt_for_roll(f"{prompt_prefix}Podaj obrażenia {self.damage_prompt}: ")
             return [(self.damage_type, dmg)]
 
         damage_types = list(self.damage_type)
@@ -234,7 +237,7 @@ class BaseRangeAttackEvent(AttackEventBase):
                 prompt_text = prompt[idx] if idx < len(prompt) else prompt[-1]
             else:
                 prompt_text = prompt
-            roll = prompt_for_roll(f"Trafienie! Podaj obrażenia {prompt_text} ({dtype}): ")
+            roll = prompt_for_roll(f"{prompt_prefix}Podaj obrażenia {prompt_text} ({dtype}): ")
             components.append((dtype, roll))
         return components
 

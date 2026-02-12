@@ -5,17 +5,22 @@ import logging
 from board import consts
 from actions.specials.magic_missile import magic_missile_ability
 
-from ..base import EventContext, EventResult, GameEvent
+from ..base import EventContext, EventResult
 from ..registry import register_event
+from .magic_event import MagicEvent
+from .spell_types import SpellTradition
 
 logger = logging.getLogger(__name__)
 
 
 @register_event
-class MagicMissileEvent(GameEvent):
+class MagicMissileEvent(MagicEvent):
     name = "magic_missile"
     default_tags = ["cast", "attack_ranged", "magic"]
     consumes_action = True
+    actions_cost = 1
+    spell_tradition = SpellTradition.ARCANA
+    prompt = "Magic Missile – wystrzel pociski energii w cel w zasięgu."
 
     def execute(self, ctx: EventContext) -> EventResult:
         hero = ctx.actor or self._choose_hero(ctx)

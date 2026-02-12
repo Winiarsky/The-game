@@ -4,6 +4,7 @@ import logging
 
 from board import consts
 from combat import refresh_flanking_statuses
+from statuses import STEALTH_STATUS
 
 from .base import EventContext, EventResult, GameEvent
 from .registry import register_event
@@ -36,12 +37,20 @@ class StepEvent(GameEvent):
 
         board = ctx.game.board
 
+        try:
+            ctx.game.events.safe_emit_action(
+                actor=hero,
+                action_id="step_start",
+                action_tags=self._effective_tags(ctx),
+                from_pos=hero_pos,
+            )
+        except Exception:
+            logger.debug("Nie udało się wysłać eventu step_start.", exc_info=True)
+
         # pozbądź się stealth jak przy zwykłym ruchu
         try:
-            if getattr(hero, "has_status", lambda _s: False)("stealth"):
-                hero.remove_status("stealth")
-                if hasattr(hero, "stealth_bonus"):
-                    hero.stealth_bonus = 0  # type: ignore[attr-defined]
+            if getattr(hero, "has_status", lambda _s: False)(STEALTH_STATUS):
+                hero.remove_status(STEALTH_STATUS)
         except Exception:
             logger.debug("Nie udało się zdjąć statusu stealth przed stepem.", exc_info=True)
 

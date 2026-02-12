@@ -8,6 +8,7 @@ from GameObjects.interactions_mixin.base_interaction import InteractableMixin
 from GameObjects.Obstacles.basic_obstacle import Obstacle
 from GameObjects.Terrains.basic_terrain import BasicTerrain
 from GameObjects.Walls.basic_wall import Wall
+from statuses import COVERED_STATUS, HIDE_STATUS
 
 
 class Occupant(Protocol):
@@ -237,8 +238,8 @@ class BoardGrid:
                 if getattr(interactable, "someone_inside", None) is occupant:
                     interactable.someone_inside = None
             if isinstance(occupant, StatusMixin):
-                occupant.remove_status("hide")
-                occupant.remove_status("covered")
+                occupant.remove_status(HIDE_STATUS)
+                occupant.remove_status(COVERED_STATUS)
             else:
                 statuses = getattr(occupant, "statuses", None)
                 if isinstance(statuses, list):

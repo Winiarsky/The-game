@@ -13,6 +13,7 @@ from actions.move_utils import (
     path_cost_feet,
     perform_movement,
 )
+from statuses import STEALTH_STATUS
 
 from .base import EventContext, EventResult, GameEvent
 from .registry import register_event
@@ -73,11 +74,21 @@ class MoveEvent(GameEvent):
             return EventResult.cancelled(message="Nie wybrano bohatera do ruchu.")
 
         # zdejmij stealth przy jawnym ruchu
-        if getattr(moving_hero, "has_status", lambda _s: False)("stealth"):
-            moving_hero.remove_status("stealth")  # type: ignore[attr-defined]
-            if hasattr(moving_hero, "stealth_bonus"):
-                moving_hero.stealth_bonus = 0
+        if getattr(moving_hero, "has_status", lambda _s: False)(STEALTH_STATUS):
+            moving_hero.remove_status(STEALTH_STATUS)  # type: ignore[attr-defined]
             logger.info("Zdejmuję status stealth – poruszasz się jawnie.")
+
+        initial_pos = getattr(moving_hero, "position", None)
+
+        try:
+            game.events.safe_emit_action(
+                actor=moving_hero,
+                action_id="move_start",
+                action_tags=self._effective_tags(ctx),
+                from_pos=getattr(moving_hero, "position", None),
+            )
+        except Exception:
+            logger.debug("Nie udało się wysłać eventu move_start.", exc_info=True)
 
         started_in_combat = getattr(game.state, "__class__", None).__name__ == "Combat"
 
@@ -364,6 +375,10 @@ class MoveEvent(GameEvent):
                         active_path_id = None
                     if completed:
                         logger.info("Zakończono ruch.")
+                        try:
+                            _emit_move_event(initial_pos, moving_hero.position)
+                        except Exception:
+                            logger.debug("Nie udało się wysłać eventu move.", exc_info=True)
                         return EventResult(success=True, consumed_action=self.consumes_action, message="Ruch wykonany.")
 
                     if (reason == "on_enter") and (not started_in_combat) and getattr(game.state, "__class__", None).__name__ == "Combat":

@@ -35,6 +35,7 @@ class EventResult:
 
     success: bool = True
     consumed_action: bool = True
+    actions_spent: int | None = None
     message: str | None = None
     data: Dict[str, Any] = field(default_factory=dict)
 
@@ -96,4 +97,3 @@ class GameEvent:
         except Exception:  # pragma: no cover - nie blokuj dalszych akcji
             logger.debug("Post hook failed for %s", self.name, exc_info=True)
         return result
-
