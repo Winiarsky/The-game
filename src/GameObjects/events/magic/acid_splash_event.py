@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 @register_event
 class AcidSplashEvent(BaseMagicAttackEvent):
-    name = "acid_splash"
+    name = "acidcplash"
     actions_cost = 2
     range_feet = 30
     default_tags = ["magic", "spell", "attack_ranged"]

@@ -7,7 +7,7 @@ for p in (ROOT, ROOT / "src"):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
-from GameObjects.events.magic.acid_splash_event import AcidSplashEvent
+from GameObjects.events.magic.acidcplash_event import AcidSplashEvent
 from GameObjects.events.base import EventContext
 from statuses import PERSISTENT_DAMAGE_STATUS
 
@@ -41,10 +41,10 @@ class DummyTarget:
         return True
 
 
-def test_acid_splash_hit(monkeypatch):
+def test_acidcplash_hit(monkeypatch):
     # roll: attack hits (handled in BaseMagicAttackEvent), damage=7
     monkeypatch.setattr("GameObjects.events.magic.base_attack_magic_event.prompt_for_roll", lambda prompt: 15)
-    monkeypatch.setattr("GameObjects.events.magic.acid_splash_event.AcidSplashEvent._prompt_damage", lambda self: 7)
+    monkeypatch.setattr("GameObjects.events.magic.acidcplash_event.AcidSplashEvent._prompt_damage", lambda self: 7)
 
     hero = SimpleNamespace(position=(0, 0))
     target = DummyTarget((1, 0))
@@ -59,7 +59,7 @@ def test_acid_splash_hit(monkeypatch):
     assert target.hp == 93
 
 
-def test_acid_splash_critical_adds_persistent(monkeypatch):
+def test_acidcplash_critical_adds_persistent(monkeypatch):
     # attack roll = crit; damage=5, persistent=2
     monkeypatch.setattr("GameObjects.events.magic.base_attack_magic_event.prompt_for_roll", lambda prompt: 30)
 
@@ -68,8 +68,8 @@ def test_acid_splash_critical_adds_persistent(monkeypatch):
             return 2
         return 5
 
-    monkeypatch.setattr("GameObjects.events.magic.acid_splash_event.AcidSplashEvent._prompt_damage", lambda self: 5)
-    monkeypatch.setattr("GameObjects.events.magic.acid_splash_event.AcidSplashEvent._prompt_persistent", lambda self: 2)
+    monkeypatch.setattr("GameObjects.events.magic.acidcplash_event.AcidSplashEvent._prompt_damage", lambda self: 5)
+    monkeypatch.setattr("GameObjects.events.magic.acidcplash_event.AcidSplashEvent._prompt_persistent", lambda self: 2)
 
     hero = SimpleNamespace(position=(0, 0))
     target = DummyTarget((1, 0))
