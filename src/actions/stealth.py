@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from actions.move_utils import perform_movement  # re-export stub
-from GameObjects.interactions_mixin.prompt_utils import prompt_for_roll
 
 def iter_watchers_in_rooms(*_args, **_kwargs):
     return []

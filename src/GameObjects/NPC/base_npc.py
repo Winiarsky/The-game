@@ -10,10 +10,10 @@ from GameObjects.interactions_mixin import (
     TradeMixin,
     TradeItem,
     PickpocketMixin,
-    prompt_for_roll,
     resolve_skill_check,
     attitude_label,
 )
+import GameObjects.events.checks.skill_check_event  # noqa: F401  # rejestruj skill_check
 from GameObjects.events.base import EventContext
 from GameObjects.events.registry import dispatch_event
 from skills import Skill

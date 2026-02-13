@@ -8,6 +8,8 @@ from board import consts
 
 from .base import EventContext, EventResult, GameEvent
 from .registry import register_event
+# zapewnij rejestrację eventów checków zanim będą dispatchowane
+import GameObjects.events.checks.skill_check_event  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -127,11 +129,22 @@ class InteractionEvent(GameEvent):
             return None
         ui = getattr(game, "ui", None)
         if ui and ui.enabled:
-            choices = [
-                f"{idx}: {action.label}{' — ' + action.description if action.description else ''}"
-                for idx, action in enumerate(actions, start=1)
+            choice_meta = [
+                {
+                    "raw": act.id,
+                    "label": act.label,
+                    "desc": act.description or "",
+                    "key": str(idx + 1),
+                }
+                for idx, act in enumerate(actions)
             ]
-            ans = ui.prompt_choice("Wybierz akcję (numer lub nazwa): ", choices=choices, source="interaction")
+            ans = ui.prompt_choice(
+                "Wybierz akcję",
+                choices=[c["label"] for c in choice_meta],
+                source="interaction",
+                layout="dialog",
+                choice_meta=choice_meta,
+            )
             if ans:
                 normalized = ans.strip()
                 if normalized.isdigit():

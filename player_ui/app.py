@@ -110,6 +110,9 @@ def create_prompt():
     choices = data.get("choices")
     if choices is not None and not isinstance(choices, list):
         choices = None
+    choice_meta = data.get("choice_meta") if isinstance(data.get("choice_meta"), list) else None
+    modifiers = data.get("modifiers") if isinstance(data.get("modifiers"), dict) else None
+    layout = data.get("layout")
 
     prompt_id = str(next(prompt_ids))
     entry = {
@@ -121,6 +124,16 @@ def create_prompt():
         "answer": None,
         "created_at": time.time(),
         "choices": choices,
+        "choice_meta": choice_meta,
+        "title": data.get("title"),
+        "subtitle": data.get("subtitle"),
+        "prompt_long": data.get("prompt_long"),
+        "image": data.get("image"),
+        "layout": layout,
+        "action_desc": data.get("action_desc"),
+        "desc": data.get("desc"),
+        "answer_placeholder": data.get("answer_placeholder"),
+        "modifiers": modifiers,
     }
     with prompts_lock:
         prompts[prompt_id] = entry
@@ -155,6 +168,16 @@ def get_prompt(prompt_id: str):
             "kind": entry.get("kind"),
             "source": entry.get("source"),
             "choices": entry.get("choices"),
+            "choice_meta": entry.get("choice_meta"),
+            "title": entry.get("title"),
+            "subtitle": entry.get("subtitle"),
+            "prompt_long": entry.get("prompt_long"),
+            "image": entry.get("image"),
+            "layout": entry.get("layout"),
+            "action_desc": entry.get("action_desc"),
+            "desc": entry.get("desc"),
+            "answer_placeholder": entry.get("answer_placeholder"),
+            "modifiers": entry.get("modifiers"),
         }
     )
 

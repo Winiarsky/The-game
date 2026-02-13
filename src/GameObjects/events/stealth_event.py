@@ -6,7 +6,6 @@ from typing import Tuple
 
 from board import consts
 from combat import refresh_flanking_statuses
-from GameObjects.interactions_mixin import prompt_for_roll
 from GameObjects.Interactables.utils.awareness import iter_watchers_in_rooms, summarize_watchers
 from GameObjects.Obstacles.basic_obstacle import Obstacle
 from actions.move_utils import perform_movement, default_on_enter

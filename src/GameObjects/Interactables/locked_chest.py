@@ -3,7 +3,8 @@ from GameObjects.base import GameObjectMeta
 from typing import Optional
 
 from GameObjects.interactions_mixin.base_interaction import InteractableMixin, Interaction
-from GameObjects.interactions_mixin import HideInMixin, prompt_for_roll, RangeAttackAffectMixin
+from GameObjects.interactions_mixin import HideInMixin, RangeAttackAffectMixin
+from ui_client import get_ui_client
 import logging
 from board import consts
 
@@ -61,7 +62,12 @@ class LockedChest(RangeAttackAffectMixin, InteractableMixin, HideInMixin):
 
     # --- Narzędzia ---
     def _skill_check(self, dc: int, roll_msg: str) -> tuple[str, int]:
-        roll = prompt_for_roll(roll_msg)
+        roll = get_ui_client().prompt_roll(
+            roll_msg,
+            source="game",
+            layout="test",
+            answer_placeholder="Wynik rzutu",
+        )
         if roll >= dc + 10:
             outcome = "critical_success"
         elif roll >= dc:
@@ -293,10 +299,20 @@ class LockedChest(RangeAttackAffectMixin, InteractableMixin, HideInMixin):
     def action_attack(self, actor, game, _payload: Optional[dict] = None) -> str:
         if self.destroyed:
             return "Skrzynia już rozbita."
-        attack_roll = prompt_for_roll("Rzuć na atak (podaj ostateczny wynik): ") # po zaimplementowaniu walki, to powinno korzystać z mechaniki walki
+        attack_roll = get_ui_client().prompt_roll(
+            "Rzuć na atak (podaj ostateczny wynik): ",
+            source="game",
+            layout="test",
+            answer_placeholder="Wynik ataku",
+        )  # po zaimplementowaniu walki, to powinno korzystać z mechaniki walki
         if attack_roll < self.ac:
             return f"Atak ({attack_roll}) nie trafia skrzyni (AC {self.ac})."
-        damage = prompt_for_roll("Podaj zadaną ilość obrażeń: ")
+        damage = get_ui_client().prompt_roll(
+            "Podaj zadaną ilość obrażeń: ",
+            source="game",
+            layout="damage",
+            answer_placeholder="Obrażenia",
+        )
         effective_damage = max(0, damage - self.hardness)
         self.hp -= effective_damage
         if self.hp <= 0:

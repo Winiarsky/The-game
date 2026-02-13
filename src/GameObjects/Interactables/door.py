@@ -9,9 +9,9 @@ from GameObjects.interactions_mixin import (
     LockableMixin,
     TrappableMixin,
     RangeAttackAffectMixin,
-    prompt_for_roll,
     resolve_skill_check,
 )
+from ui_client import get_ui_client
 
 logger = logging.getLogger(__name__)
 
@@ -289,7 +289,12 @@ class Door(RangeAttackAffectMixin, LockableMixin, TrappableMixin, HiddenMixin, D
     def action_pick_lock(self, actor, game, _payload=None) -> str:
         if self.destroyed:
             return "Zamek zniszczony, wytrych niepotrzebny."
-        roll = prompt_for_roll("Rzuć na Thievery (wynik końcowy): ")
+        roll = get_ui_client().prompt_roll(
+            "Rzuć na Thievery (wynik końcowy): ",
+            source="game",
+            layout="test",
+            answer_placeholder="Wynik Thievery",
+        )
         outcome, msg = self.pick_lock(roll)
         if outcome in ("critical_success",):
             self.is_open = True
@@ -299,7 +304,12 @@ class Door(RangeAttackAffectMixin, LockableMixin, TrappableMixin, HiddenMixin, D
     def action_force_open(self, actor, game, _payload=None) -> str:
         if self.destroyed:
             return "Zamek i zawiasy już zniszczone."
-        roll = prompt_for_roll("Rzuć na Athletics (wyważanie): ")
+        roll = get_ui_client().prompt_roll(
+            "Rzuć na Athletics (wyważanie): ",
+            source="game",
+            layout="test",
+            answer_placeholder="Wynik Athletics",
+        )
         outcome, msg = self.force_lock(roll)
         if outcome in ("critical_success", "success"):
             self.is_open = True
@@ -307,8 +317,18 @@ class Door(RangeAttackAffectMixin, LockableMixin, TrappableMixin, HiddenMixin, D
         return msg
 
     def action_attack(self, actor, game, _payload=None) -> str:
-        attack_roll = prompt_for_roll("Rzut na atak: ")
-        damage = prompt_for_roll("Zadane obrażenia: ")
+        attack_roll = get_ui_client().prompt_roll(
+            "Rzut na atak: ",
+            source="game",
+            layout="test",
+            answer_placeholder="Wynik ataku",
+        )
+        damage = get_ui_client().prompt_roll(
+            "Zadane obrażenia: ",
+            source="game",
+            layout="damage",
+            answer_placeholder="Obrażenia",
+        )
         hit, dealt, msg = self.apply_damage(attack_roll, damage)
         if hit and self.destroyed:
             self.is_open = True
@@ -319,17 +339,32 @@ class Door(RangeAttackAffectMixin, LockableMixin, TrappableMixin, HiddenMixin, D
         return msg
 
     def action_search_trap(self, actor, game, _payload=None) -> str:
-        roll = prompt_for_roll("Rzuć na Perception (szukanie pułapki): ")
+        roll = get_ui_client().prompt_roll(
+            "Rzuć na Perception (szukanie pułapki): ",
+            source="game",
+            layout="test",
+            answer_placeholder="Wynik Perception",
+        )
         outcome, msg = self.detect_trap(roll)
         return f"{msg} (wynik: {outcome})"
 
     def action_disable_trap(self, actor, game, _payload=None) -> str:
-        roll = prompt_for_roll("Rzuć na Thievery (rozbrajanie): ")
+        roll = get_ui_client().prompt_roll(
+            "Rzuć na Thievery (rozbrajanie): ",
+            source="game",
+            layout="test",
+            answer_placeholder="Wynik Thievery",
+        )
         outcome, msg = self.disable_trap(roll)
         return f"{msg} (wynik: {outcome})"
 
     def action_search_secret(self, actor, game, _payload=None) -> str:
-        roll = prompt_for_roll("Rzuć na Perception (szukanie sekretu): ")
+        roll = get_ui_client().prompt_roll(
+            "Rzuć na Perception (szukanie sekretu): ",
+            source="game",
+            layout="test",
+            answer_placeholder="Wynik Perception",
+        )
         outcome, msg = self.try_reveal(roll)
         return f"{msg} (wynik: {outcome})"
 
@@ -338,7 +373,12 @@ class Door(RangeAttackAffectMixin, LockableMixin, TrappableMixin, HiddenMixin, D
             return "Tu nic nie jest ukryte – ślepy strzał nic nie da."
         if self.revealed:
             return "Sekret już odkryty."
-        roll = prompt_for_roll("Ślepy strzał (Perception) – wynik: ")
+        roll = get_ui_client().prompt_roll(
+            "Ślepy strzał (Perception) – wynik: ",
+            source="game",
+            layout="test",
+            answer_placeholder="Wynik Perception",
+        )
         outcome = resolve_skill_check(self.reveal_dc + 2, roll)  # utrudnienie dla ślepego macania
         if outcome in ("success", "critical_success"):
             self.revealed = True
@@ -356,7 +396,12 @@ class Door(RangeAttackAffectMixin, LockableMixin, TrappableMixin, HiddenMixin, D
             effect = self.trigger_trap()
             messages.append(f"Pułapka przy drzwiach odpala! {effect}")
         if self.auto_reveal_on_enter and self.hidden and not self.revealed:
-            roll = prompt_for_roll("Perception (auto-check na sekret drzwi): ")
+            roll = get_ui_client().prompt_roll(
+                "Perception (auto-check na sekret drzwi): ",
+                source="game",
+                layout="test",
+                answer_placeholder="Wynik Perception",
+            )
             outcome, msg = self.try_reveal(roll)
             messages.append(f"{msg} (wynik: {outcome})")
         return " ".join(messages) if messages else None

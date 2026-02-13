@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Iterable
 
-from GameObjects.interactions_mixin import prompt_for_roll
+from ui_client import get_ui_client
 from bonuses import compute_total_modifier
 from combat import effective_ac
 
@@ -65,9 +65,13 @@ class BaseMagicAttackEvent(MagicEvent):
         action_tag = (self._effective_tags(ctx) or ["spell_attack"])[0]
         bonus_info = self._format_bonus_info(actor, action_tag, target=target)
 
-        roll = prompt_for_roll(
-            f"Atak zaklęciem przeciwko AC {target_ac}{modifier_note}."
-            f"{bonus_info}Podaj wynik d20 + spell attack modifier: "
+        roll = get_ui_client().prompt_roll(
+            f"Atak zaklęciem przeciwko AC {target_ac}",
+            source="game",
+            layout="test",
+            subtitle=f"bazowe {base_ac}{modifier_note}",
+            prompt_long=bonus_info.strip(),
+            answer_placeholder="Wynik d20 + spell attack",
         )
         critical = roll >= target_ac + 10
         hit = roll >= target_ac

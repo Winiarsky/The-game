@@ -451,6 +451,8 @@ button.disabled, button:disabled {
     border-radius: 10px;
     min-height: 260px;
     box-shadow: inset 0 0 30px rgba(0,0,0,0.25);
+    background-size: cover;
+    background-position: center;
 }
 
 .action-content {
@@ -475,16 +477,108 @@ button.disabled, button:disabled {
     opacity: 0.9;
     line-height: 1.4;
 }
+.action-prompt {
+    color: var(--fg);
+    opacity: 0.95;
+    line-height: 1.5;
+    max-height: 180px;
+    overflow-y: auto;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: rgba(12, 8, 6, 0.5);
+}
+.action-prompt.hidden {
+    display: none;
+}
 
 .action-choices {
     display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
+    flex-direction: column;
+    gap: 6px;
 }
 
 .action-desc {
     color: var(--muted);
     min-height: 18px;
+}
+
+.choice-pill {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    cursor: pointer;
+    background: rgba(193, 138, 58, 0.08);
+    transition: border-color 0.15s, background 0.15s;
+}
+.choice-pill .label {
+    font-weight: 600;
+    color: var(--fg);
+}
+.choice-pill .desc {
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.4;
+    display: none;
+}
+.choice-pill.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px rgba(193, 138, 58, 0.3);
+    background: rgba(193, 138, 58, 0.14);
+}
+.choice-pill.expanded .desc {
+    display: block;
+}
+
+.action-mods {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: rgba(10, 8, 6, 0.5);
+}
+.action-mods.hidden {
+    display: none;
+}
+.mods-col {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.mods-head {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--muted);
+}
+.mods-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+.mods-list li {
+    padding: 6px 8px;
+    border-radius: 8px;
+    background: rgba(193, 138, 58, 0.08);
+    border: 1px solid var(--border);
+    color: var(--fg);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.mods-list li.top {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px rgba(193, 138, 58, 0.32);
+}
+.mods-value {
+    color: var(--accent);
+    font-weight: 700;
 }
 
 .action-form {
@@ -655,7 +749,14 @@ button.disabled, button:disabled {
 }
 
 .input-hidden {
-    display: none;
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    padding: 0;
+    border: 0;
 }
 
 /* Path toast */

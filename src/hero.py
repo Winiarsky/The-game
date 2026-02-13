@@ -1,7 +1,9 @@
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-from GameObjects.interactions_mixin import BonusMixin, StatusMixin, ReactiveMixin, prompt_for_roll
+from GameObjects.interactions_mixin import BonusMixin, StatusMixin, ReactiveMixin
+from GameObjects.interactions_mixin.skill_check_resolver import resolve_skill_check_with_sources
+from skills import Skill
 from combat.reactions import OpportunityAttack
 from combat.damage_utils import apply_damage_resistance
 from damage_types import DamageType
@@ -55,10 +57,17 @@ class Hero(StatusMixin, BonusMixin, ReactiveMixin):
         pass
 
     def roll_for_initiative(self) -> int:
-        """Poproś gracza o wynik testu inicjatywy i ustaw go na bohaterze."""
-        roll = prompt_for_roll(f"Inicjatywa dla bohatera {self.object_id} (podaj wynik): ")
-        self.initiative = roll
-        return roll
+        """Test inicjatywy: Perception z tagiem initiative (uwzględnia premie/kary)."""
+        resolution = resolve_skill_check_with_sources(
+            skill_id=Skill.PERCEPTION.value,
+            dc=0,
+            actor=self,
+            tags=["initiative"],
+            game=None,
+            apply_modifiers=False,
+        )
+        self.initiative = resolution.total
+        return resolution.total
 
     def apply_damage(self, amount: int, damage_type: str = DamageType.NORMAL.value) -> tuple[int, bool]:
         """Zastosuj obrażenia na bohaterze (uwzględnia redukcje ze statusów)."""

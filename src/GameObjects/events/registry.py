@@ -31,16 +31,57 @@ def register_event(cls: Type[GameEvent]) -> Type[GameEvent]:
 def get_event_cls(name: str) -> Type[GameEvent]:
     key = _normalize(name)
     if key not in _registry:
-        raise KeyError(f"Nieznany event '{name}'")
+        # spróbuj doładować skill_check (bez pełnego all_events)
+        if key == "skill_check":
+            try:
+                from importlib import import_module
+
+                import_module(".checks.skill_check_event", package=__package__)
+            except Exception as exc:
+                logger.warning("Nie udało się doładować skill_check: %s", exc)
+        # spróbuj doładować wszystkie eventy
+        try:
+            from importlib import import_module
+
+            import_module(".all_events", package=__package__)
+        except Exception:
+            pass
+        if key not in _registry:
+            raise KeyError(f"Nieznany event '{name}'")
     return _registry[key]
 
 
 def list_events() -> Dict[str, Type[GameEvent]]:
+    # Lazy-load skill_check on first access to list_events to avoid circular imports.
+    if "skill_check" not in _registry:
+        try:
+            from importlib import import_module
+
+            import_module(".checks.skill_check_event", package=__package__)
+        except Exception as exc:
+            logger.warning("Nie udało się zarejestrować skill_check: %s", exc)
     return dict(_registry)
 
 
 def dispatch_event(name: str, ctx: EventContext) -> EventResult:
     """Znajdź event po nazwie i uruchom jego lifecycle."""
+    # Upewnij się, że wszystkie eventy są zarejestrowane (ważne dla skill_check).
+    try:
+        import importlib
+
+        importlib.import_module("GameObjects.events.all_events")
+    except Exception:
+        pass
+    # awaryjna rejestracja skill_check bezpośrednio
+    key = _normalize(name)
+    if key == "skill_check" and key not in _registry:
+        try:
+            from .checks.skill_check_event import GenericSkillCheckEvent
+
+            _registry[key] = GenericSkillCheckEvent
+        except Exception as exc:
+            logger.warning("Nie udało się wymusić rejestracji skill_check: %s", exc)
+
     event_cls = get_event_cls(name)
     event = event_cls()
 

@@ -5,7 +5,8 @@ import math
 from typing import Sequence
 
 from bonuses import BonusEffect, BonusType
-from GameObjects.interactions_mixin import RangeAttackAffectMixin, prompt_for_roll
+from GameObjects.interactions_mixin import RangeAttackAffectMixin
+from ui_client import get_ui_client
 from statuses import Status
 from damage_types import DamageType
 
@@ -147,9 +148,15 @@ class BaseRangeAttackEvent(AttackEventBase):
             action_tag = (self._effective_tags(ctx) or ["attack_ranged"])[0]
             bonus_info = self._format_bonus_info(hero, action_tag, target=enemy)
 
-            roll = prompt_for_roll(
-                f"Atak {self.weapon_label} na AC {target_ac} (bazowe {base_ac}, modyfikatory: {mods_note})."
-                f"{bonus_info}Podaj wynik k20 + DEX po modyfikatorach: "
+            from ui_client import get_ui_client
+
+            roll = get_ui_client().prompt_roll(
+                f"Atak {self.weapon_label} na AC {target_ac}",
+                source="game",
+                layout="test",
+                subtitle=f"bazowe {base_ac}, modyfikatory: {mods_note}",
+                prompt_long=bonus_info.strip(),
+                answer_placeholder="Wynik k20 + DEX",
             )
             critical = roll >= target_ac + 10
             hit = roll >= target_ac
@@ -226,7 +233,12 @@ class BaseRangeAttackEvent(AttackEventBase):
     def _collect_damage_components(self, *, prompt_prefix: str = "") -> list[tuple[str, int]]:
         """Pozyskaj wartości obrażeń dla 1+ typów."""
         if isinstance(self.damage_type, str):
-            dmg = prompt_for_roll(f"{prompt_prefix}Podaj obrażenia {self.damage_prompt}: ")
+            dmg = get_ui_client().prompt_roll(
+                f"{prompt_prefix}Obrażenia {self.damage_prompt}: ",
+                source="game",
+                layout="damage",
+                answer_placeholder="Suma obrażeń",
+            )
             return [(self.damage_type, dmg)]
 
         damage_types = list(self.damage_type)
@@ -237,7 +249,12 @@ class BaseRangeAttackEvent(AttackEventBase):
                 prompt_text = prompt[idx] if idx < len(prompt) else prompt[-1]
             else:
                 prompt_text = prompt
-            roll = prompt_for_roll(f"{prompt_prefix}Podaj obrażenia {prompt_text} ({dtype}): ")
+            roll = get_ui_client().prompt_roll(
+                f"{prompt_prefix}Obrażenia {prompt_text} ({dtype}): ",
+                source="game",
+                layout="damage",
+                answer_placeholder=f"Obrażenia {dtype}",
+            )
             components.append((dtype, roll))
         return components
 

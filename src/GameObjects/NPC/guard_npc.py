@@ -4,6 +4,8 @@ from typing import Optional
 from GameObjects.base import GameObjectMeta
 from GameObjects.NPC.base_npc import BaseNPC
 from GameObjects.interactions_mixin import WatchfulMixin, TradeItem, Interaction, resolve_skill_check
+# zapewnij rejestrację zdarzenia skill_check zanim zostanie dispatchowane
+import GameObjects.events.checks.skill_check_event  # noqa: F401
 from GameObjects.events.base import EventContext
 from GameObjects.events.registry import dispatch_event
 from skills import Skill

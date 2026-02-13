@@ -7,7 +7,9 @@ from typing import Iterable, List, Optional, Sequence
 from bonuses import BonusEffect, aggregate_best_by_type, compute_total_modifier
 from statuses import Status
 from statuses.check_effects import CheckEffect
-from GameObjects.interactions_mixin import prompt_for_roll, resolve_skill_check
+from GameObjects.interactions_mixin import resolve_skill_check
+from ui_client import get_ui_client
+from bonuses import BonusType
 
 logger = logging.getLogger(__name__)
 
@@ -118,9 +120,9 @@ def resolve_skill_check_with_sources(
     breakdown = _format_breakdown(all_effects, skill_id)
     notes = list(notes_src) + list(notes_tgt)
 
-    prompt_msg = (
-        f"Test {skill_id} (DC {dc}). "
-        + (
+    prompt_msg = f"Test {skill_id} (DC {dc})."
+    prompt_long = (
+        (
             "Podaj wynik rzutu (bez premii sytuacyjnych). "
             if apply_modifiers
             else "Podaj końcowy wynik (uwzględnij swoje premie/kary). "
@@ -128,7 +130,15 @@ def resolve_skill_check_with_sources(
         + f"Premie/kary: {', '.join(breakdown) if breakdown else 'brak'} (suma {modifier:+d}, "
         + ("doliczana automatycznie)." if apply_modifiers else "nie jest doliczana automatycznie).")
     )
-    roll = prompt_for_roll(prompt_msg)
+    modifiers_grid = _build_modifiers_grid(all_effects)
+    roll = get_ui_client().prompt_roll(
+        prompt_msg,
+        source="game",
+        layout="test",
+        prompt_long=prompt_long,
+        answer_placeholder="Wynik rzutu",
+        modifiers=modifiers_grid,
+    )
     total = roll + modifier if apply_modifiers else roll
     outcome = resolve_skill_check(dc, total)
 
@@ -161,3 +171,28 @@ def resolve_skill_check_with_sources(
         pass
 
     return resolution
+
+
+def _build_modifiers_grid(effects: list) -> dict:
+    """Przygotuj dane do sekcji premii/kar w UI."""
+    buckets = {
+        "penCirc": [],
+        "bonCirc": [],
+        "penStat": [],
+        "bonStat": [],
+    }
+    for eff in effects:
+        value = getattr(eff, "value", 0) or 0
+        label = getattr(eff, "label", None) or getattr(eff, "tag", None) or getattr(eff, "source", "") or "mod"
+        btype = getattr(eff, "type", None)
+        is_penalty = value < 0
+        if btype == BonusType.CIRCUMSTANCE:
+            key = "penCirc" if is_penalty else "bonCirc"
+        elif btype == BonusType.STATUS:
+            key = "penStat" if is_penalty else "bonStat"
+        else:
+            key = "penCirc" if is_penalty else "bonCirc"
+        buckets[key].append({"label": label, "value": value})
+    for key, arr in buckets.items():
+        arr.sort(key=lambda x: abs(x.get("value", 0)), reverse=True)
+    return buckets

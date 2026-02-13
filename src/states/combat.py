@@ -4,7 +4,7 @@ import logging
 import sys
 from pathlib import Path
 from typing import Any, List, Optional
-from GameObjects.interactions_mixin import prompt_for_roll
+from ui_client import get_ui_client
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
@@ -42,6 +42,14 @@ class Combat(State):
         logger.info("Walka rozpoczęta.")
         self.game.ui_log("Walka rozpoczęta.")
         self.game.ui_log("Press Enter aby kontynuować walkę.")
+        # Wyświetl informacyjny prompt na starcie walki.
+        self.game.ui_event(
+            "info",
+            {
+                "text": "O bogowie, walka!",
+                "source": "combat",
+            },
+        )
         self._reset_heroes_initiative()
         self._ensure_initiative_order()
 
@@ -299,7 +307,12 @@ class Combat(State):
                 self.game.ui_log("Już opóźniałeś turę w tej rundzie.")
                 return self
 
-            delta = prompt_for_roll("O ile obniżasz inicjatywę w tej rundzie? (liczba) ")
+            delta = get_ui_client().prompt_roll(
+                "O ile obniżasz inicjatywę w tej rundzie? (liczba) ",
+                source="game",
+                layout="test",
+                answer_placeholder="Modyfikator inicjatywy",
+            )
             try:
                 delta = max(0, int(delta))
             except Exception:

@@ -13,14 +13,21 @@ const initRoundNum = document.getElementById("init-round-num");
 const actionIllustration = document.getElementById("action-illustration");
 const actionTitle = document.getElementById("action-title");
 const actionText = document.getElementById("action-text");
+const actionPrompt = document.getElementById("action-prompt");
 const actionChoices = document.getElementById("action-choices");
 const actionDesc = document.getElementById("action-desc");
 const actionForm = document.getElementById("action-form");
 const actionAnswer = document.getElementById("action-answer");
 const actionKind = document.getElementById("action-kind");
 const actionSource = document.getElementById("action-source");
+const modsBox = document.getElementById("action-mods");
+const modsPenCirc = document.getElementById("mods-pen-circ");
+const modsBonCirc = document.getElementById("mods-bon-circ");
+const modsPenStat = document.getElementById("mods-pen-stat");
+const modsBonStat = document.getElementById("mods-bon-stat");
 const topbar = document.getElementById("topbar");
 const topbarToggle = document.getElementById("topbar-toggle");
+const PLACEHOLDER_IMAGE = "/static/placeholder.png";
 
 let currentScenario = null;
 let eventSource = null;
@@ -33,12 +40,61 @@ let selectedChoiceIndex = -1;
 let choiceMeta = [];
 let digitBuffer = "";
 let digitTimer = null;
+let confirmMode = false;
+let storedSelection = "";
+let layoutMode = "info";
 const DIGIT_BUFFER_MS = 600;
 const pathToast = document.getElementById("path-toast");
 let activePathId = null;
 let initiativeState = { order: [], activeId: null, round: 1 };
 let lastLoggedRound = null;
 actionForm.classList.add("hidden");
+
+function setIllustration(imageUrl) {
+    const src = imageUrl || PLACEHOLDER_IMAGE;
+    if (src) {
+        actionIllustration.style.backgroundImage = `url(${src})`;
+        actionIllustration.style.backgroundSize = "cover";
+        actionIllustration.style.backgroundPosition = "center";
+    } else {
+        actionIllustration.style.backgroundImage = "";
+    }
+}
+
+function clearMods() {
+    [modsPenCirc, modsBonCirc, modsPenStat, modsBonStat].forEach((el) => {
+        if (el) el.innerHTML = "";
+    });
+    modsBox.classList.add("hidden");
+}
+
+function renderMods(mods = {}) {
+    const { penCirc = [], bonCirc = [], penStat = [], bonStat = [] } = mods;
+    const fill = (el, arr) => {
+        if (!el) return;
+        el.innerHTML = "";
+        arr.forEach((item, idx) => {
+            const li = document.createElement("li");
+            li.className = idx === 0 ? "top" : "";
+            const label = document.createElement("span");
+            label.textContent = item.label || item.tag || item.name || "mod";
+            const val = document.createElement("span");
+            val.className = "mods-value";
+            val.textContent = item.value != null ? item.value : "";
+            li.appendChild(label);
+            li.appendChild(val);
+            el.appendChild(li);
+        });
+    };
+    clearMods();
+    const hasAny = penCirc.length || bonCirc.length || penStat.length || bonStat.length;
+    if (!hasAny) return;
+    fill(modsPenCirc, penCirc);
+    fill(modsBonCirc, bonCirc);
+    fill(modsPenStat, penStat);
+    fill(modsBonStat, bonStat);
+    modsBox.classList.remove("hidden");
+}
 
 function showMenu() {
     screenMenu.classList.remove("hidden");
@@ -95,13 +151,7 @@ function handleEvent(event) {
         const title = payload.name || payload.slug || "Zdolność specjalna";
         actionTitle.textContent = title;
         actionText.textContent = payload.desc || "";
-        if (payload.image) {
-            actionIllustration.style.backgroundImage = `url(${payload.image})`;
-            actionIllustration.style.backgroundSize = "cover";
-            actionIllustration.style.backgroundPosition = "center";
-        } else {
-            actionIllustration.style.backgroundImage = "";
-        }
+        setIllustration(payload.image);
         addLogEntry(`Zdolność: ${title}`, meta, "info", "Special");
         return;
     }
@@ -112,6 +162,7 @@ function handleEvent(event) {
             kind: "info",
             choices: [],
             source: payload.source || "",
+            image: payload.image || null,
         });
         addLogEntry(payload.text || payload.message || "Info", meta, "info", payload.source || "Info");
         return;
@@ -264,11 +315,73 @@ actionForm.addEventListener("submit", async (evt) => {
         closePrompt();
         return;
     }
+
+    // specjalny flow dla wyboru akcji z potwierdzeniem
+    if (layoutMode === "action_select" && !confirmMode) {
+        storedSelection = actionAnswer.value.trim();
+        if (!storedSelection) return;
+        // przejście do potwierdzenia
+        confirmMode = true;
+        actionTitle.textContent = storedSelection;
+        actionText.textContent = activePrompt.action_desc || activePrompt.desc || "Potwierdź tę akcję.";
+        actionAnswer.classList.add("input-hidden");
+        actionChoices.innerHTML = "";
+        const confirmChoices = normalizeChoices({
+            choices: ["Accept", "Decline"],
+            choice_meta: [
+                { raw: "Accept", label: "Accept", desc: "Zatwierdź i procesuj.", key: "+" },
+                { raw: "Decline", label: "Decline", desc: "Wróć do wyboru akcji.", key: "-" },
+            ],
+        });
+        currentChoices = confirmChoices.map((c) => c.raw);
+        choiceMeta = confirmChoices;
+        selectedChoiceIndex = 0;
+        confirmChoices.forEach((c, idx) => {
+            const pill = document.createElement("div");
+            pill.className = "choice-pill";
+            pill.innerHTML =
+                '<div class="label">' +
+                (c.label || "") +
+                "</div>" +
+                (c.desc ? '<div class="desc">' + c.desc + "</div>" : "");
+            pill.addEventListener("click", () => selectChoice(idx));
+            actionChoices.appendChild(pill);
+        });
+        updateChoiceHighlight();
+        updateChoiceDesc();
+        return;
+    }
+
+    if (layoutMode === "action_select" && confirmMode) {
+        const choice = currentChoices[selectedChoiceIndex] || "Decline";
+        if (choice.toLowerCase().startsWith("decline")) {
+            // reset do wyboru akcji, czysty filtr
+            confirmMode = false;
+            storedSelection = "";
+            actionChoices.innerHTML = "";
+            actionDesc.textContent = "";
+            actionAnswer.value = "";
+            actionAnswer.classList.remove("input-hidden");
+            actionAnswer.placeholder = "Nazwa akcji...";
+            currentChoices = [];
+            choiceMeta = [];
+            selectedChoiceIndex = -1;
+            return;
+        }
+        // Accept — zwracamy wpisaną akcję
+        await sendPromptAnswer(storedSelection);
+        return;
+    }
+
     let answer = actionAnswer.value.trim();
     if (!answer && currentChoices.length > 0 && selectedChoiceIndex >= 0) {
         answer = currentChoices[selectedChoiceIndex];
     }
     if (!answer) return;
+    await sendPromptAnswer(answer);
+});
+
+async function sendPromptAnswer(answer) {
     try {
         await fetch(`/api/prompts/${activePrompt.id}/response`, {
             method: "POST",
@@ -280,7 +393,7 @@ actionForm.addEventListener("submit", async (evt) => {
     } catch (err) {
         console.error(err);
     }
-});
+}
 
 document.addEventListener("keydown", (evt) => {
     // scenario wybór w menu
@@ -306,6 +419,21 @@ document.addEventListener("keydown", (evt) => {
     }
 
     if (!activePrompt) return;
+    if (layoutMode === "action_select" && confirmMode && evt.key === "Escape") {
+        evt.preventDefault();
+        // manual decline -> reset filtra
+        confirmMode = false;
+        storedSelection = "";
+        actionChoices.innerHTML = "";
+        actionDesc.textContent = "";
+        actionAnswer.value = "";
+        actionAnswer.classList.remove("input-hidden");
+        actionAnswer.placeholder = "Nazwa akcji...";
+        currentChoices = [];
+        choiceMeta = [];
+        selectedChoiceIndex = -1;
+        return;
+    }
     if (activePrompt.kind === "info") {
         if (evt.key === "Enter") {
             evt.preventDefault();
@@ -368,32 +496,74 @@ document.addEventListener("keydown", (evt) => {
 function openPrompt(prompt) {
     activePrompt = prompt;
     renderedPrompts.add(prompt.id);
-    actionTitle.textContent = prompt.prompt || "Akcja";
-    actionText.textContent = prompt.source ? `Źródło: ${prompt.source}` : "";
+    layoutMode = prompt.layout || prompt.kind || "info";
+    confirmMode = false;
+    storedSelection = "";
+    actionTitle.textContent = prompt.title || prompt.prompt || "Akcja";
+    actionText.textContent = prompt.subtitle || (prompt.source ? `Źródło: ${prompt.source}` : "");
+    const promptBody = prompt.prompt_long || (layoutMode === "dialog" ? prompt.prompt : "");
+    actionPrompt.textContent = promptBody || "";
+    actionPrompt.classList.toggle("hidden", !promptBody);
+    setIllustration(prompt.image);
     actionKind.textContent = prompt.kind || "prompt";
     actionKind.classList.toggle("hidden", !prompt.kind);
     actionSource.textContent = prompt.source ? `Źródło: ${prompt.source}` : "";
     actionSource.classList.toggle("hidden", !prompt.source);
     actionChoices.innerHTML = "";
+    actionDesc.textContent = "";
+    clearMods();
+
     const normalized = normalizeChoices(prompt);
     currentChoices = normalized.map((c) => c.raw);
     choiceMeta = normalized;
     selectedChoiceIndex = normalized.length ? 0 : -1;
-    normalized.forEach((c, idx) => {
-        const pill = document.createElement("div");
-        pill.className = "choice-pill";
-        pill.textContent = c.label;
-        pill.addEventListener("click", () => {
-            selectChoice(idx);
+
+    const ensureChoiceList = (list) => {
+        list.forEach((c, idx) => {
+            const pill = document.createElement("div");
+            pill.className = "choice-pill";
+            pill.innerHTML =
+                '<div class="label">' +
+                (c.label || "") +
+                "</div>" +
+                (c.desc ? '<div class="desc">' + c.desc + "</div>" : "");
+            pill.addEventListener("click", () => {
+                selectChoice(idx);
+            });
+            actionChoices.appendChild(pill);
         });
-        actionChoices.appendChild(pill);
-    });
-    if (prompt.kind === "info") {
+    };
+
+    if (layoutMode === "dialog" || layoutMode === "interact") {
+        ensureChoiceList(normalized);
+        actionAnswer.value = normalized[0]?.raw || "";
+        actionAnswer.classList.add("input-hidden");
+        actionAnswer.required = false;
+        updateChoiceHighlight();
+        updateChoiceDesc();
+    } else if (layoutMode === "action_select") {
+        // pierwszy krok: wpisz nazwę akcji
+        actionTitle.textContent = prompt.title || "Wybierz akcję";
+        actionText.textContent = prompt.subtitle || "Wpisz nazwę akcji i Enter.";
+        actionAnswer.placeholder = "Nazwa akcji...";
+        actionAnswer.value = "";
+        actionAnswer.required = true;
+        actionAnswer.classList.remove("input-hidden");
+    } else if (layoutMode === "test" || layoutMode === "damage") {
+        actionAnswer.placeholder = prompt.answer_placeholder || "Podaj wynik (liczba)...";
+        actionAnswer.value = "";
+        actionAnswer.required = true;
+        actionAnswer.classList.remove("input-hidden");
+        if (prompt.modifiers) {
+            renderMods(prompt.modifiers);
+        }
+    } else if (prompt.kind === "info") {
         actionAnswer.value = "";
         actionAnswer.placeholder = "Enter aby zamknąć";
         actionAnswer.required = false;
         actionAnswer.classList.add("input-hidden");
     } else if (normalized.length > 0) {
+        ensureChoiceList(normalized);
         actionAnswer.value = normalized[0].raw;
         actionAnswer.classList.add("input-hidden");
         actionAnswer.required = false;
@@ -410,11 +580,17 @@ function openPrompt(prompt) {
 
 function closePrompt() {
     activePrompt = null;
+    confirmMode = false;
+    storedSelection = "";
+    layoutMode = "info";
     actionForm.classList.add("hidden");
     actionChoices.innerHTML = "";
     actionDesc.textContent = "";
+    actionPrompt.textContent = "";
+    actionPrompt.classList.add("hidden");
     actionTitle.textContent = "Czekam na działania...";
     actionText.textContent = "";
+    clearMods();
     processPromptQueue();
 }
 
@@ -427,7 +603,13 @@ function processPromptQueue() {
 
 function selectChoice(idx) {
     if (idx < 0 || idx >= currentChoices.length) return;
-    selectedChoiceIndex = idx;
+    if (selectedChoiceIndex === idx) {
+        // toggle expansion
+        choiceMeta[idx].expanded = !choiceMeta[idx].expanded;
+    } else {
+        selectedChoiceIndex = idx;
+        choiceMeta = choiceMeta.map((c, i) => ({ ...c, expanded: i === idx ? true : c.expanded && i === idx }));
+    }
     actionAnswer.value = currentChoices[idx];
     updateChoiceHighlight();
     updateChoiceDesc();
@@ -436,20 +618,20 @@ function selectChoice(idx) {
 function updateChoiceHighlight() {
     const pills = actionChoices.querySelectorAll(".choice-pill");
     pills.forEach((pill, i) => {
-        if (i === selectedChoiceIndex) {
-            pill.classList.add("selected");
-        } else {
-            pill.classList.remove("selected");
-        }
+        const isSelected = i === selectedChoiceIndex;
+        const isExpanded = choiceMeta[i]?.expanded;
+        pill.classList.toggle("selected", isSelected);
+        pill.classList.toggle("expanded", isExpanded);
     });
 }
 
 function updateChoiceDesc() {
-    if (selectedChoiceIndex < 0 || selectedChoiceIndex >= choiceMeta.length) {
+    const idx = choiceMeta.findIndex((c) => c.expanded);
+    if (idx === -1) {
         actionDesc.textContent = "";
         return;
     }
-    actionDesc.textContent = choiceMeta[selectedChoiceIndex].desc || "";
+    actionDesc.textContent = choiceMeta[idx].desc || "";
 }
 
 function statusTone(name = "") {
@@ -462,6 +644,15 @@ function statusTone(name = "") {
 }
 
 function normalizeChoices(prompt) {
+    // prefer structured choice_meta if provided
+    if (Array.isArray(prompt.choice_meta) && prompt.choice_meta.length) {
+        return prompt.choice_meta.map((c) => ({
+            raw: c.raw || c.label || "",
+            label: c.label || c.raw || "",
+            desc: c.desc || "",
+            key: c.key || "",
+        }));
+    }
     const rawChoices = Array.isArray(prompt.choices) ? prompt.choices : [];
     const cardMap = {
         accept: "+",

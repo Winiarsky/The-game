@@ -77,8 +77,11 @@ class InteractableMixin:
 
         ui = getattr(game, "ui", None)
         if ui and ui.enabled:
-            choices = [f"{idx}: {act.label}" for idx, act in enumerate(actions, start=1)]
-            ans = ui.prompt_choice("Wybierz akcję (numer lub nazwa): ", choices=choices, source="interaction")
+            ans = ui.prompt_action_select(
+                title="Wybierz akcję",
+                subtitle="Wpisz nazwę akcji i potwierdź Enterem.",
+                source="interaction",
+            )
             if ans:
                 normalized = ans.strip()
                 # numer z listy

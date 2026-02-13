@@ -59,20 +59,28 @@ class AcidSplashEvent(BaseMagicAttackEvent):
         )
 
     def _prompt_damage(self) -> int:
-        from GameObjects.interactions_mixin import prompt_for_roll
+        from ui_client import get_ui_client
 
-        try:
-            return int(prompt_for_roll("Acid Splash – podaj obrażenia kwasowe: "))
-        except Exception:
-            return 0
+        ui = get_ui_client()
+        val = ui.prompt_roll(
+            "Acid Splash – podaj obrażenia kwasowe:",
+            source="game",
+            layout="damage",
+            answer_placeholder="Obrażenia kwasowe",
+        )
+        return int(val or 0)
 
     def _prompt_persistent(self) -> int:
-        from GameObjects.interactions_mixin import prompt_for_roll
+        from ui_client import get_ui_client
 
-        try:
-            return int(prompt_for_roll("Krytyk! Podaj wartość persistent acid: "))
-        except Exception:
-            return 0
+        ui = get_ui_client()
+        val = ui.prompt_roll(
+            "Krytyk! Podaj wartość persistent acid:",
+            source="game",
+            layout="damage",
+            answer_placeholder="Persistent acid",
+        )
+        return int(val or 0)
 
     def _apply_damage(self, target, amount: int, damage_type: str) -> bool:
         defeated = False

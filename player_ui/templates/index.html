@@ -59,19 +59,38 @@
                         <div class="panel-body action-body">
                             <div class="action-illustration" id="action-illustration"></div>
                             <div class="action-content">
-                                <div class="action-badges">
-                                    <span class="badge" id="action-kind"></span>
-                                    <span class="badge" id="action-source"></span>
-                                </div>
-                                <div class="action-title" id="action-title">Czekam na działania...</div>
-                                <div class="action-text" id="action-text"></div>
-                                <div class="action-choices" id="action-choices"></div>
-                                <div class="action-desc" id="action-desc"></div>
-                                <form id="action-form" class="action-form">
-                                    <input type="text" id="action-answer" autocomplete="off" placeholder="Wpisz odpowiedź lub wybierz kartę..." />
-                                    <button type="submit">OK</button>
-                                </form>
+                            <div class="action-badges">
+                                <span class="badge" id="action-kind"></span>
+                                <span class="badge" id="action-source"></span>
                             </div>
+                            <div class="action-title" id="action-title">Czekam na działania...</div>
+                            <div class="action-text" id="action-text"></div>
+                            <div class="action-prompt" id="action-prompt"></div>
+                            <div class="action-mods hidden" id="action-mods">
+                                <div class="mods-col">
+                                    <div class="mods-head">Penalties · Circumstances</div>
+                                    <ul id="mods-pen-circ" class="mods-list"></ul>
+                                </div>
+                                <div class="mods-col">
+                                    <div class="mods-head">Bonuses · Circumstances</div>
+                                    <ul id="mods-bon-circ" class="mods-list"></ul>
+                                </div>
+                                <div class="mods-col">
+                                    <div class="mods-head">Penalties · Status</div>
+                                    <ul id="mods-pen-stat" class="mods-list"></ul>
+                                </div>
+                                <div class="mods-col">
+                                    <div class="mods-head">Bonuses · Status</div>
+                                    <ul id="mods-bon-stat" class="mods-list"></ul>
+                                </div>
+                            </div>
+                            <div class="action-choices" id="action-choices"></div>
+                            <div class="action-desc" id="action-desc"></div>
+                            <form id="action-form" class="action-form">
+                                <input type="text" id="action-answer" autocomplete="off" placeholder="Wpisz odpowiedź lub wybierz kartę..." />
+                                <button type="submit">OK</button>
+                            </form>
+                        </div>
                         </div>
                     </div>
                 </div>

@@ -100,25 +100,62 @@ class UIClient:
             logger.warning("Nie udało się wysłać eventu do UI: %s", exc)
             return False
 
-    def prompt_roll(self, prompt: str, source: str | None = None) -> Optional[int]:
-        """Wyślij prompt na rzut i poczekaj na odpowiedź z UI."""
-        if not self.enabled:
-            return None
-        prompt_id = self._create_prompt(prompt, source=source)
-        if prompt_id is None:
-            return None
-        return self._wait_for_answer(prompt_id, max_wait=self.max_wait)
+    def prompt_roll(self, prompt: str, source: str | None = None, **extra) -> Optional[int]:
+        """Wyślij prompt na rzut; jeśli UI wyłączone lub błąd – fallback na CLI."""
+        if self.enabled:
+            prompt_id = self._create_prompt(prompt, source=source, **extra)
+            if prompt_id is not None:
+                ans = self._wait_for_answer(prompt_id, max_wait=self.max_wait)
+                if isinstance(ans, int):
+                    return ans
+        # fallback CLI
+        return self._prompt_cli_int(prompt)
 
     def prompt_choice(
-        self, prompt: str, choices: list[str] | None = None, source: str | None = None
+        self,
+        prompt: str,
+        choices: list[str] | None = None,
+        source: str | None = None,
+        **extra,
     ) -> Optional[str]:
-        """Wyślij prompt tekstowy z opcjonalną listą wyboru, zwróć odpowiedź."""
-        if not self.enabled:
+        """Wyślij prompt tekstowy z opcjonalną listą wyboru; fallback na CLI."""
+        if self.enabled:
+            prompt_id = self._create_prompt(prompt, kind="choice", source=source, choices=choices, **extra)
+            if prompt_id is not None:
+                ans = self._wait_for_text_answer(prompt_id, max_wait=self.max_wait)
+                if ans is not None:
+                    return ans
+        return self._prompt_cli_choice(prompt, choices)
+
+    def prompt_action_select(
+        self,
+        title: str = "Wybierz akcję",
+        subtitle: str | None = None,
+        source: str | None = None,
+        image: str | None = None,
+        action_desc: str | None = None,
+    ) -> Optional[str]:
+        """Specjalny prompt na wybór akcji z potwierdzeniem."""
+        if self.enabled:
+            prompt_id = self._create_prompt(
+                title,
+                kind="choice",
+                source=source,
+                layout="action_select",
+                title=title,
+                subtitle=subtitle,
+                image=image,
+                action_desc=action_desc,
+            )
+            if prompt_id is not None:
+                ans = self._wait_for_text_answer(prompt_id, max_wait=self.max_wait)
+                if ans is not None:
+                    return ans
+        # fallback na prosty input
+        try:
+            return input(f"{title} (wpisz nazwę akcji): ").strip() or None
+        except Exception:
             return None
-        prompt_id = self._create_prompt(prompt, kind="choice", source=source, choices=choices)
-        if prompt_id is None:
-            return None
-        return self._wait_for_text_answer(prompt_id, max_wait=self.max_wait)
 
     # --- Helpers ---
 
@@ -128,6 +165,7 @@ class UIClient:
         source: str | None = None,
         kind: str = "roll",
         choices: list[str] | None = None,
+        **extra,
     ) -> Optional[str]:
         try:
             resp = requests.post(
@@ -137,6 +175,7 @@ class UIClient:
                     "kind": kind,
                     "source": source,
                     "choices": choices or None,
+                    **extra,
                 },
                 timeout=self.request_timeout,
             )
@@ -146,6 +185,34 @@ class UIClient:
         except Exception as exc:  # pragma: no cover - fallback na CLI
             logger.warning("Nie udało się utworzyć promptu w UI: %s", exc)
             return None
+
+    # --- CLI fallbacks ---
+
+    @staticmethod
+    def _prompt_cli_int(prompt: str) -> Optional[int]:
+        while True:
+            try:
+                raw = input(prompt).strip()
+            except Exception:
+                return None
+            if not raw:
+                continue
+            try:
+                return int(raw)
+            except ValueError:
+                continue
+
+    @staticmethod
+    def _prompt_cli_choice(prompt: str, choices: list[str] | None = None) -> Optional[str]:
+        if choices:
+            print(prompt)
+            for idx, ch in enumerate(choices, start=1):
+                print(f"{idx}. {ch}")
+        try:
+            raw = input(prompt + " ").strip()
+        except Exception:
+            return None
+        return raw or None
 
     def _wait_for_answer(self, prompt_id: str, *, max_wait: Optional[float] = None) -> Optional[int]:
         url = f"{self.base_url}/api/prompts/{prompt_id}"
