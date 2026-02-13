@@ -11,6 +11,7 @@ if str(SRC_ROOT) not in sys.path:
 
 from combat.reactions import OpportunityAttack, dispatch_reactions
 from GameObjects.interactions_mixin.reactive_mixin import ReactiveMixin
+from statuses import OPPORTUNITY_ATTACK_STATUS
 
 
 class FakeBoard:
@@ -62,6 +63,7 @@ class DummyHero(ReactiveMixin):
         self.attack_bonus = attack_bonus
         self.wounds = 0
         self.reactions = [OpportunityAttack()]
+        self.statuses = [OPPORTUNITY_ATTACK_STATUS]
 
     def consume_reaction(self):
         super().consume_reaction()
@@ -80,6 +82,7 @@ class DummyEnemy(ReactiveMixin):
         self.strength = strength
         self.reactions = [OpportunityAttack()]
         self.wounds = 0
+        self.statuses = [OPPORTUNITY_ATTACK_STATUS]
 
     def apply_damage(self, amt, _type):
         self.hp -= amt

@@ -55,8 +55,14 @@ STUBBORN_STATUS = Status(
     ],
 )
 
+OPPORTUNITY_ATTACK_STATUS = Status(
+    id="opportunity_attack",
+    label="Atak okazyjny",
+)
+
 __all__ = [
     "NOBLE_PERSON_STATUS",
     "SILVER_TONGUE_STATUS",
     "STUBBORN_STATUS",
+    "OPPORTUNITY_ATTACK_STATUS",
 ]

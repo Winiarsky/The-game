@@ -12,6 +12,19 @@ from .base import Reaction
 logger = logging.getLogger(__name__)
 
 
+def _has_status(actor, status_id: str) -> bool:
+    """Sprawdź status zarówno przez has_status, jak i listę statuses."""
+    if hasattr(actor, "has_status"):
+        try:
+            return bool(actor.has_status(status_id))
+        except Exception:
+            return False
+    statuses = getattr(actor, "statuses", None)
+    if isinstance(statuses, list):
+        return any(getattr(s, "id", s) == status_id for s in statuses)
+    return False
+
+
 def _is_leaving_reach(event: dict[str, Any]) -> bool:
     if event.get("leaving_reach"):
         return True
@@ -34,6 +47,8 @@ class OpportunityAttack(Reaction):
     label: str = "Atak okazyjny"
 
     def triggers(self, actor, event: dict[str, Any]) -> bool:
+        if not _has_status(actor, "opportunity_attack"):
+            return False
         target = event.get("actor")
         if target is None or target is actor:
             return False
