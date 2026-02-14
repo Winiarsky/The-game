@@ -3,6 +3,9 @@
 <head>
     <meta charset="utf-8">
     <title>Boardgame Player UI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Text:wght@400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
@@ -29,81 +32,94 @@
 
         <section id="screen-game" class="screen hidden">
             <div class="game-layout">
-                <div class="initiative-bar">
-                    <div id="initiative-summary" class="initiative-summary hidden">
-                        <div class="init-active">
-                            <div class="label">Aktywny</div>
-                            <div id="init-active-name" class="value">-</div>
-                        </div>
-                        <div class="init-next">
-                            <div class="label">Następny</div>
-                            <div id="init-next-name" class="value">-</div>
-                        </div>
-                        <div class="init-round">
-                            <div class="label">Runda</div>
-                            <div id="init-round-num" class="value">-</div>
+                <aside class="side-column">
+                    <div class="panel initiative-panel">
+                        <div class="panel-header">Inicjatywa</div>
+                        <div class="panel-body">
+                            <div id="initiative-summary" class="initiative-summary hidden">
+                                <div class="init-active">
+                                    <div class="label">Aktywny</div>
+                                    <div id="init-active-name" class="value">-</div>
+                                </div>
+                                <div class="init-next">
+                                    <div class="label">Następny</div>
+                                    <div id="init-next-name" class="value">-</div>
+                                </div>
+                                <div class="init-round">
+                                    <div class="label">Runda</div>
+                                    <div id="init-round-num" class="value">-</div>
+                                </div>
+                            </div>
+                            <div id="initiative-list" class="initiative-list empty-note">Brak danych o inicjatywie.</div>
                         </div>
                     </div>
-                    <div id="initiative-list" class="initiative-list empty-note">Brak danych o inicjatywie.</div>
-                </div>
 
-                <div class="main-area">
                     <div class="panel heroes-panel">
                         <div class="panel-header">Bohaterowie</div>
                         <div class="panel-body">
                             <div id="heroes-list" class="heroes-list"></div>
                         </div>
                     </div>
+                </aside>
 
+                <main class="center-column">
                     <div class="panel action-panel">
                         <div class="panel-body action-body">
                             <div class="action-illustration" id="action-illustration"></div>
                             <div class="action-content">
-                            <div class="action-badges">
-                                <span class="badge" id="action-kind"></span>
-                                <span class="badge" id="action-source"></span>
+                                <div class="action-badges">
+                                    <span class="badge" id="action-kind"></span>
+                                    <span class="badge" id="action-source"></span>
+                                </div>
+                                <div class="action-title" id="action-title">Czekam na działania...</div>
+                                <div class="action-separator"></div>
+                                <div class="action-text" id="action-text"></div>
+                                <div class="action-prompt" id="action-prompt"></div>
+                                <div class="action-mods hidden" id="action-mods">
+                                    <div class="mods-col">
+                                        <div class="mods-head">Penalties · Circumstances</div>
+                                        <ul id="mods-pen-circ" class="mods-list"></ul>
+                                    </div>
+                                    <div class="mods-col">
+                                        <div class="mods-head">Bonuses · Circumstances</div>
+                                        <ul id="mods-bon-circ" class="mods-list"></ul>
+                                    </div>
+                                    <div class="mods-col">
+                                        <div class="mods-head">Penalties · Status</div>
+                                        <ul id="mods-pen-stat" class="mods-list"></ul>
+                                    </div>
+                                    <div class="mods-col">
+                                        <div class="mods-head">Bonuses · Status</div>
+                                        <ul id="mods-bon-stat" class="mods-list"></ul>
+                                    </div>
+                                </div>
+                                <div class="action-choices" id="action-choices"></div>
+                                <div class="action-desc" id="action-desc"></div>
+                                <form id="action-form" class="action-form">
+                                    <input type="text" id="action-answer" autocomplete="off" placeholder="Wpisz odpowiedź lub wybierz kartę..." />
+                                    <button type="submit">OK</button>
+                                </form>
                             </div>
-                            <div class="action-title" id="action-title">Czekam na działania...</div>
-                            <div class="action-text" id="action-text"></div>
-                            <div class="action-prompt" id="action-prompt"></div>
-                            <div class="action-mods hidden" id="action-mods">
-                                <div class="mods-col">
-                                    <div class="mods-head">Penalties · Circumstances</div>
-                                    <ul id="mods-pen-circ" class="mods-list"></ul>
-                                </div>
-                                <div class="mods-col">
-                                    <div class="mods-head">Bonuses · Circumstances</div>
-                                    <ul id="mods-bon-circ" class="mods-list"></ul>
-                                </div>
-                                <div class="mods-col">
-                                    <div class="mods-head">Penalties · Status</div>
-                                    <ul id="mods-pen-stat" class="mods-list"></ul>
-                                </div>
-                                <div class="mods-col">
-                                    <div class="mods-head">Bonuses · Status</div>
-                                    <ul id="mods-bon-stat" class="mods-list"></ul>
-                                </div>
-                            </div>
-                            <div class="action-choices" id="action-choices"></div>
-                            <div class="action-desc" id="action-desc"></div>
-                            <form id="action-form" class="action-form">
-                                <input type="text" id="action-answer" autocomplete="off" placeholder="Wpisz odpowiedź lub wybierz kartę..." />
-                                <button type="submit">OK</button>
-                            </form>
-                        </div>
                         </div>
                     </div>
-                </div>
+                </main>
+
             </div>
         </section>
     </div>
 
     <div id="path-toast" class="toast hidden"></div>
 
-    <div id="log-drawer" class="log-drawer collapsed">
-        <button id="log-toggle" class="log-toggle" title="Pokaż logi">Log</button>
-        <div class="log-last" id="log-last">Logi będą tu widoczne.</div>
-        <ul id="log-list" class="log-list"></ul>
+    <button id="log-fab" class="log-fab" title="Pokaż logi">Log</button>
+    <div id="log-modal" class="log-modal hidden" role="dialog" aria-modal="true">
+        <div class="log-modal-body">
+            <div class="log-modal-header">
+                <div class="log-modal-title">Logi</div>
+                <button id="log-close" class="log-close" title="Zamknij">✕</button>
+            </div>
+            <div class="log-last" id="log-last">Logi będą tu widoczne.</div>
+            <ul id="log-list" class="log-list"></ul>
+        </div>
     </div>
 
     <script src="{{ url_for('static', filename='app.js') }}"></script>

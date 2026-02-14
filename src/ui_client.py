@@ -157,6 +157,34 @@ class UIClient:
         except Exception:
             return None
 
+    def prompt_info(
+        self,
+        title: str,
+        *,
+        prompt_long: str | None = None,
+        source: str | None = None,
+        image: str | None = None,
+    ) -> Optional[str]:
+        """Pokaż informację i poczekaj na potwierdzenie (Enter)."""
+        if self.enabled:
+            prompt_id = self._create_prompt(
+                title,
+                kind="info",
+                source=source,
+                layout="info",
+                title=title,
+                prompt_long=prompt_long,
+                image=image,
+            )
+            if prompt_id is not None:
+                return self._wait_for_text_answer(prompt_id, max_wait=self.max_wait)
+        # fallback CLI
+        try:
+            input(f"{title} (Enter aby kontynuować) ")
+        except Exception:
+            return None
+        return "ok"
+
     # --- Helpers ---
 
     def _create_prompt(

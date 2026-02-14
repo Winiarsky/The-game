@@ -309,3 +309,10 @@ class Game:
             "initiative": getattr(hero, "initiative", None),
         }
         self.ui_event("hero", payload)
+
+    def ui_idle_hint(self, title: str, text: str | None = None) -> None:
+        """Wyślij wskazówkę do UI dla stanu bez aktywnego promptu."""
+        payload: dict[str, Any] = {"title": title}
+        if text:
+            payload["text"] = text
+        self.ui_event("idle_hint", payload)

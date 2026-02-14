@@ -4,6 +4,7 @@ import logging
 
 from board import consts
 from GameObjects.interactions_mixin.skill_check_resolver import resolve_skill_check_with_sources
+from ui_client import get_ui_client
 from skills import Skill
 
 from .base import EventContext, EventResult, GameEvent
@@ -80,6 +81,7 @@ class SeekEvent(GameEvent):
             return EventResult.noop(message="Krytyczna porażka – pokoje zablokowane.")
 
         newly_revealed_positions: set[tuple[int, int]] = set()
+        reveal_notes: list[str] = []
         hidden_candidates = 0
         revealed_count = 0
 
@@ -98,6 +100,13 @@ class SeekEvent(GameEvent):
                 if not was_revealed and getattr(obj, "revealed", False):
                     newly_revealed_positions.add(pos)
                     revealed_count += 1
+                    desc = (
+                        getattr(obj, "description_on_reveal", None)
+                        or getattr(obj, "reveal_description", None)
+                        or getattr(obj, "description", None)
+                    )
+                    if desc:
+                        reveal_notes.append(str(desc))
                     logger.info("Odkrywasz %s na polu %s.", obj.__class__.__name__, pos)
 
         if hidden_candidates == 0:
@@ -123,12 +132,20 @@ class SeekEvent(GameEvent):
             count=revealed_count,
         )
         game.conn.set_leds(list(newly_revealed_positions), consts.HIDDEN_REVEAL_RGB)
-        time_to_show = getattr(consts, "SEEK_REVEAL_SECONDS", 3)
-        try:
-            import time
+        info_text = "Odkryto ukryte obiekty."
+        if reveal_notes:
+            info_text = "Odkryto:\n" + "\n".join(reveal_notes)
+        ui = get_ui_client()
+        if ui.enabled:
+            ui.prompt_info("Odkryto coś!", prompt_long=info_text, source="seek")
+        else:
+            time_to_show = getattr(consts, "SEEK_REVEAL_SECONDS", 3)
+            try:
+                import time
 
-            time.sleep(time_to_show)
-        finally:
-            game.conn.leds_off()
+                time.sleep(time_to_show)
+            finally:
+                pass
+        game.conn.leds_off()
 
         return EventResult(success=True, consumed_action=self.consumes_action, message="Przeszukiwanie wykonane.")

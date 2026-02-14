@@ -73,6 +73,15 @@ class MoveEvent(GameEvent):
         if moving_hero is None or getattr(moving_hero, "position", None) is None:
             return EventResult.cancelled(message="Nie wybrano bohatera do ruchu.")
 
+        # hint w UI: wybór celu i tworzenie ścieżki
+        try:
+            game.ui_idle_hint(
+                "Wybierz pole docelowe",
+                "Kliknij pole, aby utworzyć ścieżkę ruchu.",
+            )
+        except Exception:
+            pass
+
         # zdejmij stealth przy jawnym ruchu
         if getattr(moving_hero, "has_status", lambda _s: False)(STEALTH_STATUS):
             moving_hero.remove_status(STEALTH_STATUS)  # type: ignore[attr-defined]
@@ -314,6 +323,13 @@ class MoveEvent(GameEvent):
                     active_path_id = path_id
                     preview_msg = f"Ścieżka do {target}: {steps} pól / {feet} stóp. Kliknij cel ponownie, aby potwierdzić."
                     game.ui_event("path_preview", {"id": path_id, "steps": steps, "feet": feet, "target": target})
+                    try:
+                        game.ui_idle_hint(
+                            "Potwierdź ruch",
+                            "Kliknij pole docelowe, aby wykonać ruch lub inne pole, aby ustawić nową ścieżkę.",
+                        )
+                    except Exception:
+                        pass
                     logger.info(preview_msg)
                     leds_positions = [moving_hero.position] + path_preview
                     leds_colors = [consts.MOVE_START_RGB]

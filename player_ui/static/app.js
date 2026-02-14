@@ -2,8 +2,9 @@ const screenMenu = document.getElementById("screen-menu");
 const screenGame = document.getElementById("screen-game");
 const logList = document.getElementById("log-list");
 const logLast = document.getElementById("log-last");
-const logDrawer = document.getElementById("log-drawer");
-const logToggle = document.getElementById("log-toggle");
+const logFab = document.getElementById("log-fab");
+const logModal = document.getElementById("log-modal");
+const logClose = document.getElementById("log-close");
 const heroesList = document.getElementById("heroes-list");
 const initiativeList = document.getElementById("initiative-list");
 const initiativeSummary = document.getElementById("initiative-summary");
@@ -167,6 +168,13 @@ function handleEvent(event) {
         addLogEntry(payload.text || payload.message || "Info", meta, "info", payload.source || "Info");
         return;
     }
+    if (type === "idle_hint") {
+        if (!activePrompt) {
+            actionTitle.textContent = payload.title || "Czekam na działania...";
+            actionText.textContent = payload.text || "";
+        }
+        return;
+    }
     if (type === "prompt_answered") {
         addLogEntry(`Rzut rozstrzygnięty (${payload.prompt || ""}): ${payload.answer}`, meta, "success", "Rzut");
         if (activePrompt && String(activePrompt.id) === String(payload.id)) {
@@ -278,15 +286,15 @@ if (scenarioButtons.length) {
     highlightScenario(scenarioIndex);
 }
 
-if (logToggle && logDrawer) {
-    logToggle.addEventListener("click", () => {
-        logDrawer.classList.toggle("collapsed");
+if (logFab && logModal) {
+    logFab.addEventListener("click", () => {
+        logModal.classList.toggle("hidden");
     });
-    if (logLast) {
-        logLast.addEventListener("click", () => {
-            logDrawer.classList.toggle("collapsed");
-        });
-    }
+}
+if (logClose && logModal) {
+    logClose.addEventListener("click", () => {
+        logModal.classList.add("hidden");
+    });
 }
 
 if (topbarToggle && topbar) {
@@ -312,7 +320,12 @@ actionForm.addEventListener("submit", async (evt) => {
     evt.preventDefault();
     if (!activePrompt) return;
     if (activePrompt.kind === "info") {
-        closePrompt();
+        const infoId = String(activePrompt.id || "");
+        if (infoId.startsWith("info-")) {
+            closePrompt();
+            return;
+        }
+        await sendPromptAnswer("ok");
         return;
     }
 
@@ -340,7 +353,9 @@ actionForm.addEventListener("submit", async (evt) => {
             const pill = document.createElement("div");
             pill.className = "choice-pill";
             pill.innerHTML =
-                '<div class="label">' +
+                '<div class="label"><span class="key">' +
+                (c.key || String(idx + 1)) +
+                "</span>" +
                 (c.label || "") +
                 "</div>" +
                 (c.desc ? '<div class="desc">' + c.desc + "</div>" : "");
@@ -396,6 +411,10 @@ async function sendPromptAnswer(answer) {
 }
 
 document.addEventListener("keydown", (evt) => {
+    if (evt.key === "Escape" && logModal && !logModal.classList.contains("hidden")) {
+        logModal.classList.add("hidden");
+        return;
+    }
     // scenario wybór w menu
     if (!screenMenu.classList.contains("hidden") && screenGame.classList.contains("hidden")) {
         if (evt.key === "ArrowDown" || evt.key === "ArrowRight") {
@@ -437,7 +456,12 @@ document.addEventListener("keydown", (evt) => {
     if (activePrompt.kind === "info") {
         if (evt.key === "Enter") {
             evt.preventDefault();
-            closePrompt();
+            const infoId = String(activePrompt.id || "");
+            if (infoId.startsWith("info-")) {
+                closePrompt();
+            } else {
+                actionForm.dispatchEvent(new Event("submit", { cancelable: true }));
+            }
         }
         return;
     }
@@ -500,15 +524,15 @@ function openPrompt(prompt) {
     confirmMode = false;
     storedSelection = "";
     actionTitle.textContent = prompt.title || prompt.prompt || "Akcja";
-    actionText.textContent = prompt.subtitle || (prompt.source ? `Źródło: ${prompt.source}` : "");
+    actionText.textContent = prompt.subtitle || "";
     const promptBody = prompt.prompt_long || (layoutMode === "dialog" ? prompt.prompt : "");
     actionPrompt.textContent = promptBody || "";
     actionPrompt.classList.toggle("hidden", !promptBody);
     setIllustration(prompt.image);
-    actionKind.textContent = prompt.kind || "prompt";
-    actionKind.classList.toggle("hidden", !prompt.kind);
-    actionSource.textContent = prompt.source ? `Źródło: ${prompt.source}` : "";
-    actionSource.classList.toggle("hidden", !prompt.source);
+    actionKind.textContent = "";
+    actionKind.classList.add("hidden");
+    actionSource.textContent = "";
+    actionSource.classList.add("hidden");
     actionChoices.innerHTML = "";
     actionDesc.textContent = "";
     clearMods();
@@ -523,7 +547,9 @@ function openPrompt(prompt) {
             const pill = document.createElement("div");
             pill.className = "choice-pill";
             pill.innerHTML =
-                '<div class="label">' +
+                '<div class="label"><span class="key">' +
+                (c.key || String(idx + 1)) +
+                "</span>" +
                 (c.label || "") +
                 "</div>" +
                 (c.desc ? '<div class="desc">' + c.desc + "</div>" : "");
@@ -541,6 +567,9 @@ function openPrompt(prompt) {
         actionAnswer.required = false;
         updateChoiceHighlight();
         updateChoiceDesc();
+        actionText.classList.add("hidden");
+        actionPrompt.classList.add("hidden");
+        actionDesc.classList.add("hidden");
     } else if (layoutMode === "action_select") {
         // pierwszy krok: wpisz nazwę akcji
         actionTitle.textContent = prompt.title || "Wybierz akcję";
@@ -586,10 +615,12 @@ function closePrompt() {
     actionForm.classList.add("hidden");
     actionChoices.innerHTML = "";
     actionDesc.textContent = "";
+    actionDesc.classList.remove("hidden");
     actionPrompt.textContent = "";
     actionPrompt.classList.add("hidden");
     actionTitle.textContent = "Czekam na działania...";
     actionText.textContent = "";
+    actionText.classList.remove("hidden");
     clearMods();
     processPromptQueue();
 }
@@ -622,6 +653,9 @@ function updateChoiceHighlight() {
         const isExpanded = choiceMeta[i]?.expanded;
         pill.classList.toggle("selected", isSelected);
         pill.classList.toggle("expanded", isExpanded);
+        if (isSelected) {
+            pill.scrollIntoView({ block: "nearest", inline: "nearest" });
+        }
     });
 }
 
@@ -720,15 +754,21 @@ function renderHeroes() {
     heroes.forEach((hero) => {
         const card = document.createElement("div");
         card.className = "hero-card" + (hero.active ? " active" : "");
+        const heroImg = hero.image || PLACEHOLDER_IMAGE;
         const statuses = hero.statuses && hero.statuses.length
             ? hero.statuses.map((s) => `<span class="status-pill ${statusTone(s)}">${s}</span>`).join("")
             : '<span class="status-pill neutral">brak</span>';
         card.innerHTML = `
-            <div class="hero-name">${hero.name}</div>
-            <div class="hero-stats">Inicjatywa: ${hero.initiative ?? "-"}</div>
-            <div class="hero-statuses">${statuses}</div>
-            <div class="hero-stats">Rany: ${hero.wounds ?? "-"}</div>
-            <div class="hero-notes">${hero.note || ""}</div>
+            <div class="hero-row">
+                <div class="hero-info">
+                    <div class="hero-name">${hero.name}</div>
+                    <div class="hero-stats">Inicjatywa: ${hero.initiative ?? "-"}</div>
+                    <div class="hero-statuses">${statuses}</div>
+                    <div class="hero-stats">Rany: ${hero.wounds ?? "-"}</div>
+                    <div class="hero-notes">${hero.note || ""}</div>
+                </div>
+                <div class="hero-portrait" style="background-image: url('${heroImg}')"></div>
+            </div>
         `;
         heroesList.appendChild(card);
     });
