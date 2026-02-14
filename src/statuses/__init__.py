@@ -3,7 +3,10 @@ from .hide import HideStatus, HIDE_STATUS
 from .flat_footed import FlatFootedStatus, FLAT_FOOTED_STATUS
 from .covered import CoveredStatus, COVERED_STATUS
 from .prone import ProneStatus, PRONE_STATUS, apply_prone_effects, clear_prone_effects
-from .presets import NOBLE_PERSON_STATUS, SILVER_TONGUE_STATUS, STUBBORN_STATUS, OPPORTUNITY_ATTACK_STATUS
+from .noble_person import NOBLE_PERSON_STATUS
+from .silver_tongue import SILVER_TONGUE_STATUS
+from .stubborn import STUBBORN_STATUS
+from .opportunity_attack import OPPORTUNITY_ATTACK_STATUS
 from .in_dark import InDarkStatus, IN_DARK_STATUS
 from .stealth import StealthStatus, STEALTH_STATUS, ObservableStatus, OBSERVABLE_STATUS
 from .persistent_damage import PERSISTENT_DAMAGE_STATUS, make_persistent_damage, process_persistent_damage
