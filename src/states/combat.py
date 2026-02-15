@@ -164,6 +164,12 @@ class Combat(State):
 
     def _clear_start_of_turn_effects(self, actor) -> None:
         """Usuń efekty jednorundowe (np. raise_shield) na początku inicjatywy bohatera."""
+        tick_statuses = getattr(actor, "tick_statuses_turn", None)
+        if callable(tick_statuses):
+            try:
+                tick_statuses()
+            except Exception:
+                logger.debug("Nie udało się odliczyć statusów dla %s", actor)
         if actor in getattr(self.game, "heroes", []):
             tick = getattr(actor, "tick_bonuses_turn", None)
             if callable(tick):

@@ -47,6 +47,7 @@ def _collect_from_statuses(statuses: Iterable[Status], skill_id: str, tags: Sequ
     promote_rules: list[tuple[int, Optional[set[str]]]] = []
     demote_rules: list[tuple[int, Optional[set[str]]]] = []
     notes: list[str] = []
+    consume_statuses: list[Status] = []
     for status in statuses:
         effects: Optional[Sequence[CheckEffect]] = getattr(status, "check_effects", None)
         if not effects:
@@ -56,13 +57,15 @@ def _collect_from_statuses(statuses: Iterable[Status], skill_id: str, tags: Sequ
                 continue
             if not effect.matches(skill_id, tags):
                 continue
+            if getattr(status, "data", None) and status.data.get("consume_on_use"):
+                consume_statuses.append(status)
             bonus_effects.extend(effect.bonus_effects)
             if effect.promote:
                 promote_rules.append((int(effect.promote), set(effect.promote_on) if effect.promote_on else None))
             if effect.demote:
                 demote_rules.append((int(effect.demote), set(effect.demote_on) if effect.demote_on else None))
             notes.extend(effect.prompt_notes)
-    return bonus_effects, promote_rules, demote_rules, notes
+    return bonus_effects, promote_rules, demote_rules, notes, consume_statuses
 
 
 def _format_breakdown(effects: Iterable[BonusEffect], skill_id: str) -> list[str]:
@@ -111,9 +114,9 @@ def resolve_skill_check_with_sources(
         all_effects.extend(bonuses)
 
     # statusy source / target
-    src_effects, promote_src, demote_src, notes_src = _collect_from_statuses(_status_list(actor), skill_id, tags, "source")
+    src_effects, promote_src, demote_src, notes_src, consume_src = _collect_from_statuses(_status_list(actor), skill_id, tags, "source")
     all_effects.extend(src_effects)
-    tgt_effects, promote_tgt, demote_tgt, notes_tgt = _collect_from_statuses(_status_list(target), skill_id, tags, "target") if target else ([], [], [], [])
+    tgt_effects, promote_tgt, demote_tgt, notes_tgt, consume_tgt = _collect_from_statuses(_status_list(target), skill_id, tags, "target") if target else ([], [], [], [], [])
     all_effects.extend(tgt_effects)
 
     modifier = base_modifier + (compute_total_modifier(all_effects, skill_id) if all_effects else 0)
@@ -160,6 +163,21 @@ def resolve_skill_check_with_sources(
         notes=notes,
         breakdown=breakdown,
     )
+
+    # zużyj statusy jednorazowe, jeśli zostały użyte w tym teście
+    try:
+        if consume_src:
+            remover = getattr(actor, "remove_status", None)
+            if callable(remover):
+                for s in consume_src:
+                    remover(s)
+        if consume_tgt and target is not None:
+            remover = getattr(target, "remove_status", None)
+            if callable(remover):
+                for s in consume_tgt:
+                    remover(s)
+    except Exception:
+        pass
 
     try:
         if game and hasattr(game, "ui_log"):

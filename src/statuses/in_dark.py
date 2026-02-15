@@ -5,7 +5,7 @@ from statuses.base import Status
 
 def InDarkStatus() -> Status:
     """Status ciemności – na razie bez efektów (placeholder)."""
-    return Status(id="in_dark", label="In Dark")
+    return Status(id="in_dark", label="In Dark", data={"effect_tags": ["darkness"]})
 
 
 IN_DARK_STATUS = InDarkStatus()

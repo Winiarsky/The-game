@@ -17,6 +17,7 @@ def pick_target_in_range(
     *,
     max_range_feet: int | None,
     allowed_kinds: tuple[str, ...] = ("enemy", "hero"),
+    tags: list[str] | None = None,
 ):
     """Zwróć (target, pos) jeśli gracz wybierze cel w zasięgu i dozwolonego typu.
 
@@ -27,9 +28,13 @@ def pick_target_in_range(
     if not source_pos:
         return None, None
 
+    from GameObjects.events.targeting import is_target_blocked_by_tags
+
     valid: list[tuple[object, tuple[int, int], str, int]] = []
     for obj, pos, kind in candidates:
         if pos is None or kind not in allowed_kinds:
+            continue
+        if is_target_blocked_by_tags(obj, tags):
             continue
         if max_range_feet is not None:
             dist = grid_distance_feet(source_pos, pos)

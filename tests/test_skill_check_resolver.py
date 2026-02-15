@@ -35,7 +35,7 @@ from GameObjects.interactions_mixin.skill_check_resolver import (  # noqa: E402
     resolve_skill_check_with_sources,
 )
 from GameObjects.events.checks import skill_check_event  # noqa: F401  # rejestruje eventy
-from statuses.presets import NOBLE_PERSON_STATUS, SILVER_TONGUE_STATUS, STUBBORN_STATUS  # noqa: E402
+from statuses import NOBLE_PERSON_STATUS, SILVER_TONGUE_STATUS, STUBBORN_STATUS  # noqa: E402
 from GameObjects.NPC.guard_npc import GuardNPC  # noqa: E402
 
 

@@ -10,6 +10,7 @@ from damage_types import DamageType
 from statuses import Status
 
 from .attack_base import AttackEventBase
+from ..targeting import is_target_blocked_by_tags
 from ..base import EventContext, EventResult
 
 logger = logging.getLogger(__name__)
@@ -43,6 +44,8 @@ class BasicMeleeAttackEvent(AttackEventBase):
             pass
 
         candidates = self._adjacent_enemies(ctx.game, hero_pos)
+        tags = self._effective_tags(ctx)
+        candidates = [(enemy, pos) for enemy, pos in candidates if not is_target_blocked_by_tags(enemy, tags)]
         if not candidates:
             logger.info("Brak wrogów na sąsiednich polach.")
             return EventResult(success=False, consumed_action=False, message="Brak wrogów w zasięgu.")

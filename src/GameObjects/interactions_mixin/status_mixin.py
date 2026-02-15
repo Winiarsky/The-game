@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from statuses import Status
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -19,6 +22,30 @@ class StatusMixin:
     """
 
     statuses: list["Status"] = field(default_factory=list)
+
+    def _ui_log(self, message: str) -> None:
+        ui_log = getattr(self, "ui_log", None)
+        if callable(ui_log):
+            ui_log(message)
+            return
+        game = getattr(self, "game", None)
+        if game is not None:
+            game_ui_log = getattr(game, "ui_log", None)
+            if callable(game_ui_log):
+                game_ui_log(message)
+
+    def _status_immunity_blocks(self, incoming: "Status") -> bool:
+        incoming_id = incoming.id
+        incoming_tags = set(getattr(incoming, "data", {}).get("effect_tags", []) or [])
+        for s in self.statuses:
+            data = getattr(s, "data", None) or {}
+            immune_ids = set(data.get("immune_status_ids", []) or [])
+            if incoming_id in immune_ids:
+                return True
+            immune_tags = set(data.get("immune_status_tags", []) or [])
+            if incoming_tags and immune_tags.intersection(incoming_tags):
+                return True
+        return False
 
     def _ensure_status_objects(self) -> None:
         if not self.statuses:
@@ -40,19 +67,36 @@ class StatusMixin:
         if not isinstance(status, Status):
             raise TypeError("add_status oczekuje instancji Status.")
         self._ensure_status_objects()
-        # Cavern Elf: immunitet na InDark
-        if status.id == "in_dark":
-            for s in self.statuses:
-                if s.id == "heritage_cavern_elf":
-                    return False
-                ignore_tags = getattr(s, "data", {}).get("ignore_effect_tags") if hasattr(s, "data") else None
-                if ignore_tags and "dark" in ignore_tags:
-                    return False
+        if self._status_immunity_blocks(status):
+            msg = f"Status '{getattr(status, 'label', status.id)}' zablokowany przez immunitet."
+            logger.info(msg)
+            self._ui_log(msg)
+            return False
         if not getattr(status, "stacks", False):
             if any(s.id == status.id for s in self.statuses):
                 return False
         self.statuses.append(status)
+        self._apply_granted_statuses(status)
         return True
+
+    def _apply_granted_statuses(self, status: "Status") -> None:
+        data = getattr(status, "data", None) or {}
+        grants = data.get("grants_statuses") or data.get("grants_status") or []
+        if not grants:
+            return
+        from statuses import Status  # lokalny import by unikać cykli
+        for granted in grants:
+            if isinstance(granted, Status):
+                if granted.id == status.id:
+                    continue
+                self.add_status(granted)
+            elif isinstance(granted, str):
+                if granted == status.id:
+                    continue
+                try:
+                    self.add_status(Status(id=granted))
+                except Exception:
+                    continue
 
     def remove_status(self, status: str | "Status") -> bool:
         self._ensure_status_objects()
@@ -99,3 +143,27 @@ class StatusMixin:
         """Zwraca listę etykiet (label -> id) do logów/UI."""
         self._ensure_status_objects()
         return [s.display_label for s in self.statuses]
+
+    def tick_statuses_turn(self) -> int:
+        """Zdekrementuj duration statusów; usuń wygasłe."""
+        self._ensure_status_objects()
+        if not self.statuses:
+            return 0
+        remaining: list[Status] = []
+        removed = 0
+        for status in self.statuses:
+            duration = getattr(status, "duration", None)
+            if duration is None:
+                remaining.append(status)
+                continue
+            try:
+                turns = int(duration) - 1
+            except Exception:
+                remaining.append(status)
+                continue
+            if turns <= 0:
+                removed += 1
+                continue
+            remaining.append(replace(status, duration=turns))
+        self.statuses = remaining
+        return removed

@@ -11,6 +11,7 @@ from statuses import Status
 from damage_types import DamageType
 
 from .attack_base import AttackEventBase
+from ..targeting import is_target_blocked_by_tags
 from ..base import EventContext, EventResult
 
 logger = logging.getLogger(__name__)
@@ -54,6 +55,8 @@ class BaseRangeAttackEvent(AttackEventBase):
 
         candidates = [(e, getattr(e, "position", None)) for e in getattr(game, "enemies", [])]
         candidates = [(e, pos) for e, pos in candidates if pos is not None]
+        tags = self._effective_tags(ctx)
+        candidates = [(e, pos) for e, pos in candidates if not is_target_blocked_by_tags(e, tags)]
         if not candidates:
             return EventResult.cancelled(message="Brak wrogów na planszy.")
 

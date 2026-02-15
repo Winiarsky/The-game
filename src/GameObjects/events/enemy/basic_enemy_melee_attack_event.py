@@ -8,6 +8,7 @@ from combat import effective_ac
 from damage_types import DamageType
 
 from ..base import EventContext, EventResult, GameEvent
+from ..targeting import is_target_blocked_by_tags
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,8 @@ class BasicEnemyMeleeAttackEvent(GameEvent):
         enemy_pos = enemy.position
 
         targets = self._adjacent_heroes(game, enemy_pos)
+        tags = self._effective_tags(ctx)
+        targets = [p for p in targets if not is_target_blocked_by_tags(board.occupant_at(p), tags)]
         if not targets:
             return EventResult(success=False, consumed_action=False, message="Brak bohaterów w zasięgu.")
 

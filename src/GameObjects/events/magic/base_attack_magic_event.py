@@ -53,6 +53,7 @@ class BaseMagicAttackEvent(MagicEvent):
             candidates,
             max_range_feet=self.range_feet,
             allowed_kinds=("enemy", "hero") if self.target_kind == "any" else (self.target_kind,),
+            tags=self._effective_tags(ctx),
         )
         if target is None or target_pos is None:
             return EventResult.cancelled(message="Brak celu w zasięgu.")
