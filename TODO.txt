@@ -1,5 +1,7 @@
 - elfy i status z forestem
 - in dark status
 - uzupelnic enum EnemyType o brakujace typy wrogow
+- dodac checkhero actionevent (na koniec)
+- sprawdzic dynamiczne odswiezanie statusow w UI pod hero
 
 TODO: Dodać mechaniki usuwania statusu Poisoned (test medyczny, antidotum itd.).

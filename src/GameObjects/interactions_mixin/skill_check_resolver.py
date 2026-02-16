@@ -4,12 +4,13 @@ import logging
 from dataclasses import dataclass
 from typing import Iterable, List, Optional, Sequence
 
-from bonuses import BonusEffect, aggregate_best_by_type, compute_total_modifier
+from bonuses import BonusEffect, BonusType, aggregate_best_by_type, compute_total_modifier
 from statuses import Status
 from statuses.check_effects import CheckEffect
 from GameObjects.interactions_mixin import resolve_skill_check
 from ui_client import get_ui_client
-from bonuses import BonusType
+from statuses import DARKVISION_STATUS, DIM_LIGHT_VISION_STATUS, IN_DARK_STATUS, IN_DIM_LIGHT_STATUS
+from skills import Skill
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +62,19 @@ def _status_list(obj) -> list[Status]:
             # string -> goła definicja bez efektów
             result.append(Status(id=str(s)))
     return result
+
+
+def _has_status(obj, status) -> bool:
+    if obj is None:
+        return False
+    has_status = getattr(obj, "has_status", None)
+    if callable(has_status):
+        return bool(has_status(status))
+    for item in getattr(obj, "statuses", []) or []:
+        item_id = getattr(item, "id", None)
+        if item_id == status.id or item == status.id:
+            return True
+    return False
 
 
 def _collect_from_statuses(statuses: Iterable[Status], skill_id: str, tags: Sequence[str], applies_to: str):
@@ -262,6 +276,28 @@ def _collect_modifier_data(
         _status_list(target), skill_id, tags, "target"
     ) if target else ([], [], [], [], [])
     all_effects.extend(tgt_effects)
+
+    if skill_id == Skill.PERCEPTION.value and target is not None:
+        if _has_status(actor, DARKVISION_STATUS) and _has_status(target, IN_DARK_STATUS):
+            all_effects.append(
+                BonusEffect(
+                    type=BonusType.CIRCUMSTANCE,
+                    value=10,
+                    tag=skill_id,
+                    source="status:darkvision",
+                    label="darkvision +10",
+                )
+            )
+        if _has_status(actor, DIM_LIGHT_VISION_STATUS) and _has_status(target, IN_DIM_LIGHT_STATUS):
+            all_effects.append(
+                BonusEffect(
+                    type=BonusType.CIRCUMSTANCE,
+                    value=2,
+                    tag=skill_id,
+                    source="status:dim_light_vision",
+                    label="dim light vision +2",
+                )
+            )
 
     modifier = base_modifier + (compute_total_modifier(all_effects, skill_id) if all_effects else 0)
     breakdown = _format_breakdown(all_effects, skill_id)

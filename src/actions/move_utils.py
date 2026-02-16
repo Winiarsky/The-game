@@ -213,7 +213,22 @@ def perform_movement(ctx, hero, start_pos, neighbors_fn, *, led_color=None, end_
     return start_pos
 
 
-def default_on_enter(*_args, **_kwargs):
+def default_on_enter(ctx_or_board, mover, position):
+    board = getattr(getattr(ctx_or_board, "game", None), "board", None)
+    if board is None and hasattr(ctx_or_board, "cell_at"):
+        board = ctx_or_board
+    if board is None or mover is None:
+        return None
+    try:
+        terrain = board.cell_at(position).field
+    except Exception:
+        return None
+    on_enter = getattr(terrain, "on_enter", None)
+    if callable(on_enter):
+        try:
+            return on_enter(mover, getattr(ctx_or_board, "game", None))
+        except Exception as exc:
+            logger.debug("terrain.on_enter failed: %s", exc)
     return None
 
 

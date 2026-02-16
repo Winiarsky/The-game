@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from statuses.base import Status
+from statuses.check_effects import CheckEffect
+from skills import Skill
 
 
 def DarkVisionStatus() -> Status:
@@ -8,7 +10,16 @@ def DarkVisionStatus() -> Status:
     return Status(
         id="darkvision",
         label="Darkvision",
-        data={"immune_status_tags": ["darkness"]},
+        data={
+            "immune_status_ids": ["blinded"],
+        },
+        check_effects=[
+            CheckEffect(
+                applies_to="source",
+                skills=[Skill.PERCEPTION.value],
+                prompt_notes=["Ignorujesz efekty naturalnej ciemnosci."],
+            )
+        ],
     )
 
 

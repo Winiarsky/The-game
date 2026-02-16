@@ -9,7 +9,7 @@ from GameObjects.interactions_mixin import prompt_for_roll
 from damage_types import DamageType
 from statuses import Status
 
-from .attack_base import AttackEventBase
+from .attack_base import AttackEventBase, check_concealed
 from ..targeting import is_target_blocked_by_tags
 from ..base import EventContext, EventResult
 
@@ -53,6 +53,16 @@ class BasicMeleeAttackEvent(AttackEventBase):
         enemy, enemy_pos = self._pick_enemy(ctx, candidates)
         if enemy is None:
             return EventResult.cancelled(message="Nie wybrano celu.")
+
+        if not check_concealed(ctx, enemy):
+            ctx.game.events.safe_emit_action(
+                actor=hero,
+                action_id=f"{self.action_id_base}_concealed_miss",
+                action_tags=self._effective_tags(ctx),
+                target=enemy,
+                target_pos=enemy_pos,
+            )
+            return EventResult(success=True, consumed_action=self.consumes_action, message=f"Atak {self.weapon_label}: pudło (concealed).")
 
         target_ac, base_ac, modifier = self._ac_with_bonuses(enemy, attacker=hero)
         modifier_note = ""

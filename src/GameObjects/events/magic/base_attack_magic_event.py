@@ -8,6 +8,7 @@ from bonuses import compute_total_modifier
 from combat import effective_ac
 
 from ..base import EventContext, EventResult
+from ..attack.attack_base import check_concealed
 from .magic_event import MagicEvent
 from .magic_utils import pick_target_in_range
 
@@ -57,6 +58,9 @@ class BaseMagicAttackEvent(MagicEvent):
         )
         if target is None or target_pos is None:
             return EventResult.cancelled(message="Brak celu w zasięgu.")
+
+        if not check_concealed(ctx, target):
+            return EventResult(success=True, consumed_action=self.consumes_action, message="Czar chybia (concealed).")
 
         target_ac, base_ac, modifier = self._target_ac_with_bonuses(target, attacker=actor)
         modifier_note = ""

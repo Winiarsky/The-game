@@ -77,6 +77,7 @@ class StatusMixin:
                 return False
         self.statuses.append(status)
         self._apply_granted_statuses(status)
+        self._ui_log(f"Otrzymujesz status: {status.display_label}.")
         return True
 
     def _apply_granted_statuses(self, status: "Status") -> None:

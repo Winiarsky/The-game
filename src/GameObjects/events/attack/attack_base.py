@@ -5,10 +5,67 @@ from typing import Iterable, Optional
 
 from bonuses import BonusEffect, compute_total_modifier
 from combat import effective_ac
+from GameObjects.interactions_mixin import prompt_for_roll
+from statuses import CONCEALED_STATUS, DARKVISION_STATUS, DIM_LIGHT_VISION_STATUS, IN_DIM_LIGHT_STATUS
 
 from ..base import GameEvent
 
 logger = logging.getLogger(__name__)
+
+
+def check_concealed(ctx, target) -> bool:
+    if target is None:
+        return True
+    attacker = getattr(ctx, "actor", None)
+    if _has_status(attacker, DARKVISION_STATUS):
+        return True
+    if _has_status(attacker, DIM_LIGHT_VISION_STATUS) and _has_status(target, IN_DIM_LIGHT_STATUS):
+        return True
+    has_status = getattr(target, "has_status", None)
+    if callable(has_status):
+        concealed = has_status(CONCEALED_STATUS)
+    else:
+        concealed = False
+        for status in getattr(target, "statuses", []) or []:
+            if getattr(status, "id", None) == CONCEALED_STATUS.id or status == CONCEALED_STATUS.id:
+                concealed = True
+                break
+    if not concealed:
+        return True
+    roll = prompt_for_roll(
+        "Concealed: rzut k20 (DC 5) przed atakiem.",
+        layout="test",
+        subtitle="Flat check bez premii.",
+        answer_placeholder="Wynik k20",
+    )
+    if roll >= 5:
+        return True
+    try:
+        ui = getattr(ctx.game, "ui", None)
+        if ui is not None and hasattr(ui, "prompt_info"):
+            ui.prompt_info(
+                "Atak chybia",
+                prompt_long="Nie trafiłeś z powodu zaciemnienia (concealed).",
+                source="concealed",
+            )
+        else:
+            ctx.game.ui_log("Nie trafiłeś z powodu zaciemnienia (concealed).")
+    except Exception:
+        pass
+    return False
+
+
+def _has_status(obj, status) -> bool:
+    if obj is None:
+        return False
+    has_status = getattr(obj, "has_status", None)
+    if callable(has_status):
+        return bool(has_status(status))
+    for item in getattr(obj, "statuses", []) or []:
+        item_id = getattr(item, "id", None)
+        if item_id == status.id or item == status.id:
+            return True
+    return False
 
 
 class AttackEventBase(GameEvent):

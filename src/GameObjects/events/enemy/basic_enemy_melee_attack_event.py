@@ -8,6 +8,7 @@ from combat import effective_ac
 from damage_types import DamageType
 
 from ..base import EventContext, EventResult, GameEvent
+from ..attack.attack_base import check_concealed
 from ..targeting import is_target_blocked_by_tags
 
 logger = logging.getLogger(__name__)
@@ -52,6 +53,16 @@ class BasicEnemyMeleeAttackEvent(GameEvent):
         hero = board.occupant_at(target_pos)
         if hero not in game.heroes:
             return EventResult(success=False, consumed_action=True, message="Wybrano cel niebędący bohaterem.")
+
+        if not check_concealed(ctx, hero):
+            game.events.safe_emit_action(
+                actor=enemy,
+                action_id=f"{self.action_id_base}_concealed_miss",
+                action_tags=self._effective_tags(ctx),
+                target=hero,
+                target_pos=target_pos,
+            )
+            return EventResult(success=True, consumed_action=True, message="Atak wroga chybia (concealed).")
 
         attack_bonus = getattr(enemy, self.attack_bonus_attr, 0)
         bonus_mixin = getattr(enemy, "compute_modifier", None)

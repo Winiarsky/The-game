@@ -10,7 +10,7 @@ from GameObjects.Interactables.utils.awareness import iter_watchers_in_rooms, su
 from GameObjects.Obstacles.basic_obstacle import Obstacle
 from actions.move_utils import perform_movement, default_on_enter
 from skills import Skill
-from statuses import OBSERVABLE_STATUS, STEALTH_STATUS, StealthStatus, Status
+from statuses import IN_DIM_LIGHT_STATUS, IN_DARK_STATUS, OBSERVABLE_STATUS, STEALTH_STATUS, StealthStatus, Status
 
 from .base import EventContext, EventResult, GameEvent
 from .registry import register_event, dispatch_event
@@ -88,9 +88,11 @@ class StealthEvent(GameEvent):
         rooms_here = board.rooms_at(hero_pos)
         blocked_rooms, fail_counts = _get_stealth_memory(hero)
         has_hide_status = hero.has_status("hide")
-        watchers = iter_watchers_in_rooms(board, rooms_here, ignore_obj=hero) if not has_hide_status else []
+        in_dim_light = hero.has_status(IN_DIM_LIGHT_STATUS)
+        in_dark = hero.has_status(IN_DARK_STATUS)
+        watchers = iter_watchers_in_rooms(board, rooms_here, ignore_obj=hero) if not has_hide_status and not in_dim_light and not in_dark else []
         penalty, blockers = summarize_watchers(watchers) if watchers else (0, [])
-        if hero.has_status(OBSERVABLE_STATUS):
+        if hero.has_status(OBSERVABLE_STATUS) and not in_dim_light and not in_dark:
             logger.info("Masz status observable – nie możesz wejść w ukrycie.")
             return EventResult.noop(message="Status observable blokuje stealth.")
         if rooms_here and any(room in blocked_rooms for room in rooms_here):
@@ -101,7 +103,7 @@ class StealthEvent(GameEvent):
         covered = hero.has_status("covered")
 
         if not already_stealth:
-            if blockers and not covered:
+            if blockers and not covered and not in_dim_light and not in_dark:
                 positions = [pos for _watcher, pos in blockers]
                 logger.info("Nie możesz wejść w ukrycie – ktoś cię obserwuje.")
                 if positions:

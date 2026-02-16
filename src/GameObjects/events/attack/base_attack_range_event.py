@@ -9,7 +9,7 @@ from GameObjects.interactions_mixin import RangeAttackAffectMixin, prompt_for_ro
 from statuses import Status
 from damage_types import DamageType
 
-from .attack_base import AttackEventBase
+from .attack_base import AttackEventBase, check_concealed
 from ..targeting import is_target_blocked_by_tags
 from ..base import EventContext, EventResult
 
@@ -114,6 +114,17 @@ class BaseRangeAttackEvent(AttackEventBase):
             distance_ft = target_analysis["distance_ft"]
             range_penalty = target_analysis["range_penalty"]
             increments = target_analysis["increments"]
+
+            if not check_concealed(ctx, enemy):
+                game.events.safe_emit_action(
+                    actor=hero,
+                    action_id=f"{self.action_id_base}_concealed_miss",
+                    action_tags=self._effective_tags(ctx),
+                    target=enemy,
+                    target_pos=target_pos,
+                )
+                self._apply_range_attacker_status(hero)
+                return EventResult(success=True, consumed_action=self.consumes_action, message="Strzał chybia (concealed).")
 
             cover_bonus_effect = None
             if cover_bonus:
