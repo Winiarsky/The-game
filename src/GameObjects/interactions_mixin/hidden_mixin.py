@@ -11,6 +11,7 @@ class HiddenMixin:
     revealed: bool = False
     reveal_dc: int = 18
     seekable: bool = True
+    reveal_tags: tuple[str, ...] = ()
 
     def try_reveal(self, roll: int) -> tuple[str, str]:
         if not self.hidden:

@@ -125,24 +125,14 @@ def resolve_skill_check_with_sources(
     apply_modifiers: bool = False,
 ) -> SkillCheckResolution:
     """Policz wynik testu umiejętności z bonusami i efektami statusów."""
-
     tags = list(tags)
-
-    # bonusy z aktora
-    all_effects: list[BonusEffect] = []
-    bonuses = getattr(actor, "bonuses", None)
-    if isinstance(bonuses, list):
-        all_effects.extend(bonuses)
-
-    # statusy source / target
-    src_effects, promote_src, demote_src, notes_src, consume_src = _collect_from_statuses(_status_list(actor), skill_id, tags, "source")
-    all_effects.extend(src_effects)
-    tgt_effects, promote_tgt, demote_tgt, notes_tgt, consume_tgt = _collect_from_statuses(_status_list(target), skill_id, tags, "target") if target else ([], [], [], [], [])
-    all_effects.extend(tgt_effects)
-
-    modifier = base_modifier + (compute_total_modifier(all_effects, skill_id) if all_effects else 0)
-    breakdown = _format_breakdown(all_effects, skill_id)
-    notes = list(notes_src) + list(notes_tgt)
+    modifier, breakdown, notes, promote_src, demote_src, promote_tgt, demote_tgt, consume_src, consume_tgt, effects = _collect_modifier_data(
+        skill_id=skill_id,
+        tags=tags,
+        actor=actor,
+        target=target,
+        base_modifier=base_modifier,
+    )
 
     prompt_msg = f"Test {skill_id} (DC {dc})."
     prompt_long = (
@@ -154,7 +144,7 @@ def resolve_skill_check_with_sources(
         + f"Premie/kary: {', '.join(breakdown) if breakdown else 'brak'} (suma {modifier:+d}, "
         + ("doliczana automatycznie)." if apply_modifiers else "nie jest doliczana automatycznie).")
     )
-    modifiers_grid = _build_modifiers_grid(all_effects)
+    modifiers_grid = _build_modifiers_grid(effects)
     roll = prompt_for_roll(
         prompt_msg,
         layout="test",
@@ -162,11 +152,50 @@ def resolve_skill_check_with_sources(
         answer_placeholder="Wynik rzutu",
         modifiers=modifiers_grid,
     )
+    return resolve_skill_check_with_sources_from_roll(
+        skill_id=skill_id,
+        dc=dc,
+        actor=actor,
+        tags=tags,
+        roll=roll,
+        target=target,
+        game=game,
+        base_modifier=base_modifier,
+        apply_modifiers=apply_modifiers,
+        _precomputed=(modifier, breakdown, notes, promote_src, demote_src, promote_tgt, demote_tgt, consume_src, consume_tgt, effects),
+    )
+
+
+def resolve_skill_check_with_sources_from_roll(
+    *,
+    skill_id: str,
+    dc: int,
+    actor,
+    tags: Sequence[str],
+    roll: int,
+    target=None,
+    game=None,
+    base_modifier: int = 0,
+    apply_modifiers: bool = False,
+    consume_statuses: bool = True,
+    _precomputed=None,
+) -> SkillCheckResolution:
+    """Wersja resolvera z podanym wynikiem rzutu (bez promptu)."""
+    tags = list(tags)
+    if _precomputed is None:
+        modifier, breakdown, notes, promote_src, demote_src, promote_tgt, demote_tgt, consume_src, consume_tgt, _effects = _collect_modifier_data(
+            skill_id=skill_id,
+            tags=tags,
+            actor=actor,
+            target=target,
+            base_modifier=base_modifier,
+        )
+    else:
+        modifier, breakdown, notes, promote_src, demote_src, promote_tgt, demote_tgt, consume_src, consume_tgt, _effects = _precomputed
+
     total = roll + modifier if apply_modifiers else roll
     outcome = resolve_skill_check(dc, total)
 
-    # przesunięcia sukcesu
-    # zastosuj przesunięcia warunkowe w kolejności: src-promote, tgt-promote, src-demote, tgt-demote
     for value, cond in list(promote_src) + list(promote_tgt):
         if cond is None or outcome in cond:
             outcome = _apply_shift(outcome, value)
@@ -184,20 +213,20 @@ def resolve_skill_check_with_sources(
         breakdown=breakdown,
     )
 
-    # zużyj statusy jednorazowe, jeśli zostały użyte w tym teście
-    try:
-        if consume_src:
-            remover = getattr(actor, "remove_status", None)
-            if callable(remover):
-                for s in consume_src:
-                    remover(s)
-        if consume_tgt and target is not None:
-            remover = getattr(target, "remove_status", None)
-            if callable(remover):
-                for s in consume_tgt:
-                    remover(s)
-    except Exception:
-        pass
+    if consume_statuses:
+        try:
+            if consume_src:
+                remover = getattr(actor, "remove_status", None)
+                if callable(remover):
+                    for s in consume_src:
+                        remover(s)
+            if consume_tgt and target is not None:
+                remover = getattr(target, "remove_status", None)
+                if callable(remover):
+                    for s in consume_tgt:
+                        remover(s)
+        except Exception:
+            pass
 
     try:
         if game and hasattr(game, "ui_log"):
@@ -209,6 +238,35 @@ def resolve_skill_check_with_sources(
         pass
 
     return resolution
+
+
+def _collect_modifier_data(
+    *,
+    skill_id: str,
+    tags: Sequence[str],
+    actor,
+    target=None,
+    base_modifier: int = 0,
+):
+    tags = list(tags)
+    all_effects: list[BonusEffect] = []
+    bonuses = getattr(actor, "bonuses", None)
+    if isinstance(bonuses, list):
+        all_effects.extend(bonuses)
+
+    src_effects, promote_src, demote_src, notes_src, consume_src = _collect_from_statuses(
+        _status_list(actor), skill_id, tags, "source"
+    )
+    all_effects.extend(src_effects)
+    tgt_effects, promote_tgt, demote_tgt, notes_tgt, consume_tgt = _collect_from_statuses(
+        _status_list(target), skill_id, tags, "target"
+    ) if target else ([], [], [], [], [])
+    all_effects.extend(tgt_effects)
+
+    modifier = base_modifier + (compute_total_modifier(all_effects, skill_id) if all_effects else 0)
+    breakdown = _format_breakdown(all_effects, skill_id)
+    notes = list(notes_src) + list(notes_tgt)
+    return modifier, breakdown, notes, promote_src, demote_src, promote_tgt, demote_tgt, consume_src, consume_tgt, all_effects
 
 
 def _build_modifiers_grid(effects: list) -> dict:

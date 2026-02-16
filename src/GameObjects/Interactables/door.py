@@ -10,6 +10,7 @@ from GameObjects.interactions_mixin import (
     TrappableMixin,
     RangeAttackAffectMixin,
     resolve_skill_check,
+    resolve_skill_check_with_sources,
 )
 from ui_client import get_ui_client
 
@@ -37,6 +38,7 @@ class Door(RangeAttackAffectMixin, LockableMixin, TrappableMixin, HiddenMixin, D
         hidden: bool = False,
         reveal_dc: int = 18,
         seekable: bool = True,
+        reveal_tags: Optional[list[str]] = None,
         ac: int = 18,
         hp: int = 10,
         hardness: int = 5,
@@ -70,6 +72,7 @@ class Door(RangeAttackAffectMixin, LockableMixin, TrappableMixin, HiddenMixin, D
         self.revealed = not hidden
         self.reveal_dc = reveal_dc
         self.seekable = seekable
+        self.reveal_tags = tuple(reveal_tags or [])
         self.auto_reveal_on_enter = auto_reveal_on_enter
         self.auto_trigger_on_enter = auto_trigger_on_enter
 
@@ -359,13 +362,18 @@ class Door(RangeAttackAffectMixin, LockableMixin, TrappableMixin, HiddenMixin, D
         return f"{msg} (wynik: {outcome})"
 
     def action_search_secret(self, actor, game, _payload=None) -> str:
-        roll = get_ui_client().prompt_roll(
-            "Rzuć na Perception (szukanie sekretu): ",
-            source="game",
-            layout="test",
-            answer_placeholder="Wynik Perception",
+        tags = ["seek", "secret", "door", "perception"]
+        tags.extend([t for t in self.reveal_tags if t not in tags])
+        result = resolve_skill_check_with_sources(
+            skill_id="perception",
+            dc=self.reveal_dc,
+            actor=actor,
+            target=None,
+            tags=tags,
+            game=game,
+            apply_modifiers=True,
         )
-        outcome, msg = self.try_reveal(roll)
+        outcome, msg = self.try_reveal(result.total)
         return f"{msg} (wynik: {outcome})"
 
     def action_blind_probe(self, actor, game, _payload=None) -> str:
@@ -373,14 +381,18 @@ class Door(RangeAttackAffectMixin, LockableMixin, TrappableMixin, HiddenMixin, D
             return "Tu nic nie jest ukryte – ślepy strzał nic nie da."
         if self.revealed:
             return "Sekret już odkryty."
-        roll = get_ui_client().prompt_roll(
-            "Ślepy strzał (Perception) – wynik: ",
-            source="game",
-            layout="test",
-            answer_placeholder="Wynik Perception",
+        tags = ["seek", "secret", "door", "perception", "blind_probe"]
+        tags.extend([t for t in self.reveal_tags if t not in tags])
+        result = resolve_skill_check_with_sources(
+            skill_id="perception",
+            dc=self.reveal_dc + 2,
+            actor=actor,
+            target=None,
+            tags=tags,
+            game=game,
+            apply_modifiers=True,
         )
-        outcome = resolve_skill_check(self.reveal_dc + 2, roll)  # utrudnienie dla ślepego macania
-        if outcome in ("success", "critical_success"):
+        if result.outcome in ("success", "critical_success"):
             self.revealed = True
             return "Udaje się namacać ukryte drzwi."
         return "Nie znajdujesz niczego konkretnego."
@@ -396,13 +408,18 @@ class Door(RangeAttackAffectMixin, LockableMixin, TrappableMixin, HiddenMixin, D
             effect = self.trigger_trap()
             messages.append(f"Pułapka przy drzwiach odpala! {effect}")
         if self.auto_reveal_on_enter and self.hidden and not self.revealed:
-            roll = get_ui_client().prompt_roll(
-                "Perception (auto-check na sekret drzwi): ",
-                source="game",
-                layout="test",
-                answer_placeholder="Wynik Perception",
+            tags = ["seek", "secret", "door", "perception", "auto"]
+            tags.extend([t for t in self.reveal_tags if t not in tags])
+            result = resolve_skill_check_with_sources(
+                skill_id="perception",
+                dc=self.reveal_dc,
+                actor=actor,
+                target=None,
+                tags=tags,
+                game=game,
+                apply_modifiers=True,
             )
-            outcome, msg = self.try_reveal(roll)
+            outcome, msg = self.try_reveal(result.total)
             messages.append(f"{msg} (wynik: {outcome})")
         return " ".join(messages) if messages else None
 
@@ -430,6 +447,7 @@ META = GameObjectMeta(
         "hidden": False,
         "reveal_dc": 18,
         "seekable": True,
+        "reveal_tags": [],
         "auto_reveal_on_enter": False,
         "auto_trigger_on_enter": False,
         "ac": 18,

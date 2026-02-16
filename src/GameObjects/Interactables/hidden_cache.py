@@ -18,6 +18,7 @@ class HiddenCache(HiddenMixin, InteractableMixin):
         allow_hidden_interaction: bool = True,
         reveal_dc: int = 18,
         seekable: bool = True,
+        reveal_tags: Optional[list[str]] = None,
         auto_reveal_on_enter: bool = False,
         auto_trigger_on_enter: bool = False,
         trap_effect: str | None = None,
@@ -33,6 +34,7 @@ class HiddenCache(HiddenMixin, InteractableMixin):
         self.revealed = not hidden
         self.reveal_dc = reveal_dc
         self.seekable = seekable
+        self.reveal_tags = tuple(reveal_tags or [])
         self.loot = list(loot or [])
         self.opened = False
         self.auto_reveal_on_enter = auto_reveal_on_enter
@@ -87,14 +89,16 @@ class HiddenCache(HiddenMixin, InteractableMixin):
         )
 
     def action_search(self, actor, game, _payload=None) -> str:
+        tags = [Skill.PERCEPTION.value, "seek", "hidden_cache"]
+        tags.extend([t for t in self.reveal_tags if t not in tags])
         result = resolve_skill_check_with_sources(
             skill_id=Skill.PERCEPTION.value,
             dc=self.reveal_dc,
             actor=actor,
             target=None,
-            tags=[Skill.PERCEPTION.value, "seek", "hidden_cache"],
+            tags=tags,
             game=game,
-            apply_modifiers=False,
+            apply_modifiers=True,
         )
         outcome, msg = self.try_reveal(result.total)
         return f"{msg} (wynik: {outcome})"
@@ -104,14 +108,16 @@ class HiddenCache(HiddenMixin, InteractableMixin):
             return "Ten element nie jest ukryty."
         if self.revealed:
             return "Sekret już odkryty."
+        tags = [Skill.PERCEPTION.value, "seek", "hidden_cache"]
+        tags.extend([t for t in self.reveal_tags if t not in tags])
         result = resolve_skill_check_with_sources(
             skill_id=Skill.PERCEPTION.value,
             dc=self.reveal_dc + 2,
             actor=actor,
             target=None,
-            tags=[Skill.PERCEPTION.value, "seek", "hidden_cache"],
+            tags=tags,
             game=game,
-            apply_modifiers=False,
+            apply_modifiers=True,
         )
         roll = result.total
         # trudniej bez kontekstu
@@ -141,14 +147,16 @@ class HiddenCache(HiddenMixin, InteractableMixin):
         """Wejście na pole: opcjonalne auto-odkrycie/wyzwolenie efektu."""
         messages: list[str] = []
         if self.auto_reveal_on_enter and self.hidden and not self.revealed:
+            tags = [Skill.PERCEPTION.value, "seek", "hidden_cache"]
+            tags.extend([t for t in self.reveal_tags if t not in tags])
             result = resolve_skill_check_with_sources(
                 skill_id=Skill.PERCEPTION.value,
                 dc=self.reveal_dc,
                 actor=actor,
                 target=None,
-                tags=[Skill.PERCEPTION.value, "seek", "hidden_cache"],
+                tags=tags,
                 game=game,
-                apply_modifiers=False,
+                apply_modifiers=True,
             )
             outcome, msg = self.try_reveal(result.total)
             messages.append(f"{msg} (wynik: {outcome})")
@@ -173,6 +181,7 @@ META = GameObjectMeta(
         "allow_hidden_interaction": True,
         "reveal_dc": 18,
         "seekable": True,
+        "reveal_tags": [],
         "auto_reveal_on_enter": False,
         "auto_trigger_on_enter": False,
         "trap_effect": None,

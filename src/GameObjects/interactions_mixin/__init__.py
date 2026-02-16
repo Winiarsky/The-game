@@ -17,12 +17,17 @@ from GameObjects.interactions_mixin.reactive_mixin import ReactiveMixin
 from GameObjects.interactions_mixin.range_attack_affect_mixin import RangeAttackAffectMixin
 from GameObjects.interactions_mixin.leap_blocker_mixin import LeapBlockerMixin
 from GameObjects.interactions_mixin.base_interaction import Interaction, InteractableMixin, InteractionHandler
-from GameObjects.interactions_mixin.skill_check_resolver import resolve_skill_check_with_sources, SkillCheckResolution
+from GameObjects.interactions_mixin.skill_check_resolver import (
+    resolve_skill_check_with_sources,
+    resolve_skill_check_with_sources_from_roll,
+    SkillCheckResolution,
+)
 
 __all__ = [
     "prompt_for_roll",
     "resolve_skill_check",
     "resolve_skill_check_with_sources",
+    "resolve_skill_check_with_sources_from_roll",
     "SkillCheckResolution",
     "SocialMixin",
     "attitude_label",

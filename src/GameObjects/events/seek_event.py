@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 
 from board import consts
-from GameObjects.interactions_mixin.skill_check_resolver import resolve_skill_check_with_sources
+import GameObjects.interactions_mixin.skill_check_resolver as check_resolver
 from ui_client import get_ui_client
 from skills import Skill
 
@@ -63,18 +63,27 @@ class SeekEvent(GameEvent):
         search_positions = board.positions_in_rooms(set(allowed_rooms)) if allowed_rooms else set()
         search_positions.add(hero_pos)
 
-        check = resolve_skill_check_with_sources(
+        base_tags = ["seek", Skill.PERCEPTION.value]
+        roll = check_resolver.prompt_for_roll(
+            "Rzuć na Perception (seek): ",
+            source="seek",
+            layout="test",
+            answer_placeholder="Wynik Perception",
+        )
+        base_resolution = check_resolver.resolve_skill_check_with_sources_from_roll(
             skill_id=Skill.PERCEPTION.value,
             dc=consts.SEEK_FAIL,
             actor=actor,
             target=None,
-            tags=["seek", Skill.PERCEPTION.value],
+            tags=base_tags,
+            roll=roll,
             game=game,
-            apply_modifiers=False,
+            apply_modifiers=True,
+            consume_statuses=False,
         )
-        roll = check.total
+        roll_total = base_resolution.total
 
-        if rooms_here and roll < consts.SEEK_CRITICAL_FAIL:
+        if rooms_here and roll_total < consts.SEEK_CRITICAL_FAIL:
             for room_id in rooms_here:
                 board.lock_room_seek(room_id)
             logger.info("Krytyczna porażka – dalsze przeszukiwanie tych pokoi zablokowane.")
@@ -93,9 +102,22 @@ class SeekEvent(GameEvent):
                     continue
                 hidden_candidates += 1
                 was_revealed = getattr(obj, "revealed", False)
+                obj_tags = list(getattr(obj, "reveal_tags", ()) or ())
+                tags = base_tags + [t for t in obj_tags if t not in base_tags]
+                resolution = check_resolver.resolve_skill_check_with_sources_from_roll(
+                    skill_id=Skill.PERCEPTION.value,
+                    dc=getattr(obj, "reveal_dc", 18),
+                    actor=actor,
+                    target=obj,
+                    tags=tags,
+                    roll=roll,
+                    game=game,
+                    apply_modifiers=True,
+                )
+                total = resolution.total
                 if hasattr(obj, "try_reveal"):
-                    obj.try_reveal(roll)
-                elif roll >= getattr(obj, "reveal_dc", 18):
+                    obj.try_reveal(total)
+                elif total >= getattr(obj, "reveal_dc", 18):
                     obj.revealed = True
                 if not was_revealed and getattr(obj, "revealed", False):
                     newly_revealed_positions.add(pos)
@@ -114,7 +136,7 @@ class SeekEvent(GameEvent):
             return EventResult.noop(message="Brak ukrytych elementów.")
         if not newly_revealed_positions:
             logger.info("Przeszukiwanie niczego nie ujawnia.")
-            if rooms_here and roll < consts.SEEK_FAIL:
+            if rooms_here and roll_total < consts.SEEK_FAIL:
                 for room_id in allowed_rooms:
                     board.increment_room_seek_fail(room_id)
                 logger.info(
