@@ -12,6 +12,7 @@ from actions.move_utils import (
     follow_path,
     path_cost_feet,
     perform_movement,
+    terrain_move_bonus_feet,
 )
 from statuses import STEALTH_STATUS
 
@@ -148,11 +149,7 @@ class MoveEvent(GameEvent):
             last_led_colors = None
 
         def _is_difficult(pos: tuple[int, int]) -> bool:
-            try:
-                terrain = board.cell_at(pos).field
-                return bool(getattr(terrain, "move_cost_bonus_feet", 0))
-            except Exception:
-                return False
+            return terrain_move_bonus_feet(board, pos, moving_hero) > 0
 
         last_led_positions: list[tuple[int, int]] | None = None
         last_led_colors: list[list[int]] | None = None
@@ -330,6 +327,7 @@ class MoveEvent(GameEvent):
                         target,
                         allow_diagonal=True,
                         allow_occupied=False,
+                        mover=moving_hero,
                     )
                     if not path or len(path) <= 1:
                         logger.info("Brak możliwej ścieżki do %s.", target)
@@ -338,7 +336,7 @@ class MoveEvent(GameEvent):
 
                     path_preview = path[1:]
                     steps = len(path_preview)
-                    feet = path_cost_feet(path, board)
+                    feet = path_cost_feet(path, board, mover=moving_hero)
                     path_id = f"path-{time.time_ns()}"
                     active_path_id = path_id
                     preview_msg = f"Ścieżka do {target}: {steps} pól / {feet} stóp. Kliknij cel ponownie, aby potwierdzić."

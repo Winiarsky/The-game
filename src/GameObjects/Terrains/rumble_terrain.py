@@ -6,6 +6,7 @@ class RumbleTerrain(BasicTerrain):
     """Trudny teren – spowalnia ruch (dodatkowe 5 stóp za pole)."""
 
     name = "rumble"
+    terrain_tags = ("rumble",)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

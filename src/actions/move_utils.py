@@ -11,7 +11,43 @@ def _is_diagonal(a, b) -> bool:
     return abs(a[0] - b[0]) == 1 and abs(a[1] - b[1]) == 1
 
 
-def find_path(board, start, goal, *, allow_diagonal: bool = True, allow_occupied: bool = True):
+def _iter_status_data(mover):
+    statuses = getattr(mover, "statuses", None) or []
+    for status in statuses:
+        data = getattr(status, "data", None)
+        if isinstance(data, dict):
+            yield data
+
+
+def _ignores_terrain_move_cost(mover, terrain) -> bool:
+    if mover is None or terrain is None:
+        return False
+    terrain_name = getattr(terrain, "name", None)
+    terrain_tags = set(getattr(terrain, "terrain_tags", ()) or ())
+    for data in _iter_status_data(mover):
+        names = data.get("ignore_move_cost_terrain_names") or []
+        if terrain_name and terrain_name in names:
+            return True
+        tags = data.get("ignore_move_cost_terrain_tags") or []
+        if tags and terrain_tags.intersection(tags):
+            return True
+    return False
+
+
+def terrain_move_bonus_feet(board, pos, mover=None) -> int:
+    try:
+        terrain = board.cell_at(pos).field
+    except Exception:
+        return 0
+    bonus = int(getattr(terrain, "move_cost_bonus_feet", 0) or 0)
+    if bonus <= 0:
+        return 0
+    if mover is not None and _ignores_terrain_move_cost(mover, terrain):
+        return 0
+    return bonus
+
+
+def find_path(board, start, goal, *, allow_diagonal: bool = True, allow_occupied: bool = True, mover=None):
     """Znajdź najtańszą ścieżkę (Dijkstra) z uwzględnieniem kosztu terenu i skosów 5/10."""
     if start == goal:
         return [start]
@@ -29,11 +65,7 @@ def find_path(board, start, goal, *, allow_diagonal: bool = True, allow_occupied
     def _step_cost(src, dst, diag_parity):
         is_diag = _is_diagonal(src, dst)
         cost = 10 if (is_diag and diag_parity == 1) else 5
-        try:
-            terrain = board.cell_at(dst).field
-            cost += int(getattr(terrain, "move_cost_bonus_feet", 0) or 0)
-        except Exception:
-            pass
+        cost += terrain_move_bonus_feet(board, dst, mover)
         next_parity = diag_parity ^ 1 if is_diag else diag_parity
         return cost, next_parity
 
@@ -82,7 +114,7 @@ def find_path(board, start, goal, *, allow_diagonal: bool = True, allow_occupied
     return list(reversed(rev))
 
 
-def path_cost_feet(path, board=None):
+def path_cost_feet(path, board=None, mover=None):
     """Koszt w stopach (skosy 5/10 + koszt terenu)."""
     if not path or len(path) < 2:
         return 0
@@ -95,18 +127,14 @@ def path_cost_feet(path, board=None):
         if is_diag:
             diag_parity ^= 1
         if board is not None and hasattr(board, "cell_at"):
-            try:
-                terrain = board.cell_at(step).field
-                bonus = int(getattr(terrain, "move_cost_bonus_feet", 0) or 0)
-            except Exception:
-                bonus = 0
+            bonus = terrain_move_bonus_feet(board, step, mover)
         else:
             bonus = 0
         total += step_cost + bonus
     return max(0, total)
 
 
-def trim_path_to_feet(path, max_feet, board=None):
+def trim_path_to_feet(path, max_feet, board=None, mover=None):
     """Przytnij ścieżkę do dostępnej liczby stóp."""
     if max_feet <= 0 or len(path) < 2:
         return [path[0]] if path else []
@@ -119,11 +147,7 @@ def trim_path_to_feet(path, max_feet, board=None):
         if is_diag:
             diag_parity ^= 1
         if board is not None and hasattr(board, "cell_at"):
-            try:
-                terrain = board.cell_at(step).field
-                step_cost += int(getattr(terrain, "move_cost_bonus_feet", 0) or 0)
-            except Exception:
-                pass
+            step_cost += terrain_move_bonus_feet(board, step, mover)
         if total + step_cost > max_feet:
             break
         total += step_cost

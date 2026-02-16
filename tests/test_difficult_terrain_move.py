@@ -22,6 +22,7 @@ from board_grid import BoardGrid  # noqa: E402
 from GameObjects.Terrains.rumble_terrain import RumbleTerrain  # noqa: E402
 from GameObjects.events.move_event import MoveEvent  # noqa: E402
 from GameObjects.events.base import EventContext  # noqa: E402
+from statuses.race.dwarf.feats.rock_runner import ROCK_RUNNER_STATUS  # noqa: E402
 
 
 class DummyConn:
@@ -51,6 +52,7 @@ class DummyEvents:
 class DummyUI:
     def __init__(self):
         self.prompts = []
+        self.hints = []
 
     def prompt_info(self, title, *, prompt_long=None, source=None, image=None):
         self.prompts.append(
@@ -61,6 +63,9 @@ class DummyUI:
                 "image": image,
             }
         )
+
+    def idle_hint(self, title, text):
+        self.hints.append({"title": title, "text": text})
 
 
 class DummyHero:
@@ -149,3 +154,46 @@ def test_move_no_prompt_when_already_on_difficult_terrain():
     MoveEvent().execute(ctx)
 
     assert ui.prompts == []
+
+
+def test_rock_runner_ignores_difficult_prompt_and_hint():
+    board = BoardGrid(rows=1, cols=3)
+    board.set_field((1, 0), RumbleTerrain())
+
+    hero = DummyHero((0, 0))
+    hero.statuses.append(ROCK_RUNNER_STATUS)
+    board.place(hero, (0, 0))
+
+    target = (2, 0)
+    conn = DummyConn(clicks=[target, target])
+    ui = DummyUI()
+    game = types.SimpleNamespace(
+        board=board,
+        conn=conn,
+        heroes=[hero],
+        enemies=[],
+        events=DummyEvents(),
+        ui=ui,
+        ui_log=lambda *_a, **_k: None,
+        ui_event=lambda *_a, **_k: None,
+        state=types.SimpleNamespace(__class__=type("Exploration", (), {})),
+        ui_idle_hint=ui.idle_hint,
+    )
+
+    ctx = EventContext(game=game, actor=hero)
+    MoveEvent().execute(ctx)
+
+    assert ui.prompts == []
+    assert ui.hints
+    assert "trudny teren" not in ui.hints[-1]["text"].lower()
+
+
+def test_rock_runner_path_cost_ignores_rumble():
+    board = BoardGrid(rows=1, cols=3)
+    board.set_field((1, 0), RumbleTerrain())
+    path = [(0, 0), (1, 0), (2, 0)]
+
+    hero = DummyHero((0, 0))
+    hero.statuses.append(ROCK_RUNNER_STATUS)
+
+    assert move_utils.path_cost_feet(path, board, mover=hero) == 10
