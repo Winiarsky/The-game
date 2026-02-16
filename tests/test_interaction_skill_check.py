@@ -100,7 +100,7 @@ class FakeGame:
 
 
 def test_interaction_triggers_skill_check(monkeypatch):
-    hero = types.SimpleNamespace(name="Hero", position=(1, 1), statuses=[], has_status=lambda *_: False)
+    hero = types.SimpleNamespace(name="Hero", position=(1, 1), statuses=[], has_status=lambda *_, **__:False)
     guard = GuardNPC(enable_talk=False, enable_trade=False, enable_pickpocket=False, enable_diplomacy=True)
     game = FakeGame(hero, guard, target_pos=(2, 1))
 

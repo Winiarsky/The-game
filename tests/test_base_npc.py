@@ -44,7 +44,7 @@ def test_on_trade_callback_adds_line(monkeypatch):
 
 def test_on_pickpocket_fail_callback(monkeypatch):
     # force fail: roll=1, dc=16
-    monkeypatch.setattr("GameObjects.NPC.base_npc.prompt_for_roll", lambda *_: 1)
+    monkeypatch.setattr("GameObjects.NPC.base_npc.prompt_for_roll", lambda *_, **__:1)
     actor = type("A", (), {"statuses": ["stealth"], "stealth_bonus": 0})()
     called = {}
 
@@ -61,7 +61,7 @@ def test_on_pickpocket_fail_callback(monkeypatch):
 def test_extra_actions_hook():
     class CustomNPC(BaseNPC):
         def extra_actions(self):
-            return [Interaction(id="wave", label="Pomachaj", handler=lambda *_: "Machasz.")]
+            return [Interaction(id="wave", label="Pomachaj", handler=lambda *_, **__:"Machasz.")]
 
     npc = CustomNPC(enable_trade=False, enable_pickpocket=False)
     assert "wave" in npc.actions

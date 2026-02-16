@@ -4,7 +4,7 @@ import logging
 import sys
 from pathlib import Path
 from typing import Any, List, Optional
-from ui_client import get_ui_client
+from GameObjects.interactions_mixin import prompt_for_roll
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
@@ -321,9 +321,8 @@ class Combat(State):
                 self.game.ui_log("Już opóźniałeś turę w tej rundzie.")
                 return self
 
-            delta = get_ui_client().prompt_roll(
+            delta = prompt_for_roll(
                 "O ile obniżasz inicjatywę w tej rundzie? (liczba) ",
-                source="game",
                 layout="test",
                 answer_placeholder="Modyfikator inicjatywy",
             )

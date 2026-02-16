@@ -7,6 +7,7 @@ class BasicTerrain:
     walkable: bool = True
     room: str = "basic room"
     stealth_impact: int = 0
+    move_cost_bonus_feet: int = 0
 
     def on_critical_stealth_fail(self):
         return None

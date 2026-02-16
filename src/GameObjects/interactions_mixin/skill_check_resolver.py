@@ -17,6 +17,27 @@ logger = logging.getLogger(__name__)
 OUTCOME_ORDER = ["critical_failure", "failure", "success", "critical_success"]
 
 
+def prompt_for_roll(prompt: str, **ui_kwargs) -> int:
+    """Lokalny wrapper na prompt w testach (ułatwia monkeypatch get_ui_client)."""
+    ui_client = get_ui_client()
+    if ui_client is not None and hasattr(ui_client, "prompt_roll") and getattr(ui_client, "enabled", True):
+        if "layout" not in ui_kwargs:
+            ui_kwargs["layout"] = "test"
+        ui_kwargs.setdefault("answer_placeholder", "Podaj wynik rzutu")
+        ui_kwargs.setdefault("source", "game")
+        ui_answer = ui_client.prompt_roll(prompt, **ui_kwargs)
+        if isinstance(ui_answer, int):
+            return ui_answer
+    while True:
+        raw = input(prompt).strip()
+        if not raw:
+            continue
+        try:
+            return int(raw)
+        except ValueError:
+            continue
+
+
 @dataclass
 class SkillCheckResolution:
     outcome: str
@@ -134,9 +155,8 @@ def resolve_skill_check_with_sources(
         + ("doliczana automatycznie)." if apply_modifiers else "nie jest doliczana automatycznie).")
     )
     modifiers_grid = _build_modifiers_grid(all_effects)
-    roll = get_ui_client().prompt_roll(
+    roll = prompt_for_roll(
         prompt_msg,
-        source="game",
         layout="test",
         prompt_long=prompt_long,
         answer_placeholder="Wynik rzutu",

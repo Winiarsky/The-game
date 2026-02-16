@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Iterable
 import random
 
-from ui_client import get_ui_client
+from GameObjects.interactions_mixin import prompt_for_roll
 from damage_types import DamageType
 
 from .base import Status
@@ -50,10 +50,9 @@ def process_persistent_damage(actor, game) -> None:
 
         if is_hero:
             try:
-                get_ui_client().prompt_roll(
+                prompt_for_roll(
                     f"Persistent damage: otrzymujesz {amount} {damage_type}. "
                     "Podaj dowolną liczbę aby potwierdzić: ",
-                    source="game",
                     layout="info",
                 )
             except Exception:
@@ -71,9 +70,8 @@ def process_persistent_damage(actor, game) -> None:
         if is_hero:
             try:
                 roll = int(
-                    get_ui_client().prompt_roll(
+                    prompt_for_roll(
                         "Flat check na zakończenie persistent (ST 15): ",
-                        source="game",
                         layout="test",
                         answer_placeholder="Wynik rzutu",
                     )

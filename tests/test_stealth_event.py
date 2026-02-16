@@ -121,7 +121,7 @@ def test_stealth_success_with_hide_bonus(monkeypatch):
     monkeypatch.setattr("GameObjects.events.stealth_event.iter_watchers_in_rooms", lambda *a, **k: [])
     monkeypatch.setattr("GameObjects.events.stealth_event.summarize_watchers", lambda watchers: (0, []))
     # gracz podaje wynik końcowy 10 (uwzględniając +2 z hide)
-    monkeypatch.setattr("GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll", lambda *_: 10)
+    monkeypatch.setattr("GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll", lambda *_, **__:10)
     monkeypatch.setattr("GameObjects.events.stealth_event.perform_movement", lambda *a, **k: None)
 
     ctx = EventContext(game=game, actor=hero, tags=["move", "stealth"])

@@ -68,6 +68,10 @@ class DummyBoard:
         return True
 
     def is_blocked(self, a, b):
+        dx = abs(a[0] - b[0])
+        dy = abs(a[1] - b[1])
+        if dx == 1 and dy == 1:
+            return True
         return False
 
     def can_enter(self, pos, allow_occupied=False):

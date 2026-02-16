@@ -74,7 +74,7 @@ def test_hide_allows_stealth_despite_watchful():
     # podmieniamy prompt na stały wynik >= STEALTH_FAIL, by nie wejść w gałąź porażki
     import GameObjects.interactions_mixin.prompt_utils as prompt_utils
 
-    prompt_utils.prompt_for_roll = lambda *_: 15
+    prompt_utils.prompt_for_roll = lambda *_, **__:15
     # wymuszamy brak podświetleń (DummyConn) i sprawdzamy, że nie ma blockerów
     board = game.board
     rooms_here = board.rooms_at(hero.position)

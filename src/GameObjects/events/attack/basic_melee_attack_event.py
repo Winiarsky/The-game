@@ -5,7 +5,7 @@ from typing import Iterable, Sequence
 
 from board import consts
 from combat import refresh_flanking_statuses
-from ui_client import get_ui_client
+from GameObjects.interactions_mixin import prompt_for_roll
 from damage_types import DamageType
 from statuses import Status
 
@@ -72,9 +72,8 @@ class BasicMeleeAttackEvent(AttackEventBase):
         action_tag = (self._effective_tags(ctx) or ["attack_melee"])[0]
         bonus_info = self._format_bonus_info(hero, action_tag, target=enemy)
 
-        roll = get_ui_client().prompt_roll(
+        roll = prompt_for_roll(
             f"Atak {self.weapon_label} przeciwko AC {prompt_ac}.",
-            source="game",
             layout="test",
             prompt_long=bonus_info.strip(),
             answer_placeholder="Wynik k20",
@@ -94,9 +93,8 @@ class BasicMeleeAttackEvent(AttackEventBase):
             return EventResult(success=True, consumed_action=self.consumes_action, message=f"Atak {self.weapon_label}: pudło.")
 
         dmg_prompt = f"{'Trafienie krytyczne! ' if critical else 'Trafienie! '}Obrażenia {self.damage_prompt}: "
-        damage = get_ui_client().prompt_roll(
+        damage = prompt_for_roll(
             dmg_prompt,
-            source="game",
             layout="damage",
             answer_placeholder="Suma obrażeń",
         )
@@ -151,9 +149,8 @@ class BasicMeleeAttackEvent(AttackEventBase):
         components.append((damage_types[0], first_roll))
         for idx, dtype in enumerate(damage_types[1:], start=1):
             prompt = f"Trafienie! Obrażenia dodatkowe ({dtype}): "
-            roll = get_ui_client().prompt_roll(
+            roll = prompt_for_roll(
                 prompt,
-                source="game",
                 layout="damage",
                 answer_placeholder=f"Obrażenia {dtype}",
             )

@@ -121,7 +121,7 @@ def test_attack_sword_applies_damage(monkeypatch):
     from GameObjects.events.attack import basic_melee_attack_event as bmae
 
     rolls = iter([20, 5])
-    monkeypatch.setattr(bmae, "prompt_for_roll", lambda prompt: next(rolls))
+    monkeypatch.setattr(bmae, "prompt_for_roll", lambda *_, **__: next(rolls))
     # wyłącz kosztowny refresh flankowania
     monkeypatch.setattr(bmae, "refresh_flanking_statuses", lambda *a, **k: None)
 

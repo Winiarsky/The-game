@@ -31,7 +31,7 @@ def test_persistent_damage_hero_removed_on_success(monkeypatch):
     actor.statuses.append(make_persistent_damage(3, "fire"))
     logs = []
     game = SimpleNamespace(heroes=[actor], enemies=[], ui_log=lambda msg: logs.append(msg))
-    monkeypatch.setattr("statuses.persistent_damage.prompt_for_roll", lambda prompt: 16)
+    monkeypatch.setattr("statuses.persistent_damage.prompt_for_roll", lambda *_, **__: 16)
 
     process_persistent_damage(actor, game)
 
@@ -60,7 +60,7 @@ def test_persistent_damage_stacks_same_type(monkeypatch):
     actor.statuses.append(make_persistent_damage(3, "fire"))
     logs = []
     game = SimpleNamespace(heroes=[actor], enemies=[], ui_log=lambda msg: logs.append(msg))
-    monkeypatch.setattr("statuses.persistent_damage.prompt_for_roll", lambda prompt: 10)
+    monkeypatch.setattr("statuses.persistent_damage.prompt_for_roll", lambda *_, **__: 10)
 
     process_persistent_damage(actor, game)
 

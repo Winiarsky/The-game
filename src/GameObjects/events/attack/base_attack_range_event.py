@@ -5,8 +5,7 @@ import math
 from typing import Sequence
 
 from bonuses import BonusEffect, BonusType
-from GameObjects.interactions_mixin import RangeAttackAffectMixin
-from ui_client import get_ui_client
+from GameObjects.interactions_mixin import RangeAttackAffectMixin, prompt_for_roll
 from statuses import Status
 from damage_types import DamageType
 
@@ -151,11 +150,8 @@ class BaseRangeAttackEvent(AttackEventBase):
             action_tag = (self._effective_tags(ctx) or ["attack_ranged"])[0]
             bonus_info = self._format_bonus_info(hero, action_tag, target=enemy)
 
-            from ui_client import get_ui_client
-
-            roll = get_ui_client().prompt_roll(
+            roll = prompt_for_roll(
                 f"Atak {self.weapon_label} na AC {target_ac}",
-                source="game",
                 layout="test",
                 subtitle=f"bazowe {base_ac}, modyfikatory: {mods_note}",
                 prompt_long=bonus_info.strip(),
@@ -236,9 +232,8 @@ class BaseRangeAttackEvent(AttackEventBase):
     def _collect_damage_components(self, *, prompt_prefix: str = "") -> list[tuple[str, int]]:
         """Pozyskaj wartości obrażeń dla 1+ typów."""
         if isinstance(self.damage_type, str):
-            dmg = get_ui_client().prompt_roll(
+            dmg = prompt_for_roll(
                 f"{prompt_prefix}Obrażenia {self.damage_prompt}: ",
-                source="game",
                 layout="damage",
                 answer_placeholder="Suma obrażeń",
             )
@@ -252,9 +247,8 @@ class BaseRangeAttackEvent(AttackEventBase):
                 prompt_text = prompt[idx] if idx < len(prompt) else prompt[-1]
             else:
                 prompt_text = prompt
-            roll = get_ui_client().prompt_roll(
+            roll = prompt_for_roll(
                 f"{prompt_prefix}Obrażenia {prompt_text} ({dtype}): ",
-                source="game",
                 layout="damage",
                 answer_placeholder=f"Obrażenia {dtype}",
             )

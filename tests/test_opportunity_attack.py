@@ -124,7 +124,7 @@ def test_hero_opportunity_attack_prompts_and_deals_damage(monkeypatch):
 
     # auto-hit: d20=15; dmg roll mocked
     monkeypatch.setattr("random.randint", lambda *args, **kwargs: 15)
-    monkeypatch.setattr("combat.reactions.opportunity_attack.prompt_for_roll", lambda prompt: 4)
+    monkeypatch.setattr("combat.reactions.opportunity_attack.prompt_for_roll", lambda *_, **__: 4)
     # typ obrażeń
     monkeypatch.setattr("actions.attack._choose_damage_type", lambda _game: "sieczne")
     game.ui.enabled = True

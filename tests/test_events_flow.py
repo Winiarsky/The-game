@@ -159,7 +159,7 @@ def test_delay_reorders_initiative(monkeypatch):
     import states.combat as combat_module
 
     # stały wynik rzutu obniżający inicjatywę o 3
-    monkeypatch.setattr(combat_module, "prompt_for_roll", lambda prompt: 3)
+    monkeypatch.setattr(combat_module, "prompt_for_roll", lambda *_, **__: 3)
 
     class Hero:
         def __init__(self):

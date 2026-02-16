@@ -55,7 +55,7 @@ class Hero:
 
 def test_source_bonus_and_target_penalty(monkeypatch):
     # gracz podaje wynik końcowy już z premią +2 (13+2=15)
-    monkeypatch.setattr("GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll", lambda *_: 15)
+    monkeypatch.setattr("GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll", lambda *_, **__:15)
 
     actor = Hero(statuses=[NOBLE_PERSON_STATUS])
     target = Hero(statuses=[STUBBORN_STATUS])
@@ -67,7 +67,7 @@ def test_source_bonus_and_target_penalty(monkeypatch):
 
 
 def test_promotion_from_silver_tongue(monkeypatch):
-    monkeypatch.setattr("GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll", lambda *_: 12)
+    monkeypatch.setattr("GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll", lambda *_, **__:12)
     actor = Hero(statuses=[SILVER_TONGUE_STATUS])
     res = resolve_skill_check_with_sources(skill_id="diplomacy", dc=15, actor=actor, target=None, tags=["diplomacy"])
     # 12 vs 15 -> failure, promote +1 => success
@@ -95,20 +95,20 @@ def test_conditional_promote_on_success(monkeypatch):
     )
 
     # bazowy success (roll 13 vs DC 13)
-    monkeypatch.setattr("GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll", lambda *_: 13)
+    monkeypatch.setattr("GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll", lambda *_, **__:13)
     actor = Hero(statuses=[dwarven])
     res = resolve_skill_check_with_sources(skill_id="fortitude", dc=13, actor=actor, target=None, tags=["necromancy"])
     assert res.outcome == "critical_success"
 
     # bazowy failure (roll 10 vs DC 13) nie spełnia promote_on -> zostaje failure
-    monkeypatch.setattr("GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll", lambda *_: 10)
+    monkeypatch.setattr("GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll", lambda *_, **__:10)
     res2 = resolve_skill_check_with_sources(skill_id="fortitude", dc=13, actor=actor, target=None, tags=["necromancy"])
     assert res2.outcome == "failure"
 
 
 def test_guard_diplomacy_action(monkeypatch):
     # roll 17 ensures sukces (DC zależy od nastawienia=0 => 16)
-    monkeypatch.setattr("GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll", lambda *_: 17)
+    monkeypatch.setattr("GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll", lambda *_, **__:17)
     game = DummyGame()
     guard = GuardNPC(enable_trade=False, enable_pickpocket=False, enable_talk=False, enable_diplomacy=True, attitude=0)
     hero = Hero(statuses=[NOBLE_PERSON_STATUS, SILVER_TONGUE_STATUS])
@@ -121,6 +121,6 @@ def test_guard_diplomacy_action(monkeypatch):
     # krytyczna porażka blokuje (osobna instancja bez promujących statusów)
     guard2 = GuardNPC(enable_trade=False, enable_pickpocket=False, enable_talk=False, enable_diplomacy=True, attitude=0)
     hero_plain = Hero()
-    monkeypatch.setattr("GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll", lambda *_: 1)
+    monkeypatch.setattr("GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll", lambda *_, **__:1)
     msg2 = guard2.action_diplomacy_guard(hero_plain, game)
     assert "Nie będzie dalszych" in msg2 or guard2.diplomacy_blocked

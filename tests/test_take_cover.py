@@ -185,7 +185,7 @@ def test_stealth_allowed_with_covered(monkeypatch):
     # przygotuj sztuczne dane do funkcji summarize_watchers: penalty=2, blockers=[...]
     monkeypatch.setattr(stealth_mod, "iter_watchers_in_rooms", lambda *args, **kwargs: [(object(), (5, 5))])
     monkeypatch.setattr(stealth_mod, "summarize_watchers", lambda w: (2, [(None, (5, 5))]))
-    monkeypatch.setattr(stealth_mod, "prompt_for_roll", lambda prompt: 10)
+    monkeypatch.setattr(stealth_mod, "prompt_for_roll", lambda *_, **__: 10)
 
     # StealthAction.compute_modifier jest złożone – sprawdzamy, że +2 wchodzi
     action = stealth_mod.StealthAction()

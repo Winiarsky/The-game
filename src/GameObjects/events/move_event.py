@@ -147,8 +147,16 @@ class MoveEvent(GameEvent):
             last_led_positions = None
             last_led_colors = None
 
+        def _is_difficult(pos: tuple[int, int]) -> bool:
+            try:
+                terrain = board.cell_at(pos).field
+                return bool(getattr(terrain, "move_cost_bonus_feet", 0))
+            except Exception:
+                return False
+
         last_led_positions: list[tuple[int, int]] | None = None
         last_led_colors: list[list[int]] | None = None
+        last_was_difficult = _is_difficult(getattr(moving_hero, "position", (-1, -1)))
 
         def _set_leds(positions: list[tuple[int, int]], colors) -> None:
             nonlocal last_led_positions, last_led_colors
@@ -187,6 +195,18 @@ class MoveEvent(GameEvent):
                 )
 
             def _on_enter_wrapper(context, hero_obj, current_pos: tuple[int, int]) -> bool:
+                nonlocal last_was_difficult
+                now_difficult = _is_difficult(current_pos)
+                if now_difficult and not last_was_difficult:
+                    try:
+                        game.ui.prompt_info(
+                            "Trudny teren",
+                            prompt_long="Wchodzisz na trudny teren: koszt ruchu +5 stóp.",
+                            source="move",
+                        )
+                    except Exception:
+                        pass
+                last_was_difficult = now_difficult
                 stopped = default_on_enter(context, hero_obj, current_pos)
                 # sprawdź on_enter na obiektach pola (np. pułapki); zatrzymaj jeśli coś zwróci komunikat
                 try:
@@ -318,25 +338,36 @@ class MoveEvent(GameEvent):
 
                     path_preview = path[1:]
                     steps = len(path_preview)
-                    feet = path_cost_feet(path)
+                    feet = path_cost_feet(path, board)
                     path_id = f"path-{time.time_ns()}"
                     active_path_id = path_id
                     preview_msg = f"Ścieżka do {target}: {steps} pól / {feet} stóp. Kliknij cel ponownie, aby potwierdzić."
                     game.ui_event("path_preview", {"id": path_id, "steps": steps, "feet": feet, "target": target})
                     try:
+                        difficult_in_path = any(_is_difficult(pos) for pos in path_preview)
+                        hint_text = "Kliknij pole docelowe, aby wykonać ruch lub inne pole, aby ustawić nową ścieżkę."
+                        if difficult_in_path:
+                            hint_text = (
+                                f"{hint_text} Uwaga: ścieżka przebiega przez trudny teren "
+                                "(ruch kosztuje +5 stóp za pole, poruszasz się z połową prędkości)."
+                            )
                         game.ui_idle_hint(
                             "Potwierdź ruch",
-                            "Kliknij pole docelowe, aby wykonać ruch lub inne pole, aby ustawić nową ścieżkę.",
+                            hint_text,
                         )
                     except Exception:
                         pass
                     logger.info(preview_msg)
                     leds_positions = [moving_hero.position] + path_preview
                     leds_colors = [consts.MOVE_START_RGB]
-                    if path_preview:
-                        if len(path_preview) > 1:
-                            leds_colors += [consts.MOVE_FIELD_RGB] * (len(path_preview) - 1)
-                        leds_colors.append(consts.MOVE_TARGET_RGB)
+                    for pos in path_preview:
+                        is_target = pos == target
+                        is_difficult = _is_difficult(pos)
+                        if is_target:
+                            color = consts.DIFFICULT_FIELD_RGB if is_difficult else consts.MOVE_TARGET_RGB
+                        else:
+                            color = consts.DIFFICULT_FIELD_RGB if is_difficult else consts.MOVE_FIELD_RGB
+                        leds_colors.append(color)
                     _set_leds(leds_positions, leds_colors)
                     confirm = game.conn.scan_board(None)
 

@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import logging
 import time
-from collections import deque
+import heapq
 
 logger = logging.getLogger(__name__)
 
 
+def _is_diagonal(a, b) -> bool:
+    return abs(a[0] - b[0]) == 1 and abs(a[1] - b[1]) == 1
+
+
 def find_path(board, start, goal, *, allow_diagonal: bool = True, allow_occupied: bool = True):
-    """Znajdź najkrótszą ścieżkę BFS-em, respektując blokady planszy."""
+    """Znajdź najtańszą ścieżkę (Dijkstra) z uwzględnieniem kosztu terenu i skosów 5/10."""
     if start == goal:
         return [start]
     if not (board.in_bounds(start) and board.in_bounds(goal)):
@@ -22,13 +26,27 @@ def find_path(board, start, goal, *, allow_diagonal: bool = True, allow_occupied
         for dx, dy in deltas:
             yield x + dx, y + dy
 
-    visited = {start: None}
-    q = deque([start])
+    def _step_cost(src, dst, diag_parity):
+        is_diag = _is_diagonal(src, dst)
+        cost = 10 if (is_diag and diag_parity == 1) else 5
+        try:
+            terrain = board.cell_at(dst).field
+            cost += int(getattr(terrain, "move_cost_bonus_feet", 0) or 0)
+        except Exception:
+            pass
+        next_parity = diag_parity ^ 1 if is_diag else diag_parity
+        return cost, next_parity
 
-    while q:
-        cur = q.popleft()
+    prev: dict[tuple[tuple[int, int], int], tuple[tuple[int, int], int] | None] = {(start, 0): None}
+    cost_so_far: dict[tuple[tuple[int, int], int], int] = {(start, 0): 0}
+    heap = [(0, start, 0)]
+
+    while heap:
+        cur_cost, cur, parity = heapq.heappop(heap)
         if cur == goal:
             break
+        if cur_cost != cost_so_far.get((cur, parity)):
+            continue
         for nxt in _neighbors(cur):
             if not board.in_bounds(nxt):
                 continue
@@ -42,34 +60,75 @@ def find_path(board, start, goal, *, allow_diagonal: bool = True, allow_occupied
                     continue
             except Exception:
                 pass
-            if nxt in visited:
-                continue
-            visited[nxt] = cur
-            q.append(nxt)
+            step_cost, next_parity = _step_cost(cur, nxt, parity)
+            new_cost = cur_cost + step_cost
+            state = (nxt, next_parity)
+            if new_cost < cost_so_far.get(state, float("inf")):
+                cost_so_far[state] = new_cost
+                prev[state] = (cur, parity)
+                heapq.heappush(heap, (new_cost, nxt, next_parity))
 
-    if goal not in visited:
+    goal_states = [state for state in cost_so_far.keys() if state[0] == goal]
+    if not goal_states:
         return []
+    best_state = min(goal_states, key=lambda st: cost_so_far.get(st, float("inf")))
 
     # reconstruct
     rev = []
-    cur = goal
+    cur = best_state
     while cur is not None:
-        rev.append(cur)
-        cur = visited[cur]
+        rev.append(cur[0])
+        cur = prev[cur]
     return list(reversed(rev))
 
 
-def path_cost_feet(path):
-    """Koszt w stopach (5 ft per krawędź)."""
-    return max(0, (len(path) - 1) * 5)
+def path_cost_feet(path, board=None):
+    """Koszt w stopach (skosy 5/10 + koszt terenu)."""
+    if not path or len(path) < 2:
+        return 0
+    diag_parity = 0
+    bonus = 0
+    total = 0
+    for prev, step in zip(path, path[1:]):
+        is_diag = _is_diagonal(prev, step)
+        step_cost = 10 if (is_diag and diag_parity == 1) else 5
+        if is_diag:
+            diag_parity ^= 1
+        if board is not None and hasattr(board, "cell_at"):
+            try:
+                terrain = board.cell_at(step).field
+                bonus = int(getattr(terrain, "move_cost_bonus_feet", 0) or 0)
+            except Exception:
+                bonus = 0
+        else:
+            bonus = 0
+        total += step_cost + bonus
+    return max(0, total)
 
 
-def trim_path_to_feet(path, max_feet):
+def trim_path_to_feet(path, max_feet, board=None):
     """Przytnij ścieżkę do dostępnej liczby stóp."""
     if max_feet <= 0 or len(path) < 2:
         return [path[0]] if path else []
-    max_edges = max_feet // 5
-    return path[: max_edges + 1]
+    total = 0
+    trimmed = [path[0]]
+    diag_parity = 0
+    for prev, step in zip(path, path[1:]):
+        is_diag = _is_diagonal(prev, step)
+        step_cost = 10 if (is_diag and diag_parity == 1) else 5
+        if is_diag:
+            diag_parity ^= 1
+        if board is not None and hasattr(board, "cell_at"):
+            try:
+                terrain = board.cell_at(step).field
+                step_cost += int(getattr(terrain, "move_cost_bonus_feet", 0) or 0)
+            except Exception:
+                pass
+        if total + step_cost > max_feet:
+            break
+        total += step_cost
+        trimmed.append(step)
+    return trimmed
 
 
 def follow_path(ctx_or_board, mover, path, *, led_color=None, on_enter=None, allow_occupied=True, step_delay: float = 0.0):

@@ -12,6 +12,7 @@ from GameObjects.interactions_mixin import (
     PickpocketMixin,
     resolve_skill_check,
     attitude_label,
+    prompt_for_roll,
 )
 import GameObjects.events.checks.skill_check_event  # noqa: F401  # rejestruj skill_check
 from GameObjects.events.base import EventContext
@@ -150,21 +151,26 @@ class BaseNPC(SocialMixin, TradeMixin, PickpocketMixin, InteractableMixin):
         is_stealthed = has_status(Skill.STEALTH.value) if callable(has_status) else Skill.STEALTH.value in getattr(actor, "statuses", [])
         if not is_stealthed:
             return "Musisz być w ukryciu, aby spróbować podkraść."
-        result = dispatch_event(
-            "skill_check",
-            EventContext(
-                game=None,
-                actor=actor,
-                tags=[Skill.THIEVERY.value, "pickpocket"],
-                metadata={
-                    "dc": self.pickpocket_dc,
-                    "skill_id": Skill.THIEVERY.value,
-                    "skill_label": "Thievery",
-                    "apply_modifiers": False,
-                },
-            ),
-        )
-        outcome = result.data.get("outcome") if result.data else resolve_skill_check(self.pickpocket_dc, 0)
+        outcome = None
+        if _game is None:
+            roll = prompt_for_roll("Pickpocket: podaj wynik rzutu (d20 + modyfikatory): ")
+            outcome = resolve_skill_check(self.pickpocket_dc, roll)
+        else:
+            result = dispatch_event(
+                "skill_check",
+                EventContext(
+                    game=_game,
+                    actor=actor,
+                    tags=[Skill.THIEVERY.value, "pickpocket"],
+                    metadata={
+                        "dc": self.pickpocket_dc,
+                        "skill_id": Skill.THIEVERY.value,
+                        "skill_label": "Thievery",
+                        "apply_modifiers": False,
+                    },
+                ),
+            )
+            outcome = result.data.get("outcome") if result.data else resolve_skill_check(self.pickpocket_dc, 0)
         if outcome in ("success", "critical_success"):
             loot = (self.pickpocket_loot or ["drobne"])[0]
             return f"Udało się podkraść: {loot} (wynik: {outcome})."

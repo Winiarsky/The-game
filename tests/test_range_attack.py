@@ -112,7 +112,7 @@ def test_longbow_hits_without_cover(monkeypatch):
     game.conn.choice = enemy.position
 
     rolls = iter([20, 5])  # hit, dmg
-    monkeypatch.setattr(base_attack_range_event, "prompt_for_roll", lambda prompt: next(rolls))
+    monkeypatch.setattr(base_attack_range_event, "prompt_for_roll", lambda *_, **__: next(rolls))
 
     result = dispatch_event("longbow", _ctx(game, hero))
     assert result.success
@@ -153,7 +153,7 @@ def test_cover_and_range_penalty_emitted(monkeypatch):
     game.conn.choice = enemy.position
 
     rolls = iter([20, 4])  # attack (>= target AC), dmg
-    monkeypatch.setattr(base_attack_range_event, "prompt_for_roll", lambda prompt: next(rolls))
+    monkeypatch.setattr(base_attack_range_event, "prompt_for_roll", lambda *_, **__: next(rolls))
 
     event = ShortBow()
     result = event.run(_ctx(game, hero))

@@ -97,7 +97,7 @@ class _DummyMagicAttack(BaseMagicAttackEvent):
 
 def test_base_magic_attack_event_uses_helper(monkeypatch):
     from GameObjects.events.magic import base_attack_magic_event as bam
-    monkeypatch.setattr(bam, "prompt_for_roll", lambda prompt: 15)
+    monkeypatch.setattr(bam, "prompt_for_roll", lambda *_, **__: 15)
 
     hero = SimpleNamespace(position=(0, 0))
     enemy = SimpleNamespace(position=(1, 0))
@@ -112,7 +112,7 @@ def test_base_magic_attack_event_uses_helper(monkeypatch):
 
 def test_base_magic_attack_event_hits_on_roll(monkeypatch):
     from GameObjects.events.magic import base_attack_magic_event as bam
-    monkeypatch.setattr(bam, "prompt_for_roll", lambda prompt: 15)
+    monkeypatch.setattr(bam, "prompt_for_roll", lambda *_, **__: 15)
 
     hero = SimpleNamespace(position=(0, 0))
     enemy = SimpleNamespace(position=(1, 0), ac=15, bonuses=[])
@@ -135,7 +135,7 @@ def test_base_magic_attack_event_hits_on_roll(monkeypatch):
 
 def test_base_magic_attack_event_miss_does_not_resolve(monkeypatch):
     from GameObjects.events.magic import base_attack_magic_event as bam
-    monkeypatch.setattr(bam, "prompt_for_roll", lambda prompt: 10)
+    monkeypatch.setattr(bam, "prompt_for_roll", lambda *_, **__: 10)
 
     hero = SimpleNamespace(position=(0, 0))
     enemy = SimpleNamespace(position=(1, 0), ac=15, bonuses=[])
@@ -161,7 +161,7 @@ def test_base_magic_attack_event_miss_does_not_resolve(monkeypatch):
 
 def test_base_magic_attack_event_critical(monkeypatch):
     from GameObjects.events.magic import base_attack_magic_event as bam
-    monkeypatch.setattr(bam, "prompt_for_roll", lambda prompt: 25)
+    monkeypatch.setattr(bam, "prompt_for_roll", lambda *_, **__: 25)
 
     hero = SimpleNamespace(position=(0, 0))
     enemy = SimpleNamespace(position=(1, 0), ac=15, bonuses=[])

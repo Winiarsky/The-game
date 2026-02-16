@@ -55,7 +55,7 @@ class _StealthAction:
 
 _stealth.StealthAction = _StealthAction
 _stealth.perform_movement = lambda *a, **k: None
-_stealth.prompt_for_roll = lambda prompt: 10
+_stealth.prompt_for_roll = lambda *_, **__: 10
 # korzystaj z prawdziwych helperów awareness jeśli dostępne
 try:
     from GameObjects.Interactables.utils.awareness import iter_watchers_in_rooms as _iter_watchers, summarize_watchers as _summarize_watchers

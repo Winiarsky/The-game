@@ -113,15 +113,15 @@ class EnemyMoveEvent(GameEvent):
                 continue
             path = find_path(board, enemy.position, cand, allow_diagonal=True, allow_occupied=False)
             if path:
-                reachable_paths.append((path, cand, path_cost_feet(path)))
+                reachable_paths.append((path, cand, path_cost_feet(path, board)))
 
         if not reachable_paths:
             return EventResult(success=False, consumed_action=False, message="Brak ścieżki dla ruchu wroga.")
 
         reachable_paths.sort(key=lambda p: p[2])
         full_path, goal, full_feet = reachable_paths[0]
-        truncated = trim_path_to_feet(full_path, move_budget_feet)
-        used_feet = path_cost_feet(truncated)
+        truncated = trim_path_to_feet(full_path, move_budget_feet, board)
+        used_feet = path_cost_feet(truncated, board)
         if len(truncated) < 2:
             return EventResult(success=False, consumed_action=True, message="Nie można wykonać kroku w budżecie ruchu.")
         dest = truncated[-1]
