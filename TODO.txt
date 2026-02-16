@@ -1,4 +1,5 @@
 - elfy i status z forestem
 - in dark status
+- uzupelnic enum EnemyType o brakujace typy wrogow
 
 TODO: Dodać mechaniki usuwania statusu Poisoned (test medyczny, antidotum itd.).

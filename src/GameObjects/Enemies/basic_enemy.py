@@ -9,6 +9,7 @@ from GameObjects.interactions_mixin.bonus_mixin import BonusMixin
 from GameObjects.interactions_mixin.status_mixin import StatusMixin
 from GameObjects.interactions_mixin.watchful_mixin import WatchfulMixin
 from GameObjects.interactions_mixin.reactive_mixin import ReactiveMixin
+from GameObjects.Enemies.enemy_types import EnemyType
 from combat.reactions import OpportunityAttack
 from combat.damage_utils import apply_damage_resistance
 from statuses import Status
@@ -31,6 +32,7 @@ class BasicEnemy(StatusMixin, BonusMixin, WatchfulMixin, ReactiveMixin):
     strength: int = 0
     behavior_id: str | None = "basic_melee"
     reach: int = 1
+    enemy_type: EnemyType | str = EnemyType.HUMAN
     watch_disturbed: int = 0  # 0 blokuje wejście w stealth w pokoju
     watch_disabled: bool = False
     perception_bonus: int = 4

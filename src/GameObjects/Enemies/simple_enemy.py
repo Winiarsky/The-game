@@ -4,6 +4,7 @@ import logging
 
 from GameObjects.base import GameObjectMeta
 from GameObjects.Enemies.basic_enemy import BasicEnemy
+from GameObjects.Enemies.enemy_types import EnemyType
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,7 @@ META = GameObjectMeta(
         "attack_bonus": 5,
         "strength": 2,
         "behavior_id": "basic_melee",
+        "enemy_type": EnemyType.ORC.value,
         "watch_disturbed": 0,
         "watch_disabled": False,
         "perception_bonus": 4,

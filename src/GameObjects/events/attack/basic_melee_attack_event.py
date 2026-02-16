@@ -92,6 +92,7 @@ class BasicMeleeAttackEvent(AttackEventBase):
             )
             return EventResult(success=True, consumed_action=self.consumes_action, message=f"Atak {self.weapon_label}: pudło.")
 
+        self._maybe_prompt_vengeful_hatred(hero, enemy)
         dmg_prompt = f"{'Trafienie krytyczne! ' if critical else 'Trafienie! '}Obrażenia {self.damage_prompt}: "
         damage = prompt_for_roll(
             dmg_prompt,

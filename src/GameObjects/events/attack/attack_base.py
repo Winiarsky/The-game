@@ -59,3 +59,42 @@ class AttackEventBase(GameEvent):
         except Exception:
             logger.debug("format_prompt nie powiódł się dla %s", action_tag, exc_info=True)
             return ""
+
+    def _maybe_prompt_vengeful_hatred(self, attacker, target) -> None:
+        """Pokaż informację o +1 do obrażeń vs wybrany typ przeciwnika (bez naliczania)."""
+        getter = getattr(attacker, "get_status_data", None)
+        if callable(getter):
+            enemy_type = getter("vengeful_hatred", "enemy_type", None)
+            bonus = getter("vengeful_hatred", "damage_bonus", 1)
+        else:
+            enemy_type = None
+            bonus = 1
+            for status in getattr(attacker, "statuses", []) or []:
+                if getattr(status, "id", None) != "vengeful_hatred":
+                    continue
+                data = getattr(status, "data", {}) or {}
+                enemy_type = data.get("enemy_type")
+                bonus = data.get("damage_bonus", 1)
+                break
+        if not enemy_type:
+            return
+        target_type = getattr(target, "enemy_type", None)
+        if target_type is None:
+            return
+        enemy_type_norm = getattr(enemy_type, "value", enemy_type)
+        target_type_norm = getattr(target_type, "value", target_type)
+        if enemy_type_norm != target_type_norm:
+            return
+        try:
+            from ui_client import get_ui_client
+
+            get_ui_client().prompt_info(
+                "Vengeful Hatred",
+                prompt_long=(
+                    f"Bonus do obrazen +{int(bonus)} vs {enemy_type_norm}. "
+                    "Dodaj recznie do wyniku."
+                ),
+                source="vengeful_hatred",
+            )
+        except Exception:
+            return

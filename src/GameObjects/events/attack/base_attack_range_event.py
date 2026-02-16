@@ -175,6 +175,7 @@ class BaseRangeAttackEvent(AttackEventBase):
                 return EventResult(success=True, consumed_action=self.consumes_action, message="Strzał chybia.")
 
             prompt_prefix = "Trafienie krytyczne! " if critical else "Trafienie! "
+            self._maybe_prompt_vengeful_hatred(hero, enemy)
             damage_components = self._collect_damage_components(prompt_prefix=prompt_prefix)
             defeated = False
             try:
