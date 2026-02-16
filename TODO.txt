@@ -1,2 +1,4 @@
 - elfy i status z forestem
 - in dark status
+
+TODO: Dodać mechaniki usuwania statusu Poisoned (test medyczny, antidotum itd.).

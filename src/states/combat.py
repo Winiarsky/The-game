@@ -164,12 +164,6 @@ class Combat(State):
 
     def _clear_start_of_turn_effects(self, actor) -> None:
         """Usuń efekty jednorundowe (np. raise_shield) na początku inicjatywy bohatera."""
-        tick_statuses = getattr(actor, "tick_statuses_turn", None)
-        if callable(tick_statuses):
-            try:
-                tick_statuses()
-            except Exception:
-                logger.debug("Nie udało się odliczyć statusów dla %s", actor)
         if actor in getattr(self.game, "heroes", []):
             tick = getattr(actor, "tick_bonuses_turn", None)
             if callable(tick):
@@ -191,6 +185,20 @@ class Combat(State):
             process_persistent_damage(actor, self.game)
         except Exception as exc:
             logger.debug("Nie udało się przetworzyć persistent damage dla %s: %s", actor, exc)
+
+        try:
+            from statuses import process_poisoned
+
+            process_poisoned(actor, self.game)
+        except Exception as exc:
+            logger.debug("Nie udało się przetworzyć poisoned dla %s: %s", actor, exc)
+
+        tick_statuses = getattr(actor, "tick_statuses_turn", None)
+        if callable(tick_statuses):
+            try:
+                tick_statuses()
+            except Exception:
+                logger.debug("Nie udało się odliczyć statusów dla %s", actor)
 
     def _current_actor(self):
         self._cleanup_removed()

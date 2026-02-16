@@ -11,6 +11,7 @@ from .in_dark import InDarkStatus, IN_DARK_STATUS
 from .darkvision import DarkVisionStatus, DARKVISION_STATUS
 from .stealth import StealthStatus, STEALTH_STATUS, ObservableStatus, OBSERVABLE_STATUS
 from .persistent_damage import PERSISTENT_DAMAGE_STATUS, make_persistent_damage, process_persistent_damage
+from .poisoned import PoisonedStatus, process_poisoned
 
 __all__ = [
     "Status",
@@ -31,6 +32,8 @@ __all__ = [
     "PERSISTENT_DAMAGE_STATUS",
     "make_persistent_damage",
     "process_persistent_damage",
+    "PoisonedStatus",
+    "process_poisoned",
     "ProneStatus",
     "PRONE_STATUS",
     "apply_prone_effects",
