@@ -19,6 +19,7 @@ from . import prone_event  # noqa: F401
 from . import stand_event  # noqa: F401
 from . import ancient_blood_event  # noqa: F401
 from .magic import magic_missile_event  # noqa: F401
+from .magic import detect_magic_event  # noqa: F401
 from .magic import acid_splash_event  # noqa: F401
 from . import phase_events  # noqa: F401
 from .enemy import enemy_move_event  # noqa: F401

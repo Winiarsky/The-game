@@ -76,9 +76,32 @@ class StatusMixin:
             if any(s.id == status.id for s in self.statuses):
                 return False
         self.statuses.append(status)
+        self._apply_removed_statuses(status)
         self._apply_granted_statuses(status)
         self._ui_log(f"Otrzymujesz status: {status.display_label}.")
         return True
+
+    def _apply_removed_statuses(self, status: "Status") -> None:
+        data = getattr(status, "data", None) or {}
+        removes = data.get("remove_statuses") or data.get("remove_status") or []
+        if not removes:
+            return
+        from statuses import Status  # lokalny import by unikać cykli
+        for removed in removes:
+            if isinstance(removed, Status):
+                if removed.id == status.id:
+                    continue
+                try:
+                    self.remove_status(removed)
+                except Exception:
+                    continue
+            elif isinstance(removed, str):
+                if removed == status.id:
+                    continue
+                try:
+                    self.remove_status(removed)
+                except Exception:
+                    continue
 
     def _apply_granted_statuses(self, status: "Status") -> None:
         data = getattr(status, "data", None) or {}

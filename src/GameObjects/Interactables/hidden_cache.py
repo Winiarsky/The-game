@@ -22,6 +22,8 @@ class HiddenCache(HiddenMixin, InteractableMixin):
         auto_reveal_on_enter: bool = False,
         auto_trigger_on_enter: bool = False,
         trap_effect: str | None = None,
+        magical: bool = True,
+        magical_description: str = "Wyczuwasz obecnosc magicznej skrytki",
     ):
         InteractableMixin.__init__(
             self,
@@ -37,6 +39,8 @@ class HiddenCache(HiddenMixin, InteractableMixin):
         self.reveal_tags = tuple(reveal_tags or [])
         self.loot = list(loot or [])
         self.opened = False
+        self.magical = magical
+        self.magical_description = magical_description
         self.auto_reveal_on_enter = auto_reveal_on_enter
         self.auto_trigger_on_enter = auto_trigger_on_enter
         self.trap_effect = trap_effect or "Cichy alarm – czujesz niepokój."

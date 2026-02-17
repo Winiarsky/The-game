@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from GameObjects.interactions_mixin.bonus_mixin import BonusMixin
+from GameObjects.interactions_mixin.magical_mixin import MagicalMixin
 from GameObjects.interactions_mixin.status_mixin import StatusMixin
 from GameObjects.interactions_mixin.watchful_mixin import WatchfulMixin
 from GameObjects.interactions_mixin.reactive_mixin import ReactiveMixin
@@ -20,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class BasicEnemy(StatusMixin, BonusMixin, WatchfulMixin, ReactiveMixin):
+class BasicEnemy(StatusMixin, BonusMixin, WatchfulMixin, ReactiveMixin, MagicalMixin):
     """Bazowa klasa przeciwnika do walki turowej."""
 
     name: str = "Enemy"

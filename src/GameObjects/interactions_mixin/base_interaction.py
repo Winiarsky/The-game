@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Optional, Tuple, TYPE_CHECKING, Any
 
 from object_registry import assign_id
+from GameObjects.interactions_mixin.magical_mixin import MagicalMixin
 
 if TYPE_CHECKING:
     from board_grid import Occupant
@@ -31,7 +32,7 @@ class Interaction:
 
 
 @dataclass
-class InteractableMixin:
+class InteractableMixin(MagicalMixin):
     """Mixin dla obiektów, z którymi można wchodzić w interakcję."""
 
     object_id: str = field(init=False)
