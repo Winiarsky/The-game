@@ -20,9 +20,11 @@ sys.modules["actions.move_utils"] = move_utils
 
 from board_grid import BoardGrid  # noqa: E402
 from GameObjects.Terrains.rumble_terrain import RumbleTerrain  # noqa: E402
+from GameObjects.Terrains.bushes_terrain import BushesTerrain  # noqa: E402
 from GameObjects.events.move_event import MoveEvent  # noqa: E402
 from GameObjects.events.base import EventContext  # noqa: E402
 from statuses.race.dwarf.feats.rock_runner import ROCK_RUNNER_STATUS  # noqa: E402
+from statuses.race.elfs.heritages.woodland_elf import WOODLAND_ELF_STATUS  # noqa: E402
 
 
 class DummyConn:
@@ -197,3 +199,36 @@ def test_rock_runner_path_cost_ignores_rumble():
     hero.statuses.append(ROCK_RUNNER_STATUS)
 
     assert move_utils.path_cost_feet(path, board, mover=hero) == 10
+
+
+def test_woodland_elf_ignores_bushes_cost_and_prompt():
+    board = BoardGrid(rows=1, cols=3)
+    board.set_field((1, 0), BushesTerrain())
+
+    hero = DummyHero((0, 0))
+    hero.statuses.append(WOODLAND_ELF_STATUS)
+    board.place(hero, (0, 0))
+
+    target = (2, 0)
+    conn = DummyConn(clicks=[target, target])
+    ui = DummyUI()
+    game = types.SimpleNamespace(
+        board=board,
+        conn=conn,
+        heroes=[hero],
+        enemies=[],
+        events=DummyEvents(),
+        ui=ui,
+        ui_log=lambda *_a, **_k: None,
+        ui_event=lambda *_a, **_k: None,
+        state=types.SimpleNamespace(__class__=type("Exploration", (), {})),
+        ui_idle_hint=ui.idle_hint,
+    )
+
+    ctx = EventContext(game=game, actor=hero)
+    MoveEvent().execute(ctx)
+
+    assert ui.prompts == []
+    assert ui.hints
+    assert "trudny teren" not in ui.hints[-1]["text"].lower()
+    assert move_utils.path_cost_feet([(0, 0), (1, 0), (2, 0)], board, mover=hero) == 10

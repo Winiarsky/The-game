@@ -37,6 +37,21 @@ class TakeCoverEvent(GameEvent):
                     result.append((candidate[0], candidate[1], obj))
         return result
 
+    def _status_allows_terrain_cover(self, hero, terrain) -> bool:
+        if hero is None or terrain is None:
+            return False
+        terrain_name = getattr(terrain, "name", None)
+        terrain_tags = set(getattr(terrain, "terrain_tags", ()) or ())
+        for status in getattr(hero, "statuses", []) or []:
+            data = getattr(status, "data", None) or {}
+            names = data.get("allow_take_cover_terrain_names") or []
+            if terrain_name and terrain_name in names:
+                return True
+            tags = data.get("allow_take_cover_terrain_tags") or []
+            if tags and terrain_tags.intersection(tags):
+                return True
+        return False
+
     def _upgrade_cover_type(self, cover_type: str) -> Optional[str]:
         order = ["minor", "standard", "greater", "block"]
         try:
@@ -60,11 +75,22 @@ class TakeCoverEvent(GameEvent):
 
         neighbors = self._neighbors_with_cover(ctx.game, hero_pos)
 
+        cover_obj: RangeAttackAffectMixin | None = None
         if not neighbors:
-            return EventResult.cancelled(message="Brak pobliskiej osłony.")
+            terrain = None
+            try:
+                terrain = ctx.game.board.cell_at(hero_pos).field
+            except Exception:
+                terrain = None
+            if terrain is None or not self._status_allows_terrain_cover(hero, terrain):
+                return EventResult.cancelled(message="Brak pobliskiej osłony.")
+            cover_obj = terrain if isinstance(terrain, RangeAttackAffectMixin) else None
+            if cover_obj is None:
+                return EventResult.cancelled(message="Brak osłony na tym terenie.")
 
-        cover_obj = neighbors[0][2]
-        if len(neighbors) > 1:
+        if cover_obj is None:
+            cover_obj = neighbors[0][2]
+        if len(neighbors) > 1 and cover_obj is neighbors[0][2]:
             positions = [(x, y) for x, y, _ in neighbors]
             colors = [[60, 140, 60]] * len(positions)
             try:

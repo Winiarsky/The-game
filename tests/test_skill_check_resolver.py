@@ -11,24 +11,42 @@ for path in (PROJECT_ROOT, SRC_ROOT):
         sys.path.insert(0, str(path))
 
 # --- Stuby brakujących modułów actions.* potrzebne przy imporcie eventów ---
-_actions = types.ModuleType("actions")
-_actions.__path__ = []
-_move_utils = types.ModuleType("actions.move_utils")
-_move_utils.find_path = lambda *a, **k: []
-_move_utils.path_cost_feet = lambda *a, **k: 0
-_move_utils.trim_path_to_feet = lambda *a, **k: []
-_move_utils.perform_movement = lambda *a, **k: None
-_move_utils.follow_path = lambda *a, **k: None
-_move_utils.default_on_enter = lambda *a, **k: None
-_move_utils._maybe_dispatch_move_reactions = lambda *a, **k: None
-_specials = types.ModuleType("actions.specials")
-_specials.__path__ = []
-_magic = types.ModuleType("actions.specials.magic_missile")
-_magic.magic_missile_ability = lambda *a, **k: None
-sys.modules.setdefault("actions", _actions)
-sys.modules.setdefault("actions.move_utils", _move_utils)
-sys.modules.setdefault("actions.specials", _specials)
-sys.modules.setdefault("actions.specials.magic_missile", _magic)
+try:
+    import actions.move_utils as _move_utils_mod  # noqa: F401
+    import actions.specials.magic_missile  # noqa: F401
+    if not hasattr(_move_utils_mod, "terrain_move_bonus_feet"):
+        raise ImportError("stubbed move_utils without terrain_move_bonus_feet")
+except Exception:
+    import importlib.util
+    _actions = types.ModuleType("actions")
+    _actions.__path__ = []
+    _move_utils = types.ModuleType("actions.move_utils")
+    _move_utils.find_path = lambda *a, **k: []
+    _move_utils.path_cost_feet = lambda *a, **k: 0
+    _move_utils.trim_path_to_feet = lambda *a, **k: []
+    _move_utils.perform_movement = lambda *a, **k: None
+    _move_utils.follow_path = lambda *a, **k: None
+    _move_utils.terrain_move_bonus_feet = lambda *a, **k: 0
+    _move_utils.default_on_enter = lambda *a, **k: None
+    _move_utils._maybe_dispatch_move_reactions = lambda *a, **k: None
+    _specials = types.ModuleType("actions.specials")
+    _specials.__path__ = []
+    _magic = types.ModuleType("actions.specials.magic_missile")
+    _magic.magic_missile_ability = lambda *a, **k: None
+    sys.modules["actions"] = _actions
+    sys.modules["actions.move_utils"] = _move_utils
+    sys.modules["actions.specials"] = _specials
+    sys.modules["actions.specials.magic_missile"] = _magic
+    # jeśli realny move_utils istnieje, podmień stub by uniknąć braków importu
+    try:
+        MOVE_UTILS_PATH = SRC_ROOT / "actions" / "move_utils.py"
+        spec = importlib.util.spec_from_file_location("actions.move_utils", MOVE_UTILS_PATH)
+        move_utils = importlib.util.module_from_spec(spec)
+        assert spec and spec.loader
+        spec.loader.exec_module(move_utils)  # type: ignore[arg-type]
+        sys.modules["actions.move_utils"] = move_utils
+    except Exception:
+        pass
 
 from bonuses import BonusEffect, BonusType  # noqa: E402
 from GameObjects.interactions_mixin.skill_check_resolver import (  # noqa: E402
@@ -37,6 +55,8 @@ from GameObjects.interactions_mixin.skill_check_resolver import (  # noqa: E402
 from GameObjects.events.checks import skill_check_event  # noqa: F401  # rejestruje eventy
 from statuses import NOBLE_PERSON_STATUS, SILVER_TONGUE_STATUS, STUBBORN_STATUS  # noqa: E402
 from GameObjects.NPC.guard_npc import GuardNPC  # noqa: E402
+from statuses.race.elfs.heritages.seer_elf import SEER_ELF_STATUS  # noqa: E402
+from statuses.race.elfs.heritages.whisper_elf import WHISPER_ELF_STATUS  # noqa: E402
 
 
 class DummyGame:
@@ -124,3 +144,32 @@ def test_guard_diplomacy_action(monkeypatch):
     monkeypatch.setattr("GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll", lambda *_, **__:1)
     msg2 = guard2.action_diplomacy_guard(hero_plain, game)
     assert "Nie będzie dalszych" in msg2 or guard2.diplomacy_blocked
+
+
+@pytest.mark.parametrize("skill_id", ["arcana", "occultism", "religion"])
+def test_seer_elf_circumstance_bonus_for_magic_skills(monkeypatch, skill_id):
+    monkeypatch.setattr("GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll", lambda *_, **__:10)
+    actor = Hero(statuses=[SEER_ELF_STATUS])
+    res = resolve_skill_check_with_sources(
+        skill_id=skill_id,
+        dc=15,
+        actor=actor,
+        target=None,
+        tags=[skill_id],
+        apply_modifiers=False,
+    )
+    assert res.modifier == 1
+
+
+def test_whisper_elf_circumstance_bonus_for_perception(monkeypatch):
+    monkeypatch.setattr("GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll", lambda *_, **__:10)
+    actor = Hero(statuses=[WHISPER_ELF_STATUS])
+    res = resolve_skill_check_with_sources(
+        skill_id="perception",
+        dc=15,
+        actor=actor,
+        target=None,
+        tags=["perception"],
+        apply_modifiers=False,
+    )
+    assert res.modifier == 4

@@ -18,14 +18,15 @@ from bonuses import BonusEffect, BonusType
 
 
 class DummyBoard:
-    def __init__(self, cover_positions=None):
+    def __init__(self, cover_positions=None, terrain=None):
         self.cover_positions = set(cover_positions or [])
         self.removed = []
+        self.terrain = terrain
 
     # minimal cell/terrain for _compute_modifier
     class _Cell:
-        def __init__(self):
-            self.field = types.SimpleNamespace(stealth_impact=0)
+        def __init__(self, terrain=None):
+            self.field = terrain or types.SimpleNamespace(stealth_impact=0)
             self.rooms = set()
 
     def get_neighbors(self, pos, include_position=True, diagonal=True):
@@ -52,7 +53,7 @@ class DummyBoard:
         return []
 
     def cell_at(self, pos):
-        return self._Cell()
+        return self._Cell(self.terrain)
 
     def in_bounds(self, pos):
         return True
@@ -83,8 +84,8 @@ class DummyConn:
 
 
 class DummyGame:
-    def __init__(self, cover_positions=None, choice=None):
-        self.board = DummyBoard(cover_positions)
+    def __init__(self, cover_positions=None, choice=None, terrain=None):
+        self.board = DummyBoard(cover_positions, terrain=terrain)
         self.conn = DummyConn(choice)
         self.ui_log_messages = []
 
@@ -198,4 +199,18 @@ def test_stealth_allowed_with_covered(monkeypatch):
     # ręcznie dodajemy +2 jak w execute (tam by się dodało przez covered)
     modifier += 2
     assert modifier >= 2
-    assert any("+2" in d or "2" in d for d in details + ["osłona +2"])
+
+
+def test_take_cover_allowed_on_forest_with_woodland_elf():
+    from GameObjects.Terrains.forest_terrain import ForestTerrain
+    from statuses.race.elfs.heritages.woodland_elf import WOODLAND_ELF_STATUS
+
+    game = DummyGame(cover_positions=[], terrain=ForestTerrain())
+    hero = DummyHero((0, 0))
+    hero.statuses.append(WOODLAND_ELF_STATUS)
+    ctx = DummyCtx(game, hero, in_combat=True)
+
+    result = TakeCoverEvent().execute(ctx)
+
+    assert result.success is True
+    assert _ac_bonus(hero) == 4
