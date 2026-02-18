@@ -34,13 +34,16 @@ def check_concealed(ctx, target) -> bool:
                 break
     if not concealed:
         return True
+    dc = 5
+    if _has_status(attacker, "keen_eyes"):
+        dc = 3
     roll = prompt_for_roll(
-        "Concealed: rzut k20 (DC 5) przed atakiem.",
+        f"Concealed: rzut k20 (DC {dc}) przed atakiem.",
         layout="test",
         subtitle="Flat check bez premii.",
         answer_placeholder="Wynik k20",
     )
-    if roll >= 5:
+    if roll >= dc:
         return True
     try:
         ui = getattr(ctx.game, "ui", None)
