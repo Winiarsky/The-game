@@ -10,6 +10,7 @@ from . import end_turn_event  # noqa: F401
 from . import delay_event  # noqa: F401
 from .attack import attack_sword_event  # noqa: F401
 from .attack import attack_dagger_event  # noqa: F401
+from .attack import attack_razortooth_jaws_event  # noqa: F401
 from .attack import attack_range_long_bow  # noqa: F401
 from . import raise_shield_event  # noqa: F401
 from . import take_cover_event  # noqa: F401

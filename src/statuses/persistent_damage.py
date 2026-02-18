@@ -27,6 +27,19 @@ def _iter_persistent(statuses: Iterable[Status]) -> list[Status]:
     return [s for s in statuses if getattr(s, "id", None) == PERSISTENT_DAMAGE_STATUS.id]
 
 
+def _has_status_id(actor, status_id: str, statuses: Iterable[Status]) -> bool:
+    has_status = getattr(actor, "has_status", None)
+    if callable(has_status):
+        try:
+            return bool(has_status(status_id))
+        except Exception:
+            pass
+    for status in statuses:
+        if getattr(status, "id", None) == status_id or status == status_id:
+            return True
+    return False
+
+
 def process_persistent_damage(actor, game) -> None:
     """Zastosuj obrażenia ciągłe na początku inicjatywy aktora."""
     statuses = getattr(actor, "statuses", []) or []
@@ -66,12 +79,18 @@ def process_persistent_damage(actor, game) -> None:
             except Exception:
                 pass
 
-        # flat check ST 15
+        # flat check: domyślnie DC 15 (zmiany dla wybranych heritage)
+        dc = 15
+        if damage_type == DamageType.FIRE.value and _has_status_id(actor, "charhide_goblin", statuses):
+            dc = 10
+        elif damage_type == DamageType.COLD.value and _has_status_id(actor, "snow_goblin", statuses):
+            dc = 10
+
         if is_hero:
             try:
                 roll = int(
                     prompt_for_roll(
-                        "Flat check na zakończenie persistent (ST 15): ",
+                        f"Flat check na zakończenie persistent (DC {dc}): ",
                         layout="test",
                         answer_placeholder="Wynik rzutu",
                     )
@@ -82,7 +101,7 @@ def process_persistent_damage(actor, game) -> None:
         else:
             roll = int(random.randint(1, 20))
 
-        if roll >= 15:
+        if roll >= dc:
             for st in list(statuses_same_type):
                 try:
                     actor.remove_status(st)  # type: ignore[arg-type]

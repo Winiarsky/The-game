@@ -58,6 +58,7 @@ from GameObjects.NPC.guard_npc import GuardNPC  # noqa: E402
 from statuses.race.elfs.heritages.seer_elf import SEER_ELF_STATUS  # noqa: E402
 from statuses.race.elfs.heritages.whisper_elf import WHISPER_ELF_STATUS  # noqa: E402
 from statuses.race.elfs.feats.unwavering_mien import UNWAVERING_MIEN_STATUS  # noqa: E402
+from statuses.race.goblin.heritages.irongut_goblin import IRONGUT_GOBLIN_STATUS  # noqa: E402
 
 
 class DummyGame:
@@ -191,3 +192,28 @@ def test_unwavering_mien_bonus_and_promote_on_mental(monkeypatch):
     # 14 vs 15 -> failure, promote +1 => success
     assert res.modifier == 1
     assert res.outcome == "success"
+
+
+def test_irongut_goblin_ingested_bonus_and_promote(monkeypatch):
+    captured = {}
+
+    def _prompt(_prompt, **kwargs):
+        captured.update(kwargs)
+        return 13
+
+    monkeypatch.setattr("GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll", _prompt)
+    actor = Hero(statuses=[IRONGUT_GOBLIN_STATUS])
+    res = resolve_skill_check_with_sources(
+        skill_id="fortitude",
+        dc=13,
+        actor=actor,
+        target=None,
+        tags=["ingested", "fortitude"],
+        apply_modifiers=False,
+    )
+
+    assert res.modifier == 2
+    assert res.outcome == "critical_success"
+    modifiers = captured.get("modifiers", {})
+    bon_circ = modifiers.get("bonCirc", [])
+    assert any(item.get("label") == "irongut" and item.get("value") == 2 for item in bon_circ)

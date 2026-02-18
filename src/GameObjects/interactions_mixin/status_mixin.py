@@ -47,6 +47,26 @@ class StatusMixin:
                 return True
         return False
 
+    def _maybe_prompt_status_info(self, status: "Status") -> None:
+        data = getattr(status, "data", None) or {}
+        prompt = data.get("ui_prompt")
+        if not prompt:
+            return
+        prompt_long = data.get("ui_prompt_long")
+        try:
+            from ui_client import get_ui_client  # lokalny import by unikać cykli
+
+            ui_client = get_ui_client()
+            if ui_client.enabled:
+                try:
+                    ui_client.prompt_info(prompt, prompt_long=prompt_long, source="status")
+                    return
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        self._ui_log(prompt)
+
     def _ensure_status_objects(self) -> None:
         if not self.statuses:
             return
@@ -79,6 +99,7 @@ class StatusMixin:
         self._apply_removed_statuses(status)
         self._apply_granted_statuses(status)
         self._ui_log(f"Otrzymujesz status: {status.display_label}.")
+        self._maybe_prompt_status_info(status)
         return True
 
     def _apply_removed_statuses(self, status: "Status") -> None:

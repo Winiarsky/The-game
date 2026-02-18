@@ -8,6 +8,7 @@ for p in (ROOT, ROOT / "src"):
         sys.path.insert(0, str(p))
 
 from statuses import make_persistent_damage, process_persistent_damage
+from statuses.base import Status
 
 
 class DummyActor:
@@ -81,3 +82,33 @@ def test_persistent_damage_enemy_removed_on_high_roll(monkeypatch):
     assert enemy.damage_taken == 4
     assert not enemy.statuses  # removed on good roll
     assert any("ustaje" in msg for msg in logs)
+
+
+def test_persistent_damage_charhide_fire_dc10(monkeypatch):
+    actor = DummyActor("hero")
+    actor.statuses.append(make_persistent_damage(2, "fire"))
+    actor.statuses.append(Status(id="charhide_goblin"))
+    logs = []
+    game = SimpleNamespace(heroes=[actor], enemies=[], ui_log=lambda msg: logs.append(msg))
+    monkeypatch.setattr("statuses.persistent_damage.prompt_for_roll", lambda *_, **__: 10)
+
+    process_persistent_damage(actor, game)
+
+    assert actor.damage_taken == 2
+    assert any(getattr(s, "id", None) == "charhide_goblin" for s in actor.statuses)
+    assert not any(getattr(s, "id", None) == "persistent_damage" for s in actor.statuses)
+
+
+def test_persistent_damage_snow_cold_dc10(monkeypatch):
+    actor = DummyActor("hero")
+    actor.statuses.append(make_persistent_damage(3, "cold"))
+    actor.statuses.append(Status(id="snow_goblin"))
+    logs = []
+    game = SimpleNamespace(heroes=[actor], enemies=[], ui_log=lambda msg: logs.append(msg))
+    monkeypatch.setattr("statuses.persistent_damage.prompt_for_roll", lambda *_, **__: 10)
+
+    process_persistent_damage(actor, game)
+
+    assert actor.damage_taken == 3
+    assert any(getattr(s, "id", None) == "snow_goblin" for s in actor.statuses)
+    assert not any(getattr(s, "id", None) == "persistent_damage" for s in actor.statuses)
