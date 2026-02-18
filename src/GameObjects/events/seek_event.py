@@ -64,23 +64,17 @@ class SeekEvent(GameEvent):
         search_positions.add(hero_pos)
 
         base_tags = ["seek", Skill.PERCEPTION.value]
-        roll = check_resolver.prompt_for_roll(
-            "Rzuć na Perception (seek): ",
-            source="seek",
-            layout="test",
-            answer_placeholder="Wynik Perception",
-        )
-        base_resolution = check_resolver.resolve_skill_check_with_sources_from_roll(
+        base_resolution = check_resolver.resolve_skill_check_with_sources(
             skill_id=Skill.PERCEPTION.value,
             dc=consts.SEEK_FAIL,
             actor=actor,
             target=None,
             tags=base_tags,
-            roll=roll,
             game=game,
             apply_modifiers=True,
             consume_statuses=False,
         )
+        roll = base_resolution.roll
         roll_total = base_resolution.total
 
         if rooms_here and roll_total < consts.SEEK_CRITICAL_FAIL:

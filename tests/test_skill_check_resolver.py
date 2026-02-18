@@ -158,7 +158,7 @@ def test_seer_elf_circumstance_bonus_for_magic_skills(monkeypatch, skill_id):
         actor=actor,
         target=None,
         tags=[skill_id],
-        apply_modifiers=False,
+        apply_modifiers=True,
     )
     assert res.modifier == 1
 
@@ -172,9 +172,9 @@ def test_whisper_elf_circumstance_bonus_for_perception(monkeypatch):
         actor=actor,
         target=None,
         tags=["perception"],
-        apply_modifiers=False,
+        apply_modifiers=True,
     )
-    assert res.modifier == 0
+    assert res.modifier == 4
     assert any("Whisper Elf" in note for note in res.notes)
 
 
@@ -187,7 +187,7 @@ def test_unwavering_mien_bonus_and_promote_on_mental(monkeypatch):
         actor=actor,
         target=None,
         tags=["mental", "will"],
-        apply_modifiers=False,
+        apply_modifiers=True,
     )
     # 14 vs 15 -> failure, promote +1 => success
     assert res.modifier == 1
@@ -209,7 +209,7 @@ def test_irongut_goblin_ingested_bonus_and_promote(monkeypatch):
         actor=actor,
         target=None,
         tags=["ingested", "fortitude"],
-        apply_modifiers=False,
+        apply_modifiers=True,
     )
 
     assert res.modifier == 2

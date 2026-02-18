@@ -82,3 +82,89 @@ def compute_total_modifier(effects: Iterable[BonusEffect], tag: str, target_id: 
     total_bonus = sum(data["bonus"] for data in aggregated.values())
     total_penalty = sum(data["penalty"] for data in aggregated.values())
     return int(total_bonus - total_penalty)
+
+
+def _effect_is_penalty(effect: BonusEffect) -> bool:
+    return bool(effect.is_penalty or effect.value < 0)
+
+
+def _effect_label(effect: BonusEffect) -> str:
+    return effect.label or effect.source or effect.tag or "mod"
+
+
+def select_best_effects(
+    effects: Iterable[BonusEffect], tag: str, target_id: Optional[str] = None
+) -> list[BonusEffect]:
+    """Wybierz po 1 najwyższym bonusie i karze na typ dla danego tagu/targetu."""
+    filtered = [eff for eff in effects if eff.matches(tag, target_id)]
+    if not filtered:
+        return []
+    result: list[BonusEffect] = []
+    grouped: dict[BonusType, list[BonusEffect]] = {}
+    for eff in filtered:
+        grouped.setdefault(eff.type, []).append(eff)
+    for btype, items in grouped.items():
+        bonuses = [e for e in items if not _effect_is_penalty(e)]
+        penalties = [e for e in items if _effect_is_penalty(e)]
+        if bonuses:
+            best_bonus = max(bonuses, key=lambda e: e.value)
+            result.append(best_bonus)
+        if penalties:
+            best_penalty = max(penalties, key=lambda e: abs(e.value))
+            result.append(best_penalty)
+    return result
+
+
+def format_effects_log(
+    effects: Iterable[BonusEffect], tag: str, target_id: Optional[str] = None
+) -> list[str]:
+    """Zwróć listę unikalnych linii do logu (grupowanie po typie/znaku/wartości)."""
+    filtered = [eff for eff in effects if eff.matches(tag, target_id)]
+    if not filtered:
+        return []
+    groups: dict[tuple[BonusType, bool, int], set[str]] = {}
+    for eff in filtered:
+        is_penalty = _effect_is_penalty(eff)
+        value = abs(int(getattr(eff, "value", 0) or 0))
+        if value == 0:
+            continue
+        key = (eff.type, is_penalty, value)
+        groups.setdefault(key, set()).add(_effect_label(eff))
+    ordered_types = list(BonusType)
+    lines: list[str] = []
+    for btype in ordered_types:
+        for is_penalty in (False, True):
+            for (t, pen, value), labels in groups.items():
+                if t != btype or pen != is_penalty:
+                    continue
+                sign = "-" if is_penalty else "+"
+                label_txt = ", ".join(sorted(labels))
+                lines.append(f"{sign}{value} {btype.value} ({label_txt})")
+    return lines
+
+
+def build_modifiers_grid(effects: Iterable[BonusEffect]) -> dict:
+    """Przygotuj dane do sekcji premii/kar w UI (najlepsze per typ)."""
+    buckets = {
+        "penCirc": [],
+        "bonCirc": [],
+        "penStat": [],
+        "bonStat": [],
+    }
+    for eff in effects:
+        value = getattr(eff, "value", 0) or 0
+        if not value:
+            continue
+        label = _effect_label(eff)
+        btype = getattr(eff, "type", None)
+        is_penalty = _effect_is_penalty(eff)
+        if btype == BonusType.CIRCUMSTANCE:
+            key = "penCirc" if is_penalty else "bonCirc"
+        elif btype == BonusType.STATUS:
+            key = "penStat" if is_penalty else "bonStat"
+        else:
+            key = "penCirc" if is_penalty else "bonCirc"
+        buckets[key].append({"label": label, "value": value})
+    for key, arr in buckets.items():
+        arr.sort(key=lambda x: abs(x.get("value", 0)), reverse=True)
+    return buckets

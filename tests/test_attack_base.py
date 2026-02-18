@@ -78,10 +78,9 @@ def test_attacker_modifier_uses_compute_modifier():
     assert mod == -2
 
 
-def test_format_bonus_info_uses_formatter_output():
+def test_format_bonus_info_is_empty_without_bonuses():
     attacker = DummyAttacker(formatted="+1 flank")
     attack = DummyAttack()
 
     info = attack._format_bonus_info(attacker, "attack_melee")
-    assert "+1 flank" in info
-    assert "Modyfikatory" in info
+    assert info == ""

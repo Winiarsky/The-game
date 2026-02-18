@@ -57,7 +57,7 @@ def test_in_dark_status_prompt_and_removal():
     assert completed and reason is None
     assert hero.has_status(IN_DARK_STATUS)
 
-    # status should add prompt note (manual bonus)
+    # status powinien dodać automatyczny bonus
     res = resolve_skill_check_with_sources_from_roll(
         skill_id=Skill.STEALTH.value,
         dc=10,
@@ -66,7 +66,7 @@ def test_in_dark_status_prompt_and_removal():
         roll=10,
         apply_modifiers=True,
     )
-    assert res.modifier == 0
+    assert res.modifier == 10
     assert any("Ciemność" in note for note in res.notes)
 
     # move onto basic terrain -> basic_terrain.on_enter removes status

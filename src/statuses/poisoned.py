@@ -56,7 +56,7 @@ def process_poisoned(actor, game) -> None:
             target=None,
             tags=["poison", Skill.FORTITUDE.value],
             game=game,
-            apply_modifiers=False,
+            apply_modifiers=True,
         )
 
         dealt = _poison_damage_for_outcome(damage, result.outcome)

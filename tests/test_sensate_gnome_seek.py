@@ -41,7 +41,7 @@ def test_sensate_gnome_has_prompt_note_only_for_matching_tags():
         apply_modifiers=True,
     )
 
-    assert resolution.modifier == 0
+    assert resolution.modifier == 4
     assert any("sensate gnome" in note.lower() for note in resolution.notes)
 
     resolution_no_tag = resolve_skill_check_with_sources_from_roll(

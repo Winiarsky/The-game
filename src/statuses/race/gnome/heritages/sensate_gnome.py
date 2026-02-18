@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from bonuses import BonusEffect, BonusType
 from skills import Skill
 from statuses.base import Status
 from statuses.check_effects import CheckEffect
@@ -20,24 +21,51 @@ def SensateGnomeStatus() -> Status:
                 applies_to="source",
                 skills=[Skill.PERCEPTION.value],
                 tags_required=["nature"],
+                bonus_effects=[
+                    BonusEffect(
+                        type=BonusType.CIRCUMSTANCE,
+                        value=4,
+                        tag=Skill.PERCEPTION.value,
+                        source="status:sensate_gnome",
+                        label="sensate gnome +4",
+                    )
+                ],
                 prompt_notes=[
-                    "Sensate Gnome: +4 do Perception przy seek na tagi nature/magic/smelly (dolicz ręcznie)."
+                    "Sensate Gnome: +4 do Perception przy seek na tagi nature/magic/smelly."
                 ],
             ),
             CheckEffect(
                 applies_to="source",
                 skills=[Skill.PERCEPTION.value],
                 tags_required=["magic"],
+                bonus_effects=[
+                    BonusEffect(
+                        type=BonusType.CIRCUMSTANCE,
+                        value=4,
+                        tag=Skill.PERCEPTION.value,
+                        source="status:sensate_gnome",
+                        label="sensate gnome +4",
+                    )
+                ],
                 prompt_notes=[
-                    "Sensate Gnome: +4 do Perception przy seek na tagi nature/magic/smelly (dolicz ręcznie)."
+                    "Sensate Gnome: +4 do Perception przy seek na tagi nature/magic/smelly."
                 ],
             ),
             CheckEffect(
                 applies_to="source",
                 skills=[Skill.PERCEPTION.value],
                 tags_required=["smelly"],
+                bonus_effects=[
+                    BonusEffect(
+                        type=BonusType.CIRCUMSTANCE,
+                        value=4,
+                        tag=Skill.PERCEPTION.value,
+                        source="status:sensate_gnome",
+                        label="sensate gnome +4",
+                    )
+                ],
                 prompt_notes=[
-                    "Sensate Gnome: +4 do Perception przy seek na tagi nature/magic/smelly (dolicz ręcznie)."
+                    "Sensate Gnome: +4 do Perception przy seek na tagi nature/magic/smelly."
                 ],
             ),
         ],

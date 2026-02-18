@@ -4,7 +4,7 @@ import logging
 import math
 from typing import Sequence
 
-from bonuses import BonusEffect, BonusType
+from bonuses import BonusEffect, BonusType, build_modifiers_grid
 from GameObjects.interactions_mixin import RangeAttackAffectMixin, prompt_for_roll
 from statuses import Status
 from damage_types import DamageType
@@ -159,17 +159,39 @@ class BaseRangeAttackEvent(AttackEventBase):
             mods_note = "; ".join(mods) if mods else "brak"
 
             action_tag = (self._effective_tags(ctx) or ["attack_ranged"])[0]
-            bonus_info = self._format_bonus_info(hero, action_tag, target=enemy)
+            extra_effects = []
+            if range_penalty:
+                extra_effects.append(
+                    BonusEffect(
+                        type=BonusType.CIRCUMSTANCE,
+                        value=range_penalty,
+                        tag=action_tag,
+                        source="range_penalty",
+                        label=f"zasięg {increments}x{self.range_increment_ft}",
+                        is_penalty=True,
+                    )
+                )
+            modifier, best_effects, log_lines = self._attack_modifier_details(
+                hero, action_tag, target=enemy, extra_effects=extra_effects
+            )
+            if log_lines:
+                try:
+                    game.ui_log(f"Modyfikatory ({action_tag}): {', '.join(log_lines)}.")
+                except Exception:
+                    pass
+            prompt_long = f"Modyfikator łączny: {modifier:+d} (doliczany automatycznie)."
 
             roll = prompt_for_roll(
                 f"Atak {self.weapon_label} na AC {target_ac}",
                 layout="test",
                 subtitle=f"bazowe {base_ac}, modyfikatory: {mods_note}",
-                prompt_long=bonus_info.strip(),
-                answer_placeholder="Wynik k20 + DEX",
+                prompt_long=prompt_long,
+                modifiers=build_modifiers_grid(best_effects),
+                answer_placeholder="Wynik k20",
             )
-            critical = roll >= target_ac + 10
-            hit = roll >= target_ac
+            total_roll = roll + modifier
+            critical = total_roll >= target_ac + 10
+            hit = total_roll >= target_ac
             if not hit:
                 game.events.safe_emit_action(
                     actor=hero,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from bonuses import BonusEffect, BonusType
 from skills import Skill
 from statuses.base import Status
 from statuses.check_effects import CheckEffect
@@ -15,7 +16,16 @@ def InDimLightStatus() -> Status:
                 applies_to="source",
                 skills=[Skill.STEALTH.value],
                 tags_required=["try_stealth"],
-                prompt_notes=["Półmrok: +2 circumstance do Stealth (dolicz ręcznie)."],
+                bonus_effects=[
+                    BonusEffect(
+                        type=BonusType.CIRCUMSTANCE,
+                        value=2,
+                        tag=Skill.STEALTH.value,
+                        source="status:in_dim_light",
+                        label="półmrok +2",
+                    )
+                ],
+                prompt_notes=["Półmrok: +2 circumstance do Stealth."],
             )
         ],
     )

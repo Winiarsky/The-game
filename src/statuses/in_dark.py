@@ -17,7 +17,16 @@ def InDarkStatus() -> Status:
                 applies_to="source",
                 skills=[Skill.STEALTH.value],
                 tags_required=["try_stealth"],
-                prompt_notes=["Ciemność: +10 circumstance do Stealth (dolicz ręcznie)."],
+                bonus_effects=[
+                    BonusEffect(
+                        type=BonusType.CIRCUMSTANCE,
+                        value=10,
+                        tag=Skill.STEALTH.value,
+                        source="status:in_dark",
+                        label="ciemność +10",
+                    )
+                ],
+                prompt_notes=["Ciemność: +10 circumstance do Stealth."],
             )
         ],
     )

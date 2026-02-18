@@ -34,7 +34,7 @@ def test_ancient_blood_prompt_includes_circumstance_bonus(monkeypatch):
         dc=15,
         actor=hero,
         tags=["magic", Skill.WILL.value],
-        apply_modifiers=False,
+        apply_modifiers=True,
     )
 
     assert dummy_ui.last_prompt_long is not None
@@ -60,13 +60,12 @@ def test_ancient_blood_prompt_without_status_has_no_bonus(monkeypatch):
         dc=15,
         actor=hero,
         tags=["magic", Skill.REFLEX.value],
-        apply_modifiers=False,
+        apply_modifiers=True,
     )
 
     assert dummy_ui.last_prompt_long is not None
     assert "circumstance" not in dummy_ui.last_prompt_long
     assert "ancient blood" not in dummy_ui.last_prompt_long.lower()
-    assert "brak" in dummy_ui.last_prompt_long
 
 
 def test_ancient_blood_consumed_on_use(monkeypatch):
@@ -88,7 +87,7 @@ def test_ancient_blood_consumed_on_use(monkeypatch):
         dc=15,
         actor=hero,
         tags=["magic", Skill.FORTITUDE.value],
-        apply_modifiers=False,
+        apply_modifiers=True,
     )
 
     assert hero.get_status("ancient_blood") is None

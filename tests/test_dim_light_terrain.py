@@ -57,7 +57,7 @@ def test_dim_light_status_prompt_and_removal():
     assert completed and reason is None
     assert hero.has_status(IN_DIM_LIGHT_STATUS)
 
-    # status should add prompt note (manual bonus)
+    # status powinien dodać automatyczny bonus
     res = resolve_skill_check_with_sources_from_roll(
         skill_id=Skill.STEALTH.value,
         dc=10,
@@ -66,7 +66,7 @@ def test_dim_light_status_prompt_and_removal():
         roll=10,
         apply_modifiers=True,
     )
-    assert res.modifier == 0
+    assert res.modifier == 2
     assert any("Półmrok" in note for note in res.notes)
 
     # move back to basic terrain -> status should be removed

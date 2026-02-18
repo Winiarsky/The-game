@@ -4,7 +4,7 @@ import logging
 from dataclasses import dataclass
 from typing import Iterable, List, Optional, Sequence
 
-from bonuses import BonusEffect, BonusType, aggregate_best_by_type, compute_total_modifier
+from bonuses import BonusEffect, BonusType, aggregate_best_by_type, build_modifiers_grid, compute_total_modifier, format_effects_log, select_best_effects
 from statuses import Status
 from statuses.check_effects import CheckEffect
 from GameObjects.interactions_mixin import resolve_skill_check
@@ -136,7 +136,8 @@ def resolve_skill_check_with_sources(
     target=None,
     game=None,
     base_modifier: int = 0,
-    apply_modifiers: bool = False,
+    apply_modifiers: bool = True,
+    consume_statuses: bool = True,
 ) -> SkillCheckResolution:
     """Policz wynik testu umiejętności z bonusami i efektami statusów."""
     tags = list(tags)
@@ -149,16 +150,18 @@ def resolve_skill_check_with_sources(
     )
 
     prompt_msg = f"Test {skill_id} (DC {dc})."
-    prompt_long = (
-        (
-            "Podaj wynik rzutu (bez premii sytuacyjnych). "
-            if apply_modifiers
-            else "Podaj końcowy wynik (uwzględnij swoje premie/kary). "
-        )
-        + f"Premie/kary: {', '.join(breakdown) if breakdown else 'brak'} (suma {modifier:+d}, "
-        + ("doliczana automatycznie)." if apply_modifiers else "nie jest doliczana automatycznie).")
-    )
-    modifiers_grid = _build_modifiers_grid(effects)
+    summary_lines = []
+    if breakdown:
+        summary_lines.append(f"Premie/kary (najwyższe per typ): {', '.join(breakdown)}")
+    if base_modifier:
+        summary_lines.append(f"Modyfikator bazowy: {base_modifier:+d}")
+    if apply_modifiers:
+        summary_lines.append(f"Łączny modyfikator: {modifier:+d} (doliczany automatycznie).")
+        prompt_long = "Podaj wynik rzutu d20 (bez premii). " + " ".join(summary_lines)
+    else:
+        summary_lines.append(f"Modyfikator do uwzględnienia: {modifier:+d}.")
+        prompt_long = "Podaj końcowy wynik (uwzględnij premie/kary). " + " ".join(summary_lines)
+    modifiers_grid = build_modifiers_grid(select_best_effects(effects, skill_id))
     roll = prompt_for_roll(
         prompt_msg,
         layout="test",
@@ -176,6 +179,7 @@ def resolve_skill_check_with_sources(
         game=game,
         base_modifier=base_modifier,
         apply_modifiers=apply_modifiers,
+        consume_statuses=consume_statuses,
         _precomputed=(modifier, breakdown, notes, promote_src, demote_src, promote_tgt, demote_tgt, consume_src, consume_tgt, effects),
     )
 
@@ -190,7 +194,7 @@ def resolve_skill_check_with_sources_from_roll(
     target=None,
     game=None,
     base_modifier: int = 0,
-    apply_modifiers: bool = False,
+    apply_modifiers: bool = True,
     consume_statuses: bool = True,
     _precomputed=None,
 ) -> SkillCheckResolution:
@@ -248,6 +252,11 @@ def resolve_skill_check_with_sources_from_roll(
                 f"{skill_id}: {outcome} (r={roll}, mod={modifier:+d}, suma={total} vs DC {dc}). "
                 f"{' | '.join(notes) if notes else ''}"
             )
+            all_lines = format_effects_log(_effects, skill_id)
+            if all_lines:
+                game.ui_log(f"{skill_id}: premie/kary: {', '.join(all_lines)}.")
+            if base_modifier:
+                game.ui_log(f"{skill_id}: modyfikator bazowy: {base_modifier:+d}.")
     except Exception:
         pass
 
@@ -305,28 +314,3 @@ def _collect_modifier_data(
     breakdown = _format_breakdown(all_effects, skill_id)
     notes = list(notes_src) + list(notes_tgt)
     return modifier, breakdown, notes, promote_src, demote_src, promote_tgt, demote_tgt, consume_src, consume_tgt, all_effects
-
-
-def _build_modifiers_grid(effects: list) -> dict:
-    """Przygotuj dane do sekcji premii/kar w UI."""
-    buckets = {
-        "penCirc": [],
-        "bonCirc": [],
-        "penStat": [],
-        "bonStat": [],
-    }
-    for eff in effects:
-        value = getattr(eff, "value", 0) or 0
-        label = getattr(eff, "label", None) or getattr(eff, "tag", None) or getattr(eff, "source", "") or "mod"
-        btype = getattr(eff, "type", None)
-        is_penalty = value < 0
-        if btype == BonusType.CIRCUMSTANCE:
-            key = "penCirc" if is_penalty else "bonCirc"
-        elif btype == BonusType.STATUS:
-            key = "penStat" if is_penalty else "bonStat"
-        else:
-            key = "penCirc" if is_penalty else "bonCirc"
-        buckets[key].append({"label": label, "value": value})
-    for key, arr in buckets.items():
-        arr.sort(key=lambda x: abs(x.get("value", 0)), reverse=True)
-    return buckets

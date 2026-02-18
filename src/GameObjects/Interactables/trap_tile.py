@@ -85,7 +85,7 @@ class TrapTile(TrappableMixin, InteractableMixin):
             target=None,
             tags=[Skill.PERCEPTION.value, "trap", "search"],
             game=game,
-            apply_modifiers=False,
+            apply_modifiers=True,
         )
         outcome, msg = self.detect_trap(result.total)
         return f"{msg} (wynik: {outcome})"
@@ -98,7 +98,7 @@ class TrapTile(TrappableMixin, InteractableMixin):
             target=None,
             tags=[Skill.THIEVERY.value, "trap", "disable"],
             game=game,
-            apply_modifiers=False,
+            apply_modifiers=True,
         )
         outcome, msg = self.disable_trap(result.total)
         return f"{msg} (wynik: {outcome})"

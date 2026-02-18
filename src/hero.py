@@ -64,7 +64,7 @@ class Hero(StatusMixin, BonusMixin, ReactiveMixin):
             actor=self,
             tags=["initiative"],
             game=None,
-            apply_modifiers=False,
+            apply_modifiers=True,
         )
         self.initiative = resolution.total
         return resolution.total

@@ -4,7 +4,7 @@ import logging
 from typing import Iterable
 
 from GameObjects.interactions_mixin import prompt_for_roll
-from bonuses import compute_total_modifier
+from bonuses import build_modifiers_grid, compute_total_modifier, format_effects_log, select_best_effects
 from combat import effective_ac
 
 from ..base import EventContext, EventResult
@@ -79,17 +79,25 @@ class BaseMagicAttackEvent(MagicEvent):
             sign = "+" if modifier > 0 else ""
             modifier_note = f" (bazowe {base_ac}, modyfikatory {sign}{modifier})"
         action_tag = (self._effective_tags(ctx) or ["spell_attack"])[0]
-        bonus_info = self._format_bonus_info(actor, action_tag, target=target)
+        modifier, best_effects, log_lines = self._attack_modifier_details(actor, action_tag, target=target)
+        if log_lines:
+            try:
+                ctx.game.ui_log(f"Modyfikatory ({action_tag}): {', '.join(log_lines)}.")
+            except Exception:
+                pass
+        prompt_long = f"Modyfikator łączny: {modifier:+d} (doliczany automatycznie)."
 
         roll = prompt_for_roll(
             f"Atak zaklęciem przeciwko AC {target_ac}",
             layout="test",
             subtitle=f"bazowe {base_ac}{modifier_note}",
-            prompt_long=bonus_info.strip(),
-            answer_placeholder="Wynik d20 + spell attack",
+            prompt_long=prompt_long,
+            modifiers=build_modifiers_grid(best_effects),
+            answer_placeholder="Wynik k20",
         )
-        critical = roll >= target_ac + 10
-        hit = roll >= target_ac
+        total_roll = roll + modifier
+        critical = total_roll >= target_ac + 10
+        hit = total_roll >= target_ac
         if not hit:
             return EventResult(success=True, consumed_action=self.consumes_action, message="Czar chybia.")
 
@@ -125,6 +133,16 @@ class BaseMagicAttackEvent(MagicEvent):
             except Exception:
                 logger.debug("Nie udało się policzyć compute_modifier dla %s", action_tag, exc_info=True)
         return 0
+
+    def _attack_modifier_details(self, attacker, action_tag: str, target=None, extra_effects=None):
+        effects = list(getattr(attacker, "bonuses", [])) if hasattr(attacker, "bonuses") else []
+        if extra_effects:
+            effects.extend(list(extra_effects))
+        target_id = getattr(target, "object_id", None)
+        modifier = compute_total_modifier(effects, action_tag, target_id) if effects else 0
+        best_effects = select_best_effects(effects, action_tag, target_id)
+        log_lines = format_effects_log(effects, action_tag, target_id)
+        return modifier, best_effects, log_lines
 
     def _format_bonus_info(self, attacker, action_tag: str, target=None) -> str:
         formatter = getattr(attacker, "format_prompt", None)

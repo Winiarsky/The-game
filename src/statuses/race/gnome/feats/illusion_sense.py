@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from bonuses import BonusEffect, BonusType
 from skills import Skill
 from statuses.base import Status
 from statuses.check_effects import CheckEffect
@@ -21,9 +22,25 @@ def IllusionSenseStatus() -> Status:
                 applies_to="source",
                 skills=[Skill.WILL.value, Skill.PERCEPTION.value],
                 tags_required=["illusion"],
+                bonus_effects=[
+                    BonusEffect(
+                        type=BonusType.CIRCUMSTANCE,
+                        value=1,
+                        tag=Skill.WILL.value,
+                        source="status:illusion_sense",
+                        label="illusion sense +1",
+                    ),
+                    BonusEffect(
+                        type=BonusType.CIRCUMSTANCE,
+                        value=1,
+                        tag=Skill.PERCEPTION.value,
+                        source="status:illusion_sense",
+                        label="illusion sense +1",
+                    ),
+                ],
                 promote=1,
                 prompt_notes=[
-                    "Illusion Sense: +1 circumstance do Will/Perception vs iluzje (dolicz recznie).",
+                    "Illusion Sense: +1 circumstance do Will/Perception vs iluzje.",
                     "Illusion Sense: wynik testu podbity o 1 stopien.",
                 ],
             )

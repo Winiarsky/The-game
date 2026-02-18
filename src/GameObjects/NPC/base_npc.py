@@ -166,7 +166,7 @@ class BaseNPC(SocialMixin, TradeMixin, PickpocketMixin, InteractableMixin):
                         "dc": self.pickpocket_dc,
                         "skill_id": Skill.THIEVERY.value,
                         "skill_label": "Thievery",
-                        "apply_modifiers": False,
+                        "apply_modifiers": True,
                     },
                 ),
             )

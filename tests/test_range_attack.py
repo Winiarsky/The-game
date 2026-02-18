@@ -152,7 +152,7 @@ def test_cover_and_range_penalty_emitted(monkeypatch):
     game.board.occupants = {hero.position: hero, enemy.position: enemy, (1, 0): obstacle}
     game.conn.choice = enemy.position
 
-    rolls = iter([20, 4])  # attack (>= target AC), dmg
+    rolls = iter([30, 4])  # attack (>= target AC) after auto penalties, dmg
     monkeypatch.setattr(base_attack_range_event, "prompt_for_roll", lambda *_, **__: next(rolls))
 
     event = ShortBow()

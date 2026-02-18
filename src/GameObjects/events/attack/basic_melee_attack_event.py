@@ -4,6 +4,7 @@ import logging
 from typing import Iterable, Sequence
 
 from board import consts
+from bonuses import build_modifiers_grid
 from combat import refresh_flanking_statuses
 from GameObjects.interactions_mixin import prompt_for_roll
 from damage_types import DamageType
@@ -80,16 +81,24 @@ class BasicMeleeAttackEvent(AttackEventBase):
         )
 
         action_tag = (self._effective_tags(ctx) or ["attack_melee"])[0]
-        bonus_info = self._format_bonus_info(hero, action_tag, target=enemy)
+        modifier, best_effects, log_lines = self._attack_modifier_details(hero, action_tag, target=enemy)
+        if log_lines:
+            try:
+                ctx.game.ui_log(f"Modyfikatory ({action_tag}): {', '.join(log_lines)}.")
+            except Exception:
+                pass
+        prompt_long = f"Modyfikator łączny: {modifier:+d} (doliczany automatycznie)."
 
         roll = prompt_for_roll(
             f"Atak {self.weapon_label} przeciwko AC {prompt_ac}.",
             layout="test",
-            prompt_long=bonus_info.strip(),
+            prompt_long=prompt_long,
+            modifiers=build_modifiers_grid(best_effects),
             answer_placeholder="Wynik k20",
         )
-        critical = roll >= target_ac + 10
-        hit = roll >= target_ac
+        total_roll = roll + modifier
+        critical = total_roll >= target_ac + 10
+        hit = total_roll >= target_ac
         if not hit:
             ctx.game.events.safe_emit_action(
                 actor=hero,

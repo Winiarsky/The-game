@@ -138,7 +138,7 @@ class StealthEvent(GameEvent):
                         "skill_label": "Stealth",
                         "base_modifier": base_modifier,
                         "details": details_txt,
-                        "apply_modifiers": False,  # gracz podaje ostateczny wynik
+                        "apply_modifiers": True,
                     },
                 ),
             )

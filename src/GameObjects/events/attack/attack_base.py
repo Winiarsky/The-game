@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Iterable, Optional
 
-from bonuses import BonusEffect, compute_total_modifier
+from bonuses import BonusEffect, compute_total_modifier, format_effects_log, select_best_effects
 from combat import effective_ac
 from GameObjects.interactions_mixin import prompt_for_roll
 from statuses import CONCEALED_STATUS, DARKVISION_STATUS, DIM_LIGHT_VISION_STATUS, IN_DIM_LIGHT_STATUS, LOW_LIGHT_VISION_STATUS
@@ -106,18 +106,23 @@ class AttackEventBase(GameEvent):
                 logger.debug("Nie udało się policzyć compute_modifier dla %s", action_tag, exc_info=True)
         return 0
 
+    def _attack_modifier_details(self, attacker, action_tag: str, target=None, extra_effects=None):
+        effects = list(getattr(attacker, "bonuses", [])) if hasattr(attacker, "bonuses") else []
+        if extra_effects:
+            effects.extend(list(extra_effects))
+        target_id = getattr(target, "object_id", None)
+        modifier = compute_total_modifier(effects, action_tag, target_id) if effects else 0
+        best_effects = select_best_effects(effects, action_tag, target_id)
+        log_lines = format_effects_log(effects, action_tag, target_id)
+        return modifier, best_effects, log_lines
+
     def _format_bonus_info(self, attacker, action_tag: str, target=None) -> str:
         """Opis modyfikatorów do wyświetlenia w promptcie (z BonusMixin.format_prompt)."""
 
-        formatter = getattr(attacker, "format_prompt", None)
-        if not callable(formatter):
+        modifier, best_effects, _ = self._attack_modifier_details(attacker, action_tag, target=target)
+        if not best_effects and not modifier:
             return ""
-        try:
-            formatted = formatter(action_tag, target=target)
-            return f"\nModyfikatory ({action_tag}):\n{formatted}\n" if formatted else ""
-        except Exception:
-            logger.debug("format_prompt nie powiódł się dla %s", action_tag, exc_info=True)
-            return ""
+        return f"\nModyfikator łączny: {modifier:+d} (doliczany automatycznie).\n"
 
     def _maybe_prompt_vengeful_hatred(self, attacker, target) -> None:
         """Pokaż informację o +1 do obrażeń vs wybrany typ przeciwnika (bez naliczania)."""
