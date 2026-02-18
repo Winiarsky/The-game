@@ -211,15 +211,77 @@ def resolve_skill_check_with_sources_from_roll(
     else:
         modifier, breakdown, notes, promote_src, demote_src, promote_tgt, demote_tgt, consume_src, consume_tgt, _effects = _precomputed
 
-    total = roll + modifier if apply_modifiers else roll
-    outcome = resolve_skill_check(dc, total)
+    def _apply_outcome(current_roll: int) -> tuple[int, int, str]:
+        total_val = current_roll + modifier if apply_modifiers else current_roll
+        outcome_val = resolve_skill_check(dc, total_val)
+        for value, cond in list(promote_src) + list(promote_tgt):
+            if cond is None or outcome_val in cond:
+                outcome_val = _apply_shift(outcome_val, value)
+        for value, cond in list(demote_src) + list(demote_tgt):
+            if cond is None or outcome_val in cond:
+                outcome_val = _apply_shift(outcome_val, -value)
+        return current_roll, total_val, outcome_val
 
-    for value, cond in list(promote_src) + list(promote_tgt):
-        if cond is None or outcome in cond:
-            outcome = _apply_shift(outcome, value)
-    for value, cond in list(demote_src) + list(demote_tgt):
-        if cond is None or outcome in cond:
-            outcome = _apply_shift(outcome, -value)
+    roll, total, outcome = _apply_outcome(roll)
+
+    def _has_status(actor_obj, status_id: str) -> bool:
+        if actor_obj is None:
+            return False
+        has_status = getattr(actor_obj, "has_status", None)
+        if callable(has_status):
+            try:
+                return bool(has_status(status_id))
+            except Exception:
+                return False
+        statuses = getattr(actor_obj, "statuses", None)
+        if isinstance(statuses, list):
+            return any(getattr(s, "id", s) == status_id for s in statuses)
+        return False
+
+    def _consume_status(actor_obj, status_id: str) -> None:
+        if actor_obj is None:
+            return
+        remover = getattr(actor_obj, "remove_status", None)
+        if callable(remover):
+            try:
+                remover(status_id)
+                return
+            except Exception:
+                pass
+        statuses = getattr(actor_obj, "statuses", None)
+        if isinstance(statuses, list):
+            for idx in range(len(statuses) - 1, -1, -1):
+                if getattr(statuses[idx], "id", statuses[idx]) == status_id:
+                    del statuses[idx]
+                    break
+
+    def _prompt_halfling_luck() -> bool:
+        ui_client = get_ui_client()
+        if ui_client is not None and getattr(ui_client, "enabled", True):
+            try:
+                choice = ui_client.prompt_choice(
+                    "Użyć Halfling Luck? (przerzut, wynik obowiązkowy)",
+                    choices=["tak", "nie"],
+                    source="halfling_luck",
+                )
+                return str(choice or "").strip().lower().startswith("t")
+            except Exception:
+                pass
+        try:
+            resp = input("Użyć Halfling Luck? [t/N]: ")
+            return resp.strip().lower().startswith("t")
+        except Exception:
+            return False
+
+    if outcome in ("failure", "critical_failure") and _has_status(actor, "halfling_luck"):
+        if _prompt_halfling_luck():
+            reroll = prompt_for_roll(
+                "Halfling Luck: przerzut (użyj nowego wyniku).",
+                layout="test",
+                answer_placeholder="Wynik k20",
+            )
+            roll, total, outcome = _apply_outcome(reroll)
+            _consume_status(actor, "halfling_luck")
 
     resolution = SkillCheckResolution(
         outcome=outcome,

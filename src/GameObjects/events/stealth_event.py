@@ -101,6 +101,16 @@ class StealthEvent(GameEvent):
 
         already_stealth = hero.has_status(STEALTH_STATUS)
         covered = hero.has_status("covered")
+        shadow_cover = False
+        if hero.has_status("distracting_shadows"):
+            neighbors = board.get_neighbors(hero_pos, include_position=False, diagonal=True)
+            for npos in neighbors:
+                occ = board.occupant_at(npos)
+                if occ in getattr(game, "heroes", []) and occ is not hero:
+                    shadow_cover = True
+                    break
+        if shadow_cover and not covered:
+            covered = True
 
         if not already_stealth:
             if blockers and not covered and not in_dim_light and not in_dark:
@@ -118,7 +128,10 @@ class StealthEvent(GameEvent):
                 pos=hero_pos,
             )
             base_modifier, details = self._compute_modifier(ctx, hero_pos)
-            if covered:
+            if shadow_cover:
+                base_modifier += 2
+                details.append("distracting shadows +2")
+            elif covered:
                 base_modifier += 2
                 details.append("osłona +2")
             if penalty:

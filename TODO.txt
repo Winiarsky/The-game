@@ -6,5 +6,7 @@
 - doprecyzowac logike Scent/Seek (zakres/warunki/limit na ture)
 - Silver Tongue: status do usuniecia (usunac mechanike/prompty po ustaleniach)
 - OA: zmienic na event-driven + event prepare (zamiast reakcji)
+- Sure Feet: dodać mechanikę balansowania na krawędzi (flat-footed przy Balance/Climb).
+- Unfettered Halfling: dodać mechanikę grapplingu (Grab/Grapple/Escape).
 
 TODO: Dodać mechaniki usuwania statusu Poisoned (test medyczny, antidotum itd.).
