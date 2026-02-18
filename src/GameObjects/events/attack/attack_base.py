@@ -6,7 +6,7 @@ from typing import Iterable, Optional
 from bonuses import BonusEffect, compute_total_modifier
 from combat import effective_ac
 from GameObjects.interactions_mixin import prompt_for_roll
-from statuses import CONCEALED_STATUS, DARKVISION_STATUS, DIM_LIGHT_VISION_STATUS, IN_DIM_LIGHT_STATUS
+from statuses import CONCEALED_STATUS, DARKVISION_STATUS, DIM_LIGHT_VISION_STATUS, IN_DIM_LIGHT_STATUS, LOW_LIGHT_VISION_STATUS
 
 from ..base import GameEvent
 
@@ -19,7 +19,9 @@ def check_concealed(ctx, target) -> bool:
     attacker = getattr(ctx, "actor", None)
     if _has_status(attacker, DARKVISION_STATUS):
         return True
-    if _has_status(attacker, DIM_LIGHT_VISION_STATUS) and _has_status(target, IN_DIM_LIGHT_STATUS):
+    if (_has_status(attacker, DIM_LIGHT_VISION_STATUS) or _has_status(attacker, LOW_LIGHT_VISION_STATUS)) and _has_status(
+        target, IN_DIM_LIGHT_STATUS
+    ):
         return True
     has_status = getattr(target, "has_status", None)
     if callable(has_status):

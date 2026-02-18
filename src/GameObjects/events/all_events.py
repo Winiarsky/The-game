@@ -17,6 +17,7 @@ from . import step_event  # noqa: F401
 from . import leap_event  # noqa: F401
 from . import prone_event  # noqa: F401
 from . import stand_event  # noqa: F401
+from . import command_familiar_event  # noqa: F401
 from . import ancient_blood_event  # noqa: F401
 from .magic import magic_missile_event  # noqa: F401
 from .magic import detect_magic_event  # noqa: F401

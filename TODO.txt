@@ -3,5 +3,6 @@
 - uzupelnic enum EnemyType o brakujace typy wrogow
 - dodac checkhero actionevent (na koniec)
 - sprawdzic dynamiczne odswiezanie statusow w UI pod hero
+- doprecyzowac logike Scent/Seek (zakres/warunki/limit na ture)
 
 TODO: Dodać mechaniki usuwania statusu Poisoned (test medyczny, antidotum itd.).

@@ -1,6 +1,7 @@
 import sys
 from pathlib import Path
 import types
+import importlib
 import importlib.util
 
 import pytest
@@ -20,8 +21,13 @@ assert spec and spec.loader
 spec.loader.exec_module(move_utils)  # type: ignore[arg-type]
 sys.modules["actions.move_utils"] = move_utils
 
-from GameObjects.events.move_event import MoveEvent  # noqa: E402
+import GameObjects.events.move_event as move_event  # noqa: E402
+
+importlib.reload(move_event)
+
 from GameObjects.events.base import EventContext  # noqa: E402
+
+MoveEvent = move_event.MoveEvent
 
 
 class DummyConn:
@@ -127,7 +133,7 @@ def test_move_stops_on_trap_on_enter(monkeypatch):
     target = (0, 2)
 
     # kolejność kliknięć: wybór celu (target), potwierdzenie (target) + bufor
-    conn = DummyConn(clicks=[target, target, target])
+    conn = DummyConn(clicks=[target, target, target, target])
     board = DummyBoard(trap_pos=trap_pos)
     trap = Trap()
     board.trap_obj = trap

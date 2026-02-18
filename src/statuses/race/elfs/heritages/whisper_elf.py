@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from bonuses import BonusEffect, BonusType
 from skills import Skill
 from statuses.base import Status
 from statuses.check_effects import CheckEffect
@@ -23,16 +22,7 @@ def WhisperElfStatus() -> Status:
             CheckEffect(
                 applies_to="source",
                 skills=[Skill.PERCEPTION.value],
-                bonus_effects=[
-                    BonusEffect(
-                        type=BonusType.CIRCUMSTANCE,
-                        value=4,
-                        tag=Skill.PERCEPTION.value,
-                        source="status:whisper_elf",
-                        label="whisper elf",
-                    )
-                ],
-                prompt_notes=["Whisper Elf"],
+                prompt_notes=["Whisper Elf: +4 do Perception (dolicz ręcznie)."],
             )
         ],
     )

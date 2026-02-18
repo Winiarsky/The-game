@@ -15,6 +15,7 @@ _move_utils.perform_movement = lambda *a, **k: None
 _move_utils.default_on_enter = lambda *a, **k: None
 _move_utils.follow_path = lambda *a, **k: []
 _move_utils._maybe_dispatch_move_reactions = lambda *a, **k: None
+_move_utils.terrain_move_bonus_feet = lambda *a, **k: 0
 
 _specials = types.ModuleType("actions.specials")
 _specials.__path__ = []

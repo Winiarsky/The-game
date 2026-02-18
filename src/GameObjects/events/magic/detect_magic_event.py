@@ -64,7 +64,7 @@ class DetectMagicEvent(MagicEvent):
     name = "detect_magic"
     default_tags = ["cast", "magic", "detect"]
     consumes_action = True
-    actions_cost = 1
+    actions_cost = 2
     magic_traditions = (
         SpellTradition.ARCANA,
         SpellTradition.DIVINE,

@@ -9,7 +9,7 @@ from statuses import Status
 from statuses.check_effects import CheckEffect
 from GameObjects.interactions_mixin import resolve_skill_check
 from ui_client import get_ui_client
-from statuses import DARKVISION_STATUS, DIM_LIGHT_VISION_STATUS, IN_DARK_STATUS, IN_DIM_LIGHT_STATUS
+from statuses import DARKVISION_STATUS, DIM_LIGHT_VISION_STATUS, IN_DARK_STATUS, IN_DIM_LIGHT_STATUS, LOW_LIGHT_VISION_STATUS
 from skills import Skill
 
 logger = logging.getLogger(__name__)
@@ -288,14 +288,16 @@ def _collect_modifier_data(
                     label="darkvision +10",
                 )
             )
-        if _has_status(actor, DIM_LIGHT_VISION_STATUS) and _has_status(target, IN_DIM_LIGHT_STATUS):
+        if (_has_status(actor, DIM_LIGHT_VISION_STATUS) or _has_status(actor, LOW_LIGHT_VISION_STATUS)) and _has_status(
+            target, IN_DIM_LIGHT_STATUS
+        ):
             all_effects.append(
                 BonusEffect(
                     type=BonusType.CIRCUMSTANCE,
                     value=2,
                     tag=skill_id,
-                    source="status:dim_light_vision",
-                    label="dim light vision +2",
+                    source="status:low_light_vision",
+                    label="low light vision +2",
                 )
             )
 

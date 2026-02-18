@@ -1,6 +1,7 @@
 import sys
 from pathlib import Path
 import types
+import importlib
 import importlib.util
 
 # ensure src on path
@@ -18,13 +19,18 @@ assert spec and spec.loader
 spec.loader.exec_module(move_utils)  # type: ignore[arg-type]
 sys.modules["actions.move_utils"] = move_utils
 
+import GameObjects.events.move_event as move_event  # noqa: E402
+
+importlib.reload(move_event)
+
 from board_grid import BoardGrid  # noqa: E402
 from GameObjects.Terrains.rumble_terrain import RumbleTerrain  # noqa: E402
 from GameObjects.Terrains.bushes_terrain import BushesTerrain  # noqa: E402
-from GameObjects.events.move_event import MoveEvent  # noqa: E402
 from GameObjects.events.base import EventContext  # noqa: E402
 from statuses.race.dwarf.feats.rock_runner import ROCK_RUNNER_STATUS  # noqa: E402
 from statuses.race.elfs.heritages.woodland_elf import WOODLAND_ELF_STATUS  # noqa: E402
+
+MoveEvent = move_event.MoveEvent
 
 
 class DummyConn:
@@ -108,7 +114,7 @@ def test_move_prompts_only_on_entering_difficult_terrain():
     board.place(hero, (0, 0))
 
     target = (2, 0)
-    conn = DummyConn(clicks=[target, target])
+    conn = DummyConn(clicks=[target, target, target])
     ui = DummyUI()
     game = types.SimpleNamespace(
         board=board,
@@ -138,7 +144,7 @@ def test_move_no_prompt_when_already_on_difficult_terrain():
     board.place(hero, (0, 0))
 
     target = (2, 0)
-    conn = DummyConn(clicks=[target, target])
+    conn = DummyConn(clicks=[target, target, target])
     ui = DummyUI()
     game = types.SimpleNamespace(
         board=board,
@@ -167,7 +173,7 @@ def test_rock_runner_ignores_difficult_prompt_and_hint():
     board.place(hero, (0, 0))
 
     target = (2, 0)
-    conn = DummyConn(clicks=[target, target])
+    conn = DummyConn(clicks=[target, target, target])
     ui = DummyUI()
     game = types.SimpleNamespace(
         board=board,
@@ -210,7 +216,7 @@ def test_woodland_elf_ignores_bushes_cost_and_prompt():
     board.place(hero, (0, 0))
 
     target = (2, 0)
-    conn = DummyConn(clicks=[target, target])
+    conn = DummyConn(clicks=[target, target, target])
     ui = DummyUI()
     game = types.SimpleNamespace(
         board=board,

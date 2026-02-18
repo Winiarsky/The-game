@@ -203,6 +203,17 @@ class StealthEvent(GameEvent):
         if terrain_mod:
             total += terrain_mod
             details.append(f"teren {terrain_mod:+d}")
+        selected = None
+        getter = getattr(ctx.actor, "get_status_data", None)
+        if callable(getter):
+            selected = getter("chameleon_gnome", "chameleon_terrain", None)
+        if selected:
+            terrain = cell.field
+            terrain_tags = set(getattr(terrain, "terrain_tags", ()) or ())
+            terrain_name = getattr(terrain, "name", None)
+            if selected in terrain_tags or selected == terrain_name:
+                total += 2
+                details.append("chameleon gnome +2")
 
         seen_interactables: set[int] = set()
         seen_obstacles: set[int] = set()

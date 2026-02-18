@@ -72,6 +72,8 @@ class BasicEnemyMeleeAttackEvent(GameEvent):
                 extra_mod = bonus_mixin("attack_melee", target=hero)
             except Exception:
                 extra_mod = 0
+        if self._consume_familiar_distract(enemy):
+            extra_mod -= 1
         roll = random.randint(1, 20) + attack_bonus + extra_mod
 
         target_ac = effective_ac(hero)
@@ -111,6 +113,25 @@ class BasicEnemyMeleeAttackEvent(GameEvent):
         return EventResult(success=True, consumed_action=True, message="Atak wroga wykonany.")
 
     # --- helpers ---
+    @staticmethod
+    def _consume_familiar_distract(enemy) -> bool:
+        has_status = getattr(enemy, "has_status", None)
+        if callable(has_status):
+            active = has_status("familiar_distract")
+        else:
+            active = False
+            for status in getattr(enemy, "statuses", []) or []:
+                if getattr(status, "id", None) == "familiar_distract" or status == "familiar_distract":
+                    active = True
+                    break
+        if not active:
+            return False
+        try:
+            enemy.remove_status("familiar_distract")
+        except Exception:
+            pass
+        return True
+
     @staticmethod
     def _adjacent_heroes(game, pos):
         board = game.board

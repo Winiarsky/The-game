@@ -11,6 +11,7 @@ from ..base import EventContext, EventResult
 from ..attack.attack_base import check_concealed
 from .magic_event import MagicEvent
 from .magic_utils import pick_target_in_range
+from statuses.familiar import FAMILIAR_TOUCH_DELIVERY_STATUS
 
 logger = logging.getLogger(__name__)
 
@@ -48,16 +49,26 @@ class BaseMagicAttackEvent(MagicEvent):
             return EventResult.cancelled(message="Bohater nie stoi na planszy.")
 
         candidates = list(self._iter_candidates(ctx.game))
+        max_range = self.range_feet
+        consume_touch_delivery = False
+        if max_range == 5 and self._has_status(actor, FAMILIAR_TOUCH_DELIVERY_STATUS):
+            max_range = 10
+            consume_touch_delivery = True
         target, target_pos = pick_target_in_range(
             ctx,
             source_pos,
             candidates,
-            max_range_feet=self.range_feet,
+            max_range_feet=max_range,
             allowed_kinds=("enemy", "hero") if self.target_kind == "any" else (self.target_kind,),
             tags=self._effective_tags(ctx),
         )
         if target is None or target_pos is None:
             return EventResult.cancelled(message="Brak celu w zasięgu.")
+        if consume_touch_delivery:
+            try:
+                actor.remove_status(FAMILIAR_TOUCH_DELIVERY_STATUS)
+            except Exception:
+                pass
 
         if not check_concealed(ctx, target):
             return EventResult(success=True, consumed_action=self.consumes_action, message="Czar chybia (concealed).")
@@ -84,6 +95,19 @@ class BaseMagicAttackEvent(MagicEvent):
 
         self._maybe_prompt_vengeful_hatred(actor, target)
         return self._resolve_on_target(target, target_pos, ctx, critical=critical)
+
+    @staticmethod
+    def _has_status(obj, status) -> bool:
+        if obj is None:
+            return False
+        has_status = getattr(obj, "has_status", None)
+        if callable(has_status):
+            return bool(has_status(status))
+        for item in getattr(obj, "statuses", []) or []:
+            item_id = getattr(item, "id", None)
+            if item_id == status.id or item == status.id:
+                return True
+        return False
 
     # --- helpers ---
     def _target_ac_with_bonuses(self, target, *, attacker=None) -> tuple[int, int, int]:

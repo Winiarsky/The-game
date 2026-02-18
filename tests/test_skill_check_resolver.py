@@ -57,6 +57,7 @@ from statuses import NOBLE_PERSON_STATUS, SILVER_TONGUE_STATUS, STUBBORN_STATUS 
 from GameObjects.NPC.guard_npc import GuardNPC  # noqa: E402
 from statuses.race.elfs.heritages.seer_elf import SEER_ELF_STATUS  # noqa: E402
 from statuses.race.elfs.heritages.whisper_elf import WHISPER_ELF_STATUS  # noqa: E402
+from statuses.race.elfs.feats.unwavering_mien import UNWAVERING_MIEN_STATUS  # noqa: E402
 
 
 class DummyGame:
@@ -172,4 +173,21 @@ def test_whisper_elf_circumstance_bonus_for_perception(monkeypatch):
         tags=["perception"],
         apply_modifiers=False,
     )
-    assert res.modifier == 4
+    assert res.modifier == 0
+    assert any("Whisper Elf" in note for note in res.notes)
+
+
+def test_unwavering_mien_bonus_and_promote_on_mental(monkeypatch):
+    monkeypatch.setattr("GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll", lambda *_, **__:14)
+    actor = Hero(statuses=[UNWAVERING_MIEN_STATUS])
+    res = resolve_skill_check_with_sources(
+        skill_id="will",
+        dc=15,
+        actor=actor,
+        target=None,
+        tags=["mental", "will"],
+        apply_modifiers=False,
+    )
+    # 14 vs 15 -> failure, promote +1 => success
+    assert res.modifier == 1
+    assert res.outcome == "success"
