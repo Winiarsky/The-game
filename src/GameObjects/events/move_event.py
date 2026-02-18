@@ -12,6 +12,7 @@ from actions.move_utils import (
     follow_path,
     path_cost_feet,
     perform_movement,
+    _maybe_dispatch_move_reactions,
     terrain_move_bonus_feet,
 )
 from statuses import STEALTH_STATUS
@@ -190,6 +191,10 @@ class MoveEvent(GameEvent):
                     from_pos=src_pos,
                     to_pos=dst_pos,
                 )
+                try:
+                    _maybe_dispatch_move_reactions(ctx, moving_hero, src_pos, dst_pos, action_tags=self._effective_tags(ctx))
+                except Exception:
+                    logger.debug("Nie udało się odpalić reakcji na ruch.", exc_info=True)
 
             def _on_enter_wrapper(context, hero_obj, current_pos: tuple[int, int]) -> bool:
                 nonlocal last_was_difficult

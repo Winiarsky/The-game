@@ -6,6 +6,7 @@ from typing import Iterable, Sequence
 from board import consts
 from bonuses import build_modifiers_grid
 from combat import refresh_flanking_statuses
+from combat.damage_utils import burn_it_bonus, burn_it_prompt_note
 from GameObjects.interactions_mixin import prompt_for_roll
 from damage_types import DamageType
 from statuses import Status
@@ -113,12 +114,15 @@ class BasicMeleeAttackEvent(AttackEventBase):
 
         self._maybe_prompt_vengeful_hatred(hero, enemy)
         dmg_prompt = f"{'Trafienie krytyczne! ' if critical else 'Trafienie! '}Obrażenia {self.damage_prompt}: "
+        first_type = self.damage_type if isinstance(self.damage_type, str) else list(self.damage_type)[0]
+        note = burn_it_prompt_note(hero, first_type)
         damage = prompt_for_roll(
             dmg_prompt,
             layout="damage",
             answer_placeholder="Suma obrażeń",
+            prompt_long=note,
         )
-        damage_components = self._collect_damage_components(damage)
+        damage_components = self._collect_damage_components(damage, actor=hero)
         defeated = False
         try:
             defeated = self._apply_damage_components(enemy, damage_components)
@@ -160,21 +164,26 @@ class BasicMeleeAttackEvent(AttackEventBase):
         return EventResult(success=True, consumed_action=self.consumes_action, message=msg, data={"critical": critical})
 
     # --- helpers ---
-    def _collect_damage_components(self, first_roll: int) -> list[tuple[str, int]]:
+    def _collect_damage_components(self, first_roll: int, *, actor=None) -> list[tuple[str, int]]:
         """Zwraca listę (typ, obrażenia) – obsługa wielu typów."""
         if isinstance(self.damage_type, str):
-            return [(self.damage_type, first_roll)]
+            bonus = burn_it_bonus(actor, self.damage_type)
+            return [(self.damage_type, int(first_roll) + int(bonus))]
         components: list[tuple[str, int]] = []
         damage_types = list(self.damage_type)
-        components.append((damage_types[0], first_roll))
+        bonus = burn_it_bonus(actor, damage_types[0])
+        components.append((damage_types[0], int(first_roll) + int(bonus)))
         for idx, dtype in enumerate(damage_types[1:], start=1):
             prompt = f"Trafienie! Obrażenia dodatkowe ({dtype}): "
+            note = burn_it_prompt_note(actor, dtype)
             roll = prompt_for_roll(
                 prompt,
                 layout="damage",
                 answer_placeholder=f"Obrażenia {dtype}",
+                prompt_long=note,
             )
-            components.append((dtype, roll))
+            bonus = burn_it_bonus(actor, dtype)
+            components.append((dtype, int(roll) + int(bonus)))
         return components
 
     @staticmethod

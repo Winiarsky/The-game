@@ -4,6 +4,7 @@ import logging
 
 from damage_types import DamageType
 from statuses import make_persistent_damage
+from combat.damage_utils import burn_it_bonus, burn_it_prompt_note
 
 from ..base import EventContext, EventResult
 from ..registry import register_event
@@ -31,7 +32,7 @@ class AcidSplashEvent(BaseMagicAttackEvent):
 
         persistent_value = None
         if critical:
-            persistent_value = self._prompt_persistent()
+            persistent_value = self._prompt_persistent(ctx.actor, DamageType.ACID.value)
             if persistent_value and persistent_value > 0:
                 try:
                     target.add_status(make_persistent_damage(persistent_value, DamageType.ACID.value, source=self.name))
@@ -70,17 +71,20 @@ class AcidSplashEvent(BaseMagicAttackEvent):
         )
         return int(val or 0)
 
-    def _prompt_persistent(self) -> int:
+    def _prompt_persistent(self, actor, damage_type: str) -> int:
         from ui_client import get_ui_client
 
         ui = get_ui_client()
+        note = burn_it_prompt_note(actor, damage_type, persistent=True)
         val = ui.prompt_roll(
             "Krytyk! Podaj wartość persistent acid:",
             source="game",
             layout="damage",
             answer_placeholder="Persistent acid",
+            prompt_long=note,
         )
-        return int(val or 0)
+        bonus = burn_it_bonus(actor, damage_type, persistent=True)
+        return int(val or 0) + int(bonus)
 
     def _apply_damage(self, target, amount: int, damage_type: str) -> bool:
         defeated = False

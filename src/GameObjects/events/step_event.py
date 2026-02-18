@@ -5,6 +5,7 @@ import logging
 from board import consts
 from combat import refresh_flanking_statuses
 from statuses import STEALTH_STATUS
+from actions.move_utils import _maybe_dispatch_move_reactions
 
 from .base import EventContext, EventResult, GameEvent
 from .registry import register_event
@@ -113,6 +114,10 @@ class StepEvent(GameEvent):
             to_pos=dest,
             leaving_reach=False,
         )
+        try:
+            _maybe_dispatch_move_reactions(ctx, hero, start_pos, dest, action_tags=self._effective_tags(ctx))
+        except Exception:
+            logger.debug("Nie udało się odpalić reakcji na step.", exc_info=True)
 
         try:
             refresh_flanking_statuses(ctx.game)

@@ -8,7 +8,7 @@ from board import consts
 from combat import refresh_flanking_statuses
 from GameObjects.Interactables.utils.awareness import iter_watchers_in_rooms, summarize_watchers
 from GameObjects.Obstacles.basic_obstacle import Obstacle
-from actions.move_utils import perform_movement, default_on_enter
+from actions.move_utils import perform_movement, default_on_enter, _maybe_dispatch_move_reactions
 from skills import Skill
 from statuses import IN_DIM_LIGHT_STATUS, IN_DARK_STATUS, OBSERVABLE_STATUS, STEALTH_STATUS, StealthStatus, Status
 
@@ -314,6 +314,10 @@ class StealthEvent(GameEvent):
                     from_pos=start_pos,
                     to_pos=getattr(hero, "position", None),
                 )
+            try:
+                _maybe_dispatch_move_reactions(ctx, hero, start_pos, getattr(hero, "position", None), action_tags=self._effective_tags(ctx))
+            except Exception:
+                logger.debug("Nie udało się odpalić reakcji na stealth_move.", exc_info=True)
         finally:
             try:
                 refresh_flanking_statuses(ctx.game)

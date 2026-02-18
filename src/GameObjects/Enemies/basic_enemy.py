@@ -37,6 +37,7 @@ class BasicEnemy(StatusMixin, BonusMixin, WatchfulMixin, ReactiveMixin, MagicalM
     watch_disturbed: int = 0  # 0 blokuje wejście w stealth w pokoju
     watch_disabled: bool = False
     perception_bonus: int = 4
+    will_bonus: int = 0
     initiative: Optional[int] = None
     position: Optional[tuple[int, int]] = None
     statuses: list[Status] = field(default_factory=list)

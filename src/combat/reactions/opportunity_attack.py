@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from GameObjects.interactions_mixin import prompt_for_roll
+from combat.damage_utils import burn_it_bonus, burn_it_prompt_note
 from combat.flanking import effective_ac
 from .base import Reaction
 
@@ -90,12 +91,15 @@ class OpportunityAttack(Reaction):
         dmg_type = _choose_damage_type(game)
         if dmg_type is None:
             return False
+        note = burn_it_prompt_note(hero, dmg_type)
         amount = prompt_for_roll(
             f"Ile obrażeń {dmg_type} zadajesz (atak okazyjny)? ",
             layout="damage",
             answer_placeholder=f"Obrażenia {dmg_type}",
+            prompt_long=note,
         )
-        _, defeated = target.apply_damage(amount, dmg_type)
+        bonus = burn_it_bonus(hero, dmg_type)
+        _, defeated = target.apply_damage(int(amount) + int(bonus), dmg_type)
         if defeated:
             try:
                 pos = getattr(target, "position", None)

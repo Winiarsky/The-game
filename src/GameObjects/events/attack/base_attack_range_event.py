@@ -8,6 +8,7 @@ from bonuses import BonusEffect, BonusType, build_modifiers_grid
 from GameObjects.interactions_mixin import RangeAttackAffectMixin, prompt_for_roll
 from statuses import Status
 from damage_types import DamageType
+from combat.damage_utils import burn_it_bonus, burn_it_prompt_note
 
 from .attack_base import AttackEventBase, check_concealed
 from ..targeting import is_target_blocked_by_tags
@@ -209,7 +210,7 @@ class BaseRangeAttackEvent(AttackEventBase):
 
             prompt_prefix = "Trafienie krytyczne! " if critical else "Trafienie! "
             self._maybe_prompt_vengeful_hatred(hero, enemy)
-            damage_components = self._collect_damage_components(prompt_prefix=prompt_prefix)
+            damage_components = self._collect_damage_components(actor=hero, prompt_prefix=prompt_prefix)
             defeated = False
             try:
                 defeated = self._apply_damage_components(enemy, damage_components)
@@ -263,15 +264,18 @@ class BaseRangeAttackEvent(AttackEventBase):
         return self.COVER_RANK.get(cover_type, 0)
 
     # --- damage helpers ---
-    def _collect_damage_components(self, *, prompt_prefix: str = "") -> list[tuple[str, int]]:
+    def _collect_damage_components(self, *, actor=None, prompt_prefix: str = "") -> list[tuple[str, int]]:
         """Pozyskaj wartości obrażeń dla 1+ typów."""
         if isinstance(self.damage_type, str):
+            note = burn_it_prompt_note(actor, self.damage_type)
             dmg = prompt_for_roll(
                 f"{prompt_prefix}Obrażenia {self.damage_prompt}: ",
                 layout="damage",
                 answer_placeholder="Suma obrażeń",
+                prompt_long=note,
             )
-            return [(self.damage_type, dmg)]
+            bonus = burn_it_bonus(actor, self.damage_type)
+            return [(self.damage_type, int(dmg) + int(bonus))]
 
         damage_types = list(self.damage_type)
         components: list[tuple[str, int]] = []
@@ -281,12 +285,15 @@ class BaseRangeAttackEvent(AttackEventBase):
                 prompt_text = prompt[idx] if idx < len(prompt) else prompt[-1]
             else:
                 prompt_text = prompt
+            note = burn_it_prompt_note(actor, dtype)
             roll = prompt_for_roll(
                 f"{prompt_prefix}Obrażenia {prompt_text} ({dtype}): ",
                 layout="damage",
                 answer_placeholder=f"Obrażenia {dtype}",
+                prompt_long=note,
             )
-            components.append((dtype, roll))
+            bonus = burn_it_bonus(actor, dtype)
+            components.append((dtype, int(roll) + int(bonus)))
         return components
 
     @staticmethod

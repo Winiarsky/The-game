@@ -232,6 +232,79 @@ def default_on_enter(ctx_or_board, mover, position):
     return None
 
 
-def _maybe_dispatch_move_reactions(*_args, **_kwargs):
-    """Brak reakcji w stubie."""
+def _maybe_dispatch_move_reactions(ctx, mover, src, dst, *, action_tags=None):
+    """Obsłuż reakcje na zakończenie ruchu (np. Goblin Scuttle)."""
+    game = getattr(ctx, "game", None) or getattr(ctx, "game", None)
+    if game is None:
+        return None
+    state = getattr(game, "state", None)
+    if getattr(getattr(state, "__class__", None), "__name__", "") != "Combat":
+        return None
+    if mover not in getattr(game, "heroes", []):
+        return None
+    if dst is None:
+        return None
+
+    def _has_status(actor, status_id: str) -> bool:
+        has_status = getattr(actor, "has_status", None)
+        if callable(has_status):
+            try:
+                return bool(has_status(status_id))
+            except Exception:
+                return False
+        statuses = getattr(actor, "statuses", None)
+        if isinstance(statuses, list):
+            return any(getattr(s, "id", s) == status_id for s in statuses)
+        return False
+
+    def _adjacent(a, b) -> bool:
+        if a is None or b is None:
+            return False
+        dx = abs(a[0] - b[0])
+        dy = abs(a[1] - b[1])
+        return max(dx, dy) <= 1
+
+    scuttlers = [
+        hero
+        for hero in getattr(game, "heroes", [])
+        if hero is not mover and _has_status(hero, "goblin_scuttle")
+    ]
+    if not scuttlers:
+        return None
+
+    for scuttler in scuttlers:
+        pos = getattr(scuttler, "position", None)
+        if pos is None or not _adjacent(pos, dst):
+            continue
+        try:
+            ui = getattr(game, "ui", None)
+            if ui is not None and hasattr(ui, "prompt_info"):
+                ui.prompt_info(
+                    "Goblin Scuttle",
+                    prompt_long=(
+                        f"{getattr(scuttler, 'name', 'Bohater')} może wykonać Step "
+                        f"po ruchu {getattr(mover, 'name', 'sojusznika')}."
+                    ),
+                    source="goblin_scuttle",
+                )
+            else:
+                game.ui_log(
+                    f"Goblin Scuttle: {getattr(scuttler, 'name', 'Bohater')} może wykonać Step."
+                )
+        except Exception:
+            pass
+
+        try:
+            from GameObjects.events.step_event import StepEvent
+            from GameObjects.events.base import EventContext
+
+            StepEvent().execute(EventContext(game=game, actor=scuttler))
+            game.ui_log(
+                f"Goblin Scuttle: {getattr(scuttler, 'name', 'Bohater')} wykonuje Step."
+            )
+            game.ui_log(
+                f"Powrót do ruchu {getattr(mover, 'name', 'sojusznika')}."
+            )
+        except Exception:
+            pass
     return None

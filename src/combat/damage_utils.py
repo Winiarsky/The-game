@@ -4,6 +4,7 @@ from typing import Any, Iterable, Optional, Sequence, Tuple
 
 from statuses import Status
 from ui_client import get_ui_client
+from damage_types import DamageType
 
 
 def _status_list(target: Any) -> Iterable[Status]:
@@ -103,3 +104,43 @@ def prompt_damage_summary(target: Any, components: Sequence[tuple[str, int]]) ->
     except Exception:
         pass
     return summary
+
+
+def _has_status(obj, status_id: str) -> bool:
+    if obj is None:
+        return False
+    has_status = getattr(obj, "has_status", None)
+    if callable(has_status):
+        try:
+            return bool(has_status(status_id))
+        except Exception:
+            return False
+    statuses = getattr(obj, "statuses", None)
+    if isinstance(statuses, list):
+        return any(getattr(s, "id", s) == status_id for s in statuses)
+    return False
+
+
+def burn_it_bonus(actor: Any, damage_type: str, *, persistent: bool = False) -> int:
+    """Zwróć bonus z Burn It! dla obrażeń ognia."""
+    if damage_type != DamageType.FIRE.value:
+        return 0
+    if not _has_status(actor, "burn_it"):
+        return 0
+    if persistent:
+        return 1
+    level = getattr(actor, "level", 1) or 1
+    try:
+        level = int(level)
+    except Exception:
+        level = 1
+    return max(1, level // 2)
+
+
+def burn_it_prompt_note(actor: Any, damage_type: str, *, persistent: bool = False) -> str | None:
+    bonus = burn_it_bonus(actor, damage_type, persistent=persistent)
+    if not bonus:
+        return None
+    if persistent:
+        return "Burn It!: wpisz wartość -1 (bonus +1 doda się automatycznie)."
+    return f"Burn It!: +{bonus} status do obrażeń ognia (dodane automatycznie)."
