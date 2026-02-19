@@ -376,3 +376,23 @@ def _collect_modifier_data(
     breakdown = _format_breakdown(all_effects, skill_id)
     notes = list(notes_src) + list(notes_tgt)
     return modifier, breakdown, notes, promote_src, demote_src, promote_tgt, demote_tgt, consume_src, consume_tgt, all_effects
+
+
+def compute_skill_modifier_with_sources(
+    *,
+    skill_id: str,
+    actor,
+    target=None,
+    tags: Sequence[str] | None = None,
+    base_modifier: int = 0,
+) -> tuple[int, list[str], list[str]]:
+    """Zwróć (modifier, breakdown, notes) bez wykonywania rzutu."""
+    tags = list(tags or [])
+    modifier, breakdown, notes, _ps, _ds, _pt, _dt, _cs, _ct, _effects = _collect_modifier_data(
+        skill_id=skill_id,
+        tags=tags,
+        actor=actor,
+        target=target,
+        base_modifier=base_modifier,
+    )
+    return modifier, breakdown, notes

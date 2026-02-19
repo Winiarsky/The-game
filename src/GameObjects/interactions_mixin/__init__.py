@@ -22,6 +22,7 @@ from GameObjects.interactions_mixin.skill_check_resolver import (
     resolve_skill_check_with_sources,
     resolve_skill_check_with_sources_from_roll,
     SkillCheckResolution,
+    compute_skill_modifier_with_sources,
 )
 
 __all__ = [
@@ -30,6 +31,7 @@ __all__ = [
     "resolve_skill_check_with_sources",
     "resolve_skill_check_with_sources_from_roll",
     "SkillCheckResolution",
+    "compute_skill_modifier_with_sources",
     "SocialMixin",
     "attitude_label",
     "clamp",

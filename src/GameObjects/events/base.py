@@ -97,3 +97,49 @@ class GameEvent:
         except Exception:  # pragma: no cover - nie blokuj dalszych akcji
             logger.debug("Post hook failed for %s", self.name, exc_info=True)
         return result
+
+
+class ActionCostEvent(GameEvent):
+    """Bazowy event z kontrolą kosztu akcji (1-3) w walce."""
+
+    actions_cost: int = 1
+    consumes_action: bool = True
+
+    def _actions_remaining(self, ctx: EventContext, actor) -> int | None:
+        combat_state = getattr(ctx.game, "state", None)
+        if combat_state is None:
+            return None
+        try:
+            limit = getattr(combat_state, "ACTION_LIMIT", None)
+            used = getattr(combat_state, "actions_used", {}).get(actor, 0)
+            if limit is None:
+                return None
+            return int(limit) - int(used)
+        except Exception:
+            return None
+
+    def pre(self, ctx: EventContext) -> EventResult:
+        if not self.consumes_action:
+            return EventResult()
+        if not ctx.in_combat:
+            return EventResult()
+        actor = ctx.actor
+        if actor is None:
+            return EventResult.cancelled(message="Brak aktora do wykonania akcji.")
+        try:
+            cost = int(self.actions_cost)
+        except Exception:
+            cost = 1
+        cost = min(3, max(1, cost))
+        self.actions_cost = cost
+        remaining = self._actions_remaining(ctx, actor)
+        if remaining is not None and cost > remaining:
+            msg = f"Za mało akcji: potrzebne {cost}, dostępne {remaining}."
+            return EventResult.cancelled(message=msg)
+        return EventResult()
+
+
+class ThreeActionEvent(ActionCostEvent):
+    """Wygodny bazowy event 3-akcyjny."""
+
+    actions_cost: int = 3

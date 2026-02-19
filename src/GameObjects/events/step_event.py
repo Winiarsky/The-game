@@ -33,6 +33,8 @@ class StepEvent(GameEvent):
         hero_pos = getattr(hero, "position", None)
         if hero_pos is None:
             return EventResult.cancelled(message="Bohater nie stoi na planszy.")
+        if getattr(hero, "has_status", lambda _s: False)("grabbed") or getattr(hero, "has_status", lambda _s: False)("restrained"):
+            return EventResult.cancelled(message="Nie możesz wykonać stepu będąc grabbed/restrained.")
         if getattr(hero, "has_status", lambda _s: False)("prone"):
             return EventResult.cancelled(message="Nie możesz wykonać stepu będąc prone.")
 

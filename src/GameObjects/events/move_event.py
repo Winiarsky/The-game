@@ -74,6 +74,8 @@ class MoveEvent(GameEvent):
 
         if moving_hero is None or getattr(moving_hero, "position", None) is None:
             return EventResult.cancelled(message="Nie wybrano bohatera do ruchu.")
+        if getattr(moving_hero, "has_status", lambda _s: False)("grabbed") or getattr(moving_hero, "has_status", lambda _s: False)("restrained"):
+            return EventResult.cancelled(message="Nie możesz wykonać ruchu będąc grabbed/restrained.")
 
         # hint w UI: wybór celu i tworzenie ścieżki
         try:

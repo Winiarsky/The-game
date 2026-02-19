@@ -193,12 +193,92 @@ class Combat(State):
         except Exception as exc:
             logger.debug("Nie udało się przetworzyć poisoned dla %s: %s", actor, exc)
 
+        # wygaszanie statusów utrzymywanych przez aktora (np. grabbed/restrained)
+        try:
+            self._expire_held_statuses(actor)
+        except Exception as exc:
+            logger.debug("Nie udało się wygasić utrzymywanych statusów: %s", exc)
+
         tick_statuses = getattr(actor, "tick_statuses_turn", None)
         if callable(tick_statuses):
             try:
                 tick_statuses()
             except Exception:
                 logger.debug("Nie udało się odliczyć statusów dla %s", actor)
+
+    def _iter_held_statuses(self, source_actor):
+        source_id = self._actor_id(source_actor)
+        if not source_id:
+            return []
+        held = []
+        actors = list(getattr(self.game, "heroes", [])) + list(getattr(self.game, "enemies", []))
+        for target in actors:
+            statuses = getattr(target, "statuses", None) or []
+            for status in statuses:
+                if getattr(status, "id", None) not in ("grabbed", "restrained"):
+                    continue
+                data = getattr(status, "data", None) or {}
+                if data.get("source_id") != source_id:
+                    continue
+                held.append((target, status))
+        return held
+
+    def _clear_hold_status(self, target, status) -> None:
+        status_id = getattr(status, "id", None)
+        remover = getattr(target, "remove_status", None)
+        if callable(remover):
+            try:
+                remover(status)
+            except Exception:
+                pass
+        if status_id == "grabbed":
+            try:
+                from statuses import clear_grabbed_effects
+
+                clear_grabbed_effects(target)
+            except Exception:
+                pass
+        elif status_id == "restrained":
+            try:
+                from statuses import clear_restrained_effects
+
+                clear_restrained_effects(target)
+            except Exception:
+                pass
+
+    def _expire_held_statuses(self, source_actor) -> None:
+        for target, status in self._iter_held_statuses(source_actor):
+            data = getattr(status, "data", None) or {}
+            if "maintain_turns_left" not in data:
+                continue
+            try:
+                turns_left = int(data.get("maintain_turns_left", 0))
+            except Exception:
+                turns_left = 0
+            turns_left -= 1
+            data["maintain_turns_left"] = turns_left
+            if turns_left < 0:
+                self._clear_hold_status(target, status)
+
+    def _confirm_break_hold(self, source_actor, held_statuses) -> bool:
+        try:
+            from ui_client import get_ui_client
+        except Exception:
+            get_ui_client = None
+        prompt = "Inna akcja przerwie chwyt (grabbed/restrained). Kontynuować?"
+        try:
+            if get_ui_client is not None:
+                ui = get_ui_client()
+                if ui is not None and getattr(ui, "enabled", True):
+                    choice = ui.prompt_choice(prompt, choices=["tak", "nie"], source="grapple_break")
+                    return str(choice or "").strip().lower().startswith("t")
+        except Exception:
+            pass
+        try:
+            resp = input(f"{prompt} [t/N]: ")
+            return resp.strip().lower().startswith("t")
+        except Exception:
+            return False
 
     def _current_actor(self):
         self._cleanup_removed()
@@ -449,6 +529,25 @@ class Combat(State):
             logger.error("Nieznana akcja '%s'", raw_choice)
             self.game.ui_log(f"Nieznana akcja '{raw_choice}'")
             return self
+
+        # podtrzymanie chwytu (grabbed/restrained) – blokada innych akcji jeśli wymagane
+        held_statuses = self._iter_held_statuses(actor)
+        if held_statuses and raw_choice not in ("end", "delay"):
+            maintain_ids = set()
+            needs_block = False
+            for _target, status in held_statuses:
+                data = getattr(status, "data", None) or {}
+                if not data.get("allow_other_actions_in_meantime", True):
+                    needs_block = True
+                mid = data.get("maintain_action_id")
+                if mid:
+                    maintain_ids.add(str(mid))
+            if needs_block and raw_choice not in maintain_ids:
+                if self._confirm_break_hold(actor, held_statuses):
+                    for target, status in held_statuses:
+                        self._clear_hold_status(target, status)
+                else:
+                    return self
 
         ctx = EventContext(game=self.game, actor=actor)
         result = dispatch_event(raw_choice, ctx)

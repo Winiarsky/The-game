@@ -121,6 +121,8 @@ class LeapEvent(GameEvent):
         origin = getattr(hero, "position", None)
         if origin is None:
             return EventResult.cancelled(message="Bohater nie stoi na planszy.")
+        if getattr(hero, "has_status", lambda _s: False)("grabbed") or getattr(hero, "has_status", lambda _s: False)("restrained"):
+            return EventResult.cancelled(message="Nie możesz wykonać leapa będąc grabbed/restrained.")
 
         try:
             ctx.game.events.safe_emit_action(

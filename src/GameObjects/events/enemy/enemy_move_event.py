@@ -93,6 +93,8 @@ class EnemyMoveEvent(GameEvent):
         enemy = ctx.actor
         if enemy is None or getattr(enemy, "position", None) is None:
             return EventResult(success=False, consumed_action=False, message="Wróg nie jest na planszy.")
+        if getattr(enemy, "has_status", lambda _s: False)("grabbed") or getattr(enemy, "has_status", lambda _s: False)("restrained"):
+            return EventResult(success=False, consumed_action=False, message="Wróg jest grabbed/restrained – nie może się ruszyć.")
 
         game = ctx.game
         board = game.board

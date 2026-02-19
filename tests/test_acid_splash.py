@@ -69,7 +69,7 @@ def test_acid_splash_critical_adds_persistent(monkeypatch):
         return 5
 
     monkeypatch.setattr("GameObjects.events.magic.acid_splash_event.AcidSplashEvent._prompt_damage", lambda self: 5)
-    monkeypatch.setattr("GameObjects.events.magic.acid_splash_event.AcidSplashEvent._prompt_persistent", lambda self: 2)
+    monkeypatch.setattr("GameObjects.events.magic.acid_splash_event.AcidSplashEvent._prompt_persistent", lambda *_, **__: 2)
 
     hero = SimpleNamespace(position=(0, 0))
     target = DummyTarget((1, 0))

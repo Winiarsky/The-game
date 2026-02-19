@@ -80,17 +80,24 @@ def is_flanked(board, target_pos: tuple[int, int] | None, threats: Iterable[obje
     return False
 
 
-def _remove_flat_footed(target) -> None:
+def _remove_flat_footed(target, *, source: str | None = None) -> None:
     removed = False
     remover = getattr(target, "remove_status", None)
     if callable(remover):
-        removed = remover(FLAT_FOOTED_STATUS) or remover("flat_footed")
+        if source is None:
+            removed = remover(FLAT_FOOTED_STATUS) or remover("flat_footed")
+        else:
+            removed = False
     statuses = getattr(target, "statuses", None)
     if isinstance(statuses, list):
         new_statuses: list[Status | object] = []
         for status in statuses:
             sid = status.id if isinstance(status, Status) else status
             if sid == "flat_footed":
+                data = getattr(status, "data", None) or {}
+                if source is not None and data.get("flat_footed_source") != source:
+                    new_statuses.append(status)
+                    continue
                 removed = True
                 continue
             new_statuses.append(status)
@@ -104,8 +111,12 @@ def _remove_flat_footed(target) -> None:
 
 
 def _apply_flat_footed(target, ac_penalty: int) -> None:
-    _remove_flat_footed(target)
-    status = Status(id="flat_footed", label=FLAT_FOOTED_STATUS.label, data={"ac_penalty": ac_penalty})
+    _remove_flat_footed(target, source="flanking")
+    status = Status(
+        id="flat_footed",
+        label=FLAT_FOOTED_STATUS.label,
+        data={"ac_penalty": ac_penalty, "flat_footed_source": "flanking"},
+    )
     adder = getattr(target, "add_status", None)
     if callable(adder):
         adder(status)
@@ -160,7 +171,7 @@ def refresh_flanking_statuses(game, ac_penalty: int = 2) -> None:
                 except Exception:
                     pass
         else:
-            _remove_flat_footed(enemy)
+            _remove_flat_footed(enemy, source="flanking")
 
     for hero in getattr(game, "heroes", []):
         pos = getattr(hero, "position", None)
@@ -183,7 +194,7 @@ def refresh_flanking_statuses(game, ac_penalty: int = 2) -> None:
                 except Exception:
                     pass
         else:
-            _remove_flat_footed(hero)
+            _remove_flat_footed(hero, source="flanking")
 
 
 def flat_footed_penalty(target) -> int:

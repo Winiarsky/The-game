@@ -17,6 +17,8 @@ from .in_dim_light import InDimLightStatus, IN_DIM_LIGHT_STATUS
 from .stealth import StealthStatus, STEALTH_STATUS, ObservableStatus, OBSERVABLE_STATUS
 from .persistent_damage import PERSISTENT_DAMAGE_STATUS, make_persistent_damage, process_persistent_damage
 from .poisoned import PoisonedStatus, process_poisoned
+from .grabbed import GrabbedStatus, GRABBED_STATUS, apply_grabbed_effects, clear_grabbed_effects
+from .restrained import RestrainedStatus, RESTRAINED_STATUS, apply_restrained_effects, clear_restrained_effects
 from .familiar import (
     FAMILIAR_OWNER_STATUS,
     FamiliarScoutStatus,
@@ -56,6 +58,14 @@ __all__ = [
     "process_persistent_damage",
     "PoisonedStatus",
     "process_poisoned",
+    "GrabbedStatus",
+    "GRABBED_STATUS",
+    "apply_grabbed_effects",
+    "clear_grabbed_effects",
+    "RestrainedStatus",
+    "RESTRAINED_STATUS",
+    "apply_restrained_effects",
+    "clear_restrained_effects",
     "ProneStatus",
     "PRONE_STATUS",
     "apply_prone_effects",

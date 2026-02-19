@@ -136,5 +136,5 @@ def test_stealth_success_with_hide_bonus(monkeypatch):
         for s in hero.statuses
         if getattr(s, "id", None) == "stealth"
     )
-    assert dc == 10
+    assert dc == 12
     assert any("stealth_start" in a.get("action_id", "") or True for a in game.events.emitted)

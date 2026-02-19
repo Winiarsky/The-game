@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import logging
 
-from ..base import EventContext, EventResult, GameEvent
+from ..base import EventContext, EventResult, ActionCostEvent
 from .magic_utils import grid_distance_feet
 from .spell_types import SpellTradition
 
 logger = logging.getLogger(__name__)
 
 
-class MagicEvent(GameEvent):
+class MagicEvent(ActionCostEvent):
     """Bazowa klasa czarów z polami wspólnymi dla większości zaklęć."""
 
     # w jakich trybach można rzucać
@@ -53,20 +53,6 @@ class MagicEventResolver:
     """Waliduje możliwość rzucenia czaru i odpala lifecycle eventu."""
 
     @staticmethod
-    def _actions_remaining(ctx: EventContext, actor) -> int | None:
-        combat_state = getattr(ctx.game, "state", None)
-        if combat_state is None:
-            return None
-        try:
-            limit = getattr(combat_state, "ACTION_LIMIT", None)
-            used = getattr(combat_state, "actions_used", {}).get(actor, 0)
-            if limit is None:
-                return None
-            return int(limit) - int(used)
-        except Exception:
-            return None
-
-    @staticmethod
     def resolve(event: MagicEvent, ctx: EventContext) -> EventResult:
         actor = ctx.actor
         if actor is None:
@@ -88,14 +74,6 @@ class MagicEventResolver:
             msg = f"Czar '{event.name}' niedostępny poza walką."
             logger.info(msg)
             return EventResult.cancelled(message=msg)
-
-        # koszt akcji tylko w walce
-        if ctx.in_combat:
-            remaining = MagicEventResolver._actions_remaining(ctx, actor)
-            if remaining is not None and cost > remaining:
-                msg = f"Za mało akcji: potrzebne {cost}, dostępne {remaining}."
-                logger.info(msg)
-                return EventResult.cancelled(message=msg)
 
         result = event.run(ctx)
         if result.actions_spent is None and result.consumed_action:

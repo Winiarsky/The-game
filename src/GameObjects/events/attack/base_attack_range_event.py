@@ -49,6 +49,8 @@ class BaseRangeAttackEvent(AttackEventBase):
         hero = ctx.actor
         if hero is None:
             return EventResult.cancelled(message="Brak bohatera do ataku dystansowego.")
+        if getattr(hero, "has_status", lambda _s: False)("restrained"):
+            return EventResult.cancelled(message="Nie możesz wykonywać ataków dystansowych będąc restrained.")
         hero_pos = getattr(hero, "position", None)
         if hero_pos is None:
             return EventResult.cancelled(message="Bohater nie stoi na planszy.")

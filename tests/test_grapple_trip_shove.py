@@ -1,0 +1,170 @@
+from types import SimpleNamespace
+
+from GameObjects.events.base import EventContext
+from GameObjects.events.grapple_event import GrappleEvent
+from GameObjects.events.trip_event import TripEvent
+from GameObjects.events.shove_event import ShoveEvent
+from GameObjects.interactions_mixin import BonusMixin, StatusMixin
+from statuses import GRABBED_STATUS, PRONE_STATUS
+from states.combat import Combat
+
+
+class DummyConn:
+    def set_leds(self, *_a, **_k):
+        return None
+
+    def leds_off(self):
+        return None
+
+    def scan_board(self, positions):
+        return positions[0] if positions else None
+
+
+class DummyEvents:
+    def __init__(self):
+        self.emitted = []
+
+    def safe_emit_action(self, **payload):
+        self.emitted.append(payload)
+
+
+class DummyBoard:
+    def __init__(self, occupants):
+        self._occ = dict(occupants)
+
+    def get_neighbors(self, pos, include_position=False, diagonal=True):
+        x, y = pos
+        res = [
+            (x - 1, y),
+            (x + 1, y),
+            (x, y - 1),
+            (x, y + 1),
+        ]
+        if diagonal:
+            res += [(x - 1, y - 1), (x - 1, y + 1), (x + 1, y - 1), (x + 1, y + 1)]
+        return res
+
+    def occupant_at(self, pos):
+        return self._occ.get(pos)
+
+    def can_enter(self, pos, allow_occupied=False):
+        return pos not in self._occ
+
+    def is_blocked(self, *_a, **_k):
+        return False
+
+    def move(self, src, dst):
+        obj = self._occ.pop(src, None)
+        if obj is not None:
+            self._occ[dst] = obj
+
+
+class DummyActor(StatusMixin, BonusMixin):
+    def __init__(self, object_id, position):
+        super().__init__()
+        self.object_id = object_id
+        self.position = position
+
+    def apply_damage(self, amount, *_a, **_k):
+        self.last_damage = amount
+        return 0, False
+
+
+def _game(hero, enemy, board):
+    game = SimpleNamespace(
+        heroes=[hero],
+        enemies=[enemy],
+        board=board,
+        conn=DummyConn(),
+        events=DummyEvents(),
+        ui_log=lambda *_a, **_k: None,
+        ui_event=lambda *_a, **_k: None,
+    )
+    game.state = Combat(game)
+    return game
+
+
+def _ctx(game, actor):
+    return EventContext(game=game, actor=actor)
+
+
+def test_grapple_success_applies_grabbed(monkeypatch):
+    hero = DummyActor("h1", (0, 0))
+    enemy = DummyActor("e1", (1, 0))
+    board = DummyBoard({hero.position: hero, enemy.position: enemy})
+    game = _game(hero, enemy, board)
+
+    monkeypatch.setattr(
+        "GameObjects.events.grapple_event.resolve_skill_check_with_sources",
+        lambda **_k: SimpleNamespace(outcome="success"),
+    )
+    monkeypatch.setattr(
+        "GameObjects.events.grapple_event.compute_skill_modifier_with_sources",
+        lambda **_k: (0, [], []),
+    )
+
+    res = GrappleEvent().execute(_ctx(game, hero))
+    assert res.success is True
+    assert enemy.has_status(GRABBED_STATUS)
+
+
+def test_grapple_critical_failure_grabs_actor(monkeypatch):
+    hero = DummyActor("h1", (0, 0))
+    enemy = DummyActor("e1", (1, 0))
+    board = DummyBoard({hero.position: hero, enemy.position: enemy})
+    game = _game(hero, enemy, board)
+
+    monkeypatch.setattr(
+        "GameObjects.events.grapple_event.resolve_skill_check_with_sources",
+        lambda **_k: SimpleNamespace(outcome="critical_failure"),
+    )
+    monkeypatch.setattr(
+        "GameObjects.events.grapple_event.compute_skill_modifier_with_sources",
+        lambda **_k: (0, [], []),
+    )
+
+    res = GrappleEvent().execute(_ctx(game, hero))
+    assert res.success is True
+    assert hero.has_status(GRABBED_STATUS)
+
+
+def test_trip_critical_success_deals_bludgeoning(monkeypatch):
+    hero = DummyActor("h1", (0, 0))
+    enemy = DummyActor("e1", (1, 0))
+    board = DummyBoard({hero.position: hero, enemy.position: enemy})
+    game = _game(hero, enemy, board)
+
+    monkeypatch.setattr(
+        "GameObjects.events.trip_event.resolve_skill_check_with_sources",
+        lambda **_k: SimpleNamespace(outcome="critical_success"),
+    )
+    monkeypatch.setattr(
+        "GameObjects.events.trip_event.compute_skill_modifier_with_sources",
+        lambda **_k: (0, [], []),
+    )
+    monkeypatch.setattr("GameObjects.events.trip_event.prompt_for_roll", lambda *_, **__: 4)
+
+    res = TripEvent().execute(_ctx(game, hero))
+    assert res.success is True
+    assert enemy.has_status(PRONE_STATUS)
+    assert getattr(enemy, "last_damage", None) == 4
+
+
+def test_shove_success_moves_target(monkeypatch):
+    hero = DummyActor("h1", (0, 0))
+    enemy = DummyActor("e1", (1, 0))
+    board = DummyBoard({hero.position: hero, enemy.position: enemy})
+    game = _game(hero, enemy, board)
+
+    monkeypatch.setattr(
+        "GameObjects.events.shove_event.resolve_skill_check_with_sources",
+        lambda **_k: SimpleNamespace(outcome="success"),
+    )
+    monkeypatch.setattr(
+        "GameObjects.events.shove_event.compute_skill_modifier_with_sources",
+        lambda **_k: (0, [], []),
+    )
+
+    res = ShoveEvent().execute(_ctx(game, hero))
+    assert res.success is True
+    assert enemy.position == (2, 0)

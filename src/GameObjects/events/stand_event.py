@@ -26,6 +26,8 @@ class StandEvent(GameEvent):
         hero = ctx.actor
         if hero is None:
             return EventResult.cancelled(message="Brak bohatera do akcji stand.")
+        if getattr(hero, "has_status", lambda _s: False)("grabbed") or getattr(hero, "has_status", lambda _s: False)("restrained"):
+            return EventResult.cancelled(message="Nie możesz wstać będąc grabbed/restrained.")
 
         if getattr(hero, "has_status", lambda _s: False)(STEALTH_STATUS):
             try:

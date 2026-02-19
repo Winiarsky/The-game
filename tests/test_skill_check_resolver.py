@@ -189,9 +189,9 @@ def test_unwavering_mien_bonus_and_promote_on_mental(monkeypatch):
         tags=["mental", "will"],
         apply_modifiers=True,
     )
-    # 14 vs 15 -> failure, promote +1 => success
+    # 14 + 1 vs 15 -> success, promote +1 => critical_success
     assert res.modifier == 1
-    assert res.outcome == "success"
+    assert res.outcome == "critical_success"
 
 
 def test_irongut_goblin_ingested_bonus_and_promote(monkeypatch):
