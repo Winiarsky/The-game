@@ -26,6 +26,7 @@ from .familiar import (
     FAMILIAR_DISTRACT_STATUS,
     FAMILIAR_TOUCH_DELIVERY_STATUS,
 )
+from .aided import AidedStatus
 
 __all__ = [
     "Status",
@@ -79,4 +80,5 @@ __all__ = [
     "FamiliarGuidanceStatus",
     "FAMILIAR_DISTRACT_STATUS",
     "FAMILIAR_TOUCH_DELIVERY_STATUS",
+    "AidedStatus",
 ]

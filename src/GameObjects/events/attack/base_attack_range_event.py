@@ -193,6 +193,7 @@ class BaseRangeAttackEvent(AttackEventBase):
                 answer_placeholder="Wynik k20",
             )
             total_roll = roll + modifier
+            self._consume_aid_attack_bonus(hero)
             critical = total_roll >= target_ac + 10
             hit = total_roll >= target_ac
             if not hit:

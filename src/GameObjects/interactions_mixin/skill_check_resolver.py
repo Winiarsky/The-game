@@ -141,6 +141,8 @@ def resolve_skill_check_with_sources(
 ) -> SkillCheckResolution:
     """Policz wynik testu umiejętności z bonusami i efektami statusów."""
     tags = list(tags)
+    if "roll" not in tags:
+        tags.append("roll")
     modifier, breakdown, notes, promote_src, demote_src, promote_tgt, demote_tgt, consume_src, consume_tgt, effects = _collect_modifier_data(
         skill_id=skill_id,
         tags=tags,
@@ -200,6 +202,8 @@ def resolve_skill_check_with_sources_from_roll(
 ) -> SkillCheckResolution:
     """Wersja resolvera z podanym wynikiem rzutu (bez promptu)."""
     tags = list(tags)
+    if "roll" not in tags:
+        tags.append("roll")
     if _precomputed is None:
         modifier, breakdown, notes, promote_src, demote_src, promote_tgt, demote_tgt, consume_src, consume_tgt, _effects = _collect_modifier_data(
             skill_id=skill_id,

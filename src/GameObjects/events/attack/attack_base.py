@@ -127,6 +127,14 @@ class AttackEventBase(GameEvent):
             return ""
         return f"\nModyfikator łączny: {modifier:+d} (doliczany automatycznie).\n"
 
+    def _consume_aid_attack_bonus(self, attacker) -> None:
+        remover = getattr(attacker, "remove_bonuses_by_source", None)
+        if callable(remover):
+            try:
+                remover("aid:attack")
+            except Exception:
+                pass
+
     def _maybe_prompt_vengeful_hatred(self, attacker, target) -> None:
         """Pokaż informację o +1 do obrażeń vs wybrany typ przeciwnika (bez naliczania)."""
         getter = getattr(attacker, "get_status_data", None)
