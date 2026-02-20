@@ -84,6 +84,19 @@ class GameEvent:
 
     def run(self, ctx: EventContext) -> EventResult:
         """Wykonaj pełny lifecycle: pre -> execute -> post."""
+        actor = ctx.actor
+        if actor is not None and "move" in self._effective_tags(ctx):
+            has_status = getattr(actor, "has_status", None)
+            if callable(has_status):
+                try:
+                    if has_status("immobilized"):
+                        return EventResult.cancelled(message="Nie możesz się ruszyć (immobilized).")
+                except Exception:
+                    pass
+            else:
+                for item in getattr(actor, "statuses", []) or []:
+                    if getattr(item, "id", None) == "immobilized" or item == "immobilized":
+                        return EventResult.cancelled(message="Nie możesz się ruszyć (immobilized).")
         pre_res = self.pre(ctx)
         if not pre_res.success:
             return pre_res

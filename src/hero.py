@@ -66,6 +66,13 @@ class Hero(StatusMixin, BonusMixin, ReactiveMixin):
             game=None,
             apply_modifiers=True,
         )
+        if getattr(self, "has_status", lambda _s: False)("deafened"):
+            try:
+                from statuses import mark_deafened_initiative_applied
+
+                mark_deafened_initiative_applied(self)
+            except Exception:
+                pass
         self.initiative = resolution.total
         return resolution.total
 

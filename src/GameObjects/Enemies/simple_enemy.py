@@ -26,7 +26,7 @@ META = GameObjectMeta(
         "hp": 12,
         "ac": 14,
         "initiative_bonus": 2,
-        "move_points": 3,
+        "distance": 25,
         "attack_bonus": 5,
         "strength": 2,
         "behavior_id": "basic_melee",

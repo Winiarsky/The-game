@@ -199,6 +199,12 @@ class Combat(State):
         except Exception as exc:
             logger.debug("Nie udało się wygasić utrzymywanych statusów: %s", exc)
 
+        # wygaszanie statusów liczonych od tury źródła
+        try:
+            self._expire_sourced_statuses(actor)
+        except Exception as exc:
+            logger.debug("Nie udało się wygasić statusów źródłowych: %s", exc)
+
         tick_statuses = getattr(actor, "tick_statuses_turn", None)
         if callable(tick_statuses):
             try:
@@ -259,6 +265,38 @@ class Combat(State):
             data["maintain_turns_left"] = turns_left
             if turns_left < 0:
                 self._clear_hold_status(target, status)
+
+    def _expire_sourced_statuses(self, source_actor) -> None:
+        source_id = self._actor_id(source_actor)
+        if not source_id:
+            return
+        actors = list(getattr(self.game, "heroes", [])) + list(getattr(self.game, "enemies", []))
+        for target in actors:
+            statuses = getattr(target, "statuses", None)
+            if not isinstance(statuses, list) or not statuses:
+                continue
+            remaining = []
+            removed = 0
+            for status in statuses:
+                data = getattr(status, "data", None) or {}
+                if data.get("source_id") != source_id or "source_turns_left" not in data:
+                    remaining.append(status)
+                    continue
+                try:
+                    turns_left = int(data.get("source_turns_left", 0))
+                except Exception:
+                    turns_left = 0
+                turns_left -= 1
+                data["source_turns_left"] = turns_left
+                if turns_left <= 0:
+                    removed += 1
+                    continue
+                remaining.append(status)
+            if removed:
+                try:
+                    target.statuses = remaining
+                except Exception:
+                    pass
 
     def _confirm_break_hold(self, source_actor, held_statuses) -> bool:
         try:
@@ -336,10 +374,18 @@ class Combat(State):
 
     def _effective_initiative(self, actor: Any) -> int:
         if actor in self.temp_initiative:
-            return self.temp_initiative[actor]
-        if actor in self.base_initiative:
-            return self.base_initiative[actor]
-        return getattr(actor, "initiative", -1)
+            base = self.temp_initiative[actor]
+        elif actor in self.base_initiative:
+            base = self.base_initiative[actor]
+        else:
+            base = getattr(actor, "initiative", -1)
+        try:
+            from statuses import deafened_initiative_penalty
+
+            penalty = deafened_initiative_penalty(actor, only_unapplied=True)
+        except Exception:
+            penalty = 0
+        return int(base) - int(penalty or 0)
 
     def _effective_initiative_sort_key(self, actor: Any) -> int:
         return self._effective_initiative(actor)
@@ -376,6 +422,50 @@ class Combat(State):
                 "active_id": self._actor_id(active) if active else None,
             },
         )
+
+    def apply_initiative_penalty(self, actor, penalty: int) -> None:
+        """Obniż inicjatywę aktora i przestaw w kolejce (używane np. przez deafened)."""
+        try:
+            penalty = int(penalty)
+        except Exception:
+            penalty = 0
+        if penalty <= 0:
+            return
+
+        try:
+            from statuses import deafened_initiative_penalty
+
+            unapplied = deafened_initiative_penalty(actor, only_unapplied=True)
+        except Exception:
+            unapplied = 0
+        base_init = self._effective_initiative(actor)
+        new_init = base_init if unapplied else base_init - penalty
+        try:
+            from statuses import mark_deafened_initiative_applied
+
+            mark_deafened_initiative_applied(actor)
+        except Exception:
+            pass
+        self.temp_initiative[actor] = new_init
+
+        if actor in self.round_queue:
+            if self.round_queue and self.round_queue[0] is actor:
+                self.round_queue.pop(0)
+            else:
+                try:
+                    self.round_queue.remove(actor)
+                except ValueError:
+                    pass
+            inserted = False
+            for idx, obj in enumerate(self.round_queue):
+                if self._effective_initiative(obj) < new_init:
+                    self.round_queue.insert(idx, actor)
+                    inserted = True
+                    break
+            if not inserted:
+                self.round_queue.append(actor)
+            self.initiative_order = list(self.round_queue)
+        self._send_initiative_event()
 
     def _confirm_actor_position(self, actor) -> bool:
         return True

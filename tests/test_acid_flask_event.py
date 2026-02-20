@@ -103,7 +103,7 @@ def test_acid_flask_moderate_hit_persistent_and_splash(monkeypatch):
     monkeypatch.setattr("combat.damage_utils.get_ui_client", lambda: dummy_ui)
 
     hero = DummyHero((0, 0), object_id="hero-1")
-    hero_adj = DummyHero((0, 1), object_id="hero-2")
+    hero_adj = DummyHero((0, 1), name="hero-2", object_id="hero-2")
     target = DummyEnemy((1, 0), object_id="enemy-1")
     enemy_adj = DummyEnemy((1, 1), object_id="enemy-2")
 
@@ -136,7 +136,7 @@ def test_acid_flask_item_bonus_in_modifiers(monkeypatch, tier, item_bonus):
     event = AcidFlaskEvent()
     monkeypatch.setattr(event, "_prompt_level", lambda: tier)
     monkeypatch.setattr(event, "_prompt_persistent", lambda *_args, **_kwargs: 0)
-    monkeypatch.setattr(event, "_apply_splash_damage", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("GameObjects.events.acid_flask_event.apply_splash_damage", lambda *_args, **_kwargs: None)
 
     captured = {}
 

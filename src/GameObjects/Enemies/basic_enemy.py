@@ -28,7 +28,8 @@ class BasicEnemy(StatusMixin, BonusMixin, WatchfulMixin, ReactiveMixin, MagicalM
     hp: int = 10
     ac: int = 14
     initiative_bonus: int = 0
-    move_points: int = 3
+    distance: int = 25
+    move_points: int | None = None
     attack_bonus: int = 0
     strength: int = 0
     behavior_id: str | None = "basic_melee"
@@ -46,6 +47,11 @@ class BasicEnemy(StatusMixin, BonusMixin, WatchfulMixin, ReactiveMixin, MagicalM
 
     def __post_init__(self):
         self.object_id = assign_id(self)
+        if self.move_points is not None and (self.distance is None or self.distance == 25):
+            try:
+                self.distance = max(5, int(self.move_points) * 5)
+            except Exception:
+                self.distance = 25
         if not self.reactions:
             try:
                 self.reactions.append(OpportunityAttack())
@@ -81,6 +87,14 @@ class BasicEnemy(StatusMixin, BonusMixin, WatchfulMixin, ReactiveMixin, MagicalM
     def roll_initiative(self) -> int:
         """Losowy rzut inicjatywy dla wrogów."""
         roll = random.randint(1, 20) + self.initiative_bonus
+        if getattr(self, "has_status", lambda _s: False)("deafened"):
+            roll -= 2
+            try:
+                from statuses import mark_deafened_initiative_applied
+
+                mark_deafened_initiative_applied(self)
+            except Exception:
+                pass
         self.initiative = roll
         logger.info("%s rzuca inicjatywę: %s (bonus %s).", self.name, roll, self.initiative_bonus)
         return roll

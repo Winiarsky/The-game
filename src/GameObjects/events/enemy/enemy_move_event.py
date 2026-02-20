@@ -7,6 +7,7 @@ from board import consts
 from actions.move_utils import find_path, path_cost_feet, trim_path_to_feet
 from combat import refresh_flanking_statuses
 from combat.reactions import dispatch_reactions
+from statuses import speed_penalty_value
 
 from ..base import EventContext, EventResult, GameEvent
 from ..registry import register_event
@@ -99,7 +100,13 @@ class EnemyMoveEvent(GameEvent):
         game = ctx.game
         board = game.board
 
-        move_budget_feet = max(1, getattr(enemy, "move_points", 3)) * 5
+        base_distance = getattr(enemy, "distance", None)
+        if base_distance is None:
+            base_distance = max(1, getattr(enemy, "move_points", 3)) * 5
+        penalty = speed_penalty_value(enemy)
+        move_budget_feet = max(0, int(base_distance) - int(penalty))
+        if move_budget_feet <= 0:
+            return EventResult(success=False, consumed_action=True, message="Wróg jest spowolniony i nie może się ruszyć.")
         nearest_pos, _dist = _nearest_hero(game, enemy.position)
         if nearest_pos is None:
             return EventResult(success=False, consumed_action=False, message="Wróg nie widzi celu.")
