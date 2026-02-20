@@ -8,10 +8,10 @@ from statuses import make_persistent_damage
 from GameObjects.interactions_mixin import prompt_for_roll
 from combat.damage_utils import apply_splash_damage
 
-from .attack.attack_base import AttackEventBase, check_concealed
-from .base import EventContext, EventResult
-from .magic.magic_utils import pick_target_in_range
-from .registry import register_event
+from ..attack.attack_base import AttackEventBase, check_concealed
+from ..base import EventContext, EventResult
+from ..magic.magic_utils import pick_target_in_range
+from ..registry import register_event
 
 logger = logging.getLogger(__name__)
 

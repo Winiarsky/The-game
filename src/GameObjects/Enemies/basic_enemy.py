@@ -115,6 +115,15 @@ class BasicEnemy(StatusMixin, BonusMixin, WatchfulMixin, ReactiveMixin, MagicalM
         )
         return self.hp, defeated
 
+    def heal(self, amount: int) -> int:
+        """Wylecz wroga (zwiększa HP, bez max HP)."""
+        try:
+            amt = max(0, int(amount))
+        except Exception:
+            amt = 0
+        self.hp = int(getattr(self, "hp", 0)) + amt
+        return self.hp
+
     def trigger_combat(self, game) -> None:
         """Wywołuje wejście w stan walki, gdy jesteśmy w turze bohaterów."""
         try:

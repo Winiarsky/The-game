@@ -10,3 +10,5 @@
 - Unfettered Halfling: dodać mechanikę grapplingu (Grab/Grapple/Escape).
 
 TODO: Dodać mechaniki usuwania statusu Poisoned (test medyczny, antidotum itd.).
+TODO: Bestial Mutagen - dodać akcje ataku pazurami i kłami, potem zaimplementować eliksir.
+TODO: Leaper's Elixir - dodać mechanikę skoku (High/Long Jump), potem zaimplementować eliksir.

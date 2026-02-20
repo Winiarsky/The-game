@@ -84,3 +84,14 @@ class Hero(StatusMixin, BonusMixin, ReactiveMixin):
         except Exception:
             self.wounds = getattr(self, "wounds", 0) + effective  # type: ignore[attr-defined]
         return self.wounds, False
+
+    def heal(self, amount: int) -> int:
+        """Wylecz bohatera (zmniejsza wounds, bez max HP)."""
+        try:
+            amt = max(0, int(amount))
+        except Exception:
+            amt = 0
+        current = getattr(self, "wounds", 0)
+        new_val = max(0, int(current) - amt)
+        self.wounds = new_val  # type: ignore[attr-defined]
+        return new_val

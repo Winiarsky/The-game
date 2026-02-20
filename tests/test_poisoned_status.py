@@ -60,3 +60,53 @@ def test_poisoned_removed_after_duration(monkeypatch):
     process_poisoned(hero, game=SimpleNamespace(ui_log=lambda *_a, **_k: None, ui_event=lambda *_a, **_k: None))
     hero.tick_statuses_turn()
     assert hero.get_status("poisoned") is None
+
+
+def test_poisoned_stages_progression(monkeypatch):
+    outcomes = ["failure", "success", "critical_success"]
+
+    def _fake_resolve(*_args, **_kwargs):
+        return SimpleNamespace(outcome=outcomes.pop(0))
+
+    monkeypatch.setattr("statuses.poisoned.resolve_skill_check_with_sources", _fake_resolve)
+
+    hero = Hero()
+    stages = [
+        {"damage": 1},
+        {"damage": 2},
+        {"damage": 3},
+    ]
+    hero.add_status(PoisonedStatus(duration=3, damage=1, dc=15, stages=stages, stage=1))
+
+    process_poisoned(hero, game=SimpleNamespace(ui_log=lambda *_a, **_k: None, ui_event=lambda *_a, **_k: None))
+    status = hero.get_status("poisoned")
+    assert status is not None
+    assert status.data.get("stage") == 2
+
+    process_poisoned(hero, game=SimpleNamespace(ui_log=lambda *_a, **_k: None, ui_event=lambda *_a, **_k: None))
+    status = hero.get_status("poisoned")
+    assert status is not None
+    assert status.data.get("stage") == 1
+
+    process_poisoned(hero, game=SimpleNamespace(ui_log=lambda *_a, **_k: None, ui_event=lambda *_a, **_k: None))
+    assert hero.get_status("poisoned") is None
+
+
+def test_poisoned_stage_dice_enemy_roll(monkeypatch):
+    def _fake_resolve(*_args, **_kwargs):
+        return SimpleNamespace(outcome="failure")
+
+    monkeypatch.setattr("statuses.poisoned.resolve_skill_check_with_sources", _fake_resolve)
+    monkeypatch.setattr("random.randint", lambda _a, _b: 1)
+
+    enemy = SimpleNamespace(
+        statuses=[],
+        apply_damage=lambda amount, _dtype: setattr(enemy, "damage", amount),
+    )
+    enemy.damage = 0
+    stages = [{"dice": "1d6"}]
+    enemy.statuses.append(PoisonedStatus(duration=1, damage=1, dc=15, stages=stages, stage=1))
+
+    process_poisoned(enemy, game=SimpleNamespace(ui_log=lambda *_a, **_k: None, ui_event=lambda *_a, **_k: None, heroes=[]))
+
+    assert enemy.damage == 1

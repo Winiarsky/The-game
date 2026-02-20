@@ -165,18 +165,19 @@ class Combat(State):
     def _clear_start_of_turn_effects(self, actor) -> None:
         """Usuń efekty jednorundowe (np. raise_shield) na początku inicjatywy bohatera."""
         if actor in getattr(self.game, "heroes", []):
-            tick = getattr(actor, "tick_bonuses_turn", None)
-            if callable(tick):
+            remover = getattr(actor, "remove_bonuses_with_prefix", None)
+            if callable(remover):
                 try:
-                    tick()
+                    remover("raise_shield:")
                 except Exception:
-                    logger.debug("Nie udało się odliczyć bonusów dla %s", actor)
-                remover = getattr(actor, "remove_bonuses_with_prefix", None)
-                if callable(remover):
-                    try:
-                        remover("raise_shield:")
-                    except Exception:
-                        logger.debug("Nie udało się wyczyścić efektów raise_shield dla %s", actor)
+                    logger.debug("Nie udało się wyczyścić efektów raise_shield dla %s", actor)
+
+        tick = getattr(actor, "tick_bonuses_turn", None)
+        if callable(tick):
+            try:
+                tick()
+            except Exception:
+                logger.debug("Nie udało się odliczyć bonusów dla %s", actor)
 
         # obrażenia ciągłe na początku inicjatywy
         try:

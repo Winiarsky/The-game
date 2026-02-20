@@ -3,6 +3,7 @@ from .hide import HideStatus, HIDE_STATUS
 from .flat_footed import FlatFootedStatus, FLAT_FOOTED_STATUS
 from .deafened import DeafenedStatus, DEAFENED_STATUS, deafened_initiative_penalty, mark_deafened_initiative_applied
 from .speed_penalty import SpeedPenaltyStatus, speed_penalty_value
+from .speed_bonus import SpeedBonusStatus, speed_bonus_value
 from .immobilized import ImmobilizedStatus, IMMOBILIZED_STATUS
 from .covered import CoveredStatus, COVERED_STATUS
 from .prone import ProneStatus, PRONE_STATUS, apply_prone_effects, clear_prone_effects
@@ -47,6 +48,8 @@ __all__ = [
     "mark_deafened_initiative_applied",
     "SpeedPenaltyStatus",
     "speed_penalty_value",
+    "SpeedBonusStatus",
+    "speed_bonus_value",
     "ImmobilizedStatus",
     "IMMOBILIZED_STATUS",
     "CoveredStatus",
