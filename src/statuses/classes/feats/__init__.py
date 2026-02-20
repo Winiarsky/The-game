@@ -5,4 +5,6 @@ from __future__ import annotations
 __all__: list[str] = [
     "alchemist_familiar_guidance",
     "alchemical_savant",
+    "far_lobber",
+    "quick_bomber",
 ]

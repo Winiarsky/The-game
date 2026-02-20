@@ -8,13 +8,13 @@ from GameObjects.interactions_mixin import prompt_for_roll
 from combat.damage_utils import apply_splash_damage
 
 from ..attack.attack_base import AttackEventBase, check_concealed
-from ..base import EventContext, EventResult
+from ..base import ActionCostEvent, EventContext, EventResult
 from ..magic.magic_utils import pick_target_in_range
 
 logger = logging.getLogger(__name__)
 
 
-class BaseAlchemicalBombEvent(AttackEventBase):
+class BaseAlchemicalBombEvent(ActionCostEvent, AttackEventBase):
     """Wspólna logika dla bomb alchemicznych."""
 
     actions_cost = 2
@@ -29,6 +29,10 @@ class BaseAlchemicalBombEvent(AttackEventBase):
 
     # per-tier: item_bonus, damage_dice, splash, extra
     tiers: dict[str, dict[str, object]] = {}
+
+    def pre(self, ctx: EventContext) -> EventResult:
+        self._apply_quick_bomber_cost(ctx.actor)
+        return super().pre(ctx)
 
     def execute(self, ctx: EventContext) -> EventResult:
         actor = ctx.actor
@@ -49,11 +53,12 @@ class BaseAlchemicalBombEvent(AttackEventBase):
             (enemy, getattr(enemy, "position", None), "enemy")
             for enemy in getattr(ctx.game, "enemies", [])
         ]
+        max_range = self._bomb_range_feet(actor)
         target, target_pos = pick_target_in_range(
             ctx,
             source_pos,
             candidates,
-            max_range_feet=self.range_feet,
+            max_range_feet=max_range,
             allowed_kinds=("enemy",),
             tags=self._effective_tags(ctx),
         )
@@ -117,6 +122,36 @@ class BaseAlchemicalBombEvent(AttackEventBase):
     # --- helpers ---
     def _event_label(self) -> str:
         return getattr(self, "name", "bomba").replace("_", " ").title()
+
+    def _bomb_range_feet(self, actor) -> int:
+        try:
+            base_range = int(self.range_feet)
+        except Exception:
+            base_range = 0
+        bonus = self._sum_status_data(actor, "bomb_range_bonus")
+        return max(0, base_range + bonus)
+
+    def _apply_quick_bomber_cost(self, actor) -> None:
+        try:
+            base_cost = int(self.actions_cost)
+        except Exception:
+            base_cost = 1
+        reduction = self._sum_status_data(actor, "bomb_action_cost_reduction")
+        if reduction:
+            self.actions_cost = max(1, base_cost - int(reduction))
+
+    @staticmethod
+    def _sum_status_data(actor, key: str) -> int:
+        total = 0
+        if actor is None:
+            return total
+        for status in getattr(actor, "statuses", []) or []:
+            data = getattr(status, "data", None) or {}
+            try:
+                total += int(data.get(key, 0) or 0)
+            except Exception:
+                continue
+        return total
 
     def _item_bonus_effects(self, tier: str, action_tag: str) -> list[BonusEffect]:
         tier_data = self.tiers.get(tier, {})

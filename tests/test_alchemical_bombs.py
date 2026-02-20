@@ -9,13 +9,14 @@ for p in (ROOT, ROOT / "src"):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
-from GameObjects.events.base import EventContext
+from GameObjects.events.base import EventContext, EventResult
 from GameObjects.events.bombs.bottled_lightning_event import BottledLightningEvent
 from GameObjects.events.bombs.frost_vial_event import FrostVialEvent
 from GameObjects.events.bombs.tanglefoot_bag_event import TanglefootBagEvent
 from GameObjects.events.bombs.thunderstone_event import ThunderstoneEvent
 from GameObjects.events.bombs.alchemists_fire_event import AlchemistsFireEvent
-from statuses import PERSISTENT_DAMAGE_STATUS
+from states.combat import Combat
+from statuses import PERSISTENT_DAMAGE_STATUS, Status
 
 
 class FakeConn:
@@ -225,3 +226,48 @@ def test_alchemists_fire_adds_persistent_damage(monkeypatch):
     res = event.execute(ctx)
     assert res.success
     assert any(s.id == PERSISTENT_DAMAGE_STATUS.id for s in target.statuses)
+
+
+def test_far_lobber_extends_bomb_range(monkeypatch):
+    event = BottledLightningEvent()
+    monkeypatch.setattr(event, "_prompt_level", lambda: "lesser")
+    monkeypatch.setattr(event, "_prompt_damage", lambda *_args, **_kwargs: 4)
+    monkeypatch.setattr("GameObjects.events.bombs.base_alchemical_bomb_event.prompt_for_roll", lambda *_, **__: 15)
+    _dummy_ui(monkeypatch)
+
+    hero = DummyHero((0, 0), object_id="hero-1")
+    target = DummyEnemy((5, 0), object_id="enemy-1")
+    game = SimpleNamespace(
+        conn=FakeConn(responses=[(5, 0)]),
+        board=BoardStub(width=10, height=5),
+        heroes=[hero],
+        enemies=[target],
+        ui_log=lambda _msg=None: None,
+    )
+    ctx = EventContext(game=game, actor=hero)
+
+    res = event.execute(ctx)
+    assert not res.success
+    assert res.message == "Brak celu w zasięgu."
+
+    hero.add_status(Status(id="far_lobber", data={"bomb_range_bonus": 10}))
+    game.conn = FakeConn(responses=[(5, 0)])
+    res = event.execute(ctx)
+    assert res.success
+
+
+def test_quick_bomber_reduces_bomb_action_cost(monkeypatch):
+    event = BottledLightningEvent()
+    monkeypatch.setattr(event, "execute", lambda _ctx: EventResult(success=True, consumed_action=True))
+
+    hero = DummyHero((0, 0), object_id="hero-1")
+    hero.add_status(Status(id="quick_bomber", data={"bomb_action_cost_reduction": 1}))
+
+    game = SimpleNamespace()
+    state = Combat(game)
+    game.state = state
+    state.actions_used[hero] = 2
+
+    ctx = EventContext(game=game, actor=hero)
+    res = event.run(ctx)
+    assert res.success
