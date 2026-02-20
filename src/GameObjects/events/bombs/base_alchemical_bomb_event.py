@@ -9,7 +9,8 @@ from combat.damage_utils import apply_splash_damage
 
 from ..attack.attack_base import AttackEventBase, check_concealed
 from ..base import ActionCostEvent, EventContext, EventResult
-from ..magic.magic_utils import pick_target_in_range
+from ..magic.magic_utils import pick_target_in_range, grid_distance_feet
+from ..targeting import is_target_blocked_by_tags
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,10 @@ class BaseAlchemicalBombEvent(ActionCostEvent, AttackEventBase):
 
     # per-tier: item_bonus, damage_dice, splash, extra
     tiers: dict[str, dict[str, object]] = {}
+    TARGET_LED = [0, 80, 180]
+    TARGET_SPLASH_LED = [0, 160, 80]
+    TARGET_NO_SPLASH_LED = [200, 120, 0]
+    CONFIRM_LED = [180, 180, 0]
 
     def pre(self, ctx: EventContext) -> EventResult:
         self._apply_quick_bomber_cost(ctx.actor)
@@ -54,14 +59,28 @@ class BaseAlchemicalBombEvent(ActionCostEvent, AttackEventBase):
             for enemy in getattr(ctx.game, "enemies", [])
         ]
         max_range = self._bomb_range_feet(actor)
-        target, target_pos = pick_target_in_range(
-            ctx,
-            source_pos,
-            candidates,
-            max_range_feet=max_range,
-            allowed_kinds=("enemy",),
-            tags=self._effective_tags(ctx),
-        )
+        ctx.metadata["bomb_splash_target_only"] = False
+        if self._sum_status_data(actor, "bomb_splash_primary_only"):
+            self._prompt_splash_toggle_info()
+            target, target_pos, splash_target_only = self._pick_target_with_splash_toggle(
+                ctx,
+                source_pos,
+                candidates,
+                max_range_feet=max_range,
+                allowed_kinds=("enemy",),
+                tags=self._effective_tags(ctx),
+            )
+            if splash_target_only is not None:
+                ctx.metadata["bomb_splash_target_only"] = splash_target_only
+        else:
+            target, target_pos = pick_target_in_range(
+                ctx,
+                source_pos,
+                candidates,
+                max_range_feet=max_range,
+                allowed_kinds=("enemy",),
+                tags=self._effective_tags(ctx),
+            )
         if target is None or target_pos is None:
             return EventResult.cancelled(message="Brak celu w zasięgu.")
 
@@ -140,6 +159,97 @@ class BaseAlchemicalBombEvent(ActionCostEvent, AttackEventBase):
         if reduction:
             self.actions_cost = max(1, base_cost - int(reduction))
 
+    def _prompt_splash_toggle_info(self) -> None:
+        try:
+            from ui_client import get_ui_client
+
+            get_ui_client().prompt_info(
+                "Rozprysk bomby (Bomber)",
+                prompt_long=(
+                    "Kliknij cel aby wybrać (domyślnie ze splashem).\n"
+                    "Kliknij ten sam cel, by przełączać splash on/off.\n"
+                    "Kliknij swoje pole, aby zatwierdzić wybór."
+                ),
+                source=self.name,
+            )
+        except Exception:
+            pass
+
+    def _pick_target_with_splash_toggle(
+        self,
+        ctx: EventContext,
+        source_pos: tuple[int, int],
+        candidates: list[tuple[object, tuple[int, int], str]],
+        *,
+        max_range_feet: int | None,
+        allowed_kinds: tuple[str, ...] = ("enemy",),
+        tags: list[str] | None = None,
+    ):
+        if not source_pos:
+            return None, None, None
+
+        valid: list[tuple[object, tuple[int, int], str, int]] = []
+        for obj, pos, kind in candidates:
+            if pos is None or kind not in allowed_kinds:
+                continue
+            if is_target_blocked_by_tags(obj, tags):
+                continue
+            dist = grid_distance_feet(source_pos, pos)
+            if max_range_feet is not None and dist > max_range_feet:
+                continue
+            valid.append((obj, pos, kind, dist))
+
+        if not valid:
+            return None, None, None
+
+        pos_to_obj = {pos: obj for obj, pos, _kind, _dist in valid}
+        selected_pos = None
+        splash_enabled = True
+
+        try:
+            while True:
+                positions: list[tuple[int, int]] = []
+                colors: list[list[int]] = []
+                for _obj, pos, _kind, _dist in valid:
+                    positions.append(pos)
+                    if selected_pos == pos:
+                        colors.append(self.TARGET_SPLASH_LED if splash_enabled else self.TARGET_NO_SPLASH_LED)
+                    else:
+                        colors.append(self.TARGET_LED)
+                positions.append(source_pos)
+                colors.append(self.CONFIRM_LED)
+
+                try:
+                    ctx.game.conn.set_leds(positions, colors)
+                except Exception:
+                    pass
+
+                try:
+                    choice = ctx.game.conn.scan_board(positions)
+                except Exception:
+                    choice = None
+
+                if choice is None:
+                    return None, None, None
+                if choice == source_pos:
+                    if selected_pos is None:
+                        return None, None, None
+                    return pos_to_obj.get(selected_pos), selected_pos, not splash_enabled
+                if choice not in pos_to_obj:
+                    continue
+                if selected_pos == choice:
+                    splash_enabled = not splash_enabled
+                    self._log_splash_mode(ctx, splash_enabled)
+                else:
+                    selected_pos = choice
+                    splash_enabled = True
+                    self._log_splash_mode(ctx, splash_enabled)
+        finally:
+            try:
+                ctx.game.conn.leds_off()
+            except Exception:
+                pass
+
     @staticmethod
     def _sum_status_data(actor, key: str) -> int:
         total = 0
@@ -152,6 +262,13 @@ class BaseAlchemicalBombEvent(ActionCostEvent, AttackEventBase):
             except Exception:
                 continue
         return total
+
+    def _log_splash_mode(self, ctx: EventContext, splash_enabled: bool) -> None:
+        mode = "splash ON (obszar)" if splash_enabled else "splash OFF (tylko cel)"
+        try:
+            ctx.game.ui_log(f"Bomber: {mode}. Kliknij cel, aby przełączyć; swoje pole = zatwierdź.")
+        except Exception:
+            pass
 
     def _item_bonus_effects(self, tier: str, action_tag: str) -> list[BonusEffect]:
         tier_data = self.tiers.get(tier, {})
@@ -213,6 +330,9 @@ class BaseAlchemicalBombEvent(ActionCostEvent, AttackEventBase):
         splash = int(tier_data.get("splash", 0) or 0)
         splash_type = self.splash_damage_type or self.damage_type
         if splash > 0:
+            if ctx.metadata.get("bomb_splash_target_only"):
+                self._apply_damage(target, splash, splash_type)
+                return
             apply_splash_damage(
                 ctx.game,
                 target_pos,

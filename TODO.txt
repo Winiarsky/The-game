@@ -8,6 +8,7 @@
 - OA: zmienic na event-driven + event prepare (zamiast reakcji)
 - Sure Feet: dodać mechanikę balansowania na krawędzi (flat-footed przy Balance/Climb).
 - Unfettered Halfling: dodać mechanikę grapplingu (Grab/Grapple/Escape).
+- Alchemist: uzupełnić opis dla Formula Book.
 
 TODO: Dodać mechaniki usuwania statusu Poisoned (test medyczny, antidotum itd.).
 TODO: Bestial Mutagen - dodać akcje ataku pazurami i kłami, potem zaimplementować eliksir.

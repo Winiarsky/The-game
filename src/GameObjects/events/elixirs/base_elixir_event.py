@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from typing import Iterable
+from dataclasses import replace
 
 from board import consts
 from bonuses import BonusEffect, BonusType
@@ -99,6 +100,7 @@ class BaseElixirEvent(ActionCostEvent):
             return EventResult.cancelled(message="Brak celu w zasięgu.")
 
         self._apply_elixir(ctx, target, tier, tier_data)
+        self._record_mutagen_consumption(target, tier)
         return EventResult(success=True, consumed_action=self.consumes_action, message=f"Użyto eliksiru ({tier}).")
 
     def _prompt_level(self) -> str | None:
@@ -201,6 +203,52 @@ class BaseElixirEvent(ActionCostEvent):
 
     def _apply_elixir(self, ctx: EventContext, target, tier: str, tier_data: dict[str, object]) -> None:
         raise NotImplementedError
+
+    def _is_mutagen(self) -> bool:
+        tags = self.default_tags or []
+        return "mutagen" in tags
+
+    def _get_status(self, target, status_id: str):
+        getter = getattr(target, "get_status", None)
+        if callable(getter):
+            try:
+                return getter(status_id)
+            except Exception:
+                return None
+        for status in getattr(target, "statuses", []) or []:
+            if getattr(status, "id", None) == status_id:
+                return status
+        return None
+
+    def _replace_status_data(self, target, status_id: str, new_data: dict) -> bool:
+        statuses = getattr(target, "statuses", None)
+        if not isinstance(statuses, list):
+            return False
+        for idx, status in enumerate(statuses):
+            if getattr(status, "id", None) == status_id:
+                try:
+                    statuses[idx] = replace(status, data=new_data)
+                    return True
+                except Exception:
+                    return False
+        return False
+
+    def _record_mutagen_consumption(self, target, tier: str) -> None:
+        if not self._is_mutagen():
+            return
+        status = self._get_status(target, "alchemist_research_field")
+        if status is None:
+            return
+        data = getattr(status, "data", None) or {}
+        if data.get("research_field") != "mutagenist":
+            return
+        consumed = list(data.get("mutagen_consumed", []) or [])
+        entry = {"name": self.name, "tier": str(tier)}
+        if entry not in consumed:
+            consumed.append(entry)
+        new_data = dict(data)
+        new_data["mutagen_consumed"] = consumed
+        self._replace_status_data(target, "alchemist_research_field", new_data)
 
 
 def make_bonus_status(

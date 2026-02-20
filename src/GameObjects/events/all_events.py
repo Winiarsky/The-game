@@ -42,6 +42,7 @@ from .elixirs import juggernaut_mutagen_event  # noqa: F401
 from .elixirs import quicksilver_mutagen_event  # noqa: F401
 from .elixirs import serene_mutagen_event  # noqa: F401
 from .elixirs import silvertongue_mutagen_event  # noqa: F401
+from . import mutagenic_flashback_event  # noqa: F401
 from .poisons import arsenic_event  # noqa: F401
 from .poisons import giant_centipede_venom_event  # noqa: F401
 from .magic import magic_missile_event  # noqa: F401

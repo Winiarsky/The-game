@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from statuses.base import Status
+from statuses.classes.alchemist_research_field import ALCHEMIST_RESEARCH_FIELD_STATUS
 
 ALCHEMSIT_PROMPT = (
     "Ability boost: Intelligence\n"
@@ -37,7 +38,10 @@ def AlchemsitStatus() -> Status:
     return Status(
         id="alchemsit",
         label="Alchemist",
-        data={"ui_prompt": ALCHEMSIT_PROMPT},
+        data={
+            "ui_prompt": ALCHEMSIT_PROMPT,
+            "grant_statuses": [ALCHEMIST_RESEARCH_FIELD_STATUS],
+        },
     )
 
 

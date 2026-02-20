@@ -54,6 +54,11 @@ class StatusMixin:
                 self._handle_adopted_ancestry_choice(status, data)
             except Exception:
                 pass
+        if data.get("ui_choice_kind") == "alchemist_research_field":
+            try:
+                self._handle_alchemist_research_field_choice(status, data)
+            except Exception:
+                pass
         prompt = data.get("ui_prompt")
         if not prompt:
             return
@@ -195,6 +200,72 @@ class StatusMixin:
                 self._ui_log(f"Nie znaleziono statusu feata: {chosen_feat_id}.")
         except Exception:
             self._ui_log("Nie udalo sie dodac wybranego feata (brak modulu?).")
+
+    def _handle_alchemist_research_field_choice(self, status: "Status", data: dict) -> None:
+        fields = list(data.get("research_field_choices") or [])
+        if not fields:
+            fields = ["bomber", "chirurgeon", "mutagenist"]
+        field_labels = [self._labelize_choice(f) for f in fields]
+        field_label_to_id = {self._labelize_choice(f): f for f in fields}
+        try:
+            from ui_client import get_ui_client
+
+            ui_client = get_ui_client()
+            if ui_client.enabled:
+                chosen_label = ui_client.prompt_choice(
+                    "Research Field: wybierz specjalizację",
+                    choices=field_labels,
+                    source="status",
+                )
+            else:
+                chosen_label = None
+        except Exception:
+            chosen_label = None
+        if not chosen_label:
+            try:
+                chosen_label = input(
+                    f"Research Field: wybierz specjalizację {field_labels}: "
+                ).strip()
+            except Exception:
+                chosen_label = None
+        if not chosen_label:
+            return
+        chosen_field = field_label_to_id.get(chosen_label, None)
+        if not chosen_field:
+            chosen_field = str(chosen_label).strip().lower().replace(" ", "_")
+
+        field_data: dict = {}
+        if chosen_field == "bomber":
+            field_data = {
+                "bomb_splash_primary_only": True,
+                "signature_items": ["acidflask", "alchemists_fire"],
+            }
+        elif chosen_field == "chirurgeon":
+            field_data = {
+                "signature_items": ["antidote", "antiplague"],
+                "use_crafting_for_medicine": True,
+            }
+        elif chosen_field == "mutagenist":
+            field_data = {
+                "signature_items": ["quicksilver_mutagen", "juggernaut_mutagen"],
+                "mutagen_consumed": [],
+                "mutagenic_flashback_used": False,
+            }
+
+        try:
+            for idx, item in enumerate(self.statuses):
+                if item is status:
+                    new_data = dict(data)
+                    new_data["research_field"] = chosen_field
+                    new_data.update(field_data)
+                    self.statuses[idx] = replace(status, data=new_data)
+                    break
+        except Exception:
+            pass
+
+        self._ui_log(
+            f"Research Field: wybrano {self._labelize_choice(chosen_field)}."
+        )
 
     def _ensure_status_objects(self) -> None:
         if not self.statuses:
