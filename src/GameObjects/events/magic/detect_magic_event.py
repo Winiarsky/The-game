@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from board import consts
+from bonuses import BonusEffect, BonusType
 from GameObjects.interactions_mixin.magical_mixin import MagicalMixin
 
 from ..base import EventContext, EventResult
@@ -151,6 +152,33 @@ class DetectMagicEvent(MagicEvent):
                 ctx.game.ui_log(info_text)
         except Exception:
             pass
+
+        # Recognize Spell (uproszczenie): +1 AC vs magic attacks na 1 ture w walce.
+        try:
+            in_combat = getattr(ctx.game, "state", None).__class__.__name__ == "Combat"
+        except Exception:
+            in_combat = False
+        if in_combat:
+            has_status = getattr(hero, "has_status", None)
+            if callable(has_status) and has_status("recognize_spell"):
+                try:
+                    add_bonus = getattr(hero, "add_bonus", None)
+                    if callable(add_bonus):
+                        add_bonus(
+                            BonusEffect(
+                                type=BonusType.CIRCUMSTANCE,
+                                value=1,
+                                tag="ac_magic",
+                                source="status:recognize_spell",
+                                label="recognize spell +1",
+                                duration_turns=1,
+                            )
+                        )
+                        ctx.game.ui_log(
+                            "Recognize Spell: +1 AC vs magic attacks (1 tura)."
+                        )
+                except Exception:
+                    pass
 
         try:
             ctx.game.conn.scan_board(None)

@@ -49,6 +49,11 @@ class StatusMixin:
 
     def _maybe_prompt_status_info(self, status: "Status") -> None:
         data = getattr(status, "data", None) or {}
+        if data.get("ui_choice_kind") == "adopted_ancestry":
+            try:
+                self._handle_adopted_ancestry_choice(status, data)
+            except Exception:
+                pass
         prompt = data.get("ui_prompt")
         if not prompt:
             return
@@ -66,6 +71,130 @@ class StatusMixin:
         except Exception:
             pass
         self._ui_log(prompt)
+    
+    @staticmethod
+    def _labelize_choice(value: str) -> str:
+        return str(value or "").replace("_", " ").strip().title()
+
+    def _handle_adopted_ancestry_choice(self, status: "Status", data: dict) -> None:
+        races = list(data.get("adopted_ancestry_races") or [])
+        feats_map = data.get("adopted_ancestry_feats") or {}
+        if not races or not feats_map:
+            return
+        race_labels = [self._labelize_choice(r) for r in races]
+        race_label_to_id = {self._labelize_choice(r): r for r in races}
+        try:
+            from ui_client import get_ui_client
+
+            ui_client = get_ui_client()
+            if ui_client.enabled:
+                chosen_race_label = ui_client.prompt_choice(
+                    "Adopted Ancestry: wybierz ancestry",
+                    choices=race_labels,
+                    source="status",
+                )
+            else:
+                chosen_race_label = None
+        except Exception:
+            chosen_race_label = None
+        if not chosen_race_label:
+            try:
+                chosen_race_label = input(
+                    f"Adopted Ancestry: wybierz ancestry {race_labels}: "
+                ).strip()
+            except Exception:
+                chosen_race_label = None
+        if not chosen_race_label:
+            return
+        chosen_race_id = race_label_to_id.get(chosen_race_label, None)
+        if not chosen_race_id:
+            chosen_race_id = str(chosen_race_label).strip().lower().replace(" ", "_")
+        feats = list(feats_map.get(chosen_race_id, []) or [])
+        if not feats:
+            self._ui_log("Brak listy feats dla wybranej ancestry.")
+            return
+        feat_labels = [self._labelize_choice(f) for f in feats]
+        feat_label_to_id = {self._labelize_choice(f): f for f in feats}
+        try:
+            from ui_client import get_ui_client
+
+            ui_client = get_ui_client()
+            if ui_client.enabled:
+                chosen_feat_label = ui_client.prompt_choice(
+                    f"Adopted Ancestry ({self._labelize_choice(chosen_race_id)}): wybierz feat",
+                    choices=feat_labels,
+                    source="status",
+                )
+            else:
+                chosen_feat_label = None
+        except Exception:
+            chosen_feat_label = None
+        if not chosen_feat_label:
+            try:
+                chosen_feat_label = input(
+                    f"Adopted Ancestry: wybierz feat {feat_labels}: "
+                ).strip()
+            except Exception:
+                chosen_feat_label = None
+        if not chosen_feat_label:
+            return
+        chosen_feat_id = feat_label_to_id.get(chosen_feat_label, None)
+        if not chosen_feat_id:
+            chosen_feat_id = str(chosen_feat_label).strip().lower().replace(" ", "_")
+
+        try:
+            for idx, item in enumerate(self.statuses):
+                if item is status:
+                    new_data = dict(data)
+                    new_data["adopted_ancestry_choice"] = {
+                        "race": chosen_race_id,
+                        "feat": chosen_feat_id,
+                    }
+                    self.statuses[idx] = replace(status, data=new_data)
+                    break
+        except Exception:
+            pass
+
+        self._ui_log(
+            f"Adopted Ancestry: wybrano {self._labelize_choice(chosen_race_id)} -> "
+            f"{self._labelize_choice(chosen_feat_id)}."
+        )
+
+        # Dodaj wybrany feat jako status, jeśli moduł istnieje.
+        try:
+            import importlib
+
+            race_pkg = "elfs" if chosen_race_id == "elf" else chosen_race_id
+            module_path = f"statuses.race.{race_pkg}.feats.{chosen_feat_id}"
+            status_name = f"{chosen_feat_id.upper()}_STATUS"
+            fallback = {
+                "elven_weapon_familiarity": ("elfs", "elven_weapon_familiarity", "ELVEN_WEAPON_FAMILIARITY_STATUS"),
+                "dwarven_weapon_familiarity": ("dwarf", "dwarven_weapon_familiarity", "DWARVEN_WEAPON_FAMILIARITY_STATUS"),
+                "gnome_weapon_familiarity": ("gnome", "gnome_weapon_familiarity", "GNOME_WEAPON_FAMILIARITY_STATUS"),
+                "goblin_weapon_familiarity": ("goblin", "goblin_weapon_familiarity", "GOBLIN_WEAPON_FAMILIARITY_STATUS"),
+                "halfling_weapon_familiarity": ("halfling", "halfling_weapon_familiarity", "HALFLING_WEAPON_FAMILIARITY_STATUS"),
+                "halfling_luck": ("halfling", "halfling_luck", "HALFLING_LUCK_STATUS"),
+                "halfling_lore": ("halfling", "halfling_lore", "HALFLING_LORE_STATUS"),
+                "goblin_song": ("goblin", "goblin_song", "GOBLIN_SONG_STATUS"),
+                "gnome_obsession": ("gnome", "gnome_obsession", "GNOME_OBSESSION_STATUS"),
+                "first_world_magic": ("gnome", "first_world_magic", "FIRST_WORLD_MAGIC_STATUS"),
+                "otherworldly_magic": ("elfs", "otherworldly_magic", "OTHERWORLDLY_MAGIC_STATUS"),
+                "ancestral_longevity": ("elfs", "ancestral_longevity", "ANCESTRAL_LONGEVITY_STATUS"),
+                "unwavering_mien": ("elfs", "unwavering_mien", "UNWAVERING_MIEN_STATUS"),
+                "nimble_elf": ("elfs", "nimble_elf", "NIMBLE_ELF_STATUS"),
+            }
+            module = importlib.import_module(module_path)
+            feat_status = getattr(module, status_name, None)
+            if feat_status is None and chosen_feat_id in fallback:
+                pkg, mod, status_attr = fallback[chosen_feat_id]
+                module = importlib.import_module(f"statuses.race.{pkg}.feats.{mod}")
+                feat_status = getattr(module, status_attr, None)
+            if feat_status is not None:
+                self.add_status(feat_status)
+            else:
+                self._ui_log(f"Nie znaleziono statusu feata: {chosen_feat_id}.")
+        except Exception:
+            self._ui_log("Nie udalo sie dodac wybranego feata (brak modulu?).")
 
     def _ensure_status_objects(self) -> None:
         if not self.statuses:

@@ -121,7 +121,10 @@ class BaseMagicAttackEvent(MagicEvent):
     def _target_ac_with_bonuses(self, target, *, attacker=None) -> tuple[int, int, int]:
         base_ac = getattr(target, "ac", effective_ac(target))
         bonuses = list(getattr(target, "bonuses", [])) if hasattr(target, "bonuses") else []
-        modifier = compute_total_modifier(bonuses, "ac", getattr(attacker, "object_id", None)) if bonuses else 0
+        modifier = 0
+        if bonuses:
+            modifier = compute_total_modifier(bonuses, "ac", getattr(attacker, "object_id", None))
+            modifier += compute_total_modifier(bonuses, "ac_magic", getattr(attacker, "object_id", None))
         target_ac = base_ac + modifier
         return target_ac, base_ac, modifier
 
