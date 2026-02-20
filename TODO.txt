@@ -9,6 +9,8 @@
 - Sure Feet: dodać mechanikę balansowania na krawędzi (flat-footed przy Balance/Climb).
 - Unfettered Halfling: dodać mechanikę grapplingu (Grab/Grapple/Escape).
 - Alchemist: uzupełnić opis dla Formula Book.
+- Dokończyć karty dla przedmiotów alchemicznych.
+- Alchemist: uzupełnić opis do UI promptu.
 
 TODO: Dodać mechaniki usuwania statusu Poisoned (test medyczny, antidotum itd.).
 TODO: Bestial Mutagen - dodać akcje ataku pazurami i kłami, potem zaimplementować eliksir.
