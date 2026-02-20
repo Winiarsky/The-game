@@ -8,7 +8,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from bonuses import BonusEffect, BonusType, aggregate_best_by_type, compute_total_modifier
+from bonuses import BonusEffect, BonusType, aggregate_best_by_type, build_modifiers_grid, compute_total_modifier
 from GameObjects.interactions_mixin.bonus_mixin import BonusMixin
 from combat.flanking import refresh_flanking_statuses
 
@@ -57,6 +57,31 @@ def test_bonus_mixin_compute_modifier_matches_helpers():
     actor.add_bonus(BonusEffect(BonusType.STATUS, 4, "stealth", source="mud", is_penalty=True))
 
     assert actor.compute_modifier("stealth") == -1  # 2 + 1 - 4
+
+
+def test_item_bonus_stacks_as_separate_type():
+    effects = [
+        BonusEffect(BonusType.CIRCUMSTANCE, 2, "attack_melee", source="aid"),
+        BonusEffect(BonusType.ITEM, 1, "attack_melee", source="minor item"),
+        BonusEffect(BonusType.ITEM, 3, "attack_melee", source="major item"),
+        BonusEffect(BonusType.STATUS, 1, "attack_melee", source="fatigue", is_penalty=True),
+    ]
+    total = compute_total_modifier(effects, "attack_melee")
+    assert total == 4  # 2 (circ) + 3 (item best) - 1 (status penalty)
+    agg = aggregate_best_by_type(effects, "attack_melee")
+    assert agg[BonusType.ITEM]["bonus"] == 3
+
+
+def test_build_modifiers_grid_includes_item_bucket():
+    effects = [
+        BonusEffect(BonusType.ITEM, 2, "attack_melee", source="acid flask"),
+        BonusEffect(BonusType.ITEM, 1, "attack_melee", source="weak", is_penalty=True),
+    ]
+    grid = build_modifiers_grid(effects)
+    bon_item = grid.get("bonItem", [])
+    pen_item = grid.get("penItem", [])
+    assert any(item.get("label") == "acid flask" and item.get("value") == 2 for item in bon_item)
+    assert any(item.get("label") == "weak" and item.get("value") == 1 for item in pen_item)
 
 
 def test_duration_turns_ticks_and_expires():

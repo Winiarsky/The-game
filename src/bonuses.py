@@ -10,6 +10,7 @@ class BonusType(str, Enum):
 
     CIRCUMSTANCE = "circumstance"
     STATUS = "status"
+    ITEM = "item"
 
 
 @dataclass(frozen=True)
@@ -150,6 +151,8 @@ def build_modifiers_grid(effects: Iterable[BonusEffect]) -> dict:
         "bonCirc": [],
         "penStat": [],
         "bonStat": [],
+        "penItem": [],
+        "bonItem": [],
     }
     for eff in effects:
         value = getattr(eff, "value", 0) or 0
@@ -162,6 +165,8 @@ def build_modifiers_grid(effects: Iterable[BonusEffect]) -> dict:
             key = "penCirc" if is_penalty else "bonCirc"
         elif btype == BonusType.STATUS:
             key = "penStat" if is_penalty else "bonStat"
+        elif btype == BonusType.ITEM:
+            key = "penItem" if is_penalty else "bonItem"
         else:
             key = "penCirc" if is_penalty else "bonCirc"
         buckets[key].append({"label": label, "value": value})

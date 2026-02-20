@@ -26,6 +26,8 @@ const modsPenCirc = document.getElementById("mods-pen-circ");
 const modsBonCirc = document.getElementById("mods-bon-circ");
 const modsPenStat = document.getElementById("mods-pen-stat");
 const modsBonStat = document.getElementById("mods-bon-stat");
+const modsPenItem = document.getElementById("mods-pen-item");
+const modsBonItem = document.getElementById("mods-bon-item");
 const topbar = document.getElementById("topbar");
 const topbarToggle = document.getElementById("topbar-toggle");
 const PLACEHOLDER_IMAGE = "/static/placeholder.png";
@@ -63,14 +65,14 @@ function setIllustration(imageUrl) {
 }
 
 function clearMods() {
-    [modsPenCirc, modsBonCirc, modsPenStat, modsBonStat].forEach((el) => {
+    [modsPenCirc, modsBonCirc, modsPenStat, modsBonStat, modsPenItem, modsBonItem].forEach((el) => {
         if (el) el.innerHTML = "";
     });
     modsBox.classList.add("hidden");
 }
 
 function renderMods(mods = {}) {
-    const { penCirc = [], bonCirc = [], penStat = [], bonStat = [] } = mods;
+    const { penCirc = [], bonCirc = [], penStat = [], bonStat = [], penItem = [], bonItem = [] } = mods;
     const fill = (el, arr) => {
         if (!el) return;
         el.innerHTML = "";
@@ -88,12 +90,15 @@ function renderMods(mods = {}) {
         });
     };
     clearMods();
-    const hasAny = penCirc.length || bonCirc.length || penStat.length || bonStat.length;
+    const hasAny =
+        penCirc.length || bonCirc.length || penStat.length || bonStat.length || penItem.length || bonItem.length;
     if (!hasAny) return;
     fill(modsPenCirc, penCirc);
     fill(modsBonCirc, bonCirc);
     fill(modsPenStat, penStat);
     fill(modsBonStat, bonStat);
+    fill(modsPenItem, penItem);
+    fill(modsBonItem, bonItem);
     modsBox.classList.remove("hidden");
 }
 

@@ -144,3 +144,117 @@ def burn_it_prompt_note(actor: Any, damage_type: str, *, persistent: bool = Fals
     if persistent:
         return "Burn It!: wpisz wartość -1 (bonus +1 doda się automatycznie)."
     return f"Burn It!: +{bonus} status do obrażeń ognia (dodane automatycznie)."
+
+
+def _neighbors_from_game(game: Any, center_pos: tuple[int, int], *, diagonal: bool = True) -> list[tuple[int, int]]:
+    board = getattr(game, "board", None)
+    if board is not None and hasattr(board, "get_neighbors"):
+        try:
+            return list(board.get_neighbors(center_pos, include_position=False, diagonal=diagonal))
+        except Exception:
+            return []
+    x, y = center_pos
+    return [
+        (x + dx, y + dy)
+        for dx in (-1, 0, 1)
+        for dy in (-1, 0, 1)
+        if not (dx == 0 and dy == 0)
+    ]
+
+
+def _remove_enemy_from_game(game: Any, enemy: Any) -> None:
+    pos = getattr(enemy, "position", None)
+    try:
+        if pos is not None:
+            game.board.remove(pos)
+    except Exception:
+        pass
+    try:
+        game.enemies.remove(enemy)
+    except Exception:
+        pass
+    try:
+        enemy.position = None
+    except Exception:
+        pass
+
+
+def apply_splash_damage(
+    game: Any,
+    center_pos: tuple[int, int] | None,
+    amount: int,
+    damage_type: str,
+    *,
+    exclude: Any | Iterable[Any] | tuple[int, int] | None = None,
+    include_heroes: bool = True,
+    include_enemies: bool = True,
+    hero_info: bool = True,
+    info_title: str | None = None,
+    source: str = "splash",
+    diagonal: bool = True,
+    remove_defeated: bool = True,
+) -> dict[str, list[Any]]:
+    """Zadaj splash damage sąsiadom (hero -> info, enemy -> auto HP)."""
+    result = {"heroes": [], "enemies": [], "defeated": []}
+    if game is None or center_pos is None:
+        return result
+    if int(amount) <= 0:
+        return result
+    neighbors = _neighbors_from_game(game, center_pos, diagonal=diagonal)
+    if not neighbors:
+        return result
+
+    def _is_excluded(obj: Any) -> bool:
+        if exclude is None:
+            return False
+        if obj is exclude:
+            return True
+        if isinstance(exclude, (list, tuple, set)):
+            if obj in exclude:
+                return True
+            pos = getattr(obj, "position", None)
+            if pos is not None and pos in exclude:
+                return True
+        if isinstance(exclude, tuple) and len(exclude) == 2:
+            return getattr(obj, "position", None) == exclude
+        return False
+
+    if include_heroes:
+        for hero in getattr(game, "heroes", []):
+            if _is_excluded(hero):
+                continue
+            if getattr(hero, "position", None) in neighbors:
+                result["heroes"].append(hero)
+                if hero_info:
+                    try:
+                        name = getattr(hero, "name", None) or getattr(hero, "object_id", "Hero")
+                        get_ui_client().prompt_info(
+                            info_title or "Splash Damage",
+                            prompt_long=(
+                                f"{name} otrzymuje {int(amount)} obrażeń splash "
+                                f"({damage_type}). Zapisz ręcznie."
+                            ),
+                            source=source,
+                        )
+                    except Exception:
+                        pass
+
+    if include_enemies:
+        for enemy in list(getattr(game, "enemies", [])):
+            if _is_excluded(enemy):
+                continue
+            if getattr(enemy, "position", None) in neighbors:
+                result["enemies"].append(enemy)
+                apply = getattr(enemy, "apply_damage", None)
+                defeated = False
+                if callable(apply):
+                    try:
+                        _hp, defeated = apply(max(0, int(amount)), damage_type)
+                    except Exception:
+                        defeated = False
+                if defeated:
+                    result["defeated"].append(enemy)
+                    if remove_defeated:
+                        _remove_enemy_from_game(game, enemy)
+
+    return result

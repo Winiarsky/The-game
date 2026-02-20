@@ -19,6 +19,7 @@ from . import leap_event  # noqa: F401
 from . import prone_event  # noqa: F401
 from . import stand_event  # noqa: F401
 from . import command_familiar_event  # noqa: F401
+from . import acid_flask_event  # noqa: F401
 from . import ancient_blood_event  # noqa: F401
 from . import goblin_scuttle_event  # noqa: F401
 from . import goblin_song_event  # noqa: F401

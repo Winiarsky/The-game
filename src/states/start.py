@@ -143,9 +143,9 @@ class Start(State):
         self.game.ui_log(f"Chameleon Gnome: wybrany teren: {choice}.")
 
     def _maybe_prompt_familiar_owner(self, hero: Hero) -> None:
-        if not hero.has_status("FamiliarOwner"):
+        if not hero.has_status("FamiliarOwner") and not hero.has_status("alchemist_familiar_guidance"):
             return
-        status = self._get_status(hero, "FamiliarOwner")
+        status = self._get_status(hero, "FamiliarOwner") or self._get_status(hero, "alchemist_familiar_guidance")
         if status is None:
             return
         data = getattr(status, "data", None) or {}

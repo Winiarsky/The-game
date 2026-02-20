@@ -30,10 +30,10 @@ class CommandFamiliarEvent(GameEvent):
             actor = self._pick_hero(game)
         if actor is None:
             return EventResult.cancelled(message="Nie wybrano bohatera.")
-        if not actor.has_status("FamiliarOwner"):
+        if not actor.has_status("FamiliarOwner") and not actor.has_status("alchemist_familiar_guidance"):
             return EventResult.cancelled(message="Bohater nie ma familiara.")
 
-        status = actor.get_status("FamiliarOwner")
+        status = actor.get_status("FamiliarOwner") or actor.get_status("alchemist_familiar_guidance")
         if status is None:
             return EventResult.cancelled(message="Brak statusu FamiliarOwner.")
         data = getattr(status, "data", None) or {}
