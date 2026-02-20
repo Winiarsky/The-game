@@ -9,7 +9,7 @@ for p in (ROOT, ROOT / "src"):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
-from GameObjects.events.acid_flask_event import AcidFlaskEvent
+from GameObjects.events.bombs.acid_flask_event import AcidFlaskEvent
 from GameObjects.events.base import EventContext
 from statuses import PERSISTENT_DAMAGE_STATUS
 
@@ -89,7 +89,7 @@ def test_acid_flask_moderate_hit_persistent_and_splash(monkeypatch):
     event = AcidFlaskEvent()
     monkeypatch.setattr(event, "_prompt_level", lambda: "moderate")
     monkeypatch.setattr(event, "_prompt_persistent", lambda *_args, **_kwargs: 7)
-    monkeypatch.setattr("GameObjects.events.acid_flask_event.prompt_for_roll", lambda *_, **__: 12)
+    monkeypatch.setattr("GameObjects.events.bombs.acid_flask_event.prompt_for_roll", lambda *_, **__: 12)
 
     class DummyUI:
         def __init__(self):
@@ -136,7 +136,7 @@ def test_acid_flask_item_bonus_in_modifiers(monkeypatch, tier, item_bonus):
     event = AcidFlaskEvent()
     monkeypatch.setattr(event, "_prompt_level", lambda: tier)
     monkeypatch.setattr(event, "_prompt_persistent", lambda *_args, **_kwargs: 0)
-    monkeypatch.setattr("GameObjects.events.acid_flask_event.apply_splash_damage", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("GameObjects.events.bombs.acid_flask_event.apply_splash_damage", lambda *_args, **_kwargs: None)
 
     captured = {}
 
@@ -144,7 +144,7 @@ def test_acid_flask_item_bonus_in_modifiers(monkeypatch, tier, item_bonus):
         captured.update(kwargs)
         return 20
 
-    monkeypatch.setattr("GameObjects.events.acid_flask_event.prompt_for_roll", _prompt)
+    monkeypatch.setattr("GameObjects.events.bombs.acid_flask_event.prompt_for_roll", _prompt)
 
     hero = DummyHero((0, 0))
     target = DummyEnemy((1, 0), ac=10)
