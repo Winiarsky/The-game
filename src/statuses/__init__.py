@@ -31,6 +31,17 @@ from .familiar import (
     FAMILIAR_TOUCH_DELIVERY_STATUS,
 )
 from .aided import AidedStatus
+from .clumsy import (
+    ClumsyStatus,
+    clumsy_ac_penalty,
+    clumsy_reflex_penalty,
+    clumsy_ranged_penalty,
+    clumsy_finesse_penalty,
+    clumsy_stealth_penalty,
+    clumsy_ac_penalty_effect,
+    clumsy_ac_prompt_note,
+    clumsy_attack_penalty_effects,
+)
 
 __all__ = [
     "Status",
@@ -95,4 +106,13 @@ __all__ = [
     "FAMILIAR_DISTRACT_STATUS",
     "FAMILIAR_TOUCH_DELIVERY_STATUS",
     "AidedStatus",
+    "ClumsyStatus",
+    "clumsy_ac_penalty",
+    "clumsy_reflex_penalty",
+    "clumsy_ranged_penalty",
+    "clumsy_finesse_penalty",
+    "clumsy_stealth_penalty",
+    "clumsy_ac_penalty_effect",
+    "clumsy_ac_prompt_note",
+    "clumsy_attack_penalty_effects",
 ]

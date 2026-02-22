@@ -140,10 +140,21 @@ class BaseRangeAttackEvent(AttackEventBase):
                     label=f"osłona ({cover_type})",
                 )
 
+            extra_bonuses = []
+            if cover_bonus_effect:
+                extra_bonuses.append(cover_bonus_effect)
+            try:
+                from statuses.clumsy import clumsy_ac_penalty_effect
+
+                clumsy_bonus = clumsy_ac_penalty_effect(enemy)
+                if clumsy_bonus:
+                    extra_bonuses.append(clumsy_bonus)
+            except Exception:
+                pass
             target_ac, base_ac, modifier = self._ac_with_bonuses(
                 enemy,
                 attacker=hero,
-                extra_bonuses=[cover_bonus_effect] if cover_bonus_effect else None,
+                extra_bonuses=extra_bonuses or None,
             )
 
             game.events.safe_emit_action(
@@ -174,6 +185,19 @@ class BaseRangeAttackEvent(AttackEventBase):
                         is_penalty=True,
                     )
                 )
+            try:
+                from statuses.clumsy import clumsy_attack_penalty_effects
+
+                extra_effects.extend(
+                    clumsy_attack_penalty_effects(
+                        hero,
+                        action_tag=action_tag,
+                        is_ranged=True,
+                        is_finesse=("finesse" in tags),
+                    )
+                )
+            except Exception:
+                pass
             modifier, best_effects, log_lines = self._attack_modifier_details(
                 hero, action_tag, target=enemy, extra_effects=extra_effects
             )

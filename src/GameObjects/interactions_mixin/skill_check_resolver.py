@@ -18,6 +18,15 @@ logger = logging.getLogger(__name__)
 OUTCOME_ORDER = ["critical_failure", "failure", "success", "critical_success"]
 
 
+def _is_hero(obj) -> bool:
+    try:
+        from hero import Hero
+
+        return isinstance(obj, Hero)
+    except Exception:
+        return False
+
+
 def prompt_for_roll(prompt: str, **ui_kwargs) -> int:
     """Lokalny wrapper na prompt w testach (ułatwia monkeypatch get_ui_client)."""
     ui_client = get_ui_client()
@@ -157,6 +166,15 @@ def resolve_skill_check_with_sources(
         summary_lines.append(f"Premie/kary (najwyższe per typ): {', '.join(breakdown)}")
     if base_modifier:
         summary_lines.append(f"Modyfikator bazowy: {base_modifier:+d}")
+    if skill_id == Skill.REFLEX.value and _is_hero(actor):
+        try:
+            from statuses.clumsy import clumsy_reflex_penalty
+
+            penalty = int(clumsy_reflex_penalty(actor) or 0)
+            if penalty > 0:
+                summary_lines.append(f"Clumsy: -{penalty} status do Reflex (uwzględnij ręcznie).")
+        except Exception:
+            pass
     if apply_modifiers:
         summary_lines.append(f"Łączny modyfikator: {modifier:+d} (doliczany automatycznie).")
         prompt_long = "Podaj wynik rzutu d20 (bez premii). " + " ".join(summary_lines)
@@ -376,9 +394,32 @@ def _collect_modifier_data(
                 )
             )
 
+    notes = list(notes_src) + list(notes_tgt)
+
+    if skill_id == Skill.REFLEX.value:
+        try:
+            from statuses.clumsy import clumsy_reflex_penalty
+        except Exception:
+            clumsy_reflex_penalty = None
+        if clumsy_reflex_penalty:
+            penalty = int(clumsy_reflex_penalty(actor) or 0)
+            if penalty > 0:
+                if _is_hero(actor):
+                    notes.append(f"Clumsy: -{penalty} status do Reflex (uwzględnij ręcznie).")
+                else:
+                    all_effects.append(
+                        BonusEffect(
+                            type=BonusType.STATUS,
+                            value=penalty,
+                            tag=skill_id,
+                            source="status:clumsy",
+                            label="clumsy",
+                            is_penalty=True,
+                        )
+                    )
+
     modifier = base_modifier + (compute_total_modifier(all_effects, skill_id) if all_effects else 0)
     breakdown = _format_breakdown(all_effects, skill_id)
-    notes = list(notes_src) + list(notes_tgt)
     return modifier, breakdown, notes, promote_src, demote_src, promote_tgt, demote_tgt, consume_src, consume_tgt, all_effects
 
 

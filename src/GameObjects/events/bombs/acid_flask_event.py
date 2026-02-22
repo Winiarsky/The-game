@@ -5,6 +5,7 @@ import logging
 from damage_types import DamageType
 from statuses import make_persistent_damage
 from combat.damage_utils import apply_splash_damage
+from GameObjects.interactions_mixin import prompt_for_roll
 
 from .base_alchemical_bomb_event import BaseAlchemicalBombEvent
 from ..registry import register_event
@@ -38,6 +39,9 @@ class AcidFlaskEvent(BaseAlchemicalBombEvent):
         "greater": {"item_bonus": 2, "persistent": "3d6", "splash": 3},
         "major": {"item_bonus": 3, "persistent": "4d6", "splash": 4},
     }
+
+    def _prompt_for_roll(self, *args, **kwargs) -> int:
+        return prompt_for_roll(*args, **kwargs)
 
     def _apply_on_hit(self, ctx, target, target_pos, tier, tier_data, *, critical: bool = False) -> None:
         persistent_value = self._prompt_persistent(tier, str(tier_data.get("persistent", "")))

@@ -11,6 +11,7 @@
 - Alchemist: uzupełnić opis dla Formula Book.
 - Dokończyć karty dla przedmiotów alchemicznych.
 - Alchemist: uzupełnić opis do UI promptu.
+- Mutagenic Flashback: poprawić czas działania, żeby był mierzony w turach.
 
 TODO: Dodać mechaniki usuwania statusu Poisoned (test medyczny, antidotum itd.).
 TODO: Bestial Mutagen - dodać akcje ataku pazurami i kłami, potem zaimplementować eliksir.

@@ -77,6 +77,13 @@ class BasicEnemyMeleeAttackEvent(GameEvent):
         roll = random.randint(1, 20) + attack_bonus + extra_mod
 
         target_ac = effective_ac(hero)
+        clumsy_note = None
+        try:
+            from statuses.clumsy import clumsy_ac_prompt_note
+
+            clumsy_note = clumsy_ac_prompt_note(hero)
+        except Exception:
+            clumsy_note = None
 
         prompt = (
             f"{getattr(enemy, 'name', 'wróg')} {self.weapon_label} na {target_pos}: "
@@ -84,6 +91,8 @@ class BasicEnemyMeleeAttackEvent(GameEvent):
             f"AC celu: {target_ac}. "
             "Potwierdź trafienie: ACCEPT/DECLINE"
         )
+        if clumsy_note:
+            prompt = f"{prompt} {clumsy_note}"
         response = conn.read_card(prompt, ["ACCEPT", "DECLINE"])
         if response.upper() != "ACCEPT":
             logger.info("Atak wroga odrzucony.")

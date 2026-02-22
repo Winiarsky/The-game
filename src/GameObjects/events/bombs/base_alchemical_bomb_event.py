@@ -105,7 +105,7 @@ class BaseAlchemicalBombEvent(ActionCostEvent, AttackEventBase):
                 pass
         prompt_long = f"Modyfikator łączny: {modifier:+d} (doliczany automatycznie)."
 
-        roll = prompt_for_roll(
+        roll = self._prompt_for_roll(
             f"Atak {self._event_label()} przeciwko AC {target_ac}",
             layout="test",
             subtitle=f"bazowe {base_ac}{modifier_note}",
@@ -139,6 +139,9 @@ class BaseAlchemicalBombEvent(ActionCostEvent, AttackEventBase):
         self._apply_damage_and_splash(ctx, target, target_pos, tier, tier_data)
 
     # --- helpers ---
+    def _prompt_for_roll(self, *args, **kwargs) -> int:
+        return prompt_for_roll(*args, **kwargs)
+
     def _event_label(self) -> str:
         return getattr(self, "name", "bomba").replace("_", " ").title()
 

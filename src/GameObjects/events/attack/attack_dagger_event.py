@@ -11,5 +11,5 @@ class DaggerAttackEvent(BasicMeleeAttackEvent):
     weapon_label = "sztyletem"
     damage_prompt = "1k4 + STR"
     action_id_base = "attack_dagger"
-    default_tags = ["attack_melee", "dagger"]
+    default_tags = ["attack_melee", "finesse", "dagger"]
     damage_type = DamageType.SLASHING.value

@@ -11,5 +11,5 @@ class RazortoothJawsAttackEvent(BasicMeleeAttackEvent):
     weapon_label = "szczekami"
     damage_prompt = "1k6 + STR"
     action_id_base = "attack_razortooth_jaws"
-    default_tags = ["attack_melee", "jaws", "goblin"]
+    default_tags = ["attack_melee", "finesse", "jaws", "goblin"]
     damage_type = DamageType.PIERCING.value
