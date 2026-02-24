@@ -37,6 +37,7 @@ class Combat(State):
         self.base_order: list[Any] = []      # stała kolejność bazowa
         self.round_queue: list[Any] = []     # kolejka na bieżącą rundę (konsumowana)
         self.round_index: int = 1
+        self.attack_state: dict[Any, dict[str, object]] = {}
 
     def on_enter(self):
         logger.info("Walka rozpoczęta.")
@@ -137,6 +138,7 @@ class Combat(State):
         self.base_initiative.clear()
         self.temp_initiative.clear()
         self.delayed.clear()
+        self.attack_state.clear()
         self.base_order.clear()
         self.round_queue.clear()
 
@@ -164,6 +166,15 @@ class Combat(State):
 
     def _clear_start_of_turn_effects(self, actor) -> None:
         """Usuń efekty jednorundowe (np. raise_shield) na początku inicjatywy bohatera."""
+        try:
+            self.attack_state.pop(actor, None)
+        except Exception:
+            pass
+        try:
+            if hasattr(actor, "_attack_trait_state"):
+                delattr(actor, "_attack_trait_state")
+        except Exception:
+            pass
         if actor in getattr(self.game, "heroes", []):
             remover = getattr(actor, "remove_bonuses_with_prefix", None)
             if callable(remover):

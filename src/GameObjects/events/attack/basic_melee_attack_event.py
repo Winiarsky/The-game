@@ -4,7 +4,7 @@ import logging
 from typing import Iterable, Sequence
 
 from board import consts
-from bonuses import build_modifiers_grid
+from bonuses import BonusEffect, BonusType, build_modifiers_grid
 from combat import refresh_flanking_statuses
 from combat.damage_utils import burn_it_bonus, burn_it_prompt_note
 from GameObjects.interactions_mixin import prompt_for_roll
@@ -45,8 +45,8 @@ class BasicMeleeAttackEvent(AttackEventBase):
         except Exception:
             pass
 
-        candidates = self._adjacent_enemies(ctx.game, hero_pos)
         tags = self._effective_tags(ctx)
+        candidates = self._reachable_enemies(ctx.game, hero_pos, tags)
         candidates = [(enemy, pos) for enemy, pos in candidates if not is_target_blocked_by_tags(enemy, tags)]
         if not candidates:
             logger.info("Brak wrogów na sąsiednich polach.")
@@ -56,6 +56,18 @@ class BasicMeleeAttackEvent(AttackEventBase):
         if enemy is None:
             return EventResult.cancelled(message="Nie wybrano celu.")
 
+        # --- weapon trait state (przed atakiem) ---
+        state = self._get_attack_state(ctx, hero)
+        weapon_key = self._weapon_key()
+        weapon_type = self._weapon_type_tag(tags)
+        attacks_this_turn = int(state.get("attacks_this_turn", 0) or 0)
+        weapon_counts = state.setdefault("weapon_counts", {})
+        weapon_attack_count = int(weapon_counts.get(weapon_key, 0) or 0)
+        backswing_ready = state.setdefault("backswing_ready", set())
+        weapon_targets = state.setdefault("weapon_targets", {})
+        target_set = weapon_targets.setdefault(weapon_key, set())
+        target_id = self._target_id(enemy)
+
         if not check_concealed(ctx, enemy):
             ctx.game.events.safe_emit_action(
                 actor=hero,
@@ -64,6 +76,12 @@ class BasicMeleeAttackEvent(AttackEventBase):
                 target=enemy,
                 target_pos=enemy_pos,
             )
+            if self._has_trait(tags, "backswing"):
+                try:
+                    backswing_ready.add(weapon_key)
+                except Exception:
+                    pass
+            self._record_attack(ctx, hero, weapon_key=weapon_key, weapon_type=weapon_type, target=enemy)
             return EventResult(success=True, consumed_action=self.consumes_action, message=f"Atak {self.weapon_label}: pudło (concealed).")
 
         extra_bonuses = []
@@ -96,6 +114,7 @@ class BasicMeleeAttackEvent(AttackEventBase):
 
         action_tag = (tags or ["attack_melee"])[0]
         extra_effects = []
+        trait_notes: list[str] = []
         try:
             from statuses.clumsy import clumsy_attack_penalty_effects
 
@@ -109,6 +128,55 @@ class BasicMeleeAttackEvent(AttackEventBase):
             )
         except Exception:
             pass
+        map_penalty = 0
+        if attacks_this_turn >= 1:
+            if self._has_trait(tags, "agile"):
+                map_penalty = 4 if attacks_this_turn == 1 else 8
+            else:
+                map_penalty = 5 if attacks_this_turn == 1 else 10
+        if map_penalty:
+            extra_effects.append(
+                BonusEffect(
+                    type=BonusType.CIRCUMSTANCE,
+                    value=map_penalty,
+                    tag=action_tag,
+                    source="map",
+                    label=f"MAP{' (agile)' if self._has_trait(tags, 'agile') else ''}",
+                    is_penalty=True,
+                )
+            )
+        if self._has_trait(tags, "backswing") and weapon_key in backswing_ready:
+            extra_effects.append(
+                BonusEffect(
+                    type=BonusType.CIRCUMSTANCE,
+                    value=1,
+                    tag=action_tag,
+                    source="backswing",
+                    label="backswing",
+                )
+            )
+            try:
+                backswing_ready.discard(weapon_key)
+            except Exception:
+                pass
+        if self._has_trait(tags, "sweep") and target_id:
+            try:
+                if any(tid != target_id for tid in target_set):
+                    extra_effects.append(
+                        BonusEffect(
+                            type=BonusType.CIRCUMSTANCE,
+                            value=1,
+                            tag=action_tag,
+                            source="sweep",
+                            label="sweep",
+                        )
+                    )
+            except Exception:
+                pass
+        if self._has_trait(tags, "nonlethal"):
+            trait_notes.append("Nonlethal: atak nieśmiertelny; jeśli lethal, -2 do ataku (ręcznie).")
+        if self._has_trait(tags, "finesse"):
+            trait_notes.append("Finesse: możesz użyć ZR zamiast SI do premii ataku.")
         modifier, best_effects, log_lines = self._attack_modifier_details(
             hero, action_tag, target=enemy, extra_effects=extra_effects or None
         )
@@ -118,6 +186,8 @@ class BasicMeleeAttackEvent(AttackEventBase):
             except Exception:
                 pass
         prompt_long = f"Modyfikator łączny: {modifier:+d} (doliczany automatycznie)."
+        if trait_notes:
+            prompt_long = f"{prompt_long}\n" + "\n".join(trait_notes)
 
         roll = prompt_for_roll(
             f"Atak {self.weapon_label} przeciwko AC {prompt_ac}.",
@@ -140,19 +210,78 @@ class BasicMeleeAttackEvent(AttackEventBase):
                 roll=roll,
                 target_ac=target_ac,
             )
+            if self._has_trait(tags, "backswing"):
+                try:
+                    backswing_ready.add(weapon_key)
+                except Exception:
+                    pass
+            self._record_attack(ctx, hero, weapon_key=weapon_key, weapon_type=weapon_type, target=enemy)
             return EventResult(success=True, consumed_action=self.consumes_action, message=f"Atak {self.weapon_label}: pudło.")
 
         self._maybe_prompt_vengeful_hatred(hero, enemy)
         dmg_prompt = f"{'Trafienie krytyczne! ' if critical else 'Trafienie! '}Obrażenia {self.damage_prompt}: "
-        first_type = self.damage_type if isinstance(self.damage_type, str) else list(self.damage_type)[0]
+        resolved_damage_type = self._choose_damage_type(tags, self.damage_type)
+        first_type = resolved_damage_type if isinstance(resolved_damage_type, str) else list(resolved_damage_type)[0]
         note = burn_it_prompt_note(hero, first_type)
+        damage_bonus = 0
+        damage_notes: list[str] = []
+        dice_count = self._damage_dice_count(self.damage_prompt)
+        if self._has_trait(tags, "versatile") and not self._tag_value(tags, "versatile"):
+            damage_notes.append("Versatile: brak typu w tagu (np. versatile:p) – wybierz ręcznie.")
+        deadly_tag = self._tag_value(tags, "deadly")
+        deadly_die = self._die_size_from_tag(deadly_tag)
+        if self._has_trait(tags, "deadly") and not deadly_die:
+            damage_notes.append("Deadly: brak kości w tagu (np. deadly:d8) – dodaj ręcznie.")
+        if self._has_trait(tags, "forceful"):
+            if dice_count:
+                if weapon_attack_count >= 1:
+                    add = dice_count if weapon_attack_count == 1 else dice_count * 2
+                    damage_bonus += add
+                    damage_notes.append(f"Forceful: +{add} obrażeń (doliczone).")
+            else:
+                damage_notes.append("Forceful: dodaj bonus za kości obrażeń (ręcznie).")
+        if self._has_trait(tags, "twin") and weapon_type:
+            last_by_type = state.get("last_weapon_by_type", {}) or {}
+            last_weapon = last_by_type.get(weapon_type)
+            if last_weapon and last_weapon != weapon_key:
+                if dice_count:
+                    damage_bonus += dice_count
+                    damage_notes.append(f"Twin: +{dice_count} obrażeń (doliczone).")
+                else:
+                    damage_notes.append("Twin: dodaj bonus za kości obrażeń (ręcznie).")
+        if self._has_trait(tags, "backstabber") and self._is_flat_footed(enemy):
+            damage_bonus += 1
+            damage_notes.append("Backstabber: +1 precision (doliczone; +2 jeśli broń +3).")
+        if self._has_trait(tags, "propulsive"):
+            damage_notes.append("Propulsive: dodaj 1/2 STR do obrażeń (ręcznie).")
+        if self._has_trait(tags, "fatal"):
+            damage_notes.append("Fatal: zmień kości bazowe i dodaj 1 kość fatal (ręcznie).")
+        if self._has_trait(tags, "two_hand"):
+            damage_notes.append("Two-Hand: użycie dwuręczne zmienia kości obrażeń (ręcznie).")
+        if damage_notes:
+            note = f"{note}\n" + "\n".join(damage_notes) if note else "\n".join(damage_notes)
         damage = prompt_for_roll(
             dmg_prompt,
             layout="damage",
             answer_placeholder="Suma obrażeń",
             prompt_long=note,
         )
-        damage_components = self._collect_damage_components(damage, actor=hero)
+        damage_components = self._collect_damage_components(
+            damage,
+            actor=hero,
+            damage_type_override=resolved_damage_type,
+            flat_bonus=damage_bonus,
+        )
+        if critical and deadly_die:
+            extra = prompt_for_roll(
+                f"Deadly {deadly_die}: dodatkowe obrażenia (rzut): ",
+                layout="damage",
+                answer_placeholder="Dodatkowe obrażenia",
+            )
+            try:
+                damage_components.append((first_type, int(extra)))
+            except Exception:
+                pass
         defeated = False
         try:
             defeated = self._apply_damage_components(enemy, damage_components)
@@ -168,8 +297,9 @@ class BasicMeleeAttackEvent(AttackEventBase):
             target_pos=enemy_pos,
             damage=sum(d for _, d in damage_components),
             damage_components=damage_components,
-                defeated=defeated,
-            )
+            defeated=defeated,
+        )
+        self._record_attack(ctx, hero, weapon_key=weapon_key, weapon_type=weapon_type, target=enemy)
 
         if defeated:
             try:
@@ -194,15 +324,23 @@ class BasicMeleeAttackEvent(AttackEventBase):
         return EventResult(success=True, consumed_action=self.consumes_action, message=msg, data={"critical": critical})
 
     # --- helpers ---
-    def _collect_damage_components(self, first_roll: int, *, actor=None) -> list[tuple[str, int]]:
+    def _collect_damage_components(
+        self,
+        first_roll: int,
+        *,
+        actor=None,
+        damage_type_override: str | Sequence[str] | None = None,
+        flat_bonus: int = 0,
+    ) -> list[tuple[str, int]]:
         """Zwraca listę (typ, obrażenia) – obsługa wielu typów."""
-        if isinstance(self.damage_type, str):
-            bonus = burn_it_bonus(actor, self.damage_type)
-            return [(self.damage_type, int(first_roll) + int(bonus))]
+        damage_type = damage_type_override if damage_type_override is not None else self.damage_type
+        if isinstance(damage_type, str):
+            bonus = burn_it_bonus(actor, damage_type)
+            return [(damage_type, int(first_roll) + int(bonus) + int(flat_bonus))]
         components: list[tuple[str, int]] = []
-        damage_types = list(self.damage_type)
+        damage_types = list(damage_type)
         bonus = burn_it_bonus(actor, damage_types[0])
-        components.append((damage_types[0], int(first_roll) + int(bonus)))
+        components.append((damage_types[0], int(first_roll) + int(bonus) + int(flat_bonus)))
         for idx, dtype in enumerate(damage_types[1:], start=1):
             prompt = f"Trafienie! Obrażenia dodatkowe ({dtype}): "
             note = burn_it_prompt_note(actor, dtype)
@@ -232,6 +370,34 @@ class BasicMeleeAttackEvent(AttackEventBase):
             occ = board.occupant_at(npos)
             if occ in game.enemies:
                 enemies.append((occ, npos))
+        return enemies
+
+    def _reachable_enemies(self, game, pos, tags):
+        board = game.board
+        reach_tag = self._tag_value(tags, "reach")
+        if not self._has_trait(tags, "reach"):
+            return self._adjacent_enemies(game, pos)
+        try:
+            reach_ft = int(reach_tag) if reach_tag else 10
+        except Exception:
+            reach_ft = 10
+        steps = max(1, int(reach_ft / 5))
+        enemies = []
+        for dx in range(-steps, steps + 1):
+            for dy in range(-steps, steps + 1):
+                if dx == 0 and dy == 0:
+                    continue
+                if max(abs(dx), abs(dy)) > steps:
+                    continue
+                npos = (pos[0] + dx, pos[1] + dy)
+                try:
+                    if not board.in_bounds(npos):
+                        continue
+                except Exception:
+                    continue
+                occ = board.occupant_at(npos)
+                if occ in game.enemies:
+                    enemies.append((occ, npos))
         return enemies
 
     def _pick_enemy(self, ctx: EventContext, candidates):

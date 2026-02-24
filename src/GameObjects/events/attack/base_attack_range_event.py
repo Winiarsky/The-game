@@ -117,6 +117,18 @@ class BaseRangeAttackEvent(AttackEventBase):
             distance_ft = target_analysis["distance_ft"]
             range_penalty = target_analysis["range_penalty"]
             increments = target_analysis["increments"]
+            target_id = self._target_id(enemy)
+
+            # --- weapon trait state (przed atakiem) ---
+            state = self._get_attack_state(ctx, hero)
+            weapon_key = self._weapon_key()
+            weapon_type = self._weapon_type_tag(tags)
+            attacks_this_turn = int(state.get("attacks_this_turn", 0) or 0)
+            weapon_counts = state.setdefault("weapon_counts", {})
+            weapon_attack_count = int(weapon_counts.get(weapon_key, 0) or 0)
+            backswing_ready = state.setdefault("backswing_ready", set())
+            weapon_targets = state.setdefault("weapon_targets", {})
+            target_set = weapon_targets.setdefault(weapon_key, set())
 
             if not check_concealed(ctx, enemy):
                 game.events.safe_emit_action(
@@ -126,6 +138,12 @@ class BaseRangeAttackEvent(AttackEventBase):
                     target=enemy,
                     target_pos=target_pos,
                 )
+                if self._has_trait(tags, "backswing"):
+                    try:
+                        backswing_ready.add(weapon_key)
+                    except Exception:
+                        pass
+                self._record_attack(ctx, hero, weapon_key=weapon_key, weapon_type=weapon_type, target=enemy)
                 self._apply_range_attacker_status(hero)
                 return EventResult(success=True, consumed_action=self.consumes_action, message="Strzał chybia (concealed).")
 
@@ -174,6 +192,7 @@ class BaseRangeAttackEvent(AttackEventBase):
 
             action_tag = (self._effective_tags(ctx) or ["attack_ranged"])[0]
             extra_effects = []
+            trait_notes: list[str] = []
             if range_penalty:
                 extra_effects.append(
                     BonusEffect(
@@ -185,6 +204,74 @@ class BaseRangeAttackEvent(AttackEventBase):
                         is_penalty=True,
                     )
                 )
+            map_penalty = 0
+            if attacks_this_turn >= 1:
+                if self._has_trait(tags, "agile"):
+                    map_penalty = 4 if attacks_this_turn == 1 else 8
+                else:
+                    map_penalty = 5 if attacks_this_turn == 1 else 10
+            if map_penalty:
+                extra_effects.append(
+                    BonusEffect(
+                        type=BonusType.CIRCUMSTANCE,
+                        value=map_penalty,
+                        tag=action_tag,
+                        source="map",
+                        label=f"MAP{' (agile)' if self._has_trait(tags, 'agile') else ''}",
+                        is_penalty=True,
+                    )
+                )
+            volley_range = self._tag_value(tags, "volley")
+            if volley_range:
+                try:
+                    volley_ft = int(volley_range)
+                except Exception:
+                    volley_ft = 0
+                if volley_ft > 0 and distance_ft <= volley_ft:
+                    extra_effects.append(
+                        BonusEffect(
+                            type=BonusType.CIRCUMSTANCE,
+                            value=2,
+                            tag=action_tag,
+                            source="volley",
+                            label=f"volley {volley_ft}ft",
+                            is_penalty=True,
+                        )
+                    )
+            elif self._has_trait(tags, "volley"):
+                trait_notes.append("Volley: brak zasięgu w tagu (np. volley:30) – dodaj ręcznie.")
+            if self._has_trait(tags, "backswing") and weapon_key in backswing_ready:
+                extra_effects.append(
+                    BonusEffect(
+                        type=BonusType.CIRCUMSTANCE,
+                        value=1,
+                        tag=action_tag,
+                        source="backswing",
+                        label="backswing",
+                    )
+                )
+                try:
+                    backswing_ready.discard(weapon_key)
+                except Exception:
+                    pass
+            if self._has_trait(tags, "sweep") and target_id:
+                try:
+                    if any(tid != target_id for tid in target_set):
+                        extra_effects.append(
+                            BonusEffect(
+                                type=BonusType.CIRCUMSTANCE,
+                                value=1,
+                                tag=action_tag,
+                                source="sweep",
+                                label="sweep",
+                            )
+                        )
+                except Exception:
+                    pass
+            if self._has_trait(tags, "nonlethal"):
+                trait_notes.append("Nonlethal: atak nieśmiertelny; jeśli lethal, -2 do ataku (ręcznie).")
+            if self._has_trait(tags, "finesse"):
+                trait_notes.append("Finesse: możesz użyć ZR zamiast SI do premii ataku.")
             try:
                 from statuses.clumsy import clumsy_attack_penalty_effects
 
@@ -207,6 +294,8 @@ class BaseRangeAttackEvent(AttackEventBase):
                 except Exception:
                     pass
             prompt_long = f"Modyfikator łączny: {modifier:+d} (doliczany automatycznie)."
+            if trait_notes:
+                prompt_long = f"{prompt_long}\n" + "\n".join(trait_notes)
 
             roll = prompt_for_roll(
                 f"Atak {self.weapon_label} na AC {target_ac}",
@@ -232,12 +321,71 @@ class BaseRangeAttackEvent(AttackEventBase):
                     cover=cover_type,
                     range_penalty=range_penalty,
                 )
+                if self._has_trait(tags, "backswing"):
+                    try:
+                        backswing_ready.add(weapon_key)
+                    except Exception:
+                        pass
+                self._record_attack(ctx, hero, weapon_key=weapon_key, weapon_type=weapon_type, target=enemy)
                 self._apply_range_attacker_status(hero)
                 return EventResult(success=True, consumed_action=self.consumes_action, message="Strzał chybia.")
 
             prompt_prefix = "Trafienie krytyczne! " if critical else "Trafienie! "
             self._maybe_prompt_vengeful_hatred(hero, enemy)
-            damage_components = self._collect_damage_components(actor=hero, prompt_prefix=prompt_prefix)
+            resolved_damage_type = self._choose_damage_type(tags, self.damage_type)
+            damage_bonus = 0
+            damage_notes: list[str] = []
+            dice_count = self._damage_dice_count(self.damage_prompt)
+            if self._has_trait(tags, "versatile") and not self._tag_value(tags, "versatile"):
+                damage_notes.append("Versatile: brak typu w tagu (np. versatile:p) – wybierz ręcznie.")
+            deadly_tag = self._tag_value(tags, "deadly")
+            deadly_die = self._die_size_from_tag(deadly_tag)
+            if self._has_trait(tags, "deadly") and not deadly_die:
+                damage_notes.append("Deadly: brak kości w tagu (np. deadly:d8) – dodaj ręcznie.")
+            if self._has_trait(tags, "forceful"):
+                if dice_count:
+                    if weapon_attack_count >= 1:
+                        add = dice_count if weapon_attack_count == 1 else dice_count * 2
+                        damage_bonus += add
+                        damage_notes.append(f"Forceful: +{add} obrażeń (doliczone).")
+                else:
+                    damage_notes.append("Forceful: dodaj bonus za kości obrażeń (ręcznie).")
+            if self._has_trait(tags, "twin") and weapon_type:
+                last_by_type = state.get("last_weapon_by_type", {}) or {}
+                last_weapon = last_by_type.get(weapon_type)
+                if last_weapon and last_weapon != weapon_key:
+                    if dice_count:
+                        damage_bonus += dice_count
+                        damage_notes.append(f"Twin: +{dice_count} obrażeń (doliczone).")
+                    else:
+                        damage_notes.append("Twin: dodaj bonus za kości obrażeń (ręcznie).")
+            if self._has_trait(tags, "backstabber") and self._is_flat_footed(enemy):
+                damage_bonus += 1
+                damage_notes.append("Backstabber: +1 precision (doliczone; +2 jeśli broń +3).")
+            if self._has_trait(tags, "propulsive"):
+                damage_notes.append("Propulsive: dodaj 1/2 STR do obrażeń (ręcznie).")
+            if self._has_trait(tags, "fatal"):
+                damage_notes.append("Fatal: zmień kości bazowe i dodaj 1 kość fatal (ręcznie).")
+            if self._has_trait(tags, "two_hand"):
+                damage_notes.append("Two-Hand: użycie dwuręczne zmienia kości obrażeń (ręcznie).")
+            damage_components = self._collect_damage_components(
+                actor=hero,
+                prompt_prefix=prompt_prefix,
+                damage_type_override=resolved_damage_type,
+                flat_bonus=damage_bonus,
+                extra_notes=damage_notes,
+            )
+            first_type = resolved_damage_type if isinstance(resolved_damage_type, str) else list(resolved_damage_type)[0]
+            if critical and deadly_die:
+                extra = prompt_for_roll(
+                    f"Deadly {deadly_die}: dodatkowe obrażenia (rzut): ",
+                    layout="damage",
+                    answer_placeholder="Dodatkowe obrażenia",
+                )
+                try:
+                    damage_components.append((first_type, int(extra)))
+                except Exception:
+                    pass
             defeated = False
             try:
                 defeated = self._apply_damage_components(enemy, damage_components)
@@ -258,6 +406,7 @@ class BaseRangeAttackEvent(AttackEventBase):
                 range_penalty=range_penalty,
                 critical=critical,
             )
+            self._record_attack(ctx, hero, weapon_key=weapon_key, weapon_type=weapon_type, target=enemy)
 
             if defeated:
                 try:
@@ -291,20 +440,31 @@ class BaseRangeAttackEvent(AttackEventBase):
         return self.COVER_RANK.get(cover_type, 0)
 
     # --- damage helpers ---
-    def _collect_damage_components(self, *, actor=None, prompt_prefix: str = "") -> list[tuple[str, int]]:
+    def _collect_damage_components(
+        self,
+        *,
+        actor=None,
+        prompt_prefix: str = "",
+        damage_type_override: str | Sequence[str] | None = None,
+        flat_bonus: int = 0,
+        extra_notes: list[str] | None = None,
+    ) -> list[tuple[str, int]]:
         """Pozyskaj wartości obrażeń dla 1+ typów."""
-        if isinstance(self.damage_type, str):
-            note = burn_it_prompt_note(actor, self.damage_type)
+        damage_type = damage_type_override if damage_type_override is not None else self.damage_type
+        if isinstance(damage_type, str):
+            note = burn_it_prompt_note(actor, damage_type)
+            if extra_notes:
+                note = f"{note}\n" + "\n".join(extra_notes) if note else "\n".join(extra_notes)
             dmg = prompt_for_roll(
                 f"{prompt_prefix}Obrażenia {self.damage_prompt}: ",
                 layout="damage",
                 answer_placeholder="Suma obrażeń",
                 prompt_long=note,
             )
-            bonus = burn_it_bonus(actor, self.damage_type)
-            return [(self.damage_type, int(dmg) + int(bonus))]
+            bonus = burn_it_bonus(actor, damage_type)
+            return [(damage_type, int(dmg) + int(bonus) + int(flat_bonus))]
 
-        damage_types = list(self.damage_type)
+        damage_types = list(damage_type)
         components: list[tuple[str, int]] = []
         for idx, dtype in enumerate(damage_types):
             prompt = self.damage_prompt
@@ -313,6 +473,8 @@ class BaseRangeAttackEvent(AttackEventBase):
             else:
                 prompt_text = prompt
             note = burn_it_prompt_note(actor, dtype)
+            if idx == 0 and extra_notes:
+                note = f"{note}\n" + "\n".join(extra_notes) if note else "\n".join(extra_notes)
             roll = prompt_for_roll(
                 f"{prompt_prefix}Obrażenia {prompt_text} ({dtype}): ",
                 layout="damage",
@@ -320,7 +482,10 @@ class BaseRangeAttackEvent(AttackEventBase):
                 prompt_long=note,
             )
             bonus = burn_it_bonus(actor, dtype)
-            components.append((dtype, int(roll) + int(bonus)))
+            total = int(roll) + int(bonus)
+            if idx == 0:
+                total += int(flat_bonus)
+            components.append((dtype, total))
         return components
 
     @staticmethod
