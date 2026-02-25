@@ -38,6 +38,7 @@ class Combat(State):
         self.round_queue: list[Any] = []     # kolejka na bieżącą rundę (konsumowana)
         self.round_index: int = 1
         self.attack_state: dict[Any, dict[str, object]] = {}
+        self.status_initiative_penalty: dict[Any, int] = {}
 
     def on_enter(self):
         logger.info("Walka rozpoczęta.")
@@ -108,11 +109,19 @@ class Combat(State):
             if getattr(hero, "position", None) is None:
                 continue
             self.base_initiative.setdefault(hero, getattr(hero, "initiative", -1))
+            penalty = self._status_initiative_penalty_value(hero)
+            if penalty:
+                self.base_initiative[hero] = int(self.base_initiative[hero]) - penalty
+                self.status_initiative_penalty[hero] = penalty
             participants.append(hero)
         for enemy in self.game.enemies:
             if getattr(enemy, "position", None) is None:
                 continue
             self.base_initiative.setdefault(enemy, getattr(enemy, "initiative", -1))
+            penalty = self._status_initiative_penalty_value(enemy)
+            if penalty:
+                self.base_initiative[enemy] = int(self.base_initiative[enemy]) - penalty
+                self.status_initiative_penalty[enemy] = penalty
             participants.append(enemy)
         participants.sort(key=self._effective_initiative_sort_key, reverse=True)
         self.base_order = participants
@@ -139,6 +148,7 @@ class Combat(State):
         self.temp_initiative.clear()
         self.delayed.clear()
         self.attack_state.clear()
+        self.status_initiative_penalty.clear()
         self.base_order.clear()
         self.round_queue.clear()
 
@@ -163,6 +173,53 @@ class Combat(State):
         for mapping in (self.base_initiative, self.temp_initiative):
             for dead in [k for k in list(mapping.keys()) if k not in self.base_order]:
                 mapping.pop(dead, None)
+        for dead in [k for k in list(self.status_initiative_penalty.keys()) if k not in self.base_order]:
+            self.status_initiative_penalty.pop(dead, None)
+
+    def _status_initiative_penalty_value(self, actor) -> int:
+        statuses = getattr(actor, "statuses", None)
+        if not isinstance(statuses, list):
+            return 0
+        best = 0
+        for status in statuses:
+            data = getattr(status, "data", None) or {}
+            val = data.get("initiative_penalty", 0)
+            try:
+                val = int(val)
+            except Exception:
+                val = 0
+            if val > best:
+                best = val
+        return int(best)
+
+    def _resort_base_order(self) -> None:
+        self._cleanup_removed()
+        self.base_order.sort(
+            key=lambda obj: self.base_initiative.get(obj, getattr(obj, "initiative", -1)),
+            reverse=True,
+        )
+
+    def _rebuild_round_queue(self) -> None:
+        remaining = [obj for obj in self.base_order if obj in self.round_queue]
+        remaining.sort(key=self._effective_initiative_sort_key, reverse=True)
+        self.round_queue = remaining
+        self.initiative_order = list(self.round_queue)
+        self._send_initiative_event()
+
+    def sync_status_initiative_penalty(self, actor, *, reorder_round_queue: bool = False) -> None:
+        current = self._status_initiative_penalty_value(actor)
+        prev = self.status_initiative_penalty.get(actor, 0)
+        if current == prev:
+            return
+        base = self.base_initiative.get(actor, getattr(actor, "initiative", -1))
+        self.base_initiative[actor] = int(base) - int(current - prev)
+        if current:
+            self.status_initiative_penalty[actor] = current
+        else:
+            self.status_initiative_penalty.pop(actor, None)
+        self._resort_base_order()
+        if reorder_round_queue:
+            self._rebuild_round_queue()
 
     def _clear_start_of_turn_effects(self, actor) -> None:
         """Usuń efekty jednorundowe (np. raise_shield) na początku inicjatywy bohatera."""
@@ -223,6 +280,10 @@ class Combat(State):
                 tick_statuses()
             except Exception:
                 logger.debug("Nie udało się odliczyć statusów dla %s", actor)
+        try:
+            self.sync_status_initiative_penalty(actor, reorder_round_queue=False)
+        except Exception:
+            logger.debug("Nie udało się zsynchronizować kary do inicjatywy dla %s", actor)
 
     def _iter_held_statuses(self, source_actor):
         source_id = self._actor_id(source_actor)

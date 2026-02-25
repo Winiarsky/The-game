@@ -12,6 +12,7 @@ for p in (ROOT, ROOT / "src"):
 from GameObjects.events.base import EventContext
 from GameObjects.events.enemy.enemy_move_event import EnemyMoveEvent
 from GameObjects.events.move_event import MoveEvent
+from GameObjects.events.elixirs.juggernaut_mutagen_event import JuggernautMutagenEvent
 from states.combat import Combat
 from statuses import SpeedPenaltyStatus, ImmobilizedStatus, DeafenedStatus
 
@@ -174,3 +175,49 @@ def test_deafened_initiative_penalty_reorders_queue():
 
     assert combat.round_queue[0] is hero_slow
     assert combat.round_queue[1] is hero_fast
+
+
+def test_juggernaut_mutagen_penalty_lowers_existing_initiative():
+    game = SimpleNamespace(heroes=[], enemies=[], ui_event=lambda *a, **k: None, ui_log=lambda *a, **k: None)
+    combat = Combat(game)
+
+    hero_fast = DummyHero(pos=(0, 0))
+    hero_slow = DummyHero(pos=(1, 0))
+    game.heroes = [hero_fast, hero_slow]
+    game.state = combat
+
+    combat.base_initiative[hero_fast] = 16
+    combat.base_initiative[hero_slow] = 15
+    combat.base_order = [hero_fast, hero_slow]
+    combat.round_queue = [hero_fast, hero_slow]
+
+    ctx = EventContext(game=game, actor=hero_fast)
+    event = JuggernautMutagenEvent()
+    event._apply_elixir(ctx, hero_fast, "lesser", event.tiers["lesser"])
+
+    assert combat.base_initiative[hero_fast] == 14
+    assert combat.round_queue[0] is hero_slow
+    assert combat.round_queue[1] is hero_fast
+
+
+def test_juggernaut_mutagen_penalty_expires_restores_initiative():
+    game = SimpleNamespace(heroes=[], enemies=[], ui_event=lambda *a, **k: None, ui_log=lambda *a, **k: None)
+    combat = Combat(game)
+
+    hero = DummyHero(pos=(0, 0))
+    game.heroes = [hero]
+    game.state = combat
+
+    combat.base_initiative[hero] = 16
+    combat.base_order = [hero]
+    combat.round_queue = [hero]
+
+    ctx = EventContext(game=game, actor=hero)
+    event = JuggernautMutagenEvent()
+    event._apply_elixir(ctx, hero, "lesser", event.tiers["lesser"])
+
+    hero.statuses = [s for s in hero.statuses if getattr(s, "id", None) != "juggernaut_mutagen_penalty"]
+    combat.sync_status_initiative_penalty(hero, reorder_round_queue=False)
+
+    assert combat.base_initiative[hero] == 16
+    assert combat.status_initiative_penalty.get(hero, 0) == 0

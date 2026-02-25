@@ -97,11 +97,20 @@ class JuggernautMutagenEvent(BaseElixirEvent):
             status_id="juggernaut_mutagen_penalty",
             label="Juggernaut Mutagen (penalty)",
             duration=duration,
-            data={"effect_tags": ["mutagen", "polymorph"]},
+            data={
+                "effect_tags": ["mutagen", "polymorph"],
+                "initiative_penalty": 2,
+            },
             effects=penalty_effects,
         )
         if callable(adder):
             adder(penalty_status)
+            state = getattr(ctx.game, "state", None)
+            if state is not None and hasattr(state, "sync_status_initiative_penalty"):
+                try:
+                    state.sync_status_initiative_penalty(target, reorder_round_queue=True)
+                except Exception:
+                    pass
 
         temp_hp = int(tier_data.get("temp_hp", 0) or 0)
         if temp_hp:
