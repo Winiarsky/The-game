@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from statuses.base import Status
-from statuses.classes.alchemist_research_field import ALCHEMIST_RESEARCH_FIELD_STATUS
+from statuses.classes.alchemist.alchemist_research_field import ALCHEMIST_RESEARCH_FIELD_STATUS
 
 ALCHEMSIT_PROMPT = (
     "Ability boost: Intelligence\n"
