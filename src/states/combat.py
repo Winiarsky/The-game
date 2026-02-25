@@ -58,7 +58,36 @@ class Combat(State):
     def on_exit(self):
         logger.info("Zakończenie walki.")
         self.game.ui_log("Zakończenie walki.")
+        self._clear_combat_statuses()
         self._clear_initiatives()
+
+    def _clear_combat_statuses(self) -> None:
+        """Wyczyść statusy i bonusy, które mają kończyć się po walce."""
+        for actor in list(getattr(self.game, "heroes", []) or []) + list(getattr(self.game, "enemies", []) or []):
+            remover_status = getattr(actor, "remove_status", None)
+            if callable(remover_status):
+                try:
+                    remover_status("rage")
+                except Exception:
+                    pass
+            remover_bonus = getattr(actor, "remove_bonuses_by_source", None)
+            if callable(remover_bonus):
+                try:
+                    remover_bonus("rage")
+                except Exception:
+                    pass
+            statuses = getattr(actor, "statuses", None)
+            if isinstance(statuses, list):
+                for status in list(statuses):
+                    if getattr(status, "id", None) != "darkvision":
+                        continue
+                    data = getattr(status, "data", None) or {}
+                    if data.get("source_tag") != "rage":
+                        continue
+                    try:
+                        statuses.remove(status)
+                    except ValueError:
+                        pass
 
     # --- Initiative helpers ---
     def _reset_heroes_initiative(self) -> None:

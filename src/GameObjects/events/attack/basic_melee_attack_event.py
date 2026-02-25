@@ -252,6 +252,18 @@ class BasicMeleeAttackEvent(AttackEventBase):
         if self._has_trait(tags, "backstabber") and self._is_flat_footed(enemy):
             damage_bonus += 1
             damage_notes.append("Backstabber: +1 precision (doliczone; +2 jeśli broń +3).")
+        try:
+            from statuses.rage import rage_damage_bonus
+
+            rage_bonus = rage_damage_bonus(hero, is_agile=self._has_trait(tags, "agile"))
+            if rage_bonus:
+                damage_bonus += rage_bonus
+                if self._has_trait(tags, "agile"):
+                    damage_notes.append(f"Rage: +{rage_bonus} dmg (agile).")
+                else:
+                    damage_notes.append(f"Rage: +{rage_bonus} dmg.")
+        except Exception:
+            pass
         if self._has_trait(tags, "propulsive"):
             damage_notes.append("Propulsive: dodaj 1/2 STR do obrażeń (ręcznie).")
         if self._has_trait(tags, "fatal"):

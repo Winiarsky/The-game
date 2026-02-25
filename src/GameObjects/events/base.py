@@ -97,6 +97,43 @@ class GameEvent:
                 for item in getattr(actor, "statuses", []) or []:
                     if getattr(item, "id", None) == "immobilized" or item == "immobilized":
                         return EventResult.cancelled(message="Nie możesz się ruszyć (immobilized).")
+        if actor is not None:
+            tags = self._effective_tags(ctx)
+            if "manipulate" in tags or "manipulation" in tags:
+                has_status = getattr(actor, "has_status", None)
+                allow_rage_manipulate = False
+                if callable(has_status):
+                    try:
+                        allow_rage_manipulate = has_status("moment_of_clarity")
+                    except Exception:
+                        allow_rage_manipulate = False
+                    try:
+                        if has_status("rage"):
+                            if (
+                                not allow_rage_manipulate
+                                and "shove" not in tags
+                                and "grapple" not in tags
+                                and getattr(self, "name", "") not in ("shove", "grapple")
+                            ):
+                                return EventResult.cancelled(message="Rage: nie możesz używać akcji z tagiem manipulate.")
+                    except Exception:
+                        pass
+                else:
+                    has_rage = False
+                    for item in getattr(actor, "statuses", []) or []:
+                        sid = getattr(item, "id", None)
+                        if sid == "moment_of_clarity" or item == "moment_of_clarity":
+                            allow_rage_manipulate = True
+                        if sid == "rage" or item == "rage":
+                            has_rage = True
+                    if has_rage:
+                        if (
+                            not allow_rage_manipulate
+                            and "shove" not in tags
+                            and "grapple" not in tags
+                            and getattr(self, "name", "") not in ("shove", "grapple")
+                        ):
+                            return EventResult.cancelled(message="Rage: nie możesz używać akcji z tagiem manipulate.")
         pre_res = self.pre(ctx)
         if not pre_res.success:
             return pre_res

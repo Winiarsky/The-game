@@ -42,6 +42,11 @@ from .clumsy import (
     clumsy_ac_prompt_note,
     clumsy_attack_penalty_effects,
 )
+from .rage import (
+    RageStatus,
+    RAGE_STATUS,
+    rage_damage_bonus,
+)
 
 __all__ = [
     "Status",
@@ -115,4 +120,7 @@ __all__ = [
     "clumsy_ac_penalty_effect",
     "clumsy_ac_prompt_note",
     "clumsy_attack_penalty_effects",
+    "RageStatus",
+    "RAGE_STATUS",
+    "rage_damage_bonus",
 ]

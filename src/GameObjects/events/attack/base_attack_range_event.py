@@ -362,6 +362,33 @@ class BaseRangeAttackEvent(AttackEventBase):
             if self._has_trait(tags, "backstabber") and self._is_flat_footed(enemy):
                 damage_bonus += 1
                 damage_notes.append("Backstabber: +1 precision (doliczone; +2 jeśli broń +3).")
+            try:
+                if self._has_trait(tags, "thrown"):
+                    has_status = getattr(hero, "has_status", None)
+                    has_rage = False
+                    has_thrower = False
+                    if callable(has_status):
+                        has_rage = has_status("rage")
+                        has_thrower = has_status("raging_thrower")
+                    else:
+                        for item in getattr(hero, "statuses", []) or []:
+                            sid = getattr(item, "id", None)
+                            if sid == "rage" or item == "rage":
+                                has_rage = True
+                            if sid == "raging_thrower" or item == "raging_thrower":
+                                has_thrower = True
+                    if has_rage and has_thrower:
+                        from statuses.rage import rage_damage_bonus
+
+                        rage_bonus = rage_damage_bonus(hero, is_agile=self._has_trait(tags, "agile"))
+                        if rage_bonus:
+                            damage_bonus += rage_bonus
+                            if self._has_trait(tags, "agile"):
+                                damage_notes.append(f"Raging Thrower: +{rage_bonus} dmg (agile).")
+                            else:
+                                damage_notes.append(f"Raging Thrower: +{rage_bonus} dmg.")
+            except Exception:
+                pass
             if self._has_trait(tags, "propulsive"):
                 damage_notes.append("Propulsive: dodaj 1/2 STR do obrażeń (ręcznie).")
             if self._has_trait(tags, "fatal"):

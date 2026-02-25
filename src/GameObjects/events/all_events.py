@@ -28,10 +28,13 @@ from .bombs import alchemists_fire_event  # noqa: F401
 from . import ancient_blood_event  # noqa: F401
 from . import goblin_scuttle_event  # noqa: F401
 from . import goblin_song_event  # noqa: F401
+from . import rage_event  # noqa: F401
+from . import moment_of_clarity_event  # noqa: F401
 from . import aid_event  # noqa: F401
 from . import grapple_event  # noqa: F401
 from . import trip_event  # noqa: F401
 from . import shove_event  # noqa: F401
+from . import sudden_charge_event  # noqa: F401
 from .elixirs import antidote_event  # noqa: F401
 from .elixirs import antiplague_event  # noqa: F401
 from .elixirs import elixir_of_life_event  # noqa: F401

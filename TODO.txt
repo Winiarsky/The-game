@@ -14,6 +14,7 @@
 - Mutagenic Flashback: poprawić czas działania, żeby był mierzony w turach.
 - Dodać konkretne cechy broni do eventów (np. dagger/longbow/jaws) + testy per broń.
 - Dodać featsy i inne cechy dla lvl 1+.
+- Barbarian: Raging Intimidation (status + wyjątki dla demoralize/scare_to_death) – do ustalenia.
 
 TODO: Dodać mechaniki usuwania statusu Poisoned (test medyczny, antidotum itd.).
 TODO: Bestial Mutagen - dodać akcje ataku pazurami i kłami, potem zaimplementować eliksir.
