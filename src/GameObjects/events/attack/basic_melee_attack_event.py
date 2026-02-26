@@ -17,6 +17,50 @@ from ..base import EventContext, EventResult
 
 logger = logging.getLogger(__name__)
 
+_PHYSICAL_DAMAGE_TYPES = {"slashing", "piercing", "bludgeoning"}
+
+
+def is_target_incorporeal(target) -> bool:
+    if target is None:
+        return False
+    has_tag = getattr(target, "has_tag", None)
+    if callable(has_tag):
+        try:
+            return bool(has_tag("incorporeal"))
+        except Exception:
+            return False
+    tags = getattr(target, "tags", None) or []
+    return "incorporeal" in tags
+
+
+def _ignores_incorporeal(attacker) -> bool:
+    if attacker is None:
+        return False
+    has_status = getattr(attacker, "has_status", None)
+    if callable(has_status):
+        try:
+            return bool(has_status("spirit_instinct_active"))
+        except Exception:
+            return False
+    for status in getattr(attacker, "statuses", []) or []:
+        if getattr(status, "id", None) == "spirit_instinct_active":
+            return True
+    return False
+
+
+def _apply_incorporeal_reductions(target, components, *, ignore: bool, tags: list[str]):
+    if target is None or ignore or not is_target_incorporeal(target):
+        return components
+    if "precision" in (tags or []):
+        return [(dtype, 0) for dtype, _amt in components]
+    reduced = []
+    for dtype, amt in components:
+        if str(dtype) in _PHYSICAL_DAMAGE_TYPES:
+            reduced.append((dtype, int(amt) // 2))
+        else:
+            reduced.append((dtype, int(amt)))
+    return reduced
+
 
 class BasicMeleeAttackEvent(AttackEventBase):
     """Wspólna logika dla prostych ataków bronią białą."""
@@ -260,6 +304,45 @@ class BasicMeleeAttackEvent(AttackEventBase):
                                 resolved_damage_type = str(dragon_type)
         except Exception:
             pass
+        try:
+            if not (getattr(ctx, "metadata", None) or {}).get("skip_spirit_instinct"):
+                has_status = getattr(hero, "has_status", None)
+                has_rage = False
+                if callable(has_status):
+                    has_rage = bool(has_status("rage"))
+                else:
+                    for item in getattr(hero, "statuses", []) or []:
+                        if getattr(item, "id", None) == "rage" or item == "rage":
+                            has_rage = True
+                            break
+                if has_rage:
+                    getter = getattr(hero, "get_status_data", None)
+                    if callable(getter):
+                        spirit_type = getter("spirit_instinct_active", "spirit_damage_type", None)
+                    else:
+                        spirit_type = None
+                        for item in getattr(hero, "statuses", []) or []:
+                            if getattr(item, "id", None) != "spirit_instinct_active":
+                                continue
+                            data = getattr(item, "data", None) or {}
+                            spirit_type = data.get("spirit_damage_type")
+                            break
+                    if spirit_type and str(spirit_type) != "weapon":
+                        base_type = (
+                            resolved_damage_type
+                            if isinstance(resolved_damage_type, str)
+                            else list(resolved_damage_type)[0]
+                        )
+                        if base_type != spirit_type:
+                            choice = self._prompt_choice(
+                                "Spirit Instinct: wybierz typ obrażeń",
+                                choices=[base_type, str(spirit_type)],
+                                source="spirit_instinct",
+                            )
+                            if choice is not None and str(choice).strip().lower() == str(spirit_type).strip().lower():
+                                resolved_damage_type = str(spirit_type)
+        except Exception:
+            pass
         first_type = resolved_damage_type if isinstance(resolved_damage_type, str) else list(resolved_damage_type)[0]
         note = burn_it_prompt_note(hero, first_type)
         damage_bonus = 0
@@ -323,6 +406,15 @@ class BasicMeleeAttackEvent(AttackEventBase):
             damage_type_override=resolved_damage_type,
             flat_bonus=damage_bonus,
         )
+        try:
+            ignore_incorporeal = _ignores_incorporeal(hero)
+            if critical and not (is_target_incorporeal(enemy) and not ignore_incorporeal):
+                damage_components = [(dtype, int(amt) * 2) for dtype, amt in damage_components]
+            damage_components = _apply_incorporeal_reductions(
+                enemy, damage_components, ignore=ignore_incorporeal, tags=tags
+            )
+        except Exception:
+            pass
         if critical and deadly_die:
             extra = prompt_for_roll(
                 f"Deadly {deadly_die}: dodatkowe obrażenia (rzut): ",

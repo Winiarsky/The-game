@@ -49,6 +49,7 @@ class UnarmedAttackEvent(BasicMeleeAttackEvent):
                     try:
                         ctx.metadata = dict(getattr(ctx, "metadata", {}) or {})
                         ctx.metadata["skip_dragon_instinct"] = True
+                        ctx.metadata["skip_spirit_instinct"] = True
                         dice = profile.get("damage_dice")
                         dtype = profile.get("damage_type")
                         extra_tags = list(profile.get("tags", []) or [])
@@ -64,4 +65,5 @@ class UnarmedAttackEvent(BasicMeleeAttackEvent):
                         self.damage_type = original_type
                         ctx.tags = original_tags
                         ctx.metadata.pop("skip_dragon_instinct", None)
+                        ctx.metadata.pop("skip_spirit_instinct", None)
         return super().execute(ctx)

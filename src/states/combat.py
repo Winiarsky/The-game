@@ -78,6 +78,25 @@ class Combat(State):
                     remover_status("dragon_instinct_active")
                 except Exception:
                     pass
+                try:
+                    remover_status("giant_instinct_active")
+                except Exception:
+                    pass
+                try:
+                    remover_status("spirit_instinct_active")
+                except Exception:
+                    pass
+                statuses = getattr(actor, "statuses", None)
+                if isinstance(statuses, list):
+                    for status in list(statuses):
+                        if getattr(status, "id", None) != "clumsy":
+                            continue
+                        source = getattr(status, "source", None)
+                        if source == "giant_instinct":
+                            try:
+                                statuses.remove(status)
+                            except ValueError:
+                                pass
             remover_bonus = getattr(actor, "remove_bonuses_by_source", None)
             if callable(remover_bonus):
                 try:

@@ -16,6 +16,7 @@ from statuses.classes.barbarian.instincts.dragon_instinct import (
     DragonInstinctStatus,
     DRAGON_INSTINCT_TYPES,
 )
+from statuses.classes.barbarian.instincts.fury_instinct import FuryInstinctStatus, FURY_INSTINCT_FEAT_CHOICES
 
 
 class DummyUI:
@@ -59,3 +60,16 @@ def test_dragon_instinct_ui_choice_sets_type(monkeypatch):
     assert ui.last_prompt is not None and "Dragon Instinct" in ui.last_prompt
     assert "Fire" in (ui.last_choices or [])
     assert hero.get_status_data("dragon_instinct", "dragon_instinct_type") == "fire"
+
+
+def test_fury_instinct_ui_choice_sets_feat(monkeypatch):
+    ui = DummyUI("Cute Vision")
+    monkeypatch.setattr("ui_client.get_ui_client", lambda: ui)
+
+    hero = Hero()
+    hero.add_status(FuryInstinctStatus())
+
+    assert ui.last_prompt is not None and "Fury Instinct" in ui.last_prompt
+    assert "Cute Vision" in (ui.last_choices or [])
+    assert hero.get_status_data("fury_instinct", "fury_instinct_feat") == "cute_vision"
+    assert hero.has_status("cute_vision")

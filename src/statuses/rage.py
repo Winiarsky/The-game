@@ -46,10 +46,23 @@ def rage_damage_bonus(attacker, *, is_agile: bool) -> int:
     """Zwróć bonus do obrażeń dla Rage (wręcz), z uwzględnieniem agile."""
     if attacker is None:
         return 0
+    has_status = getattr(attacker, "has_status", None)
+    if callable(has_status):
+        try:
+            if not has_status("rage"):
+                return 0
+        except Exception:
+            return 0
     getter = getattr(attacker, "get_status_data", None)
     if callable(getter):
         bonus = getter("rage", "rage_damage_bonus", RAGE_DEFAULT_DAMAGE_BONUS)
         override = getter("dragon_instinct_active", "rage_damage_bonus_override", None)
+        if override is not None:
+            bonus = override
+        override = getter("giant_instinct_active", "rage_damage_bonus_override", None)
+        if override is not None:
+            bonus = override
+        override = getter("spirit_instinct_active", "rage_damage_bonus_override", None)
         if override is not None:
             bonus = override
         agile_halved = getter("rage", "rage_agile_halved", True)
@@ -57,16 +70,25 @@ def rage_damage_bonus(attacker, *, is_agile: bool) -> int:
         bonus = RAGE_DEFAULT_DAMAGE_BONUS
         agile_halved = True
         override = None
+        has_rage = False
         for status in getattr(attacker, "statuses", []) or []:
-            if getattr(status, "id", None) == "dragon_instinct_active":
+            sid = getattr(status, "id", None)
+            if sid == "dragon_instinct_active":
                 data = getattr(status, "data", None) or {}
                 override = data.get("rage_damage_bonus_override")
-            if getattr(status, "id", None) != "rage":
-                continue
-            data = getattr(status, "data", None) or {}
-            bonus = data.get("rage_damage_bonus", RAGE_DEFAULT_DAMAGE_BONUS)
-            agile_halved = data.get("rage_agile_halved", True)
-            break
+            elif sid == "giant_instinct_active":
+                data = getattr(status, "data", None) or {}
+                override = data.get("rage_damage_bonus_override")
+            elif sid == "spirit_instinct_active":
+                data = getattr(status, "data", None) or {}
+                override = data.get("rage_damage_bonus_override")
+            elif sid == "rage":
+                has_rage = True
+                data = getattr(status, "data", None) or {}
+                bonus = data.get("rage_damage_bonus", RAGE_DEFAULT_DAMAGE_BONUS)
+                agile_halved = data.get("rage_agile_halved", True)
+        if not has_rage:
+            return 0
         if override is not None:
             bonus = override
     try:

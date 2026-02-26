@@ -11,6 +11,7 @@ from damage_types import DamageType
 from combat.damage_utils import burn_it_bonus, burn_it_prompt_note
 
 from .attack_base import AttackEventBase, check_concealed
+from . import basic_melee_attack_event
 from ..targeting import is_target_blocked_by_tags
 from ..base import EventContext, EventResult
 
@@ -372,6 +373,45 @@ class BaseRangeAttackEvent(AttackEventBase):
                                     resolved_damage_type = str(dragon_type)
             except Exception:
                 pass
+            try:
+                if self._has_trait(tags, "thrown"):
+                    has_status = getattr(hero, "has_status", None)
+                    has_rage = False
+                    if callable(has_status):
+                        has_rage = bool(has_status("rage"))
+                    else:
+                        for item in getattr(hero, "statuses", []) or []:
+                            if getattr(item, "id", None) == "rage" or item == "rage":
+                                has_rage = True
+                                break
+                    if has_rage:
+                        getter = getattr(hero, "get_status_data", None)
+                        if callable(getter):
+                            spirit_type = getter("spirit_instinct_active", "spirit_damage_type", None)
+                        else:
+                            spirit_type = None
+                            for item in getattr(hero, "statuses", []) or []:
+                                if getattr(item, "id", None) != "spirit_instinct_active":
+                                    continue
+                                data = getattr(item, "data", None) or {}
+                                spirit_type = data.get("spirit_damage_type")
+                                break
+                        if spirit_type and str(spirit_type) != "weapon":
+                            base_type = (
+                                resolved_damage_type
+                                if isinstance(resolved_damage_type, str)
+                                else list(resolved_damage_type)[0]
+                            )
+                            if base_type != spirit_type:
+                                choice = self._prompt_choice(
+                                    "Spirit Instinct: wybierz typ obrażeń",
+                                    choices=[base_type, str(spirit_type)],
+                                    source="spirit_instinct",
+                                )
+                                if choice is not None and str(choice).strip().lower() == str(spirit_type).strip().lower():
+                                    resolved_damage_type = str(spirit_type)
+            except Exception:
+                pass
             damage_bonus = 0
             damage_notes: list[str] = []
             dice_count = self._damage_dice_count(self.damage_prompt)
@@ -441,6 +481,15 @@ class BaseRangeAttackEvent(AttackEventBase):
                 flat_bonus=damage_bonus,
                 extra_notes=damage_notes,
             )
+            try:
+                ignore_incorporeal = basic_melee_attack_event._ignores_incorporeal(hero)
+                if critical and not (basic_melee_attack_event.is_target_incorporeal(enemy) and not ignore_incorporeal):
+                    damage_components = [(dtype, int(amt) * 2) for dtype, amt in damage_components]
+                damage_components = basic_melee_attack_event._apply_incorporeal_reductions(
+                    enemy, damage_components, ignore=ignore_incorporeal, tags=tags
+                )
+            except Exception:
+                pass
             first_type = resolved_damage_type if isinstance(resolved_damage_type, str) else list(resolved_damage_type)[0]
             if critical and deadly_die:
                 extra = prompt_for_roll(

@@ -69,6 +69,16 @@ class StatusMixin:
                 self._handle_dragon_instinct_choice(status, data)
             except Exception:
                 pass
+        if data.get("ui_choice_kind") == "fury_instinct":
+            try:
+                self._handle_fury_instinct_choice(status, data)
+            except Exception:
+                pass
+        if data.get("ui_choice_kind") == "spirit_instinct":
+            try:
+                self._handle_spirit_instinct_choice(status, data)
+            except Exception:
+                pass
         prompt = data.get("ui_prompt")
         if not prompt:
             return
@@ -369,6 +379,109 @@ class StatusMixin:
                     break
         except Exception:
             self._ui_log("Nie udalo sie ustawic Dragon Instinct.")
+
+    def _handle_fury_instinct_choice(self, status: "Status", data: dict) -> None:
+        choices = list(data.get("fury_instinct_feat_choices") or [])
+        if not choices:
+            return
+        label_map = {self._labelize_choice(key): key for key in choices}
+        labels = list(label_map.keys())
+        try:
+            from ui_client import get_ui_client
+
+            ui_client = get_ui_client()
+            if ui_client.enabled:
+                chosen_label = ui_client.prompt_choice(
+                    "Fury Instinct: wybierz feat",
+                    choices=labels,
+                    source="status",
+                )
+            else:
+                chosen_label = None
+        except Exception:
+            chosen_label = None
+        if not chosen_label:
+            try:
+                chosen_label = input(
+                    f"Fury Instinct: wybierz feat {labels}: "
+                ).strip()
+            except Exception:
+                chosen_label = None
+        if not chosen_label:
+            return
+        chosen_key = label_map.get(chosen_label)
+        if not chosen_key:
+            chosen_key = str(chosen_label).strip().lower().replace(" ", "_")
+
+        try:
+            for idx, item in enumerate(self.statuses):
+                if item is status:
+                    new_data = dict(data)
+                    new_data["fury_instinct_feat"] = chosen_key
+                    self.statuses[idx] = replace(status, data=new_data)
+                    break
+        except Exception:
+            self._ui_log("Nie udalo sie ustawic Fury Instinct.")
+            return
+
+        try:
+            from statuses.classes.barbarian.feats.cute_vision import CUTE_VISION_STATUS
+            from statuses.classes.barbarian.feats.raging_thrower import RAGING_THROWER_STATUS
+
+            feat_map = {
+                "cute_vision": CUTE_VISION_STATUS,
+                "raging_thrower": RAGING_THROWER_STATUS,
+            }
+            feat_status = feat_map.get(str(chosen_key))
+            if feat_status is not None:
+                self.add_status(feat_status)
+            else:
+                self._ui_log(f"Nie znaleziono feata: {chosen_key}.")
+        except Exception:
+            self._ui_log("Nie udalo sie dodac feata z Fury Instinct.")
+
+    def _handle_spirit_instinct_choice(self, status: "Status", data: dict) -> None:
+        choices = list(data.get("spirit_instinct_choices") or [])
+        if not choices:
+            return
+        label_map = {self._labelize_choice(key): key for key in choices}
+        labels = list(label_map.keys())
+        try:
+            from ui_client import get_ui_client
+
+            ui_client = get_ui_client()
+            if ui_client.enabled:
+                chosen_label = ui_client.prompt_choice(
+                    "Spirit Instinct: wybierz typ obrażeń",
+                    choices=labels,
+                    source="status",
+                )
+            else:
+                chosen_label = None
+        except Exception:
+            chosen_label = None
+        if not chosen_label:
+            try:
+                chosen_label = input(
+                    f"Spirit Instinct: wybierz typ obrażeń {labels}: "
+                ).strip()
+            except Exception:
+                chosen_label = None
+        if not chosen_label:
+            return
+        chosen_key = label_map.get(chosen_label)
+        if not chosen_key:
+            chosen_key = str(chosen_label).strip().lower().replace(" ", "_")
+
+        try:
+            for idx, item in enumerate(self.statuses):
+                if item is status:
+                    new_data = dict(data)
+                    new_data["spirit_instinct_type"] = chosen_key
+                    self.statuses[idx] = replace(status, data=new_data)
+                    break
+        except Exception:
+            self._ui_log("Nie udalo sie ustawic Spirit Instinct.")
 
     def _ensure_status_objects(self) -> None:
         if not self.statuses:
