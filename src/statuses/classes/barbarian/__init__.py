@@ -1,3 +1,3 @@
 from __future__ import annotations
 
-__all__: list[str] = ["barbarian", "feats"]
+__all__: list[str] = ["barbarian", "feats", "instincts"]

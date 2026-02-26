@@ -49,17 +49,26 @@ def rage_damage_bonus(attacker, *, is_agile: bool) -> int:
     getter = getattr(attacker, "get_status_data", None)
     if callable(getter):
         bonus = getter("rage", "rage_damage_bonus", RAGE_DEFAULT_DAMAGE_BONUS)
+        override = getter("dragon_instinct_active", "rage_damage_bonus_override", None)
+        if override is not None:
+            bonus = override
         agile_halved = getter("rage", "rage_agile_halved", True)
     else:
         bonus = RAGE_DEFAULT_DAMAGE_BONUS
         agile_halved = True
+        override = None
         for status in getattr(attacker, "statuses", []) or []:
+            if getattr(status, "id", None) == "dragon_instinct_active":
+                data = getattr(status, "data", None) or {}
+                override = data.get("rage_damage_bonus_override")
             if getattr(status, "id", None) != "rage":
                 continue
             data = getattr(status, "data", None) or {}
             bonus = data.get("rage_damage_bonus", RAGE_DEFAULT_DAMAGE_BONUS)
             agile_halved = data.get("rage_agile_halved", True)
             break
+        if override is not None:
+            bonus = override
     try:
         bonus_val = int(bonus)
     except Exception:

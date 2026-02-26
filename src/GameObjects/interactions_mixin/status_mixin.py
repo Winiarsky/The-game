@@ -59,6 +59,16 @@ class StatusMixin:
                 self._handle_alchemist_research_field_choice(status, data)
             except Exception:
                 pass
+        if data.get("ui_choice_kind") == "animal_instinct":
+            try:
+                self._handle_animal_instinct_choice(status, data)
+            except Exception:
+                pass
+        if data.get("ui_choice_kind") == "dragon_instinct":
+            try:
+                self._handle_dragon_instinct_choice(status, data)
+            except Exception:
+                pass
         prompt = data.get("ui_prompt")
         if not prompt:
             return
@@ -266,6 +276,99 @@ class StatusMixin:
         self._ui_log(
             f"Research Field: wybrano {self._labelize_choice(chosen_field)}."
         )
+
+    def _handle_animal_instinct_choice(self, status: "Status", data: dict) -> None:
+        choices = list(data.get("animal_instinct_choices") or [])
+        if not choices:
+            return
+        label_map = {self._labelize_choice(key): key for key in choices}
+        labels = list(label_map.keys())
+        try:
+            from ui_client import get_ui_client
+
+            ui_client = get_ui_client()
+            if ui_client.enabled:
+                chosen_label = ui_client.prompt_choice(
+                    "Animal Instinct: wybierz zwierzę",
+                    choices=labels,
+                    source="status",
+                )
+            else:
+                chosen_label = None
+        except Exception:
+            chosen_label = None
+        if not chosen_label:
+            try:
+                chosen_label = input(
+                    f"Animal Instinct: wybierz zwierzę {labels}: "
+                ).strip()
+            except Exception:
+                chosen_label = None
+        if not chosen_label:
+            return
+        chosen_key = label_map.get(chosen_label)
+        if not chosen_key:
+            chosen_key = str(chosen_label).strip().lower().replace(" ", "_")
+        try:
+            from statuses.classes.barbarian.instincts.animal_instinct import ANIMAL_INSTINCT_PROFILES
+        except Exception:
+            ANIMAL_INSTINCT_PROFILES = {}
+        profile = dict(ANIMAL_INSTINCT_PROFILES.get(chosen_key, {}) or {})
+
+        try:
+            for idx, item in enumerate(self.statuses):
+                if item is status:
+                    new_data = dict(data)
+                    new_data["animal_instinct"] = chosen_key
+                    if profile:
+                        new_data["animal_instinct_profile"] = profile
+                    self.statuses[idx] = replace(status, data=new_data)
+                    break
+        except Exception:
+            self._ui_log("Nie udalo sie ustawic Animal Instinct.")
+
+    def _handle_dragon_instinct_choice(self, status: "Status", data: dict) -> None:
+        choices = list(data.get("dragon_instinct_choices") or [])
+        if not choices:
+            return
+        label_map = {self._labelize_choice(key): key for key in choices}
+        labels = list(label_map.keys())
+        try:
+            from ui_client import get_ui_client
+
+            ui_client = get_ui_client()
+            if ui_client.enabled:
+                chosen_label = ui_client.prompt_choice(
+                    "Dragon Instinct: wybierz typ obrażeń",
+                    choices=labels,
+                    source="status",
+                )
+            else:
+                chosen_label = None
+        except Exception:
+            chosen_label = None
+        if not chosen_label:
+            try:
+                chosen_label = input(
+                    f"Dragon Instinct: wybierz typ obrażeń {labels}: "
+                ).strip()
+            except Exception:
+                chosen_label = None
+        if not chosen_label:
+            return
+        chosen_key = label_map.get(chosen_label)
+        if not chosen_key:
+            chosen_key = str(chosen_label).strip().lower().replace(" ", "_")
+
+        try:
+            for idx, item in enumerate(self.statuses):
+                if item is status:
+                    new_data = dict(data)
+                    new_data["dragon_instinct_type"] = chosen_key
+                    self.statuses[idx] = replace(status, data=new_data)
+                    break
+        except Exception:
+            self._ui_log("Nie udalo sie ustawic Dragon Instinct.")
 
     def _ensure_status_objects(self) -> None:
         if not self.statuses:

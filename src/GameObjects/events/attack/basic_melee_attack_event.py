@@ -221,6 +221,45 @@ class BasicMeleeAttackEvent(AttackEventBase):
         self._maybe_prompt_vengeful_hatred(hero, enemy)
         dmg_prompt = f"{'Trafienie krytyczne! ' if critical else 'Trafienie! '}Obrażenia {self.damage_prompt}: "
         resolved_damage_type = self._choose_damage_type(tags, self.damage_type)
+        try:
+            if not (getattr(ctx, "metadata", None) or {}).get("skip_dragon_instinct"):
+                has_status = getattr(hero, "has_status", None)
+                has_rage = False
+                if callable(has_status):
+                    has_rage = bool(has_status("rage"))
+                else:
+                    for item in getattr(hero, "statuses", []) or []:
+                        if getattr(item, "id", None) == "rage" or item == "rage":
+                            has_rage = True
+                            break
+                if has_rage:
+                    getter = getattr(hero, "get_status_data", None)
+                    if callable(getter):
+                        dragon_type = getter("dragon_instinct_active", "dragon_damage_type", None)
+                    else:
+                        dragon_type = None
+                        for item in getattr(hero, "statuses", []) or []:
+                            if getattr(item, "id", None) != "dragon_instinct_active":
+                                continue
+                            data = getattr(item, "data", None) or {}
+                            dragon_type = data.get("dragon_damage_type")
+                            break
+                    if dragon_type:
+                        base_type = (
+                            resolved_damage_type
+                            if isinstance(resolved_damage_type, str)
+                            else list(resolved_damage_type)[0]
+                        )
+                        if base_type != dragon_type:
+                            choice = self._prompt_choice(
+                                "Dragon Instinct: wybierz typ obrażeń",
+                                choices=[base_type, str(dragon_type)],
+                                source="dragon_instinct",
+                            )
+                            if choice is not None and str(choice).strip().lower() == str(dragon_type).strip().lower():
+                                resolved_damage_type = str(dragon_type)
+        except Exception:
+            pass
         first_type = resolved_damage_type if isinstance(resolved_damage_type, str) else list(resolved_damage_type)[0]
         note = burn_it_prompt_note(hero, first_type)
         damage_bonus = 0

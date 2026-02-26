@@ -70,6 +70,14 @@ class Combat(State):
                     remover_status("rage")
                 except Exception:
                     pass
+                try:
+                    remover_status("animal_instinct_active")
+                except Exception:
+                    pass
+                try:
+                    remover_status("dragon_instinct_active")
+                except Exception:
+                    pass
             remover_bonus = getattr(actor, "remove_bonuses_by_source", None)
             if callable(remover_bonus):
                 try:

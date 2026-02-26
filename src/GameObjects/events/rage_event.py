@@ -6,6 +6,8 @@ from dataclasses import replace
 from bonuses import BonusEffect, BonusType
 from statuses.darkvision import DARKVISION_STATUS
 from statuses.rage import RageStatus, RAGE_DURATION_TURNS, RAGE_DEFAULT_AC_PENALTY
+from statuses.classes.barbarian.instincts.animal_instinct import AnimalInstinctActiveStatus
+from statuses.classes.barbarian.instincts.dragon_instinct import DragonInstinctActiveStatus
 from .base import EventContext, EventResult, GameEvent
 from .registry import register_event
 
@@ -56,6 +58,51 @@ class RageEvent(GameEvent):
         except Exception as exc:
             logger.error("Nie udało się dodać statusu Rage: %s", exc)
             return EventResult.cancelled(message="Nie udało się aktywować Rage.")
+
+        getter = getattr(actor, "get_status_data", None)
+        if callable(getter):
+            profile = getter("animal_instinct", "animal_instinct_profile", None)
+        else:
+            profile = None
+            for s in getattr(actor, "statuses", []) or []:
+                if getattr(s, "id", None) != "animal_instinct":
+                    continue
+                data = getattr(s, "data", None) or {}
+                profile = data.get("animal_instinct_profile")
+                break
+        if profile:
+            remover_status = getattr(actor, "remove_status", None)
+            if callable(remover_status):
+                try:
+                    remover_status("animal_instinct_active")
+                except Exception:
+                    pass
+            try:
+                adder_status(AnimalInstinctActiveStatus(profile=profile, duration=duration))
+            except Exception:
+                pass
+
+        if callable(getter):
+            dragon_type = getter("dragon_instinct", "dragon_instinct_type", None)
+        else:
+            dragon_type = None
+            for s in getattr(actor, "statuses", []) or []:
+                if getattr(s, "id", None) != "dragon_instinct":
+                    continue
+                data = getattr(s, "data", None) or {}
+                dragon_type = data.get("dragon_instinct_type")
+                break
+        if dragon_type:
+            remover_status = getattr(actor, "remove_status", None)
+            if callable(remover_status):
+                try:
+                    remover_status("dragon_instinct_active")
+                except Exception:
+                    pass
+            try:
+                adder_status(DragonInstinctActiveStatus(dragon_type=str(dragon_type), duration=duration))
+            except Exception:
+                pass
 
         has_status = getattr(actor, "has_status", None)
         has_darkvision = False
