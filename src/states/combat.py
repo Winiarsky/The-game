@@ -63,6 +63,12 @@ class Combat(State):
 
     def _clear_combat_statuses(self) -> None:
         """Wyczyść statusy i bonusy, które mają kończyć się po walce."""
+        try:
+            from GameObjects.events.magic.lighting_effects import clear_magic_lighting
+
+            clear_magic_lighting(self.game)
+        except Exception:
+            pass
         for actor in list(getattr(self.game, "heroes", []) or []) + list(getattr(self.game, "enemies", []) or []):
             remover_status = getattr(actor, "remove_status", None)
             if callable(remover_status):
@@ -454,7 +460,7 @@ class Combat(State):
         actor = self.round_queue[0]
         if actor not in self.actions_used:
             self._clear_start_of_turn_effects(actor)
-            self.actions_used[actor] = 0
+            self.actions_used[actor] = self._start_turn_actions_used(actor)
             reset_react = getattr(actor, "reset_reactions", None)
             if callable(reset_react):
                 try:
@@ -479,16 +485,23 @@ class Combat(State):
         self.initiative_order = list(self.round_queue)
         actor = self._current_actor()
         if actor is not None:
-            self._clear_start_of_turn_effects(actor)
-            self.actions_used[actor] = 0
             logger.debug("Nowa tura dla %s – reset licznika akcji.", actor)
-            reset_react = getattr(actor, "reset_reactions", None)
-            if callable(reset_react):
-                try:
-                    reset_react()
-                except Exception as exc:
-                    logger.error("Nie udało się zresetować reakcji dla %s: %s", actor, exc)
         self._send_initiative_event()
+
+    def _start_turn_actions_used(self, actor) -> int:
+        used = 0
+        try:
+            from statuses import consume_stunned_actions
+
+            used = min(self.ACTION_LIMIT, max(0, int(consume_stunned_actions(actor) or 0)))
+        except Exception:
+            used = 0
+        if used > 0:
+            try:
+                self.game.ui_log(f"{getattr(actor, 'name', 'Aktor')} jest stunned: traci {used} akcji.")
+            except Exception:
+                pass
+        return used
 
     # --- Combat flow ---
     def _end_combat_if_no_enemies(self) -> Optional[State]:

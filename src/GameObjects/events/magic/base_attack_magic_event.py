@@ -79,7 +79,21 @@ class BaseMagicAttackEvent(MagicEvent):
             sign = "+" if modifier > 0 else ""
             modifier_note = f" (bazowe {base_ac}, modyfikatory {sign}{modifier})"
         action_tag = (self._effective_tags(ctx) or ["spell_attack"])[0]
+        extra_effects = []
+        try:
+            from statuses import enfeebled_attack_penalty_effects
+
+            extra_effects.extend(enfeebled_attack_penalty_effects(actor, action_tag))
+        except Exception:
+            pass
         modifier, best_effects, log_lines = self._attack_modifier_details(actor, action_tag, target=target)
+        if extra_effects:
+            modifier, best_effects, log_lines = self._attack_modifier_details(
+                actor,
+                action_tag,
+                target=target,
+                extra_effects=extra_effects,
+            )
         if log_lines:
             try:
                 ctx.game.ui_log(f"Modyfikatory ({action_tag}): {', '.join(log_lines)}.")

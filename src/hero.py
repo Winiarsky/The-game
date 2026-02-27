@@ -7,6 +7,7 @@ from skills import Skill
 from combat.reactions import OpportunityAttack
 from combat.damage_utils import apply_damage_resistance
 from damage_types import DamageType
+from statuses import apply_shield_cantrip_absorb
 from object_registry import assign_id
 
 # to do make hero scrpt, 
@@ -79,6 +80,7 @@ class Hero(StatusMixin, BonusMixin, ReactiveMixin):
     def apply_damage(self, amount: int, damage_type: str = DamageType.NORMAL.value) -> tuple[int, bool]:
         """Zastosuj obrażenia na bohaterze (uwzględnia redukcje ze statusów)."""
         effective, _ = apply_damage_resistance(self, amount, damage_type)
+        effective, _absorbed, _broken = apply_shield_cantrip_absorb(self, effective)
         try:
             self.wounds += effective  # type: ignore[attr-defined]
         except Exception:

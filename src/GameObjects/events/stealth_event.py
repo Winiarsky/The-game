@@ -90,8 +90,21 @@ class StealthEvent(GameEvent):
         has_hide_status = hero.has_status("hide")
         in_dim_light = hero.has_status(IN_DIM_LIGHT_STATUS)
         in_dark = hero.has_status(IN_DARK_STATUS)
+        illuminated = False
+        try:
+            from GameObjects.events.magic.lighting_effects import is_position_in_light_aura
+
+            illuminated = is_position_in_light_aura(game, hero_pos)
+        except Exception:
+            illuminated = False
+        if illuminated:
+            in_dim_light = False
+            in_dark = False
         watchers = iter_watchers_in_rooms(board, rooms_here, ignore_obj=hero) if not has_hide_status and not in_dim_light and not in_dark else []
         penalty, blockers = summarize_watchers(watchers) if watchers else (0, [])
+        if illuminated:
+            logger.info("Magiczne światło uniemożliwia ukrycie.")
+            return EventResult.noop(message="Nie możesz się ukryć w zasięgu Light.")
         if hero.has_status(OBSERVABLE_STATUS) and not in_dim_light and not in_dark:
             logger.info("Masz status observable – nie możesz wejść w ukrycie.")
             return EventResult.noop(message="Status observable blokuje stealth.")

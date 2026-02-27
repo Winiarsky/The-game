@@ -72,3 +72,45 @@ def pick_target_in_range(
         if pos == choice:
             return obj, pos
     return None, None
+
+
+def positions_within_range(board, source_pos: tuple[int, int], max_range_feet: int | None) -> list[tuple[int, int]]:
+    if source_pos is None:
+        return []
+    positions: list[tuple[int, int]] = []
+    rows = getattr(board, "rows", 0) or 0
+    cols = getattr(board, "cols", 0) or 0
+    for row in range(rows):
+        for col in range(cols):
+            pos = (col, row)
+            if max_range_feet is None or grid_distance_feet(source_pos, pos) <= max_range_feet:
+                positions.append(pos)
+    return positions
+
+
+def pick_position_in_range(
+    ctx,
+    source_pos: tuple[int, int],
+    *,
+    max_range_feet: int | None,
+    color: list[int] | None = None,
+) -> tuple[int, int] | None:
+    """Pozwól wybrać pozycję na planszy w zasięgu."""
+    if source_pos is None:
+        return None
+    positions = positions_within_range(ctx.game.board, source_pos, max_range_feet)
+    if not positions:
+        return None
+    if color is None:
+        color = [0, 80, 180]
+    try:
+        ctx.game.conn.set_leds(positions, [color for _ in positions])
+        choice = ctx.game.conn.scan_board(positions)
+    finally:
+        try:
+            ctx.game.conn.leds_off()
+        except Exception:
+            pass
+    if choice in positions:
+        return choice
+    return None

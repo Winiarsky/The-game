@@ -18,6 +18,13 @@ logger = logging.getLogger(__name__)
 def check_concealed(ctx, target) -> bool:
     if target is None:
         return True
+    try:
+        from GameObjects.events.magic.lighting_effects import is_position_illuminated
+
+        if is_position_illuminated(ctx.game, getattr(target, "position", None)):
+            return True
+    except Exception:
+        pass
     attacker = getattr(ctx, "actor", None)
     if _has_status(attacker, DARKVISION_STATUS):
         return True

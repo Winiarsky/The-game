@@ -112,9 +112,9 @@ def _collect_from_statuses(statuses: Iterable[Status], skill_id: str, tags: Sequ
     return bonus_effects, promote_rules, demote_rules, notes, consume_statuses
 
 
-def _format_breakdown(effects: Iterable[BonusEffect], skill_id: str) -> list[str]:
+def _format_breakdown(effects: Iterable[BonusEffect], skill_id: str, target_id: str | None = None) -> list[str]:
     lines: list[str] = []
-    aggregated = aggregate_best_by_type(effects, skill_id)
+    aggregated = aggregate_best_by_type(effects, skill_id, target_id)
     for btype, data in aggregated.items():
         bonus_val = data["bonus"]
         penalty_val = data["penalty"]
@@ -418,8 +418,29 @@ def _collect_modifier_data(
                         )
                     )
 
-    modifier = base_modifier + (compute_total_modifier(all_effects, skill_id) if all_effects else 0)
-    breakdown = _format_breakdown(all_effects, skill_id)
+    if skill_id == Skill.STEALTH.value:
+        try:
+            game = getattr(actor, "game", None)
+            if game is not None:
+                from GameObjects.events.magic.lighting_effects import is_position_in_light_aura
+
+                if is_position_in_light_aura(game, getattr(actor, "position", None)):
+                    all_effects.append(
+                        BonusEffect(
+                            type=BonusType.CIRCUMSTANCE,
+                            value=10,
+                            tag=Skill.STEALTH.value,
+                            source="light_aura",
+                            label="light aura",
+                            is_penalty=True,
+                        )
+                    )
+        except Exception:
+            pass
+
+    target_id = getattr(target, "object_id", None) if target is not None else None
+    modifier = base_modifier + (compute_total_modifier(all_effects, skill_id, target_id) if all_effects else 0)
+    breakdown = _format_breakdown(all_effects, skill_id, target_id)
     return modifier, breakdown, notes, promote_src, demote_src, promote_tgt, demote_tgt, consume_src, consume_tgt, all_effects
 
 

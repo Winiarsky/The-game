@@ -33,6 +33,7 @@ class BaseRangeAttackEvent(AttackEventBase):
     feet_per_cell: int = 5
     default_tags = ["attack_ranged", "ranged_attack"]
     consumes_action = True
+    critical_doubles_damage: bool = False
 
     COVER_RANK = {"none": 0, "minor": 1, "standard": 2, "greater": 3, "block": 4}
     COVER_AC = {"minor": 1, "standard": 2, "greater": 4}
@@ -286,6 +287,12 @@ class BaseRangeAttackEvent(AttackEventBase):
                 )
             except Exception:
                 pass
+            try:
+                from statuses import enfeebled_attack_penalty_effects
+
+                extra_effects.extend(enfeebled_attack_penalty_effects(hero, action_tag))
+            except Exception:
+                pass
             modifier, best_effects, log_lines = self._attack_modifier_details(
                 hero, action_tag, target=enemy, extra_effects=extra_effects
             )
@@ -414,6 +421,15 @@ class BaseRangeAttackEvent(AttackEventBase):
                 pass
             damage_bonus = 0
             damage_notes: list[str] = []
+            try:
+                from statuses import enfeebled_damage_penalty
+
+                enfeebled_penalty = int(enfeebled_damage_penalty(hero) or 0)
+                if enfeebled_penalty > 0:
+                    damage_bonus -= enfeebled_penalty
+                    damage_notes.append(f"Enfeebled: -{enfeebled_penalty} do obrazen (doliczone).")
+            except Exception:
+                pass
             dice_count = self._damage_dice_count(self.damage_prompt)
             if self._has_trait(tags, "versatile") and not self._tag_value(tags, "versatile"):
                 damage_notes.append("Versatile: brak typu w tagu (np. versatile:p) – wybierz ręcznie.")
@@ -483,7 +499,11 @@ class BaseRangeAttackEvent(AttackEventBase):
             )
             try:
                 ignore_incorporeal = basic_melee_attack_event._ignores_incorporeal(hero)
-                if critical and not (basic_melee_attack_event.is_target_incorporeal(enemy) and not ignore_incorporeal):
+                if (
+                    critical
+                    and self.critical_doubles_damage
+                    and not (basic_melee_attack_event.is_target_incorporeal(enemy) and not ignore_incorporeal)
+                ):
                     damage_components = [(dtype, int(amt) * 2) for dtype, amt in damage_components]
                 damage_components = basic_melee_attack_event._apply_incorporeal_reductions(
                     enemy, damage_components, ignore=ignore_incorporeal, tags=tags

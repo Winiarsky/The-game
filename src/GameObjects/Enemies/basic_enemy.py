@@ -14,6 +14,7 @@ from GameObjects.Enemies.enemy_types import EnemyType
 from combat.reactions import OpportunityAttack
 from combat.damage_utils import apply_damage_resistance
 from statuses import Status
+from statuses import apply_shield_cantrip_absorb
 from object_registry import assign_id
 from damage_types import DamageType
 
@@ -102,6 +103,7 @@ class BasicEnemy(StatusMixin, BonusMixin, WatchfulMixin, ReactiveMixin, MagicalM
     def apply_damage(self, amount: int, damage_type: str = DamageType.NORMAL.value) -> tuple[int, bool]:
         """Odejmij HP i zwróć (aktualne_hp, czy_pokonany)."""
         effective, reduced = apply_damage_resistance(self, amount, damage_type)
+        effective, _absorbed, _broken = apply_shield_cantrip_absorb(self, effective)
         self.hp -= effective
         defeated = self.hp <= 0
         reduction_note = f" (zredukowano o {reduced})" if reduced else ""

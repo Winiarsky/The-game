@@ -57,6 +57,13 @@ class WatchfulMixin:
         from statuses import OBSERVABLE_STATUS, STEALTH_STATUS  # lokalnie, by unikać cykli
 
         dc, _bonus = self._stealth_dc_from_status(hero)
+        try:
+            from GameObjects.events.magic.lighting_effects import is_position_in_light_aura
+
+            if dc is not None and is_position_in_light_aura(game, getattr(hero, "position", None)):
+                dc = max(0, int(dc) - 10)
+        except Exception:
+            pass
         if dc is None or not getattr(hero, "has_status", lambda _s: False)(STEALTH_STATUS):
             return False, "Cel nie jest ukryty."
         roll = random.randint(1, 20) + self.perception_bonus

@@ -47,6 +47,14 @@ from .rage import (
     RAGE_STATUS,
     rage_damage_bonus,
 )
+from .enfeebled import (
+    EnfeebledStatus,
+    enfeebled_value,
+    enfeebled_attack_penalty_effects,
+    enfeebled_damage_penalty,
+)
+from .stunned import StunnedStatus, consume_stunned_actions
+from .shield_cantrip import ShieldCantripStatus, apply_shield_cantrip_absorb, shield_cantrip_ac_bonus
 
 __all__ = [
     "Status",
@@ -123,4 +131,13 @@ __all__ = [
     "RageStatus",
     "RAGE_STATUS",
     "rage_damage_bonus",
+    "EnfeebledStatus",
+    "enfeebled_value",
+    "enfeebled_attack_penalty_effects",
+    "enfeebled_damage_penalty",
+    "StunnedStatus",
+    "consume_stunned_actions",
+    "ShieldCantripStatus",
+    "apply_shield_cantrip_absorb",
+    "shield_cantrip_ac_bonus",
 ]

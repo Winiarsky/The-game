@@ -72,6 +72,7 @@ class BasicMeleeAttackEvent(AttackEventBase):
     damage_type: str | Sequence[str] = DamageType.SLASHING.value
     default_tags = ["attack_melee"]
     consumes_action = True
+    critical_doubles_damage: bool = False
     # może być str lub lista str przy wielu typach obrażeń
 
     # --- główna logika ---
@@ -170,6 +171,12 @@ class BasicMeleeAttackEvent(AttackEventBase):
                     is_finesse=("finesse" in tags),
                 )
             )
+        except Exception:
+            pass
+        try:
+            from statuses import enfeebled_attack_penalty_effects
+
+            extra_effects.extend(enfeebled_attack_penalty_effects(hero, action_tag))
         except Exception:
             pass
         map_penalty = 0
@@ -347,6 +354,15 @@ class BasicMeleeAttackEvent(AttackEventBase):
         note = burn_it_prompt_note(hero, first_type)
         damage_bonus = 0
         damage_notes: list[str] = []
+        try:
+            from statuses import enfeebled_damage_penalty
+
+            enfeebled_penalty = int(enfeebled_damage_penalty(hero) or 0)
+            if enfeebled_penalty > 0:
+                damage_bonus -= enfeebled_penalty
+                damage_notes.append(f"Enfeebled: -{enfeebled_penalty} do obrazen (doliczone).")
+        except Exception:
+            pass
         dice_count = self._damage_dice_count(self.damage_prompt)
         if self._has_trait(tags, "versatile") and not self._tag_value(tags, "versatile"):
             damage_notes.append("Versatile: brak typu w tagu (np. versatile:p) – wybierz ręcznie.")
@@ -408,7 +424,11 @@ class BasicMeleeAttackEvent(AttackEventBase):
         )
         try:
             ignore_incorporeal = _ignores_incorporeal(hero)
-            if critical and not (is_target_incorporeal(enemy) and not ignore_incorporeal):
+            if (
+                critical
+                and self.critical_doubles_damage
+                and not (is_target_incorporeal(enemy) and not ignore_incorporeal)
+            ):
                 damage_components = [(dtype, int(amt) * 2) for dtype, amt in damage_components]
             damage_components = _apply_incorporeal_reductions(
                 enemy, damage_components, ignore=ignore_incorporeal, tags=tags
