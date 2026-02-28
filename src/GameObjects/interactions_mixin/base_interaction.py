@@ -101,6 +101,8 @@ class InteractableMixin(MagicalMixin):
                         idx = int(prefix) - 1
                         if 0 <= idx < len(actions):
                             return actions[idx].id
+        if ui and not getattr(ui, "allow_cli_fallback", False):
+            return None
 
         # fallback: konsola
         print("Dostępne akcje:")

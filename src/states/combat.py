@@ -43,7 +43,6 @@ class Combat(State):
     def on_enter(self):
         logger.info("Walka rozpoczęta.")
         self.game.ui_log("Walka rozpoczęta.")
-        self.game.ui_log("Press Enter aby kontynuować walkę.")
         # Wyświetl informacyjny prompt na starcie walki.
         self.game.ui_event(
             "info",
@@ -52,6 +51,9 @@ class Combat(State):
                 "source": "combat",
             },
         )
+        ui_idle_hint = getattr(self.game, "ui_idle_hint", None)
+        if callable(ui_idle_hint):
+            ui_idle_hint("Walka", "Śledź inicjatywę i wybierz akcję aktywnego aktora.")
         self._reset_heroes_initiative()
         self._ensure_initiative_order()
 
@@ -434,6 +436,7 @@ class Combat(State):
                     pass
 
     def _confirm_break_hold(self, source_actor, held_statuses) -> bool:
+        ui = None
         try:
             from ui_client import get_ui_client
         except Exception:
@@ -447,6 +450,8 @@ class Combat(State):
                     return str(choice or "").strip().lower().startswith("t")
         except Exception:
             pass
+        if ui is not None and not getattr(ui, "allow_cli_fallback", False):
+            return False
         try:
             resp = input(f"{prompt} [t/N]: ")
             return resp.strip().lower().startswith("t")
@@ -564,6 +569,9 @@ class Combat(State):
                 "active_id": self._actor_id(active) if active else None,
             },
         )
+        ui_active_actor = getattr(self.game, "ui_active_actor", None)
+        if callable(ui_active_actor):
+            ui_active_actor(active)
 
     def apply_initiative_penalty(self, actor, penalty: int) -> None:
         """Obniż inicjatywę aktora i przestaw w kolejce (używane np. przez deafened)."""
@@ -702,6 +710,9 @@ class Combat(State):
         if actor is None:
             logger.info("Brak uczestników – powrót do tury bohaterów.")
             return HeroesTurn(self.game)
+        ui_active_actor = getattr(self.game, "ui_active_actor", None)
+        if callable(ui_active_actor):
+            ui_active_actor(actor)
 
         if actor in self.game.enemies:
             remaining = self.ACTION_LIMIT - self.actions_used.get(actor, 0)
@@ -727,7 +738,7 @@ class Combat(State):
         available_events = {
             name: cls for name, cls in all_events.items() if getattr(cls, "available_in_combat", True)
         }
-        if not all_events:
+        if not available_events:
             logger.warning("Brak zarejestrowanych eventów dla walki.")
             self.game.ui_log("Brak akcji do wykonania.")
             self._advance_turn()
@@ -757,7 +768,7 @@ class Combat(State):
             except Exception:
                 pass
 
-        if raw_choice not in all_events:
+        if raw_choice not in available_events:
             logger.error("Nieznana akcja '%s'", raw_choice)
             self.game.ui_log(f"Nieznana akcja '{raw_choice}'")
             return self

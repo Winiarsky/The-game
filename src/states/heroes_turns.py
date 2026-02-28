@@ -27,7 +27,12 @@ class HeroesTurn(State):
         logger.info("Tura bohaterow!")
         self.game.ui_log("Tura bohaterów!")
         self.game.ui_event("initiative", {"round": None, "order": [], "active_id": None})
-        self.game.ui_log("Press Enter aby kontynuować turę bohaterów.")
+        ui_active_actor = getattr(self.game, "ui_active_actor", None)
+        if callable(ui_active_actor):
+            ui_active_actor(None)
+        ui_idle_hint = getattr(self.game, "ui_idle_hint", None)
+        if callable(ui_idle_hint):
+            ui_idle_hint("Tura bohaterów", "Wybierz bohatera i akcję.")
 
     def on_exit(self):
         logger.info("Koniec tury bohaterow.")
@@ -47,7 +52,10 @@ class HeroesTurn(State):
 
     def choose_action(self) -> State:
         all_events = list_events()
-        if not all_events:
+        available_events = {
+            name: cls for name, cls in all_events.items() if getattr(cls, "available_in_exploration", True)
+        }
+        if not available_events:
             logger.warning("Brak zarejestrowanych eventów dla eksploracji.")
             self.game.ui_log("Brak akcji do wykonania.")
             return self
@@ -59,6 +67,9 @@ class HeroesTurn(State):
                 return self
             self.active_hero = hero
         hero = self.active_hero
+        ui_active_actor = getattr(self.game, "ui_active_actor", None)
+        if callable(ui_active_actor):
+            ui_active_actor(hero)
 
         # podświetl aktywnego bohatera podczas wyboru akcji
         highlighted = False
@@ -79,7 +90,7 @@ class HeroesTurn(State):
             except Exception:
                 pass
 
-        if choice not in all_events:
+        if choice not in available_events:
             logger.error("Nieznana akcja '%s'", choice)
             self.game.ui_log(f"Nieznana akcja '{choice}'")
             return self

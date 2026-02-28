@@ -101,6 +101,23 @@ class StatusMixin:
     def _labelize_choice(value: str) -> str:
         return str(value or "").replace("_", " ").strip().title()
 
+    @staticmethod
+    def _prompt_choice(prompt: str, choices: list[str], *, source: str) -> str | None:
+        try:
+            from ui_client import get_ui_client
+
+            ui_client = get_ui_client()
+            if ui_client.enabled:
+                return ui_client.prompt_choice(prompt, choices=choices, source=source)
+            if not getattr(ui_client, "allow_cli_fallback", False):
+                return None
+        except Exception:
+            return None
+        try:
+            return input(f"{prompt} {choices}: ").strip() or None
+        except Exception:
+            return None
+
     def _handle_adopted_ancestry_choice(self, status: "Status", data: dict) -> None:
         races = list(data.get("adopted_ancestry_races") or [])
         feats_map = data.get("adopted_ancestry_feats") or {}
@@ -108,27 +125,11 @@ class StatusMixin:
             return
         race_labels = [self._labelize_choice(r) for r in races]
         race_label_to_id = {self._labelize_choice(r): r for r in races}
-        try:
-            from ui_client import get_ui_client
-
-            ui_client = get_ui_client()
-            if ui_client.enabled:
-                chosen_race_label = ui_client.prompt_choice(
-                    "Adopted Ancestry: wybierz ancestry",
-                    choices=race_labels,
-                    source="status",
-                )
-            else:
-                chosen_race_label = None
-        except Exception:
-            chosen_race_label = None
-        if not chosen_race_label:
-            try:
-                chosen_race_label = input(
-                    f"Adopted Ancestry: wybierz ancestry {race_labels}: "
-                ).strip()
-            except Exception:
-                chosen_race_label = None
+        chosen_race_label = self._prompt_choice(
+            "Adopted Ancestry: wybierz ancestry",
+            race_labels,
+            source="status",
+        )
         if not chosen_race_label:
             return
         chosen_race_id = race_label_to_id.get(chosen_race_label, None)
@@ -140,27 +141,11 @@ class StatusMixin:
             return
         feat_labels = [self._labelize_choice(f) for f in feats]
         feat_label_to_id = {self._labelize_choice(f): f for f in feats}
-        try:
-            from ui_client import get_ui_client
-
-            ui_client = get_ui_client()
-            if ui_client.enabled:
-                chosen_feat_label = ui_client.prompt_choice(
-                    f"Adopted Ancestry ({self._labelize_choice(chosen_race_id)}): wybierz feat",
-                    choices=feat_labels,
-                    source="status",
-                )
-            else:
-                chosen_feat_label = None
-        except Exception:
-            chosen_feat_label = None
-        if not chosen_feat_label:
-            try:
-                chosen_feat_label = input(
-                    f"Adopted Ancestry: wybierz feat {feat_labels}: "
-                ).strip()
-            except Exception:
-                chosen_feat_label = None
+        chosen_feat_label = self._prompt_choice(
+            f"Adopted Ancestry ({self._labelize_choice(chosen_race_id)}): wybierz feat",
+            feat_labels,
+            source="status",
+        )
         if not chosen_feat_label:
             return
         chosen_feat_id = feat_label_to_id.get(chosen_feat_label, None)
@@ -227,27 +212,11 @@ class StatusMixin:
             fields = ["bomber", "chirurgeon", "mutagenist"]
         field_labels = [self._labelize_choice(f) for f in fields]
         field_label_to_id = {self._labelize_choice(f): f for f in fields}
-        try:
-            from ui_client import get_ui_client
-
-            ui_client = get_ui_client()
-            if ui_client.enabled:
-                chosen_label = ui_client.prompt_choice(
-                    "Research Field: wybierz specjalizację",
-                    choices=field_labels,
-                    source="status",
-                )
-            else:
-                chosen_label = None
-        except Exception:
-            chosen_label = None
-        if not chosen_label:
-            try:
-                chosen_label = input(
-                    f"Research Field: wybierz specjalizację {field_labels}: "
-                ).strip()
-            except Exception:
-                chosen_label = None
+        chosen_label = self._prompt_choice(
+            "Research Field: wybierz specjalizację",
+            field_labels,
+            source="status",
+        )
         if not chosen_label:
             return
         chosen_field = field_label_to_id.get(chosen_label, None)
@@ -293,27 +262,11 @@ class StatusMixin:
             return
         label_map = {self._labelize_choice(key): key for key in choices}
         labels = list(label_map.keys())
-        try:
-            from ui_client import get_ui_client
-
-            ui_client = get_ui_client()
-            if ui_client.enabled:
-                chosen_label = ui_client.prompt_choice(
-                    "Animal Instinct: wybierz zwierzę",
-                    choices=labels,
-                    source="status",
-                )
-            else:
-                chosen_label = None
-        except Exception:
-            chosen_label = None
-        if not chosen_label:
-            try:
-                chosen_label = input(
-                    f"Animal Instinct: wybierz zwierzę {labels}: "
-                ).strip()
-            except Exception:
-                chosen_label = None
+        chosen_label = self._prompt_choice(
+            "Animal Instinct: wybierz zwierzę",
+            labels,
+            source="status",
+        )
         if not chosen_label:
             return
         chosen_key = label_map.get(chosen_label)
@@ -343,27 +296,11 @@ class StatusMixin:
             return
         label_map = {self._labelize_choice(key): key for key in choices}
         labels = list(label_map.keys())
-        try:
-            from ui_client import get_ui_client
-
-            ui_client = get_ui_client()
-            if ui_client.enabled:
-                chosen_label = ui_client.prompt_choice(
-                    "Dragon Instinct: wybierz typ obrażeń",
-                    choices=labels,
-                    source="status",
-                )
-            else:
-                chosen_label = None
-        except Exception:
-            chosen_label = None
-        if not chosen_label:
-            try:
-                chosen_label = input(
-                    f"Dragon Instinct: wybierz typ obrażeń {labels}: "
-                ).strip()
-            except Exception:
-                chosen_label = None
+        chosen_label = self._prompt_choice(
+            "Dragon Instinct: wybierz typ obrażeń",
+            labels,
+            source="status",
+        )
         if not chosen_label:
             return
         chosen_key = label_map.get(chosen_label)
@@ -386,27 +323,11 @@ class StatusMixin:
             return
         label_map = {self._labelize_choice(key): key for key in choices}
         labels = list(label_map.keys())
-        try:
-            from ui_client import get_ui_client
-
-            ui_client = get_ui_client()
-            if ui_client.enabled:
-                chosen_label = ui_client.prompt_choice(
-                    "Fury Instinct: wybierz feat",
-                    choices=labels,
-                    source="status",
-                )
-            else:
-                chosen_label = None
-        except Exception:
-            chosen_label = None
-        if not chosen_label:
-            try:
-                chosen_label = input(
-                    f"Fury Instinct: wybierz feat {labels}: "
-                ).strip()
-            except Exception:
-                chosen_label = None
+        chosen_label = self._prompt_choice(
+            "Fury Instinct: wybierz feat",
+            labels,
+            source="status",
+        )
         if not chosen_label:
             return
         chosen_key = label_map.get(chosen_label)
@@ -446,27 +367,11 @@ class StatusMixin:
             return
         label_map = {self._labelize_choice(key): key for key in choices}
         labels = list(label_map.keys())
-        try:
-            from ui_client import get_ui_client
-
-            ui_client = get_ui_client()
-            if ui_client.enabled:
-                chosen_label = ui_client.prompt_choice(
-                    "Spirit Instinct: wybierz typ obrażeń",
-                    choices=labels,
-                    source="status",
-                )
-            else:
-                chosen_label = None
-        except Exception:
-            chosen_label = None
-        if not chosen_label:
-            try:
-                chosen_label = input(
-                    f"Spirit Instinct: wybierz typ obrażeń {labels}: "
-                ).strip()
-            except Exception:
-                chosen_label = None
+        chosen_label = self._prompt_choice(
+            "Spirit Instinct: wybierz typ obrażeń",
+            labels,
+            source="status",
+        )
         if not chosen_label:
             return
         chosen_key = label_map.get(chosen_label)

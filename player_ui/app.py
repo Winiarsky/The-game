@@ -20,6 +20,7 @@ events_history: list[dict[str, Any]] = []
 history_limit = 200
 prompts: dict[str, dict[str, Any]] = {}
 prompts_lock = Lock()
+prompt_limit = 300
 
 event_ids = itertools.count(1)
 prompt_ids = itertools.count(1)
@@ -54,6 +55,20 @@ def _make_event(event_type: str, payload: dict[str, Any]) -> dict[str, Any]:
         "payload": payload,
         "ts": time.time(),
     }
+
+
+def _prune_prompts_unlocked() -> None:
+    if len(prompts) <= prompt_limit:
+        return
+    ordered = sorted(prompts.values(), key=lambda item: float(item.get("created_at", 0.0)))
+    for entry in ordered:
+        if len(prompts) <= prompt_limit:
+            break
+        if entry.get("status") == "answered":
+            prompts.pop(str(entry.get("id")), None)
+    while len(prompts) > prompt_limit and ordered:
+        oldest = ordered.pop(0)
+        prompts.pop(str(oldest.get("id")), None)
 
 
 # --- Routes ---
@@ -137,6 +152,7 @@ def create_prompt():
     }
     with prompts_lock:
         prompts[prompt_id] = entry
+        _prune_prompts_unlocked()
 
     event = _make_event("prompt", entry)
     _record_event(event)
@@ -192,6 +208,7 @@ def set_prompt_response(prompt_id: str):
             return jsonify({"ok": False, "error": "prompt not found"}), 404
         entry["status"] = "answered"
         entry["answer"] = answer
+        _prune_prompts_unlocked()
 
     event = _make_event(
         "prompt_answered", {"id": prompt_id, "answer": answer, "prompt": entry["prompt"]}

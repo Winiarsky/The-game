@@ -130,7 +130,7 @@ class Start(State):
         ui = getattr(self.game, "ui", None)
         if ui is not None and hasattr(ui, "prompt_choice"):
             answer = ui.prompt_choice(prompt, choices=choices, source="setup")
-        else:
+        elif ui is None or getattr(ui, "allow_cli_fallback", False):
             try:
                 answer = input(prompt + " ").strip() or None
             except Exception:
@@ -163,7 +163,7 @@ class Start(State):
         ui = getattr(self.game, "ui", None)
         if ui is not None and hasattr(ui, "prompt_choice"):
             answer = ui.prompt_choice(prompt, choices=choices, source="setup")
-        else:
+        elif ui is None or getattr(ui, "allow_cli_fallback", False):
             try:
                 answer = input(prompt + " ").strip() or None
             except Exception:
@@ -190,7 +190,7 @@ class Start(State):
             skill_answer: str | None = None
             if ui is not None and hasattr(ui, "prompt_choice"):
                 skill_answer = ui.prompt_choice(skill_prompt, choices=skill_choices, source="setup")
-            else:
+            elif ui is None or getattr(ui, "allow_cli_fallback", False):
                 try:
                     skill_answer = input(skill_prompt + " ").strip() or None
                 except Exception:

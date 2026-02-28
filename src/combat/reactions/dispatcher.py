@@ -90,6 +90,8 @@ def dispatch_reactions(game, event: dict[str, object]) -> None:
                     except Exception as exc:
                         logger.error("Prompt reakcji nie powiódł się: %s", exc)
                 else:
+                    if getattr(getattr(game, "ui", None), "allow_cli_fallback", False) is False:
+                        continue
                     try:
                         resp = input(f"Reakcja {reaction.label} ({reason}). Wykonać? [t/N]: ")
                         consent = resp.strip().lower() in ("t", "tak", "y", "yes")

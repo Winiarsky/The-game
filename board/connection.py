@@ -94,6 +94,10 @@ class Connection:
                     else:
                         logger.info(f"Scanned via UI {ui_answer}: {card_response}")
                         return card_response
+                logger.warning("Brak odpowiedzi UI dla read_card, ponawiam prompt.")
+                continue
+            if not getattr(ui, "allow_cli_fallback", False):
+                raise RuntimeError("UI-only mode: read_card wymaga aktywnego UI lub ALLOW_CLI_FALLBACK=1.")
 
             card = input(msg) #trzeba bedze dodac slownik do mapowania
             card_response = translate_map.get(card, card)

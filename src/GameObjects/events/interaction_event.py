@@ -160,6 +160,8 @@ class InteractionEvent(GameEvent):
                         idx = int(prefix) - 1
                         if 0 <= idx < len(actions):
                             return actions[idx].id
+        if ui and not getattr(ui, "allow_cli_fallback", False):
+            return None
 
         print("Możliwe akcje:")
         for idx, action in enumerate(actions, start=1):

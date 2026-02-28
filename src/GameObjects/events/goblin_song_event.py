@@ -204,6 +204,8 @@ class GoblinSongEvent(GameEvent):
                     )
                     return str(choice or "").strip().lower().startswith("t")
                 except Exception:
+                    pass
+                if not getattr(ui, "allow_cli_fallback", False):
                     return False
             try:
                 resp = input("Wskazać kolejny cel? [t/N]: ")

@@ -191,6 +191,14 @@ def follow_path(ctx_or_board, mover, path, *, led_color=None, on_enter=None, all
             logger.debug("board.move failed: %s", exc)
             return False, prev, "move_error"
 
+        try:
+            from GameObjects.events.magic.runtime_effects import process_alarm_wards_for_move
+
+            game = getattr(ctx_or_board, "game", None)
+            process_alarm_wards_for_move(game, mover, step)
+        except Exception:
+            pass
+
         if callable(on_enter):
             try:
                 stop = on_enter(ctx_or_board, mover, step)

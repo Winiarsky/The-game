@@ -11,6 +11,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable, List, MutableMapping
 
+from narration import narrate_action_event
+
 logger = logging.getLogger(__name__)
 
 ActionEvent = MutableMapping[str, Any]
@@ -106,7 +108,6 @@ class ActionEventBus:
 
         def _listener(event: ActionEvent) -> None:
             ui_event = getattr(self.game, "ui_event", None)
-            ui_log = getattr(self.game, "ui_log", None)
             if callable(ui_event):
                 try:
                     safe_event = dict(event)
@@ -116,16 +117,15 @@ class ActionEventBus:
                     ui_event("action", safe_event)
                 except Exception:  # pragma: no cover - logowanie poniżej
                     logger.debug("Nie udało się wysłać eventu akcji do UI", exc_info=True)
-            # prosty wpis do logów UI, by użytkownik widział zdarzenie
-            if callable(ui_log):
                 try:
-                    actor = event.get("actor")
-                    actor_name = getattr(actor, "name", None) or getattr(actor, "object_id", None) or "actor"
-                    ui_log(
-                        f"[akcja] {actor_name}: {event.get('action_id')} {event.get('action_tags')}",
-                        tag="action_event",
+                    ui_event(
+                        "narration",
+                        {
+                            "message": narrate_action_event(dict(event)),
+                            "action_id": event.get("action_id"),
+                        },
                     )
                 except Exception:
-                    logger.debug("Nie udało się zalogować eventu akcji w UI", exc_info=True)
+                    logger.debug("Nie udało się wysłać narracji akcji do UI", exc_info=True)
 
         self.add_listener(_listener)

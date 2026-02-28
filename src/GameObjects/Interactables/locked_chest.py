@@ -233,7 +233,11 @@ class LockedChest(RangeAttackAffectMixin, InteractableMixin, HideInMixin):
         key_name = None
         if ui and ui.enabled:
             key_name = ui.prompt_choice("Podaj nazwę klucza, którego używasz:", source="interaction")
+        elif ui and not getattr(ui, "allow_cli_fallback", False):
+            return "UI-only mode: brak aktywnego promptu do podania nazwy klucza."
         if not key_name:
+            if ui and not getattr(ui, "allow_cli_fallback", False):
+                return "Nie podano nazwy klucza."
             key_name = input("Podaj nazwę klucza, którego używasz: ").strip()
         if not key_name:
             return "Nie użyto klucza."

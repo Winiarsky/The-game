@@ -50,6 +50,7 @@ const DIGIT_BUFFER_MS = 600;
 const pathToast = document.getElementById("path-toast");
 let activePathId = null;
 let initiativeState = { order: [], activeId: null, round: 1 };
+let activeActorId = null;
 let lastLoggedRound = null;
 actionForm.classList.add("hidden");
 
@@ -150,7 +151,8 @@ function handleEvent(event) {
 
     if (type === "prompt") {
         renderPrompt(payload);
-        addLogEntry(`Nowy rzut: ${payload.prompt}`, meta, "info", "Rzut");
+        const promptTag = payload.kind === "choice" ? "Wybór" : payload.kind === "info" ? "Info" : "Rzut";
+        addLogEntry(`Nowy prompt: ${payload.prompt}`, meta, "info", promptTag);
         return;
     }
     if (type === "special_preview") {
@@ -181,24 +183,37 @@ function handleEvent(event) {
         return;
     }
     if (type === "prompt_answered") {
-        addLogEntry(`Rzut rozstrzygnięty (${payload.prompt || ""}): ${payload.answer}`, meta, "success", "Rzut");
+        addLogEntry(`Odpowiedź (${payload.prompt || ""}): ${payload.answer}`, meta, "success", "Prompt");
         if (activePrompt && String(activePrompt.id) === String(payload.id)) {
             closePrompt();
         }
         return;
     }
-    if (type === "hero") {
-        const id = payload.name || payload.object_id || "hero";
+    if (type === "hero_snapshot" || type === "hero") {
+        const id = payload.id || payload.object_id || payload.name || "hero";
         heroes.set(id, {
+            id,
             name: payload.name || id,
             statuses: payload.statuses || [],
             note: payload.note,
             wounds: payload.wounds,
-            active: true,
+            pos: payload.pos,
             initiative: payload.initiative,
         });
         renderHeroes();
-        addLogEntry(`Aktualny bohater: ${payload.name || ""}`, meta, "info", "Bohater");
+        addLogEntry(`Aktualizacja bohatera: ${payload.name || ""}`, meta, "info", "Bohater");
+        return;
+    }
+    if (type === "active_actor_changed") {
+        activeActorId = payload.id || null;
+        renderHeroes();
+        return;
+    }
+    if (type === "narration") {
+        addLogEntry(payload.message || "Narrator", meta, "info", "Narrator");
+        return;
+    }
+    if (type === "action") {
         return;
     }
     if (type === "path_preview") {
@@ -213,8 +228,9 @@ function handleEvent(event) {
         initiativeState = {
             order: payload.order || [],
             activeId: payload.active_id || payload.activeId || null,
-            round: payload.round || 1,
+            round: payload.round ?? null,
         };
+        activeActorId = initiativeState.activeId || null;
         if (initiativeState.round && initiativeState.round !== lastLoggedRound) {
             addLogEntry(`Runda ${initiativeState.round} start`, meta, "info", "Runda");
             lastLoggedRound = initiativeState.round;
@@ -758,7 +774,8 @@ function renderHeroes() {
     heroesList.innerHTML = "";
     heroes.forEach((hero) => {
         const card = document.createElement("div");
-        card.className = "hero-card" + (hero.active ? " active" : "");
+        const isActive = String(hero.id || "") === String(activeActorId || "");
+        card.className = "hero-card" + (isActive ? " active" : "");
         const heroImg = hero.image || PLACEHOLDER_IMAGE;
         const statuses = hero.statuses && hero.statuses.length
             ? hero.statuses.map((s) => `<span class="status-pill ${statusTone(s)}">${s}</span>`).join("")

@@ -300,15 +300,31 @@ class Game:
                 statuses = hero.status_labels()  # type: ignore[attr-defined]
             except Exception:
                 statuses = getattr(hero, "statuses", [])
+        hero_id = getattr(hero, "object_id", None) or getattr(hero, "name", "Bohater")
         payload = {
-            "name": getattr(hero, "name", None) or getattr(hero, "object_id", "Bohater"),
+            "id": hero_id,
+            "name": getattr(hero, "name", None) or hero_id,
             "statuses": statuses,
             "note": note,
             "pos": getattr(hero, "position", None),
             "wounds": getattr(hero, "wounds", None),
             "initiative": getattr(hero, "initiative", None),
         }
-        self.ui_event("hero", payload)
+        self.ui_event("hero_snapshot", payload)
+
+    def ui_active_actor(self, actor: Any | None) -> None:
+        payload: dict[str, Any]
+        if actor is None:
+            payload = {"id": None, "name": None, "kind": None}
+        else:
+            payload = {
+                "id": getattr(actor, "object_id", None) or getattr(actor, "name", str(id(actor))),
+                "name": getattr(actor, "name", None) or getattr(actor, "object_id", "Aktor"),
+                "kind": "hero"
+                if actor in getattr(self, "heroes", [])
+                else ("enemy" if actor in getattr(self, "enemies", []) else None),
+            }
+        self.ui_event("active_actor_changed", payload)
 
     def ui_idle_hint(self, title: str, text: str | None = None) -> None:
         """Wyślij wskazówkę do UI dla stanu bez aktywnego promptu."""

@@ -53,6 +53,7 @@ from .magic import magic_missile_event  # noqa: F401
 from .magic import detect_magic_event  # noqa: F401
 from .magic import acid_splash_event  # noqa: F401
 from .magic import occult_cantrips_event  # noqa: F401
+from .magic import occult_rank1_event  # noqa: F401
 from . import phase_events  # noqa: F401
 from .enemy import enemy_move_event  # noqa: F401
 from .enemy import enemy_attack_melee_event  # noqa: F401

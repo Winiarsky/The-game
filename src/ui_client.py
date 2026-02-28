@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 import time
@@ -63,12 +62,14 @@ class UIClient:
     request_timeout: float = 5.0
     max_wait: Optional[float] = None  # None = czekaj na UI bez limitu; można nadpisać env PLAYER_UI_MAX_WAIT
     enabled: bool = field(init=False)
+    allow_cli_fallback: bool = field(init=False, default=False)
 
     def __post_init__(self) -> None:
         if self.base_url is None:
             self.base_url = _configured_url()
         self.base_url = _normalize_url(self.base_url)
         self.enabled = bool(self.base_url)
+        self.allow_cli_fallback = str(os.environ.get("ALLOW_CLI_FALLBACK", "0")).lower() in ("1", "true", "yes")
         if self.enabled and self.base_url and self.base_url.endswith("/"):
             self.base_url = self.base_url.rstrip("/")
         env_wait = os.environ.get("PLAYER_UI_MAX_WAIT")
@@ -101,14 +102,17 @@ class UIClient:
             return False
 
     def prompt_roll(self, prompt: str, source: str | None = None, **extra) -> Optional[int]:
-        """Wyślij prompt na rzut; jeśli UI wyłączone lub błąd – fallback na CLI."""
+        """Wyślij prompt na rzut; fallback CLI tylko w trybie debug."""
         if self.enabled:
             prompt_id = self._create_prompt(prompt, source=source, **extra)
             if prompt_id is not None:
                 ans = self._wait_for_answer(prompt_id, max_wait=self.max_wait)
                 if isinstance(ans, int):
                     return ans
-        # fallback CLI
+        if not self.enabled:
+            logger.warning("UI jest wyłączone; prompt_roll bez odpowiedzi.")
+        if not self.allow_cli_fallback:
+            return None
         return self._prompt_cli_int(prompt)
 
     def prompt_choice(
@@ -118,13 +122,17 @@ class UIClient:
         source: str | None = None,
         **extra,
     ) -> Optional[str]:
-        """Wyślij prompt tekstowy z opcjonalną listą wyboru; fallback na CLI."""
+        """Wyślij prompt tekstowy z opcjonalną listą wyboru; fallback CLI tylko w debug."""
         if self.enabled:
             prompt_id = self._create_prompt(prompt, kind="choice", source=source, choices=choices, **extra)
             if prompt_id is not None:
                 ans = self._wait_for_text_answer(prompt_id, max_wait=self.max_wait)
                 if ans is not None:
                     return ans
+        if not self.enabled:
+            logger.warning("UI jest wyłączone; prompt_choice bez odpowiedzi.")
+        if not self.allow_cli_fallback:
+            return None
         return self._prompt_cli_choice(prompt, choices)
 
     def prompt_action_select(
@@ -151,7 +159,10 @@ class UIClient:
                 ans = self._wait_for_text_answer(prompt_id, max_wait=self.max_wait)
                 if ans is not None:
                     return ans
-        # fallback na prosty input
+        if not self.enabled:
+            logger.warning("UI jest wyłączone; prompt_action_select bez odpowiedzi.")
+        if not self.allow_cli_fallback:
+            return None
         try:
             return input(f"{title} (wpisz nazwę akcji): ").strip() or None
         except Exception:
@@ -178,7 +189,10 @@ class UIClient:
             )
             if prompt_id is not None:
                 return self._wait_for_text_answer(prompt_id, max_wait=self.max_wait)
-        # fallback CLI
+        if not self.enabled:
+            logger.warning("UI jest wyłączone; prompt_info bez potwierdzenia.")
+        if not self.allow_cli_fallback:
+            return None
         try:
             input(f"{title} (Enter aby kontynuować) ")
         except Exception:

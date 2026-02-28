@@ -332,6 +332,7 @@ class AttackEventBase(GameEvent):
 
     @staticmethod
     def _prompt_choice(prompt: str, choices: list[str], *, source: str) -> str | None:
+        ui = None
         try:
             from ui_client import get_ui_client
 
@@ -340,6 +341,8 @@ class AttackEventBase(GameEvent):
                 return ui.prompt_choice(prompt, choices=choices, source=source)
         except Exception:
             pass
+        if ui is not None and not getattr(ui, "allow_cli_fallback", False):
+            return None
         try:
             raw = input(f"{prompt} {choices}: ").strip()
             return raw or None

@@ -260,6 +260,8 @@ class AidEvent(ActionCostEvent):
                     return self._resolve_choice(str(answer).strip(), choice_meta)
             except Exception:
                 pass
+            if not getattr(ui, "allow_cli_fallback", False):
+                return None
         try:
             answer = input("Wybierz test do wsparcia (np. Athletics / Melee Attack): ").strip()
         except Exception:

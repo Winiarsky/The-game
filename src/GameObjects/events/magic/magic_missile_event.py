@@ -20,6 +20,7 @@ class MagicMissileEvent(MagicEvent):
     consumes_action = True
     actions_cost = 1
     spell_tradition = SpellTradition.ARCANA
+    magic_traditions = (SpellTradition.ARCANA, SpellTradition.OCCULT)
     prompt = "Magic Missile – wystrzel pociski energii w cel w zasięgu."
 
     def execute(self, ctx: EventContext) -> EventResult:

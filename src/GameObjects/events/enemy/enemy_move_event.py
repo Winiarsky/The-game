@@ -149,6 +149,12 @@ class EnemyMoveEvent(GameEvent):
             _dispatch_move_reactions(game, enemy, enemy.position, dest)
             game.board.move(enemy.position, dest)
             try:
+                from GameObjects.events.magic.runtime_effects import process_alarm_wards_for_move
+
+                process_alarm_wards_for_move(game, enemy, dest)
+            except Exception:
+                pass
+            try:
                 refresh_flanking_statuses(game)
             except Exception as exc:
                 logger.error("Nie udało się odświeżyć flankowania po ruchu wroga: %s", exc)

@@ -38,6 +38,9 @@ def prompt_for_roll(prompt: str, **ui_kwargs) -> int:
         ui_answer = ui_client.prompt_roll(prompt, **ui_kwargs)
         if isinstance(ui_answer, int):
             return ui_answer
+        raise RuntimeError("UI nie zwróciło poprawnego wyniku rzutu.")
+    if ui_client is not None and not getattr(ui_client, "allow_cli_fallback", False):
+        raise RuntimeError("UI-only mode: prompt_for_roll wymaga aktywnego UI.")
     while True:
         raw = input(prompt).strip()
         if not raw:
@@ -289,6 +292,8 @@ def resolve_skill_check_with_sources_from_roll(
                 return str(choice or "").strip().lower().startswith("t")
             except Exception:
                 pass
+        if ui_client is not None and not getattr(ui_client, "allow_cli_fallback", False):
+            return False
         try:
             resp = input("Użyć Halfling Luck? [t/N]: ")
             return resp.strip().lower().startswith("t")

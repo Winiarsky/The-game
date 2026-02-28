@@ -23,6 +23,7 @@ __all__ = [
     "magic_event",
     "magic_utils",
     "spell_types",
+    "occult_rank1_event",
 ]
 
 from . import magic_event  # type: ignore  # noqa: F401,E402
@@ -30,3 +31,4 @@ from . import magic_missile_event  # type: ignore  # noqa: F401,E402
 from . import detect_magic_event  # type: ignore  # noqa: F401,E402
 from . import magic_utils  # type: ignore  # noqa: F401,E402
 from . import spell_types  # type: ignore  # noqa: F401,E402
+from . import occult_rank1_event  # type: ignore  # noqa: F401,E402
