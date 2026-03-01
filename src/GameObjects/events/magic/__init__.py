@@ -25,6 +25,7 @@ __all__ = [
     "spell_types",
     "cantrips",
     "level_1st",
+    "focus_spells",
 ]
 
 from . import magic_event  # type: ignore  # noqa: F401,E402
@@ -34,3 +35,4 @@ from . import magic_utils  # type: ignore  # noqa: F401,E402
 from . import spell_types  # type: ignore  # noqa: F401,E402
 from . import cantrips  # type: ignore  # noqa: F401,E402
 from . import level_1st  # type: ignore  # noqa: F401,E402
+from . import focus_spells  # type: ignore  # noqa: F401,E402

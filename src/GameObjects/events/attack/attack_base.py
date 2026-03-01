@@ -4,7 +4,7 @@ import logging
 from typing import Iterable, Optional
 import re
 
-from bonuses import BonusEffect, compute_total_modifier, format_effects_log, select_best_effects
+from bonuses import BonusEffect, BonusType, compute_total_modifier, format_effects_log, select_best_effects
 from damage_types import DamageType
 from combat import effective_ac
 from GameObjects.interactions_mixin import prompt_for_roll
@@ -120,6 +120,27 @@ class AttackEventBase(GameEvent):
 
     def _attack_modifier_details(self, attacker, action_tag: str, target=None, extra_effects=None):
         effects = list(getattr(attacker, "bonuses", [])) if hasattr(attacker, "bonuses") else []
+        if action_tag in ("attack_melee", "attack_ranged", "magic"):
+            try:
+                has_status = getattr(attacker, "has_status", None)
+                has_ic = bool(has_status("inspire_courage")) if callable(has_status) else False
+                if not has_ic:
+                    for item in getattr(attacker, "statuses", []) or []:
+                        if getattr(item, "id", None) == "inspire_courage":
+                            has_ic = True
+                            break
+                if has_ic:
+                    effects.append(
+                        BonusEffect(
+                            type=BonusType.STATUS,
+                            value=1,
+                            tag=action_tag,
+                            source="status:inspire_courage",
+                            label="inspire courage",
+                        )
+                    )
+            except Exception:
+                pass
         if extra_effects:
             effects.extend(list(extra_effects))
         target_id = getattr(target, "object_id", None)
@@ -136,11 +157,41 @@ class AttackEventBase(GameEvent):
             return ""
         return f"\nModyfikator łączny: {modifier:+d} (doliczany automatycznie).\n"
 
-    def _consume_aid_attack_bonus(self, attacker) -> None:
+    def _consume_aid_attack_bonus(self, attacker, *, action_tag: str | None = None) -> None:
+        target_source = f"aid:attack:{action_tag}" if action_tag else None
+        bonuses = getattr(attacker, "bonuses", None)
+        if isinstance(bonuses, list):
+            kept = []
+            removed = False
+            for eff in bonuses:
+                source = str(getattr(eff, "source", "") or "")
+                if removed:
+                    kept.append(eff)
+                    continue
+                if target_source and source == target_source:
+                    removed = True
+                    continue
+                if target_source and source == "aid:attack":
+                    removed = True
+                    continue
+                if target_source is None and source == "aid:attack":
+                    removed = True
+                    continue
+                kept.append(eff)
+            if removed:
+                try:
+                    attacker.bonuses = kept
+                except Exception:
+                    pass
+                return
         remover = getattr(attacker, "remove_bonuses_by_source", None)
         if callable(remover):
             try:
-                remover("aid:attack")
+                if target_source:
+                    remover(target_source)
+                    remover("aid:attack")
+                else:
+                    remover("aid:attack")
             except Exception:
                 pass
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 
 from damage_types import DamageType
-from statuses import make_persistent_damage
+from statuses import make_persistent_damage, inspire_courage_damage_bonus
 from combat.damage_utils import burn_it_bonus, burn_it_prompt_note
 
 from ..base import EventContext, EventResult
@@ -28,6 +28,7 @@ class AcidSplashEvent(BaseMagicAttackEvent):
 
     def _resolve_on_target(self, target, pos, ctx: EventContext, *, critical: bool = False) -> EventResult:
         dmg = self._prompt_damage()
+        dmg += int(inspire_courage_damage_bonus(ctx.actor) or 0)
         defeated = self._apply_damage(target, dmg, DamageType.ACID.value)
 
         persistent_value = None

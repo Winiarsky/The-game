@@ -8,7 +8,7 @@ from board import consts
 from bonuses import BonusEffect, BonusType
 from damage_types import DamageType
 from skills import Skill
-from statuses import EnfeebledStatus, StunnedStatus, ShieldCantripStatus, shield_cantrip_ac_bonus
+from statuses import EnfeebledStatus, StunnedStatus, ShieldCantripStatus, shield_cantrip_ac_bonus, inspire_courage_damage_bonus
 from GameObjects.interactions_mixin import prompt_for_roll
 from GameObjects.interactions_mixin.skill_check_resolver import compute_skill_modifier_with_sources
 from GameObjects.NPC.base_npc import BaseNPC
@@ -776,6 +776,7 @@ class TelekineticProjectileEvent(BaseMagicAttackEvent):
             )
             or 0
         )
+        damage += int(inspire_courage_damage_bonus(ctx.actor) or 0)
         if critical:
             damage *= 2
 
@@ -803,4 +804,3 @@ class TelekineticProjectileEvent(BaseMagicAttackEvent):
         if defeated:
             msg += " Cel pokonany."
         return EventResult(success=True, consumed_action=self.consumes_action, message=msg)
-

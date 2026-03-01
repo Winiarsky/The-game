@@ -6,7 +6,7 @@ from typing import Sequence
 
 from bonuses import BonusEffect, BonusType, build_modifiers_grid
 from GameObjects.interactions_mixin import RangeAttackAffectMixin, prompt_for_roll
-from statuses import Status
+from statuses import Status, inspire_courage_damage_bonus
 from damage_types import DamageType
 from combat.damage_utils import burn_it_bonus, burn_it_prompt_note
 
@@ -314,7 +314,7 @@ class BaseRangeAttackEvent(AttackEventBase):
                 answer_placeholder="Wynik k20",
             )
             total_roll = roll + modifier
-            self._consume_aid_attack_bonus(hero)
+            self._consume_aid_attack_bonus(hero, action_tag=action_tag)
             critical = total_roll >= target_ac + 10
             hit = total_roll >= target_ac
             if not hit:
@@ -421,6 +421,10 @@ class BaseRangeAttackEvent(AttackEventBase):
                 pass
             damage_bonus = 0
             damage_notes: list[str] = []
+            inspire_bonus = int(inspire_courage_damage_bonus(hero) or 0)
+            if inspire_bonus:
+                damage_bonus += inspire_bonus
+                damage_notes.append(f"Inspire Courage: +{inspire_bonus} do obrazen (doliczone).")
             try:
                 from statuses import enfeebled_damage_penalty
 

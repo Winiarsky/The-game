@@ -54,6 +54,10 @@ from .magic import detect_magic_event  # noqa: F401
 from .magic import acid_splash_event  # noqa: F401
 from .magic.cantrips import events as cantrips_events  # noqa: F401
 from .magic.level_1st import events as level_1st_events  # noqa: F401
+from .magic.focus_spells.bard import counter_performance_event  # noqa: F401
+from .magic.focus_spells.bard import inspire_competence_event  # noqa: F401
+from .magic.focus_spells.bard import inspire_courage_event  # noqa: F401
+from .magic.focus_spells.bard import loremaster_etude_event  # noqa: F401
 from . import phase_events  # noqa: F401
 from .enemy import enemy_move_event  # noqa: F401
 from .enemy import enemy_attack_melee_event  # noqa: F401

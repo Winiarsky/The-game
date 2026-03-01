@@ -310,6 +310,35 @@ def resolve_skill_check_with_sources_from_roll(
             roll, total, outcome = _apply_outcome(reroll)
             _consume_status(actor, "halfling_luck")
 
+    def _counter_performance_total(actor_obj) -> int | None:
+        statuses = getattr(actor_obj, "statuses", None)
+        if not isinstance(statuses, list) or not statuses:
+            return None
+        best: int | None = None
+        for status in statuses:
+            if getattr(status, "id", None) != "counter_performance":
+                continue
+            data = getattr(status, "data", None) or {}
+            try:
+                value = int(data.get("performance_total", 0) or 0)
+            except Exception:
+                value = 0
+            if value <= 0:
+                continue
+            if best is None or value > best:
+                best = value
+        return best
+
+    if skill_id in (Skill.FORTITUDE.value, Skill.REFLEX.value, Skill.WILL.value):
+        perf_total = _counter_performance_total(actor)
+        if perf_total is not None and total < perf_total:
+            original_total = total
+            total = perf_total
+            outcome = resolve_skill_check(dc, total)
+            notes.append(
+                f"Counter Performance: wynik save {original_total} zastapiony przez {perf_total}."
+            )
+
     resolution = SkillCheckResolution(
         outcome=outcome,
         roll=roll,
@@ -422,6 +451,29 @@ def _collect_modifier_data(
                             is_penalty=True,
                         )
                     )
+
+    if skill_id in (Skill.FORTITUDE.value, Skill.REFLEX.value, Skill.WILL.value) and "fear" in tags:
+        has_status = getattr(actor, "has_status", None)
+        has_ic = False
+        if callable(has_status):
+            try:
+                has_ic = bool(has_status("inspire_courage"))
+            except Exception:
+                has_ic = False
+        if not has_ic:
+            statuses = getattr(actor, "statuses", None)
+            if isinstance(statuses, list):
+                has_ic = any(getattr(s, "id", None) == "inspire_courage" for s in statuses)
+        if has_ic:
+            all_effects.append(
+                BonusEffect(
+                    type=BonusType.STATUS,
+                    value=1,
+                    tag=skill_id,
+                    source="status:inspire_courage_fear",
+                    label="inspire courage",
+                )
+            )
 
     if skill_id == Skill.STEALTH.value:
         try:

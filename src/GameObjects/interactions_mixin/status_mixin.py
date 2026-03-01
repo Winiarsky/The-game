@@ -417,11 +417,28 @@ class StatusMixin:
             if any(s.id == status.id for s in self.statuses):
                 return False
         self.statuses.append(status)
+        self._apply_status_actor_attrs(status)
         self._apply_removed_statuses(status)
         self._apply_granted_statuses(status)
         self._ui_log(f"Otrzymujesz status: {status.display_label}.")
         self._maybe_prompt_status_info(status)
         return True
+
+    def _apply_status_actor_attrs(self, status: "Status") -> None:
+        data = getattr(status, "data", None) or {}
+        attrs = data.get("set_actor_attrs") or {}
+        if not isinstance(attrs, dict):
+            return
+        for key, value in attrs.items():
+            name = str(key or "").strip()
+            if not name:
+                continue
+            if hasattr(self, name):
+                continue
+            try:
+                setattr(self, name, value)
+            except Exception:
+                continue
 
     def _apply_removed_statuses(self, status: "Status") -> None:
         data = getattr(status, "data", None) or {}

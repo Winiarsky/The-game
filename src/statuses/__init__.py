@@ -66,6 +66,8 @@ from .summoned_fey import SummonedFeyStatus
 from .true_strike import TrueStrikeStatus
 from .unseen_servant import UnseenServantStatus
 from .ventriloquism import VentriloquismStatus
+from .counter_performance import CounterPerformanceStatus
+from .inspire_courage import InspireCourageStatus, inspire_courage_damage_bonus
 
 __all__ = [
     "Status",
@@ -163,4 +165,7 @@ __all__ = [
     "TrueStrikeStatus",
     "UnseenServantStatus",
     "VentriloquismStatus",
+    "CounterPerformanceStatus",
+    "InspireCourageStatus",
+    "inspire_courage_damage_bonus",
 ]

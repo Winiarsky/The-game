@@ -6,6 +6,7 @@ from bonuses import BonusEffect, BonusType, build_modifiers_grid
 from damage_types import DamageType
 from GameObjects.interactions_mixin import prompt_for_roll
 from combat.damage_utils import apply_splash_damage
+from statuses import inspire_courage_damage_bonus
 
 from ..attack.attack_base import AttackEventBase, check_concealed
 from ..base import ActionCostEvent, EventContext, EventResult
@@ -328,6 +329,7 @@ class BaseAlchemicalBombEvent(ActionCostEvent, AttackEventBase):
         dmg_dice = tier_data.get("damage_dice")
         if dmg_dice:
             dmg = self._prompt_damage(tier, str(dmg_dice))
+            dmg += int(inspire_courage_damage_bonus(ctx.actor) or 0)
             self._apply_damage(target, dmg, self.damage_type)
 
         splash = int(tier_data.get("splash", 0) or 0)

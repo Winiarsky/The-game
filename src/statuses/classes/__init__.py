@@ -2,4 +2,4 @@ from __future__ import annotations
 
 # Package for class statuses.
 
-__all__: list[str] = ["alchemist", "barbarian"]
+__all__: list[str] = ["alchemist", "barbarian", "bard"]

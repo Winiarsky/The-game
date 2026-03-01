@@ -9,8 +9,10 @@ for path in (PROJECT_ROOT, SRC_ROOT):
         sys.path.insert(0, str(path))
 
 from GameObjects.events.aid_event import AidEvent
+from GameObjects.events.attack.attack_base import AttackEventBase
 from GameObjects.events.base import EventContext
 from GameObjects.interactions_mixin import BonusMixin, StatusMixin
+from bonuses import BonusEffect, BonusType
 from statuses.race.human.feats.cooperative_nature import COOPERATIVE_NATURE_STATUS
 from states.combat import Combat
 
@@ -74,6 +76,31 @@ def _game(hero, target, board):
 
 def _ctx(game, actor):
     return EventContext(game=game, actor=actor)
+
+
+def test_aid_available_in_exploration(monkeypatch):
+    hero = DummyActor("h1", (0, 0))
+    target = DummyActor("h2", (1, 0))
+    board = DummyBoard({hero.position: hero, target.position: target})
+    game = _game(hero, target, board)
+    class Exploration:
+        pass
+    game.state = Exploration()
+    ctx = _ctx(game, hero)
+    event = AidEvent()
+
+    monkeypatch.setattr(event, "_pick_target", lambda *_a, **_k: (target, target.position))
+    monkeypatch.setattr(event, "_pick_aid_test", lambda *_a, **_k: "skill:athletics")
+    monkeypatch.setattr(
+        "GameObjects.events.aid_event.resolve_skill_check_with_sources",
+        lambda **_k: SimpleNamespace(outcome="success"),
+    )
+
+    res = event.execute(ctx)
+    assert res.success is True
+    status = target.get_status("aided")
+    assert status is not None
+    assert status.data.get("bonus") == 1
 
 
 def test_aid_skill_success_adds_plus_one(monkeypatch):
@@ -248,3 +275,52 @@ def test_aid_ranged_attack_critical_failure_adds_penalty(monkeypatch):
     assert bonus.tag == "attack_ranged"
     assert bonus.value == 1
     assert bonus.is_penalty is True
+
+
+def test_aid_attack_bonus_has_combat_duration_and_tagged_source(monkeypatch):
+    hero = DummyActor("h1", (0, 0))
+    target = DummyActor("h2", (1, 0))
+    board = DummyBoard({hero.position: hero, target.position: target})
+    game = _game(hero, target, board)
+    ctx = _ctx(game, hero)
+    event = AidEvent()
+
+    monkeypatch.setattr(event, "_pick_target", lambda *_a, **_k: (target, target.position))
+    monkeypatch.setattr(event, "_pick_aid_test", lambda *_a, **_k: "attack:melee")
+    monkeypatch.setattr("GameObjects.events.aid_event.prompt_for_roll", lambda *_a, **_k: 15)
+
+    res = event.execute(ctx)
+    assert res.success is True
+    bonus = target.bonuses[-1]
+    assert bonus.source == "aid:attack:attack_melee"
+    assert bonus.duration_turns == 2
+
+
+def test_aid_attack_bonus_consumed_for_matching_attack_tag_only():
+    class DummyAttack(AttackEventBase):
+        pass
+
+    actor = DummyActor("h1", (0, 0))
+    actor.add_bonus(
+        BonusEffect(
+            type=BonusType.CIRCUMSTANCE,
+            value=1,
+            tag="attack_melee",
+            source="aid:attack:attack_melee",
+            label="aid +1",
+        )
+    )
+    actor.add_bonus(
+        BonusEffect(
+            type=BonusType.CIRCUMSTANCE,
+            value=1,
+            tag="attack_ranged",
+            source="aid:attack:attack_ranged",
+            label="aid +1",
+        )
+    )
+
+    DummyAttack()._consume_aid_attack_bonus(actor, action_tag="attack_melee")
+    sources = [b.source for b in actor.bonuses]
+    assert "aid:attack:attack_melee" not in sources
+    assert "aid:attack:attack_ranged" in sources

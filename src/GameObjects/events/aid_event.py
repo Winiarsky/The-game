@@ -23,7 +23,7 @@ class AidEvent(ActionCostEvent):
     name = "aid"
     default_tags = ["aid", "manipulate"]
     available_in_combat = True
-    available_in_exploration = False
+    available_in_exploration = True
     consumes_action = True
     actions_cost = 1
 
@@ -102,8 +102,6 @@ class AidEvent(ActionCostEvent):
         return None, None
 
     def execute(self, ctx: EventContext) -> EventResult:
-        if not ctx.in_combat:
-            return EventResult.cancelled(message="Aid dostępne tylko w walce.")
         actor = ctx.actor
         if actor is None:
             return EventResult.cancelled(message="Brak bohatera do Aid.")
@@ -153,9 +151,13 @@ class AidEvent(ActionCostEvent):
             if not callable(adder):
                 return EventResult.cancelled(message="Sojusznik nie obsługuje bonusów.")
             try:
-                remover = getattr(target, "remove_bonuses_by_source", None)
-                if callable(remover):
-                    remover("aid:attack")
+                remover_prefix = getattr(target, "remove_bonuses_with_prefix", None)
+                if callable(remover_prefix):
+                    remover_prefix("aid:attack:")
+                else:
+                    remover = getattr(target, "remove_bonuses_by_source", None)
+                    if callable(remover):
+                        remover("aid:attack")
             except Exception:
                 pass
             try:
@@ -164,9 +166,10 @@ class AidEvent(ActionCostEvent):
                         type=BonusType.CIRCUMSTANCE,
                         value=abs(bonus),
                         tag=tag,
-                        source="aid:attack",
+                        source=f"aid:attack:{tag}",
                         label=f"aid {bonus:+d}",
                         is_penalty=bonus < 0,
+                        duration_turns=2 if ctx.in_combat else None,
                     )
                 )
             except Exception as exc:
