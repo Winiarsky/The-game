@@ -14,6 +14,7 @@ if str(SRC) not in sys.path:
 from GameObjects.events.base import EventContext
 from GameObjects.events.magic.cantrips import events as occ
 from GameObjects.events.magic.lighting_effects import is_position_in_light_aura
+from GameObjects.events.magic.spell_types import SpellTradition
 from GameObjects.interactions_mixin.skill_check_resolver import compute_skill_modifier_with_sources
 from GameObjects.NPC.base_npc import BaseNPC
 from skills import Skill
@@ -304,3 +305,118 @@ def test_stunned_consumed_on_turn_start():
     assert current is actor
     assert combat.actions_used[actor] == 2
     assert not actor.has_status("stunned")
+
+
+def test_arcane_tradition_added_for_shared_cantrips():
+    events = [
+        occ.ChillTouchEvent(),
+        occ.DancingLightsEvent(),
+        occ.DazeEvent(),
+        occ.LightEvent(),
+        occ.MageHandEvent(),
+        occ.MessageEvent(),
+        occ.PrestidigitationEvent(),
+        occ.ReadAuraEvent(),
+        occ.ShieldCantripEvent(),
+        occ.TelekineticProjectileEvent(),
+    ]
+    for event in events:
+        assert SpellTradition.ARCANA in tuple(getattr(event, "magic_traditions", ()) or ())
+
+
+def test_electric_arc_hits_two_targets(monkeypatch):
+    hero = DummyActor("hero", (0, 0))
+    e1 = DummyActor("enemy1", (1, 0), hp=20)
+    e2 = DummyActor("enemy2", (2, 0), hp=20)
+    game = _game(actor=hero, enemies=[e1, e2])
+
+    picks = [(e1, e1.position), (e2, e2.position)]
+    monkeypatch.setattr(occ, "pick_target_in_range", lambda *_a, **_k: picks.pop(0))
+    monkeypatch.setattr(occ, "_prompt_choice", lambda *_a, **_k: "Tak")
+    rolls = iter([15, 6])  # dc, damage
+    monkeypatch.setattr(occ, "prompt_for_roll", lambda *_a, **_k: next(rolls))
+    save_rolls = iter([5, 19])  # failure, success
+    monkeypatch.setattr(occ.random, "randint", lambda _a, _b: next(save_rolls))
+
+    res = occ.ElectricArcEvent().execute(EventContext(game=game, actor=hero))
+
+    assert res.success is True
+    assert e1.hp == 8
+    assert e2.hp == 17
+
+
+def test_ghost_sound_adds_runtime_marker(monkeypatch):
+    hero = DummyActor("hero", (0, 0))
+    game = _game(actor=hero)
+
+    monkeypatch.setattr(occ, "pick_position_in_range", lambda *_a, **_k: (2, 2))
+    monkeypatch.setattr(occ, "_prompt_choice", lambda *_a, **_k: "kroki")
+
+    res = occ.GhostSoundEvent().execute(EventContext(game=game, actor=hero))
+
+    assert res.success is True
+    assert game._arcane_runtime["ghost_sounds"][0]["pos"] == (2, 2)
+    assert game._arcane_runtime["ghost_sounds"][0]["sound"] == "kroki"
+
+
+def test_produce_flame_critical_adds_persistent(monkeypatch):
+    hero = DummyActor("hero", (0, 0))
+    enemy = DummyActor("enemy", (1, 0), hp=20)
+    game = _game(actor=hero, enemies=[enemy])
+
+    monkeypatch.setattr("GameObjects.events.magic.base_attack_magic_event.pick_target_in_range", lambda *_a, **_k: (enemy, enemy.position))
+    monkeypatch.setattr(occ, "_prompt_choice", lambda *_a, **_k: "melee")
+    monkeypatch.setattr("GameObjects.events.magic.base_attack_magic_event.prompt_for_roll", lambda *_a, **_k: 30)
+    damage_rolls = iter([4, 2])  # damage, persistent
+    monkeypatch.setattr(occ, "prompt_for_roll", lambda *_a, **_k: next(damage_rolls))
+
+    res = occ.ProduceFlameEvent().execute(EventContext(game=game, actor=hero))
+
+    assert res.success is True
+    assert enemy.hp == 12
+    assert any(getattr(s, "id", "") == "persistent_damage" for s in enemy.statuses)
+
+
+def test_ray_of_frost_critical_applies_speed_penalty(monkeypatch):
+    hero = DummyActor("hero", (0, 0))
+    enemy = DummyActor("enemy", (1, 0), hp=20)
+    game = _game(actor=hero, enemies=[enemy])
+
+    monkeypatch.setattr("GameObjects.events.magic.base_attack_magic_event.pick_target_in_range", lambda *_a, **_k: (enemy, enemy.position))
+    monkeypatch.setattr("GameObjects.events.magic.base_attack_magic_event.prompt_for_roll", lambda *_a, **_k: 30)
+    monkeypatch.setattr(occ, "prompt_for_roll", lambda *_a, **_k: 3)
+
+    res = occ.RayOfFrostEvent().execute(EventContext(game=game, actor=hero))
+
+    assert res.success is True
+    assert enemy.hp == 14
+    assert any(getattr(s, "id", "") == "speed_penalty" for s in enemy.statuses)
+
+
+def test_sigil_marks_target(monkeypatch):
+    hero = DummyActor("hero", (0, 0))
+    enemy = DummyActor("enemy", (1, 0))
+    game = _game(actor=hero, enemies=[enemy])
+
+    monkeypatch.setattr(occ, "pick_target_in_range", lambda *_a, **_k: (enemy, enemy.position))
+    monkeypatch.setattr(occ, "_prompt_choice", lambda *_a, **_k: "runa")
+
+    res = occ.SigilEvent().execute(EventContext(game=game, actor=hero))
+
+    assert res.success is True
+    assert getattr(enemy, "sigils", [{}])[0].get("mark") == "runa"
+
+
+def test_tanglefoot_critical_applies_immobilized(monkeypatch):
+    hero = DummyActor("hero", (0, 0))
+    enemy = DummyActor("enemy", (1, 0))
+    game = _game(actor=hero, enemies=[enemy])
+
+    monkeypatch.setattr("GameObjects.events.magic.base_attack_magic_event.pick_target_in_range", lambda *_a, **_k: (enemy, enemy.position))
+    monkeypatch.setattr("GameObjects.events.magic.base_attack_magic_event.prompt_for_roll", lambda *_a, **_k: 30)
+
+    res = occ.TanglefootEvent().execute(EventContext(game=game, actor=hero))
+
+    assert res.success is True
+    assert any(getattr(s, "id", "") == "speed_penalty" for s in enemy.statuses)
+    assert any(getattr(s, "id", "") == "immobilized" for s in enemy.statuses)

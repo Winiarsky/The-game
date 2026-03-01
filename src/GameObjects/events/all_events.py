@@ -49,9 +49,6 @@ from .elixirs import silvertongue_mutagen_event  # noqa: F401
 from . import mutagenic_flashback_event  # noqa: F401
 from .poisons import arsenic_event  # noqa: F401
 from .poisons import giant_centipede_venom_event  # noqa: F401
-from .magic import magic_missile_event  # noqa: F401
-from .magic import detect_magic_event  # noqa: F401
-from .magic import acid_splash_event  # noqa: F401
 from .magic.cantrips import events as cantrips_events  # noqa: F401
 from .magic.level_1st import events as level_1st_events  # noqa: F401
 from .magic.focus_spells.bard import counter_performance_event  # noqa: F401

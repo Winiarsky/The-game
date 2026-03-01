@@ -13,6 +13,7 @@ if str(SRC) not in sys.path:
 
 from GameObjects.events.base import EventContext
 from GameObjects.events.magic.level_1st import events as occ1
+from GameObjects.events.magic.spell_types import SpellTradition
 
 
 class DummyConn:
@@ -219,3 +220,183 @@ def test_alarm_triggers_on_enemy_enter(monkeypatch):
 
     assert messages
     assert "Alarm" in messages[0]
+
+
+def test_rank1_arcane_tradition_added_for_shared_spells():
+    events = [
+        occ1.AlarmEvent(),
+        occ1.CharmEvent(),
+        occ1.ColorSprayEvent(),
+        occ1.CommandEvent(),
+        occ1.FearEvent(),
+        occ1.FloatingDiskEvent(),
+        occ1.GrimTendrilsEvent(),
+        occ1.IllusoryDisguiseEvent(),
+        occ1.IllusoryObjectEvent(),
+        occ1.ItemFacadeEvent(),
+        occ1.LockSpellEvent(),
+        occ1.MageArmorEvent(),
+        occ1.MagicAuraEvent(),
+        occ1.MagicWeaponEvent(),
+        occ1.MendingEvent(),
+        occ1.RayOfEnfeeblementEvent(),
+        occ1.SleepEvent(),
+        occ1.TrueStrikeEvent(),
+        occ1.UnseenServantEvent(),
+        occ1.VentriloquismEvent(),
+    ]
+    for event in events:
+        assert SpellTradition.ARCANA in tuple(getattr(event, "magic_traditions", ()) or ())
+
+
+def test_magic_missile_spends_actions_by_missiles(monkeypatch):
+    caster = DummyActor("caster", (0, 0))
+    enemy = DummyActor("enemy", (1, 0), hp=20)
+    game = _game(actor=caster, enemies=[enemy])
+
+    monkeypatch.setattr(occ1, "_prompt_choice", lambda *_a, **_k: "2")
+    monkeypatch.setattr(occ1, "pick_target_in_range", lambda *_a, **_k: (enemy, enemy.position))
+    damage_rolls = iter([3, 4])
+    monkeypatch.setattr(occ1, "prompt_for_roll", lambda *_a, **_k: next(damage_rolls))
+
+    result = occ1.MagicMissileEvent().execute(EventContext(game=game, actor=caster))
+
+    assert result.success is True
+    assert result.actions_spent == 2
+    assert enemy.hp == 13
+
+
+def test_burning_hands_hits_targets_in_cone(monkeypatch):
+    caster = DummyActor("caster", (0, 0))
+    e1 = DummyActor("e1", (1, 0), hp=20)
+    e2 = DummyActor("e2", (2, 0), hp=20)
+    game = _game(actor=caster, enemies=[e1, e2])
+
+    monkeypatch.setattr(occ1, "_prompt_choice", lambda *_a, **_k: "E")
+    rolls = iter([15, 6])  # DC, damage
+    monkeypatch.setattr(occ1, "prompt_for_roll", lambda *_a, **_k: next(rolls))
+    monkeypatch.setattr(occ1.random, "randint", lambda _a, _b: 5)  # failure
+
+    result = occ1.BurningHandsEvent().execute(EventContext(game=game, actor=caster))
+
+    assert result.success is True
+    assert e1.hp == 8
+    assert e2.hp == 8
+
+
+def test_hydraulic_push_deals_damage_and_pushes(monkeypatch):
+    caster = DummyActor("caster", (0, 0))
+    enemy = DummyActor("enemy", (1, 0), hp=20)
+    game = _game(actor=caster, enemies=[enemy])
+
+    monkeypatch.setattr("GameObjects.events.magic.base_attack_magic_event.pick_target_in_range", lambda *_a, **_k: (enemy, enemy.position))
+    monkeypatch.setattr("GameObjects.events.magic.base_attack_magic_event.prompt_for_roll", lambda *_a, **_k: 20)
+    monkeypatch.setattr(occ1, "prompt_for_roll", lambda *_a, **_k: 5)
+
+    result = occ1.HydraulicPushEvent().execute(EventContext(game=game, actor=caster))
+
+    assert result.success is True
+    assert enemy.hp == 10
+    assert "Odepchniecie" in (result.message or "")
+
+
+def test_grease_surface_prones_enemy_and_creates_zone(monkeypatch):
+    caster = DummyActor("caster", (0, 0))
+    enemy = DummyActor("enemy", (1, 0), hp=20)
+    game = _game(actor=caster, enemies=[enemy])
+
+    choices = iter(["surface"])
+    monkeypatch.setattr(occ1, "_prompt_choice", lambda *_a, **_k: next(choices))
+    monkeypatch.setattr(occ1, "pick_position_in_range", lambda *_a, **_k: (1, 0))
+    monkeypatch.setattr(occ1, "prompt_for_roll", lambda *_a, **_k: 15)
+    monkeypatch.setattr(occ1.random, "randint", lambda _a, _b: 5)
+
+    result = occ1.GreaseEvent().execute(EventContext(game=game, actor=caster))
+
+    assert result.success is True
+    assert enemy.has_status("prone")
+    assert game._arcane_runtime["grease_zones"]
+
+
+def test_longstrider_adds_speed_bonus(monkeypatch):
+    caster = DummyActor("caster", (0, 0))
+    ally = DummyActor("ally", (1, 0))
+    game = _game(actor=caster, heroes=[caster, ally])
+
+    monkeypatch.setattr(occ1, "pick_target_in_range", lambda *_a, **_k: (ally, ally.position))
+    result = occ1.LongstriderEvent().execute(EventContext(game=game, actor=caster))
+
+    assert result.success is True
+    assert any(getattr(s, "id", "") == "speed_bonus" for s in ally.statuses)
+
+
+def test_air_bubble_reaction_style(monkeypatch):
+    caster = DummyActor("caster", (0, 0))
+    ally = DummyActor("ally", (1, 0))
+    game = _game(actor=caster, heroes=[caster, ally])
+
+    monkeypatch.setattr(occ1, "pick_target_in_range", lambda *_a, **_k: (ally, ally.position))
+    result = occ1.AirBubbleEvent().execute(EventContext(game=game, actor=caster))
+
+    assert result.success is True
+    assert result.consumed_action is False
+    assert ally.has_status("air_bubble")
+
+
+def test_shocking_grasp_critical_damage(monkeypatch):
+    caster = DummyActor("caster", (0, 0))
+    enemy = DummyActor("enemy", (1, 0), hp=20)
+    game = _game(actor=caster, enemies=[enemy])
+
+    monkeypatch.setattr("GameObjects.events.magic.base_attack_magic_event.pick_target_in_range", lambda *_a, **_k: (enemy, enemy.position))
+    monkeypatch.setattr("GameObjects.events.magic.base_attack_magic_event.prompt_for_roll", lambda *_a, **_k: 30)
+    choices = iter(["nie"])
+    monkeypatch.setattr(occ1, "_prompt_choice", lambda *_a, **_k: next(choices))
+    monkeypatch.setattr(occ1, "prompt_for_roll", lambda *_a, **_k: 4)
+
+    result = occ1.ShockingGraspEvent().execute(EventContext(game=game, actor=caster))
+
+    assert result.success is True
+    assert enemy.hp == 12
+
+
+def test_goblin_pox_applies_poisoned_on_failure(monkeypatch):
+    caster = DummyActor("caster", (0, 0))
+    enemy = DummyActor("enemy", (1, 0), hp=20)
+    game = _game(actor=caster, enemies=[enemy])
+
+    monkeypatch.setattr(occ1, "pick_target_in_range", lambda *_a, **_k: (enemy, enemy.position))
+    rolls = iter([15, 6])  # dc, dmg
+    monkeypatch.setattr(occ1, "prompt_for_roll", lambda *_a, **_k: next(rolls))
+    monkeypatch.setattr(occ1.random, "randint", lambda _a, _b: 5)  # failure
+
+    result = occ1.GoblinPoxEvent().execute(EventContext(game=game, actor=caster))
+
+    assert result.success is True
+    assert enemy.hp == 8
+    assert enemy.has_status("poisoned")
+
+
+def test_summon_animal_and_construct_add_status():
+    caster = DummyActor("caster", (0, 0))
+    game = _game(actor=caster, heroes=[caster], enemies=[])
+
+    res_animal = occ1.SummonAnimalEvent().execute(EventContext(game=game, actor=caster))
+    res_construct = occ1.SummonConstructEvent().execute(EventContext(game=game, actor=caster))
+
+    assert res_animal.success is True
+    assert res_construct.success is True
+    assert caster.has_status("summon_animal")
+    assert caster.has_status("summon_construct")
+
+
+def test_pest_form_sets_form_status(monkeypatch):
+    caster = DummyActor("caster", (0, 0))
+    game = _game(actor=caster, heroes=[caster], enemies=[])
+
+    monkeypatch.setattr(occ1, "_prompt_choice", lambda *_a, **_k: "rat")
+    result = occ1.PestFormEvent().execute(EventContext(game=game, actor=caster))
+
+    assert result.success is True
+    status = [s for s in caster.statuses if getattr(s, "id", "") == "pest_form"]
+    assert status and status[0].data.get("form") == "rat"

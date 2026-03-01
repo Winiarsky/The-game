@@ -5,7 +5,7 @@ from hero import Hero
 from GameObjects.Enemies.basic_enemy import BasicEnemy
 from GameObjects.Interactables.hidden_cache import HiddenCache
 from GameObjects.events.base import EventContext
-from GameObjects.events.magic.detect_magic_event import DetectMagicEvent
+from GameObjects.events.magic.cantrips.events import DetectMagicEvent
 
 
 class DummyConn:

@@ -14,7 +14,7 @@ from GameObjects.Enemies.enemy_types import EnemyType
 from GameObjects.events.base import EventContext
 from GameObjects.events.attack.basic_melee_attack_event import BasicMeleeAttackEvent
 from GameObjects.events.attack import base_attack_range_event
-from GameObjects.events.magic.acid_splash_event import AcidSplashEvent
+from GameObjects.events.magic.cantrips.events import AcidSplashEvent
 from hero import Hero
 from statuses.race.dwarf.feats.vengeful_hatred import VengefulHatredStatus
 

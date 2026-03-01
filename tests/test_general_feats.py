@@ -12,7 +12,7 @@ from hero import Hero
 from board_grid import BoardGrid
 from GameObjects.Interactables.hidden_cache import HiddenCache
 from GameObjects.events.base import EventContext
-from GameObjects.events.magic.detect_magic_event import DetectMagicEvent
+from GameObjects.events.magic.cantrips.events import DetectMagicEvent
 
 
 class DummyHero(StatusMixin):

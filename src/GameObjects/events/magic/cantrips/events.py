@@ -6,18 +6,30 @@ from typing import Iterable
 
 from board import consts
 from bonuses import BonusEffect, BonusType
+from combat.damage_utils import burn_it_bonus, burn_it_prompt_note
 from damage_types import DamageType
 from skills import Skill
-from statuses import EnfeebledStatus, StunnedStatus, ShieldCantripStatus, shield_cantrip_ac_bonus, inspire_courage_damage_bonus
+from statuses import (
+    EnfeebledStatus,
+    ImmobilizedStatus,
+    ShieldCantripStatus,
+    SpeedPenaltyStatus,
+    StunnedStatus,
+    inspire_courage_damage_bonus,
+    make_persistent_damage,
+    shield_cantrip_ac_bonus,
+)
 from GameObjects.interactions_mixin import prompt_for_roll
+from GameObjects.interactions_mixin.magical_mixin import MagicalMixin
 from GameObjects.interactions_mixin.skill_check_resolver import compute_skill_modifier_with_sources
 from GameObjects.NPC.base_npc import BaseNPC
 
 from ...base import EventContext, EventResult
 from ...registry import register_event
 from ..base_attack_magic_event import BaseMagicAttackEvent
+from ..magic_utils import grid_distance_feet
 from ..magic_event import MagicEvent
-from ..magic_utils import pick_target_in_range, positions_within_range
+from ..magic_utils import pick_position_in_range, pick_target_in_range, positions_within_range
 from ..spell_types import SpellTradition
 from ..lighting_effects import (
     set_dancing_positions,
@@ -108,6 +120,32 @@ def _roll_enemy_save(target, skill_id: str, dc: int, *, attacker=None, tags: lis
     return _save_outcome(total, dc), roll, total
 
 
+def _basic_save_damage(base_damage: int, outcome: str) -> int:
+    base = max(0, int(base_damage))
+    if outcome == "critical_success":
+        return 0
+    if outcome == "success":
+        return max(0, base // 2)
+    if outcome == "critical_failure":
+        return max(0, base * 2)
+    return base
+
+
+def _prompt_choice(ctx: EventContext, prompt: str, choices: list[str], *, source: str) -> str | None:
+    ui = getattr(ctx.game, "ui", None)
+    chooser = getattr(ui, "prompt_choice", None)
+    if not callable(chooser):
+        return None
+    try:
+        value = chooser(prompt, choices=choices, source=source)
+    except Exception:
+        return None
+    if value is None:
+        return None
+    value = str(value).strip()
+    return value or None
+
+
 def _remove_statuses(target, status_id: str) -> None:
     statuses = getattr(target, "statuses", None)
     if not isinstance(statuses, list) or not statuses:
@@ -119,14 +157,59 @@ def _remove_statuses(target, status_id: str) -> None:
         pass
 
 
+def _level_range(actor) -> int:
+    try:
+        level = int(getattr(actor, "level", 1) or 1)
+    except Exception:
+        level = 1
+    return max(1, level // 2)
+
+
+def _is_magical(obj) -> bool:
+    if obj is None:
+        return False
+    if getattr(obj, "magical", False):
+        return True
+    tags = getattr(obj, "tags", None) or []
+    return "magical" in tags or "magic" in tags
+
+
+def _magical_description(obj) -> str:
+    desc = getattr(obj, "magical_description", "") or ""
+    if desc:
+        return desc
+    name = getattr(obj, "name", None) or getattr(obj, "label", None)
+    if name:
+        return f"Magiczny obiekt: {name}"
+    return "Magiczna aura."
+
+
+def _iter_room_objects(ctx: EventContext, rooms: set[str]) -> list[tuple[object, tuple[int, int]]]:
+    board = ctx.game.board
+    positions = board.positions_in_rooms(rooms) if rooms else set()
+    seen: set[int] = set()
+    result: list[tuple[object, tuple[int, int]]] = []
+    for pos in positions:
+        occ = board.occupant_at(pos)
+        if occ is not None and id(occ) not in seen:
+            seen.add(id(occ))
+            result.append((occ, pos))
+        for obj in board.interactables_at(pos):
+            if id(obj) in seen:
+                continue
+            seen.add(id(obj))
+            result.append((obj, pos))
+    return result
+
+
 @register_event
 class ChillTouchEvent(MagicEvent):
     name = "chill_touch"
     actions_cost = 2
     range_feet = 5
     default_tags = ["magic", "spell"]
-    spell_tags = ["cantrip", "occult", "necromancy", "touch"]
-    magic_traditions = (SpellTradition.OCCULT,)
+    spell_tags = ["cantrip", "occult", "arcane", "necromancy", "touch"]
+    magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA)
     magic_types = ["necromancy"]
     prompt = "Chill Touch - 1k4 negative, Fortitude save, Enfeebled przy porazce."
 
@@ -214,8 +297,8 @@ class DancingLightsEvent(MagicEvent):
     name = "dancing_lights"
     actions_cost = 2
     default_tags = ["magic", "spell"]
-    spell_tags = ["cantrip", "occult", "evocation"]
-    magic_traditions = (SpellTradition.OCCULT,)
+    spell_tags = ["cantrip", "occult", "arcane", "evocation"]
+    magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA)
     magic_types = ["evocation"]
     range_feet = 30
     prompt = "Dancing Lights - wybierz do 4 pol darkness/dim light i zatwierdz klikajac na bohatera."
@@ -288,8 +371,8 @@ class DazeEvent(MagicEvent):
     name = "daze"
     actions_cost = 2
     default_tags = ["magic", "spell"]
-    spell_tags = ["cantrip", "occult", "enchantment"]
-    magic_traditions = (SpellTradition.OCCULT,)
+    spell_tags = ["cantrip", "occult", "arcane", "enchantment"]
+    magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA)
     magic_types = ["enchantment"]
     range_feet = 60
     prompt = "Daze - enemy robi Will save."
@@ -550,8 +633,8 @@ class LightEvent(MagicEvent):
     name = "light"
     actions_cost = 2
     default_tags = ["magic", "spell"]
-    spell_tags = ["cantrip", "occult", "evocation"]
-    magic_traditions = (SpellTradition.OCCULT,)
+    spell_tags = ["cantrip", "occult", "arcane", "evocation"]
+    magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA)
     magic_types = ["evocation"]
     prompt = "Light - aura 30 stop od castera do konca walki."
 
@@ -574,8 +657,8 @@ class MageHandEvent(MagicEvent):
     name = "mage_hand"
     actions_cost = 2
     default_tags = ["magic", "spell", "manipulate"]
-    spell_tags = ["cantrip", "occult", "evocation"]
-    magic_traditions = (SpellTradition.OCCULT,)
+    spell_tags = ["cantrip", "occult", "arcane", "evocation"]
+    magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA)
     magic_types = ["evocation"]
     range_feet = 30
     prompt = "Mage Hand - interakcja z interactable (bez NPC) do 30 stop."
@@ -619,8 +702,8 @@ class MessageEvent(MagicEvent):
     name = "message"
     actions_cost = 1
     default_tags = ["magic", "spell"]
-    spell_tags = ["cantrip", "occult", "illusion"]
-    magic_traditions = (SpellTradition.OCCULT,)
+    spell_tags = ["cantrip", "occult", "arcane", "illusion"]
+    magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA)
     magic_types = ["illusion"]
     range_feet = 120
     prompt = "Message - rozmowa z NPC na odleglosc."
@@ -664,8 +747,8 @@ class PrestidigitationEvent(MagicEvent):
     name = "prestidigitation"
     actions_cost = 2
     default_tags = ["magic", "spell"]
-    spell_tags = ["cantrip", "occult", "evocation"]
-    magic_traditions = (SpellTradition.OCCULT,)
+    spell_tags = ["cantrip", "occult", "arcane", "evocation"]
+    magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA)
     magic_types = ["evocation"]
 
     def execute(self, ctx: EventContext) -> EventResult:
@@ -681,8 +764,8 @@ class ReadAuraEvent(MagicEvent):
     name = "read_aura"
     actions_cost = 2
     default_tags = ["magic", "spell", "detect"]
-    spell_tags = ["cantrip", "occult", "divination"]
-    magic_traditions = (SpellTradition.OCCULT,)
+    spell_tags = ["cantrip", "occult", "arcane", "divination"]
+    magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA)
     magic_types = ["divination"]
     range_feet = 30
     prompt = "Read Aura - pokaz statusy enemy w zasiegu 30 stop."
@@ -726,8 +809,8 @@ class ShieldCantripEvent(MagicEvent):
     name = "shield_cantrip"
     actions_cost = 1
     default_tags = ["magic", "spell", "defense"]
-    spell_tags = ["cantrip", "occult", "abjuration"]
-    magic_traditions = (SpellTradition.OCCULT,)
+    spell_tags = ["cantrip", "occult", "arcane", "abjuration"]
+    magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA)
     magic_types = ["abjuration"]
     prompt = "Shield Cantrip - +1 AC i absorpcja 5 obrazen."
 
@@ -763,8 +846,8 @@ class TelekineticProjectileEvent(BaseMagicAttackEvent):
     actions_cost = 2
     range_feet = 30
     default_tags = ["magic", "spell", "attack_ranged"]
-    spell_tags = ["cantrip", "occult", "evocation"]
-    magic_traditions = (SpellTradition.OCCULT,)
+    spell_tags = ["cantrip", "occult", "arcane", "evocation"]
+    magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA)
     magic_types = ["evocation"]
 
     def _resolve_on_target(self, target, pos, ctx: EventContext, *, critical: bool = False) -> EventResult:
@@ -803,4 +886,609 @@ class TelekineticProjectileEvent(BaseMagicAttackEvent):
             msg = f"Telekinetic Projectile - krytyk! {damage} {dtype}."
         if defeated:
             msg += " Cel pokonany."
+        return EventResult(success=True, consumed_action=self.consumes_action, message=msg)
+
+
+@register_event
+class AcidSplashEvent(BaseMagicAttackEvent):
+    name = "acidsplash"
+    actions_cost = 2
+    range_feet = 30
+    default_tags = ["magic", "spell", "attack_ranged"]
+    spell_tags = ["acid", "cantrip", "arcane", "evocation"]
+    magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL)
+    magic_types = ["evocation"]
+    prompt = "Acid Splash - wystrzel bryzg kwasu w zasiegu 30 stop."
+
+    def _resolve_on_target(self, target, pos, ctx: EventContext, *, critical: bool = False) -> EventResult:
+        dmg = self._prompt_damage()
+        dmg += int(inspire_courage_damage_bonus(ctx.actor) or 0)
+        defeated = _apply_damage(target, dmg, DamageType.ACID.value)
+
+        persistent_value = None
+        if critical:
+            persistent_value = self._prompt_persistent(ctx.actor, DamageType.ACID.value)
+            if persistent_value and persistent_value > 0:
+                try:
+                    target.add_status(make_persistent_damage(persistent_value, DamageType.ACID.value, source=self.name))
+                except Exception as exc:
+                    logger.debug("Nie udalo sie dodac persistent acid: %s", exc)
+
+        message = f"Acid Splash trafia za {dmg} acid."
+        if critical:
+            message = f"Acid Splash - krytyk! {dmg} acid."
+            if persistent_value:
+                message += f" Persistent acid {persistent_value}."
+        if defeated:
+            message += " Cel pokonany."
+
+        return EventResult(
+            success=True,
+            consumed_action=self.consumes_action,
+            message=message,
+            data={
+                "critical": critical,
+                "damage": dmg,
+                "damage_type": DamageType.ACID.value,
+                "persistent_damage": persistent_value,
+            },
+        )
+
+    def _prompt_damage(self) -> int:
+        from ui_client import get_ui_client
+
+        ui = get_ui_client()
+        val = ui.prompt_roll(
+            "Acid Splash - podaj obrazenia kwasowe:",
+            source="game",
+            layout="damage",
+            answer_placeholder="Obrazenia kwasowe",
+        )
+        return int(val or 0)
+
+    def _prompt_persistent(self, actor, damage_type: str) -> int:
+        from ui_client import get_ui_client
+
+        ui = get_ui_client()
+        note = burn_it_prompt_note(actor, damage_type, persistent=True)
+        val = ui.prompt_roll(
+            "Krytyk! Podaj wartosc persistent acid:",
+            source="game",
+            layout="damage",
+            answer_placeholder="Persistent acid",
+            prompt_long=note,
+        )
+        bonus = burn_it_bonus(actor, damage_type, persistent=True)
+        return int(val or 0) + int(bonus)
+
+
+@register_event
+class AcidSplashAliasEvent(AcidSplashEvent):
+    name = "acid_splash"
+
+
+@register_event
+class DetectMagicEvent(MagicEvent):
+    name = "detect_magic"
+    default_tags = ["cast", "magic", "detect"]
+    actions_cost = 2
+    magic_traditions = (
+        SpellTradition.ARCANA,
+        SpellTradition.DIVINE,
+        SpellTradition.OCCULT,
+        SpellTradition.PRIMAL,
+    )
+    spell_tags = ["cantrip", "arcane", "divination", "detect"]
+    magic_types = ["divination"]
+    prompt = "Detect Magic - wyczuj magiczne aury w poblizu."
+
+    def execute(self, ctx: EventContext) -> EventResult:
+        hero = ctx.actor or self._choose_hero(ctx)
+        if hero is None or getattr(hero, "position", None) is None:
+            return EventResult.cancelled(message="Brak bohatera do rzucenia czaru.")
+
+        board = ctx.game.board
+        hero_pos = hero.position
+        rooms_here = board.rooms_at(hero_pos) if hero_pos else set()
+        in_room = _iter_room_objects(ctx, rooms_here) if rooms_here else []
+
+        magical_in_room: list[tuple[object, tuple[int, int]]] = [(obj, pos) for (obj, pos) in in_room if _is_magical(obj)]
+
+        detect_range_feet = _level_range(hero) * 5
+        in_range: list[tuple[object, tuple[int, int]]] = []
+        out_of_range_count = 0
+        newly_revealed: list[object] = []
+
+        for obj, pos in magical_in_room:
+            if hero_pos is None or pos is None:
+                out_of_range_count += 1
+                continue
+            if grid_distance_feet(hero_pos, pos) <= detect_range_feet:
+                in_range.append((obj, pos))
+                if getattr(obj, "hidden", False) and not getattr(obj, "revealed", False):
+                    try:
+                        obj.revealed = True
+                        newly_revealed.append(obj)
+                    except Exception:
+                        pass
+            else:
+                out_of_range_count += 1
+
+        highlight_positions = [
+            pos
+            for obj, pos in in_range
+            if isinstance(obj, MagicalMixin)
+            or hasattr(obj, "magical_description")
+            or getattr(obj, "magical", False)
+        ]
+
+        if highlight_positions:
+            try:
+                ctx.game.conn.set_leds(highlight_positions, [consts.MAGIC_DETECT_RGB] * len(highlight_positions))
+            except Exception:
+                pass
+
+        lines: list[str] = []
+        if magical_in_room:
+            lines.append("Wyczuwasz magię w pomieszczeniu.")
+            lines.append(f"Zasięg wykrywania: {detect_range_feet} stóp.")
+            if in_range:
+                lines.append("Zlokalizowane aury:")
+                for obj, _pos in in_range:
+                    lines.append(f"- {_magical_description(obj)}")
+            if out_of_range_count:
+                lines.append(f"Poza zasięgiem wyczuwasz jeszcze {out_of_range_count} magicznych aur.")
+        else:
+            lines.append("Nie wyczuwasz magii w tym pomieszczeniu.")
+
+        if newly_revealed:
+            lines.append("Odkryto ukryte magiczne obiekty w zasięgu.")
+
+        info_text = "\n".join(lines)
+        try:
+            ui = getattr(ctx.game, "ui", None)
+            if ui and getattr(ui, "prompt_info", None):
+                ui.prompt_info("Detect Magic", prompt_long=info_text, source="detect_magic")
+            else:
+                ctx.game.ui_log(info_text)
+        except Exception:
+            pass
+
+        try:
+            in_combat = getattr(ctx.game, "state", None).__class__.__name__ == "Combat"
+        except Exception:
+            in_combat = False
+        if in_combat:
+            has_status = getattr(hero, "has_status", None)
+            if callable(has_status) and has_status("recognize_spell"):
+                try:
+                    add_bonus = getattr(hero, "add_bonus", None)
+                    if callable(add_bonus):
+                        add_bonus(
+                            BonusEffect(
+                                type=BonusType.CIRCUMSTANCE,
+                                value=1,
+                                tag="ac_magic",
+                                source="status:recognize_spell",
+                                label="recognize spell +1",
+                                duration_turns=1,
+                            )
+                        )
+                        ctx.game.ui_log("Recognize Spell: +1 AC vs magic attacks (1 tura).")
+                except Exception:
+                    pass
+
+        try:
+            ctx.game.conn.scan_board(None)
+        except Exception:
+            pass
+        finally:
+            try:
+                ctx.game.conn.leds_off()
+            except Exception:
+                pass
+
+        return EventResult(success=True, consumed_action=self.consumes_action, message="Detect Magic zakończone.")
+
+    def _choose_hero(self, ctx: EventContext):
+        heroes_positions = [h.position for h in getattr(ctx.game, "heroes", []) if getattr(h, "position", None) is not None]
+        if not heroes_positions:
+            logger.info("Brak bohaterów na planszy.")
+            return None
+        ctx.game.conn.set_leds(heroes_positions, consts.HERO_HIGHLIGHT_RGB)
+        try:
+            pos = ctx.game.conn.scan_board(heroes_positions)
+        finally:
+            try:
+                ctx.game.conn.leds_off()
+            except Exception:
+                pass
+        return ctx.game.board.occupant_at(pos)
+
+
+@register_event
+class DetectMagicAliasEvent(DetectMagicEvent):
+    name = "detectmagic"
+
+
+@register_event
+class ElectricArcEvent(MagicEvent):
+    name = "electric_arc"
+    actions_cost = 2
+    default_tags = ["magic", "spell"]
+    spell_tags = ["cantrip", "arcane", "evocation", "electric"]
+    magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL)
+    magic_types = ["evocation"]
+    range_feet = 30
+    prompt = "Electric Arc - 1 lub 2 cele, Reflex save na kazdy cel."
+
+    def execute(self, ctx: EventContext) -> EventResult:
+        actor = ctx.actor
+        if actor is None or getattr(actor, "position", None) is None:
+            return EventResult.cancelled(message="Brak bohatera do rzucenia czaru.")
+
+        candidates = list(_iter_enemy_candidates(ctx.game))
+        first, first_pos = pick_target_in_range(
+            ctx,
+            actor.position,
+            candidates,
+            max_range_feet=self.range_feet,
+            allowed_kinds=("enemy",),
+            tags=self._effective_tags(ctx),
+        )
+        if first is None or first_pos is None:
+            return EventResult.cancelled(message="Brak celu w zasiegu.")
+
+        targets: list[tuple[object, tuple[int, int]]] = [(first, first_pos)]
+        second_choice = _prompt_choice(
+            ctx,
+            "Electric Arc - drugi cel?",
+            ["Nie", "Tak"],
+            source=self.name,
+        )
+        if str(second_choice or "").strip().lower() == "tak":
+            second_candidates: list[tuple[object, tuple[int, int], str]] = []
+            for cand, cand_pos, kind in candidates:
+                if cand is first or cand_pos is None:
+                    continue
+                if grid_distance_feet(first_pos, cand_pos) <= self.range_feet:
+                    second_candidates.append((cand, cand_pos, kind))
+            if second_candidates:
+                second, second_pos = pick_target_in_range(
+                    ctx,
+                    first_pos,
+                    second_candidates,
+                    max_range_feet=self.range_feet,
+                    allowed_kinds=("enemy",),
+                    tags=self._effective_tags(ctx),
+                )
+                if second is not None and second_pos is not None:
+                    targets.append((second, second_pos))
+
+        spell_dc = int(prompt_for_roll("Electric Arc - podaj Spell DC:", layout="test", answer_placeholder="Spell DC") or 0)
+        base_damage = int(
+            prompt_for_roll(
+                "Electric Arc - podaj obrazenia electric:",
+                layout="damage",
+                answer_placeholder="Obrazenia",
+            )
+            or 0
+        )
+
+        messages: list[str] = []
+        for target, _pos in targets:
+            outcome, roll, total = _roll_enemy_save(
+                target,
+                Skill.REFLEX.value,
+                spell_dc,
+                attacker=actor,
+                tags=["save", Skill.REFLEX.value, "magic", "electric"],
+            )
+            damage = _basic_save_damage(base_damage, outcome)
+            defeated = _apply_damage(target, damage, DamageType.ELECTRIC.value)
+            name = getattr(target, "name", "cel")
+            messages.append(f"{name}: {outcome}, {damage} electric")
+            try:
+                ctx.game.ui_log(
+                    f"Electric Arc [{name}]: Reflex save k20={roll}, suma={total} vs DC {spell_dc}: {outcome}. "
+                    f"Obrazenia: {damage}."
+                )
+            except Exception:
+                pass
+            if defeated:
+                messages[-1] += ", cel pokonany"
+
+        return EventResult(success=True, consumed_action=self.consumes_action, message="Electric Arc: " + "; ".join(messages) + ".")
+
+
+@register_event
+class GhostSoundEvent(MagicEvent):
+    name = "ghost_sound"
+    actions_cost = 2
+    default_tags = ["magic", "spell", "illusion", "auditory"]
+    spell_tags = ["cantrip", "arcane", "illusion"]
+    magic_traditions = (SpellTradition.ARCANA, SpellTradition.OCCULT, SpellTradition.PRIMAL)
+    magic_types = ["illusion"]
+    range_feet = 30
+    prompt = "Ghost Sound - wybierz pole i typ falszywego dzwieku."
+
+    def execute(self, ctx: EventContext) -> EventResult:
+        actor = ctx.actor
+        if actor is None or getattr(actor, "position", None) is None:
+            return EventResult.cancelled(message="Brak bohatera do rzucenia czaru.")
+        pos = pick_position_in_range(ctx, actor.position, max_range_feet=self.range_feet, color=[90, 90, 220])
+        if pos is None:
+            return EventResult.cancelled(message="Nie wybrano pola dla Ghost Sound.")
+
+        sound = _prompt_choice(
+            ctx,
+            "Ghost Sound - wybierz dzwiek",
+            ["szept", "kroki", "krzyk", "stukot"],
+            source=self.name,
+        )
+        sound = sound or "dziwny dzwiek"
+
+        state = getattr(ctx.game, "_arcane_runtime", None)
+        if not isinstance(state, dict):
+            state = {}
+            try:
+                ctx.game._arcane_runtime = state
+            except Exception:
+                pass
+        sounds = state.setdefault("ghost_sounds", [])
+        sounds.append({"pos": pos, "sound": sound, "source_id": _actor_id(actor)})
+
+        try:
+            ctx.game.ui_log(f"Ghost Sound: '{sound}' na polu {pos}.")
+        except Exception:
+            pass
+        return EventResult(success=True, consumed_action=self.consumes_action, message=f"Ghost Sound aktywne na {pos}.")
+
+
+@register_event
+class ProduceFlameEvent(BaseMagicAttackEvent):
+    name = "produce_flame"
+    actions_cost = 2
+    range_feet = 30
+    default_tags = ["magic", "spell", "attack_ranged"]
+    spell_tags = ["cantrip", "arcane", "evocation", "fire"]
+    magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL)
+    magic_types = ["evocation"]
+    prompt = "Produce Flame - atak ogniem (melee lub ranged)."
+
+    def execute(self, ctx: EventContext) -> EventResult:
+        mode = _prompt_choice(ctx, "Produce Flame - wybierz tryb ataku", ["ranged", "melee"], source=self.name) or "ranged"
+        current_range = self.range_feet
+        try:
+            self.range_feet = 5 if str(mode).strip().lower() == "melee" else 30
+            return super().execute(ctx)
+        finally:
+            self.range_feet = current_range
+
+    def _resolve_on_target(self, target, pos, ctx: EventContext, *, critical: bool = False) -> EventResult:
+        damage = int(
+            prompt_for_roll(
+                "Produce Flame - podaj obrazenia fire:",
+                layout="damage",
+                answer_placeholder="Obrazenia",
+            )
+            or 0
+        )
+        damage += int(inspire_courage_damage_bonus(ctx.actor) or 0)
+        damage += int(burn_it_bonus(ctx.actor, DamageType.FIRE.value, persistent=False) or 0)
+        if critical:
+            damage *= 2
+
+        defeated = _apply_damage(target, damage, DamageType.FIRE.value)
+        persistent = None
+        if critical:
+            persistent = self._prompt_persistent(ctx.actor)
+            if persistent and persistent > 0:
+                try:
+                    target.add_status(make_persistent_damage(persistent, DamageType.FIRE.value, source=self.name))
+                except Exception:
+                    pass
+
+        msg = f"Produce Flame trafia za {damage} fire."
+        if critical:
+            msg = f"Produce Flame - krytyk! {damage} fire."
+            if persistent:
+                msg += f" Persistent fire {persistent}."
+        if defeated:
+            msg += " Cel pokonany."
+        return EventResult(success=True, consumed_action=self.consumes_action, message=msg)
+
+    def _prompt_persistent(self, actor) -> int:
+        note = burn_it_prompt_note(actor, DamageType.FIRE.value, persistent=True)
+        val = int(
+            prompt_for_roll(
+                "Produce Flame - podaj persistent fire na krytyku:",
+                layout="damage",
+                answer_placeholder="Persistent fire",
+                prompt_long=note,
+            )
+            or 0
+        )
+        return val + int(burn_it_bonus(actor, DamageType.FIRE.value, persistent=True) or 0)
+
+
+@register_event
+class RayOfFrostEvent(BaseMagicAttackEvent):
+    name = "ray_of_frost"
+    actions_cost = 2
+    range_feet = 120
+    default_tags = ["magic", "spell", "attack_ranged"]
+    spell_tags = ["cantrip", "arcane", "evocation", "cold"]
+    magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL)
+    magic_types = ["evocation"]
+    prompt = "Ray of Frost - atak zimnem; krytyk spowalnia cel."
+
+    def _resolve_on_target(self, target, pos, ctx: EventContext, *, critical: bool = False) -> EventResult:
+        damage = int(
+            prompt_for_roll(
+                "Ray of Frost - podaj obrazenia cold:",
+                layout="damage",
+                answer_placeholder="Obrazenia",
+            )
+            or 0
+        )
+        damage += int(inspire_courage_damage_bonus(ctx.actor) or 0)
+        if critical:
+            damage *= 2
+        defeated = _apply_damage(target, damage, DamageType.COLD.value)
+
+        slowed = False
+        if critical:
+            if target in getattr(ctx.game, "heroes", []):
+                try:
+                    from ui_client import get_ui_client
+
+                    get_ui_client().prompt_info(
+                        "Ray of Frost",
+                        prompt_long="Krytyk: kara do szybkosci -10 stop na 1 ture (zapisz recznie).",
+                        source=self.name,
+                    )
+                    slowed = True
+                except Exception:
+                    pass
+            else:
+                try:
+                    target.add_status(
+                        SpeedPenaltyStatus(
+                            penalty_feet=10,
+                            source=self.name,
+                            source_id=_actor_id(ctx.actor),
+                            source_turns_left=1,
+                            label="ray of frost -10ft",
+                        )
+                    )
+                    slowed = True
+                except Exception:
+                    pass
+
+        msg = f"Ray of Frost trafia za {damage} cold."
+        if critical:
+            msg = f"Ray of Frost - krytyk! {damage} cold."
+            if slowed:
+                msg += " Cel ma -10ft speed."
+        if defeated:
+            msg += " Cel pokonany."
+        return EventResult(success=True, consumed_action=self.consumes_action, message=msg)
+
+
+@register_event
+class SigilEvent(MagicEvent):
+    name = "sigil"
+    actions_cost = 2
+    default_tags = ["magic", "spell", "transmutation"]
+    spell_tags = ["cantrip", "arcane", "transmutation"]
+    magic_traditions = (SpellTradition.ARCANA, SpellTradition.OCCULT, SpellTradition.DIVINE)
+    magic_types = ["transmutation"]
+    range_feet = 30
+    prompt = "Sigil - oznacz obiekt lub stworzenie magicznym znakiem."
+
+    def execute(self, ctx: EventContext) -> EventResult:
+        actor = ctx.actor
+        if actor is None or getattr(actor, "position", None) is None:
+            return EventResult.cancelled(message="Brak bohatera do rzucenia czaru.")
+
+        candidates = list(_iter_enemy_candidates(ctx.game)) + list(_iter_hero_candidates(ctx.game)) + list(
+            _iter_interactable_candidates(ctx.game, include_npc=False)
+        )
+        target, target_pos = pick_target_in_range(
+            ctx,
+            actor.position,
+            candidates,
+            max_range_feet=self.range_feet,
+            allowed_kinds=("enemy", "hero", "interactable"),
+            tags=self._effective_tags(ctx),
+        )
+        if target is None or target_pos is None:
+            return EventResult.cancelled(message="Brak celu dla Sigil.")
+
+        mark = _prompt_choice(
+            ctx,
+            "Sigil - wybierz typ znaku",
+            ["runa", "pieczec", "znak"],
+            source=self.name,
+        )
+        mark = mark or "runa"
+
+        sigils = list(getattr(target, "sigils", []) or [])
+        sigils.append({"mark": mark, "source_id": _actor_id(actor)})
+        try:
+            setattr(target, "sigils", sigils)
+        except Exception:
+            pass
+
+        try:
+            ctx.game.ui_log(f"Sigil: {getattr(target, 'name', 'cel')} otrzymuje znak '{mark}'.")
+        except Exception:
+            pass
+        return EventResult(success=True, consumed_action=self.consumes_action, message=f"Sigil nalozony ({mark}).")
+
+
+@register_event
+class TanglefootEvent(BaseMagicAttackEvent):
+    name = "tanglefoot"
+    actions_cost = 2
+    range_feet = 30
+    default_tags = ["magic", "spell", "attack_ranged"]
+    spell_tags = ["cantrip", "arcane", "conjuration"]
+    magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL)
+    magic_types = ["conjuration"]
+    prompt = "Tanglefoot - trafiony cel traci szybkosc, krytyk unieruchamia."
+
+    def _resolve_on_target(self, target, pos, ctx: EventContext, *, critical: bool = False) -> EventResult:
+        penalty = 10
+        source_id = _actor_id(ctx.actor)
+        applied_penalty = False
+        applied_immobilized = False
+
+        if target in getattr(ctx.game, "heroes", []):
+            try:
+                from ui_client import get_ui_client
+
+                extra = " Krytyk: immobilized 1." if critical else ""
+                get_ui_client().prompt_info(
+                    "Tanglefoot",
+                    prompt_long=f"Otrzymujesz kare do szybkosci -{penalty} stop na 1 ture.{extra} Zapisz recznie.",
+                    source=self.name,
+                )
+                applied_penalty = True
+                applied_immobilized = critical
+            except Exception:
+                pass
+        else:
+            try:
+                target.add_status(
+                    SpeedPenaltyStatus(
+                        penalty_feet=penalty,
+                        source=self.name,
+                        source_id=source_id,
+                        source_turns_left=1,
+                        label=f"tanglefoot -{penalty}ft",
+                    )
+                )
+                applied_penalty = True
+            except Exception:
+                pass
+            if critical:
+                try:
+                    target.add_status(
+                        ImmobilizedStatus(
+                            source=self.name,
+                            source_id=source_id,
+                            source_turns_left=1,
+                        )
+                    )
+                    applied_immobilized = True
+                except Exception:
+                    pass
+
+        msg = "Tanglefoot trafia."
+        if applied_penalty:
+            msg += f" Cel ma -{penalty}ft speed."
+        if critical and applied_immobilized:
+            msg += " Cel immobilized 1."
         return EventResult(success=True, consumed_action=self.consumes_action, message=msg)
