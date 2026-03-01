@@ -193,3 +193,145 @@ def test_delay_reorders_initiative(monkeypatch):
     assert combat.temp_initiative[hero] == 12  # 15 - 3
     assert combat.round_queue[0] is hero
     assert combat.actions_used[hero] == 0
+
+
+def test_actions_reset_when_actor_turn_comes_again():
+    from states.combat import Combat
+
+    class Hero:
+        def __init__(self):
+            self.name = "Hero"
+            self.object_id = "hero-1"
+            self.position = (0, 0)
+            self.initiative = 15
+
+        def __hash__(self):
+            return id(self)
+
+    class Enemy:
+        def __init__(self):
+            self.name = "Enemy"
+            self.object_id = "enemy-1"
+            self.position = (1, 0)
+            self.initiative = 10
+            self.hp = 10
+
+        def __hash__(self):
+            return id(self)
+
+    hero = Hero()
+    enemy = Enemy()
+    game = FakeGame()
+    game.heroes = [hero]
+    game.enemies = [enemy]
+    game.ui = None
+    combat = Combat(game)
+    game.state = combat
+
+    combat.base_order = [hero, enemy]
+    combat.round_queue = [hero, enemy]
+    combat.initiative_order = [hero, enemy]
+    combat.base_initiative[hero] = 15
+    combat.base_initiative[enemy] = 10
+    combat.actions_used[hero] = 2
+
+    # Koniec tury bohatera -> tura wroga.
+    combat._advance_turn()
+    assert combat._current_actor() is enemy
+
+    # Koniec tury wroga -> nowa runda, znowu bohater.
+    combat._advance_turn()
+    assert combat._current_actor() is hero
+    assert combat.actions_used.get(hero, 0) == 0
+
+
+def test_end_blocked_for_non_active_actor():
+    from states.combat import Combat
+    from GameObjects.events.base import EventContext
+    from GameObjects.events.registry import dispatch_event
+
+    class Hero:
+        def __init__(self, name, object_id, pos):
+            self.name = name
+            self.object_id = object_id
+            self.position = pos
+            self.initiative = 10
+
+        def __hash__(self):
+            return id(self)
+
+    hero_a = Hero("Hero A", "hero-a", (0, 0))
+    hero_b = Hero("Hero B", "hero-b", (1, 0))
+    game = FakeGame()
+    game.heroes = [hero_a, hero_b]
+    game.enemies = []
+    game.ui = None
+    combat = Combat(game)
+    game.state = combat
+    combat.base_order = [hero_a, hero_b]
+    combat.round_queue = [hero_a, hero_b]
+    combat.base_initiative[hero_a] = 12
+    combat.base_initiative[hero_b] = 10
+
+    ctx = EventContext(game=game, actor=hero_b)  # nieaktywny aktor próbuje END
+    result = dispatch_event("end", ctx)
+
+    assert result.success is False
+    assert "nie jest tura" in (result.message or "").lower()
+    assert combat.round_queue[0] is hero_a
+
+
+def test_initiative_event_payload_excludes_removed_dead_enemy():
+    from states.combat import Combat
+
+    class Hero:
+        def __init__(self):
+            self.name = "Hero"
+            self.object_id = "hero-1"
+            self.position = (0, 0)
+            self.initiative = 15
+
+        def reset_reactions(self):
+            return None
+
+        def __hash__(self):
+            return id(self)
+
+    class Enemy:
+        def __init__(self, *, alive=True):
+            self.name = "Enemy"
+            self.object_id = "enemy-alive" if alive else "enemy-dead"
+            self.position = (1, 0) if alive else (2, 0)
+            self.initiative = 10
+            self.hp = 10 if alive else 0
+
+        def __hash__(self):
+            return id(self)
+
+    captured = []
+
+    hero = Hero()
+    alive_enemy = Enemy(alive=True)
+    dead_enemy = Enemy(alive=False)
+    game = FakeGame()
+    game.heroes = [hero]
+    game.enemies = [alive_enemy, dead_enemy]
+    game.ui = object()
+    game.ui_event = lambda event_type, payload: captured.append((event_type, payload))
+    game.ui_active_actor = lambda *_a, **_k: None
+
+    combat = Combat(game)
+    game.state = combat
+    combat.base_order = [hero, dead_enemy, alive_enemy]
+    combat.round_queue = [hero, dead_enemy, alive_enemy]
+    combat.base_initiative[hero] = 15
+    combat.base_initiative[dead_enemy] = 11
+    combat.base_initiative[alive_enemy] = 10
+
+    combat._send_initiative_event()
+
+    evt_type, payload = captured[-1]
+    assert evt_type == "initiative"
+    ids = [entry["id"] for entry in payload["order"]]
+    assert "enemy-dead" not in ids
+    assert payload["active_id"] == "hero-1"

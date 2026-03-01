@@ -55,20 +55,17 @@ from .enfeebled import (
 )
 from .stunned import StunnedStatus, consume_stunned_actions
 from .shield_cantrip import ShieldCantripStatus, apply_shield_cantrip_absorb, shield_cantrip_ac_bonus
-from .occult_rank1 import (
-    CharmedStatus,
-    FloatingDiskStatus,
-    IllusoryDisguiseStatus,
-    MageArmorStatus,
-    MindlinkStatus,
-    SleepStatus,
-    SpiritLinkCasterStatus,
-    SpiritLinkTargetStatus,
-    SummonedFeyStatus,
-    TrueStrikeStatus,
-    UnseenServantStatus,
-    VentriloquismStatus,
-)
+from .charmed import CharmedStatus
+from .floating_disk import FloatingDiskStatus
+from .illusory_disguise import IllusoryDisguiseStatus
+from .mage_armor import MageArmorStatus
+from .mindlink import MindlinkStatus
+from .sleep import SleepStatus
+from .spirit_link import SpiritLinkCasterStatus, SpiritLinkTargetStatus
+from .summoned_fey import SummonedFeyStatus
+from .true_strike import TrueStrikeStatus
+from .unseen_servant import UnseenServantStatus
+from .ventriloquism import VentriloquismStatus
 
 __all__ = [
     "Status",

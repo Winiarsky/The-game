@@ -63,6 +63,32 @@
                 </aside>
 
                 <main class="center-column">
+                    <div class="panel session-panel">
+                        <div class="panel-header">Sesja</div>
+                        <div class="panel-body session-body">
+                            <div class="session-chip">
+                                <div class="session-key">Scenariusz</div>
+                                <div id="status-scenario" class="session-val">-</div>
+                            </div>
+                            <div class="session-chip">
+                                <div class="session-key">Aktywny</div>
+                                <div id="status-actor" class="session-val">-</div>
+                            </div>
+                            <div class="session-chip">
+                                <div class="session-key">Następny</div>
+                                <div id="status-next" class="session-val">-</div>
+                            </div>
+                            <div class="session-chip">
+                                <div class="session-key">Runda</div>
+                                <div id="status-round" class="session-val">-</div>
+                            </div>
+                            <div class="session-chip">
+                                <div class="session-key">Prompt</div>
+                                <div id="status-prompt" class="session-val">Brak</div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="panel action-panel">
                         <div class="panel-body action-body">
                             <div class="action-illustration" id="action-illustration"></div>
@@ -108,6 +134,15 @@
                                     <button type="submit">OK</button>
                                 </form>
                             </div>
+                        </div>
+                    </div>
+
+                    <div class="panel feed-panel">
+                        <div class="panel-header">Ostatnie zdarzenia</div>
+                        <div class="panel-body">
+                            <ul id="event-feed" class="event-feed">
+                                <li class="event-feed-empty">Brak zdarzeń.</li>
+                            </ul>
                         </div>
                     </div>
                 </main>

@@ -13,13 +13,13 @@ from GameObjects.interactions_mixin import prompt_for_roll
 from GameObjects.interactions_mixin.skill_check_resolver import compute_skill_modifier_with_sources
 from GameObjects.NPC.base_npc import BaseNPC
 
-from ..base import EventContext, EventResult
-from ..registry import register_event
-from .base_attack_magic_event import BaseMagicAttackEvent
-from .magic_event import MagicEvent
-from .magic_utils import pick_target_in_range, positions_within_range
-from .spell_types import SpellTradition
-from .lighting_effects import (
+from ...base import EventContext, EventResult
+from ...registry import register_event
+from ..base_attack_magic_event import BaseMagicAttackEvent
+from ..magic_event import MagicEvent
+from ..magic_utils import pick_target_in_range, positions_within_range
+from ..spell_types import SpellTradition
+from ..lighting_effects import (
     set_dancing_positions,
     set_light_source,
     refresh_lighting_on_board,
@@ -125,7 +125,7 @@ class ChillTouchEvent(MagicEvent):
     actions_cost = 2
     range_feet = 5
     default_tags = ["magic", "spell"]
-    spell_tags = ["cantrip", "necromancy", "touch"]
+    spell_tags = ["cantrip", "occult", "necromancy", "touch"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["necromancy"]
     prompt = "Chill Touch - 1k4 negative, Fortitude save, Enfeebled przy porazce."
@@ -214,7 +214,7 @@ class DancingLightsEvent(MagicEvent):
     name = "dancing_lights"
     actions_cost = 2
     default_tags = ["magic", "spell"]
-    spell_tags = ["cantrip", "evocation"]
+    spell_tags = ["cantrip", "occult", "evocation"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["evocation"]
     range_feet = 30
@@ -288,7 +288,7 @@ class DazeEvent(MagicEvent):
     name = "daze"
     actions_cost = 2
     default_tags = ["magic", "spell"]
-    spell_tags = ["cantrip", "enchantment"]
+    spell_tags = ["cantrip", "occult", "enchantment"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["enchantment"]
     range_feet = 60
@@ -371,7 +371,7 @@ class ForbiddingWardEvent(MagicEvent):
     name = "forbidding_ward"
     actions_cost = 2
     default_tags = ["magic", "spell", "ward"]
-    spell_tags = ["cantrip", "abjuration"]
+    spell_tags = ["cantrip", "occult", "abjuration"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["abjuration"]
     range_feet = 30
@@ -485,7 +485,7 @@ class GuidanceEvent(MagicEvent):
     name = "guidance"
     actions_cost = 1
     default_tags = ["magic", "spell", "support"]
-    spell_tags = ["cantrip", "divination"]
+    spell_tags = ["cantrip", "occult", "divination"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["divination"]
     range_feet = 30
@@ -550,7 +550,7 @@ class LightEvent(MagicEvent):
     name = "light"
     actions_cost = 2
     default_tags = ["magic", "spell"]
-    spell_tags = ["cantrip", "evocation"]
+    spell_tags = ["cantrip", "occult", "evocation"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["evocation"]
     prompt = "Light - aura 30 stop od castera do konca walki."
@@ -574,7 +574,7 @@ class MageHandEvent(MagicEvent):
     name = "mage_hand"
     actions_cost = 2
     default_tags = ["magic", "spell", "manipulate"]
-    spell_tags = ["cantrip", "evocation"]
+    spell_tags = ["cantrip", "occult", "evocation"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["evocation"]
     range_feet = 30
@@ -619,7 +619,7 @@ class MessageEvent(MagicEvent):
     name = "message"
     actions_cost = 1
     default_tags = ["magic", "spell"]
-    spell_tags = ["cantrip", "illusion"]
+    spell_tags = ["cantrip", "occult", "illusion"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["illusion"]
     range_feet = 120
@@ -664,7 +664,7 @@ class PrestidigitationEvent(MagicEvent):
     name = "prestidigitation"
     actions_cost = 2
     default_tags = ["magic", "spell"]
-    spell_tags = ["cantrip", "evocation"]
+    spell_tags = ["cantrip", "occult", "evocation"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["evocation"]
 
@@ -681,7 +681,7 @@ class ReadAuraEvent(MagicEvent):
     name = "read_aura"
     actions_cost = 2
     default_tags = ["magic", "spell", "detect"]
-    spell_tags = ["cantrip", "divination"]
+    spell_tags = ["cantrip", "occult", "divination"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["divination"]
     range_feet = 30
@@ -726,7 +726,7 @@ class ShieldCantripEvent(MagicEvent):
     name = "shield_cantrip"
     actions_cost = 1
     default_tags = ["magic", "spell", "defense"]
-    spell_tags = ["cantrip", "abjuration"]
+    spell_tags = ["cantrip", "occult", "abjuration"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["abjuration"]
     prompt = "Shield Cantrip - +1 AC i absorpcja 5 obrazen."
@@ -763,7 +763,7 @@ class TelekineticProjectileEvent(BaseMagicAttackEvent):
     actions_cost = 2
     range_feet = 30
     default_tags = ["magic", "spell", "attack_ranged"]
-    spell_tags = ["cantrip", "evocation"]
+    spell_tags = ["cantrip", "occult", "evocation"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["evocation"]
 

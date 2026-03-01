@@ -12,7 +12,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from GameObjects.events.base import EventContext
-from GameObjects.events.magic import occult_rank1_event as occ1
+from GameObjects.events.magic.level_1st import events as occ1
 
 
 class DummyConn:

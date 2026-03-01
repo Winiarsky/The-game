@@ -477,10 +477,13 @@ class Combat(State):
     def _advance_turn(self):
         if not self.round_queue:
             return
+        finished_actor = self.round_queue[0]
         try:
             self.round_queue.pop(0)
         except IndexError:
             return
+        # Koniec tury aktora -> następna jego tura zaczyna z nowym licznikiem akcji.
+        self.actions_used.pop(finished_actor, None)
         if not self.round_queue:
             # nowa runda: reset opóźnień do bazowych inicjatyw
             self.round_index += 1
@@ -541,6 +544,7 @@ class Combat(State):
         """Wyślij kolejkę inicjatywy do UI."""
         if not getattr(self.game, "ui", None):
             return
+        active = self._current_actor()
         order_payload: list[dict[str, Any]] = []
         done_set = set(self.base_order) - set(self.round_queue)
         # kolejność: najpierw obecna kolejka rundy, potem już-ograne (w bazowej kolejności)
@@ -560,7 +564,6 @@ class Combat(State):
                     "done": obj in done_set,
                 }
             )
-        active = self._current_actor()
         self.game.ui_event(
             "initiative",
             {

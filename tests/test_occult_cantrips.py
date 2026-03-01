@@ -12,7 +12,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from GameObjects.events.base import EventContext
-from GameObjects.events.magic import occult_cantrips_event as occ
+from GameObjects.events.magic.cantrips import events as occ
 from GameObjects.events.magic.lighting_effects import is_position_in_light_aura
 from GameObjects.interactions_mixin.skill_check_resolver import compute_skill_modifier_with_sources
 from GameObjects.NPC.base_npc import BaseNPC

@@ -33,13 +33,13 @@ from GameObjects.NPC.base_npc import BaseNPC
 from GameObjects.interactions_mixin import prompt_for_roll
 from GameObjects.interactions_mixin.skill_check_resolver import compute_skill_modifier_with_sources
 
-from ..base import EventContext, EventResult
-from ..registry import register_event
-from .base_attack_magic_event import BaseMagicAttackEvent
-from .magic_event import MagicEvent
-from .magic_utils import grid_distance_feet, pick_position_in_range, pick_target_in_range
-from .runtime_effects import add_alarm_ward
-from .spell_types import SpellTradition
+from ...base import EventContext, EventResult
+from ...registry import register_event
+from ..base_attack_magic_event import BaseMagicAttackEvent
+from ..magic_event import MagicEvent
+from ..magic_utils import grid_distance_feet, pick_position_in_range, pick_target_in_range
+from ..runtime_effects import add_alarm_ward
+from ..spell_types import SpellTradition
 
 logger = logging.getLogger(__name__)
 
@@ -299,7 +299,7 @@ class AlarmEvent(MagicEvent):
     name = "alarm"
     actions_cost = 2
     default_tags = ["magic", "spell", "abjuration", "ward"]
-    spell_tags = ["rank1", "abjuration"]
+    spell_tags = ["rank1", "occult", "abjuration"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["abjuration"]
     range_feet = 30
@@ -331,7 +331,7 @@ class BaneEvent(MagicEvent):
     name = "bane"
     actions_cost = 2
     default_tags = ["magic", "spell", "enchantment", "aura"]
-    spell_tags = ["rank1", "enchantment"]
+    spell_tags = ["rank1", "occult", "enchantment"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["enchantment"]
     prompt = "Bane - enemy w aurze 10 stop otrzymuja -1 do atakow (1 tura)."
@@ -367,7 +367,7 @@ class BlessEvent(MagicEvent):
     name = "bless"
     actions_cost = 2
     default_tags = ["magic", "spell", "enchantment", "aura"]
-    spell_tags = ["rank1", "enchantment"]
+    spell_tags = ["rank1", "occult", "enchantment"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["enchantment"]
     prompt = "Bless - sojusznicy w aurze 10 stop otrzymuja +1 do atakow (1 tura)."
@@ -402,7 +402,7 @@ class CharmEvent(MagicEvent):
     name = "charm"
     actions_cost = 2
     default_tags = ["magic", "spell", "enchantment", "mental"]
-    spell_tags = ["rank1", "enchantment"]
+    spell_tags = ["rank1", "occult", "enchantment"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["enchantment"]
     range_feet = 30
@@ -443,7 +443,7 @@ class ColorSprayEvent(MagicEvent):
     name = "color_spray"
     actions_cost = 2
     default_tags = ["magic", "spell", "illusion", "visual"]
-    spell_tags = ["rank1", "illusion"]
+    spell_tags = ["rank1", "occult", "illusion"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["illusion"]
     range_feet = 15
@@ -500,7 +500,7 @@ class CommandEvent(MagicEvent):
     name = "command"
     actions_cost = 2
     default_tags = ["magic", "spell", "enchantment", "mental"]
-    spell_tags = ["rank1", "enchantment"]
+    spell_tags = ["rank1", "occult", "enchantment"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["enchantment"]
     range_feet = 30
@@ -580,7 +580,7 @@ class DetectAlignmentEvent(MagicEvent):
     name = "detect_alignment"
     actions_cost = 2
     default_tags = ["magic", "spell", "divination", "detect"]
-    spell_tags = ["rank1", "divination"]
+    spell_tags = ["rank1", "occult", "divination"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["divination"]
     range_feet = 30
@@ -627,7 +627,7 @@ class FearEvent(MagicEvent):
     name = "fear"
     actions_cost = 2
     default_tags = ["magic", "spell", "enchantment", "mental"]
-    spell_tags = ["rank1", "enchantment"]
+    spell_tags = ["rank1", "occult", "enchantment"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["enchantment"]
     range_feet = 30
@@ -718,7 +718,7 @@ class FloatingDiskEvent(MagicEvent):
     name = "floating_disk"
     actions_cost = 2
     default_tags = ["magic", "spell", "conjuration", "utility"]
-    spell_tags = ["rank1", "conjuration"]
+    spell_tags = ["rank1", "occult", "conjuration"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["conjuration"]
 
@@ -739,7 +739,7 @@ class GrimTendrilsEvent(MagicEvent):
     name = "grim_tendrils"
     actions_cost = 2
     default_tags = ["magic", "spell", "necromancy", "negative"]
-    spell_tags = ["rank1", "necromancy"]
+    spell_tags = ["rank1", "occult", "necromancy"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["necromancy"]
 
@@ -806,7 +806,7 @@ class IllusoryDisguiseEvent(MagicEvent):
     name = "illusory_disguise"
     actions_cost = 2
     default_tags = ["magic", "spell", "illusion"]
-    spell_tags = ["rank1", "illusion"]
+    spell_tags = ["rank1", "occult", "illusion"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["illusion"]
 
@@ -834,7 +834,7 @@ class IllusoryObjectEvent(MagicEvent):
     name = "illusory_object"
     actions_cost = 2
     default_tags = ["magic", "spell", "illusion"]
-    spell_tags = ["rank1", "illusion"]
+    spell_tags = ["rank1", "occult", "illusion"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["illusion"]
     range_feet = 30
@@ -863,7 +863,7 @@ class ItemFacadeEvent(MagicEvent):
     name = "item_facade"
     actions_cost = 2
     default_tags = ["magic", "spell", "illusion"]
-    spell_tags = ["rank1", "illusion"]
+    spell_tags = ["rank1", "occult", "illusion"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["illusion"]
     range_feet = 30
@@ -900,7 +900,7 @@ class LockSpellEvent(MagicEvent):
     name = "lock"
     actions_cost = 2
     default_tags = ["magic", "spell", "abjuration", "manipulate"]
-    spell_tags = ["rank1", "abjuration"]
+    spell_tags = ["rank1", "occult", "abjuration"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["abjuration"]
     range_feet = 30
@@ -948,7 +948,7 @@ class MageArmorEvent(MagicEvent):
     name = "mage_armor"
     actions_cost = 2
     default_tags = ["magic", "spell", "abjuration", "defense"]
-    spell_tags = ["rank1", "abjuration"]
+    spell_tags = ["rank1", "occult", "abjuration"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["abjuration"]
 
@@ -983,7 +983,7 @@ class MagicAuraEvent(MagicEvent):
     name = "magic_aura"
     actions_cost = 2
     default_tags = ["magic", "spell", "illusion"]
-    spell_tags = ["rank1", "illusion"]
+    spell_tags = ["rank1", "occult", "illusion"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["illusion"]
     range_feet = 30
@@ -1021,7 +1021,7 @@ class MagicWeaponEvent(MagicEvent):
     name = "magic_weapon"
     actions_cost = 2
     default_tags = ["magic", "spell", "transmutation", "buff"]
-    spell_tags = ["rank1", "transmutation"]
+    spell_tags = ["rank1", "occult", "transmutation"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["transmutation"]
     range_feet = 30
@@ -1064,7 +1064,7 @@ class MendingEvent(MagicEvent):
     name = "mending"
     actions_cost = 2
     default_tags = ["magic", "spell", "transmutation", "manipulate"]
-    spell_tags = ["rank1", "transmutation"]
+    spell_tags = ["rank1", "occult", "transmutation"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["transmutation"]
     range_feet = 30
@@ -1110,7 +1110,7 @@ class MindlinkEvent(MagicEvent):
     name = "mindlink"
     actions_cost = 2
     default_tags = ["magic", "spell", "divination", "mental"]
-    spell_tags = ["rank1", "divination"]
+    spell_tags = ["rank1", "occult", "divination"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["divination"]
     range_feet = 30
@@ -1150,7 +1150,7 @@ class PhantomPainEvent(MagicEvent):
     name = "phantom_pain"
     actions_cost = 2
     default_tags = ["magic", "spell", "illusion", "mental"]
-    spell_tags = ["rank1", "illusion"]
+    spell_tags = ["rank1", "occult", "illusion"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["illusion"]
     range_feet = 30
@@ -1239,7 +1239,7 @@ class ProtectionEvent(MagicEvent):
     name = "protection"
     actions_cost = 1
     default_tags = ["magic", "spell", "abjuration", "defense"]
-    spell_tags = ["rank1", "abjuration"]
+    spell_tags = ["rank1", "occult", "abjuration"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["abjuration"]
     range_feet = 30
@@ -1298,7 +1298,7 @@ class RayOfEnfeeblementEvent(BaseMagicAttackEvent):
     actions_cost = 2
     range_feet = 30
     default_tags = ["magic", "spell", "necromancy", "attack_ranged"]
-    spell_tags = ["rank1", "necromancy"]
+    spell_tags = ["rank1", "occult", "necromancy"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["necromancy"]
 
@@ -1327,7 +1327,7 @@ class SleepEvent(MagicEvent):
     name = "sleep"
     actions_cost = 2
     default_tags = ["magic", "spell", "enchantment", "mental"]
-    spell_tags = ["rank1", "enchantment"]
+    spell_tags = ["rank1", "occult", "enchantment"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["enchantment"]
     range_feet = 30
@@ -1396,7 +1396,7 @@ class SootheEvent(MagicEvent):
     name = "soothe"
     actions_cost = 2
     default_tags = ["magic", "spell", "necromancy", "healing"]
-    spell_tags = ["rank1", "necromancy"]
+    spell_tags = ["rank1", "occult", "necromancy"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["necromancy"]
     range_feet = 30
@@ -1441,7 +1441,7 @@ class SpiritLinkEvent(MagicEvent):
     name = "spirit_link"
     actions_cost = 2
     default_tags = ["magic", "spell", "necromancy", "healing"]
-    spell_tags = ["rank1", "necromancy"]
+    spell_tags = ["rank1", "occult", "necromancy"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["necromancy"]
     range_feet = 30
@@ -1500,7 +1500,7 @@ class SummonFeyEvent(MagicEvent):
     name = "summon_fey"
     actions_cost = 3
     default_tags = ["magic", "spell", "conjuration", "summon"]
-    spell_tags = ["rank1", "conjuration"]
+    spell_tags = ["rank1", "occult", "conjuration"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["conjuration"]
 
@@ -1536,7 +1536,7 @@ class TrueStrikeEvent(MagicEvent):
     name = "true_strike"
     actions_cost = 1
     default_tags = ["magic", "spell", "divination", "fortune"]
-    spell_tags = ["rank1", "divination"]
+    spell_tags = ["rank1", "occult", "divination"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["divination"]
 
@@ -1572,7 +1572,7 @@ class UnseenServantEvent(MagicEvent):
     name = "unseen_servant"
     actions_cost = 2
     default_tags = ["magic", "spell", "conjuration", "utility"]
-    spell_tags = ["rank1", "conjuration"]
+    spell_tags = ["rank1", "occult", "conjuration"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["conjuration"]
 
@@ -1593,7 +1593,7 @@ class VentriloquismEvent(MagicEvent):
     name = "ventriloquism"
     actions_cost = 2
     default_tags = ["magic", "spell", "illusion", "auditory"]
-    spell_tags = ["rank1", "illusion"]
+    spell_tags = ["rank1", "occult", "illusion"]
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["illusion"]
 

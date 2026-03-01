@@ -17,6 +17,18 @@ class EndTurnEvent(GameEvent):
     def execute(self, ctx: EventContext) -> EventResult:
         if ctx.in_combat:
             combat = getattr(ctx.game, "state", None)
+            active_getter = getattr(combat, "_current_actor", None)
+            if callable(active_getter) and ctx.actor is not None:
+                try:
+                    active = active_getter()
+                except Exception:
+                    active = None
+                if active is not None and active is not ctx.actor:
+                    return EventResult(
+                        success=False,
+                        consumed_action=False,
+                        message="To nie jest tura tego aktora.",
+                    )
             advance = getattr(combat, "_advance_turn", None)
             if callable(advance):
                 advance()

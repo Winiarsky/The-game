@@ -30,6 +30,12 @@ const modsPenItem = document.getElementById("mods-pen-item");
 const modsBonItem = document.getElementById("mods-bon-item");
 const topbar = document.getElementById("topbar");
 const topbarToggle = document.getElementById("topbar-toggle");
+const eventFeed = document.getElementById("event-feed");
+const statusScenario = document.getElementById("status-scenario");
+const statusActor = document.getElementById("status-actor");
+const statusNext = document.getElementById("status-next");
+const statusRound = document.getElementById("status-round");
+const statusPrompt = document.getElementById("status-prompt");
 const PLACEHOLDER_IMAGE = "/static/placeholder.png";
 
 let currentScenario = null;
@@ -52,6 +58,7 @@ let activePathId = null;
 let initiativeState = { order: [], activeId: null, round: 1 };
 let activeActorId = null;
 let lastLoggedRound = null;
+let lastLoggedActiveActorId = null;
 actionForm.classList.add("hidden");
 
 function setIllustration(imageUrl) {
@@ -113,21 +120,125 @@ function showGame() {
     screenGame.classList.remove("hidden");
 }
 
+function str(value, fallback = "-") {
+    if (value === null || value === undefined || value === "") return fallback;
+    return String(value);
+}
+
+function actorNameById(id) {
+    if (!id) return "-";
+    const fromInit = initiativeState.order.find((entry) => String(entry.id) === String(id));
+    if (fromInit && fromInit.name) return fromInit.name;
+    const fromHero = heroes.get(id);
+    if (fromHero && fromHero.name) return fromHero.name;
+    return String(id);
+}
+
+function currentPromptLabel() {
+    if (!activePrompt) return "Brak";
+    const kind = str(activePrompt.kind || activePrompt.layout || layoutMode || "prompt");
+    const choicesCount = Array.isArray(activePrompt.choices) ? activePrompt.choices.length : currentChoices.length;
+    return choicesCount ? `${kind} (${choicesCount})` : kind;
+}
+
+function initiativePointers() {
+    const order = Array.isArray(initiativeState.order) ? initiativeState.order : [];
+    if (!order.length) {
+        return { active: "-", next: "-" };
+    }
+    const activeIdx = order.findIndex((entry) => String(entry.id) === String(initiativeState.activeId));
+    if (activeIdx === -1) {
+        return { active: "-", next: order[0]?.name || "-" };
+    }
+    const active = order[activeIdx]?.name || "-";
+    const next = order.length > 1 ? order[(activeIdx + 1) % order.length]?.name || "-" : "-";
+    return { active, next };
+}
+
+function updateSessionSummary() {
+    const pointers = initiativePointers();
+    const activeLabel = activeActorId ? actorNameById(activeActorId) : pointers.active;
+    if (statusScenario) statusScenario.textContent = str(currentScenario);
+    if (statusActor) statusActor.textContent = str(activeLabel);
+    if (statusNext) statusNext.textContent = str(pointers.next);
+    if (statusRound) statusRound.textContent = str(initiativeState.round);
+    if (statusPrompt) statusPrompt.textContent = currentPromptLabel();
+}
+
+function appendTag(container, tag) {
+    if (!container || !tag) return;
+    const tagEl = document.createElement("span");
+    tagEl.className = "tag";
+    tagEl.textContent = tag;
+    container.appendChild(tagEl);
+}
+
+function addEventFeedEntry(text, meta, variant = "", tag = "") {
+    if (!eventFeed) return;
+    const empty = eventFeed.querySelector(".event-feed-empty");
+    if (empty) empty.remove();
+    const item = document.createElement("li");
+    item.className = "event-item" + (variant ? ` ${variant}` : "");
+
+    const main = document.createElement("div");
+    main.className = "event-main";
+    appendTag(main, tag);
+    const textEl = document.createElement("span");
+    textEl.textContent = str(text, "");
+    main.appendChild(textEl);
+
+    const metaEl = document.createElement("div");
+    metaEl.className = "event-meta";
+    metaEl.textContent = str(meta, "");
+
+    item.appendChild(main);
+    item.appendChild(metaEl);
+    eventFeed.prepend(item);
+
+    while (eventFeed.children.length > 8) {
+        eventFeed.removeChild(eventFeed.lastChild);
+    }
+}
+
 function addLogEntry(text, meta, variant = "", tag = "", image = "") {
     const item = document.createElement("li");
     item.className = "log-item" + (variant ? ` ${variant}` : "");
-    const thumb = image ? `<div class="log-thumb-wrap"><img class="log-thumb" src="${image}" alt=""></div>` : "";
-    item.innerHTML = `
-        ${thumb}
-        <div class="log-body">
-            <div class="log-text">${tag ? `<span class="tag">${tag}</span>` : ""}${text}</div>
-            <div class="meta">${meta || ""}</div>
-        </div>
-    `;
+
+    if (image) {
+        const thumbWrap = document.createElement("div");
+        thumbWrap.className = "log-thumb-wrap";
+        const thumb = document.createElement("img");
+        thumb.className = "log-thumb";
+        thumb.src = image;
+        thumb.alt = "";
+        thumbWrap.appendChild(thumb);
+        item.appendChild(thumbWrap);
+    }
+
+    const body = document.createElement("div");
+    body.className = "log-body";
+    const logText = document.createElement("div");
+    logText.className = "log-text";
+    appendTag(logText, tag);
+    const textEl = document.createElement("span");
+    textEl.textContent = str(text, "");
+    logText.appendChild(textEl);
+    const metaEl = document.createElement("div");
+    metaEl.className = "meta";
+    metaEl.textContent = str(meta, "");
+    body.appendChild(logText);
+    body.appendChild(metaEl);
+    item.appendChild(body);
+
     logList.prepend(item);
     if (logLast) {
-        logLast.innerHTML = `${tag ? `<span class="tag">${tag}</span>` : ""}${text}`;
+        logLast.innerHTML = "";
+        appendTag(logLast, tag);
+        const lastText = document.createElement("span");
+        lastText.textContent = str(text, "");
+        logLast.appendChild(lastText);
     }
+    addEventFeedEntry(text, meta, variant, tag);
     // limit log length
     while (logList.children.length > 60) {
         logList.removeChild(logList.lastChild);
@@ -141,6 +252,65 @@ function renderPrompt(prompt) {
     processPromptQueue();
 }
 
+function samePos(a, b) {
+    if (!Array.isArray(a) || !Array.isArray(b)) return false;
+    if (a.length < 2 || b.length < 2) return false;
+    return Number(a[0]) === Number(b[0]) && Number(a[1]) === Number(b[1]);
+}
+
+function formatPos(pos) {
+    if (!Array.isArray(pos) || pos.length < 2) return "-";
+    return `(${pos[0]}, ${pos[1]})`;
+}
+
+function arrayDiff(previous, next) {
+    const prevSet = new Set((previous || []).map((item) => String(item)));
+    const nextSet = new Set((next || []).map((item) => String(item)));
+    const added = [...nextSet].filter((item) => !prevSet.has(item));
+    const removed = [...prevSet].filter((item) => !nextSet.has(item));
+    return { added, removed };
+}
+
+function buildHeroUpdateLog(previous, current) {
+    if (!previous) {
+        return {
+            message: `${current.name} dołącza do sceny na ${formatPos(current.pos)}.`,
+            variant: "info",
+        };
+    }
+    const changes = [];
+    let variant = "info";
+
+    if (previous.wounds !== current.wounds) {
+        changes.push(`Rany: ${str(previous.wounds)} -> ${str(current.wounds)}`);
+        const before = Number(previous.wounds);
+        const after = Number(current.wounds);
+        if (!Number.isNaN(before) && !Number.isNaN(after)) {
+            if (after > before) variant = "warning";
+            else if (after < before && variant !== "warning") variant = "success";
+        }
+    }
+    if (!samePos(previous.pos, current.pos) && (previous.pos || current.pos)) {
+        changes.push(`Pozycja: ${formatPos(previous.pos)} -> ${formatPos(current.pos)}`);
+    }
+    if (previous.initiative !== current.initiative) {
+        changes.push(`Inicjatywa: ${str(previous.initiative)} -> ${str(current.initiative)}`);
+    }
+    const statusesDiff = arrayDiff(previous.statuses, current.statuses);
+    if (statusesDiff.added.length) {
+        changes.push(`+ status: ${statusesDiff.added.join(", ")}`);
+        if (variant !== "warning") variant = "success";
+    }
+    if (statusesDiff.removed.length) {
+        changes.push(`- status: ${statusesDiff.removed.join(", ")}`);
+    }
+    if (!changes.length && previous.note !== current.note && current.note) {
+        changes.push(`Notatka: ${current.note}`);
+    }
+    if (!changes.length) return null;
+    return { message: `${current.name}: ${changes.join(" · ")}`, variant };
+}
+
 function handleEvent(event) {
     const type = event.type;
     const payload = event.payload || {};
@@ -152,7 +322,11 @@ function handleEvent(event) {
     if (type === "prompt") {
         renderPrompt(payload);
         const promptTag = payload.kind === "choice" ? "Wybór" : payload.kind === "info" ? "Info" : "Rzut";
-        addLogEntry(`Nowy prompt: ${payload.prompt}`, meta, "info", promptTag);
+        const sourceNote = payload.source ? ` [${payload.source}]` : "";
+        const choicesCount = Array.isArray(payload.choices) ? payload.choices.length : 0;
+        const choicesNote = choicesCount ? ` (${choicesCount} opcji)` : "";
+        addLogEntry(`Nowy prompt${sourceNote}: ${payload.prompt}${choicesNote}`, meta, "info", promptTag);
+        updateSessionSummary();
         return;
     }
     if (type === "special_preview") {
@@ -161,6 +335,7 @@ function handleEvent(event) {
         actionText.textContent = payload.desc || "";
         setIllustration(payload.image);
         addLogEntry(`Zdolność: ${title}`, meta, "info", "Special");
+        updateSessionSummary();
         return;
     }
     if (type === "info") {
@@ -187,11 +362,13 @@ function handleEvent(event) {
         if (activePrompt && String(activePrompt.id) === String(payload.id)) {
             closePrompt();
         }
+        updateSessionSummary();
         return;
     }
     if (type === "hero_snapshot" || type === "hero") {
         const id = payload.id || payload.object_id || payload.name || "hero";
-        heroes.set(id, {
+        const previous = heroes.get(id);
+        const current = {
             id,
             name: payload.name || id,
             statuses: payload.statuses || [],
@@ -199,14 +376,31 @@ function handleEvent(event) {
             wounds: payload.wounds,
             pos: payload.pos,
             initiative: payload.initiative,
-        });
+            image: payload.image,
+        };
+        heroes.set(id, current);
         renderHeroes();
-        addLogEntry(`Aktualizacja bohatera: ${payload.name || ""}`, meta, "info", "Bohater");
+        const heroLog = buildHeroUpdateLog(previous, current);
+        if (heroLog) {
+            addLogEntry(heroLog.message, meta, heroLog.variant, "Bohater");
+        }
+        updateSessionSummary();
         return;
     }
     if (type === "active_actor_changed") {
+        const prev = activeActorId;
         activeActorId = payload.id || null;
         renderHeroes();
+        if (String(prev) !== String(activeActorId)) {
+            if (activeActorId) {
+                const actorLabel = payload.name || actorNameById(activeActorId);
+                addLogEntry(`Aktywna tura: ${actorLabel}`, meta, "info", "Tura");
+            } else {
+                addLogEntry("Brak aktywnego aktora.", meta, "info", "Tura");
+            }
+            lastLoggedActiveActorId = activeActorId;
+        }
+        updateSessionSummary();
         return;
     }
     if (type === "narration") {
@@ -214,6 +408,13 @@ function handleEvent(event) {
         return;
     }
     if (type === "action") {
+        if (!activePrompt) {
+            const actor = payload.actor?.name || payload.actor?.id || "Aktor";
+            const actionId = str(payload.action_id || "akcja", "akcja").replace(/_/g, " ");
+            const target = payload.target?.name || payload.target?.id;
+            actionTitle.textContent = actor;
+            actionText.textContent = target ? `${actionId} -> ${target}` : actionId;
+        }
         return;
     }
     if (type === "path_preview") {
@@ -235,7 +436,15 @@ function handleEvent(event) {
             addLogEntry(`Runda ${initiativeState.round} start`, meta, "info", "Runda");
             lastLoggedRound = initiativeState.round;
         }
+        if (initiativeState.activeId && String(lastLoggedActiveActorId) !== String(initiativeState.activeId)) {
+            addLogEntry(`Aktywna tura: ${actorNameById(initiativeState.activeId)}`, meta, "info", "Tura");
+            lastLoggedActiveActorId = initiativeState.activeId;
+        }
+        if (!initiativeState.activeId) {
+            lastLoggedActiveActorId = null;
+        }
         renderInitiative();
+        updateSessionSummary();
         return;
     }
     // domyślnie traktujemy jako log
@@ -293,6 +502,7 @@ document.querySelectorAll(".scenario-btn").forEach((btn) => {
         currentScenario = btn.dataset.scenario;
         addLogEntry(`Uruchomiono scenariusz: ${currentScenario}`, new Date().toLocaleTimeString());
         showGame();
+        updateSessionSummary();
     });
 });
 const scenarioButtons = Array.from(document.querySelectorAll(".scenario-btn"));
@@ -317,6 +527,13 @@ if (logClose && logModal) {
         logModal.classList.add("hidden");
     });
 }
+if (logModal) {
+    logModal.addEventListener("click", (evt) => {
+        if (evt.target === logModal) {
+            logModal.classList.add("hidden");
+        }
+    });
+}
 
 if (topbarToggle && topbar) {
     topbarToggle.addEventListener("click", () => {
@@ -324,13 +541,10 @@ if (topbarToggle && topbar) {
         topbarToggle.textContent = topbar.classList.contains("collapsed") ? "▼" : "▲";
     });
 }
-if (topbar && !topbar.classList.contains("collapsed")) {
-    topbar.classList.add("collapsed");
-    if (topbarToggle) topbarToggle.textContent = "▼";
-}
 
 // start in menu and connect SSE
 showMenu();
+updateSessionSummary();
 connectStream();
 fetchPendingPrompts();
 setInterval(fetchPendingPrompts, 2000);
@@ -625,6 +839,7 @@ function openPrompt(prompt) {
         actionAnswer.classList.remove("input-hidden");
     }
     actionForm.classList.remove("hidden");
+    updateSessionSummary();
     actionAnswer.focus();
 }
 
@@ -643,6 +858,7 @@ function closePrompt() {
     actionText.textContent = "";
     actionText.classList.remove("hidden");
     clearMods();
+    updateSessionSummary();
     processPromptQueue();
 }
 
