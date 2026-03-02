@@ -63,24 +63,44 @@ def _dispatch_move_reactions(game, mover, src: tuple[int, int], dst: tuple[int, 
                 leaving = True
                 break
 
+    event_uid = None
+    alloc_uid = getattr(state, "new_reaction_event_uid", None)
+    if callable(alloc_uid):
+        try:
+            event_uid = str(alloc_uid())
+        except Exception:
+            event_uid = None
+
     event = {
         "actor": mover,
+        "action_id": "enemy_move",
         "action_tags": {"move"},
         "from_pos": src,
         "to_pos": dst,
         "leaving_reach": leaving,
+        "event_uid": event_uid,
     }
 
-    game.events.safe_emit_action(
-        actor=mover,
-        action_id="enemy_move",
-        action_tags=["move"],
-        from_pos=src,
-        to_pos=dst,
-        leaving_reach=leaving,
-    )
+    emitted = False
+    events_bus = getattr(game, "events", None)
+    if events_bus is not None and hasattr(events_bus, "safe_emit_action"):
+        try:
+            emitted = bool(
+                events_bus.safe_emit_action(
+                    actor=mover,
+                    action_id="enemy_move",
+                    action_tags=["move"],
+                    from_pos=src,
+                    to_pos=dst,
+                    leaving_reach=leaving,
+                    event_uid=event_uid,
+                )
+            )
+        except Exception:
+            emitted = False
 
-    dispatch_reactions(game, event)
+    if not emitted:
+        dispatch_reactions(game, event)
 
 
 @register_event

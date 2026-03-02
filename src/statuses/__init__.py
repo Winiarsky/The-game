@@ -68,6 +68,7 @@ from .unseen_servant import UnseenServantStatus
 from .ventriloquism import VentriloquismStatus
 from .counter_performance import CounterPerformanceStatus
 from .inspire_courage import InspireCourageStatus, inspire_courage_damage_bonus
+from .raise_shield_allow import RaiseShieldAllowStatus, RAISE_SHIELD_ALLOW_STATUS
 
 __all__ = [
     "Status",
@@ -168,4 +169,6 @@ __all__ = [
     "CounterPerformanceStatus",
     "InspireCourageStatus",
     "inspire_courage_damage_bonus",
+    "RaiseShieldAllowStatus",
+    "RAISE_SHIELD_ALLOW_STATUS",
 ]

@@ -46,6 +46,7 @@ class OpportunityAttack(Reaction):
 
     id: str = "opportunity_attack"
     label: str = "Atak okazyjny"
+    priority: int = 10
 
     def triggers(self, actor, event: dict[str, Any]) -> bool:
         if not _has_status(actor, "opportunity_attack"):

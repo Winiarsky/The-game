@@ -14,7 +14,9 @@ from GameObjects.events.raise_shield_event import RaiseShieldEvent
 from GameObjects.events.base import EventContext
 from bonuses import BonusEffect, BonusType
 from GameObjects.interactions_mixin.bonus_mixin import BonusMixin
+from GameObjects.items.shield import StandardShield
 from states.combat import Combat
+from statuses import RAISE_SHIELD_ALLOW_STATUS
 
 
 class DummyGame:
@@ -40,9 +42,20 @@ class DummyHero(BonusMixin):
     def __init__(self):
         super().__init__()
         self.object_id = "hero1"
+        self.statuses = []
+        self.equipped_shield = StandardShield()
 
     def __hash__(self):
         return id(self)
+
+    def has_status(self, status_id):
+        return any(getattr(status, "id", status) == status_id for status in self.statuses)
+
+    def add_status(self, status):
+        if self.has_status(getattr(status, "id", status)):
+            return False
+        self.statuses.append(status)
+        return True
 
 
 def _find_shield_bonus(hero):
@@ -51,6 +64,7 @@ def _find_shield_bonus(hero):
 
 def test_raise_shield_adds_circumstance_bonus_and_clears_previous():
     hero = DummyHero()
+    hero.add_status(RAISE_SHIELD_ALLOW_STATUS)
     game = DummyGame(round_idx=3)
     ctx = DummyCtx(game=game, actor=hero)
     event = RaiseShieldEvent()
@@ -69,6 +83,32 @@ def test_raise_shield_adds_circumstance_bonus_and_clears_previous():
     assert res2.success
     bonuses2 = _find_shield_bonus(hero)
     assert len(bonuses2) == 1
+
+
+def test_raise_shield_requires_allow_status():
+    hero = DummyHero()
+    game = DummyGame(round_idx=2)
+    ctx = DummyCtx(game=game, actor=hero)
+    event = RaiseShieldEvent()
+
+    res = event.execute(ctx)
+    assert not res.success
+    assert res.consumed_action is False
+    assert "raise_shield_allow" in (res.message or "").lower()
+
+
+def test_raise_shield_requires_equipped_shield():
+    hero = DummyHero()
+    hero.add_status(RAISE_SHIELD_ALLOW_STATUS)
+    hero.equipped_shield = None
+    game = DummyGame(round_idx=2)
+    ctx = DummyCtx(game=game, actor=hero)
+    event = RaiseShieldEvent()
+
+    res = event.execute(ctx)
+    assert not res.success
+    assert res.consumed_action is False
+    assert "brak wyposazonej tarczy" in (res.message or "").lower()
 
 
 def test_raise_shield_requires_combat():

@@ -84,6 +84,11 @@ class StatusMixin:
                 self._handle_bard_muse_choice(status, data)
             except Exception:
                 pass
+        if data.get("ui_choice_kind") == "champion_setup":
+            try:
+                self._handle_champion_setup_choice(status, data)
+            except Exception:
+                pass
         prompt = data.get("ui_prompt")
         if not prompt:
             return
@@ -477,6 +482,138 @@ class StatusMixin:
                 f"Dopisz do listy znanych czarow: {chosen_spell_label}."
             )
 
+    def _handle_champion_setup_choice(self, status: "Status", data: dict) -> None:
+        key_ability_choices = list(data.get("champion_key_ability_choices") or ["strength", "dexterity"])
+        cause_choices = list(data.get("champion_cause_choices") or ["paladin", "redeemer", "liberator"])
+        deity_choices = list(data.get("champion_deity_choices") or ["custom"])
+        deity_skill_choices = dict(data.get("champion_deity_skill_choices") or {})
+
+        def _pick(prompt: str, choices: list[str]) -> str | None:
+            if not choices:
+                return None
+            label_map = {self._labelize_choice(item): item for item in choices}
+            labels = list(label_map.keys())
+            chosen_label = self._prompt_choice(prompt, labels, source="status")
+            if not chosen_label:
+                return None
+            chosen = label_map.get(chosen_label)
+            if chosen:
+                return chosen
+            raw = str(chosen_label).strip().lower().replace(" ", "_")
+            return raw if raw in choices else None
+
+        chosen_key_ability = _pick("Champion: wybierz key ability", key_ability_choices)
+        if not chosen_key_ability:
+            return
+        chosen_cause = _pick("Champion: wybierz cause", cause_choices)
+        if not chosen_cause:
+            return
+        chosen_deity = _pick("Champion: wybierz deity", deity_choices)
+        if not chosen_deity:
+            return
+
+        available_deity_skills = list(deity_skill_choices.get(chosen_deity, [])) or list(
+            deity_skill_choices.get("custom", [])
+        )
+        if not available_deity_skills:
+            available_deity_skills = ["religion"]
+        chosen_deity_skill = _pick(
+            f"Champion ({self._labelize_choice(chosen_deity)}): wybierz skill od deity",
+            available_deity_skills,
+        )
+        if not chosen_deity_skill:
+            return
+
+        try:
+            for idx, item in enumerate(self.statuses):
+                if item is status:
+                    new_data = dict(data)
+                    new_data["champion_setup"] = {
+                        "key_ability": chosen_key_ability,
+                        "cause": chosen_cause,
+                        "deity": chosen_deity,
+                        "deity_skill": chosen_deity_skill,
+                    }
+                    new_data["champion_key_ability"] = chosen_key_ability
+                    new_data["champion_cause"] = chosen_cause
+                    new_data["champion_deity"] = chosen_deity
+                    new_data["champion_deity_skill"] = chosen_deity_skill
+                    self.statuses[idx] = replace(status, data=new_data)
+                    break
+        except Exception:
+            self._ui_log("Nie udalo sie zapisac wyboru Champion.")
+            return
+
+        for attr, value in (
+            ("champion_key_ability", chosen_key_ability),
+            ("champion_cause", chosen_cause),
+            ("champion_deity", chosen_deity),
+            ("champion_deity_skill", chosen_deity_skill),
+        ):
+            try:
+                setattr(self, attr, value)
+            except Exception:
+                pass
+
+        try:
+            from combat.reactions.champion_reaction import ChampionReaction
+
+            reactions = getattr(self, "reactions", None)
+            if isinstance(reactions, list):
+                exists = any(getattr(item, "id", None) == "champion_reaction" for item in reactions)
+                if not exists:
+                    reactions.append(ChampionReaction())
+        except Exception:
+            self._ui_log("Nie udalo sie dodac reakcji Champion.")
+
+        self._ui_log(
+            "Champion setup: "
+            f"key ability={self._labelize_choice(chosen_key_ability)}, "
+            f"cause={self._labelize_choice(chosen_cause)}, "
+            f"deity={self._labelize_choice(chosen_deity)}, "
+            f"skill={self._labelize_choice(chosen_deity_skill)}."
+        )
+
+    def _sync_reactions_for_status(self, status: "Status") -> None:
+        reactions = getattr(self, "reactions", None)
+        if not isinstance(reactions, list):
+            return
+        status_id = str(getattr(status, "id", "") or "")
+        if status_id == "shield_block":
+            try:
+                from combat.reactions.shield_block_reaction import ShieldBlockReaction
+                from GameObjects.items.shield import StandardShield, get_equipped_shield
+
+                if not any(getattr(item, "id", None) == "shield_block" for item in reactions):
+                    reactions.append(ShieldBlockReaction())
+                equipped = get_equipped_shield(self, create_default=False)
+                if equipped is None:
+                    choice = self._prompt_choice(
+                        "Shield Block: wybierz tarcze",
+                        ["standard", "brak"],
+                        source="status",
+                    )
+                    normalized = str(choice or "").strip().lower()
+                    if normalized.startswith("s"):
+                        try:
+                            setattr(self, "equipped_shield", StandardShield())
+                            self._ui_log("Wyposazono tarcze: Standard Shield.")
+                        except Exception:
+                            self._ui_log("Nie udalo sie wyposazyc tarczy.")
+                    elif normalized.startswith("b"):
+                        self._ui_log("Brak wyposazonej tarczy.")
+                    else:
+                        self._ui_log("Nie wybrano tarczy (brak wyposazenia).")
+            except Exception:
+                self._ui_log("Nie udalo sie dodac reakcji Shield Block.")
+
+    def _drop_reactions_for_status(self, status_id: str) -> None:
+        reactions = getattr(self, "reactions", None)
+        if not isinstance(reactions, list):
+            return
+        if status_id == "shield_block":
+            self.reactions = [item for item in reactions if getattr(item, "id", None) != "shield_block"]
+
     def _ensure_status_objects(self) -> None:
         if not self.statuses:
             return
@@ -509,6 +646,7 @@ class StatusMixin:
         self._apply_status_actor_attrs(status)
         self._apply_removed_statuses(status)
         self._apply_granted_statuses(status)
+        self._sync_reactions_for_status(status)
         self._ui_log(f"Otrzymujesz status: {status.display_label}.")
         self._maybe_prompt_status_info(status)
         return True
@@ -597,6 +735,7 @@ class StatusMixin:
         for idx, item in enumerate(self.statuses):
             if getattr(item, "id", None) == target_id:
                 del self.statuses[idx]
+                self._drop_reactions_for_status(target_id)
                 return True
         return False
 

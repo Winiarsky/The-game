@@ -30,6 +30,10 @@ class Combat(State):
         self.initiative_order: list[Any] = []
         self.turn_index: int = 0
         self.actions_used: dict[Any, int] = {}
+        self.out_of_turn_actions_used: dict[Any, int] = {}
+        self.turn_initialized: set[Any] = set()
+        self._reaction_resolution_keys: set[tuple[Any, ...]] = set()
+        self._reaction_event_seq: int = 0
         self.delayed: set[Any] = set()
         self._initiatives_ready = False
         self.base_initiative: dict[Any, int] = {}
@@ -192,6 +196,9 @@ class Combat(State):
         self.round_queue = list(self.base_order)
         self.initiative_order = list(self.base_order)
         self.actions_used.clear()
+        self.out_of_turn_actions_used.clear()
+        self.turn_initialized.clear()
+        self._reaction_resolution_keys.clear()
         self.delayed.clear()
         self._initiatives_ready = True
         logger.info("Kolejność inicjatywy: %s", self.base_order)
@@ -211,6 +218,10 @@ class Combat(State):
         self.base_initiative.clear()
         self.temp_initiative.clear()
         self.delayed.clear()
+        self.out_of_turn_actions_used.clear()
+        self.turn_initialized.clear()
+        self._reaction_resolution_keys.clear()
+        self._reaction_event_seq = 0
         self.attack_state.clear()
         self.status_initiative_penalty.clear()
         self.base_order.clear()
@@ -239,6 +250,11 @@ class Combat(State):
                 mapping.pop(dead, None)
         for dead in [k for k in list(self.status_initiative_penalty.keys()) if k not in self.base_order]:
             self.status_initiative_penalty.pop(dead, None)
+        for dead in [k for k in list(self.actions_used.keys()) if k not in self.base_order]:
+            self.actions_used.pop(dead, None)
+        for dead in [k for k in list(self.out_of_turn_actions_used.keys()) if k not in self.base_order]:
+            self.out_of_turn_actions_used.pop(dead, None)
+        self.turn_initialized = {actor for actor in self.turn_initialized if actor in self.base_order}
 
     def _status_initiative_penalty_value(self, actor) -> int:
         statuses = getattr(actor, "statuses", None)
@@ -463,9 +479,16 @@ class Combat(State):
         if not self.round_queue:
             return None
         actor = self.round_queue[0]
-        if actor not in self.actions_used:
+        if actor not in self.turn_initialized:
+            self.turn_initialized.add(actor)
             self._clear_start_of_turn_effects(actor)
-            self.actions_used[actor] = self._start_turn_actions_used(actor)
+            base_used = self._start_turn_actions_used(actor)
+            existing_used = self.actions_used.get(actor, 0)
+            try:
+                existing_used = int(existing_used)
+            except Exception:
+                existing_used = 0
+            self.actions_used[actor] = min(self.ACTION_LIMIT, max(base_used, existing_used))
             reset_react = getattr(actor, "reset_reactions", None)
             if callable(reset_react):
                 try:
@@ -484,11 +507,15 @@ class Combat(State):
             return
         # Koniec tury aktora -> następna jego tura zaczyna z nowym licznikiem akcji.
         self.actions_used.pop(finished_actor, None)
+        self.turn_initialized.discard(finished_actor)
         if not self.round_queue:
             # nowa runda: reset opóźnień do bazowych inicjatyw
             self.round_index += 1
             self.temp_initiative.clear()
             self.delayed.clear()
+            self.out_of_turn_actions_used.clear()
+            self.turn_initialized.clear()
+            self._reaction_resolution_keys.clear()
             self.round_queue = list(self.base_order)
         self.initiative_order = list(self.round_queue)
         actor = self._current_actor()
@@ -504,12 +531,86 @@ class Combat(State):
             used = min(self.ACTION_LIMIT, max(0, int(consume_stunned_actions(actor) or 0)))
         except Exception:
             used = 0
+        preturn_used = self.out_of_turn_actions_used.pop(actor, 0)
+        try:
+            preturn_used = max(0, int(preturn_used))
+        except Exception:
+            preturn_used = 0
+        used += preturn_used
         if used > 0:
             try:
-                self.game.ui_log(f"{getattr(actor, 'name', 'Aktor')} jest stunned: traci {used} akcji.")
+                actor_name = getattr(actor, "name", "Aktor")
+                if preturn_used > 0:
+                    self.game.ui_log(
+                        f"{actor_name} ma zużyte {preturn_used} akcji poza turą (reakcje). "
+                        f"Na start tury: {max(0, self.ACTION_LIMIT - used)}/{self.ACTION_LIMIT}."
+                    )
+                if used - preturn_used > 0:
+                    self.game.ui_log(f"{actor_name} jest stunned: traci {used - preturn_used} akcji.")
             except Exception:
                 pass
-        return used
+        return min(self.ACTION_LIMIT, max(0, int(used)))
+
+    def new_reaction_event_uid(self) -> str:
+        self._reaction_event_seq = int(self._reaction_event_seq) + 1
+        return f"r{int(self.round_index)}:{self._reaction_event_seq}"
+
+    def actions_remaining(self, actor) -> int:
+        if actor is None:
+            return 0
+        if actor in self.turn_initialized:
+            used = self.actions_used.get(actor, 0)
+        else:
+            used = self.out_of_turn_actions_used.get(actor, 0)
+        try:
+            used = int(used)
+        except Exception:
+            used = 0
+        return max(0, int(self.ACTION_LIMIT) - max(0, used))
+
+    def can_pay_reaction_action_cost(self, actor, *, cost: int = 1) -> bool:
+        try:
+            required = max(1, int(cost))
+        except Exception:
+            required = 1
+        return self.actions_remaining(actor) >= required
+
+    def consume_reaction_action_cost(self, actor, *, cost: int = 1, reason: str | None = None) -> bool:
+        if actor is None:
+            return False
+        try:
+            spent = max(1, int(cost))
+        except Exception:
+            spent = 1
+        if not self.can_pay_reaction_action_cost(actor, cost=spent):
+            return False
+        if actor in self.turn_initialized:
+            self.actions_used[actor] = min(
+                self.ACTION_LIMIT,
+                int(self.actions_used.get(actor, 0) or 0) + spent,
+            )
+        else:
+            self.out_of_turn_actions_used[actor] = min(
+                self.ACTION_LIMIT,
+                int(self.out_of_turn_actions_used.get(actor, 0) or 0) + spent,
+            )
+        try:
+            remaining = self.actions_remaining(actor)
+            label = reason or "Reakcja"
+            self.game.ui_log(
+                f"{getattr(actor, 'name', 'Aktor')}: {label} kosztuje {spent} akcję. "
+                f"Pozostało {remaining}/{self.ACTION_LIMIT}."
+            )
+        except Exception:
+            pass
+        if actor in self.turn_initialized and self.actions_used.get(actor, 0) >= self.ACTION_LIMIT:
+            self.game.ui_log(
+                f"{getattr(actor, 'name', 'Aktor')} zużył wszystkie akcje. "
+                "Tura kończy się automatycznie."
+            )
+            if self.round_queue and self.round_queue[0] is actor:
+                self._advance_turn()
+        return True
 
     # --- Combat flow ---
     def _end_combat_if_no_enemies(self) -> Optional[State]:
@@ -575,6 +676,25 @@ class Combat(State):
         ui_active_actor = getattr(self.game, "ui_active_actor", None)
         if callable(ui_active_actor):
             ui_active_actor(active)
+
+    @staticmethod
+    def _shield_note(actor) -> str:
+        try:
+            from GameObjects.items.shield import get_equipped_shield
+        except Exception:
+            return "Shield: brak"
+        shield = get_equipped_shield(actor, create_default=False)
+        if shield is None:
+            return "Shield: brak"
+        name = str(getattr(shield, "name", "Shield") or "Shield")
+        hp = int(getattr(shield, "current_hp", 0) or 0)
+        hp_max = int(getattr(shield, "max_hp", hp) or hp)
+        hardness = int(getattr(shield, "hardness", 0) or 0)
+        if bool(getattr(shield, "is_destroyed", False)):
+            return f"Shield: {name} ZNISZCZONA ({hp}/{hp_max})"
+        if bool(getattr(shield, "is_broken", False)):
+            return f"Shield: {name} BROKEN ({hp}/{hp_max}, Hardness {hardness})"
+        return f"Shield: {name} ({hp}/{hp_max}, Hardness {hardness})"
 
     def apply_initiative_penalty(self, actor, penalty: int) -> None:
         """Obniż inicjatywę aktora i przestaw w kolejce (używane np. przez deafened)."""
@@ -735,7 +855,15 @@ class Combat(State):
         used = self.actions_used.get(actor, 0)
         self.actions_used[actor] = used
         logger.info("Tura bohatera (%s). Akcje: %s/%s", actor, used, self.ACTION_LIMIT)
-        self.game.ui_hero(actor, note=f"Akcje: {used}/{self.ACTION_LIMIT}")
+        self.game.ui_hero(
+            actor,
+            note=f"Akcje: {used}/{self.ACTION_LIMIT} | {self._shield_note(actor)}",
+        )
+        if used >= self.ACTION_LIMIT:
+            logger.info("Aktor %s nie ma już akcji. Automatyczny koniec tury.", getattr(actor, "name", actor))
+            self.game.ui_log("Brak dostępnych akcji. Automatyczny koniec tury.")
+            self._advance_turn()
+            return self
 
         all_events = list_events()
         available_events = {
@@ -809,10 +937,10 @@ class Combat(State):
                 spent = 1
             self.actions_used[actor] = self.actions_used.get(actor, 0) + spent
             if self.actions_used[actor] >= self.ACTION_LIMIT:
-                logger.info(
-                    "Wykorzystano limit %s akcji. Użyj end lub delay aby zakończyć turę.",
-                    self.ACTION_LIMIT,
-                )
+                logger.info("Wykorzystano limit %s akcji. Automatyczny koniec tury.", self.ACTION_LIMIT)
+                self.game.ui_log("Wykorzystano wszystkie akcje. Automatyczny koniec tury.")
+                self._advance_turn()
+                return self
         if result.message:
             self.game.ui_log(result.message)
         else:

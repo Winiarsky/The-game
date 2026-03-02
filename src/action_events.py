@@ -29,6 +29,7 @@ def _safe_tags(tags: Iterable[str] | None) -> list[str]:
 class ActionEventBus:
     game: Any
     listeners: List[ActionListener] = field(default_factory=list)
+    event_seq: int = 0
 
     def __post_init__(self) -> None:
         self._register_default_listeners()
@@ -68,6 +69,8 @@ class ActionEventBus:
             "action_tags": _safe_tags(action_tags),
             "state": getattr(getattr(self.game, "state", None), "__class__", type("", (), {})).__name__,
         }
+        self.event_seq = int(self.event_seq) + 1
+        event.setdefault("event_uid", f"ev:{self.event_seq}")
         event.update(payload)
 
         for listener in list(self.listeners):

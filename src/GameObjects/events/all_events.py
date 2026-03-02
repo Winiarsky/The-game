@@ -32,6 +32,7 @@ from . import goblin_scuttle_event  # noqa: F401
 from . import goblin_song_event  # noqa: F401
 from . import rage_event  # noqa: F401
 from . import moment_of_clarity_event  # noqa: F401
+from . import lay_on_hands_event  # noqa: F401
 from . import aid_event  # noqa: F401
 from . import grapple_event  # noqa: F401
 from . import trip_event  # noqa: F401
