@@ -79,6 +79,11 @@ class StatusMixin:
                 self._handle_spirit_instinct_choice(status, data)
             except Exception:
                 pass
+        if data.get("ui_choice_kind") == "bard_muse":
+            try:
+                self._handle_bard_muse_choice(status, data)
+            except Exception:
+                pass
         prompt = data.get("ui_prompt")
         if not prompt:
             return
@@ -388,6 +393,90 @@ class StatusMixin:
         except Exception:
             self._ui_log("Nie udalo sie ustawic Spirit Instinct.")
 
+    def _handle_bard_muse_choice(self, status: "Status", data: dict) -> None:
+        choices = list(data.get("bard_muse_choices") or [])
+        if not choices:
+            choices = ["enigma", "maestro", "polymath"]
+        muse_effects = data.get("bard_muse_effects") or {}
+
+        label_to_key: dict[str, str] = {}
+        labels: list[str] = []
+        for key in choices:
+            effect_data = muse_effects.get(key) or {}
+            effect = str(effect_data.get("effect") or "").strip()
+            feat_label = str(effect_data.get("feat_label") or "").strip()
+            spell_label = str(effect_data.get("spell_label") or "").strip()
+            detail_parts = [part for part in [effect, f"Feat: {feat_label}" if feat_label else "", f"Czar: {spell_label}" if spell_label else ""] if part]
+            details = "; ".join(detail_parts)
+            base_label = self._labelize_choice(key)
+            label = f"{base_label} - {details}" if details else base_label
+            label_to_key[label] = key
+            labels.append(label)
+
+        chosen_label = self._prompt_choice(
+            "Bard Muse: wybierz inspiracje",
+            labels,
+            source="status",
+        )
+        if not chosen_label:
+            return
+
+        chosen_key = label_to_key.get(chosen_label)
+        if not chosen_key:
+            chosen_key = str(chosen_label).split("-", 1)[0].strip().lower().replace(" ", "_")
+
+        default_map = {
+            "enigma": {"feat": "bardic_lore", "spell": "true_strike", "spell_label": "True Strike"},
+            "maestro": {"feat": "lingering_composition", "spell": "soothe", "spell_label": "Soothe"},
+            "polymath": {"feat": "versatile_performance", "spell": "unseen_servant", "spell_label": "Unseen Servant"},
+        }
+        selected = dict(default_map.get(chosen_key, {}))
+        selected.update(dict(muse_effects.get(chosen_key, {}) or {}))
+
+        chosen_feat = str(selected.get("feat") or "").strip().lower()
+        chosen_spell = str(selected.get("spell") or "").strip().lower()
+        chosen_spell_label = str(selected.get("spell_label") or "").strip() or self._labelize_choice(chosen_spell)
+
+        try:
+            for idx, item in enumerate(self.statuses):
+                if item is status:
+                    new_data = dict(data)
+                    new_data["bard_muse"] = chosen_key
+                    new_data["bard_muse_choice"] = {
+                        "muse": chosen_key,
+                        "feat": chosen_feat,
+                        "known_spell": chosen_spell,
+                    }
+                    self.statuses[idx] = replace(status, data=new_data)
+                    break
+        except Exception:
+            self._ui_log("Nie udalo sie zapisac wyboru muse.")
+
+        self._ui_log(f"Bard Muse: wybrano {self._labelize_choice(chosen_key)}.")
+
+        try:
+            from statuses.classes.bard.feats.bardic_lore import BARDIC_LORE_STATUS
+            from statuses.classes.bard.feats.lingering_composition import LINGERING_COMPOSITION_STATUS
+            from statuses.classes.bard.feats.versatile_performance import VERSATILE_PERFORMANCE_STATUS
+
+            feat_map = {
+                "bardic_lore": BARDIC_LORE_STATUS,
+                "lingering_composition": LINGERING_COMPOSITION_STATUS,
+                "versatile_performance": VERSATILE_PERFORMANCE_STATUS,
+            }
+            feat_status = feat_map.get(chosen_feat)
+            if feat_status is not None:
+                self.add_status(feat_status)
+            elif chosen_feat:
+                self._ui_log(f"Nie znaleziono feata: {chosen_feat}.")
+        except Exception:
+            self._ui_log("Nie udalo sie dodac feata z Bard Muse.")
+
+        if chosen_spell_label:
+            self._ui_log(
+                f"Dopisz do listy znanych czarow: {chosen_spell_label}."
+            )
+
     def _ensure_status_objects(self) -> None:
         if not self.statuses:
             return
@@ -428,7 +517,7 @@ class StatusMixin:
         data = getattr(status, "data", None) or {}
         attrs = data.get("set_actor_attrs") or {}
         if not isinstance(attrs, dict):
-            return
+            attrs = {}
         for key, value in attrs.items():
             name = str(key or "").strip()
             if not name:
@@ -437,6 +526,26 @@ class StatusMixin:
                 continue
             try:
                 setattr(self, name, value)
+            except Exception:
+                continue
+
+        additive = data.get("add_actor_attrs") or {}
+        if not isinstance(additive, dict):
+            return
+        for key, value in additive.items():
+            name = str(key or "").strip()
+            if not name:
+                continue
+            try:
+                current = getattr(self, name, 0)
+            except Exception:
+                current = 0
+            try:
+                new_value = int(current) + int(value)
+            except Exception:
+                continue
+            try:
+                setattr(self, name, new_value)
             except Exception:
                 continue
 

@@ -324,6 +324,150 @@ def test_arcane_tradition_added_for_shared_cantrips():
         assert SpellTradition.ARCANA in tuple(getattr(event, "magic_traditions", ()) or ())
 
 
+def test_divine_tradition_added_for_divine_cantrips():
+    events = [
+        occ.ChillTouchEvent(),
+        occ.DazeEvent(),
+        occ.DetectMagicEvent(),
+        occ.DisruptUndeadEvent(),
+        occ.DivineLanceEvent(),
+        occ.ForbiddingWardEvent(),
+        occ.GuidanceEvent(),
+        occ.KnowDirectionEvent(),
+        occ.LightEvent(),
+        occ.MessageEvent(),
+        occ.PrestidigitationEvent(),
+        occ.ReadAuraEvent(),
+        occ.ShieldCantripEvent(),
+        occ.SigilEvent(),
+        occ.StabilizeEvent(),
+    ]
+    for event in events:
+        assert SpellTradition.DIVINE in tuple(getattr(event, "magic_traditions", ()) or ())
+
+
+def test_primal_tradition_added_for_primal_cantrips():
+    events = [
+        occ.AcidSplashEvent(),
+        occ.DancingLightsEvent(),
+        occ.DetectMagicEvent(),
+        occ.DisruptUndeadEvent(),
+        occ.ElectricArcEvent(),
+        occ.GuidanceEvent(),
+        occ.KnowDirectionEvent(),
+        occ.LightEvent(),
+        occ.PrestidigitationEvent(),
+        occ.ProduceFlameEvent(),
+        occ.RayOfFrostEvent(),
+        occ.ReadAuraEvent(),
+        occ.SigilEvent(),
+        occ.StabilizeEvent(),
+        occ.TanglefootEvent(),
+    ]
+    for event in events:
+        assert SpellTradition.PRIMAL in tuple(getattr(event, "magic_traditions", ()) or ())
+
+
+def test_primal_tag_present_for_primal_cantrips():
+    events = [
+        occ.AcidSplashEvent(),
+        occ.DancingLightsEvent(),
+        occ.DetectMagicEvent(),
+        occ.DisruptUndeadEvent(),
+        occ.ElectricArcEvent(),
+        occ.GuidanceEvent(),
+        occ.KnowDirectionEvent(),
+        occ.LightEvent(),
+        occ.PrestidigitationEvent(),
+        occ.ProduceFlameEvent(),
+        occ.RayOfFrostEvent(),
+        occ.ReadAuraEvent(),
+        occ.SigilEvent(),
+        occ.StabilizeEvent(),
+        occ.TanglefootEvent(),
+    ]
+    for event in events:
+        assert "primal" in tuple(getattr(event, "spell_tags", ()) or ())
+
+
+def test_disrupt_undead_deals_positive_to_undead(monkeypatch):
+    hero = DummyActor("hero", (0, 0))
+    enemy = DummyActor("undead", (1, 0), hp=20)
+    enemy.tags = ["undead"]
+    game = _game(actor=hero, enemies=[enemy])
+
+    monkeypatch.setattr(occ, "pick_target_in_range", lambda *_a, **_k: (enemy, enemy.position))
+    rolls = iter([15, 6])  # spell DC, damage
+    monkeypatch.setattr(occ, "prompt_for_roll", lambda *_a, **_k: next(rolls))
+    monkeypatch.setattr(occ.random, "randint", lambda _a, _b: 7)  # failure vs DC 15
+
+    res = occ.DisruptUndeadEvent().execute(EventContext(game=game, actor=hero))
+
+    assert res.success is True
+    assert enemy.hp == 14
+
+
+def test_divine_lance_hits_opposed_alignment(monkeypatch):
+    hero = DummyActor("hero", (0, 0))
+    hero.alignment = "good"
+    enemy = DummyActor("enemy", (1, 0), hp=20)
+    enemy.ac = 20
+    enemy.tags = ["evil"]
+    game = _game(actor=hero, enemies=[enemy])
+
+    monkeypatch.setattr("GameObjects.events.magic.base_attack_magic_event.pick_target_in_range", lambda *_a, **_k: (enemy, enemy.position))
+    monkeypatch.setattr("GameObjects.events.magic.base_attack_magic_event.prompt_for_roll", lambda *_a, **_k: 20)
+    monkeypatch.setattr(occ, "prompt_for_roll", lambda *_a, **_k: 4)
+
+    res = occ.DivineLanceEvent().execute(EventContext(game=game, actor=hero))
+
+    assert res.success is True
+    assert enemy.hp == 16
+
+
+def test_divine_lance_no_effect_without_opposed_alignment(monkeypatch):
+    hero = DummyActor("hero", (0, 0))
+    hero.alignment = "good"
+    enemy = DummyActor("enemy", (1, 0), hp=20)
+    enemy.ac = 20
+    enemy.tags = ["lawful"]
+    game = _game(actor=hero, enemies=[enemy])
+
+    monkeypatch.setattr("GameObjects.events.magic.base_attack_magic_event.pick_target_in_range", lambda *_a, **_k: (enemy, enemy.position))
+    monkeypatch.setattr("GameObjects.events.magic.base_attack_magic_event.prompt_for_roll", lambda *_a, **_k: 20)
+
+    res = occ.DivineLanceEvent().execute(EventContext(game=game, actor=hero))
+
+    assert res.success is True
+    assert enemy.hp == 20
+    assert "przeciwnej aury" in (res.message or "")
+
+
+def test_know_direction_logs_north():
+    hero = DummyActor("hero", (2, 2))
+    game = _game(actor=hero)
+
+    res = occ.KnowDirectionEvent().execute(EventContext(game=game, actor=hero))
+
+    assert res.success is True
+    assert any("polnoc" in msg.lower() for msg in game._logs)
+
+
+def test_stabilize_removes_dying_status(monkeypatch):
+    caster = DummyActor("caster", (0, 0))
+    target = DummyActor("target", (1, 0))
+    target.add_status(Status(id="dying_2", label="Dying 2"))
+    target.add_status(Status(id="poisoned", label="Poisoned"))
+    game = _game(actor=caster, heroes=[caster, target])
+
+    monkeypatch.setattr(occ, "pick_target_in_range", lambda *_a, **_k: (target, target.position))
+    res = occ.StabilizeEvent().execute(EventContext(game=game, actor=caster))
+
+    assert res.success is True
+    assert not any(str(getattr(s, "id", s)).startswith("dying") for s in target.statuses)
+    assert any(getattr(s, "id", "") == "poisoned" for s in target.statuses)
+
+
 def test_electric_arc_hits_two_targets(monkeypatch):
     hero = DummyActor("hero", (0, 0))
     e1 = DummyActor("enemy1", (1, 0), hp=20)

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from statuses.base import Status
+from statuses.classes.bard.feats.reach_spell import REACH_SPELL_STATUS
+from statuses.classes.bard.inspiration import INSPIRATION_STATUS
 
 BARD_PROMPT = (
     "KEY ABILITY: CHARISMA\n"
@@ -30,6 +32,7 @@ def BardStatus() -> Status:
         data={
             "ui_prompt": BARD_PROMPT,
             "set_actor_attrs": {"focus_point": 1},
+            "grants_statuses": [INSPIRATION_STATUS, REACH_SPELL_STATUS],
         },
     )
 
@@ -41,4 +44,3 @@ __all__ = [
     "BardStatus",
     "BARD_STATUS",
 ]
-

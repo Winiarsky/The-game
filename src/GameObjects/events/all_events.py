@@ -20,6 +20,7 @@ from . import leap_event  # noqa: F401
 from . import prone_event  # noqa: F401
 from . import stand_event  # noqa: F401
 from . import command_familiar_event  # noqa: F401
+from . import reach_spell_event  # noqa: F401
 from .bombs import acid_flask_event  # noqa: F401
 from .bombs import bottled_lightning_event  # noqa: F401
 from .bombs import frost_vial_event  # noqa: F401

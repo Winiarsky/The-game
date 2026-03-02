@@ -38,6 +38,7 @@ from ..lighting_effects import (
 )
 
 logger = logging.getLogger(__name__)
+ALIGNMENT_KEYS = ("good", "evil", "lawful", "chaotic")
 
 
 def _actor_id(actor) -> str | None:
@@ -202,14 +203,134 @@ def _iter_room_objects(ctx: EventContext, rooms: set[str]) -> list[tuple[object,
     return result
 
 
+def _is_undead_target(target) -> bool:
+    if target is None:
+        return False
+    has_tag = getattr(target, "has_tag", None)
+    if callable(has_tag):
+        try:
+            if bool(has_tag("undead")):
+                return True
+        except Exception:
+            pass
+    tags = {str(t).strip().lower() for t in (getattr(target, "tags", None) or [])}
+    enemy_type = getattr(target, "enemy_type", None)
+    if enemy_type is not None:
+        tags.add(str(getattr(enemy_type, "value", enemy_type)).strip().lower())
+    return "undead" in tags
+
+
+def _extract_alignment_values(raw) -> list[str]:
+    values: list[str] = []
+    if raw is None:
+        return values
+    if isinstance(raw, (list, tuple, set)):
+        for item in raw:
+            for value in _extract_alignment_values(item):
+                if value not in values:
+                    values.append(value)
+        return values
+
+    text = str(raw).strip().lower()
+    shorthand = {
+        "lg": ["lawful", "good"],
+        "ln": ["lawful"],
+        "le": ["lawful", "evil"],
+        "ng": ["good"],
+        "n": [],
+        "ne": ["evil"],
+        "cg": ["chaotic", "good"],
+        "cn": ["chaotic"],
+        "ce": ["chaotic", "evil"],
+    }
+    if text in shorthand:
+        return list(shorthand[text])
+
+    tokens = (
+        text.replace("_", " ")
+        .replace("-", " ")
+        .replace("/", " ")
+        .replace(",", " ")
+        .split()
+    )
+    for key in ALIGNMENT_KEYS:
+        if key in tokens and key not in values:
+            values.append(key)
+    return values
+
+
+def _alignment_values_from_target(target) -> set[str]:
+    values: set[str] = set()
+    if target is None:
+        return values
+    for value in _extract_alignment_values(getattr(target, "alignment", None)):
+        values.add(value)
+    for value in _extract_alignment_values(getattr(target, "deity_alignment", None)):
+        values.add(value)
+    for value in _extract_alignment_values(getattr(target, "tags", None) or []):
+        values.add(value)
+    return values
+
+
+def _is_opposed_alignment(target, damage_alignment: str) -> bool:
+    alignment = str(damage_alignment or "").strip().lower()
+    opposites = {
+        "good": "evil",
+        "evil": "good",
+        "lawful": "chaotic",
+        "chaotic": "lawful",
+    }
+    needed = opposites.get(alignment)
+    if not needed:
+        return False
+    return needed in _alignment_values_from_target(target)
+
+
+def _resolve_divine_lance_alignment(ctx: EventContext, actor) -> str:
+    if actor is None:
+        return "good"
+    stored = str(getattr(actor, "divine_lance_alignment", "") or "").strip().lower()
+    if stored in ALIGNMENT_KEYS:
+        return stored
+
+    for source in (
+        getattr(actor, "deity_alignment", None),
+        getattr(actor, "alignment", None),
+        getattr(actor, "tags", None),
+    ):
+        values = _extract_alignment_values(source)
+        if values:
+            choice = values[0]
+            try:
+                setattr(actor, "divine_lance_alignment", choice)
+            except Exception:
+                pass
+            return choice
+
+    choice = _prompt_choice(
+        ctx,
+        "Divine Lance - wybierz aspekt bostwa",
+        ["good", "evil", "lawful", "chaotic"],
+        source="divine_lance",
+    )
+    choice_norm = str(choice or "").strip().lower()
+    if choice_norm not in ALIGNMENT_KEYS:
+        choice_norm = "good"
+    try:
+        setattr(actor, "divine_lance_alignment", choice_norm)
+    except Exception:
+        pass
+    return choice_norm
+
+
 @register_event
 class ChillTouchEvent(MagicEvent):
     name = "chill_touch"
     actions_cost = 2
     range_feet = 5
     default_tags = ["magic", "spell"]
-    spell_tags = ["cantrip", "occult", "arcane", "necromancy", "touch"]
-    magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA)
+    spell_tags = ["cantrip", "occult", "arcane", "divine", "necromancy", "touch"]
+    magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA, SpellTradition.DIVINE)
     magic_types = ["necromancy"]
     prompt = "Chill Touch - 1k4 negative, Fortitude save, Enfeebled przy porazce."
 
@@ -297,8 +418,8 @@ class DancingLightsEvent(MagicEvent):
     name = "dancing_lights"
     actions_cost = 2
     default_tags = ["magic", "spell"]
-    spell_tags = ["cantrip", "occult", "arcane", "evocation"]
-    magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA)
+    spell_tags = ["cantrip", "occult", "arcane", "primal", "evocation"]
+    magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA, SpellTradition.PRIMAL)
     magic_types = ["evocation"]
     range_feet = 30
     prompt = "Dancing Lights - wybierz do 4 pol darkness/dim light i zatwierdz klikajac na bohatera."
@@ -371,8 +492,8 @@ class DazeEvent(MagicEvent):
     name = "daze"
     actions_cost = 2
     default_tags = ["magic", "spell"]
-    spell_tags = ["cantrip", "occult", "arcane", "enchantment"]
-    magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA)
+    spell_tags = ["cantrip", "occult", "arcane", "divine", "enchantment"]
+    magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA, SpellTradition.DIVINE)
     magic_types = ["enchantment"]
     range_feet = 60
     prompt = "Daze - enemy robi Will save."
@@ -454,8 +575,8 @@ class ForbiddingWardEvent(MagicEvent):
     name = "forbidding_ward"
     actions_cost = 2
     default_tags = ["magic", "spell", "ward"]
-    spell_tags = ["cantrip", "occult", "abjuration"]
-    magic_traditions = (SpellTradition.OCCULT,)
+    spell_tags = ["cantrip", "occult", "divine", "abjuration"]
+    magic_traditions = (SpellTradition.OCCULT, SpellTradition.DIVINE)
     magic_types = ["abjuration"]
     range_feet = 30
     prompt = "Forbidding Ward - +1 AC i save tylko wzgledem wybranego przeciwnika."
@@ -568,8 +689,8 @@ class GuidanceEvent(MagicEvent):
     name = "guidance"
     actions_cost = 1
     default_tags = ["magic", "spell", "support"]
-    spell_tags = ["cantrip", "occult", "divination"]
-    magic_traditions = (SpellTradition.OCCULT,)
+    spell_tags = ["cantrip", "occult", "divine", "primal", "divination"]
+    magic_traditions = (SpellTradition.OCCULT, SpellTradition.DIVINE, SpellTradition.PRIMAL)
     magic_types = ["divination"]
     range_feet = 30
     prompt = "Guidance - +1 status do atakow i testow (1 tura)."
@@ -633,8 +754,8 @@ class LightEvent(MagicEvent):
     name = "light"
     actions_cost = 2
     default_tags = ["magic", "spell"]
-    spell_tags = ["cantrip", "occult", "arcane", "evocation"]
-    magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA)
+    spell_tags = ["cantrip", "occult", "arcane", "divine", "primal", "evocation"]
+    magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA, SpellTradition.DIVINE, SpellTradition.PRIMAL)
     magic_types = ["evocation"]
     prompt = "Light - aura 30 stop od castera do konca walki."
 
@@ -702,8 +823,8 @@ class MessageEvent(MagicEvent):
     name = "message"
     actions_cost = 1
     default_tags = ["magic", "spell"]
-    spell_tags = ["cantrip", "occult", "arcane", "illusion"]
-    magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA)
+    spell_tags = ["cantrip", "occult", "arcane", "divine", "illusion"]
+    magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA, SpellTradition.DIVINE)
     magic_types = ["illusion"]
     range_feet = 120
     prompt = "Message - rozmowa z NPC na odleglosc."
@@ -747,8 +868,8 @@ class PrestidigitationEvent(MagicEvent):
     name = "prestidigitation"
     actions_cost = 2
     default_tags = ["magic", "spell"]
-    spell_tags = ["cantrip", "occult", "arcane", "evocation"]
-    magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA)
+    spell_tags = ["cantrip", "occult", "arcane", "divine", "primal", "evocation"]
+    magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA, SpellTradition.DIVINE, SpellTradition.PRIMAL)
     magic_types = ["evocation"]
 
     def execute(self, ctx: EventContext) -> EventResult:
@@ -764,8 +885,8 @@ class ReadAuraEvent(MagicEvent):
     name = "read_aura"
     actions_cost = 2
     default_tags = ["magic", "spell", "detect"]
-    spell_tags = ["cantrip", "occult", "arcane", "divination"]
-    magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA)
+    spell_tags = ["cantrip", "occult", "arcane", "divine", "primal", "divination"]
+    magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA, SpellTradition.DIVINE, SpellTradition.PRIMAL)
     magic_types = ["divination"]
     range_feet = 30
     prompt = "Read Aura - pokaz statusy enemy w zasiegu 30 stop."
@@ -809,8 +930,8 @@ class ShieldCantripEvent(MagicEvent):
     name = "shield_cantrip"
     actions_cost = 1
     default_tags = ["magic", "spell", "defense"]
-    spell_tags = ["cantrip", "occult", "arcane", "abjuration"]
-    magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA)
+    spell_tags = ["cantrip", "occult", "arcane", "divine", "abjuration"]
+    magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA, SpellTradition.DIVINE)
     magic_types = ["abjuration"]
     prompt = "Shield Cantrip - +1 AC i absorpcja 5 obrazen."
 
@@ -895,7 +1016,7 @@ class AcidSplashEvent(BaseMagicAttackEvent):
     actions_cost = 2
     range_feet = 30
     default_tags = ["magic", "spell", "attack_ranged"]
-    spell_tags = ["acid", "cantrip", "arcane", "evocation"]
+    spell_tags = ["acid", "cantrip", "arcane", "primal", "evocation"]
     magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL)
     magic_types = ["evocation"]
     prompt = "Acid Splash - wystrzel bryzg kwasu w zasiegu 30 stop."
@@ -978,7 +1099,7 @@ class DetectMagicEvent(MagicEvent):
         SpellTradition.OCCULT,
         SpellTradition.PRIMAL,
     )
-    spell_tags = ["cantrip", "arcane", "divination", "detect"]
+    spell_tags = ["cantrip", "arcane", "divine", "primal", "divination", "detect"]
     magic_types = ["divination"]
     prompt = "Detect Magic - wyczuj magiczne aury w poblizu."
 
@@ -1112,11 +1233,217 @@ class DetectMagicAliasEvent(DetectMagicEvent):
 
 
 @register_event
+class DisruptUndeadEvent(MagicEvent):
+    name = "disrupt_undead"
+    actions_cost = 2
+    default_tags = ["magic", "spell"]
+    spell_tags = ["cantrip", "divine", "primal", "necromancy", "positive"]
+    magic_traditions = (SpellTradition.DIVINE, SpellTradition.PRIMAL)
+    magic_types = ["necromancy"]
+    range_feet = 30
+    prompt = "Disrupt Undead - positive damage tylko przeciw undead."
+
+    def execute(self, ctx: EventContext) -> EventResult:
+        actor = ctx.actor
+        if actor is None or getattr(actor, "position", None) is None:
+            return EventResult.cancelled(message="Brak bohatera do rzucenia czaru.")
+
+        candidates = [item for item in _iter_enemy_candidates(ctx.game) if _is_undead_target(item[0])]
+        if not candidates:
+            return EventResult.cancelled(message="Brak undead w zasiegu.")
+
+        target, target_pos = pick_target_in_range(
+            ctx,
+            actor.position,
+            candidates,
+            max_range_feet=self.range_feet,
+            allowed_kinds=("enemy",),
+            tags=self._effective_tags(ctx),
+        )
+        if target is None or target_pos is None:
+            return EventResult.cancelled(message="Nie wybrano undead.")
+
+        spell_dc = int(prompt_for_roll("Disrupt Undead - podaj Spell DC:", layout="test", answer_placeholder="Spell DC") or 0)
+        base_damage = int(
+            prompt_for_roll(
+                "Disrupt Undead - podaj obrazenia positive:",
+                layout="damage",
+                answer_placeholder="Obrazenia",
+            )
+            or 0
+        )
+
+        outcome, roll, total = _roll_enemy_save(
+            target,
+            Skill.FORTITUDE.value,
+            spell_dc,
+            attacker=actor,
+            tags=["save", Skill.FORTITUDE.value, "magic", "positive"],
+        )
+        damage = _basic_save_damage(base_damage, outcome)
+        defeated = _apply_damage(target, damage, DamageType.POSITIVE.value)
+
+        try:
+            ctx.game.ui_log(
+                f"Disrupt Undead: Fort save k20={roll}, suma={total} vs DC {spell_dc}: {outcome}. "
+                f"Obrazenia: {damage}."
+            )
+        except Exception:
+            pass
+
+        msg = f"Disrupt Undead: {outcome}, obrazenia {damage} positive."
+        if defeated:
+            msg += " Cel pokonany."
+        return EventResult(success=True, consumed_action=self.consumes_action, message=msg)
+
+
+@register_event
+class DivineLanceEvent(BaseMagicAttackEvent):
+    name = "divine_lance"
+    actions_cost = 2
+    range_feet = 30
+    default_tags = ["magic", "spell", "attack_ranged"]
+    spell_tags = ["cantrip", "divine", "evocation", "alignment"]
+    magic_traditions = (SpellTradition.DIVINE,)
+    magic_types = ["evocation"]
+    prompt = "Divine Lance - alignment damage zalezne od bostwa."
+
+    def _resolve_on_target(self, target, pos, ctx: EventContext, *, critical: bool = False) -> EventResult:
+        actor = ctx.actor
+        damage_alignment = _resolve_divine_lance_alignment(ctx, actor)
+        if not _is_opposed_alignment(target, damage_alignment):
+            return EventResult(
+                success=True,
+                consumed_action=self.consumes_action,
+                message=f"Divine Lance trafia, ale cel nie ma przeciwnej aury ({damage_alignment}).",
+            )
+
+        damage = int(
+            prompt_for_roll(
+                "Divine Lance - podaj obrazenia:",
+                layout="damage",
+                answer_placeholder="Obrazenia",
+            )
+            or 0
+        )
+        damage += int(inspire_courage_damage_bonus(actor) or 0)
+        if critical:
+            damage *= 2
+
+        defeated = _apply_damage(target, damage, damage_alignment)
+        msg = f"Divine Lance trafia za {damage} {damage_alignment}."
+        if critical:
+            msg = f"Divine Lance - krytyk! {damage} {damage_alignment}."
+        if defeated:
+            msg += " Cel pokonany."
+        return EventResult(success=True, consumed_action=self.consumes_action, message=msg)
+
+
+@register_event
+class KnowDirectionEvent(MagicEvent):
+    name = "know_direction"
+    actions_cost = 1
+    default_tags = ["magic", "spell", "utility"]
+    spell_tags = ["cantrip", "divine", "primal", "divination"]
+    magic_traditions = (SpellTradition.DIVINE, SpellTradition.PRIMAL)
+    magic_types = ["divination"]
+    prompt = "Know Direction - wyznacza prawdziwa polnoc."
+
+    def execute(self, ctx: EventContext) -> EventResult:
+        actor = ctx.actor
+        if actor is None or getattr(actor, "position", None) is None:
+            return EventResult.cancelled(message="Brak bohatera do rzucenia czaru.")
+
+        x, y = actor.position
+        north_pos = (x, y - 1)
+        in_bounds = True
+        try:
+            in_bounds = bool(ctx.game.board.in_bounds(north_pos))
+        except Exception:
+            pass
+
+        if in_bounds:
+            text = f"Know Direction: polnoc jest w kierunku pola {north_pos}."
+        else:
+            text = "Know Direction: polnoc jest powyzej aktualnej pozycji."
+        try:
+            ctx.game.ui_log(text)
+        except Exception:
+            pass
+        return EventResult(
+            success=True,
+            consumed_action=self.consumes_action,
+            message="Know Direction zakonczone.",
+            data={"north_vector": (0, -1)},
+        )
+
+
+@register_event
+class StabilizeEvent(MagicEvent):
+    name = "stabilize"
+    actions_cost = 2
+    default_tags = ["magic", "spell", "healing"]
+    spell_tags = ["cantrip", "divine", "primal", "necromancy"]
+    magic_traditions = (SpellTradition.DIVINE, SpellTradition.PRIMAL)
+    magic_types = ["necromancy"]
+    range_feet = 30
+    prompt = "Stabilize - stabilizuje dying creature."
+
+    def execute(self, ctx: EventContext) -> EventResult:
+        actor = ctx.actor
+        if actor is None or getattr(actor, "position", None) is None:
+            return EventResult.cancelled(message="Brak bohatera do rzucenia czaru.")
+
+        candidates = list(_iter_hero_candidates(ctx.game)) + list(_iter_enemy_candidates(ctx.game))
+        target, target_pos = pick_target_in_range(
+            ctx,
+            actor.position,
+            candidates,
+            max_range_feet=self.range_feet,
+            allowed_kinds=("hero", "enemy"),
+            tags=self._effective_tags(ctx),
+        )
+        if target is None or target_pos is None:
+            return EventResult.cancelled(message="Brak celu dla Stabilize.")
+
+        statuses = getattr(target, "statuses", None)
+        if not isinstance(statuses, list):
+            return EventResult(
+                success=True,
+                consumed_action=self.consumes_action,
+                message="Stabilize: UI-only (brak listy statusow celu).",
+            )
+
+        kept = []
+        removed = 0
+        for status in statuses:
+            status_id = str(getattr(status, "id", status)).strip().lower()
+            if status_id.startswith("dying"):
+                removed += 1
+                continue
+            kept.append(status)
+
+        if removed:
+            try:
+                target.statuses = kept
+            except Exception:
+                pass
+            msg = f"Stabilize: usunieto statusy dying ({removed})."
+        else:
+            msg = "Stabilize: brak statusu dying - efekt UI-only."
+        try:
+            ctx.game.ui_log(msg)
+        except Exception:
+            pass
+        return EventResult(success=True, consumed_action=self.consumes_action, message=msg)
+
+
+@register_event
 class ElectricArcEvent(MagicEvent):
     name = "electric_arc"
     actions_cost = 2
     default_tags = ["magic", "spell"]
-    spell_tags = ["cantrip", "arcane", "evocation", "electric"]
+    spell_tags = ["cantrip", "arcane", "primal", "evocation", "electric"]
     magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL)
     magic_types = ["evocation"]
     range_feet = 30
@@ -1251,7 +1578,7 @@ class ProduceFlameEvent(BaseMagicAttackEvent):
     actions_cost = 2
     range_feet = 30
     default_tags = ["magic", "spell", "attack_ranged"]
-    spell_tags = ["cantrip", "arcane", "evocation", "fire"]
+    spell_tags = ["cantrip", "arcane", "primal", "evocation", "fire"]
     magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL)
     magic_types = ["evocation"]
     prompt = "Produce Flame - atak ogniem (melee lub ranged)."
@@ -1318,7 +1645,7 @@ class RayOfFrostEvent(BaseMagicAttackEvent):
     actions_cost = 2
     range_feet = 120
     default_tags = ["magic", "spell", "attack_ranged"]
-    spell_tags = ["cantrip", "arcane", "evocation", "cold"]
+    spell_tags = ["cantrip", "arcane", "primal", "evocation", "cold"]
     magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL)
     magic_types = ["evocation"]
     prompt = "Ray of Frost - atak zimnem; krytyk spowalnia cel."
@@ -1381,8 +1708,8 @@ class SigilEvent(MagicEvent):
     name = "sigil"
     actions_cost = 2
     default_tags = ["magic", "spell", "transmutation"]
-    spell_tags = ["cantrip", "arcane", "transmutation"]
-    magic_traditions = (SpellTradition.ARCANA, SpellTradition.OCCULT, SpellTradition.DIVINE)
+    spell_tags = ["cantrip", "arcane", "occult", "divine", "primal", "transmutation"]
+    magic_traditions = (SpellTradition.ARCANA, SpellTradition.OCCULT, SpellTradition.DIVINE, SpellTradition.PRIMAL)
     magic_types = ["transmutation"]
     range_feet = 30
     prompt = "Sigil - oznacz obiekt lub stworzenie magicznym znakiem."
@@ -1434,7 +1761,7 @@ class TanglefootEvent(BaseMagicAttackEvent):
     actions_cost = 2
     range_feet = 30
     default_tags = ["magic", "spell", "attack_ranged"]
-    spell_tags = ["cantrip", "arcane", "conjuration"]
+    spell_tags = ["cantrip", "arcane", "primal", "conjuration"]
     magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL)
     magic_types = ["conjuration"]
     prompt = "Tanglefoot - trafiony cel traci szybkosc, krytyk unieruchamia."

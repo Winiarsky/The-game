@@ -169,6 +169,44 @@ def _apply_heal(target, amount: int) -> None:
         pass
 
 
+def _is_undead_target(target) -> bool:
+    if target is None:
+        return False
+    has_tag = getattr(target, "has_tag", None)
+    if callable(has_tag):
+        try:
+            if bool(has_tag("undead")):
+                return True
+        except Exception:
+            pass
+    tags = {str(t).strip().lower() for t in (getattr(target, "tags", None) or [])}
+    enemy_type = getattr(target, "enemy_type", None)
+    if enemy_type is not None:
+        tags.add(str(getattr(enemy_type, "value", enemy_type)).strip().lower())
+    return "undead" in tags
+
+
+def _is_poisonous_target(target) -> bool:
+    if target is None:
+        return False
+    statuses = getattr(target, "statuses", None) or []
+    for status in statuses:
+        sid = str(getattr(status, "id", "") or "").strip().lower()
+        if "poison" in sid or sid in ("venom", "venomous", "poisoned"):
+            return True
+    tags = {str(t).strip().lower() for t in (getattr(target, "tags", None) or [])}
+    for key in ("poison", "poisoned", "venom", "venomous", "toxic"):
+        if key in tags:
+            return True
+    for attr in ("poisonous", "venomous", "toxic"):
+        try:
+            if bool(getattr(target, attr, False)):
+                return True
+        except Exception:
+            pass
+    return False
+
+
 def _basic_save_damage(base_damage: int, outcome: str) -> int:
     base = max(0, int(base_damage))
     if outcome == "critical_success":
@@ -453,8 +491,8 @@ class AlarmEvent(MagicEvent):
     name = "alarm"
     actions_cost = 2
     default_tags = ["magic", "spell", "abjuration", "ward"]
-    spell_tags = ["rank1", "occult", "arcane", "abjuration"]
-    magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA)
+    spell_tags = ["rank1", "occult", "arcane", "divine", "abjuration"]
+    magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA, SpellTradition.DIVINE)
     magic_types = ["abjuration"]
     range_feet = 30
     prompt = "Alarm - wybierz pole wardu (promien 10 stop, trigger na enemy)."
@@ -556,8 +594,8 @@ class CharmEvent(MagicEvent):
     name = "charm"
     actions_cost = 2
     default_tags = ["magic", "spell", "enchantment", "mental"]
-    spell_tags = ["rank1", "occult", "arcane", "enchantment"]
-    magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA)
+    spell_tags = ["rank1", "occult", "arcane", "divine", "enchantment"]
+    magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA, SpellTradition.DIVINE)
     magic_types = ["enchantment"]
     range_feet = 30
 
@@ -781,8 +819,8 @@ class FearEvent(MagicEvent):
     name = "fear"
     actions_cost = 2
     default_tags = ["magic", "spell", "enchantment", "mental"]
-    spell_tags = ["rank1", "occult", "arcane", "enchantment"]
-    magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA)
+    spell_tags = ["rank1", "occult", "arcane", "divine", "enchantment"]
+    magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA, SpellTradition.DIVINE)
     magic_types = ["enchantment"]
     range_feet = 30
 
@@ -1218,8 +1256,8 @@ class MendingEvent(MagicEvent):
     name = "mending"
     actions_cost = 2
     default_tags = ["magic", "spell", "transmutation", "manipulate"]
-    spell_tags = ["rank1", "occult", "arcane", "transmutation"]
-    magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA)
+    spell_tags = ["rank1", "occult", "arcane", "divine", "transmutation"]
+    magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA, SpellTradition.DIVINE)
     magic_types = ["transmutation"]
     range_feet = 30
 
@@ -1654,8 +1692,8 @@ class SummonFeyEvent(MagicEvent):
     name = "summon_fey"
     actions_cost = 3
     default_tags = ["magic", "spell", "conjuration", "summon"]
-    spell_tags = ["rank1", "occult", "conjuration"]
-    magic_traditions = (SpellTradition.OCCULT,)
+    spell_tags = ["rank1", "occult", "divine", "conjuration"]
+    magic_traditions = (SpellTradition.OCCULT, SpellTradition.DIVINE)
     magic_types = ["conjuration"]
 
     def execute(self, ctx: EventContext) -> EventResult:
@@ -1747,8 +1785,8 @@ class VentriloquismEvent(MagicEvent):
     name = "ventriloquism"
     actions_cost = 2
     default_tags = ["magic", "spell", "illusion", "auditory"]
-    spell_tags = ["rank1", "occult", "arcane", "illusion"]
-    magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA)
+    spell_tags = ["rank1", "occult", "arcane", "divine", "illusion"]
+    magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA, SpellTradition.DIVINE)
     magic_types = ["illusion"]
 
     def execute(self, ctx: EventContext) -> EventResult:
@@ -1784,8 +1822,8 @@ class AirBubbleEvent(MagicEvent):
     actions_cost = 1
     consumes_action = False
     default_tags = ["magic", "spell", "conjuration", "reaction"]
-    spell_tags = ["rank1", "arcane", "conjuration"]
-    magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL)
+    spell_tags = ["rank1", "arcane", "divine", "conjuration"]
+    magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL, SpellTradition.DIVINE)
     magic_types = ["conjuration"]
     range_feet = 30
     prompt = "Air Bubble (reaction): cel moze oddychac przez chwile."
@@ -1822,8 +1860,8 @@ class AntHaulEvent(MagicEvent):
     name = "ant_haul"
     actions_cost = 2
     default_tags = ["magic", "spell", "transmutation", "buff"]
-    spell_tags = ["rank1", "arcane", "transmutation"]
-    magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL)
+    spell_tags = ["rank1", "arcane", "divine", "transmutation"]
+    magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL, SpellTradition.DIVINE)
     magic_types = ["transmutation"]
     range_feet = 30
     prompt = "Ant Haul: cel moze niesc wiecej (uproszczenie)."
@@ -1863,8 +1901,8 @@ class BurningHandsEvent(MagicEvent):
     name = "burning_hands"
     actions_cost = 2
     default_tags = ["magic", "spell", "evocation", "fire"]
-    spell_tags = ["rank1", "arcane", "evocation"]
-    magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL)
+    spell_tags = ["rank1", "arcane", "divine", "evocation"]
+    magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL, SpellTradition.DIVINE)
     magic_types = ["evocation"]
     range_feet = 15
     prompt = "Burning Hands: stozek ognia (15 stop), Reflex basic save."
@@ -1910,8 +1948,8 @@ class CreateWaterEvent(MagicEvent):
     name = "create_water"
     actions_cost = 2
     default_tags = ["magic", "spell", "conjuration", "utility"]
-    spell_tags = ["rank1", "arcane", "conjuration"]
-    magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL)
+    spell_tags = ["rank1", "arcane", "divine", "conjuration"]
+    magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL, SpellTradition.DIVINE)
     magic_types = ["conjuration"]
     range_feet = 30
     prompt = "Create Water: tworzysz 2 galony wody (uproszczenie)."
@@ -1935,8 +1973,8 @@ class FeatherFallEvent(MagicEvent):
     actions_cost = 1
     consumes_action = False
     default_tags = ["magic", "spell", "abjuration", "reaction"]
-    spell_tags = ["rank1", "arcane", "abjuration"]
-    magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL)
+    spell_tags = ["rank1", "arcane", "divine", "abjuration"]
+    magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL, SpellTradition.DIVINE)
     magic_types = ["abjuration"]
     range_feet = 60
     prompt = "Feather Fall (reaction): spowolnij spadanie celu (uproszczenie)."
@@ -1968,8 +2006,8 @@ class FleetStepEvent(MagicEvent):
     name = "fleet_step"
     actions_cost = 1
     default_tags = ["magic", "spell", "transmutation", "buff"]
-    spell_tags = ["rank1", "arcane", "transmutation"]
-    magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL)
+    spell_tags = ["rank1", "arcane", "divine", "transmutation"]
+    magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL, SpellTradition.DIVINE)
     magic_types = ["transmutation"]
     prompt = "Fleet Step: +30 stop Speed (uproszczenie)."
 
@@ -1990,8 +2028,8 @@ class GoblinPoxEvent(MagicEvent):
     name = "goblin_pox"
     actions_cost = 2
     default_tags = ["magic", "spell", "necromancy", "poison"]
-    spell_tags = ["rank1", "arcane", "necromancy"]
-    magic_traditions = (SpellTradition.ARCANA, SpellTradition.OCCULT)
+    spell_tags = ["rank1", "arcane", "divine", "necromancy"]
+    magic_traditions = (SpellTradition.ARCANA, SpellTradition.OCCULT, SpellTradition.DIVINE)
     magic_types = ["necromancy"]
     range_feet = 30
     prompt = "Goblin Pox: zaraza oslabia cel i zatruwa go."
@@ -2047,8 +2085,8 @@ class GreaseEvent(MagicEvent):
     name = "grease"
     actions_cost = 2
     default_tags = ["magic", "spell", "conjuration", "control"]
-    spell_tags = ["rank1", "arcane", "conjuration"]
-    magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL)
+    spell_tags = ["rank1", "arcane", "divine", "conjuration"]
+    magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL, SpellTradition.DIVINE)
     magic_types = ["conjuration"]
     range_feet = 30
     prompt = "Grease: sliska powierzchnia lub obiekt (uproszczenie)."
@@ -2109,8 +2147,8 @@ class GustOfWindEvent(MagicEvent):
     name = "gust_of_wind"
     actions_cost = 2
     default_tags = ["magic", "spell", "evocation", "air"]
-    spell_tags = ["rank1", "arcane", "evocation"]
-    magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL)
+    spell_tags = ["rank1", "arcane", "divine", "evocation"]
+    magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL, SpellTradition.DIVINE)
     magic_types = ["evocation"]
     prompt = "Gust of Wind: podmuch w linii, odpycha cele."
 
@@ -2175,8 +2213,8 @@ class HydraulicPushEvent(BaseMagicAttackEvent):
     actions_cost = 2
     range_feet = 60
     default_tags = ["magic", "spell", "evocation", "attack_ranged"]
-    spell_tags = ["rank1", "arcane", "evocation"]
-    magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL)
+    spell_tags = ["rank1", "arcane", "divine", "evocation"]
+    magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL, SpellTradition.DIVINE)
     magic_types = ["evocation"]
     prompt = "Hydraulic Push: obrazenia i odrzut celu."
 
@@ -2200,8 +2238,8 @@ class JumpEvent(MagicEvent):
     name = "jump"
     actions_cost = 1
     default_tags = ["magic", "spell", "transmutation", "movement"]
-    spell_tags = ["rank1", "arcane", "transmutation"]
-    magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL)
+    spell_tags = ["rank1", "arcane", "divine", "transmutation"]
+    magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL, SpellTradition.DIVINE)
     magic_types = ["transmutation"]
     prompt = "Jump: wzmacnia nastepny leap/skok (uproszczenie)."
 
@@ -2230,8 +2268,8 @@ class LongstriderEvent(MagicEvent):
     name = "longstrider"
     actions_cost = 2
     default_tags = ["magic", "spell", "transmutation", "buff"]
-    spell_tags = ["rank1", "arcane", "transmutation"]
-    magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL)
+    spell_tags = ["rank1", "arcane", "divine", "transmutation"]
+    magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL, SpellTradition.DIVINE)
     magic_types = ["transmutation"]
     range_feet = 30
     prompt = "Longstrider: +10 stop Speed (uproszczenie)."
@@ -2262,8 +2300,8 @@ class NegateAromaEvent(MagicEvent):
     name = "negate_aroma"
     actions_cost = 2
     default_tags = ["magic", "spell", "abjuration", "utility"]
-    spell_tags = ["rank1", "arcane", "abjuration"]
-    magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL)
+    spell_tags = ["rank1", "arcane", "divine", "abjuration"]
+    magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL, SpellTradition.DIVINE)
     magic_types = ["abjuration"]
     range_feet = 30
     prompt = "Negate Aroma: tlumi zapach celu (uproszczenie)."
@@ -2295,8 +2333,8 @@ class PestFormEvent(MagicEvent):
     name = "pest_form"
     actions_cost = 2
     default_tags = ["magic", "spell", "transmutation", "polymorph"]
-    spell_tags = ["rank1", "arcane", "transmutation"]
-    magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL)
+    spell_tags = ["rank1", "arcane", "divine", "transmutation"]
+    magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL, SpellTradition.DIVINE)
     magic_types = ["transmutation"]
     prompt = "Pest Form: przemiana w male zwierze (uproszczenie UI)."
 
@@ -2319,8 +2357,8 @@ class ShockingGraspEvent(BaseMagicAttackEvent):
     actions_cost = 2
     range_feet = 5
     default_tags = ["magic", "spell", "evocation", "touch"]
-    spell_tags = ["rank1", "arcane", "evocation"]
-    magic_traditions = (SpellTradition.ARCANA,)
+    spell_tags = ["rank1", "arcane", "divine", "evocation"]
+    magic_traditions = (SpellTradition.ARCANA, SpellTradition.DIVINE)
     magic_types = ["evocation"]
     prompt = "Shocking Grasp: dotykowy atak elektryczny."
 
@@ -2344,8 +2382,8 @@ class SpiderStingEvent(BaseMagicAttackEvent):
     actions_cost = 2
     range_feet = 5
     default_tags = ["magic", "spell", "necromancy", "poison", "touch"]
-    spell_tags = ["rank1", "arcane", "necromancy"]
-    magic_traditions = (SpellTradition.ARCANA,)
+    spell_tags = ["rank1", "arcane", "divine", "necromancy"]
+    magic_traditions = (SpellTradition.ARCANA, SpellTradition.DIVINE)
     magic_types = ["necromancy"]
     prompt = "Spider Sting: jad pajeczy i obrazenia poison."
 
@@ -2377,8 +2415,8 @@ class SummonAnimalEvent(MagicEvent):
     name = "summon_animal"
     actions_cost = 3
     default_tags = ["magic", "spell", "conjuration", "summon"]
-    spell_tags = ["rank1", "arcane", "conjuration"]
-    magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL)
+    spell_tags = ["rank1", "arcane", "divine", "conjuration"]
+    magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL, SpellTradition.DIVINE)
     magic_types = ["conjuration"]
     prompt = "Summon Animal: uproszczone wsparcie bojowe."
 
@@ -2443,3 +2481,353 @@ class SummonConstructEvent(MagicEvent):
         except Exception:
             pass
         return EventResult(success=True, consumed_action=True, message="Summon Construct aktywne (uproszczenie).")
+
+
+@register_event
+class DetectPoisonEvent(MagicEvent):
+    name = "detect_poison"
+    actions_cost = 2
+    default_tags = ["magic", "spell", "divination", "detect"]
+    spell_tags = ["rank1", "divine", "primal", "divination", "detect", "poison"]
+    magic_traditions = (SpellTradition.DIVINE, SpellTradition.PRIMAL)
+    magic_types = ["divination"]
+    range_feet = 30
+    prompt = "Detect Poison: sprawdz, czy cel jest trujacy/zatruty."
+
+    def execute(self, ctx: EventContext) -> EventResult:
+        actor = ctx.actor
+        if actor is None or getattr(actor, "position", None) is None:
+            return EventResult.cancelled(message="Brak bohatera do rzucenia czaru.")
+        candidates = list(_iter_hero_candidates(ctx.game)) + list(_iter_enemy_candidates(ctx.game))
+        candidates += list(_iter_interactable_candidates(ctx.game, include_npc=False))
+        target, _target_pos = pick_target_in_range(
+            ctx,
+            actor.position,
+            candidates,
+            max_range_feet=self.range_feet,
+            allowed_kinds=("hero", "enemy", "interactable"),
+            tags=self._effective_tags(ctx),
+        )
+        if target is None:
+            return EventResult.cancelled(message="Brak celu dla Detect Poison.")
+
+        poisonous = _is_poisonous_target(target)
+        target_name = getattr(target, "name", getattr(target, "object_id", "cel"))
+        if poisonous:
+            msg = f"Detect Poison: {target_name} wykazuje slady trucizny/jadu."
+        else:
+            msg = f"Detect Poison: {target_name} nie wykazuje oznak trucizny."
+        try:
+            ctx.game.ui_log(msg)
+        except Exception:
+            pass
+        return EventResult(success=True, consumed_action=True, message=msg)
+
+
+@register_event
+class HealEvent(MagicEvent):
+    name = "heal"
+    actions_cost = 1
+    default_tags = ["magic", "spell", "necromancy", "healing"]
+    spell_tags = ["rank1", "divine", "primal", "necromancy", "healing", "positive"]
+    magic_traditions = (SpellTradition.DIVINE, SpellTradition.PRIMAL)
+    magic_types = ["necromancy"]
+    range_feet = 30
+    prompt = "Heal: leczy zywych, rani undead (uproszczenie single/burst)."
+
+    def execute(self, ctx: EventContext) -> EventResult:
+        actor = ctx.actor
+        if actor is None or getattr(actor, "position", None) is None:
+            return EventResult.cancelled(message="Brak bohatera do rzucenia czaru.")
+        mode = _prompt_choice(ctx, "Heal - wybierz tryb", ["single", "burst"], source=self.name) or "single"
+        amount = int(
+            prompt_for_roll(
+                "Heal - podaj wartosc leczenia/obrazen positive:",
+                layout="damage",
+                answer_placeholder="Wartosc",
+            )
+            or 0
+        )
+        if amount <= 0:
+            return EventResult.cancelled(message="Heal: wartosc musi byc > 0.")
+
+        if mode == "single":
+            candidates = list(_iter_hero_candidates(ctx.game)) + list(_iter_enemy_candidates(ctx.game))
+            target, _target_pos = pick_target_in_range(
+                ctx,
+                actor.position,
+                candidates,
+                max_range_feet=self.range_feet,
+                allowed_kinds=("hero", "enemy"),
+                tags=self._effective_tags(ctx),
+            )
+            if target is None:
+                return EventResult.cancelled(message="Brak celu dla Heal.")
+            if _is_undead_target(target):
+                defeated = _apply_damage(target, amount, DamageType.POSITIVE.value)
+                msg = f"Heal: undead otrzymuje {amount} positive."
+                if defeated:
+                    msg += " Cel pokonany."
+                return EventResult(success=True, consumed_action=True, message=msg)
+            _apply_heal(target, amount)
+            return EventResult(success=True, consumed_action=True, message=f"Heal: przywrocono {amount} HP.")
+
+        healed = 0
+        harmed = 0
+        for hero in _targets_in_radius(_iter_hero_candidates(ctx.game), actor.position, self.range_feet):
+            if _is_undead_target(hero):
+                continue
+            _apply_heal(hero, amount)
+            healed += 1
+        for enemy in _targets_in_radius(_iter_enemy_candidates(ctx.game), actor.position, self.range_feet):
+            if not _is_undead_target(enemy):
+                continue
+            _apply_damage(enemy, amount, DamageType.POSITIVE.value)
+            harmed += 1
+        return EventResult(
+            success=True,
+            consumed_action=True,
+            message=f"Heal (burst): uleczono {healed}, zraniono undead {harmed}.",
+        )
+
+
+@register_event
+class MagicFangEvent(MagicEvent):
+    name = "magic_fang"
+    actions_cost = 2
+    default_tags = ["magic", "spell", "transmutation", "buff"]
+    spell_tags = ["rank1", "divine", "primal", "transmutation"]
+    magic_traditions = (SpellTradition.DIVINE, SpellTradition.PRIMAL)
+    magic_types = ["transmutation"]
+    range_feet = 30
+    prompt = "Magic Fang: unarmed ataki celu staja sie magiczne (uproszczenie)."
+
+    def execute(self, ctx: EventContext) -> EventResult:
+        actor = ctx.actor
+        if actor is None or getattr(actor, "position", None) is None:
+            return EventResult.cancelled(message="Brak bohatera do rzucenia czaru.")
+        target, _target_pos = pick_target_in_range(
+            ctx,
+            actor.position,
+            list(_iter_hero_candidates(ctx.game)),
+            max_range_feet=self.range_feet,
+            allowed_kinds=("hero",),
+            tags=self._effective_tags(ctx),
+        )
+        if target is None:
+            return EventResult.cancelled(message="Brak celu dla Magic Fang.")
+        _remove_bonus_prefix(target, "magic_fang:")
+        try:
+            target.add_bonus(
+                BonusEffect(
+                    type=BonusType.STATUS,
+                    value=1,
+                    tag="attack_melee",
+                    source="magic_fang:attack",
+                    label="magic fang",
+                    duration_turns=10,
+                )
+            )
+        except Exception:
+            pass
+        _remove_statuses(target, "magic_fang")
+        try:
+            target.add_status(
+                Status(
+                    id="magic_fang",
+                    label="Magic Fang",
+                    duration=10,
+                    source=self.name,
+                    data={"unarmed_magical": True, "unnatural_damage_bonus": 1},
+                )
+            )
+        except Exception:
+            pass
+        return EventResult(success=True, consumed_action=True, message="Magic Fang aktywne.")
+
+
+@register_event
+class PassWithoutTraceEvent(MagicEvent):
+    name = "pass_without_trace"
+    actions_cost = 2
+    default_tags = ["magic", "spell", "abjuration", "stealth"]
+    spell_tags = ["rank1", "divine", "primal", "abjuration", "stealth"]
+    magic_traditions = (SpellTradition.DIVINE, SpellTradition.PRIMAL)
+    magic_types = ["abjuration"]
+    range_feet = 30
+    prompt = "Pass without Trace: utrudnia tropienie i poprawia skradanie (uproszczenie)."
+
+    def execute(self, ctx: EventContext) -> EventResult:
+        actor = ctx.actor
+        if actor is None or getattr(actor, "position", None) is None:
+            return EventResult.cancelled(message="Brak bohatera do rzucenia czaru.")
+
+        affected = 0
+        for target in _targets_in_radius(_iter_hero_candidates(ctx.game), actor.position, self.range_feet):
+            _remove_bonus_prefix(target, "pass_without_trace:")
+            try:
+                target.add_bonus(
+                    BonusEffect(
+                        type=BonusType.STATUS,
+                        value=2,
+                        tag=Skill.STEALTH.value,
+                        source="pass_without_trace:stealth",
+                        label="pass without trace",
+                        duration_turns=10,
+                    )
+                )
+            except Exception:
+                pass
+            _remove_statuses(target, "pass_without_trace")
+            try:
+                target.add_status(
+                    Status(
+                        id="pass_without_trace",
+                        label="Pass without Trace",
+                        duration=10,
+                        source=self.name,
+                        data={"tracks_hidden": True},
+                    )
+                )
+            except Exception:
+                pass
+            affected += 1
+        return EventResult(success=True, consumed_action=True, message=f"Pass without Trace aktywne ({affected} celow).")
+
+
+@register_event
+class PurifyFoodAndDrinkEvent(MagicEvent):
+    name = "purify_food_and_drink"
+    actions_cost = 2
+    default_tags = ["magic", "spell", "necromancy", "utility"]
+    spell_tags = ["rank1", "divine", "primal", "necromancy", "purify"]
+    magic_traditions = (SpellTradition.DIVINE, SpellTradition.PRIMAL)
+    magic_types = ["necromancy"]
+    range_feet = 10
+    prompt = "Purify Food and Drink: oczyszcza jedzenie i napoje (uproszczenie)."
+
+    def execute(self, ctx: EventContext) -> EventResult:
+        actor = ctx.actor
+        if actor is None or getattr(actor, "position", None) is None:
+            return EventResult.cancelled(message="Brak bohatera do rzucenia czaru.")
+        target, _target_pos = pick_target_in_range(
+            ctx,
+            actor.position,
+            list(_iter_interactable_candidates(ctx.game, include_npc=False)),
+            max_range_feet=self.range_feet,
+            allowed_kinds=("interactable",),
+            tags=self._effective_tags(ctx),
+        )
+        if target is None:
+            return EventResult(success=True, consumed_action=True, message="Purify Food and Drink: efekt UI-only (brak obiektu).")
+        try:
+            setattr(target, "purified", True)
+        except Exception:
+            pass
+        for attr, value in (("poisonous", False), ("venomous", False), ("toxic", False)):
+            try:
+                setattr(target, attr, value)
+            except Exception:
+                pass
+        try:
+            target.magical_description = "Pozywienie/napoj zostaly oczyszczone magicznie."
+        except Exception:
+            pass
+        return EventResult(success=True, consumed_action=True, message="Purify Food and Drink: oczyszczono cel.")
+
+
+@register_event
+class ShillelaghEvent(MagicEvent):
+    name = "shillelagh"
+    actions_cost = 2
+    default_tags = ["magic", "spell", "transmutation", "buff"]
+    spell_tags = ["rank1", "divine", "primal", "transmutation"]
+    magic_traditions = (SpellTradition.DIVINE, SpellTradition.PRIMAL)
+    magic_types = ["transmutation"]
+    range_feet = 30
+    prompt = "Shillelagh: wzmacnia bron obuchowa (uproszczenie)."
+
+    def execute(self, ctx: EventContext) -> EventResult:
+        actor = ctx.actor
+        if actor is None or getattr(actor, "position", None) is None:
+            return EventResult.cancelled(message="Brak bohatera do rzucenia czaru.")
+        target, _target_pos = pick_target_in_range(
+            ctx,
+            actor.position,
+            list(_iter_hero_candidates(ctx.game)),
+            max_range_feet=self.range_feet,
+            allowed_kinds=("hero",),
+            tags=self._effective_tags(ctx),
+        )
+        if target is None:
+            return EventResult.cancelled(message="Brak celu dla Shillelagh.")
+        _remove_bonus_prefix(target, "shillelagh:")
+        try:
+            target.add_bonus(
+                BonusEffect(
+                    type=BonusType.STATUS,
+                    value=1,
+                    tag="attack_melee",
+                    source="shillelagh:attack",
+                    label="shillelagh",
+                    duration_turns=10,
+                )
+            )
+        except Exception:
+            pass
+        _remove_statuses(target, "shillelagh")
+        try:
+            target.add_status(
+                Status(
+                    id="shillelagh",
+                    label="Shillelagh",
+                    duration=10,
+                    source=self.name,
+                    data={"weapon_magical": True, "unnatural_damage_bonus": 1},
+                )
+            )
+        except Exception:
+            pass
+        return EventResult(success=True, consumed_action=True, message="Shillelagh aktywne.")
+
+
+@register_event
+class SummonPlantOrFungusEvent(MagicEvent):
+    name = "summon_plant_or_fungus"
+    actions_cost = 3
+    default_tags = ["magic", "spell", "conjuration", "summon"]
+    spell_tags = ["rank1", "divine", "primal", "conjuration"]
+    magic_traditions = (SpellTradition.DIVINE, SpellTradition.PRIMAL)
+    magic_types = ["conjuration"]
+    prompt = "Summon Plant or Fungus: przyzwanie wsparcia bojowego (uproszczenie)."
+
+    def execute(self, ctx: EventContext) -> EventResult:
+        actor = ctx.actor
+        if actor is None:
+            return EventResult.cancelled(message="Brak bohatera do rzucenia czaru.")
+        _remove_bonus_prefix(actor, "summon_plant_or_fungus:")
+        for tag in ("attack_melee", "attack_ranged"):
+            try:
+                actor.add_bonus(
+                    BonusEffect(
+                        type=BonusType.STATUS,
+                        value=1,
+                        tag=tag,
+                        source="summon_plant_or_fungus:aid",
+                        label="summon plant/fungus",
+                        duration_turns=1,
+                    )
+                )
+            except Exception:
+                pass
+        _remove_statuses(actor, "summon_plant_or_fungus")
+        try:
+            actor.add_status(Status(id="summon_plant_or_fungus", label="Summon Plant/Fungus", duration=1, source=self.name))
+        except Exception:
+            pass
+        return EventResult(success=True, consumed_action=True, message="Summon Plant or Fungus aktywne (uproszczenie).")
+
+
+@register_event
+class SummonPlantEvent(SummonPlantOrFungusEvent):
+    name = "summon_plant"

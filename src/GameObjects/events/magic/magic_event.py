@@ -53,6 +53,40 @@ class MagicEventResolver:
     """Waliduje możliwość rzucenia czaru i odpala lifecycle eventu."""
 
     @staticmethod
+    def _has_status(actor, status_id: str) -> bool:
+        if actor is None:
+            return False
+        checker = getattr(actor, "has_status", None)
+        if callable(checker):
+            try:
+                return bool(checker(status_id))
+            except Exception:
+                return False
+        for status in getattr(actor, "statuses", []) or []:
+            if getattr(status, "id", status) == status_id:
+                return True
+        return False
+
+    @staticmethod
+    def _remove_status(actor, status_id: str) -> None:
+        if actor is None:
+            return
+        remover = getattr(actor, "remove_status", None)
+        if callable(remover):
+            try:
+                remover(status_id)
+                return
+            except Exception:
+                pass
+        statuses = getattr(actor, "statuses", None)
+        if not isinstance(statuses, list):
+            return
+        for idx in range(len(statuses) - 1, -1, -1):
+            if getattr(statuses[idx], "id", statuses[idx]) == status_id:
+                del statuses[idx]
+                return
+
+    @staticmethod
     def resolve(event: MagicEvent, ctx: EventContext) -> EventResult:
         actor = ctx.actor
         if actor is None:
@@ -75,7 +109,32 @@ class MagicEventResolver:
             logger.info(msg)
             return EventResult.cancelled(message=msg)
 
+        reach_applied = False
+        if event.range_feet is not None and MagicEventResolver._has_status(actor, "reach_spell_ready"):
+            try:
+                base_range = int(event.range_feet)
+            except Exception:
+                base_range = event.range_feet
+            tags = {str(tag).strip().lower() for tag in (event.spell_tags or [])}
+            is_touch = "touch" in tags
+            if isinstance(base_range, int):
+                if is_touch and base_range <= 5:
+                    event.range_feet = 30
+                else:
+                    event.range_feet = base_range + 30
+                reach_applied = True
+                try:
+                    game_ui_log = getattr(ctx.game, "ui_log", None)
+                    if callable(game_ui_log):
+                        game_ui_log(
+                            f"Reach Spell: zasieg czaru '{event.name}' zwiekszony z {base_range} ft do {event.range_feet} ft."
+                        )
+                except Exception:
+                    pass
+
         result = event.run(ctx)
         if result.actions_spent is None and result.consumed_action:
             result.actions_spent = cost
+        if reach_applied and result.consumed_action:
+            MagicEventResolver._remove_status(actor, "reach_spell_ready")
         return result

@@ -178,6 +178,8 @@ def resolve_skill_check_with_sources(
                 summary_lines.append(f"Clumsy: -{penalty} status do Reflex (uwzględnij ręcznie).")
         except Exception:
             pass
+    if notes:
+        summary_lines.append(f"Uwagi: {' | '.join(notes)}")
     if apply_modifiers:
         summary_lines.append(f"Łączny modyfikator: {modifier:+d} (doliczany automatycznie).")
         prompt_long = "Podaj wynik rzutu d20 (bez premii). " + " ".join(summary_lines)
@@ -494,6 +496,26 @@ def _collect_modifier_data(
                     )
         except Exception:
             pass
+
+    is_recall_knowledge = "knowledge" in tags or "recall_knowledge" in tags or "recall-knowledge" in tags
+    if is_recall_knowledge and _has_status(actor, Status(id="bardic_lore")):
+        notes.append(
+            "Bardic Lore: Recall Knowledge z advantage (rzuc 2x k20 i wybierz lepszy wynik) - opisowo."
+        )
+
+    if _has_status(actor, Status(id="versatile_performance")):
+        if skill_id == Skill.DIPLOMACY.value:
+            notes.append(
+                "Versatile Performance: zamiast Diplomacy mozesz wykonac test Performance (opisowo)."
+            )
+        elif skill_id == Skill.INTIMIDATION.value:
+            notes.append(
+                "Versatile Performance: zamiast Intimidation mozesz wykonac test Performance (opisowo)."
+            )
+        elif skill_id == Skill.DECEPTION.value:
+            notes.append(
+                "Versatile Performance: zamiast Deception mozesz wykonac test Performance (opisowo)."
+            )
 
     target_id = getattr(target, "object_id", None) if target is not None else None
     modifier = base_modifier + (compute_total_modifier(all_effects, skill_id, target_id) if all_effects else 0)

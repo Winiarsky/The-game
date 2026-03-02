@@ -249,6 +249,80 @@ def test_rank1_arcane_tradition_added_for_shared_spells():
         assert SpellTradition.ARCANA in tuple(getattr(event, "magic_traditions", ()) or ())
 
 
+def test_rank1_divine_tradition_added_for_listed_spells():
+    events = [
+        occ1.AirBubbleEvent(),
+        occ1.AlarmEvent(),
+        occ1.AntHaulEvent(),
+        occ1.BurningHandsEvent(),
+        occ1.CharmEvent(),
+        occ1.CreateWaterEvent(),
+        occ1.DetectPoisonEvent(),
+        occ1.FearEvent(),
+        occ1.FeatherFallEvent(),
+        occ1.FleetStepEvent(),
+        occ1.GoblinPoxEvent(),
+        occ1.GreaseEvent(),
+        occ1.GustOfWindEvent(),
+        occ1.HealEvent(),
+        occ1.HydraulicPushEvent(),
+        occ1.JumpEvent(),
+        occ1.LongstriderEvent(),
+        occ1.MagicFangEvent(),
+        occ1.MendingEvent(),
+        occ1.NegateAromaEvent(),
+        occ1.PassWithoutTraceEvent(),
+        occ1.PestFormEvent(),
+        occ1.PurifyFoodAndDrinkEvent(),
+        occ1.ShillelaghEvent(),
+        occ1.ShockingGraspEvent(),
+        occ1.SpiderStingEvent(),
+        occ1.SummonAnimalEvent(),
+        occ1.SummonFeyEvent(),
+        occ1.SummonPlantOrFungusEvent(),
+        occ1.VentriloquismEvent(),
+    ]
+    for event in events:
+        assert SpellTradition.DIVINE in tuple(getattr(event, "magic_traditions", ()) or ())
+
+
+def test_rank1_divine_tag_present_for_listed_spells():
+    events = [
+        occ1.AirBubbleEvent(),
+        occ1.AlarmEvent(),
+        occ1.AntHaulEvent(),
+        occ1.BurningHandsEvent(),
+        occ1.CharmEvent(),
+        occ1.CreateWaterEvent(),
+        occ1.DetectPoisonEvent(),
+        occ1.FearEvent(),
+        occ1.FeatherFallEvent(),
+        occ1.FleetStepEvent(),
+        occ1.GoblinPoxEvent(),
+        occ1.GreaseEvent(),
+        occ1.GustOfWindEvent(),
+        occ1.HealEvent(),
+        occ1.HydraulicPushEvent(),
+        occ1.JumpEvent(),
+        occ1.LongstriderEvent(),
+        occ1.MagicFangEvent(),
+        occ1.MendingEvent(),
+        occ1.NegateAromaEvent(),
+        occ1.PassWithoutTraceEvent(),
+        occ1.PestFormEvent(),
+        occ1.PurifyFoodAndDrinkEvent(),
+        occ1.ShillelaghEvent(),
+        occ1.ShockingGraspEvent(),
+        occ1.SpiderStingEvent(),
+        occ1.SummonAnimalEvent(),
+        occ1.SummonFeyEvent(),
+        occ1.SummonPlantOrFungusEvent(),
+        occ1.VentriloquismEvent(),
+    ]
+    for event in events:
+        assert "divine" in tuple(getattr(event, "spell_tags", ()) or ())
+
+
 def test_magic_missile_spends_actions_by_missiles(monkeypatch):
     caster = DummyActor("caster", (0, 0))
     enemy = DummyActor("enemy", (1, 0), hp=20)
@@ -400,3 +474,70 @@ def test_pest_form_sets_form_status(monkeypatch):
     assert result.success is True
     status = [s for s in caster.statuses if getattr(s, "id", "") == "pest_form"]
     assert status and status[0].data.get("form") == "rat"
+
+
+def test_heal_single_heals_living_target(monkeypatch):
+    caster = DummyActor("caster", (0, 0))
+    ally = DummyActor("ally", (1, 0), hp=10)
+    game = _game(actor=caster, heroes=[caster, ally], enemies=[])
+
+    monkeypatch.setattr(occ1, "_prompt_choice", lambda *_a, **_k: "single")
+    monkeypatch.setattr(occ1, "prompt_for_roll", lambda *_a, **_k: 6)
+    monkeypatch.setattr(occ1, "pick_target_in_range", lambda *_a, **_k: (ally, ally.position))
+
+    result = occ1.HealEvent().execute(EventContext(game=game, actor=caster))
+
+    assert result.success is True
+    assert ally.hp == 16
+
+
+def test_detect_poison_recognizes_poisoned_target(monkeypatch):
+    caster = DummyActor("caster", (0, 0))
+    enemy = DummyActor("enemy", (1, 0))
+    enemy.tags = ["poison"]
+    game = _game(actor=caster, enemies=[enemy])
+
+    monkeypatch.setattr(occ1, "pick_target_in_range", lambda *_a, **_k: (enemy, enemy.position))
+    result = occ1.DetectPoisonEvent().execute(EventContext(game=game, actor=caster))
+
+    assert result.success is True
+    assert "trucizny/jadu" in (result.message or "")
+
+
+def test_magic_fang_applies_status_and_bonus(monkeypatch):
+    caster = DummyActor("caster", (0, 0))
+    ally = DummyActor("ally", (1, 0))
+    game = _game(actor=caster, heroes=[caster, ally], enemies=[])
+
+    monkeypatch.setattr(occ1, "pick_target_in_range", lambda *_a, **_k: (ally, ally.position))
+    result = occ1.MagicFangEvent().execute(EventContext(game=game, actor=caster))
+
+    assert result.success is True
+    assert ally.has_status("magic_fang")
+    assert any((getattr(b, "source", "") or "").startswith("magic_fang:") for b in ally.bonuses)
+
+
+def test_pass_without_trace_applies_group_stealth_bonus():
+    caster = DummyActor("caster", (0, 0))
+    ally = DummyActor("ally", (1, 0))
+    game = _game(actor=caster, heroes=[caster, ally], enemies=[])
+
+    result = occ1.PassWithoutTraceEvent().execute(EventContext(game=game, actor=caster))
+
+    assert result.success is True
+    assert caster.has_status("pass_without_trace")
+    assert ally.has_status("pass_without_trace")
+    assert any((getattr(b, "source", "") or "").startswith("pass_without_trace:") for b in caster.bonuses)
+    assert any((getattr(b, "source", "") or "").startswith("pass_without_trace:") for b in ally.bonuses)
+
+
+def test_summon_plant_or_fungus_and_alias_apply_status():
+    caster = DummyActor("caster", (0, 0))
+    game = _game(actor=caster, heroes=[caster], enemies=[])
+
+    res_full = occ1.SummonPlantOrFungusEvent().execute(EventContext(game=game, actor=caster))
+    res_alias = occ1.SummonPlantEvent().execute(EventContext(game=game, actor=caster))
+
+    assert res_full.success is True
+    assert res_alias.success is True
+    assert caster.has_status("summon_plant_or_fungus")
