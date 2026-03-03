@@ -108,6 +108,27 @@ def dispatch_event(name: str, ctx: EventContext) -> EventResult:
         result = event.run(ctx)
     if result is None:  # type: ignore[unreachable]
         result = EventResult()
+
+    # Globalny tracking traitów akcji (PF2): attack/open/flourish.
+    if ctx.in_combat and result.success and result.consumed_action and ctx.actor is not None:
+        try:
+            combat_state = getattr(ctx.game, "state", None)
+            attack_state = getattr(combat_state, "attack_state", None)
+            if isinstance(attack_state, dict):
+                payload = attack_state.setdefault(ctx.actor, {})
+                tags = set(event._effective_tags(ctx))
+                used_attack = (
+                    "attack" in tags
+                    or any(str(tag).startswith("attack_") for tag in tags)
+                    or "ranged_attack" in tags
+                )
+                if used_attack:
+                    payload["used_attack_action"] = True
+                if "flourish" in tags:
+                    payload["used_flourish_action"] = True
+        except Exception:
+            logger.debug("Nie udało się zaktualizować trait usage dla akcji '%s'.", name, exc_info=True)
+
     # Jeśli wynik nie określił consumed_action, przyjmij flagę z klasy.
     if result.consumed_action is None:  # pragma: no cover - defensywnie
         result.consumed_action = event.consumes_action

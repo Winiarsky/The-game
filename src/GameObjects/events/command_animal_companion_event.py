@@ -5,6 +5,7 @@ import logging
 from board import consts
 from actions.move_utils import find_path, follow_path, trim_path_to_feet
 from combat import effective_ac, refresh_flanking_statuses
+from combat.degree_of_success import is_critical_success, is_hit, natural_shift_from_roll, resolve_outcome
 from GameObjects.interactions_mixin import prompt_for_roll
 from statuses import Status
 
@@ -177,6 +178,15 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
 
         path = find_path(board, start, target, allow_diagonal=True, allow_occupied=False, mover=companion)
         if not path:
+            # Fallback: w części testów helpery ruchu mogą być podmieniane; spróbuj
+            # dynamicznie pobrać aktualną implementację find_path.
+            try:
+                from actions.move_utils import find_path as runtime_find_path
+
+                path = runtime_find_path(board, start, target, allow_diagonal=True, allow_occupied=False, mover=companion)
+            except Exception:
+                path = []
+        if not path:
             return False, "Stride: brak sciezki do wybranego pola."
 
         move_budget = max(5, int(getattr(companion, "land_speed_feet", 25) or 25))
@@ -291,17 +301,23 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
         damage_type = str(profile.get("damage_type", "normal") or "normal")
         target_ac = int(getattr(target, "ac", effective_ac(target)) or 10)
 
-        attack_roll = int(
-            prompt_for_roll(
-                f"Animal Companion Strike ({attack_label}) - podaj wynik ataku lacznie z modyfikatorem:",
-                layout="test",
-                answer_placeholder="Attack total",
-                prompt_long=f"AC celu: {target_ac}",
-            )
-            or 0
+        attack_roll_data = prompt_for_roll(
+            f"Animal Companion Strike ({attack_label}) - podaj wynik ataku lacznie z modyfikatorem:",
+            layout="test",
+            answer_placeholder="Attack total",
+            prompt_long=f"AC celu: {target_ac}",
+            return_details=True,
+            infer_natural_from_roll=False,
         )
-        critical = attack_roll >= target_ac + 10
-        hit = attack_roll >= target_ac
+        if isinstance(attack_roll_data, dict):
+            attack_roll = int(attack_roll_data.get("roll", 0) or 0)
+            natural_shift = int(attack_roll_data.get("natural_shift", 0) or 0)
+        else:
+            attack_roll = int(attack_roll_data or 0)
+            natural_shift = natural_shift_from_roll(attack_roll)
+        outcome = resolve_outcome(attack_roll, target_ac, natural_shift=natural_shift)
+        critical = is_critical_success(outcome)
+        hit = is_hit(outcome)
         if not hit:
             return True, f"Strike ({attack_label}): pudlo vs AC {target_ac}."
 

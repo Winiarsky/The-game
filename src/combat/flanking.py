@@ -196,6 +196,14 @@ def refresh_flanking_statuses(game, ac_penalty: int = 2) -> None:
         else:
             _remove_flat_footed(hero, source="flanking")
 
+    # Snagging Strike: flat-footed znika natychmiast, gdy cel nie jest już w reach ręki.
+    try:
+        from statuses.classes.fighter.feats.snagging_strike import cleanup_snagging_flat_footed
+
+        cleanup_snagging_flat_footed(game)
+    except Exception:
+        logger.debug("Nie udało się odświeżyć statusu Snagging Strike.", exc_info=True)
+
 
 def flat_footed_penalty(target) -> int:
     """Wyciągnij karę do AC ze statusu flat_footed."""

@@ -25,7 +25,20 @@ class DummyEvents:
         self.emitted = []
 
     def safe_emit_action(self, **payload):
+        return_event = bool(payload.pop("return_event", False))
         self.emitted.append(payload)
+        if return_event:
+            return dict(payload)
+        return True
+
+
+class DisruptingEvents(DummyEvents):
+    def safe_emit_action(self, **payload):
+        return_event = bool(payload.pop("return_event", False))
+        self.emitted.append(payload)
+        if return_event:
+            return {"disrupted": True, "disruption_reason": "opportunity_attack_critical_manipulate"}
+        return True
 
 
 class DummyBoard:
@@ -168,3 +181,23 @@ def test_shove_success_moves_target(monkeypatch):
     res = ShoveEvent().execute(_ctx(game, hero))
     assert res.success is True
     assert enemy.position == (2, 0)
+
+
+def test_grapple_is_disrupted_before_resolution(monkeypatch):
+    hero = DummyActor("h1", (0, 0))
+    enemy = DummyActor("e1", (1, 0))
+    board = DummyBoard({hero.position: hero, enemy.position: enemy})
+    game = _game(hero, enemy, board)
+    game.events = DisruptingEvents()
+
+    monkeypatch.setattr(
+        "GameObjects.events.grapple_event.compute_skill_modifier_with_sources",
+        lambda **_k: (0, [], []),
+    )
+
+    res = GrappleEvent().execute(_ctx(game, hero))
+
+    assert res.success is False
+    assert res.consumed_action is True
+    assert "przerwane" in str(res.message or "").lower()
+    assert not enemy.has_status(GRABBED_STATUS)

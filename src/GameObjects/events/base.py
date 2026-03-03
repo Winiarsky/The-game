@@ -168,6 +168,20 @@ class ActionCostEvent(GameEvent):
         except Exception:
             return None
 
+    def _trait_usage_payload(self, ctx: EventContext, actor) -> dict[str, Any] | None:
+        if not ctx.in_combat or actor is None:
+            return None
+        combat_state = getattr(ctx.game, "state", None)
+        attack_state = getattr(combat_state, "attack_state", None)
+        if not isinstance(attack_state, dict):
+            return None
+        payload = attack_state.get(actor)
+        if isinstance(payload, dict):
+            return payload
+        payload = {}
+        attack_state[actor] = payload
+        return payload
+
     def pre(self, ctx: EventContext) -> EventResult:
         if not self.consumes_action:
             return EventResult()
@@ -186,6 +200,25 @@ class ActionCostEvent(GameEvent):
         if remaining is not None and cost > remaining:
             msg = f"Za mało akcji: potrzebne {cost}, dostępne {remaining}."
             return EventResult.cancelled(message=msg)
+
+        tags = set(self._effective_tags(ctx))
+        payload = self._trait_usage_payload(ctx, actor)
+        if payload is not None:
+            used_flourish = bool(payload.get("used_flourish_action", False))
+            used_attack = bool(payload.get("used_attack_action", False))
+            try:
+                used_attack = used_attack or int(payload.get("attacks_this_turn", 0) or 0) > 0
+            except Exception:
+                pass
+
+            if "flourish" in tags and used_flourish:
+                return EventResult.cancelled(
+                    message="Flourish: możesz użyć tylko jednej akcji z tym traitem na turę."
+                )
+            if "open" in tags and used_attack:
+                return EventResult.cancelled(
+                    message="Open: tej akcji nie można użyć po wykonaniu ataku w tej turze."
+                )
         return EventResult()
 
 

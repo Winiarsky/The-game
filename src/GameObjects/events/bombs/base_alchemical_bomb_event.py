@@ -7,6 +7,7 @@ from damage_types import DamageType
 from GameObjects.interactions_mixin import prompt_for_roll
 from GameObjects.items.inventory import consume_ready_alchemical_item, has_ready_alchemical_item, missing_alchemical_item_reason
 from combat.damage_utils import apply_splash_damage
+from combat.degree_of_success import is_critical_success, is_hit, natural_shift_from_roll, resolve_outcome
 from statuses import inspire_courage_damage_bonus
 
 from ..attack.attack_base import AttackEventBase, check_concealed
@@ -115,17 +116,26 @@ class BaseAlchemicalBombEvent(ActionCostEvent, AttackEventBase):
                 pass
         prompt_long = f"Modyfikator łączny: {modifier:+d} (doliczany automatycznie)."
 
-        roll = self._prompt_for_roll(
+        roll_data = self._prompt_for_roll(
             f"Atak {self._event_label()} przeciwko AC {target_ac}",
             layout="test",
             subtitle=f"bazowe {base_ac}{modifier_note}",
             prompt_long=prompt_long,
             modifiers=build_modifiers_grid(best_effects),
             answer_placeholder="Wynik k20",
+            return_details=True,
+            infer_natural_from_roll=True,
         )
+        if isinstance(roll_data, dict):
+            roll = int(roll_data.get("roll", 0) or 0)
+            natural_shift = int(roll_data.get("natural_shift", 0) or 0)
+        else:
+            roll = int(roll_data or 0)
+            natural_shift = natural_shift_from_roll(roll)
         total_roll = roll + modifier
-        critical = total_roll >= target_ac + 10
-        hit = total_roll >= target_ac
+        outcome = resolve_outcome(total_roll, target_ac, natural_shift=natural_shift)
+        critical = is_critical_success(outcome)
+        hit = is_hit(outcome)
         if not hit:
             return EventResult(success=True, consumed_action=self.consumes_action, message="Atak chybia.")
 

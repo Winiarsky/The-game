@@ -159,3 +159,60 @@ def test_step_does_not_trigger_opportunity_attack():
 
     assert hero.wounds == 0
     assert enemy.reactions_left == enemy.reactions_max
+
+
+def test_opportunity_attack_critical_manipulate_sets_disrupted_flag(monkeypatch):
+    game = DummyGame()
+    game.state = type("Combat", (), {})()
+    hero = DummyHero(pos=(0, 0))
+    enemy = DummyEnemy(pos=(0, 1), hp=12)
+    game.heroes = [hero]
+    game.enemies = [enemy]
+    game.ui.enabled = True
+    game.ui.choice = "tak"
+
+    monkeypatch.setattr(
+        OpportunityAttack,
+        "_roll_attack",
+        lambda self, attacker, defender, game_obj: (30, 10, True, True),
+    )
+    monkeypatch.setattr("combat.reactions.opportunity_attack.prompt_for_roll", lambda *_, **__: 4)
+    monkeypatch.setattr("actions.attack._choose_damage_type", lambda _game: "sieczne")
+
+    event = {
+        "actor": enemy,
+        "action_tags": {"manipulate"},
+        "action_id": "test_manipulate",
+    }
+    dispatch_reactions(game, event)
+
+    assert event.get("disrupted") is True
+    assert event.get("disruption_reason") == "opportunity_attack_critical_manipulate"
+
+
+def test_opportunity_attack_noncritical_manipulate_does_not_disrupt(monkeypatch):
+    game = DummyGame()
+    game.state = type("Combat", (), {})()
+    hero = DummyHero(pos=(0, 0))
+    enemy = DummyEnemy(pos=(0, 1), hp=12)
+    game.heroes = [hero]
+    game.enemies = [enemy]
+    game.ui.enabled = True
+    game.ui.choice = "tak"
+
+    monkeypatch.setattr(
+        OpportunityAttack,
+        "_roll_attack",
+        lambda self, attacker, defender, game_obj: (20, 10, False, True),
+    )
+    monkeypatch.setattr("combat.reactions.opportunity_attack.prompt_for_roll", lambda *_, **__: 4)
+    monkeypatch.setattr("actions.attack._choose_damage_type", lambda _game: "sieczne")
+
+    event = {
+        "actor": enemy,
+        "action_tags": {"manipulate"},
+        "action_id": "test_manipulate",
+    }
+    dispatch_reactions(game, event)
+
+    assert event.get("disrupted") is not True

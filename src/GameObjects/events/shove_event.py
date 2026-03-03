@@ -118,6 +118,26 @@ class ShoveEvent(ActionCostEvent):
             return EventResult.cancelled(message="Nie wybrano celu.")
 
         tags = self._effective_tags(ctx)
+        emitted = None
+        try:
+            emitted = ctx.game.events.safe_emit_action(
+                return_event=True,
+                actor=hero,
+                action_id="shove",
+                action_tags=tags,
+                target=enemy,
+                target_pos=enemy_pos,
+            )
+        except Exception:
+            emitted = None
+        if isinstance(emitted, dict) and bool(emitted.get("disrupted", False)):
+            msg = "Shove przerwane przez Atak okazyjny."
+            try:
+                ctx.game.ui_log(msg)
+            except Exception:
+                pass
+            return EventResult(success=False, consumed_action=True, actions_spent=self.actions_cost, message=msg)
+
         dc = _save_dc(enemy, Skill.FORTITUDE.value, tags, ctx)
 
         result = resolve_skill_check_with_sources(
@@ -141,15 +161,6 @@ class ShoveEvent(ActionCostEvent):
             except Exception:
                 pass
             apply_prone_effects(hero)
-
-        ctx.game.events.safe_emit_action(
-            actor=hero,
-            action_id="shove",
-            action_tags=tags,
-            target=enemy,
-            target_pos=enemy_pos,
-            outcome=outcome,
-        )
 
         msg = f"Shove: {outcome}."
         try:

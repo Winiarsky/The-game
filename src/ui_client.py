@@ -101,19 +101,28 @@ class UIClient:
             logger.warning("Nie udało się wysłać eventu do UI: %s", exc)
             return False
 
-    def prompt_roll(self, prompt: str, source: str | None = None, **extra) -> Optional[int]:
+    def prompt_roll(self, prompt: str, source: str | None = None, **extra) -> Optional[Any]:
         """Wyślij prompt na rzut; fallback CLI tylko w trybie debug."""
+        return_meta = bool(extra.pop("return_meta", False))
         if self.enabled:
             prompt_id = self._create_prompt(prompt, source=source, **extra)
             if prompt_id is not None:
                 ans = self._wait_for_answer(prompt_id, max_wait=self.max_wait)
-                if isinstance(ans, int):
-                    return ans
+                if return_meta:
+                    return self._normalize_roll_answer(ans)
+                parsed = self._coerce_roll_answer_int(ans)
+                if parsed is not None:
+                    return parsed
         if not self.enabled:
             logger.warning("UI jest wyłączone; prompt_roll bez odpowiedzi.")
         if not self.allow_cli_fallback:
             return None
-        return self._prompt_cli_int(prompt)
+        fallback = self._prompt_cli_int(prompt)
+        if return_meta:
+            if fallback is None:
+                return None
+            return {"roll": int(fallback), "natural_mode": "none"}
+        return fallback
 
     def prompt_choice(
         self,
@@ -256,7 +265,36 @@ class UIClient:
             return None
         return raw or None
 
-    def _wait_for_answer(self, prompt_id: str, *, max_wait: Optional[float] = None) -> Optional[int]:
+    @staticmethod
+    def _coerce_roll_answer_int(answer: Any) -> Optional[int]:
+        if isinstance(answer, int):
+            return int(answer)
+        if isinstance(answer, float):
+            return int(answer)
+        if isinstance(answer, dict):
+            for key in ("roll", "value", "result"):
+                if key not in answer:
+                    continue
+                try:
+                    return int(answer.get(key))
+                except (TypeError, ValueError):
+                    continue
+            return None
+        try:
+            return int(answer)
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _normalize_roll_answer(answer: Any) -> dict[str, Any]:
+        if isinstance(answer, dict):
+            roll = UIClient._coerce_roll_answer_int(answer)
+            mode = answer.get("natural_mode", answer.get("natural", answer.get("nat", "none")))
+            return {"roll": int(roll or 0), "natural_mode": str(mode or "none")}
+        roll = UIClient._coerce_roll_answer_int(answer)
+        return {"roll": int(roll or 0), "natural_mode": "none"}
+
+    def _wait_for_answer(self, prompt_id: str, *, max_wait: Optional[float] = None) -> Any:
         url = f"{self.base_url}/api/prompts/{prompt_id}"
         start = time.time()
         while True:
@@ -265,12 +303,7 @@ class UIClient:
                 resp.raise_for_status()
                 data = resp.json()
                 if data.get("status") == "answered":
-                    answer = data.get("answer")
-                    try:
-                        return int(answer)
-                    except (TypeError, ValueError):
-                        logger.warning("Odpowiedź UI nie jest liczbą całkowitą: %s", answer)
-                        return None
+                    return data.get("answer")
             except Exception as exc:  # pragma: no cover - fallback na CLI
                 logger.warning("Błąd podczas oczekiwania na odpowiedź UI: %s", exc)
                 return None

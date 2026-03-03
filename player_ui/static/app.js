@@ -19,6 +19,10 @@ const actionChoices = document.getElementById("action-choices");
 const actionDesc = document.getElementById("action-desc");
 const actionForm = document.getElementById("action-form");
 const actionAnswer = document.getElementById("action-answer");
+const rollNaturalControls = document.getElementById("roll-natural-controls");
+const nat20Toggle = document.getElementById("nat20-toggle");
+const nat1Toggle = document.getElementById("nat1-toggle");
+const natModeHint = document.getElementById("nat-mode-hint");
 const actionKind = document.getElementById("action-kind");
 const actionSource = document.getElementById("action-source");
 const modsBox = document.getElementById("action-mods");
@@ -52,6 +56,7 @@ let digitTimer = null;
 let confirmMode = false;
 let storedSelection = "";
 let layoutMode = "info";
+let rollNaturalMode = "none";
 const DIGIT_BUFFER_MS = 600;
 const pathToast = document.getElementById("path-toast");
 let activePathId = null;
@@ -60,6 +65,52 @@ let activeActorId = null;
 let lastLoggedRound = null;
 let lastLoggedActiveActorId = null;
 actionForm.classList.add("hidden");
+
+function _isNaturalRollPrompt(prompt) {
+    if (!prompt) return false;
+    const kind = String(prompt.kind || "").toLowerCase();
+    const layout = String(prompt.layout || "").toLowerCase();
+    if (layout === "damage") return false;
+    return layout === "test" || kind === "roll";
+}
+
+function _setNaturalMode(mode) {
+    const next = mode === "nat20" || mode === "nat1" ? mode : "none";
+    rollNaturalMode = next;
+    if (nat20Toggle) nat20Toggle.classList.toggle("active", next === "nat20");
+    if (nat1Toggle) nat1Toggle.classList.toggle("active", next === "nat1");
+}
+
+function _cycleNaturalMode() {
+    if (rollNaturalMode === "none") _setNaturalMode("nat20");
+    else if (rollNaturalMode === "nat20") _setNaturalMode("nat1");
+    else _setNaturalMode("none");
+}
+
+function _renderNaturalControls(prompt) {
+    const visible = _isNaturalRollPrompt(prompt);
+    if (!rollNaturalControls) return;
+    if (!visible) {
+        rollNaturalControls.classList.add("hidden");
+        return;
+    }
+    rollNaturalControls.classList.remove("hidden");
+    if (natModeHint) {
+        natModeHint.textContent = "* : brak -> nat20 -> nat1";
+    }
+    _setNaturalMode(rollNaturalMode);
+}
+
+if (nat20Toggle) {
+    nat20Toggle.addEventListener("click", () => {
+        _setNaturalMode(rollNaturalMode === "nat20" ? "none" : "nat20");
+    });
+}
+if (nat1Toggle) {
+    nat1Toggle.addEventListener("click", () => {
+        _setNaturalMode(rollNaturalMode === "nat1" ? "none" : "nat1");
+    });
+}
 
 function setIllustration(imageUrl) {
     const src = imageUrl || PLACEHOLDER_IMAGE;
@@ -633,10 +684,20 @@ actionForm.addEventListener("submit", async (evt) => {
 
 async function sendPromptAnswer(answer) {
     try {
+        let finalAnswer = answer;
+        if (_isNaturalRollPrompt(activePrompt)) {
+            const parsed = Number.parseInt(String(answer).trim(), 10);
+            if (!Number.isNaN(parsed)) {
+                finalAnswer = {
+                    roll: parsed,
+                    natural_mode: rollNaturalMode,
+                };
+            }
+        }
         await fetch(`/api/prompts/${activePrompt.id}/response`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ answer }),
+            body: JSON.stringify({ answer: finalAnswer }),
         });
         actionAnswer.value = "";
         closePrompt();
@@ -673,6 +734,12 @@ document.addEventListener("keydown", (evt) => {
     }
 
     if (!activePrompt) return;
+    if (_isNaturalRollPrompt(activePrompt) && evt.key === "*") {
+        evt.preventDefault();
+        _cycleNaturalMode();
+        _renderNaturalControls(activePrompt);
+        return;
+    }
     if (layoutMode === "equip_nav") {
         const key = evt.key;
         const map = {
@@ -781,6 +848,7 @@ function openPrompt(prompt) {
     layoutMode = prompt.layout || prompt.kind || "info";
     confirmMode = false;
     storedSelection = "";
+    rollNaturalMode = "none";
     actionTitle.textContent = prompt.title || prompt.prompt || "Akcja";
     actionText.textContent = prompt.subtitle || "";
     const promptBody = prompt.prompt_long || (layoutMode === "dialog" ? prompt.prompt : "");
@@ -861,6 +929,7 @@ function openPrompt(prompt) {
         actionAnswer.required = true;
         actionAnswer.classList.remove("input-hidden");
     }
+    _renderNaturalControls(prompt);
     actionForm.classList.remove("hidden");
     updateSessionSummary();
     actionAnswer.focus();
@@ -871,6 +940,7 @@ function closePrompt() {
     confirmMode = false;
     storedSelection = "";
     layoutMode = "info";
+    rollNaturalMode = "none";
     actionForm.classList.add("hidden");
     actionChoices.innerHTML = "";
     actionDesc.textContent = "";
@@ -881,6 +951,7 @@ function closePrompt() {
     actionText.textContent = "";
     actionText.classList.remove("hidden");
     clearMods();
+    _renderNaturalControls(null);
     updateSessionSummary();
     processPromptQueue();
 }

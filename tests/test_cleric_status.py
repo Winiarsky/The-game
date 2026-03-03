@@ -24,3 +24,9 @@ def test_cleric_prompt_contains_core_sections():
     assert "DOCTRINE:" in prompt
     assert "Cloistered Cleric" in prompt
     assert "Warpriest" in prompt
+
+
+def test_cleric_grants_shield_block():
+    grants = list((CLERIC_STATUS.data or {}).get("grants_statuses") or [])
+    grant_ids = [getattr(item, "id", str(item)) for item in grants]
+    assert "shield_block" in grant_ids

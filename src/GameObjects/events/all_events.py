@@ -44,6 +44,7 @@ from . import grapple_event  # noqa: F401
 from . import trip_event  # noqa: F401
 from . import shove_event  # noqa: F401
 from . import sudden_charge_event  # noqa: F401
+from . import fighter_feat_events  # noqa: F401
 from .elixirs import antidote_event  # noqa: F401
 from .elixirs import antiplague_event  # noqa: F401
 from .elixirs import elixir_of_life_event  # noqa: F401

@@ -4,6 +4,7 @@ from dataclasses import replace
 from typing import Any
 
 from GameObjects.interactions_mixin import prompt_for_roll
+from combat.degree_of_success import natural_shift_from_roll, resolve_outcome
 from combat.hp_engine import computed_max_hp
 from combat.hp_engine import current_hp as hp_current_hp
 from combat.hp_engine import uses_wounds_model
@@ -335,27 +336,7 @@ def on_heal(actor: Any, *, source: str | None = None) -> dict[str, Any]:
 
 
 def _degree_of_success(total: int, dc: int, *, natural: int | None = None) -> str:
-    if total >= dc + 10:
-        degree = 3
-    elif total >= dc:
-        degree = 2
-    elif total <= dc - 10:
-        degree = 0
-    else:
-        degree = 1
-
-    if natural == 20:
-        degree = min(3, degree + 1)
-    elif natural == 1:
-        degree = max(0, degree - 1)
-
-    mapping = {
-        3: "critical_success",
-        2: "success",
-        1: "failure",
-        0: "critical_failure",
-    }
-    return mapping[degree]
+    return resolve_outcome(total, dc, natural_shift=natural_shift_from_roll(natural))
 
 
 def run_recovery_check(actor: Any, *, source: str | None = "recovery_check") -> dict[str, Any]:

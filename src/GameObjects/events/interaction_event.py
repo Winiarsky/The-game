@@ -92,13 +92,21 @@ class InteractionEvent(GameEvent):
         while True:
             interaction = interactable.actions.get(action_id) if action_id else None
             tags = interaction.tags if interaction and getattr(interaction, "tags", None) else self._effective_tags(ctx)
-            game.events.safe_emit_action(
+            emitted = game.events.safe_emit_action(
+                return_event=True,
                 actor=actor,
                 action_id=action_id or "interaction",
                 action_tags=tags,
                 target=interactable,
                 target_pos=target,
             )
+            if isinstance(emitted, dict) and bool(emitted.get("disrupted", False)):
+                msg = "Interakcja przerwana przez Atak okazyjny."
+                try:
+                    game.ui_log(msg)
+                except Exception:
+                    pass
+                return EventResult(success=False, consumed_action=True, actions_spent=1, message=msg)
 
             message = interactable.interact(actor, game, action_id=action_id)
             if message:

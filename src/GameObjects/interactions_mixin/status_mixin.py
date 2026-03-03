@@ -99,6 +99,11 @@ class StatusMixin:
                 self._handle_champion_setup_choice(status, data)
             except Exception:
                 pass
+        if data.get("ui_choice_kind") == "fighter_setup":
+            try:
+                self._handle_fighter_setup_choice(status, data)
+            except Exception:
+                pass
         if data.get("ui_choice_kind") == "cleric_setup":
             try:
                 self._handle_cleric_setup_choice(status, data)
@@ -296,6 +301,36 @@ class StatusMixin:
                 "widen_spell": ("statuses.classes.druid.feats.widen_spell", "WIDEN_SPELL_STATUS"),
                 "wild_shape": ("statuses.classes.druid.feats.wild_shape", "WILD_SHAPE_STATUS"),
             },
+            "fighter": {
+                "double_slice": (
+                    "statuses.classes.fighter.feats.double_slice",
+                    "DOUBLE_SLICE_STATUS",
+                ),
+                "exacting_strike": (
+                    "statuses.classes.fighter.feats.exacting_strike",
+                    "EXACTING_STRIKE_STATUS",
+                ),
+                "point_blank_shot": (
+                    "statuses.classes.fighter.feats.point_blank_shot",
+                    "POINT_BLANK_SHOT_STATUS",
+                ),
+                "power_attack": (
+                    "statuses.classes.fighter.feats.power_attack",
+                    "POWER_ATTACK_STATUS",
+                ),
+                "reactive_shield": (
+                    "statuses.classes.fighter.feats.reactive_shield",
+                    "REACTIVE_SHIELD_STATUS",
+                ),
+                "snagging_strike": (
+                    "statuses.classes.fighter.feats.snagging_strike",
+                    "SNAGGING_STRIKE_STATUS",
+                ),
+                "sudden_charge": (
+                    "statuses.classes.fighter.feats.sudden_charge",
+                    "SUDDEN_CHARGE_STATUS",
+                ),
+            },
         }
 
     @staticmethod
@@ -422,6 +457,15 @@ class StatusMixin:
         except Exception:
             return False
 
+    def _is_fighter_actor(self) -> bool:
+        class_name = str(getattr(self, "class_name", "") or "").strip().lower()
+        if class_name == "fighter":
+            return True
+        try:
+            return bool(self.has_status("fighter"))
+        except Exception:
+            return False
+
     def _passes_status_prerequisites(self, status: "Status") -> bool:
         status_id = str(getattr(status, "id", "") or "").strip().lower()
         status_data = getattr(status, "data", None) or {}
@@ -448,6 +492,19 @@ class StatusMixin:
         if status_id in {"animal_companion", "leshy_familiar", "storm_born", "widen_spell", "wild_shape"}:
             if not self._is_druid_actor():
                 self._ui_log(f"{self._labelize_choice(status_id)}: wymaga klasy Druid.")
+                return False
+
+        if status_id in {
+            "double_slice",
+            "exacting_strike",
+            "point_blank_shot",
+            "power_attack",
+            "reactive_shield",
+            "snagging_strike",
+            "sudden_charge",
+        }:
+            if not self._is_fighter_actor():
+                self._ui_log(f"{self._labelize_choice(status_id)}: wymaga klasy Fighter.")
                 return False
 
         required_druid_order = str(status_data.get("requires_druid_order", "") or "").strip().lower()
@@ -1180,6 +1237,43 @@ class StatusMixin:
             f"skill={self._labelize_choice(chosen_deity_skill)}."
         )
 
+    def _handle_fighter_setup_choice(self, status: "Status", data: dict) -> None:
+        key_ability_choices = list(data.get("fighter_key_ability_choices") or ["strength", "dexterity"])
+        chosen_key_ability = self._pick_choice_id(
+            "Fighter: wybierz key ability",
+            key_ability_choices,
+            source="status",
+        )
+        if not chosen_key_ability:
+            return
+
+        setup_payload = {"key_ability": chosen_key_ability}
+        try:
+            for idx, item in enumerate(self.statuses):
+                if item is status:
+                    new_data = dict(data)
+                    new_data["fighter_setup"] = dict(setup_payload)
+                    new_data["fighter_key_ability"] = chosen_key_ability
+                    self.statuses[idx] = replace(status, data=new_data)
+                    break
+        except Exception:
+            self._ui_log("Fighter setup: nie udalo sie zapisac wyboru key ability.")
+            return
+
+        for attr, value in (
+            ("fighter_key_ability", chosen_key_ability),
+        ):
+            try:
+                setattr(self, attr, value)
+            except Exception:
+                pass
+
+        self._ui_log(
+            "Fighter setup: "
+            f"key ability={self._labelize_choice(chosen_key_ability)}."
+        )
+        self._ui_log("Fighter: skille prowadzisz ręcznie poza grą.")
+
     def _handle_cleric_setup_choice(self, status: "Status", data: dict) -> None:
         doctrine_choices = list(data.get("cleric_doctrine_choices") or ["cloistered_cleric", "warpriest"])
         deity_choices = list(data.get("cleric_deity_choices") or ["custom"])
@@ -1449,6 +1543,14 @@ class StatusMixin:
                         self._ui_log("Nie wybrano tarczy (brak wyposazenia).")
             except Exception:
                 self._ui_log("Nie udalo sie dodac reakcji Shield Block.")
+        if status_id == "reactive_shield":
+            try:
+                from combat.reactions.reactive_shield_reaction import ReactiveShieldReaction
+
+                if not any(getattr(item, "id", None) == "reactive_shield" for item in reactions):
+                    reactions.append(ReactiveShieldReaction())
+            except Exception:
+                self._ui_log("Nie udalo sie dodac reakcji Reactive Shield.")
 
     def _drop_reactions_for_status(self, status_id: str) -> None:
         reactions = getattr(self, "reactions", None)
@@ -1456,6 +1558,8 @@ class StatusMixin:
             return
         if status_id == "shield_block":
             self.reactions = [item for item in reactions if getattr(item, "id", None) != "shield_block"]
+        if status_id == "reactive_shield":
+            self.reactions = [item for item in reactions if getattr(item, "id", None) != "reactive_shield"]
 
     def _ensure_status_objects(self) -> None:
         if not self.statuses:

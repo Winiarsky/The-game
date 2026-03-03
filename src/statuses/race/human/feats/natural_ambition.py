@@ -46,6 +46,15 @@ NATURAL_AMBITION_CLASS_FEAT_CHOICES = {
         "widen_spell",
         "wild_shape",
     ],
+    "fighter": [
+        "double_slice",
+        "exacting_strike",
+        "point_blank_shot",
+        "power_attack",
+        "reactive_shield",
+        "snagging_strike",
+        "sudden_charge",
+    ],
 }
 
 

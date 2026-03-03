@@ -10,10 +10,25 @@ from .registry import register_event
 logger = logging.getLogger(__name__)
 
 
+def _has_status(actor, status_id: str) -> bool:
+    if actor is None:
+        return False
+    checker = getattr(actor, "has_status", None)
+    if callable(checker):
+        try:
+            return bool(checker(status_id))
+        except Exception:
+            return False
+    for status in getattr(actor, "statuses", []) or []:
+        if getattr(status, "id", status) == status_id:
+            return True
+    return False
+
+
 @register_event
 class SuddenChargeEvent(ActionCostEvent):
     name = "sudden_charge"
-    default_tags = ["sudden_charge", "move", "attack_melee"]
+    default_tags = ["sudden_charge", "move", "attack_melee", "flourish", "open"]
     available_in_combat = True
     available_in_exploration = False
     consumes_action = True
@@ -36,6 +51,8 @@ class SuddenChargeEvent(ActionCostEvent):
         actor = ctx.actor
         if actor is None:
             return EventResult.cancelled(message="Brak bohatera do Sudden Charge.")
+        if not _has_status(actor, "sudden_charge"):
+            return EventResult.cancelled(message="Sudden Charge: wymaga featu Sudden Charge.")
 
         mover = MoveEvent()
         res = mover.execute(ctx)

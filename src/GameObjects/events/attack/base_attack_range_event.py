@@ -9,6 +9,7 @@ from GameObjects.interactions_mixin import RangeAttackAffectMixin, prompt_for_ro
 from statuses import Status, inspire_courage_damage_bonus
 from damage_types import DamageType
 from combat.damage_utils import burn_it_bonus, burn_it_prompt_note
+from combat.degree_of_success import is_critical_success, is_hit, natural_shift_from_roll, resolve_outcome
 
 from .attack_base import AttackEventBase, check_concealed
 from . import basic_melee_attack_event
@@ -60,6 +61,7 @@ class BaseRangeAttackEvent(AttackEventBase):
         candidates = [(e, getattr(e, "position", None)) for e in getattr(game, "enemies", [])]
         candidates = [(e, pos) for e, pos in candidates if pos is not None]
         tags = self._effective_tags(ctx)
+        metadata = dict(getattr(ctx, "metadata", None) or {})
         candidates = [(e, pos) for e, pos in candidates if not is_target_blocked_by_tags(e, tags)]
         if not candidates:
             return EventResult.cancelled(message="Brak wrogów na planszy.")
@@ -131,6 +133,22 @@ class BaseRangeAttackEvent(AttackEventBase):
             backswing_ready = state.setdefault("backswing_ready", set())
             weapon_targets = state.setdefault("weapon_targets", {})
             target_set = weapon_targets.setdefault(weapon_key, set())
+            suppress_record = bool(metadata.get("suppress_attack_record", False))
+            exacting_strike_press = bool(metadata.get("exacting_strike_press", False))
+            try:
+                map_attack_count = max(1, int(metadata.get("map_attack_count", 1) or 1))
+            except Exception:
+                map_attack_count = 1
+            try:
+                fixed_attacks_this_turn = metadata.get("fixed_attacks_this_turn", None)
+                if fixed_attacks_this_turn is not None:
+                    attacks_this_turn = max(0, int(fixed_attacks_this_turn))
+            except Exception:
+                pass
+            try:
+                attack_roll_penalty = max(0, int(metadata.get("attack_roll_penalty", 0) or 0))
+            except Exception:
+                attack_roll_penalty = 0
 
             if not check_concealed(ctx, enemy):
                 game.events.safe_emit_action(
@@ -145,9 +163,22 @@ class BaseRangeAttackEvent(AttackEventBase):
                         backswing_ready.add(weapon_key)
                     except Exception:
                         pass
-                self._record_attack(ctx, hero, weapon_key=weapon_key, weapon_type=weapon_type, target=enemy)
+                if not suppress_record:
+                    self._record_attack(
+                        ctx,
+                        hero,
+                        weapon_key=weapon_key,
+                        weapon_type=weapon_type,
+                        target=enemy,
+                        attack_count=map_attack_count,
+                    )
                 self._apply_range_attacker_status(hero)
-                return EventResult(success=True, consumed_action=self.consumes_action, message="Strzał chybia (concealed).")
+                return EventResult(
+                    success=True,
+                    consumed_action=self.consumes_action,
+                    message="Strzał chybia (concealed).",
+                    data={"hit": False, "critical": False, "target": enemy, "target_pos": target_pos},
+                )
 
             cover_bonus_effect = None
             if cover_bonus:
@@ -159,6 +190,14 @@ class BaseRangeAttackEvent(AttackEventBase):
                     target_id=getattr(hero, "object_id", None),
                     label=f"osłona ({cover_type})",
                 )
+
+            game.events.safe_emit_action(
+                actor=hero,
+                action_id=f"{self.action_id_base}_pre",
+                action_tags=self._effective_tags(ctx),
+                target=enemy,
+                target_pos=target_pos,
+            )
 
             extra_bonuses = []
             if cover_bonus_effect:
@@ -177,14 +216,6 @@ class BaseRangeAttackEvent(AttackEventBase):
                 extra_bonuses=extra_bonuses or None,
             )
 
-            game.events.safe_emit_action(
-                actor=hero,
-                action_id=f"{self.action_id_base}_pre",
-                action_tags=self._effective_tags(ctx),
-                target=enemy,
-                target_pos=target_pos,
-            )
-
             mods: list[str] = []
             if cover_bonus:
                 mods.append(f"+{cover_bonus} osłona ({cover_type})")
@@ -195,6 +226,8 @@ class BaseRangeAttackEvent(AttackEventBase):
             action_tag = (self._effective_tags(ctx) or ["attack_ranged"])[0]
             extra_effects = []
             trait_notes: list[str] = []
+            has_point_blank_shot = bool(getattr(hero, "has_status", lambda *_a, **_k: False)("point_blank_shot_stance"))
+            has_volley_trait = self._has_trait(tags, "volley")
             if range_penalty:
                 extra_effects.append(
                     BonusEffect(
@@ -203,6 +236,17 @@ class BaseRangeAttackEvent(AttackEventBase):
                         tag=action_tag,
                         source="range_penalty",
                         label=f"zasięg {increments}x{self.range_increment_ft}",
+                        is_penalty=True,
+                    )
+                )
+            if attack_roll_penalty > 0:
+                extra_effects.append(
+                    BonusEffect(
+                        type=BonusType.CIRCUMSTANCE,
+                        value=attack_roll_penalty,
+                        tag=action_tag,
+                        source="fighter:attack_roll_penalty",
+                        label="fighter penalty",
                         is_penalty=True,
                     )
                 )
@@ -224,7 +268,9 @@ class BaseRangeAttackEvent(AttackEventBase):
                     )
                 )
             volley_range = self._tag_value(tags, "volley")
-            if volley_range:
+            if has_point_blank_shot and has_volley_trait:
+                trait_notes.append("Point-Blank Shot: kara volley zignorowana.")
+            elif volley_range:
                 try:
                     volley_ft = int(volley_range)
                 except Exception:
@@ -240,7 +286,7 @@ class BaseRangeAttackEvent(AttackEventBase):
                             is_penalty=True,
                         )
                     )
-            elif self._has_trait(tags, "volley"):
+            elif has_volley_trait:
                 trait_notes.append("Volley: brak zasięgu w tagu (np. volley:30) – dodaj ręcznie.")
             if self._has_trait(tags, "backswing") and weapon_key in backswing_ready:
                 extra_effects.append(
@@ -305,18 +351,28 @@ class BaseRangeAttackEvent(AttackEventBase):
             if trait_notes:
                 prompt_long = f"{prompt_long}\n" + "\n".join(trait_notes)
 
-            roll = prompt_for_roll(
+            roll_data = prompt_for_roll(
                 f"Atak {self.weapon_label} na AC {target_ac}",
                 layout="test",
                 subtitle=f"bazowe {base_ac}, modyfikatory: {mods_note}",
                 prompt_long=prompt_long,
                 modifiers=build_modifiers_grid(best_effects),
                 answer_placeholder="Wynik k20",
+                return_details=True,
+                infer_natural_from_roll=True,
             )
+            if isinstance(roll_data, dict):
+                roll = int(roll_data.get("roll", 0) or 0)
+                natural_shift = int(roll_data.get("natural_shift", 0) or 0)
+            else:
+                roll = int(roll_data or 0)
+                natural_shift = natural_shift_from_roll(roll)
+
             total_roll = roll + modifier
             self._consume_aid_attack_bonus(hero, action_tag=action_tag)
-            critical = total_roll >= target_ac + 10
-            hit = total_roll >= target_ac
+            outcome = resolve_outcome(total_roll, target_ac, natural_shift=natural_shift)
+            critical = is_critical_success(outcome)
+            hit = is_hit(outcome)
             if not hit:
                 game.events.safe_emit_action(
                     actor=hero,
@@ -334,9 +390,25 @@ class BaseRangeAttackEvent(AttackEventBase):
                         backswing_ready.add(weapon_key)
                     except Exception:
                         pass
-                self._record_attack(ctx, hero, weapon_key=weapon_key, weapon_type=weapon_type, target=enemy)
+                if not exacting_strike_press and not suppress_record:
+                    self._record_attack(
+                        ctx,
+                        hero,
+                        weapon_key=weapon_key,
+                        weapon_type=weapon_type,
+                        target=enemy,
+                        attack_count=map_attack_count,
+                    )
                 self._apply_range_attacker_status(hero)
-                return EventResult(success=True, consumed_action=self.consumes_action, message="Strzał chybia.")
+                miss_message = "Strzał chybia."
+                if exacting_strike_press:
+                    miss_message = "Exacting Strike: pudło (MAP bez zmian)."
+                return EventResult(
+                    success=True,
+                    consumed_action=self.consumes_action,
+                    message=miss_message,
+                    data={"hit": False, "critical": False, "target": enemy, "target_pos": target_pos},
+                )
 
             prompt_prefix = "Trafienie krytyczne! " if critical else "Trafienie! "
             self._maybe_prompt_vengeful_hatred(hero, enemy)
@@ -430,6 +502,9 @@ class BaseRangeAttackEvent(AttackEventBase):
             if inspire_bonus:
                 damage_bonus += inspire_bonus
                 damage_notes.append(f"Inspire Courage: +{inspire_bonus} do obrazen (doliczone).")
+            if has_point_blank_shot and not has_volley_trait and distance_ft <= int(self.range_increment_ft):
+                damage_bonus += 2
+                damage_notes.append("Point-Blank Shot: +2 circumstance do obrażeń (1. przyrost zasięgu).")
             try:
                 from statuses import enfeebled_damage_penalty
 
@@ -552,7 +627,15 @@ class BaseRangeAttackEvent(AttackEventBase):
                 range_penalty=range_penalty,
                 critical=critical,
             )
-            self._record_attack(ctx, hero, weapon_key=weapon_key, weapon_type=weapon_type, target=enemy)
+            if not suppress_record:
+                self._record_attack(
+                    ctx,
+                    hero,
+                    weapon_key=weapon_key,
+                    weapon_type=weapon_type,
+                    target=enemy,
+                    attack_count=map_attack_count,
+                )
 
             if defeated:
                 try:
@@ -567,7 +650,12 @@ class BaseRangeAttackEvent(AttackEventBase):
 
             self._apply_range_attacker_status(hero)
             msg = "Przeciwnik pokonany." if defeated else ("Trafienie krytyczne!" if critical else f"Atak {self.weapon_label} trafia.")
-            return EventResult(success=True, consumed_action=self.consumes_action, message=msg, data={"critical": critical})
+            return EventResult(
+                success=True,
+                consumed_action=self.consumes_action,
+                message=msg,
+                data={"hit": True, "critical": critical, "defeated": defeated, "target": enemy, "target_pos": target_pos},
+            )
         finally:
             try:
                 game.conn.leds_off()

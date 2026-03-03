@@ -348,11 +348,26 @@ class AttackEventBase(GameEvent):
         weapon_key: str,
         weapon_type: str | None,
         target,
+        attack_count: int = 1,
+        weapon_attack_count: int | None = None,
     ) -> None:
         state = self._get_attack_state(ctx, actor)
-        state["attacks_this_turn"] = int(state.get("attacks_this_turn", 0) or 0) + 1
+        try:
+            count = max(0, int(attack_count))
+        except Exception:
+            count = 1
+        if count <= 0:
+            return
+        state["attacks_this_turn"] = int(state.get("attacks_this_turn", 0) or 0) + count
         weapon_counts = state.setdefault("weapon_counts", {})
-        weapon_counts[weapon_key] = int(weapon_counts.get(weapon_key, 0) or 0) + 1
+        if weapon_attack_count is None:
+            weapon_count = count
+        else:
+            try:
+                weapon_count = max(0, int(weapon_attack_count))
+            except Exception:
+                weapon_count = count
+        weapon_counts[weapon_key] = int(weapon_counts.get(weapon_key, 0) or 0) + weapon_count
         weapon_targets = state.setdefault("weapon_targets", {})
         target_set = weapon_targets.setdefault(weapon_key, set())
         tid = self._target_id(target)

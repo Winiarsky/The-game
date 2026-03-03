@@ -101,7 +101,7 @@ def dispatch_reactions(game, event: dict[str, object]) -> None:
     state = getattr(game, "state", None)
     if getattr(getattr(state, "__class__", None), "__name__", "") != "Combat":
         return
-    event_payload = dict(event)
+    event_payload = event
     event_payload.setdefault("game", game)
     can_pay_action = getattr(state, "can_pay_reaction_action_cost", None)
     consume_action = getattr(state, "consume_reaction_action_cost", None)

@@ -6,6 +6,7 @@ from typing import Iterable, Sequence
 from board import consts
 from bonuses import BonusEffect, BonusType, build_modifiers_grid
 from combat import refresh_flanking_statuses
+from combat.degree_of_success import is_critical_success, is_hit, natural_shift_from_roll, resolve_outcome
 from combat.damage_utils import burn_it_bonus, burn_it_prompt_note
 from GameObjects.interactions_mixin import prompt_for_roll
 from damage_types import DamageType
@@ -91,13 +92,33 @@ class BasicMeleeAttackEvent(AttackEventBase):
             pass
 
         tags = self._effective_tags(ctx)
+        metadata = dict(getattr(ctx, "metadata", None) or {})
         candidates = self._reachable_enemies(ctx.game, hero_pos, tags)
         candidates = [(enemy, pos) for enemy, pos in candidates if not is_target_blocked_by_tags(enemy, tags)]
         if not candidates:
             logger.info("Brak wrogów na sąsiednich polach.")
             return EventResult(success=False, consumed_action=False, message="Brak wrogów w zasięgu.")
 
-        enemy, enemy_pos = self._pick_enemy(ctx, candidates)
+        forced_target = metadata.get("forced_target")
+        forced_target_pos = metadata.get("forced_target_pos")
+        enemy = None
+        enemy_pos = None
+        if forced_target is not None:
+            for candidate_enemy, candidate_pos in candidates:
+                if candidate_enemy is forced_target:
+                    enemy, enemy_pos = candidate_enemy, candidate_pos
+                    break
+            if enemy is None:
+                return EventResult.cancelled(message="Wymuszony cel nie jest w zasięgu ataku.")
+        elif isinstance(forced_target_pos, tuple) and len(forced_target_pos) == 2:
+            for candidate_enemy, candidate_pos in candidates:
+                if tuple(candidate_pos) == tuple(forced_target_pos):
+                    enemy, enemy_pos = candidate_enemy, candidate_pos
+                    break
+            if enemy is None:
+                return EventResult.cancelled(message="Wymuszony cel nie jest w zasięgu ataku.")
+        else:
+            enemy, enemy_pos = self._pick_enemy(ctx, candidates)
         if enemy is None:
             return EventResult.cancelled(message="Nie wybrano celu.")
 
@@ -112,6 +133,36 @@ class BasicMeleeAttackEvent(AttackEventBase):
         weapon_targets = state.setdefault("weapon_targets", {})
         target_set = weapon_targets.setdefault(weapon_key, set())
         target_id = self._target_id(enemy)
+        suppress_record = bool(metadata.get("suppress_attack_record", False))
+        exacting_strike_press = bool(metadata.get("exacting_strike_press", False))
+        try:
+            map_attack_count = max(1, int(metadata.get("map_attack_count", 1) or 1))
+        except Exception:
+            map_attack_count = 1
+        try:
+            fixed_attacks_this_turn = metadata.get("fixed_attacks_this_turn", None)
+            if fixed_attacks_this_turn is not None:
+                attacks_this_turn = max(0, int(fixed_attacks_this_turn))
+        except Exception:
+            pass
+        try:
+            attack_roll_penalty = max(0, int(metadata.get("attack_roll_penalty", 0) or 0))
+        except Exception:
+            attack_roll_penalty = 0
+        try:
+            power_attack_extra_dice = max(0, int(metadata.get("power_attack_extra_dice", 0) or 0))
+        except Exception:
+            power_attack_extra_dice = 0
+        roll_only = bool(metadata.get("roll_only", False))
+        allow_auto_precision_bonus = metadata.get("allow_auto_precision_bonus", True)
+        if isinstance(allow_auto_precision_bonus, str):
+            allow_auto_precision_bonus = allow_auto_precision_bonus.strip().lower() not in {
+                "0",
+                "false",
+                "no",
+                "nie",
+            }
+        allow_auto_precision_bonus = bool(allow_auto_precision_bonus)
 
         if not check_concealed(ctx, enemy):
             ctx.game.events.safe_emit_action(
@@ -126,8 +177,29 @@ class BasicMeleeAttackEvent(AttackEventBase):
                     backswing_ready.add(weapon_key)
                 except Exception:
                     pass
-            self._record_attack(ctx, hero, weapon_key=weapon_key, weapon_type=weapon_type, target=enemy)
-            return EventResult(success=True, consumed_action=self.consumes_action, message=f"Atak {self.weapon_label}: pudło (concealed).")
+            if not suppress_record:
+                self._record_attack(
+                    ctx,
+                    hero,
+                    weapon_key=weapon_key,
+                    weapon_type=weapon_type,
+                    target=enemy,
+                    attack_count=map_attack_count,
+                )
+            return EventResult(
+                success=True,
+                consumed_action=self.consumes_action,
+                message=f"Atak {self.weapon_label}: pudło (concealed).",
+                data={"hit": False, "critical": False, "target": enemy, "target_pos": enemy_pos},
+            )
+
+        ctx.game.events.safe_emit_action(
+            actor=hero,
+            action_id=f"{self.action_id_base}_pre",
+            action_tags=self._effective_tags(ctx),
+            target=enemy,
+            target_pos=enemy_pos,
+        )
 
         extra_bonuses = []
         try:
@@ -148,14 +220,6 @@ class BasicMeleeAttackEvent(AttackEventBase):
             sign = "+" if modifier > 0 else ""
             modifier_note = f" (bazowe {base_ac}, modyfikatory {sign}{modifier})"
         prompt_ac = f"{target_ac}{modifier_note}"
-
-        ctx.game.events.safe_emit_action(
-            actor=hero,
-            action_id=f"{self.action_id_base}_pre",
-            action_tags=self._effective_tags(ctx),
-            target=enemy,
-            target_pos=enemy_pos,
-        )
 
         action_tag = (tags or ["attack_melee"])[0]
         extra_effects = []
@@ -224,6 +288,17 @@ class BasicMeleeAttackEvent(AttackEventBase):
                     is_penalty=True,
                 )
             )
+        if attack_roll_penalty > 0:
+            extra_effects.append(
+                BonusEffect(
+                    type=BonusType.CIRCUMSTANCE,
+                    value=attack_roll_penalty,
+                    tag=action_tag,
+                    source="fighter:attack_roll_penalty",
+                    label="fighter penalty",
+                    is_penalty=True,
+                )
+            )
         if self._has_trait(tags, "backswing") and weapon_key in backswing_ready:
             extra_effects.append(
                 BonusEffect(
@@ -268,17 +343,27 @@ class BasicMeleeAttackEvent(AttackEventBase):
         if trait_notes:
             prompt_long = f"{prompt_long}\n" + "\n".join(trait_notes)
 
-        roll = prompt_for_roll(
+        roll_data = prompt_for_roll(
             f"Atak {self.weapon_label} przeciwko AC {prompt_ac}.",
             layout="test",
             prompt_long=prompt_long,
             modifiers=build_modifiers_grid(best_effects),
             answer_placeholder="Wynik k20",
+            return_details=True,
+            infer_natural_from_roll=True,
         )
+        if isinstance(roll_data, dict):
+            roll = int(roll_data.get("roll", 0) or 0)
+            natural_shift = int(roll_data.get("natural_shift", 0) or 0)
+        else:
+            roll = int(roll_data or 0)
+            natural_shift = natural_shift_from_roll(roll)
+
         total_roll = roll + modifier
         self._consume_aid_attack_bonus(hero, action_tag=action_tag)
-        critical = total_roll >= target_ac + 10
-        hit = total_roll >= target_ac
+        outcome = resolve_outcome(total_roll, target_ac, natural_shift=natural_shift)
+        critical = is_critical_success(outcome)
+        hit = is_hit(outcome)
         if not hit:
             ctx.game.events.safe_emit_action(
                 actor=hero,
@@ -294,8 +379,24 @@ class BasicMeleeAttackEvent(AttackEventBase):
                     backswing_ready.add(weapon_key)
                 except Exception:
                     pass
-            self._record_attack(ctx, hero, weapon_key=weapon_key, weapon_type=weapon_type, target=enemy)
-            return EventResult(success=True, consumed_action=self.consumes_action, message=f"Atak {self.weapon_label}: pudło.")
+            if not exacting_strike_press and not suppress_record:
+                self._record_attack(
+                    ctx,
+                    hero,
+                    weapon_key=weapon_key,
+                    weapon_type=weapon_type,
+                    target=enemy,
+                    attack_count=map_attack_count,
+                )
+            miss_message = f"Atak {self.weapon_label}: pudło."
+            if exacting_strike_press:
+                miss_message = "Exacting Strike: pudło (MAP bez zmian)."
+            return EventResult(
+                success=True,
+                consumed_action=self.consumes_action,
+                message=miss_message,
+                data={"hit": False, "critical": False, "target": enemy, "target_pos": enemy_pos},
+            )
 
         self._maybe_prompt_vengeful_hatred(hero, enemy)
         effective_damage_prompt, class_upgrade_notes = self._damage_prompt_with_class_upgrades(
@@ -426,7 +527,7 @@ class BasicMeleeAttackEvent(AttackEventBase):
                     damage_notes.append(f"Twin: +{dice_count} obrażeń (doliczone).")
                 else:
                     damage_notes.append("Twin: dodaj bonus za kości obrażeń (ręcznie).")
-        if self._has_trait(tags, "backstabber") and self._is_flat_footed(enemy):
+        if allow_auto_precision_bonus and self._has_trait(tags, "backstabber") and self._is_flat_footed(enemy):
             damage_bonus += 1
             damage_notes.append("Backstabber: +1 precision (doliczone; +2 jeśli broń +3).")
         try:
@@ -496,6 +597,60 @@ class BasicMeleeAttackEvent(AttackEventBase):
                 damage_components.append((first_type, int(extra)))
             except Exception:
                 pass
+        if power_attack_extra_dice > 0:
+            extra = prompt_for_roll(
+                f"Power Attack: dodatkowe obrażenia ({power_attack_extra_dice}k): ",
+                layout="damage",
+                answer_placeholder="Dodatkowe obrażenia",
+            )
+            try:
+                damage_components.append((first_type, int(extra)))
+            except Exception:
+                pass
+
+        if roll_only:
+            total_damage = sum(max(0, int(amount or 0)) for _, amount in damage_components)
+            ctx.game.events.safe_emit_action(
+                actor=hero,
+                action_id=self.action_id_base,
+                action_tags=self._effective_tags(ctx),
+                target=enemy,
+                target_pos=enemy_pos,
+                damage=total_damage,
+                damage_components=damage_components,
+                defeated=False,
+                roll_only=True,
+            )
+            if not suppress_record:
+                self._record_attack(
+                    ctx,
+                    hero,
+                    weapon_key=weapon_key,
+                    weapon_type=weapon_type,
+                    target=enemy,
+                    attack_count=map_attack_count,
+                )
+            try:
+                refresh_flanking_statuses(ctx.game)
+            except Exception as exc:
+                logger.error("Nie udało się odświeżyć flankowania: %s", exc)
+            msg = "Trafienie krytyczne!" if critical else f"Atak {self.weapon_label} trafia."
+            return EventResult(
+                success=True,
+                consumed_action=self.consumes_action,
+                message=f"{msg} Obrażenia do rozliczenia przez efekt zewnętrzny.",
+                data={
+                    "hit": True,
+                    "critical": critical,
+                    "defeated": False,
+                    "target": enemy,
+                    "target_pos": enemy_pos,
+                    "damage_components": list(damage_components),
+                    "damage_total": int(total_damage),
+                    "roll_only": True,
+                },
+            )
+
         defeated = False
         try:
             defeated = self._apply_damage_components(enemy, damage_components)
@@ -517,7 +672,15 @@ class BasicMeleeAttackEvent(AttackEventBase):
             damage_components=damage_components,
             defeated=defeated,
         )
-        self._record_attack(ctx, hero, weapon_key=weapon_key, weapon_type=weapon_type, target=enemy)
+        if not suppress_record:
+            self._record_attack(
+                ctx,
+                hero,
+                weapon_key=weapon_key,
+                weapon_type=weapon_type,
+                target=enemy,
+                attack_count=map_attack_count,
+            )
 
         if defeated:
             try:
@@ -539,7 +702,12 @@ class BasicMeleeAttackEvent(AttackEventBase):
             logger.error("Nie udało się odświeżyć flankowania: %s", exc)
 
         msg = "Przeciwnik pokonany." if defeated else ("Trafienie krytyczne!" if critical else f"Atak {self.weapon_label} trafia.")
-        return EventResult(success=True, consumed_action=self.consumes_action, message=msg, data={"critical": critical})
+        return EventResult(
+            success=True,
+            consumed_action=self.consumes_action,
+            message=msg,
+            data={"hit": True, "critical": critical, "defeated": defeated, "target": enemy, "target_pos": enemy_pos},
+        )
 
     # --- helpers ---
     def _collect_damage_components(

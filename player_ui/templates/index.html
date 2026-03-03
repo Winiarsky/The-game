@@ -130,7 +130,14 @@
                                 <div class="action-choices" id="action-choices"></div>
                                 <div class="action-desc" id="action-desc"></div>
                                 <form id="action-form" class="action-form">
-                                    <input type="text" id="action-answer" autocomplete="off" placeholder="Wpisz odpowiedź lub wybierz kartę..." />
+                                    <div class="roll-input-wrap">
+                                        <input type="text" id="action-answer" autocomplete="off" placeholder="Wpisz odpowiedź lub wybierz kartę..." />
+                                        <div id="roll-natural-controls" class="roll-natural-controls hidden">
+                                            <button type="button" id="nat20-toggle" class="nat-toggle">Nat 20</button>
+                                            <button type="button" id="nat1-toggle" class="nat-toggle">Nat 1</button>
+                                            <span id="nat-mode-hint" class="nat-mode-hint">* : brak -> nat20 -> nat1</span>
+                                        </div>
+                                    </div>
                                     <button type="submit">OK</button>
                                 </form>
                             </div>

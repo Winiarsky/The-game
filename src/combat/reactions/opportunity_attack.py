@@ -7,6 +7,7 @@ from typing import Any
 
 from GameObjects.interactions_mixin import prompt_for_roll
 from combat.damage_utils import burn_it_bonus, burn_it_prompt_note
+from combat.degree_of_success import is_critical_success, is_hit, natural_shift_from_roll, resolve_outcome
 from combat.flanking import effective_ac
 from combat.hp_engine import apply_damage as hp_apply_damage
 from .base import Reaction
@@ -69,30 +70,36 @@ class OpportunityAttack(Reaction):
             return "cel opuszcza twój zasięg"
         return "okazja do ataku"
 
-    def _roll_attack(self, attacker, defender, game) -> tuple[int, int, bool]:
-        """Zwróć (roll_total, d20, critical). MAP pomijamy."""
+    def _roll_attack(self, attacker, defender, game) -> tuple[int, int, bool, bool]:
+        """Zwróć (roll_total, target_ac, critical, hit). MAP pomijamy."""
         attack_bonus = getattr(attacker, "attack_bonus", 0)
         d20 = random.randint(1, 20)
         total = d20 + attack_bonus
         target_ac = effective_ac(defender)
-        crit = d20 == 20 or total >= target_ac + 10
-        return total, target_ac, crit
+        natural_shift = natural_shift_from_roll(d20)
+        outcome = resolve_outcome(total, target_ac, natural_shift=natural_shift)
+        crit = is_critical_success(outcome)
+        hit = is_hit(outcome)
+        return total, target_ac, crit, hit
 
-    def _do_player_attack(self, hero, target, game) -> bool:
-        """Obsłuż OA bohatera z promptem jak w normalnym ataku."""
+    def _do_player_attack(self, hero, target, game) -> tuple[bool, bool]:
+        """Obsłuż OA bohatera z promptem jak w normalnym ataku.
+
+        Zwraca `(executed, critical_hit)`.
+        """
         from actions.attack import _choose_damage_type  # lokalnie, by uniknąć cykli importów
-        total, target_ac, crit = self._roll_attack(hero, target, game)
+        total, target_ac, crit, hit = self._roll_attack(hero, target, game)
         msg = f"Atak okazyjny: r={total} vs AC {target_ac}"
         if game.ui:
             game.ui_log(msg)
         else:
             print(msg)
-        if total < target_ac:
-            return False
+        if not hit:
+            return True, False
 
         dmg_type = _choose_damage_type(game)
         if dmg_type is None:
-            return False
+            return False, False
         note = burn_it_prompt_note(hero, dmg_type)
         amount = prompt_for_roll(
             f"Ile obrażeń {dmg_type} zadajesz (atak okazyjny)? ",
@@ -111,16 +118,19 @@ class OpportunityAttack(Reaction):
             except Exception:
                 pass
             target.position = None
-        return True
+        return True, bool(crit)
 
-    def _do_enemy_attack(self, enemy, target, game, event) -> bool:
-        """Uproszczony OA wroga: auto-rozstrzygnięcie jak w basic_melee."""
-        total, target_ac, crit = self._roll_attack(enemy, target, game)
+    def _do_enemy_attack(self, enemy, target, game, event) -> tuple[bool, bool]:
+        """Uproszczony OA wroga: auto-rozstrzygnięcie jak w basic_melee.
+
+        Zwraca `(executed, critical_hit)`.
+        """
+        total, target_ac, crit, hit = self._roll_attack(enemy, target, game)
         msg = f"{getattr(enemy, 'name', 'wróg')} wykonuje atak okazyjny: r={total} vs AC {target_ac}"
         logger.info(msg)
         game.ui_log(msg)
-        if total < target_ac:
-            return False
+        if not hit:
+            return True, False
         damage = random.randint(1, 6) + getattr(enemy, "strength", 0)
         defeated = False
         try:
@@ -140,13 +150,22 @@ class OpportunityAttack(Reaction):
                 pass
         if crit and "manipulate" in (event.get("action_tags") or []):
             game.ui_log("Krytyk – akcja manipulate przerwana.")
-        return True
+        return True, bool(crit)
 
     def execute(self, actor, event: dict[str, Any], ctx) -> bool:
         game = ctx.game
         target = event.get("actor")
         if target is None:
             return False
+        tags = set(event.get("action_tags") or [])
         if actor in getattr(game, "heroes", []):
-            return self._do_player_attack(actor, target, game)
-        return self._do_enemy_attack(actor, target, game, event)
+            executed, crit = self._do_player_attack(actor, target, game)
+            if executed and crit and "manipulate" in tags:
+                event["disrupted"] = True
+                event["disruption_reason"] = "opportunity_attack_critical_manipulate"
+            return executed
+        executed, crit = self._do_enemy_attack(actor, target, game, event)
+        if executed and crit and "manipulate" in tags:
+            event["disrupted"] = True
+            event["disruption_reason"] = "opportunity_attack_critical_manipulate"
+        return executed

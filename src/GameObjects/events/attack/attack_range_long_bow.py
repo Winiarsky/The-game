@@ -13,4 +13,4 @@ class LongBowAttackEvent(BaseRangeAttackEvent):
     action_id_base = "attack_long_bow"
     damage_type = DamageType.PIERCING.value
     range_increment_ft = 100
-    default_tags = ["attack_ranged", "ranged_attack", "bow", "longbow"]
+    default_tags = ["attack_ranged", "ranged_attack", "bow", "longbow", "volley:30"]

@@ -45,6 +45,14 @@ class DummyRangedEvent:
     available_in_combat = True
 
 
+class DummyActor:
+    def __init__(self):
+        self.statuses = []
+
+    def has_status(self, status_id: str) -> bool:
+        return status_id == "sudden_charge"
+
+
 def test_sudden_charge_end_skips_attack(monkeypatch):
     move_calls = {"count": 0}
 
@@ -60,7 +68,7 @@ def test_sudden_charge_end_skips_attack(monkeypatch):
     monkeypatch.setattr("GameObjects.events.sudden_charge_event.dispatch_event", lambda *_a, **_k: EventResult())
 
     game = FakeGame(["end"])
-    ctx = EventContext(game=game, actor=object())
+    ctx = EventContext(game=game, actor=DummyActor())
     result = SuddenChargeEvent().execute(ctx)
 
     assert move_calls["count"] == 2
@@ -88,7 +96,7 @@ def test_sudden_charge_reprompts_until_melee(monkeypatch):
 
     # najpierw zła akcja, potem dobra melee
     game = FakeGame(["shoot", "attack_sword"])
-    ctx = EventContext(game=game, actor=object())
+    ctx = EventContext(game=game, actor=DummyActor())
     result = SuddenChargeEvent().execute(ctx)
 
     assert move_calls["count"] == 2
@@ -113,7 +121,7 @@ def test_sudden_charge_reprompts_then_end(monkeypatch):
     monkeypatch.setattr("GameObjects.events.sudden_charge_event.dispatch_event", lambda *_a, **_k: EventResult())
 
     game = FakeGame(["shoot", "end"])
-    ctx = EventContext(game=game, actor=object())
+    ctx = EventContext(game=game, actor=DummyActor())
     result = SuddenChargeEvent().execute(ctx)
 
     assert move_calls["count"] == 2

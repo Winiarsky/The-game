@@ -11,6 +11,7 @@ from GameObjects.interactions_mixin import resolve_skill_check
 from ui_client import get_ui_client
 from statuses import DARKVISION_STATUS, DIM_LIGHT_VISION_STATUS, IN_DARK_STATUS, IN_DIM_LIGHT_STATUS, LOW_LIGHT_VISION_STATUS
 from skills import Skill
+from combat.degree_of_success import natural_mode_from_shift, natural_shift_from_mode, natural_shift_from_roll
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,34 @@ def _is_hero(obj) -> bool:
         return False
 
 
-def prompt_for_roll(prompt: str, **ui_kwargs) -> int:
+def _parse_roll_details(answer, *, infer_natural_from_roll: bool = False) -> dict[str, object]:
+    roll = 0
+    shift = 0
+    if isinstance(answer, dict):
+        raw_roll = answer.get("roll", answer.get("value", answer.get("result", 0)))
+        try:
+            roll = int(raw_roll or 0)
+        except Exception:
+            roll = 0
+        mode = answer.get("natural_mode", answer.get("natural", answer.get("nat", None)))
+        shift = natural_shift_from_mode(mode)
+        if shift == 0 and infer_natural_from_roll:
+            shift = natural_shift_from_roll(roll)
+    else:
+        try:
+            roll = int(answer or 0)
+        except Exception:
+            roll = 0
+        if infer_natural_from_roll:
+            shift = natural_shift_from_roll(roll)
+    return {
+        "roll": int(roll),
+        "natural_shift": int(shift),
+        "natural_mode": natural_mode_from_shift(shift),
+    }
+
+
+def prompt_for_roll(prompt: str, *, return_details: bool = False, infer_natural_from_roll: bool = False, **ui_kwargs):
     """Lokalny wrapper na prompt w testach (ułatwia monkeypatch get_ui_client)."""
     ui_client = get_ui_client()
     if ui_client is not None and hasattr(ui_client, "prompt_roll") and getattr(ui_client, "enabled", True):
@@ -35,10 +63,11 @@ def prompt_for_roll(prompt: str, **ui_kwargs) -> int:
             ui_kwargs["layout"] = "test"
         ui_kwargs.setdefault("answer_placeholder", "Podaj wynik rzutu")
         ui_kwargs.setdefault("source", "game")
-        ui_answer = ui_client.prompt_roll(prompt, **ui_kwargs)
-        if isinstance(ui_answer, int):
-            return ui_answer
-        raise RuntimeError("UI nie zwróciło poprawnego wyniku rzutu.")
+        ui_answer = ui_client.prompt_roll(prompt, return_meta=bool(return_details), **ui_kwargs)
+        details = _parse_roll_details(ui_answer, infer_natural_from_roll=infer_natural_from_roll)
+        if return_details:
+            return details
+        return int(details.get("roll", 0) or 0)
     if ui_client is not None and not getattr(ui_client, "allow_cli_fallback", False):
         raise RuntimeError("UI-only mode: prompt_for_roll wymaga aktywnego UI.")
     while True:
@@ -46,7 +75,10 @@ def prompt_for_roll(prompt: str, **ui_kwargs) -> int:
         if not raw:
             continue
         try:
-            return int(raw)
+            value = int(raw)
+            if return_details:
+                return _parse_roll_details(value, infer_natural_from_roll=infer_natural_from_roll)
+            return value
         except ValueError:
             continue
 
@@ -187,19 +219,28 @@ def resolve_skill_check_with_sources(
         summary_lines.append(f"Modyfikator do uwzględnienia: {modifier:+d}.")
         prompt_long = "Podaj końcowy wynik (uwzględnij premie/kary). " + " ".join(summary_lines)
     modifiers_grid = build_modifiers_grid(select_best_effects(effects, skill_id))
-    roll = prompt_for_roll(
+    roll_data = prompt_for_roll(
         prompt_msg,
         layout="test",
         prompt_long=prompt_long,
         answer_placeholder="Wynik rzutu",
         modifiers=modifiers_grid,
+        return_details=True,
+        infer_natural_from_roll=bool(apply_modifiers),
     )
+    if isinstance(roll_data, dict):
+        roll = int(roll_data.get("roll", 0) or 0)
+        natural_shift = int(roll_data.get("natural_shift", 0) or 0)
+    else:
+        roll = int(roll_data or 0)
+        natural_shift = natural_shift_from_roll(roll) if apply_modifiers else 0
     return resolve_skill_check_with_sources_from_roll(
         skill_id=skill_id,
         dc=dc,
         actor=actor,
         tags=tags,
         roll=roll,
+        natural_shift=natural_shift,
         target=target,
         game=game,
         base_modifier=base_modifier,
@@ -216,6 +257,7 @@ def resolve_skill_check_with_sources_from_roll(
     actor,
     tags: Sequence[str],
     roll: int,
+    natural_shift: int = 0,
     target=None,
     game=None,
     base_modifier: int = 0,
@@ -238,9 +280,9 @@ def resolve_skill_check_with_sources_from_roll(
     else:
         modifier, breakdown, notes, promote_src, demote_src, promote_tgt, demote_tgt, consume_src, consume_tgt, _effects = _precomputed
 
-    def _apply_outcome(current_roll: int) -> tuple[int, int, str]:
+    def _apply_outcome(current_roll: int, *, shift: int) -> tuple[int, int, str]:
         total_val = current_roll + modifier if apply_modifiers else current_roll
-        outcome_val = resolve_skill_check(dc, total_val)
+        outcome_val = resolve_skill_check(dc, total_val, natural_shift=shift)
         for value, cond in list(promote_src) + list(promote_tgt):
             if cond is None or outcome_val in cond:
                 outcome_val = _apply_shift(outcome_val, value)
@@ -249,7 +291,7 @@ def resolve_skill_check_with_sources_from_roll(
                 outcome_val = _apply_shift(outcome_val, -value)
         return current_roll, total_val, outcome_val
 
-    roll, total, outcome = _apply_outcome(roll)
+    roll, total, outcome = _apply_outcome(roll, shift=natural_shift)
 
     def _has_status(actor_obj, status_id: str) -> bool:
         if actor_obj is None:
@@ -304,12 +346,20 @@ def resolve_skill_check_with_sources_from_roll(
 
     if outcome in ("failure", "critical_failure") and _has_status(actor, "halfling_luck"):
         if _prompt_halfling_luck():
-            reroll = prompt_for_roll(
+            reroll_data = prompt_for_roll(
                 "Halfling Luck: przerzut (użyj nowego wyniku).",
                 layout="test",
                 answer_placeholder="Wynik k20",
+                return_details=True,
+                infer_natural_from_roll=bool(apply_modifiers),
             )
-            roll, total, outcome = _apply_outcome(reroll)
+            if isinstance(reroll_data, dict):
+                reroll = int(reroll_data.get("roll", 0) or 0)
+                reroll_shift = int(reroll_data.get("natural_shift", 0) or 0)
+            else:
+                reroll = int(reroll_data or 0)
+                reroll_shift = natural_shift_from_roll(reroll) if apply_modifiers else 0
+            roll, total, outcome = _apply_outcome(reroll, shift=reroll_shift)
             _consume_status(actor, "halfling_luck")
 
     def _counter_performance_total(actor_obj) -> int | None:

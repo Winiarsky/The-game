@@ -1,9 +1,6 @@
-def resolve_skill_check(dc: int, roll: int) -> str:
+from combat.degree_of_success import resolve_outcome
+
+
+def resolve_skill_check(dc: int, roll: int, natural_shift: int = 0) -> str:
     """Zwraca outcome: critical_success, success, failure, critical_failure."""
-    if roll >= dc + 10:
-        return "critical_success"
-    if roll >= dc:
-        return "success"
-    if roll <= dc - 10:
-        return "critical_failure"
-    return "failure"
+    return resolve_outcome(roll, dc, natural_shift=natural_shift)

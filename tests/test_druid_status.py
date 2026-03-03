@@ -29,3 +29,9 @@ def test_druid_sets_class_name_and_focus_point():
     attrs = dict((DRUID_STATUS.data or {}).get("set_actor_attrs") or {})
     assert attrs.get("class_name") == "druid"
     assert attrs.get("focus_point") == 1
+
+
+def test_druid_grants_shield_block():
+    grants = list((DRUID_STATUS.data or {}).get("grants_statuses") or [])
+    grant_ids = [getattr(item, "id", str(item)) for item in grants]
+    assert "shield_block" in grant_ids

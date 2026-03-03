@@ -35,13 +35,21 @@ class ActionEventBus:
         self._register_default_listeners()
 
     # --- Helper ---
-    def safe_emit_action(self, **kwargs: Any) -> bool:
-        """Emituj akcję, łapiąc wyjątki; zwraca True przy sukcesie."""
+    def safe_emit_action(self, *, return_event: bool = False, **kwargs: Any) -> bool | ActionEvent | None:
+        """Emituj akcję, łapiąc wyjątki.
+
+        - domyślnie zwraca ``True``/``False`` (kompatybilność wsteczna),
+        - przy ``return_event=True`` zwraca payload eventu (lub ``None`` przy błędzie).
+        """
         try:
-            self.emit_action(**kwargs)
+            event = self.emit_action(**kwargs)
+            if return_event:
+                return event
             return True
         except Exception:
             logger.debug("safe_emit_action failure", exc_info=True)
+            if return_event:
+                return None
             return False
 
     # --- Public API ---
@@ -56,7 +64,7 @@ class ActionEventBus:
         action_id: str,
         action_tags: Iterable[str] | None = None,
         **payload: Any,
-    ) -> None:
+    ) -> ActionEvent:
         """Emituje event akcji do wszystkich słuchaczy.
 
         Event ma minimalnie: actor, action_id, action_tags, state_name.
@@ -78,6 +86,7 @@ class ActionEventBus:
                 listener(event)
             except Exception as exc:  # pragma: no cover - tylko logujemy
                 logger.error("ActionEvent listener failed: %s", exc)
+        return event
 
     # --- Domyślne słuchacze ---
     def _register_default_listeners(self) -> None:
@@ -93,7 +102,7 @@ class ActionEventBus:
 
         def _listener(event: ActionEvent) -> None:
             # dispatcher sam sprawdza stan walki, więc emitujemy zawsze
-            dispatch_reactions(self.game, dict(event))
+            dispatch_reactions(self.game, event)
 
         self.add_listener(_listener)
 

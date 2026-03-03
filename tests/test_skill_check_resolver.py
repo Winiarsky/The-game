@@ -217,3 +217,71 @@ def test_irongut_goblin_ingested_bonus_and_promote(monkeypatch):
     modifiers = captured.get("modifiers", {})
     bon_circ = modifiers.get("bonCirc", [])
     assert any(item.get("label") == "irongut" and item.get("value") == 2 for item in bon_circ)
+
+
+def test_natural_20_promotes_degree_from_ui_payload(monkeypatch):
+    monkeypatch.setattr(
+        "GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll",
+        lambda *_, **__: {"roll": 10, "natural_mode": "nat20", "natural_shift": 1},
+    )
+    actor = Hero()
+    res = resolve_skill_check_with_sources(
+        skill_id="perception",
+        dc=15,
+        actor=actor,
+        target=None,
+        tags=["perception"],
+        apply_modifiers=True,
+    )
+    # 10 vs 15 = failure, nat20 => +1 degree => success.
+    assert res.outcome == "success"
+
+
+def test_natural_1_demotes_degree_from_ui_payload(monkeypatch):
+    monkeypatch.setattr(
+        "GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll",
+        lambda *_, **__: {"roll": 10, "natural_mode": "nat1", "natural_shift": -1},
+    )
+    actor = Hero()
+    res = resolve_skill_check_with_sources(
+        skill_id="perception",
+        dc=10,
+        actor=actor,
+        target=None,
+        tags=["perception"],
+        apply_modifiers=True,
+    )
+    # 10 vs 10 = success, nat1 => -1 degree => failure.
+    assert res.outcome == "failure"
+
+
+def test_no_natural_inference_when_total_is_entered(monkeypatch):
+    monkeypatch.setattr("GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll", lambda *_, **__: 20)
+    actor = Hero()
+    res = resolve_skill_check_with_sources(
+        skill_id="perception",
+        dc=20,
+        actor=actor,
+        target=None,
+        tags=["perception"],
+        apply_modifiers=False,
+    )
+    # Wynik końcowy 20 nie może sam z siebie liczyć się jako nat20.
+    assert res.outcome == "success"
+
+
+def test_explicit_natural_mode_still_applies_for_final_total(monkeypatch):
+    monkeypatch.setattr(
+        "GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll",
+        lambda *_, **__: {"roll": 20, "natural_mode": "nat20", "natural_shift": 1},
+    )
+    actor = Hero()
+    res = resolve_skill_check_with_sources(
+        skill_id="perception",
+        dc=20,
+        actor=actor,
+        target=None,
+        tags=["perception"],
+        apply_modifiers=False,
+    )
+    assert res.outcome == "critical_success"

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from statuses.base import Status
+from statuses.general.shield_block import SHIELD_BLOCK_STATUS
 
 DRUID_ORDER_CHOICES = ["animal", "leaf", "storm", "wild"]
 DRUID_ORDER_SKILLS = {
@@ -72,6 +73,7 @@ def DruidStatus() -> Status:
             "druid_order_spells": dict(DRUID_ORDER_SPELLS),
             "druid_order_focus_bonus": dict(DRUID_ORDER_FOCUS_BONUS),
             "set_actor_attrs": {"class_name": "druid", "focus_point": 1},
+            "grants_statuses": [SHIELD_BLOCK_STATUS],
         },
     )
 

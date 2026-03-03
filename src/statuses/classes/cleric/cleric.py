@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from statuses.base import Status
+from statuses.general.shield_block import SHIELD_BLOCK_STATUS
 
 CLERIC_KEY_ABILITY_CHOICES = ["wisdom"]
 CLERIC_DOCTRINE_CHOICES = ["cloistered_cleric", "warpriest"]
@@ -268,6 +269,7 @@ def ClericStatus() -> Status:
             "cleric_deity_options": dict(CLERIC_DEITY_OPTIONS),
             "cleric_domain_spell_placeholders": dict(CLERIC_DOMAIN_INITIAL_SPELLS),
             "set_actor_attrs": {"class_name": "cleric"},
+            "grants_statuses": [SHIELD_BLOCK_STATUS],
         },
     )
 

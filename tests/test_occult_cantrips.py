@@ -422,7 +422,8 @@ def test_divine_lance_hits_opposed_alignment(monkeypatch):
     res = occ.DivineLanceEvent().execute(EventContext(game=game, actor=hero))
 
     assert res.success is True
-    assert enemy.hp == 16
+    # Natural 20 podnosi stopień sukcesu o 1: trafienie staje się krytyczne.
+    assert enemy.hp == 12
 
 
 def test_divine_lance_no_effect_without_opposed_alignment(monkeypatch):

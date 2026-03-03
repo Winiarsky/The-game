@@ -1,0 +1,95 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from bonuses import BonusEffect, BonusType
+from GameObjects.items.shield import get_equipped_shield
+
+from .base import Reaction
+
+
+def _has_status(actor, status_id: str) -> bool:
+    if actor is None:
+        return False
+    checker = getattr(actor, "has_status", None)
+    if callable(checker):
+        try:
+            return bool(checker(status_id))
+        except Exception:
+            return False
+    for status in getattr(actor, "statuses", []) or []:
+        if getattr(status, "id", status) == status_id:
+            return True
+    return False
+
+
+@dataclass
+class ReactiveShieldReaction(Reaction):
+    id: str = "reactive_shield"
+    label: str = "Reactive Shield"
+    priority: int = 45
+    action_cost: int = 1
+    requires_reach: bool = False
+    blocks_range_attacker: bool = False
+
+    def triggers(self, actor, event: dict[str, object]) -> bool:
+        if actor is None:
+            return False
+        if not _has_status(actor, "reactive_shield"):
+            return False
+        if event.get("target") is not actor:
+            return False
+        action_id = str(event.get("action_id", "") or "")
+        if not action_id.endswith("_pre"):
+            return False
+        tags = set(event.get("action_tags") or [])
+        if "attack_melee" not in tags:
+            return False
+        shield = get_equipped_shield(actor, create_default=False)
+        if shield is None:
+            return False
+        if bool(getattr(shield, "is_destroyed", False)):
+            return False
+        return True
+
+    def reason(self, actor, event: dict[str, object]) -> str:
+        _ = event
+        return f"Reactive Shield: ochrona {getattr(actor, 'name', 'celu')}"
+
+    def execute(self, actor, event: dict[str, object], ctx) -> bool:
+        shield = get_equipped_shield(actor, create_default=False)
+        if shield is None:
+            return False
+
+        remover = getattr(actor, "remove_bonuses_with_prefix", None)
+        if callable(remover):
+            try:
+                remover("raise_shield:")
+            except Exception:
+                pass
+
+        round_idx = getattr(getattr(ctx.game, "state", None), "round_index", None)
+        source_tag = f"raise_shield:round{round_idx}" if round_idx is not None else "raise_shield"
+
+        adder = getattr(actor, "add_bonus", None)
+        if not callable(adder):
+            return False
+        try:
+            adder(
+                BonusEffect(
+                    type=BonusType.CIRCUMSTANCE,
+                    value=2,
+                    tag="ac",
+                    source=source_tag,
+                    label="tarcza w górze",
+                    duration_turns=1,
+                )
+            )
+        except Exception:
+            return False
+
+        try:
+            ctx.game.ui_log("Reactive Shield: podnosisz tarczę (+2 AC) na ten atak.")
+        except Exception:
+            pass
+        return True
