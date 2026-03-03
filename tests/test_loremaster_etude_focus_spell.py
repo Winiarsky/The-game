@@ -67,11 +67,25 @@ def test_loremaster_etude_action_cost_and_ui_info():
     res_exploration = LoremasterEtudeEvent().execute(EventContext(game=game, actor=caster))
     assert res_exploration.success is True
     assert res_exploration.consumed_action is False
+    assert getattr(caster, "focus_point", None) == 0
     assert "recall knowledge" in (res_exploration.message or "").lower()
     assert game._ui_calls
 
     game.state = Combat(game)
     res_combat = LoremasterEtudeEvent().execute(EventContext(game=game, actor=caster))
-    assert res_combat.success is True
-    assert res_combat.consumed_action is True
-    assert res_combat.actions_spent == 1
+    assert res_combat.success is False
+    assert "focus point" in (res_combat.message or "").lower()
+
+
+def test_loremaster_etude_spends_focus_point_in_combat():
+    caster = _hero("bard")
+    caster.add_status(BARD_STATUS)
+    game = _game([caster])
+    game.state = Combat(game)
+
+    result = LoremasterEtudeEvent().execute(EventContext(game=game, actor=caster))
+
+    assert result.success is True
+    assert result.consumed_action is True
+    assert result.actions_spent == 1
+    assert getattr(caster, "focus_point", None) == 0

@@ -21,6 +21,7 @@ from board_grid import BoardGrid
 from hero import Hero
 from states.combat import Combat
 from statuses import Status
+from statuses.classes.alchemist.alchemist import ALCHEMIST_STATUS
 from statuses.classes.alchemist.alchemsit import ALCHEMSIT_STATUS
 
 
@@ -83,11 +84,16 @@ def test_quick_alchemy_requires_feat_status():
 
 
 def test_alchemist_status_grants_quick_alchemy_feat():
-    grants = list((ALCHEMSIT_STATUS.data or {}).get("grants_statuses") or [])
+    grants = list((ALCHEMIST_STATUS.data or {}).get("grants_statuses") or [])
     grant_ids = [getattr(item, "id", str(item)) for item in grants]
+    assert ALCHEMIST_STATUS.id == "alchemist"
     assert "alchemist_research_field" in grant_ids
     assert "quick_alchemy_allow" in grant_ids
     assert "advanced_alchemy" in grant_ids
+
+
+def test_alchemsit_alias_points_to_alchemist_status():
+    assert ALCHEMSIT_STATUS.id == "alchemist"
 
 
 def test_quick_alchemy_reprompts_invalid_then_creates_item(monkeypatch):

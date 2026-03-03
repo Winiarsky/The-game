@@ -10,6 +10,7 @@ for path in (PROJECT_ROOT, SRC_ROOT):
 from hero import Hero
 from GameObjects.events.base import EventContext
 from GameObjects.events.rage_event import RageEvent
+from statuses.classes.barbarian.barbarian import BARBARIAN_STATUS
 from statuses.classes.barbarian.instincts.giant_instinct import GiantInstinctStatus
 from statuses.clumsy import clumsy_ac_penalty, clumsy_ac_prompt_note
 from statuses.rage import rage_damage_bonus
@@ -50,6 +51,7 @@ def test_giant_instinct_rage_clumsy_and_bonus():
 
     assert not hero.has_status("clumsy")
 
+    hero.add_status(BARBARIAN_STATUS)
     hero.add_status(GiantInstinctStatus())
 
     ctx = EventContext(game=game, actor=hero)
@@ -70,3 +72,17 @@ def test_giant_instinct_rage_clumsy_and_bonus():
     assert not hero.has_status("clumsy")
     assert not hero.has_status("giant_instinct_active")
     assert not hero.has_status("rage")
+
+
+def test_rage_requires_barbarian_class():
+    game = DummyGame()
+    combat = Combat(game)
+    game.state = combat
+
+    hero = Hero()
+    game.heroes = [hero]
+
+    result = RageEvent().execute(EventContext(game=game, actor=hero))
+
+    assert result.success is False
+    assert "tylko barbarian" in str(result.message or "").lower()

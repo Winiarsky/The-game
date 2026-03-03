@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from statuses.base import Status
-from statuses.low_light_vision import LOW_LIGHT_VISION_STATUS
+from statuses.dim_light_vision import DIM_LIGHT_VISION_STATUS
 
 TWILIGHT_HALFLING_DESCRIPTION = "Zyskujesz low-light vision."
 
@@ -13,7 +13,7 @@ def TwilightHalflingStatus() -> Status:
         label="Twilight Halfling",
         data={
             "ui_description": TWILIGHT_HALFLING_DESCRIPTION,
-            "grants_statuses": [LOW_LIGHT_VISION_STATUS],
+            "grants_statuses": [DIM_LIGHT_VISION_STATUS],
         },
     )
 

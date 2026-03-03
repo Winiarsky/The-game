@@ -5,7 +5,7 @@ from statuses.race.halfling.heritages.gutsy_halfling import GutsyHalflingStatus
 from statuses.race.halfling.heritages.nomadic_halfling import NomadicHalflingStatus
 from statuses.race.halfling.heritages.twilight_halfling import TwilightHalflingStatus
 from statuses.race.halfling.heritages.wildwood_halfling import WildwoodHalflingStatus
-from statuses.low_light_vision import LOW_LIGHT_VISION_STATUS
+from statuses.dim_light_vision import DIM_LIGHT_VISION_STATUS
 
 
 class Dummy:
@@ -31,10 +31,10 @@ def test_gutsy_halfling_promotes_emotion_success():
     assert res.outcome == "critical_success"
 
 
-def test_twilight_halfling_grants_low_light():
+def test_twilight_halfling_grants_dim_light_vision_status():
     status = TwilightHalflingStatus()
     grants = status.data.get("grants_statuses") or []
-    assert any(getattr(s, "id", None) == LOW_LIGHT_VISION_STATUS.id for s in grants)
+    assert any(getattr(s, "id", None) == DIM_LIGHT_VISION_STATUS.id for s in grants)
 
 
 def test_wildwood_halfling_terrain_tags():

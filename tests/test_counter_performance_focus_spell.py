@@ -54,7 +54,7 @@ def test_counter_performance_requires_bard():
     assert "tylko bard" in (result.message or "").lower()
 
 
-def test_counter_performance_spends_focus_and_applies_to_nearby_allies(monkeypatch):
+def test_counter_performance_is_focus_cantrip_and_does_not_spend_focus(monkeypatch):
     monkeypatch.setattr("GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll", lambda *_a, **_k: 15)
 
     caster = _hero("bard", (0, 0))
@@ -67,7 +67,7 @@ def test_counter_performance_spends_focus_and_applies_to_nearby_allies(monkeypat
     result = event.execute(EventContext(game=game, actor=caster))
 
     assert result.success is True
-    assert getattr(caster, "focus_point", None) == 0
+    assert getattr(caster, "focus_point", None) == 1
     assert not caster.has_status("counter_performance")
     assert near.has_status("counter_performance")
     assert not far.has_status("counter_performance")
@@ -75,6 +75,21 @@ def test_counter_performance_spends_focus_and_applies_to_nearby_allies(monkeypat
     assert status is not None
     assert (status.data or {}).get("performance_total") == 15
     assert (status.data or {}).get("source_turns_left") == 1
+
+
+def test_counter_performance_works_even_with_zero_focus_points(monkeypatch):
+    monkeypatch.setattr("GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll", lambda *_a, **_k: 12)
+
+    caster = _hero("bard", (0, 0))
+    caster.add_status(BARD_STATUS)
+    caster.focus_point = 0
+    near = _hero("near", (1, 0))
+    game = _game([caster, near])
+
+    result = CounterPerformanceEvent().execute(EventContext(game=game, actor=caster))
+
+    assert result.success is True
+    assert near.has_status("counter_performance")
 
 
 def test_counter_performance_replaces_lower_save_result(monkeypatch):

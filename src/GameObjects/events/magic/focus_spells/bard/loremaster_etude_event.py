@@ -20,6 +20,28 @@ def _is_bard(actor) -> bool:
     return class_name == "bard"
 
 
+def _focus_points(actor) -> int:
+    raw = getattr(actor, "focus_point", None)
+    if raw is None and _is_bard(actor):
+        try:
+            setattr(actor, "focus_point", 1)
+        except Exception:
+            return 0
+        raw = 1
+    try:
+        return max(0, int(raw or 0))
+    except Exception:
+        return 0
+
+
+def _set_focus_points(actor, value: int) -> None:
+    points = max(0, int(value))
+    try:
+        setattr(actor, "focus_point", points)
+    except Exception:
+        return
+
+
 @register_event
 class LoremasterEtudeEvent(MagicEvent):
     name = "loremaster_etude"
@@ -40,6 +62,9 @@ class LoremasterEtudeEvent(MagicEvent):
             return EventResult.cancelled(message="Brak bohatera do rzucenia czaru.")
         if not _is_bard(actor):
             return EventResult.cancelled(message="Loremaster's Etude: tylko bard moze rzucic ten czar.")
+        current_focus = _focus_points(actor)
+        if current_focus <= 0:
+            return EventResult.cancelled(message="Loremaster's Etude: brak Focus Point.")
 
         ui = getattr(ctx.game, "ui", None)
         if ui is not None and hasattr(ui, "prompt_info"):
@@ -55,12 +80,13 @@ class LoremasterEtudeEvent(MagicEvent):
             except Exception:
                 pass
 
+        _set_focus_points(actor, current_focus - 1)
         return EventResult(
             success=True,
             consumed_action=ctx.in_combat,
             actions_spent=1 if ctx.in_combat else None,
             message=(
                 "Loremaster's Etude: nastepny Recall Knowledge z advantage (2x k20, wybierz wyzszy). "
-                "Efekt do rozliczenia recznie."
+                f"Efekt do rozliczenia recznie. Focus Point: {_focus_points(actor)}."
             ),
         )

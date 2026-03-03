@@ -17,6 +17,23 @@ from .registry import register_event
 logger = logging.getLogger(__name__)
 
 
+def _is_barbarian(actor) -> bool:
+    if actor is None:
+        return False
+    has_status = getattr(actor, "has_status", None)
+    if callable(has_status):
+        try:
+            if bool(has_status("barbarian")):
+                return True
+        except Exception:
+            pass
+    for status in getattr(actor, "statuses", []) or []:
+        if getattr(status, "id", None) == "barbarian":
+            return True
+    class_name = str(getattr(actor, "class_name", "") or "").strip().lower()
+    return class_name == "barbarian"
+
+
 @register_event
 class RageEvent(GameEvent):
     name = "rage"
@@ -32,6 +49,8 @@ class RageEvent(GameEvent):
         actor = ctx.actor
         if actor is None:
             return EventResult.cancelled(message="Brak bohatera do Rage.")
+        if not _is_barbarian(actor):
+            return EventResult.cancelled(message="Rage: tylko Barbarian może użyć tej akcji.")
 
         has_status = getattr(actor, "has_status", None)
         if callable(has_status) and has_status("rage"):

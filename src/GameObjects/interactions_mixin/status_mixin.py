@@ -94,6 +94,26 @@ class StatusMixin:
                 self._handle_deific_weapon_choice(status, data)
             except Exception:
                 pass
+        if data.get("ui_choice_kind") == "adapted_cantrip":
+            try:
+                self._handle_adapted_cantrip_choice(status, data)
+            except Exception:
+                pass
+        if data.get("ui_choice_kind") == "general_training":
+            try:
+                self._handle_general_training_choice(status, data)
+            except Exception:
+                pass
+        if data.get("ui_choice_kind") == "natural_ambition":
+            try:
+                self._handle_natural_ambition_choice(status, data)
+            except Exception:
+                pass
+        if data.get("ui_choice_kind") == "versatile_heritage":
+            try:
+                self._handle_versatile_heritage_choice(status, data)
+            except Exception:
+                pass
         prompt = data.get("ui_prompt")
         if not prompt:
             return
@@ -132,6 +152,275 @@ class StatusMixin:
             return input(f"{prompt} {choices}: ").strip() or None
         except Exception:
             return None
+
+    def _pick_choice_id(self, prompt: str, choices: list[str], *, source: str = "status") -> str | None:
+        if not choices:
+            return None
+        label_map = {self._labelize_choice(item): item for item in choices}
+        labels = list(label_map.keys())
+        chosen_label = self._prompt_choice(prompt, labels, source=source)
+        if not chosen_label:
+            return None
+        chosen = label_map.get(chosen_label)
+        if chosen:
+            return chosen
+        raw = str(chosen_label).strip().lower().replace(" ", "_")
+        return raw if raw in choices else None
+
+    def _replace_status_data(self, status: "Status", data_updates: dict) -> bool:
+        if not isinstance(data_updates, dict):
+            return False
+        try:
+            for idx, item in enumerate(self.statuses):
+                if item is status:
+                    new_data = dict(getattr(item, "data", None) or {})
+                    new_data.update(data_updates)
+                    self.statuses[idx] = replace(item, data=new_data)
+                    return True
+        except Exception:
+            return False
+        return False
+
+    @staticmethod
+    def _general_feat_registry() -> dict[str, tuple[str, str]]:
+        return {
+            "adopted_ancestry": ("statuses.general.adopted_ancestry", "ADOPTED_ANCESTRY_STATUS"),
+            "armor_proficiency": ("statuses.general.armor_proficiency", "ARMOR_PROFICIENCY_STATUS"),
+            "assurance": ("statuses.general.assurance", "ASSURANCE_STATUS"),
+            "breath_control": ("statuses.general.breath_control", "BREATH_CONTROL_STATUS"),
+            "canny_acumen": ("statuses.general.canny_acumen", "CANNY_ACUMEN_STATUS"),
+            "diehard": ("statuses.general.diehard", "DIEHARD_STATUS"),
+            "dubious_knowledge": ("statuses.general.dubious_knowledge", "DUBIOUS_KNOWLEDGE_STATUS"),
+            "fleet": ("statuses.general.fleet", "FLEET_STATUS"),
+            "incredible_initiative": ("statuses.general.incredible_initiative", "INCREDIBLE_INITIATIVE_STATUS"),
+            "recognize_spell": ("statuses.general.recognize_spell", "RECOGNIZE_SPELL_STATUS"),
+            "shield_block": ("statuses.general.shield_block", "SHIELD_BLOCK_STATUS"),
+            "skill_training": ("statuses.general.skill_training", "SKILL_TRAINING_STATUS"),
+            "toughness": ("statuses.general.toughness", "TOUGHNESS_STATUS"),
+            "trick_magic_item": ("statuses.general.trick_magic_item", "TRICK_MAGIC_ITEM_STATUS"),
+            "weapon_proficiency": ("statuses.general.weapon_proficiency", "WEAPON_PROFICIENCY_STATUS"),
+        }
+
+    @staticmethod
+    def _class_feat_registry() -> dict[str, dict[str, tuple[str, str]]]:
+        return {
+            "alchemist": {
+                "advanced_alchemy": ("statuses.classes.alchemist.feats.advanced_alchemy", "ADVANCED_ALCHEMY_STATUS"),
+                "alchemical_savant": ("statuses.classes.alchemist.feats.alchemical_savant", "ALCHEMICAL_SAVANT_STATUS"),
+                "alchemist_familiar_guidance": (
+                    "statuses.classes.alchemist.feats.alchemist_familiar_guidance",
+                    "ALCHEMIST_FAMILIAR_GUIDANCE_STATUS",
+                ),
+                "far_lobber": ("statuses.classes.alchemist.feats.far_lobber", "FAR_LOBBER_STATUS"),
+                "quick_alchemy_allow": ("statuses.classes.alchemist.feats.quick_alchemy_allow", "QUICK_ALCHEMY_ALLOW_STATUS"),
+                "quick_bomber": ("statuses.classes.alchemist.feats.quick_bomber", "QUICK_BOMBER_STATUS"),
+            },
+            "barbarian": {
+                "cute_vision": ("statuses.classes.barbarian.feats.cute_vision", "CUTE_VISION_STATUS"),
+                "moment_of_clarity": ("statuses.classes.barbarian.feats.moment_of_clarity", "MomentOfClarityStatus"),
+                "raging_thrower": ("statuses.classes.barbarian.feats.raging_thrower", "RAGING_THROWER_STATUS"),
+            },
+            "bard": {
+                "bardic_lore": ("statuses.classes.bard.feats.bardic_lore", "BARDIC_LORE_STATUS"),
+                "lingering_composition": (
+                    "statuses.classes.bard.feats.lingering_composition",
+                    "LINGERING_COMPOSITION_STATUS",
+                ),
+                "reach_spell": ("statuses.classes.bard.feats.reach_spell", "REACH_SPELL_STATUS"),
+                "versatile_performance": (
+                    "statuses.classes.bard.feats.versatile_performance",
+                    "VERSATILE_PERFORMANCE_STATUS",
+                ),
+            },
+            "champion": {
+                "deific_weapon": ("statuses.classes.champion.feats.deific_weapon", "DEIFIC_WEAPON_STATUS"),
+                "raise_shield_allow": (
+                    "statuses.classes.champion.feats.raise_shield_allow",
+                    "CHAMPION_RAISE_SHIELD_ALLOW_FEAT",
+                ),
+            },
+        }
+
+    @staticmethod
+    def _resolve_status_from_registry(feat_id: str, registry: dict[str, tuple[str, str]]):
+        if not feat_id:
+            return None
+        entry = registry.get(str(feat_id))
+        if not entry:
+            return None
+        module_path, symbol = entry
+        try:
+            import importlib
+
+            module = importlib.import_module(module_path)
+            resolved = getattr(module, symbol, None)
+        except Exception:
+            return None
+        if resolved is None:
+            return None
+        if hasattr(resolved, "id"):
+            return resolved
+        if callable(resolved):
+            try:
+                candidate = resolved()
+            except Exception:
+                return None
+            if hasattr(candidate, "id"):
+                return candidate
+        return None
+
+    def _actor_class_id(self) -> str | None:
+        class_id = str(getattr(self, "class_name", "") or "").strip().lower()
+        if class_id == "alchemsit":
+            class_id = "alchemist"
+        if class_id in self._class_feat_registry():
+            return class_id
+        for candidate in self._class_feat_registry():
+            try:
+                if self.has_status(candidate):
+                    return candidate
+            except Exception:
+                continue
+        return None
+
+    def _handle_adapted_cantrip_choice(self, status: "Status", data: dict) -> None:
+        traditions = list(data.get("adapted_cantrip_traditions") or ["arcane", "divine", "occult", "primal"])
+        if not traditions:
+            return
+        chosen_tradition = self._pick_choice_id(
+            "Adapted Cantrip: wybierz tradycje",
+            traditions,
+            source="status",
+        )
+        if not chosen_tradition:
+            return
+
+        cantrip_map = dict(data.get("adapted_cantrip_choices") or {})
+        cantrip_choices = list(cantrip_map.get(chosen_tradition, [])) or list(cantrip_map.get("all", []))
+        if not cantrip_choices:
+            cantrip_choices = ["detect_magic", "daze", "ray_of_frost", "light", "guidance"]
+        chosen_cantrip = self._pick_choice_id(
+            f"Adapted Cantrip ({self._labelize_choice(chosen_tradition)}): wybierz cantrip",
+            cantrip_choices,
+            source="status",
+        )
+        if not chosen_cantrip:
+            return
+
+        replaced_choices = list(data.get("replaced_cantrip_choices") or cantrip_choices)
+        chosen_replaced = self._pick_choice_id(
+            "Adapted Cantrip: wybierz cantrip do zastapienia",
+            replaced_choices,
+            source="status",
+        )
+        if not chosen_replaced:
+            return
+
+        self._replace_status_data(
+            status,
+            {
+                "adapted_tradition": chosen_tradition,
+                "adapted_cantrip": chosen_cantrip,
+                "replaced_cantrip": chosen_replaced,
+            },
+        )
+        self._ui_log(
+            "Adapted Cantrip: "
+            f"{self._labelize_choice(chosen_tradition)} -> {self._labelize_choice(chosen_cantrip)} "
+            f"(zastapiony: {self._labelize_choice(chosen_replaced)})."
+        )
+
+    def _handle_general_training_choice(self, status: "Status", data: dict) -> None:
+        registry = self._general_feat_registry()
+        choices = list(data.get("general_feat_choices") or list(registry.keys()))
+        if not choices:
+            return
+        chosen_feat = self._pick_choice_id(
+            "General Training: wybierz general feat",
+            choices,
+            source="status",
+        )
+        if not chosen_feat:
+            return
+        self._replace_status_data(status, {"general_feat": chosen_feat})
+
+        feat_status = self._resolve_status_from_registry(chosen_feat, registry)
+        if feat_status is None:
+            self._ui_log(f"General Training: nie znaleziono statusu dla feata {chosen_feat}.")
+            return
+        self.add_status(feat_status)
+        self._ui_log(f"General Training: wybrano {self._labelize_choice(chosen_feat)}.")
+
+    def _handle_natural_ambition_choice(self, status: "Status", data: dict) -> None:
+        class_id = self._actor_class_id()
+        if not class_id:
+            self._ui_log("Natural Ambition: brak wspieranej klasy bohatera.")
+            return
+
+        fallback_choices_map = {
+            key: list(value.keys())
+            for key, value in self._class_feat_registry().items()
+        }
+        raw_choices_map = data.get("natural_ambition_class_feat_choices") or {}
+        choices_map = {}
+        if isinstance(raw_choices_map, dict):
+            for key, value in raw_choices_map.items():
+                if isinstance(value, list):
+                    choices_map[str(key)] = list(value)
+        choices = list(choices_map.get(class_id, [])) or list(fallback_choices_map.get(class_id, []))
+        if not choices:
+            self._ui_log(f"Natural Ambition: brak listy featów dla klasy {class_id}.")
+            return
+
+        chosen_feat = self._pick_choice_id(
+            f"Natural Ambition ({self._labelize_choice(class_id)}): wybierz class feat",
+            choices,
+            source="status",
+        )
+        if not chosen_feat:
+            return
+
+        self._replace_status_data(
+            status,
+            {
+                "class_name": class_id,
+                "class_feat": chosen_feat,
+            },
+        )
+
+        registry = self._class_feat_registry().get(class_id, {})
+        feat_status = self._resolve_status_from_registry(chosen_feat, registry)
+        if feat_status is None:
+            self._ui_log(
+                f"Natural Ambition: nie znaleziono statusu feata {chosen_feat} dla klasy {class_id}."
+            )
+            return
+        self.add_status(feat_status)
+        self._ui_log(
+            "Natural Ambition: "
+            f"{self._labelize_choice(class_id)} -> {self._labelize_choice(chosen_feat)}."
+        )
+
+    def _handle_versatile_heritage_choice(self, status: "Status", data: dict) -> None:
+        registry = self._general_feat_registry()
+        choices = list(data.get("general_feat_choices") or list(registry.keys()))
+        if not choices:
+            return
+        chosen_feat = self._pick_choice_id(
+            "Versatile Heritage: wybierz general feat",
+            choices,
+            source="status",
+        )
+        if not chosen_feat:
+            return
+
+        self._replace_status_data(status, {"general_feat": chosen_feat})
+        feat_status = self._resolve_status_from_registry(chosen_feat, registry)
+        if feat_status is None:
+            self._ui_log(f"Versatile Heritage: nie znaleziono statusu dla feata {chosen_feat}.")
+            return
+        self.add_status(feat_status)
+        self._ui_log(f"Versatile Heritage: wybrano {self._labelize_choice(chosen_feat)}.")
 
     def _handle_adopted_ancestry_choice(self, status: "Status", data: dict) -> None:
         races = list(data.get("adopted_ancestry_races") or [])

@@ -31,29 +31,6 @@ def _is_bard(actor) -> bool:
     class_name = str(getattr(actor, "class_name", "") or "").strip().lower()
     return class_name == "bard"
 
-
-def _focus_points(actor) -> int:
-    raw = getattr(actor, "focus_point", None)
-    if raw is None and _is_bard(actor):
-        try:
-            setattr(actor, "focus_point", 1)
-        except Exception:
-            return 0
-        raw = 1
-    try:
-        return max(0, int(raw or 0))
-    except Exception:
-        return 0
-
-
-def _set_focus_points(actor, value: int) -> None:
-    points = max(0, int(value))
-    try:
-        setattr(actor, "focus_point", points)
-    except Exception:
-        return
-
-
 def _remove_statuses(target, status_id: str) -> None:
     statuses = getattr(target, "statuses", None)
     if not isinstance(statuses, list) or not statuses:
@@ -76,7 +53,7 @@ class CounterPerformanceEvent(MagicEvent):
     range_feet = 60
     hero_turn_allowed = False
     prompt = (
-        "Counter Performance (Bard, Focus 1): Performance check. "
+        "Counter Performance (Bard, Focus Cantrip): Performance check. "
         "Sojusznicy w 60 ft moga uzyc tego wyniku zamiast nizszego Fort/Ref/Will "
         "do poczatku twojej nastepnej tury."
     )
@@ -87,10 +64,6 @@ class CounterPerformanceEvent(MagicEvent):
             return EventResult.cancelled(message="Brak bohatera do rzucenia czaru.")
         if not _is_bard(actor):
             return EventResult.cancelled(message="Counter Performance: tylko bard moze rzucic ten czar.")
-
-        current_focus = _focus_points(actor)
-        if current_focus <= 0:
-            return EventResult.cancelled(message="Counter Performance: brak Focus Point.")
 
         ui = getattr(ctx.game, "ui", None)
         if ui is not None and hasattr(ui, "prompt_info"):
@@ -117,7 +90,6 @@ class CounterPerformanceEvent(MagicEvent):
         )
         performance_total = int(resolution.total)
 
-        _set_focus_points(actor, current_focus - 1)
         source_id = _actor_id(actor)
         affected = 0
 
@@ -151,7 +123,6 @@ class CounterPerformanceEvent(MagicEvent):
             consumed_action=True,
             message=(
                 f"Counter Performance: wynik Performance {performance_total}. "
-                f"Objeci sojusznicy: {affected}. Focus Point: {_focus_points(actor)}."
+                f"Objeci sojusznicy: {affected}."
             ),
         )
-
