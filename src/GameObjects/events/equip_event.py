@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import logging
+import random
 
 from board import consts
 from GameObjects.Interactables.loot_pile import LootPile
+from GameObjects.items.goodberry_item import is_goodberry_item
 from GameObjects.items.inventory import (
     all_inventory_sections,
     ensure_actor_inventory,
@@ -156,6 +158,40 @@ class EquipEvent(ActionCostEvent):
     consumes_action = True
     actions_cost = 1
 
+    def _consume_goodberry(self, ctx: EventContext, actor, item) -> tuple[bool, str]:
+        if not remove_item(actor, item):
+            return False, "Nie udało się zużyć Goodberry."
+
+        heal_roll = random.randint(1, 6)
+        heal_amount = int(heal_roll) + 4
+        healer = getattr(actor, "heal", None)
+        if callable(healer):
+            try:
+                healer(heal_amount)
+            except Exception:
+                pass
+
+        prompt_long = (
+            "Zjedzono Goodberry.\n"
+            f"Leczenie: {heal_roll} + 4 = {heal_amount} HP."
+        )
+        prompted = False
+        ui = getattr(ctx.game, "ui", None)
+        if ui is not None and hasattr(ui, "prompt_info"):
+            try:
+                ui.prompt_info("Goodberry", prompt_long=prompt_long, source="goodberry_item")
+                prompted = True
+            except Exception:
+                pass
+        if not prompted:
+            try:
+                from ui_client import get_ui_client
+
+                get_ui_client().prompt_info("Goodberry", prompt_long=prompt_long, source="goodberry_item")
+            except Exception:
+                pass
+        return True, f"Zużyto Goodberry: uleczono {heal_amount} HP."
+
     def _read_command(self, ctx: EventContext, *, prompt_long: str, subtitle: str) -> str:
         ui = getattr(ctx.game, "ui", None)
         if ui and getattr(ui, "enabled", False):
@@ -244,7 +280,10 @@ class EquipEvent(ActionCostEvent):
                 return EventResult.cancelled(message="Zamknięto ekwipunek.")
 
             if command == "toggle":
-                success, message = toggle_item_activation(actor, selected_item)
+                if is_goodberry_item(selected_item):
+                    success, message = self._consume_goodberry(ctx, actor, selected_item)
+                else:
+                    success, message = toggle_item_activation(actor, selected_item)
                 try:
                     setattr(actor, "inventory_cursor", inventory_index_of(actor, selected_item))
                 except Exception:

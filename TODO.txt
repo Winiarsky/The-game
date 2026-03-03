@@ -20,3 +20,6 @@
 TODO: Dodać mechaniki usuwania statusu Poisoned (test medyczny, antidotum itd.).
 TODO: Bestial Mutagen - dodać akcje ataku pazurami i kłami, potem zaimplementować eliksir.
 TODO: Leaper's Elixir - dodać mechanikę skoku (High/Long Jump), potem zaimplementować eliksir.
+TODO: Cleric - zaimplementować advanced domain spells (drugi czar domenowy) dla wszystkich domen.
+TODO: Rozszerzyć mechanikę umierania dla animal companion do pełnego PF2 (dying/wounded/recovery checks).
+TODO: Character builder - spiąć pełny wzór Max HP (ancestry + klasa + poziom + featy + buffy) i mapowanie do statusowych bonusów `hp_engine`.

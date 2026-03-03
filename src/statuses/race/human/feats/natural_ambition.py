@@ -30,6 +30,22 @@ NATURAL_AMBITION_CLASS_FEAT_CHOICES = {
         "raise_shield_allow",
         "deific_weapon",
     ],
+    "cleric": [
+        "deadly_simplicity",
+        "domain_initiate",
+        "harming_hands",
+        "healing_hands",
+        "holy_castigation",
+        "reach_spell",
+    ],
+    "druid": [
+        "animal_companion",
+        "leshy_familiar",
+        "reach_spell",
+        "storm_born",
+        "widen_spell",
+        "wild_shape",
+    ],
 }
 
 

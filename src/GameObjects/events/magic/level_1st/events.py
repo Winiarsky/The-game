@@ -4,6 +4,8 @@ import logging
 import random
 
 from bonuses import BonusEffect, BonusType
+from combat.hp_engine import apply_damage as hp_apply_damage
+from combat.hp_engine import heal as hp_heal
 from damage_types import DamageType
 from skills import Skill
 from statuses import (
@@ -150,9 +152,15 @@ def _apply_damage(target, amount: int, damage_type: str) -> bool:
     if callable(apply):
         try:
             _, defeated = apply(max(0, int(amount)), damage_type)
+            return bool(defeated)
         except Exception as exc:
             logger.error("Nie udalo sie zadac obrazen: %s", exc)
-    return defeated
+            return False
+    try:
+        info = hp_apply_damage(target, amount, damage_type, source=f"spell:{damage_type}")
+        return bool(info.get("defeated", False))
+    except Exception:
+        return False
 
 
 def _apply_heal(target, amount: int) -> None:
@@ -164,7 +172,7 @@ def _apply_heal(target, amount: int) -> None:
         except Exception:
             pass
     try:
-        target.hp = int(getattr(target, "hp", 0)) + max(0, int(amount))
+        hp_heal(target, amount, source="spell:heal")
     except Exception:
         pass
 
@@ -184,6 +192,39 @@ def _is_undead_target(target) -> bool:
     if enemy_type is not None:
         tags.add(str(getattr(enemy_type, "value", enemy_type)).strip().lower())
     return "undead" in tags
+
+
+def _is_fiend_target(target) -> bool:
+    if target is None:
+        return False
+    has_tag = getattr(target, "has_tag", None)
+    if callable(has_tag):
+        for tag in ("fiend", "demon", "devil"):
+            try:
+                if bool(has_tag(tag)):
+                    return True
+            except Exception:
+                continue
+    tags = {str(t).strip().lower() for t in (getattr(target, "tags", None) or [])}
+    enemy_type = getattr(target, "enemy_type", None)
+    if enemy_type is not None:
+        tags.add(str(getattr(enemy_type, "value", enemy_type)).strip().lower())
+    return any(tag in tags for tag in ("fiend", "demon", "devil"))
+
+
+def _has_status_id(actor, status_id: str) -> bool:
+    if actor is None:
+        return False
+    has_status = getattr(actor, "has_status", None)
+    if callable(has_status):
+        try:
+            return bool(has_status(status_id))
+        except Exception:
+            pass
+    for status in getattr(actor, "statuses", []) or []:
+        if getattr(status, "id", None) == status_id:
+            return True
+    return False
 
 
 def _is_poisonous_target(target) -> bool:
@@ -2539,12 +2580,21 @@ class HealEvent(MagicEvent):
         actor = ctx.actor
         if actor is None or getattr(actor, "position", None) is None:
             return EventResult.cancelled(message="Brak bohatera do rzucenia czaru.")
+        has_healing_hands = _has_status_id(actor, "healing_hands")
+        has_holy_castigation = _has_status_id(actor, "holy_castigation")
         mode = _prompt_choice(ctx, "Heal - wybierz tryb", ["single", "burst"], source=self.name) or "single"
+        prompt_hint_parts: list[str] = []
+        if has_healing_hands:
+            prompt_hint_parts.append("Healing Hands: rozlicz Heal na kosciach d10 zamiast d8.")
+        if has_holy_castigation:
+            prompt_hint_parts.append("Holy Castigation: Heal moze raniac fiendy jak undead.")
+        prompt_hint = "\n".join(prompt_hint_parts) if prompt_hint_parts else None
         amount = int(
             prompt_for_roll(
                 "Heal - podaj wartosc leczenia/obrazen positive:",
                 layout="damage",
                 answer_placeholder="Wartosc",
+                prompt_long=prompt_hint,
             )
             or 0
         )
@@ -2563,9 +2613,10 @@ class HealEvent(MagicEvent):
             )
             if target is None:
                 return EventResult.cancelled(message="Brak celu dla Heal.")
-            if _is_undead_target(target):
+            if _is_undead_target(target) or (has_holy_castigation and _is_fiend_target(target)):
                 defeated = _apply_damage(target, amount, DamageType.POSITIVE.value)
-                msg = f"Heal: undead otrzymuje {amount} positive."
+                target_kind = "undead/fiend" if has_holy_castigation else "undead"
+                msg = f"Heal: {target_kind} otrzymuje {amount} positive."
                 if defeated:
                     msg += " Cel pokonany."
                 return EventResult(success=True, consumed_action=True, message=msg)
@@ -2580,14 +2631,90 @@ class HealEvent(MagicEvent):
             _apply_heal(hero, amount)
             healed += 1
         for enemy in _targets_in_radius(_iter_enemy_candidates(ctx.game), actor.position, self.range_feet):
-            if not _is_undead_target(enemy):
+            if not (_is_undead_target(enemy) or (has_holy_castigation and _is_fiend_target(enemy))):
                 continue
             _apply_damage(enemy, amount, DamageType.POSITIVE.value)
             harmed += 1
         return EventResult(
             success=True,
             consumed_action=True,
-            message=f"Heal (burst): uleczono {healed}, zraniono undead {harmed}.",
+            message=f"Heal (burst): uleczono {healed}, zraniono cele positive {harmed}.",
+        )
+
+
+@register_event
+class HarmEvent(MagicEvent):
+    name = "harm"
+    actions_cost = 1
+    default_tags = ["magic", "spell", "necromancy", "negative"]
+    spell_tags = ["rank1", "divine", "necromancy", "negative"]
+    magic_traditions = (SpellTradition.DIVINE,)
+    magic_types = ["necromancy"]
+    range_feet = 30
+    prompt = "Harm: rani zywych, leczy undead (uproszczenie single/burst)."
+
+    def execute(self, ctx: EventContext) -> EventResult:
+        actor = ctx.actor
+        if actor is None or getattr(actor, "position", None) is None:
+            return EventResult.cancelled(message="Brak bohatera do rzucenia czaru.")
+        has_harming_hands = _has_status_id(actor, "harming_hands")
+
+        mode = _prompt_choice(ctx, "Harm - wybierz tryb", ["single", "burst"], source=self.name) or "single"
+        prompt_hint = "Harming Hands: rozlicz Harm na kosciach d10 zamiast d8." if has_harming_hands else None
+        amount = int(
+            prompt_for_roll(
+                "Harm - podaj wartosc leczenia/obrazen negative:",
+                layout="damage",
+                answer_placeholder="Wartosc",
+                prompt_long=prompt_hint,
+            )
+            or 0
+        )
+        if amount <= 0:
+            return EventResult.cancelled(message="Harm: wartosc musi byc > 0.")
+
+        if mode == "single":
+            candidates = list(_iter_hero_candidates(ctx.game)) + list(_iter_enemy_candidates(ctx.game))
+            target, _target_pos = pick_target_in_range(
+                ctx,
+                actor.position,
+                candidates,
+                max_range_feet=self.range_feet,
+                allowed_kinds=("hero", "enemy"),
+                tags=self._effective_tags(ctx),
+            )
+            if target is None:
+                return EventResult.cancelled(message="Brak celu dla Harm.")
+            if _is_undead_target(target):
+                _apply_heal(target, amount)
+                return EventResult(success=True, consumed_action=True, message=f"Harm: undead odzyskuje {amount} HP.")
+            defeated = _apply_damage(target, amount, DamageType.NEGATIVE.value)
+            msg = f"Harm: cel otrzymuje {amount} negative."
+            if defeated:
+                msg += " Cel pokonany."
+            return EventResult(success=True, consumed_action=True, message=msg)
+
+        harmed = 0
+        healed_undead = 0
+        for hero in _targets_in_radius(_iter_hero_candidates(ctx.game), actor.position, self.range_feet):
+            if _is_undead_target(hero):
+                _apply_heal(hero, amount)
+                healed_undead += 1
+                continue
+            _apply_damage(hero, amount, DamageType.NEGATIVE.value)
+            harmed += 1
+        for enemy in _targets_in_radius(_iter_enemy_candidates(ctx.game), actor.position, self.range_feet):
+            if _is_undead_target(enemy):
+                _apply_heal(enemy, amount)
+                healed_undead += 1
+                continue
+            _apply_damage(enemy, amount, DamageType.NEGATIVE.value)
+            harmed += 1
+
+        return EventResult(
+            success=True,
+            consumed_action=True,
+            message=f"Harm (burst): zraniono zywych {harmed}, uleczono undead {healed_undead}.",
         )
 
 

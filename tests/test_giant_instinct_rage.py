@@ -59,6 +59,7 @@ def test_giant_instinct_rage_clumsy_and_bonus():
     assert result.success
 
     assert hero.has_status("clumsy")
+    assert int(getattr(hero, "temp_hp", 0) or 0) == 1
     status = hero.get_status("clumsy")
     assert getattr(status, "source", None) == "giant_instinct"
     assert clumsy_ac_penalty(hero) == 1
@@ -72,6 +73,7 @@ def test_giant_instinct_rage_clumsy_and_bonus():
     assert not hero.has_status("clumsy")
     assert not hero.has_status("giant_instinct_active")
     assert not hero.has_status("rage")
+    assert int(getattr(hero, "temp_hp", 0) or 0) == 0
 
 
 def test_rage_requires_barbarian_class():

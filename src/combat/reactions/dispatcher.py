@@ -4,6 +4,8 @@ from dataclasses import dataclass
 import logging
 from typing import Iterable
 
+from combat.hp_engine import current_hp as hp_current_hp
+
 logger = logging.getLogger(__name__)
 
 
@@ -45,20 +47,9 @@ def _is_alive(actor, game) -> bool:
                 return False
         except Exception:
             pass
-    hp = getattr(actor, "hp", None)
-    if hp is not None:
-        try:
-            if int(hp) <= 0:
-                return False
-        except Exception:
-            pass
-    if actor in getattr(game, "enemies", []):
-        hp = getattr(actor, "hp", None)
-        if hp is not None:
-            try:
-                return int(hp) > 0
-            except Exception:
-                return True
+    hp = hp_current_hp(actor)
+    if hp is not None and int(hp) <= 0:
+        return False
     return True
 
 

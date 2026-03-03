@@ -90,6 +90,32 @@ def test_natural_ambition_without_supported_class_stops_cleanly(monkeypatch):
     assert any("brak wspieranej klasy" in message.lower() for message in hero.messages)
 
 
+def test_natural_ambition_for_cleric_grants_holy_castigation(monkeypatch):
+    ui = DummyUI(["Holy Castigation"])
+    monkeypatch.setattr("ui_client.get_ui_client", lambda: ui)
+
+    hero = DummyHero()
+    hero.class_name = "cleric"
+    hero.add_status(NATURAL_AMBITION_STATUS)
+
+    assert hero.get_status_data("natural_ambition", "class_name", None) == "cleric"
+    assert hero.get_status_data("natural_ambition", "class_feat", None) == "holy_castigation"
+    assert hero.has_status("holy_castigation")
+
+
+def test_natural_ambition_for_druid_grants_widen_spell(monkeypatch):
+    ui = DummyUI(["Widen Spell"])
+    monkeypatch.setattr("ui_client.get_ui_client", lambda: ui)
+
+    hero = DummyHero()
+    hero.class_name = "druid"
+    hero.add_status(NATURAL_AMBITION_STATUS)
+
+    assert hero.get_status_data("natural_ambition", "class_name", None) == "druid"
+    assert hero.get_status_data("natural_ambition", "class_feat", None) == "widen_spell"
+    assert hero.has_status("widen_spell")
+
+
 def test_adapted_cantrip_records_selected_choices(monkeypatch):
     ui = DummyUI(["Arcane", "Shield", "Detect Magic"])
     monkeypatch.setattr("ui_client.get_ui_client", lambda: ui)

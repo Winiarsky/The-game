@@ -6,6 +6,9 @@ from typing import Any, Protocol
 from GameObjects.events.magic.magic_utils import grid_distance_feet
 from GameObjects.interactions_mixin import prompt_for_roll
 from combat import effective_ac
+from combat.hp_engine import apply_damage as hp_apply_damage
+from combat.hp_engine import current_hp as hp_current_hp
+from combat.hp_engine import heal as hp_heal
 from damage_types import DamageType
 from statuses import clear_grabbed_effects, clear_restrained_effects
 from statuses.enfeebled import EnfeebledStatus
@@ -85,8 +88,7 @@ def _heal_prevented_damage(target, amount: int) -> None:
         except Exception:
             pass
     try:
-        wounds = int(getattr(target, "wounds", 0) or 0)
-        setattr(target, "wounds", max(0, wounds - int(amount)))
+        hp_heal(target, amount, source="champion_reaction:prevented")
     except Exception:
         pass
 
@@ -105,13 +107,15 @@ def _is_alive(actor) -> bool:
         return False
     if getattr(actor, "position", None) is None:
         return False
-    hp = getattr(actor, "hp", None)
-    if hp is not None:
-        try:
-            return int(hp) > 0
-        except Exception:
-            return True
-    return True
+    try:
+        if bool(getattr(actor, "has_status", lambda *_a, **_k: False)("dead")):
+            return False
+    except Exception:
+        pass
+    hp = hp_current_hp(actor)
+    if hp is None:
+        return True
+    return int(hp) > 0
 
 
 def _same_side(game, first, second) -> bool | None:
@@ -222,9 +226,13 @@ def _paladin_retributive_strike(champion, attacker, game) -> None:
         if callable(apply):
             _, defeated = apply(max(0, int(damage)), DamageType.NORMAL.value)
         else:
-            hp = int(getattr(attacker, "hp", 0) or 0) - max(0, int(damage))
-            setattr(attacker, "hp", hp)
-            defeated = hp <= 0
+            info = hp_apply_damage(
+                attacker,
+                max(0, int(damage)),
+                DamageType.NORMAL.value,
+                source="champion_reaction",
+            )
+            defeated = bool(info.get("defeated", False))
     except Exception:
         defeated = False
     try:

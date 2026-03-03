@@ -9,7 +9,7 @@ from combat import refresh_flanking_statuses
 from combat.damage_utils import burn_it_bonus, burn_it_prompt_note
 from GameObjects.interactions_mixin import prompt_for_roll
 from damage_types import DamageType
-from statuses import Status, inspire_courage_damage_bonus
+from statuses import Status, inspire_courage_damage_bonus, make_persistent_damage
 
 from .attack_base import AttackEventBase, check_concealed
 from ..targeting import is_target_blocked_by_tags
@@ -160,6 +160,34 @@ class BasicMeleeAttackEvent(AttackEventBase):
         action_tag = (tags or ["attack_melee"])[0]
         extra_effects = []
         trait_notes: list[str] = []
+        if "unarmed" in (tags or []):
+            wild_shape_bonus = 0
+            getter = getattr(hero, "get_status_data", None)
+            if callable(getter):
+                try:
+                    wild_shape_bonus = int(getter("wild_shape_active", "attack_status_bonus", 0) or 0)
+                except Exception:
+                    wild_shape_bonus = 0
+            else:
+                for item in getattr(hero, "statuses", []) or []:
+                    if getattr(item, "id", None) != "wild_shape_active":
+                        continue
+                    data = getattr(item, "data", None) or {}
+                    try:
+                        wild_shape_bonus = int(data.get("attack_status_bonus", 0) or 0)
+                    except Exception:
+                        wild_shape_bonus = 0
+                    break
+            if wild_shape_bonus > 0:
+                extra_effects.append(
+                    BonusEffect(
+                        type=BonusType.STATUS,
+                        value=wild_shape_bonus,
+                        tag=action_tag,
+                        source="wild_shape",
+                        label="wild shape",
+                    )
+                )
         try:
             from statuses.clumsy import clumsy_attack_penalty_effects
 
@@ -270,7 +298,7 @@ class BasicMeleeAttackEvent(AttackEventBase):
             return EventResult(success=True, consumed_action=self.consumes_action, message=f"Atak {self.weapon_label}: pudło.")
 
         self._maybe_prompt_vengeful_hatred(hero, enemy)
-        effective_damage_prompt, deific_applied = self._deific_damage_prompt(
+        effective_damage_prompt, class_upgrade_notes = self._damage_prompt_with_class_upgrades(
             hero,
             weapon_type=getattr(self, "name", None),
             damage_prompt=self.damage_prompt,
@@ -419,8 +447,7 @@ class BasicMeleeAttackEvent(AttackEventBase):
             damage_notes.append("Fatal: zmień kości bazowe i dodaj 1 kość fatal (ręcznie).")
         if self._has_trait(tags, "two_hand"):
             damage_notes.append("Two-Hand: użycie dwuręczne zmienia kości obrażeń (ręcznie).")
-        if deific_applied:
-            damage_notes.append("Deific Weapon: kość obrażeń zwiększona o 1 stopień.")
+        damage_notes.extend(class_upgrade_notes)
         if damage_notes:
             note = f"{note}\n" + "\n".join(damage_notes) if note else "\n".join(damage_notes)
         damage = prompt_for_roll(
@@ -449,6 +476,16 @@ class BasicMeleeAttackEvent(AttackEventBase):
             )
         except Exception:
             pass
+        if critical:
+            crit_resistance = self._critical_hit_resistance(enemy)
+            if crit_resistance > 0:
+                damage_components = self._reduce_damage_components(damage_components, crit_resistance)
+                try:
+                    ctx.game.ui_log(
+                        f"{getattr(enemy, 'name', 'Cel')}: odporność na critical hit redukuje obrażenia o {crit_resistance}."
+                    )
+                except Exception:
+                    pass
         if critical and deadly_die:
             extra = prompt_for_roll(
                 f"Deadly {deadly_die}: dodatkowe obrażenia (rzut): ",
@@ -465,6 +502,10 @@ class BasicMeleeAttackEvent(AttackEventBase):
         except Exception as exc:
             logger.error("Nie udało się zadać obrażeń: %s", exc)
             return EventResult(success=False, consumed_action=False, message=str(exc))
+
+        persistent_payload = (getattr(ctx, "metadata", None) or {}).get("on_hit_persistent_damage")
+        if persistent_payload:
+            self._apply_on_hit_persistent(enemy, persistent_payload, ctx=ctx, source=self.action_id_base)
 
         ctx.game.events.safe_emit_action(
             actor=hero,
@@ -542,6 +583,79 @@ class BasicMeleeAttackEvent(AttackEventBase):
         for dmg_type, amount in comps:
             _, defeated = target.apply_damage(amount, dmg_type)
         return defeated
+
+    @staticmethod
+    def _critical_hit_resistance(target) -> int:
+        statuses = getattr(target, "statuses", None)
+        if not isinstance(statuses, list):
+            return 0
+        best = 0
+        for status in statuses:
+            data = getattr(status, "data", None) or {}
+            try:
+                value = int(data.get("critical_hit_resistance", 0) or 0)
+            except Exception:
+                value = 0
+            if value > best:
+                best = value
+        return max(0, int(best))
+
+    @staticmethod
+    def _reduce_damage_components(
+        components: list[tuple[str, int]],
+        reduction: int,
+    ) -> list[tuple[str, int]]:
+        left = max(0, int(reduction or 0))
+        if left <= 0:
+            return list(components)
+        reduced: list[tuple[str, int]] = []
+        for dtype, amount in components:
+            dmg = max(0, int(amount))
+            if left <= 0:
+                reduced.append((dtype, dmg))
+                continue
+            take = min(dmg, left)
+            left -= take
+            reduced.append((dtype, max(0, dmg - take)))
+        return reduced
+
+    def _apply_on_hit_persistent(self, target, payload, *, ctx: EventContext, source: str) -> None:
+        if target is None:
+            return
+        if not isinstance(payload, dict):
+            return
+        formula = str(payload.get("formula", "") or "").strip().lower()
+        damage_type = str(payload.get("damage_type", DamageType.BLEED.value) or DamageType.BLEED.value)
+        if not formula:
+            return
+        amount = 0
+        if formula.isdigit():
+            amount = int(formula)
+        else:
+            rolled = prompt_for_roll(
+                f"Persistent on hit ({formula} {damage_type}) - podaj wynik:",
+                layout="damage",
+                answer_placeholder="Persistent",
+            )
+            try:
+                amount = int(rolled or 0)
+            except Exception:
+                amount = 0
+        if amount <= 0:
+            return
+        try:
+            adder = getattr(target, "add_status", None)
+            if callable(adder):
+                adder(make_persistent_damage(amount, damage_type, source=source))
+            else:
+                statuses = getattr(target, "statuses", None)
+                if isinstance(statuses, list):
+                    statuses.append(make_persistent_damage(amount, damage_type, source=source))
+            ctx.game.ui_log(
+                f"{getattr(target, 'name', 'Cel')} otrzymuje persistent {damage_type} {amount}."
+            )
+        except Exception:
+            pass
 
     @staticmethod
     def _adjacent_enemies(game, pos):

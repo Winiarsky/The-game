@@ -9,7 +9,7 @@ RAGE_DEFAULT_AC_PENALTY = 1
 RAGE_PROMPT = (
     "Rage: wpadasz w szał na 1 minutę (10 tur).\n"
     "Szał kończy się, gdy nie widzisz wrogów lub upadniesz nieprzytomny (pilnuj ręcznie).\n"
-    "Zyskujesz tymczasowe HP = poziom + modyfikator z Kondycji (opisowo).\n"
+    "Zyskujesz tymczasowe HP = poziom + modyfikator z Kondycji.\n"
     "Podczas szału:\n"
     "- +2 do obrażeń ataków wręcz (jeśli broń/agile: połowa).\n"
     "- -1 do AC.\n"
@@ -27,6 +27,7 @@ def RageStatus(
     data = {
         "ui_prompt": RAGE_PROMPT,
         "effect_tags": ["rage"],
+        "temp_hp_source": "rage",
         "rage_damage_bonus": int(damage_bonus),
         "rage_ac_penalty": int(ac_penalty),
         "rage_agile_halved": True,

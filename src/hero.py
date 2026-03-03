@@ -6,8 +6,13 @@ from GameObjects.interactions_mixin.skill_check_resolver import resolve_skill_ch
 from skills import Skill
 from combat.reactions import OpportunityAttack
 from combat.damage_utils import apply_damage_resistance
+from combat.hp_engine import apply_damage as hp_apply_damage
+from combat.hp_engine import current_hp as hp_current_hp
+from combat.hp_engine import heal as hp_heal
+from combat.hp_engine import get_temp_hp as hp_get_temp_hp
 from damage_types import DamageType
 from statuses import apply_shield_cantrip_absorb
+from statuses import is_dead as status_is_dead
 from object_registry import assign_id
 
 # to do make hero scrpt, 
@@ -21,6 +26,8 @@ class Hero(StatusMixin, BonusMixin, ReactiveMixin):
     initiative: Optional[int] = None
     wounds: int = 0
     level: int = 1
+    max_hp: int = 20
+    temp_hp: int = 0
 
     def __post_init__(self):
         self.object_id = assign_id(self)
@@ -81,19 +88,24 @@ class Hero(StatusMixin, BonusMixin, ReactiveMixin):
         """Zastosuj obrażenia na bohaterze (uwzględnia redukcje ze statusów)."""
         effective, _ = apply_damage_resistance(self, amount, damage_type)
         effective, _absorbed, _broken = apply_shield_cantrip_absorb(self, effective)
-        try:
-            self.wounds += effective  # type: ignore[attr-defined]
-        except Exception:
-            self.wounds = getattr(self, "wounds", 0) + effective  # type: ignore[attr-defined]
-        return self.wounds, False
+        info = hp_apply_damage(
+            self,
+            effective,
+            damage_type,
+            source=f"damage:{damage_type}",
+        )
+        return int(getattr(self, "wounds", 0) or 0), bool(info.get("defeated", False))
 
     def heal(self, amount: int) -> int:
-        """Wylecz bohatera (zmniejsza wounds, bez max HP)."""
-        try:
-            amt = max(0, int(amount))
-        except Exception:
-            amt = 0
-        current = getattr(self, "wounds", 0)
-        new_val = max(0, int(current) - amt)
-        self.wounds = new_val  # type: ignore[attr-defined]
-        return new_val
+        """Wylecz bohatera (wounds-model, ograniczone przez efektywne max HP)."""
+        hp_heal(self, amount, source="heal")
+        return int(getattr(self, "wounds", 0) or 0)
+
+    def is_dead(self) -> bool:
+        return bool(status_is_dead(self))
+
+    def current_hp(self) -> int:
+        return max(0, int(hp_current_hp(self) or 0))
+
+    def current_temp_hp(self) -> int:
+        return max(0, int(hp_get_temp_hp(self) or 0))

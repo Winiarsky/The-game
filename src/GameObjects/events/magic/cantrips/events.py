@@ -7,6 +7,7 @@ from typing import Iterable
 from board import consts
 from bonuses import BonusEffect, BonusType
 from combat.damage_utils import burn_it_bonus, burn_it_prompt_note
+from combat.hp_engine import apply_damage as hp_apply_damage
 from damage_types import DamageType
 from skills import Skill
 from statuses import (
@@ -53,9 +54,15 @@ def _apply_damage(target, amount: int, damage_type: str) -> bool:
     if callable(apply):
         try:
             _, defeated = apply(max(0, int(amount)), damage_type)
+            return bool(defeated)
         except Exception as exc:
             logger.error("Nie udalo sie zadac obrazen: %s", exc)
-    return defeated
+            return False
+    try:
+        info = hp_apply_damage(target, amount, damage_type, source=f"cantrip:{damage_type}")
+        return bool(info.get("defeated", False))
+    except Exception:
+        return False
 
 
 def _iter_enemy_candidates(game) -> Iterable[tuple[object, tuple[int, int] | None, str]]:
@@ -1406,30 +1413,16 @@ class StabilizeEvent(MagicEvent):
         if target is None or target_pos is None:
             return EventResult.cancelled(message="Brak celu dla Stabilize.")
 
-        statuses = getattr(target, "statuses", None)
-        if not isinstance(statuses, list):
-            return EventResult(
-                success=True,
-                consumed_action=self.consumes_action,
-                message="Stabilize: UI-only (brak listy statusow celu).",
-            )
+        try:
+            from statuses import dying_value, lose_dying
 
-        kept = []
-        removed = 0
-        for status in statuses:
-            status_id = str(getattr(status, "id", status)).strip().lower()
-            if status_id.startswith("dying"):
-                removed += 1
-                continue
-            kept.append(status)
-
-        if removed:
-            try:
-                target.statuses = kept
-            except Exception:
-                pass
-            msg = f"Stabilize: usunieto statusy dying ({removed})."
-        else:
+            before = int(dying_value(target) or 0)
+            if before > 0:
+                lose_dying(target, source=self.name, keep_unconscious=True)
+                msg = f"Stabilize: usunieto dying {before}, cel jest stable i wounded."
+            else:
+                msg = "Stabilize: brak statusu dying - efekt UI-only."
+        except Exception:
             msg = "Stabilize: brak statusu dying - efekt UI-only."
         try:
             ctx.game.ui_log(msg)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from bonuses import BonusEffect, BonusType
+from combat.hp_engine import grant_temp_hp
 from skills import Skill
 
 from .base_elixir_event import BaseElixirEvent, _minutes, _hours, make_bonus_status, skill_bonus_effect, skill_check_effect
@@ -11,7 +12,7 @@ from ..registry import register_event
 class JuggernautMutagenEvent(BaseElixirEvent):
     name = "juggernaut_mutagen"
     default_tags = ["elixir", "alchemical", "mutagen", "polymorph"]
-    prompt_description = "Bonus do Fortitude + temp HP (opisowo), kara do Will/Perception/initiative."
+    prompt_description = "Bonus do Fortitude + temp HP, kara do Will/Perception/initiative."
     tiers = {
         "lesser": {"bonus": 1, "temp_hp": 5, "duration": _minutes(1)},
         "moderate": {"bonus": 2, "temp_hp": 10, "duration": _minutes(10)},
@@ -49,7 +50,10 @@ class JuggernautMutagenEvent(BaseElixirEvent):
             status_id="juggernaut_mutagen",
             label="Juggernaut Mutagen",
             duration=duration,
-            data={"effect_tags": ["mutagen", "polymorph"]},
+            data={
+                "effect_tags": ["mutagen", "polymorph"],
+                "temp_hp_source": "juggernaut_mutagen",
+            },
             effects=effects,
         )
         adder = getattr(target, "add_status", None)
@@ -114,8 +118,9 @@ class JuggernautMutagenEvent(BaseElixirEvent):
 
         temp_hp = int(tier_data.get("temp_hp", 0) or 0)
         if temp_hp:
+            info = grant_temp_hp(target, temp_hp, source="juggernaut_mutagen")
             try:
-                ctx.game.ui_log(f"Juggernaut Mutagen: tymczasowe HP {temp_hp} (opisowo).")
+                ctx.game.ui_log(f"Juggernaut Mutagen: temp HP {int(info.get('temp_hp', 0) or 0)}.")
             except Exception:
                 pass
         if tier_data.get("fort_crit"):

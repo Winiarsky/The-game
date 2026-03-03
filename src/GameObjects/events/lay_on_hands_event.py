@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from bonuses import BonusEffect, BonusType
+from combat.hp_engine import heal as hp_heal
 
 from .base import ActionCostEvent, EventContext, EventResult
 from .registry import register_event
@@ -53,18 +54,7 @@ def _source_id(actor) -> str | None:
 
 
 def _apply_heal(target, amount: int) -> None:
-    healer = getattr(target, "heal", None)
-    if callable(healer):
-        try:
-            healer(max(0, int(amount)))
-            return
-        except Exception:
-            pass
-    try:
-        wounds = int(getattr(target, "wounds", 0) or 0)
-        setattr(target, "wounds", max(0, wounds - max(0, int(amount))))
-    except Exception:
-        pass
+    hp_heal(target, amount, source="lay_on_hands")
 
 
 @register_event

@@ -340,7 +340,7 @@ class BaseRangeAttackEvent(AttackEventBase):
 
             prompt_prefix = "Trafienie krytyczne! " if critical else "Trafienie! "
             self._maybe_prompt_vengeful_hatred(hero, enemy)
-            effective_damage_prompt, deific_applied = self._deific_damage_prompt(
+            effective_damage_prompt, class_upgrade_notes = self._damage_prompt_with_class_upgrades(
                 hero,
                 weapon_type=getattr(self, "name", None),
                 damage_prompt=self.damage_prompt,
@@ -499,8 +499,7 @@ class BaseRangeAttackEvent(AttackEventBase):
                 damage_notes.append("Fatal: zmień kości bazowe i dodaj 1 kość fatal (ręcznie).")
             if self._has_trait(tags, "two_hand"):
                 damage_notes.append("Two-Hand: użycie dwuręczne zmienia kości obrażeń (ręcznie).")
-            if deific_applied:
-                damage_notes.append("Deific Weapon: kość obrażeń zwiększona o 1 stopień.")
+            damage_notes.extend(class_upgrade_notes)
             damage_components = self._collect_damage_components(
                 actor=hero,
                 prompt_prefix=prompt_prefix,

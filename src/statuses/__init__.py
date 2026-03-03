@@ -69,6 +69,25 @@ from .ventriloquism import VentriloquismStatus
 from .counter_performance import CounterPerformanceStatus
 from .inspire_courage import InspireCourageStatus, inspire_courage_damage_bonus
 from .raise_shield_allow import RaiseShieldAllowStatus, RAISE_SHIELD_ALLOW_STATUS
+from .death_dying import (
+    dying_value,
+    wounded_value,
+    is_dead,
+    is_unconscious,
+    is_stable,
+    death_threshold,
+    recovery_dc,
+    current_hp,
+    set_wounded,
+    increase_wounded,
+    clear_dying,
+    set_dying,
+    mark_dead,
+    lose_dying,
+    on_reduced_to_zero,
+    on_heal,
+    run_recovery_check,
+)
 
 __all__ = [
     "Status",
@@ -171,4 +190,21 @@ __all__ = [
     "inspire_courage_damage_bonus",
     "RaiseShieldAllowStatus",
     "RAISE_SHIELD_ALLOW_STATUS",
+    "dying_value",
+    "wounded_value",
+    "is_dead",
+    "is_unconscious",
+    "is_stable",
+    "death_threshold",
+    "recovery_dc",
+    "current_hp",
+    "set_wounded",
+    "increase_wounded",
+    "clear_dying",
+    "set_dying",
+    "mark_dead",
+    "lose_dying",
+    "on_reduced_to_zero",
+    "on_heal",
+    "run_recovery_check",
 ]

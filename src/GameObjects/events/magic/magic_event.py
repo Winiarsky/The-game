@@ -137,4 +137,15 @@ class MagicEventResolver:
             result.actions_spent = cost
         if reach_applied and result.consumed_action:
             MagicEventResolver._remove_status(actor, "reach_spell_ready")
+        if MagicEventResolver._has_status(actor, "widen_spell_ready") and result.consumed_action:
+            MagicEventResolver._remove_status(actor, "widen_spell_ready")
+            try:
+                game_ui_log = getattr(ctx.game, "ui_log", None)
+                if callable(game_ui_log):
+                    game_ui_log(
+                        f"Widen Spell: czar '{event.name}' zuzywa przygotowany efekt "
+                        "(rozlicz recznie zwiekszenie obszaru)."
+                    )
+            except Exception:
+                pass
         return result

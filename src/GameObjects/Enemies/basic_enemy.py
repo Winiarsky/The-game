@@ -13,6 +13,8 @@ from GameObjects.interactions_mixin.reactive_mixin import ReactiveMixin
 from GameObjects.Enemies.enemy_types import EnemyType
 from combat.reactions import OpportunityAttack
 from combat.damage_utils import apply_damage_resistance
+from combat.hp_engine import apply_damage as hp_apply_damage
+from combat.hp_engine import heal as hp_heal
 from statuses import Status
 from statuses import apply_shield_cantrip_absorb
 from object_registry import assign_id
@@ -104,8 +106,8 @@ class BasicEnemy(StatusMixin, BonusMixin, WatchfulMixin, ReactiveMixin, MagicalM
         """Odejmij HP i zwróć (aktualne_hp, czy_pokonany)."""
         effective, reduced = apply_damage_resistance(self, amount, damage_type)
         effective, _absorbed, _broken = apply_shield_cantrip_absorb(self, effective)
-        self.hp -= effective
-        defeated = self.hp <= 0
+        info = hp_apply_damage(self, effective, damage_type, source=f"damage:{damage_type}")
+        defeated = bool(info.get("defeated", False))
         reduction_note = f" (zredukowano o {reduced})" if reduced else ""
         logger.info(
             "%s otrzymuje %s obrażeń %s%s (HP: %s).",
@@ -119,11 +121,7 @@ class BasicEnemy(StatusMixin, BonusMixin, WatchfulMixin, ReactiveMixin, MagicalM
 
     def heal(self, amount: int) -> int:
         """Wylecz wroga (zwiększa HP, bez max HP)."""
-        try:
-            amt = max(0, int(amount))
-        except Exception:
-            amt = 0
-        self.hp = int(getattr(self, "hp", 0)) + amt
+        hp_heal(self, amount, source="heal")
         return self.hp
 
     def trigger_combat(self, game) -> None:

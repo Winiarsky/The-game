@@ -189,4 +189,5 @@ def test_alchemist_can_transfer_mutagen_and_other_hero_can_drink_it(monkeypatch)
     assert result.success is True
     assert drinker.has_status("juggernaut_mutagen")
     assert drinker.has_status("juggernaut_mutagen_penalty")
+    assert int(getattr(drinker, "temp_hp", 0) or 0) == 5
     assert has_ready_alchemical_item(drinker, event_name) is False

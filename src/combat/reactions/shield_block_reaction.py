@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from combat.hp_engine import heal as hp_heal
 from damage_types import DamageType
 from GameObjects.items.shield import get_equipped_shield
 
@@ -83,8 +84,7 @@ def _heal_prevented_damage(target, amount: int) -> None:
         except Exception:
             pass
     try:
-        wounds = int(getattr(target, "wounds", 0) or 0)
-        setattr(target, "wounds", max(0, wounds - int(amount)))
+        hp_heal(target, amount, source="shield_block:prevented")
     except Exception:
         pass
 

@@ -4,6 +4,7 @@ import logging
 from dataclasses import replace
 
 from bonuses import BonusEffect, BonusType
+from combat.hp_engine import grant_temp_hp
 from statuses.darkvision import DARKVISION_STATUS
 from statuses.rage import RageStatus, RAGE_DURATION_TURNS, RAGE_DEFAULT_AC_PENALTY
 from statuses.classes.barbarian.instincts.animal_instinct import AnimalInstinctActiveStatus
@@ -32,6 +33,28 @@ def _is_barbarian(actor) -> bool:
             return True
     class_name = str(getattr(actor, "class_name", "") or "").strip().lower()
     return class_name == "barbarian"
+
+
+def _constitution_modifier(actor) -> int:
+    if actor is None:
+        return 0
+    for attr in ("con_mod", "con_modifier", "constitution_mod", "constitution_modifier"):
+        try:
+            if hasattr(actor, attr):
+                return int(getattr(actor, attr) or 0)
+        except Exception:
+            continue
+    for attr in ("ability_modifiers", "ability_mods"):
+        try:
+            payload = getattr(actor, attr, None)
+            if isinstance(payload, dict):
+                if "con" in payload:
+                    return int(payload.get("con") or 0)
+                if "constitution" in payload:
+                    return int(payload.get("constitution") or 0)
+        except Exception:
+            continue
+    return 0
 
 
 @register_event
@@ -223,9 +246,13 @@ class RageEvent(GameEvent):
                 )
             )
 
+        level = int(getattr(actor, "level", 1) or 1)
+        temp_hp_gain = max(0, level + _constitution_modifier(actor))
+        temp_info = grant_temp_hp(actor, temp_hp_gain, source="rage")
+
         try:
             ctx.game.ui_log(
-                "Rage aktywne: tymczasowe HP = poziom + modyfikator z Kondycji (opisowo), "
+                f"Rage aktywne: temp HP {int(temp_info.get('temp_hp', 0) or 0)}, "
                 f"-{RAGE_DEFAULT_AC_PENALTY} AC, +2 dmg wręcz."
             )
         except Exception:

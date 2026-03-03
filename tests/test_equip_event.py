@@ -13,6 +13,7 @@ import GameObjects.events.all_events  # noqa: F401
 from GameObjects.events.base import EventContext
 from GameObjects.events.registry import dispatch_event
 from GameObjects.events.attack import basic_melee_attack_event
+from GameObjects.items.goodberry_item import GoodberryItem
 from GameObjects.items.inventory import ensure_actor_inventory, get_equipped_weapons
 from GameObjects.items.shield import StandardShield
 from board_grid import BoardGrid
@@ -70,10 +71,15 @@ class FakeUI:
         self.answer = answer
         self.allow_cli_fallback = False
         self.calls = []
+        self.info_calls = []
 
     def prompt_choice(self, prompt, **kwargs):
         self.calls.append({"prompt": prompt, **kwargs})
         return self.answer
+
+    def prompt_info(self, title, **kwargs):
+        self.info_calls.append({"title": title, **kwargs})
+        return "ok"
 
 
 class FakeEvents:
@@ -92,6 +98,7 @@ class Hero:
         self.weapon_loadout = ["sword", "dagger", "longbow", "unarmed"]
         self.active_weapon = "sword"
         self.equipped_shield = StandardShield()
+        self.hp = 20
 
     def set_position(self, pos):
         self.position = pos
@@ -105,6 +112,9 @@ class Hero:
 
     def add_status(self, status):
         self.statuses.append(status)
+
+    def heal(self, amount):
+        self.hp += int(amount)
 
 
 class Enemy:
@@ -280,6 +290,28 @@ def test_equip_ui_prompt_contains_details_and_legend():
     assert "Nawigacja:" in prompt_long
     assert "Szczegóły:" in prompt_long
     assert "Attack:" in prompt_long
+
+
+def test_equip_toggle_consumes_goodberry_and_heals(monkeypatch):
+    hero = Hero("A", (0, 0))
+    hero.equipped_shield = None
+    hero.inventory = [GoodberryItem(cast_rank=1)]
+    ui = FakeUI(enabled=False)
+    game = FakeGame(conn=FakeConn(card_choices=["2", "5"]), ui=ui)
+    game.heroes = [hero]
+    game.board.place(hero, hero.position)
+    game.state.actions_used = {hero: 0}
+
+    monkeypatch.setattr("GameObjects.events.equip_event.random.randint", lambda *_a, **_k: 6)
+
+    result = dispatch_event("equip", CombatCtx(game=game, actor=hero))
+
+    assert result.success
+    assert result.consumed_action
+    assert hero.hp == 30
+    assert all(str(getattr(item, "item_id", "")).lower() != "goodberry" for item in ensure_actor_inventory(hero))
+    assert len(ui.info_calls) == 1
+    assert "Leczenie: 6 + 4 = 10 HP." in str(ui.info_calls[0].get("prompt_long") or "")
 
 
 def test_attack_with_two_active_weapons_asks_and_uses_selected(monkeypatch):

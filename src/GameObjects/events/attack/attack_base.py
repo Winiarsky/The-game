@@ -370,7 +370,12 @@ class AttackEventBase(GameEvent):
         raw = str(value or "").strip().lower()
         if not raw:
             return None
-        return raw.replace("-", "_").replace(" ", "_")
+        normalized = raw.replace("-", "_").replace(" ", "_")
+        aliases = {
+            "fist": "unarmed",
+            "longsword": "sword",
+        }
+        return aliases.get(normalized, normalized)
 
     def _deific_weapon_type(self, actor) -> str | None:
         if actor is None:
@@ -398,6 +403,89 @@ class AttackEventBase(GameEvent):
             if normalized:
                 return normalized
         return self._normalize_weapon_type(getattr(actor, "deific_weapon_type", None))
+
+    def _cleric_favored_weapon_type(self, actor) -> str | None:
+        if actor is None:
+            return None
+        getter = getattr(actor, "get_status_data", None)
+        if callable(getter):
+            try:
+                setup = getter("cleric", "cleric_setup", {})
+                if isinstance(setup, dict):
+                    normalized = self._normalize_weapon_type(setup.get("favored_weapon"))
+                    if normalized:
+                        return normalized
+                value = getter("cleric", "cleric_favored_weapon", None)
+                normalized = self._normalize_weapon_type(value)
+                if normalized:
+                    return normalized
+            except Exception:
+                pass
+        for status in getattr(actor, "statuses", []) or []:
+            if getattr(status, "id", None) != "cleric":
+                continue
+            data = getattr(status, "data", None) or {}
+            setup = data.get("cleric_setup")
+            if isinstance(setup, dict):
+                normalized = self._normalize_weapon_type(setup.get("favored_weapon"))
+                if normalized:
+                    return normalized
+            normalized = self._normalize_weapon_type(data.get("cleric_favored_weapon"))
+            if normalized:
+                return normalized
+        return self._normalize_weapon_type(getattr(actor, "cleric_favored_weapon", None))
+
+    def _cleric_favored_weapon_group(self, actor) -> str | None:
+        if actor is None:
+            return None
+        getter = getattr(actor, "get_status_data", None)
+        if callable(getter):
+            try:
+                setup = getter("cleric", "cleric_setup", {})
+                if isinstance(setup, dict):
+                    group = str(setup.get("favored_weapon_group", "") or "").strip().lower().replace("-", "_")
+                    if group in {"simple", "martial", "unarmed"}:
+                        return group
+                value = getter("cleric", "cleric_favored_weapon_group", None)
+                group = str(value or "").strip().lower().replace("-", "_")
+                if group in {"simple", "martial", "unarmed"}:
+                    return group
+            except Exception:
+                pass
+        for status in getattr(actor, "statuses", []) or []:
+            if getattr(status, "id", None) != "cleric":
+                continue
+            data = getattr(status, "data", None) or {}
+            setup = data.get("cleric_setup")
+            if isinstance(setup, dict):
+                group = str(setup.get("favored_weapon_group", "") or "").strip().lower().replace("-", "_")
+                if group in {"simple", "martial", "unarmed"}:
+                    return group
+            group = str(data.get("cleric_favored_weapon_group", "") or "").strip().lower().replace("-", "_")
+            if group in {"simple", "martial", "unarmed"}:
+                return group
+        group = str(getattr(actor, "cleric_favored_weapon_group", "") or "").strip().lower().replace("-", "_")
+        if group in {"simple", "martial", "unarmed"}:
+            return group
+        return None
+
+    def _deadly_simplicity_active_for_weapon(self, actor, weapon_type: str | None) -> bool:
+        if actor is None:
+            return False
+        has_status = getattr(actor, "has_status", None)
+        try:
+            if callable(has_status) and not has_status("deadly_simplicity"):
+                return False
+        except Exception:
+            return False
+        favored = self._cleric_favored_weapon_type(actor)
+        selected = self._normalize_weapon_type(weapon_type)
+        if not favored or not selected:
+            return False
+        if favored != selected:
+            return False
+        group = self._cleric_favored_weapon_group(actor)
+        return group in {"simple", "unarmed"}
 
     def _upgrade_damage_prompt_one_step(self, prompt_text: str) -> str:
         text = str(prompt_text or "")
@@ -435,6 +523,64 @@ class AttackEventBase(GameEvent):
             return damage_prompt, False
         prompt_list[0] = upgraded_first
         return prompt_list, True
+
+    def _deadly_simplicity_damage_prompt(
+        self,
+        actor,
+        *,
+        weapon_type: str | None,
+        damage_prompt: str | Iterable[str],
+    ):
+        if not self._deadly_simplicity_active_for_weapon(actor, weapon_type):
+            return damage_prompt, False
+
+        prompt = damage_prompt
+        if isinstance(prompt, str):
+            upgraded = self._upgrade_damage_prompt_one_step(prompt)
+            weapon_group = self._cleric_favored_weapon_group(actor)
+            if weapon_group == "unarmed":
+                upgraded = re.sub(r"([kKdD])4\\b", r"\\g<1>6", upgraded)
+            return upgraded, upgraded != prompt
+
+        prompt_list = list(prompt)
+        if not prompt_list:
+            return damage_prompt, False
+        first = str(prompt_list[0])
+        upgraded_first = self._upgrade_damage_prompt_one_step(first)
+        if self._cleric_favored_weapon_group(actor) == "unarmed":
+            upgraded_first = re.sub(r"([kKdD])4\\b", r"\\g<1>6", upgraded_first)
+        if upgraded_first == first:
+            return damage_prompt, False
+        prompt_list[0] = upgraded_first
+        return prompt_list, True
+
+    def _damage_prompt_with_class_upgrades(
+        self,
+        actor,
+        *,
+        weapon_type: str | None,
+        damage_prompt: str | Iterable[str],
+    ):
+        current_prompt = damage_prompt
+        notes: list[str] = []
+
+        current_prompt, deific_applied = self._deific_damage_prompt(
+            actor,
+            weapon_type=weapon_type,
+            damage_prompt=current_prompt,
+        )
+        if deific_applied:
+            notes.append("Deific Weapon: kosc obrazen zwiekszona o 1 stopien.")
+
+        current_prompt, deadly_applied = self._deadly_simplicity_damage_prompt(
+            actor,
+            weapon_type=weapon_type,
+            damage_prompt=current_prompt,
+        )
+        if deadly_applied:
+            notes.append("Deadly Simplicity: kosc obrazen zwiekszona dla favored weapon.")
+
+        return current_prompt, notes
 
     @staticmethod
     def _is_flat_footed(target) -> bool:

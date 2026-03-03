@@ -84,9 +84,29 @@ class StatusMixin:
                 self._handle_bard_muse_choice(status, data)
             except Exception:
                 pass
+        if data.get("ui_choice_kind") == "druid_setup":
+            try:
+                self._handle_druid_setup_choice(status, data)
+            except Exception:
+                pass
+        if data.get("ui_choice_kind") == "animal_companion_type":
+            try:
+                self._handle_animal_companion_type_choice(status, data)
+            except Exception:
+                pass
         if data.get("ui_choice_kind") == "champion_setup":
             try:
                 self._handle_champion_setup_choice(status, data)
+            except Exception:
+                pass
+        if data.get("ui_choice_kind") == "cleric_setup":
+            try:
+                self._handle_cleric_setup_choice(status, data)
+            except Exception:
+                pass
+        if data.get("ui_choice_kind") == "cleric_domain_initiate":
+            try:
+                self._handle_cleric_domain_initiate_choice(status, data)
             except Exception:
                 pass
         if data.get("ui_choice_kind") == "deific_weapon":
@@ -239,6 +259,43 @@ class StatusMixin:
                     "CHAMPION_RAISE_SHIELD_ALLOW_FEAT",
                 ),
             },
+            "cleric": {
+                "deadly_simplicity": (
+                    "statuses.classes.cleric.feats.deadly_simplicity",
+                    "DEADLY_SIMPLICITY_STATUS",
+                ),
+                "domain_initiate": (
+                    "statuses.classes.cleric.feats.domain_initiate",
+                    "DOMAIN_INITIATE_STATUS",
+                ),
+                "harming_hands": (
+                    "statuses.classes.cleric.feats.harming_hands",
+                    "HARMING_HANDS_STATUS",
+                ),
+                "healing_hands": (
+                    "statuses.classes.cleric.feats.healing_hands",
+                    "HEALING_HANDS_STATUS",
+                ),
+                "holy_castigation": (
+                    "statuses.classes.cleric.feats.holy_castigation",
+                    "HOLY_CASTIGATION_STATUS",
+                ),
+                "reach_spell": ("statuses.classes.bard.feats.reach_spell", "REACH_SPELL_STATUS"),
+            },
+            "druid": {
+                "animal_companion": (
+                    "statuses.classes.druid.feats.animal_companion",
+                    "ANIMAL_COMPANION_STATUS",
+                ),
+                "leshy_familiar": (
+                    "statuses.classes.druid.feats.leshy_familiar",
+                    "LESHY_FAMILIAR_STATUS",
+                ),
+                "reach_spell": ("statuses.classes.bard.feats.reach_spell", "REACH_SPELL_STATUS"),
+                "storm_born": ("statuses.classes.druid.feats.storm_born", "STORM_BORN_STATUS"),
+                "widen_spell": ("statuses.classes.druid.feats.widen_spell", "WIDEN_SPELL_STATUS"),
+                "wild_shape": ("statuses.classes.druid.feats.wild_shape", "WILD_SHAPE_STATUS"),
+            },
         }
 
     @staticmethod
@@ -282,6 +339,129 @@ class StatusMixin:
             except Exception:
                 continue
         return None
+
+    def _cleric_setup_data(self) -> dict:
+        getter = getattr(self, "get_status_data", None)
+        if callable(getter):
+            try:
+                raw = getter("cleric", "cleric_setup", {})
+                if isinstance(raw, dict):
+                    return dict(raw)
+            except Exception:
+                pass
+        for status in getattr(self, "statuses", []) or []:
+            if getattr(status, "id", None) != "cleric":
+                continue
+            data = getattr(status, "data", None) or {}
+            setup = data.get("cleric_setup")
+            if isinstance(setup, dict):
+                return dict(setup)
+        return {}
+
+    def _druid_setup_data(self) -> dict:
+        getter = getattr(self, "get_status_data", None)
+        if callable(getter):
+            try:
+                raw = getter("druid", "druid_setup", {})
+                if isinstance(raw, dict):
+                    return dict(raw)
+            except Exception:
+                pass
+        for status in getattr(self, "statuses", []) or []:
+            if getattr(status, "id", None) != "druid":
+                continue
+            data = getattr(status, "data", None) or {}
+            setup = data.get("druid_setup")
+            if isinstance(setup, dict):
+                return dict(setup)
+        return {}
+
+    def _druid_order_choice(self) -> str | None:
+        setup = self._druid_setup_data()
+        value = setup.get("order")
+        if value is None:
+            value = getattr(self, "druid_order", None)
+        raw = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+        return raw or None
+
+    def _is_druid_actor(self) -> bool:
+        class_name = str(getattr(self, "class_name", "") or "").strip().lower()
+        if class_name == "druid":
+            return True
+        try:
+            return bool(self.has_status("druid"))
+        except Exception:
+            return False
+
+    def _cleric_font_choice(self) -> str | None:
+        setup = self._cleric_setup_data()
+        value = setup.get("font")
+        if value is None:
+            value = setup.get("font_choice")
+        if value is None:
+            value = getattr(self, "cleric_font", None)
+        raw = str(value or "").strip().lower()
+        return raw if raw in ("heal", "harm") else None
+
+    def _cleric_favored_weapon_group(self) -> str | None:
+        setup = self._cleric_setup_data()
+        value = setup.get("favored_weapon_group")
+        if value is None:
+            value = getattr(self, "cleric_favored_weapon_group", None)
+        raw = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+        if raw in ("simple", "martial", "unarmed"):
+            return raw
+        return None
+
+    def _is_cleric_actor(self) -> bool:
+        class_name = str(getattr(self, "class_name", "") or "").strip().lower()
+        if class_name == "cleric":
+            return True
+        try:
+            return bool(self.has_status("cleric"))
+        except Exception:
+            return False
+
+    def _passes_status_prerequisites(self, status: "Status") -> bool:
+        status_id = str(getattr(status, "id", "") or "").strip().lower()
+        status_data = getattr(status, "data", None) or {}
+        if status_id in {"deadly_simplicity", "domain_initiate", "harming_hands", "healing_hands", "holy_castigation"}:
+            if not self._is_cleric_actor():
+                self._ui_log(f"{self._labelize_choice(status_id)}: wymaga klasy Cleric.")
+                return False
+
+        if status_id == "deadly_simplicity":
+            favored_group = self._cleric_favored_weapon_group()
+            if favored_group not in {"simple", "unarmed"}:
+                self._ui_log("Deadly Simplicity: wymaga favored weapon typu simple lub unarmed.")
+                return False
+
+        if status_id in {"harming_hands", "healing_hands"}:
+            required_font = "harm" if status_id == "harming_hands" else "heal"
+            current_font = self._cleric_font_choice()
+            if current_font != required_font:
+                self._ui_log(
+                    f"{self._labelize_choice(status_id)}: wymaga divine font '{required_font}'."
+                )
+                return False
+
+        if status_id in {"animal_companion", "leshy_familiar", "storm_born", "widen_spell", "wild_shape"}:
+            if not self._is_druid_actor():
+                self._ui_log(f"{self._labelize_choice(status_id)}: wymaga klasy Druid.")
+                return False
+
+        required_druid_order = str(status_data.get("requires_druid_order", "") or "").strip().lower()
+        if required_druid_order:
+            if not self._is_druid_actor():
+                self._ui_log(f"{self._labelize_choice(status_id)}: wymaga klasy Druid.")
+                return False
+            chosen_order = self._druid_order_choice()
+            if chosen_order != required_druid_order:
+                self._ui_log(
+                    f"{self._labelize_choice(status_id)}: wymaga druid order '{required_druid_order}'."
+                )
+                return False
+        return True
 
     def _handle_adapted_cantrip_choice(self, status: "Status", data: dict) -> None:
         traditions = list(data.get("adapted_cantrip_traditions") or ["arcane", "divine", "occult", "primal"])
@@ -776,6 +956,130 @@ class StatusMixin:
                 f"Dopisz do listy znanych czarow: {chosen_spell_label}."
             )
 
+    def _handle_druid_setup_choice(self, status: "Status", data: dict) -> None:
+        order_choices = list(data.get("druid_order_choices") or ["animal", "leaf", "storm", "wild"])
+        order_skills = dict(data.get("druid_order_skills") or {})
+        order_start_feats = dict(data.get("druid_order_start_feats") or {})
+        order_spells = dict(data.get("druid_order_spells") or {})
+        order_focus_bonus = dict(data.get("druid_order_focus_bonus") or {})
+
+        chosen_order = self._pick_choice_id(
+            "Druid: wybierz order",
+            order_choices,
+            source="status",
+        )
+        if not chosen_order:
+            return
+
+        chosen_skill = str(order_skills.get(chosen_order) or "")
+        chosen_feat = str(order_start_feats.get(chosen_order) or "")
+        chosen_order_spell = str(order_spells.get(chosen_order) or "")
+        try:
+            chosen_focus_bonus = int(order_focus_bonus.get(chosen_order) or 0)
+        except Exception:
+            chosen_focus_bonus = 0
+
+        setup_payload = {
+            "order": chosen_order,
+            "trained_skill": chosen_skill,
+            "order_feat": chosen_feat,
+            "order_spell": chosen_order_spell,
+            "focus_bonus": chosen_focus_bonus,
+        }
+        try:
+            for idx, item in enumerate(self.statuses):
+                if item is status:
+                    new_data = dict(data)
+                    new_data["druid_setup"] = dict(setup_payload)
+                    new_data["druid_order"] = chosen_order
+                    new_data["druid_order_skill"] = chosen_skill
+                    new_data["druid_order_feat"] = chosen_feat
+                    new_data["druid_order_spell"] = chosen_order_spell
+                    new_data["druid_order_focus_bonus"] = chosen_focus_bonus
+                    self.statuses[idx] = replace(status, data=new_data)
+                    break
+        except Exception:
+            self._ui_log("Druid setup: nie udalo sie zapisac wyborow.")
+            return
+
+        for attr, value in (
+            ("druid_order", chosen_order),
+            ("druid_order_skill", chosen_skill),
+            ("druid_order_feat", chosen_feat),
+            ("druid_order_spell", chosen_order_spell),
+            ("druid_order_focus_bonus", chosen_focus_bonus),
+        ):
+            try:
+                setattr(self, attr, value)
+            except Exception:
+                pass
+
+        known_order_spells = list(getattr(self, "druid_order_spells", []) or [])
+        if chosen_order_spell and chosen_order_spell not in known_order_spells:
+            known_order_spells.append(chosen_order_spell)
+        try:
+            setattr(self, "druid_order_spells", known_order_spells)
+        except Exception:
+            pass
+
+        if chosen_focus_bonus:
+            try:
+                current_focus = int(getattr(self, "focus_point", 0) or 0)
+            except Exception:
+                current_focus = 0
+            try:
+                setattr(self, "focus_point", max(0, current_focus + chosen_focus_bonus))
+            except Exception:
+                pass
+
+        self._ui_log(
+            "Druid setup: "
+            f"order={self._labelize_choice(chosen_order)}, "
+            f"skill={self._labelize_choice(chosen_skill)}, "
+            f"order spell={self._labelize_choice(chosen_order_spell)}."
+        )
+        self._ui_log(
+            f"Druid order spell ({self._labelize_choice(chosen_order_spell)}): "
+            "dodany do listy known focus spells."
+        )
+
+        if not chosen_feat:
+            return
+        registry = self._class_feat_registry().get("druid", {})
+        feat_status = self._resolve_status_from_registry(chosen_feat, registry)
+        if feat_status is None:
+            self._ui_log(f"Druid setup: nie znaleziono feata startowego {chosen_feat}.")
+            return
+        self.add_status(feat_status)
+
+    def _handle_animal_companion_type_choice(self, status: "Status", data: dict) -> None:
+        choices = list(data.get("animal_companion_type_choices") or [])
+        if not choices:
+            choices = ["wolf"]
+        chosen_type = self._pick_choice_id(
+            "Animal Companion: wybierz typ companions",
+            choices,
+            source="status",
+        )
+        if not chosen_type:
+            chosen_type = str(data.get("animal_companion_type") or choices[0] or "wolf")
+        chosen_type = str(chosen_type).strip().lower().replace("-", "_").replace(" ", "_")
+        if chosen_type not in choices:
+            chosen_type = str(choices[0]).strip().lower()
+
+        self._replace_status_data(
+            status,
+            {
+                "animal_companion_type": chosen_type,
+                "animal_companion_pending": False,
+            },
+        )
+        try:
+            setattr(self, "animal_companion_type", chosen_type)
+        except Exception:
+            pass
+        self._ui_log(f"Animal Companion: wybrano typ {self._labelize_choice(chosen_type)}.")
+
     def _handle_champion_setup_choice(self, status: "Status", data: dict) -> None:
         key_ability_choices = list(data.get("champion_key_ability_choices") or ["strength", "dexterity"])
         cause_choices = list(data.get("champion_cause_choices") or ["paladin", "redeemer", "liberator"])
@@ -876,6 +1180,205 @@ class StatusMixin:
             f"skill={self._labelize_choice(chosen_deity_skill)}."
         )
 
+    def _handle_cleric_setup_choice(self, status: "Status", data: dict) -> None:
+        doctrine_choices = list(data.get("cleric_doctrine_choices") or ["cloistered_cleric", "warpriest"])
+        deity_choices = list(data.get("cleric_deity_choices") or ["custom"])
+        deity_options = dict(data.get("cleric_deity_options") or {})
+        favored_weapon_choices = list(data.get("cleric_favored_weapon_choices") or ["sword", "dagger", "longbow", "unarmed"])
+        font_choices = list(data.get("cleric_font_choices") or ["heal", "harm"])
+        weapon_groups = dict(data.get("cleric_weapon_groups") or {})
+        domain_spell_placeholders = dict(data.get("cleric_domain_spell_placeholders") or {})
+
+        def _pick(prompt: str, choices: list[str]) -> str | None:
+            if not choices:
+                return None
+            label_map = {self._labelize_choice(item): item for item in choices}
+            labels = list(label_map.keys())
+            chosen_label = self._prompt_choice(prompt, labels, source="status")
+            if not chosen_label:
+                return None
+            chosen = label_map.get(chosen_label)
+            if chosen:
+                return chosen
+            raw = str(chosen_label).strip().lower().replace(" ", "_")
+            return raw if raw in choices else None
+
+        def _normalize_weapon(value: str | None) -> str | None:
+            raw = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+            return raw if raw else None
+
+        def _weapon_group_for(weapon_id: str | None) -> str | None:
+            normalized = _normalize_weapon(weapon_id)
+            if not normalized:
+                return None
+            mapped = str(weapon_groups.get(normalized, "") or "").strip().lower()
+            if mapped in {"simple", "martial", "unarmed"}:
+                return mapped
+            return None
+
+        chosen_deity = _pick("Cleric: wybierz deity", deity_choices)
+        if not chosen_deity:
+            return
+        chosen_doctrine = _pick("Cleric: wybierz doctrine", doctrine_choices)
+        if not chosen_doctrine:
+            return
+
+        deity_data = dict(deity_options.get(chosen_deity, {}) or {})
+        chosen_favored_weapon = _normalize_weapon(deity_data.get("favored_weapon"))
+        if not chosen_favored_weapon:
+            chosen_favored_weapon = _pick("Cleric: wybierz favored weapon", favored_weapon_choices)
+        if not chosen_favored_weapon:
+            return
+        favored_weapon_group = _normalize_weapon(deity_data.get("favored_weapon_group")) or _weapon_group_for(
+            chosen_favored_weapon
+        )
+
+        allowed_fonts = list(deity_data.get("font_options") or font_choices)
+        if not allowed_fonts:
+            allowed_fonts = ["heal"]
+        chosen_font = allowed_fonts[0] if len(allowed_fonts) == 1 else _pick("Cleric: wybierz divine font", allowed_fonts)
+        if not chosen_font:
+            return
+
+        domain_choices = list(deity_data.get("domain_choices") or [])
+        if not domain_choices:
+            domain_choices = ["custom_domain_a", "custom_domain_b", "custom_domain_c"]
+
+        setup_payload = {
+            "deity": chosen_deity,
+            "doctrine": chosen_doctrine,
+            "favored_weapon": chosen_favored_weapon,
+            "favored_weapon_group": favored_weapon_group,
+            "font": chosen_font,
+            "domain_choices": list(domain_choices),
+        }
+        try:
+            for idx, item in enumerate(self.statuses):
+                if item is status:
+                    new_data = dict(data)
+                    new_data["cleric_setup"] = dict(setup_payload)
+                    new_data["cleric_deity"] = chosen_deity
+                    new_data["cleric_doctrine"] = chosen_doctrine
+                    new_data["cleric_favored_weapon"] = chosen_favored_weapon
+                    new_data["cleric_favored_weapon_group"] = favored_weapon_group
+                    new_data["cleric_font"] = chosen_font
+                    new_data["cleric_domain_choices"] = list(domain_choices)
+                    new_data["cleric_domain_spell_placeholders"] = dict(domain_spell_placeholders)
+                    self.statuses[idx] = replace(status, data=new_data)
+                    break
+        except Exception:
+            self._ui_log("Cleric setup: nie udalo sie zapisac wyborow.")
+            return
+
+        for attr, value in (
+            ("cleric_deity", chosen_deity),
+            ("cleric_doctrine", chosen_doctrine),
+            ("cleric_favored_weapon", chosen_favored_weapon),
+            ("cleric_favored_weapon_group", favored_weapon_group),
+            ("cleric_font", chosen_font),
+            ("cleric_domain_choices", list(domain_choices)),
+            ("cleric_domain_spell_placeholders", dict(domain_spell_placeholders)),
+        ):
+            try:
+                setattr(self, attr, value)
+            except Exception:
+                pass
+
+        self._ui_log(
+            "Cleric setup: "
+            f"deity={self._labelize_choice(chosen_deity)}, "
+            f"doctrine={self._labelize_choice(chosen_doctrine)}, "
+            f"favored weapon={self._labelize_choice(chosen_favored_weapon)}, "
+            f"font={self._labelize_choice(chosen_font)}."
+        )
+        self._ui_log(
+            "Divine Font: przygotowanie listy czarow i pilnowanie slotow pozostaje po stronie gracza."
+        )
+
+        if chosen_doctrine == "cloistered_cleric":
+            try:
+                from statuses.classes.cleric.feats.domain_initiate import DOMAIN_INITIATE_STATUS
+
+                self.add_status(DOMAIN_INITIATE_STATUS)
+            except Exception:
+                self._ui_log("Cleric setup: nie udalo sie dodac Domain Initiate.")
+
+        if chosen_doctrine == "warpriest":
+            try:
+                from statuses.general.shield_block import SHIELD_BLOCK_STATUS
+
+                self.add_status(SHIELD_BLOCK_STATUS)
+            except Exception:
+                self._ui_log("Cleric setup: nie udalo sie dodac Shield Block.")
+            if favored_weapon_group in {"simple", "unarmed"}:
+                try:
+                    from statuses.classes.cleric.feats.deadly_simplicity import DEADLY_SIMPLICITY_STATUS
+
+                    self.add_status(DEADLY_SIMPLICITY_STATUS)
+                except Exception:
+                    self._ui_log("Cleric setup: nie udalo sie dodac Deadly Simplicity.")
+
+    def _handle_cleric_domain_initiate_choice(self, status: "Status", data: dict) -> None:
+        setup = self._cleric_setup_data()
+        domain_choices = list(data.get("domain_choices") or setup.get("domain_choices") or [])
+        if not domain_choices:
+            domain_choices = list(getattr(self, "cleric_domain_choices", []) or [])
+        if not domain_choices:
+            domain_choices = ["custom_domain_a", "custom_domain_b", "custom_domain_c"]
+        placeholder_map = dict(
+            data.get("domain_spell_placeholders")
+            or setup.get("domain_spell_placeholders")
+            or getattr(self, "cleric_domain_spell_placeholders", {})
+            or {}
+        )
+
+        selected_already: set[str] = set()
+        for item in getattr(self, "statuses", []) or []:
+            if getattr(item, "id", None) != "domain_initiate":
+                continue
+            item_data = getattr(item, "data", None) or {}
+            selected = str(item_data.get("selected_domain", "") or "").strip().lower()
+            if selected:
+                selected_already.add(selected)
+
+        available_domains = [domain for domain in domain_choices if domain not in selected_already]
+        if not available_domains:
+            self._ui_log("Domain Initiate: brak nowych domen do wyboru.")
+            return
+        chosen_domain = self._pick_choice_id(
+            "Domain Initiate: wybierz domene",
+            available_domains,
+            source="status",
+        )
+        if not chosen_domain:
+            return
+
+        chosen_spell = str(placeholder_map.get(chosen_domain) or f"domain_spell_{chosen_domain}")
+        self._replace_status_data(
+            status,
+            {
+                "selected_domain": chosen_domain,
+                "domain_spell": chosen_spell,
+            },
+        )
+
+        known_domains = list(getattr(self, "cleric_known_domains", []) or [])
+        if chosen_domain not in known_domains:
+            known_domains.append(chosen_domain)
+        known_spells = list(getattr(self, "cleric_domain_spells", []) or [])
+        if chosen_spell not in known_spells:
+            known_spells.append(chosen_spell)
+        try:
+            setattr(self, "cleric_known_domains", known_domains)
+            setattr(self, "cleric_domain_spells", known_spells)
+        except Exception:
+            pass
+
+        self._ui_log(
+            "Domain Initiate: "
+            f"{self._labelize_choice(chosen_domain)} -> {self._labelize_choice(chosen_spell)}."
+        )
+
     def _handle_deific_weapon_choice(self, status: "Status", data: dict) -> None:
         choices = list(data.get("deific_weapon_choices") or [])
         if not choices:
@@ -974,6 +1477,8 @@ class StatusMixin:
         if not isinstance(status, Status):
             raise TypeError("add_status oczekuje instancji Status.")
         self._ensure_status_objects()
+        if not self._passes_status_prerequisites(status):
+            return False
         if self._status_immunity_blocks(status):
             msg = f"Status '{getattr(status, 'label', status.id)}' zablokowany przez immunitet."
             logger.info(msg)
@@ -1074,6 +1579,7 @@ class StatusMixin:
         target_id = status.id if isinstance(status, Status) else str(status)
         for idx, item in enumerate(self.statuses):
             if getattr(item, "id", None) == target_id:
+                self._clear_temp_hp_for_status(item)
                 del self.statuses[idx]
                 self._drop_reactions_for_status(target_id)
                 return True
@@ -1104,6 +1610,7 @@ class StatusMixin:
         removed = 0
         for status in self.statuses:
             if status.id in to_remove:
+                self._clear_temp_hp_for_status(status)
                 removed += 1
                 continue
             new_statuses.append(status)
@@ -1133,8 +1640,21 @@ class StatusMixin:
                 remaining.append(status)
                 continue
             if turns <= 0:
+                self._clear_temp_hp_for_status(status)
                 removed += 1
                 continue
             remaining.append(replace(status, duration=turns))
         self.statuses = remaining
         return removed
+
+    def _clear_temp_hp_for_status(self, status: "Status") -> None:
+        data = getattr(status, "data", None) or {}
+        source = data.get("temp_hp_source")
+        if not source:
+            return
+        try:
+            from combat.hp_engine import clear_temp_hp
+
+            clear_temp_hp(self, source=str(source))
+        except Exception:
+            pass

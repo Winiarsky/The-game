@@ -25,15 +25,15 @@ def _has_status(actor, status_id: str) -> bool:
 class ReachSpellEvent(ActionCostEvent):
     name = "reach_spell"
     actions_cost = 1
-    default_tags = ["concentrate", "metamagic", "bard"]
+    default_tags = ["concentrate", "metamagic", "spell"]
     consumes_action = True
 
     def execute(self, ctx: EventContext) -> EventResult:
         actor = ctx.actor
         if actor is None:
             return EventResult.cancelled(message="Reach Spell: brak aktywnego bohatera.")
-        if not (_has_status(actor, "reach_spell") or _has_status(actor, "bard")):
-            return EventResult.cancelled(message="Reach Spell: wymaga featu Reach Spell (Bard).")
+        if not _has_status(actor, "reach_spell"):
+            return EventResult.cancelled(message="Reach Spell: wymaga featu Reach Spell.")
 
         remover = getattr(actor, "remove_status", None)
         if callable(remover):

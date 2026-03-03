@@ -5,6 +5,7 @@ import random
 
 from board import consts
 from combat import effective_ac
+from combat.hp_engine import apply_damage as hp_apply_damage
 from damage_types import DamageType
 
 from ..base import EventContext, EventResult, GameEvent
@@ -172,6 +173,6 @@ class BasicEnemyMeleeAttackEvent(GameEvent):
             except Exception:
                 pass
         try:
-            hero.wounds += damage  # type: ignore[attr-defined]
+            hp_apply_damage(hero, damage, self.damage_type, source=f"enemy_attack:{self.action_id_base}")
         except Exception:
             pass

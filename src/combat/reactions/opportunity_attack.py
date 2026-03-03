@@ -8,6 +8,7 @@ from typing import Any
 from GameObjects.interactions_mixin import prompt_for_roll
 from combat.damage_utils import burn_it_bonus, burn_it_prompt_note
 from combat.flanking import effective_ac
+from combat.hp_engine import apply_damage as hp_apply_damage
 from .base import Reaction
 
 logger = logging.getLogger(__name__)
@@ -121,11 +122,22 @@ class OpportunityAttack(Reaction):
         if total < target_ac:
             return False
         damage = random.randint(1, 6) + getattr(enemy, "strength", 0)
+        defeated = False
         try:
-            target.wounds += damage  # type: ignore[attr-defined]
+            apply = getattr(target, "apply_damage", None)
+            if callable(apply):
+                _, defeated = apply(damage, "normal")
+            else:
+                info = hp_apply_damage(target, damage, "normal", source="reaction:opportunity_attack")
+                defeated = bool(info.get("defeated", False))
         except Exception:
             pass
-        game.ui_log(f"Atak okazyjny zadaje {damage} obrażeń. Rany bohatera: {getattr(target, 'wounds', '?')}.")
+        game.ui_log(f"Atak okazyjny zadaje {damage} obrażeń.")
+        if defeated:
+            try:
+                game.ui_log(f"{getattr(target, 'name', 'Cel')} pada od ataku okazyjnego.")
+            except Exception:
+                pass
         if crit and "manipulate" in (event.get("action_tags") or []):
             game.ui_log("Krytyk – akcja manipulate przerwana.")
         return True

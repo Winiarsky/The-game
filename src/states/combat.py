@@ -12,6 +12,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 import actions  # noqa: F401  # rejestracja akcji przy starcie stanu walki
 from board import consts
+from GameObjects.companions import build_animal_companion
 from GameObjects.Enemies.behaviors import get_behavior
 from .base import State
 from .heroes_turns import HeroesTurn
@@ -43,6 +44,7 @@ class Combat(State):
         self.round_index: int = 1
         self.attack_state: dict[Any, dict[str, object]] = {}
         self.status_initiative_penalty: dict[Any, int] = {}
+        self.animal_companions: dict[str, Any] = {}
 
     def on_enter(self):
         logger.info("Walka rozpoczęta.")
@@ -60,10 +62,12 @@ class Combat(State):
             ui_idle_hint("Walka", "Śledź inicjatywę i wybierz akcję aktywnego aktora.")
         self._reset_heroes_initiative()
         self._ensure_initiative_order()
+        self._deploy_pending_animal_companions()
 
     def on_exit(self):
         logger.info("Zakończenie walki.")
         self.game.ui_log("Zakończenie walki.")
+        self._cleanup_animal_companions()
         self._clear_combat_statuses()
         self._clear_initiatives()
 
@@ -128,6 +132,184 @@ class Combat(State):
                     except ValueError:
                         pass
 
+    @staticmethod
+    def _actor_id(actor: Any) -> str:
+        return str(getattr(actor, "object_id", None) or getattr(actor, "name", None) or id(actor))
+
+    @staticmethod
+    def _has_status(actor: Any, status_id: str) -> bool:
+        checker = getattr(actor, "has_status", None)
+        if callable(checker):
+            try:
+                return bool(checker(status_id))
+            except Exception:
+                return False
+        for status in getattr(actor, "statuses", []) or []:
+            if getattr(status, "id", status) == status_id:
+                return True
+        return False
+
+    @staticmethod
+    def _is_actor_dead(actor: Any) -> bool:
+        if actor is None:
+            return False
+        try:
+            from statuses import is_dead
+
+            return bool(is_dead(actor))
+        except Exception:
+            return False
+
+    @staticmethod
+    def _is_actor_unconscious(actor: Any) -> bool:
+        if actor is None:
+            return False
+        try:
+            from statuses import is_unconscious
+
+            return bool(is_unconscious(actor))
+        except Exception:
+            return False
+
+    def get_animal_companion(self, owner) -> Any | None:
+        self._purge_dead_animal_companions()
+        owner_id = self._actor_id(owner)
+        companion = self.animal_companions.get(owner_id)
+        if companion is None:
+            return None
+        if getattr(companion, "position", None) is None:
+            return None
+        return companion
+
+    def _deploy_pending_animal_companions(self) -> None:
+        for hero in list(getattr(self.game, "heroes", []) or []):
+            self._deploy_animal_companion_for_owner(hero)
+
+    def _deploy_animal_companion_for_owner(self, owner) -> None:
+        if owner is None:
+            return
+        if not self._has_status(owner, "animal_companion"):
+            return
+        if getattr(owner, "position", None) is None:
+            return
+        owner_id = self._actor_id(owner)
+        if owner_id in self.animal_companions and getattr(self.animal_companions[owner_id], "position", None) is not None:
+            return
+        board = getattr(self.game, "board", None)
+        if board is None:
+            return
+        spawn_options = self._find_spawn_positions(owner)
+        if not spawn_options:
+            self.game.ui_log(
+                f"{getattr(owner, 'name', 'Druid')}: brak wolnego pola do ustawienia Animal Companion."
+            )
+            return
+        try:
+            self.game.ui_log(
+                f"Ustaw figurke Animal Companion dla {getattr(owner, 'name', 'bohatera')}."
+            )
+        except Exception:
+            pass
+        try:
+            self.game.conn.set_leds(spawn_options, consts.HERO_HIGHLIGHT_RGB)
+            selected = self.game.conn.scan_board(spawn_options)
+        finally:
+            try:
+                self.game.conn.leds_off()
+            except Exception:
+                pass
+        if selected not in spawn_options:
+            selected = spawn_options[0]
+        companion = build_animal_companion(owner)
+        try:
+            board.place(companion, selected)
+        except Exception as exc:
+            logger.error("Nie udalo sie ustawic Animal Companion: %s", exc)
+            return
+        self.animal_companions[owner_id] = companion
+        self.game.ui_log(
+            f"{getattr(owner, 'name', 'Bohater')}: Animal Companion ({getattr(companion, 'companion_type', 'wolf')}) "
+            f"ustawiony na {selected}."
+        )
+
+    def _find_spawn_positions(self, owner) -> list[tuple[int, int]]:
+        board = getattr(self.game, "board", None)
+        owner_pos = getattr(owner, "position", None)
+        if board is None or owner_pos is None:
+            return []
+        max_radius = max(int(getattr(board, "rows", 0) or 0), int(getattr(board, "cols", 0) or 0))
+        if max_radius <= 0:
+            return []
+        ox, oy = owner_pos
+        for radius in range(1, max_radius + 1):
+            ring: list[tuple[int, int]] = []
+            for dx in range(-radius, radius + 1):
+                for dy in range(-radius, radius + 1):
+                    if max(abs(dx), abs(dy)) != radius:
+                        continue
+                    pos = (ox + dx, oy + dy)
+                    if not board.in_bounds(pos):
+                        continue
+                    if not board.can_enter(pos, allow_occupied=False):
+                        continue
+                    ring.append(pos)
+            if ring:
+                return ring
+        return []
+
+    def _cleanup_animal_companions(self) -> None:
+        if not self.animal_companions:
+            return
+        board = getattr(self.game, "board", None)
+        for owner_id, companion in list(self.animal_companions.items()):
+            pos = getattr(companion, "position", None)
+            if board is not None and pos is not None:
+                try:
+                    board.remove(pos)
+                except Exception:
+                    pass
+            owner_name = getattr(companion, "owner_name", owner_id)
+            companion_name = getattr(companion, "name", "Animal Companion")
+            prompt = f"Koniec walki: zabierz figurke {companion_name} (owner: {owner_name})."
+            self.game.ui_log(prompt)
+            ui = getattr(self.game, "ui", None)
+            if ui is not None and hasattr(ui, "prompt_info"):
+                try:
+                    ui.prompt_info("Animal Companion", prompt_long=prompt, source="animal_companion")
+                except Exception:
+                    pass
+        self.animal_companions.clear()
+
+    def _purge_dead_animal_companions(self) -> None:
+        if not self.animal_companions:
+            return
+        board = getattr(self.game, "board", None)
+        for owner_id, companion in list(self.animal_companions.items()):
+            dead = False
+            checker = getattr(companion, "is_dead", None)
+            if callable(checker):
+                try:
+                    dead = bool(checker())
+                except Exception:
+                    dead = False
+            if not dead:
+                try:
+                    dead = int(getattr(companion, "hp", 1) or 1) <= 0
+                except Exception:
+                    dead = False
+            if not dead:
+                continue
+            pos = getattr(companion, "position", None)
+            if board is not None and pos is not None:
+                try:
+                    board.remove(pos)
+                except Exception:
+                    pass
+            self.animal_companions.pop(owner_id, None)
+            self.game.ui_log(
+                f"{getattr(companion, 'name', 'Animal Companion')} został pokonany i znika z planszy."
+            )
+
     # --- Initiative helpers ---
     def _reset_heroes_initiative(self) -> None:
         for hero in self.game.heroes:
@@ -157,6 +339,10 @@ class Combat(State):
                 logger.error("Nie udało się ustawić inicjatywy: %s", exc)
             else:
                 self.game.ui_hero(hero, note="Ustawiono inicjatywę")
+                try:
+                    self._deploy_animal_companion_for_owner(hero)
+                except Exception as exc:
+                    logger.error("Nie udalo sie ustawic Animal Companion dla %s: %s", getattr(hero, "name", hero), exc)
             pending = [h for h in heroes if getattr(h, "initiative", None) is None]
 
     def _roll_enemy_initiatives(self) -> None:
@@ -226,14 +412,19 @@ class Combat(State):
         self.status_initiative_penalty.clear()
         self.base_order.clear()
         self.round_queue.clear()
+        self.animal_companions.clear()
 
     # --- Turn helpers ---
     def _cleanup_removed(self) -> None:
+        self._purge_dead_animal_companions()
+
         def _alive(objs: list[Any]) -> list[Any]:
             alive: list[Any] = []
             for obj in objs:
                 if obj in self.game.heroes:
                     if getattr(obj, "position", None) is None:
+                        continue
+                    if self._is_actor_dead(obj):
                         continue
                 elif obj in self.game.enemies:
                     if getattr(obj, "position", None) is None or getattr(obj, "hp", 1) <= 0:
@@ -303,6 +494,8 @@ class Combat(State):
 
     def _clear_start_of_turn_effects(self, actor) -> None:
         """Usuń efekty jednorundowe (np. raise_shield) na początku inicjatywy bohatera."""
+        if self._is_actor_dead(actor):
+            return
         try:
             self.attack_state.pop(actor, None)
         except Exception:
@@ -319,6 +512,16 @@ class Combat(State):
                     remover("raise_shield:")
                 except Exception:
                     logger.debug("Nie udało się wyczyścić efektów raise_shield dla %s", actor)
+            try:
+                from statuses import run_recovery_check
+
+                recovery = run_recovery_check(actor, source="combat:recovery_check")
+                if isinstance(recovery, dict):
+                    message = str(recovery.get("message", "") or "").strip()
+                    if message:
+                        self.game.ui_log(f"{getattr(actor, 'name', 'Aktor')}: {message}")
+            except Exception as exc:
+                logger.debug("Nie udało się wykonać recovery check dla %s: %s", actor, exc)
 
         tick = getattr(actor, "tick_bonuses_turn", None)
         if callable(tick):
@@ -527,14 +730,14 @@ class Combat(State):
     def _tick_end_of_turn_preparation(self, actor) -> None:
         if actor is None:
             return
+        changed = 0
         try:
             from GameObjects.items.inventory import tick_alchemical_preparation
-        except Exception:
-            return
-        try:
             changed = int(tick_alchemical_preparation(actor) or 0)
         except Exception:
             changed = 0
+        if changed <= 0:
+            changed = self._fallback_tick_alchemical_preparation(actor)
         if changed <= 0:
             return
         try:
@@ -543,6 +746,29 @@ class Combat(State):
             )
         except Exception:
             pass
+
+    @staticmethod
+    def _fallback_tick_alchemical_preparation(actor) -> int:
+        """Defensywnie odlicza preparation_counter na itemach alchemicznych."""
+        inventory = getattr(actor, "inventory", None)
+        if not isinstance(inventory, list):
+            return 0
+        changed = 0
+        for item in inventory:
+            if not hasattr(item, "preparation_counter"):
+                continue
+            try:
+                current = max(0, int(getattr(item, "preparation_counter", 0) or 0))
+            except Exception:
+                current = 0
+            if current <= 0:
+                continue
+            try:
+                setattr(item, "preparation_counter", current - 1)
+                changed += 1
+            except Exception:
+                continue
+        return changed
 
     def _start_turn_actions_used(self, actor) -> int:
         used = 0
@@ -640,9 +866,6 @@ class Combat(State):
             return None
         logger.info("Brak wrogów na planszy – koniec walki.")
         return HeroesTurn(self.game)
-
-    def _actor_id(self, actor: Any) -> str:
-        return getattr(actor, "object_id", None) or getattr(actor, "name", None) or str(id(actor))
 
     def _effective_initiative(self, actor: Any) -> int:
         if actor in self.temp_initiative:
@@ -877,6 +1100,22 @@ class Combat(State):
             return self._process_enemy_turn(actor)
 
         # Hero turn
+        if self._is_actor_dead(actor):
+            self.game.ui_log(f"{getattr(actor, 'name', 'Aktor')} jest martwy i nie może działać.")
+            self._advance_turn()
+            return self
+        try:
+            from statuses import dying_value
+
+            if int(dying_value(actor) or 0) > 0 or self._is_actor_unconscious(actor):
+                self.game.ui_log(
+                    f"{getattr(actor, 'name', 'Aktor')} jest nieprzytomny/dying - tura kończy się automatycznie."
+                )
+                self._advance_turn()
+                return self
+        except Exception:
+            pass
+
         # Wyczyść jednorundowe bonusy osłon (np. raise_shield) na początku tury bohatera
         remover = getattr(actor, "remove_bonuses_with_prefix", None)
         if callable(remover):
