@@ -84,6 +84,12 @@ def _has_status(obj, status) -> bool:
 
 class AttackEventBase(GameEvent):
     """Wspólne helpery dla wszystkich eventów ataku (wręcz i dystans)."""
+    _DEIFIC_DIE_UPGRADE = {
+        "4": "6",
+        "6": "8",
+        "8": "10",
+        "10": "12",
+    }
 
     def _ac_with_bonuses(
         self,
@@ -358,6 +364,77 @@ class AttackEventBase(GameEvent):
         if weapon_type:
             last_by_type = state.setdefault("last_weapon_by_type", {})
             last_by_type[weapon_type] = weapon_key
+
+    @staticmethod
+    def _normalize_weapon_type(value: object) -> str | None:
+        raw = str(value or "").strip().lower()
+        if not raw:
+            return None
+        return raw.replace("-", "_").replace(" ", "_")
+
+    def _deific_weapon_type(self, actor) -> str | None:
+        if actor is None:
+            return None
+        has_status = getattr(actor, "has_status", None)
+        try:
+            if callable(has_status) and not has_status("deific_weapon"):
+                return None
+        except Exception:
+            return None
+        getter = getattr(actor, "get_status_data", None)
+        if callable(getter):
+            try:
+                value = getter("deific_weapon", "deific_weapon_type", None)
+                normalized = self._normalize_weapon_type(value)
+                if normalized:
+                    return normalized
+            except Exception:
+                pass
+        for status in getattr(actor, "statuses", []) or []:
+            if getattr(status, "id", None) != "deific_weapon":
+                continue
+            data = getattr(status, "data", None) or {}
+            normalized = self._normalize_weapon_type(data.get("deific_weapon_type"))
+            if normalized:
+                return normalized
+        return self._normalize_weapon_type(getattr(actor, "deific_weapon_type", None))
+
+    def _upgrade_damage_prompt_one_step(self, prompt_text: str) -> str:
+        text = str(prompt_text or "")
+        pattern = re.compile(r"([kKdD])(\d+)")
+        match = pattern.search(text)
+        if not match:
+            return text
+        current = str(match.group(2))
+        upgraded = self._DEIFIC_DIE_UPGRADE.get(current)
+        if not upgraded:
+            return text
+        start, end = match.span(2)
+        return f"{text[:start]}{upgraded}{text[end:]}"
+
+    def _deific_damage_prompt(
+        self,
+        actor,
+        *,
+        weapon_type: str | None,
+        damage_prompt: str | Iterable[str],
+    ):
+        selected = self._deific_weapon_type(actor)
+        weapon_key = self._normalize_weapon_type(weapon_type)
+        if not selected or not weapon_key or selected != weapon_key:
+            return damage_prompt, False
+        if isinstance(damage_prompt, str):
+            upgraded = self._upgrade_damage_prompt_one_step(damage_prompt)
+            return upgraded, upgraded != damage_prompt
+        prompt_list = list(damage_prompt)
+        if not prompt_list:
+            return damage_prompt, False
+        first = str(prompt_list[0])
+        upgraded_first = self._upgrade_damage_prompt_one_step(first)
+        if upgraded_first == first:
+            return damage_prompt, False
+        prompt_list[0] = upgraded_first
+        return prompt_list, True
 
     @staticmethod
     def _is_flat_footed(target) -> bool:

@@ -15,6 +15,7 @@ from GameObjects.events.bombs.frost_vial_event import FrostVialEvent
 from GameObjects.events.bombs.tanglefoot_bag_event import TanglefootBagEvent
 from GameObjects.events.bombs.thunderstone_event import ThunderstoneEvent
 from GameObjects.events.bombs.alchemists_fire_event import AlchemistsFireEvent
+from GameObjects.items.inventory import add_alchemical_item
 from states.combat import Combat
 from statuses import PERSISTENT_DAMAGE_STATUS, Status
 
@@ -108,6 +109,14 @@ def _dummy_ui(monkeypatch):
     return ui
 
 
+def _give_alchemical_item(actor, event_name: str, *, preparation_counter: int = 0):
+    return add_alchemical_item(
+        actor,
+        event_name=event_name,
+        preparation_counter=preparation_counter,
+    )
+
+
 def test_bottled_lightning_applies_flat_footed(monkeypatch):
     event = BottledLightningEvent()
     monkeypatch.setattr(event, "_prompt_level", lambda: "lesser")
@@ -116,6 +125,7 @@ def test_bottled_lightning_applies_flat_footed(monkeypatch):
     _dummy_ui(monkeypatch)
 
     hero = DummyHero((0, 0), object_id="hero-1")
+    _give_alchemical_item(hero, event.name)
     target = DummyEnemy((1, 0), object_id="enemy-1")
     game = SimpleNamespace(
         conn=FakeConn(responses=[(1, 0)]),
@@ -139,6 +149,7 @@ def test_frost_vial_applies_speed_penalty_to_enemy(monkeypatch):
     _dummy_ui(monkeypatch)
 
     hero = DummyHero((0, 0), object_id="hero-1")
+    _give_alchemical_item(hero, event.name)
     target = DummyEnemy((1, 0), object_id="enemy-1")
     game = SimpleNamespace(
         conn=FakeConn(responses=[(1, 0)]),
@@ -161,6 +172,7 @@ def test_tanglefoot_bag_critical_immobilizes(monkeypatch):
     _dummy_ui(monkeypatch)
 
     hero = DummyHero((0, 0), object_id="hero-1")
+    _give_alchemical_item(hero, event.name)
     target = DummyEnemy((1, 0), object_id="enemy-1")
     game = SimpleNamespace(
         conn=FakeConn(responses=[(1, 0)]),
@@ -190,6 +202,7 @@ def test_thunderstone_applies_deafened_on_failed_save(monkeypatch):
     _dummy_ui(monkeypatch)
 
     hero = DummyHero((0, 0), object_id="hero-1")
+    _give_alchemical_item(hero, event.name)
     enemy = DummyEnemy((1, 0), object_id="enemy-1")
     game = SimpleNamespace(
         conn=FakeConn(responses=[(1, 0)]),
@@ -213,6 +226,7 @@ def test_alchemists_fire_adds_persistent_damage(monkeypatch):
     _dummy_ui(monkeypatch)
 
     hero = DummyHero((0, 0), object_id="hero-1")
+    _give_alchemical_item(hero, event.name)
     target = DummyEnemy((1, 0), object_id="enemy-1")
     game = SimpleNamespace(
         conn=FakeConn(responses=[(1, 0)]),
@@ -236,6 +250,7 @@ def test_far_lobber_extends_bomb_range(monkeypatch):
     _dummy_ui(monkeypatch)
 
     hero = DummyHero((0, 0), object_id="hero-1")
+    _give_alchemical_item(hero, event.name)
     target = DummyEnemy((5, 0), object_id="enemy-1")
     game = SimpleNamespace(
         conn=FakeConn(responses=[(5, 0)]),
@@ -262,6 +277,7 @@ def test_quick_bomber_reduces_bomb_action_cost(monkeypatch):
 
     hero = DummyHero((0, 0), object_id="hero-1")
     hero.add_status(Status(id="quick_bomber", data={"bomb_action_cost_reduction": 1}))
+    _give_alchemical_item(hero, event.name)
 
     game = SimpleNamespace()
     state = Combat(game)

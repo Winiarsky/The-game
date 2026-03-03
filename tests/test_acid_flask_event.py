@@ -11,6 +11,7 @@ for p in (ROOT, ROOT / "src"):
 
 from GameObjects.events.bombs.acid_flask_event import AcidFlaskEvent
 from GameObjects.events.base import EventContext
+from GameObjects.items.inventory import add_alchemical_item
 from statuses import PERSISTENT_DAMAGE_STATUS
 
 
@@ -85,6 +86,14 @@ class DummyHero:
         self.statuses = []
 
 
+def _give_alchemical_item(actor, event_name: str, *, preparation_counter: int = 0):
+    return add_alchemical_item(
+        actor,
+        event_name=event_name,
+        preparation_counter=preparation_counter,
+    )
+
+
 def test_acid_flask_moderate_hit_persistent_and_splash(monkeypatch):
     event = AcidFlaskEvent()
     monkeypatch.setattr(event, "_prompt_level", lambda: "moderate")
@@ -103,6 +112,7 @@ def test_acid_flask_moderate_hit_persistent_and_splash(monkeypatch):
     monkeypatch.setattr("combat.damage_utils.get_ui_client", lambda: dummy_ui)
 
     hero = DummyHero((0, 0), object_id="hero-1")
+    _give_alchemical_item(hero, event.name)
     hero_adj = DummyHero((0, 1), name="hero-2", object_id="hero-2")
     target = DummyEnemy((1, 0), object_id="enemy-1")
     enemy_adj = DummyEnemy((1, 1), object_id="enemy-2")
@@ -147,6 +157,7 @@ def test_acid_flask_item_bonus_in_modifiers(monkeypatch, tier, item_bonus):
     monkeypatch.setattr("GameObjects.events.bombs.acid_flask_event.prompt_for_roll", _prompt)
 
     hero = DummyHero((0, 0))
+    _give_alchemical_item(hero, event.name)
     target = DummyEnemy((1, 0), ac=10)
     game = SimpleNamespace(
         conn=FakeConn(responses=[(1, 0)]),

@@ -673,6 +673,29 @@ document.addEventListener("keydown", (evt) => {
     }
 
     if (!activePrompt) return;
+    if (layoutMode === "equip_nav") {
+        const key = evt.key;
+        const map = {
+            ArrowUp: "up",
+            ArrowDown: "down",
+            ArrowRight: "transfer",
+            ArrowLeft: "drop",
+            "8": "up",
+            "2": "down",
+            "6": "transfer",
+            "4": "drop",
+            "5": "toggle",
+            Enter: "toggle",
+            "0": "exit",
+            Escape: "exit",
+        };
+        const cmd = map[key];
+        if (cmd) {
+            evt.preventDefault();
+            sendPromptAnswer(cmd);
+            return;
+        }
+    }
     if (layoutMode === "action_select" && confirmMode && evt.key === "Escape") {
         evt.preventDefault();
         // manual decline -> reset filtra

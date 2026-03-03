@@ -119,15 +119,33 @@ class DummyEnemy(ReactiveMixin):
         return self.hp, self.hp <= 0
 
 
-def _add_champion_with_setup(hero: DummyHero, monkeypatch, *, cause: str = "Paladin"):
-    ui = DummyUI(["standard", "Strength", cause, "Custom", "Religion"])
+def _add_champion_with_setup(
+    hero: DummyHero,
+    monkeypatch,
+    *,
+    cause: str = "Paladin",
+    deific_weapon: str = "Sword",
+):
+    answers = ["standard", "Strength", cause, "Custom", "Religion"]
+    if str(cause).strip().lower() == "paladin":
+        answers.append(deific_weapon)
+    ui = DummyUI(answers)
     monkeypatch.setattr("ui_client.get_ui_client", lambda: ui)
     hero.add_status(CHAMPION_STATUS)
     return ui
 
 
-def _add_champion_with_no_shield(hero: DummyHero, monkeypatch, *, cause: str = "Paladin"):
-    ui = DummyUI(["brak", "Strength", cause, "Custom", "Religion"])
+def _add_champion_with_no_shield(
+    hero: DummyHero,
+    monkeypatch,
+    *,
+    cause: str = "Paladin",
+    deific_weapon: str = "Sword",
+):
+    answers = ["brak", "Strength", cause, "Custom", "Religion"]
+    if str(cause).strip().lower() == "paladin":
+        answers.append(deific_weapon)
+    ui = DummyUI(answers)
     monkeypatch.setattr("ui_client.get_ui_client", lambda: ui)
     hero.add_status(CHAMPION_STATUS)
     return ui
@@ -135,7 +153,7 @@ def _add_champion_with_no_shield(hero: DummyHero, monkeypatch, *, cause: str = "
 
 def test_champion_status_setup_adds_focus_and_reaction(monkeypatch):
     hero = DummyHero(name="Champion", object_id="hero-champion", position=(0, 0))
-    _add_champion_with_setup(hero, monkeypatch, cause="Paladin")
+    _add_champion_with_setup(hero, monkeypatch, cause="Paladin", deific_weapon="Longbow")
 
     assert getattr(hero, "class_name", None) == "champion"
     assert getattr(hero, "focus_point", None) == 1
@@ -146,9 +164,18 @@ def test_champion_status_setup_adds_focus_and_reaction(monkeypatch):
     assert setup.get("deity_skill") == "religion"
     assert hero.has_status("raise_shield_allow")
     assert hero.has_status("shield_block")
+    assert hero.has_status("deific_weapon")
+    assert hero.get_status_data("deific_weapon", "deific_weapon_type") == "longbow"
     assert isinstance(getattr(hero, "equipped_shield", None), StandardShield)
     assert any(getattr(reaction, "id", None) == "champion_reaction" for reaction in hero.reactions)
     assert any(getattr(reaction, "id", None) == "shield_block" for reaction in hero.reactions)
+
+
+def test_champion_non_paladin_does_not_get_deific_weapon(monkeypatch):
+    hero = DummyHero(name="Champion", object_id="hero-champion", position=(0, 0))
+    _add_champion_with_setup(hero, monkeypatch, cause="Redeemer")
+
+    assert not hero.has_status("deific_weapon")
 
 
 def test_lay_on_hands_heals_and_grants_ac_bonus(monkeypatch):

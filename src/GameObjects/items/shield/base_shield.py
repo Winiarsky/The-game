@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from uuid import uuid4
+
+
+def _new_instance_id() -> str:
+    return f"item-{uuid4().hex[:10]}"
 
 
 @dataclass
@@ -20,6 +25,11 @@ class ShieldBlockOutcome:
 class BaseShield:
     item_id: str = "base_shield"
     name: str = "Shield"
+    category: str = "shield"
+    description: str = "Tarcza."
+    hands_required: int = 1
+    traits: tuple[str, ...] = ()
+    instance_id: str = field(default_factory=_new_instance_id)
     hardness: int = 0
     max_hp: int = 1
     broken_threshold: int = 1
@@ -49,6 +59,15 @@ class BaseShield:
 
     def repair_full(self) -> None:
         self.current_hp = self.max_hp
+
+    def ui_description(self) -> str:
+        state = "destroyed" if self.is_destroyed else ("broken" if self.is_broken else "ready")
+        traits = ", ".join(self.traits) if self.traits else "brak"
+        return (
+            f"{self.name}\n"
+            f"Hardness: {self.hardness} | HP: {self.current_hp}/{self.max_hp} | BT: {self.broken_threshold}\n"
+            f"State: {state} | Traits: {traits}"
+        )
 
     def apply_shield_block(self, incoming_damage: int) -> ShieldBlockOutcome:
         try:

@@ -4,6 +4,7 @@ from board_grid import BoardGrid
 from hero import Hero
 from GameObjects.Enemies.basic_enemy import BasicEnemy
 from GameObjects.events.base import EventContext
+from GameObjects.items.inventory import add_alchemical_item
 from GameObjects.events.poisons.arsenic_event import ArsenicEvent
 from GameObjects.events.poisons.giant_centipede_venom_event import GiantCentipedeVenomEvent
 
@@ -39,6 +40,14 @@ def _make_game(actor_pos=(1, 1), target_pos=(1, 2)):
     return game, hero, enemy
 
 
+def _give_alchemical_item(actor, event_name: str, *, preparation_counter: int = 0):
+    return add_alchemical_item(
+        actor,
+        event_name=event_name,
+        preparation_counter=preparation_counter,
+    )
+
+
 def test_arsenic_event_applies_stage(monkeypatch):
     def _fake_resolve(*_args, **_kwargs):
         return SimpleNamespace(outcome="failure")
@@ -51,6 +60,7 @@ def test_arsenic_event_applies_stage(monkeypatch):
     game, hero, enemy = _make_game()
     ctx = EventContext(game=game, actor=hero)
     event = ArsenicEvent()
+    _give_alchemical_item(hero, event.name)
 
     result = event.execute(ctx)
     assert result.success is True
@@ -72,6 +82,7 @@ def test_giant_centipede_venom_stage2(monkeypatch):
     game, hero, enemy = _make_game()
     ctx = EventContext(game=game, actor=hero)
     event = GiantCentipedeVenomEvent()
+    _give_alchemical_item(hero, event.name)
 
     result = event.execute(ctx)
     assert result.success is True

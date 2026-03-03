@@ -58,6 +58,7 @@ class Start(State):
             )
             self._maybe_prompt_chameleon_gnome(hero)
             self._maybe_prompt_familiar_owner(hero)
+            self._maybe_prompt_advanced_alchemy(hero)
             self.game.ui_hero(hero, note=f"Ustawiony na polu startowym {pos}")
             self.game.ui_log(f"Bohater ustawiony na pozycji {pos}.")
         self.game.heroes = heroes
@@ -201,3 +202,122 @@ class Start(State):
                 return
             data["familiar_guidance_skill"] = skill_choice
         self.game.ui_log(f"Familiar: wybrany tryb: {mode}.")
+
+    @staticmethod
+    def _normalize_event_name(raw: str | None) -> str:
+        return str(raw or "").strip().lower()
+
+    def _advanced_alchemy_event_choices(self) -> list[str]:
+        try:
+            import GameObjects.events.all_events  # noqa: F401
+            from GameObjects.events.bombs.base_alchemical_bomb_event import BaseAlchemicalBombEvent
+            from GameObjects.events.elixirs.base_elixir_event import BaseElixirEvent
+            from GameObjects.events.poisons.base_poison_event import BasePoisonEvent
+            from GameObjects.events.registry import list_events
+        except Exception:
+            return []
+        base_types = (BaseAlchemicalBombEvent, BaseElixirEvent, BasePoisonEvent)
+        choices: list[str] = []
+        for name, cls in list_events().items():
+            try:
+                if not issubclass(cls, base_types):
+                    continue
+            except Exception:
+                continue
+            choices.append(str(name).strip().lower())
+        return sorted(set(choices))
+
+    def _prompt_advanced_alchemy_reagent_budget(self) -> int | None:
+        while True:
+            raw = self.game.conn.read_card(
+                "Advanced Alchemy: podaj liczbę reagentów do zużycia (lub end aby zakończyć)",
+                [],
+            )
+            normalized = self._normalize_event_name(raw)
+            if normalized == "end":
+                return None
+            try:
+                budget = int(normalized)
+            except Exception:
+                self.game.ui_log("Advanced Alchemy: niepoprawna liczba reagentów.")
+                continue
+            if budget < 0:
+                self.game.ui_log("Advanced Alchemy: liczba reagentów nie może być ujemna.")
+                continue
+            return budget
+
+    def _maybe_prompt_advanced_alchemy(self, hero: Hero) -> None:
+        if not hero.has_status("advanced_alchemy"):
+            return
+        try:
+            from GameObjects.items.inventory import add_alchemical_item
+        except Exception:
+            self.game.ui_log("Advanced Alchemy: brak modułu itemów alchemicznych.")
+            return
+
+        allowed = self._advanced_alchemy_event_choices()
+        if not allowed:
+            self.game.ui_log("Advanced Alchemy: brak dostępnych eventów alchemicznych.")
+            return
+
+        try:
+            preview = ", ".join(allowed[:10]) + (", ..." if len(allowed) > 10 else "")
+            from ui_client import get_ui_client
+
+            ui = get_ui_client()
+            if ui.enabled:
+                ui.prompt_info(
+                    "Advanced Alchemy",
+                    prompt_long=(
+                        "Wybierz liczbę reagentów, a następnie event alchemiczny dla każdego reagenta.\n"
+                        "Każdy reagent tworzy 2 sztuki przedmiotu (bez preparation counter).\n"
+                        "Wpisz 'end', aby zakończyć crafting.\n"
+                        f"Dostępne eventy: {preview}"
+                    ),
+                    source="advanced_alchemy",
+                )
+        except Exception:
+            pass
+
+        budget = self._prompt_advanced_alchemy_reagent_budget()
+        if budget is None:
+            self.game.ui_log("Advanced Alchemy: zakończono bez craftingu.")
+            return
+        if budget == 0:
+            self.game.ui_log("Advanced Alchemy: 0 reagentów, pominięto crafting.")
+            return
+
+        created_total = 0
+        for idx in range(1, budget + 1):
+            while True:
+                raw_choice = self.game.conn.read_card(
+                    f"Advanced Alchemy [{idx}/{budget}]: zeskanuj event alchemiczny (lub end)",
+                    [],
+                )
+                choice = self._normalize_event_name(raw_choice)
+                if choice == "end":
+                    self.game.ui_log(
+                        f"Advanced Alchemy: przerwano crafting po {created_total} stworzonych przedmiotach."
+                    )
+                    return
+                if choice not in allowed:
+                    self.game.ui_log(f"Advanced Alchemy: '{choice}' nie jest poprawnym eventem alchemicznym.")
+                    continue
+                add_alchemical_item(
+                    hero,
+                    event_name=choice,
+                    preparation_counter=0,
+                    prepared_by_advanced_alchemy=True,
+                )
+                add_alchemical_item(
+                    hero,
+                    event_name=choice,
+                    preparation_counter=0,
+                    prepared_by_advanced_alchemy=True,
+                )
+                created_total += 2
+                self.game.ui_log(
+                    f"Advanced Alchemy: stworzono 2x {choice} ({idx}/{budget})."
+                )
+                break
+        self.game.ui_log(f"Advanced Alchemy: zakończono crafting. Łącznie stworzono {created_total} przedmiotów.")

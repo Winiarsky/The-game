@@ -270,7 +270,14 @@ class BasicMeleeAttackEvent(AttackEventBase):
             return EventResult(success=True, consumed_action=self.consumes_action, message=f"Atak {self.weapon_label}: pudło.")
 
         self._maybe_prompt_vengeful_hatred(hero, enemy)
-        dmg_prompt = f"{'Trafienie krytyczne! ' if critical else 'Trafienie! '}Obrażenia {self.damage_prompt}: "
+        effective_damage_prompt, deific_applied = self._deific_damage_prompt(
+            hero,
+            weapon_type=getattr(self, "name", None),
+            damage_prompt=self.damage_prompt,
+        )
+        dmg_prompt = (
+            f"{'Trafienie krytyczne! ' if critical else 'Trafienie! '}Obrażenia {effective_damage_prompt}: "
+        )
         resolved_damage_type = self._choose_damage_type(tags, self.damage_type)
         try:
             if not (getattr(ctx, "metadata", None) or {}).get("skip_dragon_instinct"):
@@ -367,7 +374,7 @@ class BasicMeleeAttackEvent(AttackEventBase):
                 damage_notes.append(f"Enfeebled: -{enfeebled_penalty} do obrazen (doliczone).")
         except Exception:
             pass
-        dice_count = self._damage_dice_count(self.damage_prompt)
+        dice_count = self._damage_dice_count(effective_damage_prompt)
         if self._has_trait(tags, "versatile") and not self._tag_value(tags, "versatile"):
             damage_notes.append("Versatile: brak typu w tagu (np. versatile:p) – wybierz ręcznie.")
         deadly_tag = self._tag_value(tags, "deadly")
@@ -412,6 +419,8 @@ class BasicMeleeAttackEvent(AttackEventBase):
             damage_notes.append("Fatal: zmień kości bazowe i dodaj 1 kość fatal (ręcznie).")
         if self._has_trait(tags, "two_hand"):
             damage_notes.append("Two-Hand: użycie dwuręczne zmienia kości obrażeń (ręcznie).")
+        if deific_applied:
+            damage_notes.append("Deific Weapon: kość obrażeń zwiększona o 1 stopień.")
         if damage_notes:
             note = f"{note}\n" + "\n".join(damage_notes) if note else "\n".join(damage_notes)
         damage = prompt_for_roll(
@@ -425,6 +434,7 @@ class BasicMeleeAttackEvent(AttackEventBase):
             actor=hero,
             damage_type_override=resolved_damage_type,
             flat_bonus=damage_bonus,
+            damage_prompt_override=effective_damage_prompt,
         )
         try:
             ignore_incorporeal = _ignores_incorporeal(hero)
@@ -498,8 +508,10 @@ class BasicMeleeAttackEvent(AttackEventBase):
         actor=None,
         damage_type_override: str | Sequence[str] | None = None,
         flat_bonus: int = 0,
+        damage_prompt_override: str | Sequence[str] | None = None,
     ) -> list[tuple[str, int]]:
         """Zwraca listę (typ, obrażenia) – obsługa wielu typów."""
+        damage_prompt = damage_prompt_override if damage_prompt_override is not None else self.damage_prompt
         damage_type = damage_type_override if damage_type_override is not None else self.damage_type
         if isinstance(damage_type, str):
             bonus = burn_it_bonus(actor, damage_type)
@@ -509,7 +521,10 @@ class BasicMeleeAttackEvent(AttackEventBase):
         bonus = burn_it_bonus(actor, damage_types[0])
         components.append((damage_types[0], int(first_roll) + int(bonus) + int(flat_bonus)))
         for idx, dtype in enumerate(damage_types[1:], start=1):
-            prompt = f"Trafienie! Obrażenia dodatkowe ({dtype}): "
+            prompt_text = damage_prompt
+            if isinstance(damage_prompt, (list, tuple)):
+                prompt_text = damage_prompt[idx] if idx < len(damage_prompt) else damage_prompt[-1]
+            prompt = f"Trafienie! Obrażenia dodatkowe {prompt_text} ({dtype}): "
             note = burn_it_prompt_note(actor, dtype)
             roll = prompt_for_roll(
                 prompt,

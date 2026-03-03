@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="540" height="140" viewBox="0 0 540 140" role="img" aria-label="Ekwipunek: skróty klawiszy">
+  <defs>
+    <style>
+      .bg { fill: #111827; }
+      .box { fill: #1f2937; stroke: #374151; stroke-width: 2; rx: 8; ry: 8; }
+      .t { fill: #f9fafb; font: 600 20px "Trebuchet MS", Verdana, sans-serif; }
+      .s { fill: #9ca3af; font: 500 14px "Trebuchet MS", Verdana, sans-serif; }
+      .k { fill: #f59e0b; font: 700 24px "Trebuchet MS", Verdana, sans-serif; }
+    </style>
+  </defs>
+  <rect class="bg" x="0" y="0" width="540" height="140" rx="12" ry="12" />
+
+  <rect class="box" x="20" y="22" width="120" height="96" />
+  <text class="k" x="80" y="58" text-anchor="middle">8</text>
+  <text class="s" x="80" y="84" text-anchor="middle">Góra</text>
+  <text class="s" x="80" y="102" text-anchor="middle">Nawigacja</text>
+
+  <rect class="box" x="150" y="22" width="120" height="96" />
+  <text class="k" x="210" y="58" text-anchor="middle">2</text>
+  <text class="s" x="210" y="84" text-anchor="middle">Dół</text>
+  <text class="s" x="210" y="102" text-anchor="middle">Nawigacja</text>
+
+  <rect class="box" x="280" y="22" width="120" height="96" />
+  <text class="k" x="340" y="58" text-anchor="middle">5</text>
+  <text class="s" x="340" y="84" text-anchor="middle">Aktywuj</text>
+  <text class="s" x="340" y="102" text-anchor="middle">/ Dezaktywuj</text>
+
+  <rect class="box" x="410" y="22" width="110" height="44" />
+  <text class="k" x="465" y="52" text-anchor="middle">6</text>
+  <text class="s" x="465" y="83" text-anchor="middle">Przekaż item</text>
+
+  <rect class="box" x="410" y="74" width="110" height="44" />
+  <text class="k" x="465" y="104" text-anchor="middle">4</text>
+  <text class="s" x="465" y="132" text-anchor="middle">Upuść item</text>
+
+  <text class="t" x="20" y="16">Ekwipunek</text>
+</svg>

@@ -340,6 +340,11 @@ class BaseRangeAttackEvent(AttackEventBase):
 
             prompt_prefix = "Trafienie krytyczne! " if critical else "Trafienie! "
             self._maybe_prompt_vengeful_hatred(hero, enemy)
+            effective_damage_prompt, deific_applied = self._deific_damage_prompt(
+                hero,
+                weapon_type=getattr(self, "name", None),
+                damage_prompt=self.damage_prompt,
+            )
             resolved_damage_type = self._choose_damage_type(tags, self.damage_type)
             try:
                 if self._has_trait(tags, "thrown"):
@@ -434,7 +439,7 @@ class BaseRangeAttackEvent(AttackEventBase):
                     damage_notes.append(f"Enfeebled: -{enfeebled_penalty} do obrazen (doliczone).")
             except Exception:
                 pass
-            dice_count = self._damage_dice_count(self.damage_prompt)
+            dice_count = self._damage_dice_count(effective_damage_prompt)
             if self._has_trait(tags, "versatile") and not self._tag_value(tags, "versatile"):
                 damage_notes.append("Versatile: brak typu w tagu (np. versatile:p) – wybierz ręcznie.")
             deadly_tag = self._tag_value(tags, "deadly")
@@ -494,12 +499,15 @@ class BaseRangeAttackEvent(AttackEventBase):
                 damage_notes.append("Fatal: zmień kości bazowe i dodaj 1 kość fatal (ręcznie).")
             if self._has_trait(tags, "two_hand"):
                 damage_notes.append("Two-Hand: użycie dwuręczne zmienia kości obrażeń (ręcznie).")
+            if deific_applied:
+                damage_notes.append("Deific Weapon: kość obrażeń zwiększona o 1 stopień.")
             damage_components = self._collect_damage_components(
                 actor=hero,
                 prompt_prefix=prompt_prefix,
                 damage_type_override=resolved_damage_type,
                 flat_bonus=damage_bonus,
                 extra_notes=damage_notes,
+                damage_prompt_override=effective_damage_prompt,
             )
             try:
                 ignore_incorporeal = basic_melee_attack_event._ignores_incorporeal(hero)
@@ -587,15 +595,17 @@ class BaseRangeAttackEvent(AttackEventBase):
         damage_type_override: str | Sequence[str] | None = None,
         flat_bonus: int = 0,
         extra_notes: list[str] | None = None,
+        damage_prompt_override: str | Sequence[str] | None = None,
     ) -> list[tuple[str, int]]:
         """Pozyskaj wartości obrażeń dla 1+ typów."""
+        damage_prompt = damage_prompt_override if damage_prompt_override is not None else self.damage_prompt
         damage_type = damage_type_override if damage_type_override is not None else self.damage_type
         if isinstance(damage_type, str):
             note = burn_it_prompt_note(actor, damage_type)
             if extra_notes:
                 note = f"{note}\n" + "\n".join(extra_notes) if note else "\n".join(extra_notes)
             dmg = prompt_for_roll(
-                f"{prompt_prefix}Obrażenia {self.damage_prompt}: ",
+                f"{prompt_prefix}Obrażenia {damage_prompt}: ",
                 layout="damage",
                 answer_placeholder="Suma obrażeń",
                 prompt_long=note,
@@ -606,7 +616,7 @@ class BaseRangeAttackEvent(AttackEventBase):
         damage_types = list(damage_type)
         components: list[tuple[str, int]] = []
         for idx, dtype in enumerate(damage_types):
-            prompt = self.damage_prompt
+            prompt = damage_prompt
             if isinstance(prompt, (list, tuple)):
                 prompt_text = prompt[idx] if idx < len(prompt) else prompt[-1]
             else:

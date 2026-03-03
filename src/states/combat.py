@@ -501,6 +501,7 @@ class Combat(State):
         if not self.round_queue:
             return
         finished_actor = self.round_queue[0]
+        self._tick_end_of_turn_preparation(finished_actor)
         try:
             self.round_queue.pop(0)
         except IndexError:
@@ -522,6 +523,26 @@ class Combat(State):
         if actor is not None:
             logger.debug("Nowa tura dla %s – reset licznika akcji.", actor)
         self._send_initiative_event()
+
+    def _tick_end_of_turn_preparation(self, actor) -> None:
+        if actor is None:
+            return
+        try:
+            from GameObjects.items.inventory import tick_alchemical_preparation
+        except Exception:
+            return
+        try:
+            changed = int(tick_alchemical_preparation(actor) or 0)
+        except Exception:
+            changed = 0
+        if changed <= 0:
+            return
+        try:
+            self.game.ui_log(
+                f"{getattr(actor, 'name', 'Aktor')}: przygotowanie przedmiotów alchemicznych zaktualizowane ({changed})."
+            )
+        except Exception:
+            pass
 
     def _start_turn_actions_used(self, actor) -> int:
         used = 0
@@ -676,6 +697,18 @@ class Combat(State):
         ui_active_actor = getattr(self.game, "ui_active_actor", None)
         if callable(ui_active_actor):
             ui_active_actor(active)
+
+    @staticmethod
+    def _weapon_note(actor) -> str:
+        try:
+            from GameObjects.items.inventory import get_equipped_weapons, item_label
+        except Exception:
+            return "Weapon: -"
+        equipped = list(get_equipped_weapons(actor))
+        if not equipped:
+            return "Weapon: brak (fallback unarmed)"
+        labels = ", ".join(item_label(item) for item in equipped)
+        return f"Weapon: {labels}"
 
     @staticmethod
     def _shield_note(actor) -> str:
@@ -857,7 +890,7 @@ class Combat(State):
         logger.info("Tura bohatera (%s). Akcje: %s/%s", actor, used, self.ACTION_LIMIT)
         self.game.ui_hero(
             actor,
-            note=f"Akcje: {used}/{self.ACTION_LIMIT} | {self._shield_note(actor)}",
+            note=f"Akcje: {used}/{self.ACTION_LIMIT} | {self._weapon_note(actor)} | {self._shield_note(actor)}",
         )
         if used >= self.ACTION_LIMIT:
             logger.info("Aktor %s nie ma już akcji. Automatyczny koniec tury.", getattr(actor, "name", actor))

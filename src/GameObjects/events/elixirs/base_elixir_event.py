@@ -7,6 +7,7 @@ from dataclasses import replace
 from board import consts
 from bonuses import BonusEffect, BonusType
 from damage_types import DamageType
+from GameObjects.items.inventory import consume_ready_alchemical_item, has_ready_alchemical_item, missing_alchemical_item_reason
 from statuses import Status
 from statuses.check_effects import CheckEffect
 
@@ -80,6 +81,14 @@ class BaseElixirEvent(ActionCostEvent):
     tier_choices: tuple[str, ...] = ("lesser", "moderate", "greater", "major")
     tiers: dict[str, dict[str, object]] = {}
 
+    def pre(self, ctx: EventContext) -> EventResult:
+        actor = ctx.actor
+        if actor is None:
+            return EventResult.cancelled(message="Brak bohatera do użycia eliksiru.")
+        if not has_ready_alchemical_item(actor, self.name):
+            return EventResult.cancelled(message=missing_alchemical_item_reason(actor, self.name))
+        return super().pre(ctx)
+
     def execute(self, ctx: EventContext) -> EventResult:
         actor = ctx.actor
         if actor is None:
@@ -98,6 +107,9 @@ class BaseElixirEvent(ActionCostEvent):
         target, target_pos = self._pick_target(ctx, actor_pos)
         if target is None or target_pos is None:
             return EventResult.cancelled(message="Brak celu w zasięgu.")
+
+        if not consume_ready_alchemical_item(actor, self.name):
+            return EventResult.cancelled(message=missing_alchemical_item_reason(actor, self.name))
 
         self._apply_elixir(ctx, target, tier, tier_data)
         self._record_mutagen_consumption(target, tier)

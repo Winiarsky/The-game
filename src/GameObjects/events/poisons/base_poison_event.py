@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from board import consts
+from GameObjects.items.inventory import consume_ready_alchemical_item, has_ready_alchemical_item, missing_alchemical_item_reason
 from skills import Skill
 from statuses import PoisonedStatus
 from GameObjects.interactions_mixin.skill_check_resolver import resolve_skill_check_with_sources
@@ -26,6 +27,14 @@ class BasePoisonEvent(ActionCostEvent):
     duration_turns: int = 1
     stages: list[dict[str, object]] = []
 
+    def pre(self, ctx: EventContext) -> EventResult:
+        actor = ctx.actor
+        if actor is None:
+            return EventResult.cancelled(message="Brak bohatera do użycia trucizny.")
+        if not has_ready_alchemical_item(actor, self.name):
+            return EventResult.cancelled(message=missing_alchemical_item_reason(actor, self.name))
+        return super().pre(ctx)
+
     def execute(self, ctx: EventContext) -> EventResult:
         actor = ctx.actor
         if actor is None:
@@ -37,6 +46,9 @@ class BasePoisonEvent(ActionCostEvent):
         target, _target_pos = self._pick_target(ctx, actor_pos)
         if target is None:
             return EventResult.cancelled(message="Brak celu w zasięgu.")
+
+        if not consume_ready_alchemical_item(actor, self.name):
+            return EventResult.cancelled(message=missing_alchemical_item_reason(actor, self.name))
 
         if not self.stages or self.dc <= 0:
             return EventResult.cancelled(message="Brak danych trucizny.")

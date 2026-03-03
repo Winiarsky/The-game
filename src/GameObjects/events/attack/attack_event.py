@@ -1,0 +1,120 @@
+from __future__ import annotations
+
+from GameObjects.items.inventory import ensure_actor_inventory, get_equipped_weapons, item_description, item_label
+from GameObjects.items.weapon import normalize_weapon_id
+from ..base import EventContext, EventResult, GameEvent
+from ..registry import dispatch_event, register_event
+
+
+def _weapon_event_name(weapon) -> str | None:
+    from_id = normalize_weapon_id(getattr(weapon, "item_id", None))
+    explicit = str(getattr(weapon, "event_name", "") or "").strip().lower()
+    if explicit:
+        return explicit
+    if from_id:
+        return from_id
+    return None
+
+
+def _select_weapon_from_equipped(ctx: EventContext, equipped: list[object]) -> object | None:
+    if not equipped:
+        return None
+    if len(equipped) == 1:
+        return equipped[0]
+
+    labels = []
+    for idx, weapon in enumerate(equipped, start=1):
+        labels.append(
+            {
+                "raw": str(getattr(weapon, "instance_id", idx)),
+                "label": item_label(weapon),
+                "desc": item_description(weapon),
+                "key": str(idx),
+            }
+        )
+
+    ui = getattr(ctx.game, "ui", None)
+    if ui and getattr(ui, "enabled", False):
+        answer = ui.prompt_choice(
+            "Wybierz broń do ataku",
+            choices=[entry["label"] for entry in labels],
+            source="attack",
+            layout="dialog",
+            choice_meta=labels,
+            title="Wybór broni",
+            subtitle="Masz aktywne dwie bronie 1H.",
+            prompt_long="Wybierz numer broni do tego ataku.",
+        )
+        if answer:
+            normalized = str(answer).strip().lower()
+            if normalized.isdigit():
+                idx = int(normalized) - 1
+                if 0 <= idx < len(equipped):
+                    return equipped[idx]
+            for entry, weapon in zip(labels, equipped):
+                if normalized in (entry["raw"].lower(), entry["label"].lower()):
+                    return weapon
+
+    acceptable = [normalize_weapon_id(getattr(item, "item_id", None)) or item_label(item).lower() for item in equipped]
+    answer = ctx.game.conn.read_card("Wybierz broń do ataku", acceptable).strip().lower()
+    for weapon in equipped:
+        weapon_id = normalize_weapon_id(getattr(weapon, "item_id", None))
+        if answer == (weapon_id or "").lower():
+            return weapon
+        if answer == item_label(weapon).strip().lower():
+            return weapon
+    return None
+
+
+@register_event
+class AttackEvent(GameEvent):
+    name = "attack"
+    default_tags = ["attack"]
+    consumes_action = True
+
+    def execute(self, ctx: EventContext) -> EventResult:
+        actor = ctx.actor
+        if actor is None:
+            return EventResult.cancelled(message="Brak aktora do ataku.")
+
+        ensure_actor_inventory(actor)
+        equipped = get_equipped_weapons(actor)
+
+        explicit_weapon = normalize_weapon_id((ctx.metadata or {}).get("weapon_id") or (ctx.metadata or {}).get("weapon"))
+        selected = None
+        if explicit_weapon:
+            for weapon in equipped:
+                if normalize_weapon_id(getattr(weapon, "item_id", None)) == explicit_weapon:
+                    selected = weapon
+                    break
+            if selected is None:
+                return EventResult.cancelled(message=f"Wybrana broń nie jest aktywna: {explicit_weapon}.")
+        else:
+            selected = _select_weapon_from_equipped(ctx, equipped)
+
+        # Attack event fallbackuje do unarmed, ale unarmed pozostaje osobnym eventem.
+        if selected is None:
+            return dispatch_event(
+                "unarmed",
+                EventContext(
+                    game=ctx.game,
+                    actor=actor,
+                    tags=list(ctx.tags or []),
+                    metadata=dict(ctx.metadata or {}),
+                ),
+            )
+
+        event_name = _weapon_event_name(selected)
+        if not event_name:
+            return EventResult.cancelled(message=f"Brak eventu ataku dla broni: {item_label(selected)}.")
+
+        result = dispatch_event(
+            event_name,
+            EventContext(
+                game=ctx.game,
+                actor=actor,
+                tags=list(ctx.tags or []),
+                metadata=dict(ctx.metadata or {}),
+            ),
+        )
+        return result

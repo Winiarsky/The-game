@@ -5,9 +5,13 @@ from . import move_event  # noqa: F401
 from . import stealth_event  # noqa: F401
 from . import seek_event  # noqa: F401
 from . import interaction_event  # noqa: F401
+from . import equip_event  # noqa: F401
 from . import cancel_action_event  # noqa: F401
 from . import end_turn_event  # noqa: F401
+from . import quick_alchemy_event  # noqa: F401
 from . import delay_event  # noqa: F401
+from .attack import attack_event  # noqa: F401
+from .attack import swap_weapon_event  # noqa: F401
 from .attack import attack_sword_event  # noqa: F401
 from .attack import attack_dagger_event  # noqa: F401
 from .attack import attack_razortooth_jaws_event  # noqa: F401

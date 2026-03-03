@@ -89,6 +89,11 @@ class StatusMixin:
                 self._handle_champion_setup_choice(status, data)
             except Exception:
                 pass
+        if data.get("ui_choice_kind") == "deific_weapon":
+            try:
+                self._handle_deific_weapon_choice(status, data)
+            except Exception:
+                pass
         prompt = data.get("ui_prompt")
         if not prompt:
             return
@@ -566,6 +571,14 @@ class StatusMixin:
         except Exception:
             self._ui_log("Nie udalo sie dodac reakcji Champion.")
 
+        if chosen_cause == "paladin":
+            try:
+                from statuses.classes.champion.feats.deific_weapon import DEIFIC_WEAPON_STATUS
+
+                self.add_status(DEIFIC_WEAPON_STATUS)
+            except Exception:
+                self._ui_log("Nie udalo sie dodac feata Deific Weapon.")
+
         self._ui_log(
             "Champion setup: "
             f"key ability={self._labelize_choice(chosen_key_ability)}, "
@@ -573,6 +586,44 @@ class StatusMixin:
             f"deity={self._labelize_choice(chosen_deity)}, "
             f"skill={self._labelize_choice(chosen_deity_skill)}."
         )
+
+    def _handle_deific_weapon_choice(self, status: "Status", data: dict) -> None:
+        choices = list(data.get("deific_weapon_choices") or [])
+        if not choices:
+            return
+        label_map = {self._labelize_choice(item): item for item in choices}
+        labels = list(label_map.keys())
+        chosen_label = self._prompt_choice(
+            "Deific Weapon: wybierz typ broni",
+            labels,
+            source="status",
+        )
+        if not chosen_label:
+            return
+        chosen_weapon = label_map.get(chosen_label)
+        if not chosen_weapon:
+            raw = str(chosen_label).strip().lower().replace(" ", "_").replace("-", "_")
+            chosen_weapon = raw if raw in choices else None
+        if not chosen_weapon:
+            self._ui_log("Deific Weapon: nie wybrano poprawnego typu broni.")
+            return
+
+        try:
+            for idx, item in enumerate(self.statuses):
+                if item is status:
+                    new_data = dict(data)
+                    new_data["deific_weapon_type"] = chosen_weapon
+                    self.statuses[idx] = replace(status, data=new_data)
+                    break
+        except Exception:
+            self._ui_log("Deific Weapon: nie udalo sie zapisac wyboru broni.")
+            return
+
+        try:
+            setattr(self, "deific_weapon_type", chosen_weapon)
+        except Exception:
+            pass
+        self._ui_log(f"Deific Weapon: wybrano {self._labelize_choice(chosen_weapon)}.")
 
     def _sync_reactions_for_status(self, status: "Status") -> None:
         reactions = getattr(self, "reactions", None)

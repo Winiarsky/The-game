@@ -5,6 +5,7 @@ import logging
 from bonuses import BonusEffect, BonusType, build_modifiers_grid
 from damage_types import DamageType
 from GameObjects.interactions_mixin import prompt_for_roll
+from GameObjects.items.inventory import consume_ready_alchemical_item, has_ready_alchemical_item, missing_alchemical_item_reason
 from combat.damage_utils import apply_splash_damage
 from statuses import inspire_courage_damage_bonus
 
@@ -37,6 +38,11 @@ class BaseAlchemicalBombEvent(ActionCostEvent, AttackEventBase):
     CONFIRM_LED = [180, 180, 0]
 
     def pre(self, ctx: EventContext) -> EventResult:
+        actor = ctx.actor
+        if actor is None:
+            return EventResult.cancelled(message="Brak bohatera do rzutu bombą.")
+        if not has_ready_alchemical_item(actor, self.name):
+            return EventResult.cancelled(message=missing_alchemical_item_reason(actor, self.name))
         self._apply_quick_bomber_cost(ctx.actor)
         return super().pre(ctx)
 
@@ -84,6 +90,9 @@ class BaseAlchemicalBombEvent(ActionCostEvent, AttackEventBase):
             )
         if target is None or target_pos is None:
             return EventResult.cancelled(message="Brak celu w zasięgu.")
+
+        if not consume_ready_alchemical_item(actor, self.name):
+            return EventResult.cancelled(message=missing_alchemical_item_reason(actor, self.name))
 
         if not check_concealed(ctx, target):
             return EventResult(success=True, consumed_action=self.consumes_action, message="Atak chybia (concealed).")
