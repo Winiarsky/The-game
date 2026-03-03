@@ -92,6 +92,13 @@ class BasicMeleeAttackEvent(AttackEventBase):
             pass
 
         tags = self._effective_tags(ctx)
+        if self._has_status_id(hero, "monk_stance_active") and "unarmed" not in tags:
+            stance_label = str(getattr(hero, "get_status_data", lambda *_a, **_k: "")("monk_stance_active", "stance_label", "") or "")
+            if not stance_label:
+                stance_label = "Monk Stance"
+            return EventResult.cancelled(
+                message=f"{stance_label}: twarda blokada Strike'ów spoza stance (użyj unarmed/flurry_of_blows)."
+            )
         metadata = dict(getattr(ctx, "metadata", None) or {})
         candidates = self._reachable_enemies(ctx.game, hero_pos, tags)
         candidates = [(enemy, pos) for enemy, pos in candidates if not is_target_blocked_by_tags(enemy, tags)]
@@ -149,6 +156,10 @@ class BasicMeleeAttackEvent(AttackEventBase):
             attack_roll_penalty = max(0, int(metadata.get("attack_roll_penalty", 0) or 0))
         except Exception:
             attack_roll_penalty = 0
+        try:
+            attack_roll_bonus = max(0, int(metadata.get("ki_strike_attack_bonus", 0) or 0))
+        except Exception:
+            attack_roll_bonus = 0
         try:
             power_attack_extra_dice = max(0, int(metadata.get("power_attack_extra_dice", 0) or 0))
         except Exception:
@@ -297,6 +308,16 @@ class BasicMeleeAttackEvent(AttackEventBase):
                     source="fighter:attack_roll_penalty",
                     label="fighter penalty",
                     is_penalty=True,
+                )
+            )
+        if attack_roll_bonus > 0:
+            extra_effects.append(
+                BonusEffect(
+                    type=BonusType.STATUS,
+                    value=attack_roll_bonus,
+                    tag=action_tag,
+                    source="ki_strike",
+                    label="ki strike",
                 )
             )
         if self._has_trait(tags, "backswing") and weapon_key in backswing_ready:
@@ -607,6 +628,25 @@ class BasicMeleeAttackEvent(AttackEventBase):
                 damage_components.append((first_type, int(extra)))
             except Exception:
                 pass
+        ki_formula = str(metadata.get("ki_strike_extra_formula", "") or "").strip()
+        ki_damage_type = str(metadata.get("ki_strike_extra_damage_type", "") or "").strip().lower()
+        if ki_formula and ki_damage_type:
+            extra = prompt_for_roll(
+                f"Ki Strike: dodatkowe obrażenia ({ki_formula} {ki_damage_type}) - podaj wynik:",
+                layout="damage",
+                answer_placeholder="Dodatkowe obrażenia",
+            )
+            try:
+                damage_components.append((ki_damage_type, int(extra)))
+            except Exception:
+                pass
+
+        pending_persistent_payload = None
+        persistent_payload = metadata.get("on_hit_persistent_damage")
+        if isinstance(persistent_payload, dict):
+            critical_only = bool(persistent_payload.get("on_critical_only", False))
+            if (not critical_only) or critical:
+                pending_persistent_payload = dict(persistent_payload)
 
         if roll_only:
             total_damage = sum(max(0, int(amount or 0)) for _, amount in damage_components)
@@ -648,6 +688,7 @@ class BasicMeleeAttackEvent(AttackEventBase):
                     "damage_components": list(damage_components),
                     "damage_total": int(total_damage),
                     "roll_only": True,
+                    "pending_persistent_payload": pending_persistent_payload,
                 },
             )
 
@@ -658,9 +699,8 @@ class BasicMeleeAttackEvent(AttackEventBase):
             logger.error("Nie udało się zadać obrażeń: %s", exc)
             return EventResult(success=False, consumed_action=False, message=str(exc))
 
-        persistent_payload = (getattr(ctx, "metadata", None) or {}).get("on_hit_persistent_damage")
-        if persistent_payload:
-            self._apply_on_hit_persistent(enemy, persistent_payload, ctx=ctx, source=self.action_id_base)
+        if pending_persistent_payload:
+            self._apply_on_hit_persistent(enemy, pending_persistent_payload, ctx=ctx, source=self.action_id_base)
 
         ctx.game.events.safe_emit_action(
             actor=hero,

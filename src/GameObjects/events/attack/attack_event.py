@@ -66,6 +66,21 @@ def _select_weapon_from_equipped(ctx: EventContext, equipped: list[object]) -> o
     return None
 
 
+def _has_status(actor, status_id: str) -> bool:
+    if actor is None:
+        return False
+    checker = getattr(actor, "has_status", None)
+    if callable(checker):
+        try:
+            return bool(checker(status_id))
+        except Exception:
+            return False
+    for status in getattr(actor, "statuses", []) or []:
+        if getattr(status, "id", status) == status_id:
+            return True
+    return False
+
+
 @register_event
 class AttackEvent(GameEvent):
     name = "attack"
@@ -76,6 +91,16 @@ class AttackEvent(GameEvent):
         actor = ctx.actor
         if actor is None:
             return EventResult.cancelled(message="Brak aktora do ataku.")
+        if _has_status(actor, "monk_stance_active"):
+            return dispatch_event(
+                "unarmed",
+                EventContext(
+                    game=ctx.game,
+                    actor=actor,
+                    tags=list(ctx.tags or []),
+                    metadata=dict(ctx.metadata or {}),
+                ),
+            )
 
         ensure_actor_inventory(actor)
         equipped = get_equipped_weapons(actor)

@@ -104,6 +104,11 @@ class StatusMixin:
                 self._handle_fighter_setup_choice(status, data)
             except Exception:
                 pass
+        if data.get("ui_choice_kind") == "monk_setup":
+            try:
+                self._handle_monk_setup_choice(status, data)
+            except Exception:
+                pass
         if data.get("ui_choice_kind") == "cleric_setup":
             try:
                 self._handle_cleric_setup_choice(status, data)
@@ -331,6 +336,40 @@ class StatusMixin:
                     "SUDDEN_CHARGE_STATUS",
                 ),
             },
+            "monk": {
+                "crane_stance": (
+                    "statuses.classes.monk.feats.crane_stance",
+                    "CRANE_STANCE_STATUS",
+                ),
+                "dragon_stance": (
+                    "statuses.classes.monk.feats.dragon_stance",
+                    "DRAGON_STANCE_STATUS",
+                ),
+                "ki_rush": (
+                    "statuses.classes.monk.feats.ki_rush",
+                    "KI_RUSH_STATUS",
+                ),
+                "ki_strike": (
+                    "statuses.classes.monk.feats.ki_strike",
+                    "KI_STRIKE_STATUS",
+                ),
+                "monastic_weaponry": (
+                    "statuses.classes.monk.feats.monastic_weaponry",
+                    "MONASTIC_WEAPONRY_STATUS",
+                ),
+                "mountain_stance": (
+                    "statuses.classes.monk.feats.mountain_stance",
+                    "MOUNTAIN_STANCE_STATUS",
+                ),
+                "tiger_stance": (
+                    "statuses.classes.monk.feats.tiger_stance",
+                    "TIGER_STANCE_STATUS",
+                ),
+                "wolf_stance": (
+                    "statuses.classes.monk.feats.wolf_stance",
+                    "WOLF_STANCE_STATUS",
+                ),
+            },
         }
 
     @staticmethod
@@ -466,6 +505,15 @@ class StatusMixin:
         except Exception:
             return False
 
+    def _is_monk_actor(self) -> bool:
+        class_name = str(getattr(self, "class_name", "") or "").strip().lower()
+        if class_name == "monk":
+            return True
+        try:
+            return bool(self.has_status("monk"))
+        except Exception:
+            return False
+
     def _passes_status_prerequisites(self, status: "Status") -> bool:
         status_id = str(getattr(status, "id", "") or "").strip().lower()
         status_data = getattr(status, "data", None) or {}
@@ -505,6 +553,20 @@ class StatusMixin:
         }:
             if not self._is_fighter_actor():
                 self._ui_log(f"{self._labelize_choice(status_id)}: wymaga klasy Fighter.")
+                return False
+
+        if status_id in {
+            "crane_stance",
+            "dragon_stance",
+            "ki_rush",
+            "ki_strike",
+            "monastic_weaponry",
+            "mountain_stance",
+            "tiger_stance",
+            "wolf_stance",
+        }:
+            if not self._is_monk_actor():
+                self._ui_log(f"{self._labelize_choice(status_id)}: wymaga klasy Monk.")
                 return False
 
         required_druid_order = str(status_data.get("requires_druid_order", "") or "").strip().lower()
@@ -1273,6 +1335,62 @@ class StatusMixin:
             f"key ability={self._labelize_choice(chosen_key_ability)}."
         )
         self._ui_log("Fighter: skille prowadzisz ręcznie poza grą.")
+
+    def _handle_monk_setup_choice(self, status: "Status", data: dict) -> None:
+        key_ability_choices = list(data.get("monk_key_ability_choices") or ["strength", "dexterity"])
+        feat_choices = list(data.get("monk_feat_choices") or [])
+
+        chosen_key_ability = self._pick_choice_id(
+            "Monk: wybierz key ability",
+            key_ability_choices,
+            source="status",
+        )
+        if not chosen_key_ability:
+            return
+
+        chosen_feat = self._pick_choice_id(
+            "Monk: wybierz 1. poziomowy class feat",
+            feat_choices,
+            source="status",
+        )
+        if not chosen_feat:
+            return
+
+        setup_payload = {"key_ability": chosen_key_ability, "class_feat": chosen_feat}
+        try:
+            for idx, item in enumerate(self.statuses):
+                if item is status:
+                    new_data = dict(data)
+                    new_data["monk_setup"] = dict(setup_payload)
+                    new_data["monk_key_ability"] = chosen_key_ability
+                    new_data["monk_class_feat"] = chosen_feat
+                    self.statuses[idx] = replace(status, data=new_data)
+                    break
+        except Exception:
+            self._ui_log("Monk setup: nie udalo sie zapisac wyborow.")
+            return
+
+        for attr, value in (
+            ("monk_key_ability", chosen_key_ability),
+            ("monk_class_feat", chosen_feat),
+        ):
+            try:
+                setattr(self, attr, value)
+            except Exception:
+                pass
+
+        registry = self._class_feat_registry().get("monk", {})
+        feat_status = self._resolve_status_from_registry(chosen_feat, registry)
+        if feat_status is None:
+            self._ui_log(f"Monk setup: nie znaleziono statusu feata {chosen_feat}.")
+            return
+        self.add_status(feat_status)
+
+        self._ui_log(
+            "Monk setup: "
+            f"key ability={self._labelize_choice(chosen_key_ability)}, "
+            f"feat={self._labelize_choice(chosen_feat)}."
+        )
 
     def _handle_cleric_setup_choice(self, status: "Status", data: dict) -> None:
         doctrine_choices = list(data.get("cleric_doctrine_choices") or ["cloistered_cleric", "warpriest"])

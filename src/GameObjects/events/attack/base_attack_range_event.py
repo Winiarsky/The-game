@@ -52,6 +52,13 @@ class BaseRangeAttackEvent(AttackEventBase):
         hero = ctx.actor
         if hero is None:
             return EventResult.cancelled(message="Brak bohatera do ataku dystansowego.")
+        if self._has_status_id(hero, "monk_stance_active"):
+            stance_label = str(getattr(hero, "get_status_data", lambda *_a, **_k: "")("monk_stance_active", "stance_label", "") or "")
+            if not stance_label:
+                stance_label = "Monk Stance"
+            return EventResult.cancelled(
+                message=f"{stance_label}: twarda blokada Strike'ów spoza stance (użyj unarmed/flurry_of_blows)."
+            )
         if getattr(hero, "has_status", lambda _s: False)("restrained"):
             return EventResult.cancelled(message="Nie możesz wykonywać ataków dystansowych będąc restrained.")
         hero_pos = getattr(hero, "position", None)

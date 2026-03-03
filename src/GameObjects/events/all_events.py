@@ -45,6 +45,7 @@ from . import trip_event  # noqa: F401
 from . import shove_event  # noqa: F401
 from . import sudden_charge_event  # noqa: F401
 from . import fighter_feat_events  # noqa: F401
+from . import monk_feat_events  # noqa: F401
 from .elixirs import antidote_event  # noqa: F401
 from .elixirs import antiplague_event  # noqa: F401
 from .elixirs import elixir_of_life_event  # noqa: F401
@@ -66,6 +67,7 @@ from .magic.focus_spells.bard import inspire_courage_event  # noqa: F401
 from .magic.focus_spells.bard import loremaster_etude_event  # noqa: F401
 from .magic.focus_spells.cleric import domain_focus_spell_event  # noqa: F401
 from .magic.focus_spells.druid import order_spell_events  # noqa: F401
+from .magic.focus_spells.monk import ki_spell_events  # noqa: F401
 from . import phase_events  # noqa: F401
 from .enemy import enemy_move_event  # noqa: F401
 from .enemy import enemy_attack_melee_event  # noqa: F401

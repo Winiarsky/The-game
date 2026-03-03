@@ -55,6 +55,16 @@ NATURAL_AMBITION_CLASS_FEAT_CHOICES = {
         "snagging_strike",
         "sudden_charge",
     ],
+    "monk": [
+        "crane_stance",
+        "dragon_stance",
+        "ki_rush",
+        "ki_strike",
+        "monastic_weaponry",
+        "mountain_stance",
+        "tiger_stance",
+        "wolf_stance",
+    ],
 }
 
 

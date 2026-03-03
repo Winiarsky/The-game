@@ -39,9 +39,13 @@ class UnarmedAttackEvent(BasicMeleeAttackEvent):
                         return status_profile
                 return None
 
-            profile = _profile_from_status("wild_shape_active")
+            profile = _profile_from_status("monk_stance_active")
             if profile:
-                from_source = "wild_shape"
+                from_source = "monk_stance"
+            if not profile:
+                profile = _profile_from_status("wild_shape_active")
+                if profile:
+                    from_source = "wild_shape"
             if not profile:
                 profile = _profile_from_status("wild_morph_active")
                 if profile:

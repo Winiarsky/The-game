@@ -90,6 +90,12 @@ class AttackEventBase(GameEvent):
         "8": "10",
         "10": "12",
     }
+    _ALT_UNARMED_PROFILE_STATUS_IDS = {
+        "wild_shape_active",
+        "wild_morph_active",
+        "animal_instinct_active",
+        "monk_stance_active",
+    }
 
     def _ac_with_bonuses(
         self,
@@ -392,6 +398,21 @@ class AttackEventBase(GameEvent):
         }
         return aliases.get(normalized, normalized)
 
+    @staticmethod
+    def _has_status_id(actor, status_id: str) -> bool:
+        if actor is None:
+            return False
+        has_status = getattr(actor, "has_status", None)
+        if callable(has_status):
+            try:
+                return bool(has_status(status_id))
+            except Exception:
+                return False
+        for status in getattr(actor, "statuses", []) or []:
+            if getattr(status, "id", status) == status_id:
+                return True
+        return False
+
     def _deific_weapon_type(self, actor) -> str | None:
         if actor is None:
             return None
@@ -569,6 +590,39 @@ class AttackEventBase(GameEvent):
         prompt_list[0] = upgraded_first
         return prompt_list, True
 
+    def _powerful_fist_damage_prompt(
+        self,
+        actor,
+        *,
+        weapon_type: str | None,
+        damage_prompt: str | Iterable[str],
+    ):
+        if actor is None:
+            return damage_prompt, False
+        if not self._has_status_id(actor, "powerful_fist"):
+            return damage_prompt, False
+        if self._normalize_weapon_type(weapon_type) != "unarmed":
+            return damage_prompt, False
+        if any(self._has_status_id(actor, status_id) for status_id in self._ALT_UNARMED_PROFILE_STATUS_IDS):
+            return damage_prompt, False
+
+        def _upgrade(text: str) -> str:
+            return re.sub(r"([kKdD])4\b", r"\g<1>6", str(text or ""), count=1)
+
+        if isinstance(damage_prompt, str):
+            upgraded = _upgrade(damage_prompt)
+            return upgraded, upgraded != damage_prompt
+
+        prompt_list = list(damage_prompt)
+        if not prompt_list:
+            return damage_prompt, False
+        first = str(prompt_list[0])
+        upgraded_first = _upgrade(first)
+        if upgraded_first == first:
+            return damage_prompt, False
+        prompt_list[0] = upgraded_first
+        return prompt_list, True
+
     def _damage_prompt_with_class_upgrades(
         self,
         actor,
@@ -578,6 +632,14 @@ class AttackEventBase(GameEvent):
     ):
         current_prompt = damage_prompt
         notes: list[str] = []
+
+        current_prompt, powerful_applied = self._powerful_fist_damage_prompt(
+            actor,
+            weapon_type=weapon_type,
+            damage_prompt=current_prompt,
+        )
+        if powerful_applied:
+            notes.append("Powerful Fist: bazowe unarmed 1k4 -> 1k6.")
 
         current_prompt, deific_applied = self._deific_damage_prompt(
             actor,
