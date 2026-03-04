@@ -139,7 +139,11 @@ class AttackEvent(GameEvent):
                 game=ctx.game,
                 actor=actor,
                 tags=list(ctx.tags or []),
-                metadata=dict(ctx.metadata or {}),
+                metadata={
+                    **dict(ctx.metadata or {}),
+                    "selected_weapon": selected,
+                    "selected_weapon_instance_id": str(getattr(selected, "instance_id", "") or ""),
+                },
             ),
         )
         return result

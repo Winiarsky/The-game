@@ -498,6 +498,7 @@ class Combat(State):
             return
         try:
             self.attack_state.pop(actor, None)
+            self.attack_state.pop(f"actor:{self._actor_id(actor)}", None)
         except Exception:
             pass
         try:

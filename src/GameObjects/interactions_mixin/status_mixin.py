@@ -109,6 +109,11 @@ class StatusMixin:
                 self._handle_monk_setup_choice(status, data)
             except Exception:
                 pass
+        if data.get("ui_choice_kind") == "ranger_setup":
+            try:
+                self._handle_ranger_setup_choice(status, data)
+            except Exception:
+                pass
         if data.get("ui_choice_kind") == "cleric_setup":
             try:
                 self._handle_cleric_setup_choice(status, data)
@@ -370,6 +375,28 @@ class StatusMixin:
                     "WOLF_STANCE_STATUS",
                 ),
             },
+            "ranger": {
+                "animal_companion": (
+                    "statuses.classes.ranger.feats.animal_companion",
+                    "ANIMAL_COMPANION_STATUS",
+                ),
+                "crossbow_ace": (
+                    "statuses.classes.ranger.feats.crossbow_ace",
+                    "CROSSBOW_ACE_STATUS",
+                ),
+                "hunted_shot": (
+                    "statuses.classes.ranger.feats.hunted_shot",
+                    "HUNTED_SHOT_STATUS",
+                ),
+                "monster_hunter": (
+                    "statuses.classes.ranger.feats.monster_hunter",
+                    "MONSTER_HUNTER_STATUS",
+                ),
+                "twin_takedown": (
+                    "statuses.classes.ranger.feats.twin_takedown",
+                    "TWIN_TAKEDOWN_STATUS",
+                ),
+            },
         }
 
     @staticmethod
@@ -514,6 +541,15 @@ class StatusMixin:
         except Exception:
             return False
 
+    def _is_ranger_actor(self) -> bool:
+        class_name = str(getattr(self, "class_name", "") or "").strip().lower()
+        if class_name == "ranger":
+            return True
+        try:
+            return bool(self.has_status("ranger"))
+        except Exception:
+            return False
+
     def _passes_status_prerequisites(self, status: "Status") -> bool:
         status_id = str(getattr(status, "id", "") or "").strip().lower()
         status_data = getattr(status, "data", None) or {}
@@ -538,8 +574,22 @@ class StatusMixin:
                 return False
 
         if status_id in {"animal_companion", "leshy_familiar", "storm_born", "widen_spell", "wild_shape"}:
-            if not self._is_druid_actor():
-                self._ui_log(f"{self._labelize_choice(status_id)}: wymaga klasy Druid.")
+            allowed_classes = {
+                str(item).strip().lower()
+                for item in list(status_data.get("allowed_classes") or [])
+                if str(item).strip()
+            }
+            if not allowed_classes:
+                allowed_classes = {"druid"}
+            class_checks = {
+                "druid": self._is_druid_actor,
+                "ranger": self._is_ranger_actor,
+            }
+            if not any(class_checks.get(cid, lambda: False)() for cid in allowed_classes):
+                if "ranger" in allowed_classes and "druid" not in allowed_classes:
+                    self._ui_log(f"{self._labelize_choice(status_id)}: wymaga klasy Ranger.")
+                else:
+                    self._ui_log(f"{self._labelize_choice(status_id)}: wymaga klasy Druid.")
                 return False
 
         if status_id in {
@@ -567,6 +617,17 @@ class StatusMixin:
         }:
             if not self._is_monk_actor():
                 self._ui_log(f"{self._labelize_choice(status_id)}: wymaga klasy Monk.")
+                return False
+
+        if status_id in {
+            "crossbow_ace",
+            "hunted_shot",
+            "hunt_prey",
+            "monster_hunter",
+            "twin_takedown",
+        }:
+            if not self._is_ranger_actor():
+                self._ui_log(f"{self._labelize_choice(status_id)}: wymaga klasy Ranger.")
                 return False
 
         required_druid_order = str(status_data.get("requires_druid_order", "") or "").strip().lower()
@@ -1389,6 +1450,78 @@ class StatusMixin:
         self._ui_log(
             "Monk setup: "
             f"key ability={self._labelize_choice(chosen_key_ability)}, "
+            f"feat={self._labelize_choice(chosen_feat)}."
+        )
+
+    def _handle_ranger_setup_choice(self, status: "Status", data: dict) -> None:
+        key_ability_choices = list(data.get("ranger_key_ability_choices") or ["strength", "dexterity"])
+        hunter_edge_choices = list(data.get("ranger_hunters_edge_choices") or ["flurry", "precision", "outwit"])
+        feat_choices = list(data.get("ranger_feat_choices") or [])
+
+        chosen_key_ability = self._pick_choice_id(
+            "Ranger: wybierz key ability",
+            key_ability_choices,
+            source="status",
+        )
+        if not chosen_key_ability:
+            return
+
+        chosen_hunter_edge = self._pick_choice_id(
+            "Ranger: wybierz hunter's edge",
+            hunter_edge_choices,
+            source="status",
+        )
+        if not chosen_hunter_edge:
+            return
+
+        chosen_feat = self._pick_choice_id(
+            "Ranger: wybierz 1. poziomowy class feat",
+            feat_choices,
+            source="status",
+        )
+        if not chosen_feat:
+            return
+
+        setup_payload = {
+            "key_ability": chosen_key_ability,
+            "hunter_edge": chosen_hunter_edge,
+            "class_feat": chosen_feat,
+        }
+        try:
+            for idx, item in enumerate(self.statuses):
+                if item is status:
+                    new_data = dict(data)
+                    new_data["ranger_setup"] = dict(setup_payload)
+                    new_data["ranger_key_ability"] = chosen_key_ability
+                    new_data["ranger_hunter_edge"] = chosen_hunter_edge
+                    new_data["ranger_class_feat"] = chosen_feat
+                    self.statuses[idx] = replace(status, data=new_data)
+                    break
+        except Exception:
+            self._ui_log("Ranger setup: nie udalo sie zapisac wyborow.")
+            return
+
+        for attr, value in (
+            ("ranger_key_ability", chosen_key_ability),
+            ("ranger_hunter_edge", chosen_hunter_edge),
+            ("ranger_class_feat", chosen_feat),
+        ):
+            try:
+                setattr(self, attr, value)
+            except Exception:
+                pass
+
+        registry = self._class_feat_registry().get("ranger", {})
+        feat_status = self._resolve_status_from_registry(chosen_feat, registry)
+        if feat_status is None:
+            self._ui_log(f"Ranger setup: nie znaleziono statusu feata {chosen_feat}.")
+            return
+        self.add_status(feat_status)
+
+        self._ui_log(
+            "Ranger setup: "
+            f"key ability={self._labelize_choice(chosen_key_ability)}, "
+            f"hunter's edge={self._labelize_choice(chosen_hunter_edge)}, "
             f"feat={self._labelize_choice(chosen_feat)}."
         )
 

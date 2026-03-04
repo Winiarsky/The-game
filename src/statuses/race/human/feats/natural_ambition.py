@@ -65,6 +65,13 @@ NATURAL_AMBITION_CLASS_FEAT_CHOICES = {
         "tiger_stance",
         "wolf_stance",
     ],
+    "ranger": [
+        "animal_companion",
+        "crossbow_ace",
+        "hunted_shot",
+        "monster_hunter",
+        "twin_takedown",
+    ],
 }
 
 

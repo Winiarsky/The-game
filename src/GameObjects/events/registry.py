@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Callable, Dict, Iterable, Type
 import logging
 
-from .base import EventContext, EventResult, GameEvent
+from .base import EventContext, EventResult, GameEvent, mapping_setdefault_actor
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +115,9 @@ def dispatch_event(name: str, ctx: EventContext) -> EventResult:
             combat_state = getattr(ctx.game, "state", None)
             attack_state = getattr(combat_state, "attack_state", None)
             if isinstance(attack_state, dict):
-                payload = attack_state.setdefault(ctx.actor, {})
+                payload = mapping_setdefault_actor(attack_state, ctx.actor, dict)
+                if not isinstance(payload, dict):
+                    payload = {}
                 tags = set(event._effective_tags(ctx))
                 used_attack = (
                     "attack" in tags

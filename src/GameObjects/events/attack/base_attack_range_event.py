@@ -6,7 +6,10 @@ from typing import Sequence
 
 from bonuses import BonusEffect, BonusType, build_modifiers_grid
 from GameObjects.interactions_mixin import RangeAttackAffectMixin, prompt_for_roll
+from GameObjects.items.inventory import get_equipped_weapons
+from GameObjects.items.weapon import normalize_weapon_id
 from statuses import Status, inspire_courage_damage_bonus
+from statuses.classes.ranger.ranger_utils import set_crossbow_ace_ready
 from damage_types import DamageType
 from combat.damage_utils import burn_it_bonus, burn_it_prompt_note
 from combat.degree_of_success import is_critical_success, is_hit, natural_shift_from_roll, resolve_outcome
@@ -14,7 +17,7 @@ from combat.degree_of_success import is_critical_success, is_hit, natural_shift_
 from .attack_base import AttackEventBase, check_concealed
 from . import basic_melee_attack_event
 from ..targeting import is_target_blocked_by_tags
-from ..base import EventContext, EventResult
+from ..base import EventContext, EventResult, mapping_get_actor
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +48,147 @@ class BaseRangeAttackEvent(AttackEventBase):
         "block": [180, 0, 0],
     }
     TARGET_LED = [0, 40, 140]
+
+    def _actions_remaining(self, ctx: EventContext, actor) -> int | None:
+        if not getattr(ctx, "in_combat", False):
+            return None
+        combat_state = getattr(ctx.game, "state", None)
+        if combat_state is None:
+            return None
+        try:
+            limit = int(getattr(combat_state, "ACTION_LIMIT", 3) or 3)
+            used = int(mapping_get_actor(getattr(combat_state, "actions_used", {}), actor, 0) or 0)
+        except Exception:
+            return None
+        return max(0, limit - used)
+
+    @staticmethod
+    def _weapon_reload_value(weapon) -> int:
+        try:
+            return max(0, int(getattr(weapon, "reload", 0) or 0))
+        except Exception:
+            return 0
+
+    def _resolve_selected_weapon(self, actor, metadata: dict) -> object | None:
+        equipped = list(get_equipped_weapons(actor) or [])
+        if not equipped:
+            return None
+
+        selected_weapon = metadata.get("selected_weapon")
+        if selected_weapon is not None:
+            if selected_weapon in equipped:
+                return selected_weapon
+            selected_iid = str(getattr(selected_weapon, "instance_id", "") or "").strip()
+            if selected_iid:
+                for item in equipped:
+                    if str(getattr(item, "instance_id", "") or "").strip() == selected_iid:
+                        return item
+
+        selected_iid = str(metadata.get("selected_weapon_instance_id", "") or "").strip()
+        if selected_iid:
+            for item in equipped:
+                if str(getattr(item, "instance_id", "") or "").strip() == selected_iid:
+                    return item
+
+        event_weapon_id = normalize_weapon_id(getattr(self, "name", None)) or normalize_weapon_id(
+            getattr(self, "action_id_base", None)
+        )
+        if event_weapon_id:
+            for item in equipped:
+                item_weapon_id = normalize_weapon_id(getattr(item, "item_id", None))
+                if item_weapon_id == event_weapon_id:
+                    return item
+
+        for item in equipped:
+            if bool(getattr(item, "ranged", False)):
+                return item
+        return equipped[0]
+
+    @staticmethod
+    def _weapon_name(weapon) -> str:
+        return str(getattr(weapon, "name", "") or getattr(weapon, "item_id", "") or "broń")
+
+    def _mark_weapon_need_reload(self, weapon) -> None:
+        if weapon is None:
+            return
+        if self._weapon_reload_value(weapon) <= 0:
+            return
+        try:
+            setattr(weapon, "need_reload", True)
+        except Exception:
+            pass
+
+    def _clear_weapon_need_reload(self, weapon) -> None:
+        if weapon is None:
+            return
+        try:
+            setattr(weapon, "need_reload", False)
+        except Exception:
+            pass
+
+    @staticmethod
+    def _weapon_needs_reload(weapon) -> bool:
+        if weapon is None:
+            return False
+        return bool(getattr(weapon, "need_reload", False))
+
+    def _notify_reload_blocked(self, ctx: EventContext, message: str) -> None:
+        ui = getattr(ctx.game, "ui", None)
+        if ui is not None and hasattr(ui, "prompt_info"):
+            try:
+                ui.prompt_info("Reload", prompt_long=message, source="reload")
+                return
+            except Exception:
+                pass
+        try:
+            if hasattr(ctx.game, "ui_log"):
+                ctx.game.ui_log(message)
+        except Exception:
+            return
+
+    def _handle_reload_before_shot(self, ctx: EventContext, actor, weapon) -> tuple[int, EventResult | None]:
+        reload_cost = self._weapon_reload_value(weapon)
+        if reload_cost <= 0:
+            return 0, None
+        if not self._weapon_needs_reload(weapon):
+            return 0, None
+
+        remaining = self._actions_remaining(ctx, actor)
+        total_needed = 1 + reload_cost
+        if remaining is not None and remaining < total_needed:
+            weapon_name = self._weapon_name(weapon)
+            msg = (
+                f"{weapon_name}: broń wymaga Reload {reload_cost}, "
+                f"ale masz za mało akcji ({remaining}/{total_needed})."
+            )
+            self._notify_reload_blocked(ctx, msg)
+            return 0, EventResult.cancelled(message=msg)
+
+        weapon_name = self._weapon_name(weapon)
+        choice = self._prompt_choice(
+            f"{weapon_name} wymaga przeładowania (Reload {reload_cost}). Przeładować?",
+            choices=["tak", "nie"],
+            source="reload",
+        )
+        normalized = str(choice or "").strip().lower()
+        accepted = normalized.startswith("t") or normalized in {"yes", "y", "1", "ok"}
+        if not accepted:
+            return 0, EventResult.cancelled(
+                message=f"Anulowano atak: {weapon_name} wymaga przeładowania."
+            )
+        self._clear_weapon_need_reload(weapon)
+        has_crossbow_ace = bool(getattr(actor, "has_status", lambda *_a, **_k: False)("crossbow_ace"))
+        if has_crossbow_ace:
+            weapon_id = (
+                normalize_weapon_id(getattr(weapon, "item_id", None))
+                or str(getattr(weapon, "item_id", "") or "").strip().lower().replace("-", "_").replace(" ", "_")
+                or "crossbow"
+            )
+            traits = {str(item or "").strip().lower() for item in (getattr(weapon, "traits", None) or ())}
+            crossbow_like = bool(weapon_id and "crossbow" in weapon_id) or ("crossbow" in traits)
+            if crossbow_like:
+                set_crossbow_ace_ready(actor, weapon_id, source="reload")
+        return reload_cost, None
 
     # --- main flow ---
     def execute(self, ctx: EventContext) -> EventResult:  # noqa: C901
@@ -89,11 +233,10 @@ class BaseRangeAttackEvent(AttackEventBase):
                     current = obstacle_led.get(p, "none")
                     if self.COVER_RANK[obs["cover_type"]] > self.COVER_RANK[current]:
                         obstacle_led[p] = obs["cover_type"]
+        hittable = [a for a in analyses if not a["blocked"]]
         for pos, ctype in obstacle_led.items():
             led_positions.append(pos)
             led_colors.append(self.COVER_LED.get(ctype, self.COVER_LED["standard"]))
-
-        hittable = [a for a in analyses if not a["blocked"]]
         for analysis in hittable:
             led_positions.append(analysis["target_pos"])
             led_colors.append(self.TARGET_LED)
@@ -108,16 +251,33 @@ class BaseRangeAttackEvent(AttackEventBase):
             if not hittable:
                 return EventResult.cancelled(message="Brak wrogów w zasięgu lub linia strzału zablokowana.")
 
-            target_pos_list = [a["target_pos"] for a in hittable]
-            try:
-                choice = game.conn.scan_board(target_pos_list)
-            except Exception:
-                choice = None
             target_analysis = None
-            for a in hittable:
-                if a["target_pos"] == choice:
-                    target_analysis = a
-                    break
+            forced_target = metadata.get("forced_target")
+            forced_target_pos = metadata.get("forced_target_pos")
+            if forced_target is not None:
+                for a in hittable:
+                    if a["enemy"] is forced_target:
+                        target_analysis = a
+                        break
+                if target_analysis is None:
+                    return EventResult.cancelled(message="Wymuszony cel nie jest w zasięgu ataku.")
+            elif isinstance(forced_target_pos, tuple) and len(forced_target_pos) == 2:
+                for a in hittable:
+                    if tuple(a["target_pos"]) == tuple(forced_target_pos):
+                        target_analysis = a
+                        break
+                if target_analysis is None:
+                    return EventResult.cancelled(message="Wymuszony cel nie jest w zasięgu ataku.")
+            else:
+                target_pos_list = [a["target_pos"] for a in hittable]
+                try:
+                    choice = game.conn.scan_board(target_pos_list)
+                except Exception:
+                    choice = None
+                for a in hittable:
+                    if a["target_pos"] == choice:
+                        target_analysis = a
+                        break
             if target_analysis is None:
                 return EventResult.cancelled(message="Nie wybrano poprawnego celu.")
 
@@ -128,6 +288,8 @@ class BaseRangeAttackEvent(AttackEventBase):
             distance_ft = target_analysis["distance_ft"]
             range_penalty = target_analysis["range_penalty"]
             increments = target_analysis["increments"]
+            if self._is_hunted_prey(hero, enemy) and increments >= 2:
+                range_penalty = max(0, int(range_penalty) - 2)
             target_id = self._target_id(enemy)
 
             # --- weapon trait state (przed atakiem) ---
@@ -156,6 +318,12 @@ class BaseRangeAttackEvent(AttackEventBase):
                 attack_roll_penalty = max(0, int(metadata.get("attack_roll_penalty", 0) or 0))
             except Exception:
                 attack_roll_penalty = 0
+            roll_only = bool(metadata.get("roll_only", False))
+            selected_weapon = self._resolve_selected_weapon(hero, metadata)
+            extra_actions_spent, reload_cancelled = self._handle_reload_before_shot(ctx, hero, selected_weapon)
+            if reload_cancelled is not None:
+                return reload_cancelled
+            actions_spent = 1 + max(0, int(extra_actions_spent or 0))
 
             if not check_concealed(ctx, enemy):
                 game.events.safe_emit_action(
@@ -180,9 +348,11 @@ class BaseRangeAttackEvent(AttackEventBase):
                         attack_count=map_attack_count,
                     )
                 self._apply_range_attacker_status(hero)
+                self._mark_weapon_need_reload(selected_weapon)
                 return EventResult(
                     success=True,
                     consumed_action=self.consumes_action,
+                    actions_spent=actions_spent,
                     message="Strzał chybia (concealed).",
                     data={"hit": False, "critical": False, "target": enemy, "target_pos": target_pos},
                 )
@@ -263,6 +433,14 @@ class BaseRangeAttackEvent(AttackEventBase):
                     map_penalty = 4 if attacks_this_turn == 1 else 8
                 else:
                     map_penalty = 5 if attacks_this_turn == 1 else 10
+            ranger_map_penalty = self._ranger_map_penalty(
+                hero,
+                tags=tags,
+                attacks_this_turn=attacks_this_turn,
+                target=enemy,
+            )
+            if ranger_map_penalty is not None:
+                map_penalty = int(ranger_map_penalty)
             if map_penalty:
                 extra_effects.append(
                     BonusEffect(
@@ -270,7 +448,11 @@ class BaseRangeAttackEvent(AttackEventBase):
                         value=map_penalty,
                         tag=action_tag,
                         source="map",
-                        label=f"MAP{' (agile)' if self._has_trait(tags, 'agile') else ''}",
+                        label=(
+                            "MAP ranger flurry"
+                            if ranger_map_penalty is not None
+                            else f"MAP{' (agile)' if self._has_trait(tags, 'agile') else ''}"
+                        ),
                         is_penalty=True,
                     )
                 )
@@ -377,6 +559,7 @@ class BaseRangeAttackEvent(AttackEventBase):
 
             total_roll = roll + modifier
             self._consume_aid_attack_bonus(hero, action_tag=action_tag)
+            self._consume_monster_hunter_bonus(hero)
             outcome = resolve_outcome(total_roll, target_ac, natural_shift=natural_shift)
             critical = is_critical_success(outcome)
             hit = is_hit(outcome)
@@ -410,9 +593,11 @@ class BaseRangeAttackEvent(AttackEventBase):
                 miss_message = "Strzał chybia."
                 if exacting_strike_press:
                     miss_message = "Exacting Strike: pudło (MAP bez zmian)."
+                self._mark_weapon_need_reload(selected_weapon)
                 return EventResult(
                     success=True,
                     consumed_action=self.consumes_action,
+                    actions_spent=actions_spent,
                     message=miss_message,
                     data={"hit": False, "critical": False, "target": enemy, "target_pos": target_pos},
                 )
@@ -512,6 +697,36 @@ class BaseRangeAttackEvent(AttackEventBase):
             if has_point_blank_shot and not has_volley_trait and distance_ft <= int(self.range_increment_ft):
                 damage_bonus += 2
                 damage_notes.append("Point-Blank Shot: +2 circumstance do obrażeń (1. przyrost zasięgu).")
+            crossbow_ace_applied = False
+            crossbow_ace_simple_upgrade = False
+            if getattr(hero, "has_status", lambda *_a, **_k: False)("crossbow_ace_ready"):
+                event_weapon_id = normalize_weapon_id(getattr(self, "name", None)) or normalize_weapon_id(
+                    getattr(self, "action_id_base", None)
+                )
+                crossbow_like = bool(event_weapon_id and "crossbow" in str(event_weapon_id))
+                crossbow_like = crossbow_like or self._has_trait(tags, "crossbow")
+                crossbow_like = crossbow_like or ("crossbow" in str(getattr(self, "name", "") or "").lower())
+                buff_weapon_id = None
+                getter = getattr(hero, "get_status_data", None)
+                if callable(getter):
+                    try:
+                        buff_weapon_id = normalize_weapon_id(getter("crossbow_ace_ready", "weapon_id", None))
+                    except Exception:
+                        buff_weapon_id = None
+                raw_name = str(getattr(self, "name", "") or "").strip().lower()
+                if crossbow_like and (
+                    not buff_weapon_id
+                    or buff_weapon_id == event_weapon_id
+                    or (buff_weapon_id and buff_weapon_id in raw_name)
+                ):
+                    crossbow_ace_applied = True
+                    damage_bonus += 2
+                    if (buff_weapon_id or event_weapon_id) in {"crossbow", "simple_crossbow"}:
+                        crossbow_ace_simple_upgrade = True
+                    try:
+                        hero.remove_status("crossbow_ace_ready")
+                    except Exception:
+                        pass
             try:
                 from statuses import enfeebled_damage_penalty
 
@@ -548,6 +763,20 @@ class BaseRangeAttackEvent(AttackEventBase):
             if self._has_trait(tags, "backstabber") and self._is_flat_footed(enemy):
                 damage_bonus += 1
                 damage_notes.append("Backstabber: +1 precision (doliczone; +2 jeśli broń +3).")
+            if self._ranger_precision_ready(ctx, hero, enemy):
+                precision_roll = prompt_for_roll(
+                    "Hunter's Edge (Precision): dodatkowe obrażenia 1k8:",
+                    layout="damage",
+                    answer_placeholder="Precision damage",
+                )
+                try:
+                    precision_bonus = max(0, int(precision_roll or 0))
+                except Exception:
+                    precision_bonus = 0
+                self._mark_ranger_precision(ctx, hero, enemy)
+                if precision_bonus > 0:
+                    damage_bonus += precision_bonus
+                    damage_notes.append(f"Hunter's Edge (Precision): +{precision_bonus} precision (doliczone).")
             try:
                 if self._has_trait(tags, "thrown"):
                     has_status = getattr(hero, "has_status", None)
@@ -582,6 +811,11 @@ class BaseRangeAttackEvent(AttackEventBase):
             if self._has_trait(tags, "two_hand"):
                 damage_notes.append("Two-Hand: użycie dwuręczne zmienia kości obrażeń (ręcznie).")
             damage_notes.extend(class_upgrade_notes)
+            if crossbow_ace_applied:
+                damage_notes.append("Crossbow Ace: +2 circumstance do obrażeń (doliczone).")
+                if crossbow_ace_simple_upgrade:
+                    effective_damage_prompt = self._upgrade_damage_prompt_one_step(str(effective_damage_prompt))
+                    damage_notes.append("Crossbow Ace: simple crossbow +1 stopień kości obrażeń.")
             damage_components = self._collect_damage_components(
                 actor=hero,
                 prompt_prefix=prompt_prefix,
@@ -614,6 +848,50 @@ class BaseRangeAttackEvent(AttackEventBase):
                     damage_components.append((first_type, int(extra)))
                 except Exception:
                     pass
+            if roll_only:
+                total_damage = sum(max(0, int(amount or 0)) for _, amount in damage_components)
+                game.events.safe_emit_action(
+                    actor=hero,
+                    action_id=self.action_id_base,
+                    action_tags=self._effective_tags(ctx),
+                    target=enemy,
+                    target_pos=target_pos,
+                    damage=total_damage,
+                    damage_components=damage_components,
+                    defeated=False,
+                    cover=cover_type,
+                    range_penalty=range_penalty,
+                    critical=critical,
+                    roll_only=True,
+                )
+                if not suppress_record:
+                    self._record_attack(
+                        ctx,
+                        hero,
+                        weapon_key=weapon_key,
+                        weapon_type=weapon_type,
+                        target=enemy,
+                        attack_count=map_attack_count,
+                    )
+                self._apply_range_attacker_status(hero)
+                msg = "Trafienie krytyczne!" if critical else f"Atak {self.weapon_label} trafia."
+                self._mark_weapon_need_reload(selected_weapon)
+                return EventResult(
+                    success=True,
+                    consumed_action=self.consumes_action,
+                    actions_spent=actions_spent,
+                    message=f"{msg} Obrażenia do rozliczenia przez efekt zewnętrzny.",
+                    data={
+                        "hit": True,
+                        "critical": critical,
+                        "defeated": False,
+                        "target": enemy,
+                        "target_pos": target_pos,
+                        "damage_components": list(damage_components),
+                        "damage_total": int(total_damage),
+                        "roll_only": True,
+                    },
+                )
             defeated = False
             try:
                 defeated = self._apply_damage_components(enemy, damage_components)
@@ -657,9 +935,11 @@ class BaseRangeAttackEvent(AttackEventBase):
 
             self._apply_range_attacker_status(hero)
             msg = "Przeciwnik pokonany." if defeated else ("Trafienie krytyczne!" if critical else f"Atak {self.weapon_label} trafia.")
+            self._mark_weapon_need_reload(selected_weapon)
             return EventResult(
                 success=True,
                 consumed_action=self.consumes_action,
+                actions_spent=actions_spent,
                 message=msg,
                 data={"hit": True, "critical": critical, "defeated": defeated, "target": enemy, "target_pos": target_pos},
             )

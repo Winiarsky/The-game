@@ -8,6 +8,7 @@ from combat import effective_ac, refresh_flanking_statuses
 from combat.degree_of_success import is_critical_success, is_hit, natural_shift_from_roll, resolve_outcome
 from GameObjects.interactions_mixin import prompt_for_roll
 from statuses import Status
+from statuses.classes.ranger.ranger_utils import target_allows_precision_damage
 
 from .base import ActionCostEvent, EventContext, EventResult
 from .registry import register_event
@@ -102,6 +103,7 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
         support_used = False
         action_logs: list[str] = []
         spent_any = False
+        strike_count = 0
         while actions_left > 0:
             choices = ["stride", "strike", "support", "end"]
             if support_used:
@@ -119,7 +121,7 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
             if choice == "stride":
                 consumed, msg = self._companion_stride(ctx, owner, companion)
             elif choice == "strike":
-                consumed, msg = self._companion_strike(ctx, owner, companion)
+                consumed, msg = self._companion_strike(ctx, owner, companion, strike_count=strike_count)
             elif choice == "support":
                 consumed, msg = self._companion_support(ctx, owner, companion)
                 support_used = True if consumed else support_used
@@ -131,6 +133,8 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
             if consumed:
                 actions_left -= 1
                 spent_any = True
+                if choice == "strike":
+                    strike_count += 1
 
         if not spent_any:
             return EventResult.cancelled(message="Komenda anulowana - companion nie wykonal zadnej akcji.")
@@ -236,7 +240,57 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
             pass
         return True, f"Stride: companion przemiescil sie na {dest}."
 
-    def _companion_strike(self, ctx: EventContext, owner, companion) -> tuple[bool, str]:
+    @staticmethod
+    def _combat_round_index(ctx: EventContext) -> int | None:
+        try:
+            if not ctx.in_combat:
+                return None
+            state = getattr(ctx.game, "state", None)
+            return int(getattr(state, "round_index", 0) or 0)
+        except Exception:
+            return None
+
+    @staticmethod
+    def _companion_hunter_edge(companion) -> str:
+        return str(getattr(companion, "ranger_hunter_edge", "") or "").strip().lower()
+
+    @staticmethod
+    def _companion_hunted_target_id(companion) -> str:
+        return str(getattr(companion, "ranger_hunted_prey_target_id", "") or "").strip()
+
+    def _companion_precision_ready(self, ctx: EventContext, companion, target) -> bool:
+        if self._companion_hunter_edge(companion) != "precision":
+            return False
+        target_id = _actor_id(target)
+        if not target_id or target_id != self._companion_hunted_target_id(companion):
+            return False
+        if not target_allows_precision_damage(target):
+            return False
+        round_index = self._combat_round_index(ctx)
+        if round_index is None:
+            return True
+        applied_round = getattr(companion, "ranger_precision_applied_round", None)
+        applied_target = str(getattr(companion, "ranger_precision_applied_target_id", "") or "").strip()
+        try:
+            if int(applied_round) == int(round_index) and applied_target == target_id:
+                return False
+        except Exception:
+            pass
+        return True
+
+    def _mark_companion_precision(self, ctx: EventContext, companion, target) -> None:
+        round_index = self._combat_round_index(ctx)
+        target_id = _actor_id(target)
+        try:
+            setattr(companion, "ranger_precision_applied_round", round_index)
+        except Exception:
+            pass
+        try:
+            setattr(companion, "ranger_precision_applied_target_id", target_id)
+        except Exception:
+            pass
+
+    def _companion_strike(self, ctx: EventContext, owner, companion, *, strike_count: int = 0) -> tuple[bool, str]:
         board = getattr(ctx.game, "board", None)
         source_pos = getattr(companion, "position", None)
         if board is None or source_pos is None:
@@ -300,12 +354,26 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
         damage_formula = str(profile.get("damage", "1d6") or "1d6")
         damage_type = str(profile.get("damage_type", "normal") or "normal")
         target_ac = int(getattr(target, "ac", effective_ac(target)) or 10)
+        traits = {str(item or "").strip().lower() for item in (profile.get("traits") or [])}
+        hunted_target = self._companion_hunted_target_id(companion) == _actor_id(target)
+        flurry_note = ""
+        if self._companion_hunter_edge(companion) == "flurry" and hunted_target:
+            if strike_count == 1:
+                flurry_note = "Hunter's Edge (Flurry): MAP dla 2. ataku: -2 agile / -3 standard."
+            elif strike_count >= 2:
+                flurry_note = "Hunter's Edge (Flurry): MAP dla 3+ ataku: -4 agile / -6 standard."
+            else:
+                flurry_note = "Hunter's Edge (Flurry): pierwszy atak bez MAP."
+        agile_note = "Atak ma trait agile." if "agile" in traits else "Atak bez traitu agile."
+        prompt_notes = [f"AC celu: {target_ac}", agile_note]
+        if flurry_note:
+            prompt_notes.append(flurry_note)
 
         attack_roll_data = prompt_for_roll(
             f"Animal Companion Strike ({attack_label}) - podaj wynik ataku lacznie z modyfikatorem:",
             layout="test",
             answer_placeholder="Attack total",
-            prompt_long=f"AC celu: {target_ac}",
+            prompt_long="\n".join(prompt_notes),
             return_details=True,
             infer_natural_from_roll=False,
         )
@@ -330,7 +398,20 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
             )
             or 0
         )
-        damage = max(0, dmg_base * (2 if critical else 1))
+        precision_bonus = 0
+        if self._companion_precision_ready(ctx, companion, target):
+            precision_roll = prompt_for_roll(
+                "Hunter's Edge (Precision) - dodatkowe obrażenia 1k8:",
+                layout="damage",
+                answer_placeholder="Precision damage",
+            )
+            try:
+                precision_bonus = max(0, int(precision_roll or 0))
+            except Exception:
+                precision_bonus = 0
+            self._mark_companion_precision(ctx, companion, target)
+
+        damage = max(0, dmg_base * (2 if critical else 1)) + precision_bonus
         apply = getattr(target, "apply_damage", None)
         defeated = False
         if callable(apply):
@@ -365,6 +446,8 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
                 pass
         target_name = getattr(target, "name", "target")
         msg = f"Strike ({attack_label}) trafia {target_name} za {damage} {damage_type}."
+        if precision_bonus > 0:
+            msg += f" Precision +{precision_bonus}."
         if critical:
             msg += " Critical."
         if defeated:

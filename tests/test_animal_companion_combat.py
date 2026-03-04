@@ -274,6 +274,39 @@ def test_command_animal_companion_stride_moves_on_board(monkeypatch):
     assert companion.position == (4, 2)
 
 
+def test_command_animal_companion_precision_edge_applies_bonus_once(monkeypatch):
+    board = BoardGrid(6, 6)
+    conn = DummyConn()
+    game = DummyGame(board=board, conn=conn)
+    owner = DummyOwner(position=(1, 1), initiative=17)
+    _add_druid_animal_setup(owner)
+    enemy = DummyEnemy(position=(2, 1), hp=20, ac=14)
+    game.heroes = [owner]
+    game.enemies = [enemy]
+    board.place(owner, owner.position)
+    board.place(enemy, enemy.position)
+
+    combat = Combat(game)
+    game.state = combat
+    companion = build_animal_companion(owner, "wolf")
+    companion.ranger_hunter_edge = "precision"
+    companion.ranger_hunted_prey_target_id = enemy.object_id
+    board.place(companion, (1, 2))
+    combat.animal_companions[owner.object_id] = companion
+
+    conn.read_queue = ["strike", "end"]
+    rolls = iter([18, 7, 4])  # attack total, base damage, precision damage
+    monkeypatch.setattr(
+        "GameObjects.events.command_animal_companion_event.prompt_for_roll",
+        lambda *_a, **_k: next(rolls),
+    )
+
+    result = dispatch_event("command_animal_companion", EventContext(game=game, actor=owner))
+
+    assert result.success is True
+    assert enemy.hp == 9
+
+
 def test_combat_cleanup_removes_companion_and_prompts_pickup():
     board = BoardGrid(6, 6)
     conn = DummyConn()

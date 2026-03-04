@@ -10,7 +10,7 @@ from combat import effective_ac
 from GameObjects.interactions_mixin import prompt_for_roll
 from statuses import CONCEALED_STATUS, DARKVISION_STATUS, DIM_LIGHT_VISION_STATUS, IN_DIM_LIGHT_STATUS, LOW_LIGHT_VISION_STATUS
 
-from ..base import GameEvent
+from ..base import GameEvent, mapping_setdefault_actor
 
 logger = logging.getLogger(__name__)
 
@@ -329,8 +329,9 @@ class AttackEventBase(GameEvent):
             return {}
         if getattr(ctx, "in_combat", False):
             combat_state = getattr(ctx.game, "state", None)
-            if combat_state is not None and hasattr(combat_state, "attack_state"):
-                return combat_state.attack_state.setdefault(actor, {})
+            attack_state = getattr(combat_state, "attack_state", None)
+            if isinstance(attack_state, dict):
+                return mapping_setdefault_actor(attack_state, actor, dict)
         state = getattr(actor, "_attack_trait_state", None)
         if not isinstance(state, dict):
             state = {}
@@ -345,6 +346,83 @@ class AttackEventBase(GameEvent):
         if target is None:
             return None
         return getattr(target, "object_id", None) or getattr(target, "name", None) or str(id(target))
+
+    @staticmethod
+    def _combat_round_index(ctx) -> int | None:
+        try:
+            if not getattr(ctx, "in_combat", False):
+                return None
+            state = getattr(ctx, "game", None)
+            state = getattr(state, "state", None)
+            return int(getattr(state, "round_index", 0) or 0)
+        except Exception:
+            return None
+
+    def _ranger_hunter_edge(self, actor) -> str | None:
+        try:
+            from statuses.classes.ranger.ranger_utils import hunter_edge
+
+            return hunter_edge(actor)
+        except Exception:
+            return None
+
+    def _is_hunted_prey(self, actor, target) -> bool:
+        try:
+            from statuses.classes.ranger.ranger_utils import is_hunted_prey
+
+            return bool(is_hunted_prey(actor, target))
+        except Exception:
+            return False
+
+    def _ranger_map_penalty(self, actor, *, tags: Iterable[str], attacks_this_turn: int, target) -> int | None:
+        if self._ranger_hunter_edge(actor) != "flurry":
+            return None
+        if not self._is_hunted_prey(actor, target):
+            return None
+        if attacks_this_turn < 1:
+            return 0
+        agile = self._has_trait(tags, "agile")
+        if attacks_this_turn == 1:
+            return 2 if agile else 3
+        return 4 if agile else 6
+
+    def _ranger_precision_ready(self, ctx, actor, target) -> bool:
+        round_index = self._combat_round_index(ctx)
+        try:
+            from statuses.classes.ranger.ranger_utils import precision_allowed, target_allows_precision_damage
+
+            if not target_allows_precision_damage(target):
+                return False
+            return bool(precision_allowed(actor, target, round_index=round_index))
+        except Exception:
+            return False
+
+    def _mark_ranger_precision(self, ctx, actor, target) -> None:
+        round_index = self._combat_round_index(ctx)
+        try:
+            from statuses.classes.ranger.ranger_utils import mark_precision_applied
+
+            mark_precision_applied(actor, target, round_index=round_index)
+        except Exception:
+            return
+
+    def _consume_monster_hunter_bonus(self, actor) -> None:
+        if actor is None:
+            return
+        bonuses = getattr(actor, "bonuses", None)
+        if isinstance(bonuses, list):
+            kept = [eff for eff in bonuses if str(getattr(eff, "source", "") or "") != "ranger:monster_hunter:attack"]
+            try:
+                actor.bonuses = kept
+            except Exception:
+                pass
+            return
+        remover = getattr(actor, "remove_bonuses_by_source", None)
+        if callable(remover):
+            try:
+                remover("ranger:monster_hunter:attack")
+            except Exception:
+                pass
 
     def _record_attack(
         self,

@@ -7,6 +7,44 @@ from typing import Any, Dict, Optional
 import logging
 
 logger = logging.getLogger(__name__)
+_MISSING = object()
+
+
+def actor_state_fallback_key(actor) -> str:
+    return f"actor:{getattr(actor, 'object_id', None) or getattr(actor, 'name', None) or id(actor)}"
+
+
+def mapping_get_actor(mapping: dict[Any, Any], actor, default=None):
+    if not isinstance(mapping, dict):
+        return default
+    try:
+        return mapping.get(actor, default)
+    except TypeError:
+        return mapping.get(actor_state_fallback_key(actor), default)
+
+
+def mapping_setdefault_actor(mapping: dict[Any, Any], actor, default_factory=dict):
+    if not isinstance(mapping, dict):
+        return default_factory() if callable(default_factory) else default_factory
+
+    try:
+        value = mapping.get(actor, _MISSING)
+    except TypeError:
+        value = _MISSING
+    if value is not _MISSING:
+        return value
+
+    fallback_key = actor_state_fallback_key(actor)
+    value = mapping.get(fallback_key, _MISSING)
+    if value is not _MISSING:
+        return value
+
+    value = default_factory() if callable(default_factory) else default_factory
+    try:
+        mapping[actor] = value
+    except TypeError:
+        mapping[fallback_key] = value
+    return value
 
 
 @dataclass
@@ -161,7 +199,7 @@ class ActionCostEvent(GameEvent):
             return None
         try:
             limit = getattr(combat_state, "ACTION_LIMIT", None)
-            used = getattr(combat_state, "actions_used", {}).get(actor, 0)
+            used = mapping_get_actor(getattr(combat_state, "actions_used", {}), actor, 0)
             if limit is None:
                 return None
             return int(limit) - int(used)
@@ -175,12 +213,10 @@ class ActionCostEvent(GameEvent):
         attack_state = getattr(combat_state, "attack_state", None)
         if not isinstance(attack_state, dict):
             return None
-        payload = attack_state.get(actor)
+        payload = mapping_get_actor(attack_state, actor)
         if isinstance(payload, dict):
             return payload
-        payload = {}
-        attack_state[actor] = payload
-        return payload
+        return mapping_setdefault_actor(attack_state, actor, dict)
 
     def pre(self, ctx: EventContext) -> EventResult:
         if not self.consumes_action:

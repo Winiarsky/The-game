@@ -6,6 +6,7 @@ from typing import Any
 
 from combat.hp_engine import apply_damage as hp_apply_damage
 from combat.hp_engine import heal as hp_heal
+from GameObjects.interactions_mixin.bonus_mixin import BonusMixin
 from damage_types import DamageType
 from GameObjects.interactions_mixin.status_mixin import StatusMixin
 from object_registry import assign_id
@@ -144,7 +145,7 @@ def resolve_animal_companion_type(owner) -> str:
 
 
 @dataclass
-class AnimalCompanion(StatusMixin):
+class AnimalCompanion(StatusMixin, BonusMixin):
     object_id: str = field(init=False)
     owner_id: str = ""
     owner_name: str = ""

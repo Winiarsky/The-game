@@ -288,6 +288,14 @@ class BasicMeleeAttackEvent(AttackEventBase):
                 map_penalty = 4 if attacks_this_turn == 1 else 8
             else:
                 map_penalty = 5 if attacks_this_turn == 1 else 10
+        ranger_map_penalty = self._ranger_map_penalty(
+            hero,
+            tags=tags,
+            attacks_this_turn=attacks_this_turn,
+            target=enemy,
+        )
+        if ranger_map_penalty is not None:
+            map_penalty = int(ranger_map_penalty)
         if map_penalty:
             extra_effects.append(
                 BonusEffect(
@@ -295,7 +303,11 @@ class BasicMeleeAttackEvent(AttackEventBase):
                     value=map_penalty,
                     tag=action_tag,
                     source="map",
-                    label=f"MAP{' (agile)' if self._has_trait(tags, 'agile') else ''}",
+                    label=(
+                        "MAP ranger flurry"
+                        if ranger_map_penalty is not None
+                        else f"MAP{' (agile)' if self._has_trait(tags, 'agile') else ''}"
+                    ),
                     is_penalty=True,
                 )
             )
@@ -382,6 +394,7 @@ class BasicMeleeAttackEvent(AttackEventBase):
 
         total_roll = roll + modifier
         self._consume_aid_attack_bonus(hero, action_tag=action_tag)
+        self._consume_monster_hunter_bonus(hero)
         outcome = resolve_outcome(total_roll, target_ac, natural_shift=natural_shift)
         critical = is_critical_success(outcome)
         hit = is_hit(outcome)
@@ -551,6 +564,20 @@ class BasicMeleeAttackEvent(AttackEventBase):
         if allow_auto_precision_bonus and self._has_trait(tags, "backstabber") and self._is_flat_footed(enemy):
             damage_bonus += 1
             damage_notes.append("Backstabber: +1 precision (doliczone; +2 jeśli broń +3).")
+        if self._ranger_precision_ready(ctx, hero, enemy):
+            precision_roll = prompt_for_roll(
+                "Hunter's Edge (Precision): dodatkowe obrażenia 1k8:",
+                layout="damage",
+                answer_placeholder="Precision damage",
+            )
+            try:
+                precision_bonus = max(0, int(precision_roll or 0))
+            except Exception:
+                precision_bonus = 0
+            self._mark_ranger_precision(ctx, hero, enemy)
+            if precision_bonus > 0:
+                damage_bonus += precision_bonus
+                damage_notes.append(f"Hunter's Edge (Precision): +{precision_bonus} precision (doliczone).")
         try:
             from statuses.rage import rage_damage_bonus
 

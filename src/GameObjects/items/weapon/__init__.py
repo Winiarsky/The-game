@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from .base_weapon import BaseWeapon
 from .basic_weapons import (
+    CrossbowWeapon,
     DaggerWeapon,
     LongbowWeapon,
     RazortoothJawsWeapon,
@@ -17,6 +18,7 @@ __all__ = [
     "SwordWeapon",
     "DaggerWeapon",
     "LongbowWeapon",
+    "CrossbowWeapon",
     "UnarmedWeapon",
     "RazortoothJawsWeapon",
     "create_weapon",

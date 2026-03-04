@@ -38,7 +38,22 @@ class LongbowWeapon(BaseWeapon):
     damage_type: str = DamageType.PIERCING.value
     hands_required: int = 2
     ranged: bool = True
+    range_increment_ft: int = 100
     traits: tuple[str, ...] = ("volley",)
+
+
+@dataclass
+class CrossbowWeapon(BaseWeapon):
+    item_id: str = "crossbow"
+    name: str = "Crossbow"
+    event_name: str = "crossbow"
+    damage_prompt: str = "1k8"
+    damage_type: str = DamageType.PIERCING.value
+    hands_required: int = 2
+    ranged: bool = True
+    range_increment_ft: int = 120
+    reload: int = 1
+    traits: tuple[str, ...] = ("crossbow", "simple_crossbow")
 
 
 @dataclass
@@ -67,6 +82,7 @@ _WEAPON_FACTORIES = {
     "sword": SwordWeapon,
     "dagger": DaggerWeapon,
     "longbow": LongbowWeapon,
+    "crossbow": CrossbowWeapon,
     "unarmed": UnarmedWeapon,
     "razortooth_jaws": RazortoothJawsWeapon,
 }
@@ -80,6 +96,10 @@ _ALIASES = {
     "bow": "longbow",
     "luk": "longbow",
     "dlugi_luk": "longbow",
+    "crossbow": "crossbow",
+    "simple_crossbow": "crossbow",
+    "kusza": "crossbow",
+    "lekka_kusza": "crossbow",
     "unarmed": "unarmed",
     "fist": "unarmed",
     "fists": "unarmed",
@@ -121,6 +141,7 @@ __all__ = [
     "SwordWeapon",
     "DaggerWeapon",
     "LongbowWeapon",
+    "CrossbowWeapon",
     "UnarmedWeapon",
     "RazortoothJawsWeapon",
     "create_weapon",

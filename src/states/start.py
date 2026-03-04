@@ -48,6 +48,12 @@ class Start(State):
             self.game.conn.leds_off()
             hero = Hero()
             try:
+                from statuses.classes.ranger.ranger_utils import clear_daily_ranger_preparations
+
+                clear_daily_ranger_preparations(hero)
+            except Exception:
+                pass
+            try:
                 self.game.board.place(hero, pos)
             except ValueError as exc:
                 logger.error("Nie można ustawić bohatera: %s", exc)

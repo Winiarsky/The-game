@@ -548,6 +548,54 @@ def _collect_modifier_data(
             pass
 
     is_recall_knowledge = "knowledge" in tags or "recall_knowledge" in tags or "recall-knowledge" in tags
+    try:
+        from statuses.classes.ranger.ranger_utils import hunter_edge as ranger_hunter_edge
+        from statuses.classes.ranger.ranger_utils import is_hunted_prey as ranger_is_hunted_prey
+
+        if target is not None and ranger_is_hunted_prey(actor, target):
+            if skill_id in {Skill.DECEPTION.value, Skill.INTIMIDATION.value, Skill.STEALTH.value}:
+                if ranger_hunter_edge(actor) == "outwit":
+                    all_effects.append(
+                        BonusEffect(
+                            type=BonusType.CIRCUMSTANCE,
+                            value=2,
+                            tag=skill_id,
+                            source="ranger:outwit",
+                            label="outwit +2",
+                        )
+                    )
+            if is_recall_knowledge and ranger_hunter_edge(actor) == "outwit":
+                all_effects.append(
+                    BonusEffect(
+                        type=BonusType.CIRCUMSTANCE,
+                        value=2,
+                        tag=skill_id,
+                        source="ranger:outwit",
+                        label="outwit +2",
+                    )
+                )
+            if skill_id == Skill.PERCEPTION.value and "seek" in tags:
+                all_effects.append(
+                    BonusEffect(
+                        type=BonusType.CIRCUMSTANCE,
+                        value=2,
+                        tag=Skill.PERCEPTION.value,
+                        source="ranger:hunt_prey_seek",
+                        label="hunt prey +2",
+                    )
+                )
+            if skill_id == Skill.SURVIVAL.value and "track" in tags:
+                all_effects.append(
+                    BonusEffect(
+                        type=BonusType.CIRCUMSTANCE,
+                        value=2,
+                        tag=Skill.SURVIVAL.value,
+                        source="ranger:hunt_prey_track",
+                        label="hunt prey +2",
+                    )
+                )
+    except Exception:
+        pass
     if is_recall_knowledge and _has_status(actor, Status(id="bardic_lore")):
         notes.append(
             "Bardic Lore: Recall Knowledge z advantage (rzuc 2x k20 i wybierz lepszy wynik) - opisowo."
