@@ -48,6 +48,10 @@ from . import sudden_charge_event  # noqa: F401
 from . import fighter_feat_events  # noqa: F401
 from . import monk_feat_events  # noqa: F401
 from . import ranger_feat_events  # noqa: F401
+from . import rogue_feat_events  # noqa: F401
+from . import demoralize_event  # noqa: F401
+from . import feint_event  # noqa: F401
+from . import trap_events  # noqa: F401
 from .elixirs import antidote_event  # noqa: F401
 from .elixirs import antiplague_event  # noqa: F401
 from .elixirs import elixir_of_life_event  # noqa: F401

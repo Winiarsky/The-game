@@ -362,7 +362,7 @@ class Door(RangeAttackAffectMixin, LockableMixin, TrappableMixin, HiddenMixin, D
             layout="test",
             answer_placeholder="Wynik Thievery",
         )
-        outcome, msg = self.disable_trap(roll)
+        outcome, msg = self.disable_trap(roll, actor=actor, game=game)
         return f"{msg} (wynik: {outcome})"
 
     def action_search_secret(self, actor, game, _payload=None) -> str:

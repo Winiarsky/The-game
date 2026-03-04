@@ -129,6 +129,10 @@ class BasicMeleeAttackEvent(AttackEventBase):
         if enemy is None:
             return EventResult.cancelled(message="Nie wybrano celu.")
 
+        if self._consume_feint_next_attack(ctx, hero, enemy, is_melee=True):
+            metadata["force_flat_footed"] = True
+            metadata.setdefault("force_flat_footed_source", "feint")
+
         # --- weapon trait state (przed atakiem) ---
         state = self._get_attack_state(ctx, hero)
         weapon_key = self._weapon_key()
@@ -212,7 +216,31 @@ class BasicMeleeAttackEvent(AttackEventBase):
             target_pos=enemy_pos,
         )
 
+        is_off_guard_for_attack, target_natural_flat_footed, surprise_attack_active = self._is_off_guard_for_attack(
+            ctx,
+            hero,
+            enemy,
+            metadata=metadata,
+            is_melee=True,
+        )
         extra_bonuses = []
+        if is_off_guard_for_attack and not target_natural_flat_footed:
+            source = str(metadata.get("force_flat_footed_source", "") or "").strip().lower()
+            if surprise_attack_active:
+                source = "rogue:surprise_attack"
+            if not source:
+                source = "flat_footed:forced"
+            extra_bonuses.append(
+                BonusEffect(
+                    type=BonusType.CIRCUMSTANCE,
+                    value=2,
+                    tag="ac",
+                    source=source,
+                    target_id=getattr(hero, "object_id", None),
+                    label="flat-footed",
+                    is_penalty=True,
+                )
+            )
         try:
             from statuses.clumsy import clumsy_ac_penalty_effect
 
@@ -226,6 +254,7 @@ class BasicMeleeAttackEvent(AttackEventBase):
             attacker=hero,
             extra_bonuses=extra_bonuses or None,
         )
+        self._consume_nimble_dodge_bonus(enemy, hero)
         modifier_note = ""
         if modifier:
             sign = "+" if modifier > 0 else ""
@@ -364,6 +393,8 @@ class BasicMeleeAttackEvent(AttackEventBase):
             trait_notes.append("Nonlethal: atak nieśmiertelny; jeśli lethal, -2 do ataku (ręcznie).")
         if self._has_trait(tags, "finesse"):
             trait_notes.append("Finesse: możesz użyć ZR zamiast SI do premii ataku.")
+        if surprise_attack_active:
+            trait_notes.append("Surprise Attack: cel traktowany jako flat-footed (-2 AC vs ten atak).")
         modifier, best_effects, log_lines = self._attack_modifier_details(
             hero, action_tag, target=enemy, extra_effects=extra_effects or None
         )
@@ -437,6 +468,17 @@ class BasicMeleeAttackEvent(AttackEventBase):
             hero,
             weapon_type=getattr(self, "name", None),
             damage_prompt=self.damage_prompt,
+            tags=tags,
+            is_melee=True,
+        )
+        self._maybe_log_ruffian_crit_spec_placeholder(
+            ctx=ctx,
+            actor=hero,
+            critical=critical,
+            is_off_guard=is_off_guard_for_attack,
+            weapon_type=getattr(self, "name", None),
+            tags=tags,
+            damage_prompt=effective_damage_prompt,
         )
         dmg_prompt = (
             f"{'Trafienie krytyczne! ' if critical else 'Trafienie! '}Obrażenia {effective_damage_prompt}: "
@@ -561,9 +603,29 @@ class BasicMeleeAttackEvent(AttackEventBase):
                     damage_notes.append(f"Twin: +{dice_count} obrażeń (doliczone).")
                 else:
                     damage_notes.append("Twin: dodaj bonus za kości obrażeń (ręcznie).")
-        if allow_auto_precision_bonus and self._has_trait(tags, "backstabber") and self._is_flat_footed(enemy):
+        if allow_auto_precision_bonus and self._has_trait(tags, "backstabber") and is_off_guard_for_attack:
             damage_bonus += 1
             damage_notes.append("Backstabber: +1 precision (doliczone; +2 jeśli broń +3).")
+        if is_off_guard_for_attack and self._rogue_sneak_attack_eligible(
+            actor=hero,
+            target=enemy,
+            tags=tags,
+            is_ranged=False,
+        ):
+            sneak_dice = self._rogue_sneak_attack_dice(hero)
+            if sneak_dice > 0:
+                sneak_roll = prompt_for_roll(
+                    f"Sneak Attack: dodatkowe obrażenia {sneak_dice}k6:",
+                    layout="damage",
+                    answer_placeholder="Sneak attack damage",
+                )
+                try:
+                    sneak_bonus = max(0, int(sneak_roll or 0))
+                except Exception:
+                    sneak_bonus = 0
+                if sneak_bonus > 0:
+                    damage_bonus += sneak_bonus
+                    damage_notes.append(f"Sneak Attack: +{sneak_bonus} precision (doliczone).")
         if self._ranger_precision_ready(ctx, hero, enemy):
             precision_roll = prompt_for_roll(
                 "Hunter's Edge (Precision): dodatkowe obrażenia 1k8:",
@@ -750,6 +812,12 @@ class BasicMeleeAttackEvent(AttackEventBase):
             )
 
         if defeated:
+            try:
+                from GameObjects.events.rogue_feat_events import try_trigger_youre_next
+
+                try_trigger_youre_next(ctx, hero, defeated_target=enemy)
+            except Exception:
+                pass
             try:
                 ctx.game.board.remove(enemy_pos)
                 try:

@@ -7,7 +7,7 @@ from typing import Iterable, List, Optional, Sequence
 from bonuses import BonusEffect, BonusType, aggregate_best_by_type, build_modifiers_grid, compute_total_modifier, format_effects_log, select_best_effects
 from statuses import Status
 from statuses.check_effects import CheckEffect
-from GameObjects.interactions_mixin import resolve_skill_check
+from GameObjects.interactions_mixin.skill_checks import resolve_skill_check
 from ui_client import get_ui_client
 from statuses import DARKVISION_STATUS, DIM_LIGHT_VISION_STATUS, IN_DARK_STATUS, IN_DIM_LIGHT_STATUS, LOW_LIGHT_VISION_STATUS
 from skills import Skill
@@ -477,6 +477,17 @@ def _collect_modifier_data(
                     tag=skill_id,
                     source="status:low_light_vision",
                     label="low light vision +2",
+                )
+            )
+    if skill_id == Skill.PERCEPTION.value and any(tag in {"trap", "traps"} for tag in tags):
+        if _has_status(actor, Status(id="trap_finder")):
+            all_effects.append(
+                BonusEffect(
+                    type=BonusType.CIRCUMSTANCE,
+                    value=1,
+                    tag=Skill.PERCEPTION.value,
+                    source="rogue:trap_finder",
+                    label="Trap Finder +1",
                 )
             )
 

@@ -114,6 +114,11 @@ class StatusMixin:
                 self._handle_ranger_setup_choice(status, data)
             except Exception:
                 pass
+        if data.get("ui_choice_kind") == "rogue_setup":
+            try:
+                self._handle_rogue_setup_choice(status, data)
+            except Exception:
+                pass
         if data.get("ui_choice_kind") == "cleric_setup":
             try:
                 self._handle_cleric_setup_choice(status, data)
@@ -397,6 +402,24 @@ class StatusMixin:
                     "TWIN_TAKEDOWN_STATUS",
                 ),
             },
+            "rogue": {
+                "nimble_dodge": (
+                    "statuses.classes.rogue.feats.nimble_dodge",
+                    "NIMBLE_DODGE_STATUS",
+                ),
+                "trap_finder": (
+                    "statuses.classes.rogue.feats.trap_finder",
+                    "TRAP_FINDER_STATUS",
+                ),
+                "twin_feint": (
+                    "statuses.classes.rogue.feats.twin_feint",
+                    "TWIN_FEINT_STATUS",
+                ),
+                "youre_next": (
+                    "statuses.classes.rogue.feats.youre_next",
+                    "YOURE_NEXT_STATUS",
+                ),
+            },
         }
 
     @staticmethod
@@ -550,6 +573,91 @@ class StatusMixin:
         except Exception:
             return False
 
+    def _is_rogue_actor(self) -> bool:
+        class_name = str(getattr(self, "class_name", "") or "").strip().lower()
+        if class_name == "rogue":
+            return True
+        try:
+            return bool(self.has_status("rogue"))
+        except Exception:
+            return False
+
+    def _trained_skill_ids(self) -> set[str]:
+        trained: set[str] = set()
+
+        def _normalize(raw: object) -> str | None:
+            value = str(raw or "").strip().lower().replace("-", "_").replace(" ", "_")
+            return value or None
+
+        for source in (getattr(self, "trained_skills", None), getattr(self, "rogue_trained_skills", None)):
+            if isinstance(source, (list, tuple, set)):
+                for item in source:
+                    normalized = _normalize(item)
+                    if normalized:
+                        trained.add(normalized)
+
+        statuses = getattr(self, "statuses", None)
+        if isinstance(statuses, list):
+            for status in statuses:
+                data = getattr(status, "data", None) or {}
+                for key in ("trained_skills", "skills_trained"):
+                    value = data.get(key)
+                    if isinstance(value, (list, tuple, set)):
+                        for item in value:
+                            normalized = _normalize(item)
+                            if normalized:
+                                trained.add(normalized)
+                for setup_key in (
+                    "rogue_setup",
+                    "ranger_setup",
+                    "monk_setup",
+                    "fighter_setup",
+                    "cleric_setup",
+                    "champion_setup",
+                    "druid_setup",
+                ):
+                    payload = data.get(setup_key)
+                    if not isinstance(payload, dict):
+                        continue
+                    for item in list(payload.get("trained_skills") or []):
+                        normalized = _normalize(item)
+                        if normalized:
+                            trained.add(normalized)
+                    normalized = _normalize(payload.get("trained_skill"))
+                    if normalized:
+                        trained.add(normalized)
+
+        for skill_name in (
+            "athletics",
+            "acrobatics",
+            "arcana",
+            "crafting",
+            "deception",
+            "diplomacy",
+            "intimidation",
+            "medicine",
+            "nature",
+            "occultism",
+            "performance",
+            "religion",
+            "society",
+            "stealth",
+            "survival",
+            "thievery",
+            "perception",
+            "fortitude",
+            "reflex",
+            "will",
+        ):
+            attr_name = f"{skill_name}_trained"
+            try:
+                if bool(getattr(self, attr_name, False)):
+                    trained.add(skill_name)
+            except Exception:
+                continue
+
+        return trained
+
     def _passes_status_prerequisites(self, status: "Status") -> bool:
         status_id = str(getattr(status, "id", "") or "").strip().lower()
         status_data = getattr(status, "data", None) or {}
@@ -628,6 +736,33 @@ class StatusMixin:
         }:
             if not self._is_ranger_actor():
                 self._ui_log(f"{self._labelize_choice(status_id)}: wymaga klasy Ranger.")
+                return False
+
+        if status_id in {
+            "nimble_dodge",
+            "sneak_attack",
+            "surprise_attack",
+            "trap_finder",
+            "twin_feint",
+            "youre_next",
+        }:
+            if not self._is_rogue_actor():
+                self._ui_log(f"{self._labelize_choice(status_id)}: wymaga klasy Rogue.")
+                return False
+
+        required_trained_skills = {
+            str(item).strip().lower().replace("-", "_").replace(" ", "_")
+            for item in list(status_data.get("requires_trained_skills") or [])
+            if str(item).strip()
+        }
+        if required_trained_skills:
+            trained = self._trained_skill_ids()
+            if not required_trained_skills.issubset(trained):
+                missing = sorted(required_trained_skills.difference(trained))
+                self._ui_log(
+                    f"{self._labelize_choice(status_id)}: wymaga trained w skillach: "
+                    f"{', '.join(self._labelize_choice(item) for item in missing)}."
+                )
                 return False
 
         required_druid_order = str(status_data.get("requires_druid_order", "") or "").strip().lower()
@@ -1525,6 +1660,120 @@ class StatusMixin:
             f"feat={self._labelize_choice(chosen_feat)}."
         )
 
+    def _handle_rogue_setup_choice(self, status: "Status", data: dict) -> None:
+        racket_choices = list(data.get("rogue_racket_choices") or ["ruffian", "scoundrel", "thief"])
+        feat_choices = list(data.get("rogue_feat_choices") or [])
+        key_by_racket = dict(
+            data.get("rogue_key_ability_by_racket")
+            or {
+                "ruffian": ["dexterity", "strength"],
+                "scoundrel": ["dexterity", "charisma"],
+                "thief": ["dexterity"],
+            }
+        )
+        trained_skills_by_racket = dict(
+            data.get("rogue_trained_skills_by_racket")
+            or {
+                "ruffian": ["intimidation"],
+                "scoundrel": ["deception", "diplomacy"],
+                "thief": ["thievery"],
+            }
+        )
+
+        chosen_racket = self._pick_choice_id(
+            "Rogue: wybierz racket",
+            racket_choices,
+            source="status",
+        )
+        if not chosen_racket:
+            return
+
+        key_ability_choices = list(key_by_racket.get(chosen_racket) or ["dexterity"])
+        chosen_key_ability = (
+            key_ability_choices[0]
+            if len(key_ability_choices) == 1
+            else self._pick_choice_id(
+                f"Rogue ({self._labelize_choice(chosen_racket)}): wybierz key ability",
+                key_ability_choices,
+                source="status",
+            )
+        )
+        if not chosen_key_ability:
+            return
+
+        chosen_feat = self._pick_choice_id(
+            "Rogue: wybierz 1. poziomowy class feat",
+            feat_choices,
+            source="status",
+        )
+        if not chosen_feat:
+            return
+
+        trained_skills = list(trained_skills_by_racket.get(chosen_racket) or [])
+        if chosen_racket == "ruffian" and "intimidation" not in trained_skills:
+            trained_skills.append("intimidation")
+        setup_payload = {
+            "racket": chosen_racket,
+            "key_ability": chosen_key_ability,
+            "class_feat": chosen_feat,
+            "trained_skills": list(trained_skills),
+            "ruffian_medium_armor_trained": bool(chosen_racket == "ruffian"),
+            "ruffian_crit_spec_todo": bool(chosen_racket == "ruffian"),
+            "scoundrel_feint_upgrade": bool(chosen_racket == "scoundrel"),
+        }
+        try:
+            for idx, item in enumerate(self.statuses):
+                if item is status:
+                    new_data = dict(data)
+                    new_data["rogue_setup"] = dict(setup_payload)
+                    new_data["rogue_racket"] = chosen_racket
+                    new_data["rogue_key_ability"] = chosen_key_ability
+                    new_data["rogue_class_feat"] = chosen_feat
+                    new_data["trained_skills"] = list(trained_skills)
+                    self.statuses[idx] = replace(status, data=new_data)
+                    break
+        except Exception:
+            self._ui_log("Rogue setup: nie udalo sie zapisac wyborow.")
+            return
+
+        for attr, value in (
+            ("rogue_racket", chosen_racket),
+            ("rogue_key_ability", chosen_key_ability),
+            ("rogue_class_feat", chosen_feat),
+            ("rogue_trained_skills", list(trained_skills)),
+        ):
+            try:
+                setattr(self, attr, value)
+            except Exception:
+                pass
+        if chosen_racket == "ruffian":
+            try:
+                setattr(self, "rogue_medium_armor_trained", True)
+            except Exception:
+                pass
+
+        registry = self._class_feat_registry().get("rogue", {})
+        feat_status = self._resolve_status_from_registry(chosen_feat, registry)
+        if feat_status is None:
+            self._ui_log(f"Rogue setup: nie znaleziono statusu feata {chosen_feat}.")
+            return
+        self.add_status(feat_status)
+
+        self._ui_log(
+            "Rogue setup: "
+            f"racket={self._labelize_choice(chosen_racket)}, "
+            f"key ability={self._labelize_choice(chosen_key_ability)}, "
+            f"feat={self._labelize_choice(chosen_feat)}."
+        )
+        if chosen_racket == "ruffian":
+            self._ui_log(
+                "Ruffian: critical specialization dla simple weapon -> TODO (placeholder do wspólnej implementacji broni)."
+            )
+        if chosen_racket == "scoundrel":
+            self._ui_log(
+                "Scoundrel: Feint daje dłuższy flat-footed (do końca następnej tury, a crit działa na wszystkie melee ataki)."
+            )
+
     def _handle_cleric_setup_choice(self, status: "Status", data: dict) -> None:
         doctrine_choices = list(data.get("cleric_doctrine_choices") or ["cloistered_cleric", "warpriest"])
         deity_choices = list(data.get("cleric_deity_choices") or ["custom"])
@@ -1802,6 +2051,14 @@ class StatusMixin:
                     reactions.append(ReactiveShieldReaction())
             except Exception:
                 self._ui_log("Nie udalo sie dodac reakcji Reactive Shield.")
+        if status_id == "nimble_dodge":
+            try:
+                from combat.reactions.nimble_dodge_reaction import NimbleDodgeReaction
+
+                if not any(getattr(item, "id", None) == "nimble_dodge" for item in reactions):
+                    reactions.append(NimbleDodgeReaction())
+            except Exception:
+                self._ui_log("Nie udalo sie dodac reakcji Nimble Dodge.")
 
     def _drop_reactions_for_status(self, status_id: str) -> None:
         reactions = getattr(self, "reactions", None)
@@ -1811,6 +2068,8 @@ class StatusMixin:
             self.reactions = [item for item in reactions if getattr(item, "id", None) != "shield_block"]
         if status_id == "reactive_shield":
             self.reactions = [item for item in reactions if getattr(item, "id", None) != "reactive_shield"]
+        if status_id == "nimble_dodge":
+            self.reactions = [item for item in reactions if getattr(item, "id", None) != "nimble_dodge"]
 
     def _ensure_status_objects(self) -> None:
         if not self.statuses:

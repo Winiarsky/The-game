@@ -3,12 +3,17 @@ from __future__ import annotations
 from typing import Iterable
 import random
 
-from GameObjects.interactions_mixin import prompt_for_roll
 from damage_types import DamageType
 
 from .base import Status
 
 PERSISTENT_DAMAGE_STATUS = Status(id="persistent_damage", label="Persistent Damage", stacks=True)
+
+
+def prompt_for_roll(*args, **kwargs):
+    from GameObjects.interactions_mixin.prompt_utils import prompt_for_roll as _prompt_for_roll
+
+    return _prompt_for_roll(*args, **kwargs)
 
 
 def make_persistent_damage(amount: int, damage_type: str = DamageType.NORMAL.value, *, source: str | None = None) -> Status:

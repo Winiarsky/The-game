@@ -3,13 +3,18 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
-from GameObjects.interactions_mixin import prompt_for_roll
 from combat.degree_of_success import natural_shift_from_roll, resolve_outcome
 from combat.hp_engine import computed_max_hp
 from combat.hp_engine import current_hp as hp_current_hp
 from combat.hp_engine import uses_wounds_model
 
 from .base import Status
+
+
+def prompt_for_roll(*args, **kwargs):
+    from GameObjects.interactions_mixin.prompt_utils import prompt_for_roll as _prompt_for_roll
+
+    return _prompt_for_roll(*args, **kwargs)
 
 
 def _iter_statuses(actor: Any) -> list[Status]:

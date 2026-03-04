@@ -358,6 +358,238 @@ class AttackEventBase(GameEvent):
         except Exception:
             return None
 
+    @staticmethod
+    def _is_rogue_actor(actor) -> bool:
+        if actor is None:
+            return False
+        class_name = str(getattr(actor, "class_name", "") or "").strip().lower()
+        if class_name == "rogue":
+            return True
+        has_status = getattr(actor, "has_status", None)
+        if callable(has_status):
+            try:
+                return bool(has_status("rogue"))
+            except Exception:
+                return False
+        for status in getattr(actor, "statuses", []) or []:
+            if getattr(status, "id", status) == "rogue":
+                return True
+        return False
+
+    @staticmethod
+    def _rogue_initiative_allows_surprise(actor) -> bool:
+        if actor is None:
+            return False
+        skill = str(getattr(actor, "initiative_skill", "") or "").strip().lower().replace("-", "_")
+        if not skill:
+            return True
+        return skill in {"stealth", "deception"}
+
+    def _rogue_surprise_attack_applies(self, ctx, actor, target) -> bool:
+        if actor is None or target is None:
+            return False
+        if not getattr(ctx, "in_combat", False):
+            return False
+        if not self._has_status_id(actor, "surprise_attack"):
+            return False
+        if not self._is_rogue_actor(actor):
+            return False
+        if not self._rogue_initiative_allows_surprise(actor):
+            return False
+        round_index = self._combat_round_index(ctx)
+        if round_index != 1:
+            return False
+        state = getattr(getattr(ctx, "game", None), "state", None)
+        round_queue = getattr(state, "round_queue", None)
+        if not isinstance(round_queue, list):
+            return False
+        if target not in round_queue:
+            return False
+        if round_queue and round_queue[0] is target:
+            return False
+        return True
+
+    def _is_off_guard_for_attack(
+        self,
+        ctx,
+        attacker,
+        target,
+        *,
+        metadata: dict | None = None,
+        is_melee: bool | None = None,
+    ) -> tuple[bool, bool, bool]:
+        data = dict(metadata or {})
+        forced = bool(data.get("force_flat_footed", False) or data.get("force_off_guard", False))
+        natural = self._is_flat_footed(target)
+        feint_flat_footed = self._feint_flat_footed_status_applies(target, attacker, is_melee=bool(is_melee))
+        surprise = self._rogue_surprise_attack_applies(ctx, attacker, target)
+        return bool(forced or natural or surprise or feint_flat_footed), bool(natural), bool(surprise)
+
+    @staticmethod
+    def _target_allows_precision_damage(target) -> bool:
+        try:
+            from statuses.classes.ranger.ranger_utils import target_allows_precision_damage
+
+            return bool(target_allows_precision_damage(target))
+        except Exception:
+            return True
+
+    def _rogue_sneak_attack_dice(self, actor) -> int:
+        if actor is None:
+            return 0
+        if not self._has_status_id(actor, "sneak_attack"):
+            return 0
+        if not self._is_rogue_actor(actor):
+            return 0
+        try:
+            level = max(1, int(getattr(actor, "level", 1) or 1))
+        except Exception:
+            level = 1
+        if level >= 17:
+            return 4
+        if level >= 11:
+            return 3
+        if level >= 5:
+            return 2
+        return 1
+
+    def _rogue_sneak_attack_eligible(
+        self,
+        *,
+        actor,
+        target,
+        tags: Iterable[str],
+        is_ranged: bool,
+    ) -> bool:
+        if self._rogue_sneak_attack_dice(actor) <= 0:
+            return False
+        if not self._target_allows_precision_damage(target):
+            return False
+        is_agile_or_finesse = self._has_trait(tags, "agile") or self._has_trait(tags, "finesse")
+        if is_ranged:
+            if self._has_trait(tags, "thrown") and not is_agile_or_finesse:
+                return False
+            return True
+        if self._has_trait(tags, "unarmed"):
+            return bool(is_agile_or_finesse)
+        return bool(is_agile_or_finesse)
+
+    def _rogue_racket(self, actor) -> str | None:
+        if actor is None:
+            return None
+        getter = getattr(actor, "get_status_data", None)
+        if callable(getter):
+            try:
+                value = getter("rogue", "rogue_racket", None)
+                raw = str(value or "").strip().lower()
+                if raw:
+                    return raw
+                setup = getter("rogue", "rogue_setup", {})
+                if isinstance(setup, dict):
+                    raw = str(setup.get("racket", "") or "").strip().lower()
+                    if raw:
+                        return raw
+            except Exception:
+                pass
+        for status in getattr(actor, "statuses", []) or []:
+            if getattr(status, "id", None) != "rogue":
+                continue
+            data = getattr(status, "data", None) or {}
+            raw = str(data.get("rogue_racket", "") or "").strip().lower()
+            if raw:
+                return raw
+            setup = data.get("rogue_setup")
+            if isinstance(setup, dict):
+                raw = str(setup.get("racket", "") or "").strip().lower()
+                if raw:
+                    return raw
+        raw = str(getattr(actor, "rogue_racket", "") or "").strip().lower()
+        return raw or None
+
+    @staticmethod
+    def _first_damage_die_size(damage_prompt: str | Iterable[str]) -> int | None:
+        text = str(damage_prompt[0]) if isinstance(damage_prompt, (list, tuple)) and damage_prompt else str(damage_prompt)
+        match = re.search(r"[kKdD]\s*(\d+)", text)
+        if not match:
+            return None
+        try:
+            return int(match.group(1))
+        except Exception:
+            return None
+
+    def _maybe_log_ruffian_crit_spec_placeholder(
+        self,
+        *,
+        ctx,
+        actor,
+        critical: bool,
+        is_off_guard: bool,
+        weapon_type: str | None,
+        tags: Iterable[str],
+        damage_prompt: str | Iterable[str],
+    ) -> None:
+        if not critical or not is_off_guard:
+            return
+        if not self._is_rogue_actor(actor):
+            return
+        if self._rogue_racket(actor) != "ruffian":
+            return
+
+        simple_weapon_ids = {
+            "club",
+            "crossbow",
+            "dagger",
+            "javelin",
+            "mace",
+            "shortspear",
+            "sickle",
+            "staff",
+            "spear",
+            "unarmed",
+        }
+        normalized_weapon = self._normalize_weapon_type(weapon_type) or self._weapon_type_tag(tags) or self._normalize_weapon_type(
+            getattr(self, "name", None)
+        )
+        if normalized_weapon not in simple_weapon_ids:
+            return
+
+        die_size = self._first_damage_die_size(damage_prompt)
+        if die_size is not None and die_size > 8:
+            return
+        try:
+            ctx.game.ui_log(
+                "Ruffian TODO: critical specialization efekt dla simple weapon do podpiecia z globalna mechanika broni."
+            )
+        except Exception:
+            pass
+
+    @staticmethod
+    def _consume_nimble_dodge_bonus(target, attacker) -> None:
+        if target is None:
+            return
+        bonuses = getattr(target, "bonuses", None)
+        if not isinstance(bonuses, list):
+            return
+        attacker_id = str(getattr(attacker, "object_id", None) or "")
+        kept = []
+        removed = False
+        for effect in bonuses:
+            source = str(getattr(effect, "source", "") or "")
+            if not source.startswith("nimble_dodge:"):
+                kept.append(effect)
+                continue
+            effect_target_id = str(getattr(effect, "target_id", None) or "")
+            if effect_target_id and attacker_id and effect_target_id != attacker_id:
+                kept.append(effect)
+                continue
+            removed = True
+        if not removed:
+            return
+        try:
+            target.bonuses = kept
+        except Exception:
+            pass
+
     def _ranger_hunter_edge(self, actor) -> str | None:
         try:
             from statuses.classes.ranger.ranger_utils import hunter_edge
@@ -707,6 +939,8 @@ class AttackEventBase(GameEvent):
         *,
         weapon_type: str | None,
         damage_prompt: str | Iterable[str],
+        tags: Iterable[str] | None = None,
+        is_melee: bool | None = None,
     ):
         current_prompt = damage_prompt
         notes: list[str] = []
@@ -735,7 +969,86 @@ class AttackEventBase(GameEvent):
         if deadly_applied:
             notes.append("Deadly Simplicity: kosc obrazen zwiekszona dla favored weapon.")
 
+        current_prompt, thief_applied = self._thief_dex_damage_prompt(
+            actor,
+            damage_prompt=current_prompt,
+            tags=tags,
+            is_melee=is_melee,
+        )
+        if thief_applied:
+            notes.append("Thief racket: finesse melee używa DEX zamiast STR w promptcie obrażeń.")
+
         return current_prompt, notes
+
+    def _thief_dex_damage_prompt(
+        self,
+        actor,
+        *,
+        damage_prompt: str | Iterable[str],
+        tags: Iterable[str] | None,
+        is_melee: bool | None,
+    ) -> tuple[str | Iterable[str], bool]:
+        if not bool(is_melee):
+            return damage_prompt, False
+        if self._rogue_racket(actor) != "thief":
+            return damage_prompt, False
+        if not self._has_trait(tags or [], "finesse"):
+            return damage_prompt, False
+
+        def _replace(text: str) -> tuple[str, bool]:
+            replaced = re.sub(r"\bSTR\b", "DEX", str(text), flags=re.IGNORECASE)
+            return replaced, replaced != str(text)
+
+        if isinstance(damage_prompt, str):
+            replaced, changed = _replace(damage_prompt)
+            return replaced, changed
+        if isinstance(damage_prompt, (list, tuple)):
+            changed = False
+            out = []
+            for item in damage_prompt:
+                replaced, item_changed = _replace(str(item))
+                changed = changed or item_changed
+                out.append(replaced)
+            return out, changed
+        return damage_prompt, False
+
+    def _feint_flat_footed_status_applies(self, target, attacker, *, is_melee: bool) -> bool:
+        statuses = getattr(target, "statuses", None)
+        if not isinstance(statuses, list):
+            return False
+        attacker_id = self._target_id(attacker)
+        for status in statuses:
+            if getattr(status, "id", status) != "feint_flat_footed":
+                continue
+            data = getattr(status, "data", None) or {}
+            if bool(data.get("melee_only", False)) and not bool(is_melee):
+                continue
+            required_attacker_id = str(data.get("attacker_id", "") or "").strip()
+            if required_attacker_id and str(attacker_id or "").strip() != required_attacker_id:
+                continue
+            return True
+        return False
+
+    def _consume_feint_next_attack(self, ctx, attacker, target, *, is_melee: bool) -> bool:
+        state = self._get_attack_state(ctx, attacker)
+        if not isinstance(state, dict):
+            return False
+        target_id = str(state.get("feint_next_attack_target_id", "") or "").strip()
+        if not target_id:
+            return False
+        if bool(state.get("feint_next_attack_melee_only", True)) and not bool(is_melee):
+            return False
+        current_target_id = str(self._target_id(target) or "").strip()
+        if not current_target_id or current_target_id != target_id:
+            return False
+        for key in (
+            "feint_next_attack_target_id",
+            "feint_next_attack_melee_only",
+            "feint_next_attack_source",
+            "feint_next_attack_source_id",
+        ):
+            state.pop(key, None)
+        return True
 
     @staticmethod
     def _is_flat_footed(target) -> bool:

@@ -84,12 +84,41 @@ class SeekEvent(GameEvent):
             return EventResult.noop(message="Krytyczna porażka – pokoje zablokowane.")
 
         newly_revealed_positions: set[tuple[int, int]] = set()
+        detected_trap_positions: set[tuple[int, int]] = set()
         reveal_notes: list[str] = []
+        trap_notes: list[str] = []
         hidden_candidates = 0
+        trap_candidates = 0
         revealed_count = 0
+        trap_detected_count = 0
 
         for pos in search_positions:
             for obj in board.interactables_at(pos):
+                is_trap_like = bool(
+                    hasattr(obj, "trap_armed")
+                    and callable(getattr(obj, "detect_trap", None))
+                    and callable(getattr(obj, "disable_trap", None))
+                )
+                if is_trap_like and bool(getattr(obj, "trap_armed", False)) and not bool(getattr(obj, "trap_detected", False)):
+                    trap_candidates += 1
+                    trap_tags = base_tags + ["trap", "seek", "search"]
+                    trap_resolution = check_resolver.resolve_skill_check_with_sources_from_roll(
+                        skill_id=Skill.PERCEPTION.value,
+                        dc=int(getattr(obj, "trap_detection_dc", 18) or 18),
+                        actor=actor,
+                        target=obj,
+                        tags=trap_tags,
+                        roll=roll,
+                        game=game,
+                        apply_modifiers=True,
+                    )
+                    outcome, trap_msg = obj.detect_trap(int(trap_resolution.total or 0))
+                    if outcome in ("success", "critical_success"):
+                        detected_trap_positions.add(pos)
+                        trap_detected_count += 1
+                        trap_name = str(getattr(obj, "trap_name", "") or "").strip() or "Pułapka"
+                        trap_notes.append(f"{trap_name}: {trap_msg}")
+                        logger.info("Wykryto pułapkę %s na polu %s.", trap_name, pos)
                 if not getattr(obj, "hidden", False) or getattr(obj, "revealed", False):
                     continue
                 if not getattr(obj, "seekable", True):
@@ -125,10 +154,10 @@ class SeekEvent(GameEvent):
                         reveal_notes.append(str(desc))
                     logger.info("Odkrywasz %s na polu %s.", obj.__class__.__name__, pos)
 
-        if hidden_candidates == 0:
-            logger.info("W wybranych pokojach nie ma ukrytych elementów do przeszukania.")
-            return EventResult.noop(message="Brak ukrytych elementów.")
-        if not newly_revealed_positions:
+        if hidden_candidates == 0 and trap_candidates == 0:
+            logger.info("W wybranych pokojach nie ma ukrytych elementów ani pułapek do przeszukania.")
+            return EventResult.noop(message="Brak ukrytych elementów ani pułapek.")
+        if not newly_revealed_positions and not detected_trap_positions:
             logger.info("Przeszukiwanie niczego nie ujawnia.")
             if rooms_here and roll_total < consts.SEEK_FAIL:
                 for room_id in allowed_rooms:
@@ -139,18 +168,28 @@ class SeekEvent(GameEvent):
                 )
             return EventResult.noop(message="Nic nie znaleziono.")
 
-        logger.info("Ujawniono %s ukrytych obiektów w %s polach.", revealed_count, len(newly_revealed_positions))
+        logger.info(
+            "Ujawniono %s ukrytych obiektów i wykryto %s pułapek.",
+            revealed_count,
+            trap_detected_count,
+        )
         game.events.safe_emit_action(
             actor=actor,
             action_id="seek_reveal",
             action_tags=["seek", "reveal"],
             revealed=list(newly_revealed_positions),
             count=revealed_count,
+            detected_traps=list(detected_trap_positions),
+            traps_count=trap_detected_count,
         )
-        game.conn.set_leds(list(newly_revealed_positions), consts.HIDDEN_REVEAL_RGB)
-        info_text = "Odkryto ukryte obiekty."
+        reveal_positions = list(newly_revealed_positions.union(detected_trap_positions))
+        game.conn.set_leds(reveal_positions, consts.HIDDEN_REVEAL_RGB)
+        info_text = "Odkryto ukryte obiekty i/lub pułapki."
         if reveal_notes:
             info_text = "Odkryto:\n" + "\n".join(reveal_notes)
+        if trap_notes:
+            trap_text = "Wykryte pułapki:\n" + "\n".join(trap_notes)
+            info_text = f"{info_text}\n{trap_text}" if info_text else trap_text
         ui = get_ui_client()
         if ui.enabled:
             ui.prompt_info("Odkryto coś!", prompt_long=info_text, source="seek")
