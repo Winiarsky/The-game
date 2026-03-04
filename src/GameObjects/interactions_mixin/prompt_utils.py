@@ -1,10 +1,22 @@
 from __future__ import annotations
 
 import logging
+
 from ui_client import get_ui_client
 from combat.degree_of_success import natural_mode_from_shift, natural_shift_from_mode, natural_shift_from_roll
 
 logger = logging.getLogger(__name__)
+
+_MAGIC_PROMPT_CONTEXT: dict | None = None
+
+
+def get_magic_prompt_context() -> dict | None:
+    return _MAGIC_PROMPT_CONTEXT
+
+
+def set_magic_prompt_context(payload: dict | None) -> None:
+    global _MAGIC_PROMPT_CONTEXT
+    _MAGIC_PROMPT_CONTEXT = payload if isinstance(payload, dict) else None
 
 
 def _parse_roll_details(answer, *, infer_natural_from_roll: bool = False) -> dict[str, object]:
@@ -36,6 +48,158 @@ def _parse_roll_details(answer, *, infer_natural_from_roll: bool = False) -> dic
     }
 
 
+def _has_status_id(actor, status_id: str) -> bool:
+    if actor is None:
+        return False
+    has_status = getattr(actor, "has_status", None)
+    if callable(has_status):
+        try:
+            return bool(has_status(status_id))
+        except Exception:
+            return False
+    for status in getattr(actor, "statuses", []) or []:
+        if getattr(status, "id", status) == status_id:
+            return True
+    return False
+
+
+def _dangerous_sorcery_bonus_per_level(actor) -> int:
+    if actor is None:
+        return 1
+    getter = getattr(actor, "get_status_data", None)
+    if callable(getter):
+        try:
+            value = int(getter("dangerous_sorcery", "dangerous_sorcery_damage_bonus_per_spell_level", 1) or 1)
+            return max(1, value)
+        except Exception:
+            pass
+    for status in getattr(actor, "statuses", []) or []:
+        if getattr(status, "id", None) != "dangerous_sorcery":
+            continue
+        data = getattr(status, "data", None) or {}
+        try:
+            value = int(data.get("dangerous_sorcery_damage_bonus_per_spell_level", 1) or 1)
+            return max(1, value)
+        except Exception:
+            return 1
+    return 1
+
+
+def _prompt_choice(ui_client, prompt: str, choices: list[str], *, source: str) -> str | None:
+    if getattr(ui_client, "enabled", False):
+        try:
+            answer = ui_client.prompt_choice(prompt, choices=choices, source=source)
+            if answer is not None:
+                raw = str(answer).strip()
+                if raw:
+                    return raw
+        except Exception:
+            pass
+    if not getattr(ui_client, "allow_cli_fallback", False):
+        return None
+    try:
+        raw = input(f"{prompt} {choices}: ").strip()
+    except Exception:
+        return None
+    return raw or None
+
+
+def _prompt_spell_level(ui_client, *, source: str) -> int | None:
+    choices = [str(idx) for idx in range(1, 11)]
+    selected = _prompt_choice(
+        ui_client,
+        "Dangerous Sorcery: podaj poziom czaru (slot spell level)",
+        choices=choices,
+        source=source,
+    )
+    if selected is not None:
+        try:
+            value = int(str(selected).strip())
+            return max(1, value)
+        except Exception:
+            pass
+
+    if getattr(ui_client, "enabled", False):
+        try:
+            answer = ui_client.prompt_roll(
+                "Dangerous Sorcery: wpisz poziom czaru",
+                source=source,
+                layout="test",
+                answer_placeholder="Poziom czaru",
+            )
+            details = _parse_roll_details(answer)
+            value = int(details.get("roll", 0) or 0)
+            if value > 0:
+                return value
+        except Exception:
+            return None
+    if not getattr(ui_client, "allow_cli_fallback", False):
+        return None
+    try:
+        raw = input("Dangerous Sorcery - poziom czaru: ").strip()
+        value = int(raw or 0)
+    except Exception:
+        return None
+    return value if value > 0 else None
+
+
+def _apply_dangerous_sorcery_if_needed(
+    rolled_value: int,
+    *,
+    ui_client,
+    layout: str,
+) -> int:
+    context = get_magic_prompt_context()
+    if not isinstance(context, dict):
+        return int(rolled_value)
+    if str(layout or "").strip().lower() != "damage":
+        return int(rolled_value)
+    if bool(context.get("dangerous_sorcery_resolved", False)):
+        return int(rolled_value)
+
+    actor = context.get("actor")
+    if not _has_status_id(actor, "dangerous_sorcery"):
+        context["dangerous_sorcery_resolved"] = True
+        return int(rolled_value)
+    if bool(context.get("is_focus_spell", False)) or bool(context.get("is_cantrip_spell", False)):
+        context["dangerous_sorcery_resolved"] = True
+        return int(rolled_value)
+
+    apply_answer = _prompt_choice(
+        ui_client,
+        (
+            "Dangerous Sorcery: ten bonus dziala tylko dla czarow ze slotu, "
+            "ktore zadaja obrazenia i nie maja duration. Zastosowac teraz?"
+        ),
+        choices=["tak", "nie"],
+        source="dangerous_sorcery",
+    )
+    normalized = str(apply_answer or "").strip().lower()
+    if normalized not in {"t", "tak", "y", "yes", "1"}:
+        context["dangerous_sorcery_resolved"] = True
+        return int(rolled_value)
+
+    spell_level = _prompt_spell_level(ui_client, source="dangerous_sorcery")
+    if spell_level is None:
+        context["dangerous_sorcery_resolved"] = True
+        return int(rolled_value)
+
+    per_level = _dangerous_sorcery_bonus_per_level(actor)
+    bonus = max(0, int(spell_level) * int(per_level))
+    context["dangerous_sorcery_resolved"] = True
+    context["dangerous_sorcery_applied"] = True
+
+    game = context.get("game")
+    logger_fn = getattr(game, "ui_log", None)
+    if callable(logger_fn):
+        try:
+            spell_name = str(context.get("spell_name", "spell") or "spell")
+            logger_fn(f"Dangerous Sorcery: +{bonus} obrazen do czaru '{spell_name}' (poziom {spell_level}).")
+        except Exception:
+            pass
+    return int(rolled_value) + int(bonus)
+
+
 def prompt_for_roll(prompt: str, *, return_details: bool = False, infer_natural_from_roll: bool = False, **ui_kwargs):
     """Poproś o rzut i zwróć liczbę całkowitą (UI; CLI tylko gdy ALLOW_CLI_FALLBACK=1).
 
@@ -43,9 +207,11 @@ def prompt_for_roll(prompt: str, *, return_details: bool = False, infer_natural_
     wszystkich promptów na rzuty. Można nadpisać layout/placeholder via **ui_kwargs.
     """
     ui_client = get_ui_client()
+    layout = str(ui_kwargs.get("layout", "test") or "test")
     if ui_client.enabled:
         if "layout" not in ui_kwargs:
             ui_kwargs["layout"] = "test"
+            layout = "test"
         ui_kwargs.setdefault("answer_placeholder", "Podaj wynik rzutu")
         ui_answer = ui_client.prompt_roll(
             prompt,
@@ -54,9 +220,23 @@ def prompt_for_roll(prompt: str, *, return_details: bool = False, infer_natural_
             **ui_kwargs,
         )
         if return_details:
-            return _parse_roll_details(ui_answer, infer_natural_from_roll=infer_natural_from_roll)
+            details = _parse_roll_details(ui_answer, infer_natural_from_roll=infer_natural_from_roll)
+            if str(layout).strip().lower() == "damage":
+                details["roll"] = _apply_dangerous_sorcery_if_needed(
+                    int(details.get("roll", 0) or 0),
+                    ui_client=ui_client,
+                    layout=layout,
+                )
+            return details
         details = _parse_roll_details(ui_answer, infer_natural_from_roll=infer_natural_from_roll)
-        return int(details.get("roll", 0) or 0)
+        value = int(details.get("roll", 0) or 0)
+        if str(layout).strip().lower() == "damage":
+            value = _apply_dangerous_sorcery_if_needed(
+                value,
+                ui_client=ui_client,
+                layout=layout,
+            )
+        return value
 
     if not getattr(ui_client, "allow_cli_fallback", False):
         raise RuntimeError("UI-only mode: prompt_for_roll wymaga aktywnego UI.")
@@ -68,7 +248,20 @@ def prompt_for_roll(prompt: str, *, return_details: bool = False, infer_natural_
         try:
             value = int(raw)
             if return_details:
-                return _parse_roll_details(value, infer_natural_from_roll=infer_natural_from_roll)
+                details = _parse_roll_details(value, infer_natural_from_roll=infer_natural_from_roll)
+                if str(layout).strip().lower() == "damage":
+                    details["roll"] = _apply_dangerous_sorcery_if_needed(
+                        int(details.get("roll", 0) or 0),
+                        ui_client=ui_client,
+                        layout=layout,
+                    )
+                return details
+            if str(layout).strip().lower() == "damage":
+                value = _apply_dangerous_sorcery_if_needed(
+                    value,
+                    ui_client=ui_client,
+                    layout=layout,
+                )
             return value
         except ValueError:
             continue

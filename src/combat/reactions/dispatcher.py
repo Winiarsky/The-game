@@ -227,10 +227,20 @@ def dispatch_reactions(game, event: dict[str, object]) -> None:
             prompt_fn = getattr(game, "ui", None)
             reason = reaction.reason(reactor, event_payload)
             consent = False
+            prompt_text_fn = getattr(reaction, "prompt_text", None)
+            if callable(prompt_text_fn):
+                try:
+                    prompt_text = str(prompt_text_fn(reactor, event_payload) or "").strip()
+                except Exception:
+                    prompt_text = ""
+            else:
+                prompt_text = ""
+            if not prompt_text:
+                prompt_text = f"Czy chcesz wykonać reakcję {reaction.label}? ({reason})"
             if prompt_fn and getattr(prompt_fn, "enabled", False):
                 try:
                     choice = game.ui.prompt_choice(
-                        f"Czy chcesz wykonać reakcję {reaction.label}? ({reason})",
+                        prompt_text,
                         choices=["tak", "nie"],
                         source="reaction",
                     )
@@ -241,7 +251,7 @@ def dispatch_reactions(game, event: dict[str, object]) -> None:
                 if getattr(getattr(game, "ui", None), "allow_cli_fallback", False) is False:
                     continue
                 try:
-                    resp = input(f"Reakcja {reaction.label} ({reason}). Wykonać? [t/N]: ")
+                    resp = input(f"{prompt_text} [t/N]: ")
                     consent = resp.strip().lower() in ("t", "tak", "y", "yes")
                 except Exception:
                     consent = False

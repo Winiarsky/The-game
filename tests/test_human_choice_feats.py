@@ -116,6 +116,20 @@ def test_natural_ambition_for_druid_grants_widen_spell(monkeypatch):
     assert hero.has_status("widen_spell")
 
 
+def test_natural_ambition_for_sorcerer_grants_familiar(monkeypatch):
+    ui = DummyUI(["Familiar"])
+    monkeypatch.setattr("ui_client.get_ui_client", lambda: ui)
+
+    hero = DummyHero()
+    hero.class_name = "sorcerer"
+    hero.add_status(NATURAL_AMBITION_STATUS)
+
+    assert hero.get_status_data("natural_ambition", "class_name", None) == "sorcerer"
+    assert hero.get_status_data("natural_ambition", "class_feat", None) == "familiar"
+    assert hero.has_status("familiar")
+    assert hero.has_status("FamiliarOwner")
+
+
 def test_adapted_cantrip_records_selected_choices(monkeypatch):
     ui = DummyUI(["Arcane", "Shield", "Detect Magic"])
     monkeypatch.setattr("ui_client.get_ui_client", lambda: ui)

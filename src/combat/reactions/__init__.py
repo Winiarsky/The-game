@@ -5,6 +5,7 @@ from .opportunity_attack import OpportunityAttack
 from .nimble_dodge_reaction import NimbleDodgeReaction
 from .reactive_shield_reaction import ReactiveShieldReaction
 from .shield_block_reaction import ShieldBlockReaction
+from .counterspell_reaction import CounterspellReaction
 
 __all__ = [
     "Reaction",
@@ -14,4 +15,5 @@ __all__ = [
     "ChampionReaction",
     "ReactiveShieldReaction",
     "ShieldBlockReaction",
+    "CounterspellReaction",
 ]

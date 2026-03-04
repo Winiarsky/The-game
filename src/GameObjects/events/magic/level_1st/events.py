@@ -180,6 +180,10 @@ def _apply_heal(target, amount: int) -> None:
 def _is_undead_target(target) -> bool:
     if target is None:
         return False
+    for status in getattr(target, "statuses", []) or []:
+        data = getattr(status, "data", None) or {}
+        if bool(data.get("treat_as_undead_for_heal_harm", False)):
+            return True
     has_tag = getattr(target, "has_tag", None)
     if callable(has_tag):
         try:
@@ -192,6 +196,23 @@ def _is_undead_target(target) -> bool:
     if enemy_type is not None:
         tags.add(str(getattr(enemy_type, "value", enemy_type)).strip().lower())
     return "undead" in tags
+
+
+def _harm_heal_bonus_for_target(target) -> int:
+    if target is None:
+        return 0
+    best = 0
+    for status in getattr(target, "statuses", []) or []:
+        data = getattr(status, "data", None) or {}
+        if not bool(data.get("treat_as_undead_for_heal_harm", False)):
+            continue
+        try:
+            value = int(data.get("harm_heal_bonus", 0) or 0)
+        except Exception:
+            value = 0
+        if value > best:
+            best = value
+    return max(0, best)
 
 
 def _is_fiend_target(target) -> bool:
@@ -2686,8 +2707,16 @@ class HarmEvent(MagicEvent):
             if target is None:
                 return EventResult.cancelled(message="Brak celu dla Harm.")
             if _is_undead_target(target):
-                _apply_heal(target, amount)
-                return EventResult(success=True, consumed_action=True, message=f"Harm: undead odzyskuje {amount} HP.")
+                bonus = _harm_heal_bonus_for_target(target)
+                healed = int(amount) + int(bonus)
+                _apply_heal(target, healed)
+                if bonus > 0:
+                    return EventResult(
+                        success=True,
+                        consumed_action=True,
+                        message=f"Harm: undead odzyskuje {healed} HP ({amount} + {bonus} bonus).",
+                    )
+                return EventResult(success=True, consumed_action=True, message=f"Harm: undead odzyskuje {healed} HP.")
             defeated = _apply_damage(target, amount, DamageType.NEGATIVE.value)
             msg = f"Harm: cel otrzymuje {amount} negative."
             if defeated:
@@ -2698,14 +2727,14 @@ class HarmEvent(MagicEvent):
         healed_undead = 0
         for hero in _targets_in_radius(_iter_hero_candidates(ctx.game), actor.position, self.range_feet):
             if _is_undead_target(hero):
-                _apply_heal(hero, amount)
+                _apply_heal(hero, int(amount) + int(_harm_heal_bonus_for_target(hero)))
                 healed_undead += 1
                 continue
             _apply_damage(hero, amount, DamageType.NEGATIVE.value)
             harmed += 1
         for enemy in _targets_in_radius(_iter_enemy_candidates(ctx.game), actor.position, self.range_feet):
             if _is_undead_target(enemy):
-                _apply_heal(enemy, amount)
+                _apply_heal(enemy, int(amount) + int(_harm_heal_bonus_for_target(enemy)))
                 healed_undead += 1
                 continue
             _apply_damage(enemy, amount, DamageType.NEGATIVE.value)

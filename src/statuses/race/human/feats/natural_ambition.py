@@ -72,6 +72,13 @@ NATURAL_AMBITION_CLASS_FEAT_CHOICES = {
         "monster_hunter",
         "twin_takedown",
     ],
+    "sorcerer": [
+        "counterspell",
+        "dangerous_sorcery",
+        "familiar",
+        "reach_spell",
+        "widen_spell",
+    ],
 }
 
 

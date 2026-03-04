@@ -114,6 +114,11 @@ class StatusMixin:
                 self._handle_ranger_setup_choice(status, data)
             except Exception:
                 pass
+        if data.get("ui_choice_kind") == "sorcerer_setup":
+            try:
+                self._handle_sorcerer_setup_choice(status, data)
+            except Exception:
+                pass
         if data.get("ui_choice_kind") == "rogue_setup":
             try:
                 self._handle_rogue_setup_choice(status, data)
@@ -420,6 +425,28 @@ class StatusMixin:
                     "YOURE_NEXT_STATUS",
                 ),
             },
+            "sorcerer": {
+                "counterspell": (
+                    "statuses.classes.sorcerer.feats.counterspell",
+                    "COUNTERSPELL_STATUS",
+                ),
+                "dangerous_sorcery": (
+                    "statuses.classes.sorcerer.feats.dangerous_sorcery",
+                    "DANGEROUS_SORCERY_STATUS",
+                ),
+                "familiar": (
+                    "statuses.classes.sorcerer.feats.familiar",
+                    "FAMILIAR_STATUS",
+                ),
+                "reach_spell": (
+                    "statuses.classes.sorcerer.feats.reach_spell",
+                    "REACH_SPELL_STATUS",
+                ),
+                "widen_spell": (
+                    "statuses.classes.sorcerer.feats.widen_spell",
+                    "WIDEN_SPELL_STATUS",
+                ),
+            },
         }
 
     @staticmethod
@@ -582,6 +609,15 @@ class StatusMixin:
         except Exception:
             return False
 
+    def _is_sorcerer_actor(self) -> bool:
+        class_name = str(getattr(self, "class_name", "") or "").strip().lower()
+        if class_name == "sorcerer":
+            return True
+        try:
+            return bool(self.has_status("sorcerer"))
+        except Exception:
+            return False
+
     def _trained_skill_ids(self) -> set[str]:
         trained: set[str] = set()
 
@@ -615,6 +651,7 @@ class StatusMixin:
                     "cleric_setup",
                     "champion_setup",
                     "druid_setup",
+                    "sorcerer_setup",
                 ):
                     payload = data.get(setup_key)
                     if not isinstance(payload, dict):
@@ -748,6 +785,15 @@ class StatusMixin:
         }:
             if not self._is_rogue_actor():
                 self._ui_log(f"{self._labelize_choice(status_id)}: wymaga klasy Rogue.")
+                return False
+
+        if status_id in {
+            "counterspell",
+            "dangerous_sorcery",
+            "familiar",
+        }:
+            if not self._is_sorcerer_actor():
+                self._ui_log(f"{self._labelize_choice(status_id)}: wymaga klasy Sorcerer.")
                 return False
 
         required_trained_skills = {
@@ -1660,6 +1706,206 @@ class StatusMixin:
             f"feat={self._labelize_choice(chosen_feat)}."
         )
 
+    def _handle_sorcerer_setup_choice(self, status: "Status", data: dict) -> None:
+        key_ability_choices = list(data.get("sorcerer_key_ability_choices") or ["charisma"])
+        bloodline_choices = list(data.get("sorcerer_bloodline_choices") or [])
+        feat_choices = list(data.get("sorcerer_feat_choices") or [])
+        bloodline_traditions = dict(data.get("sorcerer_bloodline_traditions") or {})
+        bloodline_skills_map = dict(data.get("sorcerer_bloodline_skills") or {})
+        bloodline_spells_map = dict(data.get("sorcerer_bloodline_granted_spells") or {})
+        bloodline_focus_map = dict(data.get("sorcerer_bloodline_initial_focus_spells") or {})
+        bloodline_magic_map = dict(data.get("sorcerer_bloodline_blood_magic") or {})
+        draconic_type_choices = list(data.get("sorcerer_draconic_type_choices") or [])
+        draconic_type_damage = dict(data.get("sorcerer_draconic_type_damage") or {})
+        elemental_type_choices = list(data.get("sorcerer_elemental_type_choices") or ["air", "earth", "fire", "water"])
+        elemental_type_damage = dict(data.get("sorcerer_elemental_type_damage") or {})
+
+        chosen_key_ability = (
+            key_ability_choices[0]
+            if len(key_ability_choices) == 1
+            else self._pick_choice_id(
+                "Sorcerer: wybierz key ability",
+                key_ability_choices,
+                source="status",
+            )
+        )
+        if not chosen_key_ability:
+            return
+
+        chosen_bloodline = self._pick_choice_id(
+            "Sorcerer: wybierz bloodline",
+            bloodline_choices,
+            source="status",
+        )
+        if not chosen_bloodline:
+            return
+
+        chosen_dragon_type: str | None = None
+        chosen_elemental_type: str | None = None
+        if chosen_bloodline == "draconic":
+            chosen_dragon_type = self._pick_choice_id(
+                "Sorcerer (Draconic): wybierz dragon type",
+                draconic_type_choices,
+                source="status",
+            )
+            if not chosen_dragon_type:
+                return
+        if chosen_bloodline == "elemental":
+            chosen_elemental_type = self._pick_choice_id(
+                "Sorcerer (Elemental): wybierz elemental type",
+                elemental_type_choices,
+                source="status",
+            )
+            if not chosen_elemental_type:
+                return
+
+        chosen_feat = self._pick_choice_id(
+            "Sorcerer: wybierz 1. poziomowy class feat",
+            feat_choices,
+            source="status",
+        )
+        if not chosen_feat:
+            return
+
+        chosen_tradition = str(bloodline_traditions.get(chosen_bloodline) or "")
+        bloodline_skills = list(bloodline_skills_map.get(chosen_bloodline) or [])
+        bloodline_spells = dict(bloodline_spells_map.get(chosen_bloodline) or {})
+        bloodline_cantrip = str(bloodline_spells.get("cantrip") or "")
+        bloodline_rank_1_spell = str(bloodline_spells.get("rank_1") or "")
+        bloodline_focus_spell = str(bloodline_focus_map.get(chosen_bloodline) or "")
+        blood_magic = str(bloodline_magic_map.get(chosen_bloodline) or "")
+        chosen_dragon_damage_type = (
+            str(draconic_type_damage.get(chosen_dragon_type) or "") if chosen_dragon_type else None
+        )
+        chosen_elemental_damage_type = (
+            str(elemental_type_damage.get(chosen_elemental_type) or "") if chosen_elemental_type else None
+        )
+
+        setup_payload = {
+            "key_ability": chosen_key_ability,
+            "bloodline": chosen_bloodline,
+            "spell_tradition": chosen_tradition,
+            "class_feat": chosen_feat,
+            "trained_skills": list(bloodline_skills),
+            "bloodline_cantrip": bloodline_cantrip,
+            "bloodline_rank_1_spell": bloodline_rank_1_spell,
+            "bloodline_initial_focus_spell": bloodline_focus_spell,
+            "blood_magic": blood_magic,
+        }
+        if chosen_dragon_type:
+            setup_payload["dragon_type"] = chosen_dragon_type
+            setup_payload["dragon_damage_type"] = chosen_dragon_damage_type
+        if chosen_elemental_type:
+            setup_payload["elemental_type"] = chosen_elemental_type
+            setup_payload["elemental_damage_type"] = chosen_elemental_damage_type
+
+        try:
+            for idx, item in enumerate(self.statuses):
+                if item is status:
+                    new_data = dict(data)
+                    new_data["sorcerer_setup"] = dict(setup_payload)
+                    new_data["sorcerer_key_ability"] = chosen_key_ability
+                    new_data["sorcerer_bloodline"] = chosen_bloodline
+                    new_data["sorcerer_spell_tradition"] = chosen_tradition
+                    new_data["sorcerer_class_feat"] = chosen_feat
+                    new_data["sorcerer_bloodline_skills"] = list(bloodline_skills)
+                    new_data["sorcerer_bloodline_granted_spells"] = dict(bloodline_spells)
+                    new_data["sorcerer_bloodline_initial_focus_spell"] = bloodline_focus_spell
+                    new_data["sorcerer_blood_magic"] = blood_magic
+                    if chosen_dragon_type:
+                        new_data["sorcerer_dragon_type"] = chosen_dragon_type
+                        new_data["sorcerer_dragon_damage_type"] = chosen_dragon_damage_type
+                    if chosen_elemental_type:
+                        new_data["sorcerer_elemental_type"] = chosen_elemental_type
+                        new_data["sorcerer_elemental_damage_type"] = chosen_elemental_damage_type
+                    self.statuses[idx] = replace(status, data=new_data)
+                    break
+        except Exception:
+            self._ui_log("Sorcerer setup: nie udalo sie zapisac wyborow.")
+            return
+
+        for attr, value in (
+            ("sorcerer_key_ability", chosen_key_ability),
+            ("sorcerer_bloodline", chosen_bloodline),
+            ("sorcerer_spell_tradition", chosen_tradition),
+            ("sorcerer_class_feat", chosen_feat),
+            ("sorcerer_bloodline_skills", list(bloodline_skills)),
+            ("sorcerer_bloodline_granted_spells", dict(bloodline_spells)),
+            ("sorcerer_bloodline_initial_focus_spell", bloodline_focus_spell),
+            ("sorcerer_blood_magic", blood_magic),
+        ):
+            try:
+                setattr(self, attr, value)
+            except Exception:
+                pass
+        if chosen_dragon_type:
+            try:
+                setattr(self, "sorcerer_dragon_type", chosen_dragon_type)
+                setattr(self, "sorcerer_dragon_damage_type", chosen_dragon_damage_type)
+            except Exception:
+                pass
+        if chosen_elemental_type:
+            try:
+                setattr(self, "sorcerer_elemental_type", chosen_elemental_type)
+                setattr(self, "sorcerer_elemental_damage_type", chosen_elemental_damage_type)
+            except Exception:
+                pass
+
+        known_cantrips = list(getattr(self, "sorcerer_known_cantrips", []) or [])
+        if bloodline_cantrip and bloodline_cantrip not in known_cantrips:
+            known_cantrips.append(bloodline_cantrip)
+        known_rank_1 = list(getattr(self, "sorcerer_known_rank_1_spells", []) or [])
+        if bloodline_rank_1_spell and bloodline_rank_1_spell not in known_rank_1:
+            known_rank_1.append(bloodline_rank_1_spell)
+        known_focus_spells = list(getattr(self, "sorcerer_focus_spells", []) or [])
+        if bloodline_focus_spell and bloodline_focus_spell not in known_focus_spells:
+            known_focus_spells.append(bloodline_focus_spell)
+        try:
+            setattr(self, "sorcerer_known_cantrips", known_cantrips)
+            setattr(self, "sorcerer_known_rank_1_spells", known_rank_1)
+            setattr(self, "sorcerer_focus_spells", known_focus_spells)
+        except Exception:
+            pass
+
+        self._ui_log(
+            "Sorcerer setup: "
+            f"bloodline={self._labelize_choice(chosen_bloodline)}, "
+            f"tradition={self._labelize_choice(chosen_tradition)}, "
+            f"feat={self._labelize_choice(chosen_feat)}."
+        )
+        if chosen_dragon_type:
+            self._ui_log(
+                "Draconic bloodline: "
+                f"dragon type={self._labelize_choice(chosen_dragon_type)} "
+                f"({self._labelize_choice(chosen_dragon_damage_type)})."
+            )
+        if chosen_elemental_type:
+            self._ui_log(
+                "Elemental bloodline: "
+                f"element={self._labelize_choice(chosen_elemental_type)} "
+                f"({self._labelize_choice(chosen_elemental_damage_type)})."
+            )
+        if bloodline_cantrip or bloodline_rank_1_spell:
+            self._ui_log(
+                "Bloodline granted spells: "
+                f"cantrip={self._labelize_choice(bloodline_cantrip)}, "
+                f"rank 1={self._labelize_choice(bloodline_rank_1_spell)}."
+            )
+        if bloodline_focus_spell:
+            self._ui_log(
+                "Bloodline focus spell: "
+                f"{self._labelize_choice(bloodline_focus_spell)}."
+            )
+        if blood_magic:
+            self._ui_log(f"Blood Magic ({self._labelize_choice(chosen_bloodline)}): {blood_magic}")
+
+        registry = self._class_feat_registry().get("sorcerer", {})
+        feat_status = self._resolve_status_from_registry(chosen_feat, registry)
+        if feat_status is None:
+            self._ui_log(f"Sorcerer setup: nie znaleziono statusu feata {chosen_feat}.")
+            return
+        self.add_status(feat_status)
+
     def _handle_rogue_setup_choice(self, status: "Status", data: dict) -> None:
         racket_choices = list(data.get("rogue_racket_choices") or ["ruffian", "scoundrel", "thief"])
         feat_choices = list(data.get("rogue_feat_choices") or [])
@@ -2059,6 +2305,14 @@ class StatusMixin:
                     reactions.append(NimbleDodgeReaction())
             except Exception:
                 self._ui_log("Nie udalo sie dodac reakcji Nimble Dodge.")
+        if status_id == "counterspell":
+            try:
+                from combat.reactions.counterspell_reaction import CounterspellReaction
+
+                if not any(getattr(item, "id", None) == "counterspell_reaction" for item in reactions):
+                    reactions.append(CounterspellReaction())
+            except Exception:
+                self._ui_log("Nie udalo sie dodac reakcji Counterspell.")
 
     def _drop_reactions_for_status(self, status_id: str) -> None:
         reactions = getattr(self, "reactions", None)
@@ -2070,6 +2324,8 @@ class StatusMixin:
             self.reactions = [item for item in reactions if getattr(item, "id", None) != "reactive_shield"]
         if status_id == "nimble_dodge":
             self.reactions = [item for item in reactions if getattr(item, "id", None) != "nimble_dodge"]
+        if status_id == "counterspell":
+            self.reactions = [item for item in reactions if getattr(item, "id", None) != "counterspell_reaction"]
 
     def _ensure_status_objects(self) -> None:
         if not self.statuses:
