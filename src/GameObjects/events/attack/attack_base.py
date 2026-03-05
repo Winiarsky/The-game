@@ -115,6 +115,37 @@ class AttackEventBase(GameEvent):
         "animal_instinct_active",
         "monk_stance_active",
     }
+    _WEAPON_GROUP_BY_WEAPON = {
+        "dagger": "knife",
+        "club": "club",
+        "mace": "club",
+        "spear": "spear",
+        "javelin": "spear",
+        "sword": "sword",
+        "longsword": "sword",
+        "shortsword": "sword",
+        "rapier": "sword",
+        "greataxe": "axe",
+        "warhammer": "hammer",
+        "halberd": "polearm",
+        "glaive": "polearm",
+        "shortbow": "bow",
+        "longbow": "bow",
+        "bow": "bow",
+        "crossbow": "crossbow",
+        "light_crossbow": "crossbow",
+        "simple_crossbow": "crossbow",
+    }
+    _SIMPLE_WEAPON_IDS = {
+        "club",
+        "crossbow",
+        "dagger",
+        "javelin",
+        "light_crossbow",
+        "mace",
+        "spear",
+        "unarmed",
+    }
 
     def _ac_with_bonuses(
         self,
@@ -133,6 +164,23 @@ class AttackEventBase(GameEvent):
         bonuses = list(getattr(target, "bonuses", [])) if hasattr(target, "bonuses") else []
         if extra_bonuses:
             bonuses.extend(list(extra_bonuses))
+        try:
+            from GameObjects.items.armor import armor_ac_bonus, get_equipped_armor
+
+            equipped_armor = get_equipped_armor(target)
+            armor_bonus = int(armor_ac_bonus(target) or 0)
+            if equipped_armor is not None and armor_bonus > 0:
+                bonuses.append(
+                    BonusEffect(
+                        type=BonusType.ITEM,
+                        value=armor_bonus,
+                        tag="ac",
+                        source=f"armor:{getattr(equipped_armor, 'item_id', 'equipped')}",
+                        label=str(getattr(equipped_armor, "name", "armor") or "armor"),
+                    )
+                )
+        except Exception:
+            pass
         try:
             cond_eff = ac_penalty_effect(target)
             if cond_eff is not None:
@@ -242,6 +290,8 @@ class AttackEventBase(GameEvent):
         "attached",
         "backstabber",
         "backswing",
+        "brutal",
+        "concealing",
         "deadly",
         "disarm",
         "dwarf",
@@ -256,6 +306,7 @@ class AttackEventBase(GameEvent):
         "halfling",
         "jousting",
         "monk",
+        "modular",
         "nonlethal",
         "orc",
         "parry",
@@ -270,6 +321,7 @@ class AttackEventBase(GameEvent):
         "unarmed",
         "versatile",
         "volley",
+        "knockdown",
     }
     _GENERIC_TAGS = {
         "attack",
@@ -324,6 +376,181 @@ class AttackEventBase(GameEvent):
         if val.isdigit():
             return f"d{val}"
         return None
+
+    @staticmethod
+    def _normalized_trait_tags(raw_tags: Iterable[object] | None) -> list[str]:
+        out: list[str] = []
+        for item in raw_tags or ():
+            tag = str(item or "").strip().lower().replace("-", "_").replace(" ", "_")
+            if not tag:
+                continue
+            out.append(tag)
+        return list(dict.fromkeys(out))
+
+    def _selected_weapon(self, ctx):
+        metadata = dict(getattr(ctx, "metadata", None) or {})
+        selected = metadata.get("selected_weapon")
+        if selected is not None:
+            return selected
+        selected_iid = str(metadata.get("selected_weapon_instance_id", "") or "").strip()
+        if not selected_iid:
+            return None
+        try:
+            from GameObjects.items.inventory import get_equipped_weapons
+
+            for item in list(get_equipped_weapons(getattr(ctx, "actor", None)) or []):
+                if str(getattr(item, "instance_id", "") or "").strip() == selected_iid:
+                    return item
+        except Exception:
+            pass
+        return None
+
+    @classmethod
+    def _merged_weapon_tags(cls, base_tags: Iterable[str], weapon) -> list[str]:
+        tags = list(base_tags or [])
+        item_id = str(getattr(weapon, "item_id", "") or "").strip().lower().replace("-", "_").replace(" ", "_")
+        if item_id and item_id not in tags:
+            tags.append(item_id)
+        for tag in cls._normalized_trait_tags(getattr(weapon, "traits", ())):
+            if tag not in tags:
+                tags.append(tag)
+        return tags
+
+    @staticmethod
+    def _replace_first_die_size(
+        damage_prompt: str | Iterable[str],
+        die_size: str | None,
+    ) -> str | Iterable[str]:
+        target_die = AttackEventBase._die_size_from_tag(die_size)
+        if not target_die:
+            return damage_prompt
+        digits = re.sub(r"[^0-9]", "", str(target_die))
+        if not digits:
+            return damage_prompt
+
+        def _replace_one(text: str) -> str:
+            return re.sub(r"([kKdD])\s*\d+", rf"\g<1>{digits}", str(text or ""), count=1)
+
+        if isinstance(damage_prompt, str):
+            return _replace_one(damage_prompt)
+        prompt_list = list(damage_prompt or [])
+        if not prompt_list:
+            return damage_prompt
+        prompt_list[0] = _replace_one(str(prompt_list[0]))
+        return prompt_list
+
+    def _fatal_critical_profile(
+        self,
+        *,
+        tags: Iterable[str],
+        critical: bool,
+        damage_prompt: str | Iterable[str],
+    ) -> tuple[str | Iterable[str], str | None]:
+        if not critical:
+            return damage_prompt, None
+        fatal_raw = self._tag_value(tags, "fatal")
+        fatal_die = self._die_size_from_tag(fatal_raw)
+        if not fatal_die:
+            return damage_prompt, None
+        upgraded = self._replace_first_die_size(damage_prompt, fatal_die)
+        return upgraded, fatal_die
+
+    @staticmethod
+    def _strength_modifier(actor) -> int:
+        if actor is None:
+            return 0
+        for key in ("str_mod", "strength_mod"):
+            value = getattr(actor, key, None)
+            if value is not None:
+                try:
+                    return int(value)
+                except Exception:
+                    continue
+        ability_modifiers = getattr(actor, "ability_modifiers", None)
+        if isinstance(ability_modifiers, dict):
+            try:
+                return int(ability_modifiers.get("strength", 0) or 0)
+            except Exception:
+                return 0
+        return 0
+
+    def _propulsive_damage_bonus(self, actor, tags: Iterable[str]) -> int:
+        if not self._has_trait(tags, "propulsive"):
+            return 0
+        str_mod = int(self._strength_modifier(actor) or 0)
+        if str_mod > 0:
+            return int(str_mod // 2)
+        return int(str_mod)
+
+    def _can_use_two_hand(self, actor, selected_weapon=None) -> bool:
+        if actor is None:
+            return False
+        if getattr(actor, "equipped_shield", None) is not None:
+            return False
+        try:
+            from GameObjects.items.inventory import get_equipped_weapons
+
+            equipped = list(get_equipped_weapons(actor) or [])
+        except Exception:
+            equipped = []
+        if not equipped:
+            return selected_weapon is None
+        if selected_weapon is not None:
+            others = [item for item in equipped if item is not selected_weapon]
+            return len(others) == 0
+        return len(equipped) <= 1
+
+    @staticmethod
+    def _bool_from_metadata(value: object, default: bool = False) -> bool:
+        if value is None:
+            return bool(default)
+        if isinstance(value, bool):
+            return value
+        raw = str(value).strip().lower()
+        if raw in {"1", "true", "yes", "y", "tak", "t"}:
+            return True
+        if raw in {"0", "false", "no", "n", "nie"}:
+            return False
+        return bool(default)
+
+    def _wants_two_hand_usage(self, ctx, *, tags: Iterable[str], selected_weapon=None) -> bool:
+        if not self._has_trait(tags, "two_hand"):
+            return False
+        if not self._die_size_from_tag(self._tag_value(tags, "two_hand")):
+            return False
+        actor = getattr(ctx, "actor", None)
+        if not self._can_use_two_hand(actor, selected_weapon=selected_weapon):
+            return False
+        metadata = dict(getattr(ctx, "metadata", None) or {})
+        if "use_two_hand" in metadata:
+            return self._bool_from_metadata(metadata.get("use_two_hand"), default=False)
+        choice = self._prompt_choice(
+            "Two-Hand: użyć broni oburącz?",
+            choices=["tak", "nie"],
+            source="two_hand",
+        )
+        return self._bool_from_metadata(choice, default=False)
+
+    @classmethod
+    def _modular_options(cls, tags: Iterable[str]) -> list[str]:
+        raw = cls._tag_value(tags, "modular")
+        chunks: list[str] = []
+        if raw:
+            chunks.append(str(raw))
+        for tag in tags or []:
+            if tag.startswith("modular:"):
+                chunks.append(tag.split(":", 1)[1])
+            elif tag.startswith("modular_"):
+                chunks.append(tag.split("_", 1)[1])
+        out: list[str] = []
+        for chunk in chunks:
+            for part in re.split(r"[,/|_ ]+", str(chunk or "").strip().lower()):
+                if not part:
+                    continue
+                mapped = cls._VERSATILE_MAP.get(part)
+                if mapped and mapped not in out:
+                    out.append(mapped)
+        return out
 
     @classmethod
     def _tag_value(cls, tags: Iterable[str], trait: str) -> str | None:
@@ -557,40 +784,8 @@ class AttackEventBase(GameEvent):
         tags: Iterable[str],
         damage_prompt: str | Iterable[str],
     ) -> None:
-        if not critical or not is_off_guard:
-            return
-        if not self._is_rogue_actor(actor):
-            return
-        if self._rogue_racket(actor) != "ruffian":
-            return
-
-        simple_weapon_ids = {
-            "club",
-            "crossbow",
-            "dagger",
-            "javelin",
-            "mace",
-            "shortspear",
-            "sickle",
-            "staff",
-            "spear",
-            "unarmed",
-        }
-        normalized_weapon = self._normalize_weapon_type(weapon_type) or self._weapon_type_tag(tags) or self._normalize_weapon_type(
-            getattr(self, "name", None)
-        )
-        if normalized_weapon not in simple_weapon_ids:
-            return
-
-        die_size = self._first_damage_die_size(damage_prompt)
-        if die_size is not None and die_size > 8:
-            return
-        try:
-            ctx.game.ui_log(
-                "Ruffian TODO: critical specialization efekt dla simple weapon do podpiecia z globalna mechanika broni."
-            )
-        except Exception:
-            pass
+        # Zachowane dla kompatybilności wywołań – globalna obsługa critical specialization działa w `_apply_weapon_critical_specialization`.
+        return
 
     @staticmethod
     def _consume_nimble_dodge_bonus(target, attacker) -> None:
@@ -734,8 +929,433 @@ class AttackEventBase(GameEvent):
         aliases = {
             "fist": "unarmed",
             "longsword": "sword",
+            "bow": "longbow",
+            "simple_crossbow": "crossbow",
         }
         return aliases.get(normalized, normalized)
+
+    def _weapon_id_from_attack(
+        self,
+        *,
+        weapon_type: str | None,
+        tags: Iterable[str] | None,
+        selected_weapon=None,
+    ) -> str | None:
+        from_weapon = self._normalize_weapon_type(getattr(selected_weapon, "item_id", None))
+        if from_weapon:
+            return from_weapon
+        from_type = self._normalize_weapon_type(weapon_type)
+        if from_type:
+            return from_type
+        from_tags = self._normalize_weapon_type(self._weapon_type_tag(tags or []))
+        if from_tags:
+            return from_tags
+        return self._normalize_weapon_type(getattr(self, "name", None))
+
+    def _weapon_group_from_attack(
+        self,
+        *,
+        weapon_type: str | None,
+        tags: Iterable[str] | None,
+        selected_weapon=None,
+    ) -> str | None:
+        explicit = self._normalize_weapon_type(getattr(selected_weapon, "weapon_group", None))
+        if explicit:
+            return explicit
+        weapon_id = self._weapon_id_from_attack(
+            weapon_type=weapon_type,
+            tags=tags,
+            selected_weapon=selected_weapon,
+        )
+        if not weapon_id:
+            return None
+        return self._WEAPON_GROUP_BY_WEAPON.get(weapon_id)
+
+    def _iter_statuses(self, actor):
+        for status in getattr(actor, "statuses", []) or []:
+            yield status
+
+    def _critical_specialization_state(self, actor) -> tuple[bool, set[str]]:
+        if actor is None:
+            return False, set()
+        allow_all = False
+        groups: set[str] = set()
+        for status in self._iter_statuses(actor):
+            sid = self._normalize_weapon_type(getattr(status, "id", None))
+            data = getattr(status, "data", None) or {}
+            if not isinstance(data, dict):
+                data = {}
+            if sid in {"critical_specialization_all", "weapon_critical_specialization_all"}:
+                allow_all = True
+            if bool(data.get("all_weapon_groups", False) or data.get("critical_specialization_all", False) or data.get("all", False)):
+                allow_all = True
+
+            for key in ("weapon_group", "group", "critical_specialization_group"):
+                value = self._normalize_weapon_type(data.get(key))
+                if value:
+                    groups.add(value)
+            for key in ("weapon_groups", "groups", "critical_specialization_groups"):
+                values = data.get(key)
+                if not isinstance(values, (list, tuple, set)):
+                    continue
+                for value in values:
+                    normalized = self._normalize_weapon_type(value)
+                    if normalized:
+                        groups.add(normalized)
+        actor_groups = getattr(actor, "critical_specialization_groups", None)
+        if isinstance(actor_groups, (list, tuple, set)):
+            for value in actor_groups:
+                normalized = self._normalize_weapon_type(value)
+                if normalized:
+                    groups.add(normalized)
+        if bool(getattr(actor, "critical_specialization_all", False)):
+            allow_all = True
+        return allow_all, groups
+
+    def _ruffian_critical_specialization_enabled(self, actor) -> bool:
+        if self._rogue_racket(actor) != "ruffian":
+            return False
+        getter = getattr(actor, "get_status_data", None)
+        if callable(getter):
+            try:
+                setup = getter("rogue", "rogue_setup", {})
+                if isinstance(setup, dict) and bool(setup.get("ruffian_crit_spec_todo", False)):
+                    return True
+            except Exception:
+                pass
+        for status in self._iter_statuses(actor):
+            if getattr(status, "id", None) != "rogue":
+                continue
+            data = getattr(status, "data", None) or {}
+            if not isinstance(data, dict):
+                continue
+            setup = data.get("rogue_setup")
+            if isinstance(setup, dict) and bool(setup.get("ruffian_crit_spec_todo", False)):
+                return True
+        return False
+
+    def _has_critical_specialization_for_group(
+        self,
+        actor,
+        *,
+        weapon_group: str | None,
+        weapon_id: str | None,
+        is_off_guard: bool = False,
+        damage_prompt: str | Iterable[str] | None = None,
+    ) -> bool:
+        normalized_group = self._normalize_weapon_type(weapon_group)
+        normalized_weapon = self._normalize_weapon_type(weapon_id)
+        if not normalized_group:
+            return False
+
+        allow_all, groups = self._critical_specialization_state(actor)
+        if allow_all:
+            return True
+        if normalized_group in groups:
+            return True
+        if normalized_weapon and normalized_weapon in groups:
+            return True
+
+        # Kompatybilność z Ruffian placeholderem: simple weapon d8 lub mniej vs Off-Guard.
+        if self._ruffian_critical_specialization_enabled(actor):
+            if not is_off_guard:
+                return False
+            if normalized_weapon not in self._SIMPLE_WEAPON_IDS:
+                return False
+            if damage_prompt is None:
+                return True
+            die_size = self._first_damage_die_size(damage_prompt)
+            return die_size is None or die_size <= 8
+
+        return False
+
+    @staticmethod
+    def _target_alive(target) -> bool:
+        hp = getattr(target, "hp", None)
+        if hp is None:
+            return True
+        try:
+            return int(hp) > 0
+        except Exception:
+            return True
+
+    @staticmethod
+    def _add_or_refresh_status(target, status_obj) -> bool:
+        if target is None or status_obj is None:
+            return False
+        status_id = getattr(status_obj, "id", None)
+        remover = getattr(target, "remove_status", None)
+        if status_id and callable(remover):
+            try:
+                remover(status_id)
+            except Exception:
+                pass
+        adder = getattr(target, "add_status", None)
+        if callable(adder):
+            try:
+                adder(status_obj)
+                return True
+            except Exception:
+                pass
+        statuses = getattr(target, "statuses", None)
+        if isinstance(statuses, list):
+            if status_id:
+                statuses[:] = [item for item in statuses if getattr(item, "id", item) != status_id]
+            statuses.append(status_obj)
+            return True
+        return False
+
+    @staticmethod
+    def _target_adjacent_to_surface(game, target_pos: tuple[int, int] | None) -> bool:
+        if game is None or target_pos is None:
+            return False
+        board = getattr(game, "board", None)
+        if board is None:
+            return False
+        try:
+            neighbors = board.get_neighbors(target_pos, include_position=False, diagonal=False)
+        except TypeError:
+            neighbors = board.get_neighbors(target_pos, include_position=False)
+        except Exception:
+            neighbors = []
+        for nxt in list(neighbors or []):
+            try:
+                if not board.in_bounds(nxt):
+                    return True
+            except Exception:
+                pass
+            try:
+                if board.is_blocked(target_pos, nxt):
+                    return True
+            except Exception:
+                pass
+            try:
+                if board.occupant_at(nxt) is not None:
+                    return True
+            except Exception:
+                pass
+            try:
+                if list(board.interactables_at(nxt) or []):
+                    return True
+            except Exception:
+                pass
+        return False
+
+    @staticmethod
+    def _push_target_away(ctx, attacker, target, *, steps: int) -> bool:
+        if ctx is None or attacker is None or target is None:
+            return False
+        source_pos = getattr(attacker, "position", None)
+        target_pos = getattr(target, "position", None)
+        board = getattr(getattr(ctx, "game", None), "board", None)
+        if source_pos is None or target_pos is None or board is None:
+            return False
+        try:
+            from actions.move_utils import adjusted_forced_movement_squares
+
+            steps = adjusted_forced_movement_squares(target, steps)
+        except Exception:
+            pass
+        try:
+            move_steps = max(0, int(steps or 0))
+        except Exception:
+            move_steps = 0
+        if move_steps <= 0:
+            return False
+        dx = target_pos[0] - source_pos[0]
+        dy = target_pos[1] - source_pos[1]
+        step_x = 0 if dx == 0 else (1 if dx > 0 else -1)
+        step_y = 0 if dy == 0 else (1 if dy > 0 else -1)
+        cur = target_pos
+        moved = False
+        for _ in range(move_steps):
+            nxt = (cur[0] + step_x, cur[1] + step_y)
+            try:
+                if board.is_blocked(cur, nxt):
+                    break
+            except Exception:
+                pass
+            try:
+                if not board.can_enter(nxt, allow_occupied=False):
+                    break
+            except Exception:
+                break
+            try:
+                board.move(cur, nxt)
+            except Exception:
+                break
+            try:
+                target.position = nxt
+            except Exception:
+                pass
+            cur = nxt
+            moved = True
+        return moved
+
+    def _apply_weapon_critical_specialization(
+        self,
+        ctx,
+        *,
+        actor,
+        target,
+        critical: bool,
+        is_off_guard: bool,
+        weapon_type: str | None,
+        tags: Iterable[str],
+        selected_weapon=None,
+        damage_prompt: str | Iterable[str] | None = None,
+        damage_components: list[tuple[str, int]] | None = None,
+        default_damage_type: str | None = None,
+        roll_for_bleed=None,
+    ) -> list[str]:
+        if not critical or actor is None or target is None or not self._target_alive(target):
+            return []
+
+        weapon_id = self._weapon_id_from_attack(
+            weapon_type=weapon_type,
+            tags=tags,
+            selected_weapon=selected_weapon,
+        )
+        weapon_group = self._weapon_group_from_attack(
+            weapon_type=weapon_type,
+            tags=tags,
+            selected_weapon=selected_weapon,
+        )
+        if not self._has_critical_specialization_for_group(
+            actor,
+            weapon_group=weapon_group,
+            weapon_id=weapon_id,
+            is_off_guard=is_off_guard,
+            damage_prompt=damage_prompt,
+        ):
+            return []
+
+        notes: list[str] = []
+        source = f"weapon_crit_spec:{weapon_group or weapon_id or 'unknown'}"
+
+        if weapon_group == "knife":
+            bleed_amount = 1
+            if callable(roll_for_bleed):
+                try:
+                    bleed_amount = int(
+                        roll_for_bleed(
+                            "Critical Specialization (Knife): persistent bleed 1k6 - podaj wynik: ",
+                            layout="damage",
+                            answer_placeholder="Bleed",
+                        )
+                        or 0
+                    )
+                except Exception:
+                    bleed_amount = 1
+            bleed_amount = max(1, int(bleed_amount or 1))
+            try:
+                from statuses import make_persistent_damage
+                from damage_types import DamageType as _DamageType
+
+                self._add_or_refresh_status(target, make_persistent_damage(bleed_amount, _DamageType.BLEED.value, source=source))
+                notes.append(f"Critical Specialization (Knife): persistent bleed {bleed_amount}.")
+            except Exception:
+                pass
+            return notes
+
+        if weapon_group == "club":
+            moved = self._push_target_away(ctx, actor, target, steps=2)
+            if moved:
+                notes.append("Critical Specialization (Club): cel odepchnięty o 10 ft.")
+            else:
+                notes.append("Critical Specialization (Club): brak miejsca na odepchnięcie.")
+            return notes
+
+        if weapon_group == "spear":
+            try:
+                from statuses import ClumsyStatus
+
+                if self._add_or_refresh_status(target, ClumsyStatus(value=1, duration=1, source=source)):
+                    notes.append("Critical Specialization (Spear): cel otrzymuje Clumsy 1.")
+            except Exception:
+                pass
+            return notes
+
+        if weapon_group == "sword":
+            try:
+                from statuses import OffGuardStatus
+
+                if self._add_or_refresh_status(target, OffGuardStatus(duration=1, source=source, source_id=getattr(actor, "object_id", None))):
+                    notes.append("Critical Specialization (Sword): cel staje się Off-Guard.")
+            except Exception:
+                pass
+            return notes
+
+        if weapon_group == "axe":
+            bonus = self._strength_modifier(actor)
+            if bonus > 0 and isinstance(damage_components, list):
+                dtype = default_damage_type or DamageType.NORMAL.value
+                damage_components.append((dtype, int(bonus)))
+                notes.append(f"Critical Specialization (Axe): +{int(bonus)} obrażeń.")
+            return notes
+
+        if weapon_group in {"hammer", "polearm"}:
+            try:
+                from statuses import PRONE_STATUS, apply_prone_effects
+
+                if self._add_or_refresh_status(target, PRONE_STATUS):
+                    apply_prone_effects(target)
+                    notes.append(f"Critical Specialization ({weapon_group.title()}): cel zostaje przewrócony.")
+            except Exception:
+                pass
+            return notes
+
+        if weapon_group == "bow":
+            target_pos = getattr(target, "position", None)
+            if self._target_adjacent_to_surface(getattr(ctx, "game", None), target_pos):
+                try:
+                    from statuses import ImmobilizedStatus
+
+                    if self._add_or_refresh_status(
+                        target,
+                        ImmobilizedStatus(duration=1, source=source, source_id=getattr(actor, "object_id", None), source_turns_left=1),
+                    ):
+                        notes.append("Critical Specialization (Bow): cel przypięty (immobilized).")
+                except Exception:
+                    pass
+            else:
+                notes.append("Critical Specialization (Bow): brak powierzchni do przypięcia celu.")
+            return notes
+
+        if weapon_group == "crossbow":
+            target_pos = getattr(target, "position", None)
+            if self._target_adjacent_to_surface(getattr(ctx, "game", None), target_pos):
+                try:
+                    from statuses import ImmobilizedStatus
+
+                    if self._add_or_refresh_status(
+                        target,
+                        ImmobilizedStatus(duration=1, source=source, source_id=getattr(actor, "object_id", None), source_turns_left=1),
+                    ):
+                        notes.append("Critical Specialization (Crossbow): cel przypięty (immobilized).")
+                except Exception:
+                    pass
+            else:
+                try:
+                    from statuses import SpeedPenaltyStatus
+
+                    if self._add_or_refresh_status(
+                        target,
+                        SpeedPenaltyStatus(
+                            penalty_feet=10,
+                            duration=1,
+                            source=source,
+                            source_id=getattr(actor, "object_id", None),
+                            source_turns_left=1,
+                            label="slowed by crossbow crit",
+                        ),
+                    ):
+                        notes.append("Critical Specialization (Crossbow): cel spowolniony (Speed -10 ft).")
+                except Exception:
+                    pass
+            return notes
+
+        return notes
 
     @staticmethod
     def _has_status_id(actor, status_id: str) -> bool:
@@ -1123,27 +1743,31 @@ class AttackEventBase(GameEvent):
     def _choose_damage_type(self, tags: Iterable[str], base_damage_type: str | Iterable[str]) -> str | Iterable[str]:
         if not isinstance(base_damage_type, str):
             return base_damage_type
+        choices: list[str] = [base_damage_type]
+        for option in self._modular_options(tags):
+            if option not in choices:
+                choices.append(option)
         alt_raw = self._tag_value(tags, "versatile")
-        if not alt_raw:
-            return base_damage_type
-        alt_key = str(alt_raw).strip().lower()
-        alt_type = self._VERSATILE_MAP.get(alt_key)
-        if not alt_type:
+        if alt_raw:
+            alt_key = str(alt_raw).strip().lower()
+            alt_type = self._VERSATILE_MAP.get(alt_key)
+            if alt_type and alt_type not in choices:
+                choices.append(alt_type)
+        if len(choices) <= 1:
             return base_damage_type
         choice = self._prompt_choice(
-            "Versatile: wybierz typ obrażeń",
-            choices=[base_damage_type, alt_type],
-            source="versatile",
+            "Wybierz typ obrażeń broni",
+            choices=choices,
+            source="weapon_damage_type",
         )
         if choice is None:
             return base_damage_type
         choice_norm = str(choice).strip().lower()
-        if choice_norm == alt_type:
-            return alt_type
-        if choice_norm == base_damage_type:
-            return base_damage_type
-        if choice_norm.startswith(alt_type[:1]):
-            return alt_type
+        for option in choices:
+            if choice_norm == option:
+                return option
+            if option and choice_norm.startswith(option[:1]):
+                return option
         return base_damage_type
 
     def _maybe_prompt_vengeful_hatred(self, attacker, target) -> None:
@@ -1203,6 +1827,7 @@ class AttackEventBase(GameEvent):
                     weapon_tags=list(tags or []),
                     is_ranged=bool(is_ranged),
                     finesse=self._has_trait(tags, "finesse"),
+                    brutal=self._has_trait(tags, "brutal"),
                 )
                 or {}
             )

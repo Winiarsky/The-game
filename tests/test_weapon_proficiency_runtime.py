@@ -52,3 +52,41 @@ def test_dwarven_weapon_familiarity_reclassifies_dwarf_weapons():
     assert result["rank"] == "trained"
     assert int(result["proficiency_bonus"]) == 3
     assert int(result["total"]) == 5
+
+
+def test_brutal_uses_strength_for_ranged_attack_bonus():
+    hero = Hero()
+    hero.level = 1
+    hero.str_mod = 4
+    hero.dex_mod = 1
+    hero.add_status(
+        Status(
+            id="weapon_prof_test",
+            data={
+                "weapon_proficiency_ranks": {
+                    "simple": "trained",
+                    "martial": "trained",
+                    "advanced": "untrained",
+                    "unarmed": "trained",
+                }
+            },
+        )
+    )
+
+    normal = compute_weapon_attack_roll_bonus(
+        hero,
+        weapon_tags=["attack_ranged", "weapon_test"],
+        is_ranged=True,
+        finesse=False,
+        brutal=False,
+    )
+    brutal = compute_weapon_attack_roll_bonus(
+        hero,
+        weapon_tags=["attack_ranged", "weapon_test", "brutal"],
+        is_ranged=True,
+        finesse=False,
+        brutal=True,
+    )
+
+    assert int(normal["ability_bonus"]) == 1
+    assert int(brutal["ability_bonus"]) == 4

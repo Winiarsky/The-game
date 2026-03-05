@@ -102,11 +102,23 @@ class BasicEnemy(StatusMixin, BonusMixin, WatchfulMixin, ReactiveMixin, MagicalM
         logger.info("%s rzuca inicjatywę: %s (bonus %s).", self.name, roll, self.initiative_bonus)
         return roll
 
-    def apply_damage(self, amount: int, damage_type: str = DamageType.NORMAL.value) -> tuple[int, bool]:
+    def apply_damage(
+        self,
+        amount: int,
+        damage_type: str = DamageType.NORMAL.value,
+        *,
+        nonlethal: bool = False,
+    ) -> tuple[int, bool]:
         """Odejmij HP i zwróć (aktualne_hp, czy_pokonany)."""
         effective, reduced = apply_damage_resistance(self, amount, damage_type)
         effective, _absorbed, _broken = apply_shield_cantrip_absorb(self, effective)
-        info = hp_apply_damage(self, effective, damage_type, source=f"damage:{damage_type}")
+        info = hp_apply_damage(
+            self,
+            effective,
+            damage_type,
+            source=f"damage:{damage_type}",
+            nonlethal=bool(nonlethal),
+        )
         defeated = bool(info.get("defeated", False))
         reduction_note = f" (zredukowano o {reduced})" if reduced else ""
         logger.info(

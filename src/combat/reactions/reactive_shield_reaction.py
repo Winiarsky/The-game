@@ -70,6 +70,10 @@ class ReactiveShieldReaction(Reaction):
 
         round_idx = getattr(getattr(ctx.game, "state", None), "round_index", None)
         source_tag = f"raise_shield:round{round_idx}" if round_idx is not None else "raise_shield"
+        try:
+            shield_ac_bonus = max(0, int(getattr(shield, "ac_bonus", 2) or 2))
+        except Exception:
+            shield_ac_bonus = 2
 
         adder = getattr(actor, "add_bonus", None)
         if not callable(adder):
@@ -78,7 +82,7 @@ class ReactiveShieldReaction(Reaction):
             adder(
                 BonusEffect(
                     type=BonusType.CIRCUMSTANCE,
-                    value=2,
+                    value=shield_ac_bonus,
                     tag="ac",
                     source=source_tag,
                     label="tarcza w górze",
@@ -89,7 +93,7 @@ class ReactiveShieldReaction(Reaction):
             return False
 
         try:
-            ctx.game.ui_log("Reactive Shield: podnosisz tarczę (+2 AC) na ten atak.")
+            ctx.game.ui_log(f"Reactive Shield: podnosisz tarczę (+{shield_ac_bonus} AC) na ten atak.")
         except Exception:
             pass
         return True

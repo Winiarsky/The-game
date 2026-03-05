@@ -11,6 +11,8 @@ class BaseWeapon(BaseItem):
     event_name: str = "unarmed"
     damage_prompt: str = "1k4 + STR"
     damage_type: str = "bludgeoning"
+    proficiency_category: str = "simple"
+    weapon_group: str = "brawling"
     hands_required: int = 1
     ranged: bool = False
     range_increment_ft: int = 0
@@ -20,6 +22,8 @@ class BaseWeapon(BaseItem):
         hand_label = "2H" if int(self.hands_required or 1) >= 2 else "1H"
         ranged_label = "ranged" if self.ranged else "melee"
         traits = ", ".join(self.traits) if self.traits else "brak"
+        prof_label = str(getattr(self, "proficiency_category", "simple") or "simple")
+        group_label = str(getattr(self, "weapon_group", "brawling") or "brawling")
         range_label = (
             f"\nRange Increment: {int(self.range_increment_ft)} ft | Reload: {int(self.reload)}"
             if self.ranged and int(self.range_increment_ft or 0) > 0
@@ -28,7 +32,8 @@ class BaseWeapon(BaseItem):
         return (
             f"{self.name}\n"
             f"Attack: {self.damage_prompt} ({self.damage_type})\n"
-            f"Hands: {hand_label} | Type: {ranged_label}\n"
+            f"Hands: {hand_label} | Type: {ranged_label} | Prof: {prof_label}\n"
+            f"Group: {group_label}\n"
             f"{range_label}"
             f"Traits: {traits}"
         )

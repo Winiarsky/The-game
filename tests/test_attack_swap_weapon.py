@@ -189,7 +189,7 @@ def test_attack_after_swap_weapon_uses_longbow(monkeypatch):
     assert swap_result.success
     assert hero.active_weapon == "longbow"
 
-    rolls = iter([20, 4])  # hit, damage
+    rolls = iter([15, 4])  # hit, damage
     monkeypatch.setattr(base_attack_range_event, "prompt_for_roll", lambda *_, **__: next(rolls))
 
     result = dispatch_event("attack", _ctx(game, hero))

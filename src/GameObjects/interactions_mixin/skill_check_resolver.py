@@ -508,6 +508,22 @@ def _collect_modifier_data(
 
     if skill_id == Skill.REFLEX.value:
         try:
+            from GameObjects.items.armor import bulwark_reflex_bonus
+
+            bulwark_bonus = int(bulwark_reflex_bonus(actor, tags=tags) or 0)
+        except Exception:
+            bulwark_bonus = 0
+        if bulwark_bonus > 0:
+            all_effects.append(
+                BonusEffect(
+                    type=BonusType.ITEM,
+                    value=bulwark_bonus,
+                    tag=Skill.REFLEX.value,
+                    source="armor:bulwark",
+                    label="bulwark",
+                )
+            )
+        try:
             from statuses.clumsy import clumsy_reflex_penalty
         except Exception:
             clumsy_reflex_penalty = None
@@ -552,6 +568,23 @@ def _collect_modifier_data(
             )
 
     if skill_id == Skill.STEALTH.value:
+        try:
+            from GameObjects.items.armor import armor_stealth_penalty
+
+            armor_penalty = int(armor_stealth_penalty(actor) or 0)
+        except Exception:
+            armor_penalty = 0
+        if armor_penalty > 0:
+            all_effects.append(
+                BonusEffect(
+                    type=BonusType.ITEM,
+                    value=armor_penalty,
+                    tag=Skill.STEALTH.value,
+                    source="armor:noisy",
+                    label="armor noisy",
+                    is_penalty=True,
+                )
+            )
         try:
             game = getattr(actor, "game", None)
             if game is not None:

@@ -11,5 +11,5 @@ class SwordAttackEvent(BasicMeleeAttackEvent):
     weapon_label = "mieczem"
     damage_prompt = "1k8 + STR"
     action_id_base = "attack_sword"
-    default_tags = ["attack_melee", "sword"]
+    default_tags = ["attack_melee", "sword", "versatile:p"]
     damage_type = DamageType.SLASHING.value

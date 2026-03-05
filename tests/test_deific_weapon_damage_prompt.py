@@ -157,7 +157,7 @@ def test_deific_weapon_upgrades_longbow_prompt_only_for_matching_weapon(monkeypa
     # Najpierw mismatch: wybrane sword, atak longbow -> brak podbicia kości.
     hero.statuses = [Status(id="deific_weapon", data={"deific_weapon_type": "sword"})]
     prompts = []
-    rolls = iter([20, 4])
+    rolls = iter([15, 4])
 
     def _prompt_mismatch(prompt, *_args, **_kwargs):
         prompts.append(str(prompt))
@@ -172,7 +172,7 @@ def test_deific_weapon_upgrades_longbow_prompt_only_for_matching_weapon(monkeypa
     hero.statuses = [Status(id="deific_weapon", data={"deific_weapon_type": "longbow"})]
     game.conn.choice = enemy.position
     prompts = []
-    rolls = iter([20, 4])
+    rolls = iter([15, 4])
 
     def _prompt_match(prompt, *_args, **_kwargs):
         prompts.append(str(prompt))

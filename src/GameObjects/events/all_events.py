@@ -18,6 +18,7 @@ from .attack import attack_razortooth_jaws_event  # noqa: F401
 from .attack import attack_unarmed_event  # noqa: F401
 from .attack import attack_range_long_bow  # noqa: F401
 from .attack import attack_range_crossbow  # noqa: F401
+from .attack import attack_additional_weapon_events  # noqa: F401
 from . import raise_shield_event  # noqa: F401
 from . import take_cover_event  # noqa: F401
 from . import step_event  # noqa: F401
@@ -44,6 +45,8 @@ from . import aid_event  # noqa: F401
 from . import grapple_event  # noqa: F401
 from . import trip_event  # noqa: F401
 from . import shove_event  # noqa: F401
+from . import disarm_event  # noqa: F401
+from . import parry_event  # noqa: F401
 from . import sudden_charge_event  # noqa: F401
 from . import fighter_feat_events  # noqa: F401
 from . import monk_feat_events  # noqa: F401

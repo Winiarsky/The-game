@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .base_shield import BaseShield, ShieldBlockOutcome
+from .basic_shields import BucklerShield, SteelShield, TowerShield, create_shield, normalize_shield_id, shield_profile
 from .standard_shield import StandardShield
 
 
@@ -60,7 +61,13 @@ def ensure_standard_shield(actor) -> BaseShield | None:
 __all__ = [
     "BaseShield",
     "ShieldBlockOutcome",
+    "BucklerShield",
+    "SteelShield",
     "StandardShield",
+    "TowerShield",
+    "create_shield",
+    "normalize_shield_id",
+    "shield_profile",
     "get_equipped_shield",
     "ensure_standard_shield",
 ]

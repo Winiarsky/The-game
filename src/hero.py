@@ -84,7 +84,13 @@ class Hero(StatusMixin, BonusMixin, ReactiveMixin):
         self.initiative = resolution.total
         return resolution.total
 
-    def apply_damage(self, amount: int, damage_type: str = DamageType.NORMAL.value) -> tuple[int, bool]:
+    def apply_damage(
+        self,
+        amount: int,
+        damage_type: str = DamageType.NORMAL.value,
+        *,
+        nonlethal: bool = False,
+    ) -> tuple[int, bool]:
         """Zastosuj obrażenia na bohaterze (uwzględnia redukcje ze statusów)."""
         effective, _ = apply_damage_resistance(self, amount, damage_type)
         effective, _absorbed, _broken = apply_shield_cantrip_absorb(self, effective)
@@ -93,6 +99,7 @@ class Hero(StatusMixin, BonusMixin, ReactiveMixin):
             effective,
             damage_type,
             source=f"damage:{damage_type}",
+            nonlethal=bool(nonlethal),
         )
         return int(getattr(self, "wounds", 0) or 0), bool(info.get("defeated", False))
 

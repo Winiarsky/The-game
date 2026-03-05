@@ -4,7 +4,9 @@ from collections import defaultdict
 from typing import Iterable
 
 from GameObjects.items.alchemical_item import AlchemicalItem, alchemical_item_name_from_event
+from GameObjects.items.armor import create_armor, normalize_armor_id
 from GameObjects.items.base_item import BaseItem
+from GameObjects.items.shield import create_shield, normalize_shield_id
 from GameObjects.items.weapon import BaseWeapon, create_weapon, normalize_weapon_id
 
 
@@ -115,6 +117,34 @@ def ensure_actor_inventory(actor) -> list[object]:
             weapon = create_weapon(weapon_id)
             if weapon is not None:
                 inventory.append(weapon)
+
+        armor_ids: list[str] = []
+        raw_armor_loadout = getattr(actor, "armor_loadout", None)
+        if isinstance(raw_armor_loadout, Iterable) and not isinstance(raw_armor_loadout, (str, bytes)):
+            for raw in raw_armor_loadout:
+                aid = normalize_armor_id(raw)
+                if aid and aid not in armor_ids:
+                    armor_ids.append(aid)
+        for armor_id in armor_ids:
+            armor = create_armor(armor_id)
+            if armor is not None:
+                inventory.append(armor)
+
+        shield_ids: list[str] = []
+        raw_shield_loadout = getattr(actor, "shield_loadout", None)
+        if isinstance(raw_shield_loadout, Iterable) and not isinstance(raw_shield_loadout, (str, bytes)):
+            for raw in raw_shield_loadout:
+                sid = normalize_shield_id(raw)
+                if sid and sid not in shield_ids:
+                    shield_ids.append(sid)
+        for shield_id in shield_ids:
+            shield = create_shield(shield_id)
+            if shield is not None:
+                inventory.append(shield)
+
+        legacy_armor = getattr(actor, "equipped_armor", None)
+        if legacy_armor is not None and _is_armor(legacy_armor):
+            inventory.append(legacy_armor)
         legacy_shield = getattr(actor, "equipped_shield", None)
         if legacy_shield is not None:
             inventory.append(legacy_shield)
@@ -194,6 +224,24 @@ def _ensure_equipment_state(actor) -> None:
             except Exception:
                 pass
 
+    inventory = list(getattr(actor, "inventory", []) or [])
+    armor_items = [item for item in inventory if _is_armor(item)]
+    armor_map = {_item_instance_id(item): item for item in armor_items}
+    equipped_armor_id = str(getattr(actor, "equipped_armor_item_id", "") or "")
+    if equipped_armor_id and equipped_armor_id not in armor_map:
+        equipped_armor_id = ""
+    if not equipped_armor_id:
+        legacy_armor = getattr(actor, "equipped_armor", None)
+        if legacy_armor is not None and _is_armor(legacy_armor):
+            iid = _item_instance_id(legacy_armor)
+            if iid in armor_map:
+                equipped_armor_id = iid
+    if equipped_armor_id:
+        try:
+            setattr(actor, "equipped_armor_item_id", equipped_armor_id)
+        except Exception:
+            pass
+
 
 def _sync_legacy_weapon_attrs(actor) -> None:
     inventory = _normalize_inventory(getattr(actor, "inventory", None))
@@ -253,11 +301,12 @@ def _enforce_hand_limits(actor) -> None:
     equipped = get_equipped_weapons(actor)
     if not equipped:
         return
+    zero_h = [item for item in equipped if _weapon_hands(item) <= 0]
     two_h = [item for item in equipped if _weapon_hands(item) >= 2]
     if two_h:
         chosen = two_h[0]
         try:
-            setattr(actor, "equipped_weapon_item_ids", [_item_instance_id(chosen)])
+            setattr(actor, "equipped_weapon_item_ids", [_item_instance_id(item) for item in (zero_h + [chosen])])
         except Exception:
             pass
         if getattr(actor, "equipped_shield", None) is not None:
@@ -272,7 +321,7 @@ def _enforce_hand_limits(actor) -> None:
     if len(one_h) > limit:
         one_h = one_h[:limit]
         try:
-            setattr(actor, "equipped_weapon_item_ids", [_item_instance_id(item) for item in one_h])
+            setattr(actor, "equipped_weapon_item_ids", [_item_instance_id(item) for item in (zero_h + one_h)])
         except Exception:
             pass
 
@@ -301,6 +350,12 @@ def is_item_active(actor, item) -> bool:
 
 
 def _weapon_hands(item) -> int:
+    traits = {
+        str(tag or "").strip().lower().replace("-", "_").replace(" ", "_")
+        for tag in (getattr(item, "traits", None) or ())
+    }
+    if "free_hand" in traits:
+        return 0
     try:
         hands = int(getattr(item, "hands_required", 1) or 1)
     except Exception:
@@ -352,11 +407,12 @@ def _toggle_weapon(actor, weapon) -> tuple[bool, str]:
         return True, f"Aktywowano broń 2H: {_item_label(weapon)}."
 
     # Aktywacja 1H: zdejmij ewentualną broń 2H.
-    equipped = [item for item in equipped if _weapon_hands(item) == 1]
+    equipped = [item for item in equipped if _weapon_hands(item) < 2]
     used_hands = _active_hands_cost(actor)
     if used_hands >= 2:
         return False, "Brak wolnej ręki na kolejną broń 1H."
-    if len(equipped) >= 2:
+    one_h_count = sum(1 for item in equipped if _weapon_hands(item) == 1)
+    if one_h_count >= 2:
         return False, "Masz już aktywne dwie bronie 1H."
     equipped.append(weapon)
     set_equipped_weapons(actor, equipped)
@@ -375,7 +431,7 @@ def _toggle_shield(actor, shield) -> tuple[bool, str]:
     for weapon in get_equipped_weapons(actor):
         if _weapon_hands(weapon) >= 2:
             return False, "Nie możesz aktywować tarczy z aktywną bronią 2H."
-    if len(get_equipped_weapons(actor)) >= 2:
+    if _active_hands_cost(actor) >= 2:
         return False, "Nie masz wolnej ręki na tarczę (dwie bronie 1H aktywne)."
     try:
         setattr(actor, "equipped_shield", shield)

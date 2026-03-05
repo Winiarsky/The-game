@@ -30,12 +30,14 @@ class BaseShield:
     hands_required: int = 1
     traits: tuple[str, ...] = ()
     instance_id: str = field(default_factory=_new_instance_id)
+    ac_bonus: int = 2
     hardness: int = 0
     max_hp: int = 1
     broken_threshold: int = 1
     current_hp: int | None = None
 
     def __post_init__(self) -> None:
+        self.ac_bonus = max(0, int(self.ac_bonus))
         self.hardness = max(0, int(self.hardness))
         self.max_hp = max(1, int(self.max_hp))
         self.broken_threshold = max(1, min(int(self.broken_threshold), self.max_hp))
@@ -65,7 +67,7 @@ class BaseShield:
         traits = ", ".join(self.traits) if self.traits else "brak"
         return (
             f"{self.name}\n"
-            f"Hardness: {self.hardness} | HP: {self.current_hp}/{self.max_hp} | BT: {self.broken_threshold}\n"
+            f"AC: +{self.ac_bonus} | Hardness: {self.hardness} | HP: {self.current_hp}/{self.max_hp} | BT: {self.broken_threshold}\n"
             f"State: {state} | Traits: {traits}"
         )
 

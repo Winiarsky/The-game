@@ -14,5 +14,4 @@ class CrossbowAttackEvent(BaseRangeAttackEvent):
     action_id_base = "attack_crossbow"
     damage_type = DamageType.PIERCING.value
     range_increment_ft = 120
-    default_tags = ["attack_ranged", "ranged_attack", "crossbow", "simple_crossbow"]
-
+    default_tags = ["attack_ranged", "ranged_attack", "crossbow", "simple_crossbow", "reload:1"]

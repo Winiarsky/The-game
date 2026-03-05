@@ -51,14 +51,26 @@ _RANK_FROM_INT = {
 _DEFAULT_TAG_CATEGORY = {
     "unarmed": WeaponCategory.UNARMED,
     "sword": WeaponCategory.MARTIAL,
+    "longsword": WeaponCategory.MARTIAL,
+    "shortsword": WeaponCategory.MARTIAL,
+    "rapier": WeaponCategory.MARTIAL,
+    "greataxe": WeaponCategory.MARTIAL,
+    "warhammer": WeaponCategory.MARTIAL,
+    "halberd": WeaponCategory.MARTIAL,
+    "glaive": WeaponCategory.MARTIAL,
     "longbow": WeaponCategory.MARTIAL,
+    "shortbow": WeaponCategory.MARTIAL,
     "bow": WeaponCategory.MARTIAL,
     "crossbow": WeaponCategory.SIMPLE,
     "simple_crossbow": WeaponCategory.SIMPLE,
+    "light_crossbow": WeaponCategory.SIMPLE,
     "dagger": WeaponCategory.SIMPLE,
+    "club": WeaponCategory.SIMPLE,
+    "mace": WeaponCategory.SIMPLE,
+    "spear": WeaponCategory.SIMPLE,
+    "javelin": WeaponCategory.SIMPLE,
     "battle_axe": WeaponCategory.MARTIAL,
     "pick": WeaponCategory.MARTIAL,
-    "warhammer": WeaponCategory.MARTIAL,
 }
 
 _GENERIC_TAGS = {"attack", "attack_melee", "attack_ranged", "ranged_attack", "melee_attack", "weapon"}
@@ -183,8 +195,8 @@ def _rank_for_category(actor, category: WeaponCategory) -> ProficiencyRank:
     return _normalize_rank(raw)
 
 
-def _ability_modifier(actor, *, is_ranged: bool, finesse: bool) -> int:
-    prefer_dex = bool(is_ranged or finesse)
+def _ability_modifier(actor, *, is_ranged: bool, finesse: bool, brutal: bool) -> int:
+    prefer_dex = bool((is_ranged and not brutal) or finesse)
     if prefer_dex:
         keys = ("dex_mod", "dexterity_mod")
         ability_key = "dexterity"
@@ -236,6 +248,7 @@ def compute_weapon_attack_roll_bonus(
     weapon_tags: Iterable[str] | None,
     is_ranged: bool = False,
     finesse: bool = False,
+    brutal: bool = False,
 ) -> dict[str, object]:
     """Policz mechaniczny bonus do ataku bronią."""
     tags = _normalize_weapon_tags(weapon_tags)
@@ -248,7 +261,7 @@ def compute_weapon_attack_roll_bonus(
         rank = _rank_for_category(actor, category)
     level = max(1, _safe_int(getattr(actor, "level", 1), 1))
     prof_bonus = proficiency_bonus(rank, level=level)
-    ability_bonus = _ability_modifier(actor, is_ranged=is_ranged, finesse=finesse)
+    ability_bonus = _ability_modifier(actor, is_ranged=is_ranged, finesse=finesse, brutal=brutal)
     item_bonus = _item_bonus(actor, weapon_key)
     total = int(prof_bonus) + int(ability_bonus) + int(item_bonus)
 

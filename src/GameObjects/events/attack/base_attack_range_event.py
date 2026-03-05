@@ -99,10 +99,14 @@ class BaseRangeAttackEvent(AttackEventBase):
                 if item_weapon_id == event_weapon_id:
                     return item
 
-        for item in equipped:
-            if bool(getattr(item, "ranged", False)):
-                return item
-        return equipped[0]
+        # Dla konkretnych eventów broni nie fallbackuj do losowo aktywnej broni.
+        # Jeśli to nie jest "attack" z wyborem z ekwipunku, brak trafionego matcha = brak selected_weapon.
+        if str(getattr(self, "name", "") or "").strip().lower() in {"attack", "attack_ranged"}:
+            for item in equipped:
+                if bool(getattr(item, "ranged", False)):
+                    return item
+            return equipped[0]
+        return None
 
     @staticmethod
     def _weapon_name(weapon) -> str:
@@ -320,6 +324,10 @@ class BaseRangeAttackEvent(AttackEventBase):
                 attack_roll_penalty = 0
             roll_only = bool(metadata.get("roll_only", False))
             selected_weapon = self._resolve_selected_weapon(hero, metadata)
+            if selected_weapon is not None:
+                tags = self._merged_weapon_tags(tags, selected_weapon)
+            force_lethal = self._bool_from_metadata(metadata.get("force_lethal"), default=False)
+            nonlethal_attack = self._has_trait(tags, "nonlethal") and not force_lethal
             extra_actions_spent, reload_cancelled = self._handle_reload_before_shot(ctx, hero, selected_weapon)
             if reload_cancelled is not None:
                 return reload_cancelled
@@ -329,7 +337,7 @@ class BaseRangeAttackEvent(AttackEventBase):
                 game.events.safe_emit_action(
                     actor=hero,
                     action_id=f"{self.action_id_base}_concealed_miss",
-                    action_tags=self._effective_tags(ctx),
+                    action_tags=tags,
                     target=enemy,
                     target_pos=target_pos,
                 )
@@ -348,6 +356,7 @@ class BaseRangeAttackEvent(AttackEventBase):
                         attack_count=map_attack_count,
                     )
                 self._apply_range_attacker_status(hero)
+                self._apply_concealing_trait(hero, tags)
                 self._mark_weapon_need_reload(selected_weapon)
                 return EventResult(
                     success=True,
@@ -371,7 +380,7 @@ class BaseRangeAttackEvent(AttackEventBase):
             game.events.safe_emit_action(
                 actor=hero,
                 action_id=f"{self.action_id_base}_pre",
-                action_tags=self._effective_tags(ctx),
+                action_tags=tags,
                 target=enemy,
                 target_pos=target_pos,
             )
@@ -425,7 +434,7 @@ class BaseRangeAttackEvent(AttackEventBase):
                 mods.append(f"-{range_penalty} zasięg ({increments}x{self.range_increment_ft} stóp)")
             mods_note = "; ".join(mods) if mods else "brak"
 
-            action_tag = (self._effective_tags(ctx) or ["attack_ranged"])[0]
+            action_tag = (tags or ["attack_ranged"])[0]
             extra_effects = []
             trait_notes: list[str] = []
             has_point_blank_shot = bool(getattr(hero, "has_status", lambda *_a, **_k: False)("point_blank_shot_stance"))
@@ -531,7 +540,20 @@ class BaseRangeAttackEvent(AttackEventBase):
                 except Exception:
                     pass
             if self._has_trait(tags, "nonlethal"):
-                trait_notes.append("Nonlethal: atak nieśmiertelny; jeśli lethal, -2 do ataku (ręcznie).")
+                if force_lethal:
+                    extra_effects.append(
+                        BonusEffect(
+                            type=BonusType.CIRCUMSTANCE,
+                            value=2,
+                            tag=action_tag,
+                            source="nonlethal:lethal",
+                            label="nonlethal (lethal)",
+                            is_penalty=True,
+                        )
+                    )
+                    trait_notes.append("Nonlethal: wymuszono lethal, -2 do ataku (doliczone).")
+                else:
+                    trait_notes.append("Nonlethal: obrażenia nieśmiertelne (doliczone).")
             if self._has_trait(tags, "finesse"):
                 trait_notes.append("Finesse: możesz użyć ZR zamiast SI do premii ataku.")
             if surprise_attack_active:
@@ -603,7 +625,7 @@ class BaseRangeAttackEvent(AttackEventBase):
                 game.events.safe_emit_action(
                     actor=hero,
                     action_id=f"{self.action_id_base}_miss",
-                    action_tags=self._effective_tags(ctx),
+                    action_tags=tags,
                     target=enemy,
                     target_pos=target_pos,
                     roll=roll,
@@ -629,6 +651,7 @@ class BaseRangeAttackEvent(AttackEventBase):
                 miss_message = "Strzał chybia."
                 if exacting_strike_press:
                     miss_message = "Exacting Strike: pudło (MAP bez zmian)."
+                self._apply_concealing_trait(hero, tags)
                 self._mark_weapon_need_reload(selected_weapon)
                 return EventResult(
                     success=True,
@@ -642,17 +665,31 @@ class BaseRangeAttackEvent(AttackEventBase):
             self._maybe_prompt_vengeful_hatred(hero, enemy)
             effective_damage_prompt, class_upgrade_notes = self._damage_prompt_with_class_upgrades(
                 hero,
-                weapon_type=getattr(self, "name", None),
+                weapon_type=weapon_type or getattr(self, "name", None),
                 damage_prompt=self.damage_prompt,
                 tags=tags,
                 is_melee=False,
+            )
+            two_hand_raw = self._tag_value(tags, "two_hand")
+            two_hand_die = self._die_size_from_tag(two_hand_raw)
+            if two_hand_die and self._wants_two_hand_usage(
+                ctx,
+                tags=tags,
+                selected_weapon=selected_weapon,
+            ):
+                effective_damage_prompt = self._replace_first_die_size(effective_damage_prompt, two_hand_die)
+                class_upgrade_notes.append(f"Two-Hand: użycie oburącz ({two_hand_die}).")
+            effective_damage_prompt, fatal_die = self._fatal_critical_profile(
+                tags=tags,
+                critical=critical,
+                damage_prompt=effective_damage_prompt,
             )
             self._maybe_log_ruffian_crit_spec_placeholder(
                 ctx=ctx,
                 actor=hero,
                 critical=critical,
                 is_off_guard=is_off_guard_for_attack,
-                weapon_type=getattr(self, "name", None),
+                weapon_type=weapon_type or getattr(self, "name", None),
                 tags=tags,
                 damage_prompt=effective_damage_prompt,
             )
@@ -795,6 +832,8 @@ class BaseRangeAttackEvent(AttackEventBase):
             deadly_die = self._die_size_from_tag(deadly_tag)
             if self._has_trait(tags, "deadly") and not deadly_die:
                 damage_notes.append("Deadly: brak kości w tagu (np. deadly:d8) – dodaj ręcznie.")
+            if self._has_trait(tags, "fatal") and not fatal_die:
+                damage_notes.append("Fatal: brak kości w tagu (np. fatal:d12) – dodaj ręcznie.")
             if self._has_trait(tags, "forceful"):
                 if dice_count:
                     if weapon_attack_count >= 1:
@@ -876,12 +915,10 @@ class BaseRangeAttackEvent(AttackEventBase):
                                 damage_notes.append(f"Raging Thrower: +{rage_bonus} dmg.")
             except Exception:
                 pass
-            if self._has_trait(tags, "propulsive"):
-                damage_notes.append("Propulsive: dodaj 1/2 STR do obrażeń (ręcznie).")
-            if self._has_trait(tags, "fatal"):
-                damage_notes.append("Fatal: zmień kości bazowe i dodaj 1 kość fatal (ręcznie).")
-            if self._has_trait(tags, "two_hand"):
-                damage_notes.append("Two-Hand: użycie dwuręczne zmienia kości obrażeń (ręcznie).")
+            propulsive_bonus = self._propulsive_damage_bonus(hero, tags)
+            if propulsive_bonus:
+                damage_bonus += propulsive_bonus
+                damage_notes.append(f"Propulsive: {propulsive_bonus:+d} do obrażeń (doliczone).")
             damage_notes.extend(class_upgrade_notes)
             if crossbow_ace_applied:
                 damage_notes.append("Crossbow Ace: +2 circumstance do obrażeń (doliczone).")
@@ -920,12 +957,38 @@ class BaseRangeAttackEvent(AttackEventBase):
                     damage_components.append((first_type, int(extra)))
                 except Exception:
                     pass
+            if critical and fatal_die:
+                extra = prompt_for_roll(
+                    f"Fatal {fatal_die}: dodatkowa kość obrażeń (rzut): ",
+                    layout="damage",
+                    answer_placeholder="Dodatkowe obrażenia",
+                )
+                try:
+                    damage_components.append((first_type, int(extra)))
+                except Exception:
+                    pass
+            if critical:
+                try:
+                    from GameObjects.items.armor import apply_critical_damage_reduction
+
+                    damage_components, armor_notes = apply_critical_damage_reduction(
+                        enemy,
+                        damage_components,
+                        critical=True,
+                    )
+                    for note_line in armor_notes:
+                        try:
+                            ctx.game.ui_log(note_line)
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
             if roll_only:
                 total_damage = sum(max(0, int(amount or 0)) for _, amount in damage_components)
                 game.events.safe_emit_action(
                     actor=hero,
                     action_id=self.action_id_base,
-                    action_tags=self._effective_tags(ctx),
+                    action_tags=tags,
                     target=enemy,
                     target_pos=target_pos,
                     damage=total_damage,
@@ -935,6 +998,7 @@ class BaseRangeAttackEvent(AttackEventBase):
                     range_penalty=range_penalty,
                     critical=critical,
                     roll_only=True,
+                    nonlethal=nonlethal_attack,
                 )
                 if not suppress_record:
                     self._record_attack(
@@ -947,6 +1011,7 @@ class BaseRangeAttackEvent(AttackEventBase):
                     )
                 self._apply_range_attacker_status(hero)
                 msg = "Trafienie krytyczne!" if critical else f"Atak {self.weapon_label} trafia."
+                self._apply_concealing_trait(hero, tags)
                 self._mark_weapon_need_reload(selected_weapon)
                 return EventResult(
                     success=True,
@@ -962,11 +1027,31 @@ class BaseRangeAttackEvent(AttackEventBase):
                         "damage_components": list(damage_components),
                         "damage_total": int(total_damage),
                         "roll_only": True,
+                        "nonlethal": nonlethal_attack,
                     },
                 )
             defeated = False
+            crit_spec_notes = self._apply_weapon_critical_specialization(
+                ctx,
+                actor=hero,
+                target=enemy,
+                critical=critical,
+                is_off_guard=is_off_guard_for_attack,
+                weapon_type=weapon_type,
+                tags=tags,
+                selected_weapon=selected_weapon,
+                damage_prompt=effective_damage_prompt,
+                damage_components=damage_components,
+                default_damage_type=first_type,
+                roll_for_bleed=prompt_for_roll,
+            )
+            for note_line in crit_spec_notes:
+                try:
+                    ctx.game.ui_log(note_line)
+                except Exception:
+                    pass
             try:
-                defeated = self._apply_damage_components(enemy, damage_components)
+                defeated = self._apply_damage_components(enemy, damage_components, nonlethal=nonlethal_attack)
             except Exception as exc:
                 logger.error("Błąd przy zadawaniu obrażeń: %s", exc)
                 return EventResult(success=False, consumed_action=False, message=str(exc))
@@ -974,7 +1059,7 @@ class BaseRangeAttackEvent(AttackEventBase):
             game.events.safe_emit_action(
                 actor=hero,
                 action_id=self.action_id_base,
-                action_tags=self._effective_tags(ctx),
+                action_tags=tags,
                 target=enemy,
                 target_pos=target_pos,
                 damage=sum(d for _, d in damage_components),
@@ -983,6 +1068,7 @@ class BaseRangeAttackEvent(AttackEventBase):
                 cover=cover_type,
                 range_penalty=range_penalty,
                 critical=critical,
+                nonlethal=nonlethal_attack,
             )
             if not suppress_record:
                 self._record_attack(
@@ -1013,6 +1099,7 @@ class BaseRangeAttackEvent(AttackEventBase):
 
             self._apply_range_attacker_status(hero)
             msg = "Przeciwnik pokonany." if defeated else ("Trafienie krytyczne!" if critical else f"Atak {self.weapon_label} trafia.")
+            self._apply_concealing_trait(hero, tags)
             self._mark_weapon_need_reload(selected_weapon)
             return EventResult(
                 success=True,
@@ -1028,6 +1115,20 @@ class BaseRangeAttackEvent(AttackEventBase):
                 pass
 
     # --- helpers ---
+    def _apply_concealing_trait(self, actor, tags) -> None:
+        if actor is None or not self._has_trait(tags, "concealing"):
+            return
+        has_status = getattr(actor, "has_status", None)
+        try:
+            if callable(has_status) and has_status("concealed"):
+                return
+        except Exception:
+            pass
+        try:
+            actor.add_status(Status(id="concealed", label="Concealed", duration=1, source="trait:concealing"))
+        except Exception:
+            return
+
     def _apply_range_attacker_status(self, hero) -> None:
         try:
             if hasattr(hero, "add_status"):
@@ -1090,10 +1191,13 @@ class BaseRangeAttackEvent(AttackEventBase):
         return components
 
     @staticmethod
-    def _apply_damage_components(target, comps):
+    def _apply_damage_components(target, comps, *, nonlethal: bool = False):
         defeated = False
         for dmg_type, amount in comps:
-            _, defeated = target.apply_damage(amount, dmg_type)
+            try:
+                _, defeated = target.apply_damage(amount, dmg_type, nonlethal=bool(nonlethal))
+            except TypeError:
+                _, defeated = target.apply_damage(amount, dmg_type)
         return defeated
 
     def _line_cells(self, start: tuple[int, int], end: tuple[int, int]) -> list[tuple[int, int]]:

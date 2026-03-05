@@ -176,10 +176,11 @@ def test_double_slice_merges_damage_and_applies_resistance_once(monkeypatch):
     result = dispatch_event("double_slice", _ctx(game, hero))
 
     assert result.success is True
-    # 10+8=18, resistance 5 zastosowana raz => 13 obrażeń.
-    assert enemy.hp == 27
-    assert enemy.apply_calls == 1
-    assert (result.data or {}).get("damage_components") == [("slashing", 18)]
+    # RAW: sword (slashing) + dagger (piercing) to dwa komponenty,
+    # więc odporność 5 działa osobno na każdy: (10-5) + (8-5) = 8 obrażeń.
+    assert enemy.hp == 32
+    assert enemy.apply_calls == 2
+    assert (result.data or {}).get("damage_components") == [("slashing", 10), ("piercing", 8)]
 
 
 def test_double_slice_precision_choice_uses_ui_prompt(monkeypatch):

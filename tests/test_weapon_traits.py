@@ -98,6 +98,13 @@ class Hero:
     def remove_status(self, *_args, **_kwargs):
         return None
 
+    def add_status(self, status):
+        self.statuses.append(status)
+        return True
+
+    def has_status(self, status_id):
+        return any(getattr(item, "id", item) == status_id for item in self.statuses)
+
 
 class Enemy:
     def __init__(self, pos=(1, 0), hp=30, ac=10):
@@ -397,3 +404,145 @@ def test_finesse_prompt_in_attack(monkeypatch):
 
     assert recorded
     assert "Finesse: możesz użyć ZR zamiast SI do premii ataku." in recorded[0]
+
+
+def test_fatal_adds_extra_damage_on_crit(monkeypatch):
+    game, hero, _enemies = _setup_melee_game()
+    rolls = iter([20, 5, 4])  # attack, base damage, fatal extra
+    monkeypatch.setattr(
+        "GameObjects.events.attack.basic_melee_attack_event.prompt_for_roll",
+        lambda *_, **__: next(rolls),
+    )
+    monkeypatch.setattr(
+        "GameObjects.events.attack.basic_melee_attack_event.refresh_flanking_statuses",
+        lambda *_: None,
+    )
+
+    class FatalMelee(BasicMeleeAttackEvent):
+        default_tags = ["attack_melee", "fatal:d12"]
+        damage_prompt = "1k8 + STR"
+
+    event = FatalMelee()
+    event.run(_ctx(game, hero))
+    total = game.events.emitted[-1]["damage"]
+    assert total == 9
+
+
+def test_modular_selects_requested_damage_type(monkeypatch):
+    game, hero, _enemies = _setup_melee_game()
+    rolls = iter([20, 5])
+    monkeypatch.setattr(
+        "GameObjects.events.attack.basic_melee_attack_event.prompt_for_roll",
+        lambda *_, **__: next(rolls),
+    )
+    monkeypatch.setattr(
+        "GameObjects.events.attack.basic_melee_attack_event.refresh_flanking_statuses",
+        lambda *_: None,
+    )
+    monkeypatch.setattr(AttackEventBase, "_prompt_choice", lambda *_a, **_k: "bludgeoning")
+
+    class ModularMelee(BasicMeleeAttackEvent):
+        default_tags = ["attack_melee", "modular:b,p"]
+        damage_type = "slashing"
+
+    event = ModularMelee()
+    event.run(_ctx(game, hero))
+    dtype = game.events.emitted[-1]["damage_components"][0][0]
+    assert dtype == "bludgeoning"
+
+
+def test_propulsive_adds_half_strength_to_ranged_damage(monkeypatch):
+    hero = Hero((0, 0))
+    hero.str_mod = 4
+    enemy = Enemy((2, 0), ac=10)
+    board = FakeBoard()
+    board.occupants = {hero.position: hero, enemy.position: enemy}
+    conn = FakeConn([enemy.position])
+    game = FakeGame(conn=conn, board=board)
+    game.heroes = [hero]
+    game.enemies = [enemy]
+
+    rolls = iter([20, 5])
+    monkeypatch.setattr(
+        "GameObjects.events.attack.base_attack_range_event.prompt_for_roll",
+        lambda *_, **__: next(rolls),
+    )
+
+    class PropulsiveRange(BaseRangeAttackEvent):
+        default_tags = ["attack_ranged", "ranged_attack", "propulsive"]
+        damage_prompt = "1k6"
+        range_increment_ft = 60
+
+    event = PropulsiveRange()
+    event.run(_ctx(game, hero))
+    dmg = game.events.emitted[-1]["damage_components"][0][1]
+    assert dmg == 7
+
+
+def test_nonlethal_sets_nonlethal_payload(monkeypatch):
+    game, hero, _enemies = _setup_melee_game()
+    rolls = iter([20, 5])
+    monkeypatch.setattr(
+        "GameObjects.events.attack.basic_melee_attack_event.prompt_for_roll",
+        lambda *_, **__: next(rolls),
+    )
+    monkeypatch.setattr(
+        "GameObjects.events.attack.basic_melee_attack_event.refresh_flanking_statuses",
+        lambda *_: None,
+    )
+
+    class NonlethalMelee(BasicMeleeAttackEvent):
+        default_tags = ["attack_melee", "nonlethal"]
+
+    event = NonlethalMelee()
+    event.run(_ctx(game, hero))
+    assert bool(game.events.emitted[-1].get("nonlethal", False)) is True
+
+
+def test_two_hand_updates_damage_prompt_when_chosen(monkeypatch):
+    game, hero, _enemies = _setup_melee_game()
+    captured_damage_prompts = []
+
+    def _prompt(*args, **kwargs):
+        if kwargs.get("layout") == "test":
+            return 20
+        captured_damage_prompts.append(str(args[0] if args else ""))
+        return 5
+
+    monkeypatch.setattr("GameObjects.events.attack.attack_base.AttackEventBase._prompt_choice", lambda *_a, **_k: "tak")
+    monkeypatch.setattr("GameObjects.events.attack.basic_melee_attack_event.prompt_for_roll", _prompt)
+    monkeypatch.setattr(
+        "GameObjects.events.attack.basic_melee_attack_event.refresh_flanking_statuses",
+        lambda *_: None,
+    )
+
+    class TwoHandMelee(BasicMeleeAttackEvent):
+        default_tags = ["attack_melee", "two_hand:d10"]
+        damage_prompt = "1k8 + STR"
+
+    event = TwoHandMelee()
+    event.run(_ctx(game, hero))
+
+    assert captured_damage_prompts
+    assert "1k10" in captured_damage_prompts[0]
+
+
+def test_concealing_grants_concealed_status_after_attack(monkeypatch):
+    game, hero, _enemies = _setup_melee_game()
+    rolls = iter([20, 1])
+    monkeypatch.setattr(
+        "GameObjects.events.attack.basic_melee_attack_event.prompt_for_roll",
+        lambda *_, **__: next(rolls),
+    )
+    monkeypatch.setattr(
+        "GameObjects.events.attack.basic_melee_attack_event.refresh_flanking_statuses",
+        lambda *_: None,
+    )
+
+    class ConcealingMelee(BasicMeleeAttackEvent):
+        default_tags = ["attack_melee", "concealing"]
+
+    event = ConcealingMelee()
+    event.run(_ctx(game, hero))
+
+    assert hero.has_status("concealed")

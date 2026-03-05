@@ -11,6 +11,7 @@ from statuses import PRONE_STATUS, apply_prone_effects
 from .base import EventContext, EventResult, ActionCostEvent
 from .registry import register_event
 from .attack.basic_melee_attack_event import BasicMeleeAttackEvent
+from .weapon_trait_utils import best_reach_ft_for_trait, enemies_in_reach
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +114,11 @@ class ShoveEvent(ActionCostEvent):
         if hero_pos is None:
             return EventResult.cancelled(message="Bohater nie stoi na planszy.")
 
-        candidates = BasicMeleeAttackEvent._adjacent_enemies(ctx.game, hero_pos)
+        reach_ft = best_reach_ft_for_trait(hero, "shove", default_ft=5)
+        if reach_ft > 5:
+            candidates = enemies_in_reach(ctx.game, hero_pos, reach_ft=reach_ft)
+        else:
+            candidates = BasicMeleeAttackEvent._adjacent_enemies(ctx.game, hero_pos)
         if not candidates:
             return EventResult.cancelled(message="Brak wrogów w zasięgu shove.")
 

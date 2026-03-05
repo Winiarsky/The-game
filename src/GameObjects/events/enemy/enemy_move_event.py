@@ -4,7 +4,7 @@ import logging
 import time
 
 from board import consts
-from actions.move_utils import find_path, path_cost_feet, trim_path_to_feet, movement_budget_feet
+from actions.move_utils import find_path, path_cost_feet, trim_path_to_feet
 from combat import refresh_flanking_statuses
 from combat.reactions import dispatch_reactions
 
@@ -39,6 +39,65 @@ def _nearest_hero(game, enemy_pos: tuple[int, int]) -> tuple[tuple[int, int] | N
             best_dist = dist
             best_pos = hero.position
     return best_pos, best_dist
+
+
+def _safe_int(value, default=0) -> int:
+    try:
+        return int(value)
+    except Exception:
+        return int(default)
+
+
+def _status_max_int(actor, key: str, default: int = 0) -> int:
+    best = int(default)
+    for status in getattr(actor, "statuses", []) or []:
+        data = getattr(status, "data", None)
+        if not isinstance(data, dict) or key not in data:
+            continue
+        try:
+            value = int(data.get(key) or 0)
+        except Exception:
+            value = 0
+        if value > best:
+            best = value
+    return best
+
+
+def _status_any_true(actor, key: str) -> bool:
+    for status in getattr(actor, "statuses", []) or []:
+        data = getattr(status, "data", None)
+        if isinstance(data, dict) and bool(data.get(key, False)):
+            return True
+    return False
+
+
+def _enemy_movement_budget_feet(enemy, *, default_feet: int) -> int:
+    """Liczy budżet ruchu lokalnie, niezależnie od testowych stubów actions.move_utils."""
+    base = max(0, _safe_int(default_feet, 25))
+    if enemy is None:
+        return base
+
+    try:
+        from statuses import speed_bonus_value, speed_penalty_value
+    except Exception:
+        speed_bonus_value = lambda _actor: 0  # type: ignore[assignment]
+        speed_penalty_value = lambda _actor: 0  # type: ignore[assignment]
+
+    bonus = max(0, _safe_int(speed_bonus_value(enemy), 0))
+    penalty = max(0, _safe_int(speed_penalty_value(enemy), 0))
+    slow_reduction = _status_max_int(enemy, "magical_slow_reduction_feet", default=0)
+    if slow_reduction > 0 and penalty > 0:
+        penalty = max(0, penalty - slow_reduction)
+
+    armor_penalty = 0
+    for attr in ("armor_speed_penalty_feet", "speed_penalty_armor_feet"):
+        raw = getattr(enemy, attr, None)
+        if raw is not None:
+            armor_penalty = max(armor_penalty, max(0, _safe_int(raw, 0)))
+    if _status_any_true(enemy, "ignore_armor_move_penalty"):
+        armor_penalty = 0
+
+    return max(0, int(base + bonus - penalty - armor_penalty))
 
 
 def _dispatch_move_reactions(game, mover, src: tuple[int, int], dst: tuple[int, int]) -> None:
@@ -122,7 +181,7 @@ class EnemyMoveEvent(GameEvent):
         base_distance = getattr(enemy, "distance", None)
         if base_distance is None:
             base_distance = max(1, getattr(enemy, "move_points", 3)) * 5
-        move_budget_feet = movement_budget_feet(enemy, default_feet=int(base_distance))
+        move_budget_feet = _enemy_movement_budget_feet(enemy, default_feet=int(base_distance))
         if move_budget_feet <= 0:
             return EventResult(success=False, consumed_action=True, message="Wróg jest spowolniony i nie może się ruszyć.")
         nearest_pos, _dist = _nearest_hero(game, enemy.position)

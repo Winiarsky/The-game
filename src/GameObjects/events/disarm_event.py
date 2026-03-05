@@ -3,15 +3,14 @@ from __future__ import annotations
 import logging
 
 from board import consts
-from damage_types import DamageType
+from bonuses import BonusEffect, BonusType
 from skills import Skill
-from GameObjects.interactions_mixin import resolve_skill_check_with_sources, compute_skill_modifier_with_sources, prompt_for_roll
-from statuses import PRONE_STATUS, apply_prone_effects
+from GameObjects.interactions_mixin import resolve_skill_check_with_sources, compute_skill_modifier_with_sources
 
 from .base import EventContext, EventResult, ActionCostEvent
 from .registry import register_event
 from .attack.basic_melee_attack_event import BasicMeleeAttackEvent
-from .weapon_trait_utils import actor_has_equipped_weapon_trait, best_reach_ft_for_trait, enemies_in_reach
+from .weapon_trait_utils import best_reach_ft_for_trait, enemies_in_reach
 
 logger = logging.getLogger(__name__)
 
@@ -32,12 +31,58 @@ def _save_dc(target, skill_id: str, tags: list[str], ctx: EventContext) -> int:
     return 10 + modifier
 
 
-@register_event
-class TripEvent(ActionCostEvent):
-    """Trip: Athletics vs Reflex DC."""
+def _actor_id(actor) -> str:
+    return str(getattr(actor, "object_id", None) or getattr(actor, "name", None) or "actor")
 
-    name = "trip"
-    default_tags = ["attack", "athletics", "trip", "manipulate"]
+
+def _apply_disarm_penalty(target, *, source: str, turns: int) -> None:
+    if target is None:
+        return
+    remover = getattr(target, "remove_bonuses_with_prefix", None)
+    if callable(remover):
+        try:
+            remover("disarm:")
+        except Exception:
+            pass
+    effects = [
+        BonusEffect(
+            type=BonusType.CIRCUMSTANCE,
+            value=2,
+            tag="attack_melee",
+            source=source,
+            label="disarmed",
+            is_penalty=True,
+            duration_turns=max(1, int(turns)),
+        ),
+        BonusEffect(
+            type=BonusType.CIRCUMSTANCE,
+            value=2,
+            tag="attack_ranged",
+            source=source,
+            label="disarmed",
+            is_penalty=True,
+            duration_turns=max(1, int(turns)),
+        ),
+    ]
+    adder = getattr(target, "add_bonus", None)
+    if callable(adder):
+        for effect in effects:
+            try:
+                adder(effect)
+            except Exception:
+                continue
+        return
+    bonuses = getattr(target, "bonuses", None)
+    if isinstance(bonuses, list):
+        bonuses.extend(effects)
+
+
+@register_event
+class DisarmEvent(ActionCostEvent):
+    """Disarm: Athletics vs Reflex DC."""
+
+    name = "disarm"
+    default_tags = ["attack", "athletics", "disarm", "manipulate"]
     available_in_combat = True
     available_in_exploration = False
     consumes_action = True
@@ -66,22 +111,22 @@ class TripEvent(ActionCostEvent):
 
     def execute(self, ctx: EventContext) -> EventResult:
         if not ctx.in_combat:
-            return EventResult.cancelled(message="Trip dostępne tylko w walce.")
+            return EventResult.cancelled(message="Disarm dostępne tylko w walce.")
 
         hero = ctx.actor
         if hero is None:
-            return EventResult.cancelled(message="Brak bohatera do akcji trip.")
+            return EventResult.cancelled(message="Brak bohatera do akcji disarm.")
         hero_pos = getattr(hero, "position", None)
         if hero_pos is None:
             return EventResult.cancelled(message="Bohater nie stoi na planszy.")
 
-        reach_ft = best_reach_ft_for_trait(hero, "trip", default_ft=5)
+        reach_ft = best_reach_ft_for_trait(hero, "disarm", default_ft=5)
         if reach_ft > 5:
             candidates = enemies_in_reach(ctx.game, hero_pos, reach_ft=reach_ft)
         else:
             candidates = BasicMeleeAttackEvent._adjacent_enemies(ctx.game, hero_pos)
         if not candidates:
-            return EventResult.cancelled(message="Brak wrogów w zasięgu trip.")
+            return EventResult.cancelled(message="Brak wrogów w zasięgu disarm.")
 
         enemy, enemy_pos = self._pick_enemy(ctx, candidates)
         if enemy is None:
@@ -93,7 +138,7 @@ class TripEvent(ActionCostEvent):
             emitted = ctx.game.events.safe_emit_action(
                 return_event=True,
                 actor=hero,
-                action_id="trip",
+                action_id="disarm",
                 action_tags=tags,
                 target=enemy,
                 target_pos=enemy_pos,
@@ -101,7 +146,7 @@ class TripEvent(ActionCostEvent):
         except Exception:
             emitted = None
         if isinstance(emitted, dict) and bool(emitted.get("disrupted", False)):
-            msg = "Trip przerwane przez Atak okazyjny."
+            msg = "Disarm przerwane przez Atak okazyjny."
             try:
                 ctx.game.ui_log(msg)
             except Exception:
@@ -109,8 +154,6 @@ class TripEvent(ActionCostEvent):
             return EventResult(success=False, consumed_action=True, actions_spent=self.actions_cost, message=msg)
 
         dc = _save_dc(enemy, Skill.REFLEX.value, tags, ctx)
-
-        knockdown_bonus = 1 if actor_has_equipped_weapon_trait(hero, "knockdown") else 0
         result = resolve_skill_check_with_sources(
             skill_id=Skill.ATHLETICS.value,
             dc=dc,
@@ -118,40 +161,18 @@ class TripEvent(ActionCostEvent):
             target=enemy,
             tags=tags,
             game=ctx.game,
-            base_modifier=knockdown_bonus,
             apply_modifiers=True,
         )
         outcome = result.outcome
 
         if outcome == "success":
-            try:
-                enemy.add_status(PRONE_STATUS)
-            except Exception:
-                pass
-            apply_prone_effects(enemy)
+            _apply_disarm_penalty(enemy, source=f"disarm:{_actor_id(hero)}", turns=1)
         elif outcome == "critical_success":
-            try:
-                enemy.add_status(PRONE_STATUS)
-            except Exception:
-                pass
-            apply_prone_effects(enemy)
-            damage = prompt_for_roll(
-                "Trip: trafienie krytyczne. Rzuć 1k6 obrażeń obuchowych: ",
-                layout="damage",
-                answer_placeholder="Obrażenia",
-            )
-            try:
-                enemy.apply_damage(int(damage), DamageType.BLUDGEONING.value)
-            except Exception:
-                pass
+            _apply_disarm_penalty(enemy, source=f"disarm:{_actor_id(hero)}", turns=2)
         elif outcome == "critical_failure":
-            try:
-                hero.add_status(PRONE_STATUS)
-            except Exception:
-                pass
-            apply_prone_effects(hero)
+            _apply_disarm_penalty(hero, source=f"disarm:self:{_actor_id(enemy)}", turns=1)
 
-        msg = f"Trip: {outcome}."
+        msg = f"Disarm: {outcome}."
         try:
             ctx.game.ui_log(msg)
         except Exception:

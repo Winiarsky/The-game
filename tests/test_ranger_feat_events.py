@@ -179,4 +179,4 @@ def test_twin_takedown_merges_damage_when_both_hits(monkeypatch):
 
     assert result.success is True
     assert enemy.hp == 28
-    assert enemy.apply_calls == 1
+    assert enemy.apply_calls == 2

@@ -27,7 +27,7 @@ def _has_status(actor, status_id: str) -> bool:
 
 @register_event
 class RaiseShieldEvent(GameEvent):
-    """Podniesienie tarczy – +2 circumstance do AC do początku kolejnej tury bohatera."""
+    """Podniesienie tarczy – circumstance AC bonus z tarczy do początku kolejnej tury bohatera."""
 
     name = "shield"
     default_tags = ["raise_shield", "defense"]
@@ -64,6 +64,10 @@ class RaiseShieldEvent(GameEvent):
 
         round_idx = getattr(getattr(ctx.game, "state", None), "round_index", None)
         source_tag = f"raise_shield:round{round_idx}" if round_idx is not None else "raise_shield"
+        try:
+            shield_ac_bonus = max(0, int(getattr(shield, "ac_bonus", 2) or 2))
+        except Exception:
+            shield_ac_bonus = 2
 
         adder = getattr(hero, "add_bonus", None)
         if not callable(adder):
@@ -72,7 +76,7 @@ class RaiseShieldEvent(GameEvent):
         adder(
             BonusEffect(
                 type=BonusType.CIRCUMSTANCE,
-                value=2,
+                value=shield_ac_bonus,
                 tag="ac",
                 source=source_tag,
                 label="tarcza w górze",
@@ -80,10 +84,10 @@ class RaiseShieldEvent(GameEvent):
             )
         )
 
-        logger.info("Bohater podnosi tarczę: +2 AC circumstance do początku kolejnej tury.")
+        logger.info("Bohater podnosi tarczę: +%s AC circumstance do początku kolejnej tury.", shield_ac_bonus)
         try:
-            ctx.game.ui_log("Podnosisz tarczę: +2 AC (circumstance) do początku następnej tury.")
+            ctx.game.ui_log(f"Podnosisz tarczę: +{shield_ac_bonus} AC (circumstance) do początku następnej tury.")
         except Exception:
             pass
 
-        return EventResult(success=True, consumed_action=True, message="Tarcza podniesiona (+2 AC).")
+        return EventResult(success=True, consumed_action=True, message=f"Tarcza podniesiona (+{shield_ac_bonus} AC).")
