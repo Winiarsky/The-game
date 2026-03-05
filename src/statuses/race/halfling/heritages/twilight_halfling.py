@@ -3,7 +3,10 @@ from __future__ import annotations
 from statuses.base import Status
 from statuses.dim_light_vision import DIM_LIGHT_VISION_STATUS
 
-TWILIGHT_HALFLING_DESCRIPTION = "Zyskujesz low-light vision."
+TWILIGHT_HALFLING_DESCRIPTION = (
+    "Twoi przodkowie działali skrycie o zmierzchu, wyostrzając wzrok w półmroku.\n"
+    "Zyskujesz low-light vision."
+)
 
 
 def TwilightHalflingStatus() -> Status:

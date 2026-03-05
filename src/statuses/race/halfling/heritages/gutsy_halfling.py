@@ -6,7 +6,9 @@ from statuses.base import Status
 from statuses.check_effects import CheckEffect
 
 GUTSY_HALFLING_DESCRIPTION = (
-    "Na sukces w rzucie obronnym przeciwko efektom emocji otrzymujesz krytyczny sukces."
+    "Zachowujesz zimną krew nawet pod presją.\n"
+    "Gdy osiągniesz sukces na saving throw przeciw efektowi emotion, "
+    "otrzymujesz krytyczny sukces."
 )
 
 

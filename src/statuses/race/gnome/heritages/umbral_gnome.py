@@ -3,7 +3,7 @@ from __future__ import annotations
 from statuses.base import Status
 from statuses.darkvision import DARKVISION_STATUS
 
-UMBRAL_GNOME_DESCRIPTION = "otrzymujesz darkvision"
+UMBRAL_GNOME_DESCRIPTION = "Masz darkvision (widzisz w całkowitej ciemności)."
 
 
 def UmbralGnomeStatus() -> Status:

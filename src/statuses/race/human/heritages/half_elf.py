@@ -13,12 +13,14 @@ HALF_ELF_DESCRIPTION = (
 
 
 def HalfElfStatus() -> Status:
-    """Heritage: Half-Elf (prompt only)."""
+    """Heritage: Half-Elf."""
     return Status(
         id="half_elf",
         label="Half-Elf",
         data={
             "ui_description": HALF_ELF_DESCRIPTION,
+            "ancestry_extra_traits": ["elf", "half_elf"],
+            "ancestry_feat_access": ["elf", "half_elf", "human"],
             "grants_statuses": [DIM_LIGHT_VISION_STATUS],
         },
     )

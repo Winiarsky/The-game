@@ -6,5 +6,7 @@ __all__: list[str] = [
     "halfling_luck",
     "halfling_weapon_familiarity",
     "sure_feet",
+    "titan_slinger",
+    "unfettered_halfling",
     "watchful_halfling",
 ]

@@ -17,6 +17,8 @@ def OrcSightStatus() -> Status:
         label="Orc Sight",
         data={
             "ui_description": ORC_SIGHT_DESCRIPTION,
+            "requires_low_light_vision": True,
+            "requires_level_max": 1,
             "grants_statuses": [DARKVISION_STATUS],
         },
     )

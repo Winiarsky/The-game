@@ -6,6 +6,7 @@ from board import consts
 import GameObjects.interactions_mixin.skill_check_resolver as check_resolver
 from ui_client import get_ui_client
 from skills import Skill
+from GameObjects.events.magic.magic_utils import grid_distance_feet
 
 from .base import EventContext, EventResult, GameEvent
 from .registry import register_event
@@ -18,6 +19,61 @@ class SeekEvent(GameEvent):
     name = "seek"
     default_tags = ["seek", Skill.PERCEPTION.value]
     consumes_action = True
+
+    @staticmethod
+    def _seek_radius_feet(actor) -> int:
+        base_radius = 30
+        if actor is None:
+            return base_radius
+        has_status = getattr(actor, "has_status", None)
+        if callable(has_status):
+            try:
+                if has_status("deafened"):
+                    return base_radius
+            except Exception:
+                pass
+        best = base_radius
+        for status in getattr(actor, "statuses", []) or []:
+            data = getattr(status, "data", None) or {}
+            try:
+                radius = int(data.get("seek_sense_radius_feet", 0) or 0)
+            except Exception:
+                radius = 0
+            if radius > best:
+                best = radius
+        return max(base_radius, best)
+
+    @staticmethod
+    def _seek_audio_within_feet(actor) -> int:
+        default = 30
+        if actor is None:
+            return default
+        best = default
+        for status in getattr(actor, "statuses", []) or []:
+            data = getattr(status, "data", None) or {}
+            try:
+                distance = int(data.get("seek_audio_locate_bonus_within_feet", 0) or 0)
+            except Exception:
+                distance = 0
+            if distance > best:
+                best = distance
+        return max(default, best)
+
+    @staticmethod
+    def _seek_scent_within_feet(actor) -> int:
+        default = 0
+        if actor is None:
+            return default
+        best = default
+        for status in getattr(actor, "statuses", []) or []:
+            data = getattr(status, "data", None) or {}
+            try:
+                distance = int(data.get("seek_scent_locate_bonus_within_feet", 0) or 0)
+            except Exception:
+                distance = 0
+            if distance > best:
+                best = distance
+        return max(default, best)
 
     def execute(self, ctx: EventContext) -> EventResult:
         game = ctx.game
@@ -62,6 +118,10 @@ class SeekEvent(GameEvent):
 
         search_positions = board.positions_in_rooms(set(allowed_rooms)) if allowed_rooms else set()
         search_positions.add(hero_pos)
+        seek_radius = self._seek_radius_feet(actor)
+        search_positions = {
+            pos for pos in search_positions if grid_distance_feet(hero_pos, pos) <= seek_radius
+        }
 
         base_tags = ["seek", Skill.PERCEPTION.value]
         base_resolution = check_resolver.resolve_skill_check_with_sources(
@@ -127,6 +187,21 @@ class SeekEvent(GameEvent):
                 was_revealed = getattr(obj, "revealed", False)
                 obj_tags = list(getattr(obj, "reveal_tags", ()) or ())
                 tags = base_tags + [t for t in obj_tags if t not in base_tags]
+                if "undetected" not in tags:
+                    tags.append("undetected")
+                target_distance = grid_distance_feet(hero_pos, pos)
+                if target_distance <= 30 and "within_30_feet" not in tags:
+                    tags.append("within_30_feet")
+                audible = bool(getattr(obj, "audible", False)) or ("auditory" in obj_tags)
+                if audible and target_distance <= self._seek_audio_within_feet(actor):
+                    if "auditory" not in tags:
+                        tags.append("auditory")
+                scentable = bool(getattr(obj, "smelly", False)) or bool(getattr(obj, "scentable", False))
+                if not scentable:
+                    scentable = "scent" in obj_tags or "smelly" in obj_tags
+                if scentable and target_distance <= self._seek_scent_within_feet(actor):
+                    if "scent" not in tags:
+                        tags.append("scent")
                 resolution = check_resolver.resolve_skill_check_with_sources_from_roll(
                     skill_id=Skill.PERCEPTION.value,
                     dc=getattr(obj, "reveal_dc", 18),

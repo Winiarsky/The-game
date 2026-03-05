@@ -3,8 +3,9 @@ from __future__ import annotations
 from statuses.base import Status
 
 HALFLING_LUCK_DESCRIPTION = (
-    "Gdy nie zdasz testu umiejętności lub rzutu obronnego, możesz przerzucić. "
-    "Musisz użyć nowego wyniku. Po użyciu efekt znika (na scenariusz)."
+    "Frequency: raz dziennie.\n"
+    "Trigger: oblejesz skill check albo saving throw.\n"
+    "Możesz wykonać przerzut, ale musisz użyć nowego wyniku."
 )
 
 
@@ -13,7 +14,12 @@ def HalflingLuckStatus() -> Status:
     return Status(
         id="halfling_luck",
         label="Halfling Luck",
-        data={"ui_description": HALFLING_LUCK_DESCRIPTION},
+        data={
+            "ui_description": HALFLING_LUCK_DESCRIPTION,
+            "frequency_per_day": 1,
+            "fortune": True,
+            "trigger_on_failure_skills_and_saves": True,
+        },
     )
 
 

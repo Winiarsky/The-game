@@ -6,8 +6,11 @@ from statuses.base import Status
 from statuses.check_effects import CheckEffect
 
 SEER_ELF_DESCRIPTION = (
-    "Mozesz rzucac czar Detect Magic, otrzymujesz rowniez premie +1 "
-    "Circumstance do testow Arcana, Occultism i Religion"
+    "Wrodzona magia: Detect Magic (arcane innate, at-will).\n"
+    "Otrzymujesz +1 circumstance do Identify Magic oraz do Decipher Writing "
+    "dotyczącego magii (Arcana, Nature, Occultism, Religion).\n"
+    "W tym silniku bonus działa przez tagi checka: identify_magic oraz "
+    "decipher_writing+magic."
 )
 
 
@@ -31,6 +34,13 @@ def SeerElfStatus() -> Status:
         BonusEffect(
             type=BonusType.CIRCUMSTANCE,
             value=1,
+            tag=Skill.NATURE.value,
+            source="status:seer_elf",
+            label="seer elf",
+        ),
+        BonusEffect(
+            type=BonusType.CIRCUMSTANCE,
+            value=1,
             tag=Skill.RELIGION.value,
             source="status:seer_elf",
             label="seer elf",
@@ -39,18 +49,36 @@ def SeerElfStatus() -> Status:
     return Status(
         id="seer_elf",
         label="Seer Elf",
-        data={"ui_description": SEER_ELF_DESCRIPTION},
+        data={
+            "ui_description": SEER_ELF_DESCRIPTION,
+            "granted_cantrips": ["detect_magic"],
+            "innate_magic_tradition": "arcane",
+        },
         check_effects=[
             CheckEffect(
                 applies_to="source",
                 skills=[
                     Skill.ARCANA.value,
+                    Skill.NATURE.value,
                     Skill.OCCULTISM.value,
                     Skill.RELIGION.value,
                 ],
+                tags_required=["identify_magic"],
                 bonus_effects=bonus_effects,
-                prompt_notes=["Seer Elf"],
-            )
+                prompt_notes=["Seer Elf: +1 do Identify Magic."],
+            ),
+            CheckEffect(
+                applies_to="source",
+                skills=[
+                    Skill.ARCANA.value,
+                    Skill.NATURE.value,
+                    Skill.OCCULTISM.value,
+                    Skill.RELIGION.value,
+                ],
+                tags_required=["decipher_writing", "magic"],
+                bonus_effects=bonus_effects,
+                prompt_notes=["Seer Elf: +1 do magicznego Decipher Writing."],
+            ),
         ],
     )
 

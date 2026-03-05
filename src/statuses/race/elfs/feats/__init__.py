@@ -4,6 +4,7 @@ __all__: list[str] = [
     "ancestral_longevity",
     "elven_lore",
     "elven_weapon_familiarity",
+    "forlorn",
     "nimble_elf",
     "otherworldly_magic",
     "unwavering_mien",

@@ -6,7 +6,10 @@ from statuses.base import Status
 from statuses.check_effects import CheckEffect
 
 WATCHFUL_HALFLING_DESCRIPTION = (
-    "+2 circumstance do Perception podczas Sense Motive (tag sense_motive)."
+    "Masz +2 circumstance do Perception checks podczas Sense Motive, by zauważyć "
+    "enchantment/possession.\n"
+    "Jeśli nie używasz aktywnie Sense Motive, GM może wykonać secret check z karą -2.\n"
+    "Możesz też użyć Aid, by pomóc sojusznikowi przeciw enchantment/possession."
 )
 
 
@@ -15,7 +18,11 @@ def WatchfulHalflingStatus() -> Status:
     return Status(
         id="watchful_halfling",
         label="Watchful Halfling",
-        data={"ui_description": WATCHFUL_HALFLING_DESCRIPTION},
+        data={
+            "ui_description": WATCHFUL_HALFLING_DESCRIPTION,
+            "watchful_halfling_passive_secret_check_penalty": -2,
+            "watchful_halfling_aid_vs_enchantment_or_possession": True,
+        },
         check_effects=[
             CheckEffect(
                 applies_to="source",

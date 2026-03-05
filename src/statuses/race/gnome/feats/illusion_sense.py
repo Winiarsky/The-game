@@ -6,8 +6,10 @@ from statuses.base import Status
 from statuses.check_effects import CheckEffect
 
 ILLUSION_SENSE_DESCRIPTION = (
-    "otrzymujesz premie +1 circumstance do rzutu obronnego na will lub perception na "
-    "efekty iluzji, ponadto efekt jest zwiekszany o jeden stopien"
+    "Masz +1 circumstance do Perception checks i Will saves przeciw iluzjom.\n"
+    "Dodatkowo gdy wejdziesz w 10 stóp od iluzji, która może być disbelief, "
+    "GM wykonuje secret check na disbelief nawet bez akcji Interact.\n"
+    "W tym silniku automatyczny secret disbelief jest oznaczony danymi statusu."
 )
 
 
@@ -16,7 +18,10 @@ def IllusionSenseStatus() -> Status:
     return Status(
         id="illusion_sense",
         label="Illusion Sense",
-        data={"ui_description": ILLUSION_SENSE_DESCRIPTION},
+        data={
+            "ui_description": ILLUSION_SENSE_DESCRIPTION,
+            "illusion_sense_auto_disbelieve_within_feet": 10,
+        },
         check_effects=[
             CheckEffect(
                 applies_to="source",
@@ -38,10 +43,8 @@ def IllusionSenseStatus() -> Status:
                         label="illusion sense +1",
                     ),
                 ],
-                promote=1,
                 prompt_notes=[
                     "Illusion Sense: +1 circumstance do Will/Perception vs iluzje.",
-                    "Illusion Sense: wynik testu podbity o 1 stopien.",
                 ],
             )
         ],

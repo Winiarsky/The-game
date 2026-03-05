@@ -10,11 +10,17 @@ SKILLED_HERITAGE_DESCRIPTION = (
 
 
 def SkilledHeritageStatus() -> Status:
-    """Heritage: Skilled Heritage (prompt only)."""
+    """Heritage: Skilled Heritage."""
     return Status(
         id="skilled_heritage",
         label="Skilled Heritage",
-        data={"ui_description": SKILLED_HERITAGE_DESCRIPTION},
+        data={
+            "ui_description": SKILLED_HERITAGE_DESCRIPTION,
+            "ui_choice_kind": "skilled_heritage",
+            "skilled_heritage_skill": None,
+            "trained_skills": [],
+            "skilled_heritage_progression": {"5": "expert"},
+        },
     )
 
 

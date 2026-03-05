@@ -6,7 +6,6 @@ from board import consts
 from bonuses import BonusEffect, BonusType, build_modifiers_grid, compute_total_modifier, select_best_effects
 from skills import Skill
 from statuses import AidedStatus
-from statuses.race.human.feats.cooperative_nature import COOPERATIVE_NATURE_STATUS
 
 from .base import ActionCostEvent, EventContext, EventResult
 from .registry import register_event
@@ -26,19 +25,6 @@ class AidEvent(ActionCostEvent):
     available_in_exploration = True
     consumes_action = True
     actions_cost = 1
-
-    @staticmethod
-    def _has_status(obj, status) -> bool:
-        if obj is None:
-            return False
-        has_status = getattr(obj, "has_status", None)
-        if callable(has_status):
-            return bool(has_status(status))
-        for item in getattr(obj, "statuses", []) or []:
-            item_id = getattr(item, "id", None)
-            if item_id == status.id or item == status.id:
-                return True
-        return False
 
     @staticmethod
     def _adjacent_allies(game, pos, actor):
@@ -114,7 +100,6 @@ class AidEvent(ActionCostEvent):
         if target is None or target_pos is None:
             return EventResult.cancelled(message="Brak sojusznika do wsparcia.")
 
-        coop = self._has_status(actor, COOPERATIVE_NATURE_STATUS)
         selection = self._pick_aid_test(ctx)
         if selection is None:
             return EventResult.cancelled(message="Nie wybrano testu do wsparcia.")
@@ -131,9 +116,9 @@ class AidEvent(ActionCostEvent):
         if outcome == "critical_failure":
             bonus = -1
         elif outcome == "success":
-            bonus = 2 if coop else 1
+            bonus = 1
         elif outcome == "critical_success":
-            bonus = 4 if coop else 2
+            bonus = 2
         try:
             ui = getattr(ctx.game, "ui", None)
             if ui is not None and hasattr(ui, "prompt_info"):

@@ -4,8 +4,8 @@ from damage_types import DamageType
 from statuses.base import Status
 
 SNOW_GOBLIN_DESCRIPTION = (
-    "Otrzymujesz odporność na zimno (1 na 2 poziomy, min 1). "
-    "Flat check na zakończenie persistent cold ma DC 10."
+    "Masz odporność na zimno równą połowie poziomu (min. 1).\n"
+    "Traktujesz środowiskowe efekty zimna jako o 1 stopień mniej ekstremalne."
 )
 
 
@@ -19,6 +19,7 @@ def SnowGoblinStatus() -> Status:
             "damage_resistance": {
                 DamageType.COLD.value: {"per_2_levels": 1, "minimum": 1}
             },
+            "cold_environment_step_reduction": 1,
         },
     )
 

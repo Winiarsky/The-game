@@ -11,8 +11,12 @@ for path in (PROJECT_ROOT, SRC_ROOT):
 
 from GameObjects.interactions_mixin.status_mixin import StatusMixin
 from statuses.race.human.feats.adapted_cantrip import ADAPTED_CANTRIP_STATUS
+from statuses.race.human.feats.elf_atavism import ELF_ATAVISM_STATUS
 from statuses.race.human.feats.general_training import GENERAL_TRAINING_STATUS
 from statuses.race.human.feats.natural_ambition import NATURAL_AMBITION_STATUS
+from statuses.race.human.feats.natural_skill import NATURAL_SKILL_STATUS
+from statuses.race.human.feats.unconventional_weaponry import UNCONVENTIONAL_WEAPONRY_STATUS
+from statuses.race.human.heritages.skilled_heritage import SKILLED_HERITAGE_STATUS
 from statuses.race.human.heritages.versatile_heritage import VERSATILE_HERITAGE_STATUS
 
 
@@ -148,9 +152,84 @@ def test_adapted_cantrip_records_selected_choices(monkeypatch):
     monkeypatch.setattr("ui_client.get_ui_client", lambda: ui)
 
     hero = DummyHero()
+    hero.class_name = "wizard"
     hero.add_status(ADAPTED_CANTRIP_STATUS)
 
     assert hero.has_status("adapted_cantrip")
     assert hero.get_status_data("adapted_cantrip", "adapted_tradition", None) == "arcane"
     assert hero.get_status_data("adapted_cantrip", "adapted_cantrip", None) == "shield"
     assert hero.get_status_data("adapted_cantrip", "replaced_cantrip", None) == "detect_magic"
+
+
+def test_adapted_cantrip_requires_spellcasting_class_feature(monkeypatch):
+    ui = DummyUI(["Arcane", "Shield", "Detect Magic"])
+    monkeypatch.setattr("ui_client.get_ui_client", lambda: ui)
+
+    hero = DummyHero()
+    added = hero.add_status(ADAPTED_CANTRIP_STATUS)
+
+    assert added is False
+    assert hero.has_status("adapted_cantrip") is False
+
+
+def test_skilled_heritage_records_selected_skill(monkeypatch):
+    ui = DummyUI(["Stealth"])
+    monkeypatch.setattr("ui_client.get_ui_client", lambda: ui)
+
+    hero = DummyHero()
+    hero.add_status(SKILLED_HERITAGE_STATUS)
+
+    assert hero.has_status("skilled_heritage")
+    assert hero.get_status_data("skilled_heritage", "skilled_heritage_skill", None) == "stealth"
+    assert hero.get_status_data("skilled_heritage", "trained_skills", []) == ["stealth"]
+
+
+def test_natural_skill_records_two_selected_skills(monkeypatch):
+    ui = DummyUI(["Arcana", "Society"])
+    monkeypatch.setattr("ui_client.get_ui_client", lambda: ui)
+
+    hero = DummyHero()
+    hero.add_status(NATURAL_SKILL_STATUS)
+
+    trained = hero.get_status_data("natural_skill", "trained_skills", [])
+    assert trained == ["arcana", "society"]
+    selected = hero.get_status_data("natural_skill", "natural_skill_selected_skills", [])
+    assert selected == ["arcana", "society"]
+
+
+def test_unconventional_weaponry_records_selected_weapon(monkeypatch):
+    ui = DummyUI(["Falchion"])
+    monkeypatch.setattr("ui_client.get_ui_client", lambda: ui)
+
+    hero = DummyHero()
+    hero.add_status(UNCONVENTIONAL_WEAPONRY_STATUS)
+
+    assert hero.has_status("unconventional_weaponry")
+    assert hero.get_status_data("unconventional_weaponry", "weapon_name", None) == "falchion"
+    assert hero.get_status_data("unconventional_weaponry", "counts_as", None) == "simple"
+    overrides = hero.get_status_data("unconventional_weaponry", "weapon_proficiency_overrides", {})
+    assert overrides.get("falchion") == "trained"
+
+
+def test_elf_atavism_grants_selected_elf_heritage(monkeypatch):
+    ui = DummyUI(["Seer Elf"])
+    monkeypatch.setattr("ui_client.get_ui_client", lambda: ui)
+
+    hero = DummyHero()
+    hero.add_status(ELF_ATAVISM_STATUS)
+
+    assert hero.has_status("elf_atavism")
+    assert hero.get_status_data("elf_atavism", "elf_atavism_choice", None) == "seer_elf"
+    assert hero.has_status("seer_elf")
+
+
+def test_elf_atavism_requires_first_level(monkeypatch):
+    ui = DummyUI(["Seer Elf"])
+    monkeypatch.setattr("ui_client.get_ui_client", lambda: ui)
+
+    hero = DummyHero()
+    hero.level = 2
+    added = hero.add_status(ELF_ATAVISM_STATUS)
+
+    assert added is False
+    assert hero.has_status("elf_atavism") is False

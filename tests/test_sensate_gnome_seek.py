@@ -34,14 +34,14 @@ def test_sensate_gnome_has_prompt_note_only_for_matching_tags():
         skill_id=Skill.PERCEPTION.value,
         dc=10,
         actor=hero,
-        target=DummyHidden(reveal_tags=("nature",)),
-        tags=["seek", Skill.PERCEPTION.value, "nature"],
+        target=DummyHidden(reveal_tags=("scent",)),
+        tags=["seek", Skill.PERCEPTION.value, "undetected", "scent"],
         roll=10,
         game=None,
         apply_modifiers=True,
     )
 
-    assert resolution.modifier == 4
+    assert resolution.modifier == 2
     assert any("sensate gnome" in note.lower() for note in resolution.notes)
 
     resolution_no_tag = resolve_skill_check_with_sources_from_roll(
@@ -49,7 +49,7 @@ def test_sensate_gnome_has_prompt_note_only_for_matching_tags():
         dc=10,
         actor=hero,
         target=DummyHidden(reveal_tags=("stone",)),
-        tags=["seek", Skill.PERCEPTION.value, "stone"],
+        tags=["seek", Skill.PERCEPTION.value, "undetected", "stone"],
         roll=10,
         game=None,
         apply_modifiers=True,

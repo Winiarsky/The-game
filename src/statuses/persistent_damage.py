@@ -45,6 +45,28 @@ def _has_status_id(actor, status_id: str, statuses: Iterable[Status]) -> bool:
     return False
 
 
+def _persistent_flat_check_dc_override(actor, statuses: Iterable[Status], damage_type: str) -> int | None:
+    best: int | None = None
+    for status in statuses:
+        data = getattr(status, "data", None) or {}
+        overrides = data.get("persistent_damage_flat_check_dc_overrides") or {}
+        if not isinstance(overrides, dict):
+            continue
+        raw = overrides.get(str(damage_type))
+        if raw is None:
+            continue
+        try:
+            dc = int(raw)
+        except Exception:
+            continue
+        if best is None or dc < best:
+            best = dc
+    # Backward-compat fallback: Charhide Goblin fire persistent DC 10.
+    if best is None and damage_type == DamageType.FIRE.value and _has_status_id(actor, "charhide_goblin", statuses):
+        best = 10
+    return best
+
+
 def process_persistent_damage(actor, game) -> None:
     """Zastosuj obrażenia ciągłe na początku inicjatywy aktora."""
     statuses = getattr(actor, "statuses", []) or []
@@ -84,12 +106,11 @@ def process_persistent_damage(actor, game) -> None:
             except Exception:
                 pass
 
-        # flat check: domyślnie DC 15 (zmiany dla wybranych heritage)
+        # flat check: domyślnie DC 15 (heritage może obniżyć przez status data)
         dc = 15
-        if damage_type == DamageType.FIRE.value and _has_status_id(actor, "charhide_goblin", statuses):
-            dc = 10
-        elif damage_type == DamageType.COLD.value and _has_status_id(actor, "snow_goblin", statuses):
-            dc = 10
+        override_dc = _persistent_flat_check_dc_override(actor, statuses, damage_type)
+        if override_dc is not None:
+            dc = int(override_dc)
 
         if is_hero:
             try:

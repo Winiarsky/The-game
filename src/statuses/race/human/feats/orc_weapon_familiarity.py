@@ -3,17 +3,31 @@ from __future__ import annotations
 from statuses.base import Status
 
 ORC_WEAPON_FAMILIARITY_DESCRIPTION = (
-    "Jestes biegly z falchion i greataxe. "
-    "Masz dostep do broni orkow (opisowo)."
+    "Trained: falchion i greataxe.\n"
+    "Dostęp: wszystkie uncommon orc weapons.\n"
+    "Dla broni z tagiem orc: martial -> simple, advanced -> martial "
+    "(do wyliczania biegłości).\n"
+    "Przykład: broń [orc, advanced] liczysz jak martial."
 )
 
 
 def OrcWeaponFamiliarityStatus() -> Status:
-    """Feat: Orc Weapon Familiarity (opis do UI)."""
+    """Feat: Orc Weapon Familiarity."""
     return Status(
         id="orc_weapon_familiarity",
         label="Orc Weapon Familiarity",
-        data={"ui_description": ORC_WEAPON_FAMILIARITY_DESCRIPTION},
+        data={
+            "ui_description": ORC_WEAPON_FAMILIARITY_DESCRIPTION,
+            "weapon_proficiency_overrides": {
+                "falchion": "trained",
+                "greataxe": "trained",
+            },
+            "weapon_category_adjustments": [
+                {"required_tag": "orc", "from": "advanced", "to": "martial"},
+                {"required_tag": "orc", "from": "martial", "to": "simple"},
+            ],
+            "weapon_access_tags": ["orc"],
+        },
     )
 
 

@@ -10,12 +10,10 @@ GOBLIN_DESCRIPTION = (
     "Ability Boosts: Dexterity, Charisma, Free\n"
     "Ability Flaw: Wisdom\n"
     "Languages: Common, Goblin\n"
-    "Traits: Darkvision\n"
-    "You can see in darkness and\n"
-    "dim light just as well as you\n"
-    "can see in bright light, though\n"
-    "your vision in darkness is in\n"
-    "black and white."
+    "Additional language choices: Draconic, Dwarven, Gnoll, Gnomish, Halfling, Orcish.\n"
+    "Traits: Goblin, Humanoid.\n"
+    "Darkvision: w ciemności i półmroku widzisz jak w jasnym świetle "
+    "(ciemność w odcieniach szarości)."
 )
 
 
@@ -26,6 +24,21 @@ def GoblinStatus() -> Status:
         label="Goblin",
         data={
             "ui_description": GOBLIN_DESCRIPTION,
+            "ancestry_hp": 6,
+            "base_speed_feet": 25,
+            "size": "small",
+            "ancestry_traits": ["goblin", "humanoid"],
+            "ancestry_languages": ["common", "goblin"],
+            "ancestry_bonus_languages": [
+                "draconic",
+                "dwarven",
+                "gnoll",
+                "gnomish",
+                "halfling",
+                "orcish",
+            ],
+            "ability_boosts": ["dexterity", "charisma", "free"],
+            "ability_flaw": "wisdom",
             "grants_statuses": [DARKVISION_STATUS],
         },
     )

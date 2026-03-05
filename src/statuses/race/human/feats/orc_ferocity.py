@@ -3,9 +3,9 @@ from __future__ import annotations
 from statuses.base import Status
 
 ORC_FEROCITY_DESCRIPTION = (
-    "Raz dziennie, gdy mialbys spasc do 0 HP (i nie giniesz natychmiast), "
-    "zostajesz na 1 HP, a twoj wounded wzrasta o 1. "
-    "Na razie licz recznie (brak pelnej mechaniki HP/wounded)."
+    "Frequency: raz dziennie.\n"
+    "Trigger: miałbyś spaść do 0 HP, ale nie zostać natychmiast zabity.\n"
+    "Pozostajesz przy 1 HP i twój wounded wzrasta o 1."
 )
 
 
@@ -14,7 +14,11 @@ def OrcFerocityStatus() -> Status:
     return Status(
         id="orc_ferocity",
         label="Orc Ferocity",
-        data={"ui_description": ORC_FEROCITY_DESCRIPTION},
+        data={
+            "ui_description": ORC_FEROCITY_DESCRIPTION,
+            "used_today": False,
+            "frequency_per_day": 1,
+        },
     )
 
 

@@ -17,9 +17,9 @@ class DummyHero(StatusMixin):
         self.statuses = []
 
 
-def test_whisper_elf_blocks_blinded_status():
+def test_whisper_elf_does_not_block_blinded_status():
     hero = DummyHero()
     hero.add_status(WHISPER_ELF_STATUS)
     added = hero.add_status(BLINDED_STATUS)
-    assert not added
-    assert not hero.has_status(BLINDED_STATUS)
+    assert added
+    assert hero.has_status(BLINDED_STATUS)

@@ -10,12 +10,10 @@ HALFLING_DESCRIPTION = (
     "Ability Boosts: Dexterity, Wisdom, Free\n"
     "Ability Flaw: Strength\n"
     "Languages: Common, Halfling\n"
-    "Traits: Keen Eyes\n"
-    "Your eyes are sharp, allowing\n"
-    "you to make out small details\n"
-    "about concealed or even\n"
-    "invisible creatures that others\n"
-    "might miss."
+    "Additional language choices: Dwarven, Elven, Gnomish, Goblin.\n"
+    "Traits: Halfling, Humanoid.\n"
+    "Keen Eyes: lepiej wykrywasz hidden/undetected creatures i łatwiej trafiasz "
+    "cele concealed/hidden."
 )
 
 
@@ -26,6 +24,19 @@ def HalflingStatus() -> Status:
         label="Halfling",
         data={
             "ui_description": HALFLING_DESCRIPTION,
+            "ancestry_hp": 6,
+            "base_speed_feet": 25,
+            "size": "small",
+            "ancestry_traits": ["halfling", "humanoid"],
+            "ancestry_languages": ["common", "halfling"],
+            "ancestry_bonus_languages": [
+                "dwarven",
+                "elven",
+                "gnomish",
+                "goblin",
+            ],
+            "ability_boosts": ["dexterity", "wisdom", "free"],
+            "ability_flaw": "strength",
             "grants_statuses": [KEEN_EYES_STATUS],
         },
     )

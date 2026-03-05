@@ -27,7 +27,7 @@ def test_keen_eyes_seek_bonus():
         skill_id=Skill.PERCEPTION.value,
         dc=15,
         actor=actor,
-        tags=["seek", Skill.PERCEPTION.value],
+        tags=["seek", Skill.PERCEPTION.value, "undetected", "within_30_feet"],
         roll=13,
         apply_modifiers=True,
     )
@@ -65,6 +65,22 @@ def test_concealed_default_dc(monkeypatch):
     attack_base = _load_attack_base()
     monkeypatch.setattr(attack_base, "prompt_for_roll", lambda *a, **k: 3)
     assert attack_base.check_concealed(Ctx(attacker), target) is False
+
+
+def test_keen_eyes_reduces_hidden_dc(monkeypatch):
+    attacker = Dummy()
+    attacker.add_status(KeenEyesStatus())
+    target = Dummy()
+    target.add_status(Status(id="hidden"))
+
+    class Ctx:
+        def __init__(self, actor):
+            self.actor = actor
+            self.game = type("G", (), {"ui": None, "ui_log": lambda *_a, **_k: None})()
+
+    attack_base = _load_attack_base()
+    monkeypatch.setattr(attack_base, "prompt_for_roll", lambda *a, **k: 9)
+    assert attack_base.check_concealed(Ctx(attacker), target) is True
 
 
 def _load_attack_base():

@@ -50,6 +50,19 @@ def _status_max_int(mover, key: str, default: int = 0) -> int:
     return best
 
 
+def _status_sum_int(mover, key: str, default: int = 0) -> int:
+    total = int(default)
+    for data in _iter_status_data(mover):
+        if key not in data:
+            continue
+        try:
+            value = int(data.get(key) or 0)
+        except Exception:
+            value = 0
+        total += value
+    return int(total)
+
+
 def _status_any_true(mover, key: str) -> bool:
     for data in _iter_status_data(mover):
         if bool(data.get(key, False)):
@@ -62,31 +75,39 @@ def base_speed_feet(mover, default_feet: int = 25) -> int:
     if mover is None:
         return max(0, _safe_int(default_feet, 25))
 
+    base = None
     for attr in ("base_speed_feet", "land_speed_feet"):
         raw = getattr(mover, attr, None)
         if raw is not None:
             val = _safe_int(raw, 0)
             if val > 0:
-                return val
+                base = val
+                break
 
-    status_speed = _status_first_int(mover, "base_speed_feet")
-    if status_speed is not None and status_speed > 0:
-        return status_speed
+    if base is None:
+        status_speed = _status_first_int(mover, "base_speed_feet")
+        if status_speed is not None and status_speed > 0:
+            base = status_speed
 
-    # kompatybilność z istniejącymi enemy statami
-    distance = getattr(mover, "distance", None)
-    if distance is not None:
-        val = _safe_int(distance, 0)
-        if val > 0:
-            return val
+    if base is None:
+        # kompatybilność z istniejącymi enemy statami
+        distance = getattr(mover, "distance", None)
+        if distance is not None:
+            val = _safe_int(distance, 0)
+            if val > 0:
+                base = val
 
-    move_points = getattr(mover, "move_points", None)
-    if move_points is not None:
-        val = _safe_int(move_points, 0) * 5
-        if val > 0:
-            return val
+    if base is None:
+        move_points = getattr(mover, "move_points", None)
+        if move_points is not None:
+            val = _safe_int(move_points, 0) * 5
+            if val > 0:
+                base = val
 
-    return max(0, _safe_int(default_feet, 25))
+    if base is None:
+        base = max(0, _safe_int(default_feet, 25))
+    base += max(0, _status_sum_int(mover, "base_speed_bonus_feet", default=0))
+    return max(0, int(base))
 
 
 def movement_budget_feet(mover, *, default_feet: int = 25) -> int:

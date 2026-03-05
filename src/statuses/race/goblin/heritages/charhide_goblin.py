@@ -4,8 +4,9 @@ from damage_types import DamageType
 from statuses.base import Status
 
 CHARHIDE_GOBLIN_DESCRIPTION = (
-    "Otrzymujesz odporność na ogień (1 na 2 poziomy, min 1). "
-    "Flat check na zakończenie persistent fire ma DC 10."
+    "Masz odporność na ogień równą połowie poziomu (min. 1).\n"
+    "Łatwiej gasisz persistent fire damage: flat check to DC 10 zamiast 15.\n"
+    "Przy odpowiedniej pomocy sojusznika DC spada do 5 (opisowo)."
 )
 
 
@@ -18,6 +19,12 @@ def CharhideGoblinStatus() -> Status:
             "ui_description": CHARHIDE_GOBLIN_DESCRIPTION,
             "damage_resistance": {
                 DamageType.FIRE.value: {"per_2_levels": 1, "minimum": 1}
+            },
+            "persistent_damage_flat_check_dc_overrides": {
+                DamageType.FIRE.value: 10
+            },
+            "persistent_damage_flat_check_dc_with_help_overrides": {
+                DamageType.FIRE.value: 5
             },
         },
     )

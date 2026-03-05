@@ -3,7 +3,8 @@ from __future__ import annotations
 from statuses.base import Status
 
 RAZORTOOTH_GOBLIN_DESCRIPTION = (
-    "Zyskujesz dodatkową akcję ataku szczękami (1k6 piercing, finesse/unarmed w opisie)."
+    "Twoje szczęki są naturalną bronią.\n"
+    "Zyskujesz jaws unarmed attack: 1d6 piercing, grupa brawling, traits finesse i unarmed."
 )
 
 
@@ -14,7 +15,16 @@ def RazortoothGoblinStatus() -> Status:
         label="Razortooth Goblin",
         data={
             "ui_description": RAZORTOOTH_GOBLIN_DESCRIPTION,
-            "ui_prompt": "Razortooth Goblin: masz nową akcję 'Razortooth Jaws' (atak wręcz, 1k6 piercing).",
+            "ui_prompt": "Razortooth Goblin: masz nową akcję 'Razortooth Jaws' (1d6 piercing, finesse, unarmed).",
+            "granted_unarmed_attacks": [
+                {
+                    "id": "razortooth_jaws",
+                    "damage_dice": "1d6",
+                    "damage_type": "piercing",
+                    "weapon_group": "brawling",
+                    "traits": ["finesse", "unarmed"],
+                }
+            ],
         },
     )
 

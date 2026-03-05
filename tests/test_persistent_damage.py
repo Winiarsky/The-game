@@ -99,7 +99,7 @@ def test_persistent_damage_charhide_fire_dc10(monkeypatch):
     assert not any(getattr(s, "id", None) == "persistent_damage" for s in actor.statuses)
 
 
-def test_persistent_damage_snow_cold_dc10(monkeypatch):
+def test_persistent_damage_snow_does_not_reduce_cold_flat_check_dc(monkeypatch):
     actor = DummyActor("hero")
     actor.statuses.append(make_persistent_damage(3, "cold"))
     actor.statuses.append(Status(id="snow_goblin"))
@@ -111,4 +111,4 @@ def test_persistent_damage_snow_cold_dc10(monkeypatch):
 
     assert actor.damage_taken == 3
     assert any(getattr(s, "id", None) == "snow_goblin" for s in actor.statuses)
-    assert not any(getattr(s, "id", None) == "persistent_damage" for s in actor.statuses)
+    assert any(getattr(s, "id", None) == "persistent_damage" for s in actor.statuses)

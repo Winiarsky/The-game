@@ -3,8 +3,12 @@ from __future__ import annotations
 from statuses.base import Status
 
 CHAMELEON_GNOME_DESCRIPTION = (
-    "Na początku scenariusza wybierz teren; "
-    "otrzymujesz +2 circumstance do Stealth na wybranym terenie."
+    "Możesz dynamicznie zmieniać barwę skóry i włosów.\n"
+    "Gdy twoje ubarwienie z grubsza pasuje do otoczenia, możesz wykonać "
+    "pojedynczą akcję dostrojenia barw i zyskać +2 circumstance do Stealth "
+    "do czasu wyraźnej zmiany otoczenia.\n"
+    "W tym silniku wybór środowiska jest uproszczony: wskazujesz typ terenu, "
+    "na którym premia +2 działa."
 )
 
 
@@ -16,6 +20,7 @@ def ChameleonGnomeStatus() -> Status:
         data={
             "ui_description": CHAMELEON_GNOME_DESCRIPTION,
             "chameleon_terrain": None,
+            "chameleon_stealth_bonus": 2,
         },
     )
 

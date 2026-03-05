@@ -5,8 +5,9 @@ from statuses.base import Status
 from statuses.check_effects import CheckEffect
 
 SURE_FEET_DESCRIPTION = (
-    "Sukces na Acrobatics (Balance) lub Athletics (Climb) staje się krytycznym sukcesem. "
-    "(Mechanika flat-footed do dodania w przyszłości)"
+    "Sukces na Acrobatics check do Balance lub Athletics check do Climb "
+    "staje się krytycznym sukcesem.\n"
+    "Nie jesteś flat-footed podczas prób Balance i Climb."
 )
 
 
@@ -15,7 +16,10 @@ def SureFeetStatus() -> Status:
     return Status(
         id="sure_feet",
         label="Sure Feet",
-        data={"ui_description": SURE_FEET_DESCRIPTION},
+        data={
+            "ui_description": SURE_FEET_DESCRIPTION,
+            "not_flat_footed_while_balance_or_climb": True,
+        },
         check_effects=[
             CheckEffect(
                 applies_to="source",

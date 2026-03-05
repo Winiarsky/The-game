@@ -150,8 +150,8 @@ def test_guard_diplomacy_action(monkeypatch):
     assert "Nie będzie dalszych" in msg2 or guard2.diplomacy_blocked
 
 
-@pytest.mark.parametrize("skill_id", ["arcana", "occultism", "religion"])
-def test_seer_elf_circumstance_bonus_for_magic_skills(monkeypatch, skill_id):
+@pytest.mark.parametrize("skill_id", ["arcana", "nature", "occultism", "religion"])
+def test_seer_elf_bonus_for_identify_magic(monkeypatch, skill_id):
     monkeypatch.setattr("GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll", lambda *_, **__:10)
     actor = Hero(statuses=[SEER_ELF_STATUS])
     res = resolve_skill_check_with_sources(
@@ -159,13 +159,27 @@ def test_seer_elf_circumstance_bonus_for_magic_skills(monkeypatch, skill_id):
         dc=15,
         actor=actor,
         target=None,
-        tags=[skill_id],
+        tags=[skill_id, "identify_magic"],
         apply_modifiers=True,
     )
     assert res.modifier == 1
 
 
-def test_whisper_elf_circumstance_bonus_for_perception(monkeypatch):
+def test_seer_elf_no_bonus_without_identify_or_decipher_tags(monkeypatch):
+    monkeypatch.setattr("GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll", lambda *_, **__:10)
+    actor = Hero(statuses=[SEER_ELF_STATUS])
+    res = resolve_skill_check_with_sources(
+        skill_id="arcana",
+        dc=15,
+        actor=actor,
+        target=None,
+        tags=["arcana"],
+        apply_modifiers=True,
+    )
+    assert res.modifier == 0
+
+
+def test_whisper_elf_audio_seek_bonus_for_undetected(monkeypatch):
     monkeypatch.setattr("GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll", lambda *_, **__:10)
     actor = Hero(statuses=[WHISPER_ELF_STATUS])
     res = resolve_skill_check_with_sources(
@@ -173,26 +187,26 @@ def test_whisper_elf_circumstance_bonus_for_perception(monkeypatch):
         dc=15,
         actor=actor,
         target=None,
-        tags=["perception"],
+        tags=["perception", "seek", "undetected", "auditory"],
         apply_modifiers=True,
     )
-    assert res.modifier == 4
+    assert res.modifier == 2
     assert any("Whisper Elf" in note for note in res.notes)
 
 
-def test_unwavering_mien_bonus_and_promote_on_mental(monkeypatch):
-    monkeypatch.setattr("GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll", lambda *_, **__:14)
+def test_unwavering_mien_promote_on_sleep_save(monkeypatch):
+    monkeypatch.setattr("GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll", lambda *_, **__:15)
     actor = Hero(statuses=[UNWAVERING_MIEN_STATUS])
     res = resolve_skill_check_with_sources(
         skill_id="will",
         dc=15,
         actor=actor,
         target=None,
-        tags=["mental", "will"],
+        tags=["sleep", "mental", "will"],
         apply_modifiers=True,
     )
-    # 14 + 1 vs 15 -> success, promote +1 => critical_success
-    assert res.modifier == 1
+    # 15 vs 15 => success, Unwavering Mien promuje do critical_success dla sleep.
+    assert res.modifier == 0
     assert res.outcome == "critical_success"
 
 

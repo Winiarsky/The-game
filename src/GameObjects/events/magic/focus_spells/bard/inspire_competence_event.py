@@ -3,7 +3,6 @@ from __future__ import annotations
 from board import consts
 from skills import Skill
 from statuses import AidedStatus
-from statuses.race.human.feats.cooperative_nature import COOPERATIVE_NATURE_STATUS
 
 from GameObjects.interactions_mixin.skill_check_resolver import resolve_skill_check_with_sources
 
@@ -26,19 +25,6 @@ def _is_bard(actor) -> bool:
             return True
     class_name = str(getattr(actor, "class_name", "") or "").strip().lower()
     return class_name == "bard"
-
-
-def _has_status(obj, status) -> bool:
-    if obj is None:
-        return False
-    has_status = getattr(obj, "has_status", None)
-    if callable(has_status):
-        return bool(has_status(status))
-    for item in getattr(obj, "statuses", []) or []:
-        item_id = getattr(item, "id", None)
-        if item_id == status.id or item == status.id:
-            return True
-    return False
 
 
 @register_event
@@ -103,13 +89,12 @@ class InspireCompetenceEvent(MagicEvent):
                 message="Inspire Competence: nieudane (brak bonusu).",
             )
 
-        coop = _has_status(actor, COOPERATIVE_NATURE_STATUS)
         if outcome == "critical_failure":
             bonus = -1
         elif outcome == "success":
-            bonus = 2 if coop else 1
+            bonus = 1
         else:  # critical_success
-            bonus = 4 if coop else 2
+            bonus = 2
 
         remover = getattr(target, "remove_status", None)
         if callable(remover):
@@ -205,4 +190,3 @@ class InspireCompetenceEvent(MagicEvent):
         if answer in choices:
             return answer
         return None
-

@@ -25,6 +25,7 @@ def AdaptedCantripStatus() -> Status:
         label="Adapted Cantrip",
         data={
             "ui_description": ADAPTED_CANTRIP_DESCRIPTION,
+            "requires_spellcasting_class_feature": True,
             "ui_choice_kind": "adapted_cantrip",
             "adapted_cantrip_traditions": list(ADAPTED_CANTRIP_TRADITIONS),
             "adapted_cantrip_choices": {key: list(values) for key, values in ADAPTED_CANTRIP_CHOICES.items()},

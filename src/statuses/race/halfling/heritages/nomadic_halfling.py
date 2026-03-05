@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from bonuses import BonusEffect, BonusType
-from skills import Skill
 from statuses.base import Status
-from statuses.check_effects import CheckEffect
 
-NOMADIC_HALFLING_DESCRIPTION = "+2 circumstance do testów Diplomacy."
+NOMADIC_HALFLING_DESCRIPTION = (
+    "Twoi przodkowie przez pokolenia podróżowali z miejsca na miejsce.\n"
+    "Zyskujesz 2 dodatkowe języki (dowolne common/uncommon, do których masz dostęp).\n"
+    "Za każdym razem, gdy bierzesz feat Multilingual, zyskujesz 1 dodatkowy język więcej."
+)
 
 
 def NomadicHalflingStatus() -> Status:
@@ -13,23 +14,11 @@ def NomadicHalflingStatus() -> Status:
     return Status(
         id="nomadic_halfling",
         label="Nomadic Halfling",
-        data={"ui_description": NOMADIC_HALFLING_DESCRIPTION},
-        check_effects=[
-            CheckEffect(
-                applies_to="source",
-                skills=[Skill.DIPLOMACY.value],
-                bonus_effects=[
-                    BonusEffect(
-                        type=BonusType.CIRCUMSTANCE,
-                        value=2,
-                        tag=Skill.DIPLOMACY.value,
-                        source="status:nomadic_halfling",
-                        label="nomadic +2",
-                    )
-                ],
-                prompt_notes=["Nomadic Halfling: +2 circumstance do Diplomacy."],
-            )
-        ],
+        data={
+            "ui_description": NOMADIC_HALFLING_DESCRIPTION,
+            "additional_languages": 2,
+            "multilingual_bonus_languages": 1,
+        },
     )
 
 

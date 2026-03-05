@@ -7,5 +7,7 @@ __all__: list[str] = [
     "goblin_weapon_familiarity",
     "goblin_scuttle",
     "goblin_song",
+    "junk_tinker",
+    "rough_rider",
     "very_sneaky",
 ]

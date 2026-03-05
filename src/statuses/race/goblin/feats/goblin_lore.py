@@ -3,8 +3,9 @@ from __future__ import annotations
 from statuses.base import Status
 
 GOBLIN_LORE_DESCRIPTION = (
-    "Otrzymujesz trained w Nature i Stealth. Jeśli już jesteś trained, wybierz inny skill. "
-    "Ponadto trained w Goblin Lore. (Opisowo)"
+    "Stajesz się trained w Nature i Stealth.\n"
+    "Jeśli już jesteś trained w jednym z tych skilli, wybierasz inny skill.\n"
+    "Dodatkowo stajesz się trained w Goblin Lore."
 )
 
 
@@ -13,7 +14,31 @@ def GoblinLoreStatus() -> Status:
     return Status(
         id="goblin_lore",
         label="Goblin Lore",
-        data={"ui_description": GOBLIN_LORE_DESCRIPTION},
+        data={
+            "ui_description": GOBLIN_LORE_DESCRIPTION,
+            "ui_choice_kind": "goblin_lore",
+            "trained_skills": ["nature", "stealth"],
+            "trained_lore": ["goblin_lore"],
+            "goblin_lore_replacements": [],
+            "goblin_lore_replacement_choices": [
+                "athletics",
+                "acrobatics",
+                "arcana",
+                "crafting",
+                "deception",
+                "diplomacy",
+                "intimidation",
+                "medicine",
+                "nature",
+                "occultism",
+                "performance",
+                "religion",
+                "society",
+                "stealth",
+                "survival",
+                "thievery",
+            ],
+        },
     )
 
 

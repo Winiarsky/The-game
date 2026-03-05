@@ -60,8 +60,23 @@ def check_concealed(ctx, target) -> bool:
                 ignore_target_concealed = False
                 break
     dc = visibility_flat_check_dc(attacker, target, ignore_target_concealed=ignore_target_concealed)
-    if _has_status(attacker, "keen_eyes") and dc == 5:
-        dc = 3
+    if _has_status(attacker, "keen_eyes"):
+        concealed_dc = 3
+        hidden_dc = 9
+        getter = getattr(attacker, "get_status_data", None)
+        if callable(getter):
+            try:
+                concealed_dc = int(getter("keen_eyes", "concealed_flat_check_dc_override", concealed_dc) or concealed_dc)
+            except Exception:
+                concealed_dc = 3
+            try:
+                hidden_dc = int(getter("keen_eyes", "hidden_flat_check_dc_override", hidden_dc) or hidden_dc)
+            except Exception:
+                hidden_dc = 9
+        if dc == 5:
+            dc = concealed_dc
+        elif dc >= 11 and _has_status(target, "hidden"):
+            dc = hidden_dc
     if dc <= 0:
         return True
     roll = prompt_for_roll(

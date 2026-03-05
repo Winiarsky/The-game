@@ -208,7 +208,7 @@ def test_rock_runner_path_cost_ignores_rumble():
     assert move_utils.path_cost_feet(path, board, mover=hero) == 10
 
 
-def test_woodland_elf_ignores_bushes_cost_and_prompt():
+def test_woodland_elf_does_not_ignore_bushes_move_cost():
     board = BoardGrid(rows=1, cols=3)
     board.set_field((1, 0), BushesTerrain())
 
@@ -235,10 +235,9 @@ def test_woodland_elf_ignores_bushes_cost_and_prompt():
     ctx = EventContext(game=game, actor=hero)
     MoveEvent().execute(ctx)
 
-    assert ui.prompts == []
-    assert ui.hints
-    assert "trudny teren" not in ui.hints[-1]["text"].lower()
-    assert move_utils.path_cost_feet([(0, 0), (1, 0), (2, 0)], board, mover=hero) == 10
+    assert ui.prompts
+    assert "trudny teren" in ui.prompts[-1]["title"].lower()
+    assert move_utils.path_cost_feet([(0, 0), (1, 0), (2, 0)], board, mover=hero) == 15
 
 
 def test_move_builds_full_path_then_trims_to_speed_budget():

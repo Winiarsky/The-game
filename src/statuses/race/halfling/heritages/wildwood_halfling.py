@@ -3,7 +3,8 @@ from __future__ import annotations
 from statuses.base import Status
 
 WILDWOOD_HALFLING_DESCRIPTION = (
-    "Ignorujesz trudny teren z drzew, gęstwiny i podszytu (np. bushes)."
+    "Wykorzystujesz mały rozmiar, by przeciskać się przez las i dżunglę.\n"
+    "Ignorujesz difficult terrain pochodzący z drzew, foliage i undergrowth."
 )
 
 
@@ -14,7 +15,14 @@ def WildwoodHalflingStatus() -> Status:
         label="Wildwood Halfling",
         data={
             "ui_description": WILDWOOD_HALFLING_DESCRIPTION,
-            "ignore_move_cost_terrain_tags": ["bushes", "forest"],
+            "ignore_move_cost_terrain_tags": [
+                "trees",
+                "foliage",
+                "undergrowth",
+                "bushes",
+                "forest",
+                "jungle",
+            ],
         },
     )
 

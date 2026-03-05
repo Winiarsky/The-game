@@ -126,7 +126,7 @@ def test_aid_skill_success_adds_plus_one(monkeypatch):
     assert status.data.get("skill_id") == "athletics"
 
 
-def test_aid_skill_critical_success_with_coop_adds_plus_four(monkeypatch):
+def test_aid_skill_critical_success_with_coop_still_adds_plus_two(monkeypatch):
     hero = DummyActor("h1", (0, 0))
     target = DummyActor("h2", (1, 0))
     board = DummyBoard({hero.position: hero, target.position: target})
@@ -146,7 +146,7 @@ def test_aid_skill_critical_success_with_coop_adds_plus_four(monkeypatch):
     assert res.success is True
     status = target.get_status("aided")
     assert status is not None
-    assert status.data.get("bonus") == 4
+    assert status.data.get("bonus") == 2
 
 
 def test_aid_skill_critical_failure_adds_minus_one(monkeypatch):
@@ -212,7 +212,7 @@ def test_aid_melee_attack_success_adds_bonus(monkeypatch):
     assert bonus.is_penalty is False
 
 
-def test_aid_melee_attack_success_with_coop_adds_plus_two(monkeypatch):
+def test_aid_melee_attack_success_with_coop_still_adds_plus_one(monkeypatch):
     hero = DummyActor("h1", (0, 0))
     target = DummyActor("h2", (1, 0))
     board = DummyBoard({hero.position: hero, target.position: target})
@@ -230,11 +230,11 @@ def test_aid_melee_attack_success_with_coop_adds_plus_two(monkeypatch):
     assert target.bonuses
     bonus = target.bonuses[-1]
     assert bonus.tag == "attack_melee"
-    assert bonus.value == 2
+    assert bonus.value == 1
     assert bonus.is_penalty is False
 
 
-def test_aid_ranged_attack_critical_success_with_coop_adds_plus_four(monkeypatch):
+def test_aid_ranged_attack_critical_success_with_coop_still_adds_plus_two(monkeypatch):
     hero = DummyActor("h1", (0, 0))
     target = DummyActor("h2", (1, 0))
     board = DummyBoard({hero.position: hero, target.position: target})
@@ -252,7 +252,7 @@ def test_aid_ranged_attack_critical_success_with_coop_adds_plus_four(monkeypatch
     assert target.bonuses
     bonus = target.bonuses[-1]
     assert bonus.tag == "attack_ranged"
-    assert bonus.value == 4
+    assert bonus.value == 2
     assert bonus.is_penalty is False
 
 

@@ -6,7 +6,10 @@ from statuses.base import Status
 from statuses.check_effects import CheckEffect
 
 WHISPER_ELF_DESCRIPTION = (
-    "otrzymujesz  premie +4 do Percepcji i jestes odpowrny na status Blind"
+    "Whisper Elf:\n"
+    "- Seek: zamiast 30 stóp możesz przeszukiwać do 60 stóp (w tym silniku jako zasięg).\n"
+    "- +2 circumstance do prób namierzenia undetected creatures, które słyszysz, "
+    "w obrębie 30 stóp (tagi: seek + undetected + auditory)."
 )
 
 
@@ -17,22 +20,24 @@ def WhisperElfStatus() -> Status:
         label="Whisper Elf",
         data={
             "ui_description": WHISPER_ELF_DESCRIPTION,
-            "immune_status_ids": ["blinded"],
+            "seek_sense_radius_feet": 60,
+            "seek_audio_locate_bonus_within_feet": 30,
         },
         check_effects=[
             CheckEffect(
                 applies_to="source",
                 skills=[Skill.PERCEPTION.value],
+                tags_required=["seek", "undetected", "auditory"],
                 bonus_effects=[
                     BonusEffect(
                         type=BonusType.CIRCUMSTANCE,
-                        value=4,
+                        value=2,
                         tag=Skill.PERCEPTION.value,
                         source="status:whisper_elf",
-                        label="whisper elf +4",
+                        label="whisper elf +2",
                     )
                 ],
-                prompt_notes=["Whisper Elf: +4 do Perception."],
+                prompt_notes=["Whisper Elf: +2 do audio Seek vs undetected."],
             )
         ],
     )

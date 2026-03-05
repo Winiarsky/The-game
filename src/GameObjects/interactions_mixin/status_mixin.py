@@ -149,9 +149,74 @@ class StatusMixin:
                 self._handle_adapted_cantrip_choice(status, data)
             except Exception:
                 pass
+        if data.get("ui_choice_kind") == "otherworldly_magic":
+            try:
+                self._handle_otherworldly_magic_choice(status, data)
+            except Exception:
+                pass
+        if data.get("ui_choice_kind") == "fey_touched_gnome":
+            try:
+                self._handle_fey_touched_gnome_choice(status, data)
+            except Exception:
+                pass
+        if data.get("ui_choice_kind") == "first_world_magic":
+            try:
+                self._handle_first_world_magic_choice(status, data)
+            except Exception:
+                pass
+        if data.get("ui_choice_kind") == "gnome_obsession":
+            try:
+                self._handle_gnome_obsession_choice(status, data)
+            except Exception:
+                pass
+        if data.get("ui_choice_kind") == "wellspring_gnome":
+            try:
+                self._handle_wellspring_gnome_choice(status, data)
+            except Exception:
+                pass
+        if data.get("ui_choice_kind") == "ancestral_longevity":
+            try:
+                self._handle_ancestral_longevity_choice(status, data)
+            except Exception:
+                pass
+        if data.get("ui_choice_kind") == "elven_lore":
+            try:
+                self._handle_elven_lore_choice(status, data)
+            except Exception:
+                pass
+        if data.get("ui_choice_kind") == "goblin_lore":
+            try:
+                self._handle_goblin_lore_choice(status, data)
+            except Exception:
+                pass
+        if data.get("ui_choice_kind") == "halfling_lore":
+            try:
+                self._handle_halfling_lore_choice(status, data)
+            except Exception:
+                pass
+        if data.get("ui_choice_kind") == "skilled_heritage":
+            try:
+                self._handle_skilled_heritage_choice(status, data)
+            except Exception:
+                pass
         if data.get("ui_choice_kind") == "general_training":
             try:
                 self._handle_general_training_choice(status, data)
+            except Exception:
+                pass
+        if data.get("ui_choice_kind") == "natural_skill":
+            try:
+                self._handle_natural_skill_choice(status, data)
+            except Exception:
+                pass
+        if data.get("ui_choice_kind") == "unconventional_weaponry":
+            try:
+                self._handle_unconventional_weaponry_choice(status, data)
+            except Exception:
+                pass
+        if data.get("ui_choice_kind") == "elf_atavism":
+            try:
+                self._handle_elf_atavism_choice(status, data)
             except Exception:
                 pass
         if data.get("ui_choice_kind") == "natural_ambition":
@@ -522,6 +587,47 @@ class StatusMixin:
                 continue
         return None
 
+    def _has_spellcasting_class_feature(self) -> bool:
+        class_id = self._actor_class_id()
+        return class_id in {"bard", "cleric", "druid", "sorcerer", "wizard"}
+
+    @staticmethod
+    def _is_trained_rank(raw_rank: object) -> bool:
+        raw = str(raw_rank or "").strip().lower()
+        return raw in {"trained", "expert", "master", "legendary", "t", "e", "m", "l", "2", "4", "6", "8"}
+
+    def _has_martial_weapon_training(self) -> bool:
+        mapping = getattr(self, "weapon_proficiency_ranks", None)
+        if isinstance(mapping, dict) and self._is_trained_rank(mapping.get("martial")):
+            return True
+        for status in getattr(self, "statuses", None) or []:
+            data = getattr(status, "data", None) or {}
+            status_mapping = data.get("weapon_proficiency_ranks")
+            if isinstance(status_mapping, dict) and self._is_trained_rank(status_mapping.get("martial")):
+                return True
+        return False
+
+    @staticmethod
+    def _base_skill_choices() -> list[str]:
+        return [
+            "athletics",
+            "acrobatics",
+            "arcana",
+            "crafting",
+            "deception",
+            "diplomacy",
+            "intimidation",
+            "medicine",
+            "nature",
+            "occultism",
+            "performance",
+            "religion",
+            "society",
+            "stealth",
+            "survival",
+            "thievery",
+        ]
+
     def _cleric_setup_data(self) -> dict:
         getter = getattr(self, "get_status_data", None)
         if callable(getter):
@@ -871,6 +977,52 @@ class StatusMixin:
                 self._ui_log(f"{self._labelize_choice(status_id)}: wymaga klasy Wizard.")
                 return False
 
+        if status_id == "ancestral_longevity":
+            min_age = int(status_data.get("requires_min_age_years", 100) or 100)
+            actor_age = None
+            for age_attr in ("age_years", "age", "years_old"):
+                raw_age = getattr(self, age_attr, None)
+                if raw_age is None:
+                    continue
+                try:
+                    actor_age = int(raw_age)
+                    break
+                except Exception:
+                    continue
+            if actor_age is not None and actor_age < min_age:
+                self._ui_log(
+                    f"{self._labelize_choice(status_id)}: wymaga wieku co najmniej {min_age} lat."
+                )
+                return False
+
+        max_level = status_data.get("requires_level_max")
+        if max_level is not None:
+            try:
+                limit = int(max_level)
+                actor_level = int(getattr(self, "level", 1) or 1)
+            except Exception:
+                limit = None
+                actor_level = 1
+            if limit is not None and actor_level > limit:
+                self._ui_log(
+                    f"{self._labelize_choice(status_id)}: można wybrać maksymalnie na {limit}. poziomie."
+                )
+                return False
+
+        if bool(status_data.get("requires_low_light_vision")):
+            has_low_light = False
+            try:
+                has_low_light = bool(self.has_status("low_light_vision") or self.has_status("dim_light_vision"))
+            except Exception:
+                has_low_light = False
+            if not has_low_light:
+                self._ui_log(f"{self._labelize_choice(status_id)}: wymaga low-light vision.")
+                return False
+
+        if bool(status_data.get("requires_spellcasting_class_feature")) and not self._has_spellcasting_class_feature():
+            self._ui_log(f"{self._labelize_choice(status_id)}: wymaga spellcasting class feature.")
+            return False
+
         required_trained_skills = {
             str(item).strip().lower().replace("-", "_").replace(" ", "_")
             for item in list(status_data.get("requires_trained_skills") or [])
@@ -964,6 +1116,424 @@ class StatusMixin:
             f"(zastapiony: {self._labelize_choice(chosen_replaced)})."
         )
 
+    def _handle_otherworldly_magic_choice(self, status: "Status", data: dict) -> None:
+        choices = list(data.get("otherworldly_magic_choices") or [])
+        if not choices:
+            choices = ["detect_magic", "daze", "light", "mage_hand", "shield", "ray_of_frost"]
+        chosen_cantrip = self._pick_choice_id(
+            "Otherworldly Magic: wybierz arcane cantrip",
+            choices,
+            source="status",
+        )
+        if not chosen_cantrip:
+            return
+        self._replace_status_data(
+            status,
+            {
+                "otherworldly_magic_cantrip": chosen_cantrip,
+                "granted_cantrips": [chosen_cantrip],
+                "innate_magic_tradition": "arcane",
+            },
+        )
+        self._ui_log(f"Otherworldly Magic: wybrano cantrip {self._labelize_choice(chosen_cantrip)}.")
+
+    def _selected_wellspring_tradition(self) -> str | None:
+        for status in getattr(self, "statuses", []) or []:
+            if getattr(status, "id", None) != "wellspring_gnome":
+                continue
+            data = getattr(status, "data", None) or {}
+            value = str(data.get("wellspring_tradition", "") or "").strip().lower()
+            if value in {"arcane", "divine", "occult"}:
+                return value
+        return None
+
+    @staticmethod
+    def _apply_gnome_primal_innate_override(data: dict, override_tradition: str | None) -> dict:
+        if not override_tradition:
+            return data
+        if not bool(data.get("gnome_primal_innate_source")):
+            return data
+        updated = dict(data)
+        updated["innate_magic_tradition"] = override_tradition
+        updated["innate_magic_tradition_overridden_by_wellspring"] = True
+        return updated
+
+    def _handle_fey_touched_gnome_choice(self, status: "Status", data: dict) -> None:
+        choices = list(data.get("fey_touched_cantrip_choices") or [])
+        if not choices:
+            choices = ["detect_magic", "guidance", "ray_of_frost", "light", "produce_flame", "ghost_sound"]
+        chosen_cantrip = self._pick_choice_id(
+            "Fey-touched Gnome: wybierz primal cantrip",
+            choices,
+            source="status",
+        )
+        if not chosen_cantrip:
+            return
+        override_tradition = self._selected_wellspring_tradition()
+        innate_tradition = override_tradition or "primal"
+        updates = self._apply_gnome_primal_innate_override(
+            {
+                "fey_touched_cantrip": chosen_cantrip,
+                "granted_cantrips": [chosen_cantrip],
+                "innate_magic_tradition": innate_tradition,
+                "gnome_primal_innate_source": True,
+            },
+            override_tradition,
+        )
+        self._replace_status_data(status, updates)
+        self._ui_log(
+            "Fey-touched Gnome: wybrano cantrip "
+            f"{self._labelize_choice(chosen_cantrip)} ({self._labelize_choice(innate_tradition)})."
+        )
+
+    def _handle_first_world_magic_choice(self, status: "Status", data: dict) -> None:
+        choices = list(data.get("first_world_magic_choices") or [])
+        if not choices:
+            choices = ["detect_magic", "guidance", "ray_of_frost", "light", "produce_flame", "ghost_sound"]
+        chosen_cantrip = self._pick_choice_id(
+            "First World Magic: wybierz primal cantrip",
+            choices,
+            source="status",
+        )
+        if not chosen_cantrip:
+            return
+        override_tradition = self._selected_wellspring_tradition()
+        innate_tradition = override_tradition or "primal"
+        updates = self._apply_gnome_primal_innate_override(
+            {
+                "first_world_magic_cantrip": chosen_cantrip,
+                "granted_cantrips": [chosen_cantrip],
+                "innate_magic_tradition": innate_tradition,
+                "gnome_primal_innate_source": True,
+            },
+            override_tradition,
+        )
+        self._replace_status_data(status, updates)
+        self._ui_log(
+            "First World Magic: wybrano cantrip "
+            f"{self._labelize_choice(chosen_cantrip)} ({self._labelize_choice(innate_tradition)})."
+        )
+
+    def _handle_gnome_obsession_choice(self, status: "Status", data: dict) -> None:
+        base_choices = list(data.get("gnome_obsession_lore_choices") or [])
+        if not base_choices:
+            base_choices = [
+                "acrobatics_lore",
+                "arcana_lore",
+                "caves_lore",
+                "engineering_lore",
+                "forest_lore",
+                "fey_lore",
+                "herbalism_lore",
+                "history_lore",
+                "mountains_lore",
+                "nature_lore",
+                "occult_lore",
+                "religion_lore",
+                "society_lore",
+                "underworld_lore",
+                "warfare_lore",
+            ]
+        chosen_lore = self._pick_choice_id(
+            "Gnome Obsession: wybierz Lore",
+            base_choices,
+            source="status",
+        )
+        if not chosen_lore:
+            return
+        self._replace_status_data(
+            status,
+            {
+                "gnome_obsession_lore": chosen_lore,
+                "trained_lore": [chosen_lore],
+            },
+        )
+        self._ui_log(f"Gnome Obsession: wybrano {self._labelize_choice(chosen_lore)}.")
+
+    def _handle_wellspring_gnome_choice(self, status: "Status", data: dict) -> None:
+        tradition_choices = list(data.get("wellspring_tradition_choices") or ["arcane", "divine", "occult"])
+        chosen_tradition = self._pick_choice_id(
+            "Wellspring Gnome: wybierz tradycję",
+            tradition_choices,
+            source="status",
+        )
+        if not chosen_tradition:
+            return
+
+        cantrip_map = dict(data.get("wellspring_cantrip_choices") or {})
+        cantrip_choices = list(cantrip_map.get(chosen_tradition, []))
+        if not cantrip_choices:
+            cantrip_choices = ["detect_magic", "daze", "light", "mage_hand", "guidance"]
+        chosen_cantrip = self._pick_choice_id(
+            f"Wellspring Gnome ({self._labelize_choice(chosen_tradition)}): wybierz cantrip",
+            cantrip_choices,
+            source="status",
+        )
+        if not chosen_cantrip:
+            return
+
+        self._replace_status_data(
+            status,
+            {
+                "wellspring_tradition": chosen_tradition,
+                "wellspring_cantrip": chosen_cantrip,
+                "granted_cantrips": [chosen_cantrip],
+                "innate_magic_tradition": chosen_tradition,
+            },
+        )
+
+        # Wellspring zmienia tradycję wcześniejszych primal innate spelli z gnome ancestry.
+        for idx, item in enumerate(list(getattr(self, "statuses", []) or [])):
+            item_data = dict(getattr(item, "data", None) or {})
+            if not bool(item_data.get("gnome_primal_innate_source")):
+                continue
+            updated = self._apply_gnome_primal_innate_override(item_data, chosen_tradition)
+            self.statuses[idx] = replace(item, data=updated)
+
+        self._ui_log(
+            "Wellspring Gnome: "
+            f"{self._labelize_choice(chosen_tradition)} -> {self._labelize_choice(chosen_cantrip)}."
+        )
+
+    def _handle_ancestral_longevity_choice(self, status: "Status", data: dict) -> None:
+        choices = [
+            "athletics",
+            "acrobatics",
+            "arcana",
+            "crafting",
+            "deception",
+            "diplomacy",
+            "intimidation",
+            "medicine",
+            "nature",
+            "occultism",
+            "performance",
+            "religion",
+            "society",
+            "stealth",
+            "survival",
+            "thievery",
+            "perception",
+        ]
+        chosen_skill = self._pick_choice_id(
+            "Ancestral Longevity: wybierz skill (trained do następnych przygotowań)",
+            choices,
+            source="status",
+        )
+        if not chosen_skill:
+            return
+        self._replace_status_data(
+            status,
+            {
+                "ancestral_longevity_skill": chosen_skill,
+                "trained_skills": [chosen_skill],
+            },
+        )
+        self._ui_log(f"Ancestral Longevity: wybrano skill {self._labelize_choice(chosen_skill)}.")
+
+    def _handle_elven_lore_choice(self, status: "Status", data: dict) -> None:
+        base_skills = [str(item).strip().lower() for item in list(data.get("trained_skills") or ["arcana", "nature"]) if str(item).strip()]
+        pre_add_trained = {
+            str(item).strip().lower()
+            for item in list(data.get("_pre_add_trained_skills") or [])
+            if str(item).strip()
+        }
+        overlaps = [skill_id for skill_id in base_skills if skill_id in pre_add_trained]
+        if not overlaps:
+            return
+        replacement_choices = [
+            str(item).strip().lower()
+            for item in list(
+                data.get("elven_lore_replacement_choices")
+                or [
+                    "athletics",
+                    "acrobatics",
+                    "arcana",
+                    "crafting",
+                    "deception",
+                    "diplomacy",
+                    "intimidation",
+                    "medicine",
+                    "nature",
+                    "occultism",
+                    "performance",
+                    "religion",
+                    "society",
+                    "stealth",
+                    "survival",
+                    "thievery",
+                ]
+            )
+            if str(item).strip()
+        ]
+        replacement_choices = [item for item in replacement_choices if item not in pre_add_trained]
+        chosen_replacements: list[str] = []
+        for index, _skill in enumerate(overlaps, start=1):
+            available = [item for item in replacement_choices if item not in chosen_replacements]
+            if not available:
+                break
+            chosen = self._pick_choice_id(
+                f"Elven Lore: wybierz skill zastępczy ({index}/{len(overlaps)})",
+                available,
+                source="status",
+            )
+            if not chosen:
+                continue
+            chosen_replacements.append(chosen)
+        if not chosen_replacements:
+            return
+        updated_base = [item for item in base_skills if item not in overlaps]
+        final_skills = list(dict.fromkeys(updated_base + chosen_replacements))
+        self._replace_status_data(
+            status,
+            {
+                "trained_skills": final_skills,
+                "elven_lore_replacements": chosen_replacements,
+            },
+        )
+        self._ui_log(
+            "Elven Lore: zastąpiono już posiadane trained skille -> "
+            f"{', '.join(self._labelize_choice(item) for item in chosen_replacements)}."
+        )
+
+    def _handle_goblin_lore_choice(self, status: "Status", data: dict) -> None:
+        base_skills = [
+            str(item).strip().lower()
+            for item in list(data.get("trained_skills") or ["nature", "stealth"])
+            if str(item).strip()
+        ]
+        pre_add_trained = {
+            str(item).strip().lower()
+            for item in list(data.get("_pre_add_trained_skills") or [])
+            if str(item).strip()
+        }
+        overlaps = [skill_id for skill_id in base_skills if skill_id in pre_add_trained]
+        if not overlaps:
+            return
+        replacement_choices = [
+            str(item).strip().lower()
+            for item in list(
+                data.get("goblin_lore_replacement_choices")
+                or [
+                    "athletics",
+                    "acrobatics",
+                    "arcana",
+                    "crafting",
+                    "deception",
+                    "diplomacy",
+                    "intimidation",
+                    "medicine",
+                    "nature",
+                    "occultism",
+                    "performance",
+                    "religion",
+                    "society",
+                    "stealth",
+                    "survival",
+                    "thievery",
+                ]
+            )
+            if str(item).strip()
+        ]
+        replacement_choices = [item for item in replacement_choices if item not in pre_add_trained]
+        chosen_replacements: list[str] = []
+        for index, _skill in enumerate(overlaps, start=1):
+            available = [item for item in replacement_choices if item not in chosen_replacements]
+            if not available:
+                break
+            chosen = self._pick_choice_id(
+                f"Goblin Lore: wybierz skill zastępczy ({index}/{len(overlaps)})",
+                available,
+                source="status",
+            )
+            if not chosen:
+                continue
+            chosen_replacements.append(chosen)
+        if not chosen_replacements:
+            return
+        updated_base = [item for item in base_skills if item not in overlaps]
+        final_skills = list(dict.fromkeys(updated_base + chosen_replacements))
+        self._replace_status_data(
+            status,
+            {
+                "trained_skills": final_skills,
+                "goblin_lore_replacements": chosen_replacements,
+            },
+        )
+        self._ui_log(
+            "Goblin Lore: zastąpiono już posiadane trained skille -> "
+            f"{', '.join(self._labelize_choice(item) for item in chosen_replacements)}."
+        )
+
+    def _handle_halfling_lore_choice(self, status: "Status", data: dict) -> None:
+        base_skills = [
+            str(item).strip().lower()
+            for item in list(data.get("trained_skills") or ["acrobatics", "stealth"])
+            if str(item).strip()
+        ]
+        pre_add_trained = {
+            str(item).strip().lower()
+            for item in list(data.get("_pre_add_trained_skills") or [])
+            if str(item).strip()
+        }
+        overlaps = [skill_id for skill_id in base_skills if skill_id in pre_add_trained]
+        if not overlaps:
+            return
+        replacement_choices = [
+            str(item).strip().lower()
+            for item in list(
+                data.get("halfling_lore_replacement_choices")
+                or [
+                    "athletics",
+                    "acrobatics",
+                    "arcana",
+                    "crafting",
+                    "deception",
+                    "diplomacy",
+                    "intimidation",
+                    "medicine",
+                    "nature",
+                    "occultism",
+                    "performance",
+                    "religion",
+                    "society",
+                    "stealth",
+                    "survival",
+                    "thievery",
+                ]
+            )
+            if str(item).strip()
+        ]
+        replacement_choices = [item for item in replacement_choices if item not in pre_add_trained]
+        chosen_replacements: list[str] = []
+        for index, _skill in enumerate(overlaps, start=1):
+            available = [item for item in replacement_choices if item not in chosen_replacements]
+            if not available:
+                break
+            chosen = self._pick_choice_id(
+                f"Halfling Lore: wybierz skill zastępczy ({index}/{len(overlaps)})",
+                available,
+                source="status",
+            )
+            if not chosen:
+                continue
+            chosen_replacements.append(chosen)
+        if not chosen_replacements:
+            return
+        updated_base = [item for item in base_skills if item not in overlaps]
+        final_skills = list(dict.fromkeys(updated_base + chosen_replacements))
+        self._replace_status_data(
+            status,
+            {
+                "trained_skills": final_skills,
+                "halfling_lore_replacements": chosen_replacements,
+            },
+        )
+        self._ui_log(
+            "Halfling Lore: zastąpiono już posiadane trained skille -> "
+            f"{', '.join(self._labelize_choice(item) for item in chosen_replacements)}."
+        )
+
     def _handle_general_training_choice(self, status: "Status", data: dict) -> None:
         registry = self._general_feat_registry()
         choices = list(data.get("general_feat_choices") or list(registry.keys()))
@@ -984,6 +1554,137 @@ class StatusMixin:
             return
         self.add_status(feat_status)
         self._ui_log(f"General Training: wybrano {self._labelize_choice(chosen_feat)}.")
+
+    def _handle_skilled_heritage_choice(self, status: "Status", data: dict) -> None:
+        choices = list(data.get("skilled_heritage_choices") or self._base_skill_choices())
+        if not choices:
+            return
+        chosen_skill = self._pick_choice_id(
+            "Skilled Heritage: wybierz skill",
+            choices,
+            source="status",
+        )
+        if not chosen_skill:
+            return
+        self._replace_status_data(
+            status,
+            {
+                "skilled_heritage_skill": chosen_skill,
+                "trained_skills": [chosen_skill],
+            },
+        )
+        self._ui_log(f"Skilled Heritage: wybrano {self._labelize_choice(chosen_skill)}.")
+
+    def _handle_natural_skill_choice(self, status: "Status", data: dict) -> None:
+        count = int(data.get("natural_skill_choices_count", 2) or 2)
+        choices = list(data.get("natural_skill_choices") or self._base_skill_choices())
+        if count <= 0 or not choices:
+            return
+
+        picked: list[str] = []
+        for index in range(count):
+            available = [item for item in choices if item not in picked]
+            if not available:
+                break
+            chosen_skill = self._pick_choice_id(
+                f"Natural Skill: wybierz skill ({index + 1}/{count})",
+                available,
+                source="status",
+            )
+            if not chosen_skill:
+                continue
+            picked.append(chosen_skill)
+
+        if not picked:
+            return
+        self._replace_status_data(
+            status,
+            {
+                "trained_skills": picked,
+                "natural_skill_selected_skills": picked,
+            },
+        )
+        self._ui_log(
+            "Natural Skill: wybrano "
+            + ", ".join(self._labelize_choice(item) for item in picked)
+            + "."
+        )
+
+    def _handle_unconventional_weaponry_choice(self, status: "Status", data: dict) -> None:
+        choices = list(data.get("unconventional_weaponry_choices") or [])
+        if not choices:
+            return
+        chosen_weapon = self._pick_choice_id(
+            "Unconventional Weaponry: wybierz broń",
+            choices,
+            source="status",
+        )
+        if not chosen_weapon:
+            return
+
+        advanced_choices = {
+            str(item).strip().lower()
+            for item in list(data.get("unconventional_weaponry_advanced_choices") or [])
+            if str(item).strip()
+        }
+        chosen_is_advanced = chosen_weapon in advanced_choices
+        if chosen_is_advanced and not self._has_martial_weapon_training():
+            self._ui_log(
+                "Unconventional Weaponry: advanced weapon wymaga trained we wszystkich martial weapons."
+            )
+            return
+
+        counts_as = "martial" if chosen_is_advanced else "simple"
+        category_from = "advanced" if chosen_is_advanced else "martial"
+        category_to = counts_as
+
+        self._replace_status_data(
+            status,
+            {
+                "weapon_name": chosen_weapon,
+                "counts_as": counts_as,
+                "weapon_proficiency_overrides": {chosen_weapon: "trained"},
+                "weapon_access_names": [chosen_weapon],
+                "weapon_category_adjustments": [
+                    {
+                        "required_tag": chosen_weapon,
+                        "from": category_from,
+                        "to": category_to,
+                    }
+                ],
+            },
+        )
+        self._ui_log(
+            "Unconventional Weaponry: "
+            f"{self._labelize_choice(chosen_weapon)} traktowana jako {self._labelize_choice(category_to)}."
+        )
+
+    def _handle_elf_atavism_choice(self, status: "Status", data: dict) -> None:
+        choices = list(data.get("elf_atavism_choices") or [])
+        if not choices:
+            return
+        chosen_heritage = self._pick_choice_id(
+            "Elf Atavism: wybierz elf heritage",
+            choices,
+            source="status",
+        )
+        if not chosen_heritage:
+            return
+
+        heritage_registry = {
+            "arctic_elf": ("statuses.race.elfs.heritages.arctic_elf", "ARCTIC_ELF_STATUS"),
+            "cavern_elf": ("statuses.race.elfs.heritages.cavern_elf", "CAVERN_ELF_STATUS"),
+            "seer_elf": ("statuses.race.elfs.heritages.seer_elf", "SEER_ELF_STATUS"),
+            "whisper_elf": ("statuses.race.elfs.heritages.whisper_elf", "WHISPER_ELF_STATUS"),
+            "woodland_elf": ("statuses.race.elfs.heritages.woodland_elf", "WOODLAND_ELF_STATUS"),
+        }
+        heritage_status = self._resolve_status_from_registry(chosen_heritage, heritage_registry)
+        self._replace_status_data(status, {"elf_atavism_choice": chosen_heritage})
+        if heritage_status is None:
+            self._ui_log(f"Elf Atavism: nie znaleziono heritage {chosen_heritage}.")
+            return
+        self.add_status(heritage_status)
+        self._ui_log(f"Elf Atavism: wybrano {self._labelize_choice(chosen_heritage)}.")
 
     def _handle_natural_ambition_choice(self, status: "Status", data: dict) -> None:
         class_id = self._actor_class_id()
@@ -2737,12 +3438,97 @@ class StatusMixin:
         status_id = status.id if isinstance(status, Status) else str(status)
         return any(s.id == status_id for s in self.statuses)
 
+    def _prepare_incoming_status(self, status: "Status") -> "Status":
+        data = dict(getattr(status, "data", None) or {})
+        status_id = str(getattr(status, "id", "") or "").strip().lower()
+        changed = False
+
+        if status_id in {"elven_lore", "goblin_lore", "halfling_lore"}:
+            data["_pre_add_trained_skills"] = sorted(self._trained_skill_ids())
+            changed = True
+
+        if status_id == "city_scavenger":
+            wants_bonus = 2 if self.has_status("irongut_goblin") else 1
+            try:
+                current_bonus = int(data.get("city_scavenger_bonus", 1) or 1)
+            except Exception:
+                current_bonus = 1
+            if current_bonus != wants_bonus:
+                try:
+                    from statuses.race.goblin.feats.city_scavenger import CityScavengerStatus
+
+                    status = CityScavengerStatus(bonus=wants_bonus)
+                    data = dict(getattr(status, "data", None) or {})
+                    changed = False
+                except Exception:
+                    pass
+
+        if status_id == "irongut_goblin":
+            try:
+                from statuses.race.goblin.feats.city_scavenger import CityScavengerStatus
+            except Exception:
+                CityScavengerStatus = None  # type: ignore[assignment]
+            if CityScavengerStatus is not None:
+                for idx, existing in enumerate(list(self.statuses or [])):
+                    if getattr(existing, "id", None) != "city_scavenger":
+                        continue
+                    existing_data = getattr(existing, "data", None) or {}
+                    try:
+                        existing_bonus = int(existing_data.get("city_scavenger_bonus", 1) or 1)
+                    except Exception:
+                        existing_bonus = 1
+                    if existing_bonus >= 2:
+                        continue
+                    try:
+                        self.statuses[idx] = CityScavengerStatus(bonus=2)
+                    except Exception:
+                        continue
+
+        if status_id != "wellspring_gnome":
+            wellspring_tradition = self._selected_wellspring_tradition()
+            if wellspring_tradition and bool(data.get("gnome_primal_innate_source")):
+                data = self._apply_gnome_primal_innate_override(data, wellspring_tradition)
+                changed = True
+
+        if status_id not in {"unwavering_mien"} and self.has_status("unwavering_mien"):
+            tags = {
+                str(item).strip().lower()
+                for item in list(data.get("effect_tags") or [])
+                if str(item).strip()
+            }
+            reduce_by = 0
+            for existing in self.statuses:
+                if getattr(existing, "id", None) != "unwavering_mien":
+                    continue
+                existing_data = getattr(existing, "data", None) or {}
+                try:
+                    reduce_by = max(
+                        reduce_by,
+                        int(existing_data.get("reduce_mental_effect_duration_rounds", 0) or 0),
+                    )
+                except Exception:
+                    continue
+            if reduce_by > 0 and "mental" in tags:
+                duration = getattr(status, "duration", None)
+                if duration is not None:
+                    try:
+                        turns = int(duration)
+                    except Exception:
+                        turns = None
+                    if turns is not None and turns >= 2:
+                        status = replace(status, duration=max(1, turns - reduce_by))
+
+        if changed:
+            status = replace(status, data=data)
+        return status
+
     def add_status(self, status: str | "Status") -> bool:
         """Dodaj status – wymagany obiekt Status (nie string)."""
         from statuses import Status  # lokalny import by unikać cykli
         if not isinstance(status, Status):
             raise TypeError("add_status oczekuje instancji Status.")
         self._ensure_status_objects()
+        status = self._prepare_incoming_status(status)
         if not self._passes_status_prerequisites(status):
             return False
         if self._status_immunity_blocks(status):

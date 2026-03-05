@@ -4,7 +4,10 @@ from damage_types import DamageType
 from statuses.base import Status
 
 ARCTIC_ELF_DESCRIPTION = (
-    "Zmniejsza obrazenia od lodu o 1 na kazde 2 poziomy (minimum 1)."
+    "Cold resistance równa połowie poziomu (minimum 1).\n"
+    "Przykład: poziom 1 = Resist Cold 1, poziom 3 = Resist Cold 2.\n"
+    "Dodatkowo traktujesz środowiskowe efekty zimna jako o 1 stopień mniej ekstremalne "
+    "(hook danych pod przyszłą mechanikę środowiska)."
 )
 
 
@@ -18,6 +21,7 @@ def ArcticElfStatus() -> Status:
             "damage_resistance": {
                 DamageType.COLD.value: {"per_2_levels": 1, "minimum": 1}
             },
+            "cold_environment_step_reduction": 1,
         },
     )
 

@@ -116,7 +116,7 @@ def test_inspire_competence_consumes_action_only_in_combat(monkeypatch):
     assert caster.focus_point == 1
 
 
-def test_inspire_competence_respects_cooperative_nature(monkeypatch):
+def test_inspire_competence_respects_cooperative_nature_as_aid_check_bonus(monkeypatch):
     caster = DummyHero("bard", (0, 0))
     caster.add_status(BARD_STATUS)
     caster.add_status(COOPERATIVE_NATURE_STATUS)
@@ -137,6 +137,5 @@ def test_inspire_competence_respects_cooperative_nature(monkeypatch):
     assert result.success is True
     status = ally.get_status("aided")
     assert status is not None
-    assert status.data.get("bonus") == 4
+    assert status.data.get("bonus") == 2
     assert status.data.get("skill_id") == "arcana"
-
