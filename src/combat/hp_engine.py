@@ -53,31 +53,71 @@ def _status_hp_contributors(actor: Any) -> tuple[int, int]:
     return int(flat), int(per_level)
 
 
+def _status_first_int(actor: Any, keys: tuple[str, ...]) -> int | None:
+    for data in _iter_status_data(actor):
+        for key in keys:
+            if key not in data:
+                continue
+            try:
+                return int(data.get(key))
+            except Exception:
+                continue
+    return None
+
+
+def _drained_reduction(actor: Any, level: int) -> int:
+    try:
+        from statuses import drained_value
+
+        drained = max(0, int(drained_value(actor) or 0))
+        return drained * max(1, int(level))
+    except Exception:
+        return 0
+
+
 def computed_max_hp(actor: Any) -> int | None:
     if actor is None:
         return None
     level = max(1, _safe_int(getattr(actor, "level", 1), 1))
     flat_bonus, per_level = _status_hp_contributors(actor)
 
+    ancestry_hp = getattr(actor, "ancestry_hp", None)
+    if ancestry_hp is None:
+        ancestry_hp = _status_first_int(actor, ("ancestry_hp", "hp_ancestry"))
+    class_hp = getattr(actor, "class_hp", None)
+    if class_hp is None:
+        class_hp = _status_first_int(actor, ("class_hp", "hp_class"))
+    has_component_hp = ancestry_hp is not None or class_hp is not None
+
     base_raw = getattr(actor, "max_hp", None)
+    if has_component_hp:
+        ancestry_val = max(0, _safe_int(ancestry_hp, 0))
+        class_val = max(0, _safe_int(class_hp, 0))
+        base = ancestry_val + class_val
+        if base <= 0:
+            if base_raw is not None:
+                base = _safe_int(base_raw, 0)
+            else:
+                base_hp = getattr(actor, "base_max_hp", None)
+                if base_hp is None:
+                    return None
+                base = _safe_int(base_hp, 0)
+        total = base + flat_bonus + per_level * level
+        total -= _drained_reduction(actor, level)
+        return max(1, total)
+
     if base_raw is None:
         base_hp = getattr(actor, "base_max_hp", None)
         if base_hp is None:
             return None
         base = _safe_int(base_hp, 0)
         total = base + flat_bonus + per_level * level
+        total -= _drained_reduction(actor, level)
         return max(1, total)
 
     base = _safe_int(base_raw, 0)
     total = base + flat_bonus + per_level * level
-    try:
-        from statuses import drained_value
-
-        drained = max(0, int(drained_value(actor) or 0))
-        if drained > 0:
-            total -= drained * level
-    except Exception:
-        pass
+    total -= _drained_reduction(actor, level)
     return max(1, total)
 
 

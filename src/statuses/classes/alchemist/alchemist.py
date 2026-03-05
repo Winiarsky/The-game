@@ -42,6 +42,8 @@ def AlchemistStatus() -> Status:
         label="Alchemist",
         data={
             "ui_prompt": ALCHEMIST_PROMPT,
+            "class_hp": 8,
+            "set_actor_attrs": {"class_name": "alchemist"},
             "grants_statuses": [
                 ALCHEMIST_RESEARCH_FIELD_STATUS,
                 QUICK_ALCHEMY_ALLOW_STATUS,

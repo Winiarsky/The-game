@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-from bonuses import BonusEffect, BonusType
 from damage_types import DamageType
-from skills import Skill
 from statuses.base import Status
-from statuses.check_effects import CheckEffect
 
 STRONG_BLOODED_DESCRIPTION = (
-    "Redukuje obrazenia typu poison o 1 na 2 poziomy (min 1) "
-    "i daje +1 do Fortitude vs poison."
+    "Odporność na poison: 1 na 2 poziomy (min 1).\n"
+    "Po udanym save vs poison: stage -2 (virulent: -1).\n"
+    "Po krytycznym sukcesie: stage -3 (virulent: -2).\n"
+    "Przykład: jad na stage 3, zwykły sukces -> stage 1."
 )
 
 
@@ -22,24 +21,11 @@ def StrongBloodedDwarfStatus() -> Status:
             "damage_resistance": {
                 DamageType.POISON.value: {"per_2_levels": 1, "minimum": 1}
             },
+            "poison_stage_reduction_on_success": 2,
+            "poison_stage_reduction_on_success_virulent": 1,
+            "poison_stage_reduction_on_critical_success": 3,
+            "poison_stage_reduction_on_critical_success_virulent": 2,
         },
-        check_effects=[
-            CheckEffect(
-                applies_to="source",
-                skills=[Skill.FORTITUDE.value],
-                tags_required=["poison"],
-                bonus_effects=[
-                    BonusEffect(
-                        type=BonusType.CIRCUMSTANCE,
-                        value=1,
-                        tag=Skill.FORTITUDE.value,
-                        source="status:strong_blooded_dwarf",
-                        label="strong-blooded",
-                    )
-                ],
-                prompt_notes=["Strong-Blooded"],
-            )
-        ],
     )
 
 

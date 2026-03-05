@@ -36,6 +36,7 @@ def RangerStatus() -> Status:
         label="Ranger",
         data={
             "ui_prompt": RANGER_PROMPT,
+            "class_hp": 10,
             "ui_choice_kind": "ranger_setup",
             "ranger_key_ability_choices": list(RANGER_KEY_ABILITY_CHOICES),
             "ranger_hunters_edge_choices": list(RANGER_HUNTERS_EDGE_CHOICES),

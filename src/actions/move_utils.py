@@ -19,6 +19,143 @@ def _iter_status_data(mover):
             yield data
 
 
+def _safe_int(value, default=0) -> int:
+    try:
+        return int(value)
+    except Exception:
+        return int(default)
+
+
+def _status_first_int(mover, key: str):
+    for data in _iter_status_data(mover):
+        if key in data:
+            try:
+                return int(data.get(key))
+            except Exception:
+                continue
+    return None
+
+
+def _status_max_int(mover, key: str, default: int = 0) -> int:
+    best = int(default)
+    for data in _iter_status_data(mover):
+        if key not in data:
+            continue
+        try:
+            value = int(data.get(key) or 0)
+        except Exception:
+            value = 0
+        if value > best:
+            best = value
+    return best
+
+
+def _status_any_true(mover, key: str) -> bool:
+    for data in _iter_status_data(mover):
+        if bool(data.get(key, False)):
+            return True
+    return False
+
+
+def base_speed_feet(mover, default_feet: int = 25) -> int:
+    """Bazowa prędkość aktora w stopach."""
+    if mover is None:
+        return max(0, _safe_int(default_feet, 25))
+
+    for attr in ("base_speed_feet", "land_speed_feet"):
+        raw = getattr(mover, attr, None)
+        if raw is not None:
+            val = _safe_int(raw, 0)
+            if val > 0:
+                return val
+
+    status_speed = _status_first_int(mover, "base_speed_feet")
+    if status_speed is not None and status_speed > 0:
+        return status_speed
+
+    # kompatybilność z istniejącymi enemy statami
+    distance = getattr(mover, "distance", None)
+    if distance is not None:
+        val = _safe_int(distance, 0)
+        if val > 0:
+            return val
+
+    move_points = getattr(mover, "move_points", None)
+    if move_points is not None:
+        val = _safe_int(move_points, 0) * 5
+        if val > 0:
+            return val
+
+    return max(0, _safe_int(default_feet, 25))
+
+
+def movement_budget_feet(mover, *, default_feet: int = 25) -> int:
+    """Policz budżet ruchu: base speed + bonus - penalty."""
+    base = base_speed_feet(mover, default_feet=default_feet)
+    if mover is None:
+        return max(0, base)
+
+    try:
+        from statuses import speed_bonus_value, speed_penalty_value
+    except Exception:
+        speed_bonus_value = lambda _actor: 0  # type: ignore[assignment]
+        speed_penalty_value = lambda _actor: 0  # type: ignore[assignment]
+
+    bonus = max(0, _safe_int(speed_bonus_value(mover), 0))
+    penalty = max(0, _safe_int(speed_penalty_value(mover), 0))
+
+    armor_penalty = 0
+    for attr in ("armor_speed_penalty_feet", "speed_penalty_armor_feet"):
+        raw = getattr(mover, attr, None)
+        if raw is not None:
+            armor_penalty = max(armor_penalty, max(0, _safe_int(raw, 0)))
+    if _status_any_true(mover, "ignore_armor_move_penalty"):
+        armor_penalty = 0
+
+    # Unburdened Iron: redukcja jednej kary do speed o 5.
+    slow_reduction = _status_max_int(mover, "magical_slow_reduction_feet", default=0)
+    reduced_penalty = penalty
+    if slow_reduction > 0 and reduced_penalty > 0:
+        reduced_penalty = max(0, reduced_penalty - slow_reduction)
+
+    total = base + bonus - reduced_penalty - armor_penalty
+    return max(0, int(total))
+
+
+def forced_movement_distance_feet(target, base_feet: int) -> int:
+    """Skoryguj dystans forced movement na podstawie statusów celu."""
+    base = max(0, _safe_int(base_feet, 0))
+    if target is None or base <= 0:
+        return base
+
+    multiplier = 1.0
+    for data in _iter_status_data(target):
+        if "forced_movement_multiplier" not in data:
+            continue
+        try:
+            mult = float(data.get("forced_movement_multiplier"))
+        except Exception:
+            continue
+        if mult <= 0:
+            continue
+        threshold = _safe_int(data.get("forced_movement_threshold_feet"), 0)
+        if threshold > 0 and base < threshold:
+            continue
+        multiplier = min(multiplier, mult)
+
+    adjusted = int(base * multiplier)
+    return max(0, adjusted)
+
+
+def adjusted_forced_movement_squares(target, squares: int) -> int:
+    """Przelicz forced movement w polach (1 pole = 5 ft)."""
+    base = max(0, _safe_int(squares, 0))
+    if base <= 0:
+        return 0
+    feet = forced_movement_distance_feet(target, base * 5)
+    return max(0, feet // 5)
+
+
 def _ignores_terrain_move_cost(mover, terrain) -> bool:
     if mover is None or terrain is None:
         return False

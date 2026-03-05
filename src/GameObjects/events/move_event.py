@@ -11,7 +11,8 @@ from actions.move_utils import (
     find_path,
     follow_path,
     path_cost_feet,
-    perform_movement,
+    trim_path_to_feet,
+    movement_budget_feet,
     _maybe_dispatch_move_reactions,
     terrain_move_bonus_feet,
 )
@@ -293,9 +294,14 @@ class MoveEvent(GameEvent):
                 return EventResult(success=True, consumed_action=self.consumes_action, message="Ruch wykonany.")
 
             active_path_id: str | None = None
+            pending_target: tuple[int, int] | None = None
             try:
                 while True:
-                    target = self._wait_for_destination(ctx, board)
+                    if pending_target is not None:
+                        target = pending_target
+                        pending_target = None
+                    else:
+                        target = self._wait_for_destination(ctx, board)
                     if target is None or moving_hero.position is None:
                         if active_path_id:
                             game.ui_event("path_clear", {"id": active_path_id})
@@ -306,29 +312,17 @@ class MoveEvent(GameEvent):
                             game.ui_event("path_clear", {"id": active_path_id})
                         return EventResult.noop(message="Ruch bez zmian.")
 
-                    if self._is_adjacent(board, moving_hero.position, target):
-                        start_pos = moving_hero.position
-                        perform_movement(
-                            ctx,
-                            moving_hero,
-                            moving_hero.position,
-                            lambda current: self._validate_neighbors(ctx, current, board.get_neighbors(current)),
-                            led_color=consts.MOVE_FIELD_RGB,
-                            end_message="Zakończono ruch.",
-                            allow_occupied=False,
-                            on_enter=_on_enter_wrapper,
-                        )
-                        _emit_move_event(start_pos, moving_hero.position)
-                        if active_path_id:
-                            game.ui_event("path_clear", {"id": active_path_id})
-                        return EventResult(success=True, consumed_action=self.consumes_action, message="Ruch wykonany.")
-
                     if not board.can_enter(target, allow_occupied=False):
                         logger.info("Pole docelowe %s jest zablokowane lub zajęte.", target)
                         game.ui_log("Nie możesz stanąć na tym polu.")
                         continue
 
-                    path = find_path(
+                    move_budget_feet = movement_budget_feet(moving_hero, default_feet=25)
+                    if move_budget_feet <= 0:
+                        game.ui_log("Nie masz dostępnego budżetu ruchu.")
+                        return EventResult.noop(message="Brak budżetu ruchu.")
+
+                    full_path = find_path(
                         board,
                         moving_hero.position,
                         target,
@@ -336,25 +330,63 @@ class MoveEvent(GameEvent):
                         allow_occupied=False,
                         mover=moving_hero,
                     )
-                    if not path or len(path) <= 1:
+                    if not full_path or len(full_path) <= 1:
                         logger.info("Brak możliwej ścieżki do %s.", target)
                         game.ui_log("Nie da się tam dojść.")
+                        continue
+
+                    path = trim_path_to_feet(full_path, move_budget_feet, board, mover=moving_hero)
+                    if not path or len(path) <= 1:
+                        logger.info("Ścieżka do %s nie mieści się w budżecie %s stóp.", target, move_budget_feet)
+                        game.ui_log("Brak ruchu w dostępnym budżecie.")
                         continue
 
                     path_preview = path[1:]
                     steps = len(path_preview)
                     feet = path_cost_feet(path, board, mover=moving_hero)
+                    full_feet = path_cost_feet(full_path, board, mover=moving_hero)
+                    confirm_target = path[-1]
+                    was_trimmed = confirm_target != target
                     path_id = f"path-{time.time_ns()}"
                     active_path_id = path_id
-                    preview_msg = f"Ścieżka do {target}: {steps} pól / {feet} stóp. Kliknij cel ponownie, aby potwierdzić."
-                    game.ui_event("path_preview", {"id": path_id, "steps": steps, "feet": feet, "target": target})
+                    if was_trimmed:
+                        preview_msg = (
+                            f"Ścieżka do {target} przycięta do {confirm_target}: "
+                            f"{steps} pól / {feet} stóp (pełna: {full_feet} stóp). "
+                            "Kliknij ostatnie podświetlone pole, aby potwierdzić."
+                        )
+                    else:
+                        preview_msg = (
+                            f"Ścieżka do {target}: {steps} pól / {feet} stóp. "
+                            "Kliknij ostatnie podświetlone pole, aby potwierdzić."
+                        )
+                    game.ui_event(
+                        "path_preview",
+                        {
+                            "id": path_id,
+                            "steps": steps,
+                            "feet": feet,
+                            "target": confirm_target,
+                            "requested_target": target,
+                            "trimmed": was_trimmed,
+                            "budget_feet": move_budget_feet,
+                        },
+                    )
                     try:
                         difficult_in_path = any(_is_difficult(pos) for pos in path_preview)
-                        hint_text = "Kliknij pole docelowe, aby wykonać ruch lub inne pole, aby ustawić nową ścieżkę."
+                        hint_text = (
+                            "Kliknij ostatnie podświetlone pole, aby wykonać ruch, "
+                            "lub dowolne inne pole, aby ustawić nową ścieżkę."
+                        )
+                        if was_trimmed:
+                            hint_text = (
+                                f"{hint_text} Budżet ruchu: {move_budget_feet} stóp "
+                                f"(pełna ścieżka do celu kosztuje {full_feet} stóp)."
+                            )
                         if difficult_in_path:
                             hint_text = (
                                 f"{hint_text} Uwaga: ścieżka przebiega przez trudny teren "
-                                "(ruch kosztuje +5 stóp za pole, poruszasz się z połową prędkości)."
+                                "(ruch kosztuje +5 stóp za pole)."
                             )
                         game.ui_idle_hint(
                             "Potwierdź ruch",
@@ -366,7 +398,7 @@ class MoveEvent(GameEvent):
                     leds_positions = [moving_hero.position] + path_preview
                     leds_colors = [consts.MOVE_START_RGB]
                     for pos in path_preview:
-                        is_target = pos == target
+                        is_target = pos == confirm_target
                         is_difficult = _is_difficult(pos)
                         if is_target:
                             color = consts.DIFFICULT_FIELD_RGB if is_difficult else consts.MOVE_TARGET_RGB
@@ -376,7 +408,7 @@ class MoveEvent(GameEvent):
                     _set_leds(leds_positions, leds_colors)
                     confirm = game.conn.scan_board(None)
 
-                    if confirm != target:
+                    if confirm != confirm_target:
                         if active_path_id:
                             game.ui_event("path_clear", {"id": active_path_id})
                             active_path_id = None
@@ -394,22 +426,7 @@ class MoveEvent(GameEvent):
                         if target == moving_hero.position:
                             logger.info("Kliknięto bieżące pole – kończę akcję ruchu.")
                             return EventResult.noop(message="Ruch bez zmian.")
-                        if self._is_adjacent(board, moving_hero.position, target):
-                            start_pos = moving_hero.position
-                            perform_movement(
-                                ctx,
-                                moving_hero,
-                                moving_hero.position,
-                                lambda current: self._validate_neighbors(ctx, current, board.get_neighbors(current)),
-                                led_color=consts.MOVE_FIELD_RGB,
-                                end_message="Zakończono ruch.",
-                                allow_occupied=False,
-                                on_enter=_on_enter_wrapper,
-                            )
-                            _emit_move_event(start_pos, moving_hero.position)
-                            if active_path_id:
-                                game.ui_event("path_clear", {"id": active_path_id})
-                            return EventResult(success=True, consumed_action=self.consumes_action, message="Ruch wykonany.")
+                        pending_target = target
                         continue
 
                     fade_on_exit = True

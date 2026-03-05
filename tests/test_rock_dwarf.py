@@ -1,4 +1,5 @@
 from GameObjects.interactions_mixin.skill_check_resolver import resolve_skill_check_with_sources
+from actions.move_utils import adjusted_forced_movement_squares
 from hero import Hero
 from skills import Skill
 from statuses.race.dwarf.heritages.rock_dwarf import ROCK_DWARF_STATUS
@@ -101,3 +102,13 @@ def test_rock_dwarf_no_bonus_without_status(monkeypatch):
 
     assert result.modifier == 0
     assert result.total == result.roll
+
+
+def test_rock_dwarf_forced_movement_multiplier_threshold():
+    target = Hero()
+    target.add_status(ROCK_DWARF_STATUS)
+
+    # 5 ft shove zostaje 5 ft, bo redukcja działa od 10 ft.
+    assert adjusted_forced_movement_squares(target, 1) == 1
+    # 10 ft forced movement -> 5 ft.
+    assert adjusted_forced_movement_squares(target, 2) == 1

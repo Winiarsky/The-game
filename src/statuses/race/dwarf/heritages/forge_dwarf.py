@@ -4,7 +4,8 @@ from statuses.base import Status
 from damage_types import DamageType
 
 FORGE_DWARF_DESCRIPTION = (
-    "Zmniejsza obrazenia od ognia o 1 na kazde 2 poziomy (minimum 1)."
+    "Odporność na fire: 1 na 2 poziomy (minimum 1).\n"
+    "Przykład: poziom 3 i cios za 7 fire -> redukcja 2, dostajesz 5."
 )
 
 

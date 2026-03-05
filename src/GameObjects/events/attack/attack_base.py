@@ -1147,11 +1147,11 @@ class AttackEventBase(GameEvent):
         return base_damage_type
 
     def _maybe_prompt_vengeful_hatred(self, attacker, target) -> None:
-        """Pokaż informację o +1 do obrażeń vs wybrany typ przeciwnika (bez naliczania)."""
+        """Pokaż informację o aktywnym Vengeful Hatred."""
         getter = getattr(attacker, "get_status_data", None)
         if callable(getter):
             enemy_type = getter("vengeful_hatred", "enemy_type", None)
-            bonus = getter("vengeful_hatred", "damage_bonus", 1)
+            bonus = getter("vengeful_hatred", "damage_bonus_per_die", getter("vengeful_hatred", "damage_bonus", 1))
         else:
             enemy_type = None
             bonus = 1
@@ -1160,7 +1160,7 @@ class AttackEventBase(GameEvent):
                     continue
                 data = getattr(status, "data", {}) or {}
                 enemy_type = data.get("enemy_type")
-                bonus = data.get("damage_bonus", 1)
+                bonus = data.get("damage_bonus_per_die", data.get("damage_bonus", 1))
                 break
         if not enemy_type:
             return
@@ -1177,10 +1177,34 @@ class AttackEventBase(GameEvent):
             get_ui_client().prompt_info(
                 "Vengeful Hatred",
                 prompt_long=(
-                    f"Bonus do obrazen +{int(bonus)} vs {enemy_type_norm}. "
-                    "Dodaj recznie do wyniku."
+                    f"Vengeful Hatred aktywne vs {enemy_type_norm}: +{int(bonus)} za każdą kość obrażeń broni/unarmed. "
+                    "Bonus jest doliczany automatycznie."
                 ),
                 source="vengeful_hatred",
             )
         except Exception:
             return
+
+    def _vengeful_hatred_damage_bonus(self, attacker, target, *, weapon_dice: int = 1) -> int:
+        try:
+            from statuses.race.dwarf.feats.vengeful_hatred import vengeful_hatred_damage_bonus
+
+            return int(vengeful_hatred_damage_bonus(attacker, target, weapon_dice=max(1, int(weapon_dice or 1))) or 0)
+        except Exception:
+            return 0
+
+    def _weapon_attack_roll_bonus(self, attacker, tags: Iterable[str], *, is_ranged: bool) -> dict[str, object]:
+        try:
+            from combat.weapon_proficiency import compute_weapon_attack_roll_bonus
+
+            return dict(
+                compute_weapon_attack_roll_bonus(
+                    attacker,
+                    weapon_tags=list(tags or []),
+                    is_ranged=bool(is_ranged),
+                    finesse=self._has_trait(tags, "finesse"),
+                )
+                or {}
+            )
+        except Exception:
+            return {"total": 0, "proficiency_bonus": 0, "ability_bonus": 0, "item_bonus": 0}

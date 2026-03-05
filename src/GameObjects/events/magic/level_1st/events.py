@@ -4,6 +4,7 @@ import logging
 import random
 
 from bonuses import BonusEffect, BonusType
+from actions.move_utils import adjusted_forced_movement_squares
 from combat.hp_engine import apply_damage as hp_apply_damage
 from combat.hp_engine import heal as hp_heal
 from damage_types import DamageType
@@ -427,6 +428,9 @@ def _push_target_linear(ctx: EventContext, target, *, from_pos: tuple[int, int],
     board = ctx.game.board
     pos = getattr(target, "position", None)
     if pos is None:
+        return 0
+    squares = adjusted_forced_movement_squares(target, squares)
+    if squares <= 0:
         return 0
     dx = pos[0] - from_pos[0]
     dy = pos[1] - from_pos[1]

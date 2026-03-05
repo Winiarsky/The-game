@@ -66,6 +66,7 @@ def DruidStatus() -> Status:
         label="Druid",
         data={
             "ui_prompt": DRUID_PROMPT,
+            "class_hp": 8,
             "ui_choice_kind": "druid_setup",
             "druid_order_choices": list(DRUID_ORDER_CHOICES),
             "druid_order_skills": dict(DRUID_ORDER_SKILLS),

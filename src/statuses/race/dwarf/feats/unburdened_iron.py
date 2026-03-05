@@ -3,9 +3,9 @@ from __future__ import annotations
 from statuses.base import Status
 
 UNBURDENED_IRON_DESCRIPTION = (
-    "Nie otrzymujesz kary do zasiegu ruchu za pancerz oraz redukujesz efekty "
-    "magicznego spowolnienia o 5, czyli jesli jakis czar zwolni Cie o 10 stop, "
-    "zwalnia Cie tylko o 5. Efekt nie dziala na trudnosci terenu."
+    "Ignorujesz karę do Speed z pancerza i zmniejszasz jedną karę do Speed o 5 ft.\n"
+    "Przykład: masz speed penalty -10 ft -> z Unburdened Iron działa jako -5 ft.\n"
+    "Nie redukuje kosztu trudnego terenu."
 )
 
 

@@ -259,6 +259,7 @@ def ClericStatus() -> Status:
         label="Cleric",
         data={
             "ui_prompt": CLERIC_PROMPT,
+            "class_hp": 8,
             "ui_choice_kind": "cleric_setup",
             "cleric_key_ability_choices": list(CLERIC_KEY_ABILITY_CHOICES),
             "cleric_doctrine_choices": list(CLERIC_DOCTRINE_CHOICES),

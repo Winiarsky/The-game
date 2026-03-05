@@ -38,6 +38,7 @@ def MonkStatus() -> Status:
         label="Monk",
         data={
             "ui_prompt": MONK_PROMPT,
+            "class_hp": 10,
             "ui_choice_kind": "monk_setup",
             "monk_key_ability_choices": list(MONK_KEY_ABILITY_CHOICES),
             "monk_feat_choices": list(MONK_FEAT_CHOICES),

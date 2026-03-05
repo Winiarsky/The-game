@@ -558,12 +558,21 @@ class BaseRangeAttackEvent(AttackEventBase):
             modifier, best_effects, log_lines = self._attack_modifier_details(
                 hero, action_tag, target=enemy, extra_effects=extra_effects
             )
+            weapon_attack_bonus = self._weapon_attack_roll_bonus(hero, tags, is_ranged=True)
+            weapon_roll_mod = int(weapon_attack_bonus.get("total", 0) or 0)
             if log_lines:
                 try:
                     game.ui_log(f"Modyfikatory ({action_tag}): {', '.join(log_lines)}.")
                 except Exception:
                     pass
             prompt_long = f"Modyfikator łączny: {modifier:+d} (doliczany automatycznie)."
+            if weapon_roll_mod:
+                prompt_long = (
+                    f"{prompt_long}\nBonus broni: {weapon_roll_mod:+d} "
+                    f"(prof {int(weapon_attack_bonus.get('proficiency_bonus', 0) or 0):+d}, "
+                    f"ability {int(weapon_attack_bonus.get('ability_bonus', 0) or 0):+d}, "
+                    f"item {int(weapon_attack_bonus.get('item_bonus', 0) or 0):+d})."
+                )
             if trait_notes:
                 prompt_long = f"{prompt_long}\n" + "\n".join(trait_notes)
 
@@ -584,7 +593,7 @@ class BaseRangeAttackEvent(AttackEventBase):
                 roll = int(roll_data or 0)
                 natural_shift = natural_shift_from_roll(roll)
 
-            total_roll = roll + modifier
+            total_roll = roll + modifier + weapon_roll_mod
             self._consume_aid_attack_bonus(hero, action_tag=action_tag)
             self._consume_monster_hunter_bonus(hero)
             outcome = resolve_outcome(total_roll, target_ac, natural_shift=natural_shift)
@@ -775,6 +784,11 @@ class BaseRangeAttackEvent(AttackEventBase):
             except Exception:
                 pass
             dice_count = self._damage_dice_count(effective_damage_prompt)
+            weapon_dice = max(1, int(dice_count or 1))
+            vengeful_bonus = self._vengeful_hatred_damage_bonus(hero, enemy, weapon_dice=weapon_dice)
+            if vengeful_bonus:
+                damage_bonus += vengeful_bonus
+                damage_notes.append(f"Vengeful Hatred: +{vengeful_bonus} obrażeń (doliczone).")
             if self._has_trait(tags, "versatile") and not self._tag_value(tags, "versatile"):
                 damage_notes.append("Versatile: brak typu w tagu (np. versatile:p) – wybierz ręcznie.")
             deadly_tag = self._tag_value(tags, "deadly")

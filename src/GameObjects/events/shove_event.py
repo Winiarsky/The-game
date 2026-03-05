@@ -4,6 +4,7 @@ import logging
 
 from board import consts
 from skills import Skill
+from actions.move_utils import adjusted_forced_movement_squares
 from GameObjects.interactions_mixin import resolve_skill_check_with_sources, compute_skill_modifier_with_sources
 from statuses import PRONE_STATUS, apply_prone_effects
 
@@ -67,6 +68,9 @@ class ShoveEvent(ActionCostEvent):
         source_pos = getattr(ctx.actor, "position", None)
         target_pos = getattr(target, "position", None)
         if source_pos is None or target_pos is None:
+            return False
+        steps = adjusted_forced_movement_squares(target, steps)
+        if steps <= 0:
             return False
         dx = target_pos[0] - source_pos[0]
         dy = target_pos[1] - source_pos[1]

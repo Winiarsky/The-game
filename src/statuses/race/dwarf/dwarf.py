@@ -22,6 +22,11 @@ def DwarfStatus() -> Status:
         label="Dwarf",
         data={
             "ui_description": DWARF_DESCRIPTION,
+            "ancestry_hp": 10,
+            "base_speed_feet": 20,
+            "size": "medium",
+            "ancestry_traits": ["dwarf", "humanoid"],
+            "ancestry_languages": ["common", "dwarven"],
             "grants_statuses": [DARKVISION_STATUS],
         },
     )

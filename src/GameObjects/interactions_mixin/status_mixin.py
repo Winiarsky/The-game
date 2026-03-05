@@ -2893,6 +2893,12 @@ class StatusMixin:
         self._ensure_status_objects()
         if not self.statuses:
             return 0
+        try:
+            from statuses.race.dwarf.feats.vengeful_hatred import tick_vengeful_hatred_rounds
+
+            tick_vengeful_hatred_rounds(self)
+        except Exception:
+            pass
         remaining: list[Status] = []
         removed = 0
         for status in self.statuses:

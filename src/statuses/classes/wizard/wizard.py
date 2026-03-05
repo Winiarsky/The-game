@@ -101,6 +101,7 @@ def WizardStatus() -> Status:
         label="Wizard",
         data={
             "ui_prompt": WIZARD_PROMPT,
+            "class_hp": 6,
             "ui_choice_kind": "wizard_setup",
             "wizard_key_ability_choices": list(WIZARD_KEY_ABILITY_CHOICES),
             "wizard_arcane_study_choices": list(WIZARD_ARCANE_STUDY_CHOICES),

@@ -35,6 +35,8 @@ def BarbarianStatus() -> Status:
         label="Barbarian",
         data={
             "ui_prompt": BARBARIAN_PROMPT,
+            "class_hp": 12,
+            "set_actor_attrs": {"class_name": "barbarian"},
         },
     )
 

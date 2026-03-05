@@ -242,6 +242,7 @@ def SorcererStatus() -> Status:
         label="Sorcerer",
         data={
             "ui_prompt": SORCERER_PROMPT,
+            "class_hp": 6,
             "ui_choice_kind": "sorcerer_setup",
             "sorcerer_key_ability_choices": list(SORCERER_KEY_ABILITY_CHOICES),
             "sorcerer_bloodline_choices": list(SORCERER_BLOODLINE_CHOICES),

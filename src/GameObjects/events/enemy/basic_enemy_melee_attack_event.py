@@ -6,7 +6,9 @@ import random
 from board import consts
 from combat import effective_ac
 from combat.hp_engine import apply_damage as hp_apply_damage
+from combat.degree_of_success import is_critical_success, natural_shift_from_roll, resolve_outcome
 from damage_types import DamageType
+from statuses.race.dwarf.feats.vengeful_hatred import grant_vengeful_hatred_revenge
 
 from ..base import EventContext, EventResult, GameEvent
 from ..attack.attack_base import check_concealed
@@ -75,9 +77,12 @@ class BasicEnemyMeleeAttackEvent(GameEvent):
                 extra_mod = 0
         if self._consume_familiar_distract(enemy):
             extra_mod -= 1
-        roll = random.randint(1, 20) + attack_bonus + extra_mod
+        natural_roll = random.randint(1, 20)
+        roll = natural_roll + attack_bonus + extra_mod
 
         target_ac = effective_ac(hero)
+        outcome = resolve_outcome(roll, target_ac, natural_shift=natural_shift_from_roll(natural_roll))
+        critical_hit = is_critical_success(outcome)
         clumsy_note = None
         try:
             from statuses.clumsy import clumsy_ac_prompt_note
@@ -88,7 +93,7 @@ class BasicEnemyMeleeAttackEvent(GameEvent):
 
         prompt = (
             f"{getattr(enemy, 'name', 'wróg')} {self.weapon_label} na {target_pos}: "
-            f"r={roll} (1d20 + {attack_bonus} {'+' if extra_mod >=0 else ''}{extra_mod}). "
+            f"r={roll} (1d20={natural_roll} + {attack_bonus} {'+' if extra_mod >=0 else ''}{extra_mod}). "
             f"AC celu: {target_ac}. "
             "Potwierdź trafienie: ACCEPT/DECLINE"
         )
@@ -101,7 +106,12 @@ class BasicEnemyMeleeAttackEvent(GameEvent):
             return EventResult(success=True, consumed_action=True, message="Atak odrzucony.")
 
         damage = self.roll_damage(enemy)
-        self.apply_damage(hero, damage)
+        hp_dealt = self.apply_damage(hero, damage)
+        if critical_hit and hp_dealt > 0:
+            try:
+                grant_vengeful_hatred_revenge(hero, enemy, rounds=10)
+            except Exception:
+                pass
 
         dmg_msg = (
             f"{getattr(enemy, 'name', 'wróg')} zadaje {damage} obrażeń "
@@ -163,16 +173,30 @@ class BasicEnemyMeleeAttackEvent(GameEvent):
         strength = getattr(enemy, self.strength_attr, 0)
         return random.randint(1, self.damage_die_sides) + strength
 
-    def apply_damage(self, hero, damage: int) -> None:
+    def apply_damage(self, hero, damage: int) -> int:
         # Minimalny zapis: zwiększ rany; jeśli istnieje metoda apply_damage, użyj jej.
+        before_hp = None
+        current_hp = getattr(hero, "current_hp", None)
+        if callable(current_hp):
+            try:
+                before_hp = int(current_hp())
+            except Exception:
+                before_hp = None
         apply = getattr(hero, "apply_damage", None)
         if callable(apply):
             try:
                 apply(damage, self.damage_type)
-                return
+                if before_hp is not None and callable(current_hp):
+                    try:
+                        after_hp = int(current_hp())
+                        return max(0, before_hp - after_hp)
+                    except Exception:
+                        return max(0, int(damage))
+                return max(0, int(damage))
             except Exception:
                 pass
         try:
-            hp_apply_damage(hero, damage, self.damage_type, source=f"enemy_attack:{self.action_id_base}")
+            info = hp_apply_damage(hero, damage, self.damage_type, source=f"enemy_attack:{self.action_id_base}")
+            return max(0, int((info or {}).get("hp_damage", 0) or 0))
         except Exception:
-            pass
+            return 0

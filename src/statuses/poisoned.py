@@ -18,6 +18,7 @@ def PoisonedStatus(
     stages: Sequence[dict[str, object]] | None = None,
     stage: int | None = None,
     onset: int | None = None,
+    virulent: bool = False,
 ) -> Status:
     """Status: Poisoned (czasowy, z testem Fortitude co turę, opcjonalne stage'e)."""
     return Status(
@@ -32,6 +33,7 @@ def PoisonedStatus(
             "stages": list(stages) if stages else None,
             "stage": int(stage) if stage is not None else None,
             "onset": int(onset) if onset is not None else None,
+            "virulent": bool(virulent),
         },
     )
 
@@ -48,6 +50,46 @@ def _poison_damage_for_outcome(base_damage: int, outcome: str) -> int:
 
 def _shift_stage(current: int, delta: int, max_stage: int) -> int:
     return max(0, min(max_stage, current + delta))
+
+
+def _stage_reduction_override(actor, *, outcome: str, virulent: bool) -> int | None:
+    if actor is None:
+        return None
+    key_base = {
+        "success": "poison_stage_reduction_on_success",
+        "critical_success": "poison_stage_reduction_on_critical_success",
+    }.get(str(outcome), "")
+    if not key_base:
+        return None
+    key = f"{key_base}_virulent" if virulent else key_base
+    best = None
+    for status in getattr(actor, "statuses", []) or []:
+        data = getattr(status, "data", None)
+        if not isinstance(data, dict):
+            continue
+        if key not in data:
+            continue
+        try:
+            value = int(data.get(key) or 0)
+        except Exception:
+            continue
+        if value <= 0:
+            continue
+        if best is None or value > best:
+            best = value
+    return best
+
+
+def _stage_shift_for_outcome(actor, *, outcome: str, virulent: bool) -> int:
+    raw = str(outcome or "")
+    if raw == "failure":
+        return 1
+    if raw == "critical_failure":
+        return 2
+    default_reduction = 2 if raw == "critical_success" else 1
+    override = _stage_reduction_override(actor, outcome=raw, virulent=virulent)
+    reduction = int(override if override is not None else default_reduction)
+    return -max(0, reduction)
 
 
 def _parse_dice(dice: str) -> tuple[int, int, int]:
@@ -211,13 +253,12 @@ def process_poisoned(actor, game) -> None:
 
         if stages:
             max_stage = len(stages)
-            delta_map = {
-                "critical_success": -2,
-                "success": -1,
-                "failure": 1,
-                "critical_failure": 2,
-            }
-            stage = _shift_stage(stage, delta_map.get(result.outcome, 0), max_stage)
+            stage_data = stages[stage - 1] if 0 < stage <= len(stages) else {}
+            virulent = bool(data.get("virulent", False))
+            if isinstance(stage_data, dict):
+                virulent = virulent or bool(stage_data.get("virulent", False))
+            shift = _stage_shift_for_outcome(actor, outcome=result.outcome, virulent=virulent)
+            stage = _shift_stage(stage, shift, max_stage)
             if stage <= 0:
                 try:
                     remover = getattr(actor, "remove_status", None)

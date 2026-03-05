@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from statuses.base import Status
 
-ROCK_RUNNER_DESCRIPTION = "Ignorujesz kary do ruchu za trudny kamienisty teren."
+ROCK_RUNNER_DESCRIPTION = (
+    "Ignorujesz dodatkowy koszt ruchu od rumble/kamienistego terenu.\n"
+    "Przykład: wejście na rumble zwykle kosztuje 10 ft, z Rock Runner kosztuje 5 ft."
+)
 
 
 def RockRunnerStatus() -> Status:

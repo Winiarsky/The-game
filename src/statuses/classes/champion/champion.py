@@ -50,6 +50,7 @@ def ChampionStatus() -> Status:
         label="Champion",
         data={
             "ui_prompt": CHAMPION_PROMPT,
+            "class_hp": 10,
             "ui_choice_kind": "champion_setup",
             "champion_key_ability_choices": list(CHAMPION_KEY_ABILITY_CHOICES),
             "champion_cause_choices": list(CHAMPION_CAUSE_CHOICES),

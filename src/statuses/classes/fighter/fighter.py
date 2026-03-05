@@ -27,6 +27,7 @@ def FighterStatus() -> Status:
         label="Fighter",
         data={
             "ui_prompt": FIGHTER_PROMPT,
+            "class_hp": 10,
             "ui_choice_kind": "fighter_setup",
             "fighter_key_ability_choices": list(FIGHTER_KEY_ABILITY_CHOICES),
             "set_actor_attrs": {"class_name": "fighter"},

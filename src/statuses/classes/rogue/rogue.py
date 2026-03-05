@@ -29,6 +29,7 @@ def RogueStatus() -> Status:
         label="Rogue",
         data={
             "ui_prompt": ROGUE_PROMPT,
+            "class_hp": 8,
             "ui_choice_kind": "rogue_setup",
             "rogue_racket_choices": list(ROGUE_RACKET_CHOICES),
             "rogue_feat_choices": list(ROGUE_FEAT_CHOICES),

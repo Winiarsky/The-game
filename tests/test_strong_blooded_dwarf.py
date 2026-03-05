@@ -31,7 +31,7 @@ def _set_dummy_ui(monkeypatch):
     return dummy
 
 
-def test_strong_blooded_poison_save_bonus(monkeypatch):
+def test_strong_blooded_no_longer_adds_flat_fort_bonus(monkeypatch):
     _set_dummy_ui(monkeypatch)
     hero_no = Hero()
     hero_yes = Hero()
@@ -53,8 +53,8 @@ def test_strong_blooded_poison_save_bonus(monkeypatch):
     )
 
     assert res_no.modifier == 0
-    assert res_yes.modifier == 1
-    assert res_yes.total == res_yes.roll + 1
+    assert res_yes.modifier == 0
+    assert res_yes.total == res_yes.roll
 
 
 def test_strong_blooded_poison_damage_reduction(monkeypatch):
@@ -78,3 +78,38 @@ def test_strong_blooded_poison_damage_reduction(monkeypatch):
 
     assert hero_no.wounds == 5
     assert hero_yes.wounds == 3
+
+
+def test_strong_blooded_reduces_stage_by_two_on_success(monkeypatch):
+    monkeypatch.setattr(
+        "statuses.poisoned.resolve_skill_check_with_sources",
+        lambda *_args, **_kwargs: SimpleNamespace(outcome="success"),
+    )
+
+    hero = Hero()
+    hero.add_status(STRONG_BLOODED_DWARF_STATUS)
+    stages = [{"damage": 0}, {"damage": 0}, {"damage": 0}, {"damage": 0}]
+    hero.add_status(PoisonedStatus(duration=3, damage=0, dc=15, stages=stages, stage=3))
+
+    process_poisoned(hero, game=SimpleNamespace(ui_log=lambda *_a, **_k: None, ui_event=lambda *_a, **_k: None))
+    status = hero.get_status("poisoned")
+    assert status is not None
+    assert int(status.data.get("stage", 0) or 0) == 1
+
+
+def test_strong_blooded_virulent_stage_reduction_is_lower(monkeypatch):
+    monkeypatch.setattr(
+        "statuses.poisoned.resolve_skill_check_with_sources",
+        lambda *_args, **_kwargs: SimpleNamespace(outcome="critical_success"),
+    )
+
+    hero = Hero()
+    hero.add_status(STRONG_BLOODED_DWARF_STATUS)
+    stages = [{"damage": 0, "virulent": True}, {"damage": 0}, {"damage": 0}, {"damage": 0}]
+    hero.add_status(PoisonedStatus(duration=3, damage=0, dc=15, stages=stages, stage=4, virulent=True))
+
+    process_poisoned(hero, game=SimpleNamespace(ui_log=lambda *_a, **_k: None, ui_event=lambda *_a, **_k: None))
+    status = hero.get_status("poisoned")
+    assert status is not None
+    # virulent: critical success redukuje stage o 2
+    assert int(status.data.get("stage", 0) or 0) == 2

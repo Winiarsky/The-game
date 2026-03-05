@@ -31,7 +31,8 @@ def BardStatus() -> Status:
         label="Bard",
         data={
             "ui_prompt": BARD_PROMPT,
-            "set_actor_attrs": {"focus_point": 1},
+            "class_hp": 8,
+            "set_actor_attrs": {"focus_point": 1, "class_name": "bard"},
             "grants_statuses": [INSPIRATION_STATUS, REACH_SPELL_STATUS],
         },
     )

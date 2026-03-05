@@ -6,8 +6,8 @@ from statuses.base import Status
 from statuses.check_effects import CheckEffect
 
 ANCIENT_BLOODED_DESCRIPTION = (
-    "Otrzymujesz akcje specjalna \"Starozytna krew\", jej wykonanie wzmacnia "
-    "pierwszy rzut obronny przeciwko czarom - circumstance bonus +1"
+    "Akcja Ancient Blood: następny save vs magic dostaje +1 circumstance.\n"
+    "Przykład: aktywujesz Ancient Blood przed czarem z save Will -> +1 do rzutu."
 )
 
 
