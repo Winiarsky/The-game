@@ -15,6 +15,7 @@ def WidenSpellStatus() -> Status:
         data={
             "ui_description": WIDEN_SPELL_DESCRIPTION,
             "ui_prompt": WIDEN_SPELL_DESCRIPTION,
+            "allowed_classes": ["druid", "sorcerer", "wizard"],
         },
     )
 

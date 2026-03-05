@@ -14,4 +14,5 @@ __all__: list[str] = [
     "ranger",
     "rogue",
     "sorcerer",
+    "wizard",
 ]

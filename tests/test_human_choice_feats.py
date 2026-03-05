@@ -82,7 +82,7 @@ def test_natural_ambition_without_supported_class_stops_cleanly(monkeypatch):
     monkeypatch.setattr("ui_client.get_ui_client", lambda: ui)
 
     hero = DummyHero()
-    hero.class_name = "wizard"
+    hero.class_name = "inventor"
     hero.add_status(NATURAL_AMBITION_STATUS)
 
     assert hero.get_status_data("natural_ambition", "class_feat", None) is None
@@ -128,6 +128,19 @@ def test_natural_ambition_for_sorcerer_grants_familiar(monkeypatch):
     assert hero.get_status_data("natural_ambition", "class_feat", None) == "familiar"
     assert hero.has_status("familiar")
     assert hero.has_status("FamiliarOwner")
+
+
+def test_natural_ambition_for_wizard_grants_eschew_materials(monkeypatch):
+    ui = DummyUI(["Eschew Materials"])
+    monkeypatch.setattr("ui_client.get_ui_client", lambda: ui)
+
+    hero = DummyHero()
+    hero.class_name = "wizard"
+    hero.add_status(NATURAL_AMBITION_STATUS)
+
+    assert hero.get_status_data("natural_ambition", "class_name", None) == "wizard"
+    assert hero.get_status_data("natural_ambition", "class_feat", None) == "eschew_materials"
+    assert hero.has_status("eschew_materials")
 
 
 def test_adapted_cantrip_records_selected_choices(monkeypatch):

@@ -119,6 +119,11 @@ class StatusMixin:
                 self._handle_sorcerer_setup_choice(status, data)
             except Exception:
                 pass
+        if data.get("ui_choice_kind") == "wizard_setup":
+            try:
+                self._handle_wizard_setup_choice(status, data)
+            except Exception:
+                pass
         if data.get("ui_choice_kind") == "rogue_setup":
             try:
                 self._handle_rogue_setup_choice(status, data)
@@ -447,6 +452,32 @@ class StatusMixin:
                     "WIDEN_SPELL_STATUS",
                 ),
             },
+            "wizard": {
+                "counterspell": (
+                    "statuses.classes.wizard.feats.counterspell",
+                    "COUNTERSPELL_STATUS",
+                ),
+                "eschew_materials": (
+                    "statuses.classes.wizard.feats.eschew_materials",
+                    "ESCHEW_MATERIALS_STATUS",
+                ),
+                "familiar": (
+                    "statuses.classes.wizard.feats.familiar",
+                    "FAMILIAR_STATUS",
+                ),
+                "hand_of_the_apprentice": (
+                    "statuses.classes.wizard.feats.hand_of_the_apprentice",
+                    "HAND_OF_THE_APPRENTICE_STATUS",
+                ),
+                "reach_spell": (
+                    "statuses.classes.wizard.feats.reach_spell",
+                    "REACH_SPELL_STATUS",
+                ),
+                "widen_spell": (
+                    "statuses.classes.wizard.feats.widen_spell",
+                    "WIDEN_SPELL_STATUS",
+                ),
+            },
         }
 
     @staticmethod
@@ -527,11 +558,37 @@ class StatusMixin:
                 return dict(setup)
         return {}
 
+    def _wizard_setup_data(self) -> dict:
+        getter = getattr(self, "get_status_data", None)
+        if callable(getter):
+            try:
+                raw = getter("wizard", "wizard_setup", {})
+                if isinstance(raw, dict):
+                    return dict(raw)
+            except Exception:
+                pass
+        for status in getattr(self, "statuses", []) or []:
+            if getattr(status, "id", None) != "wizard":
+                continue
+            data = getattr(status, "data", None) or {}
+            setup = data.get("wizard_setup")
+            if isinstance(setup, dict):
+                return dict(setup)
+        return {}
+
     def _druid_order_choice(self) -> str | None:
         setup = self._druid_setup_data()
         value = setup.get("order")
         if value is None:
             value = getattr(self, "druid_order", None)
+        raw = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+        return raw or None
+
+    def _wizard_arcane_study_choice(self) -> str | None:
+        setup = self._wizard_setup_data()
+        value = setup.get("arcane_study")
+        if value is None:
+            value = getattr(self, "wizard_arcane_study", None)
         raw = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
         return raw or None
 
@@ -618,6 +675,15 @@ class StatusMixin:
         except Exception:
             return False
 
+    def _is_wizard_actor(self) -> bool:
+        class_name = str(getattr(self, "class_name", "") or "").strip().lower()
+        if class_name == "wizard":
+            return True
+        try:
+            return bool(self.has_status("wizard"))
+        except Exception:
+            return False
+
     def _trained_skill_ids(self) -> set[str]:
         trained: set[str] = set()
 
@@ -652,6 +718,7 @@ class StatusMixin:
                     "champion_setup",
                     "druid_setup",
                     "sorcerer_setup",
+                    "wizard_setup",
                 ):
                     payload = data.get(setup_key)
                     if not isinstance(payload, dict):
@@ -729,6 +796,8 @@ class StatusMixin:
             class_checks = {
                 "druid": self._is_druid_actor,
                 "ranger": self._is_ranger_actor,
+                "sorcerer": self._is_sorcerer_actor,
+                "wizard": self._is_wizard_actor,
             }
             if not any(class_checks.get(cid, lambda: False)() for cid in allowed_classes):
                 if "ranger" in allowed_classes and "druid" not in allowed_classes:
@@ -787,13 +856,19 @@ class StatusMixin:
                 self._ui_log(f"{self._labelize_choice(status_id)}: wymaga klasy Rogue.")
                 return False
 
-        if status_id in {
-            "counterspell",
-            "dangerous_sorcery",
-            "familiar",
-        }:
+        if status_id in {"counterspell", "familiar"}:
+            if not (self._is_sorcerer_actor() or self._is_wizard_actor()):
+                self._ui_log(f"{self._labelize_choice(status_id)}: wymaga klasy Sorcerer lub Wizard.")
+                return False
+
+        if status_id in {"dangerous_sorcery"}:
             if not self._is_sorcerer_actor():
                 self._ui_log(f"{self._labelize_choice(status_id)}: wymaga klasy Sorcerer.")
+                return False
+
+        if status_id in {"eschew_materials", "hand_of_the_apprentice"}:
+            if not self._is_wizard_actor():
+                self._ui_log(f"{self._labelize_choice(status_id)}: wymaga klasy Wizard.")
                 return False
 
         required_trained_skills = {
@@ -820,6 +895,24 @@ class StatusMixin:
             if chosen_order != required_druid_order:
                 self._ui_log(
                     f"{self._labelize_choice(status_id)}: wymaga druid order '{required_druid_order}'."
+                )
+                return False
+
+        required_wizard_arcane_study = (
+            str(status_data.get("requires_wizard_arcane_study", "") or "")
+            .strip()
+            .lower()
+            .replace("-", "_")
+            .replace(" ", "_")
+        )
+        if required_wizard_arcane_study:
+            if not self._is_wizard_actor():
+                self._ui_log(f"{self._labelize_choice(status_id)}: wymaga klasy Wizard.")
+                return False
+            chosen_study = self._wizard_arcane_study_choice()
+            if chosen_study != required_wizard_arcane_study:
+                self._ui_log(
+                    f"{self._labelize_choice(status_id)}: wymaga wizard study '{required_wizard_arcane_study}'."
                 )
                 return False
         return True
@@ -1905,6 +1998,309 @@ class StatusMixin:
             self._ui_log(f"Sorcerer setup: nie znaleziono statusu feata {chosen_feat}.")
             return
         self.add_status(feat_status)
+
+    def _handle_wizard_setup_choice(self, status: "Status", data: dict) -> None:
+        key_ability_choices = list(data.get("wizard_key_ability_choices") or ["intelligence"])
+        arcane_study_choices = list(data.get("wizard_arcane_study_choices") or [])
+        arcane_school_choices = list(data.get("wizard_arcane_school_choices") or [])
+        thesis_choices = list(data.get("wizard_arcane_thesis_choices") or [])
+        feat_choices = list(data.get("wizard_feat_choices") or [])
+        metamagic_feat_choices = list(data.get("wizard_metamagic_feat_choices") or ["reach_spell", "widen_spell"])
+        bonded_item_choices = list(data.get("wizard_bonded_item_choices") or ["wand", "ring", "staff", "weapon", "other_item"])
+        school_initial_spells = dict(data.get("wizard_school_initial_spells") or {})
+        school_focus_spells = dict(data.get("wizard_school_focus_spells") or {})
+
+        try:
+            prepared_cantrips_base = int(data.get("wizard_prepared_cantrips_per_day") or 5)
+        except Exception:
+            prepared_cantrips_base = 5
+        try:
+            prepared_rank1_base = int(data.get("wizard_prepared_rank1_spells_per_day") or 2)
+        except Exception:
+            prepared_rank1_base = 2
+        try:
+            specialist_bonus_cantrip = int(data.get("wizard_specialist_bonus_cantrip") or 1)
+        except Exception:
+            specialist_bonus_cantrip = 1
+
+        chosen_key_ability = (
+            key_ability_choices[0]
+            if len(key_ability_choices) == 1
+            else self._pick_choice_id(
+                "Wizard: wybierz key ability",
+                key_ability_choices,
+                source="status",
+            )
+        )
+        if not chosen_key_ability:
+            return
+
+        if not arcane_study_choices:
+            arcane_study_choices = list(arcane_school_choices)
+            if "universalist" not in arcane_study_choices:
+                arcane_study_choices.append("universalist")
+        chosen_arcane_study = self._pick_choice_id(
+            "Wizard: wybierz arcane school lub universalist",
+            arcane_study_choices,
+            source="status",
+        )
+        if not chosen_arcane_study:
+            return
+        chosen_school = None if chosen_arcane_study == "universalist" else chosen_arcane_study
+
+        chosen_thesis = self._pick_choice_id(
+            "Wizard: wybierz arcane thesis",
+            thesis_choices,
+            source="status",
+        )
+        if not chosen_thesis:
+            return
+
+        available_feat_choices = list(feat_choices)
+        if chosen_arcane_study != "universalist":
+            available_feat_choices = [feat for feat in available_feat_choices if feat != "hand_of_the_apprentice"]
+        chosen_feat = self._pick_choice_id(
+            "Wizard: wybierz 1. poziomowy class feat",
+            available_feat_choices,
+            source="status",
+        )
+        if not chosen_feat:
+            return
+
+        chosen_bonus_feat: str | None = None
+        if chosen_arcane_study == "universalist" and bool(data.get("wizard_universalist_bonus_feat", True)):
+            bonus_pool = [feat for feat in feat_choices if feat != chosen_feat]
+            if bonus_pool:
+                chosen_bonus_feat = self._pick_choice_id(
+                    "Wizard (Universalist): wybierz bonusowy class feat",
+                    bonus_pool,
+                    source="status",
+                )
+                if not chosen_bonus_feat:
+                    return
+
+        chosen_metamagic_feat: str | None = None
+        if chosen_thesis == "metamagical_experimentation":
+            chosen_metamagic_feat = self._pick_choice_id(
+                "Wizard (Metamagical Experimentation): wybierz metamagic feat",
+                metamagic_feat_choices,
+                source="status",
+            )
+            if not chosen_metamagic_feat:
+                return
+
+        bond_source = "item"
+        drain_action = "drain_bonded_item"
+        chosen_bonded_item: str | None = None
+        if chosen_thesis == "improved_familiar_attunement":
+            bond_source = "familiar"
+            drain_action = "drain_familiar"
+        else:
+            chosen_bonded_item = self._pick_choice_id(
+                "Wizard: wybierz bonded item",
+                bonded_item_choices,
+                source="status",
+            )
+            if not chosen_bonded_item and bonded_item_choices:
+                chosen_bonded_item = bonded_item_choices[0]
+            if not chosen_bonded_item:
+                chosen_bonded_item = "wand"
+
+        school_bonus_spell = str(school_initial_spells.get(chosen_school) or "")
+        school_focus_spell = str(school_focus_spells.get(chosen_school) or "")
+        specialist = bool(chosen_school)
+
+        total_prepared_cantrips = prepared_cantrips_base + (specialist_bonus_cantrip if specialist else 0)
+        total_prepared_rank1_slots = prepared_rank1_base + (1 if specialist and bool(data.get("wizard_specialist_bonus_slot_per_rank", True)) else 0)
+
+        try:
+            spellbook_start_cantrips = int(data.get("wizard_spellbook_start_cantrips") or 10)
+        except Exception:
+            spellbook_start_cantrips = 10
+        try:
+            spellbook_start_rank1_spells = int(data.get("wizard_spellbook_start_rank1_spells") or 5)
+        except Exception:
+            spellbook_start_rank1_spells = 5
+        try:
+            spellbook_auto_add_per_level = int(data.get("wizard_spellbook_auto_add_spells_per_level") or 2)
+        except Exception:
+            spellbook_auto_add_per_level = 2
+
+        setup_payload = {
+            "key_ability": chosen_key_ability,
+            "arcane_study": chosen_arcane_study,
+            "school": chosen_school,
+            "thesis": chosen_thesis,
+            "class_feat": chosen_feat,
+            "bonus_class_feat": chosen_bonus_feat,
+            "thesis_metamagic_feat": chosen_metamagic_feat,
+            "spell_tradition": "arcane",
+            "school_bonus_spell": school_bonus_spell,
+            "school_focus_spell": school_focus_spell,
+            "bond_source": bond_source,
+            "bonded_item": chosen_bonded_item,
+            "drain_action": drain_action,
+            "spellbook_start_cantrips": spellbook_start_cantrips,
+            "spellbook_start_rank1_spells": spellbook_start_rank1_spells,
+            "spellbook_auto_add_per_level": spellbook_auto_add_per_level,
+            "prepared_cantrips": total_prepared_cantrips,
+            "prepared_rank1_slots": total_prepared_rank1_slots,
+            "specialist_bonus_cantrip": specialist_bonus_cantrip if specialist else 0,
+            "specialist_bonus_rank1_slot": 1 if specialist else 0,
+        }
+        try:
+            for idx, item in enumerate(self.statuses):
+                if item is status:
+                    new_data = dict(data)
+                    new_data["wizard_setup"] = dict(setup_payload)
+                    new_data["wizard_key_ability"] = chosen_key_ability
+                    new_data["wizard_arcane_study"] = chosen_arcane_study
+                    new_data["wizard_school"] = chosen_school
+                    new_data["wizard_thesis"] = chosen_thesis
+                    new_data["wizard_class_feat"] = chosen_feat
+                    new_data["wizard_bonus_class_feat"] = chosen_bonus_feat
+                    new_data["wizard_thesis_metamagic_feat"] = chosen_metamagic_feat
+                    new_data["wizard_spell_tradition"] = "arcane"
+                    new_data["wizard_school_bonus_spell"] = school_bonus_spell
+                    new_data["wizard_school_focus_spell"] = school_focus_spell
+                    new_data["wizard_bond_source"] = bond_source
+                    new_data["wizard_bonded_item"] = chosen_bonded_item
+                    new_data["wizard_drain_action"] = drain_action
+                    self.statuses[idx] = replace(status, data=new_data)
+                    break
+        except Exception:
+            self._ui_log("Wizard setup: nie udalo sie zapisac wyborow.")
+            return
+
+        for attr, value in (
+            ("wizard_key_ability", chosen_key_ability),
+            ("wizard_arcane_study", chosen_arcane_study),
+            ("wizard_school", chosen_school),
+            ("wizard_thesis", chosen_thesis),
+            ("wizard_class_feat", chosen_feat),
+            ("wizard_bonus_class_feat", chosen_bonus_feat),
+            ("wizard_thesis_metamagic_feat", chosen_metamagic_feat),
+            ("wizard_spell_tradition", "arcane"),
+            ("wizard_school_bonus_spell", school_bonus_spell),
+            ("wizard_school_focus_spell", school_focus_spell),
+            ("wizard_bond_source", bond_source),
+            ("wizard_bonded_item", chosen_bonded_item),
+            ("wizard_drain_action", drain_action),
+        ):
+            try:
+                setattr(self, attr, value)
+            except Exception:
+                pass
+
+        wizard_spellbook = dict(getattr(self, "wizard_spellbook", {}) or {})
+        wizard_spellbook.update(
+            {
+                "cantrips_count": spellbook_start_cantrips,
+                "rank1_spells_count": spellbook_start_rank1_spells,
+                "auto_add_spells_per_level": spellbook_auto_add_per_level,
+                "spell_tradition": "arcane",
+            }
+        )
+        try:
+            setattr(self, "wizard_spellbook", wizard_spellbook)
+        except Exception:
+            pass
+
+        known_school_spells = list(getattr(self, "wizard_school_spells", []) or [])
+        if school_bonus_spell and school_bonus_spell not in known_school_spells:
+            known_school_spells.append(school_bonus_spell)
+        known_focus_spells = list(getattr(self, "wizard_focus_spells", []) or [])
+        if school_focus_spell and school_focus_spell not in known_focus_spells:
+            known_focus_spells.append(school_focus_spell)
+        try:
+            setattr(self, "wizard_school_spells", known_school_spells)
+            setattr(self, "wizard_focus_spells", known_focus_spells)
+            setattr(self, "wizard_prepared_cantrips", total_prepared_cantrips)
+            setattr(self, "wizard_prepared_rank1_slots", total_prepared_rank1_slots)
+        except Exception:
+            pass
+
+        if school_focus_spell:
+            try:
+                current_focus = int(getattr(self, "focus_point", 0) or 0)
+            except Exception:
+                current_focus = 0
+            try:
+                setattr(self, "focus_point", max(1, current_focus))
+            except Exception:
+                pass
+
+        registry = self._class_feat_registry().get("wizard", {})
+        feats_to_apply = [chosen_feat, chosen_bonus_feat, chosen_metamagic_feat]
+        applied_feats: list[str] = []
+        for feat_id in feats_to_apply:
+            if not feat_id:
+                continue
+            if feat_id in applied_feats:
+                continue
+            feat_status = self._resolve_status_from_registry(feat_id, registry)
+            if feat_status is None:
+                self._ui_log(f"Wizard setup: nie znaleziono statusu feata {feat_id}.")
+                continue
+            self.add_status(feat_status)
+            applied_feats.append(str(feat_id))
+
+        if chosen_thesis == "improved_familiar_attunement" and "familiar" not in applied_feats:
+            familiar_status = self._resolve_status_from_registry("familiar", registry)
+            if familiar_status is not None:
+                self.add_status(familiar_status)
+                applied_feats.append("familiar")
+
+        if "hand_of_the_apprentice" in applied_feats:
+            known_focus_spells = list(getattr(self, "wizard_focus_spells", []) or [])
+            if "hand_of_the_apprentice" not in known_focus_spells:
+                known_focus_spells.append("hand_of_the_apprentice")
+            try:
+                setattr(self, "wizard_focus_spells", known_focus_spells)
+            except Exception:
+                pass
+
+        self._ui_log(
+            "Wizard setup: "
+            f"study={self._labelize_choice(chosen_arcane_study)}, "
+            f"thesis={self._labelize_choice(chosen_thesis)}, "
+            f"feat={self._labelize_choice(chosen_feat)}."
+        )
+        if chosen_bonus_feat:
+            self._ui_log(
+                "Wizard setup (Universalist): "
+                f"bonus feat={self._labelize_choice(chosen_bonus_feat)}."
+            )
+        if chosen_metamagic_feat:
+            self._ui_log(
+                "Wizard thesis (Metamagical Experimentation): "
+                f"aktywny feat={self._labelize_choice(chosen_metamagic_feat)}."
+            )
+        if chosen_thesis == "spell_blending":
+            self._ui_log(
+                "Wizard thesis (Spell Blending): "
+                "wymiana slotów jest obsługiwana manualnie podczas daily preparations (prompt reminder)."
+            )
+        if chosen_thesis == "spell_substitution":
+            self._ui_log(
+                "Wizard thesis (Spell Substitution): "
+                "podmiana przygotowanego czaru po 10 minutach jest obsługiwana manualnie (prompt reminder)."
+            )
+        if school_bonus_spell or school_focus_spell:
+            self._ui_log(
+                "Wizard school bonusy: "
+                f"spell={self._labelize_choice(school_bonus_spell)}, "
+                f"focus spell={self._labelize_choice(school_focus_spell)}."
+            )
+        self._ui_log(
+            "Wizard spellbook: "
+            f"{spellbook_start_cantrips} cantrips, {spellbook_start_rank1_spells} rank-1 spells, "
+            f"+{spellbook_auto_add_per_level} spells/level."
+        )
+        self._ui_log(
+            "Wizard prepared today: "
+            f"{total_prepared_cantrips} cantrips, {total_prepared_rank1_slots} rank-1 slots."
+        )
 
     def _handle_rogue_setup_choice(self, status: "Status", data: dict) -> None:
         racket_choices = list(data.get("rogue_racket_choices") or ["ruffian", "scoundrel", "thief"])

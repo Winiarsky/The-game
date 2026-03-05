@@ -206,6 +206,82 @@ class MagicEventResolver:
         return None
 
     @staticmethod
+    def _is_wizard(actor) -> bool:
+        if actor is None:
+            return False
+        checker = getattr(actor, "has_status", None)
+        if callable(checker):
+            try:
+                if bool(checker("wizard")):
+                    return True
+            except Exception:
+                pass
+        class_name = MagicEventResolver._normalize(getattr(actor, "class_name", ""))
+        return class_name == "wizard"
+
+    @staticmethod
+    def _wizard_cast_registry(actor) -> list[dict[str, Any]]:
+        raw = getattr(actor, "wizard_cast_spells_registry", None)
+        if isinstance(raw, list):
+            normalized: list[dict[str, Any]] = []
+            for item in raw:
+                if isinstance(item, dict):
+                    normalized.append(dict(item))
+            return normalized
+        return []
+
+    @staticmethod
+    def _set_wizard_cast_registry(actor, registry: list[dict[str, Any]]) -> None:
+        if actor is None:
+            return
+        payload = [dict(item) for item in registry if isinstance(item, dict)]
+        try:
+            setattr(actor, "wizard_cast_spells_registry", payload)
+        except Exception:
+            pass
+
+    @staticmethod
+    def _record_spell_cast_if_needed(event: MagicEvent, ctx: EventContext, result: EventResult, *, tags: list[str]) -> None:
+        actor = ctx.actor
+        if actor is None:
+            return
+        if not result.success or not result.consumed_action:
+            return
+        if not MagicEventResolver._is_wizard(actor):
+            return
+
+        spell_id = MagicEventResolver._normalize(getattr(event, "name", ""))
+        if not spell_id:
+            return
+
+        normalized_tags = [MagicEventResolver._normalize(tag) for tag in tags]
+        is_focus = "focus" in normalized_tags
+        is_cantrip = "cantrip" in normalized_tags
+        rank = MagicEventResolver._spell_rank_from_tags(tags)
+        if rank is None:
+            if is_focus:
+                try:
+                    rank = max(1, int(focus_spell_rank(actor, minimum=1) or 1))
+                except Exception:
+                    rank = 1
+            elif is_cantrip:
+                rank = 0
+            else:
+                rank = 1
+
+        registry = MagicEventResolver._wizard_cast_registry(actor)
+        registry.append(
+            {
+                "spell_id": spell_id,
+                "rank": int(max(0, rank)),
+                "is_focus": bool(is_focus),
+                "is_cantrip": bool(is_cantrip),
+                "tags": [tag for tag in normalized_tags if tag],
+            }
+        )
+        MagicEventResolver._set_wizard_cast_registry(actor, registry)
+
+    @staticmethod
     def _add_bonus(actor, effect: BonusEffect) -> None:
         if actor is None:
             return
@@ -707,4 +783,8 @@ class MagicEventResolver:
             MagicEventResolver._apply_blood_magic_if_needed(event, ctx, result, tags=event_tags)
         except Exception:
             logger.debug("Blood Magic hook failed for spell %s", getattr(event, "name", "spell"), exc_info=True)
+        try:
+            MagicEventResolver._record_spell_cast_if_needed(event, ctx, result, tags=event_tags)
+        except Exception:
+            logger.debug("Wizard cast registry hook failed for spell %s", getattr(event, "name", "spell"), exc_info=True)
         return result

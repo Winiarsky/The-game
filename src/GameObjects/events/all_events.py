@@ -49,6 +49,7 @@ from . import fighter_feat_events  # noqa: F401
 from . import monk_feat_events  # noqa: F401
 from . import ranger_feat_events  # noqa: F401
 from . import rogue_feat_events  # noqa: F401
+from . import wizard_runtime_events  # noqa: F401
 from . import demoralize_event  # noqa: F401
 from . import feint_event  # noqa: F401
 from . import trap_events  # noqa: F401
@@ -75,6 +76,7 @@ from .magic.focus_spells.cleric import domain_focus_spell_event  # noqa: F401
 from .magic.focus_spells.druid import order_spell_events  # noqa: F401
 from .magic.focus_spells.monk import ki_spell_events  # noqa: F401
 from .magic.focus_spells.sorcerer import sorcerer_focus_spell_events  # noqa: F401
+from .magic.focus_spells.wizard import wizard_school_spell_events  # noqa: F401
 from . import phase_events  # noqa: F401
 from .enemy import enemy_move_event  # noqa: F401
 from .enemy import enemy_attack_melee_event  # noqa: F401
