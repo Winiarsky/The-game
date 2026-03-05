@@ -8,6 +8,7 @@ from statuses.check_effects import CheckEffect
 
 def ClumsyStatus(
     *,
+    value: int | None = None,
     ac_penalty: int = 0,
     reflex_penalty: int = 0,
     ranged_penalty: int = 0,
@@ -18,6 +19,18 @@ def ClumsyStatus(
     label: str | None = None,
 ) -> Status:
     """Status clumsy: kary do AC/Reflex/ataków dystansowych/finesse/Stealth."""
+    if value is not None:
+        base = max(0, int(value))
+        if ac_penalty <= 0:
+            ac_penalty = base
+        if reflex_penalty <= 0:
+            reflex_penalty = base
+        if ranged_penalty <= 0:
+            ranged_penalty = base
+        if finesse_penalty <= 0:
+            finesse_penalty = base
+        if stealth_penalty <= 0:
+            stealth_penalty = base
     data = {
         "clumsy_ac_penalty": int(ac_penalty),
         "clumsy_reflex_penalty": int(reflex_penalty),

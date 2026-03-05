@@ -15,6 +15,7 @@ def RestrainedStatus(*, source_id: str | None = None, maintain_turns_left: int =
         "allow_other_actions_in_meantime": False,
         "blocks_move": True,
         "flat_footed_source": "restrained",
+        "effect_tags": ["restrained", "immobilized", "off_guard"],
     }
     return Status(id="restrained", label="Restrained", data=data)
 

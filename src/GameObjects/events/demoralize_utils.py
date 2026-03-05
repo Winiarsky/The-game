@@ -4,6 +4,7 @@ from typing import Iterable
 
 from bonuses import BonusEffect, BonusType
 from skills import Skill
+from statuses import FrightenedStatus
 from GameObjects.interactions_mixin import compute_skill_modifier_with_sources, resolve_skill_check_with_sources
 from GameObjects.events.base import EventContext, mapping_setdefault_actor
 from GameObjects.events.magic.magic_utils import grid_distance_feet
@@ -157,6 +158,15 @@ def _apply_frightened_penalties(target, *, frightened: int, source_key: str) -> 
     if target is None or frightened <= 0:
         return
     _remove_bonuses_with_prefix(target, f"demoralize:fear:{source_key}")
+    try:
+        remover = getattr(target, "remove_status", None)
+        if callable(remover):
+            remover("frightened")
+        adder = getattr(target, "add_status", None)
+        if callable(adder):
+            adder(FrightenedStatus(value=max(1, int(frightened)), source="demoralize", source_id=source_key))
+    except Exception:
+        pass
     adder = getattr(target, "add_bonus", None)
     if not callable(adder):
         return
@@ -299,4 +309,3 @@ def perform_demoralize(
         "total": int(getattr(result, "total", 0) or 0),
         "message": message,
     }
-

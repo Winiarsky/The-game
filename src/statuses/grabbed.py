@@ -15,6 +15,7 @@ def GrabbedStatus(*, source_id: str | None = None, maintain_turns_left: int = 0)
         "allow_other_actions_in_meantime": False,
         "blocks_move": True,
         "flat_footed_source": "grabbed",
+        "effect_tags": ["grabbed", "immobilized", "off_guard"],
     }
     return Status(id="grabbed", label="Grabbed", data=data)
 

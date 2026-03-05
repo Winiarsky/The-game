@@ -149,7 +149,14 @@ def is_stable(actor: Any) -> bool:
 
 
 def death_threshold(actor: Any) -> int:
-    return 5 if _has_status(actor, "diehard") else 4
+    base = 5 if _has_status(actor, "diehard") else 4
+    try:
+        from .pf2_conditions import doomed_value
+
+        base -= int(doomed_value(actor) or 0)
+    except Exception:
+        pass
+    return max(1, int(base))
 
 
 def recovery_dc(actor: Any) -> int:

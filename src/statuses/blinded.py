@@ -34,7 +34,12 @@ def BlindedStatus() -> Status:
                 ],
             )
         )
-    return Status(id="blinded", label="Blinded", check_effects=effects)
+    return Status(
+        id="blinded",
+        label="Blinded",
+        data={"effect_tags": ["blinded", "visual"], "vision_checks_auto_fail": True},
+        check_effects=effects,
+    )
 
 
 BLINDED_STATUS = BlindedStatus()

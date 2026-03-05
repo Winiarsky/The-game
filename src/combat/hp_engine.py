@@ -70,6 +70,14 @@ def computed_max_hp(actor: Any) -> int | None:
 
     base = _safe_int(base_raw, 0)
     total = base + flat_bonus + per_level * level
+    try:
+        from statuses import drained_value
+
+        drained = max(0, int(drained_value(actor) or 0))
+        if drained > 0:
+            total -= drained * level
+    except Exception:
+        pass
     return max(1, total)
 
 

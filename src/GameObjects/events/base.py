@@ -123,6 +123,20 @@ class GameEvent:
     def run(self, ctx: EventContext) -> EventResult:
         """Wykonaj pełny lifecycle: pre -> execute -> post."""
         actor = ctx.actor
+        if actor is not None:
+            try:
+                from statuses import action_block_reason
+
+                reason = action_block_reason(
+                    actor,
+                    action_tags=self._effective_tags(ctx),
+                    action_name=getattr(self, "name", None),
+                    target=(ctx.metadata or {}).get("target") if isinstance(ctx.metadata, dict) else None,
+                )
+                if reason:
+                    return EventResult.cancelled(message=str(reason))
+            except Exception:
+                pass
         if actor is not None and "move" in self._effective_tags(ctx):
             has_status = getattr(actor, "has_status", None)
             if callable(has_status):

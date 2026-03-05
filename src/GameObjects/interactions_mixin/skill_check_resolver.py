@@ -280,6 +280,17 @@ def resolve_skill_check_with_sources_from_roll(
     else:
         modifier, breakdown, notes, promote_src, demote_src, promote_tgt, demote_tgt, consume_src, consume_tgt, _effects = _precomputed
 
+    try:
+        from statuses.pf2_conditions import forced_skill_outcome
+    except Exception:
+        forced_skill_outcome = None
+    if callable(forced_skill_outcome):
+        forced_outcome, forced_note = forced_skill_outcome(actor, tags=tags)
+    else:
+        forced_outcome, forced_note = (None, None)
+    if forced_note:
+        notes.append(str(forced_note))
+
     def _apply_outcome(current_roll: int, *, shift: int) -> tuple[int, int, str]:
         total_val = current_roll + modifier if apply_modifiers else current_roll
         outcome_val = resolve_skill_check(dc, total_val, natural_shift=shift)
@@ -292,6 +303,8 @@ def resolve_skill_check_with_sources_from_roll(
         return current_roll, total_val, outcome_val
 
     roll, total, outcome = _apply_outcome(roll, shift=natural_shift)
+    if forced_outcome:
+        outcome = str(forced_outcome)
 
     def _has_status(actor_obj, status_id: str) -> bool:
         if actor_obj is None:
@@ -557,6 +570,24 @@ def _collect_modifier_data(
                     )
         except Exception:
             pass
+
+    try:
+        from statuses.pf2_conditions import skill_penalty_value
+
+        extra_penalty = int(skill_penalty_value(actor, skill_id=skill_id, tags=tags) or 0)
+    except Exception:
+        extra_penalty = 0
+    if extra_penalty > 0:
+        all_effects.append(
+            BonusEffect(
+                type=BonusType.STATUS,
+                value=extra_penalty,
+                tag=skill_id,
+                source="status:pf2_condition_penalty",
+                label="conditions",
+                is_penalty=True,
+            )
+        )
 
     is_recall_knowledge = "knowledge" in tags or "recall_knowledge" in tags or "recall-knowledge" in tags
     try:

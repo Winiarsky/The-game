@@ -13,6 +13,7 @@ from statuses import (
     BlindedStatus,
     CharmedStatus,
     EnfeebledStatus,
+    FrightenedStatus,
     FloatingDiskStatus,
     ImmobilizedStatus,
     IllusoryDisguiseStatus,
@@ -918,6 +919,11 @@ class FearEvent(MagicEvent):
 
         if frightened > 0:
             _remove_bonus_prefix(target, "fear:")
+            _remove_statuses(target, "frightened")
+            try:
+                target.add_status(FrightenedStatus(value=frightened, source=self.name, source_id=_actor_id(actor)))
+            except Exception:
+                pass
             duration = 2 if frightened >= 2 else 1
             for tag in ("attack_melee", "attack_ranged", "magic"):
                 try:

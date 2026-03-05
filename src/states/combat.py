@@ -46,6 +46,16 @@ class Combat(State):
         self.status_initiative_penalty: dict[Any, int] = {}
         self.animal_companions: dict[str, Any] = {}
 
+    def _action_limit(self, actor: Any) -> int:
+        base = int(self.ACTION_LIMIT)
+        try:
+            from statuses import action_limit_modifier
+
+            base += int(action_limit_modifier(actor) or 0)
+        except Exception:
+            pass
+        return max(0, min(4, int(base)))
+
     def on_enter(self):
         logger.info("Walka rozpoczęta.")
         self.game.ui_log("Walka rozpoczęta.")
@@ -692,7 +702,7 @@ class Combat(State):
                 existing_used = int(existing_used)
             except Exception:
                 existing_used = 0
-            self.actions_used[actor] = min(self.ACTION_LIMIT, max(base_used, existing_used))
+            self.actions_used[actor] = min(self._action_limit(actor), max(base_used, existing_used))
             reset_react = getattr(actor, "reset_reactions", None)
             if callable(reset_react):
                 try:
@@ -731,6 +741,12 @@ class Combat(State):
     def _tick_end_of_turn_preparation(self, actor) -> None:
         if actor is None:
             return
+        try:
+            from statuses import decrement_end_of_turn_conditions
+
+            decrement_end_of_turn_conditions(actor)
+        except Exception:
+            pass
         changed = 0
         try:
             from GameObjects.items.inventory import tick_alchemical_preparation
@@ -772,11 +788,12 @@ class Combat(State):
         return changed
 
     def _start_turn_actions_used(self, actor) -> int:
+        limit = self._action_limit(actor)
         used = 0
         try:
             from statuses import consume_stunned_actions
 
-            used = min(self.ACTION_LIMIT, max(0, int(consume_stunned_actions(actor) or 0)))
+            used = min(limit, max(0, int(consume_stunned_actions(actor) or 0)))
         except Exception:
             used = 0
         preturn_used = self.out_of_turn_actions_used.pop(actor, 0)
@@ -791,13 +808,13 @@ class Combat(State):
                 if preturn_used > 0:
                     self.game.ui_log(
                         f"{actor_name} ma zużyte {preturn_used} akcji poza turą (reakcje). "
-                        f"Na start tury: {max(0, self.ACTION_LIMIT - used)}/{self.ACTION_LIMIT}."
+                        f"Na start tury: {max(0, limit - used)}/{limit}."
                     )
                 if used - preturn_used > 0:
                     self.game.ui_log(f"{actor_name} jest stunned: traci {used - preturn_used} akcji.")
             except Exception:
                 pass
-        return min(self.ACTION_LIMIT, max(0, int(used)))
+        return min(limit, max(0, int(used)))
 
     def new_reaction_event_uid(self) -> str:
         self._reaction_event_seq = int(self._reaction_event_seq) + 1
@@ -806,6 +823,7 @@ class Combat(State):
     def actions_remaining(self, actor) -> int:
         if actor is None:
             return 0
+        limit = self._action_limit(actor)
         if actor in self.turn_initialized:
             used = self.actions_used.get(actor, 0)
         else:
@@ -814,7 +832,7 @@ class Combat(State):
             used = int(used)
         except Exception:
             used = 0
-        return max(0, int(self.ACTION_LIMIT) - max(0, used))
+        return max(0, int(limit) - max(0, used))
 
     def can_pay_reaction_action_cost(self, actor, *, cost: int = 1) -> bool:
         try:
@@ -832,14 +850,15 @@ class Combat(State):
             spent = 1
         if not self.can_pay_reaction_action_cost(actor, cost=spent):
             return False
+        limit = self._action_limit(actor)
         if actor in self.turn_initialized:
             self.actions_used[actor] = min(
-                self.ACTION_LIMIT,
+                limit,
                 int(self.actions_used.get(actor, 0) or 0) + spent,
             )
         else:
             self.out_of_turn_actions_used[actor] = min(
-                self.ACTION_LIMIT,
+                limit,
                 int(self.out_of_turn_actions_used.get(actor, 0) or 0) + spent,
             )
         try:
@@ -847,11 +866,11 @@ class Combat(State):
             label = reason or "Reakcja"
             self.game.ui_log(
                 f"{getattr(actor, 'name', 'Aktor')}: {label} kosztuje {spent} akcję. "
-                f"Pozostało {remaining}/{self.ACTION_LIMIT}."
+                f"Pozostało {remaining}/{limit}."
             )
         except Exception:
             pass
-        if actor in self.turn_initialized and self.actions_used.get(actor, 0) >= self.ACTION_LIMIT:
+        if actor in self.turn_initialized and self.actions_used.get(actor, 0) >= limit:
             self.game.ui_log(
                 f"{getattr(actor, 'name', 'Aktor')} zużył wszystkie akcje. "
                 "Tura kończy się automatycznie."
@@ -1007,7 +1026,8 @@ class Combat(State):
         decision = "delay" if auto_delay else None
         if decision is None:
             used = self.actions_used.get(hero, 0)
-            remaining = self.ACTION_LIMIT - used
+            limit = self._action_limit(hero)
+            remaining = limit - used
             prompt = (
                 "Limit akcji wyczerpany. END – koniec tury (8), DELAY – opóźnij (7, obniża inicjatywę)"
                 if remaining <= 0
@@ -1061,7 +1081,7 @@ class Combat(State):
     def _process_enemy_turn(self, enemy) -> State:
         logger.info("Tura przeciwnika: %s", getattr(enemy, "name", "Enemy"))
         used = self.actions_used.get(enemy, 0)
-        limit = self.ACTION_LIMIT
+        limit = self._action_limit(enemy)
         behavior_fn = get_behavior(getattr(enemy, "behavior_id", None))
         while used < limit:
             try:
@@ -1095,9 +1115,10 @@ class Combat(State):
             ui_active_actor(actor)
 
         if actor in self.game.enemies:
-            remaining = self.ACTION_LIMIT - self.actions_used.get(actor, 0)
-            logger.info("Tura przeciwnika: %s (akcje pozostałe: %s/%s)", getattr(actor, "name", "Enemy"), remaining, self.ACTION_LIMIT)
-            self.game.ui_log(f"Tura przeciwnika: {getattr(actor, 'name', 'Enemy')} (akcje {remaining}/{self.ACTION_LIMIT})")
+            limit = self._action_limit(actor)
+            remaining = limit - self.actions_used.get(actor, 0)
+            logger.info("Tura przeciwnika: %s (akcje pozostałe: %s/%s)", getattr(actor, "name", "Enemy"), remaining, limit)
+            self.game.ui_log(f"Tura przeciwnika: {getattr(actor, 'name', 'Enemy')} (akcje {remaining}/{limit})")
             return self._process_enemy_turn(actor)
 
         # Hero turn
@@ -1126,13 +1147,14 @@ class Combat(State):
                 logger.debug("Nie udało się wyczyścić efektów raise_shield dla %s", actor)
 
         used = self.actions_used.get(actor, 0)
+        limit = self._action_limit(actor)
         self.actions_used[actor] = used
-        logger.info("Tura bohatera (%s). Akcje: %s/%s", actor, used, self.ACTION_LIMIT)
+        logger.info("Tura bohatera (%s). Akcje: %s/%s", actor, used, limit)
         self.game.ui_hero(
             actor,
-            note=f"Akcje: {used}/{self.ACTION_LIMIT} | {self._weapon_note(actor)} | {self._shield_note(actor)}",
+            note=f"Akcje: {used}/{limit} | {self._weapon_note(actor)} | {self._shield_note(actor)}",
         )
-        if used >= self.ACTION_LIMIT:
+        if used >= limit:
             logger.info("Aktor %s nie ma już akcji. Automatyczny koniec tury.", getattr(actor, "name", actor))
             self.game.ui_log("Brak dostępnych akcji. Automatyczny koniec tury.")
             self._advance_turn()
@@ -1209,8 +1231,8 @@ class Combat(State):
             except Exception:
                 spent = 1
             self.actions_used[actor] = self.actions_used.get(actor, 0) + spent
-            if self.actions_used[actor] >= self.ACTION_LIMIT:
-                logger.info("Wykorzystano limit %s akcji. Automatyczny koniec tury.", self.ACTION_LIMIT)
+            if self.actions_used[actor] >= limit:
+                logger.info("Wykorzystano limit %s akcji. Automatyczny koniec tury.", limit)
                 self.game.ui_log("Wykorzystano wszystkie akcje. Automatyczny koniec tury.")
                 self._advance_turn()
                 return self

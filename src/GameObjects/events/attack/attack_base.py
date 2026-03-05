@@ -8,7 +8,17 @@ from bonuses import BonusEffect, BonusType, compute_total_modifier, format_effec
 from damage_types import DamageType
 from combat import effective_ac
 from GameObjects.interactions_mixin import prompt_for_roll
-from statuses import CONCEALED_STATUS, DARKVISION_STATUS, DIM_LIGHT_VISION_STATUS, IN_DIM_LIGHT_STATUS, LOW_LIGHT_VISION_STATUS
+from statuses import (
+    CONCEALED_STATUS,
+    DARKVISION_STATUS,
+    DIM_LIGHT_VISION_STATUS,
+    IN_DIM_LIGHT_STATUS,
+    LOW_LIGHT_VISION_STATUS,
+    visibility_block_reason,
+    visibility_flat_check_dc,
+    attack_penalty_effects,
+    ac_penalty_effect,
+)
 
 from ..base import GameEvent, mapping_setdefault_actor
 
@@ -32,20 +42,28 @@ def check_concealed(ctx, target) -> bool:
         target, IN_DIM_LIGHT_STATUS
     ):
         return True
+    blocked = visibility_block_reason(attacker, target)
+    if blocked:
+        try:
+            ctx.game.ui_log(blocked)
+        except Exception:
+            pass
+        return False
+    ignore_target_concealed = False
     has_status = getattr(target, "has_status", None)
     if callable(has_status):
-        concealed = has_status(CONCEALED_STATUS)
+        ignore_target_concealed = not bool(has_status(CONCEALED_STATUS))
     else:
-        concealed = False
+        ignore_target_concealed = True
         for status in getattr(target, "statuses", []) or []:
             if getattr(status, "id", None) == CONCEALED_STATUS.id or status == CONCEALED_STATUS.id:
-                concealed = True
+                ignore_target_concealed = False
                 break
-    if not concealed:
-        return True
-    dc = 5
-    if _has_status(attacker, "keen_eyes"):
+    dc = visibility_flat_check_dc(attacker, target, ignore_target_concealed=ignore_target_concealed)
+    if _has_status(attacker, "keen_eyes") and dc == 5:
         dc = 3
+    if dc <= 0:
+        return True
     roll = prompt_for_roll(
         f"Concealed: rzut k20 (DC {dc}) przed atakiem.",
         layout="test",
@@ -72,12 +90,13 @@ def check_concealed(ctx, target) -> bool:
 def _has_status(obj, status) -> bool:
     if obj is None:
         return False
+    wanted = getattr(status, "id", status)
     has_status = getattr(obj, "has_status", None)
     if callable(has_status):
-        return bool(has_status(status))
+        return bool(has_status(wanted))
     for item in getattr(obj, "statuses", []) or []:
         item_id = getattr(item, "id", None)
-        if item_id == status.id or item == status.id:
+        if item_id == wanted or item == wanted:
             return True
     return False
 
@@ -114,6 +133,12 @@ class AttackEventBase(GameEvent):
         bonuses = list(getattr(target, "bonuses", [])) if hasattr(target, "bonuses") else []
         if extra_bonuses:
             bonuses.extend(list(extra_bonuses))
+        try:
+            cond_eff = ac_penalty_effect(target)
+            if cond_eff is not None:
+                bonuses.append(cond_eff)
+        except Exception:
+            pass
 
         modifier = compute_total_modifier(bonuses, "ac", getattr(attacker, "object_id", None)) if bonuses else 0
         target_ac = base_ac + modifier
@@ -155,6 +180,10 @@ class AttackEventBase(GameEvent):
                 pass
         if extra_effects:
             effects.extend(list(extra_effects))
+        try:
+            effects.extend(attack_penalty_effects(attacker, action_tag=action_tag))
+        except Exception:
+            pass
         target_id = getattr(target, "object_id", None)
         modifier = compute_total_modifier(effects, action_tag, target_id) if effects else 0
         best_effects = select_best_effects(effects, action_tag, target_id)
@@ -1064,11 +1093,11 @@ class AttackEventBase(GameEvent):
         has_status = getattr(target, "has_status", None)
         if callable(has_status):
             try:
-                return bool(has_status("flat_footed"))
+                return bool(has_status("flat_footed") or has_status("off_guard"))
             except Exception:
                 return False
         for status in getattr(target, "statuses", []) or []:
-            if getattr(status, "id", None) == "flat_footed" or status == "flat_footed":
+            if getattr(status, "id", None) in ("flat_footed", "off_guard") or status in ("flat_footed", "off_guard"):
                 return True
         return False
 

@@ -212,7 +212,7 @@ def flat_footed_penalty(target) -> int:
     if isinstance(statuses, list):
         for status in statuses:
             sid = status.id if isinstance(status, Status) else status
-            if sid == "flat_footed":
+            if sid in ("flat_footed", "off_guard"):
                 if isinstance(status, Status):
                     data_val = status.data.get("ac_penalty")
                     if isinstance(data_val, int):

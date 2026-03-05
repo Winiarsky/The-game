@@ -6,7 +6,11 @@ from statuses.base import Status
 
 def ProneStatus() -> Status:
     """Status leżenia (prone)."""
-    return Status(id="prone", label="Prone", data={"attack_penalty": 2})
+    return Status(
+        id="prone",
+        label="Prone",
+        data={"attack_penalty": 2, "ac_penalty": 2, "effect_tags": ["prone", "off_guard"]},
+    )
 
 
 PRONE_STATUS = ProneStatus()
