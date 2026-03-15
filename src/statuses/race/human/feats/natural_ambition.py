@@ -3,7 +3,9 @@ from __future__ import annotations
 from statuses.base import Status
 
 NATURAL_AMBITION_DESCRIPTION = (
-    "Zyskujesz 1. poziomowy class feat (UI placeholder)."
+    "Mechanika: wybierasz dodatkowy class feat poziomu 1 dla swojej klasy.\n"
+    "Feat jest od razu dodawany jako status bohatera i dziala normalnie jak inne featy klasowe.\n"
+    "Specjalne: tylko przy tworzeniu postaci na 1. poziomie."
 )
 
 NATURAL_AMBITION_CLASS_FEAT_CHOICES = {
@@ -27,8 +29,10 @@ NATURAL_AMBITION_CLASS_FEAT_CHOICES = {
         "reach_spell",
     ],
     "champion": [
-        "raise_shield_allow",
-        "deific_weapon",
+        "deitys_domain",
+        "ranged_reprisal",
+        "unimpeded_step",
+        "weight_of_guilt",
     ],
     "cleric": [
         "deadly_simplicity",
@@ -91,10 +95,10 @@ NATURAL_AMBITION_CLASS_FEAT_CHOICES = {
 
 
 def NaturalAmbitionStatus() -> Status:
-    """Feat: Natural Ambition (UI placeholder)."""
+    """Feat: Natural Ambition."""
     return Status(
         id="natural_ambition",
-        label="Natural Ambition",
+        label="Naturalna ambicja",
         data={
             "ui_description": NATURAL_AMBITION_DESCRIPTION,
             "ui_choice_kind": "natural_ambition",

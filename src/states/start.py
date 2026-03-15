@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import sys
 from pathlib import Path
+from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
@@ -10,7 +11,16 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from board import consts
 from hero import Hero
+from localization import localize_term_pl, localized_hint_pl
 from skills import Skill
+from spell_management import initialize_actor_spell_management
+from character_creation import (
+    CharacterRepository,
+    create_character,
+    hero_from_snapshot,
+    list_character_menu_options,
+)
+from statuses.backgrounds.backgrounds import BACKGROUND_DEFINITIONS, get_background_status
 
 from .base import State
 from .heroes_turns import HeroesTurn
@@ -27,48 +37,300 @@ class Start(State):
         
     def set_heroes_starting_positions(self) -> State:
         heroes: list[Hero] = self.game.heroes
+        used_character_ids: set[str] = set()
         starting_positions = [tuple(pos) for pos in self.game.scenario['starting_positions']]
         logger.info("Ustawianie pozycji startowych bohaterów.")
         self.game.ui_log("Ustawianie pozycji startowych bohaterów.")
+        ui_idle_hint = getattr(self.game, "ui_idle_hint", None)
         logger.info(starting_positions)
+
+        def _setup_single_hero() -> bool:
+            hero = self._pick_or_create_hero(used_character_ids)
+            if hero is None:
+                self.game.ui_log("Nie wybrano bohatera. Spróbuj ponownie.")
+                return False
+
+            hero_name = str(getattr(hero, "name", "Bohater") or "Bohater")
+            logger.info("Ustaw figurke bohatera %s na wolnym polu startowym.", hero_name)
+            self.game.ui_log(
+                f"Postaw figurkę bohatera {hero_name} na jednym z podświetlonych pól startowych "
+                "i potwierdź klikając w pole."
+            )
+            if callable(ui_idle_hint):
+                ui_idle_hint(
+                    "Czekam na działanie",
+                    f"Postaw figurkę bohatera {hero_name} na jednym z podświetlonych pól startowych "
+                    "i potwierdź klikając w pole.",
+                )
+            self.game.conn.set_leds(starting_positions, consts.MOVE_FIELD_RGB) # usunac pozycje zajete
+            logger.info("Odczytuje polozenie figurki...")
+            pos = self.game.conn.scan_board(starting_positions)
+            self.game.conn.leds_off()
+            if pos is None:
+                self.game.ui_log("Nie odczytano pola. Spróbuj ponownie.")
+                return False
+            try:
+                self.game.board.place(hero, pos)
+            except ValueError as exc:
+                logger.error("Nie można ustawić bohatera: %s", exc)
+                return False
+            heroes.append(hero)
+            char_id = str(getattr(hero, "character_id", "") or "").strip().lower()
+            if char_id:
+                used_character_ids.add(char_id)
+            logger.info(
+                f"Bohater ustawiony na pozycji {pos}."
+            )
+            self._maybe_prompt_chameleon_gnome(hero)
+            self._maybe_prompt_advanced_alchemy(hero)
+            self._maybe_prepare_spells(hero)
+            self.game.ui_hero(hero, note=f"Ustawiony na polu startowym {pos}")
+            self.game.ui_log(f"Bohater ustawiony na pozycji {pos}.")
+            return True
+
         while True:
+            has_hero_on_board = any(getattr(hero, "position", None) is not None for hero in heroes)
+            if has_hero_on_board:
+                options = [
+                    {
+                        "id": "__start_game__",
+                        "label": "Graj",
+                        "desc": "Rozpocznij grę z aktualnie ustawionymi bohaterami.",
+                        "key": "enter",
+                    },
+                    {
+                        "id": "__add_hero__",
+                        "label": "Dodaj kolejnego bohatera",
+                        "desc": "Wybierz kolejnego bohatera i ustaw jego figurkę na planszy.",
+                        "key": "*",
+                    },
+                ]
+                answer = self._prompt_menu_choice(
+                    title="Setup bohaterów",
+                    subtitle="Enter: graj, *: dodaj bohatera",
+                    source="hero_setup_next",
+                    options=options,
+                    layout="menu_numpad",
+                )
+                picked = self._decode_menu_choice(answer or "", options) if answer else None
+                if picked == "__start_game__":
+                    logger.info("Setup bohaterów zakończony przez opcję Graj.")
+                    self.game.ui_log("Setup bohaterów zakończony. Start gry.")
+                    break
+                if picked == "__add_hero__":
+                    _setup_single_hero()
+                    continue
+
+            if callable(ui_idle_hint):
+                ui_idle_hint(
+                    "Setup bohaterów",
+                    "Zeskanuj kartę ACCEPT, aby wybrać bohatera i ustawić jego figurkę. "
+                    "Zeskanuj DECLINE, aby zakończyć setup.",
+                )
             response = self.game.conn.read_card(
                 "Skanuj karte ACCEPT by ustawic figurke na polu startowym, lub DECLINE by zakonczyc setup",
                 ["ACCEPT", "DECLINE"],
             )
             if response.upper() == "DECLINE":
+                if not has_hero_on_board:
+                    logger.warning("Nie można zakończyć setupu bez ustawienia bohatera.")
+                    self.game.ui_log("Najpierw ustaw co najmniej jednego bohatera na polu startowym.")
+                    continue
                 logger.info("Setup graczy zakonczony.")
                 self.game.ui_log("Setup bohaterów zakończony.")
                 break
             if response.upper() == "ACCEPT":
-                logger.info("Ustaw figurke swojego bohatera na wolnym polu startowym.")
-            self.game.conn.set_leds(starting_positions, consts.MOVE_FIELD_RGB) # usunac pozycje zajete
-            logger.info("Odczytuje polozenie figurki...")
-            pos = self.game.conn.scan_board(starting_positions)
-            self.game.conn.leds_off()
-            hero = Hero()
-            try:
-                from statuses.classes.ranger.ranger_utils import clear_daily_ranger_preparations
-
-                clear_daily_ranger_preparations(hero)
-            except Exception:
-                pass
-            try:
-                self.game.board.place(hero, pos)
-            except ValueError as exc:
-                logger.error("Nie można ustawić bohatera: %s", exc)
+                _setup_single_hero()
                 continue
-            heroes.append(hero)
-            logger.info(
-                f"Bohater ustawiony na pozycji {pos}."
-            )
-            self._maybe_prompt_chameleon_gnome(hero)
-            self._maybe_prompt_familiar_owner(hero)
-            self._maybe_prompt_advanced_alchemy(hero)
-            self.game.ui_hero(hero, note=f"Ustawiony na polu startowym {pos}")
-            self.game.ui_log(f"Bohater ustawiony na pozycji {pos}.")
+            else:
+                self.game.ui_log("Nieznana komenda setupu. Użyj ACCEPT lub DECLINE.")
+                continue
         self.game.heroes = heroes
         return HeroesTurn(self.game)
+
+    def _character_repository(self) -> CharacterRepository:
+        return CharacterRepository(PROJECT_ROOT / "data" / "heroes")
+
+    def _pick_or_create_hero(self, used_character_ids: set[str]) -> Hero | None:
+        repo = self._character_repository()
+        base_options = list_character_menu_options(repo, exclude_ids=used_character_ids)
+        options: list[dict[str, Any]] = []
+        for option in base_options:
+            enriched = dict(option)
+            snapshot = repo.load_character(str(option.get("id") or ""))
+            preview = self._build_hero_preview_payload(snapshot, fallback_label=str(option.get("label") or ""))
+            if preview:
+                enriched["hero_preview"] = preview
+            options.append(enriched)
+        create_option = {
+            "id": "__create_new__",
+            "label": "Stwórz nowego bohatera",
+            "desc": "Uruchamia pełny pipeline tworzenia postaci.",
+            "key": "*",
+            "hero_preview": {
+                "name": "Nowy bohater",
+                "note": "Uruchamia kreator tworzenia postaci.",
+                "image": "/static/placeholder.png",
+            },
+        }
+        options_with_create = list(options) + [create_option]
+
+        if not options:
+            self.game.ui_log("Brak zapisanych bohaterów. Uruchamiam tworzenie nowej postaci.")
+            created = create_character(self.game, repo)
+            if created is None:
+                return None
+            return created.hero
+
+        answer = self._prompt_menu_choice(
+            title="Wybór Bohatera",
+            subtitle="8 góra, 2 dół, Enter potwierdzenie, * nowy bohater",
+            source="hero_select",
+            options=options_with_create,
+            layout="menu_numpad",
+        )
+        if not answer:
+            return None
+        picked = self._decode_menu_choice(answer, options_with_create)
+        if not picked:
+            return None
+        if picked == "__create_new__":
+            created = create_character(self.game, repo)
+            if created is None:
+                return None
+            return created.hero
+
+        snapshot = repo.load_character(picked)
+        if snapshot is None:
+            self.game.ui_log(f"Nie udało się wczytać bohatera '{picked}'.")
+            return None
+        hero = hero_from_snapshot(snapshot)
+        self.game.ui_log(f"Wczytano bohatera: {getattr(hero, 'name', picked)}.")
+        return hero
+
+    def _prompt_menu_choice(
+        self,
+        *,
+        title: str,
+        subtitle: str,
+        source: str,
+        options: list[dict[str, Any]],
+        layout: str = "dialog",
+    ) -> str | None:
+        if not options:
+            return None
+        ui = getattr(self.game, "ui", None)
+        choice_meta = []
+        for idx, option in enumerate(options, start=1):
+            entry: dict[str, Any] = {
+                "raw": option["id"],
+                "label": option["label"],
+                "desc": option.get("desc") or "",
+                "key": option.get("key") or str(idx),
+            }
+            for key, value in option.items():
+                if key in {"id", "label", "desc", "key"}:
+                    continue
+                entry[key] = value
+            choice_meta.append(entry)
+        if ui is not None and hasattr(ui, "prompt_choice"):
+            try:
+                answer = ui.prompt_choice(
+                    title,
+                    choices=[item["label"] for item in choice_meta],
+                    source=source,
+                    layout=layout,
+                    title=title,
+                    subtitle=subtitle,
+                    choice_meta=choice_meta,
+                )
+                if answer:
+                    return str(answer)
+            except Exception:
+                pass
+        elif ui is None or getattr(ui, "allow_cli_fallback", False):
+            try:
+                return input(title + " ").strip() or None
+            except Exception:
+                return None
+        return None
+
+    @staticmethod
+    def _decode_menu_choice(raw: str, options: list[dict[str, str]]) -> str | None:
+        text = str(raw or "").strip()
+        if not text:
+            return None
+        by_id = {str(item["id"]).strip().lower(): str(item["id"]).strip().lower() for item in options}
+        by_label = {str(item["label"]).strip().lower(): str(item["id"]).strip().lower() for item in options}
+        by_key = {
+            str(item.get("key") or "").strip().lower(): str(item["id"]).strip().lower()
+            for item in options
+            if str(item.get("key") or "").strip()
+        }
+        low = text.lower()
+        if low in by_id:
+            return by_id[low]
+        if low in by_label:
+            return by_label[low]
+        if low in by_key:
+            return by_key[low]
+        if text.isdigit():
+            idx = int(text) - 1
+            if 0 <= idx < len(options):
+                return str(options[idx]["id"]).strip().lower()
+        return None
+
+    @staticmethod
+    def _build_hero_preview_payload(snapshot: dict[str, Any] | None, *, fallback_label: str = "") -> dict[str, Any] | None:
+        if not isinstance(snapshot, dict):
+            return None
+
+        def _as_dict(value: Any) -> dict[str, Any]:
+            return dict(value) if isinstance(value, dict) else {}
+
+        def _as_list(value: Any) -> list[Any]:
+            return list(value) if isinstance(value, list) else []
+
+        ability_scores = _as_dict(snapshot.get("ability_scores"))
+        ability_modifiers = _as_dict(snapshot.get("ability_modifiers"))
+        skill_ranks = _as_dict(snapshot.get("skill_ranks"))
+        save_ranks = _as_dict(snapshot.get("save_ranks"))
+
+        status_ids = [
+            str(item).strip()
+            for item in _as_list(snapshot.get("status_ids"))
+            if str(item).strip()
+        ]
+        for item in _as_list(snapshot.get("class_feat_ids")):
+            feat_id = str(item).strip()
+            if feat_id and feat_id not in status_ids:
+                status_ids.append(feat_id)
+        statuses = [localize_term_pl(item) for item in status_ids]
+
+        return {
+            "character_id": str(snapshot.get("character_id") or "").strip().lower(),
+            "name": str(snapshot.get("name") or fallback_label or "Bohater"),
+            "note": f"Poziom {int(snapshot.get('level') or 1)}",
+            "level": int(snapshot.get("level") or 1),
+            "class_id": str(snapshot.get("class_id") or ""),
+            "ancestry_id": str(snapshot.get("ancestry_id") or ""),
+            "heritage_id": str(snapshot.get("heritage_id") or ""),
+            "background_label": str(snapshot.get("background_label") or ""),
+            "background_feat_id": str(snapshot.get("background_feat_id") or ""),
+            "image": str(snapshot.get("portrait_image") or snapshot.get("image") or "/static/placeholder.png"),
+            "ac": snapshot.get("ac"),
+            "max_hp": snapshot.get("max_hp"),
+            "base_speed_feet": snapshot.get("base_speed_feet"),
+            "ability_scores": ability_scores,
+            "ability_modifiers": ability_modifiers,
+            "skill_ranks": skill_ranks,
+            "save_ranks": save_ranks,
+            "trained_skills": _as_list(snapshot.get("trained_skills")),
+            "lore_skills": _as_list(snapshot.get("lore_skills")),
+            "statuses": statuses,
+            "money_text": snapshot.get("money_text"),
+            "bulk_summary": _as_dict(snapshot.get("bulk_summary")),
+        }
 
     def _collect_terrain_choices(self) -> list[str]:
         board = self.game.board
@@ -117,6 +379,81 @@ class Start(State):
                 return status
         return None
 
+    def _maybe_prompt_background(self, hero: Hero) -> None:
+        statuses = list(getattr(hero, "statuses", []) or [])
+        for status in statuses:
+            data = getattr(status, "data", None) or {}
+            if bool(data.get("is_background")):
+                return
+
+        definitions = list(BACKGROUND_DEFINITIONS)
+        if not definitions:
+            self.game.ui_log("Background: brak zdefiniowanych backgroundów.")
+            return
+
+        label_to_key: dict[str, str] = {}
+        choices: list[str] = []
+        for definition in definitions:
+            key = str(getattr(definition, "key", "") or "").strip().lower()
+            fallback_label = str(getattr(definition, "label", "") or key).strip()
+            label = str(localize_term_pl(f"background_{key}") or localize_term_pl(key) or fallback_label).strip()
+            if not key or not label:
+                continue
+            label_to_key[label] = key
+            if fallback_label:
+                label_to_key[fallback_label] = key
+            choices.append(label)
+        if not choices:
+            self.game.ui_log("Background: brak poprawnych opcji wyboru.")
+            return
+
+        prompt = "Background: wybierz tło postaci"
+        answer: str | None = None
+        ui = getattr(self.game, "ui", None)
+        if ui is not None and hasattr(ui, "prompt_choice"):
+            answer = ui.prompt_choice(prompt, choices=choices, source="setup")
+        elif ui is None or getattr(ui, "allow_cli_fallback", False):
+            try:
+                answer = input(prompt + " ").strip() or None
+            except Exception:
+                answer = None
+
+        selected_key: str | None = None
+        if answer:
+            raw = str(answer).strip()
+            if raw.isdigit():
+                idx = int(raw) - 1
+                if 0 <= idx < len(choices):
+                    selected_key = label_to_key.get(choices[idx])
+            if selected_key is None:
+                selected_key = label_to_key.get(raw)
+            if selected_key is None:
+                norm = raw.lower().replace(" ", "_")
+                direct = get_background_status(norm)
+                if direct is not None:
+                    selected_key = str((direct.data or {}).get("background_key") or "").strip().lower()
+
+        if not selected_key:
+            self.game.ui_log("Background: nie wybrano poprawnej opcji.")
+            return
+
+        background_status = get_background_status(selected_key)
+        if background_status is None:
+            self.game.ui_log(f"Background: nie znaleziono statusu '{selected_key}'.")
+            return
+        if not hero.add_status(background_status):
+            self.game.ui_log("Background: nie udało się dodać wybranego tła.")
+            return
+
+        chosen_label = str((background_status.data or {}).get("background_label") or background_status.display_label)
+        chosen_feat = str((background_status.data or {}).get("background_feat_id") or "").strip()
+        if chosen_feat:
+            self.game.ui_log(
+                f"Background: wybrano {chosen_label}. Feat dodany do hero: {chosen_feat}."
+            )
+        else:
+            self.game.ui_log(f"Background: wybrano {chosen_label}.")
+
     def _maybe_prompt_chameleon_gnome(self, hero: Hero) -> None:
         if not hero.has_status("chameleon_gnome"):
             return
@@ -156,8 +493,8 @@ class Start(State):
         if status is None:
             return
         data = getattr(status, "data", None) or {}
-        data["familiar_mode"] = None
-        data["familiar_guidance_skill"] = None
+        data.setdefault("familiar_mode", None)
+        data.setdefault("familiar_guidance_skill", None)
         choices = [
             "Scout (Perception)",
             "Guidance (Skill)",
@@ -165,11 +502,49 @@ class Start(State):
             "Deliver Touch Spell",
             "Scent/Seek",
         ]
+        choice_meta = [
+            {
+                "raw": "Scout (Perception)",
+                "label": "Scout (Perception)",
+                "desc": "Fluff: Familiar wypatruje zagrozen.\nMechanika:\n- Kiedy: Po wyborze trybu i uzyciu Command Familiar.\n- Efekt: Jednorazowy +2 circumstance do najblizszego testu Percepcji.",
+                "key": "1",
+            },
+            {
+                "raw": "Guidance (Skill)",
+                "label": "Guidance (Skill)",
+                "desc": "Fluff: Familiar wspiera cie przy wybranej umiejetnosci.\nMechanika:\n- Kiedy: Po wyborze trybu i uzyciu Command Familiar.\n- Efekt: Jednorazowy +1 circumstance do wybranego skilla.",
+                "key": "2",
+            },
+            {
+                "raw": "Distract (Enemy)",
+                "label": "Distract (Enemy)",
+                "desc": "Fluff: Familiar rozprasza przeciwnika we wlasciwym momencie.\nMechanika:\n- Kiedy: Po wyborze celu i uzyciu Command Familiar.\n- Efekt: Wybrany wrog dostaje -1 do najblizszego ataku wręcz; efekt znika po tym ataku.",
+                "key": "3",
+            },
+            {
+                "raw": "Deliver Touch Spell",
+                "label": "Deliver Touch Spell",
+                "desc": "Fluff: Familiar przenosi energie czaru dotykowego.\nMechanika:\n- Kiedy: Przy kolejnym touch spellu po uzyciu Command Familiar.\n- Efekt: Zasieg touch spell rośnie z 5 ft do 10 ft i efekt znika po uzyciu.",
+                "key": "4",
+            },
+            {
+                "raw": "Scent/Seek",
+                "label": "Scent/Seek",
+                "desc": "Fluff: Familiar szuka ukrytych obiektow po zapachu i ruchu.\nMechanika:\n- Kiedy: Natychmiast po uzyciu Command Familiar.\n- Efekt: Gra informuje, czy w poblizu sa ukryte obiekty.",
+                "key": "5",
+            },
+        ]
         prompt = "Familiar: wybierz tryb działania (stały dla Command Familiar)."
         answer: str | None = None
         ui = getattr(self.game, "ui", None)
         if ui is not None and hasattr(ui, "prompt_choice"):
-            answer = ui.prompt_choice(prompt, choices=choices, source="setup")
+            answer = ui.prompt_choice(
+                prompt,
+                choices=choices,
+                source="setup",
+                layout="menu_numpad",
+                choice_meta=choice_meta,
+            )
         elif ui is None or getattr(ui, "allow_cli_fallback", False):
             try:
                 answer = input(prompt + " ").strip() or None
@@ -233,11 +608,77 @@ class Start(State):
             choices.append(str(name).strip().lower())
         return sorted(set(choices))
 
-    def _prompt_advanced_alchemy_reagent_budget(self) -> int | None:
+    def _advanced_alchemy_choice_meta(self, event_choices: list[str]) -> list[dict[str, str]]:
+        out: list[dict[str, str]] = []
+        for event_name in list(event_choices or []):
+            raw = str(event_name or "").strip().lower()
+            if not raw:
+                continue
+            label = localize_term_pl(raw)
+            hint = localized_hint_pl(raw) or "Przedmiot alchemiczny gotowy do użycia po stworzeniu."
+            desc = (
+                f"Fluff: Przygotowujesz {label.lower()} w laboratorium polowym.\n"
+                "Mechanika:\n"
+                "- Kiedy: W fazie startowej, podczas Advanced Alchemy.\n"
+                f"- Efekt: Zużywasz 1 reagent i tworzysz 2 sztuki; {hint}"
+            )
+            out.append(
+                {
+                    "raw": raw,
+                    "label": label,
+                    "desc": desc,
+                    "key": "",
+                }
+            )
+        out.append(
+            {
+                "raw": "end",
+                "label": "Zakończ",
+                "desc": (
+                    "Fluff: Odkładasz fiolki i kończysz przygotowania.\n"
+                    "Mechanika:\n"
+                    "- Kiedy: W dowolnym momencie wyboru eventu.\n"
+                    "- Efekt: Kończy Advanced Alchemy bez zużywania kolejnych reagentów."
+                ),
+                "key": "",
+            }
+        )
+        return out
+
+    @staticmethod
+    def _advanced_alchemy_available_reagents(hero: Hero) -> int:
+        level = int(getattr(hero, "level", 1) or 1)
+        int_mod: int | None = None
+        try:
+            int_mod = int(getattr(hero, "intelligence_modifier"))
+        except Exception:
+            int_mod = None
+        if int_mod is None:
+            mods = getattr(hero, "ability_modifiers", None)
+            if isinstance(mods, dict):
+                try:
+                    int_mod = int(mods.get("intelligence"))
+                except Exception:
+                    int_mod = None
+        if int_mod is None:
+            score = getattr(hero, "intelligence", None)
+            try:
+                score_int = int(score)
+                int_mod = (score_int - 10) // 2
+            except Exception:
+                int_mod = 0
+        return max(0, level + int(int_mod or 0))
+
+    def _prompt_advanced_alchemy_reagent_budget(self, *, available_reagents: int | None = None) -> int | None:
         while True:
+            header = "Advanced Alchemy: podaj liczbę reagentów do zużycia"
+            if available_reagents is not None:
+                header += f" [dostępne: {available_reagents}]"
+            header += " (lub end aby zakończyć)"
             raw = self.game.conn.read_card(
-                "Advanced Alchemy: podaj liczbę reagentów do zużycia (lub end aby zakończyć)",
+                header,
                 [],
+                translate_shortcuts=False,
             )
             normalized = self._normalize_event_name(raw)
             if normalized == "end":
@@ -268,6 +709,7 @@ class Start(State):
 
         try:
             preview = ", ".join(allowed[:10]) + (", ..." if len(allowed) > 10 else "")
+            available_reagents = self._advanced_alchemy_available_reagents(hero)
             from ui_client import get_ui_client
 
             ui = get_ui_client()
@@ -277,6 +719,7 @@ class Start(State):
                     prompt_long=(
                         "Wybierz liczbę reagentów, a następnie event alchemiczny dla każdego reagenta.\n"
                         "Każdy reagent tworzy 2 sztuki przedmiotu (bez preparation counter).\n"
+                        f"Dostępne reagenty: {available_reagents}\n"
                         "Wpisz 'end', aby zakończyć crafting.\n"
                         f"Dostępne eventy: {preview}"
                     ),
@@ -285,7 +728,9 @@ class Start(State):
         except Exception:
             pass
 
-        budget = self._prompt_advanced_alchemy_reagent_budget()
+        budget = self._prompt_advanced_alchemy_reagent_budget(
+            available_reagents=self._advanced_alchemy_available_reagents(hero)
+        )
         if budget is None:
             self.game.ui_log("Advanced Alchemy: zakończono bez craftingu.")
             return
@@ -294,11 +739,15 @@ class Start(State):
             return
 
         created_total = 0
+        crafting_choices = list(allowed) + ["end"]
+        crafting_choice_meta = self._advanced_alchemy_choice_meta(allowed)
         for idx in range(1, budget + 1):
             while True:
                 raw_choice = self.game.conn.read_card(
                     f"Advanced Alchemy [{idx}/{budget}]: zeskanuj event alchemiczny (lub end)",
-                    [],
+                    crafting_choices,
+                    translate_shortcuts=False,
+                    choice_meta=crafting_choice_meta,
                 )
                 choice = self._normalize_event_name(raw_choice)
                 if choice == "end":
@@ -327,3 +776,25 @@ class Start(State):
                 )
                 break
         self.game.ui_log(f"Advanced Alchemy: zakończono crafting. Łącznie stworzono {created_total} przedmiotów.")
+
+    def _maybe_prepare_spells(self, hero: Hero) -> None:
+        try:
+            state = initialize_actor_spell_management(
+                self.game,
+                hero,
+                prompt=True,
+                enforce=True,
+            )
+        except Exception:
+            return
+        if not bool(state.get("enabled", False)):
+            return
+        known = state.get("known", {}) or {}
+        summary = ", ".join(
+            [
+                f"cantrip={len(list(known.get('cantrip', []) or []))}",
+                f"rank1={len(list(known.get('rank_1', []) or []))}",
+                f"focus={len(list(known.get('focus', []) or []))}",
+            ]
+        )
+        self.game.ui_log(f"{getattr(hero, 'name', 'Bohater')}: spell management aktywny ({summary}).")

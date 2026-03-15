@@ -5,7 +5,7 @@ from statuses.dim_light_vision import DIM_LIGHT_VISION_STATUS
 
 TWILIGHT_HALFLING_DESCRIPTION = (
     "Twoi przodkowie działali skrycie o zmierzchu, wyostrzając wzrok w półmroku.\n"
-    "Zyskujesz low-light vision."
+    "Zyskujesz widzenie w polmroku."
 )
 
 

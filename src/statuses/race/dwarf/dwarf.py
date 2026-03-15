@@ -4,14 +4,18 @@ from statuses.base import Status
 from statuses.darkvision import DARKVISION_STATUS
 
 DWARF_DESCRIPTION = (
-    "Hit Points:  10\n"
-    "Size: Medium\n"
-    "Speed: 20 feet\n"
-    "Ability Boosts: Constitution, Wisdom, Free\n"
-    "Ability Flaw: Charisma\n"
-    "Languages: Common, Dwarven,\n"
-    "Additional languages equal to your Intelligence modifer (if it'spositive). Choose from:  Gnomish, Goblin, Jotun, Orcish, Terran, Undercommon\n"
-    "Traits : Darkvision status, Clan Dagger"
+    "Punkty Zycia: 10\n"
+    "Rozmiar: Sredni\n"
+    "Predkosc: 20 stop\n"
+    "Boosty atrybutow: Kondycja, Madrosc, Dowolna\n"
+    "Wada atrybutu: Charyzma\n"
+    "Jezyki: Common, Dwarven\n"
+    "Dodatkowe jezyki: liczba rowna modyfikatorowi Inteligencji (jesli dodatni): "
+    "Gnomish, Goblin, Jotun, Orcish, Terran, Undercommon lub inne dostepne regionalnie.\n"
+    "Cechy: Dwarf, Humanoid\n"
+    "Darkvision: widzisz w ciemnosci i slabym swietle jak w jasnym swietle "
+    "(ciemnosc w odcieniach szarosci).\n"
+    "Clan Dagger: otrzymujesz darmowy clan dagger."
 )
 
 
@@ -27,6 +31,16 @@ def DwarfStatus() -> Status:
             "size": "medium",
             "ancestry_traits": ["dwarf", "humanoid"],
             "ancestry_languages": ["common", "dwarven"],
+            "ancestry_bonus_languages": [
+                "gnomish",
+                "goblin",
+                "jotun",
+                "orcish",
+                "terran",
+                "undercommon",
+            ],
+            "ability_boosts": ["constitution", "wisdom", "free"],
+            "ability_flaw": "charisma",
             "grants_statuses": [DARKVISION_STATUS],
         },
     )

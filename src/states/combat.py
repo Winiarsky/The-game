@@ -16,6 +16,18 @@ from GameObjects.companions import build_animal_companion
 from GameObjects.Enemies.behaviors import get_behavior
 from .base import State
 from .heroes_turns import HeroesTurn
+from .intent_menu import (
+    build_intent_options,
+    choose_event_from_bucket,
+    choose_option,
+    filter_alchemy_events_for_actor,
+    filter_events_for_actor,
+    filter_player_events,
+    filter_magic_events_for_actor,
+    group_events,
+    render_actor_stats,
+)
+from spell_management import ensure_actor_spell_state
 from GameObjects.events import EventContext
 from GameObjects.events.registry import dispatch_event, list_events
 import GameObjects.events.all_events  # noqa: F401
@@ -524,6 +536,47 @@ class Combat(State):
                 except Exception:
                     logger.debug("Nie udało się wyczyścić efektów raise_shield dla %s", actor)
             try:
+                statuses = list(getattr(actor, "statuses", []) or [])
+                filtered = []
+                for status in statuses:
+                    sid = str(getattr(status, "id", "") or "").strip().lower()
+                    source = str(getattr(status, "source", "") or "")
+                    if sid == "speed_penalty" and source.startswith("raise_shield:"):
+                        continue
+                    filtered.append(status)
+                actor.statuses = filtered
+            except Exception:
+                logger.debug("Nie udało się wyczyścić kary speed z raise_shield dla %s", actor)
+            # Wygaszanie osłony "Take Cover przy cudzej tower shield" po końcu podniesienia tarczy właściciela.
+            try:
+                from GameObjects.items.shield import tower_shield_cover_owner_key
+
+                owner_key = tower_shield_cover_owner_key(actor)
+                shared_cover_prefix = f"take_cover:tower_shield_from:{owner_key}"
+                participants = list(getattr(self.game, "heroes", [])) + list(getattr(self.game, "enemies", []))
+                for participant in participants:
+                    shared_remover = getattr(participant, "remove_bonuses_with_prefix", None)
+                    if not callable(shared_remover):
+                        continue
+                    removed = int(shared_remover(shared_cover_prefix) or 0)
+                    if removed <= 0:
+                        continue
+                    active = [
+                        effect
+                        for effect in list(getattr(participant, "bonuses", []) or [])
+                        if str(getattr(effect, "source", "") or "").startswith("take_cover:")
+                    ]
+                    if active:
+                        continue
+                    drop_status = getattr(participant, "remove_status", None)
+                    if callable(drop_status):
+                        try:
+                            drop_status("covered")
+                        except Exception:
+                            pass
+            except Exception:
+                logger.debug("Nie udało się wygasić osłony z tower shield dla sojuszników.")
+            try:
                 from statuses import run_recovery_check
 
                 recovery = run_recovery_check(actor, source="combat:recovery_check")
@@ -571,7 +624,7 @@ class Combat(State):
         tick_statuses = getattr(actor, "tick_statuses_turn", None)
         if callable(tick_statuses):
             try:
-                tick_statuses()
+                tick_statuses(phase="turn_start", log_changes=True)
             except Exception:
                 logger.debug("Nie udało się odliczyć statusów dla %s", actor)
         try:
@@ -709,6 +762,12 @@ class Combat(State):
                     reset_react()
                 except Exception as exc:
                     logger.error("Nie udało się zresetować reakcji dla %s: %s", actor, exc)
+            try:
+                from combat.reactions.dispatcher import clear_turn_reaction_policies
+
+                clear_turn_reaction_policies(actor)
+            except Exception:
+                pass
         return actor
 
     def _advance_turn(self):
@@ -747,6 +806,12 @@ class Combat(State):
             decrement_end_of_turn_conditions(actor)
         except Exception:
             pass
+        tick_statuses = getattr(actor, "tick_statuses_turn", None)
+        if callable(tick_statuses):
+            try:
+                tick_statuses(phase="turn_end", log_changes=True)
+            except Exception:
+                logger.debug("Nie udało się odliczyć statusów end-turn dla %s", actor)
         changed = 0
         try:
             from GameObjects.items.inventory import tick_alchemical_preparation
@@ -1019,6 +1084,21 @@ class Combat(State):
     def _confirm_actor_position(self, actor) -> bool:
         return True
 
+    def _show_actor_stats(self, actor) -> None:
+        text = render_actor_stats(actor, combat_state=self)
+        ui = getattr(self.game, "ui", None)
+        if ui is not None and hasattr(ui, "prompt_info") and getattr(ui, "enabled", False):
+            try:
+                ui.prompt_info(
+                    "Statystyki",
+                    prompt_long=text,
+                    source="stats",
+                )
+                return
+            except Exception:
+                pass
+        self.game.ui_log(text)
+
     def _handle_hero_decline(self, hero, *, auto_delay: bool = False) -> State:
         if not self._confirm_actor_position(hero):
             logger.info("Nie potwierdzono pozycji bohatera – przerwano wybór END/DELAY.")
@@ -1033,7 +1113,17 @@ class Combat(State):
                 if remaining <= 0
                 else f"Masz {remaining} niewykorzystanych akcji. END – koniec tury (8), DELAY – opóźnij (7, obniża inicjatywę)"
             )
-            decision = self.game.conn.read_card(prompt, ["end", "delay"]).strip().lower()
+            picked = choose_option(
+                self.game,
+                title="Koniec tury",
+                subtitle=prompt,
+                source="end_delay",
+                options=[
+                    {"id": "end", "label": "Koniec", "desc": "Zakończ turę."},
+                    {"id": "delay", "label": "Opóźnij", "desc": "Obniż inicjatywę i zagraj później."},
+                ],
+            )
+            decision = str(picked or "end").strip().lower()
 
         if decision in ("delay", "7", "7 delay", "7 end", "7delay", "7end"):
             if hero in self.delayed:
@@ -1122,6 +1212,10 @@ class Combat(State):
             return self._process_enemy_turn(actor)
 
         # Hero turn
+        try:
+            ensure_actor_spell_state(actor, game=self.game)
+        except Exception:
+            pass
         if self._is_actor_dead(actor):
             self.game.ui_log(f"{getattr(actor, 'name', 'Aktor')} jest martwy i nie może działać.")
             self._advance_turn()
@@ -1152,7 +1246,13 @@ class Combat(State):
         logger.info("Tura bohatera (%s). Akcje: %s/%s", actor, used, limit)
         self.game.ui_hero(
             actor,
-            note=f"Akcje: {used}/{limit} | {self._weapon_note(actor)} | {self._shield_note(actor)}",
+            note="\n".join(
+                [
+                    f"Akcje: {used}/{limit}",
+                    self._weapon_note(actor),
+                    self._shield_note(actor),
+                ]
+            ),
         )
         if used >= limit:
             logger.info("Aktor %s nie ma już akcji. Automatyczny koniec tury.", getattr(actor, "name", actor))
@@ -1164,8 +1264,24 @@ class Combat(State):
         available_events = {
             name: cls for name, cls in all_events.items() if getattr(cls, "available_in_combat", True)
         }
+        available_events = filter_player_events(available_events, actor_is_hero=True)
+        available_events = filter_events_for_actor(
+            available_events,
+            actor=actor,
+            in_combat=True,
+            game=self.game,
+        )
+        available_events = filter_magic_events_for_actor(
+            available_events,
+            actor=actor,
+            game=self.game,
+        )
+        available_events = filter_alchemy_events_for_actor(
+            available_events,
+            actor=actor,
+        )
         if not available_events:
-            logger.warning("Brak zarejestrowanych eventów dla walki.")
+            logger.warning("Brak zarejestrowanych eventów dla walki (po filtrze bohatera).")
             self.game.ui_log("Brak akcji do wykonania.")
             self._advance_turn()
             return self
@@ -1180,19 +1296,76 @@ class Combat(State):
         except Exception:
             pass
 
-        ordered_choices = sorted(available_events.keys())
-        logger.info("Dostępne akcje: %s", ", ".join(ordered_choices))
-        self.game.ui_log(
-            f"Aktywny: {getattr(actor, 'name', actor)}. Dostępne akcje: {', '.join(ordered_choices)}."
+        grouped = group_events(available_events)
+        intent_options = build_intent_options(grouped, in_combat=True, actor=actor)
+        logger.info("Dostępne intencje: %s", ", ".join(option["id"] for option in intent_options))
+        self.game.ui_log(f"Aktywny: {getattr(actor, 'name', actor)}. Wybierz intencję akcji.")
+        intent = choose_option(
+            self.game,
+            title="Akcje",
+            subtitle="8/2 nawigacja, Enter potwierdzenie.",
+            source="intent",
+            options=intent_options,
         )
-        raw_choice = self.game.conn.read_card(
-            "Podaj nazwę akcji",
-        ).strip().lower()
         if highlighted:
             try:
                 self.game.conn.leds_off()
             except Exception:
                 pass
+
+        raw_choice: str | None = None
+        if not intent:
+            ui = getattr(self.game, "ui", None)
+            ui_enabled = bool(ui is not None and getattr(ui, "enabled", False))
+            try:
+                fallback_raw = str(self.game.conn.read_card("Podaj nazwę akcji", []) or "").strip().lower()
+            except Exception:
+                fallback_raw = ""
+            if fallback_raw in available_events:
+                raw_choice = fallback_raw
+            else:
+                if ui_enabled:
+                    self.game.ui_log("Nie wybrano akcji.")
+                    return self
+                self.game.ui_log("Nie wybrano akcji.")
+                return self
+
+        if intent == "stats":
+            self._show_actor_stats(actor)
+            return self
+
+        if raw_choice is None:
+            if intent == "interact":
+                raw_choice = "interaction"
+            elif intent == "equipment":
+                raw_choice = "equip"
+            elif intent == "attack":
+                if "attack" in available_events:
+                    raw_choice = "attack"
+                else:
+                    raw_choice = choose_event_from_bucket(
+                        self.game,
+                        bucket_id=intent,
+                        available_events=available_events,
+                        event_names=list(grouped.get(intent, [])),
+                        source=f"intent:{intent}",
+                    )
+                    if not raw_choice:
+                        self.game.ui_log("Nie wybrano akcji ataku.")
+                        return self
+            elif intent in ("magic", "alchemy", "special"):
+                raw_choice = choose_event_from_bucket(
+                    self.game,
+                    bucket_id=intent,
+                    available_events=available_events,
+                    event_names=list(grouped.get(intent, [])),
+                    source=f"intent:{intent}",
+                )
+                if not raw_choice:
+                    self.game.ui_log(f"Nie wybrano akcji z kategorii '{intent}'.")
+                    return self
+            else:
+                raw_choice = str(intent).strip().lower()
 
         if raw_choice not in available_events:
             logger.error("Nieznana akcja '%s'", raw_choice)

@@ -4,12 +4,12 @@ from statuses.base import Status
 
 SHIELD_BLOCK_DESCRIPTION = (
     "Reakcja: gdy masz podniesiona tarcze i otrzymujesz obrazenia fizyczne, "
-    "tarcza pochlania obrazenia do Hardness. Na razie opisowo."
+    "tarcza pochlania obrazenia do Hardness (wdrozone mechanicznie przez reakcje)."
 )
 
 
 def ShieldBlockStatus() -> Status:
-    """Feat: Shield Block (opis do UI)."""
+    """Feat: Shield Block."""
     return Status(
         id="shield_block",
         label="Shield Block",

@@ -4,12 +4,11 @@ from statuses.base import Status
 from statuses.dim_light_vision import DIM_LIGHT_VISION_STATUS
 
 HALF_ORC_DESCRIPTION = (
-    "One of your parents was an orc, or one or both were\n"
-    "half-orcs. You have a green tinge to your skin and other\n"
-    "indicators of orc heritage. You gain the orc trait, the\n"
-    "half-orc trait, and low-light vision. In addition, you can\n"
-    "select orc, half-orc, and human feats whenever you gain\n"
-    "an ancestry feat."
+    "Co najmniej jedno z twoich rodzicow jest orkiem lub polorkiem.\n"
+    "Noszisz wyrazne oznaki orkowego pochodzenia.\n"
+    "Zyskujesz cechy orc i half-orc oraz widzenie w polmroku.\n"
+    "Dodatkowo przy wyborze ancestry featow mozesz wybierac featy\n"
+    "z listy orc, half-orc i human."
 )
 
 

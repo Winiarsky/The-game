@@ -6,10 +6,11 @@ from statuses.base import Status
 from statuses.check_effects import CheckEffect
 
 ILLUSION_SENSE_DESCRIPTION = (
-    "Masz +1 circumstance do Perception checks i Will saves przeciw iluzjom.\n"
-    "Dodatkowo gdy wejdziesz w 10 stóp od iluzji, która może być disbelief, "
-    "GM wykonuje secret check na disbelief nawet bez akcji Interact.\n"
-    "W tym silniku automatyczny secret disbelief jest oznaczony danymi statusu."
+    "Twoje zmysly sa wyczulone na zaburzenia rzeczywistosci wywolane iluzja.\n"
+    "Kiedy: wykonujesz Will save lub Perception check przeciw efektowi z tagiem illusion.\n"
+    "Efekt: +1 circumstance bonus do tych testow; dodatkowo przy wejsciu w zasieg "
+    "10 stop od iluzji do disbelief mozliwy jest automatyczny secret disbelief "
+    "(w silniku sygnalizowane przez illusion_sense_auto_disbelieve_within_feet)."
 )
 
 

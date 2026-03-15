@@ -13,6 +13,7 @@ from statuses.race.goblin.feats.junk_tinker import JUNK_TINKER_STATUS
 from statuses.race.goblin.feats.rough_rider import ROUGH_RIDER_STATUS
 from statuses.race.goblin.feats.very_sneaky import VERY_SNEAKY_STATUS
 from statuses.race.goblin.heritages.irongut_goblin import IRONGUT_GOBLIN_STATUS
+from GameObjects.events.goblin_song_event import _goblin_song_max_targets
 
 
 class DummyHero(StatusMixin):
@@ -125,3 +126,23 @@ def test_junk_tinker_and_rough_rider_have_capability_data():
     assert junk.get("junk_tinker_can_craft_level0_from_junk") is True
     assert junk.get("junk_tinker_ignore_selfmade_shoddy_penalty") is True
     assert "ride" in list(rough.get("granted_feat_ids") or [])
+
+
+class _SongActor:
+    def __init__(self, rank: str):
+        self.skill_ranks = {"performance": str(rank)}
+
+    def get_status_data(self, status_id: str, field: str | None = None, default=None):
+        if str(status_id or "").strip().lower() != "goblin_song":
+            return default
+        payload = dict(GOBLIN_SONG_STATUS.data or {})
+        if field is None:
+            return payload
+        return payload.get(field, default)
+
+
+def test_goblin_song_event_uses_performance_rank_for_target_limit():
+    assert _goblin_song_max_targets(_SongActor("trained")) == 1
+    assert _goblin_song_max_targets(_SongActor("expert")) == 2
+    assert _goblin_song_max_targets(_SongActor("master")) == 4
+    assert _goblin_song_max_targets(_SongActor("legendary")) == 8

@@ -13,7 +13,7 @@ for path in (PROJECT_ROOT, SRC_ROOT):
 from bonuses import BonusEffect, BonusType
 from combat.reactions.reactive_shield_reaction import ReactiveShieldReaction
 from GameObjects.interactions_mixin import BonusMixin, StatusMixin
-from GameObjects.items.shield import StandardShield
+from GameObjects.items.shield import StandardShield, create_shield
 from statuses import Status
 
 
@@ -68,3 +68,21 @@ def test_reactive_shield_execute_applies_raise_shield_bonus_for_triggering_attac
     assert int(getattr(ac_bonuses[0], "value", 0) or 0) == 2
     assert str(getattr(ac_bonuses[0], "source", "")).startswith("raise_shield:")
     assert any("Reactive Shield" in line for line in logs)
+
+
+def test_reactive_tower_shield_adds_temporary_speed_penalty():
+    actor = DummyActor()
+    tower = create_shield("tower_shield")
+    assert tower is not None
+    actor.equipped_shield = tower
+    reaction = ReactiveShieldReaction()
+    game = SimpleNamespace(state=SimpleNamespace(round_index=7), ui_log=lambda *_a, **_k: None)
+    ctx = SimpleNamespace(game=game)
+
+    executed = reaction.execute(actor, _event_for(actor), ctx)
+
+    assert executed is True
+    penalties = [s for s in actor.statuses if getattr(s, "id", "") == "speed_penalty" and str(getattr(s, "source", "")).startswith("raise_shield:")]
+    assert penalties
+    data = getattr(penalties[0], "data", {}) or {}
+    assert int(data.get("speed_penalty_feet", 0) or 0) == 5

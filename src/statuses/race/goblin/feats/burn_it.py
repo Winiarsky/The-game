@@ -5,9 +5,7 @@ from statuses.base import Status
 BURN_IT_DESCRIPTION = (
     "Twoje czary i alchemiczne przedmioty zadające fire damage zyskują status bonus "
     "do obrażeń: połowa poziomu czaru lub 1/4 poziomu przedmiotu (min. 1).\n"
-    "Dodatkowo zadajesz +1 status do persistent fire damage.\n"
-    "W tym silniku bonus liczony jest od poziomu postaci (min. 1), a persistent fire "
-    "otrzymuje stałe +1."
+    "Dodatkowo zadajesz +1 status do persistent fire damage."
 )
 
 

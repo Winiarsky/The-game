@@ -14,7 +14,7 @@ from GameObjects.events.base import EventContext
 from GameObjects.events.registry import dispatch_event
 from GameObjects.events.attack import basic_melee_attack_event
 from GameObjects.items.goodberry_item import GoodberryItem
-from GameObjects.items.inventory import ensure_actor_inventory, get_equipped_weapons
+from GameObjects.items.inventory import ensure_actor_inventory, get_equipped_weapons, hand_slots_snapshot
 from GameObjects.items.shield import StandardShield
 from board_grid import BoardGrid
 
@@ -75,6 +75,10 @@ class FakeUI:
 
     def prompt_choice(self, prompt, **kwargs):
         self.calls.append({"prompt": prompt, **kwargs})
+        if isinstance(self.answer, list):
+            if self.answer:
+                return self.answer.pop(0)
+            return "exit"
         return self.answer
 
     def prompt_info(self, title, **kwargs):
@@ -178,7 +182,7 @@ def test_equip_cancel_does_not_consume_action():
 def test_equip_transfer_in_exploration_ignores_distance():
     hero_a = Hero("A", (0, 0))
     hero_b = Hero("B", (5, 5))
-    game = FakeGame(conn=FakeConn(card_choices=["6"]))
+    game = FakeGame(conn=FakeConn(card_choices=["*"]))
     game.heroes = [hero_a, hero_b]
     game.board.place(hero_a, hero_a.position)
     game.board.place(hero_b, hero_b.position)
@@ -197,7 +201,7 @@ def test_equip_transfer_selects_target_via_board_scan_expected_fields():
     hero_a = Hero("A", (0, 0))
     hero_b = Hero("B", (5, 5))
     hero_c = Hero("C", (4, 4))
-    conn = FakeConn(card_choices=["6"], scan_choices=[hero_c.position])
+    conn = FakeConn(card_choices=["*"], scan_choices=[hero_c.position])
     game = FakeGame(conn=conn)
     game.heroes = [hero_a, hero_b, hero_c]
     game.board.place(hero_a, hero_a.position)
@@ -222,7 +226,7 @@ def test_equip_transfer_selects_target_via_board_scan_expected_fields():
 def test_equip_transfer_in_combat_requires_adjacent_target():
     hero_a = Hero("A", (0, 0))
     hero_b = Hero("B", (5, 5))
-    game = FakeGame(conn=FakeConn(card_choices=["6"]))
+    game = FakeGame(conn=FakeConn(card_choices=["*"]))
     game.heroes = [hero_a, hero_b]
     game.board.place(hero_a, hero_a.position)
     game.board.place(hero_b, hero_b.position)
@@ -237,7 +241,7 @@ def test_equip_transfer_in_combat_requires_adjacent_target():
 
 def test_equip_drop_creates_loot_and_interaction_picks_it_up():
     hero = Hero("A", (0, 0))
-    game = FakeGame(conn=FakeConn(card_choices=["2", "4"], scan_choices=[hero.position]), ui=FakeUI(enabled=False))
+    game = FakeGame(conn=FakeConn(card_choices=["2", "/"], scan_choices=[hero.position]), ui=FakeUI(enabled=False))
     game.heroes = [hero]
     game.board.place(hero, hero.position)
     game.state.actions_used = {hero: 0}
@@ -275,7 +279,7 @@ def test_attack_fallbacks_to_unarmed_when_no_weapon_equipped(monkeypatch):
     assert enemy.hp == 5
 
 
-def test_equip_ui_prompt_contains_details_and_legend():
+def test_equip_ui_prompt_hides_top_long_text_and_uses_choice_meta_details():
     hero = Hero("A", (0, 0))
     ui = FakeUI(enabled=True, answer="exit")
     game = FakeGame(conn=FakeConn(), ui=ui)
@@ -287,9 +291,15 @@ def test_equip_ui_prompt_contains_details_and_legend():
     assert not result.success
     call = ui.calls[-1]
     prompt_long = str(call.get("prompt_long") or "")
-    assert "Nawigacja:" in prompt_long
-    assert "Szczegóły:" in prompt_long
-    assert "Attack:" in prompt_long
+    choices = [str(item) for item in list(call.get("choices") or [])]
+    assert prompt_long.strip() == ""
+    meta = list(call.get("choice_meta") or [])
+    first_item = next((entry for entry in meta if str(entry.get("raw") or "").startswith("item:")), {})
+    first_desc = str(first_item.get("desc") or "")
+    assert "Ręce:" in first_desc
+    assert "Mechanika:" in first_desc
+    assert "Użyj:" in first_desc
+    assert any(choice.startswith("[BRONIE]") for choice in choices)
 
 
 def test_equip_toggle_consumes_goodberry_and_heals(monkeypatch):
@@ -314,7 +324,7 @@ def test_equip_toggle_consumes_goodberry_and_heals(monkeypatch):
     assert "Leczenie: 6 + 4 = 10 HP." in str(ui.info_calls[0].get("prompt_long") or "")
 
 
-def test_attack_with_two_active_weapons_asks_and_uses_selected(monkeypatch):
+def test_attack_with_two_active_weapons_uses_primary_active_weapon(monkeypatch):
     hero = Hero("A", (0, 0))
     enemy = Enemy((1, 0), hp=10, ac=10)
     ui = FakeUI(enabled=True, answer="2")
@@ -336,4 +346,76 @@ def test_attack_with_two_active_weapons_asks_and_uses_selected(monkeypatch):
     result = dispatch_event("attack", ExplorationCtx(game=game, actor=hero))
 
     assert result.success
-    assert any(str(ev.get("action_id", "")).startswith("attack_dagger") for ev in game.events.emitted)
+    assert any(str(ev.get("action_id", "")).startswith("attack_sword") for ev in game.events.emitted)
+
+
+def test_equip_ui_can_assign_item_to_left_hand_with_special_command_payload():
+    hero = Hero("A", (0, 0))
+    ui = FakeUI(enabled=True, answer=[{"cmd": "hand_left", "selected": "item:1"}, "exit"])
+    game = FakeGame(conn=FakeConn(), ui=ui)
+    game.heroes = [hero]
+    game.board.place(hero, hero.position)
+
+    result = dispatch_event("equip", ExplorationCtx(game=game, actor=hero))
+
+    assert result.success
+    assert "lewą rękę" in str(result.message or "")
+
+
+def test_equip_ui_parses_object_like_string_payload_from_ui_client():
+    hero = Hero("A", (0, 0))
+    ui = FakeUI(enabled=True, answer=["{'cmd': 'hand_right', 'selected': 'item:4'}", "exit"])
+    game = FakeGame(conn=FakeConn(), ui=ui)
+    game.heroes = [hero]
+    game.board.place(hero, hero.position)
+
+    result = dispatch_event("equip", ExplorationCtx(game=game, actor=hero))
+
+    assert result.success
+    assert "prawą rękę" in str(result.message or "")
+
+
+def test_equip_stays_open_after_successful_change_until_exit():
+    hero = Hero("A", (0, 0))
+    ui = FakeUI(enabled=True, answer=["item:4", "exit"])
+    game = FakeGame(conn=FakeConn(), ui=ui)
+    game.heroes = [hero]
+    game.board.place(hero, hero.position)
+
+    result = dispatch_event("equip", ExplorationCtx(game=game, actor=hero))
+
+    assert result.success
+    assert len(ui.calls) >= 2
+
+
+def test_equip_ui_section_switch_command_is_handled_without_unknown_error():
+    hero = Hero("A", (0, 0))
+    logs: list[str] = []
+    ui = FakeUI(enabled=True, answer=[{"cmd": "section_next", "selected": "item:0"}, "exit"])
+    game = FakeGame(conn=FakeConn(), ui=ui)
+    game.ui_log = lambda msg: logs.append(str(msg))
+    game.heroes = [hero]
+    game.board.place(hero, hero.position)
+
+    result = dispatch_event("equip", ExplorationCtx(game=game, actor=hero))
+
+    assert not result.success
+    assert len(ui.calls) >= 2
+    assert all("Nieznana komenda" not in line for line in logs)
+
+
+def test_equip_cli_key_7_assigns_selected_item_to_left_hand():
+    hero = Hero("A", (0, 0))
+    game = FakeGame(conn=FakeConn(card_choices=["7", "0"]), ui=FakeUI(enabled=False))
+    game.heroes = [hero]
+    game.board.place(hero, hero.position)
+    game.state.actions_used = {hero: 0}
+    ensure_actor_inventory(hero)
+
+    result = dispatch_event("equip", CombatCtx(game=game, actor=hero))
+    slots = hand_slots_snapshot(hero)
+    left_id = str((slots.get("left", {}) or {}).get("item_id", "") or "")
+
+    assert result.success
+    assert result.consumed_action
+    assert left_id == "sword"

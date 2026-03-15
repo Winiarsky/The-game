@@ -42,6 +42,9 @@ class BasicEnemy(StatusMixin, BonusMixin, WatchfulMixin, ReactiveMixin, MagicalM
     watch_disabled: bool = False
     perception_bonus: int = 4
     will_bonus: int = 0
+    loot_items: list[object] = field(default_factory=list)
+    loot_cp: int = 0
+    coin_pouch: dict[str, int] = field(default_factory=dict)
     initiative: Optional[int] = None
     position: Optional[tuple[int, int]] = None
     statuses: list[Status] = field(default_factory=list)
@@ -138,6 +141,9 @@ class BasicEnemy(StatusMixin, BonusMixin, WatchfulMixin, ReactiveMixin, MagicalM
 
     def trigger_combat(self, game) -> None:
         """Wywołuje wejście w stan walki, gdy jesteśmy w turze bohaterów."""
+        if getattr(self, "position", None) is None or int(getattr(self, "hp", 1) or 0) <= 0:
+            logger.info("Pomijam trigger walki dla %s (brak pozycji lub HP <= 0).", self.name)
+            return
         try:
             game.start_combat(trigger=self)
         except Exception as exc:

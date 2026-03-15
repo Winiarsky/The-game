@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Portret wojownika">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#23304A"/>
+      <stop offset="100%" stop-color="#4E6C92"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <circle cx="256" cy="190" r="82" fill="#D8B08C"/>
+  <path d="M130 470c20-92 74-140 126-140s106 48 126 140H130z" fill="#8A9AB0"/>
+  <path d="M176 175l26-62h108l26 62-26 8-14-40h-80l-14 40-26-8z" fill="#C8D2E2"/>
+  <path d="M256 120l42 20v18h-84v-18l42-20z" fill="#EDF2FA"/>
+  <rect x="215" y="235" width="82" height="16" rx="8" fill="#6A2E2E"/>
+  <circle cx="238" cy="190" r="8" fill="#2B1C16"/>
+  <circle cx="274" cy="190" r="8" fill="#2B1C16"/>
+</svg>

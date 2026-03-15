@@ -4,6 +4,7 @@ import logging
 
 from GameObjects.items.shield import get_equipped_shield
 from bonuses import BonusEffect, BonusType
+from statuses import SpeedPenaltyStatus
 from .base import EventContext, EventResult, GameEvent
 from .registry import register_event
 
@@ -25,6 +26,46 @@ def _has_status(actor, status_id: str) -> bool:
     return False
 
 
+def _clear_raise_shield_speed_penalties(actor) -> None:
+    statuses = list(getattr(actor, "statuses", []) or [])
+    if not statuses:
+        return
+    kept = []
+    for status in statuses:
+        status_id = str(getattr(status, "id", "") or "").strip().lower()
+        source = str(getattr(status, "source", "") or "")
+        if status_id == "speed_penalty" and source.startswith("raise_shield:"):
+            continue
+        kept.append(status)
+    try:
+        setattr(actor, "statuses", kept)
+    except Exception:
+        pass
+
+
+def _apply_tower_shield_speed_penalty(actor, *, source_tag: str, shield) -> None:
+    penalty = max(0, int(getattr(shield, "speed_penalty_feet", 0) or 0))
+    if penalty <= 0:
+        return
+    adder = getattr(actor, "add_status", None)
+    if not callable(adder):
+        return
+    actor_id = str(getattr(actor, "object_id", "") or "").strip() or None
+    try:
+        adder(
+            SpeedPenaltyStatus(
+                penalty_feet=penalty,
+                source=source_tag,
+                source_id=actor_id,
+                source_turns_left=1,
+                duration=1,
+                label=f"raise shield: -{penalty} ft",
+            )
+        )
+    except Exception:
+        return
+
+
 @register_event
 class RaiseShieldEvent(GameEvent):
     """Podniesienie tarczy – circumstance AC bonus z tarczy do początku kolejnej tury bohatera."""
@@ -44,8 +85,6 @@ class RaiseShieldEvent(GameEvent):
         hero = ctx.actor
         if hero is None:
             return EventResult(success=False, consumed_action=False, message="Brak wybranego bohatera.")
-        if not _has_status(hero, "raise_shield_allow"):
-            return EventResult.cancelled(message="Raise Shield: wymaga statusu raise_shield_allow.")
         shield = get_equipped_shield(hero, create_default=False)
         if shield is None:
             return EventResult.cancelled(message="Raise Shield: brak wyposazonej tarczy.")
@@ -61,6 +100,7 @@ class RaiseShieldEvent(GameEvent):
                 remover("raise_shield:")
             except Exception:
                 pass
+        _clear_raise_shield_speed_penalties(hero)
 
         round_idx = getattr(getattr(ctx.game, "state", None), "round_index", None)
         source_tag = f"raise_shield:round{round_idx}" if round_idx is not None else "raise_shield"
@@ -83,6 +123,7 @@ class RaiseShieldEvent(GameEvent):
                 duration_turns=1,
             )
         )
+        _apply_tower_shield_speed_penalty(hero, source_tag=source_tag, shield=shield)
 
         logger.info("Bohater podnosi tarczę: +%s AC circumstance do początku kolejnej tury.", shield_ac_bonus)
         try:

@@ -94,6 +94,10 @@ def _safe_int(value, default=0) -> int:
         return int(default)
 
 
+def _norm_token(value: object) -> str:
+    return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+
+
 def _iter_status_data(actor):
     for status in getattr(actor, "statuses", None) or []:
         data = getattr(status, "data", None)
@@ -195,25 +199,64 @@ def _rank_for_category(actor, category: WeaponCategory) -> ProficiencyRank:
     return _normalize_rank(raw)
 
 
-def _ability_modifier(actor, *, is_ranged: bool, finesse: bool, brutal: bool) -> int:
-    prefer_dex = bool((is_ranged and not brutal) or finesse)
-    if prefer_dex:
-        keys = ("dex_mod", "dexterity_mod")
-        ability_key = "dexterity"
+def _ability_mod_value(actor, ability_key: str) -> int:
+    key = str(ability_key or "").strip().lower()
+    if key in {"strength", "str"}:
+        direct_keys = ("str_mod", "strength_mod")
+        dict_keys = ("strength", "str")
+    elif key in {"dexterity", "dex"}:
+        direct_keys = ("dex_mod", "dexterity_mod")
+        dict_keys = ("dexterity", "dex")
     else:
-        keys = ("str_mod", "strength_mod")
-        ability_key = "strength"
+        direct_keys = ()
+        dict_keys = (key,)
 
-    for key in keys:
-        raw = getattr(actor, key, None)
+    for attr in direct_keys:
+        raw = getattr(actor, attr, None)
         if raw is not None:
             return _safe_int(raw, 0)
 
     ability_modifiers = getattr(actor, "ability_modifiers", None)
     if isinstance(ability_modifiers, dict):
-        if ability_key in ability_modifiers:
-            return _safe_int(ability_modifiers.get(ability_key), 0)
+        for dict_key in dict_keys:
+            if dict_key in ability_modifiers:
+                return _safe_int(ability_modifiers.get(dict_key), 0)
     return 0
+
+
+def _ability_modifier(actor, *, is_ranged: bool, finesse: bool, brutal: bool) -> tuple[int, str]:
+    # PF2: finesse pozwala użyć DEX zamiast STR do ataku (wybieramy korzystniejszy).
+    str_mod = _ability_mod_value(actor, "strength")
+    dex_mod = _ability_mod_value(actor, "dexterity")
+    if brutal:
+        return str_mod, "strength"
+    if is_ranged and not finesse:
+        return dex_mod, "dexterity"
+    if finesse:
+        if dex_mod >= str_mod:
+            return dex_mod, "dexterity"
+        return str_mod, "strength"
+    return str_mod, "strength"
+
+
+def _equipped_weapon_item_bonus(actor, weapon_key: str | None) -> int:
+    try:
+        from GameObjects.items.inventory import get_equipped_weapons
+        from GameObjects.items.weapon import normalize_weapon_id
+    except Exception:
+        return 0
+
+    best = 0
+    for weapon in list(get_equipped_weapons(actor) or []):
+        item_weapon_id = _norm_token(normalize_weapon_id(getattr(weapon, "item_id", None)))
+        if weapon_key and item_weapon_id and item_weapon_id != _norm_token(weapon_key):
+            continue
+        for attr in ("potency_bonus", "potency_rune", "weapon_potency", "attack_item_bonus", "item_bonus"):
+            raw = getattr(weapon, attr, None)
+            if raw is None:
+                continue
+            best = max(best, _safe_int(raw, 0))
+    return max(0, best)
 
 
 def _item_bonus(actor, weapon_key: str | None) -> int:
@@ -233,6 +276,7 @@ def _item_bonus(actor, weapon_key: str | None) -> int:
             if weapon_key and weapon_key in item_data:
                 bonus = max(bonus, _safe_int(item_data.get(weapon_key), 0))
             bonus = max(bonus, _safe_int(item_data.get("default"), 0))
+    bonus = max(bonus, _equipped_weapon_item_bonus(actor, weapon_key))
     return max(0, bonus)
 
 
@@ -259,9 +303,9 @@ def compute_weapon_attack_roll_bonus(
     rank = _rank_override_for_weapon(actor, weapon_key)
     if rank is None:
         rank = _rank_for_category(actor, category)
-    level = max(1, _safe_int(getattr(actor, "level", 1), 1))
+    level = max(0, _safe_int(getattr(actor, "level", 1), 1))
     prof_bonus = proficiency_bonus(rank, level=level)
-    ability_bonus = _ability_modifier(actor, is_ranged=is_ranged, finesse=finesse, brutal=brutal)
+    ability_bonus, ability_key = _ability_modifier(actor, is_ranged=is_ranged, finesse=finesse, brutal=brutal)
     item_bonus = _item_bonus(actor, weapon_key)
     total = int(prof_bonus) + int(ability_bonus) + int(item_bonus)
 
@@ -270,8 +314,11 @@ def compute_weapon_attack_roll_bonus(
         "weapon_key": weapon_key,
         "category": category.value,
         "rank": rank.value,
+        "rank_step": int(_RANK_BONUS_STEP.get(rank, 0) or 0),
+        "level": int(level),
         "proficiency_bonus": prof_bonus,
         "ability_bonus": ability_bonus,
+        "ability_key": ability_key,
         "item_bonus": item_bonus,
     }
 

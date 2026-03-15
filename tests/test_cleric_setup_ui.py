@@ -66,3 +66,45 @@ def test_cloistered_gets_domain_initiate_and_focus_point(monkeypatch):
     assert getattr(hero, "focus_point", None) == 1
     assert "truth" in list(getattr(hero, "cleric_known_domains", []) or [])
     assert "word_of_truth" in list(getattr(hero, "cleric_domain_spells", []) or [])
+
+
+def test_cleric_iomedae_records_divine_skill_and_trained_skills(monkeypatch):
+    ui = DummyUI(["Iomedae", "Warpriest", "Heal"])
+    monkeypatch.setattr("ui_client.get_ui_client", lambda: ui)
+
+    hero = DummyHero()
+    hero.add_status(CLERIC_STATUS)
+
+    setup = dict(hero.get_status_data("cleric", "cleric_setup", {}) or {})
+    trained_skills = [str(item or "").strip().lower() for item in list(setup.get("trained_skills") or [])]
+    assert setup.get("deity_skill") == "intimidation"
+    assert "religion" in trained_skills
+    assert "intimidation" in trained_skills
+
+
+def test_cleric_shelyn_prompts_for_divine_skill_choice(monkeypatch):
+    ui = DummyUI(["Shelyn", "Warpriest", "Crafting", "Heal"])
+    monkeypatch.setattr("ui_client.get_ui_client", lambda: ui)
+
+    hero = DummyHero()
+    hero.add_status(CLERIC_STATUS)
+
+    setup = dict(hero.get_status_data("cleric", "cleric_setup", {}) or {})
+    assert setup.get("deity_skill") == "crafting"
+
+
+def test_cleric_setup_persists_spell_tradition_and_prepare_budgets(monkeypatch):
+    ui = DummyUI(["Iomedae", "Cloistered Cleric", "Truth"])
+    monkeypatch.setattr("ui_client.get_ui_client", lambda: ui)
+
+    hero = DummyHero()
+    hero.add_status(CLERIC_STATUS)
+
+    setup = dict(hero.get_status_data("cleric", "cleric_setup", {}) or {})
+    assert setup.get("spell_tradition") == "divine"
+    assert int(setup.get("prepared_cantrips_at_level1", 0) or 0) == 5
+    assert int(setup.get("prepared_rank_1_slots_at_level1", 0) or 0) == 2
+
+    assert hero.get_status_data("cleric", "cleric_spell_tradition", None) == "divine"
+    assert int(hero.get_status_data("cleric", "cleric_prepared_cantrips_at_level1", 0) or 0) == 5
+    assert int(hero.get_status_data("cleric", "cleric_prepared_rank_1_slots_at_level1", 0) or 0) == 2

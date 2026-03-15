@@ -149,6 +149,7 @@ def create_prompt():
         "desc": data.get("desc"),
         "answer_placeholder": data.get("answer_placeholder"),
         "modifiers": modifiers,
+        "roll_stack": data.get("roll_stack") if isinstance(data.get("roll_stack"), dict) else None,
     }
     with prompts_lock:
         prompts[prompt_id] = entry
@@ -194,6 +195,7 @@ def get_prompt(prompt_id: str):
             "desc": entry.get("desc"),
             "answer_placeholder": entry.get("answer_placeholder"),
             "modifiers": entry.get("modifiers"),
+            "roll_stack": entry.get("roll_stack"),
         }
     )
 

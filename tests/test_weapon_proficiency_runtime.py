@@ -90,3 +90,69 @@ def test_brutal_uses_strength_for_ranged_attack_bonus():
 
     assert int(normal["ability_bonus"]) == 1
     assert int(brutal["ability_bonus"]) == 4
+
+
+def test_melee_attack_formula_with_item_bonus_matches_pf2_example_shape():
+    hero = Hero()
+    hero.level = 5
+    hero.str_mod = 4
+    hero.weapon_attack_item_bonus = {"default": 1}
+    hero.add_status(
+        Status(
+            id="weapon_prof_test",
+            data={
+                "weapon_proficiency_ranks": {
+                    "simple": "trained",
+                    "martial": "trained",
+                    "advanced": "untrained",
+                    "unarmed": "trained",
+                }
+            },
+        )
+    )
+
+    result = compute_weapon_attack_roll_bonus(
+        hero,
+        weapon_tags=["attack_melee", "longsword"],
+        is_ranged=False,
+        finesse=False,
+    )
+    # level 5 + trained 2 + STR 4 + item 1 = 12
+    assert int(result["proficiency_bonus"]) == 7
+    assert int(result["ability_bonus"]) == 4
+    assert int(result["item_bonus"]) == 1
+    assert int(result["total"]) == 12
+
+
+def test_ranged_attack_formula_with_dex_and_expert_matches_pf2_example_shape():
+    hero = Hero()
+    hero.level = 4
+    hero.dex_mod = 4
+    hero.str_mod = 1
+    hero.weapon_attack_item_bonus = {"default": 1}
+    hero.add_status(
+        Status(
+            id="weapon_prof_test",
+            data={
+                "weapon_proficiency_ranks": {
+                    "simple": "trained",
+                    "martial": "expert",
+                    "advanced": "untrained",
+                    "unarmed": "trained",
+                }
+            },
+        )
+    )
+
+    result = compute_weapon_attack_roll_bonus(
+        hero,
+        weapon_tags=["attack_ranged", "longbow"],
+        is_ranged=True,
+        finesse=False,
+    )
+    # level 4 + expert 4 + DEX 4 + item 1 = 13
+    assert int(result["proficiency_bonus"]) == 8
+    assert int(result["ability_bonus"]) == 4
+    assert str(result["ability_key"]) == "dexterity"
+    assert int(result["item_bonus"]) == 1
+    assert int(result["total"]) == 13

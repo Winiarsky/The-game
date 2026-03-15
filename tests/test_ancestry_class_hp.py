@@ -19,6 +19,14 @@ def test_dwarf_status_has_mechanical_ancestry_fields():
     assert int(data.get("ancestry_hp", 0) or 0) == 10
     assert int(data.get("base_speed_feet", 0) or 0) == 20
     assert str(data.get("size", "")).lower() == "medium"
+    assert list(data.get("ability_boosts") or []) == ["constitution", "wisdom", "free"]
+    assert str(data.get("ability_flaw", "")).lower() == "charisma"
+
+
+def test_dwarf_base_grants_darkvision_on_add():
+    hero = Hero()
+    hero.add_status(DWARF_STATUS)
+    assert hero.has_status("darkvision") is True
 
 
 def test_computed_hp_uses_ancestry_plus_class_components():

@@ -121,29 +121,103 @@ def _has_status(obj, status_id: str) -> bool:
     return False
 
 
-def burn_it_bonus(actor: Any, damage_type: str, *, persistent: bool = False) -> int:
-    """Zwróć bonus z Burn It! dla obrażeń ognia."""
+def _normalize_burn_it_source_kind(value: object) -> str:
+    raw = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if raw in {"spell", "alchemical"}:
+        return raw
+    return ""
+
+
+def _to_non_negative_int(value: object, *, default: int = 0) -> int:
+    try:
+        parsed = int(value)
+    except Exception:
+        parsed = int(default)
+    return max(0, parsed)
+
+
+def _burn_it_persistent_bonus(actor: Any) -> int:
+    default_bonus = 1
+    statuses = getattr(actor, "statuses", None)
+    if not isinstance(statuses, list):
+        return default_bonus
+    for status in statuses:
+        if getattr(status, "id", None) != "burn_it":
+            continue
+        data = getattr(status, "data", None)
+        if isinstance(data, dict):
+            return _to_non_negative_int(data.get("burn_it_persistent_bonus", 1), default=1)
+        return default_bonus
+    return default_bonus
+
+
+def burn_it_bonus(
+    actor: Any,
+    damage_type: str,
+    *,
+    persistent: bool = False,
+    source_kind: str | None = None,
+    spell_rank: int | None = None,
+    item_level: int | None = None,
+) -> int:
+    """Zwróć bonus z Burn It! dla obrażeń ognia.
+
+    By the book:
+    - spell: połowa rangi czaru (min. 1),
+    - alchemical: 1/4 poziomu przedmiotu (min. 1),
+    - persistent fire: +1 status.
+    """
     if damage_type != DamageType.FIRE.value:
         return 0
     if not _has_status(actor, "burn_it"):
         return 0
+    source = _normalize_burn_it_source_kind(source_kind)
+    if source not in {"spell", "alchemical"}:
+        return 0
     if persistent:
-        return 1
-    level = getattr(actor, "level", 1) or 1
-    try:
-        level = int(level)
-    except Exception:
-        level = 1
-    return max(1, level // 2)
+        return _burn_it_persistent_bonus(actor)
+    if source == "spell":
+        rank = _to_non_negative_int(spell_rank, default=1)
+        return max(1, rank // 2)
+    lvl = _to_non_negative_int(item_level, default=1)
+    return max(1, lvl // 4)
 
 
-def burn_it_prompt_note(actor: Any, damage_type: str, *, persistent: bool = False) -> str | None:
-    bonus = burn_it_bonus(actor, damage_type, persistent=persistent)
+def burn_it_prompt_note(
+    actor: Any,
+    damage_type: str,
+    *,
+    persistent: bool = False,
+    source_kind: str | None = None,
+    spell_rank: int | None = None,
+    item_level: int | None = None,
+) -> str | None:
+    bonus = burn_it_bonus(
+        actor,
+        damage_type,
+        persistent=persistent,
+        source_kind=source_kind,
+        spell_rank=spell_rank,
+        item_level=item_level,
+    )
     if not bonus:
         return None
     if persistent:
-        return "Burn It!: wpisz wartość -1 (bonus +1 doda się automatycznie)."
-    return f"Burn It!: +{bonus} status do obrażeń ognia (dodane automatycznie)."
+        return f"Burn It!: +{bonus} status do persistent fire (dodane automatycznie)."
+    source = _normalize_burn_it_source_kind(source_kind)
+    if source == "spell":
+        rank = _to_non_negative_int(spell_rank, default=1)
+        return (
+            f"Burn It!: +{bonus} status do obrażeń ognia "
+            f"(czar rangi {rank}, połowa rangi; dodane automatycznie)."
+        )
+    if source == "alchemical":
+        lvl = _to_non_negative_int(item_level, default=1)
+        return (
+            f"Burn It!: +{bonus} status do obrażeń ognia "
+            f"(przedmiot poziomu {lvl}, 1/4 poziomu; dodane automatycznie)."
+        )
+    return None
 
 
 def _neighbors_from_game(game: Any, center_pos: tuple[int, int], *, diagonal: bool = True) -> list[tuple[int, int]]:
@@ -163,20 +237,168 @@ def _neighbors_from_game(game: Any, center_pos: tuple[int, int], *, diagonal: bo
 
 
 def _remove_enemy_from_game(game: Any, enemy: Any) -> None:
-    pos = getattr(enemy, "position", None)
+    remove_defeated_enemy(game, enemy, source="splash")
+
+
+def _extract_enemy_loot(enemy: Any) -> list[object]:
+    loot: list[object] = []
+    explicit_loot = getattr(enemy, "loot_items", None)
+    if isinstance(explicit_loot, list):
+        loot.extend([item for item in list(explicit_loot) if item is not None])
+    inventory = getattr(enemy, "inventory", None)
+    if isinstance(inventory, list):
+        loot.extend([item for item in list(inventory) if item is not None])
+
+    cp_total = 0
     try:
-        if pos is not None:
-            game.board.remove(pos)
+        cp_total += max(0, int(getattr(enemy, "loot_cp", 0) or 0))
     except Exception:
         pass
     try:
-        game.enemies.remove(enemy)
+        from economy import coin_pouch_total_cp
+
+        cp_total += max(0, int(coin_pouch_total_cp(getattr(enemy, "coin_pouch", None)) or 0))
     except Exception:
         pass
+    if cp_total > 0:
+        loot.append({"kind": "currency_cp", "amount_cp": int(cp_total)})
+    return loot
+
+
+def _drop_loot_pile(game: Any, pos: tuple[int, int], loot: list[object]) -> int:
+    if game is None or not loot:
+        return 0
+    board = getattr(game, "board", None)
+    if board is None:
+        return 0
+    try:
+        from GameObjects.Interactables.loot_pile import LootPile
+    except Exception:
+        return 0
+
+    pile = None
+    try:
+        for obj in list(board.interactables_at(pos)):
+            if isinstance(obj, LootPile):
+                pile = obj
+                break
+    except Exception:
+        pile = None
+
+    if pile is None:
+        try:
+            pile = LootPile()
+            board.add_interactable(pile, pos)
+        except Exception:
+            return 0
+
+    added = 0
+    for item in loot:
+        if item is None:
+            continue
+        try:
+            pile.loot_items.append(item)
+            added += 1
+        except Exception:
+            continue
+    return int(added)
+
+
+def remove_defeated_enemy(
+    game: Any,
+    enemy: Any,
+    *,
+    position: tuple[int, int] | None = None,
+    drop_loot: bool = True,
+    source: str = "damage",
+) -> dict[str, Any]:
+    """Usuń pokonanego przeciwnika z planszy/listy i opcjonalnie zostaw loot."""
+    pos = position if isinstance(position, tuple) else getattr(enemy, "position", None)
+    loot = _extract_enemy_loot(enemy) if drop_loot else []
+    removed_from_board = False
+
+    board = getattr(game, "board", None)
+    if board is not None and isinstance(pos, tuple):
+        should_remove = True
+        try:
+            occ_getter = getattr(board, "occupant_at", None)
+            if callable(occ_getter):
+                occ = occ_getter(pos)
+                if occ is not enemy and occ is not None:
+                    should_remove = False
+        except Exception:
+            should_remove = True
+        if should_remove:
+            try:
+                board.remove(pos)
+                removed_from_board = True
+            except Exception:
+                removed_from_board = False
+
+    removed_from_list = False
+    try:
+        enemies = getattr(game, "enemies", None)
+        if isinstance(enemies, list) and enemy in enemies:
+            enemies.remove(enemy)
+            removed_from_list = True
+    except Exception:
+        removed_from_list = False
+
     try:
         enemy.position = None
     except Exception:
         pass
+
+    dropped = 0
+    if isinstance(pos, tuple) and loot:
+        dropped = _drop_loot_pile(game, pos, loot)
+    try:
+        setattr(enemy, "loot_items", [])
+    except Exception:
+        pass
+    try:
+        setattr(enemy, "inventory", [])
+    except Exception:
+        pass
+    try:
+        setattr(enemy, "loot_cp", 0)
+    except Exception:
+        pass
+    try:
+        setattr(enemy, "coin_pouch", {"cp": 0, "sp": 0, "gp": 0, "pp": 0})
+    except Exception:
+        pass
+
+    return {
+        "removed_from_board": bool(removed_from_board),
+        "removed_from_list": bool(removed_from_list),
+        "loot_dropped": int(dropped),
+        "source": str(source),
+    }
+
+
+def cleanup_defeated_enemies(game: Any, *, drop_loot: bool = True, source: str = "cleanup") -> int:
+    """Awaryjne sprzątanie martwych przeciwników pozostających na planszy/liście."""
+    if game is None:
+        return 0
+    enemies = list(getattr(game, "enemies", []) or [])
+    removed = 0
+    for enemy in enemies:
+        if enemy is None:
+            continue
+        is_defeated = False
+        try:
+            hp_value = getattr(enemy, "hp", 1)
+            is_defeated = int(hp_value) <= 0
+        except Exception:
+            is_defeated = False
+        if not is_defeated:
+            is_defeated = _has_status(enemy, "dead")
+        if not is_defeated:
+            continue
+        remove_defeated_enemy(game, enemy, drop_loot=drop_loot, source=source)
+        removed += 1
+    return int(removed)
 
 
 def apply_splash_damage(
@@ -225,15 +447,27 @@ def apply_splash_damage(
                 continue
             if getattr(hero, "position", None) in neighbors:
                 result["heroes"].append(hero)
+                applied_automatically = False
+                apply = getattr(hero, "apply_damage", None)
+                if callable(apply):
+                    try:
+                        apply(max(0, int(amount)), damage_type)
+                        applied_automatically = True
+                    except Exception:
+                        applied_automatically = False
                 if hero_info:
                     try:
                         name = getattr(hero, "name", None) or getattr(hero, "object_id", "Hero")
-                        get_ui_client().prompt_info(
-                            info_title or "Splash Damage",
-                            prompt_long=(
+                        if applied_automatically:
+                            details = f"{name} otrzymuje {int(amount)} obrażeń splash ({damage_type})."
+                        else:
+                            details = (
                                 f"{name} otrzymuje {int(amount)} obrażeń splash "
                                 f"({damage_type}). Zapisz ręcznie."
-                            ),
+                            )
+                        get_ui_client().prompt_info(
+                            info_title or "Splash Damage",
+                            prompt_long=details,
                             source=source,
                         )
                     except Exception:

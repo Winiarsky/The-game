@@ -11,7 +11,8 @@ DEIFIC_WEAPON_CHOICES = [
 ]
 
 DEIFIC_WEAPON_DESCRIPTION = (
-    "Deific Weapon: wybierz typ broni bóstwa. "
+    "Deific Weapon: bron jest powiazana z favored weapon wybranego deity "
+    "(dla custom deity wybierasz recznie). "
     "Przy ataku tą bronią zwiększasz kość obrażeń o jeden stopień."
 )
 

@@ -374,9 +374,117 @@ def follow_path(ctx_or_board, mover, path, *, led_color=None, on_enter=None, all
     return True, current, None
 
 
-def perform_movement(ctx, hero, start_pos, neighbors_fn, *, led_color=None, end_message=None, allow_occupied=True, on_enter=None):
-    """Stub ruchu: pozostawia bohatera na miejscu; zwraca start_pos."""
-    return start_pos
+def perform_movement(
+    ctx,
+    hero,
+    start_pos,
+    neighbors_fn,
+    *,
+    led_color=None,
+    end_message=None,
+    allow_occupied=True,
+    on_enter=None,
+    max_feet: int | None = None,
+):
+    """Interaktywny ruch po pojedynczych polach z ograniczeniem budżetu stóp."""
+    game = getattr(ctx, "game", None)
+    board = getattr(game, "board", None)
+    conn = getattr(game, "conn", None)
+    if hero is None or board is None or conn is None or start_pos is None:
+        return start_pos
+
+    try:
+        budget = int(max_feet if max_feet is not None else movement_budget_feet(hero, default_feet=25))
+    except Exception:
+        budget = 0
+    if budget <= 0:
+        return start_pos
+
+    current = start_pos
+    spent = 0
+    used_any = False
+
+    while spent < budget:
+        try:
+            raw_positions = list(neighbors_fn(current))
+        except Exception:
+            raw_positions = []
+        if not raw_positions:
+            raw_positions = [current]
+        if current not in raw_positions:
+            raw_positions.insert(0, current)
+
+        positions: list[tuple[int, int]] = []
+        for pos in raw_positions:
+            if pos not in positions:
+                positions.append(pos)
+        if not positions:
+            break
+
+        if led_color is None:
+            colors = [[0, 180, 220] if pos != current else [30, 80, 120] for pos in positions]
+        else:
+            colors = [led_color if pos != current else [30, 80, 120] for pos in positions]
+
+        try:
+            conn.set_leds(positions, colors)
+        except Exception:
+            pass
+        try:
+            choice = conn.scan_board(positions)
+        except Exception:
+            choice = None
+        finally:
+            try:
+                conn.leds_off()
+            except Exception:
+                pass
+
+        if choice not in positions or choice == current:
+            break
+
+        step_cost = path_cost_feet([current, choice], board, mover=hero)
+        if step_cost <= 0:
+            step_cost = 5
+        if spent + step_cost > budget:
+            if game is not None and hasattr(game, "ui_log"):
+                try:
+                    remain = max(0, budget - spent)
+                    game.ui_log(
+                        f"Brak budżetu ruchu: koszt kroku {step_cost} stóp, pozostało {remain} stóp."
+                    )
+                except Exception:
+                    pass
+            continue
+
+        completed, stop_pos, reason = follow_path(
+            ctx,
+            hero,
+            [current, choice],
+            led_color=led_color,
+            on_enter=on_enter,
+            allow_occupied=allow_occupied,
+            step_delay=0.0,
+        )
+        if stop_pos is not None:
+            current = stop_pos
+        if not completed:
+            if game is not None and hasattr(game, "ui_log"):
+                try:
+                    game.ui_log(f"Ruch zatrzymany ({reason or 'unknown'}).")
+                except Exception:
+                    pass
+            break
+
+        spent += step_cost
+        used_any = True
+
+    if used_any and end_message and game is not None and hasattr(game, "ui_log"):
+        try:
+            game.ui_log(str(end_message))
+        except Exception:
+            pass
+    return current
 
 
 def default_on_enter(ctx_or_board, mover, position):

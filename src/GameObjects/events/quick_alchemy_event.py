@@ -128,12 +128,13 @@ class QuickAlchemyEvent(ActionCostEvent):
                 prepared_by_quick_alchemy=True,
             )
             label = item_label(item)
+            raw_label = str(choice).strip().lower().replace("_", " ")
             return EventResult(
                 success=True,
                 consumed_action=self.consumes_action,
                 actions_spent=self.actions_cost,
                 message=(
-                    f"Quick Alchemy: stworzono {label}. "
+                    f"Quick Alchemy: stworzono {raw_label} ({label}). "
                     "Przedmiot będzie gotowy od następnej tury."
                 ),
                 data={"created_event": choice},

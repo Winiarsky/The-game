@@ -3,9 +3,9 @@ from __future__ import annotations
 from statuses.base import Status
 
 SKILLED_HERITAGE_DESCRIPTION = (
-    "Your ingenuity allows you to train in a wide variety of skills.\n"
-    "You become trained in one skill of your choice.\n"
-    "At 5th level, you become an expert in the chosen skill."
+    "Twoja pomyslowosc pozwala ci opanowac wiele roznych umiejetnosci.\n"
+    "Stajesz sie trained w jednym wybranym skillu.\n"
+    "Na 5. poziomie awansujesz w tym skillu do expert."
 )
 
 

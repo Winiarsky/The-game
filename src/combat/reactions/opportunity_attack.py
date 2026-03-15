@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from GameObjects.interactions_mixin import prompt_for_roll
-from combat.damage_utils import burn_it_bonus, burn_it_prompt_note
+from combat.damage_utils import burn_it_bonus, burn_it_prompt_note, remove_defeated_enemy
 from combat.degree_of_success import is_critical_success, is_hit, natural_shift_from_roll, resolve_outcome
 from combat.flanking import effective_ac
 from combat.hp_engine import apply_damage as hp_apply_damage
@@ -70,6 +70,15 @@ class OpportunityAttack(Reaction):
             return "cel opuszcza twój zasięg"
         return "okazja do ataku"
 
+    def trigger_key(self, actor, event: dict[str, Any]) -> str:
+        _ = actor
+        tagged, tag = _has_trigger_tag(event)
+        if tagged and tag:
+            return f"{self.id}:{tag}"
+        if _is_leaving_reach(event):
+            return f"{self.id}:leaving_reach"
+        return str(self.id)
+
     def _roll_attack(self, attacker, defender, game) -> tuple[int, int, bool, bool]:
         """Zwróć (roll_total, target_ac, critical, hit). MAP pomijamy."""
         attack_bonus = getattr(attacker, "attack_bonus", 0)
@@ -111,13 +120,9 @@ class OpportunityAttack(Reaction):
         _, defeated = target.apply_damage(int(amount) + int(bonus), dmg_type)
         if defeated:
             try:
-                pos = getattr(target, "position", None)
-                if pos:
-                    game.board.remove(pos)
-                game.enemies.remove(target)
+                remove_defeated_enemy(game, target, source="reaction:opportunity_attack")
             except Exception:
                 pass
-            target.position = None
         return True, bool(crit)
 
     def _do_enemy_attack(self, enemy, target, game, event) -> tuple[bool, bool]:

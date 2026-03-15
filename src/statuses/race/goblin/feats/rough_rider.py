@@ -6,11 +6,11 @@ from statuses.base import Status
 from statuses.check_effects import CheckEffect
 
 ROUGH_RIDER_DESCRIPTION = (
-    "Jesteś wyjątkowo dobry w jeździe na tradycyjnych goblińskich wierzchowcach.\n"
-    "Zyskujesz Ride feat (nawet bez spełnienia prereq).\n"
-    "Masz +1 circumstance do Nature checks na Command an Animal dla "
-    "goblin dog lub wolf mount.\n"
-    "Możesz zawsze wybrać wolf jako animal companion."
+    "Świetnie radzisz sobie na typowych goblińskich wierzchowcach.\n"
+    "Kiedy: wykonujesz Command an Animal na goblin dog lub wilka jako wierzchowca.\n"
+    "Efekt: +1 circumstance do testu Nature. Dodatkowo dostajesz feat Ride "
+    "(bez prerekwizytów) i możesz wybrać wilka jako companiona. "
+    "Uwaga: pełna ekonomia tur dla mountów jest w silniku jeszcze częściowo uproszczona."
 )
 
 

@@ -8,11 +8,18 @@ from typing import Any
 from bonuses import BonusEffect, BonusType
 from combat.hp_engine import apply_damage as hp_apply_damage
 from combat.hp_engine import grant_temp_hp
+from localization import localize_term_pl
 from statuses.base import Status
 from ..base import EventContext, EventResult, ActionCostEvent
 from .focus_utils import focus_spell_rank
 from .magic_utils import grid_distance_feet
 from .spell_types import SpellTradition
+from spell_management import (
+    can_cast_managed_spell,
+    classify_spell_tier,
+    consume_managed_spell_resources,
+    ensure_actor_spell_state,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -170,6 +177,13 @@ class MagicEventResolver:
     @staticmethod
     def _normalize(value: object) -> str:
         return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+
+    @staticmethod
+    def _spell_label(event: MagicEvent) -> str:
+        spell_id = str(getattr(event, "name", "") or "").strip()
+        if not spell_id:
+            return "czar"
+        return localize_term_pl(spell_id)
 
     @staticmethod
     def _bloodline_granted_spell_levels(setup: dict[str, Any]) -> dict[str, int]:
@@ -344,6 +358,87 @@ class MagicEventResolver:
         return None
 
     @staticmethod
+    def _is_foe(ctx: EventContext, actor, target) -> bool:
+        if actor is None or target is None:
+            return False
+        game = getattr(ctx, "game", None)
+        heroes = list(getattr(game, "heroes", []) or [])
+        enemies = list(getattr(game, "enemies", []) or [])
+        if actor in heroes:
+            return target in enemies
+        if actor in enemies:
+            return target in heroes
+        return False
+
+    @staticmethod
+    def _collect_outcomes(value: object) -> set[str]:
+        outcomes: set[str] = set()
+
+        def _walk(node: object) -> None:
+            if isinstance(node, dict):
+                for item in node.values():
+                    _walk(item)
+                return
+            if isinstance(node, (list, tuple, set)):
+                for item in node:
+                    _walk(item)
+                return
+            normalized = MagicEventResolver._normalize(node)
+            if normalized in {"critical_success", "success", "failure", "critical_failure"}:
+                outcomes.add(normalized)
+
+        _walk(value)
+        return outcomes
+
+    @staticmethod
+    def _message_implies_offensive_failure(message: object) -> bool | None:
+        text = MagicEventResolver._normalize(message)
+        if not text:
+            return None
+        if "critical_failure" in text or " failure" in f" {text}" or ":failure" in text:
+            return True
+        if "critical_success" in text or " success" in f" {text}" or ":success" in text:
+            return False
+        failure_markers = (
+            "chybia",
+            "miss",
+            "unaffected",
+            "brak_efektu",
+            "brak efektu",
+            "opiera_sie",
+            "opiera sie",
+        )
+        if any(marker in text for marker in failure_markers):
+            return False
+        return None
+
+    @staticmethod
+    def _offensive_resolution_succeeded(result: EventResult) -> bool:
+        data = dict(getattr(result, "data", None) or {})
+
+        attack_hit = data.get("spell_attack_hit")
+        if isinstance(attack_hit, bool):
+            return bool(attack_hit)
+
+        attack_outcome = MagicEventResolver._normalize(data.get("spell_attack_outcome"))
+        if attack_outcome in {"critical_success", "success"}:
+            return True
+        if attack_outcome in {"failure", "critical_failure"}:
+            return False
+
+        outcomes = MagicEventResolver._collect_outcomes(data)
+        if "failure" in outcomes or "critical_failure" in outcomes:
+            return True
+        if outcomes and outcomes.issubset({"success", "critical_success"}):
+            return False
+
+        inferred_from_message = MagicEventResolver._message_implies_offensive_failure(getattr(result, "message", ""))
+        if inferred_from_message is not None:
+            return bool(inferred_from_message)
+        # Brak twardego sygnału -> fallback kompatybilności.
+        return True
+
+    @staticmethod
     def _blood_magic_spell_level(
         actor,
         event: MagicEvent,
@@ -444,6 +539,13 @@ class MagicEventResolver:
         )
         target = MagicEventResolver._extract_primary_target(result)
         target_or_self = MagicEventResolver._pick_blood_magic_target(ctx, actor, target)
+        if MagicEventResolver._is_foe(ctx, actor, target_or_self):
+            if not MagicEventResolver._offensive_resolution_succeeded(result):
+                try:
+                    ctx.game.ui_log("Blood Magic: brak efektu (przeciwnik uniknal efektu czaru).")
+                except Exception:
+                    pass
+                return
         source = f"blood_magic:{bloodline}"
 
         if bloodline == "aberrant":
@@ -679,14 +781,20 @@ class MagicEventResolver:
         event.actions_cost = cost
 
         # tryb tury
+        spell_label = MagicEventResolver._spell_label(event)
         if ctx.in_combat and not event.combat_allowed:
-            msg = f"Czar '{event.name}' niedostępny w walce."
+            msg = f"Czar '{spell_label}' niedostępny w walce."
             logger.info(msg)
             return EventResult.cancelled(message=msg)
         if ctx.in_exploration and not event.hero_turn_allowed:
-            msg = f"Czar '{event.name}' niedostępny poza walką."
+            msg = f"Czar '{spell_label}' niedostępny poza walką."
             logger.info(msg)
             return EventResult.cancelled(message=msg)
+
+        try:
+            ensure_actor_spell_state(actor, game=ctx.game)
+        except Exception:
+            pass
 
         reach_applied = False
         if event.range_feet is not None and MagicEventResolver._has_status(actor, "reach_spell_ready"):
@@ -706,12 +814,20 @@ class MagicEventResolver:
                     game_ui_log = getattr(ctx.game, "ui_log", None)
                     if callable(game_ui_log):
                         game_ui_log(
-                            f"Reach Spell: zasieg czaru '{event.name}' zwiekszony z {base_range} ft do {event.range_feet} ft."
+                            f"Reach Spell: zasieg czaru '{spell_label}' zwiekszony z {base_range} ft do {event.range_feet} ft."
                         )
                 except Exception:
                     pass
 
         event_tags = MagicEventResolver._event_tags(event, ctx)
+        spell_id = MagicEventResolver._normalize(getattr(event, "name", ""))
+        spell_tier = classify_spell_tier(event_tags)
+        metadata = dict(ctx.metadata or {})
+        wizard_drain_recast = bool(metadata.get("wizard_drain_recast"))
+        if not wizard_drain_recast:
+            can_cast, reason = can_cast_managed_spell(actor, spell_id=spell_id, tier=spell_tier)
+            if not can_cast:
+                return EventResult.cancelled(message=reason or f"{spell_label}: cast blocked.")
         emitted = MagicEventResolver._emit_cast_start(ctx, event, tags=event_tags)
         if isinstance(emitted, dict) and bool(emitted.get("disrupted", False)):
             if reach_applied:
@@ -723,7 +839,7 @@ class MagicEventResolver:
                 success=False,
                 consumed_action=True,
                 actions_spent=cost,
-                message=f"Czar '{event.name}' zostal przerwany ({reason}).",
+                message=f"Czar '{spell_label}' zostal przerwany ({reason}).",
             )
 
         try:
@@ -774,11 +890,16 @@ class MagicEventResolver:
                 game_ui_log = getattr(ctx.game, "ui_log", None)
                 if callable(game_ui_log):
                     game_ui_log(
-                        f"Widen Spell: czar '{event.name}' zuzywa przygotowany efekt "
+                        f"Widen Spell: czar '{spell_label}' zuzywa przygotowany efekt "
                         "(rozlicz recznie zwiekszenie obszaru)."
-                    )
+                )
             except Exception:
                 pass
+        if result.success and result.consumed_action and not wizard_drain_recast:
+            try:
+                consume_managed_spell_resources(actor, spell_id=spell_id, tier=spell_tier)
+            except Exception:
+                logger.debug("Spell resource consume failed for spell %s", spell_id, exc_info=True)
         try:
             MagicEventResolver._apply_blood_magic_if_needed(event, ctx, result, tags=event_tags)
         except Exception:

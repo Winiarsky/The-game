@@ -104,6 +104,26 @@ def test_specific_domain_spell_fire_ray_deals_damage_and_spends_focus(monkeypatc
     assert any(getattr(status, "id", None) == "persistent_damage" for status in target.statuses)
 
 
+def test_fire_ray_burn_it_applies_damage_and_persistent_bonus(monkeypatch):
+    actor = _cleric_with_domain(domain="fire", spell="fire_ray")
+    actor.level = 1
+    actor.add_status(Status(id="burn_it"))
+    target = DummyHero(name="Enemy", position=(1, 0), hp=15)
+
+    monkeypatch.setattr(domain_events, "_pick_target", lambda *_a, **_k: target)
+    monkeypatch.setattr(domain_events, "prompt_for_roll", lambda *_a, **_k: 6)
+
+    game = _game(actor=actor, enemies=[target])
+    result = dispatch_event("fire_ray", EventContext(game=game, actor=actor))
+
+    assert result.success is True
+    assert actor.focus_point == 0
+    assert target.hp == 8  # 6 +1 Burn It (rank 1 => +1)
+    persistent = next((s for s in target.statuses if getattr(s, "id", None) == "persistent_damage"), None)
+    assert persistent is not None
+    assert int((persistent.data or {}).get("amount", 0) or 0) == 2  # base 1 + Burn It persistent +1
+
+
 def test_domain_focus_spell_dispatches_selected_domain_spell(monkeypatch):
     actor = _cleric_with_domain(domain="fire", spell="fire_ray")
     target = DummyHero(name="Enemy", position=(1, 0), hp=14)

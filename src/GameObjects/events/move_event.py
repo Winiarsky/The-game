@@ -106,6 +106,31 @@ class MoveEvent(GameEvent):
 
         started_in_combat = getattr(game.state, "__class__", None).__name__ == "Combat"
 
+        def _is_enemy_combat_ready(enemy: object) -> bool:
+            checker = getattr(game, "_is_enemy_combat_ready", None)
+            if callable(checker):
+                try:
+                    return bool(checker(enemy))
+                except Exception:
+                    pass
+            if enemy is None:
+                return False
+            if getattr(enemy, "position", None) is None:
+                return False
+            try:
+                if int(getattr(enemy, "hp", 1) or 0) <= 0:
+                    return False
+            except Exception:
+                pass
+            has_status = getattr(enemy, "has_status", None)
+            if callable(has_status):
+                try:
+                    if bool(has_status("dead")):
+                        return False
+                except Exception:
+                    pass
+            return True
+
         def _trigger_combat_if_enemy_in_room(pos: tuple[int, int]) -> None:
             if getattr(game.state, "__class__", None).__name__ == "Combat":
                 return
@@ -113,11 +138,11 @@ class MoveEvent(GameEvent):
             if not rooms_here:
                 return
             for enemy in getattr(game, "enemies", []):
-                if getattr(enemy, "position", None) is None:
+                if not _is_enemy_combat_ready(enemy):
                     continue
                 enemy_rooms = board.rooms_at(enemy.position)
                 if rooms_here.intersection(enemy_rooms):
-                    logger.info("W pokoju są wrogowie – wywołuję walkę.")
+                    logger.info("W pokoju są żywi wrogowie – wywołuję walkę.")
                     try:
                         enemy.trigger_combat(game)  # type: ignore[attr-defined]
                     except Exception as exc:

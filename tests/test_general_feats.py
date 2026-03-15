@@ -13,6 +13,12 @@ from board_grid import BoardGrid
 from GameObjects.Interactables.hidden_cache import HiddenCache
 from GameObjects.events.base import EventContext
 from GameObjects.events.magic.cantrips.events import DetectMagicEvent
+from combat.hp_engine import computed_max_hp
+from statuses.general.assurance import ASSURANCE_STATUS
+from statuses.general.fleet import FLEET_STATUS
+from statuses.general.skill_training import SKILL_TRAINING_STATUS
+from statuses.general.toughness import TOUGHNESS_STATUS
+from statuses.race.human.feats.general_training import GENERAL_TRAINING_CHOICES
 
 
 class DummyHero(StatusMixin):
@@ -127,3 +133,47 @@ def test_recognize_spell_adds_ac_magic_bonus_in_combat():
         b.tag == "ac_magic" and b.value == 1 and b.duration_turns == 1
         for b in bonuses
     )
+
+
+def test_general_training_choices_include_new_general_feats():
+    for feat_id in (
+        "arcane_sense",
+        "additional_lore",
+        "alchemical_crafting",
+        "quick_repair",
+        "terrain_stalker",
+        "virtuosic_performer",
+    ):
+        assert feat_id in GENERAL_TRAINING_CHOICES
+
+
+def test_skill_training_prompts_and_records_selected_skill(monkeypatch):
+    dummy_ui = DummyUI(["Stealth"])
+    monkeypatch.setattr("ui_client.get_ui_client", lambda: dummy_ui)
+
+    hero = DummyHero()
+    hero.add_status(SKILL_TRAINING_STATUS)
+
+    assert hero.get_status_data("skill_training", "skill_training_skill", None) == "stealth"
+    assert hero.get_status_data("skill_training", "trained_skills", []) == ["stealth"]
+
+
+def test_assurance_prompts_and_records_selected_skill(monkeypatch):
+    dummy_ui = DummyUI(["Arcana"])
+    monkeypatch.setattr("ui_client.get_ui_client", lambda: dummy_ui)
+
+    hero = DummyHero()
+    hero.add_status(ASSURANCE_STATUS)
+
+    assert hero.get_status_data("assurance", "assurance_skill", None) == "arcana"
+
+
+def test_fleet_and_toughness_apply_runtime_mechanics():
+    hero = DummyHero()
+    hero.level = 3
+    hero.max_hp = 20
+    hero.add_status(FLEET_STATUS)
+    hero.add_status(TOUGHNESS_STATUS)
+
+    assert hero.get_status_data("fleet", "base_speed_bonus_feet", 0) == 5
+    assert computed_max_hp(hero) == 23

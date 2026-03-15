@@ -4,20 +4,16 @@ from statuses.base import Status
 from statuses.dim_light_vision import DIM_LIGHT_VISION_STATUS
 
 ELF_DESCRIPTION = (
-    "Hit Points: 6\n"
-    "Size: Medium\n"
-    "Speed: 30 feet\n"
-    "Ability Boosts: Dexterity, Intelligence, Free\n"
-    "Ability Flaw: Constitution\n"
-    "Languages: Common, Elven\n"
-    "Additional languages equal to Intelligence modifier "
-    "(Celestial, Draconic, Gnoll, Gnomish, Goblin, Orcish, Sylvan lub regionalne)\n"
-    "Traits: Elf, Humanoid, Low-Light Vision\n"
-    "Low-Light Vision (\n"
-    "You can see in dim light as\n"
-    "though it were bright light,\n"
-    "so you ignore the concealed\n"
-    "condition due to dim light.)"
+    "Punkty Zycia: 6\n"
+    "Rozmiar: Sredni\n"
+    "Predkosc: 30 stop\n"
+    "Boosty atrybutow: Zrecznosc, Inteligencja, Dowolna\n"
+    "Wada atrybutu: Kondycja\n"
+    "Jezyki: Common, Elven\n"
+    "Dodatkowe jezyki rowne modyfikatorowi Inteligencji: "
+    "Celestial, Draconic, Gnoll, Gnomish, Goblin, Orcish, Sylvan (lub regionalne).\n"
+    "Cechy: Elf, Humanoid\n"
+    "Low-Light Vision: w slabym swietle widzisz jak w jasnym i ignorujesz concealed z dim light."
 )
 
 

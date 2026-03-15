@@ -3,12 +3,12 @@ from __future__ import annotations
 from statuses.base import Status
 
 GOBLIN_SONG_DESCRIPTION = (
-    "Masz akcję Goblin Song.\n"
-    "Wykonujesz Performance check przeciw Will DC celów w 30 stóp.\n"
-    "Skalowanie liczby celów: 1 / 2 / 4 / 8 (trained/expert/master/legendary).\n"
-    "Sukces: -1 status do Perception i Will na 1 rundę.\n"
-    "Krytyczny sukces: ten sam debuff na 1 minutę.\n"
-    "Krytyczna porażka: cel ma czasową odporność na Goblin Song (1 godzina)."
+    "Wydajesz akcję Goblińska Pieśń i rozpraszasz przeciwników kakofonią.\n"
+    "Kiedy: używasz akcji Goblin Song (zasięg 30 stóp, test Performance przeciw Will DC).\n"
+    "Efekt: liczba celów skaluje się z biegłością Performance: trained=1, expert=2, "
+    "master=4, legendary=8. Sukces: -1 status do Perception i Will na 1 rundę. "
+    "Krytyczny sukces: ten sam efekt na 10 rund. Krytyczna porażka celu: "
+    "odporność na Goblin Song na 1 godzinę."
 )
 
 

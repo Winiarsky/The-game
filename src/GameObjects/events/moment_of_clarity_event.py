@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from statuses.classes.barbarian.feats.moment_of_clarity import MomentOfClarityStatus
+from statuses.classes.barbarian.feats.moment_of_clarity import MomentOfClarityActiveStatus
 from .base import EventContext, EventResult, ActionCostEvent
 from .registry import register_event
 
@@ -26,15 +26,24 @@ class MomentOfClarityEvent(ActionCostEvent):
             return EventResult.cancelled(message="Brak bohatera do Moment of Clarity.")
 
         has_status = getattr(actor, "has_status", None)
-        if callable(has_status) and not has_status("rage"):
-            return EventResult.cancelled(message="Moment of Clarity wymaga aktywnego Rage.")
+        if callable(has_status):
+            if not has_status("moment_of_clarity"):
+                return EventResult.cancelled(message="Moment of Clarity: wymaga featu Moment of Clarity.")
+            if not has_status("rage"):
+                return EventResult.cancelled(message="Moment of Clarity wymaga aktywnego Rage.")
+        else:
+            ids = {str(getattr(item, "id", item) or "").strip().lower() for item in list(getattr(actor, "statuses", []) or [])}
+            if "moment_of_clarity" not in ids:
+                return EventResult.cancelled(message="Moment of Clarity: wymaga featu Moment of Clarity.")
+            if "rage" not in ids:
+                return EventResult.cancelled(message="Moment of Clarity wymaga aktywnego Rage.")
 
         adder = getattr(actor, "add_status", None)
         if not callable(adder):
             return EventResult.cancelled(message="Bohater nie obsługuje statusów.")
 
         try:
-            adder(MomentOfClarityStatus(duration=1))
+            adder(MomentOfClarityActiveStatus(duration=1))
         except Exception as exc:
             logger.error("Nie udało się dodać statusu Moment of Clarity: %s", exc)
             return EventResult.cancelled(message="Nie udało się aktywować Moment of Clarity.")

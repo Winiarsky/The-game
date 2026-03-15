@@ -5,22 +5,21 @@ from statuses.classes.bard.feats.reach_spell import REACH_SPELL_STATUS
 from statuses.classes.bard.inspiration import INSPIRATION_STATUS
 
 BARD_PROMPT = (
-    "KEY ABILITY: CHARISMA\n"
-    "At 1st level, your class gives you an ability boost to Charisma.\n"
-    "HIT POINTS: 8 plus your Constitution Modifier\n\n"
-    "INITIAL PROFICIENCIES:\n"
-    "PERCEPTION\n"
-    "Expert in Perception\n"
-    "SAVING THROWS\n"
-    "Trained in Fortitude\n"
-    "Trained in Reflex\n"
-    "Expert in Will\n"
-    "SKILLS\n"
-    "Trained in Performance\n"
-    "Trained in a number of additional skills equal to 4 plus your Intelligence modifier\n"
-    "SPELLS\n"
-    "Occult spellcasting\n"
-    "Focus Pool: 1 Focus Point"
+    "KLASA: BARD\n"
+    "Key Ability: Charyzma (+2 na 1. poziomie).\n"
+    "Punkty Zycia: 8 + modyfikator Kondycji.\n\n"
+    "Bieglosci startowe:\n"
+    "- Percepcja: Expert\n"
+    "- Rzuty obronne: Fortitude Trained, Reflex Trained, Will Expert\n"
+    "- Skille: Performance Trained + 4 dodatkowe skille (+ INT mod)\n\n"
+    "Magia:\n"
+    "- Tradycja: okultystyczna (occult)\n"
+    "- Repertuar na 1. poziomie: 5 cantripow i 2 czary 1. rangi\n"
+    "- 5 cantripow wybierasz z listy occult podczas tworzenia postaci\n"
+    "- Composition cantrips z klasy (automatycznie, bez wyboru): Inspire Courage, Counter Performance\n"
+    "- Sloty na 1. poziomie: 2 czary 1. rangi / dzien\n"
+    "- Focus Pool: 1 Focus Point\n"
+    "Podczas setupu wybierasz Muse i kompletujesz repertuar."
 )
 
 
@@ -32,6 +31,13 @@ def BardStatus() -> Status:
         data={
             "ui_prompt": BARD_PROMPT,
             "class_hp": 8,
+            "ui_choice_kind": "bard_setup",
+            "bard_spell_tradition": "occult",
+            "bard_known_cantrips_at_level1": 5,
+            "bard_known_rank_1_spells_at_level1": 2,
+            "bard_rank_1_slots_per_day": 2,
+            "bard_bonus_cantrips": ["inspire_courage", "counter_performance"],
+            "bard_bonus_focus_spells": ["counter_performance"],
             "set_actor_attrs": {"focus_point": 1, "class_name": "bard"},
             "grants_statuses": [INSPIRATION_STATUS, REACH_SPELL_STATUS],
         },

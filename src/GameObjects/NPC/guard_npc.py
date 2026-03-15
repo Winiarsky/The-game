@@ -4,8 +4,6 @@ from typing import Optional
 from GameObjects.base import GameObjectMeta
 from GameObjects.NPC.base_npc import BaseNPC
 from GameObjects.interactions_mixin import WatchfulMixin, TradeItem, Interaction, resolve_skill_check
-# zapewnij rejestrację zdarzenia skill_check zanim zostanie dispatchowane
-import GameObjects.events.checks.skill_check_event  # noqa: F401
 from GameObjects.events.base import EventContext
 from GameObjects.events.registry import dispatch_event
 from skills import Skill
@@ -175,7 +173,33 @@ META = GameObjectMeta(
         "require_same_cell_interact": False,
         "dialog_path": "guard_dialog.json",
         "attitude": 0,
-        "inventory": [],
+        "inventory": [
+            {"item_id": "longsword", "name": "Dlugi miecz", "price": 100, "kind": "weapon", "stock": 2},
+            {"item_id": "shortbow", "name": "Krotki luk", "price": 300, "kind": "weapon", "stock": 1},
+            {"item_id": "crossbow", "name": "Kusza", "price": 300, "kind": "weapon", "stock": 1},
+            {"item_id": "leather_armor", "name": "Skorzana zbroja", "price": 200, "kind": "armor", "stock": 1},
+            {"item_id": "wooden_shield", "name": "Tarcza drewniana", "price": 100, "kind": "shield", "stock": 1},
+            {"item_id": "steel_shield", "name": "Stalowa tarcza", "price": 200, "kind": "shield", "stock": 1},
+            {"item_id": "tower_shield", "name": "Tarcza wiezowa", "price": 1000, "kind": "shield", "stock": 1},
+            {"item_id": "arrows", "name": "Strzaly (10)", "price": 10, "kind": "equipment", "stock": -1},
+            {"item_id": "bolts", "name": "Belty (10)", "price": 10, "kind": "equipment", "stock": -1},
+            {"item_id": "healer_tools", "name": "Narzedzia medyka", "price": 500, "kind": "equipment", "stock": 1},
+            {"item_id": "holy_water", "name": "Woda swiecona", "price": 300, "kind": "equipment", "stock": 2},
+            {"item_id": "unholy_water", "name": "Woda plugawa", "price": 300, "kind": "equipment", "stock": 1},
+            {"item_id": "minor_healing_potion", "name": "Mikstura leczenia (slaba)", "price": 400, "kind": "equipment", "stock": 3},
+            {"item_id": "scroll_common_rank1", "name": "Zwoj czaru 1. rangi", "price": 400, "kind": "equipment", "stock": 2},
+            {"item_id": "potency_crystal", "name": "Krysztal potencji", "price": 400, "kind": "equipment", "stock": 2},
+            {"item_id": "alchemical:elixir_of_life", "name": "Elixir of Life", "price": 300, "kind": "alchemical", "stock": 3},
+            {"item_id": "alchemical:acid_flask", "name": "Acid Flask", "price": 300, "kind": "alchemical", "stock": 3},
+            {"item_id": "alchemical:alchemists_fire", "name": "Alchemist's Fire", "price": 300, "kind": "alchemical", "stock": 3},
+            {"item_id": "alchemical:bottled_lightning", "name": "Bottled Lightning", "price": 300, "kind": "alchemical", "stock": 3},
+            {"item_id": "alchemical:frost_vial", "name": "Frost Vial", "price": 300, "kind": "alchemical", "stock": 3},
+            {"item_id": "alchemical:tanglefoot_bag", "name": "Tanglefoot Bag", "price": 300, "kind": "alchemical", "stock": 3},
+            {"item_id": "alchemical:thunderstone", "name": "Thunderstone", "price": 300, "kind": "alchemical", "stock": 3},
+            {"item_id": "alchemical:antidote", "name": "Antidote", "price": 300, "kind": "alchemical", "stock": 3},
+            {"item_id": "alchemical:antiplague", "name": "Antiplague", "price": 300, "kind": "alchemical", "stock": 3},
+            {"item_id": "alchemical:smokestick", "name": "Smokestick", "price": 300, "kind": "alchemical", "stock": 3},
+        ],
         "base_price_modifier": 1.0,
         "pickpocket_dc": 16,
         "pickpocket_loot": ["kilka monet"],

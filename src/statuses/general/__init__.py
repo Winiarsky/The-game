@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 __all__: list[str] = [
+    "additional_skill_feats",
     "adopted_ancestry",
     "armor_proficiency",
     "assurance",

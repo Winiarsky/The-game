@@ -140,3 +140,29 @@ def test_spirit_instinct_melee_choice_sequence(monkeypatch):
     res2 = dispatch_event("sword", _ctx(game, hero))
     assert res2.success
     assert enemy.last_damage_type == DamageType.POSITIVE.value
+
+
+def test_spirit_instinct_does_not_change_damage_type_without_rage(monkeypatch):
+    hero = Hero((0, 0))
+    enemy = Enemy((1, 0), hp=30, ac=10)
+    game = FakeGame()
+    game.heroes = [hero]
+    game.enemies = [enemy]
+    game.board.occupants = {hero.position: hero, enemy.position: enemy}
+    game.conn.choice = enemy.position
+
+    # Brak statusu rage; sam aktywny status instynktu nie powinien dawać efektu.
+    hero.statuses.append(SpiritInstinctActiveStatus(spirit_type=DamageType.POSITIVE.value, duration=10))
+
+    rolls = iter([30, 4])  # hit/dmg
+    monkeypatch.setattr(basic_melee_attack_event, "prompt_for_roll", lambda *_, **__: next(rolls))
+    monkeypatch.setattr(basic_melee_attack_event, "refresh_flanking_statuses", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        basic_melee_attack_event.BasicMeleeAttackEvent,
+        "_prompt_choice",
+        staticmethod(lambda *_a, **_k: DamageType.POSITIVE.value),
+    )
+
+    result = dispatch_event("sword", _ctx(game, hero))
+    assert result.success
+    assert enemy.last_damage_type != DamageType.POSITIVE.value

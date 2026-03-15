@@ -1,5 +1,5 @@
 from .base import Reaction
-from .dispatcher import dispatch_reactions
+from .dispatcher import dispatch_reactions, clear_turn_reaction_policies
 from .champion_reaction import ChampionReaction
 from .opportunity_attack import OpportunityAttack
 from .nimble_dodge_reaction import NimbleDodgeReaction
@@ -10,6 +10,7 @@ from .counterspell_reaction import CounterspellReaction
 __all__ = [
     "Reaction",
     "dispatch_reactions",
+    "clear_turn_reaction_policies",
     "OpportunityAttack",
     "NimbleDodgeReaction",
     "ChampionReaction",

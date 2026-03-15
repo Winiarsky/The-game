@@ -4,8 +4,10 @@ from statuses.base import Status
 from statuses.familiar import FAMILIAR_OWNER_STATUS
 
 ANIMAL_ACCOMPLICE_DESCRIPTION = (
-    "Budujesz magiczną więź ze zwierzęciem i zyskujesz familiara "
-    "(zgodnie z zasadami familiara)."
+    "Nawiazujesz magiczna wiez z drobnym zwierzeciem-pomocnikiem.\n"
+    "Kiedy: po wybraniu featu.\n"
+    "Efekt: otrzymujesz status familiara (FAMILIAR_OWNER_STATUS) i dostep "
+    "do akcji/zdarzen zwiazanych z familiara zgodnie z aktualna implementacja silnika."
 )
 
 

@@ -156,7 +156,7 @@ class GameEvent:
                 allow_rage_manipulate = False
                 if callable(has_status):
                     try:
-                        allow_rage_manipulate = has_status("moment_of_clarity")
+                        allow_rage_manipulate = has_status("moment_of_clarity_active")
                     except Exception:
                         allow_rage_manipulate = False
                     try:
@@ -174,7 +174,7 @@ class GameEvent:
                     has_rage = False
                     for item in getattr(actor, "statuses", []) or []:
                         sid = getattr(item, "id", None)
-                        if sid == "moment_of_clarity" or item == "moment_of_clarity":
+                        if sid == "moment_of_clarity_active" or item == "moment_of_clarity_active":
                             allow_rage_manipulate = True
                         if sid == "rage" or item == "rage":
                             has_rage = True

@@ -187,6 +187,30 @@ def test_weapon_items_profiles_and_aliases():
     assert normalize_weapon_id("lekka kusza") == "light_crossbow"
 
 
+def test_crb_weapon_table_extensions_are_available_with_expected_core_stats():
+    club = create_weapon("club")
+    flail = create_weapon("flail")
+    sling = create_weapon("sling")
+    bast = create_weapon("bastard_sword")
+    bo_staff = create_weapon("bo_staff")
+    longspear = create_weapon("longspear")
+    halfling_sling_staff = create_weapon("halfling_sling_staff")
+    katar = create_weapon("katar")
+    dwarven_waraxe = create_weapon("dwarven_waraxe")
+    sawtooth_saber = create_weapon("sawtooth_saber")
+
+    assert club is not None and "thrown:10" in tuple(getattr(club, "traits", ()))
+    assert flail is not None and int(getattr(flail, "price_cp", 0) or 0) == 80
+    assert sling is not None and str(getattr(sling, "bulk", "")) == "L"
+    assert bast is not None and "two_hand:d12" in tuple(getattr(bast, "traits", ()))
+    assert bo_staff is not None and "reach:10" in tuple(getattr(bo_staff, "traits", ()))
+    assert longspear is not None and int(getattr(longspear, "hands_required", 0) or 0) == 2
+    assert halfling_sling_staff is not None and int(getattr(halfling_sling_staff, "reload", 0) or 0) == 1
+    assert katar is not None and "deadly:d6" in tuple(getattr(katar, "traits", ()))
+    assert dwarven_waraxe is not None and str(getattr(dwarven_waraxe, "proficiency_category", "")) == "advanced"
+    assert sawtooth_saber is not None and "twin" in tuple(getattr(sawtooth_saber, "traits", ()))
+
+
 def test_halberd_reach_is_compatible_with_existing_reach_mechanics(monkeypatch):
     game, hero, enemy = _setup_game((2, 0))
     rolls = iter([20, 5])

@@ -29,8 +29,12 @@ class BaseShield:
     description: str = "Tarcza."
     hands_required: int = 1
     traits: tuple[str, ...] = ()
+    price_cp: int = 0
+    bulk: str | int | float = "-"
     instance_id: str = field(default_factory=_new_instance_id)
     ac_bonus: int = 2
+    take_cover_ac_bonus: int | None = None
+    speed_penalty_feet: int = 0
     hardness: int = 0
     max_hp: int = 1
     broken_threshold: int = 1
@@ -38,6 +42,11 @@ class BaseShield:
 
     def __post_init__(self) -> None:
         self.ac_bonus = max(0, int(self.ac_bonus))
+        if self.take_cover_ac_bonus is None:
+            self.take_cover_ac_bonus = self.ac_bonus
+        else:
+            self.take_cover_ac_bonus = max(int(self.ac_bonus), int(self.take_cover_ac_bonus))
+        self.speed_penalty_feet = max(0, int(self.speed_penalty_feet or 0))
         self.hardness = max(0, int(self.hardness))
         self.max_hp = max(1, int(self.max_hp))
         self.broken_threshold = max(1, min(int(self.broken_threshold), self.max_hp))
@@ -63,13 +72,32 @@ class BaseShield:
         self.current_hp = self.max_hp
 
     def ui_description(self) -> str:
-        state = "destroyed" if self.is_destroyed else ("broken" if self.is_broken else "ready")
+        state = "zniszczona" if self.is_destroyed else ("uszkodzona" if self.is_broken else "gotowa")
         traits = ", ".join(self.traits) if self.traits else "brak"
-        return (
-            f"{self.name}\n"
-            f"AC: +{self.ac_bonus} | Hardness: {self.hardness} | HP: {self.current_hp}/{self.max_hp} | BT: {self.broken_threshold}\n"
-            f"State: {state} | Traits: {traits}"
-        )
+        price_cp = max(0, int(getattr(self, "price_cp", 0) or 0))
+        bulk = str(getattr(self, "bulk", "-") or "-")
+        if bulk.lower() == "l":
+            bulk = "L"
+        ac_line = f"- AC: +{self.ac_bonus}"
+        if int(self.take_cover_ac_bonus or 0) > int(self.ac_bonus):
+            ac_line = f"- AC: +{self.ac_bonus}/+{int(self.take_cover_ac_bonus)} (Take Cover)"
+        speed_line = None
+        if int(self.speed_penalty_feet or 0) > 0:
+            speed_line = f"- Kara predkosci: -{int(self.speed_penalty_feet)} ft (gdy podniesiona)"
+        lines = [
+            f"{self.name}",
+            ac_line,
+            f"- Twardosc: {self.hardness}",
+            f"- HP: {self.current_hp}/{self.max_hp}",
+            f"- BT: {self.broken_threshold}",
+            f"- Cena: {price_cp} cp",
+            f"- Bulk: {bulk}",
+            f"- Stan: {state}",
+            f"- Cechy: {traits}",
+        ]
+        if speed_line:
+            lines.insert(2, speed_line)
+        return "\n".join(lines)
 
     def apply_shield_block(self, incoming_damage: int) -> ShieldBlockOutcome:
         try:

@@ -3,10 +3,11 @@ from __future__ import annotations
 from statuses.base import Status
 
 GNOME_OBSESSION_DESCRIPTION = (
-    "Wybierz 1 Lore skill. Zyskujesz w nim trained.\n"
-    "Na 2 poziomie: expert, na 7: master, na 15: legendary "
-    "(dotyczy też Lore z backgroundu).\n"
-    "W tym silniku zapisujemy wybór Lore i tabelę progresji."
+    "Masz obsesyjna, gleboka fascynacje jedna dziedzina wiedzy.\n"
+    "Kiedy: po wybraniu featu wskazujesz 1 Lore skill.\n"
+    "Efekt: dostajesz trained w wybranym Lore oraz zapis progresji tej samej "
+    "specjalizacji: 2 poziom -> expert, 7 -> master, 15 -> legendary "
+    "(mapowane przez gnome_obsession_progression)."
 )
 
 

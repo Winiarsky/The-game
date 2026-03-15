@@ -293,3 +293,32 @@ def test_command_familiar_scent_seek_hint():
     result = CommandFamiliarEvent().execute(ctx)
     assert result.success
     assert result.message and "wyczuwa" in result.message
+
+
+def test_command_familiar_prompts_mode_on_first_use_and_persists_choice():
+    game = DummyGame()
+    ui = DummyUI(["Distract (Enemy)"])
+    game.ui = ui
+
+    hero = Hero()
+    hero.set_position((0, 0))
+    enemy = BasicEnemy()
+    enemy.position = (0, 1)
+
+    game.heroes = [hero]
+    game.enemies = [enemy]
+    board = DummyBoard(hero.position, enemy.position, enemy=enemy)
+    board.hero = hero
+    game.board = board
+
+    hero.add_status(_make_familiar_owner_status())
+    assert hero.get_status_data("FamiliarOwner", "familiar_mode") is None
+
+    ctx = EventContext(game=game, actor=hero)
+    result = CommandFamiliarEvent().execute(ctx)
+
+    assert result.success
+    assert hero.get_status_data("FamiliarOwner", "familiar_mode") == "distract"
+    assert enemy.has_status("familiar_distract")
+    assert ui.last_choices is not None
+    assert "Distract (Enemy)" in ui.last_choices

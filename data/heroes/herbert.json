@@ -1,0 +1,628 @@
+{
+  "character_id": "herbert",
+  "name": "Herbert",
+  "concept": "",
+  "level": 1,
+  "ancestry_id": "gnome",
+  "heritage_id": "fey_touched_gnome",
+  "ancestry_feat_id": "animal_accomplice",
+  "background_id": "background_entertainer",
+  "class_id": "bard",
+  "class_feat_ids": [],
+  "portrait_image": "/static/portraits/custom/hero_f56c74f9.jpg",
+  "status_ids": [
+    "gnome",
+    "dim_light_vision",
+    "fey_touched_gnome",
+    "animal_accomplice",
+    "familiarowner",
+    "background_entertainer",
+    "fascinating_performance",
+    "bard",
+    "inspiration",
+    "lingering_composition",
+    "reach_spell"
+  ],
+  "status_data": {
+    "gnome": {
+      "ui_description": "Punkty Zycia: 8\nRozmiar: Maly\nPredkosc: 25 stop\nBoosty atrybutow: Kondycja, Charyzma, Dowolna\nWada atrybutu: Sila\nJezyki: Common, Gnomish, Sylvan\nDodatkowe jezyki: Draconic, Dwarven, Elven, Goblin, Jotun, Orcish.\nCechy: Gnome, Humanoid.\nLow-Light Vision: w slabym swietle widzisz jak w jasnym i ignorujesz concealed z dim light.",
+      "ancestry_hp": 8,
+      "base_speed_feet": 25,
+      "size": "small",
+      "ancestry_traits": [
+        "gnome",
+        "humanoid"
+      ],
+      "ancestry_languages": [
+        "common",
+        "gnomish",
+        "sylvan"
+      ],
+      "ancestry_bonus_languages": [
+        "draconic",
+        "dwarven",
+        "elven",
+        "goblin",
+        "jotun",
+        "orcish"
+      ],
+      "ability_boosts": [
+        "constitution",
+        "charisma",
+        "free"
+      ],
+      "ability_flaw": "strength",
+      "grants_statuses": [
+        {
+          "id": "dim_light_vision",
+          "label": "Dim Light Vision",
+          "duration": null,
+          "source": null,
+          "stacks": false,
+          "data": {},
+          "check_effects": [
+            {
+              "applies_to": "source",
+              "skills": [
+                "perception"
+              ],
+              "tags_required": null,
+              "bonus_effects": [],
+              "promote": 0,
+              "demote": 0,
+              "promote_on": null,
+              "demote_on": null,
+              "prompt_notes": [
+                "Ignorujesz efekty polmroku."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "dim_light_vision": {},
+    "fey_touched_gnome": {
+      "ui_description": "Magia fey przenika twoje dziedzictwo od urodzenia.\nKiedy: po wybraniu heritage wybierasz 1 cantrip z listy Fey-touched.\nEfekt: dostajesz trait fey (ancestry_extra_traits), wybrany cantrip jako innate spell at-will (granted_cantrips, tradycja primal), oraz mozliwosc zmiany cantripa po 10 minutach dziennej medytacji (reselect_cantrip_daily_minutes).",
+      "ui_choice_kind": "fey_touched_gnome",
+      "ancestry_extra_traits": [
+        "fey"
+      ],
+      "fey_touched_cantrip_choices": [
+        "detect_magic",
+        "guidance",
+        "ray_of_frost",
+        "produce_flame",
+        "light",
+        "tanglefoot",
+        "shield",
+        "ghost_sound",
+        "stabilize",
+        "daze"
+      ],
+      "fey_touched_cantrip": "guidance",
+      "granted_cantrips": [
+        "guidance"
+      ],
+      "innate_magic_tradition": "primal",
+      "reselect_cantrip_daily_minutes": 10,
+      "gnome_primal_innate_source": true
+    },
+    "animal_accomplice": {
+      "ui_description": "Nawiazujesz magiczna wiez z drobnym zwierzeciem-pomocnikiem.\nKiedy: po wybraniu featu.\nEfekt: otrzymujesz status familiara (FAMILIAR_OWNER_STATUS) i dostep do akcji/zdarzen zwiazanych z familiara zgodnie z aktualna implementacja silnika.",
+      "grants_statuses": [
+        {
+          "id": "FamiliarOwner",
+          "label": "Familiar Owner",
+          "duration": null,
+          "source": null,
+          "stacks": false,
+          "data": {
+            "ui_description": "Posiadasz familiara i możesz go komenderować."
+          },
+          "check_effects": null
+        }
+      ]
+    },
+    "familiarowner": {
+      "ui_description": "Posiadasz familiara i możesz go komenderować."
+    },
+    "background_entertainer": {
+      "ui_description": "Trenowales wystepy sceniczne i umiesz skupic na sobie uwage tlumu.",
+      "ui_prompt": "Background: Artysta sceniczny",
+      "ui_prompt_long": "Trenowales wystepy sceniczne i umiesz skupic na sobie uwage tlumu.\n\nMechanika (w tym silniku):\n- Boosty cech (informacyjnie w UI): Jeden boost do Zrecznosci lub Charyzmy oraz jeden dowolny boost.\n- Szkolenie Skill/Lore (informacyjnie w UI): Wystepy oraz Wiedza: Teatr.\n- Feat z backgroundu: Fascinating Performance (dodawany do bohatera jako status).\n- Mechanika featu (krotko): +2 status do testów Występów.\n\nPrzypomnienie reguły bazowej: Na 1. poziomie wybierasz jeden background i tej decyzji nie zmieniasz później. Każdy background daje dwa boosty cech (jeden ograniczony, jeden dowolny), trained w jednym skillu i jednym Lore oraz jeden skill feat. W tym silniku boosty cech i szkolenia skill/Lore są informacją UI, a feat z backgroundu jest dodawany do bohatera jako realny status.",
+      "is_background": true,
+      "background_key": "entertainer",
+      "background_label": "Artysta sceniczny",
+      "background_ability_boosts_ui": "Jeden boost do Zrecznosci lub Charyzmy oraz jeden dowolny boost.",
+      "background_skill_training_ui": "Wystepy oraz Wiedza: Teatr.",
+      "background_skill_training_ui_only": true,
+      "background_feat_id": "fascinating_performance",
+      "background_core_rules_ui": "Na 1. poziomie wybierasz jeden background i tej decyzji nie zmieniasz później. Każdy background daje dwa boosty cech (jeden ograniczony, jeden dowolny), trained w jednym skillu i jednym Lore oraz jeden skill feat. W tym silniku boosty cech i szkolenia skill/Lore są informacją UI, a feat z backgroundu jest dodawany do bohatera jako realny status.",
+      "grants_statuses": [
+        {
+          "id": "fascinating_performance",
+          "label": "Fascinating Performance",
+          "duration": null,
+          "source": null,
+          "stacks": false,
+          "data": {
+            "ui_description": "Podczas występu skupiasz uwagę i fascynujesz obserwatorów.\nMechanika: +2 status do testów Występów.",
+            "skill_feat_placeholder": false,
+            "skill_feat_fallback_mechanic": true
+          },
+          "check_effects": [
+            {
+              "applies_to": "source",
+              "skills": [
+                "performance"
+              ],
+              "tags_required": null,
+              "bonus_effects": [
+                {
+                  "type": "status",
+                  "value": 2,
+                  "tag": "performance",
+                  "source": "status:fascinating_performance",
+                  "target_id": null,
+                  "label": "fascinating_performance +2",
+                  "is_penalty": false,
+                  "duration_turns": null
+                }
+              ],
+              "promote": 0,
+              "demote": 0,
+              "promote_on": null,
+              "demote_on": null,
+              "prompt_notes": [
+                "Fascinating Performance: +2 status."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "fascinating_performance": {
+      "ui_description": "Podczas występu skupiasz uwagę i fascynujesz obserwatorów.\nMechanika: +2 status do testów Występów.",
+      "skill_feat_placeholder": false,
+      "skill_feat_fallback_mechanic": true
+    },
+    "bard": {
+      "ui_prompt": "KLASA: BARD\nKey Ability: Charyzma (+2 na 1. poziomie).\nPunkty Zycia: 8 + modyfikator Kondycji.\n\nBieglosci startowe:\n- Percepcja: Expert\n- Rzuty obronne: Fortitude Trained, Reflex Trained, Will Expert\n- Skille: Performance Trained + 4 dodatkowe skille (+ INT mod)\n\nMagia:\n- Tradycja: okultystyczna (occult)\n- Repertuar na 1. poziomie: 5 cantripow i 2 czary 1. rangi\n- 5 cantripow wybierasz z listy occult podczas tworzenia postaci\n- Composition cantrips z klasy (automatycznie, bez wyboru): Inspire Courage, Counter Performance\n- Sloty na 1. poziomie: 2 czary 1. rangi / dzien\n- Focus Pool: 1 Focus Point\nPodczas setupu wybierasz Muse i kompletujesz repertuar.",
+      "class_hp": 8,
+      "ui_choice_kind": "bard_setup",
+      "bard_spell_tradition": "occult",
+      "bard_known_cantrips_at_level1": 5,
+      "bard_known_rank_1_spells_at_level1": 2,
+      "bard_rank_1_slots_per_day": 2,
+      "bard_bonus_cantrips": [
+        "inspire_courage",
+        "counter_performance"
+      ],
+      "bard_bonus_focus_spells": [
+        "counter_performance"
+      ],
+      "set_actor_attrs": {
+        "focus_point": 1,
+        "class_name": "bard"
+      },
+      "grants_statuses": [
+        {
+          "id": "inspiration",
+          "label": "Inspiration",
+          "duration": null,
+          "source": null,
+          "stacks": false,
+          "data": {
+            "ui_choice_kind": "bard_muse",
+            "bard_muse_choices": [
+              "enigma",
+              "maestro",
+              "polymath"
+            ],
+            "bard_muse_effects": {
+              "enigma": {
+                "effect": "Odkrywasz tajemnice i sekrety rzeczywistosci.",
+                "feat": "bardic_lore",
+                "feat_label": "Bardyczna wiedza",
+                "spell": "true_strike",
+                "spell_label": "Prawdziwy cios"
+              },
+              "maestro": {
+                "effect": "Inspirujesz sojusznikow i doskonalisz wystepy.",
+                "feat": "lingering_composition",
+                "feat_label": "Trwala kompozycja",
+                "spell": "soothe",
+                "spell_label": "Ukojenie"
+              },
+              "polymath": {
+                "effect": "Laczysz wiele talentow i zainteresowan.",
+                "feat": "versatile_performance",
+                "feat_label": "Wszechstronny wystep",
+                "spell": "unseen_servant",
+                "spell_label": "Niewidzialny sluga"
+              }
+            }
+          },
+          "check_effects": null
+        },
+        {
+          "id": "reach_spell",
+          "label": "Reach Spell",
+          "duration": null,
+          "source": null,
+          "stacks": false,
+          "data": {
+            "ui_description": "Reach Spell: zyskujesz akcje 'reach_spell'. Nastepny rzucony czar z zasiegiem ma +30 ft (dla touch zasieg wynosi 30 ft).",
+            "ui_prompt": "Reach Spell: zyskujesz akcje 'reach_spell'. Nastepny rzucony czar z zasiegiem ma +30 ft (dla touch zasieg wynosi 30 ft)."
+          },
+          "check_effects": null
+        }
+      ],
+      "bard_setup": {
+        "spell_tradition": "occult",
+        "known_cantrips": [
+          "forbidding_ward",
+          "dancing_lights",
+          "chill_touch",
+          "mage_hand",
+          "telekinetic_projectile",
+          "inspire_courage",
+          "counter_performance"
+        ],
+        "known_rank_1_spells": [
+          "soothe",
+          "bless"
+        ],
+        "known_focus_spells": [
+          "counter_performance"
+        ],
+        "class_granted_cantrips": [
+          "inspire_courage",
+          "counter_performance"
+        ],
+        "rank_1_slots_per_day": 2,
+        "muse_granted_rank_1_spell": "soothe"
+      },
+      "bard_known_cantrips": [
+        "forbidding_ward",
+        "dancing_lights",
+        "chill_touch",
+        "mage_hand",
+        "telekinetic_projectile",
+        "inspire_courage",
+        "counter_performance"
+      ],
+      "bard_known_rank_1_spells": [
+        "soothe",
+        "bless"
+      ],
+      "bard_focus_spells": [
+        "counter_performance"
+      ],
+      "bard_class_granted_cantrips": [
+        "inspire_courage",
+        "counter_performance"
+      ]
+    },
+    "inspiration": {
+      "ui_choice_kind": "bard_muse",
+      "bard_muse_choices": [
+        "enigma",
+        "maestro",
+        "polymath"
+      ],
+      "bard_muse_effects": {
+        "enigma": {
+          "effect": "Odkrywasz tajemnice i sekrety rzeczywistosci.",
+          "feat": "bardic_lore",
+          "feat_label": "Bardyczna wiedza",
+          "spell": "true_strike",
+          "spell_label": "Prawdziwy cios"
+        },
+        "maestro": {
+          "effect": "Inspirujesz sojusznikow i doskonalisz wystepy.",
+          "feat": "lingering_composition",
+          "feat_label": "Trwala kompozycja",
+          "spell": "soothe",
+          "spell_label": "Ukojenie"
+        },
+        "polymath": {
+          "effect": "Laczysz wiele talentow i zainteresowan.",
+          "feat": "versatile_performance",
+          "feat_label": "Wszechstronny wystep",
+          "spell": "unseen_servant",
+          "spell_label": "Niewidzialny sluga"
+        }
+      },
+      "bard_muse": "maestro",
+      "bard_muse_choice": {
+        "muse": "maestro",
+        "feat": "lingering_composition",
+        "known_spell": "soothe"
+      }
+    },
+    "lingering_composition": {
+      "ui_description": "Lingering Composition: naucz sie focus spell 'Lingering Composition' (dopisanie do znanych czarow recznie).",
+      "ui_prompt": "Lingering Composition: dopisz do listy znanych czarow focus spell 'Lingering Composition'. Zwiekszasz Focus Pool o 1 (mechanicznie).",
+      "add_actor_attrs": {
+        "focus_point": 1
+      }
+    },
+    "reach_spell": {
+      "ui_description": "Reach Spell: zyskujesz akcje 'reach_spell'. Nastepny rzucony czar z zasiegiem ma +30 ft (dla touch zasieg wynosi 30 ft).",
+      "ui_prompt": "Reach Spell: zyskujesz akcje 'reach_spell'. Nastepny rzucony czar z zasiegiem ma +30 ft (dla touch zasieg wynosi 30 ft)."
+    }
+  },
+  "ability_scores": {
+    "strength": 8,
+    "dexterity": 12,
+    "constitution": 16,
+    "intelligence": 12,
+    "wisdom": 12,
+    "charisma": 18
+  },
+  "ability_modifiers": {
+    "strength": -1,
+    "dexterity": 1,
+    "constitution": 3,
+    "intelligence": 1,
+    "wisdom": 1,
+    "charisma": 4
+  },
+  "skill_ranks": {
+    "acrobatics": "trained",
+    "arcana": "trained",
+    "deception": "trained",
+    "diplomacy": "trained",
+    "performance": "trained",
+    "society": "trained",
+    "stealth": "trained"
+  },
+  "skill_modifiers": {
+    "acrobatics": 4,
+    "arcana": 4,
+    "athletics": -1,
+    "crafting": 1,
+    "deception": 7,
+    "diplomacy": 7,
+    "intimidation": 4,
+    "medicine": 1,
+    "nature": 1,
+    "occultism": 1,
+    "performance": 7,
+    "religion": 1,
+    "society": 4,
+    "stealth": 4,
+    "survival": 1,
+    "thievery": 1
+  },
+  "trained_skills": [
+    "acrobatics",
+    "arcana",
+    "deception",
+    "diplomacy",
+    "performance",
+    "society",
+    "stealth"
+  ],
+  "lore_skills": [
+    "Theater (Wiedza)"
+  ],
+  "languages": [
+    "common",
+    "gnomish",
+    "sylvan"
+  ],
+  "traits": [
+    "gnome",
+    "humanoid"
+  ],
+  "perception_rank": "expert",
+  "perception_bonus": 6,
+  "focus_point": 2,
+  "focus_pool_max": 2,
+  "save_ranks": {
+    "fortitude": "trained",
+    "reflex": "trained",
+    "will": "expert"
+  },
+  "fortitude_bonus": 6,
+  "reflex_bonus": 4,
+  "will_bonus": 6,
+  "weapon_proficiency_ranks": {
+    "simple": "trained",
+    "unarmed": "trained"
+  },
+  "defense_proficiency_ranks": {
+    "unarmored": "trained",
+    "light": "trained"
+  },
+  "max_hp": 19,
+  "base_speed_feet": 25,
+  "ac": 14,
+  "starting_gold_gp": 15,
+  "coin_pouch": {
+    "cp": 4,
+    "sp": 7,
+    "gp": 0,
+    "pp": 0
+  },
+  "track_ammo": true,
+  "inventory_items": [
+    {
+      "item_id": "unarmed",
+      "category": "weapon",
+      "name": "Unarmed",
+      "description": "",
+      "traits": [
+        "agile",
+        "finesse",
+        "unarmed",
+        "free_hand"
+      ],
+      "price_cp": 0,
+      "bulk": "-",
+      "instance_id": "item-c84e2ec01b",
+      "event_name": "unarmed",
+      "preparation_counter": 0,
+      "prepared_by_quick_alchemy": false,
+      "prepared_by_advanced_alchemy": false
+    },
+    {
+      "item_id": "light_crossbow",
+      "category": "weapon",
+      "name": "Light Crossbow",
+      "description": "",
+      "traits": [
+        "crossbow",
+        "simple_crossbow",
+        "reload:1"
+      ],
+      "price_cp": 300,
+      "bulk": 1,
+      "instance_id": "item-e0720cd4a9",
+      "event_name": "light_crossbow",
+      "preparation_counter": 0,
+      "prepared_by_quick_alchemy": false,
+      "prepared_by_advanced_alchemy": false
+    },
+    {
+      "item_id": "studded_leather",
+      "category": "armor",
+      "name": "Studded Leather",
+      "description": "Wzmocniona lekka zbroja.",
+      "traits": [],
+      "price_cp": 300,
+      "bulk": 1,
+      "instance_id": "item-0fc7b63553"
+    },
+    {
+      "item_id": "bolts",
+      "category": "ammo",
+      "name": "Belty (10)",
+      "description": "Pek 10 beltow do kusz.",
+      "traits": [
+        "ammunition"
+      ],
+      "price_cp": 10,
+      "bulk": "L",
+      "instance_id": "item-bcc777daaa",
+      "ammo_count": 10
+    },
+    {
+      "item_id": "chalk",
+      "category": "gear",
+      "name": "Kreda (10)",
+      "description": "Pakiet kredy do oznaczania szlaku.",
+      "traits": [],
+      "price_cp": 1,
+      "bulk": "-",
+      "instance_id": "item-3ec8244c4e"
+    },
+    {
+      "item_id": "writing_set",
+      "category": "gear",
+      "name": "Zestaw pisarski",
+      "description": "Atrament, pioro i materialy pisarskie.",
+      "traits": [
+        "tool"
+      ],
+      "price_cp": 100,
+      "bulk": "L",
+      "instance_id": "item-98d0a9f088"
+    },
+    {
+      "item_id": "belt_pouch",
+      "category": "gear",
+      "name": "Sakiewka na pas",
+      "description": "Mala sakiewka na pas.",
+      "traits": [
+        "container"
+      ],
+      "price_cp": 4,
+      "bulk": "L",
+      "instance_id": "item-fff267486f"
+    },
+    {
+      "item_id": "waterskin",
+      "category": "gear",
+      "name": "Buklak",
+      "description": "Bukłak na wodę.",
+      "traits": [
+        "container"
+      ],
+      "price_cp": 5,
+      "bulk": "L",
+      "instance_id": "item-cf7f11ebfb"
+    },
+    {
+      "item_id": "flint_and_steel",
+      "category": "gear",
+      "name": "Krzesiwo",
+      "description": "Krzesiwo do rozpalania ognia.",
+      "traits": [],
+      "price_cp": 5,
+      "bulk": "-",
+      "instance_id": "item-54b4ad27f4"
+    },
+    {
+      "item_id": "bedroll",
+      "category": "gear",
+      "name": "Poslanie",
+      "description": "Poslanie podrozne.",
+      "traits": [],
+      "price_cp": 1,
+      "bulk": "L",
+      "instance_id": "item-65504283eb"
+    },
+    {
+      "item_id": "minor_healing_potion",
+      "category": "potion",
+      "name": "Mikstura leczenia (slaba)",
+      "description": "Po wypiciu odzyskujesz 1k8 HP.",
+      "traits": [
+        "consumable",
+        "healing",
+        "magic"
+      ],
+      "price_cp": 400,
+      "bulk": "L",
+      "instance_id": "item-a39713fce7",
+      "event_name": "minor_healing_potion",
+      "preparation_counter": 0,
+      "prepared_by_quick_alchemy": false,
+      "prepared_by_advanced_alchemy": false
+    },
+    {
+      "item_id": "alchemical:smokestick",
+      "category": "potion",
+      "name": "Lesser Smokestick",
+      "description": "Przedmiot alchemiczny.",
+      "traits": [],
+      "price_cp": 300,
+      "bulk": "L",
+      "instance_id": "item-44405736d9",
+      "event_name": "smokestick",
+      "preparation_counter": 0,
+      "prepared_by_quick_alchemy": false,
+      "prepared_by_advanced_alchemy": false
+    }
+  ],
+  "weapon_loadout": [
+    "unarmed",
+    "light_crossbow"
+  ],
+  "armor_loadout": [
+    "studded_leather"
+  ],
+  "shield_loadout": [],
+  "equipped_weapon_ids": [
+    "light_crossbow"
+  ],
+  "equipped_armor_id": "studded_leather",
+  "equipped_shield_id": "",
+  "equipped_armor_item_id": "item-0fc7b63553",
+  "equipped_shield_hand": "",
+  "created_at": "2026-03-11T18:43:21.261205+00:00",
+  "updated_at": "2026-03-11T18:43:21.261765+00:00"
+}

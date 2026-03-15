@@ -1,0 +1,869 @@
+{
+  "character_id": "christopher",
+  "name": "Christopher",
+  "concept": "",
+  "level": 1,
+  "ancestry_id": "human",
+  "heritage_id": "versatile_heritage",
+  "ancestry_feat_id": "natural_ambition",
+  "background_id": "background_barkeep",
+  "class_id": "champion",
+  "class_feat_ids": [
+    "deitys_domain"
+  ],
+  "portrait_image": "/static/portraits/custom/hero_12844ea6.jpg",
+  "status_ids": [
+    "human",
+    "versatile_heritage",
+    "toughness",
+    "background_barkeep",
+    "hobnobber",
+    "champion",
+    "shield_block",
+    "deific_weapon",
+    "deitys_domain",
+    "natural_ambition",
+    "ranged_reprisal"
+  ],
+  "status_data": {
+    "human": {
+      "ui_description": "Punkty Zycia: 8\nRozmiar: Sredni\nPredkosc: 25 stop\nBoosty atrybutow: Dwa dowolne boosty\nJezyki: Common\nDodatkowe jezyki: 1 + modyfikator Inteligencji (jesli dodatni), z listy jezykow powszechnych i regionalnych.\nCechy: Human, Humanoid.",
+      "ancestry_hp": 8,
+      "base_speed_feet": 25,
+      "size": "medium",
+      "ancestry_traits": [
+        "human",
+        "humanoid"
+      ],
+      "ancestry_languages": [
+        "common"
+      ],
+      "ancestry_bonus_languages_base": 1,
+      "ancestry_bonus_languages_source": "int_modifier_positive",
+      "ability_boosts": [
+        "free",
+        "free"
+      ]
+    },
+    "versatile_heritage": {
+      "ui_description": "Ludzie sa niezwykle wszechstronni i ambitni.\nDzieki temu stali sie najpowszechniejsza ancestry w wielu krainach.\nWybierasz jeden general feat, dla ktorego spelnasz wymagania.\nTak jak ancestry feat, mozesz go wybrac w dowolnym momencie\ntworzenia postaci.",
+      "ui_choice_kind": "versatile_heritage",
+      "general_feat_choices": [
+        "additional_lore",
+        "adopted_ancestry",
+        "alchemical_crafting",
+        "arcane_sense",
+        "armor_proficiency",
+        "assurance",
+        "bargain_hunter",
+        "battle_medicine",
+        "breath_control",
+        "canny_acumen",
+        "cat_fall",
+        "charming_liar",
+        "combat_climber",
+        "courtly_graces",
+        "toughness",
+        "fleet",
+        "diehard",
+        "incredible_initiative",
+        "dubious_knowledge",
+        "experienced_professional",
+        "experienced_smuggler",
+        "experienced_tracker",
+        "fascinating_performance",
+        "fast_recovery",
+        "feather_step",
+        "forager",
+        "group_coercion",
+        "group_impression",
+        "hefty_hauler",
+        "hobnobber",
+        "impressive_performance",
+        "intimidating_glare",
+        "lengthy_diversion",
+        "multilingual",
+        "natural_medicine",
+        "oddity_identification",
+        "pickpocket",
+        "quick_coercion",
+        "quick_identification",
+        "quick_jump",
+        "quick_repair",
+        "quick_squeeze",
+        "read_lips",
+        "recognize_spell",
+        "ride",
+        "trick_magic_item",
+        "sign_language",
+        "snare_crafting",
+        "specialty_crafting",
+        "subtle_theft",
+        "survey_wildlife",
+        "terrain_expertise",
+        "terrain_stalker",
+        "titan_wrestler",
+        "train_animal",
+        "underwater_marauder",
+        "virtuosic_performer",
+        "shield_block",
+        "skill_training",
+        "weapon_proficiency"
+      ],
+      "general_feat": "toughness"
+    },
+    "toughness": {
+      "ui_description": "Zwiekszasz max HP o swoj poziom oraz zmniejszasz DC recovery o 1 (oba elementy sa wspierane mechanicznie).",
+      "max_hp_per_level": 1
+    },
+    "background_barkeep": {
+      "ui_description": "Pracowales w karczmie, uczac sie kontaktu z ludzmi i trudnymi klientami.",
+      "ui_prompt": "Background: Karczmarz",
+      "ui_prompt_long": "Pracowales w karczmie, uczac sie kontaktu z ludzmi i trudnymi klientami.\n\nMechanika (w tym silniku):\n- Boosty cech (informacyjnie w UI): Jeden boost do Kondycji lub Charyzmy oraz jeden dowolny boost.\n- Szkolenie Skill/Lore (informacyjnie w UI): Dyplomacja oraz Wiedza: Alkohol.\n- Feat z backgroundu: Hobnobber (dodawany do bohatera jako status).\n- Mechanika featu (krotko): +2 status do testów Dyplomacji.\n\nPrzypomnienie reguły bazowej: Na 1. poziomie wybierasz jeden background i tej decyzji nie zmieniasz później. Każdy background daje dwa boosty cech (jeden ograniczony, jeden dowolny), trained w jednym skillu i jednym Lore oraz jeden skill feat. W tym silniku boosty cech i szkolenia skill/Lore są informacją UI, a feat z backgroundu jest dodawany do bohatera jako realny status.",
+      "is_background": true,
+      "background_key": "barkeep",
+      "background_label": "Karczmarz",
+      "background_ability_boosts_ui": "Jeden boost do Kondycji lub Charyzmy oraz jeden dowolny boost.",
+      "background_skill_training_ui": "Dyplomacja oraz Wiedza: Alkohol.",
+      "background_skill_training_ui_only": true,
+      "background_feat_id": "hobnobber",
+      "background_core_rules_ui": "Na 1. poziomie wybierasz jeden background i tej decyzji nie zmieniasz później. Każdy background daje dwa boosty cech (jeden ograniczony, jeden dowolny), trained w jednym skillu i jednym Lore oraz jeden skill feat. W tym silniku boosty cech i szkolenia skill/Lore są informacją UI, a feat z backgroundu jest dodawany do bohatera jako realny status.",
+      "grants_statuses": [
+        {
+          "id": "hobnobber",
+          "label": "Hobnobber",
+          "duration": null,
+          "source": null,
+          "stacks": false,
+          "data": {
+            "ui_description": "Szybko zbierasz plotki i informacje społeczne w osadach.\nMechanika: +2 status do testów Dyplomacji.",
+            "skill_feat_placeholder": false,
+            "skill_feat_fallback_mechanic": true
+          },
+          "check_effects": [
+            {
+              "applies_to": "source",
+              "skills": [
+                "diplomacy"
+              ],
+              "tags_required": null,
+              "bonus_effects": [
+                {
+                  "type": "status",
+                  "value": 2,
+                  "tag": "diplomacy",
+                  "source": "status:hobnobber",
+                  "target_id": null,
+                  "label": "hobnobber +2",
+                  "is_penalty": false,
+                  "duration_turns": null
+                }
+              ],
+              "promote": 0,
+              "demote": 0,
+              "promote_on": null,
+              "demote_on": null,
+              "prompt_notes": [
+                "Hobnobber: +2 status."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "hobnobber": {
+      "ui_description": "Szybko zbierasz plotki i informacje społeczne w osadach.\nMechanika: +2 status do testów Dyplomacji.",
+      "skill_feat_placeholder": false,
+      "skill_feat_fallback_mechanic": true
+    },
+    "champion": {
+      "ui_prompt": "KEY ABILITY: STRENGTH OR DEXTERITY\nAt 1st level, your class gives you an ability boost to your choice of Strength or Dexterity.\nHIT POINTS: 10 plus your Constitution Modifier\nYou increase your maximum number of HP by this number at 1st level and every level thereafter.\n\nINITIAL PROFICIENCIES:\nPERCEPTION\nTrained in Perception\nSAVING THROWS\nExpert in Fortitude\nTrained in Reflex\nExpert in Will\nSKILLS\nTrained in Religion\nTrained in one skill determined by your choice of deity\nTrained in a number of additional skills equal to 2 plus your Intelligence modifier\nATTACKS\nTrained in simple weapons\nTrained in martial weapons\nTrained in unarmed attacks\nDEFENSES\nTrained in all armor\nTrained in unarmored defense",
+      "class_hp": 10,
+      "ui_choice_kind": "champion_setup",
+      "champion_key_ability_choices": [
+        "strength",
+        "dexterity"
+      ],
+      "champion_cause_choices": [
+        "paladin",
+        "redeemer",
+        "liberator"
+      ],
+      "champion_deity_choices": [
+        "abadar",
+        "asmodeus",
+        "calistria",
+        "cayden_cailean",
+        "desna",
+        "erastil",
+        "gorum",
+        "gozreh",
+        "iomedae",
+        "irori",
+        "lamashtu",
+        "nethys",
+        "norgorber",
+        "pharasma",
+        "rovagug",
+        "sarenrae",
+        "shelyn",
+        "torag",
+        "urgathoa",
+        "zon_kuthon",
+        "custom"
+      ],
+      "champion_deity_skill_choices": {
+        "abadar": [
+          "society"
+        ],
+        "asmodeus": [
+          "deception"
+        ],
+        "calistria": [
+          "deception"
+        ],
+        "cayden_cailean": [
+          "athletics"
+        ],
+        "desna": [
+          "acrobatics"
+        ],
+        "erastil": [
+          "survival"
+        ],
+        "gorum": [
+          "athletics"
+        ],
+        "gozreh": [
+          "survival"
+        ],
+        "iomedae": [
+          "intimidation"
+        ],
+        "irori": [
+          "athletics"
+        ],
+        "lamashtu": [
+          "survival"
+        ],
+        "nethys": [
+          "arcana"
+        ],
+        "norgorber": [
+          "stealth"
+        ],
+        "pharasma": [
+          "medicine"
+        ],
+        "rovagug": [
+          "athletics"
+        ],
+        "sarenrae": [
+          "medicine"
+        ],
+        "shelyn": [
+          "crafting",
+          "performance"
+        ],
+        "torag": [
+          "crafting"
+        ],
+        "urgathoa": [
+          "intimidation"
+        ],
+        "zon_kuthon": [
+          "intimidation"
+        ],
+        "custom": [
+          "religion",
+          "diplomacy",
+          "intimidation",
+          "medicine",
+          "society",
+          "athletics",
+          "crafting"
+        ]
+      },
+      "set_actor_attrs": {
+        "focus_point": 1,
+        "class_name": "champion"
+      },
+      "grants_statuses": [
+        {
+          "id": "shield_block",
+          "label": "Shield Block",
+          "duration": null,
+          "source": null,
+          "stacks": false,
+          "data": {
+            "ui_description": "Reakcja: gdy masz podniesiona tarcze i otrzymujesz obrazenia fizyczne, tarcza pochlania obrazenia do Hardness (wdrozone mechanicznie przez reakcje)."
+          },
+          "check_effects": null
+        }
+      ],
+      "champion_setup": {
+        "key_ability": "dexterity",
+        "cause": "paladin",
+        "deity": "iomedae",
+        "deity_skill": "intimidation",
+        "trained_skill": "intimidation",
+        "trained_skills": [
+          "religion",
+          "intimidation"
+        ]
+      },
+      "champion_key_ability": "dexterity",
+      "champion_cause": "paladin",
+      "champion_deity": "iomedae",
+      "champion_deity_skill": "intimidation",
+      "trained_skills": [
+        "religion",
+        "intimidation"
+      ]
+    },
+    "shield_block": {
+      "ui_description": "Reakcja: gdy masz podniesiona tarcze i otrzymujesz obrazenia fizyczne, tarcza pochlania obrazenia do Hardness (wdrozone mechanicznie przez reakcje)."
+    },
+    "deific_weapon": {
+      "ui_description": "Deific Weapon: bron jest powiazana z favored weapon wybranego deity (dla custom deity wybierasz recznie). Przy ataku tą bronią zwiększasz kość obrażeń o jeden stopień.",
+      "ui_choice_kind": "deific_weapon",
+      "deific_weapon_choices": [
+        "sword",
+        "dagger",
+        "longbow",
+        "unarmed",
+        "razortooth_jaws"
+      ],
+      "deific_weapon_type": "longsword",
+      "deific_weapon_deity": "iomedae"
+    },
+    "deitys_domain": {
+      "ui_description": "Deity's Domain: wybierasz jedna z domen swojego bostwa i zyskujesz jej initial domain spell jako devotion spell (focus spell).",
+      "ui_prompt": "Deity's Domain: wybierasz jedna z domen swojego bostwa i zyskujesz jej initial domain spell jako devotion spell (focus spell).",
+      "ui_choice_kind": "champion_deitys_domain",
+      "domain_choices_by_deity": {
+        "abadar": [
+          "cities",
+          "earth",
+          "travel",
+          "wealth"
+        ],
+        "asmodeus": [
+          "confidence",
+          "fire",
+          "trickery",
+          "tyranny"
+        ],
+        "calistria": [
+          "pain",
+          "passion",
+          "secrecy",
+          "trickery"
+        ],
+        "cayden_cailean": [
+          "cities",
+          "freedom",
+          "indulgence",
+          "might"
+        ],
+        "desna": [
+          "dreams",
+          "luck",
+          "moon",
+          "travel"
+        ],
+        "erastil": [
+          "earth",
+          "family",
+          "nature",
+          "wealth"
+        ],
+        "gorum": [
+          "confidence",
+          "destruction",
+          "might",
+          "zeal"
+        ],
+        "gozreh": [
+          "air",
+          "nature",
+          "travel",
+          "water"
+        ],
+        "iomedae": [
+          "confidence",
+          "might",
+          "truth",
+          "zeal"
+        ],
+        "irori": [
+          "knowledge",
+          "might",
+          "perfection",
+          "truth"
+        ],
+        "lamashtu": [
+          "family",
+          "might",
+          "nightmares",
+          "trickery"
+        ],
+        "nethys": [
+          "destruction",
+          "knowledge",
+          "magic",
+          "protection"
+        ],
+        "norgorber": [
+          "death",
+          "secrecy",
+          "trickery",
+          "wealth"
+        ],
+        "pharasma": [
+          "death",
+          "fate",
+          "healing",
+          "knowledge"
+        ],
+        "rovagug": [
+          "air",
+          "destruction",
+          "earth",
+          "zeal"
+        ],
+        "sarenrae": [
+          "fire",
+          "healing",
+          "sun",
+          "truth"
+        ],
+        "shelyn": [
+          "creation",
+          "family",
+          "passion",
+          "protection"
+        ],
+        "torag": [
+          "creation",
+          "earth",
+          "family",
+          "protection"
+        ],
+        "urgathoa": [
+          "indulgence",
+          "magic",
+          "might",
+          "undeath"
+        ],
+        "zon_kuthon": [
+          "ambition",
+          "darkness",
+          "destruction",
+          "pain"
+        ],
+        "custom": [
+          "custom_domain_a",
+          "custom_domain_b",
+          "custom_domain_c"
+        ]
+      },
+      "domain_spell_placeholders": {
+        "air": "pushing_gust",
+        "ambition": "blind_ambition",
+        "cities": "face_in_the_crowd",
+        "confidence": "veil_of_confidence",
+        "creation": "splash_of_art",
+        "darkness": "cloak_of_shadow",
+        "death": "deaths_call",
+        "destruction": "cry_of_destruction",
+        "dreams": "sweet_dream",
+        "earth": "hurtling_stone",
+        "family": "soothing_words",
+        "fate": "read_fate",
+        "fire": "fire_ray",
+        "freedom": "unimpeded_stride",
+        "healing": "healers_blessing",
+        "indulgence": "overstuff",
+        "knowledge": "scholarly_recollection",
+        "luck": "bit_of_luck",
+        "magic": "magics_vessel",
+        "might": "athletic_rush",
+        "moon": "moonbeam",
+        "nature": "vibrant_thorns",
+        "nightmares": "waking_nightmare",
+        "pain": "savor_the_sting",
+        "passion": "charming_touch",
+        "perfection": "perfected_mind",
+        "protection": "protectors_sacrifice",
+        "secrecy": "forced_quiet",
+        "sun": "dazzling_flash",
+        "travel": "agile_feet",
+        "trickery": "sudden_shift",
+        "truth": "word_of_truth",
+        "tyranny": "touch_of_obedience",
+        "undeath": "touch_of_undeath",
+        "water": "tidal_surge",
+        "wealth": "appearance_of_wealth",
+        "zeal": "weapon_surge",
+        "custom_domain_a": "custom_domain_spell_a",
+        "custom_domain_b": "custom_domain_spell_b",
+        "custom_domain_c": "custom_domain_spell_c"
+      },
+      "domain_descriptions": {
+        "air": "You can control winds and the weather.",
+        "ambition": "You strive to keep up with and outpace the competition.",
+        "cities": "You have powers over urban environments and denizens.",
+        "confidence": "You overcome your fear and project pride.",
+        "creation": "You have divine abilities related to crafting and art.",
+        "darkness": "You operate in the darkness and take away the light.",
+        "death": "You have the power to end lives and destroy undead.",
+        "destruction": "You are a conduit for divine devastation.",
+        "dreams": "You have the power to enter and manipulate dreams.",
+        "earth": "You control soil and stone.",
+        "family": "You aid and protect your family and community more effectively.",
+        "fate": "You see and understand hidden inevitabilities.",
+        "fire": "You control flame.",
+        "freedom": "You liberate yourself and others from shackles and constraints.",
+        "healing": "Your healing magic is particularly potent.",
+        "indulgence": "You feast mightily and can shake off the effects of overindulging.",
+        "knowledge": "You receive divine insights.",
+        "luck": "You're unnaturally lucky and keep out of harm's way.",
+        "magic": "You perform the unexpected and inexplicable.",
+        "might": "Your physical power is bolstered by divine strength.",
+        "moon": "You command powers associated with the moon.",
+        "nature": "You hold power over animals and plants.",
+        "nightmares": "You fill minds with horror and dread.",
+        "pain": "You punish those who displease you with the sharp sting of pain.",
+        "passion": "You evoke passion, whether as love or lust.",
+        "perfection": "You strive to perfect your mind, body, and spirit.",
+        "protection": "You ward yourself and others.",
+        "secrecy": "You protect secrets and keep them hidden.",
+        "sun": "You harness the power of the sun and other light sources, and punish undead.",
+        "travel": "You have power over movement and journeys.",
+        "trickery": "You deceive others and cause mischief.",
+        "truth": "You pierce lies and discover the truth.",
+        "tyranny": "You wield power to rule and enslave others.",
+        "undeath": "Your magic carries close ties to the undead.",
+        "water": "You control water and bodies of water.",
+        "wealth": "You hold power over wealth, trade, and treasure.",
+        "zeal": "Your inner fire increases your combat prowess.",
+        "custom_domain_a": "Custom domain A.",
+        "custom_domain_b": "Custom domain B.",
+        "custom_domain_c": "Custom domain C."
+      },
+      "domain_advanced_spell_placeholders": {
+        "air": "disperse_into_air",
+        "ambition": "competitive_edge",
+        "cities": "pulse_of_the_city",
+        "confidence": "delusional_pride",
+        "creation": "artistic_flourish",
+        "darkness": "darkened_eyes",
+        "death": "eradicate_undeath",
+        "destruction": "destructive_aura",
+        "dreams": "dreamers_call",
+        "earth": "localized_quake",
+        "family": "unity",
+        "fate": "tempt_fate",
+        "fire": "flame_barrier",
+        "freedom": "word_of_freedom",
+        "healing": "rebuke_death",
+        "indulgence": "take_its_course",
+        "knowledge": "know_the_enemy",
+        "luck": "lucky_break",
+        "magic": "mystic_beacon",
+        "might": "enduring_might",
+        "moon": "touch_of_the_moon",
+        "nature": "natures_bounty",
+        "nightmares": "shared_nightmare",
+        "pain": "retributive_pain",
+        "passion": "captivating_adoration",
+        "perfection": "perfected_form",
+        "protection": "protectors_sphere",
+        "secrecy": "safeguard_secret",
+        "sun": "positive_luminance",
+        "travel": "travelers_transit",
+        "trickery": "tricksters_twin",
+        "truth": "glimpse_the_truth",
+        "tyranny": "commanding_lash",
+        "undeath": "malignant_sustenance",
+        "water": "downpour",
+        "wealth": "precious_metals",
+        "zeal": "zeal_for_battle",
+        "custom_domain_a": "custom_advanced_domain_spell_a",
+        "custom_domain_b": "custom_advanced_domain_spell_b",
+        "custom_domain_c": "custom_advanced_domain_spell_c"
+      },
+      "selected_domain": "zeal",
+      "domain_spell": "weapon_surge"
+    },
+    "natural_ambition": {
+      "ui_description": "Mechanika: wybierasz dodatkowy class feat poziomu 1 dla swojej klasy.\nFeat jest od razu dodawany jako status bohatera i dziala normalnie jak inne featy klasowe.\nSpecjalne: tylko przy tworzeniu postaci na 1. poziomie.",
+      "ui_choice_kind": "natural_ambition",
+      "natural_ambition_class_feat_choices": {
+        "alchemist": [
+          "quick_alchemy_allow",
+          "quick_bomber",
+          "far_lobber",
+          "alchemical_savant",
+          "alchemist_familiar_guidance",
+          "advanced_alchemy"
+        ],
+        "barbarian": [
+          "moment_of_clarity",
+          "raging_thrower",
+          "cute_vision"
+        ],
+        "bard": [
+          "bardic_lore",
+          "lingering_composition",
+          "versatile_performance",
+          "reach_spell"
+        ],
+        "champion": [
+          "deitys_domain",
+          "ranged_reprisal",
+          "unimpeded_step",
+          "weight_of_guilt"
+        ],
+        "cleric": [
+          "deadly_simplicity",
+          "domain_initiate",
+          "harming_hands",
+          "healing_hands",
+          "holy_castigation",
+          "reach_spell"
+        ],
+        "druid": [
+          "animal_companion",
+          "leshy_familiar",
+          "reach_spell",
+          "storm_born",
+          "widen_spell",
+          "wild_shape"
+        ],
+        "fighter": [
+          "double_slice",
+          "exacting_strike",
+          "point_blank_shot",
+          "power_attack",
+          "reactive_shield",
+          "snagging_strike",
+          "sudden_charge"
+        ],
+        "monk": [
+          "crane_stance",
+          "dragon_stance",
+          "ki_rush",
+          "ki_strike",
+          "monastic_weaponry",
+          "mountain_stance",
+          "tiger_stance",
+          "wolf_stance"
+        ],
+        "ranger": [
+          "animal_companion",
+          "crossbow_ace",
+          "hunted_shot",
+          "monster_hunter",
+          "twin_takedown"
+        ],
+        "sorcerer": [
+          "counterspell",
+          "dangerous_sorcery",
+          "familiar",
+          "reach_spell",
+          "widen_spell"
+        ],
+        "wizard": [
+          "counterspell",
+          "eschew_materials",
+          "familiar",
+          "hand_of_the_apprentice",
+          "reach_spell",
+          "widen_spell"
+        ]
+      },
+      "class_name": "champion",
+      "class_feat": "ranged_reprisal"
+    },
+    "ranged_reprisal": {
+      "ui_description": "Ranged Reprisal: Retributive Strike moze byc wykonany bronia dystansowa, a gdy cel jest 5 stop poza zasiegiem melee, mozesz Step jako czesc reakcji.",
+      "ui_prompt": "Ranged Reprisal: Retributive Strike moze byc wykonany bronia dystansowa, a gdy cel jest 5 stop poza zasiegiem melee, mozesz Step jako czesc reakcji.",
+      "requires_champion_cause": "paladin"
+    }
+  },
+  "ability_scores": {
+    "strength": 16,
+    "dexterity": 14,
+    "constitution": 16,
+    "intelligence": 10,
+    "wisdom": 10,
+    "charisma": 12
+  },
+  "ability_modifiers": {
+    "strength": 3,
+    "dexterity": 2,
+    "constitution": 3,
+    "intelligence": 0,
+    "wisdom": 0,
+    "charisma": 1
+  },
+  "skill_ranks": {
+    "diplomacy": "trained",
+    "intimidation": "trained",
+    "medicine": "trained",
+    "occultism": "trained",
+    "religion": "trained"
+  },
+  "skill_modifiers": {
+    "acrobatics": 2,
+    "arcana": 0,
+    "athletics": 3,
+    "crafting": 0,
+    "deception": 1,
+    "diplomacy": 4,
+    "intimidation": 4,
+    "medicine": 3,
+    "nature": 0,
+    "occultism": 3,
+    "performance": 1,
+    "religion": 3,
+    "society": 0,
+    "stealth": 2,
+    "survival": 0,
+    "thievery": 2
+  },
+  "trained_skills": [
+    "diplomacy",
+    "intimidation",
+    "medicine",
+    "occultism",
+    "religion"
+  ],
+  "lore_skills": [
+    "Alcohol (Wiedza)"
+  ],
+  "languages": [
+    "common"
+  ],
+  "traits": [
+    "human",
+    "humanoid"
+  ],
+  "perception_rank": "trained",
+  "perception_bonus": 3,
+  "focus_point": 1,
+  "focus_pool_max": 1,
+  "save_ranks": {
+    "fortitude": "expert",
+    "reflex": "trained",
+    "will": "expert"
+  },
+  "fortitude_bonus": 8,
+  "reflex_bonus": 5,
+  "will_bonus": 5,
+  "weapon_proficiency_ranks": {
+    "simple": "trained",
+    "martial": "trained",
+    "unarmed": "trained"
+  },
+  "defense_proficiency_ranks": {
+    "unarmored": "trained",
+    "light": "trained",
+    "medium": "trained",
+    "heavy": "trained"
+  },
+  "max_hp": 21,
+  "base_speed_feet": 25,
+  "ac": 15,
+  "starting_gold_gp": 15,
+  "coin_pouch": {
+    "cp": 0,
+    "sp": 0,
+    "gp": 15,
+    "pp": 0
+  },
+  "track_ammo": true,
+  "inventory_items": [
+    {
+      "item_id": "unarmed",
+      "category": "weapon",
+      "name": "Unarmed",
+      "description": "",
+      "traits": [
+        "agile",
+        "finesse",
+        "unarmed",
+        "free_hand"
+      ],
+      "price_cp": 0,
+      "bulk": "-",
+      "instance_id": "item-c87026960b",
+      "event_name": "unarmed",
+      "preparation_counter": 0,
+      "prepared_by_quick_alchemy": false,
+      "prepared_by_advanced_alchemy": false
+    },
+    {
+      "item_id": "longsword",
+      "category": "weapon",
+      "name": "Longsword",
+      "description": "",
+      "traits": [
+        "versatile:p"
+      ],
+      "price_cp": 100,
+      "bulk": 1,
+      "instance_id": "item-d364df8f22",
+      "event_name": "longsword",
+      "preparation_counter": 0,
+      "prepared_by_quick_alchemy": false,
+      "prepared_by_advanced_alchemy": false
+    },
+    {
+      "item_id": "tower_shield",
+      "category": "shield",
+      "name": "Tarcza wiezowa",
+      "description": "Ciezka tarcza zapewniajaca wysoki poziom oslony.",
+      "traits": [
+        "tower_shield",
+        "shield_block"
+      ],
+      "price_cp": 1000,
+      "bulk": 4,
+      "instance_id": "item-1563211ad3",
+      "current_hp": 20,
+      "raised": false
+    },
+    {
+      "item_id": "scale_mail",
+      "category": "armor",
+      "name": "Scale Mail",
+      "description": "Średnia zbroja o wysokiej ochronie.",
+      "traits": [],
+      "price_cp": 400,
+      "bulk": 2,
+      "instance_id": "item-dace70284f"
+    }
+  ],
+  "weapon_loadout": [
+    "unarmed",
+    "longsword"
+  ],
+  "armor_loadout": [
+    "scale_mail"
+  ],
+  "shield_loadout": [
+    "tower_shield"
+  ],
+  "equipped_weapon_ids": [
+    "longsword"
+  ],
+  "equipped_armor_id": "scale_mail",
+  "equipped_shield_id": "tower_shield",
+  "equipped_armor_item_id": "item-dace70284f",
+  "equipped_shield_hand": "right",
+  "created_at": "2026-03-12T10:52:15.076103+00:00",
+  "updated_at": "2026-03-12T10:52:15.078732+00:00"
+}

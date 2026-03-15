@@ -4,7 +4,9 @@ from collections import OrderedDict
 from typing import Any
 
 from combat import refresh_flanking_statuses
+from combat.damage_utils import remove_defeated_enemy
 from combat.hp_engine import apply_damage as hp_apply_damage
+from damage_types import DamageType
 from GameObjects.items.inventory import get_equipped_weapons
 from statuses import Status
 from statuses.classes.fighter.feats.snagging_strike import apply_snagging_flat_footed
@@ -156,37 +158,64 @@ def _merge_damage_components(*groups: list[tuple[str, int]]) -> list[tuple[str, 
     return [(dtype, amount) for dtype, amount in merged.items() if amount > 0]
 
 
-def _apply_merged_damage(target, damage_components: list[tuple[str, int]]) -> bool:
-    defeated = False
-    applier = getattr(target, "apply_damage", None)
+def _resolve_combined_damage_type(
+    damage_components: list[tuple[str, int]],
+    *,
+    preferred: str | None = None,
+) -> str:
+    if preferred:
+        normalized = str(preferred or "").strip().lower()
+        if normalized:
+            return normalized
     for dmg_type, amount in damage_components:
-        if defeated:
-            break
-        value = max(0, int(amount or 0))
-        if value <= 0:
-            continue
-        if callable(applier):
-            try:
-                _, defeated = applier(value, dmg_type)
-                continue
-            except Exception:
-                pass
-        info = hp_apply_damage(target, value, str(dmg_type), source="fighter:double_slice")
-        defeated = bool((info or {}).get("defeated", False))
-    return bool(defeated)
+        try:
+            value = int(amount or 0)
+        except Exception:
+            value = 0
+        if value > 0:
+            normalized = str(dmg_type or "").strip().lower()
+            if normalized:
+                return normalized
+    return DamageType.NORMAL.value
+
+
+def _apply_merged_damage(
+    target,
+    damage_components: list[tuple[str, int]],
+    *,
+    preferred_damage_type: str | None = None,
+) -> bool:
+    total_damage = sum(max(0, int(amount or 0)) for _dmg_type, amount in damage_components)
+    if total_damage <= 0:
+        return False
+    combined_damage_type = _resolve_combined_damage_type(damage_components, preferred=preferred_damage_type)
+
+    applier = getattr(target, "apply_damage", None)
+    if callable(applier):
+        try:
+            _, defeated = applier(total_damage, combined_damage_type)
+            return bool(defeated)
+        except Exception:
+            pass
+    info = hp_apply_damage(target, total_damage, combined_damage_type, source="fighter:double_slice")
+    return bool((info or {}).get("defeated", False))
 
 
 def _remove_defeated_target(game, target, target_pos) -> None:
     pos = target_pos if isinstance(target_pos, tuple) else getattr(target, "position", None)
+    if target in getattr(game, "enemies", []):
+        try:
+            remove_defeated_enemy(game, target, position=pos, source="fighter_feat")
+            return
+        except Exception:
+            pass
     if isinstance(pos, tuple):
         try:
             game.board.remove(pos)
         except Exception:
             pass
     try:
-        if target in getattr(game, "enemies", []):
-            game.enemies.remove(target)
-        elif target in getattr(game, "heroes", []):
+        if target in getattr(game, "heroes", []):
             game.heroes.remove(target)
     except Exception:
         pass
@@ -488,6 +517,7 @@ class DoubleSliceEvent(ActionCostEvent):
                     "forced_target": first_target,
                     "forced_target_pos": first_target_pos,
                     "attack_roll_penalty": second_penalty,
+                    "attack_roll_penalty_type": "status",
                     "roll_only": True,
                     "allow_auto_precision_bonus": False,
                 },
@@ -504,6 +534,9 @@ class DoubleSliceEvent(ActionCostEvent):
         target_pos = (first_result.data or {}).get("target_pos") or (second_result.data or {}).get("target_pos")
         first_components = list((first_result.data or {}).get("damage_components") or []) if first_hit else []
         second_components = list((second_result.data or {}).get("damage_components") or []) if second_hit else []
+        first_damage_type = str((first_components[0][0] if first_components else "") or "").strip().lower()
+        second_damage_type = str((second_components[0][0] if second_components else "") or "").strip().lower()
+        preferred_damage_type = first_damage_type or second_damage_type or DamageType.NORMAL.value
         # Precision damage w Double Slice liczymy maksymalnie raz (wybór przez UI).
         if _is_flat_footed_target(target):
             if precision_choice == "first" and first_hit and ("backstabber" in first_traits):
@@ -514,7 +547,11 @@ class DoubleSliceEvent(ActionCostEvent):
 
         defeated = False
         if target is not None and merged_components:
-            defeated = _apply_merged_damage(target, merged_components)
+            defeated = _apply_merged_damage(
+                target,
+                merged_components,
+                preferred_damage_type=preferred_damage_type,
+            )
             if defeated:
                 _remove_defeated_target(ctx.game, target, target_pos)
 

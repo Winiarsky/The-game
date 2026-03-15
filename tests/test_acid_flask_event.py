@@ -86,10 +86,11 @@ class DummyHero:
         self.statuses = []
 
 
-def _give_alchemical_item(actor, event_name: str, *, preparation_counter: int = 0):
+def _give_alchemical_item(actor, event_name: str, *, preparation_counter: int = 0, alchemical_tier: str | None = None):
     return add_alchemical_item(
         actor,
         event_name=event_name,
+        alchemical_tier=alchemical_tier,
         preparation_counter=preparation_counter,
     )
 
@@ -112,7 +113,7 @@ def test_acid_flask_moderate_hit_persistent_and_splash(monkeypatch):
     monkeypatch.setattr("combat.damage_utils.get_ui_client", lambda: dummy_ui)
 
     hero = DummyHero((0, 0), object_id="hero-1")
-    _give_alchemical_item(hero, event.name)
+    _give_alchemical_item(hero, event.name, alchemical_tier="moderate")
     hero_adj = DummyHero((0, 1), name="hero-2", object_id="hero-2")
     target = DummyEnemy((1, 0), object_id="enemy-1")
     enemy_adj = DummyEnemy((1, 1), object_id="enemy-2")
@@ -157,7 +158,7 @@ def test_acid_flask_item_bonus_in_modifiers(monkeypatch, tier, item_bonus):
     monkeypatch.setattr("GameObjects.events.bombs.acid_flask_event.prompt_for_roll", _prompt)
 
     hero = DummyHero((0, 0))
-    _give_alchemical_item(hero, event.name)
+    _give_alchemical_item(hero, event.name, alchemical_tier=tier)
     target = DummyEnemy((1, 0), ac=10)
     game = SimpleNamespace(
         conn=FakeConn(responses=[(1, 0)]),

@@ -72,7 +72,16 @@ class BaseMagicAttackEvent(MagicEvent):
                 pass
 
         if not check_concealed(ctx, target):
-            return EventResult(success=True, consumed_action=self.consumes_action, message="Czar chybia (concealed).")
+            return EventResult(
+                success=True,
+                consumed_action=self.consumes_action,
+                message="Czar chybia (concealed).",
+                data={
+                    "target": target,
+                    "spell_attack_hit": False,
+                    "spell_attack_outcome": "failure",
+                },
+            )
 
         target_ac, base_ac, modifier = self._target_ac_with_bonuses(target, attacker=actor)
         modifier_note = ""
@@ -108,6 +117,19 @@ class BaseMagicAttackEvent(MagicEvent):
             subtitle=f"bazowe {base_ac}{modifier_note}",
             prompt_long=prompt_long,
             modifiers=build_modifiers_grid(best_effects),
+            roll_stack={
+                "components": [
+                    {
+                        "id": "spell_attack",
+                        "label": "Atak czarem",
+                        "value": int(modifier or 0),
+                        "description": "Łączny modyfikator ataku magicznego.",
+                        "editable": True,
+                    }
+                ],
+                "auto_total_modifier": int(modifier or 0),
+            },
+            auto_total_modifier=int(modifier or 0),
             answer_placeholder="Wynik k20",
             return_details=True,
             infer_natural_from_roll=True,
@@ -115,18 +137,38 @@ class BaseMagicAttackEvent(MagicEvent):
         if isinstance(roll_data, dict):
             roll = int(roll_data.get("roll", 0) or 0)
             natural_shift = int(roll_data.get("natural_shift", 0) or 0)
+            if natural_shift == 0:
+                raw_roll = int(roll_data.get("raw_roll", roll) or roll)
+                natural_shift = natural_shift_from_roll(raw_roll)
+            modifier_delta = int(roll_data.get("modifier_delta", 0) or 0)
         else:
             roll = int(roll_data or 0)
             natural_shift = natural_shift_from_roll(roll)
-        total_roll = roll + modifier
+            modifier_delta = 0
+        total_roll = roll + modifier + modifier_delta
         outcome = resolve_outcome(total_roll, target_ac, natural_shift=natural_shift)
         critical = is_critical_success(outcome)
         hit = is_hit(outcome)
         if not hit:
-            return EventResult(success=True, consumed_action=self.consumes_action, message="Czar chybia.")
+            return EventResult(
+                success=True,
+                consumed_action=self.consumes_action,
+                message="Czar chybia.",
+                data={
+                    "target": target,
+                    "spell_attack_hit": False,
+                    "spell_attack_outcome": str(outcome),
+                },
+            )
 
         self._maybe_prompt_vengeful_hatred(actor, target)
-        return self._resolve_on_target(target, target_pos, ctx, critical=critical)
+        result = self._resolve_on_target(target, target_pos, ctx, critical=critical)
+        payload = dict(getattr(result, "data", None) or {})
+        payload.setdefault("target", target)
+        payload.setdefault("spell_attack_hit", True)
+        payload.setdefault("spell_attack_outcome", str(outcome))
+        result.data = payload
+        return result
 
     @staticmethod
     def _has_status(obj, status) -> bool:

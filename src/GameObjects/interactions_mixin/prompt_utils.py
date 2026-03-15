@@ -3,7 +3,12 @@ from __future__ import annotations
 import logging
 
 from ui_client import get_ui_client
-from combat.degree_of_success import natural_mode_from_shift, natural_shift_from_mode, natural_shift_from_roll
+from combat.degree_of_success import (
+    clamp_natural_shift,
+    natural_mode_from_shift,
+    natural_shift_from_mode,
+    natural_shift_from_roll,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -21,30 +26,191 @@ def set_magic_prompt_context(payload: dict | None) -> None:
 
 def _parse_roll_details(answer, *, infer_natural_from_roll: bool = False) -> dict[str, object]:
     roll = 0
+    raw_roll = 0
     shift = 0
+    modifier_delta = 0
+    computed_total = None
 
     if isinstance(answer, dict):
         roll_val = answer.get("roll", answer.get("value", answer.get("result", 0)))
+        raw_roll_val = answer.get("raw_roll", roll_val)
         try:
             roll = int(roll_val or 0)
         except Exception:
             roll = 0
+        try:
+            raw_roll = int(raw_roll_val or 0)
+        except Exception:
+            raw_roll = roll
         mode = answer.get("natural_mode", answer.get("natural", answer.get("nat", None)))
         shift = natural_shift_from_mode(mode)
+        if shift == 0:
+            shift = clamp_natural_shift(answer.get("natural_shift"))
         if shift == 0 and infer_natural_from_roll:
-            shift = natural_shift_from_roll(roll)
+            shift = natural_shift_from_roll(raw_roll)
+        try:
+            modifier_delta = int(answer.get("modifier_delta", 0) or 0)
+        except Exception:
+            modifier_delta = 0
+        if "computed_total" in answer:
+            try:
+                computed_total = int(answer.get("computed_total", 0) or 0)
+            except Exception:
+                computed_total = None
     else:
         try:
             roll = int(answer or 0)
         except Exception:
             roll = 0
+        raw_roll = roll
         if infer_natural_from_roll:
-            shift = natural_shift_from_roll(roll)
+            shift = natural_shift_from_roll(raw_roll)
 
-    return {
+    out = {
         "roll": int(roll),
+        "raw_roll": int(raw_roll),
         "natural_shift": int(shift),
         "natural_mode": natural_mode_from_shift(shift),
+        "modifier_delta": int(modifier_delta),
+    }
+    if computed_total is not None:
+        out["computed_total"] = int(computed_total)
+    return out
+
+
+def _int_or_default(value, default: int = 0) -> int:
+    try:
+        return int(value or 0)
+    except Exception:
+        return int(default)
+
+
+def _sum_modifier_bucket(modifiers: dict, key: str, *, is_penalty: bool = False) -> int:
+    total = 0
+    for row in list(modifiers.get(key, []) or []):
+        value = _int_or_default(row.get("value", 0), 0) if isinstance(row, dict) else 0
+        total += -abs(value) if is_penalty else abs(value)
+    return int(total)
+
+
+def _prepare_roll_stack_payload(
+    *,
+    roll_stack: dict | None,
+    modifiers: dict | None,
+    auto_total_modifier: int | None,
+) -> dict | None:
+    base_payload: dict = dict(roll_stack or {})
+    raw_components = list(base_payload.get("components") or [])
+    components: list[dict[str, object]] = []
+
+    if raw_components:
+        for idx, row in enumerate(raw_components):
+            if not isinstance(row, dict):
+                continue
+            components.append(
+                {
+                    "id": str(row.get("id") or f"component_{idx + 1}"),
+                    "label": str(row.get("label") or f"Składnik {idx + 1}"),
+                    "value": _int_or_default(row.get("value", 0), 0),
+                    "description": str(row.get("description") or row.get("desc") or ""),
+                    "editable": bool(row.get("editable", True)),
+                }
+            )
+    elif isinstance(modifiers, dict):
+        circumstance_total = _sum_modifier_bucket(modifiers, "bonCirc") + _sum_modifier_bucket(
+            modifiers, "penCirc", is_penalty=True
+        )
+        status_total = _sum_modifier_bucket(modifiers, "bonStat") + _sum_modifier_bucket(
+            modifiers, "penStat", is_penalty=True
+        )
+        item_total = _sum_modifier_bucket(modifiers, "bonItem") + _sum_modifier_bucket(
+            modifiers, "penItem", is_penalty=True
+        )
+        for cid, label, value, description in (
+            ("circumstance", "Okoliczności", circumstance_total, "Premie i kary circumstance."),
+            ("status", "Status", status_total, "Premie i kary status."),
+            ("item", "Przedmiot", item_total, "Premie i kary item."),
+        ):
+            if int(value) == 0:
+                continue
+            components.append(
+                {
+                    "id": cid,
+                    "label": label,
+                    "value": int(value),
+                    "description": description,
+                    "editable": True,
+                }
+            )
+
+    components_total = sum(_int_or_default(item.get("value", 0), 0) for item in components)
+    auto_total = auto_total_modifier
+    if auto_total is None and "auto_total_modifier" in base_payload:
+        auto_total = _int_or_default(base_payload.get("auto_total_modifier", 0), 0)
+    if auto_total is None:
+        auto_total = int(components_total)
+
+    if int(auto_total) != int(components_total):
+        diff = int(auto_total) - int(components_total)
+        components.append(
+            {
+                "id": "other_auto",
+                "label": "Pozostałe",
+                "value": int(diff),
+                "description": "Pozostały automatyczny modyfikator.",
+                "editable": True,
+            }
+        )
+
+    if not components and int(auto_total) == 0:
+        return None
+
+    base_payload["components"] = components
+    base_payload["auto_total_modifier"] = int(auto_total)
+    return base_payload
+
+
+def _default_damage_roll_stack_payload() -> dict[str, object]:
+    components = [
+        {
+            "id": "ability",
+            "label": "Cecha",
+            "value": 0,
+            "description": "Modyfikator cechy do obrażeń (jeśli dotyczy).",
+            "editable": True,
+        },
+        {
+            "id": "item",
+            "label": "Przedmiot",
+            "value": 0,
+            "description": "Premie/kary z wyposażenia.",
+            "editable": True,
+        },
+        {
+            "id": "status",
+            "label": "Status",
+            "value": 0,
+            "description": "Premie/kary status do obrażeń.",
+            "editable": True,
+        },
+        {
+            "id": "circumstance",
+            "label": "Okoliczności",
+            "value": 0,
+            "description": "Premie/kary circumstance do obrażeń.",
+            "editable": True,
+        },
+        {
+            "id": "other",
+            "label": "Inne",
+            "value": 0,
+            "description": "Pozostałe modyfikatory.",
+            "editable": True,
+        },
+    ]
+    return {
+        "components": components,
+        "auto_total_modifier": 0,
     }
 
 
@@ -208,6 +374,17 @@ def prompt_for_roll(prompt: str, *, return_details: bool = False, infer_natural_
     """
     ui_client = get_ui_client()
     layout = str(ui_kwargs.get("layout", "test") or "test")
+    roll_stack_arg = ui_kwargs.pop("roll_stack", None)
+    auto_total_modifier = ui_kwargs.pop("auto_total_modifier", None)
+    roll_stack_payload = _prepare_roll_stack_payload(
+        roll_stack=roll_stack_arg if isinstance(roll_stack_arg, dict) else None,
+        modifiers=ui_kwargs.get("modifiers") if isinstance(ui_kwargs.get("modifiers"), dict) else None,
+        auto_total_modifier=_int_or_default(auto_total_modifier, 0) if auto_total_modifier is not None else None,
+    )
+    if roll_stack_payload is None and str(layout).strip().lower() == "damage":
+        roll_stack_payload = _default_damage_roll_stack_payload()
+    if roll_stack_payload is not None and str(layout).strip().lower() in {"test", "damage"}:
+        ui_kwargs["roll_stack"] = roll_stack_payload
     if ui_client.enabled:
         if "layout" not in ui_kwargs:
             ui_kwargs["layout"] = "test"

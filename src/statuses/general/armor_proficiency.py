@@ -5,16 +5,21 @@ from statuses.base import Status
 ARMOR_PROFICIENCY_DESCRIPTION = (
     "Stajesz sie biegly w lekkich zbrojach; jesli juz jestes, w srednich; "
     "jesli w srednich, w ciezkich. Mozna brac wielokrotnie (progresja). "
-    "Na razie licz recznie."
+    "Silnik zapisuje wybrany krok progresji na statusie."
 )
 
 
 def ArmorProficiencyStatus() -> Status:
-    """Feat: Armor Proficiency (opis do UI)."""
+    """Feat: Armor Proficiency."""
     return Status(
         id="armor_proficiency",
         label="Armor Proficiency",
-        data={"ui_description": ARMOR_PROFICIENCY_DESCRIPTION},
+        data={
+            "ui_description": ARMOR_PROFICIENCY_DESCRIPTION,
+            "ui_choice_kind": "armor_proficiency",
+            "armor_proficiency_grant": None,
+            "defense_proficiency_ranks": {},
+        },
     )
 
 

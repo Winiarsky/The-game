@@ -10,6 +10,17 @@ import requests
 logger = logging.getLogger(__name__)
 
 
+DEBUG_UNDO_COMMAND = "__debug_undo__"
+
+
+class UndoRequested(BaseException):
+    """Sygnał przerwania bieżącej akcji i cofnięcia do snapshotu debug."""
+
+    def __init__(self, command: str = "undo"):
+        self.command = str(command or "undo")
+        super().__init__(self.command)
+
+
 try:
     # Domyślny adres UI można ustawić w src/consts.py (PLAYER_UI_URL).
     from consts import PLAYER_UI_URL as DEFAULT_UI_URL
@@ -121,7 +132,7 @@ class UIClient:
         if return_meta:
             if fallback is None:
                 return None
-            return {"roll": int(fallback), "natural_mode": "none"}
+            return {"roll": int(fallback), "raw_roll": int(fallback), "natural_mode": "none"}
         return fallback
 
     def prompt_choice(
@@ -143,6 +154,36 @@ class UIClient:
         if not self.allow_cli_fallback:
             return None
         return self._prompt_cli_choice(prompt, choices)
+
+    def prompt_file_image(
+        self,
+        title: str = "Wybierz plik portretu",
+        *,
+        subtitle: str | None = None,
+        prompt_long: str | None = None,
+        source: str | None = None,
+    ) -> Optional[Any]:
+        """Prompt do wyboru pliku obrazu w UI (zwraca surową odpowiedź, np. dict z data_url)."""
+        if self.enabled:
+            prompt_id = self._create_prompt(
+                title,
+                kind="choice",
+                source=source,
+                layout="file_image",
+                title=title,
+                subtitle=subtitle,
+                prompt_long=prompt_long,
+            )
+            if prompt_id is not None:
+                return self._wait_for_answer(prompt_id, max_wait=self.max_wait)
+        if not self.enabled:
+            logger.warning("UI jest wyłączone; prompt_file_image bez odpowiedzi.")
+        if not self.allow_cli_fallback:
+            return None
+        try:
+            return input(f"{title} (podaj ścieżkę do pliku): ").strip() or None
+        except Exception:
+            return None
 
     def prompt_action_select(
         self,
@@ -272,7 +313,7 @@ class UIClient:
         if isinstance(answer, float):
             return int(answer)
         if isinstance(answer, dict):
-            for key in ("roll", "value", "result"):
+            for key in ("roll", "raw_roll", "value", "result"):
                 if key not in answer:
                     continue
                 try:
@@ -289,10 +330,35 @@ class UIClient:
     def _normalize_roll_answer(answer: Any) -> dict[str, Any]:
         if isinstance(answer, dict):
             roll = UIClient._coerce_roll_answer_int(answer)
+            raw_roll = UIClient._coerce_roll_answer_int(answer.get("raw_roll", roll))
             mode = answer.get("natural_mode", answer.get("natural", answer.get("nat", "none")))
-            return {"roll": int(roll or 0), "natural_mode": str(mode or "none")}
+            out: dict[str, Any] = {
+                "roll": int(roll or 0),
+                "raw_roll": int(raw_roll or 0),
+                "natural_mode": str(mode or "none"),
+            }
+            for key in ("natural_shift", "modifier_delta", "computed_total"):
+                if key not in answer:
+                    continue
+                try:
+                    out[key] = int(answer.get(key) or 0)
+                except (TypeError, ValueError):
+                    pass
+            if "roll_stack_values" in answer and isinstance(answer.get("roll_stack_values"), list):
+                out["roll_stack_values"] = list(answer.get("roll_stack_values") or [])
+            return out
         roll = UIClient._coerce_roll_answer_int(answer)
-        return {"roll": int(roll or 0), "natural_mode": "none"}
+        return {"roll": int(roll or 0), "raw_roll": int(roll or 0), "natural_mode": "none"}
+
+    @staticmethod
+    def _debug_undo_response_for_source(answer: Any, payload: dict[str, Any]) -> str | None:
+        """Dla kreatora postaci mapuj globalne cofnij na lokalny krok wstecz."""
+        if str(answer).strip().lower() != DEBUG_UNDO_COMMAND:
+            return None
+        source = str(payload.get("source") or "").strip().lower()
+        if source == "character_creation":
+            return "/back"
+        return None
 
     def _wait_for_answer(self, prompt_id: str, *, max_wait: Optional[float] = None) -> Any:
         url = f"{self.base_url}/api/prompts/{prompt_id}"
@@ -303,7 +369,15 @@ class UIClient:
                 resp.raise_for_status()
                 data = resp.json()
                 if data.get("status") == "answered":
-                    return data.get("answer")
+                    answer = data.get("answer")
+                    mapped = self._debug_undo_response_for_source(answer, data if isinstance(data, dict) else {})
+                    if mapped is not None:
+                        return mapped
+                    if str(answer).strip().lower() == DEBUG_UNDO_COMMAND:
+                        raise UndoRequested("undo")
+                    return answer
+            except UndoRequested:
+                raise
             except Exception as exc:  # pragma: no cover - fallback na CLI
                 logger.warning("Błąd podczas oczekiwania na odpowiedź UI: %s", exc)
                 return None
@@ -322,7 +396,14 @@ class UIClient:
                 data = resp.json()
                 if data.get("status") == "answered":
                     answer = data.get("answer")
+                    mapped = self._debug_undo_response_for_source(answer, data if isinstance(data, dict) else {})
+                    if mapped is not None:
+                        return mapped
+                    if str(answer).strip().lower() == DEBUG_UNDO_COMMAND:
+                        raise UndoRequested("undo")
                     return str(answer) if answer is not None else None
+            except UndoRequested:
+                raise
             except Exception as exc:  # pragma: no cover
                 logger.warning("Błąd podczas oczekiwania na odpowiedź UI: %s", exc)
                 return None

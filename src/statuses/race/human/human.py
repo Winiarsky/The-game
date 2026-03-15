@@ -3,14 +3,14 @@ from __future__ import annotations
 from statuses.base import Status
 
 HUMAN_DESCRIPTION = (
-    "Hit Points: 8\n"
-    "Size: Medium\n"
-    "Speed: 25 feet\n"
-    "Ability Boosts: Two free ability boosts\n"
-    "Languages: Common\n"
-    "Additional languages: 1 + Intelligence modifier (jeśli dodatni), "
-    "z listy common i innych dostępnych regionalnie.\n"
-    "Traits: Human, Humanoid."
+    "Punkty Zycia: 8\n"
+    "Rozmiar: Sredni\n"
+    "Predkosc: 25 stop\n"
+    "Boosty atrybutow: Dwa dowolne boosty\n"
+    "Jezyki: Common\n"
+    "Dodatkowe jezyki: 1 + modyfikator Inteligencji (jesli dodatni), "
+    "z listy jezykow powszechnych i regionalnych.\n"
+    "Cechy: Human, Humanoid."
 )
 
 

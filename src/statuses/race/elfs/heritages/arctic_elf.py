@@ -4,9 +4,9 @@ from damage_types import DamageType
 from statuses.base import Status
 
 ARCTIC_ELF_DESCRIPTION = (
-    "Cold resistance równa połowie poziomu (minimum 1).\n"
-    "Przykład: poziom 1 = Resist Cold 1, poziom 3 = Resist Cold 2.\n"
-    "Dodatkowo traktujesz środowiskowe efekty zimna jako o 1 stopień mniej ekstremalne "
+    "Kiedy: zawsze, gdy otrzymujesz obrazenia od zimna.\n"
+    "Efekt: masz odpornosc na zimno rowna polowie poziomu (minimum 1).\n"
+    "Dodatkowo traktujesz srodowiskowe efekty zimna jako o 1 stopien mniej ekstremalne "
     "(hook danych pod przyszłą mechanikę środowiska)."
 )
 

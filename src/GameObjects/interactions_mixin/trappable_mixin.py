@@ -145,10 +145,11 @@ class TrappableMixin:
 
     def trigger_trap(self, actor=None, game=None) -> str:
         try:
-            from combat.degree_of_success import is_hit, resolve_outcome
+            from combat.degree_of_success import is_hit, natural_shift_from_roll, resolve_outcome
         except Exception:
             is_hit = lambda outcome: str(outcome) in ("success", "critical_success")  # noqa: E731
             resolve_outcome = lambda total, dc, natural_shift=0: "success" if int(total) >= int(dc) else "failure"  # noqa: E731
+            natural_shift_from_roll = lambda _roll: 0  # noqa: E731
         self.trap_armed = False
         if actor is None:
             return self.trap_effect
@@ -160,6 +161,19 @@ class TrappableMixin:
         roll_data = prompt_for_roll(
             f"{self.trap_name}: rzut ataku +{int(attack_bonus)} vs AC {target_ac}.",
             layout="test",
+            roll_stack={
+                "components": [
+                    {
+                        "id": "trap_attack",
+                        "label": "Atak pułapki",
+                        "value": int(attack_bonus),
+                        "description": "Premia ataku pułapki.",
+                        "editable": True,
+                    }
+                ],
+                "auto_total_modifier": int(attack_bonus),
+            },
+            auto_total_modifier=int(attack_bonus),
             answer_placeholder="Wynik k20",
             return_details=True,
             infer_natural_from_roll=True,
@@ -167,10 +181,15 @@ class TrappableMixin:
         if isinstance(roll_data, dict):
             roll = int(roll_data.get("roll", 0) or 0)
             natural_shift = int(roll_data.get("natural_shift", 0) or 0)
+            if natural_shift == 0:
+                raw_roll = int(roll_data.get("raw_roll", roll) or roll)
+                natural_shift = natural_shift_from_roll(raw_roll)
+            modifier_delta = int(roll_data.get("modifier_delta", 0) or 0)
         else:
             roll = int(roll_data or 0)
-            natural_shift = 0
-        total = int(roll) + int(attack_bonus)
+            natural_shift = natural_shift_from_roll(roll)
+            modifier_delta = 0
+        total = int(roll) + int(attack_bonus) + int(modifier_delta)
         outcome = resolve_outcome(total, int(target_ac), natural_shift=natural_shift)
         if not is_hit(outcome):
             return f"Pułapka pudłuje ({total} vs AC {target_ac})."

@@ -1,20 +1,15 @@
 from __future__ import annotations
 
 from statuses.base import Status
-from statuses.classes.champion.feats.raise_shield_allow import CHAMPION_RAISE_SHIELD_ALLOW_FEAT
+from statuses.classes.cleric.cleric import CLERIC_DEITY_DIVINE_SKILL_CHOICES, CLERIC_DEITY_OPTIONS
 from statuses.general.shield_block import SHIELD_BLOCK_STATUS
 
 CHAMPION_KEY_ABILITY_CHOICES = ["strength", "dexterity"]
 CHAMPION_CAUSE_CHOICES = ["paladin", "redeemer", "liberator"]
-CHAMPION_DEITY_CHOICES = ["iomedae", "sarenrae", "torag", "shelyn", "desna", "abadar", "custom"]
+CHAMPION_DEITY_CHOICES = [str(item).strip().lower() for item in list(CLERIC_DEITY_OPTIONS.keys()) if str(item).strip()]
 CHAMPION_DEITY_SKILL_CHOICES = {
-    "iomedae": ["religion", "diplomacy"],
-    "sarenrae": ["religion", "medicine"],
-    "torag": ["religion", "crafting"],
-    "shelyn": ["religion", "performance"],
-    "desna": ["religion", "survival"],
-    "abadar": ["religion", "society"],
-    "custom": ["religion", "diplomacy", "intimidation", "medicine", "society", "athletics", "crafting"],
+    deity_id: list(CLERIC_DEITY_DIVINE_SKILL_CHOICES.get(deity_id) or ["religion"])
+    for deity_id in CHAMPION_DEITY_CHOICES
 }
 
 CHAMPION_PROMPT = (
@@ -57,7 +52,7 @@ def ChampionStatus() -> Status:
             "champion_deity_choices": list(CHAMPION_DEITY_CHOICES),
             "champion_deity_skill_choices": dict(CHAMPION_DEITY_SKILL_CHOICES),
             "set_actor_attrs": {"focus_point": 1, "class_name": "champion"},
-            "grants_statuses": [CHAMPION_RAISE_SHIELD_ALLOW_FEAT, SHIELD_BLOCK_STATUS],
+            "grants_statuses": [SHIELD_BLOCK_STATUS],
         },
     )
 

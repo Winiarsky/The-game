@@ -2,15 +2,18 @@ from __future__ import annotations
 
 from statuses.base import Status
 
-FLEET_DESCRIPTION = "Twoja predkosc zwieksza sie o 5 stop. Na razie opisowo."
+FLEET_DESCRIPTION = "Twoja bazowa predkosc zwieksza sie o 5 stop (wdrozone mechanicznie)."
 
 
 def FleetStatus() -> Status:
-    """Feat: Fleet (opis do UI)."""
+    """Feat: Fleet."""
     return Status(
         id="fleet",
         label="Fleet",
-        data={"ui_description": FLEET_DESCRIPTION},
+        data={
+            "ui_description": FLEET_DESCRIPTION,
+            "base_speed_bonus_feet": 5,
+        },
     )
 
 

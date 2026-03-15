@@ -13,7 +13,8 @@ DRAGON_INSTINCT_TYPES = [
 
 DRAGON_INSTINCT_PROMPT = (
     "Dragon Instinct: wybierz typ obrażeń (ice/fire/acid/poison/electricity).\n"
-    "Podczas Rage, możesz zamienić główny typ obrażeń broni na wybrany typ smoczy."
+    "Podczas Rage, możesz zamienić główny typ obrażeń broni na wybrany typ smoczy.\n"
+    "Uwaga: efekty instynktu działają tylko podczas aktywnego Rage."
 )
 
 

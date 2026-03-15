@@ -3,12 +3,13 @@ from __future__ import annotations
 from statuses.base import Status
 
 WELLSPRING_GNOME_DESCRIPTION = (
-    "Masz silniejsze powiązanie z innym źródłem magii niż primal dziedzictwo fey.\n"
-    "Wybierasz tradycję: arcane, divine albo occult i zyskujesz 1 cantrip tej tradycji "
-    "jako innate spell at-will.\n"
-    "Dodatkowo każdy primal innate spell otrzymany z gnome ancestry featów jest "
-    "traktowany jako spell wybranej tradycji.\n"
-    "W tym silniku wybór tradycji/cantripa jest ustawiany przy nadaniu statusu."
+    "Twoja magia plynie z innego zrodla niz typowe gnomie dziedzictwo fey.\n"
+    "Kiedy: po wybraniu heritage wskazujesz tradycje (arcane/divine/occult) "
+    "oraz 1 cantrip z odpowiedniej listy.\n"
+    "Efekt: wybrany cantrip trafia do granted_cantrips jako innate spell at-will "
+    "w wybranej tradycji; dodatkowo wszystkie innate primal gnome ancestry spells "
+    "moga byc traktowane jako ta wybrana tradycja "
+    "(override_gnome_primal_innate_tradition = True)."
 )
 
 

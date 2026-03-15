@@ -11,7 +11,12 @@ from GameObjects.interactions_mixin.skill_checks import resolve_skill_check
 from ui_client import get_ui_client
 from statuses import DARKVISION_STATUS, DIM_LIGHT_VISION_STATUS, IN_DARK_STATUS, IN_DIM_LIGHT_STATUS, LOW_LIGHT_VISION_STATUS
 from skills import Skill
-from combat.degree_of_success import natural_mode_from_shift, natural_shift_from_mode, natural_shift_from_roll
+from combat.degree_of_success import (
+    clamp_natural_shift,
+    natural_mode_from_shift,
+    natural_shift_from_mode,
+    natural_shift_from_roll,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -30,34 +35,352 @@ def _is_hero(obj) -> bool:
 
 def _parse_roll_details(answer, *, infer_natural_from_roll: bool = False) -> dict[str, object]:
     roll = 0
+    raw_roll = 0
     shift = 0
+    modifier_delta = 0
+    computed_total = None
     if isinstance(answer, dict):
-        raw_roll = answer.get("roll", answer.get("value", answer.get("result", 0)))
+        raw_roll_data = answer.get("raw_roll", answer.get("roll", answer.get("value", answer.get("result", 0))))
+        roll_value = answer.get("roll", answer.get("value", answer.get("result", 0)))
         try:
-            roll = int(raw_roll or 0)
+            raw_roll = int(raw_roll_data or 0)
+        except Exception:
+            raw_roll = 0
+        try:
+            roll = int(roll_value or 0)
         except Exception:
             roll = 0
+        if raw_roll == 0 and roll != 0:
+            raw_roll = roll
         mode = answer.get("natural_mode", answer.get("natural", answer.get("nat", None)))
         shift = natural_shift_from_mode(mode)
+        if shift == 0:
+            shift = clamp_natural_shift(answer.get("natural_shift"))
         if shift == 0 and infer_natural_from_roll:
-            shift = natural_shift_from_roll(roll)
+            shift = natural_shift_from_roll(raw_roll)
+        try:
+            modifier_delta = int(answer.get("modifier_delta", 0) or 0)
+        except Exception:
+            modifier_delta = 0
+        if "computed_total" in answer:
+            try:
+                computed_total = int(answer.get("computed_total", 0) or 0)
+            except Exception:
+                computed_total = None
     else:
         try:
             roll = int(answer or 0)
         except Exception:
             roll = 0
+        raw_roll = roll
         if infer_natural_from_roll:
-            shift = natural_shift_from_roll(roll)
-    return {
+            shift = natural_shift_from_roll(raw_roll)
+    out = {
         "roll": int(roll),
+        "raw_roll": int(raw_roll),
         "natural_shift": int(shift),
         "natural_mode": natural_mode_from_shift(shift),
+        "modifier_delta": int(modifier_delta),
     }
+    if computed_total is not None:
+        out["computed_total"] = int(computed_total)
+    return out
+
+
+def _int_or_default(value, default: int = 0) -> int:
+    try:
+        return int(value or 0)
+    except Exception:
+        return int(default)
+
+
+RANK_STEP_BONUS = {
+    "untrained": 0,
+    "trained": 2,
+    "expert": 4,
+    "master": 6,
+    "legendary": 8,
+}
+
+SKILL_TO_ABILITY = {
+    "acrobatics": "dexterity",
+    "arcana": "intelligence",
+    "athletics": "strength",
+    "crafting": "intelligence",
+    "deception": "charisma",
+    "diplomacy": "charisma",
+    "intimidation": "charisma",
+    "medicine": "wisdom",
+    "nature": "wisdom",
+    "occultism": "intelligence",
+    "performance": "charisma",
+    "religion": "wisdom",
+    "society": "intelligence",
+    "stealth": "dexterity",
+    "survival": "wisdom",
+    "thievery": "dexterity",
+    "perception": "wisdom",
+    "fortitude": "constitution",
+    "reflex": "dexterity",
+    "will": "wisdom",
+}
+
+
+def _ability_label_pl(ability_key: str) -> str:
+    mapping = {
+        "strength": "Siła",
+        "dexterity": "Zręczność",
+        "constitution": "Kondycja",
+        "intelligence": "Inteligencja",
+        "wisdom": "Mądrość",
+        "charisma": "Charyzma",
+    }
+    return mapping.get(str(ability_key or "").strip().lower(), str(ability_key or "Atrybut"))
+
+
+def _skill_rank_for_actor(actor, skill_id: str) -> str:
+    raw_skill = str(skill_id or "").strip().lower()
+    if actor is None:
+        return "untrained"
+    if raw_skill == Skill.PERCEPTION.value:
+        return str(getattr(actor, "perception_rank", "untrained") or "untrained").strip().lower()
+    if raw_skill in (Skill.FORTITUDE.value, Skill.REFLEX.value, Skill.WILL.value):
+        save_ranks = getattr(actor, "save_ranks", None)
+        if isinstance(save_ranks, dict):
+            return str(save_ranks.get(raw_skill, "untrained") or "untrained").strip().lower()
+    skill_ranks = getattr(actor, "skill_ranks", None)
+    if isinstance(skill_ranks, dict):
+        return str(skill_ranks.get(raw_skill, "untrained") or "untrained").strip().lower()
+    return "untrained"
+
+
+def _ability_mod_for_actor(actor, ability_key: str) -> int:
+    if actor is None:
+        return 0
+    raw_key = str(ability_key or "").strip().lower()
+    mods = getattr(actor, "ability_modifiers", None)
+    if isinstance(mods, dict):
+        return _int_or_default(mods.get(raw_key, 0), 0)
+    short = {"strength": "str", "dexterity": "dex", "constitution": "con", "intelligence": "int", "wisdom": "wis", "charisma": "cha"}
+    short_key = short.get(raw_key)
+    if short_key:
+        return _int_or_default(getattr(actor, f"{short_key}_mod", 0), 0)
+    return 0
+
+
+def _intrinsic_skill_bonus(actor, skill_id: str) -> int | None:
+    if actor is None:
+        return None
+    raw_skill = str(skill_id or "").strip().lower()
+    attr_name = {
+        Skill.PERCEPTION.value: "perception_bonus",
+        Skill.FORTITUDE.value: "fortitude_bonus",
+        Skill.REFLEX.value: "reflex_bonus",
+        Skill.WILL.value: "will_bonus",
+    }.get(raw_skill, f"{raw_skill}_bonus")
+    if not hasattr(actor, attr_name):
+        return None
+    return _int_or_default(getattr(actor, attr_name, 0), 0)
+
+
+def _resolve_base_modifier_components(actor, skill_id: str, requested_base_modifier: int) -> tuple[int, list[dict[str, object]]]:
+    raw_skill = str(skill_id or "").strip().lower()
+    rank = _skill_rank_for_actor(actor, raw_skill)
+    rank_step = int(RANK_STEP_BONUS.get(rank, 0))
+    level = _int_or_default(getattr(actor, "level", 0), 0)
+    level_component = level if rank != "untrained" else 0
+    ability_key = str(SKILL_TO_ABILITY.get(raw_skill, "intelligence"))
+    ability_mod = _ability_mod_for_actor(actor, ability_key)
+
+    derived_total = int(level_component + rank_step + ability_mod)
+    explicit_bonus = _intrinsic_skill_bonus(actor, raw_skill)
+    resolved = _int_or_default(requested_base_modifier, 0)
+    if resolved == 0:
+        if explicit_bonus is not None:
+            resolved = int(explicit_bonus)
+        else:
+            resolved = int(derived_total)
+
+    components: list[dict[str, object]] = [
+        {
+            "id": "level",
+            "label": "Poziom",
+            "value": int(level_component),
+            "description": "Poziom postaci (tylko jeśli co najmniej Trained).",
+            "editable": True,
+        },
+        {
+            "id": "proficiency_step",
+            "label": "Biegłość",
+            "value": int(rank_step),
+            "description": f"Stopień biegłości ({rank}).",
+            "editable": True,
+        },
+        {
+            "id": "ability",
+            "label": _ability_label_pl(ability_key),
+            "value": int(ability_mod),
+            "description": f"Modyfikator cechy ({_ability_label_pl(ability_key)}).",
+            "editable": True,
+        },
+    ]
+
+    remainder = int(resolved - derived_total)
+    if remainder != 0:
+        components.append(
+            {
+                "id": "other_base",
+                "label": "Pozostałe bazowe",
+                "value": int(remainder),
+                "description": "Różnica między wyliczeniem a bazowym bonusem postaci.",
+                "editable": True,
+            }
+        )
+    return int(resolved), components
+
+
+def _skill_roll_stack_payload(
+    *,
+    base_components: list[dict[str, object]],
+    modifiers_grid: dict,
+    total_modifier: int,
+) -> dict[str, object]:
+    circumstance_total = _sum_modifier_bucket(modifiers_grid, "bonCirc") + _sum_modifier_bucket(
+        modifiers_grid, "penCirc", is_penalty=True
+    )
+    status_total = _sum_modifier_bucket(modifiers_grid, "bonStat") + _sum_modifier_bucket(
+        modifiers_grid, "penStat", is_penalty=True
+    )
+    item_total = _sum_modifier_bucket(modifiers_grid, "bonItem") + _sum_modifier_bucket(
+        modifiers_grid, "penItem", is_penalty=True
+    )
+    components = list(base_components) + [
+        {
+            "id": "item",
+            "label": "Item",
+            "value": int(item_total),
+            "description": "Premie/kary z przedmiotów i run.",
+            "editable": True,
+        },
+        {
+            "id": "status",
+            "label": "Status",
+            "value": int(status_total),
+            "description": "Premie/kary status.",
+            "editable": True,
+        },
+        {
+            "id": "circumstance",
+            "label": "Circumstance",
+            "value": int(circumstance_total),
+            "description": "Premie/kary okolicznościowe.",
+            "editable": True,
+        },
+    ]
+    return {
+        "components": components,
+        "auto_total_modifier": int(total_modifier),
+    }
+
+
+def _sum_modifier_bucket(modifiers: dict, key: str, *, is_penalty: bool = False) -> int:
+    total = 0
+    for row in list(modifiers.get(key, []) or []):
+        value = _int_or_default(row.get("value", 0), 0) if isinstance(row, dict) else 0
+        total += -abs(value) if is_penalty else abs(value)
+    return int(total)
+
+
+def _prepare_roll_stack_payload(
+    *,
+    roll_stack: dict | None,
+    modifiers: dict | None,
+    auto_total_modifier: int | None,
+) -> dict | None:
+    base_payload: dict = dict(roll_stack or {})
+    raw_components = list(base_payload.get("components") or [])
+    components: list[dict[str, object]] = []
+
+    if raw_components:
+        for idx, row in enumerate(raw_components):
+            if not isinstance(row, dict):
+                continue
+            components.append(
+                {
+                    "id": str(row.get("id") or f"component_{idx + 1}"),
+                    "label": str(row.get("label") or f"Składnik {idx + 1}"),
+                    "value": _int_or_default(row.get("value", 0), 0),
+                    "description": str(row.get("description") or row.get("desc") or ""),
+                    "editable": bool(row.get("editable", True)),
+                }
+            )
+    elif isinstance(modifiers, dict):
+        circumstance_total = _sum_modifier_bucket(modifiers, "bonCirc") + _sum_modifier_bucket(
+            modifiers, "penCirc", is_penalty=True
+        )
+        status_total = _sum_modifier_bucket(modifiers, "bonStat") + _sum_modifier_bucket(
+            modifiers, "penStat", is_penalty=True
+        )
+        item_total = _sum_modifier_bucket(modifiers, "bonItem") + _sum_modifier_bucket(
+            modifiers, "penItem", is_penalty=True
+        )
+        for cid, label, value, description in (
+            ("circumstance", "Okoliczności", circumstance_total, "Premie i kary circumstance."),
+            ("status", "Status", status_total, "Premie i kary status."),
+            ("item", "Przedmiot", item_total, "Premie i kary item."),
+        ):
+            if int(value) == 0:
+                continue
+            components.append(
+                {
+                    "id": cid,
+                    "label": label,
+                    "value": int(value),
+                    "description": description,
+                    "editable": True,
+                }
+            )
+
+    components_total = sum(_int_or_default(item.get("value", 0), 0) for item in components)
+    auto_total = auto_total_modifier
+    if auto_total is None and "auto_total_modifier" in base_payload:
+        auto_total = _int_or_default(base_payload.get("auto_total_modifier", 0), 0)
+    if auto_total is None:
+        auto_total = int(components_total)
+
+    if int(auto_total) != int(components_total):
+        diff = int(auto_total) - int(components_total)
+        components.append(
+            {
+                "id": "other_auto",
+                "label": "Pozostałe",
+                "value": int(diff),
+                "description": "Pozostały automatyczny modyfikator.",
+                "editable": True,
+            }
+        )
+
+    if not components and int(auto_total) == 0:
+        return None
+
+    base_payload["components"] = components
+    base_payload["auto_total_modifier"] = int(auto_total)
+    return base_payload
 
 
 def prompt_for_roll(prompt: str, *, return_details: bool = False, infer_natural_from_roll: bool = False, **ui_kwargs):
     """Lokalny wrapper na prompt w testach (ułatwia monkeypatch get_ui_client)."""
     ui_client = get_ui_client()
+    layout = str(ui_kwargs.get("layout", "test") or "test")
+    roll_stack_arg = ui_kwargs.pop("roll_stack", None)
+    auto_total_modifier = ui_kwargs.pop("auto_total_modifier", None)
+    roll_stack_payload = _prepare_roll_stack_payload(
+        roll_stack=roll_stack_arg if isinstance(roll_stack_arg, dict) else None,
+        modifiers=ui_kwargs.get("modifiers") if isinstance(ui_kwargs.get("modifiers"), dict) else None,
+        auto_total_modifier=_int_or_default(auto_total_modifier, 0) if auto_total_modifier is not None else None,
+    )
+    if roll_stack_payload is not None and layout.strip().lower() == "test":
+        ui_kwargs["roll_stack"] = roll_stack_payload
     if ui_client is not None and hasattr(ui_client, "prompt_roll") and getattr(ui_client, "enabled", True):
         if "layout" not in ui_kwargs:
             ui_kwargs["layout"] = "test"
@@ -187,20 +510,21 @@ def resolve_skill_check_with_sources(
     tags = list(tags)
     if "roll" not in tags:
         tags.append("roll")
+    resolved_base_modifier, base_components = _resolve_base_modifier_components(actor, skill_id, int(base_modifier or 0))
     modifier, breakdown, notes, promote_src, demote_src, promote_tgt, demote_tgt, consume_src, consume_tgt, effects = _collect_modifier_data(
         skill_id=skill_id,
         tags=tags,
         actor=actor,
         target=target,
-        base_modifier=base_modifier,
+        base_modifier=resolved_base_modifier,
     )
 
     prompt_msg = f"Test {skill_id} (DC {dc})."
     summary_lines = []
     if breakdown:
         summary_lines.append(f"Premie/kary (najwyższe per typ): {', '.join(breakdown)}")
-    if base_modifier:
-        summary_lines.append(f"Modyfikator bazowy: {base_modifier:+d}")
+    if resolved_base_modifier:
+        summary_lines.append(f"Modyfikator bazowy: {resolved_base_modifier:+d}")
     if skill_id == Skill.REFLEX.value and _is_hero(actor):
         try:
             from statuses.clumsy import clumsy_reflex_penalty
@@ -211,7 +535,7 @@ def resolve_skill_check_with_sources(
         except Exception:
             pass
     if notes:
-        summary_lines.append(f"Uwagi: {' | '.join(notes)}")
+        summary_lines.append("Uwagi: " + "; ".join(notes))
     if apply_modifiers:
         summary_lines.append(f"Łączny modyfikator: {modifier:+d} (doliczany automatycznie).")
         prompt_long = "Podaj wynik rzutu d20 (bez premii). " + " ".join(summary_lines)
@@ -219,21 +543,33 @@ def resolve_skill_check_with_sources(
         summary_lines.append(f"Modyfikator do uwzględnienia: {modifier:+d}.")
         prompt_long = "Podaj końcowy wynik (uwzględnij premie/kary). " + " ".join(summary_lines)
     modifiers_grid = build_modifiers_grid(select_best_effects(effects, skill_id))
+    roll_stack_payload = _skill_roll_stack_payload(
+        base_components=base_components,
+        modifiers_grid=modifiers_grid,
+        total_modifier=int(modifier or 0),
+    )
     roll_data = prompt_for_roll(
         prompt_msg,
         layout="test",
         prompt_long=prompt_long,
         answer_placeholder="Wynik rzutu",
         modifiers=modifiers_grid,
+        roll_stack=roll_stack_payload,
+        auto_total_modifier=int(modifier or 0),
         return_details=True,
         infer_natural_from_roll=bool(apply_modifiers),
     )
     if isinstance(roll_data, dict):
         roll = int(roll_data.get("roll", 0) or 0)
         natural_shift = int(roll_data.get("natural_shift", 0) or 0)
+        if natural_shift == 0 and apply_modifiers:
+            raw_roll = int(roll_data.get("raw_roll", roll) or roll)
+            natural_shift = natural_shift_from_roll(raw_roll)
+        modifier_delta = int(roll_data.get("modifier_delta", 0) or 0)
     else:
         roll = int(roll_data or 0)
         natural_shift = natural_shift_from_roll(roll) if apply_modifiers else 0
+        modifier_delta = 0
     return resolve_skill_check_with_sources_from_roll(
         skill_id=skill_id,
         dc=dc,
@@ -241,9 +577,10 @@ def resolve_skill_check_with_sources(
         tags=tags,
         roll=roll,
         natural_shift=natural_shift,
+        modifier_delta=modifier_delta,
         target=target,
         game=game,
-        base_modifier=base_modifier,
+        base_modifier=resolved_base_modifier,
         apply_modifiers=apply_modifiers,
         consume_statuses=consume_statuses,
         _precomputed=(modifier, breakdown, notes, promote_src, demote_src, promote_tgt, demote_tgt, consume_src, consume_tgt, effects),
@@ -258,6 +595,7 @@ def resolve_skill_check_with_sources_from_roll(
     tags: Sequence[str],
     roll: int,
     natural_shift: int = 0,
+    modifier_delta: int = 0,
     target=None,
     game=None,
     base_modifier: int = 0,
@@ -269,13 +607,14 @@ def resolve_skill_check_with_sources_from_roll(
     tags = list(tags)
     if "roll" not in tags:
         tags.append("roll")
+    resolved_base_modifier, _base_components = _resolve_base_modifier_components(actor, skill_id, int(base_modifier or 0))
     if _precomputed is None:
         modifier, breakdown, notes, promote_src, demote_src, promote_tgt, demote_tgt, consume_src, consume_tgt, _effects = _collect_modifier_data(
             skill_id=skill_id,
             tags=tags,
             actor=actor,
             target=target,
-            base_modifier=base_modifier,
+            base_modifier=resolved_base_modifier,
         )
     else:
         modifier, breakdown, notes, promote_src, demote_src, promote_tgt, demote_tgt, consume_src, consume_tgt, _effects = _precomputed
@@ -291,8 +630,8 @@ def resolve_skill_check_with_sources_from_roll(
     if forced_note:
         notes.append(str(forced_note))
 
-    def _apply_outcome(current_roll: int, *, shift: int) -> tuple[int, int, str]:
-        total_val = current_roll + modifier if apply_modifiers else current_roll
+    def _apply_outcome(current_roll: int, *, shift: int, extra_modifier: int = 0) -> tuple[int, int, str]:
+        total_val = current_roll + modifier + int(extra_modifier or 0) if apply_modifiers else current_roll
         outcome_val = resolve_skill_check(dc, total_val, natural_shift=shift)
         for value, cond in list(promote_src) + list(promote_tgt):
             if cond is None or outcome_val in cond:
@@ -302,9 +641,15 @@ def resolve_skill_check_with_sources_from_roll(
                 outcome_val = _apply_shift(outcome_val, -value)
         return current_roll, total_val, outcome_val
 
-    roll, total, outcome = _apply_outcome(roll, shift=natural_shift)
+    roll, total, outcome = _apply_outcome(
+        roll,
+        shift=natural_shift,
+        extra_modifier=int(modifier_delta or 0) if apply_modifiers else 0,
+    )
     if forced_outcome:
         outcome = str(forced_outcome)
+    if apply_modifiers and int(modifier_delta or 0):
+        notes.append(f"Korekta ręczna modyfikatora: {int(modifier_delta):+d}.")
 
     def _has_status(actor_obj, status_id: str) -> bool:
         if actor_obj is None:
@@ -369,10 +714,19 @@ def resolve_skill_check_with_sources_from_roll(
             if isinstance(reroll_data, dict):
                 reroll = int(reroll_data.get("roll", 0) or 0)
                 reroll_shift = int(reroll_data.get("natural_shift", 0) or 0)
+                if reroll_shift == 0 and apply_modifiers:
+                    reroll_raw = int(reroll_data.get("raw_roll", reroll) or reroll)
+                    reroll_shift = natural_shift_from_roll(reroll_raw)
+                reroll_modifier_delta = int(reroll_data.get("modifier_delta", 0) or 0)
             else:
                 reroll = int(reroll_data or 0)
                 reroll_shift = natural_shift_from_roll(reroll) if apply_modifiers else 0
-            roll, total, outcome = _apply_outcome(reroll, shift=reroll_shift)
+                reroll_modifier_delta = 0
+            roll, total, outcome = _apply_outcome(
+                reroll,
+                shift=reroll_shift,
+                extra_modifier=int(reroll_modifier_delta or 0) if apply_modifiers else 0,
+            )
             _consume_status(actor, "halfling_luck")
 
     def _counter_performance_total(actor_obj) -> int | None:
@@ -433,13 +787,13 @@ def resolve_skill_check_with_sources_from_roll(
         if game and hasattr(game, "ui_log"):
             game.ui_log(
                 f"{skill_id}: {outcome} (r={roll}, mod={modifier:+d}, suma={total} vs DC {dc}). "
-                f"{' | '.join(notes) if notes else ''}"
+                f"{'; '.join(notes) if notes else ''}"
             )
             all_lines = format_effects_log(_effects, skill_id)
             if all_lines:
                 game.ui_log(f"{skill_id}: premie/kary: {', '.join(all_lines)}.")
-            if base_modifier:
-                game.ui_log(f"{skill_id}: modyfikator bazowy: {base_modifier:+d}.")
+            if resolved_base_modifier:
+                game.ui_log(f"{skill_id}: modyfikator bazowy: {resolved_base_modifier:+d}.")
     except Exception:
         pass
 
@@ -567,11 +921,11 @@ def _collect_modifier_data(
                 )
             )
 
-    if skill_id == Skill.STEALTH.value:
+    if skill_id in (Skill.STEALTH.value, Skill.ACROBATICS.value, Skill.ATHLETICS.value):
         try:
-            from GameObjects.items.armor import armor_stealth_penalty
+            from GameObjects.items.armor import armor_skill_check_penalty
 
-            armor_penalty = int(armor_stealth_penalty(actor) or 0)
+            armor_penalty = int(armor_skill_check_penalty(actor, skill_id=skill_id) or 0)
         except Exception:
             armor_penalty = 0
         if armor_penalty > 0:
@@ -579,37 +933,40 @@ def _collect_modifier_data(
                 BonusEffect(
                     type=BonusType.ITEM,
                     value=armor_penalty,
-                    tag=Skill.STEALTH.value,
-                    source="armor:noisy",
-                    label="armor noisy",
+                    tag=skill_id,
+                    source="armor:check_penalty",
+                    label="armor check penalty",
                     is_penalty=True,
                 )
             )
-        try:
-            game = getattr(actor, "game", None)
-            if game is not None:
-                from GameObjects.events.magic.lighting_effects import is_position_in_light_aura
+        if skill_id == Skill.STEALTH.value:
+            try:
+                game = getattr(actor, "game", None)
+                if game is not None:
+                    from GameObjects.events.magic.lighting_effects import is_position_in_light_aura
 
-                if is_position_in_light_aura(game, getattr(actor, "position", None)):
-                    all_effects.append(
-                        BonusEffect(
-                            type=BonusType.CIRCUMSTANCE,
-                            value=10,
-                            tag=Skill.STEALTH.value,
-                            source="light_aura",
-                            label="light aura",
-                            is_penalty=True,
+                    if is_position_in_light_aura(game, getattr(actor, "position", None)):
+                        all_effects.append(
+                            BonusEffect(
+                                type=BonusType.CIRCUMSTANCE,
+                                value=10,
+                                tag=Skill.STEALTH.value,
+                                source="light_aura",
+                                label="light aura",
+                                is_penalty=True,
+                            )
                         )
-                    )
-        except Exception:
-            pass
+            except Exception:
+                pass
 
     try:
-        from statuses.pf2_conditions import skill_penalty_value
+        from statuses.pf2_conditions import skill_penalty_value, skill_penalty_breakdown_label
 
         extra_penalty = int(skill_penalty_value(actor, skill_id=skill_id, tags=tags) or 0)
+        extra_penalty_label = str(skill_penalty_breakdown_label(actor, skill_id=skill_id, tags=tags) or "conditions")
     except Exception:
         extra_penalty = 0
+        extra_penalty_label = "conditions"
     if extra_penalty > 0:
         all_effects.append(
             BonusEffect(
@@ -617,7 +974,7 @@ def _collect_modifier_data(
                 value=extra_penalty,
                 tag=skill_id,
                 source="status:pf2_condition_penalty",
-                label="conditions",
+                label=extra_penalty_label,
                 is_penalty=True,
             )
         )
@@ -706,11 +1063,12 @@ def compute_skill_modifier_with_sources(
 ) -> tuple[int, list[str], list[str]]:
     """Zwróć (modifier, breakdown, notes) bez wykonywania rzutu."""
     tags = list(tags or [])
+    resolved_base_modifier, _base_components = _resolve_base_modifier_components(actor, skill_id, int(base_modifier or 0))
     modifier, breakdown, notes, _ps, _ds, _pt, _dt, _cs, _ct, _effects = _collect_modifier_data(
         skill_id=skill_id,
         tags=tags,
         actor=actor,
         target=target,
-        base_modifier=base_modifier,
+        base_modifier=resolved_base_modifier,
     )
     return modifier, breakdown, notes

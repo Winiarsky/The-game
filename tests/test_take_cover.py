@@ -13,15 +13,19 @@ import pytest
 
 from GameObjects.events.take_cover_event import TakeCoverEvent
 from GameObjects.interactions_mixin import RangeAttackAffectMixin
+from GameObjects.items.shield import create_shield
+from board_grid import BoardGrid
+from states.combat import Combat
 from statuses import COVERED_STATUS
 from bonuses import BonusEffect, BonusType
 
 
 class DummyBoard:
-    def __init__(self, cover_positions=None, terrain=None):
+    def __init__(self, cover_positions=None, terrain=None, occupants=None):
         self.cover_positions = set(cover_positions or [])
         self.removed = []
         self.terrain = terrain
+        self.occupants = dict(occupants or {})
 
     # minimal cell/terrain for _compute_modifier
     class _Cell:
@@ -35,13 +39,15 @@ class DummyBoard:
         result = []
         for dc, dr in offsets:
             candidate = (col + dc, row + dr)
-            if candidate in self.cover_positions:
+            if candidate in self.cover_positions or candidate in self.occupants:
                 result.append(candidate)
         if include_position:
             result.append(pos)
         return result
 
     def occupant_at(self, pos):
+        if pos in self.occupants:
+            return self.occupants[pos]
         if pos in self.cover_positions:
             return RangeObj(pos)
         return None
@@ -84,8 +90,8 @@ class DummyConn:
 
 
 class DummyGame:
-    def __init__(self, cover_positions=None, choice=None, terrain=None):
-        self.board = DummyBoard(cover_positions, terrain=terrain)
+    def __init__(self, cover_positions=None, choice=None, terrain=None, occupants=None):
+        self.board = DummyBoard(cover_positions, terrain=terrain, occupants=occupants)
         self.conn = DummyConn(choice)
         self.ui_log_messages = []
 
@@ -94,8 +100,12 @@ class DummyGame:
 
 
 class DummyHero(RangeAttackAffectMixin):
+    _counter = 0
+
     def __init__(self, pos):
+        DummyHero._counter += 1
         self.position = pos
+        self.object_id = f"hero-{DummyHero._counter}"
         self.bonuses = []
         self.statuses = []
 
@@ -111,6 +121,9 @@ class DummyHero(RangeAttackAffectMixin):
 
     def remove_status(self, status):
         self.statuses = [s for s in self.statuses if s != status]
+
+    def set_position(self, pos):
+        self.position = pos
 
 
 class RangeObj(RangeAttackAffectMixin):
@@ -214,3 +227,128 @@ def test_take_cover_allowed_on_forest_with_woodland_elf():
 
     assert result.success is True
     assert _ac_bonus(hero) == 4
+
+
+def test_take_cover_with_raised_tower_shield_without_terrain_cover():
+    game = DummyGame(cover_positions=[])
+    hero = DummyHero((0, 0))
+    tower = create_shield("tower_shield")
+    assert tower is not None
+    hero.equipped_shield = tower
+    hero.add_bonus(
+        BonusEffect(
+            type=BonusType.CIRCUMSTANCE,
+            value=2,
+            tag="ac",
+            source="raise_shield:round1",
+            label="tarcza w gorze",
+        )
+    )
+    ctx = DummyCtx(game, hero, in_combat=True)
+
+    result = TakeCoverEvent().execute(ctx)
+
+    assert result.success is True
+    ac_values = [int(getattr(b, "value", 0) or 0) for b in hero.bonuses if getattr(b, "tag", "") == "ac"]
+    assert max(ac_values) == 4
+
+
+def test_take_cover_next_to_ally_with_raised_tower_shield_expires_on_owner_next_turn():
+    holder = DummyHero((1, 0))
+    ally = DummyHero((0, 0))
+    enemy = DummyHero((5, 5))
+
+    tower = create_shield("tower_shield")
+    assert tower is not None
+    holder.equipped_shield = tower
+    holder.add_bonus(
+        BonusEffect(
+            type=BonusType.CIRCUMSTANCE,
+            value=2,
+            tag="ac",
+            source="raise_shield:round3",
+            label="tarcza w gorze",
+        )
+    )
+
+    game = DummyGame(cover_positions=[], occupants={holder.position: holder, ally.position: ally})
+    ctx = DummyCtx(game, ally, in_combat=True)
+
+    result = TakeCoverEvent().execute(ctx)
+    assert result.success is True
+    assert any(str(getattr(b, "source", "") or "").startswith("take_cover:tower_shield_from:") for b in ally.bonuses)
+    assert any(getattr(b, "tag", "") == "ac" and int(getattr(b, "value", 0) or 0) == 4 for b in ally.bonuses)
+
+    game.heroes = [holder, ally]
+    game.enemies = [enemy]
+    game.ui = None
+    game.conn = None
+    combat = Combat(game)
+    combat.base_order = [enemy, holder, ally]
+    combat.round_queue = [enemy, holder, ally]
+    combat.initiative_order = list(combat.round_queue)
+    combat.actions_used = {}
+
+    # Tura enemy -> wejście w turę holdera powinno wygasić jego raise_shield i pochodny cover u ally.
+    assert combat._current_actor() is enemy
+    combat._advance_turn()
+    assert combat._current_actor() is holder
+    assert not any(str(getattr(b, "source", "") or "").startswith("take_cover:tower_shield_from:") for b in ally.bonuses)
+
+
+def test_take_cover_from_ally_tower_shield_expires_when_owner_moves_away():
+    holder = DummyHero((1, 0))
+    ally = DummyHero((0, 0))
+    tower = create_shield("tower_shield")
+    assert tower is not None
+    holder.equipped_shield = tower
+    holder.add_bonus(
+        BonusEffect(
+            type=BonusType.CIRCUMSTANCE,
+            value=2,
+            tag="ac",
+            source="raise_shield:round5",
+            label="tarcza w gorze",
+        )
+    )
+
+    board = BoardGrid(rows=5, cols=5)
+    board.place(ally, ally.position)
+    board.place(holder, holder.position)
+
+    class _Conn:
+        def __init__(self):
+            self._choice = holder.position
+
+        def set_leds(self, *_args, **_kwargs):
+            return None
+
+        def scan_board(self, positions):
+            if self._choice in (positions or []):
+                return self._choice
+            if positions:
+                return positions[0]
+            return None
+
+        def leds_off(self):
+            return None
+
+    class _Game:
+        def __init__(self):
+            self.board = board
+            self.conn = _Conn()
+            self.ui_log_messages = []
+
+        def ui_log(self, msg):
+            self.ui_log_messages.append(str(msg))
+
+    game = _Game()
+    ctx = DummyCtx(game, ally, in_combat=True)
+
+    result = TakeCoverEvent().execute(ctx)
+    assert result.success is True
+    assert any(str(getattr(b, "source", "") or "").startswith("take_cover:tower_shield_from:") for b in ally.bonuses)
+
+    # Owner odchodzi na pole poza sasiedztwem -> bonus sojusznika znika natychmiast.
+    board.move(holder.position, (3, 0))
+    assert not any(str(getattr(b, "source", "") or "").startswith("take_cover:tower_shield_from:") for b in ally.bonuses)

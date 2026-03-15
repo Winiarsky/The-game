@@ -34,6 +34,7 @@ META = GameObjectMeta(
         "watch_disturbed": 0,
         "watch_disabled": False,
         "perception_bonus": 4,
+        "loot_cp": 10,
         "magical": True,
         "magical_description": "Wyraźna, wroga aura magiczna.",
         "tags": ["magical"],

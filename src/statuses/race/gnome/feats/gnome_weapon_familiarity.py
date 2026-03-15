@@ -3,11 +3,11 @@ from __future__ import annotations
 from statuses.base import Status
 
 GNOME_WEAPON_FAMILIARITY_DESCRIPTION = (
-    "Trained: glaive i kukri.\n"
-    "Dostęp: kukri i uncommon gnome weapons.\n"
-    "Dla broni z tagiem gnome: martial -> simple, advanced -> martial "
-    "(do wyliczania biegłości).\n"
-    "Przykład: broń [gnome, advanced] liczysz jak martial."
+    "Lepiej rozumiesz bronie tradycyjnie uzywane przez gnomy.\n"
+    "Kiedy: po wybraniu featu oraz przy wyliczaniu bieglosci broni z tagiem gnome.\n"
+    "Efekt: dostajesz trained z glaive i kukri; zyskujesz dostep do kukri i "
+    "uncommon gnome weapons; przy wyliczaniu bieglosci dla broni z tagiem gnome "
+    "kategorie sa obnizane o 1 stopien (advanced->martial, martial->simple)."
 )
 
 

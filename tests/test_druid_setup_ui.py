@@ -100,3 +100,23 @@ def test_wild_order_grants_wild_shape(monkeypatch):
     assert hero.has_status("wild_shape")
     assert getattr(hero, "focus_point", None) == 1
     assert "wild_morph" in list(getattr(hero, "druid_order_spells", []) or [])
+
+
+def test_druid_setup_persists_spell_tradition_and_prepare_budgets(monkeypatch):
+    ui = DummyUI(["Animal"])
+    monkeypatch.setattr("ui_client.get_ui_client", lambda: ui)
+
+    hero = DummyHero()
+    hero.add_status(DRUID_STATUS)
+
+    setup = dict(hero.get_status_data("druid", "druid_setup", {}) or {})
+    assert setup.get("spell_tradition") == "primal"
+    assert int(setup.get("prepared_cantrips_at_level1", 0) or 0) == 5
+    assert int(setup.get("prepared_rank_1_slots_at_level1", 0) or 0) == 2
+
+    assert hero.get_status_data("druid", "druid_spell_tradition", None) == "primal"
+    assert int(hero.get_status_data("druid", "druid_prepared_cantrips_at_level1", 0) or 0) == 5
+    assert int(hero.get_status_data("druid", "druid_prepared_rank_1_slots_at_level1", 0) or 0) == 2
+    spells_per_day = hero.get_status_data("druid", "druid_spells_per_day", None)
+    assert isinstance(spells_per_day, dict)
+    assert int((spells_per_day.get(1, {}) or {}).get("rank_1", 0) or 0) == 2

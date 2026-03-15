@@ -6,10 +6,11 @@ from statuses.base import Status
 from statuses.check_effects import CheckEffect
 
 SENSATE_GNOME_DESCRIPTION = (
-    "Zyskujesz imprecise scent (30 stóp).\n"
-    "Dodatkowo masz +2 circumstance do Perception przy próbach namierzenia "
-    "undetected creature znajdującej się w zasięgu twojego scent.\n"
-    "W tym silniku bonus działa przez tagi: seek + undetected + scent."
+    "Masz ponadprzecietnie czuly, niedokladny zmysl wechu.\n"
+    "Kiedy: wykonujesz Seek przeciw niewykrytemu celowi z uzyciem wechu "
+    "(tagi seek + undetected + scent), w zasiegu 30 stop.\n"
+    "Efekt: dostajesz imprecise scent 30 ft oraz +2 circumstance bonus do "
+    "odpowiednich testow Perception."
 )
 
 

@@ -25,17 +25,27 @@ class AlchemistsFireEvent(BaseAlchemicalBombEvent):
     )
 
     tiers = {
-        "lesser": {"item_bonus": 0, "damage_dice": "1d8", "splash": 1, "persistent": 1},
-        "moderate": {"item_bonus": 1, "damage_dice": "2d8", "splash": 2, "persistent": 2},
-        "greater": {"item_bonus": 2, "damage_dice": "3d8", "splash": 3, "persistent": 3},
-        "major": {"item_bonus": 3, "damage_dice": "4d8", "splash": 4, "persistent": 4},
+        "lesser": {"item_level": 1, "item_bonus": 0, "damage_dice": "1d8", "splash": 1, "persistent": 1},
+        "moderate": {"item_level": 3, "item_bonus": 1, "damage_dice": "2d8", "splash": 2, "persistent": 2},
+        "greater": {"item_level": 11, "item_bonus": 2, "damage_dice": "3d8", "splash": 3, "persistent": 3},
+        "major": {"item_level": 17, "item_bonus": 3, "damage_dice": "4d8", "splash": 4, "persistent": 4},
     }
 
     def _prompt_damage(self, tier: str, dice: str) -> int:
         from ui_client import get_ui_client
 
         ui = get_ui_client()
-        note = burn_it_prompt_note(self._actor_for_prompt, self.damage_type) if hasattr(self, "_actor_for_prompt") else None
+        item_level = int(self.tiers.get(str(tier).strip().lower(), {}).get("item_level", 1) or 1)
+        note = (
+            burn_it_prompt_note(
+                self._actor_for_prompt,
+                self.damage_type,
+                source_kind="alchemical",
+                item_level=item_level,
+            )
+            if hasattr(self, "_actor_for_prompt")
+            else None
+        )
         val = ui.prompt_roll(
             f"{self._event_label()} ({tier}) – podaj obrażenia ({dice}):",
             source=self.name,
@@ -43,7 +53,16 @@ class AlchemistsFireEvent(BaseAlchemicalBombEvent):
             answer_placeholder="Obrażenia",
             prompt_long=note,
         )
-        bonus = burn_it_bonus(self._actor_for_prompt, self.damage_type) if hasattr(self, "_actor_for_prompt") else 0
+        bonus = (
+            burn_it_bonus(
+                self._actor_for_prompt,
+                self.damage_type,
+                source_kind="alchemical",
+                item_level=item_level,
+            )
+            if hasattr(self, "_actor_for_prompt")
+            else 0
+        )
         return int(val or 0) + int(bonus)
 
     def _apply_on_hit(self, ctx, target, target_pos, tier, tier_data, *, critical: bool = False) -> None:
@@ -54,7 +73,18 @@ class AlchemistsFireEvent(BaseAlchemicalBombEvent):
         finally:
             self._actor_for_prompt = None
 
+        item_level = int(tier_data.get("item_level", 1) or 1)
         persistent = int(tier_data.get("persistent", 0) or 0)
+        persistent += int(
+            burn_it_bonus(
+                ctx.actor,
+                DamageType.FIRE.value,
+                persistent=True,
+                source_kind="alchemical",
+                item_level=item_level,
+            )
+            or 0
+        )
         if persistent > 0:
             try:
                 target.add_status(make_persistent_damage(persistent, DamageType.FIRE.value, source=self.name))

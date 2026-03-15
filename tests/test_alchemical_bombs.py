@@ -83,15 +83,34 @@ class DummyEnemy:
 
 
 class DummyHero:
-    def __init__(self, pos, name="Hero", object_id="hero"):
+    def __init__(self, pos, hp=20, name="Hero", object_id="hero"):
         self.position = pos
+        self.hp = hp
         self.name = name
         self.object_id = object_id
+        self.level = 1
+        self.dex_mod = 3
+        self.str_mod = 0
+        self.ability_modifiers = {
+            "strength": 0,
+            "dexterity": 3,
+        }
+        self.weapon_proficiency_ranks = {
+            "simple": "trained",
+            "martial": "untrained",
+            "advanced": "untrained",
+            "unarmed": "trained",
+        }
+        self.bonuses = []
         self.statuses = []
 
     def add_status(self, status):
         self.statuses.append(status)
         return True
+
+    def apply_damage(self, amount, damage_type):
+        self.hp -= amount
+        return self.hp, self.hp <= 0
 
 
 def _dummy_ui(monkeypatch):
@@ -109,10 +128,17 @@ def _dummy_ui(monkeypatch):
     return ui
 
 
-def _give_alchemical_item(actor, event_name: str, *, preparation_counter: int = 0):
+def _give_alchemical_item(
+    actor,
+    event_name: str,
+    *,
+    preparation_counter: int = 0,
+    alchemical_tier: str | None = None,
+):
     return add_alchemical_item(
         actor,
         event_name=event_name,
+        alchemical_tier=alchemical_tier,
         preparation_counter=preparation_counter,
     )
 
@@ -242,6 +268,33 @@ def test_alchemists_fire_adds_persistent_damage(monkeypatch):
     assert any(s.id == PERSISTENT_DAMAGE_STATUS.id for s in target.statuses)
 
 
+def test_alchemists_fire_burn_it_increases_persistent(monkeypatch):
+    event = AlchemistsFireEvent()
+    monkeypatch.setattr(event, "_prompt_level", lambda: "lesser")
+    monkeypatch.setattr(event, "_prompt_damage", lambda *_args, **_kwargs: 0)
+    monkeypatch.setattr("GameObjects.events.bombs.base_alchemical_bomb_event.prompt_for_roll", lambda *_, **__: 15)
+    _dummy_ui(monkeypatch)
+
+    hero = DummyHero((0, 0), object_id="hero-1")
+    hero.add_status(Status(id="burn_it"))
+    _give_alchemical_item(hero, event.name)
+    target = DummyEnemy((1, 0), object_id="enemy-1")
+    game = SimpleNamespace(
+        conn=FakeConn(responses=[(1, 0)]),
+        board=BoardStub(),
+        heroes=[hero],
+        enemies=[target],
+        ui_log=lambda _msg=None: None,
+    )
+    ctx = EventContext(game=game, actor=hero)
+
+    res = event.execute(ctx)
+    assert res.success
+    persistent = next((s for s in target.statuses if s.id == PERSISTENT_DAMAGE_STATUS.id), None)
+    assert persistent is not None
+    assert int((persistent.data or {}).get("amount", 0) or 0) == 2
+
+
 def test_far_lobber_extends_bomb_range(monkeypatch):
     event = BottledLightningEvent()
     monkeypatch.setattr(event, "_prompt_level", lambda: "lesser")
@@ -287,3 +340,272 @@ def test_quick_bomber_reduces_bomb_action_cost(monkeypatch):
     ctx = EventContext(game=game, actor=hero)
     res = event.run(ctx)
     assert res.success
+
+
+def test_alchemists_fire_attack_prompt_uses_split_roll_stack(monkeypatch):
+    event = AlchemistsFireEvent()
+    monkeypatch.setattr(event, "_prompt_level", lambda: "lesser")
+    monkeypatch.setattr(event, "_prompt_damage", lambda *_args, **_kwargs: 4)
+    _dummy_ui(monkeypatch)
+
+    captured = {}
+
+    def _capture_prompt(*_args, **kwargs):
+        captured.update(kwargs)
+        return 15
+
+    monkeypatch.setattr("GameObjects.events.bombs.base_alchemical_bomb_event.prompt_for_roll", _capture_prompt)
+
+    hero = DummyHero((0, 0), object_id="hero-1")
+    _give_alchemical_item(hero, event.name)
+    target = DummyEnemy((1, 0), ac=14, object_id="enemy-1")
+    game = SimpleNamespace(
+        conn=FakeConn(responses=[(1, 0)]),
+        board=BoardStub(),
+        heroes=[hero],
+        enemies=[target],
+        ui_log=lambda _msg=None: None,
+    )
+    ctx = EventContext(game=game, actor=hero)
+
+    res = event.execute(ctx)
+    assert res.success
+    stack = captured.get("roll_stack", {})
+    components = list(stack.get("components", []) or [])
+    ids = [str(component.get("id")) for component in components]
+    assert "proficiency" in ids
+    assert "ability" in ids
+    assert int(stack.get("auto_total_modifier", 0) or 0) == int(captured.get("auto_total_modifier", 0) or 0)
+
+
+def test_alchemists_fire_failure_applies_splash_to_target_and_adjacent(monkeypatch):
+    event = AlchemistsFireEvent()
+    monkeypatch.setattr(event, "_prompt_level", lambda: "lesser")
+    monkeypatch.setattr(event, "_prompt_damage", lambda *_args, **_kwargs: 4)
+    monkeypatch.setattr("GameObjects.events.bombs.base_alchemical_bomb_event.prompt_for_roll", lambda *_, **__: 2)
+    _dummy_ui(monkeypatch)
+
+    hero = DummyHero((0, 0), object_id="hero-1")
+    _give_alchemical_item(hero, event.name)
+    target = DummyEnemy((1, 0), hp=20, ac=14, object_id="enemy-1")
+    enemy_adj = DummyEnemy((1, 1), hp=20, ac=14, object_id="enemy-2")
+    game = SimpleNamespace(
+        conn=FakeConn(responses=[(1, 0)]),
+        board=BoardStub(),
+        heroes=[hero],
+        enemies=[target, enemy_adj],
+        ui_log=lambda _msg=None: None,
+    )
+    ctx = EventContext(game=game, actor=hero)
+
+    res = event.execute(ctx)
+    assert res.success
+    assert "rozprysk" in (res.message or "").lower()
+    assert target.hp == 19
+    assert enemy_adj.hp == 19
+
+
+def test_alchemists_fire_success_splash_hits_target_and_adjacent_allies(monkeypatch):
+    event = AlchemistsFireEvent()
+    monkeypatch.setattr(event, "_prompt_level", lambda: "lesser")
+    monkeypatch.setattr(event, "_prompt_damage", lambda *_args, **_kwargs: 6)
+    monkeypatch.setattr("GameObjects.events.bombs.base_alchemical_bomb_event.prompt_for_roll", lambda *_, **__: 15)
+    _dummy_ui(monkeypatch)
+
+    hero = DummyHero((0, 0), hp=20, object_id="hero-1")
+    ally = DummyHero((0, 1), hp=20, object_id="hero-2")
+    _give_alchemical_item(hero, event.name)
+    target = DummyEnemy((1, 0), hp=20, ac=14, object_id="enemy-1")
+    enemy_adj = DummyEnemy((1, 1), hp=20, ac=14, object_id="enemy-2")
+    game = SimpleNamespace(
+        conn=FakeConn(responses=[(1, 0)]),
+        board=BoardStub(),
+        heroes=[hero, ally],
+        enemies=[target, enemy_adj],
+        ui_log=lambda _msg=None: None,
+    )
+    ctx = EventContext(game=game, actor=hero)
+
+    res = event.execute(ctx)
+    assert res.success
+    # Success: cel dostaje damage + splash; sąsiedzi tylko splash.
+    assert target.hp == 13
+    assert enemy_adj.hp == 19
+    assert hero.hp == 19
+    assert ally.hp == 19
+    assert any(s.id == PERSISTENT_DAMAGE_STATUS.id for s in target.statuses)
+
+
+def test_alchemists_fire_failure_applies_only_splash_and_no_persistent(monkeypatch):
+    event = AlchemistsFireEvent()
+    monkeypatch.setattr(event, "_prompt_level", lambda: "lesser")
+    monkeypatch.setattr("GameObjects.events.bombs.base_alchemical_bomb_event.prompt_for_roll", lambda *_, **__: 2)
+    _dummy_ui(monkeypatch)
+
+    hero = DummyHero((0, 0), hp=20, object_id="hero-1")
+    ally = DummyHero((0, 1), hp=20, object_id="hero-2")
+    _give_alchemical_item(hero, event.name)
+    target = DummyEnemy((1, 0), hp=20, ac=16, object_id="enemy-1")
+    enemy_adj = DummyEnemy((1, 1), hp=20, ac=16, object_id="enemy-2")
+    game = SimpleNamespace(
+        conn=FakeConn(responses=[(1, 0)]),
+        board=BoardStub(),
+        heroes=[hero, ally],
+        enemies=[target, enemy_adj],
+        ui_log=lambda _msg=None: None,
+    )
+    ctx = EventContext(game=game, actor=hero)
+
+    res = event.execute(ctx)
+    assert res.success
+    # Failure: tylko splash na celu i wokół, bez direct i bez persistent.
+    assert target.hp == 19
+    assert enemy_adj.hp == 19
+    assert hero.hp == 19
+    assert ally.hp == 19
+    assert not any(s.id == PERSISTENT_DAMAGE_STATUS.id for s in target.statuses)
+
+
+def test_alchemists_fire_critical_success_doubles_direct_not_splash(monkeypatch):
+    event = AlchemistsFireEvent()
+    monkeypatch.setattr(event, "_prompt_level", lambda: "lesser")
+    monkeypatch.setattr(event, "_prompt_damage", lambda *_args, **_kwargs: 6)
+    monkeypatch.setattr("GameObjects.events.bombs.base_alchemical_bomb_event.prompt_for_roll", lambda *_, **__: 24)
+    _dummy_ui(monkeypatch)
+
+    hero = DummyHero((0, 0), hp=20, object_id="hero-1")
+    ally = DummyHero((0, 1), hp=20, object_id="hero-2")
+    _give_alchemical_item(hero, event.name)
+    target = DummyEnemy((1, 0), hp=20, ac=14, object_id="enemy-1")
+    enemy_adj = DummyEnemy((1, 1), hp=20, ac=14, object_id="enemy-2")
+    game = SimpleNamespace(
+        conn=FakeConn(responses=[(1, 0)]),
+        board=BoardStub(),
+        heroes=[hero, ally],
+        enemies=[target, enemy_adj],
+        ui_log=lambda _msg=None: None,
+    )
+    ctx = EventContext(game=game, actor=hero)
+
+    res = event.execute(ctx)
+    assert res.success
+    # Critical success: 2x direct + 1x splash (splash nie jest podwajany).
+    assert target.hp == 7
+    assert enemy_adj.hp == 19
+    assert hero.hp == 19
+    assert ally.hp == 19
+
+
+def test_alchemists_fire_critical_failure_has_no_splash(monkeypatch):
+    event = AlchemistsFireEvent()
+    monkeypatch.setattr(event, "_prompt_level", lambda: "lesser")
+    monkeypatch.setattr("GameObjects.events.bombs.base_alchemical_bomb_event.prompt_for_roll", lambda *_, **__: 1)
+    _dummy_ui(monkeypatch)
+
+    hero = DummyHero((0, 0), hp=20, object_id="hero-1")
+    ally = DummyHero((0, 1), hp=20, object_id="hero-2")
+    _give_alchemical_item(hero, event.name)
+    target = DummyEnemy((1, 0), hp=20, ac=20, object_id="enemy-1")
+    enemy_adj = DummyEnemy((1, 1), hp=20, ac=20, object_id="enemy-2")
+    game = SimpleNamespace(
+        conn=FakeConn(responses=[(1, 0)]),
+        board=BoardStub(),
+        heroes=[hero, ally],
+        enemies=[target, enemy_adj],
+        ui_log=lambda _msg=None: None,
+    )
+    ctx = EventContext(game=game, actor=hero)
+
+    res = event.execute(ctx)
+    assert res.success
+    assert "rozprysk" not in (res.message or "").lower()
+    assert hero.hp == 20
+    assert target.hp == 20
+    assert enemy_adj.hp == 20
+    assert ally.hp == 20
+
+
+def test_bomb_uses_single_item_tier_without_prompt(monkeypatch):
+    event = AlchemistsFireEvent()
+    monkeypatch.setattr(event, "_prompt_damage", lambda *_args, **_kwargs: 4)
+    monkeypatch.setattr("GameObjects.events.bombs.base_alchemical_bomb_event.prompt_for_roll", lambda *_, **__: 15)
+    monkeypatch.setattr(event, "_prompt_level", lambda: (_ for _ in ()).throw(AssertionError("prompt tier should not be called")))
+    _dummy_ui(monkeypatch)
+
+    hero = DummyHero((0, 0), object_id="hero-1")
+    _give_alchemical_item(hero, event.name, alchemical_tier="lesser")
+    target = DummyEnemy((1, 0), hp=20, ac=14, object_id="enemy-1")
+    game = SimpleNamespace(
+        conn=FakeConn(responses=[(1, 0)]),
+        board=BoardStub(),
+        heroes=[hero],
+        enemies=[target],
+        ui_log=lambda _msg=None: None,
+    )
+    ctx = EventContext(game=game, actor=hero)
+
+    res = event.execute(ctx)
+    assert res.success
+    assert target.hp == 15  # 4 direct + 1 splash
+
+
+def test_bomb_prompts_tier_when_multiple_variants_in_inventory(monkeypatch):
+    event = AlchemistsFireEvent()
+    monkeypatch.setattr(event, "_prompt_damage", lambda *_args, **_kwargs: 0)
+    monkeypatch.setattr("GameObjects.events.bombs.base_alchemical_bomb_event.prompt_for_roll", lambda *_, **__: 15)
+
+    class DummyUI:
+        enabled = True
+
+        def prompt_info(self, *_args, **_kwargs):
+            return "ok"
+
+        def prompt_choice(self, *_args, **_kwargs):
+            return "moderate"
+
+    ui = DummyUI()
+    monkeypatch.setattr("ui_client.get_ui_client", lambda: ui)
+    monkeypatch.setattr("combat.damage_utils.get_ui_client", lambda: ui)
+
+    hero = DummyHero((0, 0), object_id="hero-1")
+    _give_alchemical_item(hero, event.name, alchemical_tier="lesser")
+    _give_alchemical_item(hero, event.name, alchemical_tier="moderate")
+    target = DummyEnemy((1, 0), hp=20, ac=14, object_id="enemy-1")
+    game = SimpleNamespace(
+        conn=FakeConn(responses=[(1, 0)]),
+        board=BoardStub(),
+        heroes=[hero],
+        enemies=[target],
+        ui_log=lambda _msg=None: None,
+    )
+    ctx = EventContext(game=game, actor=hero)
+
+    res = event.execute(ctx)
+    assert res.success
+    assert target.hp == 18  # moderate splash = 2
+    remaining = [
+        item
+        for item in (getattr(hero, "inventory", []) or [])
+        if str(getattr(item, "event_name", "")).strip().lower() == event.name
+    ]
+    assert len(remaining) == 1
+    assert str(getattr(remaining[0], "alchemical_tier", "")).strip().lower() == "lesser"
+
+
+def test_log_splash_mode_sends_idle_hint_to_action_panel():
+    event = AlchemistsFireEvent()
+    logs: list[str] = []
+    hints: list[tuple[str, str | None]] = []
+
+    game = SimpleNamespace(
+        ui_log=lambda msg: logs.append(str(msg)),
+        ui_idle_hint=lambda title, text=None: hints.append((str(title), None if text is None else str(text))),
+    )
+    ctx = EventContext(game=game, actor=None)
+
+    event._log_splash_mode(ctx, True)
+    assert logs and "Bomber: splash ON" in logs[-1]
+    assert hints
+    title, text = hints[-1]
+    assert "Bomber: splash ON" in title
+    assert "Kliknij cel" in str(text or "")

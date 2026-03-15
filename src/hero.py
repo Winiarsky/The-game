@@ -28,6 +28,8 @@ class Hero(StatusMixin, BonusMixin, ReactiveMixin):
     level: int = 1
     max_hp: int = 20
     temp_hp: int = 0
+    coin_pouch: dict[str, int] = field(default_factory=lambda: {"cp": 0, "sp": 0, "gp": 0, "pp": 0})
+    track_ammo: bool = False
 
     def __post_init__(self):
         self.object_id = assign_id(self)

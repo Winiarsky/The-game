@@ -4,16 +4,15 @@ from statuses.base import Status
 from .keen_eyes import KEEN_EYES_STATUS
 
 HALFLING_DESCRIPTION = (
-    "Hit Points: 6\n"
-    "Size: Small\n"
-    "Speed: 25 feet\n"
-    "Ability Boosts: Dexterity, Wisdom, Free\n"
-    "Ability Flaw: Strength\n"
-    "Languages: Common, Halfling\n"
-    "Additional language choices: Dwarven, Elven, Gnomish, Goblin.\n"
-    "Traits: Halfling, Humanoid.\n"
-    "Keen Eyes: lepiej wykrywasz hidden/undetected creatures i łatwiej trafiasz "
-    "cele concealed/hidden."
+    "Punkty Zycia: 6\n"
+    "Rozmiar: Maly\n"
+    "Predkosc: 25 stop\n"
+    "Boosty atrybutow: Zrecznosc, Madrosc, Dowolna\n"
+    "Wada atrybutu: Sila\n"
+    "Jezyki: Common, Halfling\n"
+    "Dodatkowe jezyki: Dwarven, Elven, Gnomish, Goblin.\n"
+    "Cechy: Halfling, Humanoid.\n"
+    "Keen Eyes: latwiej wykrywasz cele ukryte i namierzasz concealed/hidden."
 )
 
 

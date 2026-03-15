@@ -92,6 +92,37 @@ def _replace_status(actor: Any, status_id: str, *, data_updates: dict[str, Any])
         return
 
 
+def sync_dying_state(actor: Any, *, source: str | None = None) -> int:
+    if actor is None:
+        return 0
+    changed = 0
+    ids = {_status_id(status) for status in _iter_statuses(actor)}
+
+    if "dead" in ids:
+        if dying_value(actor) > 0:
+            clear_dying(actor)
+            changed += 1
+        for status_id in ("stable", "unconscious"):
+            if _has_status(actor, status_id):
+                _remove_status(actor, status_id)
+                changed += 1
+        return int(changed)
+
+    dying = dying_value(actor)
+    if dying > 0:
+        if _has_status(actor, "stable"):
+            _remove_status(actor, "stable")
+            changed += 1
+        if not _has_status(actor, "unconscious"):
+            _ensure_unconscious(actor, source=source)
+            changed += 1
+    else:
+        if _has_status(actor, "stable") and not _has_status(actor, "unconscious"):
+            _remove_status(actor, "stable")
+            changed += 1
+    return int(changed)
+
+
 def dying_value(actor: Any) -> int:
     best = 0
     for status in _iter_statuses(actor):
@@ -231,6 +262,7 @@ def set_dying(actor: Any, value: int, *, source: str | None = None) -> int:
         ),
     )
     _ensure_unconscious(actor, source=source)
+    sync_dying_state(actor, source=source)
     return amount
 
 
@@ -249,6 +281,7 @@ def mark_dead(actor: Any, *, source: str | None = None, reason: str | None = Non
             data={"reason": str(reason or "")},
         ),
     )
+    sync_dying_state(actor, source=source)
 
 
 def _try_orc_ferocity(actor: Any, *, source: str | None = None) -> bool:
@@ -293,6 +326,7 @@ def on_reduced_to_zero(
 ) -> dict[str, Any]:
     if actor is None:
         return {"dead": False, "dying": 0, "message": ""}
+    sync_dying_state(actor, source=source)
     if is_dead(actor):
         return {"dead": True, "dying": 0, "message": "Already dead."}
 
@@ -327,6 +361,7 @@ def lose_dying(actor: Any, *, source: str | None = None, keep_unconscious: bool 
         _ensure_unconscious(actor, source=source)
         if not _has_status(actor, "stable"):
             _add_status(actor, Status(id="stable", label="Stable", source=source))
+    sync_dying_state(actor, source=source)
 
 
 def on_heal(actor: Any, *, source: str | None = None) -> dict[str, Any]:
@@ -340,10 +375,12 @@ def on_heal(actor: Any, *, source: str | None = None) -> dict[str, Any]:
             lose_dying(actor, source=source, keep_unconscious=False)
         _remove_status(actor, "unconscious")
         _remove_status(actor, "stable")
+        sync_dying_state(actor, source=source)
         return {
             "changed": had_dying,
             "message": "Recovered above 0 HP." if had_dying else "",
         }
+    sync_dying_state(actor, source=source)
     return {"changed": False, "message": ""}
 
 
@@ -352,6 +389,7 @@ def _degree_of_success(total: int, dc: int, *, natural: int | None = None) -> st
 
 
 def run_recovery_check(actor: Any, *, source: str | None = "recovery_check") -> dict[str, Any]:
+    sync_dying_state(actor, source=source)
     current = dying_value(actor)
     if current <= 0 or is_dead(actor):
         return {"processed": False, "message": ""}
@@ -382,6 +420,7 @@ def run_recovery_check(actor: Any, *, source: str | None = "recovery_check") -> 
 
     if next_val <= 0:
         lose_dying(actor, source=source, keep_unconscious=True)
+        sync_dying_state(actor, source=source)
         return {
             "processed": True,
             "message": f"Recovery check {outcome}: Dying {current} -> stable, wounded {wounded_value(actor)}.",
@@ -391,6 +430,7 @@ def run_recovery_check(actor: Any, *, source: str | None = "recovery_check") -> 
     set_dying(actor, next_val, source=source)
     if next_val >= death_threshold(actor):
         mark_dead(actor, source=source, reason="recovery_check_failed")
+        sync_dying_state(actor, source=source)
         return {
             "processed": True,
             "message": f"Recovery check {outcome}: Dying {current} -> {next_val}. Actor dies.",
@@ -418,6 +458,7 @@ __all__ = [
     "clear_dying",
     "set_dying",
     "mark_dead",
+    "sync_dying_state",
     "lose_dying",
     "on_reduced_to_zero",
     "on_heal",

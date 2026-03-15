@@ -53,12 +53,14 @@ from . import monk_feat_events  # noqa: F401
 from . import ranger_feat_events  # noqa: F401
 from . import rogue_feat_events  # noqa: F401
 from . import wizard_runtime_events  # noqa: F401
+from . import sorcerer_runtime_events  # noqa: F401
 from . import demoralize_event  # noqa: F401
 from . import feint_event  # noqa: F401
 from . import trap_events  # noqa: F401
 from .elixirs import antidote_event  # noqa: F401
 from .elixirs import antiplague_event  # noqa: F401
 from .elixirs import elixir_of_life_event  # noqa: F401
+from .elixirs import smokestick_event  # noqa: F401
 from .elixirs import cheetahs_elixir_event  # noqa: F401
 from .elixirs import eagle_eye_elixir_event  # noqa: F401
 from .elixirs import cognitive_mutagen_event  # noqa: F401
@@ -71,6 +73,7 @@ from .poisons import arsenic_event  # noqa: F401
 from .poisons import giant_centipede_venom_event  # noqa: F401
 from .magic.cantrips import events as cantrips_events  # noqa: F401
 from .magic.level_1st import events as level_1st_events  # noqa: F401
+from .magic.consumables import events as consumable_magic_events  # noqa: F401
 from .magic.focus_spells.bard import counter_performance_event  # noqa: F401
 from .magic.focus_spells.bard import inspire_competence_event  # noqa: F401
 from .magic.focus_spells.bard import inspire_courage_event  # noqa: F401

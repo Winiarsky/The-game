@@ -27,3 +27,41 @@ TODO: Rozszerzyć mechanikę umierania dla animal companion do pełnego PF2 (dyi
 TODO: Character builder - przy tworzeniu bohatera dopiąć pełny wzór Max HP (ancestry + klasa + poziom + featy + buffy), inicjalizację startowego HP oraz mapowanie do statusowych bonusów `hp_engine`.
 TODO: Monk - dodać realną listę monk weapons + itemy/eventy pod Monastic Weaponry (v1 ma placeholder).
 TODO: Wizard - dopiąć pełne przygotowywanie i zużywanie slotów/spelli (spellbook + prepared slots per rank na wyższych poziomach).
+
+# PF2e spirit - główne braki po wdrożeniu core flow
+TODO: Itemizacja PF2e (priorytet wysoki)
+- runy na broniach i pancerzach: potency/striking/resilient + impact na atak/obrażenia/AC/savy.
+- pełniejsza lista magicznych itemów (broń, pancerze, tarcze, talizmany, consumables).
+- economy loop: ceny, loot, kupno/sprzedaż, sensowny progression gearu per level.
+- bulk, item management i czytelne UI pod ekwipunek.
+
+TODO: Featy i czary wyższych poziomów (priorytet wysoki)
+- class feats / ancestry feats / skill feats dla leveli 2+ (zależnie od klasy).
+- spell listy rank 2+ wraz z heightening (automatyczny i slotowy), sustained, counteract, summon.
+- dopiąć pełne gated prerequisites (opisowo -> mechanicznie tam, gdzie krytyczne dla flow).
+
+TODO: Matematyka high-level PF2e (priorytet średni/wysoki)
+- level-up progression biegłości (skills, saves, weapons, armor, spellcasting, class DC).
+- automatyczne przeliczanie modyfikatorów po każdym awansie i po zmianie itemów/statusów.
+- sanity-check skali DC/bonusów na poziomach 10+.
+
+TODO: Condition engine PF2e - domknąć pełne RAW interakcje (priorytet wysoki)
+- pełne stackowanie i redukcja warunków:
+  frightened/sickened/drained/doomed/wounded/dying/stupefied/clumsy/enfeebled/slowed/quickened itp.
+- timing i lifecycle warunków:
+  start/end tury, do następnej tury źródła celu, do daily prep, do save, do udanego Treat Wounds itd.
+- ordering efektów i konflikty:
+  który efekt nakłada się pierwszy, kiedy następuje overwrite, kiedy działa najwyższa wartość.
+- condition hooks do wszystkich rzutów:
+  attack/skill/save/AC/perception/spell attack/spell DC, plus akcje specjalne.
+- edge-case'y krytyczne:
+  unconscious + dying/wounded, recovery checks, stabilizacja, death effects, immunity windows.
+- integracja z logiem/UI:
+  jasna informacja skąd wynika kara/premia i kiedy warunek wygaśnie.
+- testy regresji condition engine:
+  scenariusze wieloturowe + testy kolejności triggerów + testy konfliktów statusów.
+
+TODO: Bestiariusz + encounter balance (priorytet średni)
+- więcej statblocków potworów zgodnych z PF2e.
+- encounter building i budżet XP (trivial/low/moderate/severe/extreme).
+- walidacja balansu walk na różnych poziomach drużyny.

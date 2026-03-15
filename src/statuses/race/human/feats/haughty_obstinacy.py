@@ -5,11 +5,10 @@ from statuses.base import Status
 from statuses.check_effects import CheckEffect
 
 HAUGHTY_OBSTINACY_DESCRIPTION = (
-    "Twój upór utrudnia innym przejmowanie nad tobą kontroli.\n"
-    "Jeśli osiągniesz sukces na save przeciw mental effect, który bezpośrednio "
-    "kontroluje twoje działania, otrzymujesz krytyczny sukces.\n"
-    "Jeśli przeciwnik obleje check to Coerce przeciw tobie, traktuje to jako "
-    "krytyczną porażkę."
+    "Mechanika: gdy uzyskasz sukces na save przeciw mental control, "
+    "awansuje on do krytycznego sukcesu.\n"
+    "Mechanika: gdy przeciwnik obleje Coerce przeciw tobie, traktuje to jako "
+    "krytyczna porazke."
 )
 
 
@@ -17,7 +16,7 @@ def HaughtyObstinacyStatus() -> Status:
     """Feat: Haughty Obstinacy."""
     return Status(
         id="haughty_obstinacy",
-        label="Haughty Obstinacy",
+        label="Wyniosly upor",
         data={"ui_description": HAUGHTY_OBSTINACY_DESCRIPTION},
         check_effects=[
             CheckEffect(

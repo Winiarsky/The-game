@@ -522,6 +522,24 @@ def test_produce_flame_critical_adds_persistent(monkeypatch):
     assert any(getattr(s, "id", "") == "persistent_damage" for s in enemy.statuses)
 
 
+def test_produce_flame_burn_it_uses_cantrip_rank(monkeypatch):
+    hero = DummyActor("hero", (0, 0))
+    hero.level = 10  # cantrip rank 5 -> Burn It! = +2
+    hero.add_status(Status(id="burn_it"))
+    enemy = DummyActor("enemy", (1, 0), hp=20)
+    game = _game(actor=hero, enemies=[enemy])
+
+    monkeypatch.setattr("GameObjects.events.magic.base_attack_magic_event.pick_target_in_range", lambda *_a, **_k: (enemy, enemy.position))
+    monkeypatch.setattr(occ, "_prompt_choice", lambda *_a, **_k: "ranged")
+    monkeypatch.setattr("GameObjects.events.magic.base_attack_magic_event.prompt_for_roll", lambda *_a, **_k: 15)
+    monkeypatch.setattr(occ, "prompt_for_roll", lambda *_a, **_k: 4)
+
+    res = occ.ProduceFlameEvent().execute(EventContext(game=game, actor=hero))
+
+    assert res.success is True
+    assert enemy.hp == 14  # 4 (roll) + 2 (Burn It!)
+
+
 def test_ray_of_frost_critical_applies_speed_penalty(monkeypatch):
     hero = DummyActor("hero", (0, 0))
     enemy = DummyActor("enemy", (1, 0), hp=20)

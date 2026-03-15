@@ -346,3 +346,88 @@ class BoardGrid:
             raise ValueError(f"Brak obiektu do przeniesienia z pola {source}.")
         self.remove(source)
         self.place(occupant, target)
+        self._cleanup_shared_tower_shield_cover()
+
+    def _iter_occupants(self):
+        for row in self._grid:
+            for cell in row:
+                occupant = cell.occupant
+                if occupant is not None:
+                    yield occupant
+
+    @staticmethod
+    def _adjacent(a: Tuple[int, int] | None, b: Tuple[int, int] | None) -> bool:
+        if a is None or b is None:
+            return False
+        dx = abs(int(a[0]) - int(b[0]))
+        dy = abs(int(a[1]) - int(b[1]))
+        return max(dx, dy) <= 1
+
+    def _drop_covered_if_no_take_cover(self, actor) -> None:
+        bonuses = list(getattr(actor, "bonuses", []) or [])
+        if any(str(getattr(effect, "source", "") or "").startswith("take_cover:") for effect in bonuses):
+            return
+        if isinstance(actor, StatusMixin):
+            try:
+                actor.remove_status(COVERED_STATUS)
+                return
+            except Exception:
+                pass
+        statuses = getattr(actor, "statuses", None)
+        if not isinstance(statuses, list):
+            return
+        filtered = []
+        for status in statuses:
+            sid = str(getattr(status, "id", status) or "").strip().lower()
+            if sid == "covered":
+                continue
+            filtered.append(status)
+        try:
+            actor.statuses = filtered
+        except Exception:
+            pass
+
+    def _cleanup_shared_tower_shield_cover(self) -> None:
+        """Usuń pożyczony Take Cover z tower shield, jeśli beneficjent nie stoi już obok właściciela."""
+        try:
+            from GameObjects.items.shield import has_raised_tower_shield_cover, tower_shield_cover_owner_key
+        except Exception:
+            return
+
+        owners_by_key: dict[str, object] = {}
+        for actor in self._iter_occupants():
+            if not has_raised_tower_shield_cover(actor):
+                continue
+            try:
+                key = tower_shield_cover_owner_key(actor)
+            except Exception:
+                continue
+            owners_by_key[str(key)] = actor
+
+        shared_prefix = "take_cover:tower_shield_from:"
+        for actor in self._iter_occupants():
+            bonuses = list(getattr(actor, "bonuses", []) or [])
+            if not bonuses:
+                continue
+            kept = []
+            removed_any = False
+            actor_pos = getattr(actor, "position", None)
+            for effect in bonuses:
+                source = str(getattr(effect, "source", "") or "")
+                if not source.startswith(shared_prefix):
+                    kept.append(effect)
+                    continue
+                owner_key = source[len(shared_prefix) :].strip()
+                owner = owners_by_key.get(owner_key)
+                owner_pos = getattr(owner, "position", None) if owner is not None else None
+                if owner is not None and self._adjacent(actor_pos, owner_pos):
+                    kept.append(effect)
+                    continue
+                removed_any = True
+            if not removed_any:
+                continue
+            try:
+                actor.bonuses = kept
+            except Exception:
+                continue
+            self._drop_covered_if_no_take_cover(actor)

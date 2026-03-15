@@ -5,8 +5,10 @@ from typing import Iterable
 from .base_armor import BaseArmor
 from .basic_armors import (
     BreastplateArmor,
+    ChainShirtArmor,
     ChainMailArmor,
     FullPlateArmor,
+    HalfPlateArmor,
     HideArmor,
     LeatherArmor,
     PaddedArmor,
@@ -15,7 +17,14 @@ from .basic_armors import (
     StuddedLeatherArmor,
     armor_profile,
     create_armor,
+    list_armor_ids,
     normalize_armor_id,
+)
+from .specialization import (
+    armor_potency_rune_value,
+    armor_specialization_rule,
+    normalize_armor_category,
+    normalize_armor_group,
 )
 
 _PHYSICAL_DAMAGE_TYPES = {"normal", "slashing", "piercing", "bludgeoning"}
@@ -128,18 +137,32 @@ def armor_ac_bonus(actor) -> int:
         return 0
 
 
-def armor_stealth_penalty(actor) -> int:
+def armor_skill_check_penalty(actor, *, skill_id: str) -> int:
     armor = get_equipped_armor(actor)
     if armor is None:
         return 0
+    skill = str(skill_id or "").strip().lower()
+    if skill not in {"stealth", "acrobatics", "athletics"}:
+        return 0
+
     penalty = 0
     try:
-        penalty = max(penalty, int(getattr(armor, "check_penalty", 0) or 0))
+        penalty = max(0, int(getattr(armor, "check_penalty", 0) or 0))
     except Exception:
-        pass
-    if armor_has_trait(actor, "noisy"):
-        penalty = max(penalty, 2)
+        penalty = 0
+    if penalty <= 0:
+        return 0
+
+    if skill in {"acrobatics", "athletics"} and armor_has_trait(actor, "flexible"):
+        return 0
+
+    # Noisy does not change magnitude; it only prevents ignoring stealth penalty
+    # from strength handling. Strength-based mitigation is not modeled yet.
     return max(0, int(penalty))
+
+
+def armor_stealth_penalty(actor) -> int:
+    return armor_skill_check_penalty(actor, skill_id="stealth")
 
 
 def bulwark_reflex_bonus(actor, *, tags: Iterable[object] | None = None) -> int:
@@ -158,32 +181,66 @@ def bulwark_reflex_bonus(actor, *, tags: Iterable[object] | None = None) -> int:
     return max(0, int(floor) - int(_dex_modifier(actor)))
 
 
-def armor_specialization_reduction(actor, *, armor=None) -> int:
-    selected = armor if armor is not None else get_equipped_armor(actor)
-    if selected is None:
-        return 0
-    if not (_has_status(actor, "armor_specialization") or _has_status(actor, "armor_specialization_all")):
-        return 0
+def _armor_specialization_enabled(actor) -> bool:
+    return bool(_has_status(actor, "armor_specialization") or _has_status(actor, "armor_specialization_all"))
 
-    category = str(getattr(selected, "armor_category", "light") or "light").strip().lower()
-    reduction = {"light": 1, "medium": 2, "heavy": 3}.get(category, 0)
+
+def _armor_specialization_amount_override(actor, *, category: str) -> int:
+    amount = 0
     for status_id, data in _iter_status_data(actor):
         if status_id not in {"armor_specialization", "armor_specialization_all"}:
             continue
         value = data.get("armor_specialization_reduction")
         try:
             if value is not None:
-                reduction = max(reduction, int(value))
+                amount = max(amount, int(value))
         except Exception:
             pass
         mapping = data.get("armor_specialization_reduction_by_category")
         if isinstance(mapping, dict):
             try:
                 mapped = int(mapping.get(category, 0) or 0)
-                reduction = max(reduction, mapped)
+                amount = max(amount, mapped)
             except Exception:
                 pass
-    return max(0, int(reduction))
+    return max(0, int(amount))
+
+
+def _armor_specialization_effect(actor, *, armor) -> dict[str, object]:
+    category = normalize_armor_category(getattr(armor, "armor_category", "light"))
+    group = normalize_armor_group(getattr(armor, "armor_group", "cloth"))
+    if not _armor_specialization_enabled(actor):
+        return {
+            "enabled": False,
+            "group": group,
+            "category": category,
+            "kind": "",
+            "amount": 0,
+        }
+
+    potency = max(0, int(armor_potency_rune_value(armor)))
+    effect = armor_specialization_rule(
+        armor_group=group,
+        armor_category=category,
+        potency=potency,
+    )
+    if not bool(effect.get("enabled")):
+        return effect
+
+    override = _armor_specialization_amount_override(actor, category=category)
+    if override > 0:
+        effect["amount"] = max(int(effect.get("amount", 0) or 0), override)
+    return effect
+
+
+def armor_specialization_reduction(actor, *, armor=None) -> int:
+    selected = armor if armor is not None else get_equipped_armor(actor)
+    if selected is None:
+        return 0
+    effect = _armor_specialization_effect(actor, armor=selected)
+    if str(effect.get("kind", "") or "") != "critical_physical":
+        return 0
+    return max(0, int(effect.get("amount", 0) or 0))
 
 
 def _reduce_components(
@@ -215,8 +272,6 @@ def apply_critical_damage_reduction(
     *,
     critical: bool,
 ) -> tuple[list[tuple[str, int]], list[str]]:
-    if not critical:
-        return list(components), []
     armor = get_equipped_armor(actor)
     if armor is None:
         return list(components), []
@@ -224,25 +279,46 @@ def apply_critical_damage_reduction(
     reduced = [(str(dtype or "").strip().lower(), max(0, int(amount or 0))) for dtype, amount in components]
     notes: list[str] = []
 
-    if armor_has_trait(actor, "flexible"):
-        flex_reduction = 2
-        reduced, spent = _reduce_components(
-            reduced,
-            allowed_types={"slashing", "piercing"},
-            reduction=flex_reduction,
-        )
-        if spent > 0:
-            notes.append(f"Flexible: -{spent} obrażeń z critical (slashing/piercing).")
+    effect = _armor_specialization_effect(actor, armor=armor)
+    if not bool(effect.get("enabled")):
+        return reduced, notes
+    amount = max(0, int(effect.get("amount", 0) or 0))
+    if amount <= 0:
+        return reduced, notes
 
-    spec_reduction = armor_specialization_reduction(actor, armor=armor)
-    if spec_reduction > 0:
+    kind = str(effect.get("kind", "") or "")
+    if kind == "critical_physical" and critical:
         reduced, spent = _reduce_components(
             reduced,
             allowed_types=set(_PHYSICAL_DAMAGE_TYPES),
-            reduction=spec_reduction,
+            reduction=amount,
         )
         if spent > 0:
-            notes.append(f"Armor Specialization: -{spent} obrażeń z critical.")
+            notes.append(f"Armor Specialization (chain): -{spent} obrazen z critical.")
+    elif kind == "piercing_resistance":
+        reduced, spent = _reduce_components(
+            reduced,
+            allowed_types={"piercing"},
+            reduction=amount,
+        )
+        if spent > 0:
+            notes.append(f"Armor Specialization (composite): odpornosc na klute -{spent}.")
+    elif kind == "bludgeoning_resistance":
+        reduced, spent = _reduce_components(
+            reduced,
+            allowed_types={"bludgeoning"},
+            reduction=amount,
+        )
+        if spent > 0:
+            notes.append(f"Armor Specialization (leather): odpornosc na obuchowe -{spent}.")
+    elif kind == "slashing_resistance":
+        reduced, spent = _reduce_components(
+            reduced,
+            allowed_types={"slashing"},
+            reduction=amount,
+        )
+        if spent > 0:
+            notes.append(f"Armor Specialization (plate): odpornosc na sieczne -{spent}.")
 
     return reduced, notes
 
@@ -252,19 +328,23 @@ __all__ = [
     "PaddedArmor",
     "LeatherArmor",
     "StuddedLeatherArmor",
+    "ChainShirtArmor",
     "HideArmor",
     "ScaleMailArmor",
     "BreastplateArmor",
     "ChainMailArmor",
     "SplintMailArmor",
+    "HalfPlateArmor",
     "FullPlateArmor",
     "create_armor",
+    "list_armor_ids",
     "normalize_armor_id",
     "armor_profile",
     "get_equipped_armor",
     "equipped_armor_traits",
     "armor_has_trait",
     "armor_ac_bonus",
+    "armor_skill_check_penalty",
     "armor_stealth_penalty",
     "bulwark_reflex_bonus",
     "armor_specialization_reduction",

@@ -894,6 +894,180 @@
             ]
         },
         {
+            "category": "Interactables",
+            "object_id": "innkeeper_npc",
+            "label": "Karczmarz",
+            "color": "#7a4a2f",
+            "placement": "cell",
+            "positions": [],
+            "instances": [
+                {
+                    "position": [
+                        6,
+                        12
+                    ],
+                    "config": {
+                        "allow_same_cell_interact": true,
+                        "attitude": 0,
+                        "base_price_modifier": 1,
+                        "blocks_movement": true,
+                        "name": "Karczmarz",
+                        "pickpocket_dc": 16,
+                        "pickpocket_loot": [
+                            "kilka monet"
+                        ],
+                        "trade_tier": "novice",
+                        "require_same_cell_interact": false
+                    }
+                }
+            ]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "weapon_merchant_npc",
+            "label": "Kupiec Broni",
+            "color": "#8f5a2a",
+            "placement": "cell",
+            "positions": [],
+            "instances": [
+                {
+                    "position": [
+                        8,
+                        12
+                    ],
+                    "config": {
+                        "allow_same_cell_interact": true,
+                        "attitude": 0,
+                        "base_price_modifier": 1,
+                        "blocks_movement": true,
+                        "name": "Kupiec Broni",
+                        "pickpocket_dc": 16,
+                        "pickpocket_loot": [
+                            "kilka monet"
+                        ],
+                        "trade_tier": "novice",
+                        "require_same_cell_interact": false
+                    }
+                }
+            ]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "armorer_npc",
+            "label": "Płatnerz",
+            "color": "#5a6a7a",
+            "placement": "cell",
+            "positions": [],
+            "instances": [
+                {
+                    "position": [
+                        9,
+                        12
+                    ],
+                    "config": {
+                        "allow_same_cell_interact": true,
+                        "attitude": 0,
+                        "base_price_modifier": 1,
+                        "blocks_movement": true,
+                        "name": "Płatnerz",
+                        "pickpocket_dc": 16,
+                        "pickpocket_loot": [
+                            "kilka monet"
+                        ],
+                        "trade_tier": "novice",
+                        "require_same_cell_interact": false
+                    }
+                }
+            ]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "alchemist_npc",
+            "label": "Alchemik",
+            "color": "#4f7f4f",
+            "placement": "cell",
+            "positions": [],
+            "instances": [
+                {
+                    "position": [
+                        5,
+                        12
+                    ],
+                    "config": {
+                        "allow_same_cell_interact": true,
+                        "attitude": 0,
+                        "base_price_modifier": 1,
+                        "blocks_movement": true,
+                        "name": "Alchemik",
+                        "pickpocket_dc": 16,
+                        "pickpocket_loot": [
+                            "kilka monet"
+                        ],
+                        "trade_tier": "novice",
+                        "require_same_cell_interact": false
+                    }
+                }
+            ]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "mage_npc",
+            "label": "Mag",
+            "color": "#4e5fa8",
+            "placement": "cell",
+            "positions": [],
+            "instances": [
+                {
+                    "position": [
+                        4,
+                        12
+                    ],
+                    "config": {
+                        "allow_same_cell_interact": true,
+                        "attitude": 0,
+                        "base_price_modifier": 1,
+                        "blocks_movement": true,
+                        "name": "Mag",
+                        "pickpocket_dc": 16,
+                        "pickpocket_loot": [
+                            "kilka monet"
+                        ],
+                        "trade_tier": "novice",
+                        "require_same_cell_interact": false
+                    }
+                }
+            ]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "priest_npc",
+            "label": "Kaplan",
+            "color": "#d4c26a",
+            "placement": "cell",
+            "positions": [],
+            "instances": [
+                {
+                    "position": [
+                        3,
+                        12
+                    ],
+                    "config": {
+                        "allow_same_cell_interact": true,
+                        "attitude": 0,
+                        "base_price_modifier": 1,
+                        "blocks_movement": true,
+                        "name": "Kaplan",
+                        "pickpocket_dc": 16,
+                        "pickpocket_loot": [
+                            "kilka monet"
+                        ],
+                        "trade_tier": "novice",
+                        "require_same_cell_interact": false
+                    }
+                }
+            ]
+        },
+        {
             "category": "Enemies",
             "object_id": "simple_enemy",
             "label": "Wrogi NPC",

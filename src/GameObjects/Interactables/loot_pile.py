@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 
 from GameObjects.interactions_mixin.base_interaction import InteractableMixin, Interaction
 from GameObjects.items.inventory import add_item, item_label
+from economy import add_actor_cp, format_cp_value
 
 
 @dataclass
@@ -36,11 +37,31 @@ class LootPile(InteractableMixin):
             return "Brak przedmiotów do podniesienia."
         taken = list(self.loot_items)
         self.loot_items.clear()
+        item_loot: list[object] = []
+        coin_cp = 0
         for item in taken:
+            if isinstance(item, dict) and str(item.get("kind", "")).strip().lower() == "currency_cp":
+                try:
+                    coin_cp += max(0, int(item.get("amount_cp", 0) or 0))
+                except Exception:
+                    continue
+                continue
+            item_loot.append(item)
+        for item in item_loot:
             add_item(actor, item)
-        labels = ", ".join(item_label(item) for item in taken[:4])
-        if len(taken) > 4:
-            labels = f"{labels}, +{len(taken) - 4} więcej"
+        if coin_cp > 0:
+            add_actor_cp(actor, coin_cp)
+
+        labels_parts: list[str] = []
+        if item_loot:
+            labels_parts.append(", ".join(item_label(item) for item in item_loot[:4]))
+            if len(item_loot) > 4:
+                labels_parts.append(f"+{len(item_loot) - 4} więcej")
+        if coin_cp > 0:
+            labels_parts.append(f"monety: {format_cp_value(coin_cp)}")
+        labels = ", ".join(part for part in labels_parts if str(part).strip())
+        if not labels:
+            labels = "nic użytecznego"
         if self.position is not None:
             try:
                 game.board.remove_interactable(self, self.position)

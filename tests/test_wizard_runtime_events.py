@@ -109,17 +109,26 @@ def _game(*, ui=None, conn=None):
     )
 
 
-def _wizard(*, arcane_study: str = "evocation", drain_action: str = "drain_bonded_item", focus: int = 0) -> DummyActor:
+def _wizard(
+    *,
+    arcane_study: str = "evocation",
+    drain_action: str = "drain_bonded_item",
+    focus: int = 0,
+    thesis: str | None = None,
+) -> DummyActor:
     actor = DummyActor()
     actor.focus_point = int(focus)
+    setup = {
+        "arcane_study": arcane_study,
+        "drain_action": drain_action,
+    }
+    if thesis:
+        setup["thesis"] = thesis
     actor.statuses = [
         Status(
             id="wizard",
             data={
-                "wizard_setup": {
-                    "arcane_study": arcane_study,
-                    "drain_action": drain_action,
-                }
+                "wizard_setup": setup
             },
         )
     ]
@@ -194,6 +203,33 @@ def test_drain_familiar_universalist_works_once_per_rank():
     assert usage.get("rank:2") == 1
 
 
+def test_drain_bonded_item_recasts_without_prepared_copy_or_slot():
+    actor = _wizard(arcane_study="evocation", drain_action="drain_bonded_item")
+    actor.wizard_cast_spells_registry = [
+        {"spell_id": "wizard_test_rank1_spell", "rank": 1, "is_focus": False, "is_cantrip": False}
+    ]
+    actor.spell_state = {
+        "enabled": True,
+        "enforce": True,
+        "class_name": "wizard",
+        "known": {"rank_1": ["wizard_test_rank1_spell"]},
+        "prepared_today": {"rank_1": [], "cantrip": []},
+        "slot_total": {"rank_1": 0},
+        "slot_remaining": {"rank_1": 0},
+        "prepared_counts": {"rank_1": {}},
+        "consumed_counts": {"rank_1": {}},
+    }
+    game = _game(ui=DummyUI(), conn=DummyConn(cards=["wizard_test_rank1_spell"]))
+
+    result = dispatch_event("drain_bonded_item", EventContext(game=game, actor=actor))
+
+    assert result.success is True
+    state = dict(getattr(actor, "spell_state", {}) or {})
+    assert int((state.get("slot_remaining", {}) or {}).get("rank_1", 0) or 0) == 0
+    consumed_rank1 = dict((state.get("consumed_counts", {}) or {}).get("rank_1", {}) or {})
+    assert int(consumed_rank1.get("wizard_test_rank1_spell", 0) or 0) == 0
+
+
 def test_refocus_restores_wizard_focus_point_up_to_pool_limit():
     actor = _wizard(focus=0)
     actor.focus_pool_max = 2
@@ -208,3 +244,90 @@ def test_refocus_restores_wizard_focus_point_up_to_pool_limit():
     assert second.success is True
     assert third.success is False
     assert getattr(actor, "focus_point", 0) == 2
+
+
+def test_refocus_restores_focus_for_non_wizard_with_focus_pool():
+    actor = DummyActor(class_name="champion", focus_point=0)
+    actor.focus_pool_max = 1
+    game = _game()
+
+    first = dispatch_event("refocus", EventContext(game=game, actor=actor))
+    second = dispatch_event("refocus", EventContext(game=game, actor=actor))
+
+    assert first.success is True
+    assert first.consumed_action is False
+    assert second.success is False
+    assert getattr(actor, "focus_point", 0) == 1
+
+
+def test_wizard_spell_substitution_swaps_one_uncast_prepared_copy():
+    actor = _wizard(thesis="spell_substitution")
+    actor.spell_state = {
+        "enabled": True,
+        "enforce": True,
+        "class_name": "wizard",
+        "known": {"rank_1": ["wizard_test_rank1_spell", "fear"]},
+        "prepared_today": {"rank_1": ["wizard_test_rank1_spell", "wizard_test_rank1_spell"], "cantrip": []},
+        "slot_total": {"rank_1": 2},
+        "slot_remaining": {"rank_1": 1},
+        "prepared_counts": {"rank_1": {"wizard_test_rank1_spell": 2}},
+        "consumed_counts": {"rank_1": {"wizard_test_rank1_spell": 1}},
+    }
+    game = _game(ui=DummyUI(choices=["1", "1"]))
+
+    result = dispatch_event("wizard_spell_substitution", EventContext(game=game, actor=actor))
+
+    assert result.success is True
+    assert result.consumed_action is False
+    assert "10 minut" in str(result.message or "").lower()
+    state = dict(getattr(actor, "spell_state", {}) or {})
+    prepared_counts = dict((state.get("prepared_counts", {}) or {}).get("rank_1", {}) or {})
+    assert int(prepared_counts.get("wizard_test_rank1_spell", 0) or 0) == 1
+    assert int(prepared_counts.get("fear", 0) or 0) == 1
+    consumed_counts = dict((state.get("consumed_counts", {}) or {}).get("rank_1", {}) or {})
+    assert int(consumed_counts.get("wizard_test_rank1_spell", 0) or 0) == 1
+
+
+def test_wizard_spell_substitution_requires_thesis():
+    actor = _wizard(thesis="spell_blending")
+    actor.spell_state = {
+        "enabled": True,
+        "enforce": True,
+        "class_name": "wizard",
+        "known": {"rank_1": ["wizard_test_rank1_spell", "fear"]},
+        "prepared_today": {"rank_1": ["wizard_test_rank1_spell"], "cantrip": []},
+        "slot_total": {"rank_1": 1},
+        "slot_remaining": {"rank_1": 1},
+        "prepared_counts": {"rank_1": {"wizard_test_rank1_spell": 1}},
+        "consumed_counts": {"rank_1": {}},
+    }
+    game = _game(ui=DummyUI(choices=["1", "1"]))
+
+    result = dispatch_event("wizard_spell_substitution", EventContext(game=game, actor=actor))
+
+    assert result.success is False
+    assert "requires thesis" in str(result.message or "").lower()
+
+
+def test_wizard_spell_substitution_is_limited_to_once_per_scenario():
+    actor = _wizard(thesis="spell_substitution")
+    actor.object_id = "wizard-1"
+    actor.spell_state = {
+        "enabled": True,
+        "enforce": True,
+        "class_name": "wizard",
+        "known": {"rank_1": ["wizard_test_rank1_spell", "fear"]},
+        "prepared_today": {"rank_1": ["wizard_test_rank1_spell", "wizard_test_rank1_spell", "wizard_test_rank1_spell"], "cantrip": []},
+        "slot_total": {"rank_1": 3},
+        "slot_remaining": {"rank_1": 3},
+        "prepared_counts": {"rank_1": {"wizard_test_rank1_spell": 3}},
+        "consumed_counts": {"rank_1": {}},
+    }
+    game = _game(ui=DummyUI(choices=["1", "1"]))
+
+    first = dispatch_event("wizard_spell_substitution", EventContext(game=game, actor=actor))
+    second = dispatch_event("wizard_spell_substitution", EventContext(game=game, actor=actor))
+
+    assert first.success is True
+    assert second.success is False
+    assert "once per scenario" in str(second.message or "").lower()

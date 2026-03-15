@@ -8,7 +8,12 @@ from board import consts
 from combat import refresh_flanking_statuses
 from GameObjects.Interactables.utils.awareness import iter_watchers_in_rooms, summarize_watchers
 from GameObjects.Obstacles.basic_obstacle import Obstacle
-from actions.move_utils import perform_movement, default_on_enter, _maybe_dispatch_move_reactions
+from actions.move_utils import (
+    perform_movement,
+    default_on_enter,
+    _maybe_dispatch_move_reactions,
+    movement_budget_feet,
+)
 from skills import Skill
 from statuses import IN_DIM_LIGHT_STATUS, IN_DARK_STATUS, OBSERVABLE_STATUS, STEALTH_STATUS, StealthStatus, Status
 
@@ -318,9 +323,43 @@ class StealthEvent(GameEvent):
                     if msg:
                         logger.info(msg)
 
+    @staticmethod
+    def _sneak_bonus_feet(hero) -> int:
+        total = 0
+        for status in list(getattr(hero, "statuses", None) or []):
+            data = getattr(status, "data", None)
+            if not isinstance(data, dict):
+                continue
+            try:
+                bonus = int(data.get("sneak_bonus_feet", 0) or 0)
+            except Exception:
+                bonus = 0
+            if bonus > 0:
+                total += bonus
+        return max(0, int(total))
+
+    @classmethod
+    def _sneak_movement_budget_feet(cls, hero) -> int:
+        base_budget = max(0, int(movement_budget_feet(hero, default_feet=25) or 0))
+        if base_budget <= 0:
+            return 0
+
+        # PF2e Sneak: do połowy Speed; zaokrąglenie w dół do pełnych 5 stóp (siatka 5-ft).
+        sneak_half = (base_budget // 10) * 5
+        bonus = cls._sneak_bonus_feet(hero)
+        total = min(base_budget, max(0, sneak_half + bonus))
+        return max(0, int(total))
+
     def _stealth_move(self, ctx: EventContext, hero, start_pos: Tuple[int, int]) -> None:
         board = ctx.game.board
+        sneak_budget_feet = self._sneak_movement_budget_feet(hero)
         try:
+            if sneak_budget_feet <= 0:
+                try:
+                    ctx.game.ui_log("Skradanie: brak dostępnego budżetu ruchu.")
+                except Exception:
+                    pass
+                return
             perform_movement(
                 ctx,
                 hero,
@@ -330,6 +369,7 @@ class StealthEvent(GameEvent):
                 end_message="Kończysz ruch w ukryciu.",
                 allow_occupied=True,
                 on_enter=default_on_enter,
+                max_feet=sneak_budget_feet,
             )
             events = getattr(ctx.game, "events", None)
             if events and hasattr(events, "safe_emit_action"):

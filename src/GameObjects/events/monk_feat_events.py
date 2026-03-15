@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import OrderedDict
 
 from bonuses import BonusEffect, BonusType
+from combat.damage_utils import remove_defeated_enemy
 from statuses import Status
 
 from .attack.basic_melee_attack_event import BasicMeleeAttackEvent
@@ -119,15 +120,19 @@ def _apply_pending_persistent(target, payloads: list[dict], *, ctx: EventContext
 
 def _remove_defeated_target(game, target, target_pos) -> None:
     pos = target_pos if isinstance(target_pos, tuple) else getattr(target, "position", None)
+    if target in getattr(game, "enemies", []):
+        try:
+            remove_defeated_enemy(game, target, position=pos, source="monk_feat")
+            return
+        except Exception:
+            pass
     if isinstance(pos, tuple):
         try:
             game.board.remove(pos)
         except Exception:
             pass
     try:
-        if target in getattr(game, "enemies", []):
-            game.enemies.remove(target)
-        elif target in getattr(game, "heroes", []):
+        if target in getattr(game, "heroes", []):
             game.heroes.remove(target)
     except Exception:
         pass

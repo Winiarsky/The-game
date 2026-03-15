@@ -27,6 +27,11 @@ class Reaction:
         """Opis dlaczego można zareagować (do promptu)."""
         return self.label
 
+    def trigger_key(self, actor, event: dict[str, Any]) -> str:
+        """Klucz triggera do polityk auto-react/pass (domyślnie per reakcja)."""
+        _ = actor, event
+        return str(self.id or "reaction")
+
     def execute(self, actor, event: dict[str, Any], ctx: ReactionContext) -> bool:  # pragma: no cover - interfejs
         """Zwraca True gdy reakcja została wykonana (zużywa limit)."""
         raise NotImplementedError

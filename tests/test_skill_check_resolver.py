@@ -53,6 +53,7 @@ except Exception:
 from bonuses import BonusEffect, BonusType  # noqa: E402
 from GameObjects.interactions_mixin.skill_check_resolver import (  # noqa: E402
     resolve_skill_check_with_sources,
+    resolve_skill_check_with_sources_from_roll,
 )
 from GameObjects.events.checks import skill_check_event  # noqa: F401  # rejestruje eventy
 from statuses import NOBLE_PERSON_STATUS, SILVER_TONGUE_STATUS, STUBBORN_STATUS  # noqa: E402
@@ -301,3 +302,180 @@ def test_explicit_natural_mode_still_applies_for_final_total(monkeypatch):
         apply_modifiers=False,
     )
     assert res.outcome == "critical_success"
+
+
+def test_raw_roll_is_used_for_natural_inference(monkeypatch):
+    monkeypatch.setattr(
+        "GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll",
+        lambda *_, **__: {"roll": 27, "raw_roll": 20, "modifier_delta": 7},
+    )
+    actor = Hero()
+    res = resolve_skill_check_with_sources(
+        skill_id="perception",
+        dc=25,
+        actor=actor,
+        target=None,
+        tags=["perception"],
+        apply_modifiers=True,
+    )
+    assert res.outcome == "critical_success"
+
+
+def test_modifier_delta_adjusts_final_total(monkeypatch):
+    monkeypatch.setattr(
+        "GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll",
+        lambda *_, **__: {"roll": 10, "raw_roll": 10, "modifier_delta": 2},
+    )
+    actor = Hero()
+    res = resolve_skill_check_with_sources(
+        skill_id="perception",
+        dc=12,
+        actor=actor,
+        target=None,
+        tags=["perception"],
+        apply_modifiers=True,
+    )
+    assert res.total == 12
+    assert res.outcome == "success"
+    assert any("Korekta ręczna modyfikatora" in note for note in res.notes)
+
+
+def test_auto_base_modifier_from_level_rank_and_ability(monkeypatch):
+    monkeypatch.setattr("GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll", lambda *_, **__: 10)
+    actor = Hero()
+    actor.level = 1
+    actor.perception_rank = "trained"
+    actor.ability_modifiers = {"wisdom": 2}
+    res = resolve_skill_check_with_sources(
+        skill_id="perception",
+        dc=15,
+        actor=actor,
+        target=None,
+        tags=["initiative", "perception"],
+        apply_modifiers=True,
+    )
+    assert res.modifier == 5
+    assert res.total == 15
+    assert res.outcome == "success"
+
+
+def test_roll_stack_for_initiative_has_pf2_components(monkeypatch):
+    captured = {}
+
+    def _prompt(_prompt, **kwargs):
+        captured.update(kwargs)
+        return 10
+
+    monkeypatch.setattr("GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll", _prompt)
+    actor = Hero()
+    actor.level = 1
+    actor.perception_rank = "trained"
+    actor.ability_modifiers = {"wisdom": 2}
+    resolve_skill_check_with_sources(
+        skill_id="perception",
+        dc=15,
+        actor=actor,
+        target=None,
+        tags=["initiative", "perception"],
+        apply_modifiers=True,
+    )
+    stack = captured.get("roll_stack", {})
+    components = list(stack.get("components", []) or [])
+    ids = {str(row.get("id")) for row in components if isinstance(row, dict)}
+    assert {"level", "proficiency_step", "ability", "item", "status", "circumstance"}.issubset(ids)
+    assert len(components) == 6
+    assert int(stack.get("auto_total_modifier", 0) or 0) == 5
+
+
+@pytest.mark.parametrize(
+    "skill_id,level,ability_mods,skill_ranks,save_ranks,expected_modifier,tags",
+    [
+        ("athletics", 4, {"strength": 4}, {"athletics": "expert"}, {}, 12, ["athletics"]),
+        ("diplomacy", 5, {"charisma": 4}, {"diplomacy": "expert"}, {}, 13, ["diplomacy"]),
+        ("reflex", 7, {"dexterity": 3}, {}, {"reflex": "expert"}, 14, ["save", "reflex"]),
+        ("stealth", 6, {"dexterity": 4}, {"stealth": "expert"}, {}, 14, ["stealth"]),
+        ("perception", 5, {"wisdom": 3}, {"perception": "expert"}, {}, 12, ["seek", "perception"]),
+    ],
+)
+def test_pf2_core_formula_for_skills_and_saves(
+    skill_id,
+    level,
+    ability_mods,
+    skill_ranks,
+    save_ranks,
+    expected_modifier,
+    tags,
+):
+    actor = Hero()
+    actor.level = level
+    actor.ability_modifiers = dict(ability_mods)
+    actor.skill_ranks = dict(skill_ranks)
+    actor.save_ranks = dict(save_ranks)
+    if skill_id == "perception":
+        actor.perception_rank = skill_ranks.get("perception", "untrained")
+    result = resolve_skill_check_with_sources_from_roll(
+        skill_id=skill_id,
+        dc=10_000,
+        actor=actor,
+        target=None,
+        tags=tags,
+        roll=10,
+        apply_modifiers=True,
+    )
+    assert result.modifier == expected_modifier
+    assert result.total == 10 + expected_modifier
+
+
+def test_pf2_untrained_skill_does_not_add_level():
+    actor = Hero()
+    actor.level = 5
+    actor.ability_modifiers = {"intelligence": 4}
+    actor.skill_ranks = {"arcana": "untrained"}
+    result = resolve_skill_check_with_sources_from_roll(
+        skill_id="arcana",
+        dc=10_000,
+        actor=actor,
+        target=None,
+        tags=["arcana"],
+        roll=10,
+        apply_modifiers=True,
+    )
+    assert result.modifier == 4
+    assert result.total == 14
+
+
+def test_thievery_formula_with_item_bonus_from_tools(monkeypatch):
+    captured = {}
+
+    def _prompt(_prompt, **kwargs):
+        captured.update(kwargs)
+        return 10
+
+    monkeypatch.setattr("GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll", _prompt)
+    actor = Hero(
+        bonuses=[
+            BonusEffect(BonusType.ITEM, 1, "thievery", source="thieves_tools", label="thieves tools"),
+        ]
+    )
+    actor.level = 3
+    actor.ability_modifiers = {"dexterity": 4}
+    actor.skill_ranks = {"thievery": "trained"}
+    result = resolve_skill_check_with_sources(
+        skill_id="thievery",
+        dc=20,
+        actor=actor,
+        target=None,
+        tags=["thievery", "disable_device"],
+        apply_modifiers=True,
+    )
+    assert result.modifier == 10
+    assert result.total == 20
+
+    stack = captured.get("roll_stack", {})
+    components = {str(item.get("id")): int(item.get("value", 0) or 0) for item in list(stack.get("components", []) or [])}
+    assert components.get("level") == 3
+    assert components.get("proficiency_step") == 2
+    assert components.get("ability") == 4
+    assert components.get("item") == 1
+    assert components.get("status") == 0
+    assert components.get("circumstance") == 0

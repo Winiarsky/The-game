@@ -6,11 +6,12 @@ from statuses.base import Status
 from statuses.check_effects import CheckEffect
 
 CITY_SCAVENGER_DESCRIPTION = (
-    "Masz +1 circumstance do checks to Subsist.\n"
-    "W settlement możesz używać Society lub Survival do Subsist.\n"
-    "Gdy Subsistujesz w city, możesz równolegle wykonać Earn Income używając "
-    "Society lub Survival (bez dodatkowych dni) i dostajesz +1 circumstance.\n"
-    "Jeśli masz heritage Irongut Goblin, te bonusy rosną do +2."
+    "Umiesz zdobywać zasoby i zarobek, żerując na miejskich okazjach.\n"
+    "Kiedy: testy Subsist w settlement (Society albo Survival) oraz testy Earn Income "
+    "podczas Subsist w city.\n"
+    "Efekt: +1 circumstance do wskazanych testów; możesz używać Society/Survival do Subsist "
+    "w settlement i wykonywać równoległe Earn Income podczas Subsist w city. "
+    "Jeśli masz heritage Irongut Goblin, bonus rośnie do +2."
 )
 
 

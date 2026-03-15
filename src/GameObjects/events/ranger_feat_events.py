@@ -4,6 +4,7 @@ from collections import OrderedDict
 
 from bonuses import BonusEffect, BonusType
 from combat import refresh_flanking_statuses
+from combat.damage_utils import remove_defeated_enemy
 from combat.hp_engine import apply_damage as hp_apply_damage
 from GameObjects.interactions_mixin.skill_check_resolver import resolve_skill_check_with_sources
 from GameObjects.items.inventory import get_equipped_weapons
@@ -184,15 +185,19 @@ def _apply_merged_damage(target, damage_components: list[tuple[str, int]], *, so
 
 def _remove_defeated_target(game, target, target_pos) -> None:
     pos = target_pos if isinstance(target_pos, tuple) else getattr(target, "position", None)
+    if target in getattr(game, "enemies", []):
+        try:
+            remove_defeated_enemy(game, target, position=pos, source="ranger_feat")
+            return
+        except Exception:
+            pass
     if isinstance(pos, tuple):
         try:
             game.board.remove(pos)
         except Exception:
             pass
     try:
-        if target in getattr(game, "enemies", []):
-            game.enemies.remove(target)
-        elif target in getattr(game, "heroes", []):
+        if target in getattr(game, "heroes", []):
             game.heroes.remove(target)
     except Exception:
         pass

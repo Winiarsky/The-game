@@ -4,16 +4,16 @@ from statuses.base import Status
 from statuses.darkvision import DARKVISION_STATUS
 
 GOBLIN_DESCRIPTION = (
-    "Hit Points: 6\n"
-    "Size: Small\n"
-    "Speed: 25 feet\n"
-    "Ability Boosts: Dexterity, Charisma, Free\n"
-    "Ability Flaw: Wisdom\n"
-    "Languages: Common, Goblin\n"
-    "Additional language choices: Draconic, Dwarven, Gnoll, Gnomish, Halfling, Orcish.\n"
-    "Traits: Goblin, Humanoid.\n"
-    "Darkvision: w ciemności i półmroku widzisz jak w jasnym świetle "
-    "(ciemność w odcieniach szarości)."
+    "Punkty Zycia: 6\n"
+    "Rozmiar: Maly\n"
+    "Predkosc: 25 stop\n"
+    "Boosty atrybutow: Zrecznosc, Charyzma, Dowolna\n"
+    "Wada atrybutu: Madrosc\n"
+    "Jezyki: Common, Goblin\n"
+    "Dodatkowe jezyki: Draconic, Dwarven, Gnoll, Gnomish, Halfling, Orcish.\n"
+    "Cechy: Goblin, Humanoid.\n"
+    "Darkvision: w ciemnosci i slabym swietle widzisz jak w jasnym "
+    "(ciemnosc w odcieniach szarosci)."
 )
 
 

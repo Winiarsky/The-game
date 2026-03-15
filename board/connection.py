@@ -68,7 +68,14 @@ class Connection:
         r = requests.get(f"{self.esp_ip}/off")
         logger.info(f"LEDs off response: {r.status_code}, {r.text}")
         
-    def read_card(self, msg: str = "Zeskanuj karte", acceptable_responses: list[str] | None = None) -> str:
+    def read_card(
+        self,
+        msg: str = "Zeskanuj karte",
+        acceptable_responses: list[str] | None = None,
+        *,
+        translate_shortcuts: bool = True,
+        choice_meta: list[dict] | None = None,
+    ) -> str:
         translate_map = {
             "+": "ACCEPT",
             "-": "DECLINE",
@@ -81,26 +88,37 @@ class Connection:
             "7": "delay",
             "8": "end",
         }
-        
+
+        def _translate(raw: str) -> str:
+            if not translate_shortcuts:
+                return raw
+            return translate_map.get(raw, raw)
+
         while True:
             # UI prompt (jeśli dostępny)
             ui = get_ui_client()
             if ui.enabled:
-                ui_answer = ui.prompt_choice(msg, choices=acceptable_responses, source="card")
+                ui_answer = ui.prompt_choice(
+                    msg,
+                    choices=acceptable_responses,
+                    source="card",
+                    choice_meta=choice_meta,
+                )
                 if ui_answer:
-                    card_response = translate_map.get(ui_answer, ui_answer)
+                    card_response = _translate(ui_answer)
                     if acceptable_responses and card_response not in acceptable_responses:
                         logger.warning(f"Nieakceptowalna odpowiedz (UI): {card_response}")
                     else:
                         logger.info(f"Scanned via UI {ui_answer}: {card_response}")
                         return card_response
-                logger.warning("Brak odpowiedzi UI dla read_card, ponawiam prompt.")
-                continue
+                if not getattr(ui, "allow_cli_fallback", False):
+                    raise RuntimeError("UI-only mode: read_card nie otrzymał odpowiedzi z UI.")
+                logger.warning("Brak odpowiedzi UI dla read_card, przechodzę do fallback CLI.")
             if not getattr(ui, "allow_cli_fallback", False):
                 raise RuntimeError("UI-only mode: read_card wymaga aktywnego UI lub ALLOW_CLI_FALLBACK=1.")
 
             card = input(msg) #trzeba bedze dodac slownik do mapowania
-            card_response = translate_map.get(card, card)
+            card_response = _translate(card)
             logger.info(f"Scanned {card}: {card_response}")
             if acceptable_responses and card_response not in acceptable_responses:
                 logger.warning(f"Nieakceptowalna odpowiedz: {card_response}")

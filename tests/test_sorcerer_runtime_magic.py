@@ -14,6 +14,7 @@ for path in (PROJECT_ROOT, SRC_ROOT):
 import GameObjects.events.all_events  # noqa: F401
 
 from GameObjects.events.base import EventContext, EventResult
+from GameObjects.events.magic.base_attack_magic_event import BaseMagicAttackEvent
 from GameObjects.events.magic.magic_event import MagicEvent, MagicEventResolver
 from GameObjects.events.registry import dispatch_event, list_events
 from GameObjects.events.magic.focus_spells.sorcerer import sorcerer_focus_spell_events
@@ -242,6 +243,30 @@ class _BloodlineFocusSpell(MagicEvent):
         return EventResult(success=True, consumed_action=True)
 
 
+class _BloodlineAttackSpell(BaseMagicAttackEvent):
+    name = "spider_sting"
+    spell_tags = ["rank1", "occult", "attack", "enchantment"]
+    range_feet = 30
+    target_kind = "enemy"
+
+    def _resolve_on_target(self, target, pos, ctx: EventContext, *, critical: bool = False) -> EventResult:
+        _ = pos, ctx, critical
+        return EventResult(success=True, consumed_action=True, data={"target": target})
+
+
+class _BloodlineSaveSpell(MagicEvent):
+    name = "fear"
+    spell_tags = ["rank1", "divine", "emotion"]
+
+    def execute(self, ctx: EventContext) -> EventResult:
+        target = getattr(ctx, "metadata", {}).get("target")
+        return EventResult(
+            success=True,
+            consumed_action=True,
+            data={"target": target, "save_outcome": "success"},
+        )
+
+
 def test_blood_magic_triggers_for_granted_bloodline_spell():
     target = DummyActor(name="target", object_id="target")
     actor = DummyActor()
@@ -289,6 +314,68 @@ def test_blood_magic_triggers_for_focus_spell():
     assert result.success is True
     assert any(getattr(effect, "source", "") == "blood_magic:draconic" for effect in actor.bonuses)
     assert any(getattr(effect, "tag", "") == "ac" for effect in actor.bonuses)
+
+
+def test_blood_magic_does_not_apply_to_foe_when_spell_attack_misses(monkeypatch):
+    actor = DummyActor(name="sorc", object_id="sorc", position=(0, 0), hp=20)
+    actor.class_name = "sorcerer"
+    actor.statuses = [
+        Status(
+            id="sorcerer",
+            data={
+                "sorcerer_setup": {
+                    "bloodline": "aberrant",
+                    "bloodline_granted_spells": {"rank_1": "spider_sting"},
+                }
+            },
+        )
+    ]
+    target = DummyActor(name="enemy", object_id="enemy", position=(1, 0), hp=20)
+    ui = DummyUI(choices=["target"])
+    game = SimpleNamespace(
+        state=object(),
+        heroes=[actor],
+        enemies=[target],
+        conn=DummyConn(choice_pos=(1, 0)),
+        ui=ui,
+        board=SimpleNamespace(),
+        ui_log=lambda *_a, **_k: None,
+    )
+    monkeypatch.setattr("GameObjects.interactions_mixin.prompt_utils.get_ui_client", lambda: ui)
+    monkeypatch.setattr("GameObjects.events.magic.base_attack_magic_event.prompt_for_roll", lambda *_a, **_k: 1)
+
+    result = MagicEventResolver.resolve(_BloodlineAttackSpell(), EventContext(game=game, actor=actor))
+
+    assert result.success is True
+    assert not any(getattr(effect, "source", "") == "blood_magic:aberrant" for effect in actor.bonuses)
+    assert not any(getattr(effect, "source", "") == "blood_magic:aberrant" for effect in target.bonuses)
+
+
+def test_blood_magic_does_not_apply_to_foe_when_target_succeeds_save():
+    target = DummyActor(name="target", object_id="target")
+    actor = DummyActor()
+    actor.statuses = [
+        Status(
+            id="sorcerer",
+            data={
+                "sorcerer_setup": {
+                    "bloodline": "demonic",
+                    "bloodline_granted_spells": {"rank_1": "fear"},
+                }
+            },
+        )
+    ]
+    ui = DummyUI(choices=["target", "target_ac_penalty"])
+    game = _resolver_game(ui=ui)
+    game.heroes = [actor]
+    game.enemies = [target]
+    ctx = EventContext(game=game, actor=actor, metadata={"target": target})
+
+    result = MagicEventResolver.resolve(_BloodlineSaveSpell(), ctx)
+
+    assert result.success is True
+    assert not any(getattr(effect, "source", "") == "blood_magic:demonic" for effect in actor.bonuses)
+    assert not any(getattr(effect, "source", "") == "blood_magic:demonic" for effect in target.bonuses)
 
 
 def test_sorcerer_initial_focus_spells_are_registered():

@@ -6,8 +6,8 @@ from statuses.check_effects import CheckEffect
 
 WOODLAND_ELF_DESCRIPTION = (
     "Jesteś przystosowany do życia w lesie i dżungli.\n"
-    "Możesz użyć Take Cover na terenie forest nawet bez przeszkody obok.\n"
-    "Dodatkowy hook: testy Climb w foliage (trees/vines/foliage) dostają "
+    "Mozesz uzyc akcji Take Cover na terenie lasu nawet bez oslon obok.\n"
+    "Dodatkowy hook: testy wspinaczki w gesto porosnietym terenie (drzewa/liany/listowie) dostaja "
     "promocję stopnia sukcesu."
 )
 

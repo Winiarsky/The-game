@@ -6,10 +6,24 @@ from typing import Optional
 from bonuses import BonusEffect, BonusType
 from statuses import CoveredStatus
 from GameObjects.interactions_mixin import RangeAttackAffectMixin
+from GameObjects.items.shield import (
+    has_raised_tower_shield_cover,
+    tower_shield_cover_owner_key,
+)
 from .base import EventContext, EventResult, GameEvent
 from .registry import register_event
 
 logger = logging.getLogger(__name__)
+
+
+class _RaisedTowerShieldCover(RangeAttackAffectMixin):
+    """Tymczasowa osłona reprezentująca aktora z podniesioną tarczą wieżową."""
+
+    cover_type = "standard"
+
+    def __init__(self, owner) -> None:
+        self.owner = owner
+        self.position = getattr(owner, "position", None)
 
 
 @register_event
@@ -22,12 +36,27 @@ class TakeCoverEvent(GameEvent):
     available_in_exploration = False
     consumes_action = True
 
+    def _has_raised_shield_bonus(self, hero) -> bool:
+        bonuses = getattr(hero, "bonuses", None)
+        if not isinstance(bonuses, list):
+            return False
+        for effect in bonuses:
+            source = str(getattr(effect, "source", "") or "")
+            if source.startswith("raise_shield:"):
+                return True
+        return False
+
+    def _can_take_cover_with_tower_shield(self, hero) -> bool:
+        return has_raised_tower_shield_cover(hero) and self._has_raised_shield_bonus(hero)
+
     def _neighbors_with_cover(self, game, pos: tuple[int, int]) -> list[tuple[int, int, RangeAttackAffectMixin]]:
         board = game.board
         result: list[tuple[int, int, RangeAttackAffectMixin]] = []
         for candidate in board.get_neighbors(pos, include_position=True, diagonal=True):
             occupant = board.occupant_at(candidate)
-            if isinstance(occupant, RangeAttackAffectMixin):
+            if has_raised_tower_shield_cover(occupant):
+                result.append((candidate[0], candidate[1], _RaisedTowerShieldCover(occupant)))
+            elif isinstance(occupant, RangeAttackAffectMixin):
                 result.append((candidate[0], candidate[1], occupant))
             for obj in board.interactables_at(candidate):
                 if isinstance(obj, RangeAttackAffectMixin):
@@ -76,19 +105,28 @@ class TakeCoverEvent(GameEvent):
         neighbors = self._neighbors_with_cover(ctx.game, hero_pos)
 
         cover_obj: RangeAttackAffectMixin | None = None
+        current_cover: str | None = None
+        using_tower_shield_cover = False
+        tower_shield_cover_owner = None
         if not neighbors:
-            terrain = None
-            try:
-                terrain = ctx.game.board.cell_at(hero_pos).field
-            except Exception:
+            if self._can_take_cover_with_tower_shield(hero):
+                # Tower Shield: Raised + Take Cover daje ochronę jak greater cover (+4 AC).
+                current_cover = "standard"
+                using_tower_shield_cover = True
+                tower_shield_cover_owner = hero
+            else:
                 terrain = None
-            if terrain is None or not self._status_allows_terrain_cover(hero, terrain):
-                return EventResult.cancelled(message="Brak pobliskiej osłony.")
-            cover_obj = terrain if isinstance(terrain, RangeAttackAffectMixin) else None
-            if cover_obj is None:
-                return EventResult.cancelled(message="Brak osłony na tym terenie.")
+                try:
+                    terrain = ctx.game.board.cell_at(hero_pos).field
+                except Exception:
+                    terrain = None
+                if terrain is None or not self._status_allows_terrain_cover(hero, terrain):
+                    return EventResult.cancelled(message="Brak pobliskiej osłony.")
+                cover_obj = terrain if isinstance(terrain, RangeAttackAffectMixin) else None
+                if cover_obj is None:
+                    return EventResult.cancelled(message="Brak osłony na tym terenie.")
 
-        if cover_obj is None:
+        if cover_obj is None and current_cover is None:
             cover_obj = neighbors[0][2]
         if len(neighbors) > 1 and cover_obj is neighbors[0][2]:
             positions = [(x, y) for x, y, _ in neighbors]
@@ -112,7 +150,12 @@ class TakeCoverEvent(GameEvent):
                     break
             else:
                 return EventResult.cancelled(message="Nie wybrano osłony.")
-        current_cover = getattr(cover_obj, "range_cover_type", lambda: "standard")()
+
+        if current_cover is None:
+            current_cover = getattr(cover_obj, "range_cover_type", lambda: "standard")()
+        if isinstance(cover_obj, _RaisedTowerShieldCover):
+            using_tower_shield_cover = True
+            tower_shield_cover_owner = getattr(cover_obj, "owner", None)
         upgraded = self._upgrade_cover_type(current_cover)
         if upgraded is None:
             return EventResult.cancelled(message="Osłona już maksymalna (block).")
@@ -122,7 +165,13 @@ class TakeCoverEvent(GameEvent):
         if callable(remover):
             remover("take_cover:")
 
-        source_tag = f"take_cover:{hero_pos}"
+        if using_tower_shield_cover:
+            if tower_shield_cover_owner is not None:
+                source_tag = f"take_cover:tower_shield_from:{tower_shield_cover_owner_key(tower_shield_cover_owner)}"
+            else:
+                source_tag = "take_cover:tower_shield"
+        else:
+            source_tag = f"take_cover:{hero_pos}"
         adder = getattr(hero, "add_bonus", None)
         if not callable(adder):
             return EventResult(success=False, consumed_action=False, message="Bohater nie obsługuje bonusów.")

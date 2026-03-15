@@ -3,7 +3,7 @@ from __future__ import annotations
 from GameObjects.items.inventory import ensure_actor_inventory, get_equipped_weapons, item_description, item_label
 from GameObjects.items.weapon import normalize_weapon_id
 from ..base import EventContext, EventResult, GameEvent
-from ..registry import dispatch_event, register_event
+from ..registry import dispatch_event, get_event_cls, register_event
 
 
 def _weapon_event_name(weapon) -> str | None:
@@ -81,6 +81,44 @@ def _has_status(actor, status_id: str) -> bool:
     return False
 
 
+def _generic_weapon_attack(ctx: EventContext, weapon) -> EventResult:
+    from .base_attack_range_event import BaseRangeAttackEvent
+    from .basic_melee_attack_event import BasicMeleeAttackEvent
+
+    weapon_id = normalize_weapon_id(getattr(weapon, "item_id", None)) or "weapon"
+    weapon_name = item_label(weapon)
+    ranged = bool(getattr(weapon, "ranged", False))
+
+    if ranged:
+        event = BaseRangeAttackEvent()
+        event.default_tags = ["attack_ranged", "ranged_attack", weapon_id]
+        try:
+            event.range_increment_ft = max(5, int(getattr(weapon, "range_increment_ft", 60) or 60))
+        except Exception:
+            event.range_increment_ft = 60
+    else:
+        event = BasicMeleeAttackEvent()
+        event.default_tags = ["attack_melee", weapon_id]
+
+    event.name = f"generic_{weapon_id}"
+    event.weapon_label = weapon_name
+    event.action_id_base = f"attack_{weapon_id}"
+    event.damage_prompt = str(getattr(weapon, "damage_prompt", "1k4 + STR") or "1k4 + STR")
+    event.damage_type = str(getattr(weapon, "damage_type", "bludgeoning") or "bludgeoning")
+
+    runtime_ctx = EventContext(
+        game=ctx.game,
+        actor=ctx.actor,
+        tags=list(ctx.tags or []),
+        metadata={
+            **dict(ctx.metadata or {}),
+            "selected_weapon": weapon,
+            "selected_weapon_instance_id": str(getattr(weapon, "instance_id", "") or ""),
+        },
+    )
+    return event.run(runtime_ctx)
+
+
 @register_event
 class AttackEvent(GameEvent):
     name = "attack"
@@ -115,7 +153,8 @@ class AttackEvent(GameEvent):
             if selected is None:
                 return EventResult.cancelled(message=f"Wybrana broń nie jest aktywna: {explicit_weapon}.")
         else:
-            selected = _select_weapon_from_equipped(ctx, equipped)
+            # Bazowy "attack" zawsze używa aktualnie aktywnej broni (pierwsza z equipped).
+            selected = equipped[0] if equipped else None
 
         # Attack event fallbackuje do unarmed, ale unarmed pozostaje osobnym eventem.
         if selected is None:
@@ -132,6 +171,15 @@ class AttackEvent(GameEvent):
         event_name = _weapon_event_name(selected)
         if not event_name:
             return EventResult.cancelled(message=f"Brak eventu ataku dla broni: {item_label(selected)}.")
+
+        has_specific_event = True
+        try:
+            get_event_cls(event_name)
+        except Exception:
+            has_specific_event = False
+
+        if not has_specific_event:
+            return _generic_weapon_attack(ctx, selected)
 
         result = dispatch_event(
             event_name,

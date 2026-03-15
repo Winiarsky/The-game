@@ -23,6 +23,34 @@ SORCERER_FEAT_CHOICES = [
     "widen_spell",
 ]
 
+SORCERER_KNOWN_CANTRIPS_AT_LEVEL1 = 5
+SORCERER_KNOWN_RANK1_AT_LEVEL1 = 2
+SORCERER_RANK1_SLOTS_PER_DAY_AT_LEVEL1 = 3
+
+# Table 3-17: Sorcerer spells per day.
+SORCERER_SPELLS_PER_DAY = {
+    1: {"cantrip": 5, "rank_1": 3},
+    2: {"cantrip": 5, "rank_1": 4},
+    3: {"cantrip": 5, "rank_1": 4, "rank_2": 3},
+    4: {"cantrip": 5, "rank_1": 4, "rank_2": 4},
+    5: {"cantrip": 5, "rank_1": 4, "rank_2": 4, "rank_3": 3},
+    6: {"cantrip": 5, "rank_1": 4, "rank_2": 4, "rank_3": 4},
+    7: {"cantrip": 5, "rank_1": 4, "rank_2": 4, "rank_3": 4, "rank_4": 3},
+    8: {"cantrip": 5, "rank_1": 4, "rank_2": 4, "rank_3": 4, "rank_4": 4},
+    9: {"cantrip": 5, "rank_1": 4, "rank_2": 4, "rank_3": 4, "rank_4": 4, "rank_5": 3},
+    10: {"cantrip": 5, "rank_1": 4, "rank_2": 4, "rank_3": 4, "rank_4": 4, "rank_5": 4},
+    11: {"cantrip": 5, "rank_1": 4, "rank_2": 4, "rank_3": 4, "rank_4": 4, "rank_5": 4, "rank_6": 3},
+    12: {"cantrip": 5, "rank_1": 4, "rank_2": 4, "rank_3": 4, "rank_4": 4, "rank_5": 4, "rank_6": 4},
+    13: {"cantrip": 5, "rank_1": 4, "rank_2": 4, "rank_3": 4, "rank_4": 4, "rank_5": 4, "rank_6": 4, "rank_7": 3},
+    14: {"cantrip": 5, "rank_1": 4, "rank_2": 4, "rank_3": 4, "rank_4": 4, "rank_5": 4, "rank_6": 4, "rank_7": 4},
+    15: {"cantrip": 5, "rank_1": 4, "rank_2": 4, "rank_3": 4, "rank_4": 4, "rank_5": 4, "rank_6": 4, "rank_7": 4, "rank_8": 3},
+    16: {"cantrip": 5, "rank_1": 4, "rank_2": 4, "rank_3": 4, "rank_4": 4, "rank_5": 4, "rank_6": 4, "rank_7": 4, "rank_8": 4},
+    17: {"cantrip": 5, "rank_1": 4, "rank_2": 4, "rank_3": 4, "rank_4": 4, "rank_5": 4, "rank_6": 4, "rank_7": 4, "rank_8": 4, "rank_9": 3},
+    18: {"cantrip": 5, "rank_1": 4, "rank_2": 4, "rank_3": 4, "rank_4": 4, "rank_5": 4, "rank_6": 4, "rank_7": 4, "rank_8": 4, "rank_9": 4},
+    19: {"cantrip": 5, "rank_1": 4, "rank_2": 4, "rank_3": 4, "rank_4": 4, "rank_5": 4, "rank_6": 4, "rank_7": 4, "rank_8": 4, "rank_9": 4, "rank_10": 1},
+    20: {"cantrip": 5, "rank_1": 4, "rank_2": 4, "rank_3": 4, "rank_4": 4, "rank_5": 4, "rank_6": 4, "rank_7": 4, "rank_8": 4, "rank_9": 4, "rank_10": 1},
+}
+
 SORCERER_BLOODLINE_TRADITIONS = {
     "aberrant": "occult",
     "angelic": "divine",
@@ -231,6 +259,9 @@ SORCERER_PROMPT = (
     "CLASS FEATURES:\n"
     "Bloodline: wybierasz source mocy, tradycje czarow, bloodline skills oraz granted spells.\n"
     "Spellcasting: spontaniczne czary z spell repertoire.\n"
+    "Na 1. poziomie wybierasz 5 cantripow i 2 czary 1. rangi z tradycji bloodline.\n"
+    "Bloodline cantrip/rank1 sa dopisywane jako dodatkowe znane czary.\n"
+    "Sloty na dzien: zgodnie z tabela Sorcerer Spells per Day (CRB Table 3-17).\n"
     "Focus Pool: 1 Focus Point.\n"
     "Podczas setupu wybierasz bloodline i 1 class feat poziomu 1."
 )
@@ -256,6 +287,10 @@ def SorcererStatus() -> Status:
             },
             "sorcerer_bloodline_initial_focus_spells": dict(SORCERER_BLOODLINE_INITIAL_FOCUS_SPELLS),
             "sorcerer_bloodline_blood_magic": dict(SORCERER_BLOODLINE_BLOOD_MAGIC),
+            "sorcerer_known_cantrips_at_level1": int(SORCERER_KNOWN_CANTRIPS_AT_LEVEL1),
+            "sorcerer_known_rank_1_spells_at_level1": int(SORCERER_KNOWN_RANK1_AT_LEVEL1),
+            "sorcerer_rank_1_slots_per_day": int(SORCERER_RANK1_SLOTS_PER_DAY_AT_LEVEL1),
+            "sorcerer_spells_per_day": {level: dict(slots) for level, slots in SORCERER_SPELLS_PER_DAY.items()},
             "sorcerer_draconic_type_choices": list(SORCERER_DRACONIC_TYPE_DAMAGE.keys()),
             "sorcerer_draconic_type_damage": dict(SORCERER_DRACONIC_TYPE_DAMAGE),
             "sorcerer_elemental_type_choices": list(SORCERER_ELEMENTAL_TYPE_CHOICES),
@@ -271,6 +306,10 @@ __all__ = [
     "SORCERER_KEY_ABILITY_CHOICES",
     "SORCERER_BLOODLINE_CHOICES",
     "SORCERER_FEAT_CHOICES",
+    "SORCERER_KNOWN_CANTRIPS_AT_LEVEL1",
+    "SORCERER_KNOWN_RANK1_AT_LEVEL1",
+    "SORCERER_RANK1_SLOTS_PER_DAY_AT_LEVEL1",
+    "SORCERER_SPELLS_PER_DAY",
     "SORCERER_BLOODLINE_TRADITIONS",
     "SORCERER_BLOODLINE_SKILLS",
     "SORCERER_BLOODLINE_GRANTED_SPELLS",

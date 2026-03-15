@@ -3,12 +3,12 @@ from __future__ import annotations
 from statuses.base import Status
 
 JUNK_TINKER_DESCRIPTION = (
-    "Potrafisz tworzyć użyteczne rzeczy ze złomu.\n"
-    "Przy Crafting możesz tworzyć level 0 items (w tym broń, ale nie armor) ze złomu "
-    "za 1/4 ceny; wynik to shoddy item.\n"
-    "Nie dostajesz kary za używanie shoddy items, które sam wytworzyłeś.\n"
-    "Przy dowolnym Craft możesz też użyć złomu, co daje dodatkową redukcję ceny "
-    "jak za 1 dzień pracy więcej."
+    "Tworzysz prowizoryczny ekwipunek ze złomu i odpadków.\n"
+    "Kiedy: wykonujesz Crafting.\n"
+    "Efekt: możesz wytwarzać przedmioty poziomu 0 ze złomu za 1/4 ceny "
+    "(w tym broń, bez pancerzy), wynik jest shoddy. Nie dostajesz kary za używanie "
+    "shoddy przedmiotów, które sam stworzyłeś. Dodatkowo każdy Craft może dostać "
+    "dodatkową redukcję ceny jak za 1 dodatkowy dzień pracy."
 )
 
 

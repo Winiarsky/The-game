@@ -1,0 +1,387 @@
+{
+  "character_id": "kord",
+  "name": "Kord",
+  "concept": "",
+  "level": 1,
+  "ancestry_id": "human",
+  "heritage_id": "half_orc",
+  "ancestry_feat_id": "orc_ferocity",
+  "background_id": "background_laborer",
+  "class_id": "barbarian",
+  "class_feat_ids": [
+    "sudden_charge"
+  ],
+  "portrait_image": "/static/portraits/custom/hero_2572a568.jpg",
+  "status_ids": [
+    "human",
+    "half_orc",
+    "dim_light_vision",
+    "orc_ferocity",
+    "background_laborer",
+    "hefty_hauler",
+    "barbarian",
+    "giant_instinct",
+    "sudden_charge"
+  ],
+  "status_data": {
+    "human": {
+      "ui_description": "Punkty Zycia: 8\nRozmiar: Sredni\nPredkosc: 25 stop\nBoosty atrybutow: Dwa dowolne boosty\nJezyki: Common\nDodatkowe jezyki: 1 + modyfikator Inteligencji (jesli dodatni), z listy jezykow powszechnych i regionalnych.\nCechy: Human, Humanoid.",
+      "ancestry_hp": 8,
+      "base_speed_feet": 25,
+      "size": "medium",
+      "ancestry_traits": [
+        "human",
+        "humanoid"
+      ],
+      "ancestry_languages": [
+        "common"
+      ],
+      "ancestry_bonus_languages_base": 1,
+      "ancestry_bonus_languages_source": "int_modifier_positive",
+      "ability_boosts": [
+        "free",
+        "free"
+      ]
+    },
+    "half_orc": {
+      "ui_description": "Co najmniej jedno z twoich rodzicow jest orkiem lub polorkiem.\nNoszisz wyrazne oznaki orkowego pochodzenia.\nZyskujesz cechy orc i half-orc oraz widzenie w polmroku.\nDodatkowo przy wyborze ancestry featow mozesz wybierac featy\nz listy orc, half-orc i human.",
+      "ancestry_extra_traits": [
+        "orc",
+        "half_orc"
+      ],
+      "ancestry_feat_access": [
+        "orc",
+        "half_orc",
+        "human"
+      ],
+      "grants_statuses": [
+        {
+          "id": "dim_light_vision",
+          "label": "Dim Light Vision",
+          "duration": null,
+          "source": null,
+          "stacks": false,
+          "data": {},
+          "check_effects": [
+            {
+              "applies_to": "source",
+              "skills": [
+                "perception"
+              ],
+              "tags_required": null,
+              "bonus_effects": [],
+              "promote": 0,
+              "demote": 0,
+              "promote_on": null,
+              "demote_on": null,
+              "prompt_notes": [
+                "Ignorujesz efekty polmroku."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "dim_light_vision": {},
+    "orc_ferocity": {
+      "ui_description": "Mechanika: raz dziennie, gdy mialbys spasc do 0 HP (i nie giniesz natychmiast), zostajesz na 1 HP.\nEfekt uboczny: twoj wounded wzrasta o 1.",
+      "used_today": false,
+      "frequency_per_day": 1
+    },
+    "background_laborer": {
+      "ui_description": "Lata ciezkiej pracy fizycznej zbudowaly wytrzymalosc i sile.",
+      "ui_prompt": "Background: Robotnik",
+      "ui_prompt_long": "Lata ciezkiej pracy fizycznej zbudowaly wytrzymalosc i sile.\n\nMechanika (w tym silniku):\n- Boosty cech (informacyjnie w UI): Jeden boost do Sily lub Kondycji oraz jeden dowolny boost.\n- Szkolenie Skill/Lore (informacyjnie w UI): Atletyka oraz Wiedza: Praca fizyczna.\n- Feat z backgroundu: Hefty Hauler (dodawany do bohatera jako status).\n- Mechanika featu (krotko): +2 status do testów Atletyki.\n\nPrzypomnienie reguły bazowej: Na 1. poziomie wybierasz jeden background i tej decyzji nie zmieniasz później. Każdy background daje dwa boosty cech (jeden ograniczony, jeden dowolny), trained w jednym skillu i jednym Lore oraz jeden skill feat. W tym silniku boosty cech i szkolenia skill/Lore są informacją UI, a feat z backgroundu jest dodawany do bohatera jako realny status.",
+      "is_background": true,
+      "background_key": "laborer",
+      "background_label": "Robotnik",
+      "background_ability_boosts_ui": "Jeden boost do Sily lub Kondycji oraz jeden dowolny boost.",
+      "background_skill_training_ui": "Atletyka oraz Wiedza: Praca fizyczna.",
+      "background_skill_training_ui_only": true,
+      "background_feat_id": "hefty_hauler",
+      "background_core_rules_ui": "Na 1. poziomie wybierasz jeden background i tej decyzji nie zmieniasz później. Każdy background daje dwa boosty cech (jeden ograniczony, jeden dowolny), trained w jednym skillu i jednym Lore oraz jeden skill feat. W tym silniku boosty cech i szkolenia skill/Lore są informacją UI, a feat z backgroundu jest dodawany do bohatera jako realny status.",
+      "grants_statuses": [
+        {
+          "id": "hefty_hauler",
+          "label": "Hefty Hauler",
+          "duration": null,
+          "source": null,
+          "stacks": false,
+          "data": {
+            "ui_description": "Możesz nieść większy ciężar, zanim staniesz się przeciążony.\nMechanika: +2 status do testów Atletyki.",
+            "skill_feat_placeholder": false,
+            "skill_feat_fallback_mechanic": true
+          },
+          "check_effects": [
+            {
+              "applies_to": "source",
+              "skills": [
+                "athletics"
+              ],
+              "tags_required": null,
+              "bonus_effects": [
+                {
+                  "type": "status",
+                  "value": 2,
+                  "tag": "athletics",
+                  "source": "status:hefty_hauler",
+                  "target_id": null,
+                  "label": "hefty_hauler +2",
+                  "is_penalty": false,
+                  "duration_turns": null
+                }
+              ],
+              "promote": 0,
+              "demote": 0,
+              "promote_on": null,
+              "demote_on": null,
+              "prompt_notes": [
+                "Hefty Hauler: +2 status."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "hefty_hauler": {
+      "ui_description": "Możesz nieść większy ciężar, zanim staniesz się przeciążony.\nMechanika: +2 status do testów Atletyki.",
+      "skill_feat_placeholder": false,
+      "skill_feat_fallback_mechanic": true
+    },
+    "barbarian": {
+      "ui_prompt": "KEY ABILITY: STRENGTH\nAt 1st level, your class gives you an ability boost to Strength.\nHIT POINTS: 12 plus your Constitution Modifier\nYou increase your maximum number of HP by this number at 1st level and every level thereafter.\n\nINITIAL PROFICIENCIES:\nPERCEPTION\nExpert in Perception\nSAVING THROWS\nExpert in Fortitude\nTrained in Reflex\nExpert in Will\nSKILLS\nTrained in Athletics\nTrained in a number of additional skills equal to 3 plus your Intelligence modifier\nATTACKS\nTrained in simple weapons\nTrained in martial weapons\nTrained in unarmed attacks\nDEFENSES\nTrained in light armor\nTrained in medium armor\nTrained in unarmored defense",
+      "class_hp": 12,
+      "set_actor_attrs": {
+        "class_name": "barbarian"
+      }
+    },
+    "giant_instinct": {
+      "ui_prompt": "Giant Instinct: podczas Rage zadajesz +6 obrażeń zamiast +2, ale otrzymujesz status clumsy.\nUwaga: efekty instynktu działają tylko podczas aktywnego Rage."
+    },
+    "sudden_charge": {
+      "ui_description": "Sudden Charge (Open, Flourish): przemieść się 2x i wykonaj melee Strike.",
+      "ui_prompt": "Sudden Charge (Open, Flourish): przemieść się 2x i wykonaj melee Strike."
+    }
+  },
+  "ability_scores": {
+    "strength": 16,
+    "dexterity": 12,
+    "constitution": 18,
+    "intelligence": 10,
+    "wisdom": 12,
+    "charisma": 10
+  },
+  "ability_modifiers": {
+    "strength": 3,
+    "dexterity": 1,
+    "constitution": 4,
+    "intelligence": 0,
+    "wisdom": 1,
+    "charisma": 0
+  },
+  "skill_ranks": {
+    "acrobatics": "trained",
+    "athletics": "trained",
+    "intimidation": "trained",
+    "nature": "trained",
+    "survival": "trained"
+  },
+  "skill_modifiers": {
+    "acrobatics": 4,
+    "arcana": 0,
+    "athletics": 6,
+    "crafting": 0,
+    "deception": 0,
+    "diplomacy": 0,
+    "intimidation": 3,
+    "medicine": 1,
+    "nature": 4,
+    "occultism": 0,
+    "performance": 0,
+    "religion": 1,
+    "society": 0,
+    "stealth": 1,
+    "survival": 4,
+    "thievery": 1
+  },
+  "trained_skills": [
+    "acrobatics",
+    "athletics",
+    "intimidation",
+    "nature",
+    "survival"
+  ],
+  "lore_skills": [
+    "Labor (Wiedza)"
+  ],
+  "languages": [
+    "common"
+  ],
+  "traits": [
+    "human",
+    "humanoid"
+  ],
+  "perception_rank": "expert",
+  "perception_bonus": 6,
+  "focus_point": 0,
+  "focus_pool_max": 0,
+  "save_ranks": {
+    "fortitude": "expert",
+    "reflex": "trained",
+    "will": "expert"
+  },
+  "fortitude_bonus": 9,
+  "reflex_bonus": 4,
+  "will_bonus": 6,
+  "weapon_proficiency_ranks": {
+    "simple": "trained",
+    "martial": "trained",
+    "unarmed": "trained"
+  },
+  "defense_proficiency_ranks": {
+    "unarmored": "trained",
+    "light": "trained",
+    "medium": "trained"
+  },
+  "max_hp": 24,
+  "base_speed_feet": 25,
+  "ac": 14,
+  "starting_gold_gp": 15,
+  "coin_pouch": {
+    "cp": 5,
+    "sp": 4,
+    "gp": 2,
+    "pp": 0
+  },
+  "track_ammo": true,
+  "inventory_items": [
+    {
+      "item_id": "unarmed",
+      "category": "weapon",
+      "name": "Unarmed",
+      "description": "",
+      "traits": [
+        "agile",
+        "finesse",
+        "unarmed",
+        "free_hand"
+      ],
+      "price_cp": 0,
+      "bulk": "-",
+      "instance_id": "item-0449d9f02e",
+      "event_name": "unarmed",
+      "preparation_counter": 0,
+      "prepared_by_quick_alchemy": false,
+      "prepared_by_advanced_alchemy": false
+    },
+    {
+      "item_id": "greataxe",
+      "category": "weapon",
+      "name": "Greataxe",
+      "description": "",
+      "traits": [
+        "sweep"
+      ],
+      "price_cp": 200,
+      "bulk": 2,
+      "instance_id": "item-7e40737d7e",
+      "event_name": "greataxe",
+      "preparation_counter": 0,
+      "prepared_by_quick_alchemy": false,
+      "prepared_by_advanced_alchemy": false
+    },
+    {
+      "item_id": "studded_leather",
+      "category": "armor",
+      "name": "Studded Leather",
+      "description": "Wzmocniona lekka zbroja.",
+      "traits": [],
+      "price_cp": 300,
+      "bulk": 1,
+      "instance_id": "item-64aea6e5e6"
+    },
+    {
+      "item_id": "alchemical:elixir_of_life",
+      "category": "potion",
+      "name": "Minor Elixir of Life",
+      "description": "Przedmiot alchemiczny.",
+      "traits": [],
+      "price_cp": 300,
+      "bulk": "L",
+      "instance_id": "item-c58721152a",
+      "event_name": "elixir_of_life",
+      "preparation_counter": 0,
+      "prepared_by_quick_alchemy": false,
+      "prepared_by_advanced_alchemy": false
+    },
+    {
+      "item_id": "potency_crystal",
+      "category": "gear",
+      "name": "Krysztal potencji",
+      "description": "Talizman: daje +1 item do ataku bronia do konca tury.",
+      "traits": [
+        "consumable",
+        "magic",
+        "talisman"
+      ],
+      "price_cp": 400,
+      "bulk": "-",
+      "instance_id": "item-f62e2cb115",
+      "event_name": "potency_crystal",
+      "preparation_counter": 0,
+      "prepared_by_quick_alchemy": false,
+      "prepared_by_advanced_alchemy": false
+    },
+    {
+      "item_id": "rope_hemp_50ft",
+      "category": "gear",
+      "name": "Lina konopna (50 ft)",
+      "description": "Lina konopna dlugosci 50 stop.",
+      "traits": [],
+      "price_cp": 10,
+      "bulk": 1,
+      "instance_id": "item-06c5f482a4"
+    },
+    {
+      "item_id": "rations_week",
+      "category": "gear",
+      "name": "Racje (1 tydzien)",
+      "description": "Racje zywnosciowe na tydzien.",
+      "traits": [
+        "consumable"
+      ],
+      "price_cp": 40,
+      "bulk": "L",
+      "instance_id": "item-4ba178f81b"
+    },
+    {
+      "item_id": "waterskin",
+      "category": "gear",
+      "name": "Buklak",
+      "description": "Bukłak na wodę.",
+      "traits": [
+        "container"
+      ],
+      "price_cp": 5,
+      "bulk": "L",
+      "instance_id": "item-d732ad6a37"
+    }
+  ],
+  "weapon_loadout": [
+    "unarmed",
+    "greataxe"
+  ],
+  "armor_loadout": [
+    "studded_leather"
+  ],
+  "shield_loadout": [],
+  "equipped_weapon_ids": [
+    "greataxe"
+  ],
+  "equipped_armor_id": "studded_leather",
+  "equipped_shield_id": "",
+  "equipped_armor_item_id": "item-64aea6e5e6",
+  "equipped_shield_hand": "",
+  "created_at": "2026-03-11T18:24:54.940756+00:00",
+  "updated_at": "2026-03-11T18:24:54.941235+00:00"
+}

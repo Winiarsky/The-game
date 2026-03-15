@@ -12,13 +12,19 @@ from states.combat import Combat
 
 
 class DummyConn:
+    def __init__(self):
+        self.led_calls = []
+        self.scan_calls = []
+
     def set_leds(self, *_a, **_k):
+        self.led_calls.append((_a, _k))
         return None
 
     def leds_off(self):
         return None
 
     def scan_board(self, positions):
+        self.scan_calls.append(positions)
         return positions[0] if positions else None
 
 
@@ -103,12 +109,12 @@ def _equip_trait_weapon(actor, *, item_id: str, traits: tuple[str, ...]):
     return weapon
 
 
-def _game(hero, enemy, board):
+def _game(hero, enemy, board, *, conn=None):
     game = SimpleNamespace(
         heroes=[hero],
         enemies=[enemy],
         board=board,
-        conn=DummyConn(),
+        conn=conn or DummyConn(),
         events=DummyEvents(),
         ui_log=lambda *_a, **_k: None,
         ui_event=lambda *_a, **_k: None,
@@ -201,6 +207,31 @@ def test_shove_success_moves_target(monkeypatch):
     res = ShoveEvent().execute(_ctx(game, hero))
     assert res.success is True
     assert enemy.position == (2, 0)
+
+
+def test_shove_requires_confirm_press_on_destination(monkeypatch):
+    hero = DummyActor("h1", (0, 0))
+    enemy = DummyActor("e1", (1, 0))
+    board = DummyBoard({hero.position: hero, enemy.position: enemy})
+    conn = DummyConn()
+    game = _game(hero, enemy, board, conn=conn)
+
+    monkeypatch.setattr(
+        "GameObjects.events.shove_event.resolve_skill_check_with_sources",
+        lambda **_k: SimpleNamespace(outcome="success"),
+    )
+    monkeypatch.setattr(
+        "GameObjects.events.shove_event.compute_skill_modifier_with_sources",
+        lambda **_k: (0, [], []),
+    )
+
+    res = ShoveEvent().execute(_ctx(game, hero))
+
+    assert res.success is True
+    assert enemy.position == (2, 0)
+    scanned_lists = [tuple(call) for call in conn.scan_calls if isinstance(call, list)]
+    assert scanned_lists
+    assert ((2, 0),) in scanned_lists
 
 
 def test_grapple_is_disrupted_before_resolution(monkeypatch):

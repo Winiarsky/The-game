@@ -4,11 +4,11 @@ from statuses.base import Status
 from statuses.dim_light_vision import DIM_LIGHT_VISION_STATUS
 
 HALF_ELF_DESCRIPTION = (
-    "Either one of your parents was an elf, or one or both were\n"
-    "half-elves. You have pointed ears and other telltale signs\n"
-    "of elf heritage. You gain the elf trait, the half-elf trait,\n"
-    "and low-light vision. In addition, you can select elf,\n"
-    "half-elf, and human feats whenever you gain an ancestry feat."
+    "Co najmniej jedno z twoich rodzicow jest elfem lub polelfem.\n"
+    "Masz wyrazne cechy elfiego pochodzenia, jak ostre uszy.\n"
+    "Zyskujesz cechy elf i half-elf oraz widzenie w polmroku.\n"
+    "Dodatkowo przy wyborze ancestry featow mozesz wybierac featy\n"
+    "z listy elf, half-elf i human."
 )
 
 

@@ -17,6 +17,8 @@ from GameObjects.events.base import EventContext
 from GameObjects.events.attack import base_attack_range_event
 from GameObjects.events.attack import attack_range_long_bow
 from GameObjects.Obstacles.simple_obstacle import SimpleObstacle
+from bonuses import BonusEffect, BonusType
+from GameObjects.items.shield import create_shield
 
 
 class FakeEvents:
@@ -79,12 +81,17 @@ class Hero:
     def __init__(self, pos):
         self.position = pos
         self.statuses = []
+        self.bonuses = []
+        self.equipped_shield = None
 
     def add_status(self, status):
         self.statuses.append(status)
 
     def remove_status(self, status):
         self.statuses = [s for s in self.statuses if getattr(s, "id", s) != getattr(status, "id", status)]
+
+    def has_status(self, status_id):
+        return any(getattr(s, "id", s) == status_id for s in self.statuses)
 
 
 class Enemy:
@@ -162,3 +169,57 @@ def test_cover_and_range_penalty_emitted(monkeypatch):
     assert emitted.get("cover") == "greater"
     assert emitted.get("range_penalty") == 10  # 6 increment -> (6-1)*2
     assert enemy.hp == 8
+
+
+def test_analyze_shot_raised_tower_shield_in_line_grants_standard_cover():
+    shooter = Hero((0, 0))
+    blocker = Hero((1, 0))
+    target = Enemy((2, 0), ac=12)
+    tower = create_shield("tower_shield")
+    assert tower is not None
+    blocker.equipped_shield = tower
+    blocker.bonuses.append(
+        BonusEffect(
+            type=BonusType.CIRCUMSTANCE,
+            value=2,
+            tag="ac",
+            source="raise_shield:round1",
+            label="tarcza w gorze",
+        )
+    )
+    game = FakeGame()
+    game.heroes = [shooter, blocker]
+    game.enemies = [target]
+    game.board.occupants = {
+        shooter.position: shooter,
+        blocker.position: blocker,
+        target.position: target,
+    }
+
+    event = attack_range_long_bow.LongBowAttackEvent()
+    analyzed = event._analyze_shot(game, shooter.position, target.position, target=target)
+
+    assert analyzed.get("cover_type") == "standard"
+    assert analyzed.get("blocked") is False
+
+
+def test_analyze_shot_tower_shield_without_raise_does_not_grant_cover():
+    shooter = Hero((0, 0))
+    blocker = Hero((1, 0))
+    target = Enemy((2, 0), ac=12)
+    tower = create_shield("tower_shield")
+    assert tower is not None
+    blocker.equipped_shield = tower
+    game = FakeGame()
+    game.heroes = [shooter, blocker]
+    game.enemies = [target]
+    game.board.occupants = {
+        shooter.position: shooter,
+        blocker.position: blocker,
+        target.position: target,
+    }
+
+    event = attack_range_long_bow.LongBowAttackEvent()
+    analyzed = event._analyze_shot(game, shooter.position, target.position, target=target)
+
+    assert analyzed.get("cover_type") == "none"

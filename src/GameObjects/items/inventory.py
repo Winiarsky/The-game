@@ -3,11 +3,17 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Iterable
 
-from GameObjects.items.alchemical_item import AlchemicalItem, alchemical_item_name_from_event
+from GameObjects.items.alchemical_item import (
+    AlchemicalItem,
+    alchemical_item_defaults,
+    alchemical_item_name_from_event,
+    normalize_alchemical_event_id,
+)
 from GameObjects.items.armor import create_armor, normalize_armor_id
 from GameObjects.items.base_item import BaseItem
 from GameObjects.items.shield import create_shield, normalize_shield_id
 from GameObjects.items.weapon import BaseWeapon, create_weapon, normalize_weapon_id
+from localization import localize_term_pl
 
 
 _DEFAULT_WEAPON_IDS: tuple[str, ...] = ("sword", "dagger", "longbow", "unarmed")
@@ -16,7 +22,21 @@ _CATEGORY_PRIORITY: dict[str, int] = {
     "shield": 1,
     "armor": 2,
     "potion": 3,
+    "ammo": 4,
+    "gear": 5,
 }
+_HAND_LEFT = "left"
+_HAND_RIGHT = "right"
+_HAND_SHIELD_MARKER = "__shield__"
+
+
+def _refresh_bulk(actor, *, inventory: list[object] | None = None) -> None:
+    try:
+        from economy import refresh_actor_bulk_state
+
+        refresh_actor_bulk_state(actor, inventory=inventory)
+    except Exception:
+        return
 
 
 def _has_status(actor, status_id: str) -> bool:
@@ -87,6 +107,130 @@ def _item_label(item) -> str:
     if item_id:
         return item_id.replace("_", " ").title()
     return str(item)
+
+
+def _item_id(item) -> str:
+    return str(getattr(item, "item_id", "") or "").strip().lower()
+
+
+def _normalize_event_name(value: object) -> str:
+    return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+
+
+def _to_int(value: object, default: int = 0) -> int:
+    try:
+        return int(value)
+    except Exception:
+        return int(default)
+
+
+def _is_ammo_item(item) -> bool:
+    category = _item_category(item)
+    if category in {"ammo", "ammunition"}:
+        return True
+    traits = {
+        str(tag or "").strip().lower().replace("-", "_").replace(" ", "_")
+        for tag in (getattr(item, "traits", None) or ())
+    }
+    return "ammunition" in traits
+
+
+def _ammo_default_count(item) -> int:
+    item_id = _item_id(item)
+    if item_id in {"arrows", "bolts", "sling_bullets"}:
+        return 10
+    return 1
+
+
+def _ammo_count(item) -> int:
+    current = getattr(item, "ammo_count", None)
+    if current is None:
+        return _ammo_default_count(item)
+    return max(0, _to_int(current, _ammo_default_count(item)))
+
+
+def _set_ammo_count(item, value: int) -> None:
+    try:
+        setattr(item, "ammo_count", max(0, int(value)))
+    except Exception:
+        pass
+
+
+def _weapon_ammo_id(weapon) -> str | None:
+    weapon_id = normalize_weapon_id(getattr(weapon, "item_id", None)) or _item_id(weapon)
+    if not weapon_id:
+        return None
+    traits = {
+        str(tag or "").strip().lower().replace("-", "_").replace(" ", "_")
+        for tag in (getattr(weapon, "traits", None) or ())
+    }
+    group = str(getattr(weapon, "weapon_group", "") or "").strip().lower()
+    if weapon_id in {"shortbow", "longbow", "composite_shortbow", "composite_longbow"} or group == "bow":
+        return "arrows"
+    if "crossbow" in weapon_id or "crossbow" in traits or group == "crossbow":
+        return "bolts"
+    if weapon_id in {"sling", "halfling_sling_staff"} or group == "sling":
+        return "sling_bullets"
+    return None
+
+
+def weapon_ammo_label(weapon) -> str | None:
+    mapping = {
+        "arrows": "Strzaly (10)",
+        "bolts": "Belty (10)",
+        "sling_bullets": "Pociski do procy (10)",
+    }
+    ammo_id = _weapon_ammo_id(weapon)
+    if not ammo_id:
+        return None
+    return mapping.get(ammo_id, ammo_id)
+
+
+def _normalize_hand(hand: object) -> str:
+    raw = str(hand or "").strip().lower()
+    if raw in {"l", "left", "lewa", "main", "primary", "main_hand"}:
+        return _HAND_LEFT
+    if raw in {"r", "right", "prawa", "off", "off_hand", "secondary"}:
+        return _HAND_RIGHT
+    return _HAND_RIGHT
+
+
+def _other_hand(hand: str) -> str:
+    return _HAND_RIGHT if hand == _HAND_LEFT else _HAND_LEFT
+
+
+def _shield_hand(actor) -> str:
+    hand = _normalize_hand(getattr(actor, "equipped_shield_hand", _HAND_RIGHT))
+    return hand
+
+
+def _set_shield_hand(actor, hand: str) -> None:
+    try:
+        setattr(actor, "equipped_shield_hand", _normalize_hand(hand))
+    except Exception:
+        pass
+
+
+def _empty_hand_slot() -> dict[str, str | None]:
+    return {"kind": "empty", "label": "Pusta ręka", "item_id": None, "instance_id": None}
+
+
+def _weapon_slot_payload(item) -> dict[str, str | None]:
+    return {
+        "kind": "weapon",
+        "label": _item_label(item),
+        "item_id": str(getattr(item, "item_id", "") or ""),
+        "instance_id": _item_instance_id(item),
+    }
+
+
+def _shield_slot_payload(item) -> dict[str, str | None]:
+    return {
+        "kind": "shield",
+        "label": _item_label(item),
+        "item_id": str(getattr(item, "item_id", "") or ""),
+        "instance_id": _item_instance_id(item),
+    }
 
 
 def _sort_categories(category: str) -> tuple[int, str]:
@@ -176,6 +320,7 @@ def ensure_actor_inventory(actor) -> list[object]:
         pass
 
     _ensure_equipment_state(actor)
+    _refresh_bulk(actor, inventory=inventory)
     return inventory
 
 
@@ -216,6 +361,7 @@ def _ensure_equipment_state(actor) -> None:
 
     equipped_shield = getattr(actor, "equipped_shield", None)
     if equipped_shield is not None:
+        _set_shield_hand(actor, _shield_hand(actor))
         inventory = list(getattr(actor, "inventory", []) or [])
         if equipped_shield not in inventory:
             inventory.append(equipped_shield)
@@ -374,6 +520,66 @@ def _active_hands_cost(actor, *, exclude_item_id: str | None = None) -> int:
     return hands
 
 
+def _hands_cost_for_items(actor, items: list[object]) -> int:
+    """Koszt rąk dla podanej listy aktywnych broni + ewentualnej tarczy aktora."""
+    hands = sum(_weapon_hands(item) for item in list(items or []))
+    if getattr(actor, "equipped_shield", None) is not None:
+        hands += 1
+    return int(hands)
+
+
+def _current_slots(actor) -> dict[str, tuple[str, object] | None]:
+    """Bieżąca okupacja slotów rąk (bez broni free_hand)."""
+    slots: dict[str, tuple[str, object] | None] = {
+        _HAND_LEFT: None,
+        _HAND_RIGHT: None,
+    }
+    shield = getattr(actor, "equipped_shield", None)
+    if shield is not None:
+        slots[_shield_hand(actor)] = (_HAND_SHIELD_MARKER, shield)
+
+    one_h = [item for item in get_equipped_weapons(actor) if _weapon_hands(item) == 1]
+    for weapon in one_h:
+        for hand in (_HAND_LEFT, _HAND_RIGHT):
+            if slots[hand] is None:
+                slots[hand] = ("weapon", weapon)
+                break
+    return slots
+
+
+def _commit_slots(actor, slots: dict[str, tuple[str, object] | None], *, zero_h_weapons: list[object] | None = None) -> None:
+    """Zapisuje sloty do stanu aktora, dbając o zgodność z istniejącą logiką ekwipunku."""
+    if zero_h_weapons is None:
+        zero_h_weapons = [item for item in get_equipped_weapons(actor) if _weapon_hands(item) <= 0]
+    shield = None
+    shield_hand = _HAND_RIGHT
+    one_h_weapons: list[object] = []
+
+    for hand in (_HAND_LEFT, _HAND_RIGHT):
+        payload = slots.get(hand)
+        if not payload:
+            continue
+        kind, item = payload
+        if kind == _HAND_SHIELD_MARKER:
+            shield = item
+            shield_hand = hand
+            continue
+        if kind == "weapon":
+            one_h_weapons.append(item)
+
+    try:
+        setattr(actor, "equipped_shield", shield)
+    except Exception:
+        pass
+    _set_shield_hand(actor, shield_hand)
+
+    merged: list[object] = []
+    for item in list(one_h_weapons) + list(zero_h_weapons or []):
+        if item not in merged:
+            merged.append(item)
+    set_equipped_weapons(actor, merged)
+
+
 def toggle_item_activation(actor, item) -> tuple[bool, str]:
     ensure_actor_inventory(actor)
     category = _item_category(item)
@@ -383,6 +589,19 @@ def toggle_item_activation(actor, item) -> tuple[bool, str]:
         return _toggle_shield(actor, item)
     if category == "armor":
         return _toggle_armor(actor, item)
+    event_name = _normalize_event_name(getattr(item, "event_name", ""))
+    if event_name:
+        event_label = localize_term_pl(event_name)
+        route = "Alchemia" if isinstance(item, AlchemicalItem) else "Specjalne/Magia"
+        prep_counter = max(0, int(getattr(item, "preparation_counter", 0) or 0))
+        if prep_counter > 0:
+            readiness = f"Przedmiot nie jest jeszcze gotowy ({prep_counter} tur przygotowania)."
+        else:
+            readiness = "Przedmiot jest gotowy."
+        return (
+            False,
+            f"{_item_label(item)}: użyj przez Akcje -> {route} -> {event_label} (event: {event_name}). {readiness}",
+        )
     return False, f"{_item_label(item)}: tej kategorii nie da się aktywować."
 
 
@@ -408,7 +627,8 @@ def _toggle_weapon(actor, weapon) -> tuple[bool, str]:
 
     # Aktywacja 1H: zdejmij ewentualną broń 2H.
     equipped = [item for item in equipped if _weapon_hands(item) < 2]
-    used_hands = _active_hands_cost(actor)
+    # Uwaga: liczymy ręce z lokalnego stanu po zdjęciu 2H, a nie ze starego stanu aktora.
+    used_hands = _hands_cost_for_items(actor, equipped)
     if used_hands >= 2:
         return False, "Brak wolnej ręki na kolejną broń 1H."
     one_h_count = sum(1 for item in equipped if _weapon_hands(item) == 1)
@@ -435,6 +655,7 @@ def _toggle_shield(actor, shield) -> tuple[bool, str]:
         return False, "Nie masz wolnej ręki na tarczę (dwie bronie 1H aktywne)."
     try:
         setattr(actor, "equipped_shield", shield)
+        _set_shield_hand(actor, _HAND_RIGHT)
     except Exception:
         return False, "Nie udało się aktywować tarczy."
     return True, f"Aktywowano tarczę: {_item_label(shield)}."
@@ -456,6 +677,167 @@ def _toggle_armor(actor, armor) -> tuple[bool, str]:
     return True, f"Założono pancerz: {_item_label(armor)}."
 
 
+def assign_item_to_hand(actor, item, hand: str) -> tuple[bool, str]:
+    """Przypisz przedmiot do konkretnej ręki (lewa/prawa), jeśli to możliwe."""
+    ensure_actor_inventory(actor)
+    target_hand = _normalize_hand(hand)
+    other = _other_hand(target_hand)
+    category = _item_category(item)
+
+    if category not in {"weapon", "shield"}:
+        return False, f"{_item_label(item)}: ten przedmiot nie zajmuje slotu ręki."
+
+    equipped = get_equipped_weapons(actor)
+    zero_h = [weapon for weapon in equipped if _weapon_hands(weapon) <= 0]
+    two_h = [weapon for weapon in equipped if _weapon_hands(weapon) >= 2]
+    slots = _current_slots(actor)
+
+    if category == "shield":
+        if two_h:
+            return False, "Nie możesz aktywować tarczy z aktywną bronią 2H."
+        if getattr(actor, "equipped_shield", None) is not item:
+            try:
+                setattr(actor, "equipped_shield", item)
+            except Exception:
+                return False, "Nie udało się aktywować tarczy."
+        # Usuń tarczę z obu slotów i przypnij w nowym.
+        for h in (_HAND_LEFT, _HAND_RIGHT):
+            payload = slots.get(h)
+            if payload and payload[0] == _HAND_SHIELD_MARKER:
+                slots[h] = None
+        # Zajęty slot -> spróbuj przesunąć occupant na drugą rękę.
+        occupied = slots.get(target_hand)
+        if occupied is not None:
+            if slots.get(other) is None:
+                slots[other] = occupied
+            else:
+                slots[target_hand] = None
+        slots[target_hand] = (_HAND_SHIELD_MARKER, item)
+        _commit_slots(actor, slots, zero_h_weapons=zero_h)
+        hand_label = "lewą" if target_hand == _HAND_LEFT else "prawą"
+        return True, f"Przypięto tarczę '{_item_label(item)}' na {hand_label} rękę."
+
+    hands = _weapon_hands(item)
+    if hands <= 0:
+        # Broń free-hand: tylko aktywacja/dezaktywacja, bez slotu.
+        return _toggle_weapon(actor, item)
+    if hands >= 2:
+        set_equipped_weapons(actor, [item] + list(zero_h))
+        if getattr(actor, "equipped_shield", None) is not None:
+            try:
+                setattr(actor, "equipped_shield", None)
+            except Exception:
+                pass
+        _set_shield_hand(actor, _HAND_RIGHT)
+        return True, f"Aktywowano broń 2H: {_item_label(item)}."
+
+    # Jednoręczna broń: przestaw item na konkretną rękę.
+    if any(_weapon_hands(wpn) >= 2 for wpn in equipped):
+        equipped = [wpn for wpn in equipped if _weapon_hands(wpn) <= 0]
+        set_equipped_weapons(actor, equipped)
+        slots = _current_slots(actor)
+
+    # Usuń z obu slotów starą pozycję tej broni.
+    for h in (_HAND_LEFT, _HAND_RIGHT):
+        payload = slots.get(h)
+        if payload and payload[0] == "weapon" and payload[1] is item:
+            slots[h] = None
+
+    occupied = slots.get(target_hand)
+    if occupied is not None:
+        if slots.get(other) is None:
+            slots[other] = occupied
+        elif occupied[0] == "weapon":
+            slots[target_hand] = None
+        else:
+            # Tarcza na obu rękach zajęta + broń 1H -> brak miejsca.
+            return False, "Brak miejsca na broń 1H (oba sloty zajęte)."
+
+    slots[target_hand] = ("weapon", item)
+    _commit_slots(actor, slots, zero_h_weapons=zero_h)
+    hand_label = "lewą" if target_hand == _HAND_LEFT else "prawą"
+    return True, f"Przypięto broń '{_item_label(item)}' na {hand_label} rękę."
+
+
+def hand_slots_snapshot(actor) -> dict[str, object]:
+    """Zwraca czytelny snapshot zajętości rąk aktora dla UI i debugowania."""
+    ensure_actor_inventory(actor)
+
+    left = _empty_hand_slot()
+    right = _empty_hand_slot()
+    shield = getattr(actor, "equipped_shield", None)
+    equipped = list(get_equipped_weapons(actor))
+    zero_h = [item for item in equipped if _weapon_hands(item) <= 0]
+    one_h = [item for item in equipped if _weapon_hands(item) == 1]
+    two_h = [item for item in equipped if _weapon_hands(item) >= 2]
+
+    mode = "unarmed"
+    mode_label = "Bez broni"
+
+    if two_h:
+        primary = two_h[0]
+        payload = _weapon_slot_payload(primary)
+        left = dict(payload)
+        right = dict(payload)
+        mode = "two_handed"
+        mode_label = "Broń dwuręczna"
+    else:
+        slots = _current_slots(actor)
+        left_payload = slots.get(_HAND_LEFT)
+        right_payload = slots.get(_HAND_RIGHT)
+        if left_payload and left_payload[0] == "weapon":
+            left = _weapon_slot_payload(left_payload[1])
+        elif left_payload and left_payload[0] == _HAND_SHIELD_MARKER:
+            left = _shield_slot_payload(left_payload[1])
+
+        if right_payload and right_payload[0] == "weapon":
+            right = _weapon_slot_payload(right_payload[1])
+        elif right_payload and right_payload[0] == _HAND_SHIELD_MARKER:
+            right = _shield_slot_payload(right_payload[1])
+
+        left_kind = str(left.get("kind", "empty"))
+        right_kind = str(right.get("kind", "empty"))
+        if left_kind == "weapon" and right_kind == "weapon":
+            mode = "dual_wield"
+            mode_label = "Dwie bronie 1R"
+        elif "shield" in {left_kind, right_kind} and "weapon" in {left_kind, right_kind}:
+            mode = "weapon_and_shield"
+            mode_label = "Broń 1R + tarcza"
+        elif left_kind == "shield" or right_kind == "shield":
+            mode = "shield_only"
+            mode_label = "Tarcza"
+        elif left_kind == "weapon" or right_kind == "weapon":
+            mode = "single_weapon"
+            mode_label = "Jedna broń 1R"
+
+    if mode == "unarmed" and zero_h:
+        mode = "free_hand_weapon"
+        mode_label = "Broń wolnej ręki"
+    if mode != "two_handed" and mode != "dual_wield" and shield is None and len(one_h) >= 2:
+        mode = "dual_wield"
+        mode_label = "Dwie bronie 1R"
+
+    free_hands = 0
+    for slot in (left, right):
+        if str(slot.get("kind", "")) == "empty":
+            free_hands += 1
+
+    active_weapon_labels = [_item_label(item) for item in equipped]
+    active_free_hand_labels = [_item_label(item) for item in zero_h]
+    shield_label = _item_label(shield) if shield is not None else None
+
+    return {
+        _HAND_LEFT: left,
+        _HAND_RIGHT: right,
+        "mode": mode,
+        "mode_label": mode_label,
+        "free_hands": int(free_hands),
+        "active_weapons": active_weapon_labels,
+        "active_free_hand_weapons": active_free_hand_labels,
+        "active_shield": shield_label,
+    }
+
+
 def inventory_index_of(actor, item) -> int:
     inventory = ensure_actor_inventory(actor)
     for idx, current in enumerate(inventory):
@@ -475,18 +857,104 @@ def remove_item(actor, item) -> bool:
     except Exception:
         pass
     _sync_legacy_weapon_attrs(actor)
+    _refresh_bulk(actor, inventory=inventory)
     return True
 
 
-def add_item(actor, item) -> None:
+def count_ammo(actor, ammo_item_id: str) -> int:
+    ammo_id = str(ammo_item_id or "").strip().lower()
+    if not ammo_id:
+        return 0
+    total = 0
+    for item in ensure_actor_inventory(actor):
+        if _item_id(item) != ammo_id:
+            continue
+        if not _is_ammo_item(item):
+            continue
+        total += _ammo_count(item)
+    return max(0, int(total))
+
+
+def consume_ammo(actor, ammo_item_id: str, *, amount: int = 1) -> tuple[bool, str]:
+    ammo_id = str(ammo_item_id or "").strip().lower()
+    to_spend = max(0, int(amount or 0))
+    if not ammo_id or to_spend <= 0:
+        return True, ""
     inventory = ensure_actor_inventory(actor)
-    if item not in inventory:
-        inventory.append(item)
+    available = count_ammo(actor, ammo_id)
+    if available < to_spend:
+        return False, f"Brak amunicji: {ammo_id} ({available}/{to_spend})."
+
+    for item in list(inventory):
+        if to_spend <= 0:
+            break
+        if _item_id(item) != ammo_id or not _is_ammo_item(item):
+            continue
+        stack = _ammo_count(item)
+        if stack <= 0:
+            continue
+        use_now = min(stack, to_spend)
+        left = stack - use_now
+        to_spend -= use_now
+        if left <= 0:
+            try:
+                inventory.remove(item)
+            except ValueError:
+                pass
+        else:
+            _set_ammo_count(item, left)
     try:
         setattr(actor, "inventory", inventory)
     except Exception:
         pass
     _sync_legacy_weapon_attrs(actor)
+    _refresh_bulk(actor, inventory=inventory)
+    left_after = count_ammo(actor, ammo_id)
+    return True, f"Zuzyto amunicje: {ammo_id} (pozostalo: {left_after})."
+
+
+def consume_ammo_for_weapon(actor, weapon, *, amount: int = 1) -> tuple[bool, str]:
+    ammo_id = _weapon_ammo_id(weapon)
+    if not ammo_id:
+        return True, ""
+    ok, msg = consume_ammo(actor, ammo_id, amount=amount)
+    if ok:
+        return True, msg
+    label = weapon_ammo_label(weapon) or ammo_id
+    available = count_ammo(actor, ammo_id)
+    needed = max(1, int(amount or 1))
+    return False, f"Brak amunicji do {item_label(weapon)}: {label} ({available}/{needed})."
+
+
+def add_item(actor, item) -> None:
+    inventory = ensure_actor_inventory(actor)
+    if _is_ammo_item(item):
+        incoming_count = _ammo_count(item)
+        for current in inventory:
+            if current is item:
+                continue
+            if _item_id(current) != _item_id(item):
+                continue
+            if not _is_ammo_item(current):
+                continue
+            _set_ammo_count(current, _ammo_count(current) + incoming_count)
+            try:
+                setattr(actor, "inventory", inventory)
+            except Exception:
+                pass
+            _sync_legacy_weapon_attrs(actor)
+            _refresh_bulk(actor, inventory=inventory)
+            return
+    if item not in inventory:
+        inventory.append(item)
+    if _is_ammo_item(item):
+        _set_ammo_count(item, _ammo_count(item))
+    try:
+        setattr(actor, "inventory", inventory)
+    except Exception:
+        pass
+    _sync_legacy_weapon_attrs(actor)
+    _refresh_bulk(actor, inventory=inventory)
 
 
 def transfer_item(source_actor, target_actor, item) -> tuple[bool, str]:
@@ -495,6 +963,8 @@ def transfer_item(source_actor, target_actor, item) -> tuple[bool, str]:
     if not remove_item(source_actor, item):
         return False, "Nie udało się zdjąć przedmiotu ze źródła."
     add_item(target_actor, item)
+    _refresh_bulk(source_actor)
+    _refresh_bulk(target_actor)
     return True, f"Przekazano {_item_label(item)} do {getattr(target_actor, 'name', 'bohatera')}."
 
 
@@ -520,14 +990,98 @@ def _deactivate_item_before_move(actor, item) -> None:
                 pass
 
 
+def item_use_description(item) -> str:
+    """Techniczny skrót akcji użycia przedmiotu (do podglądu w UI)."""
+    category = _item_category(item)
+    if category == "weapon":
+        is_ranged = bool(getattr(item, "ranged", False))
+        distance_ft = int(getattr(item, "range_increment_ft", 0) or 0)
+        attack_type = "atak dystansowy" if is_ranged else "atak wręcz"
+        range_part = f", zasięg {distance_ft} stóp" if is_ranged and distance_ft > 0 else ""
+        damage_prompt = str(getattr(item, "damage_prompt", "1k4") or "1k4")
+        damage_type = str(getattr(item, "damage_type", "normalne") or "normalne")
+        ammo_note = ""
+        ammo_label = weapon_ammo_label(item)
+        if ammo_label:
+            ammo_note = f", wymaga amunicji: {ammo_label}"
+        return f"Użyj: {attack_type}{range_part}{ammo_note}, obrażenia {damage_prompt} ({damage_type})."
+
+    if category == "shield":
+        ac_bonus = int(getattr(item, "ac_bonus", 0) or 0)
+        hardness = int(getattr(item, "hardness", 0) or 0)
+        hp = int(getattr(item, "current_hp", getattr(item, "max_hp", 0)) or 0)
+        max_hp = int(getattr(item, "max_hp", hp) or hp)
+        return (
+            "Użyj: Raise Shield "
+            f"(+{ac_bonus} AC) / Shield Block (Hardness {hardness}, HP tarczy {hp}/{max_hp})."
+        )
+
+    item_id = str(getattr(item, "item_id", "") or "").strip().lower()
+    if item_id in {"healer_tools"}:
+        return "Uzyj: narzedzie wymagane do Battle Medicine i Treat Wounds."
+    if item_id in {"thieves_tools"}:
+        return "Uzyj: narzedzie do akcji Disable Device i otwierania zamkow."
+    if item_id in {"repair_kit"}:
+        return "Uzyj: narzedzie do akcji Repair (naprawa przedmiotow)."
+    if item_id in {"torch"}:
+        return "Uzyj: Interact (zapalenie). Swiatlo terenowe, zuzywalne."
+    if item_id in {"lantern_hooded", "lantern_bullseye"}:
+        return "Uzyj: Interact (zapalenie/zgaszenie). Wymaga oleju."
+    if item_id in {"oil_flask"}:
+        return "Uzyj: paliwo do latarni lub pochodni (zuzywalne)."
+    if _is_ammo_item(item):
+        return f"Amunicja: {_ammo_count(item)} szt. w tym stacku."
+
+    event_name = str(getattr(item, "event_name", "") or "").strip()
+    if event_name:
+        from GameObjects.events.registry import get_event_cls
+
+        try:
+            event_cls = get_event_cls(event_name)
+        except Exception:
+            event_cls = None
+        if event_cls is not None:
+            range_feet = int(getattr(event_cls, "range_feet", 0) or 0)
+            prompt_desc = str(getattr(event_cls, "prompt_description", "") or "").strip()
+            one_line_desc = " ".join(line.strip() for line in prompt_desc.splitlines() if line.strip())
+            if len(one_line_desc) > 220:
+                one_line_desc = one_line_desc[:217] + "..."
+            route = "Alchemia" if isinstance(item, AlchemicalItem) else "Specjalne/Magia"
+            event_label = localize_term_pl(event_name)
+            prep_counter = max(0, int(getattr(item, "preparation_counter", 0) or 0))
+            ready_note = (
+                "Gotowe do użycia."
+                if prep_counter <= 0
+                else f"Gotowe za {prep_counter} tur."
+            )
+            range_part = f", zasięg {range_feet} stóp" if range_feet > 0 else ""
+            if one_line_desc:
+                return f"Użyj: Akcje -> {route} -> {event_label}{range_part}. {ready_note} {one_line_desc}"
+            return f"Użyj: Akcje -> {route} -> {event_label}{range_part}. {ready_note}"
+
+    if item_id == "goodberry":
+        return "Użyj: zjedz Goodberry, leczenie 1k6+4 HP (zużywa przedmiot)."
+
+    return "Użyj: brak bezpośredniej akcji z ekwipunku (aktywacja opisowa)."
+
+
 def item_description(item) -> str:
     formatter = getattr(item, "ui_description", None)
     if callable(formatter):
         try:
-            return str(formatter())
+            base_desc = str(formatter())
+            use_desc = item_use_description(item)
+            if use_desc and use_desc not in base_desc:
+                return f"{use_desc}\n{base_desc}"
+            return base_desc
         except Exception:
             pass
     desc = str(getattr(item, "description", "") or "").strip()
+    use_desc = item_use_description(item)
+    if use_desc and desc:
+        return f"{use_desc}\n{desc}"
+    if use_desc:
+        return use_desc
     if desc:
         return desc
     return _item_label(item)
@@ -545,18 +1099,35 @@ def add_alchemical_item(
     actor,
     *,
     event_name: str,
+    alchemical_tier: str | None = None,
     preparation_counter: int = 0,
     prepared_by_quick_alchemy: bool = False,
     prepared_by_advanced_alchemy: bool = False,
 ) -> object:
     inventory = ensure_actor_inventory(actor)
+    raw_event = str(event_name or "").strip().lower().replace("-", "_").replace(" ", "_")
+    normalized_event = normalize_alchemical_event_id(event_name)
+    resolved_tier = str(alchemical_tier or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if resolved_tier not in {"lesser", "moderate", "greater", "major"}:
+        if "moderate" in raw_event:
+            resolved_tier = "moderate"
+        elif "greater" in raw_event:
+            resolved_tier = "greater"
+        elif "major" in raw_event:
+            resolved_tier = "major"
+        else:
+            resolved_tier = "lesser"
+    defaults = alchemical_item_defaults(normalized_event)
     item = AlchemicalItem(
-        item_id=f"alchemical:{event_name}",
-        name=alchemical_item_name_from_event(event_name),
-        event_name=str(event_name),
+        item_id=f"alchemical:{normalized_event}",
+        name=alchemical_item_name_from_event(normalized_event),
+        event_name=str(normalized_event),
+        alchemical_tier=resolved_tier,
         preparation_counter=max(0, int(preparation_counter or 0)),
         prepared_by_quick_alchemy=bool(prepared_by_quick_alchemy),
         prepared_by_advanced_alchemy=bool(prepared_by_advanced_alchemy),
+        price_cp=max(0, int(defaults.get("price_cp", 0) or 0)),
+        bulk=defaults.get("bulk", "L"),
     )
     inventory.append(item)
     try:
@@ -567,17 +1138,94 @@ def add_alchemical_item(
 
 
 def _alchemical_items_for_event(actor, event_name: str) -> list[object]:
-    event_key = str(event_name or "").strip().lower()
+    event_key = normalize_alchemical_event_id(event_name)
     if not event_key:
         return []
     items: list[object] = []
     for item in ensure_actor_inventory(actor):
         if not isinstance(item, AlchemicalItem):
             continue
-        if str(getattr(item, "event_name", "") or "").strip().lower() != event_key:
+        item_event = normalize_alchemical_event_id(getattr(item, "event_name", ""))
+        if item_event != event_key:
             continue
         items.append(item)
     return items
+
+
+def _items_for_event(actor, event_name: str) -> list[object]:
+    event_key = _normalize_event_name(event_name)
+    if not event_key:
+        return []
+    items: list[object] = []
+    for item in ensure_actor_inventory(actor):
+        item_event = _normalize_event_name(getattr(item, "event_name", ""))
+        if item_event != event_key:
+            continue
+        items.append(item)
+    return items
+
+
+def ready_event_items(actor, event_name: str) -> list[object]:
+    ready: list[object] = []
+    for item in _items_for_event(actor, event_name):
+        if int(getattr(item, "preparation_counter", 0) or 0) > 0:
+            continue
+        ready.append(item)
+    return ready
+
+
+def has_ready_event_item(actor, event_name: str) -> bool:
+    for item in _items_for_event(actor, event_name):
+        if int(getattr(item, "preparation_counter", 0) or 0) <= 0:
+            return True
+    return False
+
+
+def missing_event_item_reason(actor, event_name: str) -> str:
+    event_key = _normalize_event_name(event_name)
+    if not event_key:
+        return "Brak poprawnego event_name przedmiotu."
+    items = _items_for_event(actor, event_key)
+    if not items:
+        return f"Brak przedmiotu do akcji '{event_key}' w ekwipunku."
+    min_counter = min(max(0, int(getattr(item, "preparation_counter", 0) or 0)) for item in items)
+    if min_counter > 0:
+        return f"Przedmiot '{event_key}' nie jest jeszcze gotowy (pozostało tur: {min_counter})."
+    return f"Brak gotowego przedmiotu dla akcji '{event_key}'."
+
+
+def consume_ready_event_item(actor, event_name: str) -> bool:
+    inventory = ensure_actor_inventory(actor)
+    event_key = _normalize_event_name(event_name)
+    if not event_key:
+        return False
+    for item in list(inventory):
+        item_event = _normalize_event_name(getattr(item, "event_name", ""))
+        if item_event != event_key:
+            continue
+        if int(getattr(item, "preparation_counter", 0) or 0) > 0:
+            continue
+        inventory.remove(item)
+        try:
+            setattr(actor, "inventory", inventory)
+        except Exception:
+            pass
+        _refresh_bulk(actor, inventory=inventory)
+        return True
+    return False
+
+
+def consume_item_instance(actor, item) -> bool:
+    inventory = ensure_actor_inventory(actor)
+    if item not in inventory:
+        return False
+    inventory.remove(item)
+    try:
+        setattr(actor, "inventory", inventory)
+    except Exception:
+        pass
+    _refresh_bulk(actor, inventory=inventory)
+    return True
 
 
 def has_ready_alchemical_item(actor, event_name: str) -> bool:
@@ -601,22 +1249,7 @@ def missing_alchemical_item_reason(actor, event_name: str) -> str:
 
 
 def consume_ready_alchemical_item(actor, event_name: str) -> bool:
-    inventory = ensure_actor_inventory(actor)
-    event_key = str(event_name or "").strip().lower()
-    for item in list(inventory):
-        if not isinstance(item, AlchemicalItem):
-            continue
-        if str(getattr(item, "event_name", "") or "").strip().lower() != event_key:
-            continue
-        if int(getattr(item, "preparation_counter", 0) or 0) > 0:
-            continue
-        inventory.remove(item)
-        try:
-            setattr(actor, "inventory", inventory)
-        except Exception:
-            pass
-        return True
-    return False
+    return consume_ready_event_item(actor, normalize_alchemical_event_id(event_name))
 
 
 def tick_alchemical_preparation(actor) -> int:
@@ -640,20 +1273,32 @@ __all__ = [
     "add_alchemical_item",
     "add_item",
     "all_inventory_sections",
+    "assign_item_to_hand",
+    "consume_ammo",
+    "consume_ammo_for_weapon",
+    "consume_ready_event_item",
+    "consume_item_instance",
     "consume_ready_alchemical_item",
+    "count_ammo",
     "default_weapon_ids_for_actor",
     "ensure_actor_inventory",
     "get_equipped_weapons",
+    "hand_slots_snapshot",
     "has_ready_alchemical_item",
+    "has_ready_event_item",
     "inventory_index_of",
     "is_item_active",
     "item_category",
     "item_description",
     "item_label",
+    "item_use_description",
     "missing_alchemical_item_reason",
+    "missing_event_item_reason",
+    "ready_event_items",
     "remove_item",
     "set_equipped_weapons",
     "tick_alchemical_preparation",
     "toggle_item_activation",
     "transfer_item",
+    "weapon_ammo_label",
 ]

@@ -48,6 +48,14 @@ def _actor_id(actor) -> str | None:
     return getattr(actor, "object_id", None) or getattr(actor, "name", None) or str(actor)
 
 
+def _auto_cantrip_rank(actor) -> int:
+    try:
+        level = int(getattr(actor, "level", 1) or 1)
+    except Exception:
+        level = 1
+    return max(1, (max(1, level) + 1) // 2)
+
+
 def _apply_damage(target, amount: int, damage_type: str) -> bool:
     defeated = False
     apply = getattr(target, "apply_damage", None)
@@ -1029,13 +1037,14 @@ class AcidSplashEvent(BaseMagicAttackEvent):
     prompt = "Acid Splash - wystrzel bryzg kwasu w zasiegu 30 stop."
 
     def _resolve_on_target(self, target, pos, ctx: EventContext, *, critical: bool = False) -> EventResult:
+        spell_rank = _auto_cantrip_rank(ctx.actor)
         dmg = self._prompt_damage()
         dmg += int(inspire_courage_damage_bonus(ctx.actor) or 0)
         defeated = _apply_damage(target, dmg, DamageType.ACID.value)
 
         persistent_value = None
         if critical:
-            persistent_value = self._prompt_persistent(ctx.actor, DamageType.ACID.value)
+            persistent_value = self._prompt_persistent(ctx.actor, DamageType.ACID.value, spell_rank=spell_rank)
             if persistent_value and persistent_value > 0:
                 try:
                     target.add_status(make_persistent_damage(persistent_value, DamageType.ACID.value, source=self.name))
@@ -1074,11 +1083,17 @@ class AcidSplashEvent(BaseMagicAttackEvent):
         )
         return int(val or 0)
 
-    def _prompt_persistent(self, actor, damage_type: str) -> int:
+    def _prompt_persistent(self, actor, damage_type: str, *, spell_rank: int | None = None) -> int:
         from ui_client import get_ui_client
 
         ui = get_ui_client()
-        note = burn_it_prompt_note(actor, damage_type, persistent=True)
+        note = burn_it_prompt_note(
+            actor,
+            damage_type,
+            persistent=True,
+            source_kind="spell",
+            spell_rank=spell_rank,
+        )
         val = ui.prompt_roll(
             "Krytyk! Podaj wartosc persistent acid:",
             source="game",
@@ -1086,7 +1101,13 @@ class AcidSplashEvent(BaseMagicAttackEvent):
             answer_placeholder="Persistent acid",
             prompt_long=note,
         )
-        bonus = burn_it_bonus(actor, damage_type, persistent=True)
+        bonus = burn_it_bonus(
+            actor,
+            damage_type,
+            persistent=True,
+            source_kind="spell",
+            spell_rank=spell_rank,
+        )
         return int(val or 0) + int(bonus)
 
 
@@ -1106,7 +1127,7 @@ class DetectMagicEvent(MagicEvent):
         SpellTradition.OCCULT,
         SpellTradition.PRIMAL,
     )
-    spell_tags = ["cantrip", "arcane", "divine", "primal", "divination", "detect"]
+    spell_tags = ["cantrip", "arcane", "divine", "occult", "primal", "divination", "detect"]
     magic_types = ["divination"]
     prompt = "Detect Magic - wyczuj magiczne aury w poblizu."
 
@@ -1586,6 +1607,7 @@ class ProduceFlameEvent(BaseMagicAttackEvent):
             self.range_feet = current_range
 
     def _resolve_on_target(self, target, pos, ctx: EventContext, *, critical: bool = False) -> EventResult:
+        spell_rank = _auto_cantrip_rank(ctx.actor)
         damage = int(
             prompt_for_roll(
                 "Produce Flame - podaj obrazenia fire:",
@@ -1595,14 +1617,23 @@ class ProduceFlameEvent(BaseMagicAttackEvent):
             or 0
         )
         damage += int(inspire_courage_damage_bonus(ctx.actor) or 0)
-        damage += int(burn_it_bonus(ctx.actor, DamageType.FIRE.value, persistent=False) or 0)
+        damage += int(
+            burn_it_bonus(
+                ctx.actor,
+                DamageType.FIRE.value,
+                persistent=False,
+                source_kind="spell",
+                spell_rank=spell_rank,
+            )
+            or 0
+        )
         if critical:
             damage *= 2
 
         defeated = _apply_damage(target, damage, DamageType.FIRE.value)
         persistent = None
         if critical:
-            persistent = self._prompt_persistent(ctx.actor)
+            persistent = self._prompt_persistent(ctx.actor, spell_rank=spell_rank)
             if persistent and persistent > 0:
                 try:
                     target.add_status(make_persistent_damage(persistent, DamageType.FIRE.value, source=self.name))
@@ -1618,8 +1649,14 @@ class ProduceFlameEvent(BaseMagicAttackEvent):
             msg += " Cel pokonany."
         return EventResult(success=True, consumed_action=self.consumes_action, message=msg)
 
-    def _prompt_persistent(self, actor) -> int:
-        note = burn_it_prompt_note(actor, DamageType.FIRE.value, persistent=True)
+    def _prompt_persistent(self, actor, *, spell_rank: int | None = None) -> int:
+        note = burn_it_prompt_note(
+            actor,
+            DamageType.FIRE.value,
+            persistent=True,
+            source_kind="spell",
+            spell_rank=spell_rank,
+        )
         val = int(
             prompt_for_roll(
                 "Produce Flame - podaj persistent fire na krytyku:",
@@ -1629,7 +1666,16 @@ class ProduceFlameEvent(BaseMagicAttackEvent):
             )
             or 0
         )
-        return val + int(burn_it_bonus(actor, DamageType.FIRE.value, persistent=True) or 0)
+        return val + int(
+            burn_it_bonus(
+                actor,
+                DamageType.FIRE.value,
+                persistent=True,
+                source_kind="spell",
+                spell_rank=spell_rank,
+            )
+            or 0
+        )
 
 
 @register_event

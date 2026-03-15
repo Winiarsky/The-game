@@ -6,7 +6,7 @@ from ...magic_event import MagicEvent
 from ...spell_types import SpellTradition
 
 
-def _is_cleric(actor) -> bool:
+def _is_domain_focus_user(actor) -> bool:
     if actor is None:
         return False
     has_status = getattr(actor, "has_status", None)
@@ -16,11 +16,16 @@ def _is_cleric(actor) -> bool:
                 return True
         except Exception:
             pass
+        try:
+            if bool(has_status("deitys_domain")):
+                return True
+        except Exception:
+            pass
     for status in getattr(actor, "statuses", []) or []:
-        if getattr(status, "id", None) == "cleric":
+        if getattr(status, "id", None) in {"cleric", "deitys_domain"}:
             return True
     class_name = str(getattr(actor, "class_name", "") or "").strip().lower()
-    return class_name == "cleric"
+    return class_name in {"cleric", "champion"}
 
 
 def _focus_points(actor) -> int:
@@ -34,7 +39,8 @@ def _focus_points(actor) -> int:
 def _known_domain_spells(actor) -> list[tuple[str, str]]:
     known: list[tuple[str, str]] = []
     for status in getattr(actor, "statuses", []) or []:
-        if getattr(status, "id", None) != "domain_initiate":
+        status_id = str(getattr(status, "id", "") or "").strip().lower()
+        if status_id not in {"domain_initiate", "deitys_domain"}:
             continue
         data = getattr(status, "data", None) or {}
         domain = str(data.get("selected_domain", "") or "").strip().lower()
@@ -76,8 +82,8 @@ class DomainFocusSpellEvent(MagicEvent):
     name = "domain_focus_spell"
     consumes_action = False
     actions_cost = 1
-    default_tags = ["magic", "spell", "focus", "cleric", "domain"]
-    spell_tags = ["focus", "divine", "cleric", "domain"]
+    default_tags = ["magic", "spell", "focus", "cleric", "champion", "domain"]
+    spell_tags = ["focus", "divine", "cleric", "champion", "domain"]
     magic_traditions = (SpellTradition.DIVINE,)
     magic_types = ["focus"]
     prompt = "Choose one of your known domain focus spells and cast it."
@@ -86,8 +92,10 @@ class DomainFocusSpellEvent(MagicEvent):
         actor = ctx.actor
         if actor is None:
             return EventResult.cancelled(message="Domain Focus Spell: missing actor.")
-        if not _is_cleric(actor):
-            return EventResult.cancelled(message="Domain Focus Spell: only Cleric can use this action.")
+        if not _is_domain_focus_user(actor):
+            return EventResult.cancelled(
+                message="Domain Focus Spell: only Cleric or Champion with Deity's Domain can use this action."
+            )
 
         known = _known_domain_spells(actor)
         if not known:

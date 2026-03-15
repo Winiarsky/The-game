@@ -36,6 +36,16 @@ class DummyTarget:
         self.bonuses = bonuses or []
 
 
+class DummyDamageActor:
+    def __init__(self, *, str_mod=0, dex_mod=0):
+        self.str_mod = str_mod
+        self.dex_mod = dex_mod
+        self.ability_modifiers = {
+            "strength": str_mod,
+            "dexterity": dex_mod,
+        }
+
+
 def test_ac_with_bonuses_applies_extra_and_target_filters_target_id():
     attacker = DummyAttacker(object_id="hero-1")
     matching = BonusEffect(
@@ -84,3 +94,71 @@ def test_format_bonus_info_is_empty_without_bonuses():
 
     info = attack._format_bonus_info(attacker, "attack_melee")
     assert info == ""
+
+
+def test_attack_roll_stack_payload_contains_pf2_components():
+    attack = DummyAttack()
+    payload = attack._attack_roll_stack_payload(
+        weapon_attack_bonus={
+            "proficiency_bonus": 7,
+            "ability_bonus": 4,
+            "item_bonus": 1,
+            "rank": "trained",
+            "level": 5,
+            "rank_step": 2,
+            "ability_key": "strength",
+        },
+        modifier=2,
+    )
+    components = list(payload.get("components", []) or [])
+    ids = [str(item.get("id")) for item in components]
+    assert ids == ["proficiency", "ability", "item", "situational"]
+    values = {str(item.get("id")): int(item.get("value", 0) or 0) for item in components}
+    assert values["proficiency"] == 7
+    assert values["ability"] == 4
+    assert values["item"] == 1
+    assert values["situational"] == 2
+    assert int(payload.get("auto_total_modifier", 0) or 0) == 14
+
+
+def test_damage_roll_stack_payload_contains_pf2_components():
+    attack = DummyAttack()
+    actor = DummyDamageActor(str_mod=4)
+    payload = attack._damage_roll_stack_payload(
+        actor=actor,
+        damage_prompt="1k8 + STR",
+        extra_flat_bonus=3,
+    )
+    components = list(payload.get("components", []) or [])
+    ids = [str(item.get("id")) for item in components]
+    assert ids == ["ability", "item", "status", "circumstance", "other"]
+    values = {str(item.get("id")): int(item.get("value", 0) or 0) for item in components}
+    assert values["ability"] == 4
+    assert values["item"] == 0
+    assert values["status"] == 0
+    assert values["circumstance"] == 0
+    assert values["other"] == 3
+    assert int(payload.get("auto_total_modifier", 0) or 0) == 7
+
+
+def test_prompt_damage_roll_total_prefers_computed_total(monkeypatch):
+    attack = DummyAttack()
+    actor = DummyDamageActor(str_mod=4)
+
+    def _prompt(*_args, **_kwargs):
+        return {
+            "roll": 6,
+            "raw_roll": 6,
+            "modifier_delta": 2,
+            "computed_total": 15,
+        }
+
+    monkeypatch.setattr("GameObjects.events.attack.attack_base.prompt_for_roll", _prompt)
+
+    total = attack._prompt_damage_roll_total(
+        prompt="Obrażenia 1k8 + STR:",
+        actor=actor,
+        damage_prompt="1k8 + STR",
+        extra_flat_bonus=3,
+    )
+    assert total == 15

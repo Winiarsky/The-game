@@ -12,23 +12,23 @@ BARD_MUSE_EFFECTS = {
     "enigma": {
         "effect": "Odkrywasz tajemnice i sekrety rzeczywistosci.",
         "feat": "bardic_lore",
-        "feat_label": "Bardic Lore",
+        "feat_label": "Bardyczna wiedza",
         "spell": "true_strike",
-        "spell_label": "True Strike",
+        "spell_label": "Prawdziwy cios",
     },
     "maestro": {
         "effect": "Inspirujesz sojusznikow i doskonalisz wystepy.",
         "feat": "lingering_composition",
-        "feat_label": "Lingering Composition",
+        "feat_label": "Trwala kompozycja",
         "spell": "soothe",
-        "spell_label": "Soothe",
+        "spell_label": "Ukojenie",
     },
     "polymath": {
         "effect": "Laczysz wiele talentow i zainteresowan.",
         "feat": "versatile_performance",
-        "feat_label": "Versatile Performance",
+        "feat_label": "Wszechstronny wystep",
         "spell": "unseen_servant",
-        "spell_label": "Unseen Servant",
+        "spell_label": "Niewidzialny sluga",
     },
 }
 
@@ -54,4 +54,3 @@ __all__ = [
     "InspirationStatus",
     "INSPIRATION_STATUS",
 ]
-

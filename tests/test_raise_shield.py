@@ -14,7 +14,7 @@ from GameObjects.events.raise_shield_event import RaiseShieldEvent
 from GameObjects.events.base import EventContext
 from bonuses import BonusEffect, BonusType
 from GameObjects.interactions_mixin.bonus_mixin import BonusMixin
-from GameObjects.items.shield import StandardShield
+from GameObjects.items.shield import StandardShield, create_shield
 from states.combat import Combat
 from statuses import RAISE_SHIELD_ALLOW_STATUS
 
@@ -85,16 +85,33 @@ def test_raise_shield_adds_circumstance_bonus_and_clears_previous():
     assert len(bonuses2) == 1
 
 
-def test_raise_shield_requires_allow_status():
+def test_raise_tower_shield_adds_temporary_speed_penalty():
+    hero = DummyHero()
+    hero.add_status(RAISE_SHIELD_ALLOW_STATUS)
+    tower = create_shield("tower_shield")
+    assert tower is not None
+    hero.equipped_shield = tower
+    game = DummyGame(round_idx=4)
+    ctx = DummyCtx(game=game, actor=hero)
+
+    res = RaiseShieldEvent().execute(ctx)
+
+    assert res.success
+    penalties = [s for s in hero.statuses if getattr(s, "id", "") == "speed_penalty" and str(getattr(s, "source", "")).startswith("raise_shield:")]
+    assert penalties
+    data = getattr(penalties[0], "data", {}) or {}
+    assert int(data.get("speed_penalty_feet", 0) or 0) == 5
+
+
+def test_raise_shield_works_without_raise_shield_allow_status():
     hero = DummyHero()
     game = DummyGame(round_idx=2)
     ctx = DummyCtx(game=game, actor=hero)
     event = RaiseShieldEvent()
 
     res = event.execute(ctx)
-    assert not res.success
-    assert res.consumed_action is False
-    assert "raise_shield_allow" in (res.message or "").lower()
+    assert res.success
+    assert res.consumed_action is True
 
 
 def test_raise_shield_requires_equipped_shield():

@@ -6,9 +6,9 @@ from statuses.base import Status
 from statuses.check_effects import CheckEffect
 
 SEER_ELF_DESCRIPTION = (
-    "Wrodzona magia: Detect Magic (arcane innate, at-will).\n"
-    "Otrzymujesz +1 circumstance do Identify Magic oraz do Decipher Writing "
-    "dotyczącego magii (Arcana, Nature, Occultism, Religion).\n"
+    "Wrodzona magia: Detect Magic (wrodzony czar tradycji arcane, at-will).\n"
+    "Otrzymujesz +1 circumstance do identyfikacji magii i rozszyfrowywania "
+    "magicznych zapisow (Arcana, Nature, Occultism, Religion).\n"
     "W tym silniku bonus działa przez tagi checka: identify_magic oraz "
     "decipher_writing+magic."
 )

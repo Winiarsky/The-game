@@ -4,8 +4,8 @@ from statuses.base import Status
 
 NOMADIC_HALFLING_DESCRIPTION = (
     "Twoi przodkowie przez pokolenia podróżowali z miejsca na miejsce.\n"
-    "Zyskujesz 2 dodatkowe języki (dowolne common/uncommon, do których masz dostęp).\n"
-    "Za każdym razem, gdy bierzesz feat Multilingual, zyskujesz 1 dodatkowy język więcej."
+    "Zyskujesz 2 dodatkowe jezyki (dowolne powszechne/rzadkie, do ktorych masz dostep).\n"
+    "Za kazdym razem, gdy bierzesz feat Multilingual, zyskujesz 1 dodatkowy jezyk wiecej."
 )
 
 

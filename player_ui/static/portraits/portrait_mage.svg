@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Portret maga">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2A2148"/>
+      <stop offset="100%" stop-color="#5C4E91"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <circle cx="256" cy="210" r="74" fill="#DFC0A0"/>
+  <path d="M116 470c24-90 78-138 140-138s114 48 140 138H116z" fill="#2B2553"/>
+  <path d="M256 64l88 118h-176L256 64z" fill="#D9D1F4"/>
+  <path d="M256 88l54 72h-108l54-72z" fill="#F4F2FF"/>
+  <rect x="224" y="190" width="64" height="20" rx="10" fill="#3A3366"/>
+  <circle cx="238" cy="214" r="7" fill="#1C182E"/>
+  <circle cx="274" cy="214" r="7" fill="#1C182E"/>
+  <circle cx="398" cy="102" r="18" fill="#EBD8FF" opacity="0.85"/>
+  <circle cx="430" cy="142" r="10" fill="#F3E9FF" opacity="0.8"/>
+  <circle cx="372" cy="148" r="8" fill="#E5CDFF" opacity="0.7"/>
+</svg>

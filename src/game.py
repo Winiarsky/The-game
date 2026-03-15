@@ -1,7 +1,11 @@
 import json
+import copy
 import sys
 from pathlib import Path
 import logging
+import os
+import time
+from collections import deque
 from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -20,8 +24,9 @@ from GameObjects.Obstacles.basic_obstacle import Obstacle
 from GameObjects.Terrains.basic_terrain import BasicTerrain
 from GameObjects.Walls.basic_wall import Wall, Mur
 from board_grid import BoardGrid
-from object_registry import get_object
-from ui_client import get_ui_client
+from object_registry import OBJECT_REGISTRY, get_object
+from ui_client import UndoRequested, get_ui_client
+from debug_trace import DebugTrace
 
 try:
     from game_objects_loader import scan_game_objects
@@ -43,12 +48,17 @@ class Game:
             self.config = json.load(config_file)
         self.conn: Connection = self._init_connection() if conn is None else conn
         self.ui = get_ui_client()
+        self.debug_trace: DebugTrace | None = None
+        self._init_debug_trace(scenario)
         from action_events import ActionEventBus
         self.events = ActionEventBus(self)
+        self._attach_debug_event_listener()
         self.heroes: list[Hero] = []
         self.enemies: list[Enemy] = []
         self.board = self._init_board()
         self.state: State = Start(self)
+        self._init_debug_undo()
+        self._install_ui_prompt_trace_hooks()
         
 
     def _init_board(self) -> BoardGrid:
@@ -106,8 +116,12 @@ class Game:
             if not isinstance(cls, type):
                 logger.error("logic_cls %s nie jest klasą", cls)
                 return None
-            # użyj default_config obiektu, jeśli brak/empty config
-            effective_cfg = cfg if cfg not in (None, {}) else (default_cfg or {})
+            # Scal default_config z configiem instancji:
+            # - defaulty zapewniają pełną konfigurację obiektu (np. inventory handlarza),
+            # - wpisy instancji nadpisują tylko to, co scenariusz chce zmienić.
+            effective_cfg: dict[str, Any] = dict(default_cfg or {})
+            if isinstance(cfg, dict):
+                effective_cfg.update(cfg)
             try:
                 return cls(**effective_cfg)
             except TypeError as exc:
@@ -234,12 +248,60 @@ class Game:
             )
 
         current_state = self.state
-        result: Any = action(*args, **kwargs)
+        t0 = time.perf_counter()
+        self._capture_undo_snapshot(action_name)
+        if self.debug_trace is not None:
+            self.debug_trace.write(
+                "run_action_start",
+                action_name=action_name,
+                state_before=current_state.__class__.__name__,
+                args=args,
+                kwargs=kwargs,
+            )
+        try:
+            result: Any = action(*args, **kwargs)
+        except UndoRequested as undo_exc:
+            restored = self.undo_last_action(reason=f"prompt:{undo_exc.command}")
+            if self.debug_trace is not None:
+                self.debug_trace.write(
+                    "run_action_undo",
+                    action_name=action_name,
+                    command=undo_exc.command,
+                    restored=bool(restored),
+                    duration_ms=round((time.perf_counter() - t0) * 1000, 3),
+                    snapshot=self.debug_trace.snapshot_game(self),
+                )
+            if not restored:
+                self.ui_log("Debug: brak snapshotu do cofnięcia.", level="warning", tag="Debug")
+            return None
+        except Exception as exc:
+            if self.debug_trace is not None:
+                self.debug_trace.write_exception(
+                    "run_action",
+                    exc,
+                    action_name=action_name,
+                    state_before=current_state.__class__.__name__,
+                    duration_ms=round((time.perf_counter() - t0) * 1000, 3),
+                    snapshot=self.debug_trace.snapshot_game(self),
+                )
+            raise
+        self._cleanup_defeated_enemies_after_action(source=f"action:{action_name}")
 
         # Jeśli stan został zmieniony w trakcie akcji (np. trigger combat), nie nadpisuj go wynikiem.
         if self.state is not current_state:
             logger.debug("Stan zmienił się w trakcie akcji (%s -> %s); pomijam wynik %s.",
                          current_state.__class__.__name__, self.state.__class__.__name__, result)
+            if self.debug_trace is not None:
+                self.debug_trace.write(
+                    "run_action_end",
+                    action_name=action_name,
+                    duration_ms=round((time.perf_counter() - t0) * 1000, 3),
+                    state_before=current_state.__class__.__name__,
+                    state_after=self.state.__class__.__name__,
+                    state_changed=True,
+                    result=result,
+                    snapshot=self.debug_trace.snapshot_game(self),
+                )
             return result
 
         if isinstance(result, State) and result is not self.state:
@@ -247,16 +309,38 @@ class Game:
             self.state = result.set_context(self)
             self.state.on_enter()
 
+        if self.debug_trace is not None:
+            self.debug_trace.write(
+                "run_action_end",
+                action_name=action_name,
+                duration_ms=round((time.perf_counter() - t0) * 1000, 3),
+                state_before=current_state.__class__.__name__,
+                state_after=self.state.__class__.__name__,
+                state_changed=self.state is not current_state,
+                result=result,
+                snapshot=self.debug_trace.snapshot_game(self),
+            )
         return result
 
     def find_object(self, object_id: str):
         """Szybkie wyszukiwanie obiektu po jego globalnym id."""
         return get_object(object_id)
 
+    def _cleanup_defeated_enemies_after_action(self, *, source: str) -> None:
+        try:
+            from combat.damage_utils import cleanup_defeated_enemies
+
+            cleanup_defeated_enemies(self, source=source)
+        except Exception:
+            return
+
     def start_combat(self, trigger: object | None = None) -> None:
         """Wejście w stan walki (ignorowane, jeśli już walczymy)."""
         if isinstance(self.state, Combat):
             logger.info("Walka już trwa – ignoruję wywołanie.")
+            return
+        if not self._has_combat_ready_enemies():
+            logger.info("Brak żywych przeciwników na planszy – pomijam wejście w walkę.")
             return
         if not isinstance(self.state, State):
             logger.error("Brak aktywnego stanu – nie mogę rozpocząć walki.")
@@ -265,9 +349,35 @@ class Game:
         self.state = Combat(self)
         self.state.on_enter()
 
+    @staticmethod
+    def _is_enemy_combat_ready(enemy: object) -> bool:
+        """Zwraca True dla przeciwnika, który realnie może rozpocząć walkę."""
+        if enemy is None:
+            return False
+        if getattr(enemy, "position", None) is None:
+            return False
+        try:
+            if int(getattr(enemy, "hp", 1) or 0) <= 0:
+                return False
+        except Exception:
+            pass
+        has_status = getattr(enemy, "has_status", None)
+        if callable(has_status):
+            try:
+                if bool(has_status("dead")):
+                    return False
+            except Exception:
+                pass
+        return True
+
+    def _has_combat_ready_enemies(self) -> bool:
+        return any(self._is_enemy_combat_ready(enemy) for enemy in getattr(self, "enemies", []) or [])
+
     # --- UI helpery ---
     def ui_event(self, event_type: str, payload: dict[str, Any]) -> bool:
         """Bezpieczne wysyłanie eventów do UI (ignoruje brak UI)."""
+        if self.debug_trace is not None:
+            self.debug_trace.write("ui_event", ui_event_type=event_type, payload=payload)
         try:
             if not getattr(self, "ui", None) or not self.ui.enabled:
                 return False
@@ -284,6 +394,14 @@ class Game:
         image: str | None = None,
     ) -> None:
         """Wyślij komunikat do logów UI (opcjonalnie z levelem, tagiem lub obrazkiem)."""
+        if self.debug_trace is not None:
+            self.debug_trace.write(
+                "ui_log",
+                message=message,
+                level=level,
+                tag=tag,
+                image=image,
+            )
         payload: dict[str, Any] = {"message": message}
         if level:
             payload["level"] = level
@@ -294,21 +412,151 @@ class Game:
         self.ui_event("log", payload)
 
     def ui_hero(self, hero: Hero, note: str | None = None) -> None:
+        hand_slots: dict[str, Any] | None = None
+        coin_pouch: dict[str, int] | None = None
+        money_text: str | None = None
+        bulk_summary: dict[str, Any] | None = None
+        inventory_items: list[str] = []
+        try:
+            from GameObjects.items.inventory import hand_slots_snapshot
+
+            hand_slots = hand_slots_snapshot(hero)
+        except Exception:
+            hand_slots = None
+        try:
+            from economy import actor_bulk_summary, ensure_actor_coin_pouch, format_actor_money
+
+            coin_pouch = ensure_actor_coin_pouch(hero, default_gp=int(getattr(hero, "starting_gold_gp", 0) or 0))
+            money_text = format_actor_money(hero)
+            bulk_summary = actor_bulk_summary(hero)
+        except Exception:
+            coin_pouch = None
+            money_text = None
+            bulk_summary = None
+        try:
+            for item in list(getattr(hero, "inventory", []) or []):
+                label = str(getattr(item, "name", "") or getattr(item, "item_id", "") or "").strip()
+                if label:
+                    inventory_items.append(label)
+        except Exception:
+            inventory_items = []
+
         statuses = getattr(hero, "statuses", [])
         if hasattr(hero, "status_labels"):
             try:
                 statuses = hero.status_labels()  # type: ignore[attr-defined]
             except Exception:
                 statuses = getattr(hero, "statuses", [])
+        background_label = None
+        background_feat_id = None
+        background_ability_boosts_ui = None
+        background_skill_training_ui = None
+        for status in list(getattr(hero, "statuses", []) or []):
+            data = getattr(status, "data", None) or {}
+            if not bool(data.get("is_background")):
+                continue
+            background_label = data.get("background_label") or getattr(status, "label", None) or getattr(status, "id", None)
+            background_feat_id = data.get("background_feat_id")
+            background_ability_boosts_ui = data.get("background_ability_boosts_ui")
+            background_skill_training_ui = data.get("background_skill_training_ui")
+            break
+        if not background_label:
+            raw_background_id = str(getattr(hero, "background_id", "") or "").strip().lower()
+            if raw_background_id:
+                try:
+                    from localization import localize_term_pl
+
+                    background_label = (
+                        localize_term_pl(raw_background_id)
+                        or localize_term_pl(f"background_{raw_background_id}")
+                        or raw_background_id.replace("_", " ").strip().title()
+                    )
+                except Exception:
+                    background_label = raw_background_id.replace("_", " ").strip().title()
+        core_skill_ids = (
+            "acrobatics",
+            "arcana",
+            "athletics",
+            "crafting",
+            "deception",
+            "diplomacy",
+            "intimidation",
+            "medicine",
+            "nature",
+            "occultism",
+            "performance",
+            "religion",
+            "society",
+            "stealth",
+            "survival",
+            "thievery",
+        )
+
+        def _normalize_skill_id(value: object) -> str:
+            return str(value or "").strip().lower()
+
+        raw_skill_ranks = getattr(hero, "skill_ranks", {}) or {}
+        normalized_skill_ranks: dict[str, str] = {}
+        if isinstance(raw_skill_ranks, dict):
+            for key, rank in raw_skill_ranks.items():
+                skill_id = _normalize_skill_id(key)
+                if skill_id in core_skill_ids:
+                    normalized_skill_ranks[skill_id] = str(rank or "untrained").strip().lower()
+
+        trained_skills = {
+            _normalize_skill_id(item)
+            for item in list(getattr(hero, "trained_skills", []) or [])
+            if _normalize_skill_id(item) in core_skill_ids
+        }
+
+        if not normalized_skill_ranks and not trained_skills:
+            for skill_id in core_skill_ids:
+                if bool(getattr(hero, f"{skill_id}_trained", False)):
+                    trained_skills.add(skill_id)
+
+        if not normalized_skill_ranks and trained_skills:
+            normalized_skill_ranks = {skill_id: "trained" for skill_id in trained_skills}
+        if not trained_skills and normalized_skill_ranks:
+            trained_skills = {
+                skill_id
+                for skill_id, rank in normalized_skill_ranks.items()
+                if str(rank or "untrained").strip().lower() != "untrained"
+            }
         hero_id = getattr(hero, "object_id", None) or getattr(hero, "name", "Bohater")
         payload = {
             "id": hero_id,
+            "character_id": getattr(hero, "character_id", None),
             "name": getattr(hero, "name", None) or hero_id,
+            "image": getattr(hero, "image", None),
             "statuses": statuses,
             "note": note,
             "pos": getattr(hero, "position", None),
             "wounds": getattr(hero, "wounds", None),
             "initiative": getattr(hero, "initiative", None),
+            "class_id": getattr(hero, "class_id", None) or getattr(hero, "class_name", None),
+            "ancestry_id": getattr(hero, "ancestry_id", None),
+            "heritage_id": getattr(hero, "heritage_id", None),
+            "ac": getattr(hero, "ac", None),
+            "max_hp": getattr(hero, "max_hp", None),
+            "base_speed_feet": getattr(hero, "base_speed_feet", None),
+            "ability_scores": getattr(hero, "ability_scores", None),
+            "ability_modifiers": getattr(hero, "ability_modifiers", None),
+            "skill_ranks": normalized_skill_ranks,
+            "save_ranks": getattr(hero, "save_ranks", None),
+            "perception_rank": getattr(hero, "perception_rank", None),
+            "trained_skills": sorted(trained_skills),
+            "lore_skills": getattr(hero, "lore_skills", None),
+            "background_label": background_label,
+            "background_feat_id": background_feat_id,
+            "background_ability_boosts_ui": background_ability_boosts_ui,
+            "background_skill_training_ui": background_skill_training_ui,
+            "preview_barbarian_instinct_id": getattr(hero, "preview_barbarian_instinct_id", None),
+            "creation_in_progress": bool(getattr(hero, "character_creation_in_progress", False)),
+            "hand_slots": hand_slots,
+            "coin_pouch": coin_pouch,
+            "money_text": money_text,
+            "bulk_summary": bulk_summary,
+            "inventory_items": list(inventory_items),
         }
         self.ui_event("hero_snapshot", payload)
 
@@ -317,12 +565,16 @@ class Game:
         if actor is None:
             payload = {"id": None, "name": None, "kind": None}
         else:
+            is_hero_actor = (
+                actor in getattr(self, "heroes", [])
+                or isinstance(actor, Hero)
+                or bool(getattr(actor, "character_creation_in_progress", False))
+            )
+            is_enemy_actor = actor in getattr(self, "enemies", [])
             payload = {
                 "id": getattr(actor, "object_id", None) or getattr(actor, "name", str(id(actor))),
                 "name": getattr(actor, "name", None) or getattr(actor, "object_id", "Aktor"),
-                "kind": "hero"
-                if actor in getattr(self, "heroes", [])
-                else ("enemy" if actor in getattr(self, "enemies", []) else None),
+                "kind": "hero" if is_hero_actor else ("enemy" if is_enemy_actor else None),
             }
         self.ui_event("active_actor_changed", payload)
 
@@ -332,3 +584,283 @@ class Game:
         if text:
             payload["text"] = text
         self.ui_event("idle_hint", payload)
+
+    # --- Debug undo ---
+    def _init_debug_undo(self) -> None:
+        enabled = str(os.environ.get("GAME_DEBUG_UNDO", "1")).strip().lower() not in {"0", "false", "no"}
+        limit_raw = str(os.environ.get("GAME_DEBUG_UNDO_LIMIT", "60")).strip()
+        try:
+            limit = max(1, int(limit_raw))
+        except Exception:
+            limit = 60
+        self._debug_undo_enabled = bool(enabled)
+        self._debug_undo_limit = int(limit)
+        self._debug_undo_stack: deque[dict[str, Any]] = deque(maxlen=self._debug_undo_limit)
+
+    def _capture_undo_snapshot(self, action_name: str) -> None:
+        if not bool(getattr(self, "_debug_undo_enabled", False)):
+            return
+        try:
+            state_payload = {
+                "state_class": self.state.__class__,
+                "state_data": {
+                    key: value
+                    for key, value in dict(getattr(self.state, "__dict__", {}) or {}).items()
+                    if key != "game"
+                },
+                "heroes": list(self.heroes),
+                "enemies": list(self.enemies),
+                "board": self.board,
+            }
+            cloned = copy.deepcopy(state_payload)
+            self._debug_undo_stack.append(
+                {
+                    "action_name": str(action_name),
+                    "created_at": time.time(),
+                    "state": cloned,
+                }
+            )
+            if self.debug_trace is not None:
+                self.debug_trace.write(
+                    "undo_snapshot_saved",
+                    action_name=action_name,
+                    stack_size=len(self._debug_undo_stack),
+                )
+        except Exception as exc:
+            logger.debug("Nie udało się zapisać snapshotu undo: %s", exc, exc_info=True)
+
+    def undo_last_action(self, *, reason: str | None = None) -> bool:
+        if not bool(getattr(self, "_debug_undo_enabled", False)):
+            return False
+        stack = getattr(self, "_debug_undo_stack", None)
+        if not stack:
+            return False
+        try:
+            entry = stack.pop()
+        except Exception:
+            return False
+        state_blob = entry.get("state") if isinstance(entry, dict) else None
+        if not isinstance(state_blob, dict):
+            return False
+        try:
+            state_class = state_blob.get("state_class")
+            state_data = dict(state_blob.get("state_data") or {})
+            heroes = list(state_blob.get("heroes") or [])
+            enemies = list(state_blob.get("enemies") or [])
+            board = state_blob.get("board")
+            if state_class is None or board is None:
+                return False
+
+            self.heroes = heroes
+            self.enemies = enemies
+            self.board = board
+
+            restored_state = state_class(self).set_context(self)
+            restored_state.__dict__.update(state_data)
+            restored_state.set_context(self)
+            self.state = restored_state
+            self._rebuild_object_registry_after_undo()
+
+            self._refresh_ui_after_undo(entry)
+            if self.debug_trace is not None:
+                self.debug_trace.write(
+                    "undo_applied",
+                    action_name=entry.get("action_name"),
+                    reason=reason,
+                    stack_size=len(self._debug_undo_stack),
+                    snapshot=self.debug_trace.snapshot_game(self),
+                )
+            return True
+        except Exception as exc:
+            logger.debug("Undo restore failed: %s", exc, exc_info=True)
+            return False
+
+    def _refresh_ui_after_undo(self, entry: dict[str, Any]) -> None:
+        action_name = str(entry.get("action_name") or "?")
+        self.ui_log(f"Debug: cofnięto stan o 1 akcję (przed: {action_name}).", tag="Debug")
+        for hero in list(getattr(self, "heroes", []) or []):
+            try:
+                self.ui_hero(hero, note="Debug rollback")
+            except Exception:
+                continue
+        active_actor = None
+        current_actor_fn = getattr(self.state, "_current_actor", None)
+        if callable(current_actor_fn):
+            try:
+                active_actor = current_actor_fn()
+            except Exception:
+                active_actor = None
+        if active_actor is None:
+            active_actor = getattr(self.state, "active_hero", None) or getattr(self.state, "active_actor", None)
+        self.ui_active_actor(active_actor)
+        initiative_fn = getattr(self.state, "_send_initiative_event", None)
+        if callable(initiative_fn):
+            try:
+                initiative_fn()
+            except Exception:
+                pass
+        state_name = self.state.__class__.__name__
+        self.ui_idle_hint("Debug rollback", f"Stan przywrócony. Aktualny stan: {state_name}.")
+
+    def _rebuild_object_registry_after_undo(self) -> None:
+        try:
+            OBJECT_REGISTRY.clear()
+        except Exception:
+            return
+
+        def _register(obj: Any) -> None:
+            oid = str(getattr(obj, "object_id", "") or "").strip()
+            if not oid:
+                return
+            try:
+                OBJECT_REGISTRY.register(obj, oid)
+            except Exception:
+                pass
+
+        for actor in list(getattr(self, "heroes", []) or []) + list(getattr(self, "enemies", []) or []):
+            _register(actor)
+
+        board = getattr(self, "board", None)
+        if board is None:
+            return
+        rows = int(getattr(board, "rows", 0) or 0)
+        cols = int(getattr(board, "cols", 0) or 0)
+        for row in range(rows):
+            for col in range(cols):
+                pos = (col, row)
+                try:
+                    cell = board.cell_at(pos)
+                except Exception:
+                    continue
+                _register(getattr(cell, "field", None))
+                _register(getattr(cell, "occupant", None))
+                for interactable in list(getattr(cell, "interactables", []) or []):
+                    _register(interactable)
+        for objects in list(getattr(board, "edge_interactables", {}).values() or []):
+            for obj in list(objects or []):
+                _register(obj)
+        for wall in list(getattr(board, "walls", {}).values() or []):
+            _register(wall)
+
+    # --- Debug trace ---
+    def _init_debug_trace(self, scenario: str) -> None:
+        enabled = str(os.environ.get("GAME_DEBUG_TRACE", "1")).strip().lower() not in {"0", "false", "no"}
+        if not enabled:
+            self.debug_trace = None
+            return
+        try:
+            trace_dir_raw = str(os.environ.get("GAME_DEBUG_TRACE_DIR", "")).strip()
+            trace_dir = Path(trace_dir_raw) if trace_dir_raw else (PROJECT_ROOT / "data" / "debug_sessions")
+            self.debug_trace = DebugTrace(trace_dir)
+            self.debug_trace.write(
+                "session_start",
+                scenario=scenario,
+                cwd=str(PROJECT_ROOT),
+            )
+            self.ui_event(
+                "info",
+                {
+                    "message": f"Sesja debug: {self.debug_trace.session_id}",
+                    "source": "debug",
+                },
+            )
+            self.ui_log(f"Sesja debug: {self.debug_trace.session_id}", tag="Debug")
+        except Exception as exc:
+            logger.debug("Nie udało się zainicjalizować DebugTrace: %s", exc, exc_info=True)
+            self.debug_trace = None
+
+    @staticmethod
+    def _trace_actor_ref(obj: Any) -> dict[str, Any] | None:
+        if obj is None:
+            return None
+        return {
+            "id": getattr(obj, "object_id", None) or getattr(obj, "name", None) or str(obj),
+            "name": getattr(obj, "name", None),
+            "pos": getattr(obj, "position", None),
+            "kind": getattr(obj, "__class__", type("", (), {})).__name__,
+        }
+
+    def _attach_debug_event_listener(self) -> None:
+        if self.debug_trace is None:
+            return
+
+        def _listener(event: dict[str, Any]) -> None:
+            try:
+                safe_event = dict(event)
+                for key in ("actor", "target"):
+                    if key in safe_event:
+                        safe_event[key] = self._trace_actor_ref(safe_event[key])
+                self.debug_trace.write("action_bus_event", event=safe_event)
+            except Exception:
+                logger.debug("DebugTrace: błąd listenera eventów.", exc_info=True)
+
+        try:
+            self.events.add_listener(_listener)
+        except Exception:
+            logger.debug("Nie udało się podpiąć listenera DebugTrace.", exc_info=True)
+
+    def _install_ui_prompt_trace_hooks(self) -> None:
+        if self.debug_trace is None:
+            return
+        ui = getattr(self, "ui", None)
+        if ui is None:
+            return
+        if bool(getattr(ui, "_debug_trace_wrapped", False)):
+            return
+
+        methods = (
+            "prompt_roll",
+            "prompt_choice",
+            "prompt_info",
+            "prompt_file_image",
+            "prompt_action_select",
+        )
+
+        for method_name in methods:
+            original = getattr(ui, method_name, None)
+            if not callable(original):
+                continue
+
+            def _make_wrapper(orig_fn, meth: str):
+                def _wrapped(*args, **kwargs):
+                    started = time.perf_counter()
+                    prompt = args[0] if args else kwargs.get("prompt") or kwargs.get("title")
+                    if self.debug_trace is not None:
+                        self.debug_trace.write(
+                            "prompt_start",
+                            method=meth,
+                            prompt=prompt,
+                            kwargs=kwargs,
+                        )
+                    try:
+                        answer = orig_fn(*args, **kwargs)
+                    except Exception as exc:
+                        if self.debug_trace is not None:
+                            self.debug_trace.write_exception(
+                                f"ui.{meth}",
+                                exc,
+                                prompt=prompt,
+                                duration_ms=round((time.perf_counter() - started) * 1000, 3),
+                            )
+                        raise
+                    if self.debug_trace is not None:
+                        self.debug_trace.write(
+                            "prompt_answer",
+                            method=meth,
+                            prompt=prompt,
+                            answer=answer,
+                            duration_ms=round((time.perf_counter() - started) * 1000, 3),
+                        )
+                    return answer
+
+                return _wrapped
+
+            try:
+                setattr(ui, method_name, _make_wrapper(original, method_name))
+            except Exception:
+                logger.debug("DebugTrace: nie udało się owinąć %s.", method_name, exc_info=True)
+
+        try:
+            setattr(ui, "_debug_trace_wrapped", True)
+        except Exception:
+            pass

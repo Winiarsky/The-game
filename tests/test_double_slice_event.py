@@ -176,10 +176,10 @@ def test_double_slice_merges_damage_and_applies_resistance_once(monkeypatch):
     result = dispatch_event("double_slice", _ctx(game, hero))
 
     assert result.success is True
-    # RAW: sword (slashing) + dagger (piercing) to dwa komponenty,
-    # więc odporność 5 działa osobno na każdy: (10-5) + (8-5) = 8 obrażeń.
-    assert enemy.hp == 32
-    assert enemy.apply_calls == 2
+    # Double Slice łączy obrażenia i rozlicza je jednorazowo:
+    # (10 + 8) - 5 = 13 obrażeń.
+    assert enemy.hp == 27
+    assert enemy.apply_calls == 1
     assert (result.data or {}).get("damage_components") == [("slashing", 10), ("piercing", 8)]
 
 
@@ -212,3 +212,85 @@ def test_double_slice_precision_choice_uses_ui_prompt(monkeypatch):
     assert enemy.hp == 27
     assert ui.prompt_calls == 1
     assert (result.data or {}).get("precision_choice") == "second"
+
+
+def test_double_slice_non_agile_offhand_uses_status_penalty_and_counts_two_attacks(monkeypatch):
+    ui = FakeUI()
+    hero = Hero((0, 0))
+    _equip_two_weapons(hero)
+    # Dagger zwykle jest agile; usuwamy trait, żeby sprawdzić karę -2 status.
+    hero.inventory[1].traits = tuple(t for t in (hero.inventory[1].traits or ()) if str(t).strip().lower() != "agile")
+    enemy = Enemy((1, 0), hp=40, ac=30, resistance_per_call=0)
+    game = FakeGame(ui)
+    game.heroes = [hero]
+    game.enemies = [enemy]
+    game.state.base_order = [hero, enemy]
+    game.state.round_queue = [hero, enemy]
+    game.state.base_initiative[hero] = 15
+    game.state.base_initiative[enemy] = 10
+    game.board.occupants = {hero.position: hero, enemy.position: enemy}
+    game.conn.choice = enemy.position
+
+    captured_modifiers = []
+
+    def _prompt(*args, **kwargs):
+        prompt = str(args[0] if args else "")
+        if prompt.startswith("Atak "):
+            captured_modifiers.append(dict(kwargs.get("modifiers") or {}))
+        return 10
+
+    monkeypatch.setattr(basic_melee_attack_event, "prompt_for_roll", _prompt)
+    monkeypatch.setattr(basic_melee_attack_event, "refresh_flanking_statuses", lambda *_a, **_k: None)
+    monkeypatch.setattr(fighter_feat_events, "refresh_flanking_statuses", lambda *_a, **_k: None)
+
+    result = dispatch_event("double_slice", _ctx(game, hero))
+    assert result.success is True
+    assert len(captured_modifiers) >= 2
+
+    second_attack_mods = captured_modifiers[1]
+    assert any(int(item.get("value", 0) or 0) == 2 for item in (second_attack_mods.get("penStat") or []))
+    assert not any(int(item.get("value", 0) or 0) == 2 for item in (second_attack_mods.get("penCirc") or []))
+
+    attack_state = dict(game.state.attack_state.get(hero, {}) or {})
+    assert int(attack_state.get("attacks_this_turn", 0) or 0) == 2
+
+    dispatch_event("sword", _ctx(game, hero))
+    assert len(captured_modifiers) >= 3
+    third_attack_mods = captured_modifiers[2]
+    assert any(int(item.get("value", 0) or 0) == 10 for item in (third_attack_mods.get("penCirc") or []))
+
+
+def test_double_slice_agile_offhand_has_no_extra_penalty(monkeypatch):
+    ui = FakeUI()
+    hero = Hero((0, 0))
+    _equip_two_weapons(hero)  # second weapon (dagger) ma agile
+    enemy = Enemy((1, 0), hp=40, ac=30, resistance_per_call=0)
+    game = FakeGame(ui)
+    game.heroes = [hero]
+    game.enemies = [enemy]
+    game.state.base_order = [hero, enemy]
+    game.state.round_queue = [hero, enemy]
+    game.state.base_initiative[hero] = 15
+    game.state.base_initiative[enemy] = 10
+    game.board.occupants = {hero.position: hero, enemy.position: enemy}
+    game.conn.choice = enemy.position
+
+    captured_modifiers = []
+
+    def _prompt(*args, **kwargs):
+        prompt = str(args[0] if args else "")
+        if prompt.startswith("Atak "):
+            captured_modifiers.append(dict(kwargs.get("modifiers") or {}))
+        return 10
+
+    monkeypatch.setattr(basic_melee_attack_event, "prompt_for_roll", _prompt)
+    monkeypatch.setattr(basic_melee_attack_event, "refresh_flanking_statuses", lambda *_a, **_k: None)
+    monkeypatch.setattr(fighter_feat_events, "refresh_flanking_statuses", lambda *_a, **_k: None)
+
+    result = dispatch_event("double_slice", _ctx(game, hero))
+    assert result.success is True
+    assert len(captured_modifiers) >= 2
+
+    second_attack_mods = captured_modifiers[1]
+    assert not any(int(item.get("value", 0) or 0) == 2 for item in (second_attack_mods.get("penStat") or []))
+    assert not any(int(item.get("value", 0) or 0) == 2 for item in (second_attack_mods.get("penCirc") or []))

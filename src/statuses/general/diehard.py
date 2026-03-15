@@ -3,13 +3,12 @@ from __future__ import annotations
 from statuses.base import Status
 
 DIEHARD_DESCRIPTION = (
-    "Umierasz dopiero na dying 5 zamiast dying 4. "
-    "Na razie licz recznie."
+    "Umierasz dopiero na dying 5 zamiast dying 4 (wdrozone mechanicznie)."
 )
 
 
 def DiehardStatus() -> Status:
-    """Feat: Diehard (opis do UI)."""
+    """Feat: Diehard."""
     return Status(
         id="diehard",
         label="Diehard",

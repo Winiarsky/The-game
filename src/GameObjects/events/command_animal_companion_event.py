@@ -155,7 +155,7 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
             except Exception:
                 pass
 
-        summary = " | ".join(action_logs) if action_logs else "Animal Companion wykonuje komende."
+        summary = "; ".join(action_logs) if action_logs else "Animal Companion wykonuje komende."
         return EventResult(success=True, consumed_action=True, message=summary)
 
     def _companion_stride(self, ctx: EventContext, owner, companion) -> tuple[bool, str]:

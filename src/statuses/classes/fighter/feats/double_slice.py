@@ -4,7 +4,9 @@ from statuses.base import Status
 
 DOUBLE_SLICE_DESCRIPTION = (
     "Double Slice: 2 akcje, dwa Strikes dwiema broniami melee 1H. "
-    "Uproszczenie v1: obrażenia rozliczane osobno, ale oba ataki używają tego samego MAP bazowego."
+    "Oba Strikes używają tego samego bazowego MAP, "
+    "drugi Strike (bez agile) ma -2 status penalty do ataku, "
+    "a obrażenia z trafień sumują się i są rozliczane jednorazowo."
 )
 
 

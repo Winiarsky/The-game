@@ -24,19 +24,21 @@ class BaseWeapon(BaseItem):
         traits = ", ".join(self.traits) if self.traits else "brak"
         prof_label = str(getattr(self, "proficiency_category", "simple") or "simple")
         group_label = str(getattr(self, "weapon_group", "brawling") or "brawling")
-        range_label = (
-            f"\nRange Increment: {int(self.range_increment_ft)} ft | Reload: {int(self.reload)}"
-            if self.ranged and int(self.range_increment_ft or 0) > 0
-            else ""
-        )
-        return (
-            f"{self.name}\n"
-            f"Attack: {self.damage_prompt} ({self.damage_type})\n"
-            f"Hands: {hand_label} | Type: {ranged_label} | Prof: {prof_label}\n"
-            f"Group: {group_label}\n"
-            f"{range_label}"
-            f"Traits: {traits}"
-        )
+        lines: list[str] = [
+            f"{self.name}",
+            f"- Attack: {self.damage_prompt} ({self.damage_type})",
+            f"- Hands: {hand_label}",
+            f"- Type: {ranged_label}",
+            f"- Prof: {prof_label}",
+            f"- Group: {group_label}",
+            f"- Cena: {self._price_label(int(getattr(self, 'price_cp', 0) or 0))}",
+            f"- Bulk: {self._bulk_label(getattr(self, 'bulk', '-'))}",
+        ]
+        if self.ranged and int(self.range_increment_ft or 0) > 0:
+            lines.append(f"- Range Increment: {int(self.range_increment_ft)} ft")
+            lines.append(f"- Reload: {int(self.reload)}")
+        lines.append(f"- Traits: {traits}")
+        return "\n".join(lines)
 
 
 __all__ = [

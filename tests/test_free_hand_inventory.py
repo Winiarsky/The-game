@@ -3,7 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 
-from GameObjects.items.inventory import get_equipped_weapons, set_equipped_weapons, toggle_item_activation
+from GameObjects.items.inventory import (
+    add_alchemical_item,
+    assign_item_to_hand,
+    hand_slots_snapshot,
+    get_equipped_weapons,
+    set_equipped_weapons,
+    toggle_item_activation,
+)
 
 
 def _weapon(*, item_id: str, instance_id: str, traits: tuple[str, ...] = (), hands_required: int = 1):
@@ -76,3 +83,112 @@ def test_can_activate_second_one_h_weapon_with_free_hand_active():
 
     assert ok is True
     assert equipped_ids == {"w-sword", "w-dagger", "w-gauntlet"}
+
+
+def test_can_switch_from_two_hand_weapon_to_one_hand_weapon():
+    longbow = _weapon(item_id="longbow", instance_id="w-longbow", hands_required=2)
+    longsword = _weapon(item_id="longsword", instance_id="w-longsword", hands_required=1)
+    actor = Actor(inventory=[longbow, longsword], weapon_loadout=["longbow", "longsword"])
+
+    set_equipped_weapons(actor, [longbow])
+    ok, _msg = toggle_item_activation(actor, longsword)
+    equipped_ids = {getattr(item, "instance_id", "") for item in get_equipped_weapons(actor)}
+
+    assert ok is True
+    assert equipped_ids == {"w-longsword"}
+
+
+def test_hand_slots_snapshot_for_weapon_and_shield():
+    sword = _weapon(item_id="sword", instance_id="w-sword")
+    shield = _shield(instance_id="s-1")
+    actor = Actor(inventory=[sword, shield], weapon_loadout=["sword"])
+
+    set_equipped_weapons(actor, [sword])
+    ok, _msg = toggle_item_activation(actor, shield)
+    assert ok is True
+
+    slots = hand_slots_snapshot(actor)
+    assert slots["mode"] == "weapon_and_shield"
+    assert slots["left"]["kind"] == "weapon"
+    assert slots["right"]["kind"] == "shield"
+    assert slots["free_hands"] == 0
+
+
+def test_hand_slots_snapshot_for_dual_wield():
+    sword = _weapon(item_id="sword", instance_id="w-sword")
+    dagger = _weapon(item_id="dagger", instance_id="w-dagger")
+    actor = Actor(inventory=[sword, dagger], weapon_loadout=["sword", "dagger"])
+
+    set_equipped_weapons(actor, [sword, dagger])
+    slots = hand_slots_snapshot(actor)
+
+    assert slots["mode"] == "dual_wield"
+    assert slots["left"]["kind"] == "weapon"
+    assert slots["right"]["kind"] == "weapon"
+    assert slots["free_hands"] == 0
+
+
+def test_hand_slots_snapshot_for_two_handed_weapon_with_free_hand_weapon():
+    longbow = _weapon(item_id="longbow", instance_id="w-longbow", hands_required=2)
+    gauntlet = _weapon(item_id="gauntlet", instance_id="w-gauntlet", traits=("free_hand",))
+    actor = Actor(inventory=[longbow, gauntlet], weapon_loadout=["longbow", "gauntlet"])
+
+    set_equipped_weapons(actor, [longbow, gauntlet])
+    slots = hand_slots_snapshot(actor)
+
+    assert slots["mode"] == "two_handed"
+    assert slots["left"]["label"] == "longbow"
+    assert slots["right"]["label"] == "longbow"
+    assert "gauntlet" in slots["active_free_hand_weapons"]
+
+
+def test_assign_item_to_right_hand_moves_weapon_and_updates_snapshot():
+    sword = _weapon(item_id="sword", instance_id="w-sword")
+    dagger = _weapon(item_id="dagger", instance_id="w-dagger")
+    actor = Actor(inventory=[sword, dagger], weapon_loadout=["sword", "dagger"])
+
+    set_equipped_weapons(actor, [sword])
+    ok, _msg = assign_item_to_hand(actor, dagger, "right")
+    slots = hand_slots_snapshot(actor)
+
+    assert ok is True
+    assert slots["left"]["label"] == "sword"
+    assert slots["right"]["label"] == "dagger"
+
+
+def test_assign_shield_to_left_hand_updates_snapshot():
+    sword = _weapon(item_id="sword", instance_id="w-sword")
+    shield = _shield(instance_id="s-1")
+    actor = Actor(inventory=[sword, shield], weapon_loadout=["sword"])
+
+    set_equipped_weapons(actor, [sword])
+    ok, _msg = assign_item_to_hand(actor, shield, "left")
+    slots = hand_slots_snapshot(actor)
+
+    assert ok is True
+    assert slots["left"]["kind"] == "shield"
+    assert slots["right"]["kind"] == "weapon"
+    assert slots["right"]["label"] == "sword"
+
+
+def test_toggle_alchemical_item_returns_clear_usage_hint():
+    actor = Actor()
+    bomb = add_alchemical_item(actor, event_name="alchemists_fire", preparation_counter=0)
+
+    ok, message = toggle_item_activation(actor, bomb)
+
+    assert ok is False
+    assert "Akcje -> Alchemia" in message
+    assert "alchemists_fire" in message
+    assert "gotowy" in message.lower()
+
+
+def test_toggle_alchemical_item_hint_includes_not_ready_counter():
+    actor = Actor()
+    bomb = add_alchemical_item(actor, event_name="alchemists_fire", preparation_counter=1)
+
+    ok, message = toggle_item_activation(actor, bomb)
+
+    assert ok is False
+    assert "Akcje -> Alchemia" in message
+    assert "1 tur" in message.lower()

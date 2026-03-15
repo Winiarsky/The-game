@@ -53,11 +53,13 @@ class DummyConn:
 
 
 class DummyEnemy:
-    def __init__(self, pos=(0, 0), distance=25):
+    def __init__(self, pos=(0, 0), distance=25, hp=10):
         self.position = pos
         self.distance = distance
+        self.hp = hp
         self.statuses = []
         self.object_id = "enemy-1"
+        self.trigger_combat_calls = 0
 
     def has_status(self, status_id):
         return any(s.id == status_id for s in self.statuses)
@@ -65,6 +67,12 @@ class DummyEnemy:
     def add_status(self, status):
         self.statuses.append(status)
         return True
+
+    def trigger_combat(self, game):
+        self.trigger_combat_calls += 1
+        starter = getattr(game, "start_combat", None)
+        if callable(starter):
+            starter(trigger=self)
 
 
 class DummyHero:
@@ -79,6 +87,35 @@ class DummyHero:
     def add_status(self, status):
         self.statuses.append(status)
         return True
+
+
+class RoomBoardStub(BoardStub):
+    def rooms_at(self, _pos):
+        return {"karczma"}
+
+    def occupant_at(self, _pos):
+        return None
+
+    def interactables_at(self, *_args, **_kwargs):
+        return []
+
+    def cell_at(self, *_args, **_kwargs):
+        return SimpleNamespace(field=SimpleNamespace(stealth_impact=0))
+
+    def positions_in_rooms(self, *_args, **_kwargs):
+        return set()
+
+    def room_seek_failures(self, *_args, **_kwargs):
+        return 0
+
+    def is_room_seek_locked(self, *_args, **_kwargs):
+        return False
+
+    def lock_room_seek(self, *_args, **_kwargs):
+        return None
+
+    def increment_room_seek_fail(self, *_args, **_kwargs):
+        return None
 
 
 def test_enemy_move_respects_speed_penalty(monkeypatch):
@@ -155,6 +192,81 @@ def test_immobilized_blocks_move_for_hero(monkeypatch):
     res = MoveEvent().run(ctx)
     assert res.success is False
     assert res.consumed_action is False
+
+
+def test_move_does_not_trigger_combat_for_dead_enemy_in_room(monkeypatch):
+    board = RoomBoardStub()
+    conn = DummyConn()
+    hero = DummyHero(pos=(0, 0))
+    enemy = DummyEnemy(pos=(1, 0), hp=0)
+
+    class Exploration:
+        pass
+
+    start_combat_calls = {"count": 0}
+
+    def _start_combat(*_args, **_kwargs):
+        start_combat_calls["count"] += 1
+
+    game = SimpleNamespace(
+        board=board,
+        conn=conn,
+        heroes=[hero],
+        enemies=[enemy],
+        state=Exploration(),
+        events=SimpleNamespace(safe_emit_action=lambda **_payload: True),
+        ui_event=lambda *a, **k: None,
+        ui_log=lambda *a, **k: None,
+        ui_idle_hint=lambda *a, **k: None,
+        start_combat=_start_combat,
+    )
+
+    monkeypatch.setattr("GameObjects.events.move_event.MoveEvent._wait_for_destination", lambda *_args, **_kwargs: hero.position)
+    ctx = EventContext(game=game, actor=hero)
+    MoveEvent().run(ctx)
+
+    assert start_combat_calls["count"] == 0
+    assert enemy.trigger_combat_calls == 0
+
+
+def test_move_triggers_combat_for_alive_enemy_in_room(monkeypatch):
+    board = RoomBoardStub()
+    conn = DummyConn()
+    hero = DummyHero(pos=(0, 0))
+    enemy = DummyEnemy(pos=(1, 0), hp=10)
+
+    class Exploration:
+        pass
+
+    class Combat:
+        pass
+
+    start_combat_calls = {"count": 0}
+
+    game = SimpleNamespace(
+        board=board,
+        conn=conn,
+        heroes=[hero],
+        enemies=[enemy],
+        state=Exploration(),
+        events=SimpleNamespace(safe_emit_action=lambda **_payload: True),
+        ui_event=lambda *a, **k: None,
+        ui_log=lambda *a, **k: None,
+        ui_idle_hint=lambda *a, **k: None,
+    )
+
+    def _start_combat(*_args, **_kwargs):
+        start_combat_calls["count"] += 1
+        game.state = Combat()
+
+    game.start_combat = _start_combat
+
+    monkeypatch.setattr("GameObjects.events.move_event.MoveEvent._wait_for_destination", lambda *_args, **_kwargs: hero.position)
+    ctx = EventContext(game=game, actor=hero)
+    MoveEvent().run(ctx)
+
+    assert start_combat_calls["count"] == 1
+    assert enemy.trigger_combat_calls == 1
 
 
 def test_deafened_initiative_penalty_reorders_queue():

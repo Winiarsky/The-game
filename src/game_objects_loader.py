@@ -39,7 +39,10 @@ def scan_game_objects(base_dir: Path, *, ensure_src_on_path: bool = True) -> lis
         if str(src_root) not in sys.path:
             sys.path.insert(0, str(src_root))
 
-    skip_categories = {"interactions_mixin", "dialogs"}
+    # Skanujemy tylko katalogi z obiektami planszy/scenariusza.
+    # Pomijamy moduły pomocnicze (events/items/companions), które nie mają META
+    # i potrafią wywoływać skutki uboczne przy imporcie.
+    skip_categories = {"interactions_mixin", "dialogs", "events", "items", "companions"}
     for category_dir in base_dir.iterdir():
         if not category_dir.is_dir():
             continue
@@ -58,7 +61,7 @@ def scan_game_objects(base_dir: Path, *, ensure_src_on_path: bool = True) -> lis
                 module = _load_module(module_name, module_file)
                 meta = getattr(module, "META", None)
                 if not isinstance(meta, GameObjectMeta):
-                    logger.warning("Pomijam %s - brak META typu GameObjectMeta", module_name)
+                    logger.debug("Pomijam %s - brak META typu GameObjectMeta", module_name)
                     continue
                 logic_cls = getattr(meta, "logic_cls", None) or getattr(module, "LOGIC_CLS", None)
                 definitions.append(

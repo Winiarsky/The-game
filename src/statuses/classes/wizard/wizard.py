@@ -54,26 +54,26 @@ WIZARD_SCHOOL_FOCUS_SPELLS = {
 
 # Table 3-19: Wizard spells per day.
 WIZARD_SPELLS_PER_DAY = {
-    1: {"cantrips": 5, "1st": 2},
-    2: {"cantrips": 5, "1st": 3},
-    3: {"cantrips": 5, "1st": 3, "2nd": 2},
-    4: {"cantrips": 5, "1st": 3, "2nd": 3},
-    5: {"cantrips": 5, "1st": 3, "2nd": 3, "3rd": 2},
-    6: {"cantrips": 5, "1st": 3, "2nd": 3, "3rd": 3},
-    7: {"cantrips": 5, "1st": 3, "2nd": 3, "3rd": 3, "4th": 2},
-    8: {"cantrips": 5, "1st": 3, "2nd": 3, "3rd": 3, "4th": 3},
-    9: {"cantrips": 5, "1st": 3, "2nd": 3, "3rd": 3, "4th": 3, "5th": 2},
-    10: {"cantrips": 5, "1st": 3, "2nd": 3, "3rd": 3, "4th": 3, "5th": 3},
-    11: {"cantrips": 5, "1st": 3, "2nd": 3, "3rd": 3, "4th": 3, "5th": 3, "6th": 2},
-    12: {"cantrips": 5, "1st": 3, "2nd": 3, "3rd": 3, "4th": 3, "5th": 3, "6th": 3},
-    13: {"cantrips": 5, "1st": 3, "2nd": 3, "3rd": 3, "4th": 3, "5th": 3, "6th": 3, "7th": 2},
-    14: {"cantrips": 5, "1st": 3, "2nd": 3, "3rd": 3, "4th": 3, "5th": 3, "6th": 3, "7th": 3},
-    15: {"cantrips": 5, "1st": 3, "2nd": 3, "3rd": 3, "4th": 3, "5th": 3, "6th": 3, "7th": 3, "8th": 2},
-    16: {"cantrips": 5, "1st": 3, "2nd": 3, "3rd": 3, "4th": 3, "5th": 3, "6th": 3, "7th": 3, "8th": 3},
-    17: {"cantrips": 5, "1st": 3, "2nd": 3, "3rd": 3, "4th": 3, "5th": 3, "6th": 3, "7th": 3, "8th": 3, "9th": 2},
-    18: {"cantrips": 5, "1st": 3, "2nd": 3, "3rd": 3, "4th": 3, "5th": 3, "6th": 3, "7th": 3, "8th": 3, "9th": 3},
-    19: {"cantrips": 5, "1st": 3, "2nd": 3, "3rd": 3, "4th": 3, "5th": 3, "6th": 3, "7th": 3, "8th": 3, "9th": 3, "10th": 1},
-    20: {"cantrips": 5, "1st": 3, "2nd": 3, "3rd": 3, "4th": 3, "5th": 3, "6th": 3, "7th": 3, "8th": 3, "9th": 3, "10th": 1},
+    1: {"cantrip": 5, "rank_1": 2},
+    2: {"cantrip": 5, "rank_1": 3},
+    3: {"cantrip": 5, "rank_1": 3, "rank_2": 2},
+    4: {"cantrip": 5, "rank_1": 3, "rank_2": 3},
+    5: {"cantrip": 5, "rank_1": 3, "rank_2": 3, "rank_3": 2},
+    6: {"cantrip": 5, "rank_1": 3, "rank_2": 3, "rank_3": 3},
+    7: {"cantrip": 5, "rank_1": 3, "rank_2": 3, "rank_3": 3, "rank_4": 2},
+    8: {"cantrip": 5, "rank_1": 3, "rank_2": 3, "rank_3": 3, "rank_4": 3},
+    9: {"cantrip": 5, "rank_1": 3, "rank_2": 3, "rank_3": 3, "rank_4": 3, "rank_5": 2},
+    10: {"cantrip": 5, "rank_1": 3, "rank_2": 3, "rank_3": 3, "rank_4": 3, "rank_5": 3},
+    11: {"cantrip": 5, "rank_1": 3, "rank_2": 3, "rank_3": 3, "rank_4": 3, "rank_5": 3, "rank_6": 2},
+    12: {"cantrip": 5, "rank_1": 3, "rank_2": 3, "rank_3": 3, "rank_4": 3, "rank_5": 3, "rank_6": 3},
+    13: {"cantrip": 5, "rank_1": 3, "rank_2": 3, "rank_3": 3, "rank_4": 3, "rank_5": 3, "rank_6": 3, "rank_7": 2},
+    14: {"cantrip": 5, "rank_1": 3, "rank_2": 3, "rank_3": 3, "rank_4": 3, "rank_5": 3, "rank_6": 3, "rank_7": 3},
+    15: {"cantrip": 5, "rank_1": 3, "rank_2": 3, "rank_3": 3, "rank_4": 3, "rank_5": 3, "rank_6": 3, "rank_7": 3, "rank_8": 2},
+    16: {"cantrip": 5, "rank_1": 3, "rank_2": 3, "rank_3": 3, "rank_4": 3, "rank_5": 3, "rank_6": 3, "rank_7": 3, "rank_8": 3},
+    17: {"cantrip": 5, "rank_1": 3, "rank_2": 3, "rank_3": 3, "rank_4": 3, "rank_5": 3, "rank_6": 3, "rank_7": 3, "rank_8": 3, "rank_9": 2},
+    18: {"cantrip": 5, "rank_1": 3, "rank_2": 3, "rank_3": 3, "rank_4": 3, "rank_5": 3, "rank_6": 3, "rank_7": 3, "rank_8": 3, "rank_9": 3},
+    19: {"cantrip": 5, "rank_1": 3, "rank_2": 3, "rank_3": 3, "rank_4": 3, "rank_5": 3, "rank_6": 3, "rank_7": 3, "rank_8": 3, "rank_9": 3, "rank_10": 1},
+    20: {"cantrip": 5, "rank_1": 3, "rank_2": 3, "rank_3": 3, "rank_4": 3, "rank_5": 3, "rank_6": 3, "rank_7": 3, "rank_8": 3, "rank_9": 3, "rank_10": 1},
 }
 
 WIZARD_PROMPT = (
@@ -91,7 +91,9 @@ WIZARD_PROMPT = (
     "Arcane Thesis\n"
     "Arcane School specialization OR Universalist\n"
     "During setup choose school/universalist, thesis, bonded focus, and 1st-level class feat.\n"
-    "Spell Blending / Spell Substitution: v1 tracked as manual reminders in prompts."
+    "Daily preparations wykonujesz na początku scenariusza.\n"
+    "Spell Blending: modyfikuje budżet slotów/cantripów podczas tych przygotowań.\n"
+    "Spell Substitution: osobna akcja poza walką (10 minut), limit 1 raz na scenariusz."
 )
 
 

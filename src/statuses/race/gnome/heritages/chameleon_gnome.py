@@ -3,12 +3,11 @@ from __future__ import annotations
 from statuses.base import Status
 
 CHAMELEON_GNOME_DESCRIPTION = (
-    "Możesz dynamicznie zmieniać barwę skóry i włosów.\n"
-    "Gdy twoje ubarwienie z grubsza pasuje do otoczenia, możesz wykonać "
-    "pojedynczą akcję dostrojenia barw i zyskać +2 circumstance do Stealth "
-    "do czasu wyraźnej zmiany otoczenia.\n"
-    "W tym silniku wybór środowiska jest uproszczony: wskazujesz typ terenu, "
-    "na którym premia +2 działa."
+    "Twoja skora i wlosy potrafia szybko dopasowac sie do otoczenia.\n"
+    "Kiedy: po dostrojeniu ubarwienia do aktualnego terenu i przy testach Stealth.\n"
+    "Efekt: dostajesz +2 circumstance bonus do Stealth w dopasowanym srodowisku; "
+    "w silniku zapisujemy wybrany teren (chameleon_terrain), a bonus jest liczony "
+    "przez chameleon_stealth_bonus."
 )
 
 

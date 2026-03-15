@@ -10,6 +10,7 @@ for path in (PROJECT_ROOT, SRC_ROOT):
         sys.path.insert(0, str(path))
 
 from GameObjects.interactions_mixin.status_mixin import StatusMixin
+from statuses.classes.champion.feats.ranged_reprisal import RANGED_REPRISAL_STATUS
 from statuses.race.human.feats.adapted_cantrip import ADAPTED_CANTRIP_STATUS
 from statuses.race.human.feats.elf_atavism import ELF_ATAVISM_STATUS
 from statuses.race.human.feats.general_training import GENERAL_TRAINING_STATUS
@@ -32,6 +33,16 @@ class DummyUI:
         if choices:
             return choices[0]
         return None
+
+
+class CaptureUI(DummyUI):
+    def __init__(self, answers: list[str]):
+        super().__init__(answers)
+        self.calls: list[dict] = []
+
+    def prompt_choice(self, _prompt: str, choices=None, **kwargs):
+        self.calls.append({"choices": list(choices or []), **kwargs})
+        return super().prompt_choice(_prompt, choices=choices, **kwargs)
 
 
 class DummyHero(StatusMixin):
@@ -65,6 +76,35 @@ def test_versatile_heritage_choice_grants_selected_general_feat(monkeypatch):
     assert hero.has_status("versatile_heritage")
     assert hero.get_status_data("versatile_heritage", "general_feat", None) == "fleet"
     assert hero.has_status("fleet")
+
+
+def test_versatile_heritage_can_select_arcane_sense(monkeypatch):
+    ui = DummyUI(["Arcane Sense"])
+    monkeypatch.setattr("ui_client.get_ui_client", lambda: ui)
+
+    hero = DummyHero()
+    hero.add_status(VERSATILE_HERITAGE_STATUS)
+
+    assert hero.get_status_data("versatile_heritage", "general_feat", None) == "arcane_sense"
+    assert hero.has_status("arcane_sense")
+    assert hero.get_status_data("arcane_sense", "granted_cantrips", []) == ["detect_magic"]
+
+
+def test_versatile_heritage_prompt_uses_polish_labels_and_choice_descriptions(monkeypatch):
+    ui = CaptureUI(["fleet"])
+    monkeypatch.setattr("ui_client.get_ui_client", lambda: ui)
+
+    hero = DummyHero()
+    hero.add_status(VERSATILE_HERITAGE_STATUS)
+
+    assert ui.calls
+    first = ui.calls[0]
+    choice_meta = list(first.get("choice_meta") or [])
+    assert choice_meta
+    fleet_entry = next((item for item in choice_meta if str(item.get("raw")) == "fleet"), None)
+    assert fleet_entry is not None
+    assert str(fleet_entry.get("label") or "").strip() == "Szybki krok"
+    assert str(fleet_entry.get("desc") or "").strip()
 
 
 def test_natural_ambition_uses_actor_class_and_grants_selected_class_feat(monkeypatch):
@@ -105,6 +145,70 @@ def test_natural_ambition_for_cleric_grants_holy_castigation(monkeypatch):
     assert hero.get_status_data("natural_ambition", "class_name", None) == "cleric"
     assert hero.get_status_data("natural_ambition", "class_feat", None) == "holy_castigation"
     assert hero.has_status("holy_castigation")
+
+
+def test_natural_ambition_for_champion_grants_real_class_feat(monkeypatch):
+    ui = DummyUI(["Ranged Reprisal"])
+    monkeypatch.setattr("ui_client.get_ui_client", lambda: ui)
+
+    hero = DummyHero()
+    hero.class_name = "champion"
+    hero.champion_cause = "paladin"
+    hero.add_status(NATURAL_AMBITION_STATUS)
+
+    assert hero.get_status_data("natural_ambition", "class_name", None) == "champion"
+    assert hero.get_status_data("natural_ambition", "class_feat", None) == "ranged_reprisal"
+    assert hero.has_status("ranged_reprisal")
+    assert not hero.has_status("raise_shield_allow")
+    assert not hero.has_status("deific_weapon")
+
+
+def test_natural_ambition_for_champion_without_cause_offers_deitys_domain(monkeypatch):
+    ui = CaptureUI(["Domena bostwa"])
+    monkeypatch.setattr("ui_client.get_ui_client", lambda: ui)
+
+    hero = DummyHero()
+    hero.class_name = "champion"
+    hero.add_status(NATURAL_AMBITION_STATUS)
+
+    assert hero.get_status_data("natural_ambition", "class_feat", None) == "deitys_domain"
+    first = ui.calls[0]
+    choice_meta = list(first.get("choice_meta") or [])
+    choice_ids = {str(item.get("raw") or "").strip().lower() for item in choice_meta}
+    assert choice_ids == {"deitys_domain"}
+
+
+def test_natural_ambition_for_champion_filters_choices_by_cause(monkeypatch):
+    ui = CaptureUI(["Weight Of Guilt"])
+    monkeypatch.setattr("ui_client.get_ui_client", lambda: ui)
+
+    hero = DummyHero()
+    hero.class_name = "champion"
+    hero.champion_cause = "redeemer"
+    hero.add_status(NATURAL_AMBITION_STATUS)
+
+    assert hero.get_status_data("natural_ambition", "class_feat", None) == "weight_of_guilt"
+    assert hero.has_status("weight_of_guilt")
+    assert ui.calls
+    first = ui.calls[0]
+    choice_meta = list(first.get("choice_meta") or [])
+    choice_ids = {str(item.get("raw") or "").strip().lower() for item in choice_meta}
+    assert choice_ids == {"deitys_domain", "weight_of_guilt"}
+
+
+def test_natural_ambition_reprompts_when_feat_would_duplicate(monkeypatch):
+    ui = DummyUI(["Ranged Reprisal", "deitys_domain"])
+    monkeypatch.setattr("ui_client.get_ui_client", lambda: ui)
+
+    hero = DummyHero()
+    hero.class_name = "champion"
+    hero.champion_cause = "paladin"
+    hero.add_status(RANGED_REPRISAL_STATUS)
+
+    hero.add_status(NATURAL_AMBITION_STATUS)
+
+    assert hero.get_status_data("natural_ambition", "class_feat", None) == "deitys_domain"
+    assert hero.has_status("deitys_domain")
 
 
 def test_natural_ambition_for_druid_grants_widen_spell(monkeypatch):
@@ -159,6 +263,8 @@ def test_adapted_cantrip_records_selected_choices(monkeypatch):
     assert hero.get_status_data("adapted_cantrip", "adapted_tradition", None) == "arcane"
     assert hero.get_status_data("adapted_cantrip", "adapted_cantrip", None) == "shield"
     assert hero.get_status_data("adapted_cantrip", "replaced_cantrip", None) == "detect_magic"
+    assert hero.get_status_data("adapted_cantrip", "granted_cantrips", []) == ["shield"]
+    assert hero.get_status_data("adapted_cantrip", "innate_magic_tradition", None) == "arcane"
 
 
 def test_adapted_cantrip_requires_spellcasting_class_feature(monkeypatch):

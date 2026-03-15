@@ -4,9 +4,11 @@ from dataclasses import dataclass
 from typing import Iterable
 
 from bonuses import BonusEffect, BonusType
+from combat.damage_utils import burn_it_bonus, burn_it_prompt_note
 from combat.hp_engine import apply_damage as hp_apply_damage
 from combat.hp_engine import heal as hp_heal
 from damage_types import DamageType
+from localization import localize_term_pl
 from statuses import Status, make_persistent_damage
 from statuses.blinded import BLINDED_STATUS
 from statuses.charmed import CharmedStatus
@@ -18,6 +20,7 @@ from GameObjects.interactions_mixin import prompt_for_roll
 
 from ....base import EventContext, EventResult
 from ....registry import list_events, register_event
+from ...focus_utils import focus_spell_rank
 from ...magic_event import MagicEvent
 from ...magic_utils import pick_position_in_range, pick_target_in_range
 from ...spell_types import SpellTradition
@@ -263,7 +266,7 @@ DOMAIN_SPELL_SPECS: dict[str, DomainSpellSpec] = {
 }
 
 
-def _is_cleric(actor) -> bool:
+def _is_domain_focus_user(actor) -> bool:
     if actor is None:
         return False
     has_status = getattr(actor, "has_status", None)
@@ -273,11 +276,16 @@ def _is_cleric(actor) -> bool:
                 return True
         except Exception:
             pass
+        try:
+            if bool(has_status("deitys_domain")):
+                return True
+        except Exception:
+            pass
     for status in getattr(actor, "statuses", []) or []:
-        if getattr(status, "id", None) == "cleric":
+        if getattr(status, "id", None) in {"cleric", "deitys_domain"}:
             return True
     class_name = str(getattr(actor, "class_name", "") or "").strip().lower()
-    return class_name == "cleric"
+    return class_name in {"cleric", "champion"}
 
 
 def _focus_points(actor) -> int:
@@ -298,7 +306,8 @@ def _set_focus_points(actor, value: int) -> None:
 
 def _knows_domain_spell(actor, *, domain_id: str, spell_id: str) -> bool:
     for status in getattr(actor, "statuses", []) or []:
-        if getattr(status, "id", None) != "domain_initiate":
+        status_id = str(getattr(status, "id", "") or "").strip().lower()
+        if status_id not in {"domain_initiate", "deitys_domain"}:
             continue
         data = getattr(status, "data", None) or {}
         known_domain = str(data.get("selected_domain", "") or "").strip().lower()
@@ -615,8 +624,8 @@ def _status_from_spec(spec: DomainSpellSpec, spell_id: str, source: str, actor, 
 
 class ClericDomainSpellEvent(MagicEvent):
     actions_cost = 1
-    default_tags = ["magic", "spell", "focus", "cleric", "domain"]
-    spell_tags = ["focus", "divine", "cleric", "domain"]
+    default_tags = ["magic", "spell", "focus", "cleric", "champion", "domain"]
+    spell_tags = ["focus", "divine", "cleric", "champion", "domain"]
     magic_traditions = (SpellTradition.DIVINE,)
     magic_types = ["focus"]
     domain_id = ""
@@ -626,8 +635,10 @@ class ClericDomainSpellEvent(MagicEvent):
         actor = ctx.actor
         if actor is None:
             return EventResult.cancelled(message=f"{self.spell_label}: missing actor.")
-        if not _is_cleric(actor):
-            return EventResult.cancelled(message=f"{self.spell_label}: only Cleric can cast this spell.")
+        if not _is_domain_focus_user(actor):
+            return EventResult.cancelled(
+                message=f"{self.spell_label}: only Cleric or Champion with Deity's Domain can cast this spell."
+            )
         if not _knows_domain_spell(actor, domain_id=self.domain_id, spell_id=self.name):
             return EventResult.cancelled(message=f"{self.spell_label}: this domain spell is not known.")
 
@@ -668,6 +679,27 @@ class ClericDomainSpellEvent(MagicEvent):
             target = _pick_target(ctx, actor, range_feet=spec.range_feet, allowed_kinds=("enemy",))
             if target is None:
                 return EventResult.cancelled(message=f"{self.spell_label}: target not selected.")
+            spell_rank = max(1, int(focus_spell_rank(actor, minimum=1) or 1))
+            fire_damage_bonus = 0
+            fire_note = None
+            if str(spec.damage_type) == DamageType.FIRE.value:
+                fire_damage_bonus = int(
+                    burn_it_bonus(
+                        actor,
+                        DamageType.FIRE.value,
+                        source_kind="spell",
+                        spell_rank=spell_rank,
+                    )
+                    or 0
+                )
+                fire_note = burn_it_prompt_note(
+                    actor,
+                    DamageType.FIRE.value,
+                    source_kind="spell",
+                    spell_rank=spell_rank,
+                )
+            prompt_notes = [text for text in (spec.prompt_long, fire_note) if str(text or "").strip()]
+            prompt_long = "\n".join(prompt_notes) if prompt_notes else None
             save_outcome = None
             if spec.save_type:
                 save_outcome = _pick_save_outcome(
@@ -680,17 +712,19 @@ class ClericDomainSpellEvent(MagicEvent):
             if spec.basic_save:
                 base_amount = _roll_amount(
                     f"{self.spell_label}: enter base damage (before save)",
-                    prompt_long=spec.prompt_long,
+                    prompt_long=prompt_long,
                 )
                 if base_amount <= 0:
                     return EventResult.cancelled(message=f"{self.spell_label}: base damage must be > 0.")
+                base_amount += int(fire_damage_bonus)
                 amount = _basic_save_damage(base_amount, save_outcome or "failure")
             elif save_outcome and save_outcome not in damage_on:
                 amount = 0
             else:
-                amount = _roll_amount(f"{self.spell_label}: enter final damage", prompt_long=spec.prompt_long)
+                amount = _roll_amount(f"{self.spell_label}: enter final damage", prompt_long=prompt_long)
                 if amount <= 0:
                     return EventResult.cancelled(message=f"{self.spell_label}: damage must be > 0.")
+                amount += int(fire_damage_bonus)
 
             defeated = False
             if amount > 0:
@@ -708,10 +742,21 @@ class ClericDomainSpellEvent(MagicEvent):
                     ),
                 )
             if spec.persistent_damage_amount > 0 and spec.persistent_damage_type and can_apply_status_side_effect:
+                persistent_amount = int(spec.persistent_damage_amount)
+                persistent_amount += int(
+                    burn_it_bonus(
+                        actor,
+                        str(spec.persistent_damage_type),
+                        persistent=True,
+                        source_kind="spell",
+                        spell_rank=spell_rank,
+                    )
+                    or 0
+                )
                 _add_status(
                     target,
                     make_persistent_damage(
-                        spec.persistent_damage_amount,
+                        persistent_amount,
                         spec.persistent_damage_type,
                         source=source,
                     ),
@@ -894,7 +939,7 @@ class ClericDomainSpellEvent(MagicEvent):
 
 
 def _labelize_spell(spell_id: str) -> str:
-    return str(spell_id or "").replace("_", " ").strip().title()
+    return localize_term_pl(spell_id)
 
 
 def _register_domain_spell_events() -> None:
@@ -916,7 +961,7 @@ def _register_domain_spell_events() -> None:
             "name": spell,
             "domain_id": domain,
             "spell_label": _labelize_spell(spell),
-            "prompt": f"{_labelize_spell(spell)} (domain {domain}).",
+            "prompt": f"{_labelize_spell(spell)} (domena: {localize_term_pl(domain)}).",
             "spell_tags": spell_tags,
             "range_feet": spec.range_feet if spec is not None else None,
             "actions_cost": int(getattr(spec, "actions_cost", 1) or 1) if spec is not None else 1,

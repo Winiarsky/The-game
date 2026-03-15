@@ -3,8 +3,11 @@ from __future__ import annotations
 from statuses.base import Status
 
 FIRST_WORLD_MAGIC_DESCRIPTION = (
-    "Wybierz 1 primal cantrip, który możesz rzucać jako innate spell at-will.\n"
-    "Wellspring Gnome może zmienić tradycję tego czaru z primal na wybraną tradycję."
+    "Pierwotna magia Pierwszego Swiata budzi w tobie prosty talent czarodziejski.\n"
+    "Kiedy: po wybraniu featu wybierasz 1 cantrip z listy First World Magic.\n"
+    "Efekt: wybrany cantrip trafia do granted_cantrips jako innate spell at-will; "
+    "domyslna tradycja to primal, ale moze zostac nadpisana przez Wellspring Gnome "
+    "(jesli aktywny jest override_gnome_primal_innate_tradition)."
 )
 
 

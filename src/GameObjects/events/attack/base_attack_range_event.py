@@ -6,12 +6,13 @@ from typing import Sequence
 
 from bonuses import BonusEffect, BonusType, build_modifiers_grid
 from GameObjects.interactions_mixin import RangeAttackAffectMixin, prompt_for_roll
-from GameObjects.items.inventory import get_equipped_weapons
+from GameObjects.items.inventory import consume_ammo_for_weapon, get_equipped_weapons
+from GameObjects.items.shield import has_raised_tower_shield_cover
 from GameObjects.items.weapon import normalize_weapon_id
 from statuses import Status, inspire_courage_damage_bonus
 from statuses.classes.ranger.ranger_utils import set_crossbow_ace_ready
 from damage_types import DamageType
-from combat.damage_utils import burn_it_bonus, burn_it_prompt_note
+from combat.damage_utils import burn_it_bonus, burn_it_prompt_note, remove_defeated_enemy
 from combat.degree_of_success import is_critical_success, is_hit, natural_shift_from_roll, resolve_outcome
 
 from .attack_base import AttackEventBase, check_concealed
@@ -61,6 +62,15 @@ class BaseRangeAttackEvent(AttackEventBase):
         except Exception:
             return None
         return max(0, limit - used)
+
+    @staticmethod
+    def _ammo_tracking_enabled(actor) -> bool:
+        if actor is None:
+            return False
+        try:
+            return bool(getattr(actor, "track_ammo", False))
+        except Exception:
+            return False
 
     @staticmethod
     def _weapon_reload_value(weapon) -> int:
@@ -332,6 +342,15 @@ class BaseRangeAttackEvent(AttackEventBase):
             if reload_cancelled is not None:
                 return reload_cancelled
             actions_spent = 1 + max(0, int(extra_actions_spent or 0))
+            if self._ammo_tracking_enabled(hero):
+                ammo_ok, ammo_message = consume_ammo_for_weapon(hero, selected_weapon, amount=1)
+                if not ammo_ok:
+                    return EventResult.cancelled(message=str(ammo_message or "Brak amunicji."))
+                if ammo_message:
+                    try:
+                        game.ui_log(ammo_message)
+                    except Exception:
+                        pass
 
             if not check_concealed(ctx, enemy):
                 game.events.safe_emit_action(
@@ -587,16 +606,14 @@ class BaseRangeAttackEvent(AttackEventBase):
                     game.ui_log(f"Modyfikatory ({action_tag}): {', '.join(log_lines)}.")
                 except Exception:
                     pass
-            prompt_long = f"Modyfikator łączny: {modifier:+d} (doliczany automatycznie)."
-            if weapon_roll_mod:
-                prompt_long = (
-                    f"{prompt_long}\nBonus broni: {weapon_roll_mod:+d} "
-                    f"(prof {int(weapon_attack_bonus.get('proficiency_bonus', 0) or 0):+d}, "
-                    f"ability {int(weapon_attack_bonus.get('ability_bonus', 0) or 0):+d}, "
-                    f"item {int(weapon_attack_bonus.get('item_bonus', 0) or 0):+d})."
-                )
+            prompt_lines = self._attack_prompt_breakdown_lines(
+                weapon_attack_bonus=weapon_attack_bonus,
+                modifier=modifier,
+                log_lines=log_lines,
+            )
             if trait_notes:
-                prompt_long = f"{prompt_long}\n" + "\n".join(trait_notes)
+                prompt_lines.extend(trait_notes)
+            prompt_long = "\n".join(prompt_lines).strip()
 
             roll_data = prompt_for_roll(
                 f"Atak {self.weapon_label} na AC {target_ac}",
@@ -604,6 +621,11 @@ class BaseRangeAttackEvent(AttackEventBase):
                 subtitle=f"bazowe {base_ac}, modyfikatory: {mods_note}",
                 prompt_long=prompt_long,
                 modifiers=build_modifiers_grid(best_effects),
+                roll_stack=self._attack_roll_stack_payload(
+                    weapon_attack_bonus=weapon_attack_bonus,
+                    modifier=modifier,
+                ),
+                auto_total_modifier=int(weapon_roll_mod + modifier),
                 answer_placeholder="Wynik k20",
                 return_details=True,
                 infer_natural_from_roll=True,
@@ -611,11 +633,16 @@ class BaseRangeAttackEvent(AttackEventBase):
             if isinstance(roll_data, dict):
                 roll = int(roll_data.get("roll", 0) or 0)
                 natural_shift = int(roll_data.get("natural_shift", 0) or 0)
+                if natural_shift == 0:
+                    raw_roll = int(roll_data.get("raw_roll", roll) or roll)
+                    natural_shift = natural_shift_from_roll(raw_roll)
+                modifier_delta = int(roll_data.get("modifier_delta", 0) or 0)
             else:
                 roll = int(roll_data or 0)
                 natural_shift = natural_shift_from_roll(roll)
+                modifier_delta = 0
 
-            total_roll = roll + modifier + weapon_roll_mod
+            total_roll = roll + modifier + weapon_roll_mod + modifier_delta
             self._consume_aid_attack_bonus(hero, action_tag=action_tag)
             self._consume_monster_hunter_bonus(hero)
             outcome = resolve_outcome(total_roll, target_ac, natural_shift=natural_shift)
@@ -862,10 +889,12 @@ class BaseRangeAttackEvent(AttackEventBase):
             ):
                 sneak_dice = self._rogue_sneak_attack_dice(hero)
                 if sneak_dice > 0:
-                    sneak_roll = prompt_for_roll(
-                        f"Sneak Attack: dodatkowe obrażenia {sneak_dice}k6:",
-                        layout="damage",
+                    sneak_roll = self._prompt_damage_roll_total(
+                        prompt=f"Sneak Attack: dodatkowe obrażenia {sneak_dice}k6:",
+                        actor=hero,
+                        damage_prompt=f"{sneak_dice}k6",
                         answer_placeholder="Sneak attack damage",
+                        roll_for_damage=prompt_for_roll,
                     )
                     try:
                         sneak_bonus = max(0, int(sneak_roll or 0))
@@ -875,10 +904,12 @@ class BaseRangeAttackEvent(AttackEventBase):
                         damage_bonus += sneak_bonus
                         damage_notes.append(f"Sneak Attack: +{sneak_bonus} precision (doliczone).")
             if self._ranger_precision_ready(ctx, hero, enemy):
-                precision_roll = prompt_for_roll(
-                    "Hunter's Edge (Precision): dodatkowe obrażenia 1k8:",
-                    layout="damage",
+                precision_roll = self._prompt_damage_roll_total(
+                    prompt="Hunter's Edge (Precision): dodatkowe obrażenia 1k8:",
+                    actor=hero,
+                    damage_prompt="1k8",
                     answer_placeholder="Precision damage",
+                    roll_for_damage=prompt_for_roll,
                 )
                 try:
                     precision_bonus = max(0, int(precision_roll or 0))
@@ -948,41 +979,44 @@ class BaseRangeAttackEvent(AttackEventBase):
                 pass
             first_type = resolved_damage_type if isinstance(resolved_damage_type, str) else list(resolved_damage_type)[0]
             if critical and deadly_die:
-                extra = prompt_for_roll(
-                    f"Deadly {deadly_die}: dodatkowe obrażenia (rzut): ",
-                    layout="damage",
+                extra = self._prompt_damage_roll_total(
+                    prompt=f"Deadly {deadly_die}: dodatkowe obrażenia (rzut): ",
+                    actor=hero,
+                    damage_prompt=f"1{deadly_die}",
                     answer_placeholder="Dodatkowe obrażenia",
+                    roll_for_damage=prompt_for_roll,
                 )
                 try:
                     damage_components.append((first_type, int(extra)))
                 except Exception:
                     pass
             if critical and fatal_die:
-                extra = prompt_for_roll(
-                    f"Fatal {fatal_die}: dodatkowa kość obrażeń (rzut): ",
-                    layout="damage",
+                extra = self._prompt_damage_roll_total(
+                    prompt=f"Fatal {fatal_die}: dodatkowa kość obrażeń (rzut): ",
+                    actor=hero,
+                    damage_prompt=f"1{fatal_die}",
                     answer_placeholder="Dodatkowe obrażenia",
+                    roll_for_damage=prompt_for_roll,
                 )
                 try:
                     damage_components.append((first_type, int(extra)))
                 except Exception:
                     pass
-            if critical:
-                try:
-                    from GameObjects.items.armor import apply_critical_damage_reduction
+            try:
+                from GameObjects.items.armor import apply_critical_damage_reduction
 
-                    damage_components, armor_notes = apply_critical_damage_reduction(
-                        enemy,
-                        damage_components,
-                        critical=True,
-                    )
-                    for note_line in armor_notes:
-                        try:
-                            ctx.game.ui_log(note_line)
-                        except Exception:
-                            pass
-                except Exception:
-                    pass
+                damage_components, armor_notes = apply_critical_damage_reduction(
+                    enemy,
+                    damage_components,
+                    critical=critical,
+                )
+                for note_line in armor_notes:
+                    try:
+                        ctx.game.ui_log(note_line)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
             if roll_only:
                 total_damage = sum(max(0, int(amount or 0)) for _, amount in damage_components)
                 game.events.safe_emit_action(
@@ -1043,7 +1077,13 @@ class BaseRangeAttackEvent(AttackEventBase):
                 damage_prompt=effective_damage_prompt,
                 damage_components=damage_components,
                 default_damage_type=first_type,
-                roll_for_bleed=prompt_for_roll,
+                roll_for_bleed=lambda prompt, **kwargs: self._prompt_damage_roll_total(
+                    prompt=prompt,
+                    actor=hero,
+                    damage_prompt="1k6",
+                    answer_placeholder=str(kwargs.get("answer_placeholder", "Bleed") or "Bleed"),
+                    roll_for_damage=prompt_for_roll,
+                ),
             )
             for note_line in crit_spec_notes:
                 try:
@@ -1088,14 +1128,9 @@ class BaseRangeAttackEvent(AttackEventBase):
                 except Exception:
                     pass
                 try:
-                    game.board.remove(target_pos)
-                    try:
-                        game.enemies.remove(enemy)
-                    except ValueError:
-                        pass
+                    remove_defeated_enemy(game, enemy, position=target_pos, source=self.action_id_base)
                 except Exception as exc:
                     logger.error("Nie udało się usunąć wroga: %s", exc)
-                enemy.position = None
 
             self._apply_range_attacker_status(hero)
             msg = "Przeciwnik pokonany." if defeated else ("Trafienie krytyczne!" if critical else f"Atak {self.weapon_label} trafia.")
@@ -1157,14 +1192,17 @@ class BaseRangeAttackEvent(AttackEventBase):
             note = burn_it_prompt_note(actor, damage_type)
             if extra_notes:
                 note = f"{note}\n" + "\n".join(extra_notes) if note else "\n".join(extra_notes)
-            dmg = prompt_for_roll(
-                f"{prompt_prefix}Obrażenia {damage_prompt}: ",
-                layout="damage",
-                answer_placeholder="Suma obrażeń",
+            burn_bonus_first = int(burn_it_bonus(actor, damage_type) or 0)
+            dmg_total = self._prompt_damage_roll_total(
+                prompt=f"{prompt_prefix}Obrażenia {damage_prompt}: ",
+                actor=actor,
+                damage_prompt=damage_prompt,
+                extra_flat_bonus=int(flat_bonus) + int(burn_bonus_first),
                 prompt_long=note,
+                answer_placeholder="Suma obrażeń",
+                roll_for_damage=prompt_for_roll,
             )
-            bonus = burn_it_bonus(actor, damage_type)
-            return [(damage_type, int(dmg) + int(bonus) + int(flat_bonus))]
+            return [(damage_type, int(dmg_total))]
 
         damage_types = list(damage_type)
         components: list[tuple[str, int]] = []
@@ -1177,16 +1215,28 @@ class BaseRangeAttackEvent(AttackEventBase):
             note = burn_it_prompt_note(actor, dtype)
             if idx == 0 and extra_notes:
                 note = f"{note}\n" + "\n".join(extra_notes) if note else "\n".join(extra_notes)
-            roll = prompt_for_roll(
-                f"{prompt_prefix}Obrażenia {prompt_text} ({dtype}): ",
-                layout="damage",
-                answer_placeholder=f"Obrażenia {dtype}",
-                prompt_long=note,
-            )
-            bonus = burn_it_bonus(actor, dtype)
-            total = int(roll) + int(bonus)
             if idx == 0:
-                total += int(flat_bonus)
+                burn_bonus_first = int(burn_it_bonus(actor, dtype) or 0)
+                total = self._prompt_damage_roll_total(
+                    prompt=f"{prompt_prefix}Obrażenia {prompt_text} ({dtype}): ",
+                    actor=actor,
+                    damage_prompt=prompt_text,
+                    extra_flat_bonus=int(flat_bonus) + int(burn_bonus_first),
+                    prompt_long=note,
+                    answer_placeholder=f"Obrażenia {dtype}",
+                    roll_for_damage=prompt_for_roll,
+                )
+            else:
+                burn_bonus = int(burn_it_bonus(actor, dtype) or 0)
+                total = self._prompt_damage_roll_total(
+                    prompt=f"{prompt_prefix}Obrażenia {prompt_text} ({dtype}): ",
+                    actor=actor,
+                    damage_prompt=str(prompt_text),
+                    extra_flat_bonus=burn_bonus,
+                    answer_placeholder=f"Obrażenia {dtype}",
+                    prompt_long=note,
+                    roll_for_damage=prompt_for_roll,
+                )
             components.append((dtype, total))
         return components
 
@@ -1250,7 +1300,9 @@ class BaseRangeAttackEvent(AttackEventBase):
                 continue
             ctype = None
             if occupant:
-                if occupant in getattr(game, "heroes", []):
+                if has_raised_tower_shield_cover(occupant):
+                    ctype = "standard"
+                elif occupant in getattr(game, "heroes", []):
                     ctype = None  # sojusznik nie daje osłony
                 elif occupant in getattr(game, "enemies", []):
                     ctype = "minor"

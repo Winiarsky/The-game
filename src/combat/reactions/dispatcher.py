@@ -9,6 +9,10 @@ from combat.hp_engine import current_hp as hp_current_hp
 logger = logging.getLogger(__name__)
 
 
+def _normalize(value: object) -> str:
+    return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+
+
 def _actor_id(actor) -> str:
     if actor is None:
         return ""
@@ -85,6 +89,68 @@ def _event_uid(event: dict[str, object]) -> str | None:
     return str(raw)
 
 
+def _reaction_policy_state(actor) -> dict[str, set[str]]:
+    raw = getattr(actor, "reaction_policy_state", None)
+    if isinstance(raw, dict):
+        auto_accept = set(str(item) for item in list(raw.get("auto_accept", set()) or set()))
+        skip_until_turn_end = set(str(item) for item in list(raw.get("skip_until_turn_end", set()) or set()))
+        state = {
+            "auto_accept": auto_accept,
+            "skip_until_turn_end": skip_until_turn_end,
+        }
+    else:
+        state = {
+            "auto_accept": set(),
+            "skip_until_turn_end": set(),
+        }
+    try:
+        setattr(actor, "reaction_policy_state", state)
+    except Exception:
+        pass
+    return state
+
+
+def clear_turn_reaction_policies(actor) -> None:
+    state = _reaction_policy_state(actor)
+    state["skip_until_turn_end"] = set()
+    try:
+        setattr(actor, "reaction_policy_state", state)
+    except Exception:
+        pass
+
+
+def _reaction_trigger_key(reaction, reactor, event_payload: dict[str, object]) -> str:
+    trigger_key_fn = getattr(reaction, "trigger_key", None)
+    if callable(trigger_key_fn):
+        try:
+            value = _normalize(trigger_key_fn(reactor, event_payload))
+            if value:
+                return value
+        except Exception:
+            pass
+    reaction_id = _normalize(getattr(reaction, "id", "reaction"))
+    tags = [_normalize(item) for item in list(event_payload.get("action_tags") or []) if _normalize(item)]
+    if tags:
+        return f"{reaction_id}:{tags[0]}"
+    action_id = _normalize(event_payload.get("action_id"))
+    if action_id:
+        return f"{reaction_id}:{action_id}"
+    return reaction_id or "reaction"
+
+
+def _reaction_decision(choice: str | None) -> str:
+    normalized = _normalize(choice)
+    if normalized in {"tak", "t", "y", "yes", "1", "react_now", "react"}:
+        return "react_now"
+    if normalized in {"skip_now", "nie", "n", "no", "2"}:
+        return "skip_now"
+    if normalized in {"auto_for_trigger", "auto", "3"}:
+        return "auto_for_trigger"
+    if normalized in {"pass_trigger_until_turn_end", "pass_until_turn_end", "pass", "4"}:
+        return "pass_trigger_until_turn_end"
+    return "skip_now"
+
+
 @dataclass
 class _Candidate:
     reactor: object
@@ -94,6 +160,7 @@ class _Candidate:
     tie_key: str
     dedupe_key: tuple[object, ...]
     local_key: tuple[str, str]
+    trigger_key: str
 
 
 def dispatch_reactions(game, event: dict[str, object]) -> None:
@@ -186,6 +253,7 @@ def dispatch_reactions(game, event: dict[str, object]) -> None:
                 priority = int(getattr(reaction, "priority", 0) or 0)
             except Exception:
                 priority = 0
+            trigger_key = _reaction_trigger_key(reaction, reactor, event_payload)
             candidates.append(
                 _Candidate(
                     reactor=reactor,
@@ -195,6 +263,7 @@ def dispatch_reactions(game, event: dict[str, object]) -> None:
                     tie_key=reactor_key,
                     dedupe_key=dedupe_key,
                     local_key=(reactor_key, reaction_id),
+                    trigger_key=trigger_key,
                 )
             )
 
@@ -224,37 +293,71 @@ def dispatch_reactions(game, event: dict[str, object]) -> None:
 
         # bohaterowie: zapytaj; wrogowie: auto
         if reactor in heroes:
-            prompt_fn = getattr(game, "ui", None)
-            reason = reaction.reason(reactor, event_payload)
-            consent = False
-            prompt_text_fn = getattr(reaction, "prompt_text", None)
-            if callable(prompt_text_fn):
-                try:
-                    prompt_text = str(prompt_text_fn(reactor, event_payload) or "").strip()
-                except Exception:
+            policy = _reaction_policy_state(reactor)
+            trigger_key = str(candidate.trigger_key or "")
+            if trigger_key and trigger_key in policy.get("skip_until_turn_end", set()):
+                continue
+            if trigger_key and trigger_key in policy.get("auto_accept", set()):
+                consent = True
+            else:
+                prompt_fn = getattr(game, "ui", None)
+                reason = reaction.reason(reactor, event_payload)
+                consent = False
+                prompt_text_fn = getattr(reaction, "prompt_text", None)
+                if callable(prompt_text_fn):
+                    try:
+                        prompt_text = str(prompt_text_fn(reactor, event_payload) or "").strip()
+                    except Exception:
+                        prompt_text = ""
+                else:
                     prompt_text = ""
-            else:
-                prompt_text = ""
-            if not prompt_text:
-                prompt_text = f"Czy chcesz wykonać reakcję {reaction.label}? ({reason})"
-            if prompt_fn and getattr(prompt_fn, "enabled", False):
+                if not prompt_text:
+                    prompt_text = f"Czy chcesz wykonać reakcję {reaction.label}? ({reason})"
+                if prompt_fn and getattr(prompt_fn, "enabled", False):
+                    try:
+                        choice = game.ui.prompt_choice(
+                            prompt_text,
+                            choices=[
+                                "react_now",
+                                "skip_now",
+                                "auto_for_trigger",
+                                "pass_trigger_until_turn_end",
+                            ],
+                            source="reaction",
+                        )
+                        decision = _reaction_decision(str(choice or ""))
+                        if decision == "auto_for_trigger" and trigger_key:
+                            policy.setdefault("auto_accept", set()).add(trigger_key)
+                            consent = True
+                        elif decision == "pass_trigger_until_turn_end" and trigger_key:
+                            policy.setdefault("skip_until_turn_end", set()).add(trigger_key)
+                            consent = False
+                        else:
+                            consent = decision == "react_now"
+                    except Exception as exc:
+                        logger.error("Prompt reakcji nie powiódł się: %s", exc)
+                else:
+                    if getattr(getattr(game, "ui", None), "allow_cli_fallback", False) is False:
+                        continue
+                    try:
+                        resp = input(
+                            f"{prompt_text} [t=react, n=skip, a=auto trigger, p=pass do końca tury]: "
+                        )
+                        decision = _reaction_decision(resp)
+                        if decision == "auto_for_trigger" and trigger_key:
+                            policy.setdefault("auto_accept", set()).add(trigger_key)
+                            consent = True
+                        elif decision == "pass_trigger_until_turn_end" and trigger_key:
+                            policy.setdefault("skip_until_turn_end", set()).add(trigger_key)
+                            consent = False
+                        else:
+                            consent = decision == "react_now"
+                    except Exception:
+                        consent = False
                 try:
-                    choice = game.ui.prompt_choice(
-                        prompt_text,
-                        choices=["tak", "nie"],
-                        source="reaction",
-                    )
-                    consent = str(choice or "").strip().lower().startswith("t")
-                except Exception as exc:
-                    logger.error("Prompt reakcji nie powiódł się: %s", exc)
-            else:
-                if getattr(getattr(game, "ui", None), "allow_cli_fallback", False) is False:
-                    continue
-                try:
-                    resp = input(f"{prompt_text} [t/N]: ")
-                    consent = resp.strip().lower() in ("t", "tak", "y", "yes")
+                    setattr(reactor, "reaction_policy_state", policy)
                 except Exception:
-                    consent = False
+                    pass
             if not consent:
                 continue
 

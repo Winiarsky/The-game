@@ -5,6 +5,7 @@ import random
 
 from bonuses import BonusEffect, BonusType
 from actions.move_utils import adjusted_forced_movement_squares
+from combat.damage_utils import burn_it_bonus, burn_it_prompt_note
 from combat.hp_engine import apply_damage as hp_apply_damage
 from combat.hp_engine import heal as hp_heal
 from damage_types import DamageType
@@ -200,6 +201,23 @@ def _is_undead_target(target) -> bool:
     return "undead" in tags
 
 
+def _has_undead_tag(target) -> bool:
+    if target is None:
+        return False
+    has_tag = getattr(target, "has_tag", None)
+    if callable(has_tag):
+        try:
+            if bool(has_tag("undead")):
+                return True
+        except Exception:
+            pass
+    tags = {str(t).strip().lower() for t in (getattr(target, "tags", None) or [])}
+    enemy_type = getattr(target, "enemy_type", None)
+    if enemy_type is not None:
+        tags.add(str(getattr(enemy_type, "value", enemy_type)).strip().lower())
+    return "undead" in tags
+
+
 def _harm_heal_bonus_for_target(target) -> int:
     if target is None:
         return 0
@@ -248,6 +266,43 @@ def _has_status_id(actor, status_id: str) -> bool:
         if getattr(status, "id", None) == status_id:
             return True
     return False
+
+
+def _ability_modifier(actor, ability: str) -> int:
+    key = str(ability or "").strip().lower()
+    if not key:
+        return 0
+    mods = getattr(actor, "ability_modifiers", None)
+    if isinstance(mods, dict):
+        try:
+            return int(mods.get(key, 0) or 0)
+        except Exception:
+            pass
+    aliases = {
+        "strength": ("str_mod", "strength_mod"),
+        "dexterity": ("dex_mod", "dexterity_mod"),
+        "constitution": ("con_mod", "constitution_mod"),
+        "intelligence": ("int_mod", "intelligence_mod"),
+        "wisdom": ("wis_mod", "wisdom_mod"),
+        "charisma": ("cha_mod", "charisma_mod"),
+    }
+    for attr in aliases.get(key, ()):
+        try:
+            return int(getattr(actor, attr, 0) or 0)
+        except Exception:
+            continue
+    return 0
+
+
+def _heal_spellcasting_modifier(actor) -> int:
+    class_name = str(getattr(actor, "class_name", "") or "").strip().lower()
+    if class_name in {"sorcerer", "bard"}:
+        ability = "charisma"
+    elif class_name == "wizard":
+        ability = "intelligence"
+    else:
+        ability = "wisdom"
+    return _ability_modifier(actor, ability)
 
 
 def _is_poisonous_target(target) -> bool:
@@ -1997,7 +2052,30 @@ class BurningHandsEvent(MagicEvent):
             return EventResult.cancelled(message="Brak celow w stozku.")
 
         spell_dc = int(prompt_for_roll("Burning Hands - podaj Spell DC:", layout="test", answer_placeholder="Spell DC") or 0)
-        base_damage = int(prompt_for_roll("Burning Hands - podaj obrazenia fire:", layout="damage", answer_placeholder="Obrazenia") or 0)
+        burn_note = burn_it_prompt_note(
+            actor,
+            DamageType.FIRE.value,
+            source_kind="spell",
+            spell_rank=1,
+        )
+        base_damage = int(
+            prompt_for_roll(
+                "Burning Hands - podaj obrazenia fire:",
+                layout="damage",
+                answer_placeholder="Obrazenia",
+                prompt_long=burn_note,
+            )
+            or 0
+        )
+        base_damage += int(
+            burn_it_bonus(
+                actor,
+                DamageType.FIRE.value,
+                source_kind="spell",
+                spell_rank=1,
+            )
+            or 0
+        )
 
         hit_count = 0
         for target in targets:
@@ -2605,71 +2683,102 @@ class HealEvent(MagicEvent):
     magic_traditions = (SpellTradition.DIVINE, SpellTradition.PRIMAL)
     magic_types = ["necromancy"]
     range_feet = 30
-    prompt = "Heal: leczy zywych, rani undead (uproszczenie single/burst)."
+    prompt = (
+        "Heal: wybierz 1/2/3 akcje. "
+        "1 akcja (dotyk): 1d8 + modyfikator; "
+        "2 akcje (30 ft): stale 8 HP; "
+        "3 akcje: fala 30 ft."
+    )
 
     def execute(self, ctx: EventContext) -> EventResult:
         actor = ctx.actor
         if actor is None or getattr(actor, "position", None) is None:
             return EventResult.cancelled(message="Brak bohatera do rzucenia czaru.")
         has_healing_hands = _has_status_id(actor, "healing_hands")
-        has_holy_castigation = _has_status_id(actor, "holy_castigation")
-        mode = _prompt_choice(ctx, "Heal - wybierz tryb", ["single", "burst"], source=self.name) or "single"
+        action_choice = _prompt_choice(ctx, "Heal - ile akcji zuzywasz?", ["1", "2", "3"], source=self.name) or "2"
+        normalized_choice = str(action_choice or "").strip().lower()
+        if normalized_choice == "single":
+            normalized_choice = "1"
+        elif normalized_choice == "burst":
+            normalized_choice = "3"
+        try:
+            actions_used = int(normalized_choice)
+        except Exception:
+            actions_used = 2
+        actions_used = min(3, max(1, actions_used))
+
+        if ctx.in_combat:
+            remaining = self._actions_remaining(ctx, actor)
+            if remaining is not None and actions_used > int(remaining):
+                return EventResult.cancelled(
+                    message=f"Za malo akcji na Heal: potrzebne {actions_used}, dostepne {remaining}."
+                )
+
         prompt_hint_parts: list[str] = []
         if has_healing_hands:
             prompt_hint_parts.append("Healing Hands: rozlicz Heal na kosciach d10 zamiast d8.")
-        if has_holy_castigation:
-            prompt_hint_parts.append("Holy Castigation: Heal moze raniac fiendy jak undead.")
         prompt_hint = "\n".join(prompt_hint_parts) if prompt_hint_parts else None
-        amount = int(
-            prompt_for_roll(
-                "Heal - podaj wartosc leczenia/obrazen positive:",
-                layout="damage",
-                answer_placeholder="Wartosc",
-                prompt_long=prompt_hint,
+        amount = 0
+        if actions_used != 2:
+            amount = int(
+                prompt_for_roll(
+                    "Heal - podaj wartosc leczenia/obrazen positive:",
+                    layout="damage",
+                    answer_placeholder="Wartosc",
+                    prompt_long=prompt_hint,
+                )
+                or 0
             )
-            or 0
-        )
-        if amount <= 0:
-            return EventResult.cancelled(message="Heal: wartosc musi byc > 0.")
+            if amount <= 0:
+                return EventResult.cancelled(message="Heal: wartosc musi byc > 0.")
 
-        if mode == "single":
+        if actions_used in {1, 2}:
+            touch_heal = actions_used == 1
+            max_range = 5 if touch_heal else self.range_feet
+            if touch_heal:
+                total_amount = amount + _heal_spellcasting_modifier(actor)
+            else:
+                total_amount = 8
             candidates = list(_iter_hero_candidates(ctx.game)) + list(_iter_enemy_candidates(ctx.game))
             target, _target_pos = pick_target_in_range(
                 ctx,
                 actor.position,
                 candidates,
-                max_range_feet=self.range_feet,
+                max_range_feet=max_range,
                 allowed_kinds=("hero", "enemy"),
                 tags=self._effective_tags(ctx),
             )
             if target is None:
                 return EventResult.cancelled(message="Brak celu dla Heal.")
-            if _is_undead_target(target) or (has_holy_castigation and _is_fiend_target(target)):
-                defeated = _apply_damage(target, amount, DamageType.POSITIVE.value)
-                target_kind = "undead/fiend" if has_holy_castigation else "undead"
-                msg = f"Heal: {target_kind} otrzymuje {amount} positive."
+            if _has_undead_tag(target):
+                defeated = _apply_damage(target, total_amount, DamageType.POSITIVE.value)
+                msg = f"Heal ({actions_used} akcje): undead otrzymuje {total_amount} positive."
                 if defeated:
                     msg += " Cel pokonany."
-                return EventResult(success=True, consumed_action=True, message=msg)
-            _apply_heal(target, amount)
-            return EventResult(success=True, consumed_action=True, message=f"Heal: przywrocono {amount} HP.")
+                return EventResult(success=True, consumed_action=True, actions_spent=actions_used, message=msg)
+            _apply_heal(target, total_amount)
+            return EventResult(
+                success=True,
+                consumed_action=True,
+                actions_spent=actions_used,
+                message=f"Heal ({actions_used} akcje): przywrocono {total_amount} HP.",
+            )
 
         healed = 0
         harmed = 0
-        for hero in _targets_in_radius(_iter_hero_candidates(ctx.game), actor.position, self.range_feet):
-            if _is_undead_target(hero):
+        all_candidates = list(_iter_hero_candidates(ctx.game)) + list(_iter_enemy_candidates(ctx.game))
+        for target in _targets_in_radius(all_candidates, actor.position, self.range_feet):
+            if _has_undead_tag(target):
+                _apply_damage(target, amount, DamageType.POSITIVE.value)
+                harmed += 1
                 continue
-            _apply_heal(hero, amount)
+            _apply_heal(target, amount)
             healed += 1
-        for enemy in _targets_in_radius(_iter_enemy_candidates(ctx.game), actor.position, self.range_feet):
-            if not (_is_undead_target(enemy) or (has_holy_castigation and _is_fiend_target(enemy))):
-                continue
-            _apply_damage(enemy, amount, DamageType.POSITIVE.value)
-            harmed += 1
         return EventResult(
             success=True,
             consumed_action=True,
-            message=f"Heal (burst): uleczono {healed}, zraniono cele positive {harmed}.",
+            actions_spent=actions_used,
+            message=f"Heal (3 akcje, fala 30 ft): uleczono {healed}, zraniono cele positive {harmed}.",
         )
 
 

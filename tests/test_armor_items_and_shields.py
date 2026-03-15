@@ -74,22 +74,80 @@ def _ac_bonus_value(actor) -> int:
 def test_armor_profiles_and_aliases():
     full_plate = create_armor("full plate")
     studded = create_armor("studded_leather")
+    chain_shirt = create_armor("chain shirt")
+    half_plate = create_armor("half_plate")
 
     assert full_plate is not None and full_plate.ac_bonus == 6
     assert "bulwark" in full_plate.traits
     assert studded is not None and studded.dex_cap == 3
+    assert chain_shirt is not None and chain_shirt.ac_bonus == 2
+    assert half_plate is not None and half_plate.ac_bonus == 5
     assert normalize_armor_id("plytowa") == "full_plate"
+    assert normalize_armor_id("chainshirt") == "chain_shirt"
 
 
 def test_shield_profiles_and_aliases():
     buckler = create_shield("buckler")
+    wooden = create_shield("wooden_shield")
+    steel = create_shield("steel_shield")
     tower = create_shield("tower shield")
 
     assert buckler is not None and int(buckler.ac_bonus) == 1
     assert int(buckler.hardness) == 3
+    assert wooden is not None and int(wooden.ac_bonus) == 2
+    assert int(wooden.hardness) == 3
+    assert int(wooden.max_hp) == 12
+    assert steel is not None and int(steel.ac_bonus) == 2
+    assert int(steel.hardness) == 5
     assert tower is not None and int(tower.ac_bonus) == 2
+    assert int(getattr(tower, "take_cover_ac_bonus", 0)) == 4
+    assert int(getattr(tower, "speed_penalty_feet", 0)) == 5
     assert "tower_shield" in (tower.traits or ())
     assert normalize_shield_id("tarcza") == "steel_shield"
+    assert normalize_shield_id("drewniana_tarcza") == "wooden_shield"
+
+
+def test_armor_penalties_and_requirements_match_crb_table():
+    leather = create_armor("leather_armor")
+    chain_shirt = create_armor("chain_shirt")
+    chain_mail = create_armor("chain_mail")
+    splint = create_armor("splint_mail")
+    half_plate = create_armor("half_plate")
+    assert leather is not None and chain_shirt is not None
+    assert chain_mail is not None and splint is not None and half_plate is not None
+
+    assert int(getattr(leather, "check_penalty", 0)) == 1
+    assert int(getattr(leather, "speed_penalty_feet", 0)) == 0
+    assert int(getattr(chain_shirt, "check_penalty", 0)) == 1
+    assert int(getattr(chain_shirt, "strength_requirement", 0)) == 12
+    assert int(getattr(chain_mail, "check_penalty", 0)) == 2
+    assert int(getattr(chain_mail, "speed_penalty_feet", 0)) == 5
+    assert str(getattr(chain_mail, "armor_category", "")) == "medium"
+    assert int(getattr(splint, "dex_cap", 0)) == 1
+    assert int(getattr(splint, "strength_requirement", 0)) == 16
+    assert int(getattr(half_plate, "price_cp", 0)) == 1800
+    assert int(getattr(half_plate, "speed_penalty_feet", 0)) == 10
+
+
+def test_armor_trait_profiles_are_assigned():
+    expected_traits = {
+        "padded_armor": {"comfort"},
+        "leather_armor": set(),
+        "studded_leather": set(),
+        "chain_shirt": {"flexible", "noisy"},
+        "hide_armor": set(),
+        "scale_mail": set(),
+        "breastplate": set(),
+        "chain_mail": {"flexible", "noisy"},
+        "splint_mail": set(),
+        "half_plate": set(),
+        "full_plate": {"bulwark"},
+    }
+    for armor_id, expected in expected_traits.items():
+        armor = create_armor(armor_id)
+        assert armor is not None
+        traits = {str(item or "").strip().lower() for item in tuple(getattr(armor, "traits", ()) or ())}
+        assert traits == expected
 
 
 def test_inventory_can_seed_armor_and_shield_loadout():
@@ -127,7 +185,7 @@ def test_equipped_armor_adds_item_bonus_to_ac_resolution():
 
 def test_noisy_armor_penalizes_stealth_modifier():
     actor = Actor()
-    armor = create_armor("scale_mail")
+    armor = create_armor("chain_mail")
     assert armor is not None
     actor.inventory = [armor]
     actor.equipped_armor_item_id = str(getattr(armor, "instance_id", ""))
@@ -139,6 +197,42 @@ def test_noisy_armor_penalizes_stealth_modifier():
         base_modifier=0,
     )
     assert modifier == -2
+
+
+def test_flexible_armor_ignores_check_penalty_for_acrobatics_and_athletics():
+    actor = Actor()
+    flexible = create_armor("chain_shirt")
+    assert flexible is not None
+    actor.inventory = [flexible]
+    actor.equipped_armor_item_id = str(getattr(flexible, "instance_id", ""))
+
+    acro_mod, _acro_breakdown, _acro_notes = compute_skill_modifier_with_sources(
+        skill_id=Skill.ACROBATICS.value,
+        actor=actor,
+        tags=["acrobatics", "roll"],
+        base_modifier=0,
+    )
+    ath_mod, _ath_breakdown, _ath_notes = compute_skill_modifier_with_sources(
+        skill_id=Skill.ATHLETICS.value,
+        actor=actor,
+        tags=["athletics", "roll"],
+        base_modifier=0,
+    )
+    assert acro_mod == 0
+    assert ath_mod == 0
+
+    non_flexible = create_armor("scale_mail")
+    assert non_flexible is not None
+    actor.inventory = [non_flexible]
+    actor.equipped_armor_item_id = str(getattr(non_flexible, "instance_id", ""))
+
+    ath_mod_nf, _ath_breakdown_nf, _ath_notes_nf = compute_skill_modifier_with_sources(
+        skill_id=Skill.ATHLETICS.value,
+        actor=actor,
+        tags=["athletics", "roll"],
+        base_modifier=0,
+    )
+    assert ath_mod_nf == -2
 
 
 def test_bulwark_adds_reflex_bonus_in_area_context():
@@ -157,33 +251,55 @@ def test_bulwark_adds_reflex_bonus_in_area_context():
     assert modifier == 3
 
 
-def test_flexible_and_armor_specialization_reduce_critical_damage():
+def test_armor_specialization_uses_group_effects():
     actor = Actor()
-    armor = create_armor("studded_leather")
+    armor = create_armor("chain_mail")
     assert armor is not None
     actor.inventory = [armor]
     actor.equipped_armor_item_id = str(getattr(armor, "instance_id", ""))
+    actor.statuses = [Status(id="armor_specialization")]
 
     reduced, notes = apply_critical_damage_reduction(
         actor,
         [("slashing", 10)],
         critical=True,
     )
-    assert reduced[0][1] == 8
-    assert any("Flexible" in note for note in notes)
+    assert reduced[0][1] == 6
+    assert any("chain" in note.lower() for note in notes)
 
-    heavy = create_armor("full_plate")
-    assert heavy is not None
-    actor.inventory = [heavy]
-    actor.equipped_armor_item_id = str(getattr(heavy, "instance_id", ""))
-    actor.statuses = [Status(id="armor_specialization")]
+    plate = create_armor("full_plate")
+    assert plate is not None
+    actor.inventory = [plate]
+    actor.equipped_armor_item_id = str(getattr(plate, "instance_id", ""))
     reduced_spec, notes_spec = apply_critical_damage_reduction(
         actor,
-        [("bludgeoning", 10)],
-        critical=True,
+        [("slashing", 10)],
+        critical=False,
     )
-    assert reduced_spec[0][1] == 7
-    assert any("Armor Specialization" in note for note in notes_spec)
+    assert reduced_spec[0][1] == 8
+    assert any("plate" in note.lower() for note in notes_spec)
+
+    leather = create_armor("hide_armor")
+    assert leather is not None
+    actor.inventory = [leather]
+    actor.equipped_armor_item_id = str(getattr(leather, "instance_id", ""))
+    reduced_leather, _notes_leather = apply_critical_damage_reduction(
+        actor,
+        [("bludgeoning", 10)],
+        critical=False,
+    )
+    assert reduced_leather[0][1] == 9
+
+    composite = create_armor("scale_mail")
+    assert composite is not None
+    actor.inventory = [composite]
+    actor.equipped_armor_item_id = str(getattr(composite, "instance_id", ""))
+    reduced_composite, _notes_composite = apply_critical_damage_reduction(
+        actor,
+        [("piercing", 10)],
+        critical=False,
+    )
+    assert reduced_composite[0][1] == 9
 
 
 def test_raise_shield_uses_equipped_shield_ac_bonus():

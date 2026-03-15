@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from combat import effective_ac
+from combat.damage_utils import burn_it_bonus, burn_it_prompt_note
 from combat.degree_of_success import is_critical_success, is_hit, natural_shift_from_roll, resolve_outcome
 from combat.hp_engine import apply_damage as hp_apply_damage
 from bonuses import BonusEffect, BonusType
@@ -427,11 +428,27 @@ class ElementalTossEvent(SorcererFocusSpellEvent):
         damage_type = _normalize(setup.get("elemental_damage_type") or setup.get("sorcerer_elemental_damage_type") or "fire")
         if damage_type not in {"fire", "bludgeoning"}:
             damage_type = "fire"
+        burn_note = burn_it_prompt_note(
+            actor,
+            damage_type,
+            source_kind="spell",
+            spell_rank=rank,
+        )
         damage = int(
             prompt_for_roll(
                 f"Elemental Toss: podaj obrazenia ({rank}d8 {damage_type})",
                 layout="damage",
                 answer_placeholder="Obrazenia",
+                prompt_long=burn_note,
+            )
+            or 0
+        )
+        damage += int(
+            burn_it_bonus(
+                actor,
+                damage_type,
+                source_kind="spell",
+                spell_rank=rank,
             )
             or 0
         )

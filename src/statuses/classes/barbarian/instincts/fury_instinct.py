@@ -8,7 +8,8 @@ FURY_INSTINCT_FEAT_CHOICES = [
 ]
 
 FURY_INSTINCT_PROMPT = (
-    "Fury Instinct: wybierz jeden z barbarian feats jako bonus podczas Rage."
+    "Fury Instinct: wybierz jeden z barbarian feats jako bonus podczas Rage.\n"
+    "Uwaga: efekty instynktu działają tylko podczas aktywnego Rage."
 )
 
 

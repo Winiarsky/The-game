@@ -22,6 +22,7 @@ from .basic_weapons import (
     UnarmedWeapon,
     WarhammerWeapon,
     create_weapon,
+    list_weapon_ids,
     normalize_weapon_id,
     weapon_profile,
 )
@@ -48,6 +49,7 @@ __all__ = [
     "UnarmedWeapon",
     "RazortoothJawsWeapon",
     "create_weapon",
+    "list_weapon_ids",
     "normalize_weapon_id",
     "weapon_profile",
 ]

@@ -7,7 +7,7 @@ from board import consts
 from bonuses import BonusEffect, BonusType, build_modifiers_grid
 from combat import refresh_flanking_statuses
 from combat.degree_of_success import is_critical_success, is_hit, natural_shift_from_roll, resolve_outcome
-from combat.damage_utils import burn_it_bonus, burn_it_prompt_note
+from combat.damage_utils import burn_it_bonus, burn_it_prompt_note, remove_defeated_enemy
 from GameObjects.interactions_mixin import prompt_for_roll
 from damage_types import DamageType
 from statuses import Status, inspire_courage_damage_bonus, make_persistent_damage
@@ -163,6 +163,8 @@ class BasicMeleeAttackEvent(AttackEventBase):
             attack_roll_penalty = max(0, int(metadata.get("attack_roll_penalty", 0) or 0))
         except Exception:
             attack_roll_penalty = 0
+        penalty_type_raw = str(metadata.get("attack_roll_penalty_type", "circumstance") or "").strip().lower()
+        attack_roll_penalty_type = BonusType.STATUS if penalty_type_raw == "status" else BonusType.CIRCUMSTANCE
         try:
             attack_roll_bonus = max(0, int(metadata.get("ki_strike_attack_bonus", 0) or 0))
         except Exception:
@@ -349,10 +351,14 @@ class BasicMeleeAttackEvent(AttackEventBase):
         if attack_roll_penalty > 0:
             extra_effects.append(
                 BonusEffect(
-                    type=BonusType.CIRCUMSTANCE,
+                    type=attack_roll_penalty_type,
                     value=attack_roll_penalty,
                     tag=action_tag,
-                    source="fighter:attack_roll_penalty",
+                    source=(
+                        "fighter:attack_roll_penalty_status"
+                        if attack_roll_penalty_type == BonusType.STATUS
+                        else "fighter:attack_roll_penalty"
+                    ),
                     label="fighter penalty",
                     is_penalty=True,
                 )
@@ -424,22 +430,25 @@ class BasicMeleeAttackEvent(AttackEventBase):
                 ctx.game.ui_log(f"Modyfikatory ({action_tag}): {', '.join(log_lines)}.")
             except Exception:
                 pass
-        prompt_long = f"Modyfikator łączny: {modifier:+d} (doliczany automatycznie)."
-        if weapon_roll_mod:
-            prompt_long = (
-                f"{prompt_long}\nBonus broni: {weapon_roll_mod:+d} "
-                f"(prof {int(weapon_attack_bonus.get('proficiency_bonus', 0) or 0):+d}, "
-                f"ability {int(weapon_attack_bonus.get('ability_bonus', 0) or 0):+d}, "
-                f"item {int(weapon_attack_bonus.get('item_bonus', 0) or 0):+d})."
-            )
+        prompt_lines = self._attack_prompt_breakdown_lines(
+            weapon_attack_bonus=weapon_attack_bonus,
+            modifier=modifier,
+            log_lines=log_lines,
+        )
         if trait_notes:
-            prompt_long = f"{prompt_long}\n" + "\n".join(trait_notes)
+            prompt_lines.extend(trait_notes)
+        prompt_long = "\n".join(prompt_lines).strip()
 
         roll_data = prompt_for_roll(
             f"Atak {self.weapon_label} przeciwko AC {prompt_ac}.",
             layout="test",
             prompt_long=prompt_long,
             modifiers=build_modifiers_grid(best_effects),
+            roll_stack=self._attack_roll_stack_payload(
+                weapon_attack_bonus=weapon_attack_bonus,
+                modifier=modifier,
+            ),
+            auto_total_modifier=int(weapon_roll_mod + modifier),
             answer_placeholder="Wynik k20",
             return_details=True,
             infer_natural_from_roll=True,
@@ -447,11 +456,16 @@ class BasicMeleeAttackEvent(AttackEventBase):
         if isinstance(roll_data, dict):
             roll = int(roll_data.get("roll", 0) or 0)
             natural_shift = int(roll_data.get("natural_shift", 0) or 0)
+            if natural_shift == 0:
+                raw_roll = int(roll_data.get("raw_roll", roll) or roll)
+                natural_shift = natural_shift_from_roll(raw_roll)
+            modifier_delta = int(roll_data.get("modifier_delta", 0) or 0)
         else:
             roll = int(roll_data or 0)
             natural_shift = natural_shift_from_roll(roll)
+            modifier_delta = 0
 
-        total_roll = roll + modifier + weapon_roll_mod
+        total_roll = roll + modifier + weapon_roll_mod + modifier_delta
         self._consume_aid_attack_bonus(hero, action_tag=action_tag)
         self._consume_monster_hunter_bonus(hero)
         outcome = resolve_outcome(total_roll, target_ac, natural_shift=natural_shift)
@@ -664,10 +678,12 @@ class BasicMeleeAttackEvent(AttackEventBase):
         ):
             sneak_dice = self._rogue_sneak_attack_dice(hero)
             if sneak_dice > 0:
-                sneak_roll = prompt_for_roll(
-                    f"Sneak Attack: dodatkowe obrażenia {sneak_dice}k6:",
-                    layout="damage",
+                sneak_roll = self._prompt_damage_roll_total(
+                    prompt=f"Sneak Attack: dodatkowe obrażenia {sneak_dice}k6:",
+                    actor=hero,
+                    damage_prompt=f"{sneak_dice}k6",
                     answer_placeholder="Sneak attack damage",
+                    roll_for_damage=prompt_for_roll,
                 )
                 try:
                     sneak_bonus = max(0, int(sneak_roll or 0))
@@ -677,10 +693,12 @@ class BasicMeleeAttackEvent(AttackEventBase):
                     damage_bonus += sneak_bonus
                     damage_notes.append(f"Sneak Attack: +{sneak_bonus} precision (doliczone).")
         if self._ranger_precision_ready(ctx, hero, enemy):
-            precision_roll = prompt_for_roll(
-                "Hunter's Edge (Precision): dodatkowe obrażenia 1k8:",
-                layout="damage",
+            precision_roll = self._prompt_damage_roll_total(
+                prompt="Hunter's Edge (Precision): dodatkowe obrażenia 1k8:",
+                actor=hero,
+                damage_prompt="1k8",
                 answer_placeholder="Precision damage",
+                roll_for_damage=prompt_for_roll,
             )
             try:
                 precision_bonus = max(0, int(precision_roll or 0))
@@ -709,18 +727,23 @@ class BasicMeleeAttackEvent(AttackEventBase):
         damage_notes.extend(class_upgrade_notes)
         if damage_notes:
             note = f"{note}\n" + "\n".join(damage_notes) if note else "\n".join(damage_notes)
-        damage = prompt_for_roll(
-            dmg_prompt,
-            layout="damage",
-            answer_placeholder="Suma obrażeń",
+        burn_bonus_first_type = int(burn_it_bonus(hero, first_type) or 0)
+        damage = self._prompt_damage_roll_total(
+            prompt=dmg_prompt,
+            actor=hero,
+            damage_prompt=effective_damage_prompt,
+            extra_flat_bonus=int(damage_bonus) + int(burn_bonus_first_type),
             prompt_long=note,
+            answer_placeholder="Suma obrażeń",
+            roll_for_damage=prompt_for_roll,
         )
         damage_components = self._collect_damage_components(
             damage,
             actor=hero,
             damage_type_override=resolved_damage_type,
-            flat_bonus=damage_bonus,
+            flat_bonus=0,
             damage_prompt_override=effective_damage_prompt,
+            first_roll_includes_bonus=True,
         )
         try:
             ignore_incorporeal = _ignores_incorporeal(hero)
@@ -746,30 +769,36 @@ class BasicMeleeAttackEvent(AttackEventBase):
                 except Exception:
                     pass
         if critical and deadly_die:
-            extra = prompt_for_roll(
-                f"Deadly {deadly_die}: dodatkowe obrażenia (rzut): ",
-                layout="damage",
+            extra = self._prompt_damage_roll_total(
+                prompt=f"Deadly {deadly_die}: dodatkowe obrażenia (rzut): ",
+                actor=hero,
+                damage_prompt=f"1{deadly_die}",
                 answer_placeholder="Dodatkowe obrażenia",
+                roll_for_damage=prompt_for_roll,
             )
             try:
                 damage_components.append((first_type, int(extra)))
             except Exception:
                 pass
         if critical and fatal_die:
-            extra = prompt_for_roll(
-                f"Fatal {fatal_die}: dodatkowa kość obrażeń (rzut): ",
-                layout="damage",
+            extra = self._prompt_damage_roll_total(
+                prompt=f"Fatal {fatal_die}: dodatkowa kość obrażeń (rzut): ",
+                actor=hero,
+                damage_prompt=f"1{fatal_die}",
                 answer_placeholder="Dodatkowe obrażenia",
+                roll_for_damage=prompt_for_roll,
             )
             try:
                 damage_components.append((first_type, int(extra)))
             except Exception:
                 pass
         if power_attack_extra_dice > 0:
-            extra = prompt_for_roll(
-                f"Power Attack: dodatkowe obrażenia ({power_attack_extra_dice}k): ",
-                layout="damage",
+            extra = self._prompt_damage_roll_total(
+                prompt=f"Power Attack: dodatkowe obrażenia ({power_attack_extra_dice}k): ",
+                actor=hero,
+                damage_prompt=f"{power_attack_extra_dice}k",
                 answer_placeholder="Dodatkowe obrażenia",
+                roll_for_damage=prompt_for_roll,
             )
             try:
                 damage_components.append((first_type, int(extra)))
@@ -778,31 +807,32 @@ class BasicMeleeAttackEvent(AttackEventBase):
         ki_formula = str(metadata.get("ki_strike_extra_formula", "") or "").strip()
         ki_damage_type = str(metadata.get("ki_strike_extra_damage_type", "") or "").strip().lower()
         if ki_formula and ki_damage_type:
-            extra = prompt_for_roll(
-                f"Ki Strike: dodatkowe obrażenia ({ki_formula} {ki_damage_type}) - podaj wynik:",
-                layout="damage",
+            extra = self._prompt_damage_roll_total(
+                prompt=f"Ki Strike: dodatkowe obrażenia ({ki_formula} {ki_damage_type}) - podaj wynik:",
+                actor=hero,
+                damage_prompt=ki_formula,
                 answer_placeholder="Dodatkowe obrażenia",
+                roll_for_damage=prompt_for_roll,
             )
             try:
                 damage_components.append((ki_damage_type, int(extra)))
             except Exception:
                 pass
-        if critical:
-            try:
-                from GameObjects.items.armor import apply_critical_damage_reduction
+        try:
+            from GameObjects.items.armor import apply_critical_damage_reduction
 
-                damage_components, armor_notes = apply_critical_damage_reduction(
-                    enemy,
-                    damage_components,
-                    critical=True,
-                )
-                for note_line in armor_notes:
-                    try:
-                        ctx.game.ui_log(note_line)
-                    except Exception:
-                        pass
-            except Exception:
-                pass
+            damage_components, armor_notes = apply_critical_damage_reduction(
+                enemy,
+                damage_components,
+                critical=critical,
+            )
+            for note_line in armor_notes:
+                try:
+                    ctx.game.ui_log(note_line)
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
         pending_persistent_payload = None
         persistent_payload = metadata.get("on_hit_persistent_damage")
@@ -870,7 +900,13 @@ class BasicMeleeAttackEvent(AttackEventBase):
             damage_prompt=effective_damage_prompt,
             damage_components=damage_components,
             default_damage_type=first_type,
-            roll_for_bleed=prompt_for_roll,
+            roll_for_bleed=lambda prompt, **kwargs: self._prompt_damage_roll_total(
+                prompt=prompt,
+                actor=hero,
+                damage_prompt="1k6",
+                answer_placeholder=str(kwargs.get("answer_placeholder", "Bleed") or "Bleed"),
+                roll_for_damage=prompt_for_roll,
+            ),
         )
         for note_line in crit_spec_notes:
             try:
@@ -917,14 +953,9 @@ class BasicMeleeAttackEvent(AttackEventBase):
             except Exception:
                 pass
             try:
-                ctx.game.board.remove(enemy_pos)
-                try:
-                    ctx.game.enemies.remove(enemy)
-                except ValueError:
-                    pass
+                remove_defeated_enemy(ctx.game, enemy, position=enemy_pos, source=self.action_id_base)
             except Exception as exc:
                 logger.error("Nie udało się usunąć przeciwnika: %s", exc)
-            enemy.position = None
             logger.info("Przeciwnik pokonany.")
         else:
             logger.info("Przeciwnik przyjmuje obrażenia, pozostaje przy życiu (HP %s).", getattr(enemy, "hp", "?"))
@@ -966,31 +997,41 @@ class BasicMeleeAttackEvent(AttackEventBase):
         damage_type_override: str | Sequence[str] | None = None,
         flat_bonus: int = 0,
         damage_prompt_override: str | Sequence[str] | None = None,
+        first_roll_includes_bonus: bool = False,
     ) -> list[tuple[str, int]]:
         """Zwraca listę (typ, obrażenia) – obsługa wielu typów."""
         damage_prompt = damage_prompt_override if damage_prompt_override is not None else self.damage_prompt
         damage_type = damage_type_override if damage_type_override is not None else self.damage_type
         if isinstance(damage_type, str):
             bonus = burn_it_bonus(actor, damage_type)
-            return [(damage_type, int(first_roll) + int(bonus) + int(flat_bonus))]
+            total = int(first_roll)
+            if not first_roll_includes_bonus:
+                total += int(bonus) + int(flat_bonus)
+            return [(damage_type, int(total))]
         components: list[tuple[str, int]] = []
         damage_types = list(damage_type)
         bonus = burn_it_bonus(actor, damage_types[0])
-        components.append((damage_types[0], int(first_roll) + int(bonus) + int(flat_bonus)))
+        first_total = int(first_roll)
+        if not first_roll_includes_bonus:
+            first_total += int(bonus) + int(flat_bonus)
+        components.append((damage_types[0], int(first_total)))
         for idx, dtype in enumerate(damage_types[1:], start=1):
             prompt_text = damage_prompt
             if isinstance(damage_prompt, (list, tuple)):
                 prompt_text = damage_prompt[idx] if idx < len(damage_prompt) else damage_prompt[-1]
             prompt = f"Trafienie! Obrażenia dodatkowe {prompt_text} ({dtype}): "
             note = burn_it_prompt_note(actor, dtype)
-            roll = prompt_for_roll(
-                prompt,
-                layout="damage",
+            burn_bonus = int(burn_it_bonus(actor, dtype) or 0)
+            roll = self._prompt_damage_roll_total(
+                prompt=prompt,
+                actor=actor,
+                damage_prompt=str(prompt_text),
+                extra_flat_bonus=burn_bonus,
                 answer_placeholder=f"Obrażenia {dtype}",
                 prompt_long=note,
+                roll_for_damage=prompt_for_roll,
             )
-            bonus = burn_it_bonus(actor, dtype)
-            components.append((dtype, int(roll) + int(bonus)))
+            components.append((dtype, int(roll)))
         return components
 
     @staticmethod
@@ -1051,10 +1092,12 @@ class BasicMeleeAttackEvent(AttackEventBase):
         if formula.isdigit():
             amount = int(formula)
         else:
-            rolled = prompt_for_roll(
-                f"Persistent on hit ({formula} {damage_type}) - podaj wynik:",
-                layout="damage",
+            rolled = self._prompt_damage_roll_total(
+                prompt=f"Persistent on hit ({formula} {damage_type}) - podaj wynik:",
+                actor=getattr(ctx, "actor", None),
+                damage_prompt=formula,
                 answer_placeholder="Persistent",
+                roll_for_damage=prompt_for_roll,
             )
             try:
                 amount = int(rolled or 0)

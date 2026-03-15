@@ -140,3 +140,22 @@ def test_stealth_success_with_hide_bonus(monkeypatch):
     )
     assert dc == 12
     assert any("stealth_start" in a.get("action_id", "") or True for a in game.events.emitted)
+
+
+def test_stealth_budget_is_half_speed_without_very_sneaky():
+    hero = Hero()
+    hero.land_speed_feet = 25
+
+    budget = StealthEvent._sneak_movement_budget_feet(hero)
+
+    assert budget == 10
+
+
+def test_stealth_budget_gets_plus_five_with_very_sneaky():
+    hero = Hero()
+    hero.land_speed_feet = 25
+    hero.statuses.append(types.SimpleNamespace(id="very_sneaky", data={"sneak_bonus_feet": 5}))
+
+    budget = StealthEvent._sneak_movement_budget_feet(hero)
+
+    assert budget == 15

@@ -11,7 +11,8 @@ SPIRIT_INSTINCT_TYPES = [
 
 SPIRIT_INSTINCT_PROMPT = (
     "Spirit Instinct: wybierz typ obrażeń (positive/negative) albo pozostaw typ broni.\n"
-    "Podczas Rage możesz wybrać główny typ obrażeń: broń lub wybrany typ spirytualny."
+    "Podczas Rage możesz wybrać główny typ obrażeń: broń lub wybrany typ spirytualny.\n"
+    "Uwaga: efekty instynktu działają tylko podczas aktywnego Rage."
 )
 
 

@@ -3,10 +3,11 @@ from __future__ import annotations
 from statuses.base import Status
 
 FEY_TOUCHED_GNOME_DESCRIPTION = (
-    "Twoja krew jest silnie przesiąknięta magią fey.\n"
-    "Zyskujesz trait fey oraz 1 primal cantrip jako innate spell at-will.\n"
-    "W podręczniku możesz raz dziennie zmienić ten cantrip przez 10-minutową "
-    "medytację; w tym silniku wybór cantripa jest ustawiany przy nadaniu statusu."
+    "Magia fey przenika twoje dziedzictwo od urodzenia.\n"
+    "Kiedy: po wybraniu heritage wybierasz 1 cantrip z listy Fey-touched.\n"
+    "Efekt: dostajesz trait fey (ancestry_extra_traits), wybrany cantrip jako "
+    "innate spell at-will (granted_cantrips, tradycja primal), oraz mozliwosc "
+    "zmiany cantripa po 10 minutach dziennej medytacji (reselect_cantrip_daily_minutes)."
 )
 
 

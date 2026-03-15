@@ -6,10 +6,12 @@ from statuses.base import Status
 from statuses.check_effects import CheckEffect
 
 FEY_FELLOWSHIP_DESCRIPTION = (
-    "Masz +2 circumstance do Perception checks i saving throws przeciw fey.\n"
-    "W social encounter z fey możesz natychmiast wykonać Make an Impression "
-    "(zwykle z karą -5), zamiast wymaganej 1 minuty rozmowy.\n"
-    "Jeśli posiadasz Glad-Hand, kara nie obowiązuje."
+    "Masz naturalna latwosc w odczytywaniu i lagodzeniu istot fey.\n"
+    "Kiedy: wykonujesz Perception check lub save (Fortitude/Reflex/Will) "
+    "przeciw efektom/tagom fey.\n"
+    "Efekt: +2 circumstance bonus do tych testow; dodatkowo w social encounter "
+    "z fey mozesz wykonac Make an Impression natychmiast (zwykle kara -5), "
+    "a jesli masz Glad-Hand, ta kara jest ignorowana."
 )
 
 

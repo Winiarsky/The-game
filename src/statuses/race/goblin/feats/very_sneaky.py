@@ -3,10 +3,11 @@ from __future__ import annotations
 from statuses.base import Status
 
 VERY_SNEAKY_DESCRIPTION = (
-    "Podczas akcji Sneak możesz poruszyć się o 5 stóp więcej (do pełnej Speed).\n"
-    "Dodatkowo przy kontynuowaniu Sneak i udanych testach możesz pozostać "
-    "niezauważony do końca tury nawet bez cover/concealed na końcu pojedynczej akcji.\n"
-    "W tym silniku działa hook dodatkowych 5 stóp dla Sneak."
+    "Poruszasz się w ukryciu szybciej niż inni.\n"
+    "Kiedy: wykonujesz ruch skradaniem (Sneak).\n"
+    "Efekt: bazowo Sneak używa połowy twojej Speed; ten feat dodaje +5 stóp do limitu "
+    "ruchu skradaniem (maksymalnie do pełnej Speed). Dodatkowo obowiązuje reguła "
+    "utrzymania ukrycia do końca tury zgodnie z logiką Very Sneaky."
 )
 
 

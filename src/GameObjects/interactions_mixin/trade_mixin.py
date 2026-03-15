@@ -7,7 +7,11 @@ from dataclasses import dataclass
 class TradeItem:
     item_id: str
     name: str
-    price: int
+    price: int  # cena bazowa w cp
+    kind: str = "auto"  # auto|weapon|armor|shield|equipment|alchemical|service
+    description: str = ""
+    stock: int = -1  # -1 = bez limitu
+    min_tier: str = "novice"  # novice|adept|master
 
 
 @dataclass

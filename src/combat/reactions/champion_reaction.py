@@ -5,12 +5,14 @@ from typing import Any, Protocol
 
 from GameObjects.events.magic.magic_utils import grid_distance_feet
 from GameObjects.interactions_mixin import prompt_for_roll
+from GameObjects.items.inventory import get_equipped_weapons, item_label
 from combat import effective_ac
+from combat.damage_utils import remove_defeated_enemy
 from combat.hp_engine import apply_damage as hp_apply_damage
 from combat.hp_engine import current_hp as hp_current_hp
 from combat.hp_engine import heal as hp_heal
 from damage_types import DamageType
-from statuses import clear_grabbed_effects, clear_restrained_effects
+from statuses import StupefiedStatus, clear_grabbed_effects, clear_restrained_effects
 from statuses.enfeebled import EnfeebledStatus
 
 from .base import Reaction
@@ -191,19 +193,61 @@ def _line_of_effect_clear(game, source_pos: tuple[int, int] | None, target_pos: 
     return True
 
 
-def _paladin_retributive_strike(champion, attacker, game) -> None:
-    source_pos = getattr(champion, "position", None)
-    target_pos = getattr(attacker, "position", None)
-    reach = max(1, int(getattr(champion, "reach", 1) or 1))
-    if _distance_feet(source_pos, target_pos) > reach * 5:
+def _has_status(actor, status_id: str) -> bool:
+    if actor is None:
+        return False
+    checker = getattr(actor, "has_status", None)
+    if callable(checker):
         try:
-            game.ui_log("Retributive Strike: agresor poza zasiegiem kontrataku.")
+            return bool(checker(status_id))
         except Exception:
             pass
-        return
+    for status in getattr(actor, "statuses", []) or []:
+        if getattr(status, "id", None) == status_id:
+            return True
+    return False
+
+
+def _champion_has_feat(champion, feat_id: str) -> bool:
+    return _has_status(champion, feat_id)
+
+
+def _equipped_ranged_weapons(actor) -> list[object]:
+    equipped = list(get_equipped_weapons(actor) or [])
+    return [item for item in equipped if bool(getattr(item, "ranged", False))]
+
+
+def _pick_ranged_weapon(game, champion, weapons: list[object]) -> object | None:
+    if not weapons:
+        return None
+    if len(weapons) == 1:
+        return weapons[0]
+    ui = getattr(game, "ui", None)
+    labels = [item_label(weapon) for weapon in weapons]
+    if ui is not None and getattr(ui, "enabled", False):
+        try:
+            choice = ui.prompt_choice(
+                "Ranged Reprisal: wybierz bron ranged do Retributive Strike",
+                choices=labels,
+                source="champion_ranged_reprisal",
+            )
+            raw = str(choice or "").strip()
+            if raw.isdigit():
+                idx = int(raw) - 1
+                if 0 <= idx < len(weapons):
+                    return weapons[idx]
+            for idx, label in enumerate(labels):
+                if raw.lower() == label.lower():
+                    return weapons[idx]
+        except Exception:
+            pass
+    return weapons[0]
+
+
+def _perform_retributive_strike_attack(champion, attacker, game, *, mode_label: str) -> None:
     attack_bonus = int(getattr(champion, "attack_bonus", 0) or 0)
     roll = prompt_for_roll(
-        "Retributive Strike: rzut ataku (k20).",
+        f"{mode_label}: rzut ataku (k20).",
         layout="test",
         answer_placeholder="Wynik k20",
     )
@@ -211,12 +255,12 @@ def _paladin_retributive_strike(champion, attacker, game) -> None:
     target_ac = int(effective_ac(attacker))
     if total < target_ac:
         try:
-            game.ui_log(f"Retributive Strike: pudlo ({total} vs AC {target_ac}).")
+            game.ui_log(f"{mode_label}: pudlo ({total} vs AC {target_ac}).")
         except Exception:
             pass
         return
     damage = prompt_for_roll(
-        "Retributive Strike: obrazenia.",
+        f"{mode_label}: obrazenia.",
         layout="damage",
         answer_placeholder="Suma obrazen",
     )
@@ -236,27 +280,112 @@ def _paladin_retributive_strike(champion, attacker, game) -> None:
     except Exception:
         defeated = False
     try:
-        game.ui_log(f"Retributive Strike trafia za {int(damage)} obrazen.")
+        game.ui_log(f"{mode_label} trafia za {int(damage)} obrazen.")
     except Exception:
         pass
     if defeated:
         try:
-            pos = getattr(attacker, "position", None)
-            if pos is not None:
-                game.board.remove(pos)
-        except Exception:
-            pass
-        try:
-            game.enemies.remove(attacker)
-        except Exception:
-            pass
-        try:
-            attacker.position = None
+            remove_defeated_enemy(game, attacker, source="reaction:champion")
         except Exception:
             pass
 
 
-def _redeemer_effect(champion, attacker, game, *, enfeebled_value: int) -> None:
+def _step_towards_target(champion, attacker, game) -> bool:
+    source_pos = getattr(champion, "position", None)
+    target_pos = getattr(attacker, "position", None)
+    if source_pos is None or target_pos is None:
+        return False
+    candidates = _step_candidates(game, source_pos, ignore_terrain=False)
+    if not candidates:
+        return False
+    current_distance = _distance_feet(source_pos, target_pos)
+    candidates.sort(key=lambda pos: (_distance_feet(pos, target_pos), pos[0], pos[1]))
+    destination = candidates[0]
+    if _distance_feet(destination, target_pos) >= current_distance:
+        return False
+
+    board = getattr(game, "board", None)
+    moved = False
+    mover = getattr(board, "move", None) if board is not None else None
+    if callable(mover):
+        try:
+            mover(source_pos, destination)
+            moved = True
+        except Exception:
+            moved = False
+    if not moved:
+        try:
+            setattr(champion, "position", destination)
+            moved = True
+        except Exception:
+            moved = False
+    else:
+        if getattr(champion, "position", None) == source_pos:
+            try:
+                setattr(champion, "position", destination)
+            except Exception:
+                pass
+    if moved:
+        try:
+            game.ui_log(
+                f"Ranged Reprisal: {getattr(champion, 'name', 'Champion')} wykonuje Step na {destination}."
+            )
+        except Exception:
+            pass
+    return moved
+
+
+def _paladin_retributive_strike(champion, attacker, game) -> None:
+    source_pos = getattr(champion, "position", None)
+    target_pos = getattr(attacker, "position", None)
+    reach = max(1, int(getattr(champion, "reach", 1) or 1))
+    in_melee_reach = _distance_feet(source_pos, target_pos) <= reach * 5
+
+    if not in_melee_reach and _champion_has_feat(champion, "ranged_reprisal"):
+        if _distance_feet(source_pos, target_pos) <= (reach * 5 + 5):
+            moved = _step_towards_target(champion, attacker, game)
+            if moved:
+                source_pos = getattr(champion, "position", None)
+                in_melee_reach = _distance_feet(source_pos, target_pos) <= reach * 5
+        if in_melee_reach:
+            _perform_retributive_strike_attack(champion, attacker, game, mode_label="Retributive Strike")
+            return
+
+        if not _line_of_effect_clear(game, source_pos, target_pos):
+            try:
+                game.ui_log("Ranged Reprisal: brak linii efektu do agresora.")
+            except Exception:
+                pass
+            return
+        ranged_weapons = _equipped_ranged_weapons(champion)
+        if ranged_weapons:
+            selected = _pick_ranged_weapon(game, champion, ranged_weapons)
+            if selected is not None:
+                weapon_name = item_label(selected)
+                _perform_retributive_strike_attack(
+                    champion,
+                    attacker,
+                    game,
+                    mode_label=f"Retributive Strike (ranged: {weapon_name})",
+                )
+                return
+        try:
+            game.ui_log("Ranged Reprisal: brak aktywnej broni ranged do kontrataku.")
+        except Exception:
+            pass
+        return
+
+    if not in_melee_reach:
+        try:
+            game.ui_log("Retributive Strike: agresor poza zasiegiem kontrataku.")
+        except Exception:
+            pass
+        return
+
+    _perform_retributive_strike_attack(champion, attacker, game, mode_label="Retributive Strike")
+
+
+def _redeemer_enfeebled_effect(attacker, game, *, enfeebled_value: int) -> None:
     adder = getattr(attacker, "add_status", None)
     if not callable(adder):
         return
@@ -264,7 +393,7 @@ def _redeemer_effect(champion, attacker, game, *, enfeebled_value: int) -> None:
         adder(
             EnfeebledStatus(
                 value=max(1, int(enfeebled_value)),
-                source="champion_reaction",
+                source="champion_reaction:glimpse",
                 # Wygasa po następnej turze agresora:
                 # 1) start jego kolejnej tury: 2 -> 1 (efekt trwa),
                 # 2) start kolejnej po niej: 1 -> 0 (efekt znika).
@@ -274,6 +403,27 @@ def _redeemer_effect(champion, attacker, game, *, enfeebled_value: int) -> None:
         )
         game.ui_log(
             f"Glimpse of Redemption: agresor otrzymuje Enfeebled {max(1, int(enfeebled_value))} na 1 ture."
+        )
+    except Exception:
+        pass
+
+
+def _redeemer_stupefied_effect(attacker, game, *, stupefied_value: int) -> None:
+    adder = getattr(attacker, "add_status", None)
+    if not callable(adder):
+        return
+    try:
+        status = StupefiedStatus(
+            value=max(1, int(stupefied_value)),
+            source="champion_reaction:weight_of_guilt",
+            source_id=_source_id(attacker),
+        )
+        status_data = getattr(status, "data", None)
+        if isinstance(status_data, dict):
+            status_data["source_turns_left"] = 2
+        adder(status)
+        game.ui_log(
+            f"Weight of Guilt: agresor otrzymuje Stupefied {max(1, int(stupefied_value))} na 1 ture."
         )
     except Exception:
         pass
@@ -298,7 +448,7 @@ def _choose_liberator_step(game, target) -> bool:
     return True
 
 
-def _choose_redeemer_outcome(game, attacker) -> str:
+def _choose_redeemer_outcome(game, attacker, *, upgraded: bool = False) -> str:
     if game is None:
         return "strike"
     if not _is_hero(game, attacker):
@@ -307,9 +457,10 @@ def _choose_redeemer_outcome(game, attacker) -> str:
     ui = getattr(game, "ui", None)
     if ui is not None and getattr(ui, "enabled", False):
         try:
+            penalty_name = "stupefied 2" if upgraded else "enfeebled 2"
             choice = ui.prompt_choice(
                 "Glimpse of Redemption: wybierz wynik ataku.",
-                choices=["powstrzymaj atak", "zadaj obrazenia i otrzymaj enfeebled 2"],
+                choices=["powstrzymaj atak", f"zadaj obrazenia i otrzymaj {penalty_name}"],
                 source="champion_redeemer_choice",
             )
             raw = str(choice or "").strip().lower()
@@ -321,7 +472,12 @@ def _choose_redeemer_outcome(game, attacker) -> str:
     return "strike"
 
 
-def _step_candidates(game, source_pos: tuple[int, int]) -> list[tuple[int, int]]:
+def _step_candidates(
+    game,
+    source_pos: tuple[int, int],
+    *,
+    ignore_terrain: bool = False,
+) -> list[tuple[int, int]]:
     board = getattr(game, "board", None)
     if board is None:
         return []
@@ -373,7 +529,23 @@ def _step_candidates(game, source_pos: tuple[int, int]) -> list[tuple[int, int]]
         can_enter = getattr(board, "can_enter", None)
         if callable(can_enter):
             try:
-                if not bool(can_enter(candidate, allow_occupied=False)):
+                if ignore_terrain:
+                    try:
+                        enter_ok = bool(
+                            can_enter(
+                                candidate,
+                                allow_occupied=False,
+                                ignore_terrain=True,
+                                ignore_difficult_terrain=True,
+                                ignore_narrow_surface=True,
+                                ignore_uneven_ground=True,
+                            )
+                        )
+                    except TypeError:
+                        enter_ok = bool(can_enter(candidate, allow_occupied=False))
+                else:
+                    enter_ok = bool(can_enter(candidate, allow_occupied=False))
+                if not enter_ok:
                     continue
             except Exception:
                 continue
@@ -381,7 +553,7 @@ def _step_candidates(game, source_pos: tuple[int, int]) -> list[tuple[int, int]]
     return out
 
 
-def _attempt_liberating_step(target, attacker, game) -> bool:
+def _attempt_liberating_step(target, attacker, game, *, ignore_terrain: bool = False) -> bool:
     if not _choose_liberator_step(game, target):
         try:
             game.ui_log(f"Liberating Step: {getattr(target, 'name', 'Cel')} rezygnuje ze Step.")
@@ -392,7 +564,7 @@ def _attempt_liberating_step(target, attacker, game) -> bool:
     attacker_pos = getattr(attacker, "position", None)
     if source_pos is None:
         return False
-    candidates = _step_candidates(game, source_pos)
+    candidates = _step_candidates(game, source_pos, ignore_terrain=ignore_terrain)
     if not candidates:
         return False
     if attacker_pos is not None:
@@ -432,10 +604,17 @@ def _attempt_liberating_step(target, attacker, game) -> bool:
             )
         except Exception:
             pass
+        if ignore_terrain:
+            try:
+                game.ui_log(
+                    "Unimpeded Step: ruch z Liberating Step ignoruje utrudnienia terenu."
+                )
+            except Exception:
+                pass
     return moved
 
 
-def _liberator_effect(target, attacker, game) -> None:
+def _liberator_effect(champion, target, attacker, game) -> None:
     removed_any = False
     remover = getattr(target, "remove_status", None)
     if callable(remover):
@@ -464,7 +643,8 @@ def _liberator_effect(target, attacker, game) -> None:
             game.ui_log("Liberating Step: usunieto Grabbed/Restrained/Immobilized z chronionego celu.")
         except Exception:
             pass
-    _attempt_liberating_step(target, attacker, game)
+    ignore_terrain = _champion_has_feat(champion, "unimpeded_step")
+    _attempt_liberating_step(target, attacker, game, ignore_terrain=ignore_terrain)
 
 
 class ChampionCauseStrategy(Protocol):
@@ -506,18 +686,26 @@ class _RedeemerStrategy:
         return "Glimpse of Redemption"
 
     def resolve_prevention(self, champion, attacker, target, game, *, damage: int, base_prevented: int) -> tuple[int, dict[str, Any]]:
-        _ = champion
+        upgraded = _champion_has_feat(champion, "weight_of_guilt")
         _ = target
-        outcome = _choose_redeemer_outcome(game, attacker)
+        outcome = _choose_redeemer_outcome(game, attacker, upgraded=upgraded)
         if outcome == "forgo":
-            return damage, {"enfeebled_value": 0, "outcome": "forgo"}
-        return base_prevented, {"enfeebled_value": 2, "outcome": "strike"}
+            return damage, {"condition": None, "value": 0, "outcome": "forgo"}
+        if upgraded:
+            return base_prevented, {"condition": "stupefied", "value": 2, "outcome": "strike"}
+        return base_prevented, {"condition": "enfeebled", "value": 2, "outcome": "strike"}
 
     def apply_secondary(self, champion, attacker, target, game, *, details: dict[str, Any]) -> None:
+        _ = champion
         _ = target
-        enfeebled_value = int(details.get("enfeebled_value", 0) or 0)
-        if enfeebled_value > 0:
-            _redeemer_effect(champion, attacker, game, enfeebled_value=enfeebled_value)
+        value = int(details.get("value", 0) or 0)
+        condition = str(details.get("condition", "") or "").strip().lower()
+        if value <= 0:
+            return
+        if condition == "stupefied":
+            _redeemer_stupefied_effect(attacker, game, stupefied_value=value)
+            return
+        _redeemer_enfeebled_effect(attacker, game, enfeebled_value=value)
 
 
 @dataclass(frozen=True)
@@ -536,9 +724,8 @@ class _LiberatorStrategy:
         return base_prevented, {}
 
     def apply_secondary(self, champion, attacker, target, game, *, details: dict[str, Any]) -> None:
-        _ = champion
         _ = details
-        _liberator_effect(target, attacker, game)
+        _liberator_effect(champion, target, attacker, game)
 
 
 CAUSE_STRATEGIES: dict[str, ChampionCauseStrategy] = {

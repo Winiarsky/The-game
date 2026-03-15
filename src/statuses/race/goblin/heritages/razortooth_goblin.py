@@ -4,7 +4,7 @@ from statuses.base import Status
 
 RAZORTOOTH_GOBLIN_DESCRIPTION = (
     "Twoje szczęki są naturalną bronią.\n"
-    "Zyskujesz jaws unarmed attack: 1d6 piercing, grupa brawling, traits finesse i unarmed."
+    "Zyskujesz atak nieuzbrojony Szczeki: 1d6 piercing, grupa brawling, cechy finesse i unarmed."
 )
 
 

@@ -4,15 +4,15 @@ from statuses.base import Status
 from statuses.dim_light_vision import DIM_LIGHT_VISION_STATUS
 
 GNOME_DESCRIPTION = (
-    "Hit Points: 8\n"
-    "Size: Small\n"
-    "Speed: 25 feet\n"
-    "Ability Boosts: Constitution, Charisma, Free\n"
-    "Ability Flaw: Strength\n"
-    "Languages: Common, Gnomish, Sylvan\n"
-    "Additional language choices: Draconic, Dwarven, Elven, Goblin, Jotun, Orcish.\n"
-    "Traits: Gnome, Humanoid.\n"
-    "Low-Light Vision: w dim light widzisz jak w bright light i ignorujesz concealed z dim light."
+    "Punkty Zycia: 8\n"
+    "Rozmiar: Maly\n"
+    "Predkosc: 25 stop\n"
+    "Boosty atrybutow: Kondycja, Charyzma, Dowolna\n"
+    "Wada atrybutu: Sila\n"
+    "Jezyki: Common, Gnomish, Sylvan\n"
+    "Dodatkowe jezyki: Draconic, Dwarven, Elven, Goblin, Jotun, Orcish.\n"
+    "Cechy: Gnome, Humanoid.\n"
+    "Low-Light Vision: w slabym swietle widzisz jak w jasnym i ignorujesz concealed z dim light."
 )
 
 

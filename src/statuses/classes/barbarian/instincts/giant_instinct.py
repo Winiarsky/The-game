@@ -4,7 +4,8 @@ from statuses.base import Status
 
 GIANT_INSTINCT_PROMPT = (
     "Giant Instinct: podczas Rage zadajesz +6 obrażeń zamiast +2, "
-    "ale otrzymujesz status clumsy."
+    "ale otrzymujesz status clumsy.\n"
+    "Uwaga: efekty instynktu działają tylko podczas aktywnego Rage."
 )
 
 

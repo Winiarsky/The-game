@@ -3,7 +3,12 @@ from __future__ import annotations
 from statuses.base import Status
 from statuses.darkvision import DARKVISION_STATUS
 
-UMBRAL_GNOME_DESCRIPTION = "Masz darkvision (widzisz w całkowitej ciemności)."
+UMBRAL_GNOME_DESCRIPTION = (
+    "Ciemnosc podziemi jest dla ciebie naturalnym srodowiskiem.\n"
+    "Kiedy: stale, od momentu wyboru heritage.\n"
+    "Efekt: otrzymujesz Darkvision (grants_statuses: DARKVISION_STATUS), "
+    "czyli pelne widzenie w ciemnosci bez potrzeby swiatla."
+)
 
 
 def UmbralGnomeStatus() -> Status:

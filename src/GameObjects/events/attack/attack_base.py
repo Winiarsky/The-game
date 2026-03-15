@@ -161,6 +161,14 @@ class AttackEventBase(GameEvent):
         "spear",
         "unarmed",
     }
+    _ABILITY_TOKEN_TO_KEY = {
+        "STR": "strength",
+        "DEX": "dexterity",
+        "CON": "constitution",
+        "INT": "intelligence",
+        "WIS": "wisdom",
+        "CHA": "charisma",
+    }
 
     def _ac_with_bonuses(
         self,
@@ -426,6 +434,15 @@ class AttackEventBase(GameEvent):
         item_id = str(getattr(weapon, "item_id", "") or "").strip().lower().replace("-", "_").replace(" ", "_")
         if item_id and item_id not in tags:
             tags.append(item_id)
+        prof_category = (
+            str(getattr(weapon, "proficiency_category", "") or "")
+            .strip()
+            .lower()
+            .replace("-", "_")
+            .replace(" ", "_")
+        )
+        if prof_category in {"simple", "martial", "advanced", "unarmed"} and prof_category not in tags:
+            tags.append(prof_category)
         for tag in cls._normalized_trait_tags(getattr(weapon, "traits", ())):
             if tag not in tags:
                 tags.append(tag)
@@ -471,23 +488,41 @@ class AttackEventBase(GameEvent):
         return upgraded, fatal_die
 
     @staticmethod
-    def _strength_modifier(actor) -> int:
-        if actor is None:
+    def _ability_modifier(actor, ability_key: str | None) -> int:
+        if actor is None or not ability_key:
             return 0
-        for key in ("str_mod", "strength_mod"):
-            value = getattr(actor, key, None)
-            if value is not None:
-                try:
-                    return int(value)
-                except Exception:
-                    continue
+        key = str(ability_key or "").strip().lower()
+        if not key:
+            return 0
+
+        direct_names = {
+            "strength": ("str_mod", "strength_mod"),
+            "dexterity": ("dex_mod", "dexterity_mod"),
+            "constitution": ("con_mod", "constitution_mod"),
+            "intelligence": ("int_mod", "intelligence_mod"),
+            "wisdom": ("wis_mod", "wisdom_mod"),
+            "charisma": ("cha_mod", "charisma_mod"),
+        }
+        for attr in direct_names.get(key, ()):
+            value = getattr(actor, attr, None)
+            if value is None:
+                continue
+            try:
+                return int(value)
+            except Exception:
+                continue
+
         ability_modifiers = getattr(actor, "ability_modifiers", None)
         if isinstance(ability_modifiers, dict):
             try:
-                return int(ability_modifiers.get("strength", 0) or 0)
+                return int(ability_modifiers.get(key, 0) or 0)
             except Exception:
                 return 0
         return 0
+
+    @staticmethod
+    def _strength_modifier(actor) -> int:
+        return AttackEventBase._ability_modifier(actor, "strength")
 
     def _propulsive_damage_bonus(self, actor, tags: Iterable[str]) -> int:
         if not self._has_trait(tags, "propulsive"):
@@ -1847,4 +1882,274 @@ class AttackEventBase(GameEvent):
                 or {}
             )
         except Exception:
-            return {"total": 0, "proficiency_bonus": 0, "ability_bonus": 0, "item_bonus": 0}
+            return {
+                "total": 0,
+                "proficiency_bonus": 0,
+                "ability_bonus": 0,
+                "ability_key": "strength",
+                "item_bonus": 0,
+                "rank": "untrained",
+                "rank_step": 0,
+                "level": 0,
+            }
+
+    @staticmethod
+    def _ability_label_pl(ability_key: object) -> str:
+        raw = str(ability_key or "").strip().lower()
+        mapping = {
+            "strength": "Sila",
+            "str": "Sila",
+            "dexterity": "Zrecznosc",
+            "dex": "Zrecznosc",
+            "constitution": "Kondycja",
+            "con": "Kondycja",
+            "intelligence": "Inteligencja",
+            "int": "Inteligencja",
+            "wisdom": "Madrosc",
+            "wis": "Madrosc",
+            "charisma": "Charyzma",
+            "cha": "Charyzma",
+        }
+        return mapping.get(raw, str(raw or "-").title())
+
+    @staticmethod
+    def _rank_label_pl(rank: object) -> str:
+        raw = str(rank or "").strip().lower()
+        mapping = {
+            "untrained": "Niewyszkolony",
+            "trained": "Wyszkolony",
+            "expert": "Ekspert",
+            "master": "Mistrz",
+            "legendary": "Legendarny",
+        }
+        return mapping.get(raw, str(raw or "-").title())
+
+    def _attack_prompt_breakdown_lines(
+        self,
+        *,
+        weapon_attack_bonus: dict[str, object],
+        modifier: int,
+        log_lines: Iterable[str] | None = None,
+    ) -> list[str]:
+        lines: list[str] = []
+        lines.append(f"Modyfikator sytuacyjny: {int(modifier or 0):+d} (doliczany automatycznie).")
+
+        total = int(weapon_attack_bonus.get("total", 0) or 0)
+        prof = int(weapon_attack_bonus.get("proficiency_bonus", 0) or 0)
+        ability = int(weapon_attack_bonus.get("ability_bonus", 0) or 0)
+        item = int(weapon_attack_bonus.get("item_bonus", 0) or 0)
+        level = int(weapon_attack_bonus.get("level", 0) or 0)
+        rank_step = int(weapon_attack_bonus.get("rank_step", 0) or 0)
+        rank_label = self._rank_label_pl(weapon_attack_bonus.get("rank"))
+        ability_label = self._ability_label_pl(weapon_attack_bonus.get("ability_key"))
+
+        lines.append(
+            f"Bonus ataku bronia: {total:+d} "
+            f"(Bieglosc {rank_label}: poziom {level} + {rank_step} = {prof:+d}; "
+            f"{ability_label}: {ability:+d}; Item: {item:+d})."
+        )
+        lines.append("Wynik ataku = k20 + bonus broni + modyfikator sytuacyjny.")
+
+        details = [str(line).strip() for line in list(log_lines or []) if str(line).strip()]
+        if details:
+            lines.append("Aktywne premie/kary:")
+            lines.extend(f"- {entry}" for entry in details)
+        return lines
+
+    def _attack_roll_stack_payload(
+        self,
+        *,
+        weapon_attack_bonus: dict[str, object],
+        modifier: int,
+    ) -> dict[str, object]:
+        prof = int(weapon_attack_bonus.get("proficiency_bonus", 0) or 0)
+        ability = int(weapon_attack_bonus.get("ability_bonus", 0) or 0)
+        item = int(weapon_attack_bonus.get("item_bonus", 0) or 0)
+        situational = int(modifier or 0)
+        rank_label = self._rank_label_pl(weapon_attack_bonus.get("rank"))
+        level = int(weapon_attack_bonus.get("level", 0) or 0)
+        rank_step = int(weapon_attack_bonus.get("rank_step", 0) or 0)
+        ability_label = self._ability_label_pl(weapon_attack_bonus.get("ability_key"))
+
+        components: list[dict[str, object]] = [
+            {
+                "id": "proficiency",
+                "label": "Biegłość",
+                "value": prof,
+                "description": f"{rank_label}: poziom {level} + {rank_step}.",
+                "editable": True,
+            },
+            {
+                "id": "ability",
+                "label": f"{ability_label}",
+                "value": ability,
+                "description": f"Modyfikator cechy ({ability_label}).",
+                "editable": True,
+            },
+            {
+                "id": "item",
+                "label": "Przedmiot",
+                "value": item,
+                "description": "Premie/kary z wyposażenia.",
+                "editable": True,
+            },
+        ]
+        if situational:
+            components.append(
+                {
+                    "id": "situational",
+                    "label": "Sytuacyjne",
+                    "value": situational,
+                    "description": "Status/circumstance/MAP i inne modyfikatory akcji.",
+                    "editable": True,
+                }
+            )
+
+        return {
+            "components": components,
+            "auto_total_modifier": int(prof + ability + item + situational),
+        }
+
+    @staticmethod
+    def _primary_damage_prompt_text(damage_prompt: str | Iterable[str]) -> str:
+        if isinstance(damage_prompt, str):
+            return str(damage_prompt)
+        prompt_list = list(damage_prompt or [])
+        if not prompt_list:
+            return ""
+        return str(prompt_list[0] or "")
+
+    def _damage_prompt_ability_key(self, damage_prompt: str | Iterable[str]) -> str | None:
+        text = self._primary_damage_prompt_text(damage_prompt).upper()
+        for token, ability_key in self._ABILITY_TOKEN_TO_KEY.items():
+            if re.search(rf"\b{token}\b", text):
+                return ability_key
+        return None
+
+    @staticmethod
+    def _static_damage_prompt_modifier(damage_prompt: str | Iterable[str]) -> int:
+        text = AttackEventBase._primary_damage_prompt_text(damage_prompt)
+        if not text:
+            return 0
+        # Wytnij "XdY"/"XkY", aby zebrać tylko stałe składniki z formuły.
+        cleaned = re.sub(r"\d+\s*[kKdD]\s*\d+", "", text)
+        total = 0
+        for sign, value in re.findall(r"([+-])\s*(\d+)", cleaned):
+            try:
+                amount = int(value)
+            except Exception:
+                continue
+            total += amount if sign == "+" else -amount
+        return int(total)
+
+    def _damage_roll_stack_payload(
+        self,
+        *,
+        actor,
+        damage_prompt: str | Iterable[str],
+        extra_flat_bonus: int = 0,
+    ) -> dict[str, object]:
+        ability_key = self._damage_prompt_ability_key(damage_prompt)
+        ability_bonus = self._ability_modifier(actor, ability_key)
+        static_bonus = self._static_damage_prompt_modifier(damage_prompt)
+        other_bonus = int(extra_flat_bonus or 0) + int(static_bonus or 0)
+        ability_label = self._ability_label_pl(ability_key) if ability_key else "Cecha"
+        ability_desc = (
+            f"Modyfikator cechy ({ability_label}) z formuły obrażeń."
+            if ability_key
+            else "Brak cechy w formule obrażeń (możesz skorygować ręcznie)."
+        )
+
+        components: list[dict[str, object]] = [
+            {
+                "id": "ability",
+                "label": ability_label,
+                "value": int(ability_bonus),
+                "description": ability_desc,
+                "editable": True,
+            },
+            {
+                "id": "item",
+                "label": "Przedmiot",
+                "value": 0,
+                "description": "Premie/kary z broni i wyposażenia.",
+                "editable": True,
+            },
+            {
+                "id": "status",
+                "label": "Status",
+                "value": 0,
+                "description": "Premie/kary status do obrażeń.",
+                "editable": True,
+            },
+            {
+                "id": "circumstance",
+                "label": "Okoliczności",
+                "value": 0,
+                "description": "Premie/kary circumstance do obrażeń.",
+                "editable": True,
+            },
+            {
+                "id": "other",
+                "label": "Inne",
+                "value": int(other_bonus),
+                "description": "Dodatkowe automatyczne modyfikatory (featy, cechy, efekt ataku).",
+                "editable": True,
+            },
+        ]
+        auto_total = sum(int(item.get("value", 0) or 0) for item in components)
+        return {
+            "components": components,
+            "auto_total_modifier": int(auto_total),
+        }
+
+    def _prompt_damage_roll_total(
+        self,
+        *,
+        prompt: str,
+        actor,
+        damage_prompt: str | Iterable[str],
+        extra_flat_bonus: int = 0,
+        prompt_long: str | None = None,
+        answer_placeholder: str = "Suma obrażeń",
+        roll_for_damage=None,
+    ) -> int:
+        stack = self._damage_roll_stack_payload(
+            actor=actor,
+            damage_prompt=damage_prompt,
+            extra_flat_bonus=int(extra_flat_bonus or 0),
+        )
+        roller = roll_for_damage if callable(roll_for_damage) else prompt_for_roll
+        roll_data = roller(
+            prompt,
+            layout="damage",
+            answer_placeholder=answer_placeholder,
+            prompt_long=prompt_long,
+            roll_stack=stack,
+            auto_total_modifier=int(stack.get("auto_total_modifier", 0) or 0),
+            return_details=True,
+        )
+        if isinstance(roll_data, dict):
+            try:
+                computed_total = roll_data.get("computed_total", None)
+                if computed_total is not None:
+                    total = int(computed_total or 0)
+                    raw_roll = int(roll_data.get("raw_roll", roll_data.get("roll", 0)) or 0)
+                    rolled = int(roll_data.get("roll", raw_roll) or raw_roll)
+                    return int(total + (rolled - raw_roll))
+            except Exception:
+                pass
+            try:
+                rolled = int(roll_data.get("roll", 0) or 0)
+            except Exception:
+                rolled = 0
+            try:
+                modifier_delta = int(roll_data.get("modifier_delta", 0) or 0)
+            except Exception:
+                modifier_delta = 0
+            return int(rolled + int(stack.get("auto_total_modifier", 0) or 0) + modifier_delta)
+        try:
+            rolled = int(roll_data or 0)
+        except Exception:
+            return 0
+        return int(rolled + int(stack.get("auto_total_modifier", 0) or 0))

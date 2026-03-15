@@ -56,6 +56,58 @@ def _is_hidden_or_unseen(actor) -> bool:
     return False
 
 
+def _status_int(actor, status_id: str, key: str, default: int) -> int:
+    getter = getattr(actor, "get_status_data", None)
+    if callable(getter):
+        try:
+            raw = getter(status_id, key, default)
+        except Exception:
+            raw = default
+        try:
+            return int(raw)
+        except Exception:
+            return int(default)
+    return int(default)
+
+
+def _skill_rank(actor, skill_id: str) -> str:
+    raw_skill = str(skill_id or "").strip().lower()
+    if actor is None or not raw_skill:
+        return "untrained"
+    if raw_skill == Skill.PERCEPTION.value:
+        return str(getattr(actor, "perception_rank", "untrained") or "untrained").strip().lower()
+    if raw_skill in (Skill.FORTITUDE.value, Skill.REFLEX.value, Skill.WILL.value):
+        save_ranks = getattr(actor, "save_ranks", None)
+        if isinstance(save_ranks, dict):
+            return str(save_ranks.get(raw_skill, "untrained") or "untrained").strip().lower()
+    skill_ranks = getattr(actor, "skill_ranks", None)
+    if isinstance(skill_ranks, dict):
+        return str(skill_ranks.get(raw_skill, "untrained") or "untrained").strip().lower()
+    return "untrained"
+
+
+def _goblin_song_max_targets(actor) -> int:
+    getter = getattr(actor, "get_status_data", None)
+    rank_map = {}
+    if callable(getter):
+        try:
+            rank_map = dict(getter("goblin_song", "goblin_song_max_targets_by_rank", {}) or {})
+        except Exception:
+            rank_map = {}
+        base = _status_int(actor, "goblin_song", "max_targets", 1)
+    else:
+        base = 1
+    rank = _skill_rank(actor, Skill.PERFORMANCE.value)
+    if isinstance(rank_map, dict) and rank:
+        raw = rank_map.get(rank)
+        if raw is not None:
+            try:
+                return max(1, int(raw))
+            except Exception:
+                pass
+    return max(1, int(base))
+
+
 def GoblinSongDebuffStatus(*, duration: int) -> Status:
     return Status(
         id="goblin_song_debuff",
@@ -99,8 +151,14 @@ def GoblinSongImmunityStatus(*, duration: int = 600) -> Status:
     )
 
 
-def _iter_candidates(game, source_pos: tuple[int, int]) -> Iterable[tuple[object, tuple[int, int]]]:
+def _iter_candidates(
+    game,
+    source_pos: tuple[int, int],
+    *,
+    range_feet: int = 30,
+) -> Iterable[tuple[object, tuple[int, int]]]:
     board = game.board
+    max_range = max(5, int(range_feet or 30))
     for enemy in getattr(game, "enemies", []) or []:
         pos = getattr(enemy, "position", None)
         if pos is None:
@@ -111,7 +169,7 @@ def _iter_candidates(game, source_pos: tuple[int, int]) -> Iterable[tuple[object
             continue
         if _has_status(enemy, "goblin_song_immunity"):
             continue
-        if grid_distance_feet(source_pos, pos) > 30:
+        if grid_distance_feet(source_pos, pos) > max_range:
             continue
         path = find_path(board, source_pos, pos, allow_diagonal=True, allow_occupied=True, mover=None)
         if not path:
@@ -153,16 +211,12 @@ class GoblinSongEvent(GameEvent):
         except Exception:
             pass
 
-        getter = getattr(actor, "get_status_data", None)
-        if callable(getter):
-            max_targets = getter("goblin_song", "max_targets", 1)
-        else:
-            max_targets = 1
-        try:
-            max_targets = int(max_targets)
-        except Exception:
-            max_targets = 1
-        max_targets = max(1, max_targets)
+        max_targets = _goblin_song_max_targets(actor)
+        range_feet = _status_int(actor, "goblin_song", "goblin_song_range_feet", 30)
+        success_rounds = _status_int(actor, "goblin_song", "goblin_song_success_duration_rounds", 1)
+        crit_success_rounds = _status_int(actor, "goblin_song", "goblin_song_critical_success_duration_rounds", 10)
+        immunity_rounds = _status_int(actor, "goblin_song", "goblin_song_critical_failure_immunity_rounds", 600)
+        perf_rank = _skill_rank(actor, Skill.PERFORMANCE.value)
 
         try:
             ui = getattr(ctx.game, "ui", None)
@@ -170,15 +224,16 @@ class GoblinSongEvent(GameEvent):
                 ui.prompt_info(
                     "Goblin Song",
                     prompt_long=(
-                        f"Wybierz do {max_targets} celów w 30 stóp. "
-                        "(Expert 2 / Master 4 / Legendary 8)"
+                        f"Wybierz do {max_targets} celów w {range_feet} stóp. "
+                        f"Skalowanie po Performance ({perf_rank}): "
+                        "trained=1, expert=2, master=4, legendary=8."
                     ),
                     source="goblin_song",
                 )
         except Exception:
             pass
 
-        candidates = list(_iter_candidates(ctx.game, source_pos))
+        candidates = list(_iter_candidates(ctx.game, source_pos, range_feet=range_feet))
         if not candidates:
             return EventResult.cancelled(message="Brak celów w zasięgu Goblin Song.")
 
@@ -268,22 +323,26 @@ class GoblinSongEvent(GameEvent):
 
             if outcome == "critical_success":
                 try:
-                    enemy.add_status(GoblinSongDebuffStatus(duration=5))
+                    enemy.add_status(GoblinSongDebuffStatus(duration=crit_success_rounds))
                 except Exception:
                     pass
-                results.append(f"{getattr(enemy, 'name', 'wróg')}: krytyczny sukces (5 rund).")
+                results.append(
+                    f"{getattr(enemy, 'name', 'wróg')}: krytyczny sukces ({crit_success_rounds} rund)."
+                )
             elif outcome == "success":
                 try:
-                    enemy.add_status(GoblinSongDebuffStatus(duration=1))
+                    enemy.add_status(GoblinSongDebuffStatus(duration=success_rounds))
                 except Exception:
                     pass
-                results.append(f"{getattr(enemy, 'name', 'wróg')}: sukces (1 runda).")
+                results.append(f"{getattr(enemy, 'name', 'wróg')}: sukces ({success_rounds} runda/rund).")
             elif outcome == "critical_failure":
                 try:
-                    enemy.add_status(GoblinSongImmunityStatus())
+                    enemy.add_status(GoblinSongImmunityStatus(duration=immunity_rounds))
                 except Exception:
                     pass
-                results.append(f"{getattr(enemy, 'name', 'wróg')}: krytyczna porażka (odporność).")
+                results.append(
+                    f"{getattr(enemy, 'name', 'wróg')}: krytyczna porażka (odporność {immunity_rounds} rund)."
+                )
             else:
                 results.append(f"{getattr(enemy, 'name', 'wróg')}: porażka.")
 

@@ -6,7 +6,7 @@ from statuses.dim_light_vision import DIM_LIGHT_VISION_STATUS
 
 CAVERN_ELF_DESCRIPTION = (
     "Zyskujesz Darkvision.\n"
-    "Dziedzictwo zastępuje bazowe Low-Light Vision elfa."
+    "Dziedzictwo zastepuje bazowe widzenie w polmroku elfa."
 )
 
 

@@ -64,21 +64,20 @@ class ShoveEvent(ActionCostEvent):
             logger.info("Nie wybrano poprawnego celu – spróbuj ponownie.")
             ctx.game.ui_log("Nie wybrano poprawnego celu – spróbuj ponownie.")
 
-    def _push_target(self, ctx: EventContext, target, *, steps: int) -> bool:
+    def _compute_push_destination(self, ctx: EventContext, target, *, steps: int) -> tuple[tuple[int, int] | None, tuple[int, int] | None]:
         board = ctx.game.board
         source_pos = getattr(ctx.actor, "position", None)
         target_pos = getattr(target, "position", None)
         if source_pos is None or target_pos is None:
-            return False
+            return None, None
         steps = adjusted_forced_movement_squares(target, steps)
         if steps <= 0:
-            return False
+            return target_pos, target_pos
         dx = target_pos[0] - source_pos[0]
         dy = target_pos[1] - source_pos[1]
         step_x = 0 if dx == 0 else (1 if dx > 0 else -1)
         step_y = 0 if dy == 0 else (1 if dy > 0 else -1)
         cur = target_pos
-        moved = False
         for _ in range(max(0, steps)):
             nxt = (cur[0] + step_x, cur[1] + step_y)
             try:
@@ -91,17 +90,53 @@ class ShoveEvent(ActionCostEvent):
                     break
             except Exception:
                 break
-            try:
-                board.move(cur, nxt)
-            except Exception:
-                break
-            try:
-                target.position = nxt
-            except Exception:
-                pass
-            moved = True
             cur = nxt
-        return moved
+        return target_pos, cur
+
+    def _confirm_forced_destination(self, ctx: EventContext, *, destination: tuple[int, int]) -> bool:
+        conn = getattr(ctx.game, "conn", None)
+        if conn is None:
+            return True
+        ui_log = getattr(ctx.game, "ui_log", None)
+        while True:
+            try:
+                conn.set_leds([destination], consts.MOVE_TARGET_RGB)
+                if callable(ui_log):
+                    ui_log(
+                        f"Shove: przestaw figurke celu na {destination} i kliknij podswietlone pole, aby potwierdzic."
+                    )
+                choice = conn.scan_board([destination])
+            except Exception:
+                logger.debug("Shove confirm failed, falling back to auto-confirm.", exc_info=True)
+                return True
+            finally:
+                try:
+                    conn.leds_off()
+                except Exception:
+                    pass
+            if choice == destination:
+                return True
+            if callable(ui_log):
+                ui_log("Shove: potwierdz podswietlone pole docelowe.")
+
+    def _apply_push_with_confirmation(self, ctx: EventContext, target, *, steps: int) -> bool:
+        board = ctx.game.board
+        start_pos, destination = self._compute_push_destination(ctx, target, steps=steps)
+        if start_pos is None or destination is None:
+            return False
+        if destination == start_pos:
+            return False
+        if not self._confirm_forced_destination(ctx, destination=destination):
+            return False
+        try:
+            board.move(start_pos, destination)
+        except Exception:
+            return False
+        try:
+            target.position = destination
+        except Exception:
+            pass
+        return True
 
     def execute(self, ctx: EventContext) -> EventResult:
         if not ctx.in_combat:
@@ -160,10 +195,11 @@ class ShoveEvent(ActionCostEvent):
         )
         outcome = result.outcome
 
+        moved = False
         if outcome == "success":
-            self._push_target(ctx, enemy, steps=1)
+            moved = self._apply_push_with_confirmation(ctx, enemy, steps=1)
         elif outcome == "critical_success":
-            self._push_target(ctx, enemy, steps=2)
+            moved = self._apply_push_with_confirmation(ctx, enemy, steps=2)
         elif outcome == "critical_failure":
             try:
                 hero.add_status(PRONE_STATUS)
@@ -171,7 +207,10 @@ class ShoveEvent(ActionCostEvent):
                 pass
             apply_prone_effects(hero)
 
-        msg = f"Shove: {outcome}."
+        movement_suffix = ""
+        if outcome in {"success", "critical_success"}:
+            movement_suffix = " Cel odepchniety." if moved else " Cel nie zostal przesuniety."
+        msg = f"Shove: {outcome}.{movement_suffix}"
         try:
             ctx.game.ui_log(msg)
         except Exception:

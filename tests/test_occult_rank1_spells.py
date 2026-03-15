@@ -14,6 +14,7 @@ if str(SRC) not in sys.path:
 from GameObjects.events.base import EventContext
 from GameObjects.events.magic.level_1st import events as occ1
 from GameObjects.events.magic.spell_types import SpellTradition
+from statuses.base import Status
 
 
 class DummyConn:
@@ -358,6 +359,25 @@ def test_burning_hands_hits_targets_in_cone(monkeypatch):
     assert e2.hp == 8
 
 
+def test_burning_hands_burn_it_bonus_applies(monkeypatch):
+    caster = DummyActor("caster", (0, 0))
+    caster.add_status(Status(id="burn_it"))
+    e1 = DummyActor("e1", (1, 0), hp=20)
+    e2 = DummyActor("e2", (2, 0), hp=20)
+    game = _game(actor=caster, enemies=[e1, e2])
+
+    monkeypatch.setattr(occ1, "_prompt_choice", lambda *_a, **_k: "E")
+    rolls = iter([15, 6])  # DC, damage
+    monkeypatch.setattr(occ1, "prompt_for_roll", lambda *_a, **_k: next(rolls))
+    monkeypatch.setattr(occ1.random, "randint", lambda _a, _b: 5)  # failure
+
+    result = occ1.BurningHandsEvent().execute(EventContext(game=game, actor=caster))
+
+    assert result.success is True
+    assert e1.hp == 7
+    assert e2.hp == 7
+
+
 def test_hydraulic_push_deals_damage_and_pushes(monkeypatch):
     caster = DummyActor("caster", (0, 0))
     enemy = DummyActor("enemy", (1, 0), hp=20)
@@ -426,7 +446,6 @@ def test_shocking_grasp_critical_damage(monkeypatch):
     monkeypatch.setattr("GameObjects.events.magic.base_attack_magic_event.prompt_for_roll", lambda *_a, **_k: 30)
     choices = iter(["nie"])
     monkeypatch.setattr(occ1, "_prompt_choice", lambda *_a, **_k: next(choices))
-    monkeypatch.setattr(occ1, "prompt_for_roll", lambda *_a, **_k: 4)
 
     result = occ1.ShockingGraspEvent().execute(EventContext(game=game, actor=caster))
 
@@ -481,7 +500,7 @@ def test_heal_single_heals_living_target(monkeypatch):
     ally = DummyActor("ally", (1, 0), hp=10)
     game = _game(actor=caster, heroes=[caster, ally], enemies=[])
 
-    monkeypatch.setattr(occ1, "_prompt_choice", lambda *_a, **_k: "single")
+    monkeypatch.setattr(occ1, "_prompt_choice", lambda *_a, **_k: "1")
     monkeypatch.setattr(occ1, "prompt_for_roll", lambda *_a, **_k: 6)
     monkeypatch.setattr(occ1, "pick_target_in_range", lambda *_a, **_k: (ally, ally.position))
 
@@ -489,6 +508,41 @@ def test_heal_single_heals_living_target(monkeypatch):
 
     assert result.success is True
     assert ally.hp == 16
+    assert result.actions_spent == 1
+
+
+def test_heal_two_actions_adds_flat_bonus(monkeypatch):
+    caster = DummyActor("caster", (0, 0))
+    ally = DummyActor("ally", (5, 0), hp=10)
+    game = _game(actor=caster, heroes=[caster, ally], enemies=[])
+
+    monkeypatch.setattr(occ1, "_prompt_choice", lambda *_a, **_k: "2")
+    monkeypatch.setattr(occ1, "pick_target_in_range", lambda *_a, **_k: (ally, ally.position))
+
+    result = occ1.HealEvent().execute(EventContext(game=game, actor=caster))
+
+    assert result.success is True
+    assert ally.hp == 18  # stale 8 HP
+    assert result.actions_spent == 2
+
+
+def test_heal_three_actions_burst_heals_living_and_harms_undead(monkeypatch):
+    caster = DummyActor("caster", (0, 0), hp=20)
+    ally = DummyActor("ally", (1, 0), hp=10)
+    undead = DummyActor("undead", (1, 1), hp=12)
+    undead.tags = ["undead"]
+    game = _game(actor=caster, heroes=[caster, ally], enemies=[undead])
+
+    monkeypatch.setattr(occ1, "_prompt_choice", lambda *_a, **_k: "3")
+    monkeypatch.setattr(occ1, "prompt_for_roll", lambda *_a, **_k: 5)
+
+    result = occ1.HealEvent().execute(EventContext(game=game, actor=caster))
+
+    assert result.success is True
+    assert caster.hp == 25
+    assert ally.hp == 15
+    assert undead.hp == 7
+    assert result.actions_spent == 3
 
 
 def test_detect_poison_recognizes_poisoned_target(monkeypatch):

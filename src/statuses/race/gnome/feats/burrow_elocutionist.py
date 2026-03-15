@@ -3,9 +3,12 @@ from __future__ import annotations
 from statuses.base import Status
 
 BURROW_ELOCUTIONIST_DESCRIPTION = (
-    "Rozumiesz mowę zwierząt kopiących nory (np. borsuki, krety, susły) "
-    "i możesz prowadzić z nimi rozmowę oraz używać Diplomacy.\n"
-    "W tym silniku efekt jest oznaczony opisowo jako capability."
+    "Rozumiesz jezyk zwierzat kopiaczych i latwiej z nimi negocjujesz.\n"
+    "Kiedy: podczas interakcji spolecznych ze zwierzetami kopiacymi nory "
+    "(np. borsuk, kret, susel).\n"
+    "Efekt: mozesz sie z nimi komunikowac i wykonywac testy Diplomacy "
+    "zamiast traktowac je jako niemozliwe; w silniku jest to flaga capability "
+    "(can_talk_to_burrow_animals + burrow_elocutionist_uses_diplomacy)."
 )
 
 

@@ -10,6 +10,7 @@ for path in (PROJECT_ROOT, SRC_ROOT):
 from hero import Hero
 from GameObjects.events.base import EventContext
 from GameObjects.events.rage_event import RageEvent
+from statuses.base import Status
 from statuses.classes.barbarian.barbarian import BARBARIAN_STATUS
 from statuses.classes.barbarian.instincts.giant_instinct import GiantInstinctStatus
 from statuses.clumsy import clumsy_ac_penalty, clumsy_ac_prompt_note
@@ -88,3 +89,12 @@ def test_rage_requires_barbarian_class():
 
     assert result.success is False
     assert "tylko barbarian" in str(result.message or "").lower()
+
+
+def test_rage_damage_bonus_is_zero_without_rage_even_with_instinct_active():
+    hero = Hero()
+    hero.add_status(GiantInstinctStatus())
+    hero.add_status(Status(id="giant_instinct_active", data={"rage_damage_bonus_override": 6}))
+
+    assert rage_damage_bonus(hero, is_agile=False) == 0
+    assert rage_damage_bonus(hero, is_agile=True) == 0

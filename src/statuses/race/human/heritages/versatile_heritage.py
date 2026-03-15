@@ -4,12 +4,11 @@ from statuses.base import Status
 from statuses.race.human.feats.general_training import GENERAL_TRAINING_CHOICES
 
 VERSATILE_HERITAGE_DESCRIPTION = (
-    "Humanity's versatility and ambition have fueled its\n"
-    "ascendance to be the most common ancestry in most\n"
-    "nations throughout the world. Select a general feat of\n"
-    "your choice for which you meet the prerequisites (as\n"
-    "with your ancestry feat, you can select this general feat\n"
-    "at any point during character creation)."
+    "Ludzie sa niezwykle wszechstronni i ambitni.\n"
+    "Dzieki temu stali sie najpowszechniejsza ancestry w wielu krainach.\n"
+    "Wybierasz jeden general feat, dla ktorego spelnasz wymagania.\n"
+    "Tak jak ancestry feat, mozesz go wybrac w dowolnym momencie\n"
+    "tworzenia postaci."
 )
 
 

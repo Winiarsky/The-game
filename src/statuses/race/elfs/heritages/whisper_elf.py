@@ -7,9 +7,9 @@ from statuses.check_effects import CheckEffect
 
 WHISPER_ELF_DESCRIPTION = (
     "Whisper Elf:\n"
-    "- Seek: zamiast 30 stóp możesz przeszukiwać do 60 stóp (w tym silniku jako zasięg).\n"
-    "- +2 circumstance do prób namierzenia undetected creatures, które słyszysz, "
-    "w obrębie 30 stóp (tagi: seek + undetected + auditory)."
+    "- Przy akcji Seek zwiekszasz zasieg przeszukiwania z 30 do 60 stop.\n"
+    "- Otrzymujesz +2 circumstance do namierzania niewykrytych stworzen, ktore slyszysz, "
+    "w obrebie 30 stop (tagi: seek + undetected + auditory)."
 )
 
 

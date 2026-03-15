@@ -4,7 +4,7 @@ from statuses.base import Status
 
 WILDWOOD_HALFLING_DESCRIPTION = (
     "Wykorzystujesz mały rozmiar, by przeciskać się przez las i dżunglę.\n"
-    "Ignorujesz difficult terrain pochodzący z drzew, foliage i undergrowth."
+    "Ignorujesz utrudniony teren pochodzacy z drzew, listowia i podszytu."
 )
 
 

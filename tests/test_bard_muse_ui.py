@@ -29,11 +29,13 @@ class DummyUI:
         self.enabled = True
         self.last_prompt = None
         self.last_choices = None
+        self.last_choice_meta = None
         self.info_calls: list[tuple[str, str]] = []
 
-    def prompt_choice(self, prompt: str, choices=None, **_kwargs):
+    def prompt_choice(self, prompt: str, choices=None, **kwargs):
         self.last_prompt = prompt
         self.last_choices = list(choices or [])
+        self.last_choice_meta = list(kwargs.get("choice_meta") or [])
         return self.answer
 
     def prompt_info(self, *_args, **_kwargs):
@@ -71,3 +73,12 @@ def test_bard_status_grants_inspiration_and_enigma_feat(monkeypatch):
     assert hero.get_status_data("inspiration", "bard_muse") == "enigma"
     assert hero.has_status("bardic_lore")
     assert any("true strike" in msg.lower() for msg in hero.messages)
+    enigma_meta = next(
+        (item for item in list(ui.last_choice_meta or []) if str(item.get("raw") or "").strip().lower() == "enigma"),
+        None,
+    )
+    assert enigma_meta is not None
+    desc = str(enigma_meta.get("desc") or "")
+    assert "Bardyczna wiedza" in desc
+    assert "Prawdziwy cios" in desc
+    assert "Brak dodatkowego opisu mechaniki." not in desc

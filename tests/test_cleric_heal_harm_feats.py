@@ -30,6 +30,10 @@ class Actor(StatusMixin):
         self.hp -= int(amount)
         return self.hp, self.hp <= 0
 
+    def heal(self, amount: int):
+        self.hp += int(amount)
+        return self.hp
+
 
 class FakeConn:
     def __init__(self, choice):
@@ -54,7 +58,7 @@ class FakeUI:
         return "single"
 
 
-def test_heal_with_holy_castigation_can_damage_fiend(monkeypatch):
+def test_heal_with_holy_castigation_still_heals_non_undead(monkeypatch):
     caster = Actor(name="Cleric", position=(0, 0))
     caster.statuses = [Status(id="healing_hands"), Status(id="holy_castigation")]
     fiend = Actor(name="Fiend", position=(1, 0), hp=15)
@@ -79,7 +83,7 @@ def test_heal_with_holy_castigation_can_damage_fiend(monkeypatch):
     result = HealEvent().run(EventContext(game=game, actor=caster))
 
     assert result.success is True
-    assert fiend.hp == 9
+    assert fiend.hp == 21
     assert any("d10" in str((item.get("prompt_long") or "")).lower() for item in prompt_calls)
 
 

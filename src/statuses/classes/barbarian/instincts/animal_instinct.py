@@ -22,7 +22,8 @@ ANIMAL_INSTINCT_PROFILES: dict[str, dict[str, object]] = {
 
 ANIMAL_INSTINCT_PROMPT = (
     "Animal Instinct: wybierz zwierzę.\n"
-    "Podczas Rage, Unarmed Attack używa profilu zwierzęcia (1k10 + typ obrażeń + cechy) zamiast 1k4."
+    "Podczas Rage, Unarmed Attack używa profilu zwierzęcia (1k10 + typ obrażeń + cechy) zamiast 1k4.\n"
+    "Uwaga: efekty instynktu działają tylko podczas aktywnego Rage."
 )
 
 

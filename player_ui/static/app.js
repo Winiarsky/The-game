@@ -3,6 +3,7 @@ const screenGame = document.getElementById("screen-game");
 const logList = document.getElementById("log-list");
 const logLast = document.getElementById("log-last");
 const logFab = document.getElementById("log-fab");
+const debugUndoBtn = document.getElementById("debug-undo-btn");
 const logModal = document.getElementById("log-modal");
 const logClose = document.getElementById("log-close");
 const heroesList = document.getElementById("heroes-list");
@@ -51,20 +52,91 @@ let activePrompt = null;
 let currentChoices = [];
 let selectedChoiceIndex = -1;
 let choiceMeta = [];
-let digitBuffer = "";
-let digitTimer = null;
 let confirmMode = false;
 let storedSelection = "";
 let layoutMode = "info";
 let rollNaturalMode = "none";
-const DIGIT_BUFFER_MS = 600;
+let fileImagePayload = null;
+let rollStackState = null;
 const pathToast = document.getElementById("path-toast");
 let activePathId = null;
 let initiativeState = { order: [], activeId: null, round: 1 };
 let activeActorId = null;
 let lastLoggedRound = null;
 let lastLoggedActiveActorId = null;
+let creationPreviewHeroId = null;
+const CREATION_PREVIEW_FALLBACK_ID = "__creation_preview__";
+let menuNumpadContext = null;
 actionForm.classList.add("hidden");
+const DEBUG_UNDO_COMMAND = "__debug_undo__";
+const DEFAULT_CREATION_ABILITY_SCORES = {
+    strength: 10,
+    dexterity: 10,
+    constitution: 10,
+    intelligence: 10,
+    wisdom: 10,
+    charisma: 10,
+};
+const DEFAULT_CREATION_ABILITY_MODIFIERS = {
+    strength: 0,
+    dexterity: 0,
+    constitution: 0,
+    intelligence: 0,
+    wisdom: 0,
+    charisma: 0,
+};
+
+function _cloneCreationAbilityDefaults() {
+    return {
+        abilityScores: { ...DEFAULT_CREATION_ABILITY_SCORES },
+        abilityModifiers: { ...DEFAULT_CREATION_ABILITY_MODIFIERS },
+    };
+}
+
+function _resetMenuNumpadContext() {
+    menuNumpadContext = null;
+    if (actionChoices) {
+        actionChoices.classList.remove("choice-columns-mode");
+    }
+}
+
+function _isGroupedMenuNumpad() {
+    if (!menuNumpadContext || !menuNumpadContext.enabled) return false;
+    const groups = menuNumpadContext.groups || {};
+    return Array.isArray(groups.filters) && Array.isArray(groups.list) && groups.filters.length > 0 && groups.list.length > 0;
+}
+
+function _groupIndices(name) {
+    if (!_isGroupedMenuNumpad()) return [];
+    return Array.isArray(menuNumpadContext.groups?.[name]) ? menuNumpadContext.groups[name] : [];
+}
+
+function _setGroupedMenuActive(name) {
+    if (!_isGroupedMenuNumpad()) return;
+    const groupName = name === "filters" ? "filters" : "list";
+    const indices = _groupIndices(groupName);
+    if (!indices.length) return;
+    menuNumpadContext.activeGroup = groupName;
+    if (!indices.includes(selectedChoiceIndex)) {
+        selectChoice(indices[0]);
+        return;
+    }
+    updateChoiceHighlight();
+}
+
+function _moveGroupedMenuSelection(delta) {
+    if (!_isGroupedMenuNumpad()) return false;
+    const step = Number.parseInt(String(delta || 0), 10);
+    if (!step) return false;
+    const groupName = menuNumpadContext.activeGroup === "filters" ? "filters" : "list";
+    const indices = _groupIndices(groupName);
+    if (!indices.length) return false;
+    let currentPos = indices.indexOf(selectedChoiceIndex);
+    if (currentPos < 0) currentPos = 0;
+    const nextPos = (currentPos + (step > 0 ? 1 : -1) + indices.length) % indices.length;
+    selectChoice(indices[nextPos]);
+    return true;
+}
 
 function _isNaturalRollPrompt(prompt) {
     if (!prompt) return false;
@@ -123,6 +195,253 @@ function setIllustration(imageUrl) {
     }
 }
 
+function _renderFileImagePicker() {
+    fileImagePayload = null;
+    actionChoices.innerHTML = "";
+    actionDesc.classList.remove("hidden");
+    actionDesc.textContent = "Wybierz plik obrazu portretu, ustaw kadr (przeciągnij + zoom), potem Enter.";
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "file-picker";
+
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*,.jpg,.jpeg,.png,.webp,.svg";
+    input.className = "file-picker-input";
+
+    const hint = document.createElement("div");
+    hint.className = "file-picker-hint";
+    hint.textContent = "Obsługiwane formaty: JPG, PNG, WEBP, SVG. Przeciągnij obraz, aby przesunąć kadr.";
+
+    const cropWrap = document.createElement("div");
+    cropWrap.className = "file-cropper hidden";
+
+    const cropCanvas = document.createElement("canvas");
+    cropCanvas.className = "file-cropper-canvas";
+    cropCanvas.width = 320;
+    cropCanvas.height = 400;
+    cropCanvas.setAttribute("aria-label", "Edytor kadru portretu");
+
+    const zoomWrap = document.createElement("label");
+    zoomWrap.className = "file-cropper-zoom";
+    zoomWrap.textContent = "Zoom";
+
+    const zoomInput = document.createElement("input");
+    zoomInput.type = "range";
+    zoomInput.min = "100";
+    zoomInput.max = "300";
+    zoomInput.step = "1";
+    zoomInput.value = "100";
+    zoomInput.disabled = true;
+
+    const zoomValue = document.createElement("span");
+    zoomValue.className = "file-cropper-zoom-value";
+    zoomValue.textContent = "100%";
+    zoomWrap.appendChild(zoomInput);
+    zoomWrap.appendChild(zoomValue);
+
+    const cropHint = document.createElement("div");
+    cropHint.className = "file-cropper-hint";
+    cropHint.textContent = "Przeciągnij obraz, aby ustawić pozycję w ramce.";
+
+    cropWrap.appendChild(cropCanvas);
+    cropWrap.appendChild(zoomWrap);
+    cropWrap.appendChild(cropHint);
+
+    const cropState = {
+        image: null,
+        imageWidth: 0,
+        imageHeight: 0,
+        zoom: 1,
+        minScale: 1,
+        scale: 1,
+        offsetX: 0,
+        offsetY: 0,
+        dragging: false,
+        dragLastX: 0,
+        dragLastY: 0,
+        outputMime: "image/jpeg",
+        filename: "",
+    };
+
+    const _clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+
+    const _clampOffsets = () => {
+        const scaledWidth = cropState.imageWidth * cropState.scale;
+        const scaledHeight = cropState.imageHeight * cropState.scale;
+        const maxOffsetX = Math.max(0, (scaledWidth - cropCanvas.width) / 2);
+        const maxOffsetY = Math.max(0, (scaledHeight - cropCanvas.height) / 2);
+        cropState.offsetX = _clamp(cropState.offsetX, -maxOffsetX, maxOffsetX);
+        cropState.offsetY = _clamp(cropState.offsetY, -maxOffsetY, maxOffsetY);
+    };
+
+    const _exportCropPayload = () => {
+        if (!cropState.image) return null;
+        const scaledWidth = cropState.imageWidth * cropState.scale;
+        const scaledHeight = cropState.imageHeight * cropState.scale;
+        const drawX = (cropCanvas.width - scaledWidth) / 2 + cropState.offsetX;
+        const drawY = (cropCanvas.height - scaledHeight) / 2 + cropState.offsetY;
+        const sourceX = _clamp((0 - drawX) / cropState.scale, 0, cropState.imageWidth);
+        const sourceY = _clamp((0 - drawY) / cropState.scale, 0, cropState.imageHeight);
+        const sourceW = _clamp(cropCanvas.width / cropState.scale, 1, cropState.imageWidth - sourceX);
+        const sourceH = _clamp(cropCanvas.height / cropState.scale, 1, cropState.imageHeight - sourceY);
+
+        const outCanvas = document.createElement("canvas");
+        outCanvas.width = 640;
+        outCanvas.height = 800;
+        const outCtx = outCanvas.getContext("2d");
+        if (!outCtx) return null;
+        outCtx.drawImage(
+            cropState.image,
+            sourceX,
+            sourceY,
+            sourceW,
+            sourceH,
+            0,
+            0,
+            outCanvas.width,
+            outCanvas.height
+        );
+        const dataUrl =
+            cropState.outputMime === "image/jpeg"
+                ? outCanvas.toDataURL(cropState.outputMime, 0.92)
+                : outCanvas.toDataURL(cropState.outputMime);
+        return {
+            filename: cropState.filename || "portrait.jpg",
+            mime: cropState.outputMime,
+            data_url: dataUrl,
+        };
+    };
+
+    const _renderCrop = () => {
+        const ctx = cropCanvas.getContext("2d");
+        if (!ctx) return;
+        ctx.clearRect(0, 0, cropCanvas.width, cropCanvas.height);
+        if (!cropState.image) return;
+        cropState.scale = cropState.minScale * cropState.zoom;
+        _clampOffsets();
+        const drawWidth = cropState.imageWidth * cropState.scale;
+        const drawHeight = cropState.imageHeight * cropState.scale;
+        const drawX = (cropCanvas.width - drawWidth) / 2 + cropState.offsetX;
+        const drawY = (cropCanvas.height - drawHeight) / 2 + cropState.offsetY;
+        ctx.drawImage(cropState.image, drawX, drawY, drawWidth, drawHeight);
+        fileImagePayload = _exportCropPayload();
+    };
+
+    input.addEventListener("change", () => {
+        const file = input.files && input.files[0] ? input.files[0] : null;
+        if (!file) {
+            fileImagePayload = null;
+            cropWrap.classList.add("hidden");
+            zoomInput.disabled = true;
+            actionDesc.textContent = "Wybierz plik obrazu portretu, ustaw kadr (przeciągnij + zoom), potem Enter.";
+            return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+            fileImagePayload = null;
+            cropWrap.classList.add("hidden");
+            zoomInput.disabled = true;
+            actionDesc.textContent = "Plik jest za duży (limit: 5 MB).";
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+            const dataUrl = String(reader.result || "");
+            const image = new Image();
+            image.onload = () => {
+                cropState.image = image;
+                cropState.imageWidth = Math.max(1, image.naturalWidth || image.width || 1);
+                cropState.imageHeight = Math.max(1, image.naturalHeight || image.height || 1);
+                cropState.zoom = 1;
+                cropState.offsetX = 0;
+                cropState.offsetY = 0;
+                cropState.filename = file.name || "portrait.jpg";
+                if (file.type === "image/png" || file.type === "image/webp") {
+                    cropState.outputMime = file.type;
+                } else {
+                    cropState.outputMime = "image/jpeg";
+                }
+                cropState.minScale = Math.max(
+                    cropCanvas.width / cropState.imageWidth,
+                    cropCanvas.height / cropState.imageHeight
+                );
+                zoomInput.value = "100";
+                zoomValue.textContent = "100%";
+                zoomInput.disabled = false;
+                cropWrap.classList.remove("hidden");
+                _renderCrop();
+                const kb = Math.max(1, Math.round(file.size / 1024));
+                actionDesc.textContent = `Wybrano: ${file.name} (${kb} KB). Przesuń/zoomuj i naciśnij Enter.`;
+            };
+            image.onerror = () => {
+                fileImagePayload = null;
+                cropWrap.classList.add("hidden");
+                zoomInput.disabled = true;
+                actionDesc.textContent = "Nie udało się odczytać obrazu.";
+            };
+            image.src = dataUrl;
+        };
+        reader.onerror = () => {
+            fileImagePayload = null;
+            cropWrap.classList.add("hidden");
+            zoomInput.disabled = true;
+            actionDesc.textContent = "Nie udało się odczytać pliku.";
+        };
+        reader.readAsDataURL(file);
+    });
+
+    zoomInput.addEventListener("input", () => {
+        const raw = Number.parseInt(String(zoomInput.value || "100"), 10);
+        const value = Number.isNaN(raw) ? 100 : Math.min(300, Math.max(100, raw));
+        cropState.zoom = value / 100;
+        zoomValue.textContent = `${value}%`;
+        _renderCrop();
+    });
+
+    cropCanvas.addEventListener("pointerdown", (event) => {
+        if (!cropState.image) return;
+        cropState.dragging = true;
+        cropState.dragLastX = event.clientX;
+        cropState.dragLastY = event.clientY;
+        cropCanvas.setPointerCapture(event.pointerId);
+    });
+
+    cropCanvas.addEventListener("pointermove", (event) => {
+        if (!cropState.dragging || !cropState.image) return;
+        const rect = cropCanvas.getBoundingClientRect();
+        const ratioX = rect.width > 0 ? cropCanvas.width / rect.width : 1;
+        const ratioY = rect.height > 0 ? cropCanvas.height / rect.height : 1;
+        const deltaX = (event.clientX - cropState.dragLastX) * ratioX;
+        const deltaY = (event.clientY - cropState.dragLastY) * ratioY;
+        cropState.dragLastX = event.clientX;
+        cropState.dragLastY = event.clientY;
+        cropState.offsetX += deltaX;
+        cropState.offsetY += deltaY;
+        _renderCrop();
+    });
+
+    const _endDrag = (event) => {
+        cropState.dragging = false;
+        try {
+            cropCanvas.releasePointerCapture(event.pointerId);
+        } catch (_err) {
+            // ignore
+        }
+    };
+
+    cropCanvas.addEventListener("pointerup", _endDrag);
+    cropCanvas.addEventListener("pointercancel", _endDrag);
+    cropCanvas.addEventListener("pointerleave", () => {
+        cropState.dragging = false;
+    });
+
+    wrapper.appendChild(input);
+    wrapper.appendChild(hint);
+    wrapper.appendChild(cropWrap);
+    actionChoices.appendChild(wrapper);
+    input.focus();
+}
+
 function clearMods() {
     [modsPenCirc, modsBonCirc, modsPenStat, modsBonStat, modsPenItem, modsBonItem].forEach((el) => {
         if (el) el.innerHTML = "";
@@ -161,6 +480,245 @@ function renderMods(mods = {}) {
     modsBox.classList.remove("hidden");
 }
 
+function _toInt(value, fallback = 0) {
+    const parsed = Number.parseInt(String(value ?? ""), 10);
+    return Number.isNaN(parsed) ? fallback : parsed;
+}
+
+function _isRollStackPrompt(prompt) {
+    if (!prompt) return false;
+    const layout = String(prompt.layout || "").toLowerCase();
+    if (layout !== "test" && layout !== "damage") return false;
+    if (prompt.roll_stack && typeof prompt.roll_stack === "object") return true;
+    return !!(prompt.modifiers && typeof prompt.modifiers === "object");
+}
+
+function _modifierBucketTotal(mods, bonusKey, penaltyKey) {
+    const bonuses = Array.isArray(mods?.[bonusKey]) ? mods[bonusKey] : [];
+    const penalties = Array.isArray(mods?.[penaltyKey]) ? mods[penaltyKey] : [];
+    const plus = bonuses.reduce((acc, row) => acc + Math.abs(_toInt(row?.value, 0)), 0);
+    const minus = penalties.reduce((acc, row) => acc + Math.abs(_toInt(row?.value, 0)), 0);
+    return plus - minus;
+}
+
+function _buildRollStackSeed(prompt) {
+    const stack = prompt?.roll_stack && typeof prompt.roll_stack === "object" ? prompt.roll_stack : {};
+    const components = [];
+    const seedComponents = Array.isArray(stack.components) ? stack.components : [];
+
+    if (seedComponents.length) {
+        seedComponents.forEach((row, idx) => {
+            const value = _toInt(row?.value, 0);
+            components.push({
+                id: String(row?.id || `component_${idx + 1}`),
+                label: String(row?.label || `Składnik ${idx + 1}`),
+                value,
+                baseValue: value,
+                description: String(row?.description || row?.desc || ""),
+                editable: row?.editable !== false,
+                isDie: false,
+            });
+        });
+    } else {
+        const mods = prompt?.modifiers && typeof prompt.modifiers === "object" ? prompt.modifiers : null;
+        if (mods) {
+            const derived = [
+                {
+                    id: "circumstance",
+                    label: "Okoliczności",
+                    value: _modifierBucketTotal(mods, "bonCirc", "penCirc"),
+                    description: "Premie i kary circumstance.",
+                },
+                {
+                    id: "status",
+                    label: "Status",
+                    value: _modifierBucketTotal(mods, "bonStat", "penStat"),
+                    description: "Premie i kary status.",
+                },
+                {
+                    id: "item",
+                    label: "Przedmiot",
+                    value: _modifierBucketTotal(mods, "bonItem", "penItem"),
+                    description: "Premie i kary item.",
+                },
+            ];
+            derived.forEach((row) => {
+                if (!row.value) return;
+                components.push({
+                    ...row,
+                    baseValue: row.value,
+                    editable: true,
+                    isDie: false,
+                });
+            });
+        }
+    }
+
+    const componentsTotal = components.reduce((acc, row) => acc + _toInt(row.value, 0), 0);
+    const hasAutoTotal = stack.auto_total_modifier !== undefined && stack.auto_total_modifier !== null;
+    const autoTotal = hasAutoTotal ? _toInt(stack.auto_total_modifier, componentsTotal) : componentsTotal;
+
+    if (autoTotal !== componentsTotal) {
+        const diff = autoTotal - componentsTotal;
+        components.push({
+            id: "other_auto",
+            label: "Pozostałe",
+            value: diff,
+            baseValue: diff,
+            description: "Pozostały automatyczny modyfikator.",
+            editable: true,
+            isDie: false,
+        });
+    }
+
+    return {
+        defaultRoll: _toInt(stack.default_roll, 0),
+        components,
+    };
+}
+
+function _rollStackEditableIndices() {
+    if (!rollStackState) return [];
+    const list = [];
+    rollStackState.fields.forEach((field, idx) => {
+        if (field?.editable) list.push(idx);
+    });
+    return list;
+}
+
+function _rollStackEnsureFocus() {
+    if (!rollStackState) return;
+    const editable = _rollStackEditableIndices();
+    if (!editable.length) {
+        rollStackState.focusIndex = -1;
+        return;
+    }
+    if (!editable.includes(rollStackState.focusIndex)) {
+        rollStackState.focusIndex = editable[0];
+    }
+}
+
+function _rollStackTotal() {
+    if (!rollStackState) return 0;
+    return rollStackState.fields.reduce((acc, row) => acc + _toInt(row?.value, 0), 0);
+}
+
+function _rollStackModifierDelta() {
+    if (!rollStackState) return 0;
+    return rollStackState.fields
+        .filter((row) => !row?.isDie)
+        .reduce((acc, row) => acc + (_toInt(row?.value, 0) - _toInt(row?.baseValue, 0)), 0);
+}
+
+function _renderRollStack() {
+    if (!rollStackState) return;
+    _rollStackEnsureFocus();
+    actionChoices.innerHTML = "";
+    const wrapper = document.createElement("div");
+    wrapper.className = "roll-stack";
+    rollStackState.fields.forEach((field, idx) => {
+        const card = document.createElement("div");
+        card.className = "roll-field";
+        if (idx === rollStackState.focusIndex) card.classList.add("focused");
+        if (!field.editable) card.classList.add("readonly");
+
+        const label = document.createElement("div");
+        label.className = "roll-field-label";
+        label.textContent = field.label || field.id || "Pole";
+
+        const value = document.createElement("div");
+        value.className = "roll-field-value";
+        const numeric = _toInt(field.value, 0);
+        if (field.isDie) value.textContent = `${numeric}`;
+        else value.textContent = `${numeric >= 0 ? "+" : ""}${numeric}`;
+
+        const desc = document.createElement("div");
+        desc.className = "roll-field-desc";
+        desc.textContent = field.description || "";
+
+        card.appendChild(label);
+        card.appendChild(value);
+        card.appendChild(desc);
+        card.addEventListener("click", () => {
+            if (!rollStackState || !field.editable) return;
+            rollStackState.focusIndex = idx;
+            _renderRollStack();
+        });
+        wrapper.appendChild(card);
+    });
+
+    const total = document.createElement("div");
+    total.className = "roll-total";
+    const totalLabel = rollStackState.mode === "damage" ? "Suma obrażeń" : "Suma rzutu";
+    total.innerHTML = `<span>${totalLabel}</span><strong>${_rollStackTotal()}</strong>`;
+    wrapper.appendChild(total);
+    actionChoices.appendChild(wrapper);
+    actionDesc.classList.remove("hidden");
+    const baseHint = "4: poprzednie pole, 5/6: następne pole, 8: +1, 2: -1, Enter: zatwierdź.";
+    actionDesc.textContent = rollStackState.mode === "damage" ? baseHint : `${baseHint} *: nat20/nat1.`;
+}
+
+function _initRollStack(prompt) {
+    const mode = String(prompt?.layout || "test").toLowerCase() === "damage" ? "damage" : "test";
+    const seed = _buildRollStackSeed(prompt);
+    const fields = [
+        {
+            id: mode === "damage" ? "damage_roll" : "d20",
+            label: mode === "damage" ? "Rzut kości obrażeń" : "Rzut k20",
+            value: _toInt(seed.defaultRoll, 0),
+            baseValue: _toInt(seed.defaultRoll, 0),
+            description: mode === "damage" ? "Wpisz surowy wynik kości obrażeń." : "Wpisz surowy wynik kości d20.",
+            editable: true,
+            isDie: true,
+        },
+        ...seed.components,
+    ];
+    rollStackState = {
+        fields,
+        mode,
+        focusIndex: 0,
+    };
+    _renderRollStack();
+}
+
+function _moveRollStackFocus(step) {
+    if (!rollStackState) return;
+    const editable = _rollStackEditableIndices();
+    if (!editable.length) return;
+    const currentPos = Math.max(0, editable.indexOf(rollStackState.focusIndex));
+    const nextPos = (currentPos + step + editable.length) % editable.length;
+    rollStackState.focusIndex = editable[nextPos];
+    _renderRollStack();
+}
+
+function _adjustRollStackFocused(delta) {
+    if (!rollStackState) return;
+    const idx = rollStackState.focusIndex;
+    if (idx < 0 || idx >= rollStackState.fields.length) return;
+    const row = rollStackState.fields[idx];
+    if (!row?.editable) return;
+    row.value = _toInt(row.value, 0) + delta;
+    _renderRollStack();
+}
+
+function _rollStackAnswerPayload() {
+    if (!rollStackState) return null;
+    const dieRow = rollStackState.fields.find((row) => row?.isDie) || rollStackState.fields[0];
+    const rawRoll = _toInt(dieRow?.value, 0);
+    return {
+        roll: rawRoll,
+        raw_roll: rawRoll,
+        modifier_delta: _rollStackModifierDelta(),
+        computed_total: _rollStackTotal(),
+        natural_mode: rollNaturalMode,
+        roll_stack_values: rollStackState.fields.map((row) => ({
+            id: row.id,
+            value: _toInt(row.value, 0),
+            base_value: _toInt(row.baseValue, 0),
+        })),
+    };
+}
+
 function showMenu() {
     screenMenu.classList.remove("hidden");
     screenGame.classList.add("hidden");
@@ -183,6 +741,32 @@ function actorNameById(id) {
     const fromHero = heroes.get(id);
     if (fromHero && fromHero.name) return fromHero.name;
     return String(id);
+}
+
+function activeHeroImage() {
+    if (!activeActorId) return null;
+    const hero = heroes.get(activeActorId);
+    if (!hero) return null;
+    return hero.image || null;
+}
+
+function creationPreviewImage() {
+    const allHeroes = Array.from(heroes.values());
+    const previewHero =
+        (creationPreviewHeroId && heroes.get(creationPreviewHeroId)) ||
+        allHeroes.find((item) => Boolean(item?.creationInProgress)) ||
+        null;
+    return previewHero?.image || null;
+}
+
+function refreshLeftIllustration() {
+    const creationImage =
+        String(activePrompt?.source || "").toLowerCase() === "character_creation" ? creationPreviewImage() : null;
+    if (activePrompt) {
+        setIllustration(activePrompt.image || creationImage || activeHeroImage() || PLACEHOLDER_IMAGE);
+        return;
+    }
+    setIllustration(creationImage || activeHeroImage() || PLACEHOLDER_IMAGE);
 }
 
 function currentPromptLabel() {
@@ -297,6 +881,7 @@ function addLogEntry(text, meta, variant = "", tag = "", image = "") {
 }
 
 function renderPrompt(prompt) {
+    ensureCreationPreviewFallbackFromPrompt(prompt);
     if (renderedPrompts.has(prompt.id)) return;
     renderedPrompts.add(prompt.id);
     promptQueue.push(prompt);
@@ -362,6 +947,58 @@ function buildHeroUpdateLog(previous, current) {
     return { message: `${current.name}: ${changes.join(" · ")}`, variant };
 }
 
+function ensureCreationPreviewFallbackFromPrompt(promptPayload = {}) {
+    const source = String(promptPayload?.source || "").toLowerCase();
+    if (source !== "character_creation") return;
+    const hasRealCreationHero = Array.from(heroes.values()).some(
+        (hero) => Boolean(hero?.creationInProgress) && String(hero?.id || "") !== CREATION_PREVIEW_FALLBACK_ID
+    );
+    if (hasRealCreationHero) return;
+
+    const previous = heroes.get(CREATION_PREVIEW_FALLBACK_ID) || {};
+    const defaults = _cloneCreationAbilityDefaults();
+    const previousScores = previous.abilityScores && typeof previous.abilityScores === "object" ? previous.abilityScores : null;
+    const previousMods = previous.abilityModifiers && typeof previous.abilityModifiers === "object" ? previous.abilityModifiers : null;
+    const promptTitle = String(promptPayload?.prompt || promptPayload?.title || "").trim();
+    const fallback = {
+        id: CREATION_PREVIEW_FALLBACK_ID,
+        name: String(previous.name || "Tworzona postać"),
+        statuses: Array.isArray(previous.statuses) ? previous.statuses : [],
+        note: promptTitle || previous.note || "Kreator postaci",
+        wounds: previous.wounds ?? 0,
+        pos: previous.pos ?? null,
+        initiative: previous.initiative ?? null,
+        image: promptPayload?.image || previous.image || PLACEHOLDER_IMAGE,
+        characterId: previous.characterId || null,
+        classId: previous.classId || null,
+        ancestryId: previous.ancestryId || null,
+        heritageId: previous.heritageId || null,
+        ac: previous.ac ?? null,
+        maxHp: previous.maxHp ?? null,
+        baseSpeedFeet: previous.baseSpeedFeet ?? null,
+        abilityScores: previousScores && Object.keys(previousScores).length ? previousScores : defaults.abilityScores,
+        abilityModifiers: previousMods && Object.keys(previousMods).length ? previousMods : defaults.abilityModifiers,
+        skillRanks: previous.skillRanks || {},
+        saveRanks: previous.saveRanks || {},
+        perceptionRank: previous.perceptionRank || null,
+        trainedSkills: previous.trainedSkills || [],
+        loreSkills: previous.loreSkills || [],
+        backgroundLabel: previous.backgroundLabel || null,
+        backgroundFeatId: previous.backgroundFeatId || null,
+        backgroundAbilityBoostsUi: previous.backgroundAbilityBoostsUi || null,
+        backgroundSkillTrainingUi: previous.backgroundSkillTrainingUi || null,
+        previewBarbarianInstinctId: previous.previewBarbarianInstinctId || null,
+        creationInProgress: true,
+        handSlots: previous.handSlots || null,
+        coinPouch: previous.coinPouch || null,
+        moneyText: previous.moneyText || null,
+        bulkSummary: previous.bulkSummary || null,
+        inventoryItems: previous.inventoryItems || [],
+    };
+    heroes.set(CREATION_PREVIEW_FALLBACK_ID, fallback);
+    creationPreviewHeroId = CREATION_PREVIEW_FALLBACK_ID;
+}
+
 function handleEvent(event) {
     const type = event.type;
     const payload = event.payload || {};
@@ -371,6 +1008,13 @@ function handleEvent(event) {
     showGame();
 
     if (type === "prompt") {
+        ensureCreationPreviewFallbackFromPrompt(payload);
+        if (String(payload?.source || "").toLowerCase() !== "character_creation") {
+            heroes.delete(CREATION_PREVIEW_FALLBACK_ID);
+            if (String(creationPreviewHeroId || "") === CREATION_PREVIEW_FALLBACK_ID) {
+                creationPreviewHeroId = null;
+            }
+        }
         renderPrompt(payload);
         const promptTag = payload.kind === "choice" ? "Wybór" : payload.kind === "info" ? "Info" : "Rzut";
         const sourceNote = payload.source ? ` [${payload.source}]` : "";
@@ -428,9 +1072,45 @@ function handleEvent(event) {
             pos: payload.pos,
             initiative: payload.initiative,
             image: payload.image,
+            characterId: payload.character_id || null,
+            classId: payload.class_id || null,
+            ancestryId: payload.ancestry_id || null,
+            heritageId: payload.heritage_id || null,
+            ac: payload.ac,
+            maxHp: payload.max_hp,
+            baseSpeedFeet: payload.base_speed_feet,
+            abilityScores: payload.ability_scores || {},
+            abilityModifiers: payload.ability_modifiers || {},
+            skillRanks: payload.skill_ranks || {},
+            saveRanks: payload.save_ranks || {},
+            perceptionRank: payload.perception_rank || null,
+            trainedSkills: payload.trained_skills || [],
+            loreSkills: payload.lore_skills || [],
+            backgroundLabel: payload.background_label || null,
+            backgroundFeatId: payload.background_feat_id || null,
+            backgroundAbilityBoostsUi: payload.background_ability_boosts_ui || null,
+            backgroundSkillTrainingUi: payload.background_skill_training_ui || null,
+            previewBarbarianInstinctId: payload.preview_barbarian_instinct_id || null,
+            creationInProgress: Boolean(payload.creation_in_progress),
+            handSlots: payload.hand_slots || null,
+            coinPouch: payload.coin_pouch || null,
+            moneyText: payload.money_text || null,
+            bulkSummary: payload.bulk_summary || null,
+            inventoryItems: payload.inventory_items || [],
         };
+        if (current.creationInProgress) {
+            creationPreviewHeroId = id;
+            if (String(id) !== CREATION_PREVIEW_FALLBACK_ID) {
+                heroes.delete(CREATION_PREVIEW_FALLBACK_ID);
+            }
+        } else if (String(creationPreviewHeroId || "") === String(id)) {
+            creationPreviewHeroId = null;
+        }
         heroes.set(id, current);
         renderHeroes();
+        if (!activePrompt && String(id) === String(activeActorId || "")) {
+            refreshLeftIllustration();
+        }
         const heroLog = buildHeroUpdateLog(previous, current);
         if (heroLog) {
             addLogEntry(heroLog.message, meta, heroLog.variant, "Bohater");
@@ -442,6 +1122,9 @@ function handleEvent(event) {
         const prev = activeActorId;
         activeActorId = payload.id || null;
         renderHeroes();
+        if (!activePrompt) {
+            refreshLeftIllustration();
+        }
         if (String(prev) !== String(activeActorId)) {
             if (activeActorId) {
                 const actorLabel = payload.name || actorNameById(activeActorId);
@@ -614,6 +1297,21 @@ actionForm.addEventListener("submit", async (evt) => {
         await sendPromptAnswer("ok");
         return;
     }
+    if (layoutMode === "file_image") {
+        if (!fileImagePayload) {
+            actionDesc.classList.remove("hidden");
+            actionDesc.textContent = "Najpierw wybierz plik obrazu portretu.";
+            return;
+        }
+        await sendPromptAnswer(fileImagePayload);
+        return;
+    }
+    if (rollStackState) {
+        const payload = _rollStackAnswerPayload();
+        if (!payload) return;
+        await sendPromptAnswer(payload);
+        return;
+    }
 
     // specjalny flow dla wyboru akcji z potwierdzeniem
     if (layoutMode === "action_select" && !confirmMode) {
@@ -628,8 +1326,8 @@ actionForm.addEventListener("submit", async (evt) => {
         const confirmChoices = normalizeChoices({
             choices: ["Accept", "Decline"],
             choice_meta: [
-                { raw: "Accept", label: "Accept", desc: "Zatwierdź i procesuj.", key: "+" },
-                { raw: "Decline", label: "Decline", desc: "Wróć do wyboru akcji.", key: "-" },
+                { raw: "Accept", label: "Potwierdź", desc: "Zatwierdź i wykonaj akcję.", key: "+" },
+                { raw: "Decline", label: "Wróć", desc: "Wróć do wyboru akcji.", key: "-" },
             ],
         });
         currentChoices = confirmChoices.map((c) => c.raw);
@@ -638,13 +1336,13 @@ actionForm.addEventListener("submit", async (evt) => {
         confirmChoices.forEach((c, idx) => {
             const pill = document.createElement("div");
             pill.className = "choice-pill";
+            const displayKey = /^[0-9]+$/.test(String(c.key || "")) ? "" : (c.key || "");
             pill.innerHTML =
                 '<div class="label"><span class="key">' +
-                (c.key || String(idx + 1)) +
+                displayKey +
                 "</span>" +
                 (c.label || "") +
-                "</div>" +
-                (c.desc ? '<div class="desc">' + c.desc + "</div>" : "");
+                "</div>";
             pill.addEventListener("click", () => selectChoice(idx));
             actionChoices.appendChild(pill);
         });
@@ -669,7 +1367,7 @@ actionForm.addEventListener("submit", async (evt) => {
             selectedChoiceIndex = -1;
             return;
         }
-        // Accept — zwracamy wpisaną akcję
+        // Accept - zwracamy wpisaną akcję
         await sendPromptAnswer(storedSelection);
         return;
     }
@@ -686,12 +1384,21 @@ async function sendPromptAnswer(answer) {
     try {
         let finalAnswer = answer;
         if (_isNaturalRollPrompt(activePrompt)) {
-            const parsed = Number.parseInt(String(answer).trim(), 10);
-            if (!Number.isNaN(parsed)) {
-                finalAnswer = {
-                    roll: parsed,
-                    natural_mode: rollNaturalMode,
-                };
+            if (answer && typeof answer === "object" && !Array.isArray(answer)) {
+                finalAnswer = { ...answer };
+            } else {
+                const parsed = Number.parseInt(String(answer).trim(), 10);
+                if (!Number.isNaN(parsed)) {
+                    finalAnswer = {
+                        roll: parsed,
+                        raw_roll: parsed,
+                    };
+                }
+            }
+            if (finalAnswer && typeof finalAnswer === "object" && !Array.isArray(finalAnswer)) {
+                if (!finalAnswer.natural_mode) {
+                    finalAnswer.natural_mode = rollNaturalMode;
+                }
             }
         }
         await fetch(`/api/prompts/${activePrompt.id}/response`, {
@@ -706,6 +1413,20 @@ async function sendPromptAnswer(answer) {
     }
 }
 
+function requestDebugUndo() {
+    if (!activePrompt) {
+        addLogEntry("Debug cofnij: brak aktywnego promptu.", new Date().toLocaleTimeString(), "warning", "Debug");
+        return;
+    }
+    sendPromptAnswer(DEBUG_UNDO_COMMAND);
+}
+
+if (debugUndoBtn) {
+    debugUndoBtn.addEventListener("click", () => {
+        requestDebugUndo();
+    });
+}
+
 document.addEventListener("keydown", (evt) => {
     if (evt.key === "Escape" && logModal && !logModal.classList.contains("hidden")) {
         logModal.classList.add("hidden");
@@ -713,14 +1434,14 @@ document.addEventListener("keydown", (evt) => {
     }
     // scenario wybór w menu
     if (!screenMenu.classList.contains("hidden") && screenGame.classList.contains("hidden")) {
-        if (evt.key === "ArrowDown" || evt.key === "ArrowRight") {
+        if (evt.key === "2") {
             evt.preventDefault();
             if (scenarioButtons.length) {
                 scenarioIndex = (scenarioIndex + 1) % scenarioButtons.length;
                 highlightScenario(scenarioIndex);
             }
         }
-        if (evt.key === "ArrowUp" || evt.key === "ArrowLeft") {
+        if (evt.key === "8") {
             evt.preventDefault();
             if (scenarioButtons.length) {
                 scenarioIndex = (scenarioIndex - 1 + scenarioButtons.length) % scenarioButtons.length;
@@ -734,23 +1455,62 @@ document.addEventListener("keydown", (evt) => {
     }
 
     if (!activePrompt) return;
+    if ((evt.ctrlKey || evt.metaKey) && String(evt.key || "").toLowerCase() === "z") {
+        evt.preventDefault();
+        requestDebugUndo();
+        return;
+    }
+    if (layoutMode === "file_image" && evt.key === "Enter") {
+        evt.preventDefault();
+        actionForm.dispatchEvent(new Event("submit", { cancelable: true }));
+        return;
+    }
     if (_isNaturalRollPrompt(activePrompt) && evt.key === "*") {
         evt.preventDefault();
         _cycleNaturalMode();
         _renderNaturalControls(activePrompt);
         return;
     }
+    if (rollStackState) {
+        if (evt.key === "4" || evt.key === "ArrowLeft") {
+            evt.preventDefault();
+            _moveRollStackFocus(-1);
+            return;
+        }
+        if (evt.key === "5" || evt.key === "6" || evt.key === "ArrowRight") {
+            evt.preventDefault();
+            _moveRollStackFocus(1);
+            return;
+        }
+        if (evt.key === "8" || evt.key === "ArrowUp") {
+            evt.preventDefault();
+            _adjustRollStackFocused(1);
+            return;
+        }
+        if (evt.key === "2" || evt.key === "ArrowDown") {
+            evt.preventDefault();
+            _adjustRollStackFocused(-1);
+            return;
+        }
+        if (evt.key === "Enter") {
+            evt.preventDefault();
+            actionForm.dispatchEvent(new Event("submit", { cancelable: true }));
+            return;
+        }
+    }
     if (layoutMode === "equip_nav") {
         const key = evt.key;
         const map = {
             ArrowUp: "up",
             ArrowDown: "down",
-            ArrowRight: "transfer",
-            ArrowLeft: "drop",
+            ArrowRight: "section_next",
+            ArrowLeft: "section_prev",
             "8": "up",
             "2": "down",
-            "6": "transfer",
-            "4": "drop",
+            "6": "section_next",
+            "4": "section_prev",
+            "7": "hand_left",
+            "9": "hand_right",
             "5": "toggle",
             Enter: "toggle",
             "0": "exit",
@@ -760,6 +1520,84 @@ document.addEventListener("keydown", (evt) => {
         if (cmd) {
             evt.preventDefault();
             sendPromptAnswer(cmd);
+            return;
+        }
+    }
+    if (layoutMode === "menu_numpad" && currentChoices.length > 0) {
+        const groupedMenu = _isGroupedMenuNumpad();
+        const selectedRaw =
+            selectedChoiceIndex >= 0 && selectedChoiceIndex < currentChoices.length
+                ? String(currentChoices[selectedChoiceIndex] || "")
+                : "";
+        const isEquipPrompt = String(activePrompt?.source || "").toLowerCase() === "equip";
+        if (groupedMenu && (evt.key === "4" || evt.key === "ArrowLeft")) {
+            evt.preventDefault();
+            _setGroupedMenuActive("filters");
+            return;
+        }
+        if (groupedMenu && (evt.key === "6" || evt.key === "ArrowRight")) {
+            evt.preventDefault();
+            _setGroupedMenuActive("list");
+            return;
+        }
+        if (evt.key === "8") {
+            evt.preventDefault();
+            if (!_moveGroupedMenuSelection(-1)) {
+                const prev = (selectedChoiceIndex - 1 + currentChoices.length) % currentChoices.length;
+                selectChoice(prev);
+            }
+            return;
+        }
+        if (evt.key === "2") {
+            evt.preventDefault();
+            if (!_moveGroupedMenuSelection(1)) {
+                const next = (selectedChoiceIndex + 1) % currentChoices.length;
+                selectChoice(next);
+            }
+            return;
+        }
+        if (evt.key === "*") {
+            if (isEquipPrompt && selectedRaw) {
+                evt.preventDefault();
+                sendPromptAnswer({ cmd: "transfer", selected: selectedRaw });
+                return;
+            }
+            const idx = choiceMeta.findIndex((c) => String(c.key || "") === "*");
+            if (idx >= 0) {
+                evt.preventDefault();
+                selectChoice(idx);
+                actionForm.dispatchEvent(new Event("submit", { cancelable: true }));
+                return;
+            }
+        }
+        if (isEquipPrompt && (evt.key === "4" || evt.key === "ArrowLeft") && selectedRaw) {
+            evt.preventDefault();
+            sendPromptAnswer({ cmd: "section_prev", selected: selectedRaw });
+            return;
+        }
+        if (isEquipPrompt && (evt.key === "6" || evt.key === "ArrowRight") && selectedRaw) {
+            evt.preventDefault();
+            sendPromptAnswer({ cmd: "section_next", selected: selectedRaw });
+            return;
+        }
+        if (isEquipPrompt && evt.key === "7" && selectedRaw) {
+            evt.preventDefault();
+            sendPromptAnswer({ cmd: "hand_left", selected: selectedRaw });
+            return;
+        }
+        if (isEquipPrompt && evt.key === "9" && selectedRaw) {
+            evt.preventDefault();
+            sendPromptAnswer({ cmd: "hand_right", selected: selectedRaw });
+            return;
+        }
+        if (isEquipPrompt && evt.key === "/" && selectedRaw) {
+            evt.preventDefault();
+            sendPromptAnswer({ cmd: "drop", selected: selectedRaw });
+            return;
+        }
+        if (evt.key === "Enter") {
+            evt.preventDefault();
+            actionForm.dispatchEvent(new Event("submit", { cancelable: true }));
             return;
         }
     }
@@ -791,49 +1629,15 @@ document.addEventListener("keydown", (evt) => {
         return;
     }
     if (currentChoices.length > 0) {
-        if (/^[0-9]$/.test(evt.key)) {
-            evt.preventDefault();
-            digitBuffer += evt.key;
-            if (digitTimer) clearTimeout(digitTimer);
-            digitTimer = setTimeout(() => {
-                if (digitBuffer) {
-                    const num = parseInt(digitBuffer, 10);
-                    if (!isNaN(num) && num >= 1 && num <= currentChoices.length) {
-                        selectChoice(num - 1);
-                    }
-                }
-                digitBuffer = "";
-                digitTimer = null;
-            }, DIGIT_BUFFER_MS);
-
-            if (digitBuffer.length >= 2 || currentChoices.length < 10) {
-                const num = parseInt(digitBuffer, 10);
-                if (!isNaN(num) && num >= 1 && num <= currentChoices.length) {
-                    selectChoice(num - 1);
-                    digitBuffer = "";
-                    clearTimeout(digitTimer);
-                    digitTimer = null;
-                } else if (digitBuffer.length >= 2) {
-                    digitBuffer = "";
-                }
-            }
-        }
-        if (evt.key === "ArrowDown" || evt.key === "ArrowRight") {
+        if (evt.key === "2") {
             evt.preventDefault();
             const next = (selectedChoiceIndex + 1) % currentChoices.length;
             selectChoice(next);
         }
-        if (evt.key === "ArrowUp" || evt.key === "ArrowLeft") {
+        if (evt.key === "8") {
             evt.preventDefault();
             const prev = (selectedChoiceIndex - 1 + currentChoices.length) % currentChoices.length;
             selectChoice(prev);
-        }
-        if (evt.key === "+" || evt.key === "-") {
-            const idx = choiceMeta.findIndex((c) => c.key === evt.key);
-            if (idx >= 0) {
-                evt.preventDefault();
-                selectChoice(idx);
-            }
         }
         if (evt.key === "Enter") {
             evt.preventDefault();
@@ -849,90 +1653,234 @@ function openPrompt(prompt) {
     confirmMode = false;
     storedSelection = "";
     rollNaturalMode = "none";
+    rollStackState = null;
     actionTitle.textContent = prompt.title || prompt.prompt || "Akcja";
     actionText.textContent = prompt.subtitle || "";
     const promptBody = prompt.prompt_long || (layoutMode === "dialog" ? prompt.prompt : "");
     actionPrompt.textContent = promptBody || "";
     actionPrompt.classList.toggle("hidden", !promptBody);
-    setIllustration(prompt.image);
+    const creationImage =
+        String(prompt?.source || "").toLowerCase() === "character_creation" ? creationPreviewImage() : null;
+    setIllustration(prompt.image || creationImage || activeHeroImage() || PLACEHOLDER_IMAGE);
     actionKind.textContent = "";
     actionKind.classList.add("hidden");
     actionSource.textContent = "";
     actionSource.classList.add("hidden");
     actionChoices.innerHTML = "";
+    _resetMenuNumpadContext();
     actionDesc.textContent = "";
     clearMods();
 
     const normalized = normalizeChoices(prompt);
     currentChoices = normalized.map((c) => c.raw);
-    choiceMeta = normalized;
-    selectedChoiceIndex = normalized.length ? 0 : -1;
+    choiceMeta = normalized.map((c, i) => ({ ...c, expanded: i === 0 }));
+    const preferredIndex = Number.parseInt(String(prompt.preselected_index ?? ""), 10);
+    if (normalized.length) {
+        if (Number.isInteger(preferredIndex) && preferredIndex >= 0 && preferredIndex < normalized.length) {
+            selectedChoiceIndex = preferredIndex;
+        } else {
+            selectedChoiceIndex = 0;
+        }
+    } else {
+        selectedChoiceIndex = -1;
+    }
+    choiceMeta = normalized.map((c, i) => ({ ...c, expanded: i === selectedChoiceIndex }));
 
-    const ensureChoiceList = (list) => {
-        list.forEach((c, idx) => {
+    const createChoicePill = (c, idx) => {
             const pill = document.createElement("div");
             pill.className = "choice-pill";
-            pill.innerHTML =
-                '<div class="label"><span class="key">' +
-                (c.key || String(idx + 1)) +
-                "</span>" +
-                (c.label || "") +
-                "</div>" +
-                (c.desc ? '<div class="desc">' + c.desc + "</div>" : "");
+            pill.dataset.choiceIndex = String(idx);
+            const displayKey = /^[0-9]+$/.test(String(c.key || "")) ? "" : (c.key || "");
+            const labelRow = document.createElement("div");
+            labelRow.className = "label";
+            const keyEl = document.createElement("span");
+            keyEl.className = "key";
+            keyEl.textContent = displayKey;
+            const labelText = document.createElement("span");
+            labelText.textContent = c.label || "";
+            labelRow.appendChild(keyEl);
+            labelRow.appendChild(labelText);
+            pill.appendChild(labelRow);
+            const desc = document.createElement("div");
+            desc.className = "desc";
+            desc.textContent = c.desc || "";
+            pill.appendChild(desc);
             pill.addEventListener("click", () => {
                 selectChoice(idx);
             });
-            actionChoices.appendChild(pill);
+            return pill;
+    };
+
+    const ensureChoiceList = (list) => {
+        list.forEach((c, idx) => {
+            actionChoices.appendChild(createChoicePill(c, idx));
         });
     };
 
+    const renderCharacterCreationShopColumns = (list) => {
+        if (layoutMode !== "menu_numpad") return false;
+        if (String(prompt?.source || "").toLowerCase() !== "character_creation") return false;
+        const filterIndices = [];
+        const listIndices = [];
+        const indexToGroup = {};
+
+        list.forEach((row, idx) => {
+            const raw = String(row.raw || "").trim().toLowerCase();
+            if (raw.startsWith("__filter:")) {
+                filterIndices.push(idx);
+                indexToGroup[idx] = "filters";
+            } else {
+                listIndices.push(idx);
+                indexToGroup[idx] = "list";
+            }
+        });
+        if (!filterIndices.length || !listIndices.length) return false;
+
+        actionChoices.classList.add("choice-columns-mode");
+        const columns = document.createElement("div");
+        columns.className = "choice-columns";
+
+        const filterCol = document.createElement("div");
+        filterCol.className = "choice-column";
+        filterCol.dataset.group = "filters";
+        const filterHead = document.createElement("div");
+        filterHead.className = "choice-column-head";
+        filterHead.textContent = "Filtry";
+        const filterHint = document.createElement("div");
+        filterHint.className = "choice-column-hint";
+        filterHint.textContent = "4/6: panel | 8/2: nawigacja";
+        const filterList = document.createElement("div");
+        filterList.className = "choice-column-list";
+        filterIndices.forEach((idx) => {
+            filterList.appendChild(createChoicePill(list[idx], idx));
+        });
+        filterCol.appendChild(filterHead);
+        filterCol.appendChild(filterHint);
+        filterCol.appendChild(filterList);
+
+        const itemsCol = document.createElement("div");
+        itemsCol.className = "choice-column";
+        itemsCol.dataset.group = "list";
+        const itemsHead = document.createElement("div");
+        itemsHead.className = "choice-column-head";
+        itemsHead.textContent = "Lista";
+        const itemsHint = document.createElement("div");
+        itemsHint.className = "choice-column-hint";
+        itemsHint.textContent = "Enter: wybór";
+        const itemsList = document.createElement("div");
+        itemsList.className = "choice-column-list";
+        listIndices.forEach((idx) => {
+            itemsList.appendChild(createChoicePill(list[idx], idx));
+        });
+        itemsCol.appendChild(itemsHead);
+        itemsCol.appendChild(itemsHint);
+        itemsCol.appendChild(itemsList);
+
+        columns.appendChild(filterCol);
+        columns.appendChild(itemsCol);
+        actionChoices.appendChild(columns);
+
+        const selectedGroup = indexToGroup[selectedChoiceIndex] || "list";
+        menuNumpadContext = {
+            enabled: true,
+            groups: { filters: filterIndices, list: listIndices },
+            indexToGroup,
+            activeGroup: selectedGroup,
+        };
+        return true;
+    };
+
     if (layoutMode === "dialog" || layoutMode === "interact") {
-        ensureChoiceList(normalized);
-        actionAnswer.value = normalized[0]?.raw || "";
-        actionAnswer.classList.add("input-hidden");
+        if (normalized.length > 0) {
+            ensureChoiceList(normalized);
+            actionAnswer.value = selectedChoiceIndex >= 0 ? currentChoices[selectedChoiceIndex] || "" : "";
+            actionAnswer.classList.add("input-hidden");
+            actionAnswer.required = false;
+            updateChoiceHighlight();
+            updateChoiceDesc();
+            actionText.classList.add("hidden");
+            actionPrompt.classList.add("hidden");
+            actionDesc.classList.add("hidden");
+        } else {
+            // dialog bez opcji = zwykły prompt tekstowy (np. imię postaci)
+            actionAnswer.value = "";
+            actionAnswer.placeholder = prompt.answer_placeholder || "Wpisz tekst...";
+            actionAnswer.required = false;
+            actionAnswer.classList.remove("input-hidden");
+            actionText.classList.remove("hidden");
+            actionPrompt.classList.toggle("hidden", !promptBody);
+            actionDesc.classList.add("hidden");
+        }
+    } else if (layoutMode === "file_image") {
+        actionTitle.textContent = prompt.title || "Wybór portretu";
+        actionText.textContent = prompt.subtitle || "Wybierz plik obrazu portretu i potwierdź Enterem.";
+        actionAnswer.value = "";
         actionAnswer.required = false;
-        updateChoiceHighlight();
-        updateChoiceDesc();
-        actionText.classList.add("hidden");
-        actionPrompt.classList.add("hidden");
-        actionDesc.classList.add("hidden");
+        actionAnswer.classList.add("input-hidden");
+        actionPrompt.classList.toggle("hidden", !promptBody);
+        actionText.classList.remove("hidden");
+        _renderFileImagePicker();
     } else if (layoutMode === "action_select") {
         // pierwszy krok: wpisz nazwę akcji
         actionTitle.textContent = prompt.title || "Wybierz akcję";
-        actionText.textContent = prompt.subtitle || "Wpisz nazwę akcji i Enter.";
+        actionText.textContent = prompt.subtitle || "Wpisz nazwę akcji i potwierdź Enterem.";
         actionAnswer.placeholder = "Nazwa akcji...";
         actionAnswer.value = "";
         actionAnswer.required = true;
         actionAnswer.classList.remove("input-hidden");
     } else if (layoutMode === "test" || layoutMode === "damage") {
-        actionAnswer.placeholder = prompt.answer_placeholder || "Podaj wynik (liczba)...";
-        actionAnswer.value = "";
-        actionAnswer.required = true;
-        actionAnswer.classList.remove("input-hidden");
+        const useRollStack = _isRollStackPrompt(prompt);
+        if (useRollStack) {
+            actionAnswer.value = "";
+            actionAnswer.required = false;
+            actionAnswer.classList.add("input-hidden");
+            _initRollStack(prompt);
+        } else {
+            actionAnswer.placeholder = prompt.answer_placeholder || "Podaj wynik (liczba)...";
+            actionAnswer.value = "";
+            actionAnswer.required = true;
+            actionAnswer.classList.remove("input-hidden");
+        }
         if (prompt.modifiers) {
             renderMods(prompt.modifiers);
         }
+    } else if (prompt.kind === "info" && _isStatsPrompt(prompt)) {
+        actionAnswer.value = "";
+        actionAnswer.placeholder = "Enter aby zamknąć";
+        actionAnswer.required = false;
+        actionAnswer.classList.add("input-hidden");
+        actionPrompt.classList.add("hidden");
+        _renderStatsPanel(prompt.prompt_long || "");
     } else if (prompt.kind === "info") {
         actionAnswer.value = "";
         actionAnswer.placeholder = "Enter aby zamknąć";
         actionAnswer.required = false;
         actionAnswer.classList.add("input-hidden");
     } else if (normalized.length > 0) {
-        ensureChoiceList(normalized);
-        actionAnswer.value = normalized[0].raw;
+        if (!renderCharacterCreationShopColumns(normalized)) {
+            ensureChoiceList(normalized);
+        }
+        actionAnswer.value = selectedChoiceIndex >= 0 ? currentChoices[selectedChoiceIndex] || "" : "";
         actionAnswer.classList.add("input-hidden");
         actionAnswer.required = false;
         updateChoiceHighlight();
         updateChoiceDesc();
+        actionDesc.classList.add("hidden");
     } else {
         actionAnswer.placeholder = "Twoja odpowiedź...";
         actionAnswer.required = true;
         actionAnswer.classList.remove("input-hidden");
+        actionDesc.classList.remove("hidden");
     }
     _renderNaturalControls(prompt);
     actionForm.classList.remove("hidden");
+    renderHeroes();
     updateSessionSummary();
-    actionAnswer.focus();
+    if (rollStackState) {
+        _renderRollStack();
+    } else {
+        actionAnswer.focus();
+    }
 }
 
 function closePrompt() {
@@ -941,6 +1889,9 @@ function closePrompt() {
     storedSelection = "";
     layoutMode = "info";
     rollNaturalMode = "none";
+    fileImagePayload = null;
+    rollStackState = null;
+    _resetMenuNumpadContext();
     actionForm.classList.add("hidden");
     actionChoices.innerHTML = "";
     actionDesc.textContent = "";
@@ -952,6 +1903,8 @@ function closePrompt() {
     actionText.classList.remove("hidden");
     clearMods();
     _renderNaturalControls(null);
+    refreshLeftIllustration();
+    renderHeroes();
     updateSessionSummary();
     processPromptQueue();
 }
@@ -965,38 +1918,124 @@ function processPromptQueue() {
 
 function selectChoice(idx) {
     if (idx < 0 || idx >= currentChoices.length) return;
-    if (selectedChoiceIndex === idx) {
-        // toggle expansion
-        choiceMeta[idx].expanded = !choiceMeta[idx].expanded;
-    } else {
-        selectedChoiceIndex = idx;
-        choiceMeta = choiceMeta.map((c, i) => ({ ...c, expanded: i === idx ? true : c.expanded && i === idx }));
+    selectedChoiceIndex = idx;
+    if (_isGroupedMenuNumpad()) {
+        const group = menuNumpadContext.indexToGroup?.[idx];
+        if (group === "filters" || group === "list") {
+            menuNumpadContext.activeGroup = group;
+        }
     }
+    choiceMeta = choiceMeta.map((c, i) => ({ ...c, expanded: i === idx }));
     actionAnswer.value = currentChoices[idx];
     updateChoiceHighlight();
     updateChoiceDesc();
+    renderHeroes();
 }
 
 function updateChoiceHighlight() {
     const pills = actionChoices.querySelectorAll(".choice-pill");
-    pills.forEach((pill, i) => {
-        const isSelected = i === selectedChoiceIndex;
-        const isExpanded = choiceMeta[i]?.expanded;
+    pills.forEach((pill, fallbackIndex) => {
+        const dataIndex = Number.parseInt(String(pill.dataset.choiceIndex || ""), 10);
+        const idx = Number.isInteger(dataIndex) ? dataIndex : fallbackIndex;
+        const isSelected = idx === selectedChoiceIndex;
+        const isExpanded = choiceMeta[idx]?.expanded;
         pill.classList.toggle("selected", isSelected);
         pill.classList.toggle("expanded", isExpanded);
         if (isSelected) {
             pill.scrollIntoView({ block: "nearest", inline: "nearest" });
         }
     });
+    const columns = actionChoices.querySelectorAll(".choice-column");
+    columns.forEach((column) => {
+        if (!_isGroupedMenuNumpad()) {
+            column.classList.remove("active");
+            return;
+        }
+        const group = String(column.dataset.group || "");
+        column.classList.toggle("active", group === menuNumpadContext.activeGroup);
+    });
 }
 
 function updateChoiceDesc() {
-    const idx = choiceMeta.findIndex((c) => c.expanded);
-    if (idx === -1) {
+    if (actionDesc.classList.contains("hidden")) {
+        return;
+    }
+    if (selectedChoiceIndex < 0 || selectedChoiceIndex >= choiceMeta.length) {
         actionDesc.textContent = "";
         return;
     }
-    actionDesc.textContent = choiceMeta[idx].desc || "";
+    actionDesc.textContent = choiceMeta[selectedChoiceIndex]?.desc || "";
+}
+
+function _isStatsPrompt(prompt) {
+    if (!prompt) return false;
+    const source = String(prompt.source || "").toLowerCase();
+    const title = String(prompt.title || prompt.prompt || "").toLowerCase();
+    return source === "stats" || title.includes("statystyk");
+}
+
+function _renderStatsPanel(rawText) {
+    actionChoices.innerHTML = "";
+    const panel = document.createElement("div");
+    panel.className = "stats-panel";
+
+    const lines = String(rawText || "")
+        .split("\n")
+        .map((line) => String(line || "").trim())
+        .filter((line) => line.length > 0);
+
+    let section = document.createElement("div");
+    section.className = "stats-section";
+    const defaultHeader = document.createElement("div");
+    defaultHeader.className = "stats-section-title";
+    defaultHeader.textContent = "Postać";
+    section.appendChild(defaultHeader);
+    panel.appendChild(section);
+
+    const appendRow = (label, value, kind = "kv") => {
+        const row = document.createElement("div");
+        row.className = `stats-row ${kind}`;
+        if (label) {
+            const key = document.createElement("span");
+            key.className = "stats-key";
+            key.textContent = label;
+            row.appendChild(key);
+        }
+        const val = document.createElement("span");
+        val.className = "stats-value";
+        val.textContent = value || "";
+        row.appendChild(val);
+        section.appendChild(row);
+    };
+
+    lines.forEach((line) => {
+        if (line.endsWith(":") && !line.startsWith("- ")) {
+            section = document.createElement("div");
+            section.className = "stats-section";
+            const header = document.createElement("div");
+            header.className = "stats-section-title";
+            header.textContent = line.slice(0, -1).trim();
+            section.appendChild(header);
+            panel.appendChild(section);
+            return;
+        }
+        if (line.startsWith("- ")) {
+            appendRow("•", line.slice(2).trim(), "bullet");
+            return;
+        }
+        const sep = line.indexOf(":");
+        if (sep > 0) {
+            const key = line.slice(0, sep).trim();
+            const value = line.slice(sep + 1).trim();
+            appendRow(key, value, "kv");
+            return;
+        }
+        appendRow("", line, "plain");
+    });
+
+    actionChoices.appendChild(panel);
+    actionDesc.classList.remove("hidden");
+    actionDesc.textContent = "Enter: zamknij panel statystyk.";
 }
 
 function statusTone(name = "") {
@@ -1009,13 +2048,99 @@ function statusTone(name = "") {
 }
 
 function normalizeChoices(prompt) {
+    const ensureStructuredChoiceDesc = (label, rawDesc) => {
+        const sectionValue = (line) => {
+            const idx = String(line || "").indexOf(":");
+            if (idx < 0) return "";
+            return String(line).slice(idx + 1).trim();
+        };
+        const normalizeBulletLine = (line) => String(line || "").replace(/^[\-\u2022]\s*/, "").trim();
+        const splitEffectParts = (raw) => {
+            const text = String(raw || "").trim();
+            if (!text) return [];
+            return text
+                .split(/\r?\n/)
+                .map((item) => normalizeBulletLine(item))
+                .filter(Boolean)
+                .flatMap((item) => item.split(/\s*\|\s*/))
+                .map((item) => String(item || "").trim())
+                .filter(Boolean);
+        };
+        const formatStructured = (fluff, when, effect) => {
+            const whenText = String(when || "").trim() || "Po wybraniu tej opcji.";
+            const effectParts = splitEffectParts(effect);
+            if (!effectParts.length) effectParts.push("Brak dodatkowego opisu mechaniki.");
+            const lines = [`Fluff: ${String(fluff || "").trim() || "Opcja wyboru."}`, "Mechanika:", `- Kiedy: ${whenText}`];
+            if (effectParts.length === 1) {
+                lines.push(`- Efekt: ${effectParts[0]}`);
+            } else {
+                lines.push("- Efekt:");
+                effectParts.forEach((item) => lines.push(`  - ${item}`));
+            }
+            return lines.join("\n");
+        };
+        const desc = String(rawDesc || "").trim();
+        if (!desc) {
+            return formatStructured("Opcja wyboru.", "Po wybraniu tej opcji.", "Brak dodatkowego opisu mechaniki.");
+        }
+        const alreadyStructured =
+            !desc.includes("|") &&
+            /^\s*Fluff\s*:/im.test(desc) &&
+            /^\s*Mechanika\s*:\s*$/im.test(desc) &&
+            /^\s*-\s*Kiedy\s*:/im.test(desc) &&
+            /^\s*-\s*Efekt\s*:/im.test(desc);
+        if (alreadyStructured) return desc;
+        let fluff = "";
+        let when = "";
+        let effect = "";
+        let mechanics = "";
+
+        const lines = desc.split(/\r?\n/).map((line) => String(line || "").trim()).filter(Boolean);
+        if (/^\s*(NAZWA\s*:|Fluff\s*:|Mechanika\s*:|Kiedy\s*:|Efekt\s*:)/i.test(desc)) {
+            lines.forEach((line) => {
+                const normalized = normalizeBulletLine(line);
+                if (/^Fluff\s*:/i.test(normalized)) fluff = sectionValue(normalized) || fluff;
+                else if (/^Mechanika\s*:/i.test(normalized)) mechanics = sectionValue(normalized) || mechanics;
+                else if (/^Kiedy\s*:/i.test(normalized)) when = sectionValue(normalized) || when;
+                else if (/^Efekt\s*:/i.test(normalized)) effect = sectionValue(normalized) || effect;
+            });
+        } else {
+            const compact = desc.replace(/\s+/g, " ").trim();
+            const dotIdx = compact.indexOf(".");
+            fluff = dotIdx > 0 && dotIdx < 180 ? compact.slice(0, dotIdx + 1).trim() : compact;
+            mechanics = desc;
+        }
+
+        if (!fluff) {
+            const compact = desc.replace(/\s+/g, " ").trim();
+            const dotIdx = compact.indexOf(".");
+            fluff = dotIdx > 0 && dotIdx < 180 ? compact.slice(0, dotIdx + 1).trim() : compact || "Opcja wyboru.";
+        }
+        const mechanicsSource = mechanics || desc;
+        if (!when) {
+            const whenMatch = mechanicsSource.match(/Kiedy:\s*(.*?)(?:\s*(?:\||;)\s*Efekt:|\s+Efekt:|$)/i);
+            when = whenMatch && whenMatch[1] ? String(whenMatch[1]).trim() : "Po wybraniu tej opcji.";
+        }
+        if (!effect) {
+            const effectMatch = mechanicsSource.match(/Efekt:\s*(.*)$/i);
+            effect = effectMatch && effectMatch[1] ? String(effectMatch[1]).trim() : mechanicsSource;
+        }
+        if (!effect) effect = "Brak dodatkowego opisu mechaniki.";
+        return formatStructured(fluff, when, effect);
+    };
     // prefer structured choice_meta if provided
     if (Array.isArray(prompt.choice_meta) && prompt.choice_meta.length) {
         return prompt.choice_meta.map((c) => ({
             raw: c.raw || c.label || "",
             label: c.label || c.raw || "",
-            desc: c.desc || "",
+            desc: ensureStructuredChoiceDesc(c.label || c.raw || "", c.desc || ""),
             key: c.key || "",
+            heroPreview:
+                c && typeof c.hero_preview === "object" && c.hero_preview
+                    ? c.hero_preview
+                    : c && typeof c.heroPreview === "object" && c.heroPreview
+                    ? c.heroPreview
+                    : null,
         }));
     }
     const rawChoices = Array.isArray(prompt.choices) ? prompt.choices : [];
@@ -1052,9 +2177,10 @@ function normalizeChoices(prompt) {
             cardMap[lowerNorm] ||
             (key ? cardMap[key.toLowerCase()] : undefined) ||
             key;
-        const label = mapped ? `${mapped} · ${title}` : title;
+        const showMapped = mapped && !/^[0-9]+$/.test(String(mapped));
+        const label = showMapped ? `${mapped} · ${title}` : title;
         const effectiveKey = mapped || key || (title.length === 1 ? title : "");
-        return { raw: norm, label, desc, key: effectiveKey };
+        return { raw: norm, label, desc: ensureStructuredChoiceDesc(label, desc), key: effectiveKey };
     });
 }
 
@@ -1078,26 +2204,260 @@ function clearPathInfo(id = null) {
     pathToast.classList.add("hidden");
 }
 
+function _coerceHeroPreview(rawPreview, fallbackLabel = "") {
+    const preview = rawPreview && typeof rawPreview === "object" ? rawPreview : {};
+    const asDict = (value) => (value && typeof value === "object" && !Array.isArray(value) ? value : {});
+    const asList = (value) => (Array.isArray(value) ? value : []);
+    const name = String(preview.name || fallbackLabel || "Bohater");
+    const levelValue = Number.parseInt(String(preview.level ?? ""), 10);
+    return {
+        id: String(preview.character_id || preview.characterId || preview.id || "__hero_select_preview__"),
+        name,
+        level: Number.isNaN(levelValue) ? null : levelValue,
+        statuses: asList(preview.statuses),
+        note: String(preview.note || "Podgląd bohatera"),
+        wounds: preview.wounds ?? 0,
+        pos: preview.pos ?? null,
+        initiative: preview.initiative ?? null,
+        image: preview.image || preview.portrait_image || PLACEHOLDER_IMAGE,
+        characterId: preview.character_id || preview.characterId || null,
+        classId: preview.class_id || preview.classId || null,
+        ancestryId: preview.ancestry_id || preview.ancestryId || null,
+        heritageId: preview.heritage_id || preview.heritageId || null,
+        ac: preview.ac ?? null,
+        maxHp: preview.max_hp ?? preview.maxHp ?? null,
+        baseSpeedFeet: preview.base_speed_feet ?? preview.baseSpeedFeet ?? null,
+        abilityScores: asDict(preview.ability_scores || preview.abilityScores),
+        abilityModifiers: asDict(preview.ability_modifiers || preview.abilityModifiers),
+        skillRanks: asDict(preview.skill_ranks || preview.skillRanks),
+        saveRanks: asDict(preview.save_ranks || preview.saveRanks),
+        perceptionRank: preview.perception_rank || preview.perceptionRank || null,
+        trainedSkills: asList(preview.trained_skills || preview.trainedSkills),
+        loreSkills: asList(preview.lore_skills || preview.loreSkills),
+        backgroundLabel: preview.background_label || preview.backgroundLabel || null,
+        backgroundFeatId: preview.background_feat_id || preview.backgroundFeatId || null,
+        handSlots: asDict(preview.hand_slots || preview.handSlots),
+        moneyText: preview.money_text || preview.moneyText || null,
+        bulkSummary: asDict(preview.bulk_summary || preview.bulkSummary),
+        inventoryItems: asList(preview.inventory_items || preview.inventoryItems),
+        creationInProgress: false,
+    };
+}
+
+function _currentHeroSelectPreview() {
+    if (!activePrompt) return null;
+    const source = String(activePrompt.source || "").toLowerCase();
+    if (source !== "hero_select") return null;
+    if (!Array.isArray(choiceMeta) || selectedChoiceIndex < 0 || selectedChoiceIndex >= choiceMeta.length) {
+        return null;
+    }
+    const entry = choiceMeta[selectedChoiceIndex] || {};
+    return _coerceHeroPreview(entry.heroPreview || entry.hero_preview, entry.label || "Bohater");
+}
+
 // --- Heroes rendering ---
 
 function renderHeroes() {
     heroesList.innerHTML = "";
-    heroes.forEach((hero) => {
+    if (!heroesList) return;
+    const pretty = (value) => String(value || "").replace(/_/g, " ").trim();
+    const skillRanksShort = (hero) => {
+        const ranks = hero.skillRanks && typeof hero.skillRanks === "object" ? hero.skillRanks : {};
+        const trained = Array.isArray(hero.trainedSkills) ? hero.trainedSkills : [];
+        const trainedIds = new Set(
+            trained
+                .map((item) => String(item || "").toLowerCase().trim())
+                .filter(Boolean)
+        );
+        const allIds = new Set([
+            ...Object.keys(ranks || {}).map((item) => String(item || "").toLowerCase().trim()),
+            ...trainedIds,
+        ]);
+        const order = [
+            "acrobatics",
+            "arcana",
+            "athletics",
+            "crafting",
+            "deception",
+            "diplomacy",
+            "intimidation",
+            "medicine",
+            "nature",
+            "occultism",
+            "performance",
+            "religion",
+            "society",
+            "stealth",
+            "survival",
+            "thievery",
+        ];
+        const rows = [];
+        order.forEach((skillId) => {
+            if (!allIds.has(skillId)) return;
+            const rawRank = String(ranks[skillId] || (trainedIds.has(skillId) ? "trained" : "untrained"))
+                .toLowerCase()
+                .trim();
+            if (!rawRank || rawRank === "untrained") return;
+            rows.push(`${pretty(skillId)} (${pretty(rawRank)})`);
+        });
+        return rows.join(", ");
+    };
+    const loreShort = (hero) => (Array.isArray(hero.loreSkills) && hero.loreSkills.length ? hero.loreSkills.join(", ") : "");
+    const abilityOrder = [
+        ["strength", "STR"],
+        ["dexterity", "DEX"],
+        ["constitution", "CON"],
+        ["intelligence", "INT"],
+        ["wisdom", "WIS"],
+        ["charisma", "CHA"],
+    ];
+    const section = (title, body) =>
+        `<div class="hero-section"><div class="hero-section-title">${title}</div><div class="hero-section-body">${body}</div></div>`;
+
+    const allHeroes = Array.from(heroes.values());
+    let visibleHeroes = allHeroes;
+    const heroSelectPreview = _currentHeroSelectPreview();
+    const inCharacterCreation = String(activePrompt?.source || "").toLowerCase() === "character_creation";
+    const creationPreviewHero =
+        (creationPreviewHeroId && heroes.get(creationPreviewHeroId)) ||
+        allHeroes.find((item) => Boolean(item?.creationInProgress)) ||
+        null;
+    const hasRealCreationHero = allHeroes.some(
+        (item) => Boolean(item?.creationInProgress) && String(item?.id || "") !== CREATION_PREVIEW_FALLBACK_ID
+    );
+    if (heroSelectPreview) {
+        visibleHeroes = [heroSelectPreview];
+    } else if ((inCharacterCreation || hasRealCreationHero) && creationPreviewHero) {
+        visibleHeroes = [creationPreviewHero];
+    } else if (activeActorId && heroes.has(activeActorId)) {
+        const current = heroes.get(activeActorId);
+        visibleHeroes = current ? [current] : [];
+    } else if (allHeroes.length > 0) {
+        visibleHeroes = [allHeroes[0]];
+    }
+
+    visibleHeroes.forEach((hero) => {
         const card = document.createElement("div");
         const isActive = String(hero.id || "") === String(activeActorId || "");
         card.className = "hero-card" + (isActive ? " active" : "");
         const heroImg = hero.image || PLACEHOLDER_IMAGE;
-        const statuses = hero.statuses && hero.statuses.length
-            ? hero.statuses.map((s) => `<span class="status-pill ${statusTone(s)}">${s}</span>`).join("")
-            : '<span class="status-pill neutral">brak</span>';
+        const statuses = Array.isArray(hero.statuses) ? hero.statuses : [];
+        const statusPills = statuses.length
+            ? statuses.map((s) => `<span class="status-pill ${statusTone(s)}">${s}</span>`).join("")
+            : '<span class="status-pill neutral">brak statusów</span>';
+        const noteLine = hero.note ? `<div class="hero-notes">Etap: ${hero.note}</div>` : "";
+        const levelLine = hero.level != null ? `Poziom ${hero.level}` : "Poziom -";
+        const backgroundFeatLabel = hero.backgroundFeatId
+            ? String(hero.backgroundFeatId).replace(/_/g, " ")
+            : "";
+        const backgroundFeatLine = backgroundFeatLabel ? `<div class="hero-notes">Background feat: ${backgroundFeatLabel}</div>` : "";
+        const previewInstinctLine = hero.previewBarbarianInstinctId
+            ? `<div class="hero-notes">Instynkt: ${pretty(hero.previewBarbarianInstinctId)}</div>`
+            : "";
+        const backgroundSkillsLine = hero.backgroundSkillTrainingUi
+            ? `<div class="hero-notes">BG skille/Lore (opisowo): ${hero.backgroundSkillTrainingUi}</div>`
+            : "";
+        const backgroundBoostsLine = hero.backgroundAbilityBoostsUi
+            ? `<div class="hero-notes">BG ability boosts (opisowo): ${hero.backgroundAbilityBoostsUi}</div>`
+            : "";
+        const classLabel = hero.classId ? pretty(hero.classId) : "-";
+        const ancestryLabel = hero.ancestryId ? pretty(hero.ancestryId) : "-";
+        const heritageLabel = hero.heritageId ? pretty(hero.heritageId) : "-";
+
+        const woundsNum = Number(hero.wounds ?? 0);
+        const maxHpNum = Number(hero.maxHp ?? 0);
+        const hpNow =
+            !Number.isNaN(woundsNum) && !Number.isNaN(maxHpNum) && maxHpNum > 0
+                ? Math.max(0, maxHpNum - woundsNum)
+                : "-";
+        const hpLine = `HP: ${hpNow}/${hero.maxHp ?? "-"} · Rany: ${hero.wounds ?? "-"}`;
+        const speedLine = `AC: ${hero.ac ?? "-"} · Speed: ${hero.baseSpeedFeet ?? "-"} ft`;
+        const saves = hero.saveRanks && typeof hero.saveRanks === "object" ? hero.saveRanks : {};
+        const saveLine = `Save: F ${pretty(saves.fortitude || "untrained")} · R ${pretty(
+            saves.reflex || "untrained"
+        )} · W ${pretty(saves.will || "untrained")}`;
+        const perceptionLine = `Percepcja: ${pretty(hero.perceptionRank || "untrained")}`;
+
+        const rawScores = hero.abilityScores && typeof hero.abilityScores === "object" ? hero.abilityScores : {};
+        const rawMods = hero.abilityModifiers && typeof hero.abilityModifiers === "object" ? hero.abilityModifiers : {};
+        const missingAbilityScores = !rawScores || Object.keys(rawScores).length === 0;
+        const defaults = _cloneCreationAbilityDefaults();
+        const creationContextForHero =
+            hero.creationInProgress ||
+            String(hero.id || "") === CREATION_PREVIEW_FALLBACK_ID ||
+            String(activePrompt?.source || "").toLowerCase() === "character_creation";
+        const scores = creationContextForHero && missingAbilityScores ? defaults.abilityScores : rawScores;
+        const mods = creationContextForHero && missingAbilityScores ? defaults.abilityModifiers : rawMods;
+        const abilityLine = abilityOrder
+            .map(([id, short]) => {
+                if (scores[id] == null) return "";
+                const modRaw = Number(mods[id] ?? 0);
+                const modText = `${modRaw >= 0 ? "+" : ""}${modRaw}`;
+                return `<span class="hero-ability-chip">${short} ${scores[id]} (${modText})</span>`;
+            })
+            .filter(Boolean)
+            .join("");
+        const abilitiesBody = abilityLine || `<div class="hero-notes">Brak danych o cechach.</div>`;
+
+        const skillRanksLabel = skillRanksShort(hero) || "brak wytrenowanych";
+        const loreLabel = loreShort(hero) || "-";
+
+        const handSlots = hero.handSlots || {};
+        const leftHand = handSlots.left?.label || "Pusta ręka";
+        const rightHand = handSlots.right?.label || "Pusta ręka";
+        const handMode = handSlots.mode_label || handSlots.mode || "";
+        const handsLine = `Ręce: L=${leftHand} · P=${rightHand}${handMode ? ` · ${handMode}` : ""}`;
+        const moneyLine = hero.moneyText ? `Sakiewka: ${hero.moneyText}` : "Sakiewka: -";
+        const bulkLine =
+            hero.bulkSummary && typeof hero.bulkSummary === "object"
+                ? `Bulk: ${hero.bulkSummary.total_display || "-"} / ${hero.bulkSummary.encumbered_limit_display || "-"} (enc.)`
+                : "Bulk: -";
+        const inventoryItems = Array.isArray(hero.inventoryItems) ? hero.inventoryItems : [];
+        const inventoryLabel = inventoryItems.length ? inventoryItems.join(", ") : "brak";
+
+        const identityBody = `
+            <div class="hero-stats">${levelLine}</div>
+            <div class="hero-stats">Klasa: ${classLabel}</div>
+            <div class="hero-stats">Rasa: ${ancestryLabel}</div>
+            <div class="hero-stats">Heritage: ${heritageLabel}</div>
+            ${hero.backgroundLabel ? `<div class="hero-stats">Background: ${hero.backgroundLabel}</div>` : ""}
+            ${backgroundFeatLine}
+            ${previewInstinctLine}
+            ${backgroundSkillsLine}
+            ${backgroundBoostsLine}
+            ${noteLine}
+        `;
+        const combatBody = `
+            <div class="hero-stats">${hpLine}</div>
+            <div class="hero-stats">${speedLine}</div>
+            <div class="hero-stats">${saveLine}</div>
+            <div class="hero-stats">${perceptionLine}</div>
+        `;
+        const skillsBody = `
+            <div class="hero-notes">Biegłości: ${skillRanksLabel}</div>
+            <div class="hero-notes">Lore: ${loreLabel}</div>
+        `;
+        const statusBody = `
+            <div class="hero-statuses">${statusPills}</div>
+            <div class="hero-notes">Lista: ${statuses.length ? statuses.join(", ") : "brak"}</div>
+        `;
+        const equipmentBody = `
+            <div class="hero-stats">${handsLine}</div>
+            <div class="hero-stats">${moneyLine}</div>
+            <div class="hero-stats">${bulkLine}</div>
+            <div class="hero-notes">Ekwipunek: ${inventoryLabel}</div>
+        `;
+
         card.innerHTML = `
             <div class="hero-row">
                 <div class="hero-info">
                     <div class="hero-name">${hero.name}</div>
-                    <div class="hero-stats">Inicjatywa: ${hero.initiative ?? "-"}</div>
-                    <div class="hero-statuses">${statuses}</div>
-                    <div class="hero-stats">Rany: ${hero.wounds ?? "-"}</div>
-                    <div class="hero-notes">${hero.note || ""}</div>
+                    ${section("Tożsamość", identityBody)}
+                    ${section("Walka", combatBody)}
+                    ${section("Cechy", abilitiesBody)}
+                    ${section("Skille", skillsBody)}
+                    ${section("Statusy", statusBody)}
+                    ${section("Ekwipunek", equipmentBody)}
                 </div>
                 <div class="hero-portrait" style="background-image: url('${heroImg}')"></div>
             </div>
