@@ -1,49 +1,55 @@
-const screenMenu = document.getElementById("screen-menu");
-const screenGame = document.getElementById("screen-game");
-const logList = document.getElementById("log-list");
-const logLast = document.getElementById("log-last");
-const logFab = document.getElementById("log-fab");
-const debugUndoBtn = document.getElementById("debug-undo-btn");
-const logModal = document.getElementById("log-modal");
-const logClose = document.getElementById("log-close");
-const heroesList = document.getElementById("heroes-list");
-const initiativeList = document.getElementById("initiative-list");
-const initiativeSummary = document.getElementById("initiative-summary");
-const initActiveName = document.getElementById("init-active-name");
-const initNextName = document.getElementById("init-next-name");
-const initRoundNum = document.getElementById("init-round-num");
-const actionIllustration = document.getElementById("action-illustration");
-const actionTitle = document.getElementById("action-title");
-const actionText = document.getElementById("action-text");
-const actionPrompt = document.getElementById("action-prompt");
-const actionChoices = document.getElementById("action-choices");
-const actionDesc = document.getElementById("action-desc");
-const actionForm = document.getElementById("action-form");
-const actionAnswer = document.getElementById("action-answer");
-const rollNaturalControls = document.getElementById("roll-natural-controls");
-const nat20Toggle = document.getElementById("nat20-toggle");
-const nat1Toggle = document.getElementById("nat1-toggle");
-const natModeHint = document.getElementById("nat-mode-hint");
-const actionKind = document.getElementById("action-kind");
-const actionSource = document.getElementById("action-source");
-const modsBox = document.getElementById("action-mods");
-const modsPenCirc = document.getElementById("mods-pen-circ");
-const modsBonCirc = document.getElementById("mods-bon-circ");
-const modsPenStat = document.getElementById("mods-pen-stat");
-const modsBonStat = document.getElementById("mods-bon-stat");
-const modsPenItem = document.getElementById("mods-pen-item");
-const modsBonItem = document.getElementById("mods-bon-item");
-const topbar = document.getElementById("topbar");
-const topbarToggle = document.getElementById("topbar-toggle");
-const eventFeed = document.getElementById("event-feed");
-const statusScenario = document.getElementById("status-scenario");
-const statusActor = document.getElementById("status-actor");
-const statusNext = document.getElementById("status-next");
-const statusRound = document.getElementById("status-round");
-const statusPrompt = document.getElementById("status-prompt");
-const PLACEHOLDER_IMAGE = "/static/placeholder.png";
+import { PLACEHOLDER_IMAGE, refs } from "./modules/dom.js";
+import { renderHeroesPanel, coerceHeroPreview, resolveArmorClass } from "./modules/heroes_panel.js";
+import { renderInitiativePanel } from "./modules/initiative_panel.js";
+import { clearPathPreview, showPathPreview } from "./modules/path_panel.js";
+
+const {
+    screenMenu,
+    screenGame,
+    logList,
+    logLast,
+    logFab,
+    debugUndoBtn,
+    logModal,
+    logClose,
+    initiativeList,
+    initiativeSummary,
+    initActiveName,
+    initNextName,
+    initRoundNum,
+    actionIllustration,
+    actionTitle,
+    actionText,
+    actionPrompt,
+    actionChoices,
+    actionDesc,
+    actionForm,
+    actionAnswer,
+    rollNaturalControls,
+    nat20Toggle,
+    nat1Toggle,
+    natModeHint,
+    actionKind,
+    actionSource,
+    modsBox,
+    modsPenCirc,
+    modsBonCirc,
+    modsPenStat,
+    modsBonStat,
+    modsPenItem,
+    modsBonItem,
+    topbar,
+    topbarToggle,
+    eventFeed,
+    statusScenario,
+    statusActor,
+    statusNext,
+    statusRound,
+    statusPrompt,
+} = refs;
 
 let currentScenario = null;
+let currentSessionId = null;
 let eventSource = null;
 const renderedPrompts = new Set();
 const heroes = new Map();
@@ -58,13 +64,13 @@ let layoutMode = "info";
 let rollNaturalMode = "none";
 let fileImagePayload = null;
 let rollStackState = null;
-const pathToast = document.getElementById("path-toast");
-let activePathId = null;
+let pathState = { activeId: null, data: null };
 let initiativeState = { order: [], activeId: null, round: 1 };
 let activeActorId = null;
 let lastLoggedRound = null;
 let lastLoggedActiveActorId = null;
 let creationPreviewHeroId = null;
+let selectedHeroId = null;
 const CREATION_PREVIEW_FALLBACK_ID = "__creation_preview__";
 let menuNumpadContext = null;
 actionForm.classList.add("hidden");
@@ -157,6 +163,18 @@ function _cycleNaturalMode() {
     if (rollNaturalMode === "none") _setNaturalMode("nat20");
     else if (rollNaturalMode === "nat20") _setNaturalMode("nat1");
     else _setNaturalMode("none");
+}
+
+function _isUpNavigationKey(evt) {
+    const key = String(evt?.key || "");
+    const code = String(evt?.code || "");
+    return key === "8" || key === "ArrowUp" || code === "Numpad8";
+}
+
+function _isDownNavigationKey(evt) {
+    const key = String(evt?.key || "");
+    const code = String(evt?.code || "");
+    return key === "2" || key === "ArrowDown" || code === "Numpad2";
 }
 
 function _renderNaturalControls(prompt) {
@@ -729,6 +747,106 @@ function showGame() {
     screenGame.classList.remove("hidden");
 }
 
+function resetLocalSessionState({ sessionId = null, reason = "", showMenuScreen = true } = {}) {
+    currentSessionId = sessionId || currentSessionId;
+    currentScenario = null;
+    heroes.clear();
+    promptQueue = [];
+    renderedPrompts.clear();
+    activePrompt = null;
+    currentChoices = [];
+    selectedChoiceIndex = -1;
+    choiceMeta = [];
+    confirmMode = false;
+    storedSelection = "";
+    layoutMode = "info";
+    rollNaturalMode = "none";
+    fileImagePayload = null;
+    rollStackState = null;
+    initiativeState = { order: [], activeId: null, round: 1 };
+    activeActorId = null;
+    lastLoggedRound = null;
+    lastLoggedActiveActorId = null;
+    creationPreviewHeroId = null;
+    selectedHeroId = null;
+    menuNumpadContext = null;
+    pathState = clearPathPreview(refs, pathState, null);
+
+    actionForm.classList.add("hidden");
+    actionChoices.innerHTML = "";
+    actionDesc.textContent = "";
+    actionDesc.classList.remove("hidden");
+    actionPrompt.textContent = "";
+    actionPrompt.classList.add("hidden");
+    actionTitle.textContent = "Czekam na działania...";
+    actionText.textContent = "";
+    actionText.classList.remove("hidden");
+    actionAnswer.value = "";
+    actionAnswer.placeholder = "Wpisz odpowiedź lub wybierz kartę...";
+    actionAnswer.classList.remove("input-hidden");
+    clearMods();
+    _renderNaturalControls(null);
+    _resetMenuNumpadContext();
+    setIllustration(PLACEHOLDER_IMAGE);
+
+    if (eventFeed) {
+        eventFeed.innerHTML = '<li class="event-feed-empty">Brak zdarzeń.</li>';
+    }
+    if (logList) {
+        logList.innerHTML = "";
+    }
+    if (logLast) {
+        logLast.textContent = reason ? `Nowa sesja UI: ${reason}.` : "Logi będą tu widoczne.";
+    }
+    renderHeroes();
+    renderInitiative();
+    updateSessionSummary();
+    if (showMenuScreen) {
+        showMenu();
+    }
+}
+
+async function fetchSessionInfo() {
+    try {
+        const resp = await fetch("/api/session");
+        if (!resp.ok) return null;
+        const data = await resp.json();
+        const nextSessionId = String(data?.session?.id || "");
+        if (!nextSessionId) return null;
+        if (currentSessionId && currentSessionId !== nextSessionId) {
+            resetLocalSessionState({ sessionId: nextSessionId, reason: "odświeżenie sesji", showMenuScreen: true });
+        } else {
+            currentSessionId = nextSessionId;
+        }
+        return nextSessionId;
+    } catch (err) {
+        console.warn("Nie udało się pobrać sesji UI:", err);
+        return null;
+    }
+}
+
+async function resetUiSession(reason = "manual") {
+    try {
+        const resp = await fetch("/api/session/reset", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ reason }),
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data?.ok) {
+            throw new Error(data?.error || "Nie udało się zresetować sesji UI.");
+        }
+        resetLocalSessionState({
+            sessionId: String(data?.session?.id || ""),
+            reason: reason === "manual" ? "ręczny reset" : reason,
+            showMenuScreen: true,
+        });
+    } catch (err) {
+        console.warn("Reset sesji UI nie powiódł się:", err);
+        resetLocalSessionState({ sessionId: currentSessionId, reason: "lokalny reset", showMenuScreen: true });
+    }
+}
+
 function str(value, fallback = "-") {
     if (value === null || value === undefined || value === "") return fallback;
     return String(value);
@@ -932,6 +1050,12 @@ function buildHeroUpdateLog(previous, current) {
     if (previous.initiative !== current.initiative) {
         changes.push(`Inicjatywa: ${str(previous.initiative)} -> ${str(current.initiative)}`);
     }
+    const previousAc = resolveArmorClass(previous);
+    const currentAc = resolveArmorClass(current);
+    if (previousAc !== currentAc && currentAc != null) {
+        changes.push(`AC: ${str(previousAc)} -> ${str(currentAc)}`);
+        if (variant !== "warning") variant = "success";
+    }
     const statusesDiff = arrayDiff(previous.statuses, current.statuses);
     if (statusesDiff.added.length) {
         changes.push(`+ status: ${statusesDiff.added.join(", ")}`);
@@ -974,6 +1098,8 @@ function ensureCreationPreviewFallbackFromPrompt(promptPayload = {}) {
         ancestryId: previous.ancestryId || null,
         heritageId: previous.heritageId || null,
         ac: previous.ac ?? null,
+        acBase: previous.acBase ?? previous.ac ?? null,
+        acModifier: previous.acModifier ?? 0,
         maxHp: previous.maxHp ?? null,
         baseSpeedFeet: previous.baseSpeedFeet ?? null,
         abilityScores: previousScores && Object.keys(previousScores).length ? previousScores : defaults.abilityScores,
@@ -1002,8 +1128,29 @@ function ensureCreationPreviewFallbackFromPrompt(promptPayload = {}) {
 function handleEvent(event) {
     const type = event.type;
     const payload = event.payload || {};
+    const eventSessionId = String(event.session_id || "");
     const timestamp = new Date(event.ts * 1000 || Date.now());
     const meta = timestamp.toLocaleTimeString();
+
+    if (eventSessionId && currentSessionId && eventSessionId !== currentSessionId) {
+        resetLocalSessionState({
+            sessionId: eventSessionId,
+            reason: "przełączenie sesji",
+            showMenuScreen: false,
+        });
+    } else if (eventSessionId && !currentSessionId) {
+        currentSessionId = eventSessionId;
+    }
+
+    if (type === "session_reset") {
+        resetLocalSessionState({
+            sessionId: eventSessionId || currentSessionId,
+            reason: payload.reason || "reset",
+            showMenuScreen: true,
+        });
+        return;
+    }
+
     // gdy docierają zdarzenia, przełącz na ekran gry (jeśli jeszcze nie)
     showGame();
 
@@ -1034,15 +1181,21 @@ function handleEvent(event) {
         return;
     }
     if (type === "info") {
+        const infoText = payload.text || payload.message || "Info";
+        const scenarioMatch = String(infoText).match(/Start scenariusza:\s*(.+)\s*$/i);
+        if (scenarioMatch && scenarioMatch[1]) {
+            currentScenario = String(scenarioMatch[1]).trim();
+        }
         renderPrompt({
             id: `info-${Date.now()}`,
-            prompt: payload.text || payload.message || "Informacja",
+            prompt: infoText,
             kind: "info",
             choices: [],
             source: payload.source || "",
             image: payload.image || null,
         });
-        addLogEntry(payload.text || payload.message || "Info", meta, "info", payload.source || "Info");
+        addLogEntry(infoText, meta, "info", payload.source || "Info");
+        updateSessionSummary();
         return;
     }
     if (type === "idle_hint") {
@@ -1077,6 +1230,8 @@ function handleEvent(event) {
             ancestryId: payload.ancestry_id || null,
             heritageId: payload.heritage_id || null,
             ac: payload.ac,
+            acBase: payload.ac_base ?? payload.ac,
+            acModifier: payload.ac_modifier ?? 0,
             maxHp: payload.max_hp,
             baseSpeedFeet: payload.base_speed_feet,
             abilityScores: payload.ability_scores || {},
@@ -1152,11 +1307,17 @@ function handleEvent(event) {
         return;
     }
     if (type === "path_preview") {
-        showPathInfo(payload);
+        pathState = showPathPreview(refs, payload, pathState);
+        addEventFeedEntry(
+            `${payload.actor_name || "Ruch"} -> ${payload.target ? formatPos(payload.target) : "cel"}`,
+            meta,
+            payload.trimmed ? "warning" : "info",
+            "Ruch",
+        );
         return;
     }
     if (type === "path_clear") {
-        clearPathInfo(payload && payload.id);
+        pathState = clearPathPreview(refs, pathState, payload && payload.id);
         return;
     }
     if (type === "initiative") {
@@ -1213,6 +1374,16 @@ async function fetchPendingPrompts() {
         const resp = await fetch("/api/prompts");
         if (!resp.ok) return;
         const data = await resp.json();
+        const listedSessionId = String(data?.session?.id || "");
+        if (listedSessionId && currentSessionId && listedSessionId !== currentSessionId) {
+            resetLocalSessionState({
+                sessionId: listedSessionId,
+                reason: "synchronizacja promptów",
+                showMenuScreen: false,
+            });
+        } else if (listedSessionId && !currentSessionId) {
+            currentSessionId = listedSessionId;
+        }
         if (!data.prompts) return;
         const pending = data.prompts.filter((p) => p.status === "pending");
         if (pending.length) {
@@ -1226,7 +1397,9 @@ async function fetchPendingPrompts() {
 
 // --- UI actions ---
 
-document.getElementById("btn-new-game").addEventListener("click", showMenu);
+document.getElementById("btn-new-game").addEventListener("click", () => {
+    resetUiSession("manual");
+});
 document.getElementById("btn-quit").addEventListener("click", () => {
     window.close();
 });
@@ -1276,12 +1449,16 @@ if (topbarToggle && topbar) {
     });
 }
 
-// start in menu and connect SSE
-showMenu();
-updateSessionSummary();
-connectStream();
-fetchPendingPrompts();
-setInterval(fetchPendingPrompts, 2000);
+async function initUi() {
+    showMenu();
+    updateSessionSummary();
+    await fetchSessionInfo();
+    connectStream();
+    await fetchPendingPrompts();
+    setInterval(fetchPendingPrompts, 2000);
+}
+
+initUi();
 
 // --- Prompt panel logic ---
 
@@ -1434,14 +1611,14 @@ document.addEventListener("keydown", (evt) => {
     }
     // scenario wybór w menu
     if (!screenMenu.classList.contains("hidden") && screenGame.classList.contains("hidden")) {
-        if (evt.key === "2") {
+        if (_isDownNavigationKey(evt)) {
             evt.preventDefault();
             if (scenarioButtons.length) {
                 scenarioIndex = (scenarioIndex + 1) % scenarioButtons.length;
                 highlightScenario(scenarioIndex);
             }
         }
-        if (evt.key === "8") {
+        if (_isUpNavigationKey(evt)) {
             evt.preventDefault();
             if (scenarioButtons.length) {
                 scenarioIndex = (scenarioIndex - 1 + scenarioButtons.length) % scenarioButtons.length;
@@ -1540,7 +1717,7 @@ document.addEventListener("keydown", (evt) => {
             _setGroupedMenuActive("list");
             return;
         }
-        if (evt.key === "8") {
+        if (_isUpNavigationKey(evt)) {
             evt.preventDefault();
             if (!_moveGroupedMenuSelection(-1)) {
                 const prev = (selectedChoiceIndex - 1 + currentChoices.length) % currentChoices.length;
@@ -1548,7 +1725,7 @@ document.addEventListener("keydown", (evt) => {
             }
             return;
         }
-        if (evt.key === "2") {
+        if (_isDownNavigationKey(evt)) {
             evt.preventDefault();
             if (!_moveGroupedMenuSelection(1)) {
                 const next = (selectedChoiceIndex + 1) % currentChoices.length;
@@ -1629,12 +1806,12 @@ document.addEventListener("keydown", (evt) => {
         return;
     }
     if (currentChoices.length > 0) {
-        if (evt.key === "2") {
+        if (_isDownNavigationKey(evt)) {
             evt.preventDefault();
             const next = (selectedChoiceIndex + 1) % currentChoices.length;
             selectChoice(next);
         }
-        if (evt.key === "8") {
+        if (_isUpNavigationKey(evt)) {
             evt.preventDefault();
             const prev = (selectedChoiceIndex - 1 + currentChoices.length) % currentChoices.length;
             selectChoice(prev);
@@ -2038,15 +2215,6 @@ function _renderStatsPanel(rawText) {
     actionDesc.textContent = "Enter: zamknij panel statystyk.";
 }
 
-function statusTone(name = "") {
-    const txt = String(name).toLowerCase();
-    const badKeywords = ["poison", "wound", "bleed", "stun", "prone", "fear", "slow", "curse", "burn", "exhaust"];
-    const goodKeywords = ["bless", "shield", "heroism", "haste", "buff", "guard", "aid", "inspire", "rage"];
-    if (badKeywords.some((k) => txt.includes(k))) return "bad";
-    if (goodKeywords.some((k) => txt.includes(k))) return "good";
-    return "neutral";
-}
-
 function normalizeChoices(prompt) {
     const ensureStructuredChoiceDesc = (label, rawDesc) => {
         const sectionValue = (line) => {
@@ -2184,64 +2352,8 @@ function normalizeChoices(prompt) {
     });
 }
 
-// --- Path info toast ---
-
-function showPathInfo(payload = {}) {
-    const id = payload.id || `path-${Date.now()}`;
-    activePathId = id;
-    const parts = [];
-    if (payload.steps != null) parts.push(`${payload.steps} pól`);
-    if (payload.feet != null) parts.push(`${payload.feet} stóp`);
-    const steps = parts.length ? `Ścieżka: ${parts.join(" · ")}` : "Wyznaczam trasę...";
-    const target = payload.target ? ` → cel ${payload.target}` : "";
-    pathToast.textContent = `${steps}${target}`;
-    pathToast.classList.remove("hidden");
-}
-
-function clearPathInfo(id = null) {
-    if (id && activePathId && id !== activePathId) return;
-    activePathId = null;
-    pathToast.classList.add("hidden");
-}
-
 function _coerceHeroPreview(rawPreview, fallbackLabel = "") {
-    const preview = rawPreview && typeof rawPreview === "object" ? rawPreview : {};
-    const asDict = (value) => (value && typeof value === "object" && !Array.isArray(value) ? value : {});
-    const asList = (value) => (Array.isArray(value) ? value : []);
-    const name = String(preview.name || fallbackLabel || "Bohater");
-    const levelValue = Number.parseInt(String(preview.level ?? ""), 10);
-    return {
-        id: String(preview.character_id || preview.characterId || preview.id || "__hero_select_preview__"),
-        name,
-        level: Number.isNaN(levelValue) ? null : levelValue,
-        statuses: asList(preview.statuses),
-        note: String(preview.note || "Podgląd bohatera"),
-        wounds: preview.wounds ?? 0,
-        pos: preview.pos ?? null,
-        initiative: preview.initiative ?? null,
-        image: preview.image || preview.portrait_image || PLACEHOLDER_IMAGE,
-        characterId: preview.character_id || preview.characterId || null,
-        classId: preview.class_id || preview.classId || null,
-        ancestryId: preview.ancestry_id || preview.ancestryId || null,
-        heritageId: preview.heritage_id || preview.heritageId || null,
-        ac: preview.ac ?? null,
-        maxHp: preview.max_hp ?? preview.maxHp ?? null,
-        baseSpeedFeet: preview.base_speed_feet ?? preview.baseSpeedFeet ?? null,
-        abilityScores: asDict(preview.ability_scores || preview.abilityScores),
-        abilityModifiers: asDict(preview.ability_modifiers || preview.abilityModifiers),
-        skillRanks: asDict(preview.skill_ranks || preview.skillRanks),
-        saveRanks: asDict(preview.save_ranks || preview.saveRanks),
-        perceptionRank: preview.perception_rank || preview.perceptionRank || null,
-        trainedSkills: asList(preview.trained_skills || preview.trainedSkills),
-        loreSkills: asList(preview.lore_skills || preview.loreSkills),
-        backgroundLabel: preview.background_label || preview.backgroundLabel || null,
-        backgroundFeatId: preview.background_feat_id || preview.backgroundFeatId || null,
-        handSlots: asDict(preview.hand_slots || preview.handSlots),
-        moneyText: preview.money_text || preview.moneyText || null,
-        bulkSummary: asDict(preview.bulk_summary || preview.bulkSummary),
-        inventoryItems: asList(preview.inventory_items || preview.inventoryItems),
-        creationInProgress: false,
-    };
+    return coerceHeroPreview(rawPreview, fallbackLabel, PLACEHOLDER_IMAGE);
 }
 
 function _currentHeroSelectPreview() {
@@ -2258,265 +2370,42 @@ function _currentHeroSelectPreview() {
 // --- Heroes rendering ---
 
 function renderHeroes() {
-    heroesList.innerHTML = "";
-    if (!heroesList) return;
-    const pretty = (value) => String(value || "").replace(/_/g, " ").trim();
-    const skillRanksShort = (hero) => {
-        const ranks = hero.skillRanks && typeof hero.skillRanks === "object" ? hero.skillRanks : {};
-        const trained = Array.isArray(hero.trainedSkills) ? hero.trainedSkills : [];
-        const trainedIds = new Set(
-            trained
-                .map((item) => String(item || "").toLowerCase().trim())
-                .filter(Boolean)
-        );
-        const allIds = new Set([
-            ...Object.keys(ranks || {}).map((item) => String(item || "").toLowerCase().trim()),
-            ...trainedIds,
-        ]);
-        const order = [
-            "acrobatics",
-            "arcana",
-            "athletics",
-            "crafting",
-            "deception",
-            "diplomacy",
-            "intimidation",
-            "medicine",
-            "nature",
-            "occultism",
-            "performance",
-            "religion",
-            "society",
-            "stealth",
-            "survival",
-            "thievery",
-        ];
-        const rows = [];
-        order.forEach((skillId) => {
-            if (!allIds.has(skillId)) return;
-            const rawRank = String(ranks[skillId] || (trainedIds.has(skillId) ? "trained" : "untrained"))
-                .toLowerCase()
-                .trim();
-            if (!rawRank || rawRank === "untrained") return;
-            rows.push(`${pretty(skillId)} (${pretty(rawRank)})`);
-        });
-        return rows.join(", ");
-    };
-    const loreShort = (hero) => (Array.isArray(hero.loreSkills) && hero.loreSkills.length ? hero.loreSkills.join(", ") : "");
-    const abilityOrder = [
-        ["strength", "STR"],
-        ["dexterity", "DEX"],
-        ["constitution", "CON"],
-        ["intelligence", "INT"],
-        ["wisdom", "WIS"],
-        ["charisma", "CHA"],
-    ];
-    const section = (title, body) =>
-        `<div class="hero-section"><div class="hero-section-title">${title}</div><div class="hero-section-body">${body}</div></div>`;
-
-    const allHeroes = Array.from(heroes.values());
-    let visibleHeroes = allHeroes;
-    const heroSelectPreview = _currentHeroSelectPreview();
-    const inCharacterCreation = String(activePrompt?.source || "").toLowerCase() === "character_creation";
-    const creationPreviewHero =
-        (creationPreviewHeroId && heroes.get(creationPreviewHeroId)) ||
-        allHeroes.find((item) => Boolean(item?.creationInProgress)) ||
-        null;
-    const hasRealCreationHero = allHeroes.some(
-        (item) => Boolean(item?.creationInProgress) && String(item?.id || "") !== CREATION_PREVIEW_FALLBACK_ID
-    );
-    if (heroSelectPreview) {
-        visibleHeroes = [heroSelectPreview];
-    } else if ((inCharacterCreation || hasRealCreationHero) && creationPreviewHero) {
-        visibleHeroes = [creationPreviewHero];
-    } else if (activeActorId && heroes.has(activeActorId)) {
-        const current = heroes.get(activeActorId);
-        visibleHeroes = current ? [current] : [];
-    } else if (allHeroes.length > 0) {
-        visibleHeroes = [allHeroes[0]];
-    }
-
-    visibleHeroes.forEach((hero) => {
-        const card = document.createElement("div");
-        const isActive = String(hero.id || "") === String(activeActorId || "");
-        card.className = "hero-card" + (isActive ? " active" : "");
-        const heroImg = hero.image || PLACEHOLDER_IMAGE;
-        const statuses = Array.isArray(hero.statuses) ? hero.statuses : [];
-        const statusPills = statuses.length
-            ? statuses.map((s) => `<span class="status-pill ${statusTone(s)}">${s}</span>`).join("")
-            : '<span class="status-pill neutral">brak statusów</span>';
-        const noteLine = hero.note ? `<div class="hero-notes">Etap: ${hero.note}</div>` : "";
-        const levelLine = hero.level != null ? `Poziom ${hero.level}` : "Poziom -";
-        const backgroundFeatLabel = hero.backgroundFeatId
-            ? String(hero.backgroundFeatId).replace(/_/g, " ")
-            : "";
-        const backgroundFeatLine = backgroundFeatLabel ? `<div class="hero-notes">Background feat: ${backgroundFeatLabel}</div>` : "";
-        const previewInstinctLine = hero.previewBarbarianInstinctId
-            ? `<div class="hero-notes">Instynkt: ${pretty(hero.previewBarbarianInstinctId)}</div>`
-            : "";
-        const backgroundSkillsLine = hero.backgroundSkillTrainingUi
-            ? `<div class="hero-notes">BG skille/Lore (opisowo): ${hero.backgroundSkillTrainingUi}</div>`
-            : "";
-        const backgroundBoostsLine = hero.backgroundAbilityBoostsUi
-            ? `<div class="hero-notes">BG ability boosts (opisowo): ${hero.backgroundAbilityBoostsUi}</div>`
-            : "";
-        const classLabel = hero.classId ? pretty(hero.classId) : "-";
-        const ancestryLabel = hero.ancestryId ? pretty(hero.ancestryId) : "-";
-        const heritageLabel = hero.heritageId ? pretty(hero.heritageId) : "-";
-
-        const woundsNum = Number(hero.wounds ?? 0);
-        const maxHpNum = Number(hero.maxHp ?? 0);
-        const hpNow =
-            !Number.isNaN(woundsNum) && !Number.isNaN(maxHpNum) && maxHpNum > 0
-                ? Math.max(0, maxHpNum - woundsNum)
-                : "-";
-        const hpLine = `HP: ${hpNow}/${hero.maxHp ?? "-"} · Rany: ${hero.wounds ?? "-"}`;
-        const speedLine = `AC: ${hero.ac ?? "-"} · Speed: ${hero.baseSpeedFeet ?? "-"} ft`;
-        const saves = hero.saveRanks && typeof hero.saveRanks === "object" ? hero.saveRanks : {};
-        const saveLine = `Save: F ${pretty(saves.fortitude || "untrained")} · R ${pretty(
-            saves.reflex || "untrained"
-        )} · W ${pretty(saves.will || "untrained")}`;
-        const perceptionLine = `Percepcja: ${pretty(hero.perceptionRank || "untrained")}`;
-
-        const rawScores = hero.abilityScores && typeof hero.abilityScores === "object" ? hero.abilityScores : {};
-        const rawMods = hero.abilityModifiers && typeof hero.abilityModifiers === "object" ? hero.abilityModifiers : {};
-        const missingAbilityScores = !rawScores || Object.keys(rawScores).length === 0;
-        const defaults = _cloneCreationAbilityDefaults();
-        const creationContextForHero =
-            hero.creationInProgress ||
-            String(hero.id || "") === CREATION_PREVIEW_FALLBACK_ID ||
-            String(activePrompt?.source || "").toLowerCase() === "character_creation";
-        const scores = creationContextForHero && missingAbilityScores ? defaults.abilityScores : rawScores;
-        const mods = creationContextForHero && missingAbilityScores ? defaults.abilityModifiers : rawMods;
-        const abilityLine = abilityOrder
-            .map(([id, short]) => {
-                if (scores[id] == null) return "";
-                const modRaw = Number(mods[id] ?? 0);
-                const modText = `${modRaw >= 0 ? "+" : ""}${modRaw}`;
-                return `<span class="hero-ability-chip">${short} ${scores[id]} (${modText})</span>`;
-            })
-            .filter(Boolean)
-            .join("");
-        const abilitiesBody = abilityLine || `<div class="hero-notes">Brak danych o cechach.</div>`;
-
-        const skillRanksLabel = skillRanksShort(hero) || "brak wytrenowanych";
-        const loreLabel = loreShort(hero) || "-";
-
-        const handSlots = hero.handSlots || {};
-        const leftHand = handSlots.left?.label || "Pusta ręka";
-        const rightHand = handSlots.right?.label || "Pusta ręka";
-        const handMode = handSlots.mode_label || handSlots.mode || "";
-        const handsLine = `Ręce: L=${leftHand} · P=${rightHand}${handMode ? ` · ${handMode}` : ""}`;
-        const moneyLine = hero.moneyText ? `Sakiewka: ${hero.moneyText}` : "Sakiewka: -";
-        const bulkLine =
-            hero.bulkSummary && typeof hero.bulkSummary === "object"
-                ? `Bulk: ${hero.bulkSummary.total_display || "-"} / ${hero.bulkSummary.encumbered_limit_display || "-"} (enc.)`
-                : "Bulk: -";
-        const inventoryItems = Array.isArray(hero.inventoryItems) ? hero.inventoryItems : [];
-        const inventoryLabel = inventoryItems.length ? inventoryItems.join(", ") : "brak";
-
-        const identityBody = `
-            <div class="hero-stats">${levelLine}</div>
-            <div class="hero-stats">Klasa: ${classLabel}</div>
-            <div class="hero-stats">Rasa: ${ancestryLabel}</div>
-            <div class="hero-stats">Heritage: ${heritageLabel}</div>
-            ${hero.backgroundLabel ? `<div class="hero-stats">Background: ${hero.backgroundLabel}</div>` : ""}
-            ${backgroundFeatLine}
-            ${previewInstinctLine}
-            ${backgroundSkillsLine}
-            ${backgroundBoostsLine}
-            ${noteLine}
-        `;
-        const combatBody = `
-            <div class="hero-stats">${hpLine}</div>
-            <div class="hero-stats">${speedLine}</div>
-            <div class="hero-stats">${saveLine}</div>
-            <div class="hero-stats">${perceptionLine}</div>
-        `;
-        const skillsBody = `
-            <div class="hero-notes">Biegłości: ${skillRanksLabel}</div>
-            <div class="hero-notes">Lore: ${loreLabel}</div>
-        `;
-        const statusBody = `
-            <div class="hero-statuses">${statusPills}</div>
-            <div class="hero-notes">Lista: ${statuses.length ? statuses.join(", ") : "brak"}</div>
-        `;
-        const equipmentBody = `
-            <div class="hero-stats">${handsLine}</div>
-            <div class="hero-stats">${moneyLine}</div>
-            <div class="hero-stats">${bulkLine}</div>
-            <div class="hero-notes">Ekwipunek: ${inventoryLabel}</div>
-        `;
-
-        card.innerHTML = `
-            <div class="hero-row">
-                <div class="hero-info">
-                    <div class="hero-name">${hero.name}</div>
-                    ${section("Tożsamość", identityBody)}
-                    ${section("Walka", combatBody)}
-                    ${section("Cechy", abilitiesBody)}
-                    ${section("Skille", skillsBody)}
-                    ${section("Statusy", statusBody)}
-                    ${section("Ekwipunek", equipmentBody)}
-                </div>
-                <div class="hero-portrait" style="background-image: url('${heroImg}')"></div>
-            </div>
-        `;
-        heroesList.appendChild(card);
+    const result = renderHeroesPanel({
+        refs,
+        heroesMap: heroes,
+        activeActorId,
+        activePromptSource: String(activePrompt?.source || "").toLowerCase(),
+        creationPreviewHeroId,
+        selectedHeroId,
+        heroSelectPreview: _currentHeroSelectPreview(),
+        placeholderImage: PLACEHOLDER_IMAGE,
+        onSelectHero: (heroId) => {
+            selectedHeroId = heroId;
+            renderHeroes();
+        },
+        cloneCreationAbilityDefaults: _cloneCreationAbilityDefaults,
     });
+    const nextSelectedHeroId = result?.selectedHeroId || null;
+    if (nextSelectedHeroId !== selectedHeroId) {
+        selectedHeroId = nextSelectedHeroId;
+        renderHeroesPanel({
+            refs,
+            heroesMap: heroes,
+            activeActorId,
+            activePromptSource: String(activePrompt?.source || "").toLowerCase(),
+            creationPreviewHeroId,
+            selectedHeroId,
+            heroSelectPreview: _currentHeroSelectPreview(),
+            placeholderImage: PLACEHOLDER_IMAGE,
+            onSelectHero: (heroId) => {
+                selectedHeroId = heroId;
+                renderHeroes();
+            },
+            cloneCreationAbilityDefaults: _cloneCreationAbilityDefaults,
+        });
+    }
 }
 
 function renderInitiative() {
-    if (!initiativeList) return;
-    const { order, activeId, round } = initiativeState;
-    if (!order || order.length === 0) {
-        initiativeList.classList.add("empty-note");
-        initiativeList.textContent = "Brak danych o inicjatywie.";
-        initiativeSummary.classList.add("hidden");
-        return;
-    }
-    initiativeSummary.classList.remove("hidden");
-    initiativeList.classList.remove("empty-note");
-    initiativeList.innerHTML = "";
-
-    const activeIdx = order.findIndex((entry) => String(entry.id) === String(activeId));
-    const activeEntry = activeIdx >= 0 ? order[activeIdx] : null;
-    const nextEntry = activeIdx >= 0 && order.length > 1 ? order[(activeIdx + 1) % order.length] : null;
-    initActiveName.textContent = activeEntry ? activeEntry.name : "-";
-    initNextName.textContent = nextEntry ? nextEntry.name : "-";
-    initRoundNum.textContent = round ?? "-";
-
-    order.forEach((entry) => {
-        const card = document.createElement("div");
-        card.className = "initiative-card " + (entry.kind === "hero" ? "hero" : "enemy");
-        if (String(entry.id) === String(activeId)) {
-            card.classList.add("active");
-        }
-        if (entry.done) {
-            card.classList.add("done");
-        }
-        const name = document.createElement("div");
-        name.className = "initiative-name";
-        name.textContent = entry.name || "aktor";
-        const vals = document.createElement("div");
-        vals.className = "initiative-vals";
-        const base = entry.base ?? entry.current;
-        const current = entry.current ?? base;
-        const delta = entry.delta || 0;
-        const hasDelta = delta !== 0;
-        vals.textContent = `${current}`;
-        if (hasDelta) {
-            const deltaEl = document.createElement("span");
-            deltaEl.className = "delta " + (delta < 0 ? "negative" : "positive");
-            deltaEl.textContent = delta < 0 ? `↓ ${Math.abs(delta)}` : `↑ ${delta}`;
-            vals.appendChild(deltaEl);
-            const baseEl = document.createElement("span");
-            baseEl.className = "delta";
-            baseEl.textContent = `(${base})`;
-            vals.appendChild(baseEl);
-        }
-        card.appendChild(name);
-        card.appendChild(vals);
-        initiativeList.appendChild(card);
-    });
+    renderInitiativePanel(refs, initiativeState);
 }

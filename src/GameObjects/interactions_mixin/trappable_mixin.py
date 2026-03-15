@@ -54,7 +54,7 @@ class TrappableMixin:
             from combat import effective_ac
         except Exception:
             effective_ac = lambda _actor: int(getattr(_actor, "ac", 0) or 0)  # noqa: E731
-        base_ac = int(getattr(actor, "ac", effective_ac(actor)) or 0)
+        base_ac = int(effective_ac(actor) or 0)
         trap_finder_bonus = 1 if self._has_status(actor, "trap_finder") else 0
         return base_ac + trap_finder_bonus
 

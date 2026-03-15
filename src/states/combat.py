@@ -547,6 +547,39 @@ class Combat(State):
                 actor.statuses = filtered
             except Exception:
                 logger.debug("Nie udało się wyczyścić kary speed z raise_shield dla %s", actor)
+            # Własny Take Cover za tower shield nie może trwać dłużej niż podniesiona tarcza.
+            try:
+                take_cover_remover = getattr(actor, "remove_bonuses_with_prefix", None)
+                had_self_cover = any(
+                    str(getattr(effect, "source", "") or "").startswith("take_cover:tower_shield")
+                    for effect in list(getattr(actor, "bonuses", []) or [])
+                )
+                if callable(take_cover_remover):
+                    try:
+                        take_cover_remover("take_cover:tower_shield")
+                    except Exception:
+                        pass
+                if had_self_cover:
+                    active = [
+                        effect
+                        for effect in list(getattr(actor, "bonuses", []) or [])
+                        if str(getattr(effect, "source", "") or "").startswith("take_cover:")
+                    ]
+                    if not active:
+                        drop_status = getattr(actor, "remove_status", None)
+                        if callable(drop_status):
+                            try:
+                                drop_status("covered")
+                            except Exception:
+                                pass
+                        statuses = list(getattr(actor, "statuses", []) or [])
+                        filtered = [status for status in statuses if str(getattr(status, "id", status) or "").strip().lower() != "covered"]
+                        try:
+                            actor.statuses = filtered
+                        except Exception:
+                            pass
+            except Exception:
+                logger.debug("Nie udało się wygasić własnego Take Cover z tower shield dla %s", actor)
             # Wygaszanie osłony "Take Cover przy cudzej tower shield" po końcu podniesienia tarczy właściciela.
             try:
                 from GameObjects.items.shield import tower_shield_cover_owner_key
@@ -574,6 +607,12 @@ class Combat(State):
                             drop_status("covered")
                         except Exception:
                             pass
+                    statuses = list(getattr(participant, "statuses", []) or [])
+                    filtered = [status for status in statuses if str(getattr(status, "id", status) or "").strip().lower() != "covered"]
+                    try:
+                        participant.statuses = filtered
+                    except Exception:
+                        pass
             except Exception:
                 logger.debug("Nie udało się wygasić osłony z tower shield dla sojuszników.")
             try:
@@ -1037,6 +1076,25 @@ class Combat(State):
             return f"Shield: {name} BROKEN ({hp}/{hp_max}, Hardness {hardness})"
         return f"Shield: {name} ({hp}/{hp_max}, Hardness {hardness})"
 
+    def _hero_ui_note(self, actor) -> str:
+        used = int(self.actions_used.get(actor, 0) or 0)
+        limit = int(self._action_limit(actor) or 0)
+        return "\n".join(
+            [
+                f"Akcje: {used}/{limit}",
+                self._weapon_note(actor),
+                self._shield_note(actor),
+            ]
+        )
+
+    def _refresh_hero_ui_snapshot(self, actor) -> None:
+        if actor not in getattr(self.game, "heroes", []):
+            return
+        try:
+            self.game.ui_hero(actor, note=self._hero_ui_note(actor))
+        except Exception:
+            logger.debug("Nie udało się odświeżyć snapshotu UI bohatera %s", actor, exc_info=True)
+
     def apply_initiative_penalty(self, actor, penalty: int) -> None:
         """Obniż inicjatywę aktora i przestaw w kolejce (używane np. przez deafened)."""
         try:
@@ -1244,16 +1302,7 @@ class Combat(State):
         limit = self._action_limit(actor)
         self.actions_used[actor] = used
         logger.info("Tura bohatera (%s). Akcje: %s/%s", actor, used, limit)
-        self.game.ui_hero(
-            actor,
-            note="\n".join(
-                [
-                    f"Akcje: {used}/{limit}",
-                    self._weapon_note(actor),
-                    self._shield_note(actor),
-                ]
-            ),
-        )
+        self._refresh_hero_ui_snapshot(actor)
         if used >= limit:
             logger.info("Aktor %s nie ma już akcji. Automatyczny koniec tury.", getattr(actor, "name", actor))
             self.game.ui_log("Brak dostępnych akcji. Automatyczny koniec tury.")
@@ -1404,11 +1453,14 @@ class Combat(State):
             except Exception:
                 spent = 1
             self.actions_used[actor] = self.actions_used.get(actor, 0) + spent
+            self._refresh_hero_ui_snapshot(actor)
             if self.actions_used[actor] >= limit:
                 logger.info("Wykorzystano limit %s akcji. Automatyczny koniec tury.", limit)
                 self.game.ui_log("Wykorzystano wszystkie akcje. Automatyczny koniec tury.")
                 self._advance_turn()
                 return self
+        else:
+            self._refresh_hero_ui_snapshot(actor)
         if result.message:
             self.game.ui_log(result.message)
         else:

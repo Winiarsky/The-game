@@ -26,6 +26,7 @@ from src.game import Game
 from src import ui_client
 from src.character_creation import CharacterRepository, create_character
 from src.ui_client import UIClient, UndoRequested, get_ui_client
+from src.ui_payloads import build_active_actor_payload, build_hero_snapshot
 
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
@@ -160,139 +161,16 @@ class _CharacterCreationGame:
         logger.info(text)
         self.ui_event("log", {"message": text, "source": "character_creation"})
 
-    @staticmethod
-    def _status_labels(hero: Any) -> list[str]:
-        if hero is None:
-            return []
-        labels_getter = getattr(hero, "status_labels", None)
-        if callable(labels_getter):
-            try:
-                labels = list(labels_getter() or [])
-                return [str(item) for item in labels if str(item).strip()]
-            except Exception:
-                pass
-        out: list[str] = []
-        for status in list(getattr(hero, "statuses", []) or []):
-            label = (
-                getattr(status, "display_label", None)
-                or getattr(status, "label", None)
-                or getattr(status, "id", None)
-                or status
-            )
-            text = str(label or "").strip()
-            if text:
-                out.append(text)
-        return out
-
-    @staticmethod
-    def _background_preview(hero: Any) -> tuple[str | None, str | None, str | None, str | None]:
-        background_label = None
-        background_feat_id = None
-        background_ability_boosts_ui = None
-        background_skill_training_ui = None
-        for status in list(getattr(hero, "statuses", []) or []):
-            data = getattr(status, "data", None) or {}
-            if not bool(data.get("is_background")):
-                continue
-            background_label = (
-                data.get("background_label")
-                or getattr(status, "label", None)
-                or getattr(status, "id", None)
-            )
-            background_feat_id = data.get("background_feat_id")
-            background_ability_boosts_ui = data.get("background_ability_boosts_ui")
-            background_skill_training_ui = data.get("background_skill_training_ui")
-            break
-        return (
-            str(background_label) if background_label else None,
-            str(background_feat_id) if background_feat_id else None,
-            str(background_ability_boosts_ui) if background_ability_boosts_ui else None,
-            str(background_skill_training_ui) if background_skill_training_ui else None,
-        )
-
     def ui_hero(self, hero: Any, note: str | None = None) -> None:
         if hero is None:
             return
-        hero_id = getattr(hero, "object_id", None) or getattr(hero, "name", None) or "hero"
-        hand_slots: dict[str, Any] | None = None
-        coin_pouch: dict[str, int] | None = None
-        money_text: str | None = None
-        bulk_summary: dict[str, Any] | None = None
-        inventory_items: list[str] = []
-        try:
-            from GameObjects.items.inventory import hand_slots_snapshot
-
-            hand_slots = hand_slots_snapshot(hero)
-        except Exception:
-            hand_slots = None
-        try:
-            from economy import actor_bulk_summary, ensure_actor_coin_pouch, format_actor_money
-
-            coin_pouch = ensure_actor_coin_pouch(hero, default_gp=int(getattr(hero, "starting_gold_gp", 0) or 0))
-            money_text = format_actor_money(hero)
-            bulk_summary = actor_bulk_summary(hero)
-        except Exception:
-            coin_pouch = None
-            money_text = None
-            bulk_summary = None
-        try:
-            for item in list(getattr(hero, "inventory", []) or []):
-                label = str(getattr(item, "name", "") or getattr(item, "item_id", "") or "").strip()
-                if label:
-                    inventory_items.append(label)
-        except Exception:
-            inventory_items = []
-        (
-            background_label,
-            background_feat_id,
-            background_ability_boosts_ui,
-            background_skill_training_ui,
-        ) = self._background_preview(hero)
-        payload = {
-            "id": str(hero_id),
-            "character_id": getattr(hero, "character_id", None),
-            "name": getattr(hero, "name", None) or str(hero_id),
-            "image": getattr(hero, "image", None),
-            "statuses": self._status_labels(hero),
-            "note": note,
-            "class_id": getattr(hero, "class_id", None) or getattr(hero, "class_name", None),
-            "ancestry_id": getattr(hero, "ancestry_id", None),
-            "heritage_id": getattr(hero, "heritage_id", None),
-            "ac": getattr(hero, "ac", None),
-            "max_hp": getattr(hero, "max_hp", None),
-            "base_speed_feet": getattr(hero, "base_speed_feet", None),
-            "ability_scores": dict(getattr(hero, "ability_scores", {}) or {}),
-            "ability_modifiers": dict(getattr(hero, "ability_modifiers", {}) or {}),
-            "skill_ranks": dict(getattr(hero, "skill_ranks", {}) or {}),
-            "save_ranks": dict(getattr(hero, "save_ranks", {}) or {}),
-            "perception_rank": getattr(hero, "perception_rank", None),
-            "trained_skills": sorted(set(getattr(hero, "trained_skills", []) or [])),
-            "lore_skills": list(getattr(hero, "lore_skills", []) or []),
-            "background_label": background_label,
-            "background_feat_id": background_feat_id,
-            "background_ability_boosts_ui": background_ability_boosts_ui,
-            "background_skill_training_ui": background_skill_training_ui,
-            "preview_barbarian_instinct_id": getattr(hero, "preview_barbarian_instinct_id", None),
-            "creation_in_progress": bool(getattr(hero, "character_creation_in_progress", False)),
-            "hand_slots": hand_slots,
-            "coin_pouch": coin_pouch,
-            "money_text": money_text,
-            "bulk_summary": bulk_summary,
-            "inventory_items": list(inventory_items),
-        }
-        self.ui_event("hero_snapshot", payload)
+        self.ui_event("hero_snapshot", build_hero_snapshot(hero, note=note))
 
     def ui_active_actor(self, actor: Any | None) -> None:
-        if actor is None:
-            self.ui_event("active_actor_changed", {"id": None, "name": None, "kind": None})
-            return
-        actor_id = getattr(actor, "object_id", None) or getattr(actor, "name", None) or str(id(actor))
-        payload = {
-            "id": str(actor_id),
-            "name": getattr(actor, "name", None) or str(actor_id),
-            "kind": "hero",
-        }
-        self.ui_event("active_actor_changed", payload)
+        self.ui_event(
+            "active_actor_changed",
+            build_active_actor_payload(actor, default_kind="hero"),
+        )
 
 
 def default_game_loop(game: Game) -> None:

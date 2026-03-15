@@ -39,6 +39,15 @@ def _refresh_bulk(actor, *, inventory: list[object] | None = None) -> None:
         return
 
 
+def _refresh_actor_ac(actor) -> None:
+    try:
+        from character_creation.mechanics import refresh_actor_ac
+
+        refresh_actor_ac(actor)
+    except Exception:
+        return
+
+
 def _has_status(actor, status_id: str) -> bool:
     checker = getattr(actor, "has_status", None)
     if callable(checker):
@@ -669,11 +678,13 @@ def _toggle_armor(actor, armor) -> tuple[bool, str]:
             setattr(actor, "equipped_armor_item_id", None)
         except Exception:
             return False, "Nie udało się zdjąć pancerza."
+        _refresh_actor_ac(actor)
         return True, f"Zdjęto pancerz: {_item_label(armor)}."
     try:
         setattr(actor, "equipped_armor_item_id", iid)
     except Exception:
         return False, "Nie udało się założyć pancerza."
+    _refresh_actor_ac(actor)
     return True, f"Założono pancerz: {_item_label(armor)}."
 
 
@@ -988,6 +999,7 @@ def _deactivate_item_before_move(actor, item) -> None:
                 setattr(actor, "equipped_armor_item_id", None)
             except Exception:
                 pass
+            _refresh_actor_ac(actor)
 
 
 def item_use_description(item) -> str:

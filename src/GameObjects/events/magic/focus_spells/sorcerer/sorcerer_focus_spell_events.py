@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from combat import effective_ac
+from combat import ac_with_bonuses
 from combat.damage_utils import burn_it_bonus, burn_it_prompt_note
 from combat.degree_of_success import is_critical_success, is_hit, natural_shift_from_roll, resolve_outcome
 from combat.hp_engine import apply_damage as hp_apply_damage
@@ -410,7 +410,7 @@ class ElementalTossEvent(SorcererFocusSpellEvent):
         if target is None:
             return EventResult.cancelled(message="Elemental Toss: brak celu.")
 
-        target_ac = int(getattr(target, "ac", effective_ac(target)) or 10)
+        target_ac = int(ac_with_bonuses(target, attacker=actor, include_magic=True)[0] or 10)
         roll = int(
             prompt_for_roll(
                 f"Elemental Toss: atak przeciw AC {target_ac}",

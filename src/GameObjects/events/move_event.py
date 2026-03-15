@@ -372,6 +372,7 @@ class MoveEvent(GameEvent):
                     full_feet = path_cost_feet(full_path, board, mover=moving_hero)
                     confirm_target = path[-1]
                     was_trimmed = confirm_target != target
+                    difficult_in_path = any(_is_difficult(pos) for pos in path_preview)
                     path_id = f"path-{time.time_ns()}"
                     active_path_id = path_id
                     if was_trimmed:
@@ -391,14 +392,16 @@ class MoveEvent(GameEvent):
                             "id": path_id,
                             "steps": steps,
                             "feet": feet,
+                            "actor_name": getattr(moving_hero, "name", None),
+                            "path_type": "hero",
                             "target": confirm_target,
                             "requested_target": target,
                             "trimmed": was_trimmed,
                             "budget_feet": move_budget_feet,
+                            "difficult": difficult_in_path,
                         },
                     )
                     try:
-                        difficult_in_path = any(_is_difficult(pos) for pos in path_preview)
                         hint_text = (
                             "Kliknij ostatnie podświetlone pole, aby wykonać ruch, "
                             "lub dowolne inne pole, aby ustawić nową ścieżkę."

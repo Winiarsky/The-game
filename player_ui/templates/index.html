@@ -55,9 +55,16 @@
                     </div>
 
                     <div class="panel heroes-panel">
-                        <div class="panel-header">Bohaterowie</div>
-                        <div class="panel-body">
-                            <div id="heroes-list" class="heroes-list"></div>
+                        <div class="panel-header">Drużyna</div>
+                        <div class="panel-body heroes-layout">
+                            <div id="heroes-roster" class="heroes-roster empty-note">Brak danych o bohaterach.</div>
+                            <div class="heroes-detail-wrap">
+                                <div class="heroes-detail-head">
+                                    <div class="heroes-detail-title">Szczegóły</div>
+                                    <div id="hero-detail-context" class="heroes-detail-context">Brak aktywnego bohatera.</div>
+                                </div>
+                                <div id="heroes-detail" class="heroes-detail empty-note">Brak danych o bohaterze.</div>
+                            </div>
                         </div>
                     </div>
                 </aside>
@@ -126,6 +133,32 @@
                                         <ul id="mods-bon-item" class="mods-list"></ul>
                                     </div>
                                 </div>
+                                <div id="path-summary" class="path-summary hidden">
+                                    <div class="path-summary-head">Ruch</div>
+                                    <div class="path-summary-grid">
+                                        <div class="path-metric">
+                                            <div class="label">Żądany cel</div>
+                                            <div id="path-requested" class="value">-</div>
+                                        </div>
+                                        <div class="path-metric">
+                                            <div class="label">Końcowy cel</div>
+                                            <div id="path-confirmed" class="value">-</div>
+                                        </div>
+                                        <div class="path-metric">
+                                            <div class="label">Koszt</div>
+                                            <div id="path-cost" class="value">-</div>
+                                        </div>
+                                        <div class="path-metric">
+                                            <div class="label">Budżet</div>
+                                            <div id="path-budget" class="value">-</div>
+                                        </div>
+                                        <div class="path-metric">
+                                            <div class="label">Status</div>
+                                            <div id="path-status" class="value">-</div>
+                                        </div>
+                                    </div>
+                                    <div id="path-hint" class="path-summary-hint"></div>
+                                </div>
                                 <div class="action-prompt" id="action-prompt"></div>
                                 <div class="action-choices" id="action-choices"></div>
                                 <div class="action-desc" id="action-desc"></div>
@@ -173,6 +206,6 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

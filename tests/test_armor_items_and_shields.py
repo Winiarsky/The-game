@@ -23,7 +23,7 @@ from GameObjects.items.armor import (
     get_equipped_armor,
     normalize_armor_id,
 )
-from GameObjects.items.inventory import ensure_actor_inventory
+from GameObjects.items.inventory import ensure_actor_inventory, toggle_item_activation
 from GameObjects.items.shield import BucklerShield, create_shield, normalize_shield_id
 from combat.reactions.reactive_shield_reaction import ReactiveShieldReaction
 from skills import Skill
@@ -42,6 +42,10 @@ class Actor(BonusMixin):
     shield_loadout: list[str] = field(default_factory=list)
     ac: int = 10
     dex_mod: int = 0
+    level: int = 1
+    ability_modifiers: dict[str, int] = field(default_factory=dict)
+    defense_proficiency_ranks: dict[str, str] = field(default_factory=dict)
+    ac_includes_armor_bonus: bool = False
     object_id: str = "actor-1"
 
     def has_status(self, status_id: str) -> bool:
@@ -181,6 +185,29 @@ def test_equipped_armor_adds_item_bonus_to_ac_resolution():
     target_ac, _base, _mod = event._ac_with_bonuses(actor)
 
     assert target_ac == 12
+
+
+def test_toggle_armor_recomputes_pf2e_base_ac_without_double_counting_item_bonus():
+    actor = Actor(
+        ac=15,
+        level=1,
+        ability_modifiers={"dexterity": 2},
+        defense_proficiency_ranks={"unarmored": "trained", "medium": "trained"},
+    )
+    armor = create_armor("scale_mail")
+    assert armor is not None
+    actor.inventory = [armor]
+
+    ok, _message = toggle_item_activation(actor, armor)
+    assert ok is True
+    assert actor.ac == 18
+    assert actor.ac_includes_armor_bonus is True
+
+    event = AttackEventBase()
+    target_ac, base_ac, modifier = event._ac_with_bonuses(actor)
+    assert base_ac == 18
+    assert modifier == 0
+    assert target_ac == 18
 
 
 def test_noisy_armor_penalizes_stealth_modifier():

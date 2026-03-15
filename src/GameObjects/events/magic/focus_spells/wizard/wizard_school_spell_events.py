@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from bonuses import BonusEffect, BonusType
-from combat import effective_ac
+from combat import ac_with_bonuses
 from combat.degree_of_success import is_critical_success, is_hit, natural_shift_from_roll, resolve_outcome
 from combat.hp_engine import apply_damage as hp_apply_damage
 from damage_types import DamageType
@@ -439,7 +439,7 @@ class CallOfTheGraveEvent(WizardFocusSpellEvent):
         if target is None:
             return EventResult.cancelled(message="Call of the Grave: target not selected.")
 
-        target_ac = int(getattr(target, "ac", effective_ac(target)) or 10)
+        target_ac = int(ac_with_bonuses(target, attacker=actor, include_magic=True)[0] or 10)
         roll = _roll_int(
             f"Call of the Grave: spell attack vs AC {target_ac}",
             layout="test",
@@ -659,7 +659,7 @@ class HandOfTheApprenticeEvent(WizardFocusSpellEvent):
         if target is None:
             return EventResult.cancelled(message="Hand of the Apprentice: target not selected.")
 
-        target_ac = int(getattr(target, "ac", effective_ac(target)) or 10)
+        target_ac = int(ac_with_bonuses(target, attacker=actor, include_magic=True)[0] or 10)
         roll = _roll_int(
             f"Hand of the Apprentice: spell attack vs AC {target_ac}",
             layout="test",

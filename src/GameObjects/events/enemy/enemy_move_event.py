@@ -213,7 +213,20 @@ class EnemyMoveEvent(GameEvent):
         dest = truncated[-1]
 
         path_id = f"enemy-path-{time.time_ns()}"
-        game.ui_event("path_preview", {"id": path_id, "steps": len(truncated) - 1, "feet": used_feet, "target": dest})
+        game.ui_event(
+            "path_preview",
+            {
+                "id": path_id,
+                "steps": len(truncated) - 1,
+                "feet": used_feet,
+                "actor_name": getattr(enemy, "name", None),
+                "path_type": "enemy",
+                "target": dest,
+                "requested_target": goal,
+                "trimmed": dest != goal,
+                "budget_feet": move_budget_feet,
+            },
+        )
         try:
             start_and_path = [enemy.position] + truncated[1:]
             colors = [consts.ENEMY_START_RGB] + [consts.ENEMY_MOVE_RGB] * (len(truncated) - 1)

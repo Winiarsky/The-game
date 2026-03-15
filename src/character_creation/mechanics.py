@@ -158,6 +158,92 @@ def proficiency_bonus(level: int, rank: str) -> int:
     return max(0, int(level)) + int(RANK_BONUS.get(rank_id, 0))
 
 
+def _actor_ability_modifier(actor: Any, ability_id: str) -> int:
+    ability_key = str(ability_id or "").strip().lower()
+    if not ability_key:
+        return 0
+    ability_modifiers = getattr(actor, "ability_modifiers", None)
+    if isinstance(ability_modifiers, dict):
+        try:
+            return int(ability_modifiers.get(ability_key, 0) or 0)
+        except Exception:
+            return 0
+    short_key = f"{ability_key[:3]}_mod"
+    try:
+        return int(getattr(actor, short_key, 0) or 0)
+    except Exception:
+        return 0
+
+
+def _actor_defense_rank(actor: Any, category: str) -> str:
+    key = str(category or "").strip().lower()
+    if not key:
+        return "untrained"
+
+    current_rank = getattr(actor, "_current_defense_rank", None)
+    if callable(current_rank):
+        try:
+            return _clamp_rank(current_rank(key))
+        except Exception:
+            pass
+
+    raw = None
+    mapping = getattr(actor, "defense_proficiency_ranks", None)
+    if isinstance(mapping, dict):
+        raw = mapping.get(key, raw)
+    for status in getattr(actor, "statuses", None) or []:
+        data = getattr(status, "data", None) or {}
+        status_mapping = data.get("defense_proficiency_ranks")
+        if isinstance(status_mapping, dict) and key in status_mapping:
+            raw = status_mapping.get(key, raw)
+    return _clamp_rank(str(raw or "untrained"))
+
+
+def compute_actor_base_ac(actor: Any) -> int:
+    """Policz bazowe PF2e AC aktora z uwzględnieniem biegłości, Dex capu i bonusu pancerza."""
+    level = max(0, int(getattr(actor, "level", 0) or 0))
+    dexterity_modifier = _actor_ability_modifier(actor, "dexterity")
+    armor_bonus = 0
+    dexterity_contribution = dexterity_modifier
+    defense_category = "unarmored"
+
+    try:
+        from GameObjects.items.armor import get_equipped_armor
+
+        armor = get_equipped_armor(actor)
+    except Exception:
+        armor = None
+
+    if armor is not None:
+        defense_category = str(getattr(armor, "armor_category", "light") or "light").strip().lower() or "light"
+        try:
+            armor_bonus = max(0, int(getattr(armor, "ac_bonus", 0) or 0))
+        except Exception:
+            armor_bonus = 0
+        try:
+            dex_cap = int(getattr(armor, "dex_cap", dexterity_modifier) or dexterity_modifier)
+        except Exception:
+            dex_cap = dexterity_modifier
+        dexterity_contribution = min(dexterity_modifier, dex_cap)
+
+    proficiency = proficiency_bonus(level, _actor_defense_rank(actor, defense_category))
+    return 10 + int(proficiency) + int(dexterity_contribution) + int(armor_bonus)
+
+
+def refresh_actor_ac(actor: Any) -> int:
+    """Przelicz i zapisz bazowe AC aktora zgodnie z PF2e."""
+    ac_value = compute_actor_base_ac(actor)
+    try:
+        actor.ac = int(ac_value)
+    except Exception:
+        pass
+    try:
+        actor.ac_includes_armor_bonus = True
+    except Exception:
+        pass
+    return int(ac_value)
+
+
 def compute_math(
     *,
     level: int,
@@ -270,6 +356,8 @@ def apply_math_to_hero(
     if isinstance(defense_proficiency_ranks, dict):
         hero.defense_proficiency_ranks = compress_rank_map(defense_proficiency_ranks)
 
+    refresh_actor_ac(hero)
+
 
 __all__ = [
     "SKILL_TO_ABILITY",
@@ -287,5 +375,7 @@ __all__ = [
     "compress_rank_map",
     "merge_rank_maps",
     "compute_math",
+    "compute_actor_base_ac",
+    "refresh_actor_ac",
     "apply_math_to_hero",
 ]

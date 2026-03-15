@@ -66,6 +66,11 @@ def _apply_tower_shield_speed_penalty(actor, *, source_tag: str, shield) -> None
         return
 
 
+def _is_tower_shield(shield) -> bool:
+    traits = {str(item or "").strip().lower() for item in (getattr(shield, "traits", ()) or ())}
+    return "tower_shield" in traits
+
+
 @register_event
 class RaiseShieldEvent(GameEvent):
     """Podniesienie tarczy – circumstance AC bonus z tarczy do początku kolejnej tury bohatera."""
@@ -128,6 +133,19 @@ class RaiseShieldEvent(GameEvent):
         logger.info("Bohater podnosi tarczę: +%s AC circumstance do początku kolejnej tury.", shield_ac_bonus)
         try:
             ctx.game.ui_log(f"Podnosisz tarczę: +{shield_ac_bonus} AC (circumstance) do początku następnej tury.")
+            if _is_tower_shield(shield):
+                take_cover_bonus = max(shield_ac_bonus, int(getattr(shield, "take_cover_ac_bonus", shield_ac_bonus) or shield_ac_bonus))
+                if take_cover_bonus > shield_ac_bonus:
+                    ctx.game.ui_log(
+                        f"Tarcza wieżowa: samo Raise Shield daje +{shield_ac_bonus} AC. "
+                        f"Użyj Take Cover, aby mieć greater cover (+{take_cover_bonus} AC)."
+                    )
+        except Exception:
+            pass
+        try:
+            ui_hero = getattr(ctx.game, "ui_hero", None)
+            if callable(ui_hero):
+                ui_hero(hero)
         except Exception:
             pass
 

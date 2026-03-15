@@ -5,7 +5,7 @@ from typing import Iterable
 
 from GameObjects.interactions_mixin import prompt_for_roll
 from bonuses import build_modifiers_grid, compute_total_modifier, format_effects_log, select_best_effects
-from combat import effective_ac
+from combat import ac_with_bonuses
 from combat.degree_of_success import is_critical_success, is_hit, natural_shift_from_roll, resolve_outcome
 
 from ..base import EventContext, EventResult
@@ -185,14 +185,7 @@ class BaseMagicAttackEvent(MagicEvent):
 
     # --- helpers ---
     def _target_ac_with_bonuses(self, target, *, attacker=None) -> tuple[int, int, int]:
-        base_ac = getattr(target, "ac", effective_ac(target))
-        bonuses = list(getattr(target, "bonuses", [])) if hasattr(target, "bonuses") else []
-        modifier = 0
-        if bonuses:
-            modifier = compute_total_modifier(bonuses, "ac", getattr(attacker, "object_id", None))
-            modifier += compute_total_modifier(bonuses, "ac_magic", getattr(attacker, "object_id", None))
-        target_ac = base_ac + modifier
-        return target_ac, base_ac, modifier
+        return ac_with_bonuses(target, attacker=attacker, include_magic=True)
 
     def _attacker_modifier(self, attacker, action_tag: str, target=None) -> int:
         compute = getattr(attacker, "compute_modifier", None)

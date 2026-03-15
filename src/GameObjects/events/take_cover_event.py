@@ -26,6 +26,15 @@ class _RaisedTowerShieldCover(RangeAttackAffectMixin):
         self.position = getattr(owner, "position", None)
 
 
+def _current_actor_ac(actor) -> int | None:
+    try:
+        from combat import ac_with_bonuses
+
+        return int(ac_with_bonuses(actor)[0] or 0)
+    except Exception:
+        return None
+
+
 @register_event
 class TakeCoverEvent(GameEvent):
     """Przygarnięcie się do pobliskiej osłony, aby uzyskać lepszą ochronę."""
@@ -214,9 +223,23 @@ class TakeCoverEvent(GameEvent):
             cover_bonus,
         )
         try:
-            ctx.game.ui_log(
-                f"Bierzesz osłonę: {current_cover} -> {upgraded} (+{cover_bonus} AC circumstance)."
-            )
+            if using_tower_shield_cover:
+                total_ac = _current_actor_ac(hero)
+                total_line = f" Razem AC {total_ac}." if total_ac else ""
+                ctx.game.ui_log(
+                    f"Bierzesz osłonę przy tarczy wieżowej: {current_cover} -> {upgraded} "
+                    f"(używa +{cover_bonus} AC zamiast +2 z Raise Shield, bez stackowania).{total_line}"
+                )
+            else:
+                ctx.game.ui_log(
+                    f"Bierzesz osłonę: {current_cover} -> {upgraded} (+{cover_bonus} AC circumstance)."
+                )
+        except Exception:
+            pass
+        try:
+            ui_hero = getattr(ctx.game, "ui_hero", None)
+            if callable(ui_hero):
+                ui_hero(hero)
         except Exception:
             pass
 

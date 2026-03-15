@@ -18,6 +18,7 @@ from board_grid import BoardGrid
 from states.combat import Combat
 from statuses import COVERED_STATUS
 from bonuses import BonusEffect, BonusType
+from ui_payloads import build_hero_snapshot
 
 
 class DummyBoard:
@@ -94,9 +95,13 @@ class DummyGame:
         self.board = DummyBoard(cover_positions, terrain=terrain, occupants=occupants)
         self.conn = DummyConn(choice)
         self.ui_log_messages = []
+        self.hero_snapshots = []
 
     def ui_log(self, msg):
         self.ui_log_messages.append(msg)
+
+    def ui_hero(self, hero, note=None):
+        self.hero_snapshots.append(build_hero_snapshot(hero, note=note))
 
 
 class DummyHero(RangeAttackAffectMixin):
@@ -108,6 +113,7 @@ class DummyHero(RangeAttackAffectMixin):
         self.object_id = f"hero-{DummyHero._counter}"
         self.bonuses = []
         self.statuses = []
+        self.ac = 18
 
     def add_bonus(self, eff: BonusEffect):
         self.bonuses.append(eff)
@@ -251,6 +257,75 @@ def test_take_cover_with_raised_tower_shield_without_terrain_cover():
     assert result.success is True
     ac_values = [int(getattr(b, "value", 0) or 0) for b in hero.bonuses if getattr(b, "tag", "") == "ac"]
     assert max(ac_values) == 4
+
+
+def test_take_cover_with_tower_shield_updates_ui_snapshot_and_logs_non_stacking_bonus():
+    game = DummyGame(cover_positions=[])
+    hero = DummyHero((0, 0))
+    tower = create_shield("tower_shield")
+    assert tower is not None
+    hero.equipped_shield = tower
+    hero.add_bonus(
+        BonusEffect(
+            type=BonusType.CIRCUMSTANCE,
+            value=2,
+            tag="ac",
+            source="raise_shield:round1",
+            label="tarcza w gorze",
+        )
+    )
+    ctx = DummyCtx(game, hero, in_combat=True)
+
+    result = TakeCoverEvent().execute(ctx)
+
+    assert result.success is True
+    assert game.hero_snapshots
+    snapshot = game.hero_snapshots[-1]
+    assert snapshot["ac"] == 22
+    assert snapshot["ac_base"] == 18
+    assert snapshot["ac_modifier"] == 4
+    assert any("bez stackowania" in str(msg) and "Razem AC 22" in str(msg) for msg in game.ui_log_messages)
+
+
+def test_take_cover_with_own_raised_tower_shield_expires_on_owner_next_turn():
+    hero = DummyHero((0, 0))
+    enemy = DummyHero((5, 5))
+    tower = create_shield("tower_shield")
+    assert tower is not None
+    hero.equipped_shield = tower
+    hero.add_bonus(
+        BonusEffect(
+            type=BonusType.CIRCUMSTANCE,
+            value=2,
+            tag="ac",
+            source="raise_shield:round8",
+            label="tarcza w gorze",
+        )
+    )
+
+    game = DummyGame(cover_positions=[])
+    ctx = DummyCtx(game, hero, in_combat=True)
+
+    result = TakeCoverEvent().execute(ctx)
+    assert result.success is True
+    assert any(str(getattr(b, "source", "") or "").startswith("take_cover:tower_shield") for b in hero.bonuses)
+    assert any(getattr(s, "id", s) == COVERED_STATUS for s in hero.statuses)
+
+    game.heroes = [hero]
+    game.enemies = [enemy]
+    game.ui = None
+    game.conn = None
+    combat = Combat(game)
+    combat.base_order = [enemy, hero]
+    combat.round_queue = [enemy, hero]
+    combat.initiative_order = list(combat.round_queue)
+    combat.actions_used = {}
+
+    assert combat._current_actor() is enemy
+    combat._advance_turn()
+    assert combat._current_actor() is hero
+    assert not any(str(getattr(b, "source", "") or "").startswith("take_cover:tower_shield") for b in hero.bonuses)
+    assert not any(getattr(s, "id", s) == COVERED_STATUS for s in hero.statuses)
 
 
 def test_take_cover_next_to_ally_with_raised_tower_shield_expires_on_owner_next_turn():

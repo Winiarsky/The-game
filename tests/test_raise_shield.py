@@ -17,15 +17,20 @@ from GameObjects.interactions_mixin.bonus_mixin import BonusMixin
 from GameObjects.items.shield import StandardShield, create_shield
 from states.combat import Combat
 from statuses import RAISE_SHIELD_ALLOW_STATUS
+from ui_payloads import build_hero_snapshot
 
 
 class DummyGame:
     def __init__(self, round_idx=1):
         self.state = type("S", (), {"round_index": round_idx})()
         self.ui_log_messages = []
+        self.hero_snapshots = []
 
     def ui_log(self, msg):
         self.ui_log_messages.append(msg)
+
+    def ui_hero(self, hero, note=None):
+        self.hero_snapshots.append(build_hero_snapshot(hero, note=note))
 
 
 class DummyCtx(EventContext):
@@ -44,6 +49,7 @@ class DummyHero(BonusMixin):
         self.object_id = "hero1"
         self.statuses = []
         self.equipped_shield = StandardShield()
+        self.ac = 18
 
     def __hash__(self):
         return id(self)
@@ -101,6 +107,35 @@ def test_raise_tower_shield_adds_temporary_speed_penalty():
     assert penalties
     data = getattr(penalties[0], "data", {}) or {}
     assert int(data.get("speed_penalty_feet", 0) or 0) == 5
+
+
+def test_raise_shield_pushes_updated_hero_snapshot_to_ui():
+    hero = DummyHero()
+    game = DummyGame(round_idx=2)
+    ctx = DummyCtx(game=game, actor=hero)
+
+    res = RaiseShieldEvent().execute(ctx)
+
+    assert res.success
+    assert game.hero_snapshots
+    snapshot = game.hero_snapshots[-1]
+    assert snapshot["ac"] == 20
+    assert snapshot["ac_base"] == 18
+    assert snapshot["ac_modifier"] == 2
+
+
+def test_raise_tower_shield_logs_take_cover_hint():
+    hero = DummyHero()
+    tower = create_shield("tower_shield")
+    assert tower is not None
+    hero.equipped_shield = tower
+    game = DummyGame(round_idx=5)
+    ctx = DummyCtx(game=game, actor=hero)
+
+    res = RaiseShieldEvent().execute(ctx)
+
+    assert res.success
+    assert any("Take Cover" in str(msg) and "+4 AC" in str(msg) for msg in game.ui_log_messages)
 
 
 def test_raise_shield_works_without_raise_shield_allow_status():

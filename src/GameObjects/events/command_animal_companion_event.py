@@ -353,7 +353,7 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
         attack_label = str(profile.get("label", profile.get("id", "attack")) or "attack")
         damage_formula = str(profile.get("damage", "1d6") or "1d6")
         damage_type = str(profile.get("damage_type", "normal") or "normal")
-        target_ac = int(getattr(target, "ac", effective_ac(target)) or 10)
+        target_ac = int(effective_ac(target) or 10)
         traits = {str(item or "").strip().lower() for item in (profile.get("traits") or [])}
         hunted_target = self._companion_hunted_target_id(companion) == _actor_id(target)
         flurry_note = ""

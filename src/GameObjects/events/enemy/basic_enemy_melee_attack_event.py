@@ -120,6 +120,10 @@ class BasicEnemyMeleeAttackEvent(GameEvent):
         )
         logger.info(dmg_msg)
         game.ui_log(dmg_msg)
+        try:
+            game.ui_hero(hero)
+        except Exception:
+            pass
 
         game.events.safe_emit_action(
             actor=enemy,

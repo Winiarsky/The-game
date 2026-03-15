@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 DEBUG_UNDO_COMMAND = "__debug_undo__"
+SESSION_RESET_COMMAND = "__session_reset__"
 
 
 class UndoRequested(BaseException):
@@ -74,6 +75,7 @@ class UIClient:
     max_wait: Optional[float] = None  # None = czekaj na UI bez limitu; można nadpisać env PLAYER_UI_MAX_WAIT
     enabled: bool = field(init=False)
     allow_cli_fallback: bool = field(init=False, default=False)
+    session_id: Optional[str] = field(init=False, default=None)
 
     def __post_init__(self) -> None:
         if self.base_url is None:
@@ -93,6 +95,7 @@ class UIClient:
                     self.max_wait = value
             except ValueError:
                 logger.warning("PLAYER_UI_MAX_WAIT musi być liczbą (sekundy); ignoruję wartość: %s", env_wait)
+        self._ensure_session_id()
 
     # --- Public API ---
 
@@ -100,12 +103,19 @@ class UIClient:
         """Wyślij prosty event do UI (np. log, zmiana stanu)."""
         if not self.enabled:
             return False
+        body = {"type": event_type, "payload": payload}
+        session_id = self._ensure_session_id()
+        if session_id:
+            body["session_id"] = session_id
         try:
             resp = requests.post(
                 f"{self.base_url}/api/events",
-                json={"type": event_type, "payload": payload},
+                json=body,
                 timeout=self.request_timeout,
             )
+            if resp.status_code == 409:
+                logger.warning("Sesja UI dla eventu %s jest nieaktualna; pomijam wysyłkę.", event_type)
+                return False
             resp.raise_for_status()
             return True
         except Exception as exc:  # pragma: no cover - tylko logujemy
@@ -259,18 +269,25 @@ class UIClient:
         choices: list[str] | None = None,
         **extra,
     ) -> Optional[str]:
+        session_id = self._ensure_session_id()
+        payload = {
+            "prompt": prompt,
+            "kind": kind,
+            "source": source,
+            "choices": choices or None,
+            **extra,
+        }
+        if session_id:
+            payload["session_id"] = session_id
         try:
             resp = requests.post(
                 f"{self.base_url}/api/prompts",
-                json={
-                    "prompt": prompt,
-                    "kind": kind,
-                    "source": source,
-                    "choices": choices or None,
-                    **extra,
-                },
+                json=payload,
                 timeout=self.request_timeout,
             )
+            if resp.status_code == 409:
+                logger.warning("Sesja UI dla promptu '%s' jest nieaktualna; nie tworzę promptu.", prompt)
+                return None
             resp.raise_for_status()
             data = resp.json()
             return str(data.get("id"))
@@ -360,6 +377,30 @@ class UIClient:
             return "/back"
         return None
 
+    def _ensure_session_id(self) -> Optional[str]:
+        if not self.enabled or not self.base_url:
+            return None
+        if self.session_id:
+            return self.session_id
+        try:
+            resp = requests.get(
+                f"{self.base_url}/api/session",
+                timeout=self.request_timeout,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            session = data.get("session") if isinstance(data, dict) else None
+            if isinstance(session, dict):
+                raw = session.get("id")
+            else:
+                raw = data.get("session_id") if isinstance(data, dict) else None
+            session_id = str(raw or "").strip()
+            if session_id:
+                self.session_id = session_id
+        except Exception as exc:
+            logger.debug("Nie udało się ustalić sesji UI: %s", exc)
+        return self.session_id
+
     def _wait_for_answer(self, prompt_id: str, *, max_wait: Optional[float] = None) -> Any:
         url = f"{self.base_url}/api/prompts/{prompt_id}"
         start = time.time()
@@ -370,6 +411,9 @@ class UIClient:
                 data = resp.json()
                 if data.get("status") == "answered":
                     answer = data.get("answer")
+                    if str(answer).strip().lower() == SESSION_RESET_COMMAND:
+                        logger.info("Prompt %s zamknięty przez reset sesji UI.", prompt_id)
+                        return None
                     mapped = self._debug_undo_response_for_source(answer, data if isinstance(data, dict) else {})
                     if mapped is not None:
                         return mapped
@@ -396,6 +440,9 @@ class UIClient:
                 data = resp.json()
                 if data.get("status") == "answered":
                     answer = data.get("answer")
+                    if str(answer).strip().lower() == SESSION_RESET_COMMAND:
+                        logger.info("Prompt %s zamknięty przez reset sesji UI.", prompt_id)
+                        return None
                     mapped = self._debug_undo_response_for_source(answer, data if isinstance(data, dict) else {})
                     if mapped is not None:
                         return mapped

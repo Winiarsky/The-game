@@ -76,6 +76,7 @@ from .mechanics import (
     higher_rank,
     merge_rank_maps,
     proficiency_bonus,
+    refresh_actor_ac,
     rank_priority,
 )
 from .repository import CharacterRepository
@@ -1640,6 +1641,7 @@ def _equip_from_inventory_defaults(hero: Hero) -> None:
             setattr(hero, "equipped_armor_item_id", str(getattr(first_armor, "instance_id", "") or ""))
         except Exception:
             pass
+    refresh_actor_ac(hero)
 
 
 def _offer_key(offer: dict[str, Any]) -> str:
@@ -4370,16 +4372,27 @@ def hero_from_snapshot(snapshot: dict[str, Any]) -> Hero:
         if equipped_weapons:
             set_equipped_weapons(hero, equipped_weapons)
 
-    equipped_armor_id = normalize_armor_id(snapshot.get("equipped_armor_id"))
-    if equipped_armor_id:
+    equipped_armor_instance = str(snapshot.get("equipped_armor_item_id") or "").strip()
+    if equipped_armor_instance:
         for item in list(getattr(hero, "inventory", []) or []):
-            if normalize_armor_id(getattr(item, "item_id", None)) != equipped_armor_id:
+            if str(getattr(item, "instance_id", "") or "").strip() != equipped_armor_instance:
                 continue
             try:
-                setattr(hero, "equipped_armor_item_id", str(getattr(item, "instance_id", "") or ""))
+                setattr(hero, "equipped_armor_item_id", equipped_armor_instance)
             except Exception:
                 pass
             break
+    if not str(getattr(hero, "equipped_armor_item_id", "") or "").strip():
+        equipped_armor_id = normalize_armor_id(snapshot.get("equipped_armor_id"))
+        if equipped_armor_id:
+            for item in list(getattr(hero, "inventory", []) or []):
+                if normalize_armor_id(getattr(item, "item_id", None)) != equipped_armor_id:
+                    continue
+                try:
+                    setattr(hero, "equipped_armor_item_id", str(getattr(item, "instance_id", "") or ""))
+                except Exception:
+                    pass
+                break
     equipped_shield_id = normalize_shield_id(snapshot.get("equipped_shield_id"))
     if equipped_shield_id:
         for item in list(getattr(hero, "inventory", []) or []):
@@ -4398,6 +4411,7 @@ def hero_from_snapshot(snapshot: dict[str, Any]) -> Hero:
             pass
 
     refresh_actor_bulk_state(hero, inventory=list(getattr(hero, "inventory", []) or []))
+    refresh_actor_ac(hero)
     return hero
 
 

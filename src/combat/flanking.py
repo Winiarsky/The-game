@@ -4,7 +4,7 @@ import logging
 from typing import Iterable, Sequence
 
 from statuses import Status, FLAT_FOOTED_STATUS
-from bonuses import BonusEffect, BonusType
+from bonuses import BonusEffect, BonusType, compute_total_modifier
 
 logger = logging.getLogger(__name__)
 
@@ -222,19 +222,62 @@ def flat_footed_penalty(target) -> int:
     return int(penalty)
 
 
-def effective_ac(target) -> int:
+def ac_with_bonuses(
+    target,
+    *,
+    attacker=None,
+    extra_bonuses: Iterable[BonusEffect] | None = None,
+    include_magic: bool = False,
+) -> tuple[int, int, int]:
+    """Zwróć (target_ac, base_ac, modifier) z uwzględnieniem bazowego AC i bonusów runtime."""
     base_ac = getattr(target, "ac", None)
-    if base_ac is None:
-        return 10
+    try:
+        base_ac_value = int(base_ac if base_ac is not None else 10)
+    except Exception:
+        base_ac_value = 10
 
-    modifier = 0
-    compute = getattr(target, "compute_modifier", None)
-    if callable(compute):
-        try:
-            modifier += compute("ac")
-        except Exception:
-            modifier += 0
-    else:
+    bonuses = list(getattr(target, "bonuses", [])) if hasattr(target, "bonuses") else []
+    if extra_bonuses:
+        bonuses.extend(list(extra_bonuses))
+
+    try:
+        from GameObjects.items.armor import armor_ac_bonus, get_equipped_armor
+
+        equipped_armor = get_equipped_armor(target)
+        armor_bonus = int(armor_ac_bonus(target) or 0)
+        ac_includes_armor = bool(getattr(target, "ac_includes_armor_bonus", False))
+        if equipped_armor is not None and armor_bonus > 0 and not ac_includes_armor:
+            bonuses.append(
+                BonusEffect(
+                    type=BonusType.ITEM,
+                    value=armor_bonus,
+                    tag="ac",
+                    source=f"armor:{getattr(equipped_armor, 'item_id', 'equipped')}",
+                    label=str(getattr(equipped_armor, "name", "armor") or "armor"),
+                )
+            )
+    except Exception:
+        pass
+
+    try:
+        from statuses import ac_penalty_effect
+
+        cond_eff = ac_penalty_effect(target)
+        if cond_eff is not None:
+            bonuses.append(cond_eff)
+    except Exception:
+        pass
+
+    attacker_id = getattr(attacker, "object_id", None)
+    modifier = compute_total_modifier(bonuses, "ac", attacker_id) if bonuses else 0
+    if include_magic:
+        modifier += compute_total_modifier(bonuses, "ac_magic", attacker_id) if bonuses else 0
+
+    if not bonuses:
         modifier -= max(0, flat_footed_penalty(target))
 
-    return int(base_ac + modifier)
+    return int(base_ac_value + modifier), int(base_ac_value), int(modifier)
+
+
+def effective_ac(target) -> int:
+    return ac_with_bonuses(target)[0]

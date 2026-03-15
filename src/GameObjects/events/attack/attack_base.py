@@ -6,7 +6,7 @@ import re
 
 from bonuses import BonusEffect, BonusType, compute_total_modifier, format_effects_log, select_best_effects
 from damage_types import DamageType
-from combat import effective_ac
+from combat import ac_with_bonuses
 from GameObjects.interactions_mixin import prompt_for_roll
 from statuses import (
     CONCEALED_STATUS,
@@ -17,7 +17,6 @@ from statuses import (
     visibility_block_reason,
     visibility_flat_check_dc,
     attack_penalty_effects,
-    ac_penalty_effect,
 )
 
 from ..base import GameEvent, mapping_setdefault_actor
@@ -179,41 +178,11 @@ class AttackEventBase(GameEvent):
     ) -> tuple[int, int, int]:
         """Zwraca (target_ac, base_ac, modifier) z uwzględnieniem tymczasowych bonusów (np. osłony).
 
-        base_ac – pochodzi z atrybutu celu lub effective_ac (które uwzględnia np. flat-footed).
-        modifier – suma najlepszych bonusów/kar z listy bonusów celu + extra_bonuses pod tagiem "ac".
+        base_ac – bazowa wartość z atrybutu celu.
+        modifier – najlepsze bonusy/kary z runtime pod tagiem "ac" oraz wsparcie dla legacy aktorów.
         """
 
-        base_ac = getattr(target, "ac", effective_ac(target))
-        bonuses = list(getattr(target, "bonuses", [])) if hasattr(target, "bonuses") else []
-        if extra_bonuses:
-            bonuses.extend(list(extra_bonuses))
-        try:
-            from GameObjects.items.armor import armor_ac_bonus, get_equipped_armor
-
-            equipped_armor = get_equipped_armor(target)
-            armor_bonus = int(armor_ac_bonus(target) or 0)
-            if equipped_armor is not None and armor_bonus > 0:
-                bonuses.append(
-                    BonusEffect(
-                        type=BonusType.ITEM,
-                        value=armor_bonus,
-                        tag="ac",
-                        source=f"armor:{getattr(equipped_armor, 'item_id', 'equipped')}",
-                        label=str(getattr(equipped_armor, "name", "armor") or "armor"),
-                    )
-                )
-        except Exception:
-            pass
-        try:
-            cond_eff = ac_penalty_effect(target)
-            if cond_eff is not None:
-                bonuses.append(cond_eff)
-        except Exception:
-            pass
-
-        modifier = compute_total_modifier(bonuses, "ac", getattr(attacker, "object_id", None)) if bonuses else 0
-        target_ac = base_ac + modifier
-        return target_ac, base_ac, modifier
+        return ac_with_bonuses(target, attacker=attacker, extra_bonuses=extra_bonuses)
 
     def _attacker_modifier(self, attacker, action_tag: str, target=None) -> int:
         """Oblicz modyfikator atakującego dla podanego tagu (np. prone = -2)."""

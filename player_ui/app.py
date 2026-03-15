@@ -21,9 +21,12 @@ history_limit = 200
 prompts: dict[str, dict[str, Any]] = {}
 prompts_lock = Lock()
 prompt_limit = 300
+SESSION_RESET_COMMAND = "__session_reset__"
 
 event_ids = itertools.count(1)
 prompt_ids = itertools.count(1)
+session_ids = itertools.count(1)
+current_session_id = f"ui-session-{next(session_ids)}"
 
 
 # --- Helpers ---
@@ -54,13 +57,17 @@ def _make_event(event_type: str, payload: dict[str, Any]) -> dict[str, Any]:
         "type": event_type,
         "payload": payload,
         "ts": time.time(),
+        "session_id": current_session_id,
     }
 
 
 def _prune_prompts_unlocked() -> None:
     if len(prompts) <= prompt_limit:
         return
-    ordered = sorted(prompts.values(), key=lambda item: float(item.get("created_at", 0.0)))
+    ordered = sorted(
+        prompts.values(),
+        key=lambda item: (item.get("session_id") == current_session_id, float(item.get("created_at", 0.0))),
+    )
     for entry in ordered:
         if len(prompts) <= prompt_limit:
             break
@@ -71,12 +78,86 @@ def _prune_prompts_unlocked() -> None:
         prompts.pop(str(oldest.get("id")), None)
 
 
+def _session_info() -> dict[str, Any]:
+    with prompts_lock:
+        current_prompts = [
+            entry for entry in prompts.values() if str(entry.get("session_id") or "") == current_session_id
+        ]
+    return {
+        "id": current_session_id,
+        "history_size": len(events_history),
+        "prompt_count": len(current_prompts),
+    }
+
+
+def _validate_request_session_id(data: dict[str, Any]) -> tuple[bool, Response | None]:
+    request_session_id = str(data.get("session_id") or "").strip()
+    if request_session_id and request_session_id != current_session_id:
+        return False, jsonify(
+            {
+                "ok": False,
+                "error": "session mismatch",
+                "current_session_id": current_session_id,
+            }
+        )
+    return True, None
+
+
+def _answer_session_prompts_unlocked(session_id: str, answer: Any) -> int:
+    changed = 0
+    for entry in prompts.values():
+        if str(entry.get("session_id") or "") != session_id:
+            continue
+        if entry.get("status") == "answered":
+            continue
+        entry["status"] = "answered"
+        entry["answer"] = answer
+        changed += 1
+    return changed
+
+
 # --- Routes ---
 
 
 @app.get("/")
 def index():
     return render_template("index.html")
+
+
+@app.get("/api/session")
+def get_session():
+    return jsonify({"ok": True, "session": _session_info()})
+
+
+@app.post("/api/session/reset")
+def reset_session():
+    global current_session_id
+    data = request.get_json(force=True, silent=True) or {}
+    reason = str(data.get("reason") or "manual").strip() or "manual"
+    previous_session_id = current_session_id
+    with prompts_lock:
+        retired_prompts = _answer_session_prompts_unlocked(previous_session_id, SESSION_RESET_COMMAND)
+        _prune_prompts_unlocked()
+    current_session_id = f"ui-session-{next(session_ids)}"
+    events_history.clear()
+    event = _make_event(
+        "session_reset",
+        {
+            "reason": reason,
+            "previous_session_id": previous_session_id,
+            "retired_prompts": retired_prompts,
+        },
+    )
+    _record_event(event)
+    _broadcast(event)
+    return jsonify(
+        {
+            "ok": True,
+            "session": _session_info(),
+            "previous_session_id": previous_session_id,
+            "retired_prompts": retired_prompts,
+        }
+    )
 
 
 @app.get("/stream")
@@ -106,6 +187,9 @@ def stream():
 @app.post("/api/events")
 def api_events():
     payload = request.get_json(force=True, silent=True) or {}
+    is_valid, error_response = _validate_request_session_id(payload)
+    if not is_valid:
+        return error_response, 409
     event_type = payload.get("type") or "log"
     body = payload.get("payload") or {}
     event = _make_event(event_type, body)
@@ -117,6 +201,9 @@ def api_events():
 @app.post("/api/prompts")
 def create_prompt():
     data = request.get_json(force=True, silent=True) or {}
+    is_valid, error_response = _validate_request_session_id(data)
+    if not is_valid:
+        return error_response, 409
     prompt_text = (data.get("prompt") or "").strip()
     if not prompt_text:
         return jsonify({"ok": False, "error": "prompt is required"}), 400
@@ -135,6 +222,7 @@ def create_prompt():
         "prompt": prompt_text,
         "kind": kind,
         "source": source,
+        "session_id": current_session_id,
         "status": "pending",
         "answer": None,
         "created_at": time.time(),
@@ -159,14 +247,30 @@ def create_prompt():
     _record_event(event)
     _broadcast(event)
 
-    return jsonify({"ok": True, "id": prompt_id, "prompt": prompt_text})
+    return jsonify(
+        {
+            "ok": True,
+            "id": prompt_id,
+            "prompt": prompt_text,
+            "session_id": current_session_id,
+        }
+    )
 
 
 @app.get("/api/prompts")
 def list_prompts():
     with prompts_lock:
-        values = list(prompts.values())
-    return jsonify({"ok": True, "prompts": values})
+        values = [
+            value
+            for value in prompts.values()
+            if str(value.get("session_id") or "") == current_session_id
+        ]
+    session = {
+        "id": current_session_id,
+        "history_size": len(events_history),
+        "prompt_count": len(values),
+    }
+    return jsonify({"ok": True, "session": session, "prompts": values})
 
 
 @app.get("/api/prompts/<prompt_id>")
@@ -184,6 +288,7 @@ def get_prompt(prompt_id: str):
             "answer": entry["answer"],
             "kind": entry.get("kind"),
             "source": entry.get("source"),
+            "session_id": entry.get("session_id"),
             "choices": entry.get("choices"),
             "choice_meta": entry.get("choice_meta"),
             "title": entry.get("title"),
@@ -204,21 +309,58 @@ def get_prompt(prompt_id: str):
 def set_prompt_response(prompt_id: str):
     data = request.get_json(force=True, silent=True) or {}
     answer = data.get("answer")
+    entry_session_id = None
+    stored_answer = None
+    already_answered = False
     with prompts_lock:
         entry = prompts.get(prompt_id)
         if not entry:
             return jsonify({"ok": False, "error": "prompt not found"}), 404
-        entry["status"] = "answered"
-        entry["answer"] = answer
+        entry_session_id = str(entry.get("session_id") or "")
+        if entry.get("status") == "answered":
+            already_answered = True
+            stored_answer = entry.get("answer")
+        else:
+            entry["status"] = "answered"
+            entry["answer"] = answer
+            stored_answer = answer
         _prune_prompts_unlocked()
 
+    if already_answered:
+        return jsonify(
+            {
+                "ok": True,
+                "id": prompt_id,
+                "answer": stored_answer,
+                "session_id": entry_session_id,
+                "ignored": True,
+            }
+        )
+
+    if entry_session_id != current_session_id:
+        return jsonify(
+            {
+                "ok": True,
+                "id": prompt_id,
+                "answer": stored_answer,
+                "session_id": entry_session_id,
+            }
+        )
+
     event = _make_event(
-        "prompt_answered", {"id": prompt_id, "answer": answer, "prompt": entry["prompt"]}
+        "prompt_answered", {"id": prompt_id, "answer": stored_answer, "prompt": entry["prompt"]}
     )
     _record_event(event)
     _broadcast(event)
 
-    return jsonify({"ok": True, "id": prompt_id, "answer": answer})
+    return jsonify(
+        {
+            "ok": True,
+            "id": prompt_id,
+            "answer": stored_answer,
+            "session_id": entry.get("session_id"),
+        }
+    )
 
 
 if __name__ == "__main__":
