@@ -43,6 +43,12 @@ class _ReachSpellEvent:
     spell_tags: list[str] = []
 
 
+class _LingeringCompositionEvent:
+    __module__ = "GameObjects.events.lingering_composition_event"
+    default_tags = ["magic", "spell", "metamagic", "composition"]
+    spell_tags: list[str] = []
+
+
 @dataclass
 class _Actor:
     class_name: str = "wizard"
@@ -140,6 +146,28 @@ def test_magic_bucket_hides_metamagic_action_without_feat_status():
     assert "reach_spell" in filtered_with
 
 
+def test_magic_bucket_hides_lingering_composition_without_feat_status():
+    actor = _Actor(
+        class_name="fighter",
+        spell_state={
+            "enabled": False,
+            "enforce": False,
+            "class_name": "fighter",
+            "known": {"cantrip": [], "focus": [], "rank_1": [], "innate": []},
+        },
+    )
+    events = {
+        "lingering_composition": _LingeringCompositionEvent,
+    }
+
+    filtered_without = filter_magic_events_for_actor(events, actor=actor, game=SimpleNamespace(ui=None))
+    assert "lingering_composition" not in filtered_without
+
+    actor.statuses.append(SimpleNamespace(id="lingering_composition"))
+    filtered_with = filter_magic_events_for_actor(events, actor=actor, game=SimpleNamespace(ui=None))
+    assert "lingering_composition" in filtered_with
+
+
 def test_magic_bucket_keeps_signature_spell_for_sorcerer_on_higher_rank():
     actor = _Actor(
         class_name="sorcerer",
@@ -166,3 +194,53 @@ def test_magic_bucket_keeps_signature_spell_for_sorcerer_on_higher_rank():
     filtered = filter_magic_events_for_actor(events, actor=actor, game=SimpleNamespace(ui=None))
 
     assert "magic_missile" in filtered
+
+
+def test_magic_bucket_keeps_staff_nexus_spells_when_prepared_copy_is_missing():
+    actor = _Actor(
+        spell_state={
+            "enabled": True,
+            "enforce": True,
+            "class_name": "wizard",
+            "known": {
+                "cantrip": ["detect_magic"],
+                "focus": [],
+                "rank_1": ["magic_missile"],
+                "innate": [],
+            },
+            "prepared_today": {"cantrip": [], "rank_1": []},
+            "prepared_counts": {"cantrip": {}, "rank_1": {}},
+            "consumed_counts": {"rank_1": {}},
+            "slot_remaining": {"rank_1": 0},
+            "wizard_staff_nexus": {
+                "enabled": True,
+                "cantrip_spell": "detect_magic",
+                "rank_1_spell": "magic_missile",
+                "charges_total": 1,
+                "charges_remaining": 1,
+            },
+        },
+        statuses=[
+            SimpleNamespace(
+                id="wizard",
+                data={"wizard_setup": {"thesis": "staff_nexus", "arcane_study": "evocation"}}
+            )
+        ],
+    )
+    events = {
+        "magic_missile": _MagicMissileEvent,
+        "detect_magic": type(
+            "_DetectMagicEvent",
+            (),
+            {
+                "__module__": "GameObjects.events.magic.cantrips.events",
+                "default_tags": ["magic", "spell"],
+                "spell_tags": ["cantrip", "arcane", "divination"],
+            },
+        ),
+    }
+
+    filtered = filter_magic_events_for_actor(events, actor=actor, game=SimpleNamespace(ui=None))
+
+    assert "magic_missile" in filtered
+    assert "detect_magic" in filtered

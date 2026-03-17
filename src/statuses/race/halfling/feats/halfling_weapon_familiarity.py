@@ -3,11 +3,14 @@ from __future__ import annotations
 from statuses.base import Status
 
 HALFLING_WEAPON_FAMILIARITY_DESCRIPTION = (
-    "Trained: sling, halfling sling staff i shortsword.\n"
-    "Dostęp: wszystkie uncommon halfling weapons.\n"
-    "Dla broni z tagiem halfling: martial -> simple, advanced -> martial "
-    "(do wyliczania biegłości).\n"
-    "Przykład: broń [halfling, advanced] liczysz jak martial."
+    "Fluff: Niziolki od dziecka ucza sie korzystac z lekkiej broni, proc i sprytnego uzbrojenia swojej kultury.\n"
+    "Mechanika:\n"
+    "- Kiedy: Po wybraniu tej opcji.\n"
+    "- Efekt:\n"
+    "  - Otrzymujesz trained z sling, halfling sling staff i shortsword.\n"
+    "  - Zyskujesz dostep do wszystkich uncommon halfling weapons.\n"
+    "  - Przy liczeniu bieglosci bron z tagiem halfling liczy sie o 1 kategorie latwiej: martial jako simple, a advanced jako martial.\n"
+    "  - Przykład: jesli klasa daje ci trained w martial weapons, halfling advanced weapon liczysz jak martial i mozesz uzywac jej bez bycia untrained."
 )
 
 

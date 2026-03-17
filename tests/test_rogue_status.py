@@ -22,6 +22,8 @@ def test_rogue_prompt_contains_core_sections():
     assert "KEY ABILITY" in prompt
     assert "Sneak Attack" in prompt
     assert "Surprise Attack" in prompt
+    assert "Trained simple weapons + martial weapons + unarmed" in prompt
+    assert "selected martial weapons" not in prompt
 
 
 def test_rogue_grants_core_features():
@@ -29,4 +31,3 @@ def test_rogue_grants_core_features():
     grant_ids = [getattr(item, "id", str(item)) for item in grants]
     assert "sneak_attack" in grant_ids
     assert "surprise_attack" in grant_ids
-

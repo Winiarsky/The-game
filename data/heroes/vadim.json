@@ -1,0 +1,819 @@
+{
+  "character_id": "vadim",
+  "name": "Vadim",
+  "concept": "",
+  "level": 1,
+  "ancestry_id": "elf",
+  "heritage_id": "cavern_elf",
+  "ancestry_feat_id": "otherworldly_magic",
+  "background_id": "background_hermit",
+  "class_id": "wizard",
+  "class_feat_ids": [
+    "familiar"
+  ],
+  "portrait_image": "/static/portraits/custom/hero_8d955854.jpg",
+  "status_ids": [
+    "elf",
+    "cavern_elf",
+    "darkvision",
+    "otherworldly_magic",
+    "background_hermit",
+    "dubious_knowledge",
+    "wizard",
+    "familiar",
+    "familiarowner"
+  ],
+  "status_data": {
+    "elf": {
+      "ui_description": "Punkty Zycia: 6\nRozmiar: Sredni\nPredkosc: 30 stop\nBoosty atrybutow: Zrecznosc, Inteligencja, Dowolna\nWada atrybutu: Kondycja\nJezyki: Common, Elven\nDodatkowe jezyki rowne modyfikatorowi Inteligencji: Celestial, Draconic, Gnoll, Gnomish, Goblin, Orcish, Sylvan (lub regionalne).\nCechy: Elf, Humanoid\nLow-Light Vision: w slabym swietle widzisz jak w jasnym i ignorujesz concealed z dim light.",
+      "ancestry_hp": 6,
+      "base_speed_feet": 30,
+      "size": "medium",
+      "ancestry_traits": [
+        "elf",
+        "humanoid"
+      ],
+      "ancestry_languages": [
+        "common",
+        "elven"
+      ],
+      "ancestry_bonus_languages": [
+        "celestial",
+        "draconic",
+        "gnoll",
+        "gnomish",
+        "goblin",
+        "orcish",
+        "sylvan"
+      ],
+      "ability_boosts": [
+        "dexterity",
+        "intelligence",
+        "free"
+      ],
+      "ability_flaw": "constitution",
+      "grants_statuses": [
+        {
+          "id": "dim_light_vision",
+          "label": "Dim Light Vision",
+          "duration": null,
+          "source": null,
+          "stacks": false,
+          "data": {},
+          "check_effects": [
+            {
+              "applies_to": "source",
+              "skills": [
+                "perception"
+              ],
+              "tags_required": null,
+              "bonus_effects": [],
+              "promote": 0,
+              "demote": 0,
+              "promote_on": null,
+              "demote_on": null,
+              "prompt_notes": [
+                "Ignorujesz efekty polmroku."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "cavern_elf": {
+      "ui_description": "Zyskujesz Darkvision.\nDziedzictwo zastepuje bazowe widzenie w polmroku elfa.",
+      "remove_statuses": [
+        {
+          "id": "dim_light_vision",
+          "label": "Dim Light Vision",
+          "duration": null,
+          "source": null,
+          "stacks": false,
+          "data": {},
+          "check_effects": [
+            {
+              "applies_to": "source",
+              "skills": [
+                "perception"
+              ],
+              "tags_required": null,
+              "bonus_effects": [],
+              "promote": 0,
+              "demote": 0,
+              "promote_on": null,
+              "demote_on": null,
+              "prompt_notes": [
+                "Ignorujesz efekty polmroku."
+              ]
+            }
+          ]
+        }
+      ],
+      "grants_statuses": [
+        {
+          "id": "darkvision",
+          "label": "Darkvision",
+          "duration": null,
+          "source": null,
+          "stacks": false,
+          "data": {
+            "immune_status_ids": [
+              "blinded"
+            ]
+          },
+          "check_effects": [
+            {
+              "applies_to": "source",
+              "skills": [
+                "perception"
+              ],
+              "tags_required": null,
+              "bonus_effects": [],
+              "promote": 0,
+              "demote": 0,
+              "promote_on": null,
+              "demote_on": null,
+              "prompt_notes": [
+                "Ignorujesz efekty naturalnej ciemnosci."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "darkvision": {
+      "immune_status_ids": [
+        "blinded"
+      ]
+    },
+    "otherworldly_magic": {
+      "ui_description": "Wybierz 1 arcane cantrip, który możesz rzucać jako innate spell at-will.\nW tym silniku wybór cantripa zapisywany jest na statusie.",
+      "ui_choice_kind": "otherworldly_magic",
+      "otherworldly_magic_choices": [
+        "detect_magic",
+        "daze",
+        "light",
+        "mage_hand",
+        "shield",
+        "ray_of_frost",
+        "telekinetic_projectile",
+        "produce_flame",
+        "ghost_sound",
+        "message"
+      ],
+      "otherworldly_magic_cantrip": "produce_flame",
+      "granted_cantrips": [
+        "produce_flame"
+      ],
+      "innate_magic_tradition": "arcane"
+    },
+    "background_hermit": {
+      "ui_description": "Zyles w odosobnieniu i rozwineles nietypowa, praktyczna wiedze.",
+      "ui_prompt": "Background: Pustelnik",
+      "ui_prompt_long": "Zyles w odosobnieniu i rozwineles nietypowa, praktyczna wiedze.\n\nMechanika (w tym silniku):\n- Boosty cech (informacyjnie w UI): Jeden boost do Kondycji lub Inteligencji oraz jeden dowolny boost.\n- Szkolenie Skill/Lore (informacyjnie w UI): Natura albo Okultyzm oraz jeden terenowy Lore zwiazany z twoim schronieniem.\n- Feat z backgroundu: Dubious Knowledge (dodawany do bohatera jako status).\n- Mechanika featu (krotko): Gdy nie zdasz (ale nie krytycznie) Recall Knowledge, otrzymujesz prawdziwa i falszywa informacje, bez mozliwosci odroznienia. Uproszczenie: sukces z tagiem knowledge staje sie krytycznym sukcesem.\n\nPrzypomnienie reguły bazowej: Na 1. poziomie wybierasz jeden background i tej decyzji nie zmieniasz później. Każdy background daje dwa boosty cech (jeden ograniczony, jeden dowolny), trained w jednym skillu i jednym Lore oraz jeden skill feat. W tym silniku boosty cech i szkolenia skill/Lore są informacją UI, a feat z backgroundu jest dodawany do bohatera jako realny status.",
+      "is_background": true,
+      "background_key": "hermit",
+      "background_label": "Pustelnik",
+      "background_ability_boosts_ui": "Jeden boost do Kondycji lub Inteligencji oraz jeden dowolny boost.",
+      "background_skill_training_ui": "Natura albo Okultyzm oraz jeden terenowy Lore zwiazany z twoim schronieniem.",
+      "background_skill_training_ui_only": true,
+      "background_feat_id": "dubious_knowledge",
+      "background_core_rules_ui": "Na 1. poziomie wybierasz jeden background i tej decyzji nie zmieniasz później. Każdy background daje dwa boosty cech (jeden ograniczony, jeden dowolny), trained w jednym skillu i jednym Lore oraz jeden skill feat. W tym silniku boosty cech i szkolenia skill/Lore są informacją UI, a feat z backgroundu jest dodawany do bohatera jako realny status.",
+      "grants_statuses": [
+        {
+          "id": "dubious_knowledge",
+          "label": "Dubious Knowledge",
+          "duration": null,
+          "source": null,
+          "stacks": false,
+          "data": {
+            "ui_description": "Gdy nie zdasz (ale nie krytycznie) Recall Knowledge, otrzymujesz prawdziwa i falszywa informacje, bez mozliwosci odroznienia. Uproszczenie: sukces z tagiem knowledge staje sie krytycznym sukcesem."
+          },
+          "check_effects": [
+            {
+              "applies_to": "source",
+              "skills": null,
+              "tags_required": [
+                "knowledge"
+              ],
+              "bonus_effects": [],
+              "promote": 1,
+              "demote": 0,
+              "promote_on": [
+                "success"
+              ],
+              "demote_on": null,
+              "prompt_notes": [
+                "Dubious Knowledge: sukces (knowledge) -> krytyczny sukces."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "dubious_knowledge": {
+      "ui_description": "Gdy nie zdasz (ale nie krytycznie) Recall Knowledge, otrzymujesz prawdziwa i falszywa informacje, bez mozliwosci odroznienia. Uproszczenie: sukces z tagiem knowledge staje sie krytycznym sukcesem."
+    },
+    "wizard": {
+      "ui_prompt": "KEY ABILITY: INTELLIGENCE\nAt 1st level, your class gives you an ability boost to Intelligence.\nHIT POINTS: 6 plus your Constitution Modifier\n\nINITIAL PROFICIENCIES (summary):\nPerception: Trained\nSaving Throws: Trained Fortitude, Trained Reflex, Expert Will\nAttacks: Trained simple weapons + unarmed\nDefenses: Trained unarmored defense\n\nCLASS FEATURES:\nArcane Spellcasting (prepared, spellbook-based)\nArcane Bond (Drain Bonded Item)\nArcane Thesis\nArcane School specialization OR Universalist\nUniversalist: dostajesz focus spell Hand of the Apprentice oraz dodatkowy class feat na starcie.\nDuring setup choose school/universalist, thesis, bonded focus, and 1st-level class feat.\nDaily preparations wykonujesz na początku scenariusza.\nSpell Blending: modyfikuje budżet slotów/cantripów podczas tych przygotowań.\nSpell Substitution: osobna akcja poza walką (10 minut), limit 1 raz na scenariusz.",
+      "class_hp": 6,
+      "ui_choice_kind": "wizard_setup",
+      "wizard_key_ability_choices": [
+        "intelligence"
+      ],
+      "wizard_arcane_study_choices": [
+        "abjuration",
+        "conjuration",
+        "divination",
+        "enchantment",
+        "evocation",
+        "illusion",
+        "necromancy",
+        "transmutation",
+        "universalist"
+      ],
+      "wizard_arcane_school_choices": [
+        "abjuration",
+        "conjuration",
+        "divination",
+        "enchantment",
+        "evocation",
+        "illusion",
+        "necromancy",
+        "transmutation"
+      ],
+      "wizard_arcane_thesis_choices": [
+        "improved_familiar_attunement",
+        "metamagical_experimentation",
+        "staff_nexus",
+        "spell_blending",
+        "spell_substitution"
+      ],
+      "wizard_feat_choices": [
+        "counterspell",
+        "eschew_materials",
+        "familiar",
+        "reach_spell",
+        "widen_spell"
+      ],
+      "wizard_metamagic_feat_choices": [
+        "reach_spell",
+        "widen_spell"
+      ],
+      "wizard_bonded_item_choices": [
+        "wand",
+        "ring",
+        "staff",
+        "weapon",
+        "other_item"
+      ],
+      "wizard_universalist_focus_spell": "hand_of_the_apprentice",
+      "wizard_school_initial_spells": {
+        "abjuration": "feather_fall",
+        "conjuration": "summon_animal",
+        "divination": "true_strike",
+        "enchantment": "charm",
+        "evocation": "shocking_grasp",
+        "illusion": "illusory_object",
+        "necromancy": "grim_tendrils",
+        "transmutation": "magic_weapon"
+      },
+      "wizard_school_focus_spells": {
+        "abjuration": "protective_ward",
+        "conjuration": "augment_summoning",
+        "divination": "diviners_sight",
+        "enchantment": "charming_words",
+        "evocation": "force_bolt",
+        "illusion": "warped_terrain",
+        "necromancy": "call_of_the_grave",
+        "transmutation": "physical_boost"
+      },
+      "wizard_spells_per_day": {
+        "1": {
+          "cantrip": 5,
+          "rank_1": 2
+        },
+        "2": {
+          "cantrip": 5,
+          "rank_1": 3
+        },
+        "3": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 2
+        },
+        "4": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3
+        },
+        "5": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 2
+        },
+        "6": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3
+        },
+        "7": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 2
+        },
+        "8": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3
+        },
+        "9": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3,
+          "rank_5": 2
+        },
+        "10": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3,
+          "rank_5": 3
+        },
+        "11": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3,
+          "rank_5": 3,
+          "rank_6": 2
+        },
+        "12": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3,
+          "rank_5": 3,
+          "rank_6": 3
+        },
+        "13": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3,
+          "rank_5": 3,
+          "rank_6": 3,
+          "rank_7": 2
+        },
+        "14": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3,
+          "rank_5": 3,
+          "rank_6": 3,
+          "rank_7": 3
+        },
+        "15": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3,
+          "rank_5": 3,
+          "rank_6": 3,
+          "rank_7": 3,
+          "rank_8": 2
+        },
+        "16": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3,
+          "rank_5": 3,
+          "rank_6": 3,
+          "rank_7": 3,
+          "rank_8": 3
+        },
+        "17": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3,
+          "rank_5": 3,
+          "rank_6": 3,
+          "rank_7": 3,
+          "rank_8": 3,
+          "rank_9": 2
+        },
+        "18": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3,
+          "rank_5": 3,
+          "rank_6": 3,
+          "rank_7": 3,
+          "rank_8": 3,
+          "rank_9": 3
+        },
+        "19": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3,
+          "rank_5": 3,
+          "rank_6": 3,
+          "rank_7": 3,
+          "rank_8": 3,
+          "rank_9": 3,
+          "rank_10": 1
+        },
+        "20": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3,
+          "rank_5": 3,
+          "rank_6": 3,
+          "rank_7": 3,
+          "rank_8": 3,
+          "rank_9": 3,
+          "rank_10": 1
+        }
+      },
+      "wizard_spellbook_start_cantrips": 10,
+      "wizard_spellbook_start_rank1_spells": 5,
+      "wizard_spellbook_auto_add_spells_per_level": 2,
+      "wizard_prepared_cantrips_per_day": 5,
+      "wizard_prepared_rank1_spells_per_day": 2,
+      "wizard_specialist_bonus_cantrip": 1,
+      "wizard_specialist_bonus_slot_per_rank": true,
+      "wizard_universalist_bonus_feat": true,
+      "set_actor_attrs": {
+        "class_name": "wizard"
+      },
+      "wizard_setup": {
+        "key_ability": "intelligence",
+        "arcane_study": "evocation",
+        "school": "evocation",
+        "thesis": "staff_nexus",
+        "class_feat": "familiar",
+        "bonus_class_feat": null,
+        "thesis_metamagic_feat": null,
+        "spell_tradition": "arcane",
+        "school_bonus_spell": "shocking_grasp",
+        "school_focus_spell": "force_bolt",
+        "universalist_focus_spell": "",
+        "bond_source": "item",
+        "bonded_item": "staff",
+        "drain_action": "drain_bonded_item",
+        "spellbook_start_cantrips": 10,
+        "spellbook_start_rank1_spells": 5,
+        "spellbook_auto_add_per_level": 2,
+        "spellbook": {
+          "spell_tradition": "arcane",
+          "cantrip": [
+            "acid_splash",
+            "chill_touch",
+            "tanglefoot",
+            "electric_arc",
+            "read_aura",
+            "detect_magic",
+            "mage_hand",
+            "ray_of_frost",
+            "light",
+            "produce_flame"
+          ],
+          "rank_1": [
+            "magic_missile",
+            "spider_sting",
+            "mage_armor",
+            "burning_hands",
+            "fear",
+            "shocking_grasp"
+          ],
+          "rank_2": [],
+          "rank_3": [],
+          "rank_4": [],
+          "rank_5": [],
+          "rank_6": [],
+          "rank_7": [],
+          "rank_8": [],
+          "rank_9": [],
+          "rank_10": [],
+          "cantrips_count": 10,
+          "rank1_spells_count": 5,
+          "auto_add_spells_per_level": 2
+        },
+        "staff_nexus_cantrip": "electric_arc",
+        "staff_nexus_rank_1_spell": "magic_missile",
+        "universalist_bonus_spell": "",
+        "prepared_cantrips": 6,
+        "prepared_rank1_slots": 3,
+        "specialist_bonus_cantrip": 1,
+        "specialist_bonus_rank1_slot": 1,
+        "specialist_bonus_slot_per_rank": true
+      },
+      "wizard_key_ability": "intelligence",
+      "wizard_arcane_study": "evocation",
+      "wizard_school": "evocation",
+      "wizard_thesis": "staff_nexus",
+      "wizard_class_feat": "familiar",
+      "wizard_bonus_class_feat": null,
+      "wizard_thesis_metamagic_feat": null,
+      "wizard_spell_tradition": "arcane",
+      "wizard_school_bonus_spell": "shocking_grasp",
+      "wizard_school_focus_spell": "force_bolt",
+      "wizard_bond_source": "item",
+      "wizard_bonded_item": "staff",
+      "wizard_drain_action": "drain_bonded_item",
+      "wizard_spellbook": {
+        "spell_tradition": "arcane",
+        "cantrip": [
+          "acid_splash",
+          "chill_touch",
+          "tanglefoot",
+          "electric_arc",
+          "read_aura",
+          "detect_magic",
+          "mage_hand",
+          "ray_of_frost",
+          "light",
+          "produce_flame"
+        ],
+        "rank_1": [
+          "magic_missile",
+          "spider_sting",
+          "mage_armor",
+          "burning_hands",
+          "fear",
+          "shocking_grasp"
+        ],
+        "rank_2": [],
+        "rank_3": [],
+        "rank_4": [],
+        "rank_5": [],
+        "rank_6": [],
+        "rank_7": [],
+        "rank_8": [],
+        "rank_9": [],
+        "rank_10": [],
+        "cantrips_count": 10,
+        "rank1_spells_count": 5,
+        "auto_add_spells_per_level": 2
+      },
+      "wizard_staff_nexus_cantrip": "electric_arc",
+      "wizard_staff_nexus_rank_1_spell": "magic_missile"
+    },
+    "familiar": {
+      "ui_description": "Familiar: zyskujesz familiara i mozesz korzystac z akcji Command Familiar.",
+      "ui_prompt": "Familiar: zyskujesz familiara i mozesz korzystac z akcji Command Familiar.",
+      "grants_statuses": [
+        {
+          "id": "FamiliarOwner",
+          "label": "Familiar Owner",
+          "duration": null,
+          "source": null,
+          "stacks": false,
+          "data": {
+            "ui_description": "Posiadasz familiara i możesz go komenderować."
+          },
+          "check_effects": null
+        }
+      ]
+    },
+    "familiarowner": {
+      "ui_description": "Posiadasz familiara i możesz go komenderować."
+    }
+  },
+  "ability_scores": {
+    "strength": 10,
+    "dexterity": 14,
+    "constitution": 10,
+    "intelligence": 18,
+    "wisdom": 12,
+    "charisma": 12
+  },
+  "ability_modifiers": {
+    "strength": 0,
+    "dexterity": 2,
+    "constitution": 0,
+    "intelligence": 4,
+    "wisdom": 1,
+    "charisma": 1
+  },
+  "skill_ranks": {
+    "arcana": "trained",
+    "crafting": "trained",
+    "diplomacy": "trained",
+    "medicine": "trained",
+    "nature": "trained",
+    "occultism": "trained",
+    "religion": "trained",
+    "society": "trained"
+  },
+  "skill_modifiers": {
+    "acrobatics": 2,
+    "arcana": 7,
+    "athletics": 0,
+    "crafting": 7,
+    "deception": 1,
+    "diplomacy": 4,
+    "intimidation": 1,
+    "medicine": 4,
+    "nature": 4,
+    "occultism": 7,
+    "performance": 1,
+    "religion": 4,
+    "society": 7,
+    "stealth": 2,
+    "survival": 1,
+    "thievery": 2
+  },
+  "trained_skills": [
+    "arcana",
+    "crafting",
+    "diplomacy",
+    "medicine",
+    "nature",
+    "occultism",
+    "religion",
+    "society"
+  ],
+  "lore_skills": [
+    "Magia (Wiedza)"
+  ],
+  "languages": [
+    "common",
+    "elven"
+  ],
+  "traits": [
+    "elf",
+    "humanoid"
+  ],
+  "perception_rank": "trained",
+  "perception_bonus": 4,
+  "focus_point": 1,
+  "focus_pool_max": 1,
+  "save_ranks": {
+    "fortitude": "trained",
+    "reflex": "trained",
+    "will": "expert"
+  },
+  "fortitude_bonus": 3,
+  "reflex_bonus": 5,
+  "will_bonus": 6,
+  "weapon_proficiency_ranks": {
+    "simple": "trained",
+    "unarmed": "trained"
+  },
+  "defense_proficiency_ranks": {
+    "unarmored": "trained"
+  },
+  "max_hp": 12,
+  "base_speed_feet": 30,
+  "speed_feet": 30,
+  "ac": 15,
+  "starting_gold_gp": 15,
+  "coin_pouch": {
+    "cp": 0,
+    "sp": 6,
+    "gp": 3,
+    "pp": 0
+  },
+  "track_ammo": true,
+  "inventory_items": [
+    {
+      "item_id": "unarmed",
+      "category": "weapon",
+      "name": "Unarmed",
+      "description": "",
+      "traits": [
+        "agile",
+        "finesse",
+        "unarmed",
+        "free_hand"
+      ],
+      "price_cp": 0,
+      "bulk": "-",
+      "instance_id": "item-bcac78f3e9",
+      "event_name": "unarmed",
+      "preparation_counter": 0,
+      "prepared_by_quick_alchemy": false,
+      "prepared_by_advanced_alchemy": false
+    },
+    {
+      "item_id": "staff",
+      "category": "weapon",
+      "name": "Staff",
+      "description": "",
+      "traits": [
+        "two_hand:d8"
+      ],
+      "price_cp": 0,
+      "bulk": 1,
+      "instance_id": "item-c2e0009ad7",
+      "event_name": "staff",
+      "preparation_counter": 0,
+      "prepared_by_quick_alchemy": false,
+      "prepared_by_advanced_alchemy": false
+    },
+    {
+      "item_id": "rations_week",
+      "category": "gear",
+      "name": "Racje (1 tydzien)",
+      "description": "Racje zywnosciowe na tydzien.",
+      "traits": [
+        "consumable"
+      ],
+      "price_cp": 40,
+      "bulk": "L",
+      "instance_id": "item-41c2b400e3"
+    },
+    {
+      "item_id": "alchemical:elixir_of_life",
+      "category": "potion",
+      "name": "Minor Elixir of Life",
+      "description": "Przedmiot alchemiczny.",
+      "traits": [],
+      "price_cp": 300,
+      "bulk": "L",
+      "instance_id": "item-3715104159",
+      "event_name": "elixir_of_life",
+      "preparation_counter": 0,
+      "prepared_by_quick_alchemy": false,
+      "prepared_by_advanced_alchemy": false
+    },
+    {
+      "item_id": "minor_healing_potion",
+      "category": "potion",
+      "name": "Mikstura leczenia (slaba)",
+      "description": "Po wypiciu odzyskujesz 1k8 HP.",
+      "traits": [
+        "consumable",
+        "healing",
+        "magic"
+      ],
+      "price_cp": 400,
+      "bulk": "L",
+      "instance_id": "item-3710b276d3",
+      "event_name": "minor_healing_potion",
+      "preparation_counter": 0,
+      "prepared_by_quick_alchemy": false,
+      "prepared_by_advanced_alchemy": false
+    },
+    {
+      "item_id": "scroll_common_rank1",
+      "category": "potion",
+      "name": "Zwoj: Zranienie",
+      "description": "Jednorazowo rzuca czar: Zranienie. Ranga 1. Koszt: 1 akcja. Zasieg: 30 ft. Tradycja: Boska. Wybierasz tryb single albo burst. Single: cel w 30 ft otrzymuje negative damage, a undead odzyskuje HP. Burst: fala 30 ft wokol castera rani zywych i leczy undead.",
+      "traits": [
+        "consumable",
+        "magic",
+        "scroll"
+      ],
+      "price_cp": 400,
+      "bulk": "L",
+      "instance_id": "item-e005fcc783",
+      "event_name": "scroll_common_rank1",
+      "preparation_counter": 0,
+      "prepared_by_quick_alchemy": false,
+      "prepared_by_advanced_alchemy": false,
+      "scroll_spell_id": "harm"
+    }
+  ],
+  "weapon_loadout": [
+    "unarmed",
+    "staff"
+  ],
+  "armor_loadout": [],
+  "shield_loadout": [],
+  "equipped_weapon_ids": [
+    "staff"
+  ],
+  "equipped_armor_id": "",
+  "equipped_shield_id": "",
+  "equipped_armor_item_id": "",
+  "equipped_shield_hand": "",
+  "created_at": "2026-03-17T12:26:37.423806+00:00",
+  "updated_at": "2026-03-17T12:26:37.424541+00:00"
+}

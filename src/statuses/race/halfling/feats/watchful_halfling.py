@@ -6,10 +6,14 @@ from statuses.base import Status
 from statuses.check_effects import CheckEffect
 
 WATCHFUL_HALFLING_DESCRIPTION = (
-    "Masz +2 circumstance do Perception checks podczas Sense Motive, by zauważyć "
-    "enchantment/possession.\n"
-    "Jeśli nie używasz aktywnie Sense Motive, GM może wykonać secret check z karą -2.\n"
-    "Możesz też użyć Aid, by pomóc sojusznikowi przeciw enchantment/possession."
+    "Fluff: Watchful Halfling oddaje czujnosc niziolka, ktory szybko wychwytuje niepokojace sygnaly i manipulacje w zachowaniu innych.\n"
+    "Mechanika:\n"
+    "- Kiedy: Gdy wykonujesz Sense Motive albo bronisz sie przed subtelna manipulacja.\n"
+    "- Efekt:\n"
+    "  - Masz +2 circumstance do Perception checks z tagiem Sense Motive.\n"
+    "  - Feat jest przeznaczony do wylapywania enchantment i possession.\n"
+    "  - Status zapisuje tez hooki pod pasywny secret check z kara -2 oraz Aid przeciw enchantment/possession.\n"
+    "  - Przykład: podejrzewasz, ze NPC jest magicznie zmanipulowany, uzywasz Sense Motive i dostajesz +2 do testu."
 )
 
 

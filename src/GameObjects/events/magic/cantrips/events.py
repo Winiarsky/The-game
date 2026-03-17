@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import random
 from typing import Iterable
 
 from board import consts
@@ -22,12 +21,11 @@ from statuses import (
 )
 from GameObjects.interactions_mixin import prompt_for_roll
 from GameObjects.interactions_mixin.magical_mixin import MagicalMixin
-from GameObjects.interactions_mixin.skill_check_resolver import compute_skill_modifier_with_sources
 from GameObjects.NPC.base_npc import BaseNPC
 
 from ...base import EventContext, EventResult
 from ...registry import register_event
-from ..base_attack_magic_event import BaseMagicAttackEvent
+from ..base_attack_magic_event import BaseMagicAttackEvent, prompt_spell_save_roll, spell_dc_details
 from ..magic_utils import grid_distance_feet
 from ..magic_event import MagicEvent
 from ..magic_utils import pick_position_in_range, pick_target_in_range, positions_within_range
@@ -103,37 +101,19 @@ def _iter_interactable_candidates(game, *, include_npc: bool) -> Iterable[tuple[
                 yield obj, pos, "interactable"
 
 
-def _save_outcome(total: int, dc: int) -> str:
-    diff = int(total) - int(dc)
-    if diff >= 10:
-        return "critical_success"
-    if diff >= 0:
-        return "success"
-    if diff <= -10:
-        return "critical_failure"
-    return "failure"
-
-
 def _roll_enemy_save(target, skill_id: str, dc: int, *, attacker=None, tags: list[str] | None = None) -> tuple[str, int, int]:
-    tags = list(tags or [])
-    base_bonus = 0
-    if skill_id == Skill.WILL.value:
-        base_bonus = int(getattr(target, "will_bonus", 0) or 0)
-    elif skill_id == Skill.FORTITUDE.value:
-        base_bonus = int(getattr(target, "fortitude_bonus", 0) or 0)
-    elif skill_id == Skill.REFLEX.value:
-        base_bonus = int(getattr(target, "reflex_bonus", 0) or 0)
-
-    modifier, _breakdown, _notes = compute_skill_modifier_with_sources(
+    return prompt_spell_save_roll(
+        target=target,
         skill_id=skill_id,
-        actor=target,
-        target=attacker,
+        dc=dc,
+        attacker=attacker,
         tags=tags,
-        base_modifier=base_bonus,
     )
-    roll = random.randint(1, 20)
-    total = int(roll) + int(modifier)
-    return _save_outcome(total, dc), roll, total
+
+
+def _spell_dc_for_actor(actor, *, action_tag: str = "magic") -> int:
+    dc, _modifier, _best_effects, _log_lines = spell_dc_details(actor, action_tag=action_tag)
+    return int(dc)
 
 
 def _basic_save_damage(base_damage: int, outcome: str) -> int:
@@ -366,7 +346,7 @@ class ChillTouchEvent(MagicEvent):
         if target is None or target_pos is None:
             return EventResult.cancelled(message="Brak celu w zasiegu dotyku.")
 
-        spell_dc = int(prompt_for_roll("Chill Touch - podaj Spell DC:", layout="test", answer_placeholder="Spell DC") or 0)
+        spell_dc = _spell_dc_for_actor(actor)
         base_damage = int(
             prompt_for_roll(
                 "Chill Touch - obrazenia negative (podaj wynik 1k4):",
@@ -530,7 +510,7 @@ class DazeEvent(MagicEvent):
         if target is None or target_pos is None:
             return EventResult.cancelled(message="Brak celu w zasiegu.")
 
-        spell_dc = int(prompt_for_roll("Daze - podaj Spell DC:", layout="test", answer_placeholder="Spell DC") or 0)
+        spell_dc = _spell_dc_for_actor(actor)
         base_damage = int(
             prompt_for_roll(
                 "Daze - podaj obrazenia mental:",
@@ -1291,7 +1271,7 @@ class DisruptUndeadEvent(MagicEvent):
         if target is None or target_pos is None:
             return EventResult.cancelled(message="Nie wybrano undead.")
 
-        spell_dc = int(prompt_for_roll("Disrupt Undead - podaj Spell DC:", layout="test", answer_placeholder="Spell DC") or 0)
+        spell_dc = _spell_dc_for_actor(actor)
         base_damage = int(
             prompt_for_roll(
                 "Disrupt Undead - podaj obrazenia positive:",
@@ -1506,7 +1486,7 @@ class ElectricArcEvent(MagicEvent):
                 if second is not None and second_pos is not None:
                     targets.append((second, second_pos))
 
-        spell_dc = int(prompt_for_roll("Electric Arc - podaj Spell DC:", layout="test", answer_placeholder="Spell DC") or 0)
+        spell_dc = _spell_dc_for_actor(actor)
         base_damage = int(
             prompt_for_roll(
                 "Electric Arc - podaj obrazenia electric:",

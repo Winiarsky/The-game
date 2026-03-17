@@ -117,7 +117,7 @@ def try_trigger_youre_next(ctx: EventContext, actor, *, defeated_target=None) ->
 class TwinFeintEvent(ActionCostEvent):
     name = "twin_feint"
     default_tags = ["rogue", "attack_melee", "attack", "feint"]
-    actions_cost = 1
+    actions_cost = 2
     consumes_action = True
     available_in_combat = True
     available_in_exploration = False
@@ -202,8 +202,7 @@ class TwinFeintEvent(ActionCostEvent):
         return EventResult(
             success=True,
             consumed_action=True,
-            actions_spent=1,
+            actions_spent=2,
             message=msg,
             data={"first": first_data, "second": second_data, "defeated": defeated},
         )
-

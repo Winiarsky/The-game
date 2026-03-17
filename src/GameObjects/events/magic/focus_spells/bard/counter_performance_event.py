@@ -4,42 +4,13 @@ from skills import Skill
 from statuses import CounterPerformanceStatus
 
 from GameObjects.interactions_mixin.skill_check_resolver import resolve_skill_check_with_sources
+from .composition_runtime import composition_blocked, consume_lingering_ready, is_bard, remove_statuses
 
 from ....base import EventContext, EventResult
 from ....registry import register_event
 from ...magic_event import MagicEvent
 from ...magic_utils import grid_distance_feet
 from ...spell_types import SpellTradition
-
-
-def _actor_id(actor) -> str | None:
-    if actor is None:
-        return None
-    return getattr(actor, "object_id", None) or getattr(actor, "name", None) or str(actor)
-
-
-def _is_bard(actor) -> bool:
-    has_status = getattr(actor, "has_status", None)
-    if callable(has_status):
-        try:
-            return bool(has_status("bard"))
-        except Exception:
-            pass
-    for status in getattr(actor, "statuses", []) or []:
-        if getattr(status, "id", None) == "bard":
-            return True
-    class_name = str(getattr(actor, "class_name", "") or "").strip().lower()
-    return class_name == "bard"
-
-def _remove_statuses(target, status_id: str) -> None:
-    statuses = getattr(target, "statuses", None)
-    if not isinstance(statuses, list) or not statuses:
-        return
-    keep = [s for s in statuses if getattr(s, "id", None) != status_id]
-    try:
-        target.statuses = keep
-    except Exception:
-        pass
 
 
 @register_event
@@ -62,8 +33,12 @@ class CounterPerformanceEvent(MagicEvent):
         actor = ctx.actor
         if actor is None or getattr(actor, "position", None) is None:
             return EventResult.cancelled(message="Brak bohatera do rzucenia czaru.")
-        if not _is_bard(actor):
+        if not is_bard(actor):
             return EventResult.cancelled(message="Counter Performance: tylko bard moze rzucic ten czar.")
+        if composition_blocked(actor):
+            return EventResult.cancelled(
+                message="Counter Performance: po krytycznej porazce Lingering Composition nie mozesz teraz uzywac composition spells."
+            )
 
         ui = getattr(ctx.game, "ui", None)
         if ui is not None and hasattr(ui, "prompt_info"):
@@ -90,7 +65,8 @@ class CounterPerformanceEvent(MagicEvent):
         )
         performance_total = int(resolution.total)
 
-        source_id = _actor_id(actor)
+        duration_turns = consume_lingering_ready(actor, default_rounds=1)
+        source_id = getattr(actor, "object_id", None) or getattr(actor, "name", None) or str(actor)
         affected = 0
 
         for hero in getattr(ctx.game, "heroes", []) or []:
@@ -101,7 +77,7 @@ class CounterPerformanceEvent(MagicEvent):
                 continue
             if grid_distance_feet(actor.position, pos) > self.range_feet:
                 continue
-            _remove_statuses(hero, "counter_performance")
+            remove_statuses(hero, "counter_performance")
             adder = getattr(hero, "add_status", None)
             if not callable(adder):
                 continue
@@ -110,7 +86,7 @@ class CounterPerformanceEvent(MagicEvent):
                     CounterPerformanceStatus(
                         performance_total=performance_total,
                         source_id=source_id,
-                        source_turns_left=1,
+                        source_turns_left=duration_turns,
                         source=self.name,
                     )
                 )
@@ -118,11 +94,12 @@ class CounterPerformanceEvent(MagicEvent):
             except Exception:
                 continue
 
+        duration_note = f" Efekt trwa {duration_turns} rundy." if duration_turns > 1 else ""
         return EventResult(
             success=True,
             consumed_action=True,
             message=(
                 f"Counter Performance: wynik Performance {performance_total}. "
-                f"Objeci sojusznicy: {affected}."
+                f"Objeci sojusznicy: {affected}.{duration_note}"
             ),
         )

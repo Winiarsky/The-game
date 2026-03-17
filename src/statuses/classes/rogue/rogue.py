@@ -14,7 +14,7 @@ ROGUE_PROMPT = (
     "INITIAL PROFICIENCIES (summary):\n"
     "Perception: Expert\n"
     "Saving Throws: Expert Reflex, Trained Fortitude, Trained Will\n"
-    "Attacks: Trained simple weapons + selected martial weapons + unarmed\n"
+    "Attacks: Trained simple weapons + martial weapons + unarmed\n"
     "Defenses: Trained light armor + unarmored (Ruffian: medium armor)\n\n"
     "CLASS FEATURES:\n"
     "Sneak Attack: +1k6 precision na odpowiednich atakach vs flat-footed.\n"

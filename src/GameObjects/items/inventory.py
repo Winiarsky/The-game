@@ -1044,6 +1044,11 @@ def item_use_description(item) -> str:
     if _is_ammo_item(item):
         return f"Amunicja: {_ammo_count(item)} szt. w tym stacku."
 
+    if item_id == "scroll_common_rank1":
+        scroll_spell_id = str(getattr(item, "scroll_spell_id", "") or "").strip().lower().replace("-", "_").replace(" ", "_")
+        if scroll_spell_id:
+            return f"Użyj: rzucasz zapisany czar ze zwoju: {localize_term_pl(scroll_spell_id)}. Zwoj zuzywa sie po udanym rzuceniu."
+
     event_name = str(getattr(item, "event_name", "") or "").strip()
     if event_name:
         from GameObjects.events.registry import get_event_cls

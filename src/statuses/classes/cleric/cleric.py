@@ -205,6 +205,30 @@ CLERIC_DEITY_DIVINE_SKILL_CHOICES = {
     "custom": ["religion", "diplomacy", "intimidation", "medicine", "society", "athletics", "crafting"],
 }
 
+CLERIC_DEITY_FLAVOR_TEXT = {
+    "abadar": "Bog miast, handlu i porzadku spolecznego.",
+    "asmodeus": "Bog tyranii, pychy i zelaznych kontraktow.",
+    "calistria": "Bogini zemsty, namietnosci i podstepu.",
+    "cayden_cailean": "Bog wolnosci, odwagi i biesiadnej fantazji.",
+    "desna": "Bogini gwiazd, podrozy, snow i szczescia.",
+    "erastil": "Bog rodziny, lowow i zycia blisko wspolnoty.",
+    "gorum": "Bog wojny, stali i chwaly zdobywanej w boju.",
+    "gozreh": "Bostwo wiatru, fal i dzikich sil natury.",
+    "iomedae": "Bogini honoru, prawa i sprawiedliwej walki.",
+    "irori": "Bog samodoskonalenia, dyscypliny i mistrzostwa ciala oraz umyslu.",
+    "lamashtu": "Bogini potworow, koszmarow i wypaczonego macierzynstwa.",
+    "nethys": "Bog magii, tajemnic i niszczycielskiej potegi zaklec.",
+    "norgorber": "Bog sekretow, trucizn, morderstwa i cienia.",
+    "pharasma": "Bogini losu, narodzin, smierci i proroczych wizji.",
+    "rovagug": "Bog zniszczenia, furii i zaglady swiata.",
+    "sarenrae": "Bogini slonca, uzdrowienia i odkupienia.",
+    "shelyn": "Bogini sztuki, piekna, milosci i tworczej pasji.",
+    "torag": "Bog kuzni, obrony klanu i wytrwalej strategii.",
+    "urgathoa": "Bogini nieumarlych, choroby i nienasyconego obzarstwa.",
+    "zon_kuthon": "Bog ciemnosci, bolu i okrutnej ekstazy.",
+    "custom": "Wlasne bostwo ustalone wspolnie z MG i graczem.",
+}
+
 CLERIC_DEITY_OPTIONS = {
     "abadar": {
         "favored_weapon": "crossbow",

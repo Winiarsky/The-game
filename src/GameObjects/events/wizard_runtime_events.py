@@ -316,6 +316,8 @@ class _DrainWizardBondBase(GameEvent):
                 continue
             if bool(entry.get("is_focus", False)) or bool(entry.get("is_cantrip", False)):
                 continue
+            if _normalize(entry.get("cast_source")) == "staff_nexus":
+                continue
             rank = _entry_rank(entry)
             key = (spell_id, rank)
             if key in seen_pairs:

@@ -15,7 +15,7 @@ from GameObjects.interactions_mixin import StatusMixin, WatchfulMixin  # noqa: E
 from actions.stealth import StealthAction  # noqa: E402
 from hero import Hero  # noqa: E402
 from GameObjects.Enemies.simple_enemy import Enemy  # noqa: E402
-from statuses import StealthStatus  # noqa: E402
+from statuses import Status, StealthStatus  # noqa: E402
 
 
 class DummyWatchful(WatchfulMixin, Interactable):
@@ -135,3 +135,32 @@ def test_enemy_watchful_spots_hero_and_triggers_combat(monkeypatch):
     assert game.start_combat_calls == 1
     assert hero.has_status("observable")
     assert not hero.has_status("stealth")
+
+
+def test_enemy_watchful_spot_clears_hidden_and_undetected(monkeypatch):
+    watcher = DummyWatchful(watch_disturbed=0)
+    watcher.perception_bonus = 10
+
+    class DummyHero(StatusMixin):
+        def __init__(self):
+            super().__init__()
+            self.add_status(StealthStatus(detection_dc=5))
+            self.add_status(Status(id="hidden", label="Hidden"))
+            self.add_status(Status(id="undetected", label="Undetected"))
+
+    hero = DummyHero()
+    game = types.SimpleNamespace(
+        events=None,
+        ui_log=lambda *_a, **_k: None,
+        ui_hero=lambda *_a, **_k: None,
+        ui_active_actor=lambda *_a, **_k: None,
+    )
+    monkeypatch.setattr("GameObjects.interactions_mixin.watchful_mixin.random.randint", lambda *_args, **_kwargs: 20)
+
+    spotted, _msg = watcher.attempt_spot(hero, game)
+
+    assert spotted is True
+    assert hero.has_status("stealth") is False
+    assert hero.has_status("hidden") is False
+    assert hero.has_status("undetected") is False
+    assert hero.has_status("observable") is True

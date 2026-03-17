@@ -81,6 +81,26 @@ def _has_status(actor, status_id: str) -> bool:
     return False
 
 
+def _selected_weapon_from_metadata(equipped: list[object], metadata: dict | None) -> object | None:
+    payload = dict(metadata or {})
+    selected_weapon = payload.get("selected_weapon")
+    if selected_weapon in equipped:
+        return selected_weapon
+
+    selected_iid = str(payload.get("selected_weapon_instance_id", "") or "").strip()
+    if selected_iid:
+        for weapon in equipped:
+            if str(getattr(weapon, "instance_id", "") or "").strip() == selected_iid:
+                return weapon
+
+    explicit_weapon = normalize_weapon_id(payload.get("weapon_id") or payload.get("weapon"))
+    if explicit_weapon:
+        for weapon in equipped:
+            if normalize_weapon_id(getattr(weapon, "item_id", None)) == explicit_weapon:
+                return weapon
+    return None
+
+
 def _generic_weapon_attack(ctx: EventContext, weapon) -> EventResult:
     from .base_attack_range_event import BaseRangeAttackEvent
     from .basic_melee_attack_event import BasicMeleeAttackEvent
@@ -143,16 +163,11 @@ class AttackEvent(GameEvent):
         ensure_actor_inventory(actor)
         equipped = get_equipped_weapons(actor)
 
+        selected = _selected_weapon_from_metadata(equipped, ctx.metadata)
         explicit_weapon = normalize_weapon_id((ctx.metadata or {}).get("weapon_id") or (ctx.metadata or {}).get("weapon"))
-        selected = None
-        if explicit_weapon:
-            for weapon in equipped:
-                if normalize_weapon_id(getattr(weapon, "item_id", None)) == explicit_weapon:
-                    selected = weapon
-                    break
-            if selected is None:
-                return EventResult.cancelled(message=f"Wybrana broń nie jest aktywna: {explicit_weapon}.")
-        else:
+        if explicit_weapon and selected is None:
+            return EventResult.cancelled(message=f"Wybrana broń nie jest aktywna: {explicit_weapon}.")
+        if selected is None:
             # Bazowy "attack" zawsze używa aktualnie aktywnej broni (pierwsza z equipped).
             selected = equipped[0] if equipped else None
 

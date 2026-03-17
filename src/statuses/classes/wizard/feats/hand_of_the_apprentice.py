@@ -3,8 +3,9 @@ from __future__ import annotations
 from statuses.base import Status
 
 HAND_OF_THE_APPRENTICE_DESCRIPTION = (
-    "Hand of the Apprentice (Universalist): focus spell pozwalający rzucić "
-    "trzymaną broń w cel i natychmiast ją przywołać."
+    "Hand of the Apprentice (Universalist): focus spell universalisty. "
+    "Gra nadaje go automatycznie przy Arcane Study = Universalist; nie jest zwyklym wyborem class feat. "
+    "Pozwala rzucic trzymana bronia w cel i natychmiast ja przywolac."
 )
 
 

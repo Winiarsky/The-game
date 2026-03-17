@@ -4,7 +4,7 @@ from statuses.base import Status
 
 MOUNTAIN_STANCE_DESCRIPTION = (
     "Mountain Stance: +4 item AC, atakujesz profilem Falling Stone (1k8 B, forceful). "
-    "Dex cap +0, speed -5 i shove/trip bonus: reminder (manual)."
+    "Dex cap +0, Speed -5 ft oraz +2 circumstance przeciw Trip i Shove działają automatycznie."
 )
 
 

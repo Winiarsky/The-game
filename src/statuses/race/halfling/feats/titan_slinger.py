@@ -3,9 +3,14 @@ from __future__ import annotations
 from statuses.base import Status
 
 TITAN_SLINGER_DESCRIPTION = (
-    "Gdy trafisz atakiem slingiem Large lub większe stworzenie, "
-    "zwiększasz kość obrażeń broni o 1 krok.\n"
-    "W tym silniku efekt jest zapisany jako hook danych dla ataków slingiem."
+    "Fluff: Niziolki wyspecjalizowane w procach ucza sie wykorzystywac rozped i slabiej chronione miejsca wielkich przeciwnikow.\n"
+    "Mechanika:\n"
+    "- Kiedy: Gdy trafisz slingiem lub halfling sling staff Large albo wieksze stworzenie.\n"
+    "- Efekt:\n"
+    "  - Kosc obrazen broni rosnie o 1 krok.\n"
+    "  - Warunki feata sa juz zapisane w danych runtime: odpowiednia bron, cel Large+ i wzrost kosci o 1 stopien.\n"
+    "  - Pelne automatyczne dopiecie bonusu do wszystkich eventow ataku slingiem jest jeszcze do domkniecia.\n"
+    "  - Przykład: sling 1k6 trafiajacy ogra powinien liczyc obrazenia jak 1k8."
 )
 
 

@@ -158,6 +158,94 @@ def _normalize_skill_training(actor: Any) -> tuple[dict[str, str], list[str]]:
     return normalized_skill_ranks, sorted(trained_skills)
 
 
+def _speed_snapshot_values(actor: Any, *, default_feet: int = 25) -> tuple[int | None, int | None]:
+    raw_base_speed = getattr(actor, "base_speed_feet", None)
+    try:
+        raw_base_speed = int(raw_base_speed)
+    except Exception:
+        raw_base_speed = None
+    if raw_base_speed is not None and raw_base_speed <= 0:
+        raw_base_speed = None
+
+    speed_bonus = 0
+    for status in list(getattr(actor, "statuses", []) or []):
+        data = getattr(status, "data", None) or {}
+        if raw_base_speed is None and "base_speed_feet" in data:
+            try:
+                candidate = int(data.get("base_speed_feet") or 0)
+            except Exception:
+                candidate = 0
+            if candidate > 0:
+                raw_base_speed = candidate
+        try:
+            speed_bonus += int(data.get("base_speed_bonus_feet", 0) or 0)
+        except Exception:
+            continue
+
+    if raw_base_speed is None:
+        raw_base_speed = max(0, int(default_feet or 25))
+    display_speed = max(0, int(raw_base_speed) + max(0, int(speed_bonus)))
+    return int(raw_base_speed), int(display_speed)
+
+
+def _spellcasting_snapshot(actor: Any) -> dict[str, Any] | None:
+    state: dict[str, Any] = {}
+    try:
+        from spell_management import ensure_actor_spell_state
+
+        ensured = ensure_actor_spell_state(actor, enforce=False)
+        if isinstance(ensured, dict):
+            state = dict(ensured)
+    except Exception:
+        state = dict(getattr(actor, "spell_state", {}) or {})
+
+    try:
+        from focus_pool import get_focus_points, get_focus_pool_max
+
+        focus_points = int(get_focus_points(actor))
+        focus_pool_max = int(get_focus_pool_max(actor))
+    except Exception:
+        try:
+            focus_points = max(0, int(getattr(actor, "focus_point", 0) or 0))
+        except Exception:
+            focus_points = 0
+        try:
+            focus_pool_max = max(focus_points, int(getattr(actor, "focus_pool_max", 0) or 0))
+        except Exception:
+            focus_pool_max = focus_points
+
+    known = dict(state.get("known", {}) or {})
+    slot_total = {
+        str(key): int(value or 0)
+        for key, value in dict(state.get("slot_total", {}) or {}).items()
+        if str(key).strip()
+    }
+    slot_remaining = {
+        str(key): int(value or 0)
+        for key, value in dict(state.get("slot_remaining", {}) or {}).items()
+        if str(key).strip()
+    }
+    known_spells = {
+        str(tier): [str(item) for item in list(items or []) if str(item).strip()]
+        for tier, items in known.items()
+        if isinstance(items, list) and list(items or [])
+    }
+    if not bool(state.get("enabled")) and focus_points <= 0 and focus_pool_max <= 0 and not slot_total and not known_spells:
+        return None
+
+    known_counts = {tier: len(items) for tier, items in known_spells.items()}
+    return {
+        "enabled": bool(state.get("enabled")) or bool(slot_total) or focus_pool_max > 0,
+        "class_name": str(state.get("class_name") or getattr(actor, "class_name", "") or ""),
+        "focus_points": int(focus_points),
+        "focus_pool_max": int(focus_pool_max),
+        "slot_total": dict(slot_total),
+        "slot_remaining": dict(slot_remaining),
+        "known_counts": dict(known_counts),
+        "known_spells": dict(known_spells),
+    }
+
+
 def build_hero_snapshot(hero: Any, *, note: str | None = None) -> dict[str, Any]:
     hero_id = getattr(hero, "object_id", None) or getattr(hero, "name", None) or "hero"
     hand_slots, coin_pouch, money_text, bulk_summary, inventory_items = _inventory_snapshot(hero)
@@ -177,6 +265,8 @@ def build_hero_snapshot(hero: Any, *, note: str | None = None) -> dict[str, Any]
         ac_value, ac_base, ac_modifier = ac_with_bonuses(hero)
     except Exception:
         pass
+    raw_base_speed_feet, display_speed_feet = _speed_snapshot_values(hero)
+    spellcasting = _spellcasting_snapshot(hero)
 
     return {
         "id": str(hero_id),
@@ -196,7 +286,8 @@ def build_hero_snapshot(hero: Any, *, note: str | None = None) -> dict[str, Any]
         "ac_base": ac_base,
         "ac_modifier": ac_modifier,
         "max_hp": getattr(hero, "max_hp", None),
-        "base_speed_feet": getattr(hero, "base_speed_feet", None),
+        "base_speed_feet": raw_base_speed_feet,
+        "speed_feet": display_speed_feet,
         "ability_scores": dict(getattr(hero, "ability_scores", {}) or {}),
         "ability_modifiers": dict(getattr(hero, "ability_modifiers", {}) or {}),
         "skill_ranks": normalized_skill_ranks,
@@ -215,6 +306,7 @@ def build_hero_snapshot(hero: Any, *, note: str | None = None) -> dict[str, Any]
         "money_text": money_text,
         "bulk_summary": bulk_summary,
         "inventory_items": list(inventory_items),
+        "spellcasting": spellcasting,
     }
 
 
@@ -247,6 +339,7 @@ def build_active_actor_payload(
 
 __all__ = [
     "CORE_SKILL_IDS",
+    "_speed_snapshot_values",
     "background_preview",
     "build_active_actor_payload",
     "build_hero_snapshot",

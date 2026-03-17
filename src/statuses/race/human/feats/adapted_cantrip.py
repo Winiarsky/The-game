@@ -3,8 +3,8 @@ from __future__ import annotations
 from statuses.base import Status
 
 ADAPTED_CANTRIP_DESCRIPTION = (
-    "Wybierz cantrip z innej tradycji i dodaj go do swoich znanych cantripow.\n"
-    "W trakcie wyboru wskazujesz tez cantrip, ktory fabularnie zastapujesz."
+    "Wybierz cantrip z innej tradycji niz twoja klasa czarujaca.\n"
+    "Podczas wyboru wskazujesz tez cantrip swojej klasy, ktory zostaje realnie podmieniony."
 )
 
 ADAPTED_CANTRIP_TRADITIONS = ["arcane", "divine", "occult", "primal"]
@@ -34,6 +34,7 @@ def AdaptedCantripStatus() -> Status:
             "adapted_cantrip": None,
             "adapted_tradition": None,
             "replaced_cantrip": None,
+            "removed_cantrips": [],
         },
     )
 

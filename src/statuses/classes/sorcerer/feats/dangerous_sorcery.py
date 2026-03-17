@@ -4,7 +4,8 @@ from statuses.base import Status
 
 DANGEROUS_SORCERY_DESCRIPTION = (
     "Dangerous Sorcery: gdy rzucasz czar ze slotu, ktory zadaje damage i nie ma duration, "
-    "otrzymuje on status bonus do damage rowny poziomowi czaru (rozliczenie reczne)."
+    "otrzymuje on status bonus do damage rowny poziomowi czaru. "
+    "Silnik dolicza poziom slotu automatycznie, a w niejednoznacznych przypadkach prosi tylko o potwierdzenie zastosowania feata."
 )
 
 

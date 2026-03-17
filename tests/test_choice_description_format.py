@@ -137,7 +137,23 @@ def test_deity_description_contains_weapon_domains_font_and_divine_skill():
     assert "ulubiona bron:" in desc
     assert "divine skill:" in desc
     assert "dozwolony divine font:" in desc
-    assert "domeny:" in desc
+    assert "domeny do wyboru:" in desc
+    assert "czar domenowy:" in desc
+    assert "advanced domain spell:" in desc
+
+
+def test_cleric_deity_description_lists_domain_spells_for_cayden_cailean():
+    actor = _DummyActor()
+    desc = actor._choice_description("cayden_cailean")
+    _assert_structured(desc)
+    desc = desc.lower()
+    assert "wybor bostwa kleryka." not in desc
+    assert "bog wolnosci" in desc
+    assert "rapier" in desc
+    assert "twarz w tlumie" in desc
+    assert "nieskrepowany krok" in desc
+    assert "przejedzenie" in desc
+    assert "atletyczny zryw" in desc
 
 
 def test_class_setup_choice_descriptions_have_mechanics_text():
@@ -190,6 +206,7 @@ def test_class_setup_choice_descriptions_have_mechanics_text():
         "universalist",
         "improved_familiar_attunement",
         "metamagical_experimentation",
+        "staff_nexus",
         "spell_blending",
         "spell_substitution",
         "wand",
@@ -202,6 +219,97 @@ def test_class_setup_choice_descriptions_have_mechanics_text():
         desc = actor._choice_description(choice_id)
         _assert_structured(desc)
         assert "Brak dodatkowego opisu mechaniki." not in desc
+
+
+def test_rogue_racket_descriptions_include_concrete_runtime_mechanics():
+    actor = _DummyActor()
+
+    ruffian = actor._choice_description("ruffian").lower()
+    assert "intimidation" in ruffian
+    assert "medium armor" in ruffian
+    assert "todo" in ruffian
+
+    scoundrel = actor._choice_description("scoundrel").lower()
+    assert "deception" in scoundrel
+    assert "diplomacy" in scoundrel
+    assert "feint" in scoundrel
+    assert "off-guard" in scoundrel
+
+    thief = actor._choice_description("thief").lower()
+    assert "thievery" in thief
+    assert "finesse melee" in thief
+    assert "dex zamiast str" in thief
+
+
+def test_sorcerer_bloodline_descriptions_include_spell_and_focus_details():
+    actor = _DummyActor()
+
+    imperial = actor._choice_description("imperial").lower()
+    assert "magiczny pocisk" in imperial
+    assert "pamiec przodkow" in imperial
+    assert "blood magic" in imperial
+
+
+def test_wizard_study_and_thesis_descriptions_include_runtime_mechanics():
+    actor = _DummyActor()
+
+    universalist = actor._choice_description("universalist").lower()
+    assert "dlon adepta" in universalist
+    assert "dodatkowy class feat" in universalist
+
+    abjuration = actor._choice_description("abjuration").lower()
+    assert "ochronna aura" in abjuration
+    assert "bonusowy czar" in abjuration
+
+    staff_nexus = actor._choice_description("staff_nexus").lower()
+    assert "bonded item" in staff_nexus
+    assert "kostur" in staff_nexus
+
+
+def test_twin_feint_description_mentions_two_actions_and_second_attack_off_guard():
+    actor = _DummyActor()
+    raw = actor._choice_description("twin_feint")
+    _assert_structured(raw)
+    desc = raw.lower()
+    assert "koszt: 2 akcje" in desc
+    assert "2 melee strikes" in desc or "2 melee strike" in desc
+    assert "drugi atak" in desc
+    assert "off-guard" in desc
+
+
+def test_druid_order_descriptions_list_feat_and_spell_on_separate_lines():
+    actor = _DummyActor()
+    expected = {
+        "animal": ("zwierzecy towarzysz", "ulecz zwierze", "command animal companion"),
+        "leaf": ("leshy chowaniec", "dobra jagoda", "command familiar"),
+        "storm": ("zrodzony z burzy", "poryw burzy", "clumsy 2"),
+        "wild": ("dziki ksztalt", "dzika mutacja", "focus spell za 1"),
+    }
+
+    for choice_id, (feat_label, spell_label, rules_hint) in expected.items():
+        desc = actor._choice_description(choice_id)
+        _assert_structured(desc)
+        low = desc.lower()
+        assert "trained skill=" not in low
+        assert "\n  - feat startowy - " in low
+        assert "\n  - order spell - " in low
+        assert feat_label in low
+        assert spell_label in low
+        assert rules_hint in low
+
+
+def test_animal_companion_type_description_uses_runtime_details_instead_of_generic_fallback():
+    actor = _DummyActor()
+    desc = actor._choice_description("cat")
+    _assert_structured(desc)
+    low = desc.lower()
+    assert "efekt zalezy od opcji" not in low
+    assert "predkosc: 35 ft." in low
+    assert "ataki:" in low
+    assert "jaws 1d6" in low
+    assert "claw 1d4" in low
+    assert "support:" in low
+    assert "flat-footed" in low or "off-guard" in low
 
 
 def test_descriptions_use_multiline_format_without_pipe_separator():

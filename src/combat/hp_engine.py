@@ -266,10 +266,22 @@ def heal(actor: Any, amount: int, *, source: str | None = None) -> dict[str, Any
             "temp_hp": get_temp_hp(actor),
         }
 
+    blocked_reason = None
+    blocked_amount = 0
+    try:
+        from GameObjects.events.elixirs.runtime_helpers import healing_block_amount, healing_block_reason
+
+        blocked_amount = max(0, int(healing_block_amount(actor) or 0))
+        blocked_reason = healing_block_reason(actor)
+    except Exception:
+        blocked_amount = 0
+        blocked_reason = None
+
     healed = 0
     if uses_wounds_model(actor):
         old_wounds = max(0, _safe_int(getattr(actor, "wounds", 0), 0))
-        new_wounds = max(0, old_wounds - incoming)
+        min_wounds = max(0, int(blocked_amount or 0))
+        new_wounds = max(min_wounds, old_wounds - incoming)
         healed = old_wounds - new_wounds
         try:
             setattr(actor, "wounds", new_wounds)
@@ -287,7 +299,8 @@ def heal(actor: Any, amount: int, *, source: str | None = None) -> dict[str, Any
         if max_hp is None:
             new_hp = hp_now + incoming
         else:
-            new_hp = min(int(max_hp), hp_now + incoming)
+            heal_cap = max(0, int(max_hp) - max(0, int(blocked_amount or 0)))
+            new_hp = min(int(heal_cap), hp_now + incoming)
         healed = max(0, new_hp - hp_now)
         try:
             setattr(actor, "hp", new_hp)
@@ -304,6 +317,8 @@ def heal(actor: Any, amount: int, *, source: str | None = None) -> dict[str, Any
         "healed": healed,
         "current_hp": current_hp(actor),
         "temp_hp": get_temp_hp(actor),
+        "blocked_healing_amount": max(0, int(blocked_amount or 0)),
+        "blocked_healing_reason": blocked_reason,
     }
 
 

@@ -62,9 +62,9 @@ def test_twin_feint_marks_second_strike_as_forced_off_guard(monkeypatch):
     result = TwinFeintEvent().run(EventContext(game=game, actor=actor))
 
     assert result.success is True
+    assert result.actions_spent == 2
     assert len(calls) == 2
     assert calls[0][0] == "first_strike"
     assert calls[1][0] == "second_strike"
     assert calls[1][1].get("force_flat_footed") is True
     assert calls[1][1].get("force_flat_footed_source") == "twin_feint"
-

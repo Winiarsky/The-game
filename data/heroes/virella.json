@@ -1,0 +1,649 @@
+{
+  "character_id": "virella",
+  "name": "Virella",
+  "concept": "",
+  "level": 1,
+  "ancestry_id": "elf",
+  "heritage_id": "arctic_elf",
+  "ancestry_feat_id": "otherworldly_magic",
+  "background_id": "background_animal_whisperer",
+  "class_id": "druid",
+  "class_feat_ids": [],
+  "portrait_image": "/static/portraits/custom/hero_7941bc17.jpg",
+  "status_ids": [
+    "elf",
+    "dim_light_vision",
+    "arctic_elf",
+    "otherworldly_magic",
+    "background_animal_whisperer",
+    "train_animal",
+    "druid",
+    "shield_block",
+    "animal_companion"
+  ],
+  "status_data": {
+    "elf": {
+      "ui_description": "Punkty Zycia: 6\nRozmiar: Sredni\nPredkosc: 30 stop\nBoosty atrybutow: Zrecznosc, Inteligencja, Dowolna\nWada atrybutu: Kondycja\nJezyki: Common, Elven\nDodatkowe jezyki rowne modyfikatorowi Inteligencji: Celestial, Draconic, Gnoll, Gnomish, Goblin, Orcish, Sylvan (lub regionalne).\nCechy: Elf, Humanoid\nLow-Light Vision: w slabym swietle widzisz jak w jasnym i ignorujesz concealed z dim light.",
+      "ancestry_hp": 6,
+      "base_speed_feet": 30,
+      "size": "medium",
+      "ancestry_traits": [
+        "elf",
+        "humanoid"
+      ],
+      "ancestry_languages": [
+        "common",
+        "elven"
+      ],
+      "ancestry_bonus_languages": [
+        "celestial",
+        "draconic",
+        "gnoll",
+        "gnomish",
+        "goblin",
+        "orcish",
+        "sylvan"
+      ],
+      "ability_boosts": [
+        "dexterity",
+        "intelligence",
+        "free"
+      ],
+      "ability_flaw": "constitution",
+      "grants_statuses": [
+        {
+          "id": "dim_light_vision",
+          "label": "Dim Light Vision",
+          "duration": null,
+          "source": null,
+          "stacks": false,
+          "data": {},
+          "check_effects": [
+            {
+              "applies_to": "source",
+              "skills": [
+                "perception"
+              ],
+              "tags_required": null,
+              "bonus_effects": [],
+              "promote": 0,
+              "demote": 0,
+              "promote_on": null,
+              "demote_on": null,
+              "prompt_notes": [
+                "Ignorujesz efekty polmroku."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "dim_light_vision": {},
+    "arctic_elf": {
+      "ui_description": "Kiedy: zawsze, gdy otrzymujesz obrazenia od zimna.\nEfekt: masz odpornosc na zimno rowna polowie poziomu (minimum 1).\nDodatkowo traktujesz srodowiskowe efekty zimna jako o 1 stopien mniej ekstremalne (hook danych pod przyszłą mechanikę środowiska).",
+      "damage_resistance": {
+        "cold": {
+          "per_2_levels": 1,
+          "minimum": 1
+        }
+      },
+      "cold_environment_step_reduction": 1
+    },
+    "otherworldly_magic": {
+      "ui_description": "Wybierz 1 arcane cantrip, który możesz rzucać jako innate spell at-will.\nW tym silniku wybór cantripa zapisywany jest na statusie.",
+      "ui_choice_kind": "otherworldly_magic",
+      "otherworldly_magic_choices": [
+        "detect_magic",
+        "daze",
+        "light",
+        "mage_hand",
+        "shield",
+        "ray_of_frost",
+        "telekinetic_projectile",
+        "produce_flame",
+        "ghost_sound",
+        "message"
+      ],
+      "otherworldly_magic_cantrip": "ray_of_frost",
+      "granted_cantrips": [
+        "ray_of_frost"
+      ],
+      "innate_magic_tradition": "arcane"
+    },
+    "background_animal_whisperer": {
+      "ui_description": "Masz naturalna wiez ze zwierzetami i potrafisz je szkolic.",
+      "ui_prompt": "Background: Szeptacz zwierzat",
+      "ui_prompt_long": "Masz naturalna wiez ze zwierzetami i potrafisz je szkolic.\n\nMechanika (w tym silniku):\n- Boosty cech (informacyjnie w UI): Jeden boost do Madrosci lub Charyzmy oraz jeden dowolny boost.\n- Szkolenie Skill/Lore (informacyjnie w UI): Natura oraz jeden terenowy Lore zwiazany z ulubionymi zwierzetami.\n- Feat z backgroundu: Train Animal (dodawany do bohatera jako status).\n- Mechanika featu (krotko): +2 status do testów Natury (w tym szkolenie zwierząt).\n\nPrzypomnienie reguły bazowej: Na 1. poziomie wybierasz jeden background i tej decyzji nie zmieniasz później. Każdy background daje dwa boosty cech (jeden ograniczony, jeden dowolny), trained w jednym skillu i jednym Lore oraz jeden skill feat. W tym silniku boosty cech i szkolenia skill/Lore są informacją UI, a feat z backgroundu jest dodawany do bohatera jako realny status.",
+      "is_background": true,
+      "background_key": "animal_whisperer",
+      "background_label": "Szeptacz zwierzat",
+      "background_ability_boosts_ui": "Jeden boost do Madrosci lub Charyzmy oraz jeden dowolny boost.",
+      "background_skill_training_ui": "Natura oraz jeden terenowy Lore zwiazany z ulubionymi zwierzetami.",
+      "background_skill_training_ui_only": true,
+      "background_feat_id": "train_animal",
+      "background_core_rules_ui": "Na 1. poziomie wybierasz jeden background i tej decyzji nie zmieniasz później. Każdy background daje dwa boosty cech (jeden ograniczony, jeden dowolny), trained w jednym skillu i jednym Lore oraz jeden skill feat. W tym silniku boosty cech i szkolenia skill/Lore są informacją UI, a feat z backgroundu jest dodawany do bohatera jako realny status.",
+      "grants_statuses": [
+        {
+          "id": "train_animal",
+          "label": "Train Animal",
+          "duration": null,
+          "source": null,
+          "stacks": false,
+          "data": {
+            "ui_description": "Skuteczniej szkolisz zwierzęta i potrzebujesz na to mniej czasu.\nMechanika: +2 status do testów Natury (w tym szkolenie zwierząt).",
+            "skill_feat_placeholder": false,
+            "skill_feat_fallback_mechanic": true
+          },
+          "check_effects": [
+            {
+              "applies_to": "source",
+              "skills": [
+                "nature"
+              ],
+              "tags_required": null,
+              "bonus_effects": [
+                {
+                  "type": "status",
+                  "value": 2,
+                  "tag": "nature",
+                  "source": "status:train_animal",
+                  "target_id": null,
+                  "label": "train_animal +2",
+                  "is_penalty": false,
+                  "duration_turns": null
+                }
+              ],
+              "promote": 0,
+              "demote": 0,
+              "promote_on": null,
+              "demote_on": null,
+              "prompt_notes": [
+                "Train Animal: +2 status."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "train_animal": {
+      "ui_description": "Skuteczniej szkolisz zwierzęta i potrzebujesz na to mniej czasu.\nMechanika: +2 status do testów Natury (w tym szkolenie zwierząt).",
+      "skill_feat_placeholder": false,
+      "skill_feat_fallback_mechanic": true
+    },
+    "druid": {
+      "ui_prompt": "KEY ABILITY: WISDOM\nAt 1st level, your class gives you an ability boost to Wisdom.\nHIT POINTS: 8 plus your Constitution Modifier\n\nINITIAL PROFICIENCIES:\nPERCEPTION\nTrained in Perception\nSAVING THROWS\nTrained in Fortitude\nTrained in Reflex\nExpert in Will\nSKILLS\nTrained in Nature\nTrained in a number of additional skills equal to 3 plus your Intelligence modifier\nATTACKS\nTrained in simple weapons\nTrained in unarmed attacks\nDEFENSES\nTrained in light armor\nTrained in medium armor\nTrained in unarmored defense\nSPELLS\nPrimal spellcasting\nNa poczatku scenariusza przygotowujesz czary zgodnie z tabela Druid Spells per Day.\nFocus Pool: 1 Focus Point\n\nDRUIDIC ORDER:\nPodczas setupu wybierasz order (animal/leaf/storm/wild).\nOrder nadaje dodatkowy skill, startowy feat i order spell.",
+      "class_hp": 8,
+      "ui_choice_kind": "druid_setup",
+      "druid_order_choices": [
+        "animal",
+        "leaf",
+        "storm",
+        "wild"
+      ],
+      "druid_order_skills": {
+        "animal": "athletics",
+        "leaf": "diplomacy",
+        "storm": "acrobatics",
+        "wild": "intimidation"
+      },
+      "druid_order_start_feats": {
+        "animal": "animal_companion",
+        "leaf": "leshy_familiar",
+        "storm": "storm_born",
+        "wild": "wild_shape"
+      },
+      "druid_order_spells": {
+        "animal": "heal_animal",
+        "leaf": "goodberry",
+        "storm": "tempest_surge",
+        "wild": "wild_morph"
+      },
+      "druid_order_focus_bonus": 0,
+      "druid_spells_per_day": {
+        "1": {
+          "cantrip": 5,
+          "rank_1": 2
+        },
+        "2": {
+          "cantrip": 5,
+          "rank_1": 3
+        },
+        "3": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 2
+        },
+        "4": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3
+        },
+        "5": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 2
+        },
+        "6": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3
+        },
+        "7": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 2
+        },
+        "8": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3
+        },
+        "9": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3,
+          "rank_5": 2
+        },
+        "10": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3,
+          "rank_5": 3
+        },
+        "11": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3,
+          "rank_5": 3,
+          "rank_6": 2
+        },
+        "12": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3,
+          "rank_5": 3,
+          "rank_6": 3
+        },
+        "13": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3,
+          "rank_5": 3,
+          "rank_6": 3,
+          "rank_7": 2
+        },
+        "14": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3,
+          "rank_5": 3,
+          "rank_6": 3,
+          "rank_7": 3
+        },
+        "15": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3,
+          "rank_5": 3,
+          "rank_6": 3,
+          "rank_7": 3,
+          "rank_8": 2
+        },
+        "16": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3,
+          "rank_5": 3,
+          "rank_6": 3,
+          "rank_7": 3,
+          "rank_8": 3
+        },
+        "17": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3,
+          "rank_5": 3,
+          "rank_6": 3,
+          "rank_7": 3,
+          "rank_8": 3,
+          "rank_9": 2
+        },
+        "18": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3,
+          "rank_5": 3,
+          "rank_6": 3,
+          "rank_7": 3,
+          "rank_8": 3,
+          "rank_9": 3
+        },
+        "19": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3,
+          "rank_5": 3,
+          "rank_6": 3,
+          "rank_7": 3,
+          "rank_8": 3,
+          "rank_9": 3,
+          "rank_10": 1
+        },
+        "20": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3,
+          "rank_5": 3,
+          "rank_6": 3,
+          "rank_7": 3,
+          "rank_8": 3,
+          "rank_9": 3,
+          "rank_10": 1
+        }
+      },
+      "druid_spell_tradition": "primal",
+      "druid_prepared_cantrips_at_level1": 5,
+      "druid_prepared_rank_1_slots_at_level1": 2,
+      "set_actor_attrs": {
+        "class_name": "druid",
+        "focus_point": 1
+      },
+      "grants_statuses": [
+        {
+          "id": "shield_block",
+          "label": "Shield Block",
+          "duration": null,
+          "source": null,
+          "stacks": false,
+          "data": {
+            "ui_description": "Reakcja: gdy masz podniesiona tarcze i otrzymujesz obrazenia fizyczne, tarcza pochlania obrazenia do Hardness (wdrozone mechanicznie przez reakcje)."
+          },
+          "check_effects": null
+        }
+      ],
+      "druid_setup": {
+        "order": "animal",
+        "trained_skill": "athletics",
+        "order_feat": "animal_companion",
+        "order_spell": "heal_animal",
+        "focus_bonus": 0,
+        "spell_tradition": "primal",
+        "prepared_cantrips_at_level1": 5,
+        "prepared_rank_1_slots_at_level1": 2
+      },
+      "druid_order": "animal",
+      "druid_order_skill": "athletics",
+      "druid_order_feat": "animal_companion",
+      "druid_order_spell": "heal_animal"
+    },
+    "shield_block": {
+      "ui_description": "Reakcja: gdy masz podniesiona tarcze i otrzymujesz obrazenia fizyczne, tarcza pochlania obrazenia do Hardness (wdrozone mechanicznie przez reakcje)."
+    },
+    "animal_companion": {
+      "ui_description": "Animal Companion: zyskujesz young animal companion. W walce companion pojawia sie jako osobny obiekt i dziala przez komende ownera.",
+      "ui_prompt": "Animal Companion: zyskujesz young animal companion. W walce companion pojawia sie jako osobny obiekt i dziala przez komende ownera.",
+      "requires_druid_order": "animal",
+      "ui_choice_kind": "animal_companion_type",
+      "animal_companion_type_choices": [
+        "badger",
+        "bear",
+        "bird",
+        "cat",
+        "dromaeosaur",
+        "horse",
+        "snake",
+        "wolf"
+      ],
+      "animal_companion_type": "bear",
+      "animal_companion_pending": false
+    }
+  },
+  "ability_scores": {
+    "strength": 10,
+    "dexterity": 16,
+    "constitution": 10,
+    "intelligence": 14,
+    "wisdom": 18,
+    "charisma": 10
+  },
+  "ability_modifiers": {
+    "strength": 0,
+    "dexterity": 3,
+    "constitution": 0,
+    "intelligence": 2,
+    "wisdom": 4,
+    "charisma": 0
+  },
+  "skill_ranks": {
+    "athletics": "trained",
+    "diplomacy": "trained",
+    "medicine": "trained",
+    "nature": "trained",
+    "occultism": "trained",
+    "religion": "trained",
+    "survival": "trained"
+  },
+  "skill_modifiers": {
+    "acrobatics": 3,
+    "arcana": 2,
+    "athletics": 3,
+    "crafting": 2,
+    "deception": 0,
+    "diplomacy": 3,
+    "intimidation": 0,
+    "medicine": 7,
+    "nature": 7,
+    "occultism": 5,
+    "performance": 0,
+    "religion": 7,
+    "society": 2,
+    "stealth": 3,
+    "survival": 7,
+    "thievery": 3
+  },
+  "trained_skills": [
+    "athletics",
+    "diplomacy",
+    "medicine",
+    "nature",
+    "occultism",
+    "religion",
+    "survival"
+  ],
+  "lore_skills": [
+    "Animal (Wiedza)"
+  ],
+  "languages": [
+    "common",
+    "elven"
+  ],
+  "traits": [
+    "elf",
+    "humanoid"
+  ],
+  "perception_rank": "trained",
+  "perception_bonus": 7,
+  "focus_point": 1,
+  "focus_pool_max": 1,
+  "save_ranks": {
+    "fortitude": "trained",
+    "reflex": "trained",
+    "will": "expert"
+  },
+  "fortitude_bonus": 3,
+  "reflex_bonus": 6,
+  "will_bonus": 9,
+  "weapon_proficiency_ranks": {
+    "simple": "trained",
+    "unarmed": "trained"
+  },
+  "defense_proficiency_ranks": {
+    "unarmored": "trained",
+    "light": "trained",
+    "medium": "trained"
+  },
+  "max_hp": 14,
+  "base_speed_feet": 30,
+  "ac": 18,
+  "starting_gold_gp": 15,
+  "coin_pouch": {
+    "cp": 0,
+    "sp": 9,
+    "gp": 2,
+    "pp": 0
+  },
+  "track_ammo": true,
+  "inventory_items": [
+    {
+      "item_id": "unarmed",
+      "category": "weapon",
+      "name": "Unarmed",
+      "description": "",
+      "traits": [
+        "agile",
+        "finesse",
+        "unarmed",
+        "free_hand"
+      ],
+      "price_cp": 0,
+      "bulk": "-",
+      "instance_id": "item-dde6d1340d",
+      "event_name": "unarmed",
+      "preparation_counter": 0,
+      "prepared_by_quick_alchemy": false,
+      "prepared_by_advanced_alchemy": false
+    },
+    {
+      "item_id": "staff",
+      "category": "weapon",
+      "name": "Staff",
+      "description": "",
+      "traits": [
+        "two_hand:d8"
+      ],
+      "price_cp": 0,
+      "bulk": 1,
+      "instance_id": "item-da482ee22a",
+      "event_name": "staff",
+      "preparation_counter": 0,
+      "prepared_by_quick_alchemy": false,
+      "prepared_by_advanced_alchemy": false
+    },
+    {
+      "item_id": "hide_armor",
+      "category": "armor",
+      "name": "Hide Armor",
+      "description": "Solidna średnia zbroja.",
+      "traits": [],
+      "price_cp": 200,
+      "bulk": 2,
+      "instance_id": "item-0a3d290512"
+    },
+    {
+      "item_id": "alchemical:frost_vial",
+      "category": "potion",
+      "name": "Lesser Frost Vial",
+      "description": "Przedmiot alchemiczny.",
+      "traits": [],
+      "price_cp": 300,
+      "bulk": "L",
+      "instance_id": "item-db820d3c44",
+      "event_name": "frost_vial",
+      "preparation_counter": 0,
+      "prepared_by_quick_alchemy": false,
+      "prepared_by_advanced_alchemy": false
+    },
+    {
+      "item_id": "alchemical:elixir_of_life",
+      "category": "potion",
+      "name": "Minor Elixir of Life",
+      "description": "Przedmiot alchemiczny.",
+      "traits": [],
+      "price_cp": 300,
+      "bulk": "L",
+      "instance_id": "item-e8f15be610",
+      "event_name": "elixir_of_life",
+      "preparation_counter": 0,
+      "prepared_by_quick_alchemy": false,
+      "prepared_by_advanced_alchemy": false
+    },
+    {
+      "item_id": "holy_symbol_wooden",
+      "category": "gear",
+      "name": "Swiety symbol (drewniany)",
+      "description": "Drewniany swiety symbol.",
+      "traits": [
+        "religious",
+        "focus"
+      ],
+      "price_cp": 10,
+      "bulk": "L",
+      "instance_id": "item-101d6648d9"
+    },
+    {
+      "item_id": "minor_healing_potion",
+      "category": "potion",
+      "name": "Mikstura leczenia (slaba)",
+      "description": "Po wypiciu odzyskujesz 1k8 HP.",
+      "traits": [
+        "consumable",
+        "healing",
+        "magic"
+      ],
+      "price_cp": 400,
+      "bulk": "L",
+      "instance_id": "item-d7694cc194",
+      "event_name": "minor_healing_potion",
+      "preparation_counter": 0,
+      "prepared_by_quick_alchemy": false,
+      "prepared_by_advanced_alchemy": false
+    }
+  ],
+  "weapon_loadout": [
+    "unarmed",
+    "staff"
+  ],
+  "armor_loadout": [
+    "hide_armor"
+  ],
+  "shield_loadout": [],
+  "equipped_weapon_ids": [
+    "staff"
+  ],
+  "equipped_armor_id": "hide_armor",
+  "equipped_shield_id": "",
+  "equipped_armor_item_id": "item-0a3d290512",
+  "equipped_shield_hand": "",
+  "created_at": "2026-03-16T10:26:19.098105+00:00",
+  "updated_at": "2026-03-16T10:26:19.098778+00:00"
+}

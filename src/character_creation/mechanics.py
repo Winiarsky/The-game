@@ -140,6 +140,17 @@ def apply_ability_boost(scores: dict[str, int], ability: str) -> None:
     scores[key] = current + (1 if current >= 18 else 2)
 
 
+def apply_character_creation_ability_boost(scores: dict[str, int], ability: str) -> None:
+    """Apply a level-1 creation boost, which cannot increase a score above 18."""
+    key = str(ability or "").strip().lower()
+    if key not in scores:
+        return
+    current = int(scores.get(key, 10))
+    if current >= 18:
+        return
+    scores[key] = min(18, current + 2)
+
+
 def apply_ability_flaw(scores: dict[str, int], ability: str) -> None:
     key = str(ability or "").strip().lower()
     if key not in scores:
@@ -366,6 +377,7 @@ __all__ = [
     "CharacterMath",
     "base_ability_scores",
     "apply_ability_boost",
+    "apply_character_creation_ability_boost",
     "apply_ability_flaw",
     "ability_modifier",
     "proficiency_bonus",

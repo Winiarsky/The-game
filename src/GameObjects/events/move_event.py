@@ -6,7 +6,9 @@ from typing import Tuple
 
 from board import consts
 from combat import refresh_flanking_statuses
+from combat.stealth_runtime import clear_combat_stealth
 from actions.move_utils import (
+    consume_difficult_terrain_ignores_for_path,
     default_on_enter,
     find_path,
     follow_path,
@@ -89,7 +91,7 @@ class MoveEvent(GameEvent):
 
         # zdejmij stealth przy jawnym ruchu
         if getattr(moving_hero, "has_status", lambda _s: False)(STEALTH_STATUS):
-            moving_hero.remove_status(STEALTH_STATUS)  # type: ignore[attr-defined]
+            clear_combat_stealth(moving_hero, clear_stealth=True, add_observable=True)
             logger.info("Zdejmuję status stealth – poruszasz się jawnie.")
 
         initial_pos = getattr(moving_hero, "position", None)
@@ -224,6 +226,19 @@ class MoveEvent(GameEvent):
                 except Exception:
                     logger.debug("Nie udało się odpalić reakcji na ruch.", exc_info=True)
 
+            def _consume_move_runtime(path_points: list[tuple[int, int]], stop_pos: tuple[int, int] | None) -> None:
+                if not path_points or len(path_points) < 2 or stop_pos is None:
+                    return
+                traversed = [path_points[0]]
+                if stop_pos in path_points:
+                    traversed = list(path_points[: path_points.index(stop_pos) + 1])
+                if len(traversed) < 2:
+                    return
+                try:
+                    consume_difficult_terrain_ignores_for_path(moving_hero, board, traversed)
+                except Exception:
+                    logger.debug("Nie udało się zaktualizować runtime trudnego terenu.", exc_info=True)
+
             def _on_enter_wrapper(context, hero_obj, current_pos: tuple[int, int]) -> bool:
                 nonlocal last_was_difficult
                 now_difficult = _is_difficult(current_pos)
@@ -301,6 +316,7 @@ class MoveEvent(GameEvent):
                     allow_occupied=False,
                     step_delay=0.0,
                 )
+                _consume_move_runtime(path, stop_pos)
                 if not completed:
                     reason_map = {
                         "blocked": "Ruch zatrzymany – ścieżka zablokowana.",
@@ -467,6 +483,7 @@ class MoveEvent(GameEvent):
                         allow_occupied=False,
                         step_delay=0.1,
                     )
+                    _consume_move_runtime(path, stop_pos)
                     if active_path_id:
                         game.ui_event("path_clear", {"id": active_path_id})
                         active_path_id = None

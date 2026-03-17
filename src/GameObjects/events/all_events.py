@@ -78,6 +78,7 @@ from .magic.focus_spells.bard import counter_performance_event  # noqa: F401
 from .magic.focus_spells.bard import inspire_competence_event  # noqa: F401
 from .magic.focus_spells.bard import inspire_courage_event  # noqa: F401
 from .magic.focus_spells.bard import loremaster_etude_event  # noqa: F401
+from . import lingering_composition_event  # noqa: F401
 from .magic.focus_spells.cleric import domain_focus_spell_event  # noqa: F401
 from .magic.focus_spells.druid import order_spell_events  # noqa: F401
 from .magic.focus_spells.monk import ki_spell_events  # noqa: F401

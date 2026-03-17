@@ -18,6 +18,10 @@ _move_utils._maybe_dispatch_move_reactions = lambda *a, **k: None
 _move_utils.terrain_move_bonus_feet = lambda *a, **k: 0
 _move_utils.movement_budget_feet = lambda *a, **k: 25
 _move_utils.adjusted_forced_movement_squares = lambda _target, squares, *a, **k: int(squares or 0)
+_move_utils.consume_difficult_terrain_ignores_for_path = lambda *a, **k: 0
+_move_utils.reset_turn_movement_runtime = lambda *a, **k: None
+_move_utils.difficult_terrain_ignore_squares_per_turn = lambda *a, **k: 0
+_move_utils.difficult_terrain_ignore_squares_remaining = lambda *a, **k: 0
 
 _specials = types.ModuleType("actions.specials")
 _specials.__path__ = []

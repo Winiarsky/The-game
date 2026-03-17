@@ -90,8 +90,21 @@ class ActionEventBus:
 
     # --- Domyślne słuchacze ---
     def _register_default_listeners(self) -> None:
+        self._register_animal_companion_support_listener()
         self._register_reactions_listener()
         self._register_ui_listener()
+
+    def _register_animal_companion_support_listener(self) -> None:
+        try:
+            from GameObjects.companions.support_runtime import animal_companion_support_action_listener
+        except Exception as exc:  # pragma: no cover - defensywny fallback
+            logger.warning("Nie mogę załadować listenera Animal Companion support: %s", exc)
+            return
+
+        def _listener(event: ActionEvent) -> None:
+            animal_companion_support_action_listener(self.game, event)
+
+        self.add_listener(_listener)
 
     def _register_reactions_listener(self) -> None:
         try:

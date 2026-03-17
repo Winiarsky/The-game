@@ -5,9 +5,14 @@ from statuses.base import Status
 from statuses.check_effects import CheckEffect
 
 SURE_FEET_DESCRIPTION = (
-    "Sukces na Acrobatics check do Balance lub Athletics check do Climb "
-    "staje się krytycznym sukcesem.\n"
-    "Nie jesteś flat-footed podczas prób Balance i Climb."
+    "Fluff: Sure Feet odzwierciedla lekki krok niziolka, ktory pewnie trzyma rownowage i wspina sie bez utraty kontroli.\n"
+    "Mechanika:\n"
+    "- Kiedy: Gdy wykonujesz Balance albo Climb.\n"
+    "- Efekt:\n"
+    "  - Sukces na Acrobatics check do Balance staje sie krytycznym sukcesem.\n"
+    "  - Sukces na Athletics check do Climb staje sie krytycznym sukcesem.\n"
+    "  - Podczas prob Balance i Climb nie jestes flat-footed.\n"
+    "  - Przykład: zdajesz Balance na waskiej belce zwyklym sukcesem, a dzieki Sure Feet gra traktuje to jako krytyczny sukces."
 )
 
 

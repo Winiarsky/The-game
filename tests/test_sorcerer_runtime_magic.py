@@ -20,6 +20,7 @@ from GameObjects.events.registry import dispatch_event, list_events
 from GameObjects.events.magic.focus_spells.sorcerer import sorcerer_focus_spell_events
 from GameObjects.interactions_mixin import prompt_for_roll
 from GameObjects.interactions_mixin.status_mixin import StatusMixin
+from bonuses import BonusEffect, BonusType
 from combat.reactions.counterspell_reaction import CounterspellReaction
 from combat.reactions.dispatcher import dispatch_reactions
 from states.combat import Combat
@@ -133,16 +134,29 @@ def test_counterspell_reaction_disrupts_enemy_spell(monkeypatch):
     monkeypatch.setattr("GameObjects.interactions_mixin.prompt_utils.get_ui_client", lambda: ui)
 
     hero = DummyActor(name="hero", object_id="hero", position=(0, 0))
-    hero.statuses = [Status(id="counterspell")]
+    hero.class_name = "wizard"
+    hero.statuses = [Status(id="wizard"), Status(id="counterspell")]
     hero.reactions = [CounterspellReaction()]
+    hero.spell_state = {
+        "enabled": True,
+        "enforce": True,
+        "class_name": "wizard",
+        "known": {"rank_3": ["fireball"]},
+        "prepared_today": {"rank_3": ["fireball"]},
+        "slot_total": {"rank_3": 1},
+        "slot_remaining": {"rank_3": 1},
+        "prepared_counts": {"rank_3": {"fireball": 1}},
+        "consumed_counts": {"rank_3": {}},
+    }
     enemy = DummyActor(name="enemy", object_id="enemy", position=(2, 2))
 
     game = _combat_game(heroes=[hero], enemies=[enemy], ui=ui)
     event = {
         "actor": enemy,
         "action_id": "fireball_pre",
-        "action_tags": ["magic", "spell"],
+        "action_tags": ["magic", "spell", "rank3", "arcane"],
         "spell_name": "fireball",
+        "spell_tags": ["rank3", "arcane", "evocation"],
         "event_uid": "spell-1",
     }
 
@@ -151,6 +165,9 @@ def test_counterspell_reaction_disrupts_enemy_spell(monkeypatch):
     assert event.get("disrupted") is True
     assert event.get("disruption_reason") == "counterspell"
     assert hero.reactions_left == 0
+    assert int((hero.spell_state.get("slot_remaining", {}) or {}).get("rank_3", 0) or 0) == 0
+    consumed = dict((hero.spell_state.get("consumed_counts", {}) or {}).get("rank_3", {}) or {})
+    assert int(consumed.get("fireball", 0) or 0) == 1
     assert any("counterspell" in prompt.lower() and "fireball" in prompt.lower() for prompt in ui.choice_prompts)
 
 
@@ -161,6 +178,44 @@ def test_counterspell_triggers_without_known_spell_autocheck():
     event = {"action_id": "magic_missile_pre", "action_tags": ["magic", "spell"], "spell_name": "magic_missile"}
 
     assert reaction.triggers(actor, event) is True
+
+
+def test_counterspell_does_not_fire_without_matching_spell_resource(monkeypatch):
+    ui = DummyUI(choices=["tak"], rolls=[23, 20])
+    monkeypatch.setattr("GameObjects.interactions_mixin.prompt_utils.get_ui_client", lambda: ui)
+
+    hero = DummyActor(name="hero", object_id="hero", position=(0, 0))
+    hero.class_name = "wizard"
+    hero.statuses = [Status(id="wizard"), Status(id="counterspell")]
+    hero.reactions = [CounterspellReaction()]
+    hero.spell_state = {
+        "enabled": True,
+        "enforce": True,
+        "class_name": "wizard",
+        "known": {"rank_3": ["lightning_bolt"]},
+        "prepared_today": {"rank_3": ["lightning_bolt"]},
+        "slot_total": {"rank_3": 1},
+        "slot_remaining": {"rank_3": 1},
+        "prepared_counts": {"rank_3": {"lightning_bolt": 1}},
+        "consumed_counts": {"rank_3": {}},
+    }
+    enemy = DummyActor(name="enemy", object_id="enemy", position=(2, 2))
+
+    game = _combat_game(heroes=[hero], enemies=[enemy], ui=ui)
+    event = {
+        "actor": enemy,
+        "action_id": "fireball_pre",
+        "action_tags": ["magic", "spell", "rank3", "arcane"],
+        "spell_name": "fireball",
+        "spell_tags": ["rank3", "arcane", "evocation"],
+        "event_uid": "spell-2",
+    }
+
+    dispatch_reactions(game, event)
+
+    assert event.get("disrupted") is not True
+    assert hero.reactions_left == 1
+    assert int((hero.spell_state.get("slot_remaining", {}) or {}).get("rank_3", 0) or 0) == 1
 
 
 class _InterruptedSpell(MagicEvent):
@@ -211,7 +266,7 @@ class _DamageSpell(MagicEvent):
 
 
 def test_dangerous_sorcery_bonus_is_added_inside_damage_prompt(monkeypatch):
-    ui = DummyUI(choices=["tak", "3"], rolls=[12])
+    ui = DummyUI(choices=["tak"], rolls=[12])
     monkeypatch.setattr("GameObjects.interactions_mixin.prompt_utils.get_ui_client", lambda: ui)
 
     actor = DummyActor()
@@ -222,7 +277,7 @@ def test_dangerous_sorcery_bonus_is_added_inside_damage_prompt(monkeypatch):
     result = MagicEventResolver.resolve(event, ctx)
 
     assert result.success is True
-    assert event.last_damage == 15
+    assert event.last_damage == 13
 
 
 class _BloodlineGrantedSpell(MagicEvent):
@@ -398,6 +453,8 @@ def test_sorcerer_initial_focus_spells_are_registered():
 def test_elemental_toss_focus_event_spends_focus_and_deals_damage(monkeypatch):
     actor = DummyActor(name="sorc", object_id="sorc", position=(0, 0), hp=20)
     actor.class_name = "sorcerer"
+    actor.level = 1
+    actor.ability_modifiers = {"charisma": 4}
     actor.focus_point = 1
     actor.statuses = [
         Status(
@@ -422,11 +479,64 @@ def test_elemental_toss_focus_event_spends_focus_and_deals_damage(monkeypatch):
         ui_log=lambda *_a, **_k: None,
     )
 
-    rolls = iter([20, 8])
-    monkeypatch.setattr(sorcerer_focus_spell_events, "prompt_for_roll", lambda *_a, **_k: next(rolls))
+    monkeypatch.setattr(
+        "GameObjects.events.magic.base_attack_magic_event.prompt_for_roll",
+        lambda *_a, **_k: {"roll": 20, "raw_roll": 20},
+    )
+    monkeypatch.setattr(sorcerer_focus_spell_events, "prompt_for_roll", lambda *_a, **_k: 8)
 
     result = dispatch_event("elemental_toss", EventContext(game=game, actor=actor))
 
     assert result.success is True
     assert actor.focus_point == 0
     assert target.hp == 4
+
+
+def test_elemental_toss_uses_spell_attack_roll_stack(monkeypatch):
+    actor = DummyActor(name="sorc", object_id="sorc", position=(0, 0), hp=20)
+    actor.class_name = "sorcerer"
+    actor.level = 1
+    actor.ability_modifiers = {"charisma": 4}
+    actor.focus_point = 1
+    actor.add_bonus(BonusEffect(BonusType.STATUS, 1, "magic", source="spell_attack", label="spell attack"))
+    actor.statuses = [
+        Status(
+            id="sorcerer",
+            data={
+                "sorcerer_setup": {
+                    "bloodline": "elemental",
+                    "bloodline_initial_focus_spell": "elemental_toss",
+                    "elemental_damage_type": "fire",
+                }
+            },
+        )
+    ]
+    target = DummyActor(name="enemy", object_id="enemy", position=(1, 0), hp=20)
+    game = SimpleNamespace(
+        state=object(),
+        heroes=[actor],
+        enemies=[target],
+        conn=DummyConn(choice_pos=(1, 0)),
+        ui=SimpleNamespace(enabled=False, allow_cli_fallback=False, prompt_choice=lambda *_a, **_k: None),
+        board=SimpleNamespace(),
+        ui_log=lambda *_a, **_k: None,
+    )
+    captured = {}
+
+    def _attack_prompt(prompt, **kwargs):
+        if "atak" in str(prompt).lower():
+            captured.update(kwargs)
+            return {"roll": 12, "raw_roll": 12}
+
+    monkeypatch.setattr("GameObjects.events.magic.base_attack_magic_event.prompt_for_roll", _attack_prompt)
+    monkeypatch.setattr(sorcerer_focus_spell_events, "prompt_for_roll", lambda *_a, **_k: 4)
+
+    result = dispatch_event("elemental_toss", EventContext(game=game, actor=actor))
+
+    assert result.success is True
+    stack = captured.get("roll_stack", {})
+    components = list(stack.get("components", []) or [])
+    assert any(str(component.get("id")) == "spellcasting_proficiency" for component in components)
+    assert any(str(component.get("id")) == "spellcasting_key_ability" for component in components)
+    assert any(str(component.get("label", "")).startswith("Status:") for component in components)
+    assert int(stack.get("auto_total_modifier", 0) or 0) == 8

@@ -241,6 +241,146 @@ def test_wizard_spell_blending_adjusts_slots_and_cantrip_budget_during_preparati
     assert int(payload.get("extra_cantrips", 0) or 0) == 2
 
 
+def test_staff_nexus_daily_preparation_builds_charges_and_reduces_available_slots():
+    actor = DummyActor()
+    actor.statuses = [
+        Status(
+            id="wizard",
+            data={
+                "wizard_setup": {
+                    "thesis": "staff_nexus",
+                    "arcane_study": "evocation",
+                    "school": "evocation",
+                    "staff_nexus_cantrip": "detect_magic",
+                    "staff_nexus_rank_1_spell": "magic_missile",
+                }
+            },
+        )
+    ]
+    actor.wizard_spellbook = {
+        "cantrip": ["detect_magic", "light", "mage_hand", "message", "read_aura"],
+        "rank_1": ["magic_missile", "fear", "grease"],
+    }
+    ui = _ChoiceUI(["Ranga 1 -> +1 ladunkow Staff Nexus"])
+
+    state = initialize_actor_spell_management(_game_with_ui(ui), actor, prompt=True, enforce=True)
+
+    staff = dict(state.get("wizard_staff_nexus", {}) or {})
+    assert staff.get("enabled") is True
+    assert staff.get("cantrip_spell") == "detect_magic"
+    assert staff.get("rank_1_spell") == "magic_missile"
+    assert int(staff.get("base_charges", 0) or 0) == 1
+    assert int(staff.get("charges_total", 0) or 0) == 2
+    assert list(staff.get("extra_charge_ranks") or []) == [1]
+    assert int((state.get("slot_total", {}) or {}).get("rank_1", 0) or 0) == 2
+
+
+def test_staff_nexus_rank1_spell_can_be_cast_without_prepared_copy_and_spends_charge_instead_of_slot():
+    actor = DummyActor()
+    actor.statuses = [
+        Status(
+            id="wizard",
+            data={
+                "wizard_setup": {
+                    "thesis": "staff_nexus",
+                    "arcane_study": "evocation",
+                    "school": "evocation",
+                    "staff_nexus_cantrip": "detect_magic",
+                    "staff_nexus_rank_1_spell": "magic_missile",
+                }
+            },
+        )
+    ]
+    actor.wizard_spellbook = {
+        "cantrip": ["detect_magic", "light", "mage_hand", "message", "read_aura"],
+        "rank_1": ["magic_missile", "fear", "grease"],
+    }
+    state = initialize_actor_spell_management(_game(), actor, prompt=False, enforce=True)
+    state["prepared_today"]["rank_1"] = []
+    state["prepared_counts"]["rank_1"] = {}
+    state["consumed_counts"]["rank_1"] = {}
+    state["slot_remaining"]["rank_1"] = 0
+    actor.spell_state = state
+
+    result = MagicEventResolver.resolve(_Rank1MagicMissile(), EventContext(game=_game(), actor=actor))
+
+    assert result.success is True
+    staff = dict((getattr(actor, "spell_state", {}) or {}).get("wizard_staff_nexus", {}) or {})
+    assert int(staff.get("charges_remaining", 0) or 0) == 0
+    assert int(((getattr(actor, "spell_state", {}) or {}).get("slot_remaining", {}) or {}).get("rank_1", 0) or 0) == 0
+
+    second = MagicEventResolver.resolve(_Rank1MagicMissile(), EventContext(game=_game(), actor=actor))
+    assert second.success is False
+
+
+def test_staff_nexus_cantrip_can_be_cast_without_preparing_it():
+    actor = DummyActor()
+    actor.statuses = [
+        Status(
+            id="wizard",
+            data={
+                "wizard_setup": {
+                    "thesis": "staff_nexus",
+                    "arcane_study": "evocation",
+                    "school": "evocation",
+                    "staff_nexus_cantrip": "detect_magic",
+                    "staff_nexus_rank_1_spell": "magic_missile",
+                }
+            },
+        )
+    ]
+    actor.wizard_spellbook = {
+        "cantrip": ["detect_magic", "light", "mage_hand", "message", "read_aura"],
+        "rank_1": ["magic_missile", "fear", "grease"],
+    }
+    state = initialize_actor_spell_management(_game(), actor, prompt=False, enforce=True)
+    state["prepared_today"]["cantrip"] = []
+    state["prepared_counts"]["cantrip"] = {}
+    actor.spell_state = state
+
+    first = MagicEventResolver.resolve(_CantripDetectMagic(), EventContext(game=_game(), actor=actor))
+    second = MagicEventResolver.resolve(_CantripDetectMagic(), EventContext(game=_game(), actor=actor))
+
+    assert first.success is True
+    assert second.success is True
+    staff = dict((getattr(actor, "spell_state", {}) or {}).get("wizard_staff_nexus", {}) or {})
+    assert int(staff.get("charges_remaining", 0) or 0) == 1
+
+
+def test_staff_nexus_prompt_can_prefer_staff_over_prepared_copy():
+    actor = DummyActor()
+    actor.statuses = [
+        Status(
+            id="wizard",
+            data={
+                "wizard_setup": {
+                    "thesis": "staff_nexus",
+                    "arcane_study": "evocation",
+                    "school": "evocation",
+                    "staff_nexus_cantrip": "detect_magic",
+                    "staff_nexus_rank_1_spell": "magic_missile",
+                }
+            },
+        )
+    ]
+    actor.wizard_spellbook = {
+        "cantrip": ["detect_magic", "light", "mage_hand", "message", "read_aura"],
+        "rank_1": ["magic_missile", "fear", "grease"],
+    }
+    state = initialize_actor_spell_management(_game(), actor, prompt=False, enforce=True)
+    actor.spell_state = state
+
+    result = MagicEventResolver.resolve(
+        _Rank1MagicMissile(),
+        EventContext(game=_game_with_ui(_ChoiceUI(["Staff Nexus"])), actor=actor),
+    )
+
+    assert result.success is True
+    staff = dict((getattr(actor, "spell_state", {}) or {}).get("wizard_staff_nexus", {}) or {})
+    assert int(staff.get("charges_remaining", 0) or 0) == 0
+    assert int(((getattr(actor, "spell_state", {}) or {}).get("slot_remaining", {}) or {}).get("rank_1", 0) or 0) == 3
+
+
 def test_sorcerer_unknown_rank1_spell_is_blocked_when_management_is_enforced():
     actor = DummyActor(class_name="sorcerer")
     actor.sorcerer_known_rank_1_spells = ["magic_missile"]
@@ -296,6 +436,33 @@ def test_sorcerer_level3_uses_rank2_slots_and_consumes_them():
     assert fourth.success is False
     assert "brak slot" in str(fourth.message or "").lower()
     assert int(getattr(actor, "sorcerer_rank_2_slots_remaining", 0) or 0) == 0
+
+
+def test_sorcerer_setup_known_spells_are_merged_into_spell_state():
+    actor = DummyActor(class_name="sorcerer")
+    actor.focus_point = 1
+    actor.statuses = [
+        Status(
+            id="sorcerer",
+            data={
+                "sorcerer_setup": {
+                    "spell_tradition": "primal",
+                    "known_cantrips": ["produce_flame", "electric_arc"],
+                    "known_rank_1_spells": ["burning_hands", "gust_of_wind", "hydraulic_push"],
+                    "bloodline_initial_focus_spell": "elemental_toss",
+                    "bloodline_granted_spells": {"rank_1": "burning_hands"},
+                    "rank_1_slots_per_day": 3,
+                }
+            },
+        )
+    ]
+
+    state = initialize_actor_spell_management(_game(), actor, prompt=False, enforce=True)
+    rank_1_known = list((state.get("known", {}) or {}).get("rank_1", []) or [])
+
+    assert "burning_hands" in rank_1_known
+    assert "gust_of_wind" in rank_1_known
+    assert "hydraulic_push" in rank_1_known
 
 
 def test_sorcerer_signature_spell_allows_casting_on_higher_rank_tier():
@@ -514,6 +681,26 @@ def test_innate_shield_alias_is_castable_as_shield_cantrip_event():
 
     result = MagicEventResolver.resolve(_CantripShield(), EventContext(game=_game(), actor=actor))
     assert result.success is True
+
+
+def test_adapted_cantrip_removes_replaced_cantrip_from_prepared_caster_pool():
+    actor = DummyActor(class_name="cleric")
+    actor.statuses = [
+        Status(
+            id="adapted_cantrip",
+            data={
+                "granted_cantrips": ["ray_of_frost"],
+                "innate_magic_tradition": "arcane",
+                "removed_cantrips": ["detect_magic"],
+            },
+        )
+    ]
+    state = initialize_actor_spell_management(_game(), actor, prompt=False, enforce=True)
+
+    known = dict(state.get("known", {}) or {})
+    assert "detect_magic" not in list(known.get("cantrip", []) or [])
+    assert "ray_of_frost" in list(known.get("cantrip", []) or [])
+    assert "ray_of_frost" in list(known.get("innate", []) or [])
 
 
 def test_bard_rank1_slots_are_consumed_by_spell_management():

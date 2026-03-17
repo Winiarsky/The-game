@@ -4,7 +4,8 @@ from collections import OrderedDict
 
 from bonuses import BonusEffect, BonusType
 from combat.damage_utils import remove_defeated_enemy
-from statuses import Status
+from statuses import SpeedPenaltyStatus, Status
+from statuses.check_effects import CheckEffect
 
 from .attack.basic_melee_attack_event import BasicMeleeAttackEvent
 from .base import ActionCostEvent, EventContext, EventResult
@@ -12,8 +13,12 @@ from .registry import dispatch_event, register_event
 
 
 MONK_STANCE_ACTIVE_STATUS_ID = "monk_stance_active"
+MONK_STANCE_LOCK_STATUS_ID = "monk_stance_lock"
 MONK_STANCE_AC_CIRC_SOURCE = "monk_stance:ac:circumstance"
 MONK_STANCE_AC_ITEM_SOURCE = "monk_stance:ac:item"
+MONK_STANCE_AC_DEX_SOURCE = "monk_stance:ac:dex_cap"
+MONK_STANCE_SPEED_SOURCE = "monk_stance:speed"
+MONK_STANCE_DEFENSE_SOURCE = "monk_stance:defense"
 
 
 def _has_status(actor, status_id: str) -> bool:
@@ -37,6 +42,48 @@ def _focus_points(actor) -> int:
         return max(0, int(raw or 0))
     except Exception:
         return 0
+
+
+def _actor_source_id(actor) -> str | None:
+    if actor is None:
+        return None
+    raw = str(getattr(actor, "object_id", None) or getattr(actor, "name", None) or "").strip()
+    return raw or None
+
+
+def _status_value(actor, status_id: str, key: str, default=None):
+    getter = getattr(actor, "get_status_data", None)
+    if callable(getter):
+        try:
+            return getter(status_id, key, default)
+        except Exception:
+            return default
+    for status in getattr(actor, "statuses", []) or []:
+        if getattr(status, "id", None) != status_id:
+            continue
+        data = getattr(status, "data", None) or {}
+        return data.get(key, default)
+    return default
+
+
+def _dex_modifier(actor) -> int:
+    if actor is None:
+        return 0
+    mods = getattr(actor, "ability_modifiers", None)
+    if isinstance(mods, dict):
+        try:
+            return int(mods.get("dexterity", 0) or 0)
+        except Exception:
+            return 0
+    for attr in ("dex_mod", "dexterity_mod"):
+        raw = getattr(actor, attr, None)
+        if raw is None:
+            continue
+        try:
+            return int(raw or 0)
+        except Exception:
+            return 0
+    return 0
 
 
 def _current_attacks_this_turn(ctx: EventContext, actor) -> int:
@@ -71,8 +118,48 @@ def _bump_attack_state(ctx: EventContext, actor, *, event_name: str, count: int 
     payload = attack_state.setdefault(actor, {})
     payload["attacks_this_turn"] = int(payload.get("attacks_this_turn", 0) or 0) + amount
     weapon_counts = payload.setdefault("weapon_counts", {})
-    weapon_key = "attack_unarmed"
+    weapon_key = str(event_name or "unarmed").strip().lower().replace("-", "_").replace(" ", "_") or "unarmed"
+    if not weapon_key.startswith("attack_"):
+        weapon_key = f"attack_{weapon_key}"
     weapon_counts[weapon_key] = int(weapon_counts.get(weapon_key, 0) or 0) + amount
+
+
+def _normalized_trait_tags(item) -> set[str]:
+    return {
+        str(tag or "").strip().lower().replace("-", "_").replace(" ", "_")
+        for tag in (getattr(item, "traits", None) or ())
+        if str(tag or "").strip()
+    }
+
+
+def _resolve_monastic_weapon(actor, metadata: dict | None = None):
+    if actor is None or not _has_status(actor, "monastic_weaponry") or _has_status(actor, MONK_STANCE_ACTIVE_STATUS_ID):
+        return None
+    try:
+        from GameObjects.items.inventory import get_equipped_weapons
+    except Exception:
+        return None
+
+    equipped = [
+        item
+        for item in list(get_equipped_weapons(actor) or [])
+        if "monk" in _normalized_trait_tags(item) and not bool(getattr(item, "ranged", False))
+    ]
+    if not equipped:
+        return None
+
+    payload = dict(metadata or {})
+    selected = payload.get("selected_weapon")
+    if selected in equipped:
+        return selected
+
+    selected_iid = str(payload.get("selected_weapon_instance_id", "") or "").strip()
+    if selected_iid:
+        for item in equipped:
+            if str(getattr(item, "instance_id", "") or "").strip() == selected_iid:
+                return item
+
+    return equipped[0]
 
 
 def _merge_damage_components(*groups: list[tuple[str, int]]) -> list[tuple[str, int]]:
@@ -161,8 +248,22 @@ def _remove_statuses(actor, status_id: str) -> None:
     actor.statuses = [status for status in statuses if getattr(status, "id", status) != status_id]
 
 
+def _remove_statuses_by_source_prefix(actor, prefix: str) -> None:
+    if actor is None:
+        return
+    statuses = getattr(actor, "statuses", None)
+    if not isinstance(statuses, list):
+        return
+    actor.statuses = [
+        status
+        for status in statuses
+        if not str(getattr(status, "source", "") or "").startswith(prefix)
+    ]
+
+
 def _clear_monk_stance_effects(actor) -> None:
     _remove_statuses(actor, MONK_STANCE_ACTIVE_STATUS_ID)
+    _remove_statuses_by_source_prefix(actor, "monk_stance:")
     remover = getattr(actor, "remove_bonuses_by_source", None)
     if callable(remover):
         try:
@@ -173,9 +274,19 @@ def _clear_monk_stance_effects(actor) -> None:
             remover(MONK_STANCE_AC_ITEM_SOURCE)
         except Exception:
             pass
+        try:
+            remover(MONK_STANCE_AC_DEX_SOURCE)
+        except Exception:
+            pass
+    try:
+        from actions.move_utils import reset_turn_movement_runtime
+
+        reset_turn_movement_runtime(actor)
+    except Exception:
+        pass
 
 
-def _add_ac_bonus(actor, *, source: str, bonus_type: BonusType, value: int, label: str) -> None:
+def _add_ac_bonus(actor, *, source: str, bonus_type: BonusType, value: int, label: str, is_penalty: bool = False) -> None:
     if actor is None:
         return
     try:
@@ -191,6 +302,7 @@ def _add_ac_bonus(actor, *, source: str, bonus_type: BonusType, value: int, labe
         tag="ac",
         source=source,
         label=label,
+        is_penalty=bool(is_penalty),
     )
 
     adder = getattr(actor, "add_bonus", None)
@@ -215,6 +327,8 @@ def _activate_stance(
     ui_notes: list[str] | None = None,
     ac_circumstance_bonus: int = 0,
     ac_item_bonus: int = 0,
+    status_data: dict | None = None,
+    extra_statuses: list[Status] | None = None,
 ) -> None:
     _clear_monk_stance_effects(actor)
     adder = getattr(actor, "add_status", None)
@@ -229,9 +343,16 @@ def _activate_stance(
                     "stance_label": stance_label,
                     "unarmed_profile": dict(profile),
                     "ui_notes": list(ui_notes or []),
+                    "expire_on_combat_end": True,
+                    **dict(status_data or {}),
                 },
             )
         )
+        for status in list(extra_statuses or []):
+            try:
+                adder(status)
+            except Exception:
+                pass
 
     _add_ac_bonus(
         actor,
@@ -247,6 +368,104 @@ def _activate_stance(
         value=ac_item_bonus,
         label=f"{stance_label}: AC",
     )
+    try:
+        from actions.move_utils import reset_turn_movement_runtime
+
+        reset_turn_movement_runtime(actor)
+    except Exception:
+        pass
+
+
+def _add_mountain_runtime_effects(actor) -> list[Status]:
+    dex_penalty = max(0, _dex_modifier(actor))
+    if dex_penalty > 0:
+        _add_ac_bonus(
+            actor,
+            source=MONK_STANCE_AC_DEX_SOURCE,
+            bonus_type=BonusType.CIRCUMSTANCE,
+            value=dex_penalty,
+            label="Mountain Stance: Dex cap +0",
+            is_penalty=True,
+        )
+
+    return [
+        SpeedPenaltyStatus(
+            penalty_feet=5,
+            source=MONK_STANCE_SPEED_SOURCE,
+            label="Mountain Stance: Speed -5 ft",
+        ),
+        Status(
+            id="monk_mountain_defense",
+            label="Mountain Stance: Anti-Trip/Shove",
+            source=MONK_STANCE_DEFENSE_SOURCE,
+            data={"effect_tags": ["stance", "monk"]},
+            check_effects=(
+                CheckEffect(
+                    applies_to="target",
+                    skills=("reflex",),
+                    tags_required=("trip",),
+                    bonus_effects=(
+                        BonusEffect(
+                            type=BonusType.CIRCUMSTANCE,
+                            value=2,
+                            tag="reflex",
+                            source=MONK_STANCE_DEFENSE_SOURCE,
+                            label="Mountain Stance",
+                        ),
+                    ),
+                ),
+                CheckEffect(
+                    applies_to="target",
+                    skills=("fortitude",),
+                    tags_required=("shove",),
+                    bonus_effects=(
+                        BonusEffect(
+                            type=BonusType.CIRCUMSTANCE,
+                            value=2,
+                            tag="fortitude",
+                            source=MONK_STANCE_DEFENSE_SOURCE,
+                            label="Mountain Stance",
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    ]
+
+
+def _add_stance_lock(actor, stance_label: str) -> None:
+    adder = getattr(actor, "add_status", None)
+    if not callable(adder):
+        return
+    adder(
+        Status(
+            id=MONK_STANCE_LOCK_STATUS_ID,
+            label="Stance Lock",
+            source="monk_stance:lock",
+            data={
+                "effect_tags": ["stance", "monk"],
+                "source_id": _actor_source_id(actor),
+                "source_turns_left": 1,
+                "expire_on_combat_end": True,
+                "stance_label": stance_label,
+            },
+        )
+    )
+
+
+def _refresh_actor_ui(ctx: EventContext, actor) -> None:
+    ui_hero = getattr(ctx.game, "ui_hero", None)
+    if callable(ui_hero) and actor in getattr(ctx.game, "heroes", []):
+        try:
+            ui_hero(actor, note="Monk stance aktywna")
+        except Exception:
+            pass
+    ui_active_actor = getattr(ctx.game, "ui_active_actor", None)
+    if callable(ui_active_actor):
+        try:
+            ui_active_actor(actor)
+        except Exception:
+            pass
 
 
 def _stance_profile_crane() -> dict:
@@ -317,40 +536,64 @@ class FlurryOfBlowsEvent(ActionCostEvent):
 
         initial_attacks = _current_attacks_this_turn(ctx, actor)
         base_metadata = dict(ctx.metadata or {})
+        monastic_weapon = _resolve_monastic_weapon(actor, base_metadata)
+        attack_event_name = "unarmed"
+        attack_state_key = "unarmed"
+        if monastic_weapon is not None:
+            try:
+                from GameObjects.items.weapon import normalize_weapon_id
+            except Exception:
+                normalize_weapon_id = lambda value: str(value or "").strip().lower().replace("-", "_").replace(" ", "_")  # type: ignore[assignment]
+            attack_event_name = "attack"
+            attack_state_key = str(
+                normalize_weapon_id(getattr(monastic_weapon, "item_id", None))
+                or getattr(monastic_weapon, "item_id", "")
+                or "unarmed"
+            ).strip().lower().replace("-", "_").replace(" ", "_") or "unarmed"
+
+        first_metadata = {
+            **base_metadata,
+            "fixed_attacks_this_turn": initial_attacks,
+            "suppress_attack_record": True,
+            "roll_only": True,
+        }
+        second_metadata = {
+            **base_metadata,
+            "fixed_attacks_this_turn": initial_attacks + 1,
+            "suppress_attack_record": True,
+            "roll_only": True,
+        }
+        if monastic_weapon is not None:
+            selected_iid = str(getattr(monastic_weapon, "instance_id", "") or "")
+            selected_item_id = str(getattr(monastic_weapon, "item_id", "") or "")
+            for payload in (first_metadata, second_metadata):
+                payload["selected_weapon"] = monastic_weapon
+                payload["selected_weapon_instance_id"] = selected_iid
+                payload["weapon_id"] = selected_item_id
 
         first_result = dispatch_event(
-            "unarmed",
+            attack_event_name,
             EventContext(
                 game=ctx.game,
                 actor=actor,
                 tags=list(ctx.tags or []),
-                metadata={
-                    **base_metadata,
-                    "fixed_attacks_this_turn": initial_attacks,
-                    "suppress_attack_record": True,
-                    "roll_only": True,
-                },
+                metadata=first_metadata,
             ),
         )
         if not first_result.success:
             return EventResult.cancelled(message=first_result.message or "Flurry of Blows: pierwszy Strike nieudany.")
 
         second_result = dispatch_event(
-            "unarmed",
+            attack_event_name,
             EventContext(
                 game=ctx.game,
                 actor=actor,
                 tags=list(ctx.tags or []),
-                metadata={
-                    **base_metadata,
-                    "fixed_attacks_this_turn": initial_attacks + 1,
-                    "suppress_attack_record": True,
-                    "roll_only": True,
-                },
+                metadata=second_metadata,
             ),
         )
 
-        _bump_attack_state(ctx, actor, event_name="unarmed", count=2)
+        _bump_attack_state(ctx, actor, event_name=attack_state_key, count=2)
 
         first_data = dict(first_result.data or {})
         second_data = dict(second_result.data or {})
@@ -444,6 +687,8 @@ class _MonkStanceEvent(ActionCostEvent):
     stance_label: str = "Monk Stance"
     stance_profile_builder = staticmethod(lambda: {})
     ui_notes: list[str] = []
+    stance_status_data: dict[str, object] = {}
+    extra_status_factories: tuple = ()
     ac_circumstance_bonus: int = 0
     ac_item_bonus: int = 0
 
@@ -459,6 +704,8 @@ class _MonkStanceEvent(ActionCostEvent):
             return EventResult.cancelled(message=f"{self.stance_label}: brak aktora.")
         if not _has_status(actor, self.stance_required_status):
             return EventResult.cancelled(message=f"{self.stance_label}: wymaga featu {self.stance_label}.")
+        if _has_status(actor, MONK_STANCE_LOCK_STATUS_ID):
+            return EventResult.cancelled(message=f"{self.stance_label}: po wejściu w stance nie możesz użyć kolejnej stance action do początku następnej tury.")
 
         _activate_stance(
             actor,
@@ -468,7 +715,34 @@ class _MonkStanceEvent(ActionCostEvent):
             ui_notes=list(self.ui_notes or []),
             ac_circumstance_bonus=self.ac_circumstance_bonus,
             ac_item_bonus=self.ac_item_bonus,
+            status_data=dict(self.stance_status_data or {}),
+            extra_statuses=[],
         )
+        adder = getattr(actor, "add_status", None)
+        for factory in tuple(self.extra_status_factories or ()):
+            if not callable(factory):
+                continue
+            try:
+                built = factory(actor)
+            except Exception:
+                continue
+            if isinstance(built, Status):
+                if callable(adder):
+                    try:
+                        adder(built)
+                    except Exception:
+                        pass
+                continue
+            if isinstance(built, list) and callable(adder):
+                for item in built:
+                    if not isinstance(item, Status):
+                        continue
+                    try:
+                        adder(item)
+                    except Exception:
+                        continue
+        _add_stance_lock(actor, self.stance_label)
+        _refresh_actor_ui(ctx, actor)
         notes = " ".join(self.ui_notes or [])
         msg = f"{self.stance_label}: stance aktywna."
         if notes:
@@ -488,9 +762,10 @@ class CraneStanceEvent(_MonkStanceEvent):
     stance_id = "crane_stance"
     stance_label = "Crane Stance"
     stance_profile_builder = staticmethod(_stance_profile_crane)
+    stance_status_data = {"leap_extra_squares": 1}
     ac_circumstance_bonus = 1
     ui_notes = [
-        "Jump/Leap bonusy pozostają reminderem UI (manual).",
+        "Leap ma zwiększony zasięg o 1 pole, a stance daje +1 circumstance AC.",
     ]
 
 
@@ -501,8 +776,9 @@ class DragonStanceEvent(_MonkStanceEvent):
     stance_id = "dragon_stance"
     stance_label = "Dragon Stance"
     stance_profile_builder = staticmethod(_stance_profile_dragon)
+    stance_status_data = {"ignore_difficult_terrain_squares_each_turn": 1}
     ui_notes = [
-        "Ignore first difficult terrain square pozostaje reminderem UI (manual).",
+        "Pierwsze pole trudnego terenu w każdej twojej turze nie zwiększa kosztu ruchu.",
     ]
 
 
@@ -513,9 +789,10 @@ class MountainStanceEvent(_MonkStanceEvent):
     stance_id = "mountain_stance"
     stance_label = "Mountain Stance"
     stance_profile_builder = staticmethod(_stance_profile_mountain)
+    extra_status_factories = (_add_mountain_runtime_effects,)
     ac_item_bonus = 4
     ui_notes = [
-        "Dex cap +0, speed -5 oraz shove/trip defense pozostają reminderem UI (manual).",
+        "Dex cap +0, Speed -5 ft oraz +2 circumstance vs Trip/Shove działają automatycznie.",
     ]
 
 
@@ -526,8 +803,9 @@ class TigerStanceEvent(_MonkStanceEvent):
     stance_id = "tiger_stance"
     stance_label = "Tiger Stance"
     stance_profile_builder = staticmethod(_stance_profile_tiger)
+    stance_status_data = {"step_extra_feet": 5, "step_min_speed_feet": 20}
     ui_notes = [
-        "Step 10 feet pozostaje reminderem UI (manual).",
+        "Jeśli twoja Speed wynosi co najmniej 20 ft, możesz wykonać Step na 10 ft.",
     ]
 
 
@@ -539,5 +817,5 @@ class WolfStanceEvent(_MonkStanceEvent):
     stance_label = "Wolf Stance"
     stance_profile_builder = staticmethod(_stance_profile_wolf)
     ui_notes = [
-        "Trip trait przy flankowaniu pozostaje reminderem UI (manual).",
+        "Atakujesz profilem Wolf Jaw; trait Trip przy flankowaniu pozostaje ograniczony do obecnego runtime Trip.",
     ]

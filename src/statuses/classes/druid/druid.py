@@ -28,6 +28,52 @@ DRUID_ORDER_FOCUS_BONUS = {
     "storm": 1,
     "wild": 0,
 }
+DRUID_ORDER_UI_DETAILS = {
+    "animal": {
+        "fluff": "Krąg zwierząt buduje więź druida z bestiami i wspólną walką na planszy.",
+        "feat_summary": (
+            "wybierasz young animal companion. W walce wydajesz 1 akcję na Command Animal Companion, "
+            "aby dać mu 2 własne akcje na Stride, Strike albo Support."
+        ),
+        "spell_summary": (
+            "focus spell leczący living animal. Wariant touch działa w 5 ft za 1 akcję, a wariant "
+            "ranged kosztuje 2 akcje i ma zasięg 30 ft."
+        ),
+    },
+    "leaf": {
+        "fluff": "Krąg liścia stawia na opiekę, naturę i wsparcie przez leshy familiara.",
+        "feat_summary": (
+            "zyskujesz leshy familiar i status FamiliarOwner. Familiar korzysta z obecnej mechaniki "
+            "Command Familiar, np. Scout, Guidance, Distract albo Touch Delivery."
+        ),
+        "spell_summary": (
+            "focus spell za 2 akcje. Tworzysz Goodberry w ekwipunku; liczba jagód skaluje się z rangą "
+            "focus spell, a każda po użyciu leczy 1d6+4."
+        ),
+    },
+    "storm": {
+        "fluff": "Krąg burzy skupia się na panowaniu nad pogodą i agresywnych czarach elektrycznych.",
+        "feat_summary": (
+            "ignorujesz pogodowe kary do ranged spell attack i Perception. Targeted spells ignorują też "
+            "concealment wynikający z pogody."
+        ),
+        "spell_summary": (
+            "focus spell za 2 akcje na 30 ft. Cel wykonuje basic Reflex save przeciw obrażeniom electricity; "
+            "przy failure lub critical failure dostaje też Clumsy 2 i persistent electricity damage."
+        ),
+    },
+    "wild": {
+        "fluff": "Krąg dzikości stawia na przemiany i walkę w zmienionej formie.",
+        "feat_summary": (
+            "dostajesz dodatkowy focus spell Dziki ksztalt. Za 2 akcje zmieniasz formę; na starcie masz "
+            "pest formy, a od wyższych rang także formy zwierzęce i +2 status do ataków w formie."
+        ),
+        "spell_summary": (
+            "focus spell za 1 akcję. Wybierasz efekt morph spośród odblokowanych featami, np. pazury, "
+            "szczęki albo skrzydła; na wyższych rangach możesz łączyć kilka efektów naraz."
+        ),
+    },
+}
 
 DRUID_SPELLS_PER_DAY = {
     1: {"cantrip": 5, "rank_1": 2},
@@ -199,6 +245,7 @@ __all__ = [
     "DRUID_ORDER_START_FEATS",
     "DRUID_ORDER_SPELLS",
     "DRUID_ORDER_FOCUS_BONUS",
+    "DRUID_ORDER_UI_DETAILS",
     "DRUID_SPELLS_PER_DAY",
     "DRUID_PROMPT",
     "DruidStatus",

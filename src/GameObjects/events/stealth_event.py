@@ -6,6 +6,7 @@ from typing import Tuple
 
 from board import consts
 from combat import refresh_flanking_statuses
+from combat.stealth_runtime import apply_combat_stealth_state, clear_combat_stealth, has_combat_stealth_state, has_status_id
 from GameObjects.Interactables.utils.awareness import iter_watchers_in_rooms, summarize_watchers
 from GameObjects.Obstacles.basic_obstacle import Obstacle
 from actions.move_utils import (
@@ -92,43 +93,26 @@ class StealthEvent(GameEvent):
         hero_pos = hero.position
         rooms_here = board.rooms_at(hero_pos)
         blocked_rooms, fail_counts = _get_stealth_memory(hero)
-        has_hide_status = hero.has_status("hide")
-        in_dim_light = hero.has_status(IN_DIM_LIGHT_STATUS)
-        in_dark = hero.has_status(IN_DARK_STATUS)
-        illuminated = False
-        try:
-            from GameObjects.events.magic.lighting_effects import is_position_in_light_aura
-
-            illuminated = is_position_in_light_aura(game, hero_pos)
-        except Exception:
-            illuminated = False
-        if illuminated:
-            in_dim_light = False
-            in_dark = False
+        cover_state = self._stealth_cover_state(game, hero, hero_pos)
+        has_hide_status = bool(cover_state["has_hide_status"])
+        in_dim_light = bool(cover_state["in_dim_light"])
+        in_dark = bool(cover_state["in_dark"])
+        illuminated = bool(cover_state["illuminated"])
         watchers = iter_watchers_in_rooms(board, rooms_here, ignore_obj=hero) if not has_hide_status and not in_dim_light and not in_dark else []
         penalty, blockers = summarize_watchers(watchers) if watchers else (0, [])
         if illuminated:
             logger.info("Magiczne światło uniemożliwia ukrycie.")
             return EventResult.noop(message="Nie możesz się ukryć w zasięgu Light.")
-        if hero.has_status(OBSERVABLE_STATUS) and not in_dim_light and not in_dark:
+        if has_status_id(hero, OBSERVABLE_STATUS.id) and not in_dim_light and not in_dark:
             logger.info("Masz status observable – nie możesz wejść w ukrycie.")
             return EventResult.noop(message="Status observable blokuje stealth.")
         if rooms_here and any(room in blocked_rooms for room in rooms_here):
             logger.info("Ten bohater ma zablokowane próby stealth w tym pokoju.")
             return EventResult.noop(message="Pokój zablokowany dla stealth.")
 
-        already_stealth = hero.has_status(STEALTH_STATUS)
-        covered = hero.has_status("covered")
-        shadow_cover = False
-        if hero.has_status("distracting_shadows"):
-            neighbors = board.get_neighbors(hero_pos, include_position=False, diagonal=True)
-            for npos in neighbors:
-                occ = board.occupant_at(npos)
-                if occ in getattr(game, "heroes", []) and occ is not hero:
-                    shadow_cover = True
-                    break
-        if shadow_cover and not covered:
-            covered = True
+        already_stealth = bool(has_status_id(hero, STEALTH_STATUS.id) or has_combat_stealth_state(hero))
+        covered = bool(cover_state["covered"])
+        shadow_cover = bool(cover_state["shadow_cover"])
 
         if not already_stealth:
             if blockers and not covered and not in_dim_light and not in_dark:
@@ -200,8 +184,33 @@ class StealthEvent(GameEvent):
             if self._attempt_spot_here(ctx, hero, hero_pos):
                 return EventResult.noop(message="Zostałeś dostrzeżony.")
 
-        self._stealth_move(ctx, hero, hero_pos)
-        return EventResult(success=True, consumed_action=self.consumes_action, message="Stealth wykonany.")
+        moved = self._stealth_move(ctx, hero, hero_pos)
+        final_message = "Stealth wykonany."
+        if ctx.in_combat:
+            final_pos = getattr(hero, "position", None) or hero_pos
+            final_cover_state = self._stealth_cover_state(game, hero, final_pos)
+            can_remain_hidden = bool(
+                final_cover_state["has_hide_status"]
+                or final_cover_state["covered"]
+                or final_cover_state["in_dim_light"]
+                or final_cover_state["in_dark"]
+            )
+            if self._attempt_spot_here(ctx, hero, final_pos):
+                self._refresh_ui(game, hero, note="Wykryto ukrycie")
+                return EventResult.noop(message="Zostałeś dostrzeżony.")
+            if can_remain_hidden:
+                stealth_mode = "undetected" if moved else "hidden"
+                apply_combat_stealth_state(hero, mode=stealth_mode, source="stealth")
+                final_message = (
+                    "Stealth wykonany: jesteś undetected."
+                    if stealth_mode == "undetected"
+                    else "Stealth wykonany: jesteś hidden."
+                )
+            else:
+                clear_combat_stealth(hero, clear_stealth=True, add_observable=True)
+                final_message = "Kończysz ruch bez osłony - ujawniasz się."
+            self._refresh_ui(game, hero, note=final_message)
+        return EventResult(success=True, consumed_action=self.consumes_action, message=final_message)
 
     # --- helpery przeniesione z akcji ---
     def _validate_neighbors(self, ctx: EventContext, current: Tuple[int, int], neighbours: list[Tuple[int, int]]) -> list[Tuple[int, int]]:
@@ -277,6 +286,41 @@ class StealthEvent(GameEvent):
 
         return total, details
 
+    def _stealth_cover_state(self, game, hero, pos: Tuple[int, int]) -> dict[str, bool]:
+        board = game.board
+        has_hide_status = bool(has_status_id(hero, "hide"))
+        in_dim_light = bool(has_status_id(hero, IN_DIM_LIGHT_STATUS.id))
+        in_dark = bool(has_status_id(hero, IN_DARK_STATUS.id))
+        illuminated = False
+        try:
+            from GameObjects.events.magic.lighting_effects import is_position_in_light_aura
+
+            illuminated = bool(is_position_in_light_aura(game, pos))
+        except Exception:
+            illuminated = False
+        if illuminated:
+            in_dim_light = False
+            in_dark = False
+        covered = bool(has_status_id(hero, "covered"))
+        shadow_cover = False
+        if has_status_id(hero, "distracting_shadows"):
+            neighbors = board.get_neighbors(pos, include_position=False, diagonal=True)
+            for npos in neighbors:
+                occ = board.occupant_at(npos)
+                if occ in getattr(game, "heroes", []) and occ is not hero:
+                    shadow_cover = True
+                    break
+        if shadow_cover and not covered:
+            covered = True
+        return {
+            "has_hide_status": has_hide_status,
+            "in_dim_light": in_dim_light,
+            "in_dark": in_dark,
+            "illuminated": illuminated,
+            "covered": covered,
+            "shadow_cover": shadow_cover,
+        }
+
     def _apply_fail(self, hero, rooms_here: set[str], *, critical: bool) -> None:
         blocked_rooms, fail_counts = _get_stealth_memory(hero)
         for room_id in rooms_here:
@@ -284,12 +328,12 @@ class StealthEvent(GameEvent):
             fail_counts[room_id] = current
             if critical or current >= consts.STEALTH_FAIL_MAX_ATTEMPTS:
                 blocked_rooms.add(room_id)
-        hero.remove_status(STEALTH_STATUS)
+        clear_combat_stealth(hero, clear_stealth=True, add_observable=False)
 
     def _apply_success(self, hero, rooms_here: set[str], roll: int) -> int:
         blocked_rooms, fail_counts = _get_stealth_memory(hero)
         hero.remove_status(OBSERVABLE_STATUS)
-        hero.remove_status(STEALTH_STATUS)  # odśwież dane statusu
+        clear_combat_stealth(hero, clear_stealth=True, add_observable=False)
         bonus = 0
         if roll >= 20:
             bonus = 1 + (roll - 20) // 5
@@ -350,16 +394,17 @@ class StealthEvent(GameEvent):
         total = min(base_budget, max(0, sneak_half + bonus))
         return max(0, int(total))
 
-    def _stealth_move(self, ctx: EventContext, hero, start_pos: Tuple[int, int]) -> None:
+    def _stealth_move(self, ctx: EventContext, hero, start_pos: Tuple[int, int]) -> bool:
         board = ctx.game.board
         sneak_budget_feet = self._sneak_movement_budget_feet(hero)
+        moved = False
         try:
             if sneak_budget_feet <= 0:
                 try:
                     ctx.game.ui_log("Skradanie: brak dostępnego budżetu ruchu.")
                 except Exception:
                     pass
-                return
+                return False
             perform_movement(
                 ctx,
                 hero,
@@ -371,6 +416,7 @@ class StealthEvent(GameEvent):
                 on_enter=default_on_enter,
                 max_feet=sneak_budget_feet,
             )
+            moved = getattr(hero, "position", None) != start_pos
             events = getattr(ctx.game, "events", None)
             if events and hasattr(events, "safe_emit_action"):
                 events.safe_emit_action(
@@ -389,6 +435,7 @@ class StealthEvent(GameEvent):
                 refresh_flanking_statuses(ctx.game)
             except Exception as exc:
                 logger.error("Nie udało się odświeżyć flankowania po ruchu w stealth: %s", exc)
+        return bool(moved)
 
     def _attempt_spot_here(self, ctx: EventContext, hero, position: Tuple[int, int]) -> bool:
         spotted_any = False
@@ -404,3 +451,15 @@ class StealthEvent(GameEvent):
                 ctx.game.ui_log(msg)
             spotted_any = spotted_any or spotted
         return spotted_any
+
+    @staticmethod
+    def _refresh_ui(game, hero, *, note: str | None = None) -> None:
+        try:
+            ui_hero = getattr(game, "ui_hero", None)
+            if callable(ui_hero):
+                ui_hero(hero, note=note)
+            ui_active = getattr(game, "ui_active_actor", None)
+            if callable(ui_active):
+                ui_active(hero)
+        except Exception:
+            logger.debug("Nie udało się odświeżyć UI stealth.", exc_info=True)

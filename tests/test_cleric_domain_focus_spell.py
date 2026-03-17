@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import importlib.util
 from pathlib import Path
 from types import SimpleNamespace
 import sys
@@ -13,6 +14,14 @@ for path in (PROJECT_ROOT, SRC_ROOT):
 
 import GameObjects.events.all_events  # noqa: F401
 
+MOVE_UTILS_PATH = SRC_ROOT / "actions" / "move_utils.py"
+move_utils_spec = importlib.util.spec_from_file_location("domain_test_move_utils", MOVE_UTILS_PATH)
+move_utils = importlib.util.module_from_spec(move_utils_spec)
+assert move_utils_spec and move_utils_spec.loader
+move_utils_spec.loader.exec_module(move_utils)  # type: ignore[arg-type]
+
+from board_grid import BoardGrid
+from GameObjects.Terrains.rumble_terrain import RumbleTerrain
 from GameObjects.events.base import EventContext
 from GameObjects.events.magic.focus_spells.cleric import domain_spell_events as domain_events
 from GameObjects.events.magic.focus_spells.cleric.domain_spell_events import ClericDomainSpellEvent
@@ -166,6 +175,51 @@ def test_agile_feet_adds_speed_bonus_status():
         getattr(status, "id", None) == "speed_bonus" and int((getattr(status, "data", None) or {}).get("speed_bonus_feet", 0)) >= 10
         for status in actor.statuses
     )
+
+
+def test_agile_feet_ignores_difficult_terrain_cost():
+    actor = _cleric_with_domain(domain="travel", spell="agile_feet")
+    board = BoardGrid(rows=1, cols=3)
+    board.set_field((1, 0), RumbleTerrain())
+    game = _game(actor=actor)
+    game.board = board
+
+    result = dispatch_event("agile_feet", EventContext(game=game, actor=actor))
+
+    assert result.success is True
+    path = [(0, 0), (1, 0), (2, 0)]
+    assert move_utils.path_cost_feet(path, board, mover=actor) == 10
+
+
+def test_healers_blessing_buffs_next_heal_and_is_consumed(monkeypatch):
+    actor = _cleric_with_domain(domain="healing", spell="healers_blessing")
+    ally = DummyHero(name="Ally", position=(1, 0), hp=10)
+    game = _game(actor=actor, heroes=[actor, ally])
+
+    monkeypatch.setattr(domain_events, "_pick_target", lambda *_a, **_k: ally)
+    blessing = dispatch_event("healers_blessing", EventContext(game=game, actor=actor))
+
+    assert blessing.success is True
+    assert ally.has_status("healers_blessing")
+
+    monkeypatch.setattr(
+        "GameObjects.events.magic.level_1st.events._prompt_choice",
+        lambda *_a, **_k: "1",
+    )
+    monkeypatch.setattr(
+        "GameObjects.events.magic.level_1st.events.pick_target_in_range",
+        lambda *_a, **_k: (ally, ally.position),
+    )
+    monkeypatch.setattr(
+        "GameObjects.events.magic.level_1st.events.prompt_for_roll",
+        lambda *_a, **_k: 6,
+    )
+
+    heal_result = dispatch_event("heal", EventContext(game=game, actor=actor))
+
+    assert heal_result.success is True
+    assert ally.hp == 18
+    assert not ally.has_status("healers_blessing")
 
 
 def test_registered_domain_spell_action_cost_matches_spec():

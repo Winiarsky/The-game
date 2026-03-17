@@ -891,6 +891,7 @@ def filter_magic_events_for_actor(
             can_cast_managed_spell,
             classify_spell_tier,
             ensure_actor_spell_state,
+            _wizard_staff_nexus_options,
         )
     except Exception:
         return dict(available_events)
@@ -934,13 +935,14 @@ def filter_magic_events_for_actor(
             ):
                 continue
             can_cast, _reason = can_cast_managed_spell(actor, spell_id=event_name, tier=tier)
-            if not can_cast:
+            staff_available = bool(_wizard_staff_nexus_options(actor, spell_id=event_name, tier=tier).get("available"))
+            if not can_cast and not staff_available:
                 continue
             filtered[event_name] = event_cls
             continue
 
         # Metamagia i akcje pomocnicze w bucket "magic".
-        if normalized_event_id in {"reach_spell", "widen_spell"} and not _actor_has_status(actor, normalized_event_id):
+        if normalized_event_id in {"reach_spell", "widen_spell", "lingering_composition"} and not _actor_has_status(actor, normalized_event_id):
             continue
         if normalized_event_id == "domain_focus_spell":
             if not known_by_tier.get("focus"):

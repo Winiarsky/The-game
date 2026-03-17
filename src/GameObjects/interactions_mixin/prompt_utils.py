@@ -309,6 +309,26 @@ def _prompt_spell_level(ui_client, *, source: str) -> int | None:
     return value if value > 0 else None
 
 
+def _spell_level_from_context(context: dict) -> int | None:
+    if not isinstance(context, dict):
+        return None
+
+    raw_tier = str(context.get("spell_tier", "") or "").strip().lower()
+    if not raw_tier:
+        try:
+            from spell_management import classify_spell_tier
+
+            raw_tier = str(classify_spell_tier(list(context.get("spell_tags") or [])) or "").strip().lower()
+        except Exception:
+            raw_tier = ""
+    if raw_tier.startswith("rank_"):
+        try:
+            return max(1, int(raw_tier.split("_", 1)[1]))
+        except Exception:
+            return None
+    return None
+
+
 def _apply_dangerous_sorcery_if_needed(
     rolled_value: int,
     *,
@@ -345,7 +365,9 @@ def _apply_dangerous_sorcery_if_needed(
         context["dangerous_sorcery_resolved"] = True
         return int(rolled_value)
 
-    spell_level = _prompt_spell_level(ui_client, source="dangerous_sorcery")
+    spell_level = _spell_level_from_context(context)
+    if spell_level is None:
+        spell_level = _prompt_spell_level(ui_client, source="dangerous_sorcery")
     if spell_level is None:
         context["dangerous_sorcery_resolved"] = True
         return int(rolled_value)

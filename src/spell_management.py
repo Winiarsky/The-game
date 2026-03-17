@@ -73,6 +73,33 @@ def _iter_status_data(actor) -> list[dict[str, Any]]:
     return out
 
 
+def _removed_cantrip_ids(actor) -> set[str]:
+    removed: set[str] = set()
+    for data in _iter_status_data(actor):
+        values = data.get("removed_cantrips")
+        if isinstance(values, str):
+            values = [values]
+        if not isinstance(values, (list, tuple, set)):
+            continue
+        for item in values:
+            spell_id = _normalize_spell_id(item)
+            if spell_id:
+                removed.add(spell_id)
+    return removed
+
+
+def _apply_removed_cantrip_overrides(actor, known: dict[str, list[str]]) -> None:
+    removed = _removed_cantrip_ids(actor)
+    if not removed:
+        return
+    cantrips = [
+        _normalize_spell_id(item)
+        for item in list(known.get("cantrip", []) or [])
+        if _normalize_spell_id(item) and _normalize_spell_id(item) not in removed
+    ]
+    known["cantrip"] = list(dict.fromkeys(cantrips))
+
+
 def _append_unique(container: list[str], value: str) -> None:
     item = _normalize_spell_id(value)
     if not item:
@@ -430,6 +457,8 @@ def _base_known_spell_lists(actor) -> dict[str, list[str]]:
             _append_unique(pending, muse.get("known_spell"))
         sorc_setup = data.get("sorcerer_setup")
         if isinstance(sorc_setup, dict):
+            _append_many(known["cantrip"], sorc_setup.get("known_cantrips"))
+            _append_many(known["rank_1"], sorc_setup.get("known_rank_1_spells"))
             _append_unique(known["focus"], sorc_setup.get("bloodline_initial_focus_spell"))
             _pending_from_dict(sorc_setup.get("bloodline_granted_spells"))
         wiz_setup = data.get("wizard_setup")
@@ -1360,6 +1389,222 @@ def _wizard_setup_data(actor) -> dict[str, Any]:
     return {}
 
 
+def _normalize_staff_nexus_state(raw: object) -> dict[str, Any]:
+    if not isinstance(raw, dict):
+        return {"enabled": False}
+    cantrip_spell = _normalize_spell_id(raw.get("cantrip_spell"))
+    rank1_spell = _normalize_spell_id(raw.get("rank_1_spell"))
+    try:
+        charges_total = max(0, int(raw.get("charges_total", 0) or 0))
+    except Exception:
+        charges_total = 0
+    try:
+        charges_remaining = max(0, int(raw.get("charges_remaining", charges_total) or 0))
+    except Exception:
+        charges_remaining = charges_total
+    try:
+        base_charges = max(0, int(raw.get("base_charges", 0) or 0))
+    except Exception:
+        base_charges = 0
+    extra_charge_ranks: list[int] = []
+    for value in list(raw.get("extra_charge_ranks", []) or []):
+        try:
+            rank = max(1, int(value or 0))
+        except Exception:
+            continue
+        extra_charge_ranks.append(rank)
+    try:
+        max_extra_spells = max(0, int(raw.get("max_extra_spells", 0) or 0))
+    except Exception:
+        max_extra_spells = 0
+    enabled = bool(raw.get("enabled")) and bool(cantrip_spell or rank1_spell)
+    return {
+        "enabled": enabled,
+        "cantrip_spell": cantrip_spell,
+        "rank_1_spell": rank1_spell,
+        "charges_total": charges_total,
+        "charges_remaining": min(charges_total, charges_remaining),
+        "base_charges": base_charges,
+        "extra_charge_ranks": list(extra_charge_ranks),
+        "max_extra_spells": max_extra_spells,
+    }
+
+
+def _staff_nexus_extra_spell_limit(actor) -> int:
+    level = _actor_level(actor)
+    if level >= 16:
+        return 3
+    if level >= 8:
+        return 2
+    return 1
+
+
+def _wizard_staff_nexus_options(actor, *, spell_id: str, tier: str | None) -> dict[str, Any]:
+    state = dict(getattr(actor, "spell_state", {}) or {})
+    class_name = _normalize(state.get("class_name") or getattr(actor, "class_name", ""))
+    if class_name != "wizard":
+        return {"available": False}
+    setup = _wizard_setup_data(actor)
+    thesis = _normalize(setup.get("thesis") or getattr(actor, "wizard_thesis", ""))
+    if thesis != "staff_nexus":
+        return {"available": False}
+
+    payload = _normalize_staff_nexus_state(state.get("wizard_staff_nexus"))
+    if not bool(payload.get("enabled")):
+        return {"available": False}
+
+    normalized_spell = _normalize_spell_id(spell_id)
+    normalized_tier = _normalize_tier(tier)
+    if not normalized_spell or not normalized_tier:
+        return {"available": False}
+
+    cantrip_spell = str(payload.get("cantrip_spell") or "")
+    rank1_spell = str(payload.get("rank_1_spell") or "")
+    charges_remaining = int(payload.get("charges_remaining", 0) or 0)
+
+    if normalized_tier == "cantrip" and normalized_spell == cantrip_spell:
+        return {
+            "available": True,
+            "source": "staff_nexus",
+            "requires_charge": False,
+            "charges_remaining": charges_remaining,
+            "spell_id": cantrip_spell,
+            "tier": "cantrip",
+        }
+    if normalized_tier == "rank_1" and normalized_spell == rank1_spell and charges_remaining > 0:
+        return {
+            "available": True,
+            "source": "staff_nexus",
+            "requires_charge": True,
+            "charges_remaining": charges_remaining,
+            "spell_id": rank1_spell,
+            "tier": "rank_1",
+        }
+    return {"available": False}
+
+
+def consume_wizard_staff_nexus_resources(actor, *, spell_id: str, tier: str | None) -> None:
+    state = dict(getattr(actor, "spell_state", {}) or {})
+    payload = _normalize_staff_nexus_state(state.get("wizard_staff_nexus"))
+    if not bool(payload.get("enabled")):
+        return
+
+    options = _wizard_staff_nexus_options(actor, spell_id=spell_id, tier=tier)
+    if not bool(options.get("available")):
+        return
+    if not bool(options.get("requires_charge")):
+        return
+
+    current_remaining = int(payload.get("charges_remaining", 0) or 0)
+    payload["charges_remaining"] = max(0, current_remaining - 1)
+    state["wizard_staff_nexus"] = dict(payload)
+    try:
+        setattr(actor, "spell_state", state)
+    except Exception:
+        pass
+    try:
+        setattr(actor, "wizard_staff_nexus", dict(payload))
+        setattr(actor, "wizard_staff_nexus_charges_remaining", int(payload.get("charges_remaining", 0) or 0))
+        setattr(actor, "wizard_staff_nexus_charges_total", int(payload.get("charges_total", 0) or 0))
+    except Exception:
+        pass
+
+
+def _wizard_apply_staff_nexus(
+    actor,
+    game,
+    *,
+    setup: dict[str, Any],
+    slot_budget: dict[str, int],
+    prompt: bool,
+) -> tuple[dict[str, int], dict[str, Any]]:
+    thesis = _normalize(setup.get("thesis") or getattr(actor, "wizard_thesis", ""))
+    if thesis != "staff_nexus":
+        return dict(slot_budget), {"enabled": False}
+
+    cantrip_spell = _normalize_spell_id(
+        setup.get("staff_nexus_cantrip")
+        or setup.get("wizard_staff_nexus_cantrip")
+        or getattr(actor, "wizard_staff_nexus_cantrip", "")
+    )
+    rank1_spell = _normalize_spell_id(
+        setup.get("staff_nexus_rank_1_spell")
+        or setup.get("wizard_staff_nexus_rank_1_spell")
+        or getattr(actor, "wizard_staff_nexus_rank_1_spell", "")
+    )
+    if not cantrip_spell and not rank1_spell:
+        return dict(slot_budget), {"enabled": False}
+
+    mutable_budget = dict(slot_budget)
+    highest_rank = max(
+        (rank for rank in range(1, 11) if int(mutable_budget.get(_tier_for_rank(rank), 0) or 0) > 0),
+        default=0,
+    )
+    max_extra_spells = _staff_nexus_extra_spell_limit(actor)
+    extra_charge_ranks: list[int] = []
+
+    for _ in range(max_extra_spells):
+        options: list[dict[str, str]] = []
+        for rank in range(1, 11):
+            tier = _tier_for_rank(rank)
+            if int(mutable_budget.get(tier, 0) or 0) <= 0:
+                continue
+            options.append(
+                {
+                    "id": f"staff_charge:{rank}",
+                    "label": f"Ranga {rank} -> +{rank} ladunkow Staff Nexus",
+                }
+            )
+        if not options:
+            break
+
+        selected = _menu_pick(
+            game,
+            title="Wizard (Staff Nexus): poświęć slot na dodatkowe ładunki kostura",
+            source="spell_prepare",
+            choices=options,
+            prompt=prompt,
+        )
+        if not selected:
+            break
+        parts = str(selected).split(":")
+        if len(parts) != 2 or _normalize(parts[0]) != "staff_charge":
+            break
+        try:
+            rank = max(1, int(parts[1]))
+        except Exception:
+            continue
+        tier = _tier_for_rank(rank)
+        if int(mutable_budget.get(tier, 0) or 0) <= 0:
+            continue
+        mutable_budget[tier] = max(0, int(mutable_budget.get(tier, 0) or 0) - 1)
+        extra_charge_ranks.append(rank)
+
+    charges_total = max(0, int(highest_rank)) + sum(int(rank) for rank in extra_charge_ranks)
+    payload = {
+        "enabled": True,
+        "cantrip_spell": cantrip_spell,
+        "rank_1_spell": rank1_spell,
+        "base_charges": max(0, int(highest_rank)),
+        "charges_total": max(0, int(charges_total)),
+        "charges_remaining": max(0, int(charges_total)),
+        "extra_charge_ranks": list(extra_charge_ranks),
+        "max_extra_spells": max_extra_spells,
+    }
+
+    if hasattr(game, "ui_log"):
+        try:
+            extra_desc = ", ".join([f"R{rank}" for rank in extra_charge_ranks]) or "-"
+            game.ui_log(
+                "Wizard Staff Nexus: "
+                f"cantrip={_labelize(cantrip_spell)}, rank1={_labelize(rank1_spell)}, "
+                f"ladunki={int(payload['charges_total'])} (bazowe {int(payload['base_charges'])}, dodatkowe: {extra_desc})."
+            )
+        except Exception:
+            pass
+    return mutable_budget, payload
+
+
 def _wizard_prepare_today(state: dict[str, Any], actor, game, *, prompt: bool) -> None:
     setup = _wizard_setup_data(actor)
     slot_budget = _wizard_slot_budget_by_tier(actor)
@@ -1396,6 +1641,22 @@ def _wizard_prepare_today(state: dict[str, Any], actor, game, *, prompt: bool) -
     state["wizard_spell_blending"] = dict(blend_payload)
     try:
         setattr(actor, "wizard_spell_blending", dict(blend_payload))
+    except Exception:
+        pass
+
+    staff_budget, staff_payload = _wizard_apply_staff_nexus(
+        actor,
+        game,
+        setup=setup,
+        slot_budget=slot_budget,
+        prompt=prompt,
+    )
+    slot_budget = dict(staff_budget)
+    state["wizard_staff_nexus"] = dict(staff_payload)
+    try:
+        setattr(actor, "wizard_staff_nexus", dict(staff_payload))
+        setattr(actor, "wizard_staff_nexus_charges_total", int(staff_payload.get("charges_total", 0) or 0))
+        setattr(actor, "wizard_staff_nexus_charges_remaining", int(staff_payload.get("charges_remaining", 0) or 0))
     except Exception:
         pass
 
@@ -1702,6 +1963,7 @@ def initialize_actor_spell_management(
         _ensure_cleric_baseline_known(actor, known)
     if class_name == "druid":
         _ensure_druid_baseline_known(actor, known)
+    _apply_removed_cantrip_overrides(actor, known)
     has_spell_content = any(bool(values) for values in known.values()) or _merchant_one_shot_total(one_shot) > 0
     enabled = has_spell_content or class_name in _CASTER_CLASSES
 
@@ -1778,6 +2040,7 @@ def ensure_actor_spell_state(actor, *, game=None, enforce: bool | None = None) -
             merged_known[tier] = merged
         raw["class_name"] = class_name
         raw["known"] = merged_known
+        _apply_removed_cantrip_overrides(actor, raw["known"])
         raw["merchant_one_shot"] = one_shot
         raw["merchant_known"] = {tier: sorted(values) for tier, values in merchant_known.items()}
         raw["enabled"] = bool(

@@ -1,0 +1,798 @@
+{
+  "character_id": "freya",
+  "name": "Freya",
+  "concept": "",
+  "level": 1,
+  "ancestry_id": "human",
+  "heritage_id": "half_elf",
+  "ancestry_feat_id": "natural_ambition",
+  "background_id": "background_fortune_teller",
+  "class_id": "sorcerer",
+  "class_feat_ids": [
+    "dangerous_sorcery"
+  ],
+  "portrait_image": "/static/portraits/custom/hero_14e17b56.jpg",
+  "status_ids": [
+    "human",
+    "half_elf",
+    "dim_light_vision",
+    "background_fortune_teller",
+    "oddity_identification",
+    "sorcerer",
+    "dangerous_sorcery",
+    "natural_ambition",
+    "familiar",
+    "familiarowner"
+  ],
+  "status_data": {
+    "human": {
+      "ui_description": "Punkty Zycia: 8\nRozmiar: Sredni\nPredkosc: 25 stop\nBoosty atrybutow: Dwa dowolne boosty\nJezyki: Common\nDodatkowe jezyki: 1 + modyfikator Inteligencji (jesli dodatni), z listy jezykow powszechnych i regionalnych.\nCechy: Human, Humanoid.",
+      "ancestry_hp": 8,
+      "base_speed_feet": 25,
+      "size": "medium",
+      "ancestry_traits": [
+        "human",
+        "humanoid"
+      ],
+      "ancestry_languages": [
+        "common"
+      ],
+      "ancestry_bonus_languages_base": 1,
+      "ancestry_bonus_languages_source": "int_modifier_positive",
+      "ability_boosts": [
+        "free",
+        "free"
+      ]
+    },
+    "half_elf": {
+      "ui_description": "Co najmniej jedno z twoich rodzicow jest elfem lub polelfem.\nMasz wyrazne cechy elfiego pochodzenia, jak ostre uszy.\nZyskujesz cechy elf i half-elf oraz widzenie w polmroku.\nDodatkowo przy wyborze ancestry featow mozesz wybierac featy\nz listy elf, half-elf i human.",
+      "ancestry_extra_traits": [
+        "elf",
+        "half_elf"
+      ],
+      "ancestry_feat_access": [
+        "elf",
+        "half_elf",
+        "human"
+      ],
+      "grants_statuses": [
+        {
+          "id": "dim_light_vision",
+          "label": "Dim Light Vision",
+          "duration": null,
+          "source": null,
+          "stacks": false,
+          "data": {},
+          "check_effects": [
+            {
+              "applies_to": "source",
+              "skills": [
+                "perception"
+              ],
+              "tags_required": null,
+              "bonus_effects": [],
+              "promote": 0,
+              "demote": 0,
+              "promote_on": null,
+              "demote_on": null,
+              "prompt_notes": [
+                "Ignorujesz efekty polmroku."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "dim_light_vision": {},
+    "background_fortune_teller": {
+      "ui_description": "Praktykowales sztuke wrozenia i otarles sie o tajemnice okultyzmu.",
+      "ui_prompt": "Background: Wrozbita",
+      "ui_prompt_long": "Praktykowales sztuke wrozenia i otarles sie o tajemnice okultyzmu.\n\nMechanika (w tym silniku):\n- Boosty cech (informacyjnie w UI): Jeden boost do Inteligencji lub Charyzmy oraz jeden dowolny boost.\n- Szkolenie Skill/Lore (informacyjnie w UI): Okultyzm oraz Wiedza: Wrozenie.\n- Feat z backgroundu: Oddity Identification (dodawany do bohatera jako status).\n- Mechanika featu (krotko): +2 status do testów Okultyzmu.\n\nPrzypomnienie reguły bazowej: Na 1. poziomie wybierasz jeden background i tej decyzji nie zmieniasz później. Każdy background daje dwa boosty cech (jeden ograniczony, jeden dowolny), trained w jednym skillu i jednym Lore oraz jeden skill feat. W tym silniku boosty cech i szkolenia skill/Lore są informacją UI, a feat z backgroundu jest dodawany do bohatera jako realny status.",
+      "is_background": true,
+      "background_key": "fortune_teller",
+      "background_label": "Wrozbita",
+      "background_ability_boosts_ui": "Jeden boost do Inteligencji lub Charyzmy oraz jeden dowolny boost.",
+      "background_skill_training_ui": "Okultyzm oraz Wiedza: Wrozenie.",
+      "background_skill_training_ui_only": true,
+      "background_feat_id": "oddity_identification",
+      "background_core_rules_ui": "Na 1. poziomie wybierasz jeden background i tej decyzji nie zmieniasz później. Każdy background daje dwa boosty cech (jeden ograniczony, jeden dowolny), trained w jednym skillu i jednym Lore oraz jeden skill feat. W tym silniku boosty cech i szkolenia skill/Lore są informacją UI, a feat z backgroundu jest dodawany do bohatera jako realny status.",
+      "grants_statuses": [
+        {
+          "id": "oddity_identification",
+          "label": "Oddity Identification",
+          "duration": null,
+          "source": null,
+          "stacks": false,
+          "data": {
+            "ui_description": "Skuteczniej rozpoznajesz niezwykłe obiekty i osobliwości okultystyczne.\nMechanika: +2 status do testów Okultyzmu.",
+            "skill_feat_placeholder": false,
+            "skill_feat_fallback_mechanic": true
+          },
+          "check_effects": [
+            {
+              "applies_to": "source",
+              "skills": [
+                "occultism"
+              ],
+              "tags_required": null,
+              "bonus_effects": [
+                {
+                  "type": "status",
+                  "value": 2,
+                  "tag": "occultism",
+                  "source": "status:oddity_identification",
+                  "target_id": null,
+                  "label": "oddity_identification +2",
+                  "is_penalty": false,
+                  "duration_turns": null
+                }
+              ],
+              "promote": 0,
+              "demote": 0,
+              "promote_on": null,
+              "demote_on": null,
+              "prompt_notes": [
+                "Oddity Identification: +2 status."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "oddity_identification": {
+      "ui_description": "Skuteczniej rozpoznajesz niezwykłe obiekty i osobliwości okultystyczne.\nMechanika: +2 status do testów Okultyzmu.",
+      "skill_feat_placeholder": false,
+      "skill_feat_fallback_mechanic": true
+    },
+    "sorcerer": {
+      "ui_prompt": "KEY ABILITY: CHARISMA\nAt 1st level, your class gives you an ability boost to Charisma.\nHIT POINTS: 6 plus your Constitution Modifier\n\nINITIAL PROFICIENCIES (summary):\nPerception: Trained\nSaving Throws: Trained Fortitude, Trained Reflex, Expert Will\nAttacks: Trained simple weapons + unarmed\nDefenses: Trained unarmored defense\n\nCLASS FEATURES:\nBloodline: wybierasz source mocy, tradycje czarow, bloodline skills oraz granted spells.\nSpellcasting: spontaniczne czary z spell repertoire.\nNa 1. poziomie wybierasz 5 cantripow i 2 czary 1. rangi z tradycji bloodline.\nBloodline cantrip/rank1 sa dopisywane jako dodatkowe znane czary.\nSloty na dzien: zgodnie z tabela Sorcerer Spells per Day (CRB Table 3-17).\nFocus Pool: 1 Focus Point.\nPodczas setupu wybierasz bloodline i 1 class feat poziomu 1.",
+      "class_hp": 6,
+      "ui_choice_kind": "sorcerer_setup",
+      "sorcerer_key_ability_choices": [
+        "charisma"
+      ],
+      "sorcerer_bloodline_choices": [
+        "aberrant",
+        "angelic",
+        "demonic",
+        "diabolic",
+        "draconic",
+        "elemental",
+        "fey",
+        "hag",
+        "imperial",
+        "undead"
+      ],
+      "sorcerer_feat_choices": [
+        "counterspell",
+        "dangerous_sorcery",
+        "familiar",
+        "reach_spell",
+        "widen_spell"
+      ],
+      "sorcerer_bloodline_traditions": {
+        "aberrant": "occult",
+        "angelic": "divine",
+        "demonic": "divine",
+        "diabolic": "divine",
+        "draconic": "arcane",
+        "elemental": "primal",
+        "fey": "primal",
+        "hag": "occult",
+        "imperial": "arcane",
+        "undead": "divine"
+      },
+      "sorcerer_bloodline_skills": [
+        "intimidation",
+        "nature"
+      ],
+      "sorcerer_bloodline_granted_spells": {
+        "cantrip": "produce_flame",
+        "rank_1": "burning_hands",
+        "rank_2": "resist_energy",
+        "rank_3": "fireball",
+        "rank_4": "freedom_of_movement",
+        "rank_5": "elemental_form",
+        "rank_6": "repulsion",
+        "rank_7": "energy_aegis",
+        "rank_8": "prismatic_wall",
+        "rank_9": "storm_of_vengeance"
+      },
+      "sorcerer_bloodline_initial_focus_spells": {
+        "aberrant": "tentacular_limbs",
+        "angelic": "angelic_halo",
+        "demonic": "gluttons_jaws",
+        "diabolic": "diabolic_edict",
+        "draconic": "dragon_claws",
+        "elemental": "elemental_toss",
+        "fey": "faerie_dust",
+        "hag": "jealous_hex",
+        "imperial": "ancestral_memories",
+        "undead": "undeaths_blessing"
+      },
+      "sorcerer_bloodline_blood_magic": {
+        "aberrant": "Will saves +2 status (1 runda) dla ciebie lub 1 celu.",
+        "angelic": "Saving throws +1 status (1 runda) dla ciebie lub 1 celu.",
+        "demonic": "Cel: -1 status do AC (1 runda) albo ty: +1 status do Intimidation (1 runda).",
+        "diabolic": "Cel: +1 fire damage/level albo ty: +1 status do Deception (1 runda).",
+        "draconic": "AC +1 status (1 runda) dla ciebie lub 1 celu.",
+        "elemental": "Ty: +1 status do Intimidation (1 runda) albo cel: 1 damage/level (typ zalezny od elementu).",
+        "fey": "Concealed (1 runda) dla ciebie lub 1 celu (bez mozliwosci Hide).",
+        "hag": "Pierwszy przeciwnik, ktory zada ci damage, otrzymuje 2 mental damage/level (basic Will).",
+        "imperial": "Skill checks +1 status (1 runda) dla ciebie lub 1 celu.",
+        "undead": "Ty: temp HP = spell level (1 runda) albo cel: 1 negative damage/level."
+      },
+      "sorcerer_known_cantrips_at_level1": 5,
+      "sorcerer_known_rank_1_spells_at_level1": 2,
+      "sorcerer_rank_1_slots_per_day": 3,
+      "sorcerer_spells_per_day": {
+        "1": {
+          "cantrip": 5,
+          "rank_1": 3
+        },
+        "2": {
+          "cantrip": 5,
+          "rank_1": 4
+        },
+        "3": {
+          "cantrip": 5,
+          "rank_1": 4,
+          "rank_2": 3
+        },
+        "4": {
+          "cantrip": 5,
+          "rank_1": 4,
+          "rank_2": 4
+        },
+        "5": {
+          "cantrip": 5,
+          "rank_1": 4,
+          "rank_2": 4,
+          "rank_3": 3
+        },
+        "6": {
+          "cantrip": 5,
+          "rank_1": 4,
+          "rank_2": 4,
+          "rank_3": 4
+        },
+        "7": {
+          "cantrip": 5,
+          "rank_1": 4,
+          "rank_2": 4,
+          "rank_3": 4,
+          "rank_4": 3
+        },
+        "8": {
+          "cantrip": 5,
+          "rank_1": 4,
+          "rank_2": 4,
+          "rank_3": 4,
+          "rank_4": 4
+        },
+        "9": {
+          "cantrip": 5,
+          "rank_1": 4,
+          "rank_2": 4,
+          "rank_3": 4,
+          "rank_4": 4,
+          "rank_5": 3
+        },
+        "10": {
+          "cantrip": 5,
+          "rank_1": 4,
+          "rank_2": 4,
+          "rank_3": 4,
+          "rank_4": 4,
+          "rank_5": 4
+        },
+        "11": {
+          "cantrip": 5,
+          "rank_1": 4,
+          "rank_2": 4,
+          "rank_3": 4,
+          "rank_4": 4,
+          "rank_5": 4,
+          "rank_6": 3
+        },
+        "12": {
+          "cantrip": 5,
+          "rank_1": 4,
+          "rank_2": 4,
+          "rank_3": 4,
+          "rank_4": 4,
+          "rank_5": 4,
+          "rank_6": 4
+        },
+        "13": {
+          "cantrip": 5,
+          "rank_1": 4,
+          "rank_2": 4,
+          "rank_3": 4,
+          "rank_4": 4,
+          "rank_5": 4,
+          "rank_6": 4,
+          "rank_7": 3
+        },
+        "14": {
+          "cantrip": 5,
+          "rank_1": 4,
+          "rank_2": 4,
+          "rank_3": 4,
+          "rank_4": 4,
+          "rank_5": 4,
+          "rank_6": 4,
+          "rank_7": 4
+        },
+        "15": {
+          "cantrip": 5,
+          "rank_1": 4,
+          "rank_2": 4,
+          "rank_3": 4,
+          "rank_4": 4,
+          "rank_5": 4,
+          "rank_6": 4,
+          "rank_7": 4,
+          "rank_8": 3
+        },
+        "16": {
+          "cantrip": 5,
+          "rank_1": 4,
+          "rank_2": 4,
+          "rank_3": 4,
+          "rank_4": 4,
+          "rank_5": 4,
+          "rank_6": 4,
+          "rank_7": 4,
+          "rank_8": 4
+        },
+        "17": {
+          "cantrip": 5,
+          "rank_1": 4,
+          "rank_2": 4,
+          "rank_3": 4,
+          "rank_4": 4,
+          "rank_5": 4,
+          "rank_6": 4,
+          "rank_7": 4,
+          "rank_8": 4,
+          "rank_9": 3
+        },
+        "18": {
+          "cantrip": 5,
+          "rank_1": 4,
+          "rank_2": 4,
+          "rank_3": 4,
+          "rank_4": 4,
+          "rank_5": 4,
+          "rank_6": 4,
+          "rank_7": 4,
+          "rank_8": 4,
+          "rank_9": 4
+        },
+        "19": {
+          "cantrip": 5,
+          "rank_1": 4,
+          "rank_2": 4,
+          "rank_3": 4,
+          "rank_4": 4,
+          "rank_5": 4,
+          "rank_6": 4,
+          "rank_7": 4,
+          "rank_8": 4,
+          "rank_9": 4,
+          "rank_10": 1
+        },
+        "20": {
+          "cantrip": 5,
+          "rank_1": 4,
+          "rank_2": 4,
+          "rank_3": 4,
+          "rank_4": 4,
+          "rank_5": 4,
+          "rank_6": 4,
+          "rank_7": 4,
+          "rank_8": 4,
+          "rank_9": 4,
+          "rank_10": 1
+        }
+      },
+      "sorcerer_draconic_type_choices": [
+        "black",
+        "blue",
+        "brass",
+        "bronze",
+        "copper",
+        "gold",
+        "green",
+        "red",
+        "silver",
+        "white"
+      ],
+      "sorcerer_draconic_type_damage": {
+        "black": "acid",
+        "blue": "electricity",
+        "brass": "fire",
+        "bronze": "electricity",
+        "copper": "acid",
+        "gold": "fire",
+        "green": "poison",
+        "red": "fire",
+        "silver": "cold",
+        "white": "cold"
+      },
+      "sorcerer_elemental_type_choices": [
+        "air",
+        "earth",
+        "fire",
+        "water"
+      ],
+      "sorcerer_elemental_type_damage": {
+        "air": "bludgeoning",
+        "earth": "bludgeoning",
+        "fire": "fire",
+        "water": "bludgeoning"
+      },
+      "set_actor_attrs": {
+        "class_name": "sorcerer",
+        "focus_point": 1
+      },
+      "sorcerer_setup": {
+        "key_ability": "charisma",
+        "bloodline": "elemental",
+        "spell_tradition": "primal",
+        "class_feat": "dangerous_sorcery",
+        "trained_skills": [
+          "intimidation",
+          "nature"
+        ],
+        "known_cantrips": [
+          "produce_flame",
+          "acid_splash",
+          "electric_arc",
+          "ray_of_frost",
+          "detect_magic"
+        ],
+        "known_rank_1_spells": [
+          "hydraulic_push",
+          "gust_of_wind",
+          "burning_hands"
+        ],
+        "rank_1_slots_per_day": 3,
+        "bloodline_cantrip": "produce_flame",
+        "bloodline_rank_1_spell": "burning_hands",
+        "bloodline_initial_focus_spell": "elemental_toss",
+        "blood_magic": "Ty: +1 status do Intimidation (1 runda) albo cel: 1 damage/level (typ zalezny od elementu).",
+        "elemental_type": "fire",
+        "elemental_damage_type": "fire"
+      },
+      "sorcerer_key_ability": "charisma",
+      "sorcerer_bloodline": "elemental",
+      "sorcerer_spell_tradition": "primal",
+      "sorcerer_class_feat": "dangerous_sorcery",
+      "sorcerer_known_cantrips": [
+        "produce_flame",
+        "acid_splash",
+        "electric_arc",
+        "ray_of_frost",
+        "detect_magic"
+      ],
+      "sorcerer_known_rank_1_spells": [
+        "hydraulic_push",
+        "gust_of_wind",
+        "burning_hands"
+      ],
+      "sorcerer_bloodline_initial_focus_spell": "elemental_toss",
+      "sorcerer_blood_magic": "Ty: +1 status do Intimidation (1 runda) albo cel: 1 damage/level (typ zalezny od elementu).",
+      "sorcerer_elemental_type": "fire",
+      "sorcerer_elemental_damage_type": "fire"
+    },
+    "dangerous_sorcery": {
+      "ui_description": "Dangerous Sorcery: gdy rzucasz czar ze slotu, ktory zadaje damage i nie ma duration, otrzymuje on status bonus do damage rowny poziomowi czaru. Silnik dolicza poziom slotu automatycznie, a w niejednoznacznych przypadkach prosi tylko o potwierdzenie zastosowania feata.",
+      "ui_prompt": "Dangerous Sorcery: gdy rzucasz czar ze slotu, ktory zadaje damage i nie ma duration, otrzymuje on status bonus do damage rowny poziomowi czaru. Silnik dolicza poziom slotu automatycznie, a w niejednoznacznych przypadkach prosi tylko o potwierdzenie zastosowania feata.",
+      "dangerous_sorcery_damage_bonus_per_spell_level": 1
+    },
+    "natural_ambition": {
+      "ui_description": "Mechanika: wybierasz dodatkowy class feat poziomu 1 dla swojej klasy.\nFeat jest od razu dodawany jako status bohatera i dziala normalnie jak inne featy klasowe.\nSpecjalne: tylko przy tworzeniu postaci na 1. poziomie.",
+      "ui_choice_kind": "natural_ambition",
+      "natural_ambition_class_feat_choices": {
+        "alchemist": [
+          "quick_alchemy_allow",
+          "quick_bomber",
+          "far_lobber",
+          "alchemical_savant",
+          "alchemist_familiar_guidance",
+          "advanced_alchemy"
+        ],
+        "barbarian": [
+          "moment_of_clarity",
+          "raging_thrower",
+          "cute_vision"
+        ],
+        "bard": [
+          "bardic_lore",
+          "lingering_composition",
+          "versatile_performance",
+          "reach_spell"
+        ],
+        "champion": [
+          "deitys_domain",
+          "ranged_reprisal",
+          "unimpeded_step",
+          "weight_of_guilt"
+        ],
+        "cleric": [
+          "deadly_simplicity",
+          "domain_initiate",
+          "harming_hands",
+          "healing_hands",
+          "holy_castigation",
+          "reach_spell"
+        ],
+        "druid": [
+          "animal_companion",
+          "leshy_familiar",
+          "reach_spell",
+          "storm_born",
+          "widen_spell",
+          "wild_shape"
+        ],
+        "fighter": [
+          "double_slice",
+          "exacting_strike",
+          "point_blank_shot",
+          "power_attack",
+          "reactive_shield",
+          "snagging_strike",
+          "sudden_charge"
+        ],
+        "monk": [
+          "crane_stance",
+          "dragon_stance",
+          "ki_rush",
+          "ki_strike",
+          "monastic_weaponry",
+          "mountain_stance",
+          "tiger_stance",
+          "wolf_stance"
+        ],
+        "ranger": [
+          "animal_companion",
+          "crossbow_ace",
+          "hunted_shot",
+          "monster_hunter",
+          "twin_takedown"
+        ],
+        "sorcerer": [
+          "counterspell",
+          "dangerous_sorcery",
+          "familiar",
+          "reach_spell",
+          "widen_spell"
+        ],
+        "wizard": [
+          "counterspell",
+          "eschew_materials",
+          "familiar",
+          "reach_spell",
+          "widen_spell"
+        ]
+      },
+      "class_name": "sorcerer",
+      "class_feat": "familiar"
+    },
+    "familiar": {
+      "ui_description": "Familiar: zyskujesz familiara i mozesz korzystac z akcji Command Familiar.",
+      "ui_prompt": "Familiar: zyskujesz familiara i mozesz korzystac z akcji Command Familiar.",
+      "grants_statuses": [
+        {
+          "id": "FamiliarOwner",
+          "label": "Familiar Owner",
+          "duration": null,
+          "source": null,
+          "stacks": false,
+          "data": {
+            "ui_description": "Posiadasz familiara i możesz go komenderować."
+          },
+          "check_effects": null
+        }
+      ]
+    },
+    "familiarowner": {
+      "ui_description": "Posiadasz familiara i możesz go komenderować."
+    }
+  },
+  "ability_scores": {
+    "strength": 10,
+    "dexterity": 12,
+    "constitution": 14,
+    "intelligence": 12,
+    "wisdom": 12,
+    "charisma": 18
+  },
+  "ability_modifiers": {
+    "strength": 0,
+    "dexterity": 1,
+    "constitution": 2,
+    "intelligence": 1,
+    "wisdom": 1,
+    "charisma": 4
+  },
+  "skill_ranks": {
+    "arcana": "trained",
+    "deception": "trained",
+    "intimidation": "trained",
+    "nature": "trained",
+    "occultism": "trained",
+    "stealth": "trained"
+  },
+  "skill_modifiers": {
+    "acrobatics": 1,
+    "arcana": 4,
+    "athletics": 0,
+    "crafting": 1,
+    "deception": 7,
+    "diplomacy": 4,
+    "intimidation": 7,
+    "medicine": 1,
+    "nature": 4,
+    "occultism": 4,
+    "performance": 4,
+    "religion": 1,
+    "society": 1,
+    "stealth": 4,
+    "survival": 1,
+    "thievery": 1
+  },
+  "trained_skills": [
+    "arcana",
+    "deception",
+    "intimidation",
+    "nature",
+    "occultism",
+    "stealth"
+  ],
+  "lore_skills": [
+    "Fortune Telling (Wiedza)"
+  ],
+  "languages": [
+    "common"
+  ],
+  "traits": [
+    "human",
+    "humanoid"
+  ],
+  "perception_rank": "trained",
+  "perception_bonus": 4,
+  "focus_point": 1,
+  "focus_pool_max": 1,
+  "save_ranks": {
+    "fortitude": "trained",
+    "reflex": "trained",
+    "will": "expert"
+  },
+  "fortitude_bonus": 5,
+  "reflex_bonus": 4,
+  "will_bonus": 6,
+  "weapon_proficiency_ranks": {
+    "simple": "trained",
+    "unarmed": "trained"
+  },
+  "defense_proficiency_ranks": {
+    "unarmored": "trained"
+  },
+  "max_hp": 16,
+  "base_speed_feet": 25,
+  "speed_feet": 25,
+  "ac": 14,
+  "starting_gold_gp": 15,
+  "coin_pouch": {
+    "cp": 0,
+    "sp": 6,
+    "gp": 2,
+    "pp": 0
+  },
+  "track_ammo": true,
+  "inventory_items": [
+    {
+      "item_id": "unarmed",
+      "category": "weapon",
+      "name": "Unarmed",
+      "description": "",
+      "traits": [
+        "agile",
+        "finesse",
+        "unarmed",
+        "free_hand"
+      ],
+      "price_cp": 0,
+      "bulk": "-",
+      "instance_id": "item-37aba8d826",
+      "event_name": "unarmed",
+      "preparation_counter": 0,
+      "prepared_by_quick_alchemy": false,
+      "prepared_by_advanced_alchemy": false
+    },
+    {
+      "item_id": "scroll_common_rank1",
+      "category": "potion",
+      "name": "Zwoj: Magiczny pocisk",
+      "description": "Jednorazowo rzuca czar: Magiczny pocisk.",
+      "traits": [
+        "consumable",
+        "magic",
+        "scroll"
+      ],
+      "price_cp": 400,
+      "bulk": "L",
+      "instance_id": "item-7eeb1769d2",
+      "event_name": "scroll_common_rank1",
+      "preparation_counter": 0,
+      "prepared_by_quick_alchemy": false,
+      "prepared_by_advanced_alchemy": false,
+      "scroll_spell_id": "magic_missile"
+    },
+    {
+      "item_id": "scroll_common_rank1",
+      "category": "potion",
+      "name": "Zwoj: Pancerz maga",
+      "description": "Jednorazowo rzuca czar: Pancerz maga.",
+      "traits": [
+        "consumable",
+        "magic",
+        "scroll"
+      ],
+      "price_cp": 400,
+      "bulk": "L",
+      "instance_id": "item-e412d9b9b7",
+      "event_name": "scroll_common_rank1",
+      "preparation_counter": 0,
+      "prepared_by_quick_alchemy": false,
+      "prepared_by_advanced_alchemy": false,
+      "scroll_spell_id": "mage_armor"
+    },
+    {
+      "item_id": "scroll_common_rank1",
+      "category": "potion",
+      "name": "Zwoj: Prawdziwy cios",
+      "description": "Jednorazowo rzuca czar: Prawdziwy cios. Czar 1 rangi: przy nastepnym ataku rzucasz 2k20 i wybierasz lepszy wynik.",
+      "traits": [
+        "consumable",
+        "magic",
+        "scroll"
+      ],
+      "price_cp": 400,
+      "bulk": "L",
+      "instance_id": "item-60cc3626a5",
+      "event_name": "scroll_common_rank1",
+      "preparation_counter": 0,
+      "prepared_by_quick_alchemy": false,
+      "prepared_by_advanced_alchemy": false,
+      "scroll_spell_id": "true_strike"
+    },
+    {
+      "item_id": "rations_week",
+      "category": "gear",
+      "name": "Racje (1 tydzien)",
+      "description": "Racje zywnosciowe na tydzien.",
+      "traits": [
+        "consumable"
+      ],
+      "price_cp": 40,
+      "bulk": "L",
+      "instance_id": "item-d6ea3bcb91"
+    }
+  ],
+  "weapon_loadout": [
+    "unarmed"
+  ],
+  "armor_loadout": [],
+  "shield_loadout": [],
+  "equipped_weapon_ids": [],
+  "equipped_armor_id": "",
+  "equipped_shield_id": "",
+  "equipped_armor_item_id": "",
+  "equipped_shield_hand": "",
+  "created_at": "2026-03-17T12:03:47.159935+00:00",
+  "updated_at": "2026-03-17T12:03:47.160669+00:00"
+}

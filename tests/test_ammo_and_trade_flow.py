@@ -205,3 +205,31 @@ def test_npc_trade_blocks_purchase_when_insufficient_funds():
     assert actor_total_cp(hero) == 100
     inventory_ids = {str(getattr(item, "item_id", "") or "").strip().lower() for item in list(getattr(hero, "inventory", []) or [])}
     assert "healer_tools" not in inventory_ids
+
+
+def test_npc_trade_scroll_purchase_configures_spell_at_buy_time():
+    ui = _FakeChoiceUI(["1", "true_strike", "__exit_trade__"])
+    game = type("GameStub", (), {"ui": ui})()
+    hero = Hero()
+    set_actor_total_cp(hero, 500)
+    npc = BaseNPC(
+        name="Kupiec testowy",
+        inventory=[TradeItem(item_id="scroll_common_rank1", name="Zwoj czaru 1. rangi", price=400, kind="equipment", stock=1)],
+        enable_talk=False,
+        enable_diplomacy=False,
+        enable_pickpocket=False,
+    )
+
+    message = npc.action_trade(hero, game)
+
+    assert "kupiono" in str(message or "").lower()
+    scrolls = [
+        item
+        for item in list(getattr(hero, "inventory", []) or [])
+        if str(getattr(item, "item_id", "") or "").strip().lower() == "scroll_common_rank1"
+    ]
+    assert len(scrolls) == 1
+    assert str(getattr(scrolls[0], "scroll_spell_id", "") or "").strip().lower() == "true_strike"
+    assert "prawdziwy cios" in str(getattr(scrolls[0], "name", "") or "").strip().lower()
+    assert actor_total_cp(hero) == 100
+    assert int(npc.inventory[0].stock) == 0

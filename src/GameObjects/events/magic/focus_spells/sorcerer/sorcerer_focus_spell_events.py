@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from combat import ac_with_bonuses
 from combat.damage_utils import burn_it_bonus, burn_it_prompt_note
-from combat.degree_of_success import is_critical_success, is_hit, natural_shift_from_roll, resolve_outcome
 from combat.hp_engine import apply_damage as hp_apply_damage
 from bonuses import BonusEffect, BonusType
 from statuses import ClumsyStatus, EnfeebledStatus, Status
+from GameObjects.companions.support_runtime import apply_spell_attack_animal_companion_support
 from GameObjects.interactions_mixin import prompt_for_roll
+from GameObjects.events.magic.base_attack_magic_event import prompt_spell_attack_roll
 
 from ....base import EventContext, EventResult
 from ....registry import register_event
@@ -411,16 +412,15 @@ class ElementalTossEvent(SorcererFocusSpellEvent):
             return EventResult.cancelled(message="Elemental Toss: brak celu.")
 
         target_ac = int(ac_with_bonuses(target, attacker=actor, include_magic=True)[0] or 10)
-        roll = int(
-            prompt_for_roll(
-                f"Elemental Toss: atak przeciw AC {target_ac}",
-                layout="test",
-                answer_placeholder="Wynik k20",
-            )
-            or 0
+        attack_result = prompt_spell_attack_roll(
+            actor=actor,
+            target=target,
+            target_ac=target_ac,
+            action_tag="magic",
+            prompt_text=f"Elemental Toss: atak przeciw AC {target_ac}",
+            game=getattr(ctx, "game", None),
         )
-        outcome = resolve_outcome(roll, target_ac, natural_shift=natural_shift_from_roll(roll))
-        if not is_hit(outcome):
+        if not bool(attack_result.get("hit")):
             return EventResult(success=True, consumed_action=True, message="Elemental Toss: pudlo.")
 
         rank = max(1, int(focus_spell_rank(actor, minimum=1) or 1))
@@ -452,17 +452,30 @@ class ElementalTossEvent(SorcererFocusSpellEvent):
             )
             or 0
         )
-        if is_critical_success(outcome):
+        if bool(attack_result.get("critical")):
             damage *= 2
         defeated = _apply_damage(target, damage, damage_type, source=self.name)
         msg = f"Elemental Toss: zadano {damage} {damage_type}."
+        support_result = apply_spell_attack_animal_companion_support(ctx, actor, target, tags=self.spell_tags)
+        defeated = bool(defeated or support_result.get("defeated"))
+        if support_result.get("applied"):
+            notes = [str(note) for note in list(support_result.get("notes") or []) if str(note)]
+            if notes:
+                msg = f"{msg} {' '.join(notes)}".strip()
         if defeated:
             msg += " Cel pokonany."
         return EventResult(
             success=True,
             consumed_action=True,
             message=msg,
-            data={"target": target, "damage": int(damage), "damage_type": damage_type},
+            data={
+                "target": target,
+                "damage": int(damage),
+                "damage_type": damage_type,
+                "animal_companion_support_applied": bool(support_result.get("applied")),
+                "animal_companion_support_notes": list(support_result.get("notes") or []),
+                "defeated": defeated,
+            },
         )
 
 

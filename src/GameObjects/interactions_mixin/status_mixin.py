@@ -687,6 +687,176 @@ class StatusMixin:
         return "\n".join([parts[0]] + [f"- {part}" for part in parts[1:]]).strip()
 
     @staticmethod
+    def _hint_fluff_prefix(text: str) -> str:
+        raw = str(text or "").strip()
+        if not raw:
+            return ""
+        marker_idx = raw.lower().find("mechanika:")
+        if marker_idx >= 0:
+            raw = raw[:marker_idx].strip(" .;|-")
+        return StatusMixin._first_line(raw).strip(" .;|-")
+
+    @staticmethod
+    def _compact_hint_summary(text: str, max_parts: int = 2) -> str:
+        parts: list[str] = []
+        for raw_line in str(text or "").splitlines():
+            line = str(raw_line or "").strip().lstrip("-•").strip()
+            if not line:
+                continue
+            parts.append(line.rstrip(" .;"))
+            if len(parts) >= max_parts:
+                break
+        return "; ".join(parts).strip()
+
+    @staticmethod
+    def _cleric_deity_setup_hint(choice_id: str) -> str:
+        normalized = StatusMixin._normalize_choice_id(choice_id)
+        if not normalized:
+            return ""
+
+        try:
+            from statuses.classes.cleric.cleric import (
+                CLERIC_DEITY_DIVINE_SKILL_CHOICES,
+                CLERIC_DEITY_FLAVOR_TEXT,
+                CLERIC_DEITY_OPTIONS,
+                CLERIC_DOMAIN_ADVANCED_SPELLS,
+                CLERIC_DOMAIN_INITIAL_SPELLS,
+            )
+        except Exception:
+            return ""
+
+        deity_data = dict(CLERIC_DEITY_OPTIONS.get(normalized, {}) or {})
+        if not deity_data:
+            return ""
+
+        favored_weapon = str(deity_data.get("favored_weapon") or "wybor gracza").strip()
+        divine_skills = [
+            str(item or "").strip()
+            for item in list(CLERIC_DEITY_DIVINE_SKILL_CHOICES.get(normalized) or [])
+            if str(item or "").strip()
+        ]
+        fonts = [
+            str(item or "").strip()
+            for item in list(deity_data.get("font_options") or [])
+            if str(item or "").strip()
+        ]
+        domains = [
+            str(item or "").strip()
+            for item in list(deity_data.get("domain_choices") or [])
+            if str(item or "").strip()
+        ]
+
+        skills_label = ", ".join(localize_term_pl(item) for item in divine_skills) if divine_skills else "-"
+        fonts_label = ", ".join(localize_term_pl(item) for item in fonts) if fonts else "-"
+        domains_label = ", ".join(localize_term_pl(item) for item in domains) if domains else "-"
+
+        fluff = str(CLERIC_DEITY_FLAVOR_TEXT.get(normalized) or "").strip()
+        if not fluff:
+            fluff = StatusMixin._hint_fluff_prefix(localized_hint_pl(normalized))
+        if not fluff:
+            fluff = f"Bostwo {localize_term_pl(normalized)}."
+
+        mechanics_lines = [
+            f"Ulubiona bron: {localize_term_pl(favored_weapon)}.",
+            f"Divine skill: {skills_label}.",
+            f"Dozwolony divine font: {fonts_label}.",
+            f"Domeny do wyboru: {domains_label}.",
+        ]
+
+        for domain_id in domains:
+            spell_id = str(CLERIC_DOMAIN_INITIAL_SPELLS.get(domain_id) or "").strip()
+            advanced_spell_id = str(CLERIC_DOMAIN_ADVANCED_SPELLS.get(domain_id) or "").strip()
+            spell_summary = StatusMixin._compact_hint_summary(StatusMixin._domain_spell_fallback_hint(spell_id))
+
+            domain_parts: list[str] = []
+            if spell_id:
+                domain_parts.append(f"czar domenowy: {localize_term_pl(spell_id)}")
+            if advanced_spell_id:
+                domain_parts.append(f"advanced domain spell: {localize_term_pl(advanced_spell_id)}")
+            if spell_summary:
+                domain_parts.append(f"mechanika czaru: {spell_summary}")
+
+            if domain_parts:
+                mechanics_lines.append(
+                    f"Domena {localize_term_pl(domain_id)}: {'; '.join(domain_parts)}."
+                )
+
+        return StatusMixin._structured_desc(
+            name=localize_term_pl(normalized),
+            fluff=fluff,
+            mechanics="\n".join(mechanics_lines),
+            when="Po wybraniu tego bostwa dla kleryka.",
+        )
+
+    @staticmethod
+    def _animal_companion_choice_hint(choice_id: str) -> str:
+        normalized = StatusMixin._normalize_choice_id(choice_id)
+        if not normalized:
+            return ""
+
+        try:
+            from GameObjects.companions import animal_companion_type_ids, companion_type_data
+        except Exception:
+            return ""
+
+        if normalized not in set(animal_companion_type_ids()):
+            return ""
+
+        data = dict(companion_type_data(normalized) or {})
+        label = str(data.get("label") or normalized.title()).strip() or normalized.title()
+        speed = max(5, int(data.get("land_speed_feet", 25) or 25))
+        size = str(data.get("size", "small") or "small").strip()
+        hp_ancestry = max(1, int(data.get("hp_ancestry", 6) or 6))
+        support = str(data.get("support_benefit") or "").strip()
+        special = str(data.get("special") or "").strip()
+        attacks = list(data.get("attacks") or [])
+
+        fluff_map = {
+            "badger": "Uporczywy towarzysz do kontroli pola i blokowania ruchu wroga.",
+            "bear": "Mocny drapieznik do dokladania dodatkowych obrazen po twoim trafieniu.",
+            "bird": "Szybki nekacz, ktory pomaga nakladac bleed i trzymac dystans.",
+            "cat": "Zwinny lowca do ustawiania off-guard i wykorzystywania luk w obronie.",
+            "dromaeosaur": "Blyskawiczny raptor, dobry do flankowania i agresywnego wejscia w zwarcie.",
+            "horse": "Mobilny mount do szybkiego przemieszczania sie i wzmacniania szarzy.",
+            "snake": "Kontroler reakcji, ktory otwiera ci bezpieczne okna na akcje ofensywne.",
+            "wolf": "Lowca scigajacy ofiare i spowalniajacy cel po twoich trafieniach.",
+        }
+
+        attack_parts: list[str] = []
+        for attack in attacks:
+            attack_label = str(attack.get("label") or attack.get("id") or "Strike").strip()
+            damage = str(attack.get("damage") or "").strip()
+            damage_type = str(attack.get("damage_type") or "").strip()
+            traits = [str(item or "").strip() for item in list(attack.get("traits") or []) if str(item or "").strip()]
+            trait_label = f" ({', '.join(localize_term_pl(item) for item in traits)})" if traits else ""
+            if damage and damage_type:
+                attack_parts.append(f"{attack_label} {damage} {localize_term_pl(damage_type)}{trait_label}")
+            elif damage:
+                attack_parts.append(f"{attack_label} {damage}{trait_label}")
+            else:
+                attack_parts.append(f"{attack_label}{trait_label}")
+
+        mechanics_lines = [
+            "Po wybraniu companion pojawia sie w walce jako osobny obiekt; 1 akcja na Command Animal Companion daje mu 2 akcje.",
+            f"Rozmiar: {localize_term_pl(size)}.",
+            f"Predkosc: {speed} ft.",
+            f"Skalowanie: HP i AC rosna z poziomem wlasciciela; bazowe hp ancestry dla tego typu = {hp_ancestry}.",
+        ]
+        if attack_parts:
+            mechanics_lines.append(f"Ataki: {'; '.join(attack_parts)}.")
+        if support:
+            mechanics_lines.append(f"Support: {support}")
+        if special:
+            mechanics_lines.append(f"Special: {special}")
+
+        return StatusMixin._structured_desc(
+            name=label,
+            fluff=fluff_map.get(normalized, f"Wybierasz typ zwierzecego towarzysza: {label}."),
+            mechanics="\n".join(mechanics_lines),
+            when="Przy wyborze typu Animal Companion.",
+        )
+
+    @staticmethod
     def _class_setup_fallback_hint(choice_id: str) -> str:
         normalized = StatusMixin._normalize_choice_id(choice_id)
         if not normalized:
@@ -726,27 +896,8 @@ class StatusMixin:
                     "Mechanika: przygotowujesz dodatkowe ladunki czaru Harm (zarzadzanie slotami prowadzisz w UI/na karcie)."
                 )
 
-            deity_data = dict(CLERIC_DEITY_OPTIONS.get(normalized, {}) or {})
-            if deity_data:
-                favored_weapon = str(deity_data.get("favored_weapon") or "wybor gracza")
-                divine_skills = [
-                    str(item or "").strip()
-                    for item in list(CLERIC_DEITY_DIVINE_SKILL_CHOICES.get(normalized) or [])
-                    if str(item or "").strip()
-                ]
-                fonts = [str(item or "").strip() for item in list(deity_data.get("font_options") or []) if str(item or "").strip()]
-                domains = [str(item or "").strip() for item in list(deity_data.get("domain_choices") or []) if str(item or "").strip()]
-                skills_label = ", ".join(localize_term_pl(item) for item in divine_skills) if divine_skills else "-"
-                fonts_label = ", ".join(localize_term_pl(item) for item in fonts) if fonts else "-"
-                domains_label = ", ".join(localize_term_pl(item) for item in domains) if domains else "-"
-                return (
-                    "Wybor bostwa kleryka.\n"
-                    "Mechanika:\n"
-                    f"- ulubiona bron: {localize_term_pl(favored_weapon)}\n"
-                    f"- divine skill: {skills_label}\n"
-                    f"- dozwolony divine font: {fonts_label}\n"
-                    f"- domeny: {domains_label}"
-                )
+            if normalized in CLERIC_DEITY_OPTIONS:
+                return StatusMixin._cleric_deity_setup_hint(normalized)
 
             if normalized in CLERIC_DOMAIN_INITIAL_SPELLS:
                 domain_spell = str(CLERIC_DOMAIN_INITIAL_SPELLS.get(normalized) or "")
@@ -784,6 +935,7 @@ class StatusMixin:
                 DRUID_ORDER_SKILLS,
                 DRUID_ORDER_SPELLS,
                 DRUID_ORDER_START_FEATS,
+                DRUID_ORDER_UI_DETAILS,
             )
 
             if normalized in set(DRUID_ORDER_CHOICES):
@@ -791,13 +943,29 @@ class StatusMixin:
                 feat = str(DRUID_ORDER_START_FEATS.get(normalized) or "")
                 spell = str(DRUID_ORDER_SPELLS.get(normalized) or "")
                 focus_bonus = int(DRUID_ORDER_FOCUS_BONUS.get(normalized) or 0)
-                return (
-                    f"Krąg druida: {localize_term_pl(normalized)}. "
-                    f"Mechanika: trained skill={localize_term_pl(skill)}, feat startowy={localize_term_pl(feat)}, "
-                    f"order spell={localize_term_pl(spell)}, bonus Focus={focus_bonus}."
+                details = dict(DRUID_ORDER_UI_DETAILS.get(normalized) or {})
+                starting_focus = max(0, 1 + focus_bonus)
+                focus_line = (
+                    f"bonus Focus: +{focus_bonus} (łącznie {starting_focus} Focus Point na starcie)."
+                )
+                effect_lines = [
+                    f"trained skill: {localize_term_pl(skill)}.",
+                    focus_line,
+                    f"feat startowy - {localize_term_pl(feat)}: {str(details.get('feat_summary') or 'Dodaje startowy feat tego kręgu.').strip()}",
+                    f"order spell - {localize_term_pl(spell)}: {str(details.get('spell_summary') or 'Dodaje focus spell tego kręgu.').strip()}",
+                ]
+                return StatusMixin._structured_desc(
+                    name=f"Krąg druida: {localize_term_pl(normalized)}",
+                    fluff=str(details.get("fluff") or f"Krąg druida: {localize_term_pl(normalized)}."),
+                    mechanics="\n".join(effect_lines),
+                    when="Po wybraniu tego kręgu podczas setupu druida.",
                 )
         except Exception:
             pass
+
+        animal_companion_hint = StatusMixin._animal_companion_choice_hint(normalized)
+        if animal_companion_hint:
+            return animal_companion_hint
 
         # Ranger setup.
         if normalized == "flurry":
@@ -822,17 +990,24 @@ class StatusMixin:
         if normalized == "ruffian":
             return (
                 "Racket lotrzyka: Ruffian. "
-                "Mechanika: Key Ability moze byc STR, dostajesz medium armor training i styl brutalnej walki."
+                "Mechanika: Key Ability moze byc STR albo DEX; dostajesz trained w Intimidation, "
+                "medium armor training oraz brutalniejszy setup pod walke wręcz. "
+                "W tym buildzie medium armor training dziala, a krytyczna specjalizacja Ruffiana dla simple weapon "
+                "jest jeszcze oznaczona jako TODO."
             )
         if normalized == "scoundrel":
             return (
                 "Racket lotrzyka: Scoundrel. "
-                "Mechanika: Key Ability moze byc CHA, a Feint daje dluzszy efekt off-guard."
+                "Mechanika: Key Ability moze byc CHA albo DEX; dostajesz trained w Deception i Diplomacy. "
+                "Success na Feint daje celowi off-guard przeciw twoim melee atakom do konca twojej nastepnej tury, "
+                "a critical success rozszerza to na wszystkie melee ataki do konca twojej nastepnej tury."
             )
         if normalized == "thief":
             return (
                 "Racket lotrzyka: Thief. "
-                "Mechanika: klasyczny lotrzyk z naciskiem na Zrecznosc i mobilnosc."
+                "Mechanika: Key Ability jest tylko DEX i dostajesz trained w Thievery. "
+                "Przy finesse melee Strike'ach gra uzywa DEX zamiast STR w promptcie obrazen, "
+                "wiec ten racket najmocniej wspiera zrecznosciowego lotrzyka."
             )
 
         # Sorcerer setup: bloodline + variants.
@@ -856,17 +1031,31 @@ class StatusMixin:
                 blood_magic = str(SORCERER_BLOODLINE_BLOOD_MAGIC.get(normalized) or "").strip()
                 cantrip = str(spells.get("cantrip") or "")
                 rank1 = str(spells.get("rank_1") or "")
+                cantrip_summary = StatusMixin._compact_hint_summary(StatusMixin._event_fallback_hint(cantrip))
+                rank1_summary = StatusMixin._compact_hint_summary(StatusMixin._event_fallback_hint(rank1))
+                focus_summary = StatusMixin._compact_hint_summary(StatusMixin._event_fallback_hint(focus_spell))
                 skill_label = ", ".join(localize_term_pl(item) for item in skills) if skills else "-"
-                short_blood_magic = blood_magic.split(".")[0].strip() if blood_magic else ""
-                parts = [
-                    f"Linia krwi czarownika: {localize_term_pl(normalized)}.",
-                    f"Mechanika: tradycja={localize_term_pl(tradition)}, bloodline skills={skill_label},",
-                    f"cantrip={localize_term_pl(cantrip)}, czar 1. rangi={localize_term_pl(rank1)},",
-                    f"focus spell={localize_term_pl(focus_spell)}.",
+                effect_lines = [
+                    f"Tradycja: {localize_term_pl(tradition)}.",
+                    f"Umiejetnosci linii krwi: {skill_label}.",
+                    f"Cantrip linii krwi: {localize_term_pl(cantrip)}.",
+                    f"Czar 1. rangi linii krwi: {localize_term_pl(rank1)}.",
+                    f"Focus spell linii krwi: {localize_term_pl(focus_spell)}.",
                 ]
-                if short_blood_magic:
-                    parts.append(f"Blood Magic: {short_blood_magic}.")
-                return " ".join(parts)
+                if cantrip_summary:
+                    effect_lines.append(f"Cantrip - mechanika {localize_term_pl(cantrip)}: {cantrip_summary}.")
+                if rank1_summary:
+                    effect_lines.append(f"Czar 1. rangi - mechanika {localize_term_pl(rank1)}: {rank1_summary}.")
+                if focus_summary:
+                    effect_lines.append(f"Focus spell - mechanika {localize_term_pl(focus_spell)}: {focus_summary}.")
+                if blood_magic:
+                    effect_lines.append(f"Blood Magic: {blood_magic}")
+                return StatusMixin._structured_desc(
+                    name=f"Linia krwi czarownika: {localize_term_pl(normalized)}",
+                    fluff=f"Linia krwi czarownika: {localize_term_pl(normalized)}.",
+                    mechanics="\n".join(effect_lines),
+                    when="Po wybraniu tej opcji",
+                )
 
             if normalized in dict(SORCERER_DRACONIC_TYPE_DAMAGE):
                 dmg = str(SORCERER_DRACONIC_TYPE_DAMAGE.get(normalized) or "")
@@ -892,26 +1081,36 @@ class StatusMixin:
                 WIZARD_BONDED_ITEM_CHOICES,
                 WIZARD_SCHOOL_FOCUS_SPELLS,
                 WIZARD_SCHOOL_INITIAL_SPELLS,
+                WIZARD_UNIVERSALIST_FOCUS_SPELL,
             )
 
             if normalized in set(WIZARD_ARCANE_STUDY_CHOICES):
                 if normalized == "universalist":
                     return (
                         "Arcane Study: Universalist. "
-                        "Mechanika: nie wybierasz szkoly, ale dostajesz dodatkowy class feat na starcie."
+                        "Mechanika: nie wybierasz szkoly, ale dostajesz automatycznie focus spell "
+                        f"{localize_term_pl(WIZARD_UNIVERSALIST_FOCUS_SPELL)} oraz dodatkowy class feat na starcie."
                     )
                 school_spell = str(WIZARD_SCHOOL_INITIAL_SPELLS.get(normalized) or "")
                 focus_spell = str(WIZARD_SCHOOL_FOCUS_SPELLS.get(normalized) or "")
-                return (
-                    f"Arcane Study: szkola {localize_term_pl(normalized)}. "
+                school_summary = StatusMixin._compact_hint_summary(StatusMixin._event_fallback_hint(school_spell))
+                focus_summary = StatusMixin._compact_hint_summary(StatusMixin._event_fallback_hint(focus_spell))
+                detail_parts = [
+                    f"Arcane Study: szkola {localize_term_pl(normalized)}.",
                     f"Mechanika: specjalizacja szkolna; bonusowy czar={localize_term_pl(school_spell)}, "
-                    f"focus spell={localize_term_pl(focus_spell)} i dodatkowe przygotowanie szkolne."
-                )
+                    f"focus spell={localize_term_pl(focus_spell)}, dodatkowy przygotowany cantrip i dodatkowy slot szkolny kazdej rangi.",
+                ]
+                if school_summary:
+                    detail_parts.append(f"Czar szkoly - {localize_term_pl(school_spell)}: {school_summary}.")
+                if focus_summary:
+                    detail_parts.append(f"Focus spell - {localize_term_pl(focus_spell)}: {focus_summary}.")
+                return " ".join(detail_parts)
 
             if normalized in set(WIZARD_ARCANE_THESIS_CHOICES):
                 thesis_map = {
                     "improved_familiar_attunement": "Bond Source=familiar i akcja Drain Familiar.",
                     "metamagical_experimentation": "Wybierasz dodatkowy metamagic feat na setupie.",
+                    "staff_nexus": "Bonded item staje sie kosturem. Wybierasz 1 cantrip i 1 czar 1. rangi do makeshift staffu; podczas daily preparations staff dostaje ladunki rowne najwyzszej randze slotu, a dodatkowe ladunki mozesz doladowac poświęcając przygotowane sloty.",
                     "spell_blending": "Na początku scenariusza (daily preparations) pozwala wymieniac sloty i zamieniac slot na +2 cantripy.",
                     "spell_substitution": "Poza walka odblokowuje akcje 10-minutowej podmiany przygotowanego czaru (1 raz na scenariusz).",
                 }
@@ -971,6 +1170,15 @@ class StatusMixin:
                 and not self._spell_hint_has_concrete_mechanics(localized_hint)
             ):
                 hint = event_hint
+            if (
+                localized_hint
+                and class_hint
+                and (
+                    "efekt zalezy od opcji:" in str(localized_hint).lower()
+                    or "brak dodatkowego opisu mechaniki." in str(localized_hint).lower()
+                )
+            ):
+                hint = class_hint
         structured_source = ""
         if self._is_structured_desc(desc):
             structured_source = str(desc or "")
@@ -983,6 +1191,7 @@ class StatusMixin:
             mechanics = ""
             when = ""
             effect = ""
+            current_section = ""
             for raw_line in str(structured_source).splitlines():
                 line = str(raw_line or "").strip()
                 if not line:
@@ -991,14 +1200,27 @@ class StatusMixin:
                 low = normalized_line.lower()
                 if low.startswith("nazwa:"):
                     name = normalized_line.split(":", 1)[1].strip() or name
+                    current_section = "name"
                 elif low.startswith("fluff:"):
                     fluff = normalized_line.split(":", 1)[1].strip() or fluff
+                    current_section = "fluff"
                 elif low.startswith("mechanika:"):
                     mechanics = normalized_line.split(":", 1)[1].strip() or mechanics
+                    current_section = "mechanics"
                 elif low.startswith("kiedy:"):
-                    when = normalized_line.split(":", 1)[1].strip() or when
+                    payload = normalized_line.split(":", 1)[1].strip()
+                    when = payload or when
+                    current_section = "when"
                 elif low.startswith("efekt:"):
-                    effect = normalized_line.split(":", 1)[1].strip() or effect
+                    payload = normalized_line.split(":", 1)[1].strip()
+                    effect = payload or effect
+                    current_section = "effect"
+                elif current_section == "when":
+                    when = f"{when}\n{normalized_line}".strip()
+                elif current_section == "effect":
+                    effect = f"{effect}\n{normalized_line}".strip()
+                elif current_section == "mechanics":
+                    mechanics = f"{mechanics}\n{normalized_line}".strip()
             if effect:
                 mechanics = f"{mechanics}\nEfekt: {effect}".strip()
             return self._structured_desc(name=name, fluff=fluff, mechanics=mechanics or "Brak dodatkowego opisu mechaniki.", when=when or None)
@@ -1389,6 +1611,192 @@ class StatusMixin:
         class_id = self._actor_class_id()
         return class_id in {"bard", "cleric", "druid", "sorcerer", "wizard"}
 
+    def _actor_spellcasting_tradition(self) -> str | None:
+        class_id = self._actor_class_id()
+        if class_id == "bard":
+            setup = self._bard_setup_data()
+            value = setup.get("spell_tradition")
+            if value is None:
+                value = getattr(self, "bard_spell_tradition", None)
+            raw = self._normalize_choice_id(value)
+            return raw or "occult"
+        if class_id == "cleric":
+            setup = self._cleric_setup_data()
+            value = setup.get("spell_tradition")
+            if value is None:
+                value = getattr(self, "cleric_spell_tradition", None)
+            raw = self._normalize_choice_id(value)
+            return raw or "divine"
+        if class_id == "druid":
+            setup = self._druid_setup_data()
+            value = setup.get("spell_tradition")
+            if value is None:
+                value = getattr(self, "druid_spell_tradition", None)
+            raw = self._normalize_choice_id(value)
+            return raw or "primal"
+        if class_id == "sorcerer":
+            setup = self._sorcerer_setup_data()
+            value = setup.get("spell_tradition")
+            if value is None:
+                value = getattr(self, "sorcerer_spell_tradition", None)
+            raw = self._normalize_choice_id(value)
+            return raw or None
+        if class_id == "wizard":
+            setup = self._wizard_setup_data()
+            value = setup.get("spell_tradition")
+            if value is None:
+                value = getattr(self, "wizard_spell_tradition", None)
+            raw = self._normalize_choice_id(value)
+            return raw or "arcane"
+        return None
+
+    @staticmethod
+    def _replace_spell_id_in_list(values: list[str], *, source: str, target: str) -> list[str]:
+        source_id = StatusMixin._normalize_spell_id(source)
+        target_id = StatusMixin._normalize_spell_id(target)
+        if not source_id or not target_id or source_id == target_id:
+            return []
+
+        normalized = [
+            StatusMixin._normalize_spell_id(item)
+            for item in list(values or [])
+            if StatusMixin._normalize_spell_id(item)
+        ]
+        if source_id not in normalized or target_id in normalized:
+            return []
+
+        out: list[str] = []
+        replaced = False
+        for spell_id in normalized:
+            if not replaced and spell_id == source_id:
+                out.append(target_id)
+                replaced = True
+                continue
+            if spell_id not in out:
+                out.append(spell_id)
+        return out if replaced else []
+
+    def _adapted_cantrip_replacement_choices(self) -> list[str]:
+        class_id = self._actor_class_id()
+        choices: list[str] = []
+
+        if class_id == "bard":
+            setup = self._bard_setup_data()
+            choices = list(setup.get("known_cantrips") or getattr(self, "bard_known_cantrips", []) or [])
+        elif class_id == "sorcerer":
+            setup = self._sorcerer_setup_data()
+            choices = list(setup.get("known_cantrips") or getattr(self, "sorcerer_known_cantrips", []) or [])
+        elif class_id == "wizard":
+            setup = self._wizard_setup_data()
+            raw_spellbook = setup.get("spellbook")
+            if not isinstance(raw_spellbook, dict):
+                raw_spellbook = getattr(self, "wizard_spellbook", {}) or {}
+            if isinstance(raw_spellbook, dict):
+                choices = list(raw_spellbook.get("cantrip") or raw_spellbook.get("cantrips") or [])
+        elif class_id in {"cleric", "druid"}:
+            tradition = self._actor_spellcasting_tradition()
+            if tradition:
+                choices = self._collect_spell_choices_by_tier(traditions={tradition}, tier="cantrip")
+
+        if not choices:
+            tradition = self._actor_spellcasting_tradition()
+            if tradition:
+                choices = self._collect_spell_choices_by_tier(traditions={tradition}, tier="cantrip")
+
+        out: list[str] = []
+        for item in list(choices or []):
+            normalized = self._normalize_spell_id(item)
+            if normalized and normalized not in out:
+                out.append(normalized)
+        return out
+
+    def _apply_adapted_cantrip_class_replacement(self, *, source_spell: str, target_spell: str) -> bool:
+        class_id = self._actor_class_id()
+        source_id = self._normalize_spell_id(source_spell)
+        target_id = self._normalize_spell_id(target_spell)
+        if not source_id or not target_id or source_id == target_id:
+            return False
+
+        if class_id == "bard":
+            setup = self._bard_setup_data()
+            current = list(setup.get("known_cantrips") or getattr(self, "bard_known_cantrips", []) or [])
+            updated = self._replace_spell_id_in_list(current, source=source_id, target=target_id)
+            if not updated:
+                return False
+            try:
+                setattr(self, "bard_known_cantrips", list(updated))
+            except Exception:
+                pass
+            for idx, status in enumerate(list(getattr(self, "statuses", []) or [])):
+                if getattr(status, "id", None) != "bard":
+                    continue
+                data = dict(getattr(status, "data", None) or {})
+                setup_payload = dict(data.get("bard_setup") or {})
+                setup_payload["known_cantrips"] = list(updated)
+                data["bard_setup"] = setup_payload
+                data["bard_known_cantrips"] = list(updated)
+                self.statuses[idx] = replace(status, data=data)
+                break
+            return True
+
+        if class_id == "sorcerer":
+            setup = self._sorcerer_setup_data()
+            current = list(setup.get("known_cantrips") or getattr(self, "sorcerer_known_cantrips", []) or [])
+            updated = self._replace_spell_id_in_list(current, source=source_id, target=target_id)
+            if not updated:
+                return False
+            try:
+                setattr(self, "sorcerer_known_cantrips", list(updated))
+            except Exception:
+                pass
+            for idx, status in enumerate(list(getattr(self, "statuses", []) or [])):
+                if getattr(status, "id", None) != "sorcerer":
+                    continue
+                data = dict(getattr(status, "data", None) or {})
+                setup_payload = dict(data.get("sorcerer_setup") or {})
+                setup_payload["known_cantrips"] = list(updated)
+                data["sorcerer_setup"] = setup_payload
+                data["sorcerer_known_cantrips"] = list(updated)
+                self.statuses[idx] = replace(status, data=data)
+                break
+            return True
+
+        if class_id == "wizard":
+            setup = self._wizard_setup_data()
+            raw_spellbook = setup.get("spellbook")
+            if not isinstance(raw_spellbook, dict):
+                raw_spellbook = getattr(self, "wizard_spellbook", {}) or {}
+            if not isinstance(raw_spellbook, dict):
+                return False
+            spellbook = dict(raw_spellbook)
+            current = list(spellbook.get("cantrip") or spellbook.get("cantrips") or [])
+            updated = self._replace_spell_id_in_list(current, source=source_id, target=target_id)
+            if not updated:
+                return False
+            spellbook["cantrip"] = list(updated)
+            if "cantrips" in spellbook:
+                spellbook["cantrips"] = list(updated)
+            try:
+                setattr(self, "wizard_spellbook", dict(spellbook))
+            except Exception:
+                pass
+            for idx, status in enumerate(list(getattr(self, "statuses", []) or [])):
+                if getattr(status, "id", None) != "wizard":
+                    continue
+                data = dict(getattr(status, "data", None) or {})
+                setup_payload = dict(data.get("wizard_setup") or {})
+                setup_payload["spellbook"] = dict(spellbook)
+                data["wizard_setup"] = setup_payload
+                data["wizard_spellbook"] = dict(spellbook)
+                self.statuses[idx] = replace(status, data=data)
+                break
+            return True
+
+        if class_id in {"cleric", "druid"}:
+            return source_id in set(self._adapted_cantrip_replacement_choices())
+
+        return False
+
     @staticmethod
     def _is_trained_rank(raw_rank: object) -> bool:
         raw = str(raw_rank or "").strip().lower()
@@ -1470,6 +1878,24 @@ class StatusMixin:
                 return dict(setup)
         return {}
 
+    def _bard_setup_data(self) -> dict:
+        getter = getattr(self, "get_status_data", None)
+        if callable(getter):
+            try:
+                raw = getter("bard", "bard_setup", {})
+                if isinstance(raw, dict):
+                    return dict(raw)
+            except Exception:
+                pass
+        for status in getattr(self, "statuses", []) or []:
+            if getattr(status, "id", None) != "bard":
+                continue
+            data = getattr(status, "data", None) or {}
+            setup = data.get("bard_setup")
+            if isinstance(setup, dict):
+                return dict(setup)
+        return {}
+
     def _champion_setup_data(self) -> dict:
         getter = getattr(self, "get_status_data", None)
         if callable(getter):
@@ -1484,6 +1910,24 @@ class StatusMixin:
                 continue
             data = getattr(status, "data", None) or {}
             setup = data.get("champion_setup")
+            if isinstance(setup, dict):
+                return dict(setup)
+        return {}
+
+    def _sorcerer_setup_data(self) -> dict:
+        getter = getattr(self, "get_status_data", None)
+        if callable(getter):
+            try:
+                raw = getter("sorcerer", "sorcerer_setup", {})
+                if isinstance(raw, dict):
+                    return dict(raw)
+            except Exception:
+                pass
+        for status in getattr(self, "statuses", []) or []:
+            if getattr(status, "id", None) != "sorcerer":
+                continue
+            data = getattr(status, "data", None) or {}
+            setup = data.get("sorcerer_setup")
             if isinstance(setup, dict):
                 return dict(setup)
         return {}
@@ -1960,6 +2404,19 @@ class StatusMixin:
         traditions = list(data.get("adapted_cantrip_traditions") or ["arcane", "divine", "occult", "primal"])
         if not traditions:
             return
+        current_tradition = self._actor_spellcasting_tradition()
+        if current_tradition:
+            traditions = [item for item in traditions if self._normalize_choice_id(item) != current_tradition]
+        if not traditions:
+            self._ui_log("Adapted Cantrip: brak dostepnych tradycji innych niz tradycja klasy.")
+            return
+
+        replaceable_cantrips = self._adapted_cantrip_replacement_choices()
+        replaceable_set = set(replaceable_cantrips)
+        if not replaceable_cantrips:
+            self._ui_log("Adapted Cantrip: brak cantripow klasy do podmiany.")
+            return
+
         chosen_tradition = self._pick_choice_id(
             "Adapted Cantrip: wybierz tradycje",
             traditions,
@@ -1969,9 +2426,18 @@ class StatusMixin:
             return
 
         cantrip_map = dict(data.get("adapted_cantrip_choices") or {})
-        cantrip_choices = list(cantrip_map.get(chosen_tradition, [])) or list(cantrip_map.get("all", []))
+        cantrip_choices = self._collect_spell_choices_by_tier(
+            traditions={chosen_tradition},
+            tier="cantrip",
+        )
+        if replaceable_set:
+            cantrip_choices = [item for item in cantrip_choices if self._normalize_spell_id(item) not in replaceable_set]
         if not cantrip_choices:
-            cantrip_choices = ["detect_magic", "daze", "ray_of_frost", "light", "guidance"]
+            cantrip_choices = list(cantrip_map.get(chosen_tradition, [])) or list(cantrip_map.get("all", []))
+            cantrip_choices = [item for item in cantrip_choices if self._normalize_spell_id(item) not in replaceable_set]
+        if not cantrip_choices:
+            self._ui_log("Adapted Cantrip: brak dostepnych cantripow w wybranej tradycji po odfiltrowaniu obecnych czarow klasy.")
+            return
         chosen_cantrip = self._pick_choice_id(
             f"Adapted Cantrip ({self._labelize_choice(chosen_tradition)}): wybierz cantrip",
             cantrip_choices,
@@ -1980,7 +2446,7 @@ class StatusMixin:
         if not chosen_cantrip:
             return
 
-        replaced_choices = list(data.get("replaced_cantrip_choices") or cantrip_choices)
+        replaced_choices = list(replaceable_cantrips) or list(data.get("replaced_cantrip_choices") or [])
         chosen_replaced = self._pick_choice_id(
             "Adapted Cantrip: wybierz cantrip do zastapienia",
             replaced_choices,
@@ -1989,20 +2455,33 @@ class StatusMixin:
         if not chosen_replaced:
             return
 
+        normalized_cantrip = self._normalize_spell_id(chosen_cantrip)
+        normalized_replaced = self._normalize_spell_id(chosen_replaced)
+        if not normalized_cantrip or not normalized_replaced or normalized_cantrip == normalized_replaced:
+            self._ui_log("Adapted Cantrip: nowy cantrip musi byc inny niz podmieniany.")
+            return
+        if not self._apply_adapted_cantrip_class_replacement(
+            source_spell=normalized_replaced,
+            target_spell=normalized_cantrip,
+        ):
+            self._ui_log("Adapted Cantrip: nie udalo sie podmienic cantripu w biezacej liscie klasy.")
+            return
+
         self._replace_status_data(
             status,
             {
                 "adapted_tradition": chosen_tradition,
-                "adapted_cantrip": chosen_cantrip,
-                "replaced_cantrip": chosen_replaced,
-                "granted_cantrips": [chosen_cantrip],
+                "adapted_cantrip": normalized_cantrip,
+                "replaced_cantrip": normalized_replaced,
+                "granted_cantrips": [normalized_cantrip],
                 "innate_magic_tradition": chosen_tradition,
+                "removed_cantrips": [normalized_replaced],
             },
         )
         self._ui_log(
             "Adapted Cantrip: "
-            f"{self._labelize_choice(chosen_tradition)} -> {self._labelize_choice(chosen_cantrip)} "
-            f"(zastapiony: {self._labelize_choice(chosen_replaced)})."
+            f"{self._labelize_choice(chosen_tradition)} -> {self._labelize_choice(normalized_cantrip)} "
+            f"(zastapiony: {self._labelize_choice(normalized_replaced)})."
         )
 
     def _handle_otherworldly_magic_choice(self, status: "Status", data: dict) -> None:
@@ -4405,6 +4884,7 @@ class StatusMixin:
         bonded_item_choices = list(data.get("wizard_bonded_item_choices") or ["wand", "ring", "staff", "weapon", "other_item"])
         school_initial_spells = dict(data.get("wizard_school_initial_spells") or {})
         school_focus_spells = dict(data.get("wizard_school_focus_spells") or {})
+        universalist_focus_spell = str(data.get("wizard_universalist_focus_spell") or "hand_of_the_apprentice")
 
         try:
             prepared_cantrips_base = int(data.get("wizard_prepared_cantrips_per_day") or 5)
@@ -4452,9 +4932,7 @@ class StatusMixin:
         if not chosen_thesis:
             return
 
-        available_feat_choices = list(feat_choices)
-        if chosen_arcane_study != "universalist":
-            available_feat_choices = [feat for feat in available_feat_choices if feat != "hand_of_the_apprentice"]
+        available_feat_choices = [feat for feat in list(feat_choices) if feat != "hand_of_the_apprentice"]
         chosen_feat = self._pick_choice_id(
             "Wizard: wybierz 1. poziomowy class feat",
             available_feat_choices,
@@ -4465,7 +4943,7 @@ class StatusMixin:
 
         chosen_bonus_feat: str | None = None
         if chosen_arcane_study == "universalist" and bool(data.get("wizard_universalist_bonus_feat", True)):
-            bonus_pool = [feat for feat in feat_choices if feat != chosen_feat]
+            bonus_pool = [feat for feat in available_feat_choices if feat != chosen_feat]
             if bonus_pool:
                 chosen_bonus_feat = self._pick_choice_id(
                     "Wizard (Universalist): wybierz bonusowy class feat",
@@ -4491,6 +4969,8 @@ class StatusMixin:
         if chosen_thesis == "improved_familiar_attunement":
             bond_source = "familiar"
             drain_action = "drain_familiar"
+        elif chosen_thesis == "staff_nexus":
+            chosen_bonded_item = "staff"
         else:
             chosen_bonded_item = self._pick_choice_id(
                 "Wizard: wybierz bonded item",
@@ -4623,6 +5103,28 @@ class StatusMixin:
             "auto_add_spells_per_level": max(0, int(spellbook_auto_add_per_level)),
         }
 
+        staff_nexus_cantrip: str | None = None
+        staff_nexus_rank1_spell: str | None = None
+        if chosen_thesis == "staff_nexus":
+            staff_cantrip_choices = list(spellbook_payload.get("cantrip") or [])
+            staff_rank1_choices = list(spellbook_payload.get("rank_1") or [])
+            if staff_cantrip_choices:
+                staff_nexus_cantrip = self._pick_choice_id(
+                    "Wizard (Staff Nexus): wybierz cantrip w makeshift staffie",
+                    staff_cantrip_choices,
+                    source="status",
+                )
+                if not staff_nexus_cantrip:
+                    staff_nexus_cantrip = staff_cantrip_choices[0]
+            if staff_rank1_choices:
+                staff_nexus_rank1_spell = self._pick_choice_id(
+                    "Wizard (Staff Nexus): wybierz czar 1. rangi w makeshift staffie",
+                    staff_rank1_choices,
+                    source="status",
+                )
+                if not staff_nexus_rank1_spell:
+                    staff_nexus_rank1_spell = staff_rank1_choices[0]
+
         setup_payload = {
             "key_ability": chosen_key_ability,
             "arcane_study": chosen_arcane_study,
@@ -4634,6 +5136,7 @@ class StatusMixin:
             "spell_tradition": "arcane",
             "school_bonus_spell": school_bonus_spell,
             "school_focus_spell": school_focus_spell,
+            "universalist_focus_spell": universalist_focus_spell if chosen_arcane_study == "universalist" else "",
             "bond_source": bond_source,
             "bonded_item": chosen_bonded_item,
             "drain_action": drain_action,
@@ -4641,6 +5144,8 @@ class StatusMixin:
             "spellbook_start_rank1_spells": spellbook_start_rank1_spells,
             "spellbook_auto_add_per_level": spellbook_auto_add_per_level,
             "spellbook": dict(spellbook_payload),
+            "staff_nexus_cantrip": str(staff_nexus_cantrip or ""),
+            "staff_nexus_rank_1_spell": str(staff_nexus_rank1_spell or ""),
             "universalist_bonus_spell": str(universalist_bonus_spell or ""),
             "prepared_cantrips": total_prepared_cantrips,
             "prepared_rank1_slots": total_prepared_rank1_slots,
@@ -4667,6 +5172,8 @@ class StatusMixin:
                     new_data["wizard_bonded_item"] = chosen_bonded_item
                     new_data["wizard_drain_action"] = drain_action
                     new_data["wizard_spellbook"] = dict(spellbook_payload)
+                    new_data["wizard_staff_nexus_cantrip"] = str(staff_nexus_cantrip or "")
+                    new_data["wizard_staff_nexus_rank_1_spell"] = str(staff_nexus_rank1_spell or "")
                     self.statuses[idx] = replace(status, data=new_data)
                     break
         except Exception:
@@ -4688,6 +5195,8 @@ class StatusMixin:
             ("wizard_bonded_item", chosen_bonded_item),
             ("wizard_drain_action", drain_action),
             ("wizard_spellbook", dict(spellbook_payload)),
+            ("wizard_staff_nexus_cantrip", str(staff_nexus_cantrip or "")),
+            ("wizard_staff_nexus_rank_1_spell", str(staff_nexus_rank1_spell or "")),
         ):
             try:
                 setattr(self, attr, value)
@@ -4706,6 +5215,8 @@ class StatusMixin:
         known_focus_spells = list(getattr(self, "wizard_focus_spells", []) or [])
         if school_focus_spell and school_focus_spell not in known_focus_spells:
             known_focus_spells.append(school_focus_spell)
+        if chosen_arcane_study == "universalist" and universalist_focus_spell and universalist_focus_spell not in known_focus_spells:
+            known_focus_spells.append(universalist_focus_spell)
         try:
             setattr(self, "wizard_school_spells", known_school_spells)
             setattr(self, "wizard_focus_spells", known_focus_spells)
@@ -4714,7 +5225,7 @@ class StatusMixin:
         except Exception:
             pass
 
-        if school_focus_spell:
+        if school_focus_spell or (chosen_arcane_study == "universalist" and universalist_focus_spell):
             try:
                 current_focus = int(getattr(self, "focus_point", 0) or 0)
             except Exception:
@@ -4746,10 +5257,13 @@ class StatusMixin:
                 self.add_status(familiar_status)
                 applied_feats.append("familiar")
 
-        if "hand_of_the_apprentice" in applied_feats:
+        if chosen_arcane_study == "universalist":
+            hand_status = self._resolve_status_from_registry("hand_of_the_apprentice", registry)
+            if hand_status is not None and not self.has_status("hand_of_the_apprentice"):
+                self.add_status(hand_status)
             known_focus_spells = list(getattr(self, "wizard_focus_spells", []) or [])
-            if "hand_of_the_apprentice" not in known_focus_spells:
-                known_focus_spells.append("hand_of_the_apprentice")
+            if universalist_focus_spell and universalist_focus_spell not in known_focus_spells:
+                known_focus_spells.append(universalist_focus_spell)
             try:
                 setattr(self, "wizard_focus_spells", known_focus_spells)
             except Exception:
@@ -4766,10 +5280,21 @@ class StatusMixin:
                 "Wizard setup (Universalist): "
                 f"bonus feat={self._labelize_choice(chosen_bonus_feat)}."
             )
+        if chosen_arcane_study == "universalist":
+            self._ui_log(
+                "Wizard setup (Universalist): "
+                f"focus spell={self._labelize_choice(universalist_focus_spell)} dodany automatycznie."
+            )
         if chosen_metamagic_feat:
             self._ui_log(
                 "Wizard thesis (Metamagical Experimentation): "
                 f"aktywny feat={self._labelize_choice(chosen_metamagic_feat)}."
+            )
+        if chosen_thesis == "staff_nexus":
+            self._ui_log(
+                "Wizard thesis (Staff Nexus): "
+                f"bonded item=staff; makeshift staff: cantrip={self._labelize_choice(staff_nexus_cantrip)}, "
+                f"rank1={self._labelize_choice(staff_nexus_rank1_spell)}."
             )
         if chosen_thesis == "spell_blending":
             self._ui_log(

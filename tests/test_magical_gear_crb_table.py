@@ -19,6 +19,8 @@ from GameObjects.events.magic.consumables.events import (  # noqa: E402
     PotencyCrystalEvent,
     ScrollCommonRank1Event,
     UnholyWaterEvent,
+    choose_common_rank1_scroll_spell,
+    configure_common_rank1_scroll,
 )
 from GameObjects.events.registry import list_events  # noqa: E402
 from GameObjects.items.equipment import create_equipment  # noqa: E402
@@ -74,6 +76,16 @@ class _UI:
 
     def prompt_info(self, *_args, **_kwargs):
         return "ok"
+
+
+class _MetaUI(_UI):
+    def __init__(self, answers: list[str]):
+        super().__init__(answers)
+        self.last_choice_meta = None
+
+    def prompt_choice(self, *args, **kwargs):
+        self.last_choice_meta = list(kwargs.get("choice_meta") or [])
+        return super().prompt_choice(*args, **kwargs)
 
 
 def _make_game(*, hero: Hero, enemies: list[object] | None = None, ui=None, conn_choice=None):
@@ -202,9 +214,9 @@ def test_scroll_common_rank1_casts_selected_spell_and_is_consumed():
     }
     scroll = create_equipment("scroll_common_rank1")
     assert scroll is not None
+    configure_common_rank1_scroll(scroll, "true_strike")
     add_item(hero, scroll)
-    ui = _UI(["true_strike"])
-    game = _make_game(hero=hero, ui=ui)
+    game = _make_game(hero=hero)
 
     event = ScrollCommonRank1Event()
     result = event.execute(EventContext(game=game, actor=hero))
@@ -213,6 +225,64 @@ def test_scroll_common_rank1_casts_selected_spell_and_is_consumed():
     assert hero.has_status("true_strike") is True
     inventory_ids = {str(getattr(it, "item_id", "")).strip().lower() for it in list(getattr(hero, "inventory", []) or [])}
     assert "scroll_common_rank1" not in inventory_ids
+
+
+def test_scroll_common_rank1_selects_specific_scroll_item_when_multiple_ready():
+    hero = Hero(position=(0, 0))
+    hero.spell_state = {
+        "enabled": True,
+        "enforce": True,
+        "class_name": "wizard",
+        "known": {"rank_1": ["heal"], "cantrip": [], "focus": [], "innate": []},
+    }
+    first = create_equipment("scroll_common_rank1")
+    second = create_equipment("scroll_common_rank1")
+    assert first is not None and second is not None
+    configure_common_rank1_scroll(first, "mage_armor")
+    configure_common_rank1_scroll(second, "true_strike")
+    add_item(hero, first)
+    add_item(hero, second)
+    ui = _UI(["2"])
+    game = _make_game(hero=hero, ui=ui)
+
+    event = ScrollCommonRank1Event()
+    result = event.execute(EventContext(game=game, actor=hero))
+
+    assert result.success is True
+    assert hero.has_status("true_strike") is True
+    remaining_scrolls = [item for item in list(getattr(hero, "inventory", []) or []) if str(getattr(item, "item_id", "")).strip().lower() == "scroll_common_rank1"]
+    assert len(remaining_scrolls) == 1
+    assert str(getattr(remaining_scrolls[0], "scroll_spell_id", "") or "").strip().lower() == "mage_armor"
+
+
+def test_scroll_purchase_spell_choices_show_full_structured_spell_description():
+    ui = _MetaUI(["mage_armor"])
+    game = SimpleNamespace(ui=ui)
+
+    chosen = choose_common_rank1_scroll_spell(game, source="scroll_common_rank1", choices=["mage_armor"])
+
+    assert chosen == "mage_armor"
+    meta = list(ui.last_choice_meta or [])
+    assert len(meta) == 1
+    desc = str(meta[0].get("desc") or "")
+    assert "Fluff:" in desc
+    assert "Mechanika:" in desc
+    assert "Pancerz maga" in desc
+    assert "+1 item do AC na 10 tur" in desc
+    assert "Koszt: 2 akcje" in desc
+    assert "Tradycja:" in desc
+
+
+def test_configured_scroll_description_uses_spell_mechanics_summary():
+    scroll = create_equipment("scroll_common_rank1")
+    assert scroll is not None
+
+    configure_common_rank1_scroll(scroll, "mage_armor")
+
+    description = str(getattr(scroll, "description", "") or "")
+    assert "Jednorazowo rzuca czar: Pancerz maga." in description
+    assert "+1 item do AC na 10 tur" in description
+    assert "Koszt: 2 akcje." in description
 
 
 def test_required_inventory_event_filters_action_visibility():
@@ -229,4 +299,3 @@ def test_required_inventory_event_filters_action_visibility():
     filtered_with_item = filter_events_for_actor(available, actor=hero, in_combat=False, game=None)
     assert "holy_water" in filtered_with_item
     assert "minor_healing_potion" not in filtered_with_item
-

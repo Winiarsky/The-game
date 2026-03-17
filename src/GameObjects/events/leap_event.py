@@ -5,6 +5,7 @@ from typing import Iterable
 
 from board import consts
 from actions.move_utils import _maybe_dispatch_move_reactions
+from combat.stealth_runtime import clear_combat_stealth
 from GameObjects.interactions_mixin import LeapBlockerMixin
 from statuses import STEALTH_STATUS
 from .base import EventContext, EventResult, GameEvent
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 @register_event
 class LeapEvent(GameEvent):
-    """Skok na pole oddalone o 2 – przeskakuje sąsiednie pola, ale respektuje ściany i zajętość lądowiska."""
+    """Skok na pole oddalone o 2 pola; niektóre efekty zwiększają dystans leapa."""
 
     name = "leap"
     default_tags = ["move", "leap"]
@@ -24,14 +25,34 @@ class LeapEvent(GameEvent):
     consumes_action = True
 
 
-    def _candidates(self, board, origin: tuple[int, int]) -> Iterable[tuple[int, int]]:
+    @staticmethod
+    def _stance_value(actor, key: str, default=0):
+        getter = getattr(actor, "get_status_data", None)
+        if callable(getter):
+            try:
+                return getter("monk_stance_active", key, default)
+            except Exception:
+                return default
+        for status in getattr(actor, "statuses", []) or []:
+            if getattr(status, "id", None) != "monk_stance_active":
+                continue
+            data = getattr(status, "data", None) or {}
+            return data.get(key, default)
+        return default
+
+    def _candidates(self, board, origin: tuple[int, int], actor=None) -> Iterable[tuple[int, int]]:
         ox, oy = origin
-        for dx in (-2, -1, 0, 1, 2):
-            for dy in (-2, -1, 0, 1, 2):
+        try:
+            extra_squares = max(0, int(self._stance_value(actor, "leap_extra_squares", 0) or 0))
+        except Exception:
+            extra_squares = 0
+        max_dist = 2 + extra_squares
+        for dx in range(-max_dist, max_dist + 1):
+            for dy in range(-max_dist, max_dist + 1):
                 if dx == 0 and dy == 0:
                     continue
                 dist = max(abs(dx), abs(dy))
-                if dist != 2:  # tylko pola dokładnie w dystansie 2 (Chebyshev)
+                if dist < 2 or dist > max_dist:
                     continue
                 pos = (ox + dx, oy + dy)
                 if not board.in_bounds(pos):
@@ -137,14 +158,14 @@ class LeapEvent(GameEvent):
         # zdejmij stealth jak przy ruchu
         try:
             if getattr(hero, "has_status", lambda _s: False)(STEALTH_STATUS):
-                hero.remove_status(STEALTH_STATUS)
+                clear_combat_stealth(hero, clear_stealth=True, add_observable=True)
         except Exception:
             logger.debug("Nie udało się zdjąć stealth przed leap.", exc_info=True)
 
         board = ctx.game.board
 
         possible: list[tuple[int, int]] = []
-        for pos in self._candidates(board, origin):
+        for pos in self._candidates(board, origin, hero):
             if not board.can_enter(pos, allow_occupied=False):
                 continue
             if not self._path_clear(board, origin, pos):
@@ -157,7 +178,7 @@ class LeapEvent(GameEvent):
             possible.append(pos)
 
         if not possible:
-            return EventResult.cancelled(message="Brak dostępnych pól do skoku (2 pola od bohatera).")
+            return EventResult.cancelled(message="Brak dostępnych pól do skoku.")
 
         try:
             ctx.game.conn.set_leds(possible, [consts.LEAP_FIELD_RGB] * len(possible))

@@ -3,8 +3,15 @@ from __future__ import annotations
 from statuses.base import Status
 
 TWIN_FEINT_DESCRIPTION = (
-    "Twin Feint: wykonaj 2 melee Strikes dwiema broniami przeciw temu samemu celowi. "
-    "Cel jest automatycznie flat-footed przeciw drugiemu atakowi."
+    "Fluff: Twin Feint to sekwencja dwoch szybkich ciosow, w ktorej pierwszy atak odwraca uwage celu, a drugi wykorzystuje otwarta garde.\n"
+    "Mechanika:\n"
+    "- Kiedy: Gdy masz dwie bronie melee 1H i chcesz nacisnac jednym celem cala sekwencje.\n"
+    "- Efekt:\n"
+    "  - Koszt: 2 akcje.\n"
+    "  - Wykonujesz 2 melee Strikes dwiema broniami przeciw temu samemu celowi.\n"
+    "  - Drugi atak dostaje wymuszone off-guard zrodla Twin Feint.\n"
+    "  - To bardzo dobrze wspiera Sneak Attack na drugim trafieniu.\n"
+    "  - Przyklad: walczysz dwoma daggerami, pierwszy cios tylko naciska cel, a drugi korzysta z off-guard i latwiej wbija sneak damage."
 )
 
 

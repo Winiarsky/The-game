@@ -17,6 +17,7 @@ from GameObjects.events.magic.lighting_effects import is_position_in_light_aura
 from GameObjects.events.magic.spell_types import SpellTradition
 from GameObjects.interactions_mixin.skill_check_resolver import compute_skill_modifier_with_sources
 from GameObjects.NPC.base_npc import BaseNPC
+from bonuses import BonusEffect, BonusType
 from skills import Skill
 from states.combat import Combat
 from statuses import InDarkStatus, Status, StunnedStatus, apply_shield_cantrip_absorb
@@ -124,13 +125,13 @@ def _game(*, actor, enemies=None, heroes=None, board=None, conn=None):
 
 def test_chill_touch_failure_applies_enfeebled(monkeypatch):
     hero = DummyActor("hero", (0, 0))
+    hero.add_bonus(BonusEffect(BonusType.STATUS, 5, "magic", source="spell_dc", label="spell dc"))
     enemy = DummyActor("enemy", (1, 0), hp=20)
     game = _game(actor=hero, enemies=[enemy])
 
     monkeypatch.setattr(occ, "pick_target_in_range", lambda *_a, **_k: (enemy, enemy.position))
-    rolls = iter([15, 4])  # spell DC, damage
-    monkeypatch.setattr(occ, "prompt_for_roll", lambda *_a, **_k: next(rolls))
-    monkeypatch.setattr(occ.random, "randint", lambda _a, _b: 8)  # failure vs DC 15
+    monkeypatch.setattr("GameObjects.events.magic.base_attack_magic_event.prompt_for_roll", lambda *_a, **_k: 8)
+    monkeypatch.setattr(occ, "prompt_for_roll", lambda *_a, **_k: 4)
 
     res = occ.ChillTouchEvent().execute(EventContext(game=game, actor=hero))
 
@@ -143,19 +144,52 @@ def test_chill_touch_failure_applies_enfeebled(monkeypatch):
 
 def test_daze_critical_failure_applies_stunned(monkeypatch):
     hero = DummyActor("hero", (0, 0))
+    hero.add_bonus(BonusEffect(BonusType.STATUS, 5, "magic", source="spell_dc", label="spell dc"))
     enemy = DummyActor("enemy", (1, 0), hp=20)
     game = _game(actor=hero, enemies=[enemy])
 
     monkeypatch.setattr(occ, "pick_target_in_range", lambda *_a, **_k: (enemy, enemy.position))
-    rolls = iter([15, 6])
-    monkeypatch.setattr(occ, "prompt_for_roll", lambda *_a, **_k: next(rolls))
-    monkeypatch.setattr(occ.random, "randint", lambda _a, _b: 1)  # critical failure
+    monkeypatch.setattr("GameObjects.events.magic.base_attack_magic_event.prompt_for_roll", lambda *_a, **_k: 1)
+    monkeypatch.setattr(occ, "prompt_for_roll", lambda *_a, **_k: 6)
 
     res = occ.DazeEvent().execute(EventContext(game=game, actor=hero))
 
     assert res.success is True
     assert enemy.hp == 14
     assert any(getattr(s, "id", "") == "stunned" for s in enemy.statuses)
+
+
+def test_acid_splash_spell_attack_prompt_includes_proficiency_and_key_ability(monkeypatch):
+    hero = DummyActor("Freya", (0, 0))
+    hero.class_name = "sorcerer"
+    hero.level = 1
+    hero.ability_modifiers = {"charisma": 4}
+    enemy = DummyActor("enemy", (1, 0), hp=20)
+    enemy.ac = 14
+    game = _game(actor=hero, enemies=[enemy])
+    captured = {}
+
+    monkeypatch.setattr("GameObjects.events.magic.base_attack_magic_event.pick_target_in_range", lambda *_a, **_k: (enemy, enemy.position))
+
+    def _prompt(prompt, **kwargs):
+        if "atak zaklęciem" in str(prompt).lower():
+            captured.update(kwargs)
+            return {"roll": 10, "raw_roll": 10}
+        return 0
+
+    monkeypatch.setattr("GameObjects.events.magic.base_attack_magic_event.prompt_for_roll", _prompt)
+    monkeypatch.setattr(occ.AcidSplashEvent, "_prompt_damage", lambda self: 4)
+
+    res = occ.AcidSplashEvent().execute(EventContext(game=game, actor=hero))
+
+    assert res.success is True
+    stack = dict(captured.get("roll_stack") or {})
+    components = list(stack.get("components") or [])
+    proficiency = next(component for component in components if str(component.get("id")) == "spellcasting_proficiency")
+    key_ability = next(component for component in components if str(component.get("id")) == "spellcasting_key_ability")
+    assert int(proficiency.get("value", 0) or 0) == 3
+    assert int(key_ability.get("value", 0) or 0) == 4
+    assert int(stack.get("auto_total_modifier", 0) or 0) == 7
 
 
 def test_forbidding_ward_sets_target_id(monkeypatch):
@@ -392,14 +426,14 @@ def test_primal_tag_present_for_primal_cantrips():
 
 def test_disrupt_undead_deals_positive_to_undead(monkeypatch):
     hero = DummyActor("hero", (0, 0))
+    hero.add_bonus(BonusEffect(BonusType.STATUS, 5, "magic", source="spell_dc", label="spell dc"))
     enemy = DummyActor("undead", (1, 0), hp=20)
     enemy.tags = ["undead"]
     game = _game(actor=hero, enemies=[enemy])
 
     monkeypatch.setattr(occ, "pick_target_in_range", lambda *_a, **_k: (enemy, enemy.position))
-    rolls = iter([15, 6])  # spell DC, damage
-    monkeypatch.setattr(occ, "prompt_for_roll", lambda *_a, **_k: next(rolls))
-    monkeypatch.setattr(occ.random, "randint", lambda _a, _b: 7)  # failure vs DC 15
+    monkeypatch.setattr("GameObjects.events.magic.base_attack_magic_event.prompt_for_roll", lambda *_a, **_k: 7)
+    monkeypatch.setattr(occ, "prompt_for_roll", lambda *_a, **_k: 6)
 
     res = occ.DisruptUndeadEvent().execute(EventContext(game=game, actor=hero))
 
@@ -471,6 +505,7 @@ def test_stabilize_removes_dying_status(monkeypatch):
 
 def test_electric_arc_hits_two_targets(monkeypatch):
     hero = DummyActor("hero", (0, 0))
+    hero.add_bonus(BonusEffect(BonusType.STATUS, 5, "magic", source="spell_dc", label="spell dc"))
     e1 = DummyActor("enemy1", (1, 0), hp=20)
     e2 = DummyActor("enemy2", (2, 0), hp=20)
     game = _game(actor=hero, enemies=[e1, e2])
@@ -478,10 +513,9 @@ def test_electric_arc_hits_two_targets(monkeypatch):
     picks = [(e1, e1.position), (e2, e2.position)]
     monkeypatch.setattr(occ, "pick_target_in_range", lambda *_a, **_k: picks.pop(0))
     monkeypatch.setattr(occ, "_prompt_choice", lambda *_a, **_k: "Tak")
-    rolls = iter([15, 6])  # dc, damage
-    monkeypatch.setattr(occ, "prompt_for_roll", lambda *_a, **_k: next(rolls))
+    monkeypatch.setattr(occ, "prompt_for_roll", lambda *_a, **_k: 6)
     save_rolls = iter([5, 19])  # failure, success
-    monkeypatch.setattr(occ.random, "randint", lambda _a, _b: next(save_rolls))
+    monkeypatch.setattr("GameObjects.events.magic.base_attack_magic_event.prompt_for_roll", lambda *_a, **_k: next(save_rolls))
 
     res = occ.ElectricArcEvent().execute(EventContext(game=game, actor=hero))
 

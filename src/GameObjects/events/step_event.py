@@ -4,8 +4,15 @@ import logging
 
 from board import consts
 from combat import refresh_flanking_statuses
+from combat.stealth_runtime import clear_combat_stealth
 from statuses import STEALTH_STATUS
-from actions.move_utils import _maybe_dispatch_move_reactions
+from actions.move_utils import (
+    _maybe_dispatch_move_reactions,
+    consume_difficult_terrain_ignores_for_path,
+    find_path,
+    movement_budget_feet,
+    path_cost_feet,
+)
 
 from .base import EventContext, EventResult, GameEvent
 from .registry import register_event
@@ -23,6 +30,38 @@ class StepEvent(GameEvent):
     available_in_combat = True
     available_in_exploration = False
 
+    @staticmethod
+    def _stance_value(actor, key: str, default=0):
+        getter = getattr(actor, "get_status_data", None)
+        if callable(getter):
+            try:
+                return getter("monk_stance_active", key, default)
+            except Exception:
+                return default
+        for status in getattr(actor, "statuses", []) or []:
+            if getattr(status, "id", None) != "monk_stance_active":
+                continue
+            data = getattr(status, "data", None) or {}
+            return data.get(key, default)
+        return default
+
+    def _step_limit_feet(self, hero) -> int:
+        limit = 5
+        try:
+            extra = int(self._stance_value(hero, "step_extra_feet", 0) or 0)
+        except Exception:
+            extra = 0
+        try:
+            min_speed = int(self._stance_value(hero, "step_min_speed_feet", 0) or 0)
+        except Exception:
+            min_speed = 0
+        if extra <= 0:
+            return limit
+        current_speed = movement_budget_feet(hero, default_feet=25)
+        if current_speed < max(0, min_speed):
+            return limit
+        return max(limit, limit + extra)
+
     def execute(self, ctx: EventContext) -> EventResult:
         if not ctx.in_combat:
             return EventResult.cancelled(message="Step dostępny tylko w walce.")
@@ -39,6 +78,8 @@ class StepEvent(GameEvent):
             return EventResult.cancelled(message="Nie możesz wykonać stepu będąc prone.")
 
         board = ctx.game.board
+        step_limit_feet = self._step_limit_feet(hero)
+        max_squares = max(1, int(step_limit_feet // 5))
 
         try:
             ctx.game.events.safe_emit_action(
@@ -53,29 +94,44 @@ class StepEvent(GameEvent):
         # pozbądź się stealth jak przy zwykłym ruchu
         try:
             if getattr(hero, "has_status", lambda _s: False)(STEALTH_STATUS):
-                hero.remove_status(STEALTH_STATUS)
+                clear_combat_stealth(hero, clear_stealth=True, add_observable=True)
         except Exception:
             logger.debug("Nie udało się zdjąć statusu stealth przed stepem.", exc_info=True)
 
-        neighbors = board.get_neighbors(hero_pos, include_position=False, diagonal=True)
-        available: list[tuple[int, int]] = []
-        enemies: list[tuple[int, int]] = []
+        available_paths: dict[tuple[int, int], list[tuple[int, int]]] = {}
+        for dx in range(-max_squares, max_squares + 1):
+            for dy in range(-max_squares, max_squares + 1):
+                if dx == 0 and dy == 0:
+                    continue
+                pos = (hero_pos[0] + dx, hero_pos[1] + dy)
+                if not board.in_bounds(pos):
+                    continue
+                occupant = board.occupant_at(pos)
+                if occupant in getattr(ctx.game, "heroes", []) or occupant in getattr(ctx.game, "enemies", []):
+                    continue
+                path = find_path(
+                    board,
+                    hero_pos,
+                    pos,
+                    allow_diagonal=True,
+                    allow_occupied=False,
+                    mover=hero,
+                )
+                if not path or len(path) <= 1:
+                    continue
+                if (len(path) - 1) > max_squares:
+                    continue
+                if path_cost_feet(path, board, mover=hero) > step_limit_feet:
+                    continue
+                available_paths[pos] = path
 
-        for pos in neighbors:
-            occupant = board.occupant_at(pos)
-            if occupant in getattr(ctx.game, "heroes", []):
-                continue  # nie stajemy na innym bohaterze
-            if occupant in getattr(ctx.game, "enemies", []):
-                enemies.append(pos)
-                continue
-            if board.can_traverse(hero_pos, pos, allow_occupied=False):
-                available.append(pos)
+        available = list(available_paths.keys())
 
         if not available:
             return EventResult.cancelled(message="Brak wolnych pól do stepu.")
 
-        positions = list(available) + enemies
-        colors = [consts.MOVE_FIELD_RGB] * len(available) + [consts.ENEMY_MOVE_RGB] * len(enemies)
+        positions = [hero_pos] + list(available)
+        colors = [consts.MOVE_START_RGB] + [consts.MOVE_FIELD_RGB] * len(available)
 
         dest: tuple[int, int] | None = None
         try:
@@ -88,10 +144,7 @@ class StepEvent(GameEvent):
                 if choice in available:
                     dest = choice
                     break
-                if choice in enemies:
-                    ctx.game.ui_log("Nie możesz wejść na pole z wrogiem.")
-                else:
-                    ctx.game.ui_log("Wybierz jedno z zaznaczonych pól obok bohatera.")
+                ctx.game.ui_log("Wybierz jedno z zaznaczonych pól do stepu.")
         finally:
             try:
                 ctx.game.conn.leds_off()
@@ -102,11 +155,32 @@ class StepEvent(GameEvent):
             return EventResult.cancelled(message="Nie wybrano pola do stepu.")
 
         start_pos = hero_pos
+        path = list(available_paths.get(dest) or [])
+        if not path:
+            return EventResult.cancelled(message="Nie udało się wyznaczyć ścieżki do stepu.")
+        completed, stop_pos, reason = False, start_pos, None
         try:
-            board.move(start_pos, dest)
-        except ValueError as exc:
-            logger.error("Nie udało się przesunąć bohatera w stepu: %s", exc)
+            from actions.move_utils import follow_path
+
+            completed, stop_pos, reason = follow_path(
+                ctx,
+                hero,
+                path,
+                led_color=consts.MOVE_FIELD_RGB,
+                allow_occupied=False,
+                step_delay=0.0,
+            )
+        except Exception as exc:
+            logger.error("Nie udało się wykonać stepu: %s", exc)
             return EventResult(success=False, consumed_action=False, message=str(exc))
+
+        traversed_path = [start_pos]
+        if isinstance(stop_pos, tuple) and stop_pos in path:
+            traversed_path = list(path[: path.index(stop_pos) + 1])
+        consume_difficult_terrain_ignores_for_path(hero, board, traversed_path)
+        if not completed:
+            logger.error("Step zatrzymany (%s).", reason)
+            return EventResult(success=False, consumed_action=False, message=f"Step zatrzymany ({reason or 'unknown'}).")
 
         ctx.game.events.safe_emit_action(
             actor=hero,

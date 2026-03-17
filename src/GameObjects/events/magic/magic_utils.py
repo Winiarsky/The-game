@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from combat.stealth_runtime import has_status_id
+
+from ..targeting import pick_target_or_guess_square
+
 
 def grid_distance_feet(a: tuple[int, int], b: tuple[int, int]) -> int:
     """Police dystans w stopach przy zasadzie przekątnej 5/10 stóp."""
@@ -18,6 +22,8 @@ def pick_target_in_range(
     max_range_feet: int | None,
     allowed_kinds: tuple[str, ...] = ("enemy", "hero"),
     tags: list[str] | None = None,
+    allow_guess_undetected: bool = False,
+    return_selection_details: bool = False,
 ):
     """Zwróć (target, pos) jeśli gracz wybierze cel w zasięgu i dozwolonego typu.
 
@@ -45,6 +51,23 @@ def pick_target_in_range(
         valid.append((obj, pos, kind, dist))
 
     if not valid:
+        if return_selection_details:
+            return {"kind": "cancel"}
+        return None, None
+
+    if allow_guess_undetected and any(has_status_id(obj, "undetected") for obj, _pos, _kind, _dist in valid):
+        selection = pick_target_or_guess_square(
+            ctx,
+            source_pos,
+            [(obj, pos, kind) for obj, pos, kind, _dist in valid],
+            max_range_feet=max_range_feet,
+            allowed_kinds=allowed_kinds,
+            tags=tags,
+        )
+        if return_selection_details:
+            return selection
+        if selection.get("kind") == "target":
+            return selection.get("target"), selection.get("pos")
         return None, None
 
     positions = [pos for _, pos, _, _ in valid]
@@ -66,11 +89,17 @@ def pick_target_in_range(
             pass
 
     if choice is None or choice == source_pos:
+        if return_selection_details:
+            return {"kind": "cancel"}
         return None, None
 
     for obj, pos, kind, _dist in valid:
         if pos == choice:
+            if return_selection_details:
+                return {"kind": "target", "target": obj, "pos": pos, "guessed": False}
             return obj, pos
+    if return_selection_details:
+        return {"kind": "cancel"}
     return None, None
 
 

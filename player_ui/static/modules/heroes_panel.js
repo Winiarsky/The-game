@@ -50,6 +50,56 @@ function formatPos(pos) {
     return `(${pos[0]}, ${pos[1]})`;
 }
 
+function spellSlotLabel(tier) {
+    const raw = String(tier || "").toLowerCase().trim();
+    if (!raw) return "";
+    if (raw === "cantrip") return "Cantripy";
+    if (raw.startsWith("rank_")) return `R${raw.slice(5)}`;
+    return raw.replace(/_/g, " ");
+}
+
+function normalizeSpellcasting(rawSpellcasting) {
+    if (!rawSpellcasting || typeof rawSpellcasting !== "object") return null;
+    const asDict = (value) => (value && typeof value === "object" && !Array.isArray(value) ? value : {});
+    const asList = (value) => (Array.isArray(value) ? value : []);
+    return {
+        enabled: Boolean(rawSpellcasting.enabled),
+        className: rawSpellcasting.class_name || rawSpellcasting.className || "",
+        focusPoints: Number(rawSpellcasting.focus_points ?? rawSpellcasting.focusPoints ?? 0) || 0,
+        focusPoolMax: Number(rawSpellcasting.focus_pool_max ?? rawSpellcasting.focusPoolMax ?? 0) || 0,
+        slotTotal: asDict(rawSpellcasting.slot_total || rawSpellcasting.slotTotal),
+        slotRemaining: asDict(rawSpellcasting.slot_remaining || rawSpellcasting.slotRemaining),
+        knownCounts: asDict(rawSpellcasting.known_counts || rawSpellcasting.knownCounts),
+        knownSpells: asDict(rawSpellcasting.known_spells || rawSpellcasting.knownSpells),
+    };
+}
+
+function spellcastingSummary(hero) {
+    const spellcasting = normalizeSpellcasting(hero?.spellcasting);
+    if (!spellcasting) return [];
+    const rows = [];
+    if (spellcasting.focusPoolMax > 0) {
+        rows.push(`Focus ${spellcasting.focusPoints}/${spellcasting.focusPoolMax}`);
+    }
+    Object.keys(spellcasting.slotTotal)
+        .sort()
+        .forEach((tier) => {
+            const total = Number(spellcasting.slotTotal[tier]);
+            if (Number.isNaN(total) || total <= 0 || tier === "cantrip") return;
+            const remaining = Number(spellcasting.slotRemaining[tier]);
+            rows.push(`${spellSlotLabel(tier)} ${Number.isNaN(remaining) ? total : remaining}/${total}`);
+        });
+    return rows;
+}
+
+function spellListLine(spellcasting, tier) {
+    if (!spellcasting || typeof spellcasting !== "object") return "";
+    const raw = spellcasting.knownSpells && typeof spellcasting.knownSpells === "object" ? spellcasting.knownSpells[tier] : [];
+    const list = Array.isArray(raw) ? raw : [];
+    if (!list.length) return "";
+    return list.map((item) => pretty(item)).join(", ");
+}
+
 function skillRanksShort(hero) {
     const ranks = hero.skillRanks && typeof hero.skillRanks === "object" ? hero.skillRanks : {};
     const trained = Array.isArray(hero.trainedSkills) ? hero.trainedSkills : [];
@@ -181,7 +231,7 @@ export function coerceHeroPreview(rawPreview, fallbackLabel = "", placeholderIma
         acBase: preview.ac_base ?? preview.acBase ?? preview.ac ?? null,
         acModifier: preview.ac_modifier ?? preview.acModifier ?? 0,
         maxHp: preview.max_hp ?? preview.maxHp ?? null,
-        baseSpeedFeet: preview.base_speed_feet ?? preview.baseSpeedFeet ?? null,
+        baseSpeedFeet: preview.speed_feet ?? preview.base_speed_feet ?? preview.baseSpeedFeet ?? null,
         abilityScores: asDict(preview.ability_scores || preview.abilityScores),
         abilityModifiers: asDict(preview.ability_modifiers || preview.abilityModifiers),
         skillRanks: asDict(preview.skill_ranks || preview.skillRanks),
@@ -195,6 +245,7 @@ export function coerceHeroPreview(rawPreview, fallbackLabel = "", placeholderIma
         moneyText: preview.money_text || preview.moneyText || null,
         bulkSummary: asDict(preview.bulk_summary || preview.bulkSummary),
         inventoryItems: asList(preview.inventory_items || preview.inventoryItems),
+        spellcasting: normalizeSpellcasting(preview.spellcasting),
         creationInProgress: false,
     };
 }
@@ -283,11 +334,13 @@ export function renderHeroesPanel({
         const hpNow = currentHp(hero);
         const meta = document.createElement("div");
         meta.className = "hero-roster-meta";
-        meta.textContent = [
+        const metaRows = [
             hpNow != null ? `HP ${hpNow}/${hero.maxHp ?? "-"}` : "HP -",
             armorClassBreakdown(hero),
             `Pozycja ${formatPos(hero.pos)}`,
-        ].join(" · ");
+        ];
+        metaRows.push(...spellcastingSummary(hero).slice(0, 2));
+        meta.textContent = metaRows.join(" · ");
 
         const statuses = Array.isArray(hero.statuses) ? hero.statuses : [];
         const statusRow = document.createElement("div");
@@ -413,6 +466,12 @@ export function renderHeroesPanel({
             : "Bulk: -";
     const inventoryItems = Array.isArray(detailHero.inventoryItems) ? detailHero.inventoryItems : [];
     const inventoryLabel = inventoryItems.length ? inventoryItems.join(", ") : "brak";
+    const spellcasting = normalizeSpellcasting(detailHero.spellcasting);
+    const spellSummaryRows = spellcastingSummary(detailHero);
+    const slotLine = spellSummaryRows.length ? spellSummaryRows.join(" · ") : "Brak liczników slotów.";
+    const cantripLine = spellListLine(spellcasting, "cantrip");
+    const rank1Line = spellListLine(spellcasting, "rank_1");
+    const focusLine = spellListLine(spellcasting, "focus");
     const section = (title, body) =>
         `<div class="hero-section"><div class="hero-section-title">${title}</div><div class="hero-section-body">${body}</div></div>`;
 
@@ -449,6 +508,14 @@ export function renderHeroesPanel({
         <div class="hero-stats">${bulkLine}</div>
         <div class="hero-notes">Ekwipunek: ${inventoryLabel}</div>
     `;
+    const magicBody = spellcasting
+        ? `
+        <div class="hero-stats">${slotLine}</div>
+        <div class="hero-notes">Cantripy: ${cantripLine || "brak"}</div>
+        <div class="hero-notes">Czary R1: ${rank1Line || "brak"}</div>
+        <div class="hero-notes">Focus spelle: ${focusLine || "brak"}</div>
+    `
+        : `<div class="hero-notes">Brak aktywnego spellcasting runtime.</div>`;
 
     heroesDetail.innerHTML = `
         <div class="hero-card detail-card ${String(detailHero.id || "") === String(activeActorId || "") ? "active" : ""}">
@@ -461,6 +528,7 @@ export function renderHeroesPanel({
                     ${section("Skille", skillsBody)}
                     ${section("Statusy", statusBody)}
                     ${section("Ekwipunek", equipmentBody)}
+                    ${section("Magia", magicBody)}
                 </div>
                 <div class="hero-portrait detail-portrait" style="background-image: url('${detailHero.image || placeholderImage}')"></div>
             </div>

@@ -3,9 +3,14 @@ from __future__ import annotations
 from statuses.base import Status
 
 HALFLING_LORE_DESCRIPTION = (
-    "Stajesz się trained w Acrobatics i Stealth.\n"
-    "Jeśli już jesteś trained w jednej z tych umiejętności, wybierasz inny skill.\n"
-    "Dodatkowo stajesz się trained w Halfling Lore."
+    "Fluff: Halfling Lore zbiera typowe dla niziolkow sztuczki, opowiesci i codzienne umiejetnosci przydatne w drodze.\n"
+    "Mechanika:\n"
+    "- Kiedy: Po wybraniu tej opcji.\n"
+    "- Efekt:\n"
+    "  - Stajesz sie trained w Acrobatics i Stealth.\n"
+    "  - Dodatkowo stajesz sie trained w Halfling Lore.\n"
+    "  - Jesli juz masz training w Acrobatics albo Stealth, wybierasz inny skill jako zamiennik.\n"
+    "  - Przykład: jesli masz juz Acrobatics z backgroundu, feat zostawi ci Stealth i pozwoli dobrac np. Arcana."
 )
 
 

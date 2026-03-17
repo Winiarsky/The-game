@@ -1144,9 +1144,47 @@ button.disabled, button:disabled {
     border-top: 1px dashed rgba(202, 164, 90, 0.35);
     color: var(--muted);
     font-size: 13px;
-    line-height: 1.4;
-    white-space: pre-line;
+    line-height: 1.45;
     display: none;
+}
+.choice-pill .desc-structured {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.choice-pill .desc-line,
+.choice-pill .desc-bullet {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+}
+.choice-pill .desc-fluff {
+    color: var(--fg);
+}
+.choice-pill .desc-section-title {
+    margin-top: 4px;
+    color: var(--accent);
+    font-family: var(--font-title);
+    font-size: 12px;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+}
+.choice-pill .desc-label {
+    color: var(--fg);
+    font-weight: 700;
+}
+.choice-pill .desc-text,
+.choice-pill .desc-bullet-body,
+.choice-pill .desc-plain {
+    flex: 1;
+    min-width: 0;
+}
+.choice-pill .desc-bullet-marker {
+    color: var(--accent);
+    flex: 0 0 auto;
+}
+.choice-pill .desc-bullet-nested {
+    margin-left: 14px;
 }
 .choice-pill.selected {
     border-color: var(--accent);

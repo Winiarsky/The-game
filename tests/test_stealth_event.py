@@ -38,6 +38,7 @@ from GameObjects.events.base import EventContext  # noqa: E402
 from GameObjects.events.registry import dispatch_event  # noqa: E402
 from statuses import HIDE_STATUS  # noqa: E402
 from board import consts  # noqa: E402
+from states.combat import Combat  # noqa: E402
 import GameObjects.events.checks.skill_check_event  # noqa: F401  # rejestracja skill_check
 
 
@@ -159,3 +160,58 @@ def test_stealth_budget_gets_plus_five_with_very_sneaky():
     budget = StealthEvent._sneak_movement_budget_feet(hero)
 
     assert budget == 15
+
+
+def test_stealth_success_in_combat_grants_hidden(monkeypatch):
+    hero = Hero(statuses=[HIDE_STATUS])
+    game = types.SimpleNamespace(
+        board=DummyBoard(),
+        conn=DummyConn(),
+        heroes=[hero],
+        events=DummyEvents(),
+        ui_log=lambda *a, **k: None,
+        ui_hero=lambda *a, **k: None,
+        ui_active_actor=lambda *a, **k: None,
+    )
+    game.state = Combat(game)
+
+    monkeypatch.setattr("GameObjects.events.stealth_event.iter_watchers_in_rooms", lambda *a, **k: [])
+    monkeypatch.setattr("GameObjects.events.stealth_event.summarize_watchers", lambda watchers: (0, []))
+    monkeypatch.setattr("GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll", lambda *_, **__: 10)
+    monkeypatch.setattr("GameObjects.events.stealth_event.perform_movement", lambda *a, **k: None)
+
+    ctx = EventContext(game=game, actor=hero, tags=["move", "stealth"])
+    result = StealthEvent().execute(ctx)
+
+    assert result.success is True
+    status_ids = {getattr(s, "id", s) for s in hero.statuses}
+    assert "stealth" in status_ids
+    assert "hidden" in status_ids
+    assert "undetected" not in status_ids
+
+
+def test_stealth_move_in_combat_upgrades_to_undetected(monkeypatch):
+    hero = Hero(statuses=[HIDE_STATUS])
+    hero.statuses.append(types.SimpleNamespace(id="stealth", label="Stealth", data={"stealth_detection_dc": 12, "stealth_bonus": 0}))
+    hero.statuses.append(types.SimpleNamespace(id="hidden", label="Hidden", data={}))
+    game = types.SimpleNamespace(
+        board=DummyBoard(),
+        conn=DummyConn(),
+        heroes=[hero],
+        events=DummyEvents(),
+        ui_log=lambda *a, **k: None,
+        ui_hero=lambda *a, **k: None,
+        ui_active_actor=lambda *a, **k: None,
+    )
+    game.state = Combat(game)
+
+    monkeypatch.setattr("GameObjects.events.stealth_event.iter_watchers_in_rooms", lambda *a, **k: [])
+    monkeypatch.setattr("GameObjects.events.stealth_event.perform_movement", lambda _ctx, actor, *_a, **_k: setattr(actor, "position", (0, 1)))
+
+    ctx = EventContext(game=game, actor=hero, tags=["move", "stealth"])
+    result = StealthEvent().execute(ctx)
+
+    assert result.success is True
+    status_ids = {getattr(s, "id", s) for s in hero.statuses}
+    assert "undetected" in status_ids
+    assert "hidden" not in status_ids

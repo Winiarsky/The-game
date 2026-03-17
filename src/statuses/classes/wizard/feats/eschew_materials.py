@@ -4,7 +4,9 @@ from statuses.base import Status
 
 ESCHEW_MATERIALS_DESCRIPTION = (
     "Eschew Materials: możesz zastąpić standardowe komponenty materialne "
-    "gestami sigili (nadal wymaga wolnej ręki i nie działa na komponenty z kosztem)."
+    "gestami sigili (nadal wymaga wolnej ręki i nie działa na komponenty z kosztem). "
+    "W tym buildzie standardowe komponenty materialne nie sa osobno modelowane, "
+    "wiec feat jest glownie zgodnosciowy/opisowy."
 )
 
 

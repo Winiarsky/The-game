@@ -99,6 +99,8 @@ class Enemy:
         self.position = pos
         self.hp = hp
         self.ac = ac
+        self.statuses = []
+        self.bonuses = []
 
     def apply_damage(self, amount, dmg_type="piercing"):
         self.hp -= amount
@@ -169,6 +171,27 @@ def test_cover_and_range_penalty_emitted(monkeypatch):
     assert emitted.get("cover") == "greater"
     assert emitted.get("range_penalty") == 10  # 6 increment -> (6-1)*2
     assert enemy.hp == 8
+
+
+def test_longbow_wrong_square_against_undetected_target_still_counts_as_attack():
+    hero = Hero((0, 0))
+    enemy = Enemy((2, 0), hp=8, ac=10)
+    enemy.statuses.append(types.SimpleNamespace(id="undetected"))
+    game = FakeGame()
+    game.heroes = [hero]
+    game.enemies = [enemy]
+    game.board.occupants = {hero.position: hero, enemy.position: enemy}
+    game.conn.choice = (1, 1)
+
+    result = dispatch_event("longbow", _ctx(game, hero))
+
+    assert result.success is True
+    assert bool((result.data or {}).get("hit", True)) is False
+    assert (result.data or {}).get("target") is None
+    assert (result.data or {}).get("guessed_target_square") == (1, 1)
+    assert enemy.hp == 8
+    assert getattr(hero, "_attack_trait_state", {}).get("attacks_this_turn") == 1
+    assert any(getattr(s, "id", s) == "range_attacker" for s in hero.statuses)
 
 
 def test_analyze_shot_raised_tower_shield_in_line_grants_standard_cover():

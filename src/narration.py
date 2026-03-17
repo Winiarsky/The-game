@@ -2,9 +2,35 @@ from __future__ import annotations
 
 from typing import Any
 
+from localization.pl import localize_term_pl
+
+
+_ACTION_SUFFIXES = (
+    "_concealed_miss",
+    "_wrong_square",
+    "_critical_failure",
+    "_critical_success",
+    "_failure",
+    "_success",
+    "_miss",
+    "_pre",
+)
+
 
 def _humanize(action_id: str) -> str:
-    return str(action_id or "akcja").replace("_", " ").strip()
+    raw = str(action_id or "akcja").strip()
+    if not raw:
+        return "akcja"
+    normalized = raw.lower().replace("-", "_").replace(" ", "_")
+    for suffix in _ACTION_SUFFIXES:
+        if normalized.endswith(suffix):
+            normalized = normalized[: -len(suffix)]
+            break
+    normalized = normalized.strip("_")
+    localized = localize_term_pl(normalized)
+    if localized:
+        return localized
+    return str(normalized or raw or "akcja").replace("_", " ").strip()
 
 
 def _name(obj: Any, fallback: str) -> str:

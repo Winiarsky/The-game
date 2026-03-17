@@ -26,36 +26,49 @@ class DummyHero(StatusMixin):
     pass
 
 
-def test_bardic_lore_adds_recall_knowledge_note():
+def test_bardic_lore_uses_better_modifier_for_recall_knowledge():
     actor = DummyHero()
+    actor.level = 1
+    actor.ability_modifiers = {"intelligence": 4}
+    actor.skill_ranks = {"arcana": "untrained"}
     actor.add_status(BARDIC_LORE_STATUS)
 
     res = resolve_skill_check_with_sources_from_roll(
         skill_id="arcana",
-        dc=15,
+        dc=16,
         actor=actor,
-        tags=["knowledge"],
+        tags=["knowledge", "recall_knowledge"],
         roll=10,
         apply_modifiers=True,
     )
 
-    assert any("bardic lore" in note.lower() and "2x k20" in note.lower() for note in res.notes)
+    assert res.modifier == 7
+    assert res.total == 17
+    assert res.outcome == "success"
+    assert any("bardic lore" in note.lower() and "lepszego modyfikatora" in note.lower() for note in res.notes)
 
 
-def test_versatile_performance_adds_diplomacy_note():
+def test_versatile_performance_uses_performance_for_demoralize():
     actor = DummyHero()
+    actor.level = 1
+    actor.ability_modifiers = {"charisma": 4}
+    actor.skill_ranks = {"intimidation": "untrained", "performance": "expert"}
+    actor.intimidation_bonus = 4
     actor.add_status(VERSATILE_PERFORMANCE_STATUS)
 
     res = resolve_skill_check_with_sources_from_roll(
-        skill_id="diplomacy",
-        dc=15,
+        skill_id="intimidation",
+        dc=20,
         actor=actor,
-        tags=["diplomacy"],
+        tags=["demoralize", "fear", "mental", "intimidation"],
         roll=10,
         apply_modifiers=True,
     )
 
-    assert any("zamiast diplomacy" in note.lower() and "performance" in note.lower() for note in res.notes)
+    assert res.modifier == 9
+    assert res.total == 19
+    assert res.outcome == "failure"
+    assert any("versatile performance" in note.lower() and "demoralize" in note.lower() for note in res.notes)
 
 
 def test_reach_spell_extends_touch_to_30_and_consumes_ready_status():
@@ -85,4 +98,3 @@ def test_reach_spell_extends_touch_to_30_and_consumes_ready_status():
     assert spell.range_feet == 30
     assert not actor.has_status("reach_spell_ready")
     assert any("reach spell" in msg.lower() and "30 ft" in msg.lower() for msg in game_logs)
-

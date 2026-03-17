@@ -251,20 +251,52 @@ def test_natural_ambition_for_wizard_grants_eschew_materials(monkeypatch):
     assert hero.has_status("eschew_materials")
 
 
+def test_natural_ambition_for_wizard_does_not_offer_hand_of_the_apprentice():
+    choices = list(
+        ((NATURAL_AMBITION_STATUS.data or {}).get("natural_ambition_class_feat_choices") or {}).get("wizard") or []
+    )
+
+    assert "hand_of_the_apprentice" not in choices
+
+
 def test_adapted_cantrip_records_selected_choices(monkeypatch):
-    ui = DummyUI(["Arcane", "Shield", "Detect Magic"])
+    ui = DummyUI(["Divine", "Guidance", "Detect Magic"])
     monkeypatch.setattr("ui_client.get_ui_client", lambda: ui)
 
     hero = DummyHero()
     hero.class_name = "wizard"
+    hero.wizard_spellbook = {"cantrip": ["detect_magic", "ray_of_frost", "mage_hand"], "rank_1": []}
     hero.add_status(ADAPTED_CANTRIP_STATUS)
 
     assert hero.has_status("adapted_cantrip")
-    assert hero.get_status_data("adapted_cantrip", "adapted_tradition", None) == "arcane"
-    assert hero.get_status_data("adapted_cantrip", "adapted_cantrip", None) == "shield"
+    assert hero.get_status_data("adapted_cantrip", "adapted_tradition", None) == "divine"
+    assert hero.get_status_data("adapted_cantrip", "adapted_cantrip", None) == "guidance"
     assert hero.get_status_data("adapted_cantrip", "replaced_cantrip", None) == "detect_magic"
-    assert hero.get_status_data("adapted_cantrip", "granted_cantrips", []) == ["shield"]
-    assert hero.get_status_data("adapted_cantrip", "innate_magic_tradition", None) == "arcane"
+    assert hero.get_status_data("adapted_cantrip", "removed_cantrips", []) == ["detect_magic"]
+    assert hero.get_status_data("adapted_cantrip", "granted_cantrips", []) == ["guidance"]
+    assert hero.get_status_data("adapted_cantrip", "innate_magic_tradition", None) == "divine"
+    assert list((hero.wizard_spellbook or {}).get("cantrip") or []) == ["guidance", "ray_of_frost", "mage_hand"]
+
+
+def test_adapted_cantrip_uses_dynamic_tradition_and_cantrip_pools(monkeypatch):
+    ui = CaptureUI(["Divine", "Guidance", "Detect Magic"])
+    monkeypatch.setattr("ui_client.get_ui_client", lambda: ui)
+
+    hero = DummyHero()
+    hero.class_name = "wizard"
+    hero.wizard_spellbook = {"cantrip": ["detect_magic", "ray_of_frost", "mage_hand"], "rank_1": []}
+    hero.add_status(ADAPTED_CANTRIP_STATUS)
+
+    assert len(ui.calls) >= 3
+    first_meta = list(ui.calls[0].get("choice_meta") or [])
+    second_meta = list(ui.calls[1].get("choice_meta") or [])
+    third_meta = list(ui.calls[2].get("choice_meta") or [])
+
+    assert "arcane" not in {str(item.get("raw") or "") for item in first_meta}
+    assert {str(item.get("raw") or "") for item in first_meta} == {"divine", "occult", "primal"}
+    assert "stabilize" in {str(item.get("raw") or "") for item in second_meta}
+    assert "divine_lance" in {str(item.get("raw") or "") for item in second_meta}
+    assert {str(item.get("raw") or "") for item in third_meta} == {"detect_magic", "ray_of_frost", "mage_hand"}
 
 
 def test_adapted_cantrip_requires_spellcasting_class_feature(monkeypatch):

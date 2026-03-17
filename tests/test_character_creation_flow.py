@@ -14,6 +14,7 @@ from character_creation.pipeline import (
     _STARTER_SHOP_OFFERS,
     _ancestry_fluff_sentence,
     _ancestry_mechanics_desc_pl,
+    _build_snapshot,
     _create_shop_item,
     _ensure_structured_choice_desc,
     _item_choice_desc,
@@ -21,18 +22,23 @@ from character_creation.pipeline import (
     _status_choice_desc,
     hero_from_snapshot,
 )
+from character_creation.mechanics import apply_character_creation_ability_boost, base_ability_scores
 from character_creation.repository import CharacterRepository
 from character_creation.catalog import (
     ANCESTRY_FEAT_IDS_BY_ANCESTRY,
     ANCESTRY_IDS,
+    CLASS_IDS,
     CLASS_FEAT_CHOICES_MANUAL,
     HERITAGE_IDS_BY_ANCESTRY,
     list_background_status_ids,
     resolve_status,
 )
 from statuses.base import Status
+from statuses.general.fleet import FLEET_STATUS
+from statuses.race.human.human import HUMAN_STATUS
 from states.start import Start
 from character_creation.pipeline import create_character
+from hero import Hero
 
 
 def test_character_repository_save_load_and_list(tmp_path):
@@ -119,6 +125,39 @@ def test_character_repository_serializes_status_objects_in_payload(tmp_path):
     first = granted[0]
     assert isinstance(first, dict)
     assert first.get("id") == "arcane_sense"
+
+
+def test_build_snapshot_preserves_raw_speed_and_stores_display_speed_for_fleet():
+    hero = Hero()
+    hero.name = "Fleet Hero"
+    hero.level = 1
+    hero.add_status(HUMAN_STATUS)
+    hero.add_status(FLEET_STATUS)
+
+    snapshot = _build_snapshot(
+        hero=hero,
+        character_id="fleet_hero",
+        name="Fleet Hero",
+        concept="",
+        ancestry_id="human",
+        heritage_id="",
+        ancestry_feat_id="",
+        background_id="",
+        class_id="monk",
+        class_feat_ids=[],
+    )
+
+    assert snapshot["base_speed_feet"] == 25
+    assert snapshot["speed_feet"] == 30
+
+
+def test_character_creation_ability_boost_caps_score_at_18():
+    scores = base_ability_scores()
+    scores["dexterity"] = 18
+
+    apply_character_creation_ability_boost(scores, "dexterity")
+
+    assert scores["dexterity"] == 18
 
 
 def test_hero_from_snapshot_restores_core_fields():
@@ -481,6 +520,34 @@ def test_hero_from_snapshot_restores_inventory_items():
     assert "healer_tools" in item_ids
 
 
+def test_hero_from_snapshot_restores_configured_scroll_spell():
+    snapshot = {
+        "character_id": "hero_scroll",
+        "name": "Scroll Hero",
+        "class_id": "wizard",
+        "inventory_items": [
+            {
+                "item_id": "scroll_common_rank1",
+                "category": "potion",
+                "name": "Zwoj: Prawdziwy cios",
+                "description": "Jednorazowo rzuca czar: Prawdziwy cios.",
+                "price_cp": 400,
+                "bulk": "L",
+                "event_name": "scroll_common_rank1",
+                "scroll_spell_id": "true_strike",
+            },
+        ],
+    }
+    hero = hero_from_snapshot(snapshot)
+    scrolls = [
+        item
+        for item in list(getattr(hero, "inventory", []) or [])
+        if str(getattr(item, "item_id", "") or "").strip().lower() == "scroll_common_rank1"
+    ]
+    assert len(scrolls) == 1
+    assert str(getattr(scrolls[0], "scroll_spell_id", "") or "").strip().lower() == "true_strike"
+
+
 def test_hero_from_snapshot_restores_missing_class_feat_status_from_class_feat_ids():
     snapshot = {
         "character_id": "hero_barb_feat",
@@ -575,6 +642,83 @@ def test_bard_repertoire_is_set_during_character_creation(monkeypatch, tmp_path)
     assert int(snapshot_bard_setup.get("rank_1_slots_per_day", 0) or 0) == 2
 
 
+def test_character_creation_smoke_matrix_supports_all_classes_and_ancestries(monkeypatch, tmp_path):
+    class _ChoiceUi:
+        enabled = True
+        allow_cli_fallback = False
+
+        def prompt_choice(self, _prompt, choices=None, **_kwargs):
+            if choices:
+                return choices[0]
+            return None
+
+        def prompt_info(self, *_args, **_kwargs):
+            return None
+
+    class _CreationGameStub:
+        def __init__(self):
+            self.ui = None
+            self.logs: list[str] = []
+
+        def ui_log(self, message: str) -> None:
+            self.logs.append(str(message))
+
+        def ui_hero(self, *_args, **_kwargs):
+            return None
+
+        def ui_active_actor(self, *_args, **_kwargs):
+            return None
+
+    ui = _ChoiceUi()
+    monkeypatch.setattr("ui_client.get_ui_client", lambda: ui)
+    monkeypatch.setattr("character_creation.pipeline._pick_portrait_image", lambda *_a, **_k: "/static/placeholder.png")
+    monkeypatch.setattr(
+        "character_creation.pipeline._prompt_text",
+        lambda _game, *, title, **_kwargs: "AutoHero" if "imi" in str(title).lower() else "tekst",
+    )
+    monkeypatch.setattr(
+        "character_creation.pipeline._pick_ability",
+        lambda *_a, allowed=None, **_k: str((list(allowed or ["strength"]) or ["strength"])[0]),
+    )
+    monkeypatch.setattr("character_creation.pipeline._pick_additional_skills", lambda *_a, **_k: [])
+    monkeypatch.setattr("character_creation.pipeline._resolve_background_training_choice", lambda *_a, **_k: (None, None))
+    monkeypatch.setattr("character_creation.pipeline._run_starting_equipment_step", lambda *_a, **_k: None)
+    monkeypatch.setattr("character_creation.pipeline._prompt_info", lambda *_a, **_k: None)
+
+    failures: list[str] = []
+
+    for class_id in CLASS_IDS:
+        for ancestry_id in ANCESTRY_IDS:
+            def _fake_pick_one(_game, *, title, options=None, **_kwargs):
+                text = str(title or "")
+                if text.startswith("KROK 2: Wybór Ancestry"):
+                    return ancestry_id
+                if text.startswith("KROK 6: Wybór Klasy"):
+                    return class_id
+                entries = list(options or [])
+                if not entries:
+                    return None
+                first = entries[0]
+                if isinstance(first, dict):
+                    return first.get("id") or first.get("label")
+                return first
+
+            monkeypatch.setattr("character_creation.pipeline._pick_one", _fake_pick_one)
+
+            repo = CharacterRepository(tmp_path / f"{class_id}_{ancestry_id}")
+            result = create_character(_CreationGameStub(), repo)
+            if result is None or getattr(result, "hero", None) is None:
+                failures.append(f"{class_id}/{ancestry_id}: create_character zwrócił None")
+                continue
+            hero = result.hero
+            if str(getattr(hero, "class_id", "") or "").strip().lower() != class_id:
+                failures.append(f"{class_id}/{ancestry_id}: zły class_id={getattr(hero, 'class_id', None)}")
+            if str(getattr(hero, "ancestry_id", "") or "").strip().lower() != ancestry_id:
+                failures.append(f"{class_id}/{ancestry_id}: zły ancestry_id={getattr(hero, 'ancestry_id', None)}")
+
+    assert not failures, "\n".join(failures)
+
+
 def test_class_key_ability_is_visible_in_live_preview_during_class_setup(monkeypatch, tmp_path):
     repo = CharacterRepository(tmp_path / "heroes")
 
@@ -660,6 +804,135 @@ def test_class_key_ability_is_visible_in_live_preview_during_class_setup(monkeyp
     scores = dict(class_setup_snapshot.get("ability_scores") or {})
     # W preview KROK 6A widoczne sa juz boosty ancestry/background + key ability.
     assert int(scores.get("strength", 0) or 0) >= 12
+
+
+def test_monk_creation_dexterity_preview_and_final_score_do_not_exceed_18(monkeypatch, tmp_path):
+    repo = CharacterRepository(tmp_path / "heroes")
+
+    class _CreationGameStub:
+        def __init__(self):
+            self.ui = None
+            self.logs: list[str] = []
+            self.snapshots: list[dict[str, object]] = []
+
+        def ui_log(self, message: str) -> None:
+            self.logs.append(str(message))
+
+        def ui_hero(self, hero, note: str | None = None):
+            self.snapshots.append(
+                {
+                    "note": str(note or ""),
+                    "ability_scores": dict(getattr(hero, "ability_scores", {}) or {}),
+                    "class_id": str(getattr(hero, "class_id", "") or ""),
+                    "ancestry_id": str(getattr(hero, "ancestry_id", "") or ""),
+                }
+            )
+
+        def ui_active_actor(self, *_args, **_kwargs):
+            return None
+
+    class _StatusUi:
+        enabled = True
+        allow_cli_fallback = False
+
+        def __init__(self):
+            self.answers = ["Dexterity", "Tiger Stance"]
+
+        def prompt_choice(self, _prompt, choices=None, **_kwargs):
+            if self.answers:
+                return self.answers.pop(0)
+            if choices:
+                return choices[0]
+            return None
+
+        def prompt_info(self, *_args, **_kwargs):
+            return None
+
+    game = _CreationGameStub()
+    ui = _StatusUi()
+    monkeypatch.setattr("ui_client.get_ui_client", lambda: ui)
+
+    heritage_id = str((HERITAGE_IDS_BY_ANCESTRY.get("elf") or [""])[0] or "")
+    ancestry_feat_id = ""
+    for candidate in list(ANCESTRY_FEAT_IDS_BY_ANCESTRY.get("elf") or []):
+        status = resolve_status(candidate)
+        data = getattr(status, "data", None) or {}
+        if not data.get("ui_choice_kind"):
+            ancestry_feat_id = str(candidate)
+            break
+    if not ancestry_feat_id:
+        ancestry_feat_id = str((ANCESTRY_FEAT_IDS_BY_ANCESTRY.get("elf") or [""])[0] or "")
+
+    background_id = "background_criminal"
+
+    def _fake_pick_portrait(_game, **_kwargs):
+        return "/static/placeholder.png"
+
+    def _fake_prompt_text(_game, *, title, **_kwargs):
+        if "imię" in str(title).lower() or "imie" in str(title).lower():
+            return "Silk"
+        return "tekst"
+
+    def _fake_pick_one(_game, *, title, **_kwargs):
+        if str(title).startswith("KROK 2: Wybór Ancestry"):
+            return "elf"
+        if str(title).startswith("KROK 3: Wybór Heritage"):
+            return heritage_id
+        if str(title).startswith("KROK 4: Ancestry Feat"):
+            return ancestry_feat_id
+        if str(title).startswith("KROK 5: Background"):
+            return background_id
+        if str(title).startswith("KROK 6: Wybór Klasy"):
+            return "monk"
+        return None
+
+    boost_picks = iter([
+        "dexterity",  # ancestry free boost
+        "dexterity",  # background restricted boost
+        "dexterity",  # background free boost
+        "dexterity",  # first level-1 free boost (should be filtered out, fallback expected)
+        "strength",
+        "constitution",
+        "wisdom",
+    ])
+
+    def _fake_pick_ability(_game, *, allowed, **_kwargs):
+        options = [str(item) for item in list(allowed or [])]
+        if not options:
+            return None
+        desired = next(boost_picks, options[0])
+        if desired in options:
+            return desired
+        return options[0]
+
+    monkeypatch.setattr("character_creation.pipeline._pick_portrait_image", _fake_pick_portrait)
+    monkeypatch.setattr("character_creation.pipeline._prompt_text", _fake_prompt_text)
+    monkeypatch.setattr("character_creation.pipeline._pick_one", _fake_pick_one)
+    monkeypatch.setattr("character_creation.pipeline._pick_ability", _fake_pick_ability)
+    monkeypatch.setattr("character_creation.pipeline._pick_additional_skills", lambda *_a, **_k: [])
+    monkeypatch.setattr("character_creation.pipeline._resolve_background_training_choice", lambda *_a, **_k: (None, None))
+    monkeypatch.setattr("character_creation.pipeline._run_starting_equipment_step", lambda *_a, **_k: None)
+    monkeypatch.setattr("character_creation.pipeline._prompt_info", lambda *_a, **_k: None)
+
+    result = create_character(game, repo)
+    assert result is not None
+
+    class_setup_snapshot = next(
+        (
+            row
+            for row in game.snapshots
+            if "KROK 6A: Setup klasy" in str(row.get("note") or "")
+            and str(row.get("class_id") or "").strip().lower() == "monk"
+        ),
+        None,
+    )
+    assert class_setup_snapshot is not None
+    class_setup_scores = dict(class_setup_snapshot.get("ability_scores") or {})
+    assert int(class_setup_scores.get("dexterity", 0) or 0) == 18
+
+    final_scores = dict(getattr(result.hero, "ability_scores", {}) or {})
+    assert int(final_scores.get("dexterity", 0) or 0) == 18
+    assert all(int(dict(row.get("ability_scores") or {}).get("dexterity", 0) or 0) <= 18 for row in game.snapshots)
 
 
 def test_champion_natural_ambition_deitys_domain_does_not_prompt_for_deity_twice(monkeypatch, tmp_path):

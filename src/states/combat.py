@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import sys
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, List, Optional
 from GameObjects.interactions_mixin import prompt_for_roll
@@ -124,6 +125,10 @@ class Combat(State):
                     remover_status("spirit_instinct_active")
                 except Exception:
                     pass
+                try:
+                    remover_status("monk_stance_lock")
+                except Exception:
+                    pass
                 statuses = getattr(actor, "statuses", None)
                 if isinstance(statuses, list):
                     for status in list(statuses):
@@ -141,6 +146,12 @@ class Combat(State):
                     remover_bonus("rage")
                 except Exception:
                     pass
+            try:
+                from GameObjects.events.monk_feat_events import _clear_monk_stance_effects
+
+                _clear_monk_stance_effects(actor)
+            except Exception:
+                pass
             statuses = getattr(actor, "statuses", None)
             if isinstance(statuses, list):
                 for status in list(statuses):
@@ -153,6 +164,13 @@ class Combat(State):
                         statuses.remove(status)
                     except ValueError:
                         pass
+                filtered = []
+                for status in list(statuses):
+                    data = getattr(status, "data", None) or {}
+                    if bool(data.get("expire_on_combat_end", False)):
+                        continue
+                    filtered.append(status)
+                actor.statuses = filtered
 
     @staticmethod
     def _actor_id(actor: Any) -> str:
@@ -670,6 +688,12 @@ class Combat(State):
             self.sync_status_initiative_penalty(actor, reorder_round_queue=False)
         except Exception:
             logger.debug("Nie udało się zsynchronizować kary do inicjatywy dla %s", actor)
+        try:
+            from actions.move_utils import reset_turn_movement_runtime
+
+            reset_turn_movement_runtime(actor)
+        except Exception:
+            logger.debug("Nie udało się zresetować runtime ruchu dla %s", actor)
 
     def _iter_held_statuses(self, source_actor):
         source_id = self._actor_id(source_actor)
@@ -822,6 +846,7 @@ class Combat(State):
         self.actions_used.pop(finished_actor, None)
         self.turn_initialized.discard(finished_actor)
         if not self.round_queue:
+            self._tick_combat_round_statuses()
             # nowa runda: reset opóźnień do bazowych inicjatyw
             self.round_index += 1
             self.temp_initiative.clear()
@@ -835,6 +860,42 @@ class Combat(State):
         if actor is not None:
             logger.debug("Nowa tura dla %s – reset licznika akcji.", actor)
         self._send_initiative_event()
+
+    def _tick_combat_round_statuses(self) -> None:
+        actors = list(getattr(self.game, "heroes", []) or []) + list(getattr(self.game, "enemies", []) or [])
+        for actor in actors:
+            statuses = getattr(actor, "statuses", None)
+            if not isinstance(statuses, list) or not statuses:
+                continue
+            remaining = []
+            changed = False
+            for status in statuses:
+                data = getattr(status, "data", None) or {}
+                if "combat_rounds_left" not in data:
+                    remaining.append(status)
+                    continue
+                try:
+                    rounds_left = int(data.get("combat_rounds_left", 0) or 0) - 1
+                except Exception:
+                    rounds_left = -1
+                if rounds_left <= 0:
+                    clear_temp_hp = getattr(actor, "_clear_temp_hp_for_status", None)
+                    if callable(clear_temp_hp):
+                        try:
+                            clear_temp_hp(status)
+                        except Exception:
+                            pass
+                    changed = True
+                    continue
+                updated = dict(data)
+                updated["combat_rounds_left"] = rounds_left
+                remaining.append(replace(status, data=updated))
+                changed = True
+            if changed:
+                try:
+                    actor.statuses = remaining
+                except Exception:
+                    pass
 
     def _tick_end_of_turn_preparation(self, actor) -> None:
         if actor is None:

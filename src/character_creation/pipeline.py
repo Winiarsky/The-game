@@ -23,7 +23,7 @@ from GameObjects.items.alchemical_item import (
 )
 from GameObjects.items.base_item import BaseItem
 from GameObjects.items.equipment import create_equipment, list_equipment_ids, normalize_equipment_id
-from GameObjects.items.inventory import add_item, ensure_actor_inventory, get_equipped_weapons, set_equipped_weapons
+from GameObjects.items.inventory import add_item, ensure_actor_inventory, get_equipped_weapons, item_label, set_equipped_weapons
 from GameObjects.items.shield import BaseShield, create_shield, list_shield_ids, normalize_shield_id
 from GameObjects.items.weapon import create_weapon, list_weapon_ids, normalize_weapon_id
 from economy import (
@@ -45,6 +45,7 @@ from economy import (
 from hero import Hero
 from localization import localize_term_pl, localized_hint_pl
 from statuses.base import Status
+from ui_payloads import _speed_snapshot_values
 
 from .catalog import (
     ABILITY_IDS,
@@ -68,6 +69,7 @@ from .catalog import (
 from .mechanics import (
     SKILL_TO_ABILITY,
     apply_ability_boost,
+    apply_character_creation_ability_boost,
     apply_ability_flaw,
     apply_math_to_hero,
     base_ability_scores,
@@ -911,7 +913,7 @@ def _refresh_creation_preview_bonuses(hero: Hero, selected: dict[str, Any]) -> N
         for boost in ancestry_boosts:
             if boost == "free":
                 continue
-            apply_ability_boost(ability_scores, boost)
+            apply_character_creation_ability_boost(ability_scores, boost)
         if ancestry_flaw:
             apply_ability_flaw(ability_scores, ancestry_flaw)
 
@@ -1214,6 +1216,9 @@ def _serialize_inventory_item(item: Any) -> dict[str, Any] | None:
         payload["raised"] = bool(getattr(item, "raised", False))
     if payload["category"] in {"ammo", "ammunition"} or "ammunition" in set(payload["traits"]):
         payload["ammo_count"] = int(getattr(item, "ammo_count", 0) or 0)
+    scroll_spell_id = str(getattr(item, "scroll_spell_id", "") or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if scroll_spell_id:
+        payload["scroll_spell_id"] = scroll_spell_id
     return payload
 
 
@@ -1308,6 +1313,12 @@ def _item_from_snapshot_payload(payload: dict[str, Any]):
     if "ammo_count" in payload:
         try:
             item.ammo_count = max(0, int(payload.get("ammo_count", 0) or 0))
+        except Exception:
+            pass
+    scroll_spell_id = str(payload.get("scroll_spell_id") or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if scroll_spell_id:
+        try:
+            setattr(item, "scroll_spell_id", scroll_spell_id)
         except Exception:
             pass
     return item
@@ -2176,6 +2187,19 @@ def _run_starting_equipment_step(
             item = _create_shop_item(offer)
             if item is None:
                 continue
+            if str(getattr(item, "item_id", "") or "").strip().lower() == "scroll_common_rank1":
+                from GameObjects.events.magic.consumables.events import prepare_common_rank1_scroll_purchase
+
+                configured = prepare_common_rank1_scroll_purchase(
+                    game,
+                    item,
+                    source="character_creation_scroll_common_rank1",
+                    title="Kupujesz zwoj czaru 1. rangi",
+                    subtitle="Najpierw wybierz czar zapisany na zwoju.",
+                    prompt_long="Ten zakup tworzy konkretny zwoj z przypisanym czarem. Później używasz już gotowego zwoju, bez ponownego wyboru przy zakupie.",
+                )
+                if not configured:
+                    continue
             cost_cp = item_cost_cp(str(offer.get("id") or ""))
             if not can_actor_afford_cp(hero, cost_cp):
                 _prompt_info(
@@ -2207,14 +2231,14 @@ def _run_starting_equipment_step(
                 game,
                 title="Zakupiono przedmiot",
                 text=(
-                    f"Dodano: {_labelize(str(offer.get('id') or ''))}\n"
+                    f"Dodano: {item_label(item)}\n"
                     f"Pozostale srodki: {format_actor_money(hero)}\n"
                     f"Bulk: {bulk['total_display']} / {bulk['encumbered_limit_display']} (encumbered)"
                 ),
                 image=image,
             )
             _emit_refresh(
-                f"Dodano: {_labelize(str(offer.get('id') or ''))}",
+                f"Dodano: {item_label(item)}",
                 "Lista ekwipunku, stan rąk, Bulk i sakiewka zostały zaktualizowane.",
             )
 
@@ -2926,6 +2950,7 @@ def _build_snapshot(
     class_id: str,
     class_feat_ids: list[str],
 ) -> dict[str, Any]:
+    raw_base_speed_feet, display_speed_feet = _speed_snapshot_values(hero)
     coin_pouch = normalize_coin_pouch(getattr(hero, "coin_pouch", None))
     equipped_weapon_ids = []
     for weapon in list(get_equipped_weapons(hero) or []):
@@ -2997,7 +3022,8 @@ def _build_snapshot(
         "weapon_proficiency_ranks": compress_rank_map(getattr(hero, "weapon_proficiency_ranks", {}) or {}),
         "defense_proficiency_ranks": compress_rank_map(getattr(hero, "defense_proficiency_ranks", {}) or {}),
         "max_hp": int(getattr(hero, "max_hp", 1) or 1),
-        "base_speed_feet": int(getattr(hero, "base_speed_feet", 25) or 25),
+        "base_speed_feet": int(raw_base_speed_feet or 25),
+        "speed_feet": int(display_speed_feet),
         "ac": int(getattr(hero, "ac", 10) or 10),
         "starting_gold_gp": int(getattr(hero, "starting_gold_gp", _STARTING_GOLD_GP) or _STARTING_GOLD_GP),
         "coin_pouch": dict(coin_pouch),
@@ -3521,13 +3547,39 @@ def create_character(game, repository: CharacterRepository) -> CharacterCreation
             mechanics=mechanics,
         )
 
+    def _creation_boost_pool(
+        scores_current: dict[str, int],
+        allowed_values: list[str] | tuple[str, ...],
+        *,
+        exclude: list[str] | tuple[str, ...] | None = None,
+    ) -> list[str]:
+        excluded = {
+            _normalize(item)
+            for item in list(exclude or [])
+            if _normalize(item) in ABILITY_IDS
+        }
+        pool: list[str] = []
+        for item in list(allowed_values or []):
+            ability_id = _normalize(item)
+            if ability_id not in ABILITY_IDS or ability_id in excluded:
+                continue
+            try:
+                score = int(scores_current.get(ability_id, 10) or 10)
+            except Exception:
+                score = 10
+            if score >= 18:
+                continue
+            if ability_id not in pool:
+                pool.append(ability_id)
+        return pool
+
     # Najpierw ancestry/background boosty, potem setup klasy (KROK 6A).
     pre_class_scores = base_ability_scores()
     ancestry_boosts_base, ancestry_flaw_base = _ancestry_boosts_and_flaw(ancestry_status)
     for boost in ancestry_boosts_base:
         if boost == "free":
             continue
-        apply_ability_boost(pre_class_scores, boost)
+        apply_character_creation_ability_boost(pre_class_scores, boost)
         _refresh_pre_class_boost_preview(
             expected=f"Ancestry boost: {_labelize(boost)}",
             mechanics="Atrybuty aktualizowane na żywo po wyborach ancestry/background.",
@@ -3538,7 +3590,7 @@ def create_character(game, repository: CharacterRepository) -> CharacterCreation
     ancestry_free_picks: list[str] = []
     ancestry_free_base = dict(pre_class_scores)
     while len(ancestry_free_picks) < ancestry_free_count:
-        pool = [item for item in ABILITY_IDS if item not in ancestry_free_picks]
+        pool = _creation_boost_pool(pre_class_scores, list(ABILITY_IDS), exclude=ancestry_free_picks)
         chosen = _pick_ability(
             game,
             title=f"KROK 5A: Ancestry free boost {len(ancestry_free_picks) + 1}/{ancestry_free_count}",
@@ -3553,7 +3605,7 @@ def create_character(game, repository: CharacterRepository) -> CharacterCreation
                 ancestry_free_picks.pop()
                 pre_class_scores = dict(ancestry_free_base)
                 for picked in ancestry_free_picks:
-                    apply_ability_boost(pre_class_scores, picked)
+                    apply_character_creation_ability_boost(pre_class_scores, picked)
                 _refresh_pre_class_boost_preview(
                     expected="Cofnięto ostatni ancestry free boost.",
                     mechanics="Atrybuty aktualizowane na żywo po cofnięciu wyboru.",
@@ -3567,7 +3619,7 @@ def create_character(game, repository: CharacterRepository) -> CharacterCreation
         ancestry_free_picks.append(chosen)
         pre_class_scores = dict(ancestry_free_base)
         for picked in ancestry_free_picks:
-            apply_ability_boost(pre_class_scores, picked)
+            apply_character_creation_ability_boost(pre_class_scores, picked)
         _refresh_pre_class_boost_preview(
             expected=f"Ancestry free boost {len(ancestry_free_picks)}/{ancestry_free_count}: {_labelize(chosen)}",
             mechanics="Atrybuty aktualizowane na żywo po wyborach ancestry/background.",
@@ -3584,22 +3636,27 @@ def create_character(game, repository: CharacterRepository) -> CharacterCreation
 
     bg_restricted, bg_free_count = background_boost_options(background_id)
     if bg_restricted:
+        restricted_pool = _creation_boost_pool(pre_class_scores, list(bg_restricted)) or [
+            _normalize(item)
+            for item in list(bg_restricted)
+            if _normalize(item) in ABILITY_IDS
+        ]
         while True:
             chosen = _pick_ability(
                 game,
                 title="KROK 5A: Background boost (ograniczony)",
-                subtitle=f"Wybierz: {', '.join(_labelize(item) for item in bg_restricted)}",
-                allowed=list(bg_restricted),
+                subtitle=f"Wybierz: {', '.join(_labelize(item) for item in restricted_pool)}",
+                allowed=restricted_pool,
                 source="character_creation",
                 image=hero.image,
                 allow_back=True,
             )
             if _is_back_choice(chosen):
                 continue
-            if not chosen and bg_restricted:
-                chosen = str(bg_restricted[0])
+            if not chosen and restricted_pool:
+                chosen = str(restricted_pool[0])
             if chosen:
-                apply_ability_boost(pre_class_scores, chosen)
+                apply_character_creation_ability_boost(pre_class_scores, chosen)
                 _refresh_pre_class_boost_preview(
                     expected=f"Background boost: {_labelize(chosen)}",
                     mechanics="Atrybuty aktualizowane na żywo po wyborach ancestry/background.",
@@ -3610,7 +3667,7 @@ def create_character(game, repository: CharacterRepository) -> CharacterCreation
     bg_free_picks: list[str] = []
     bg_free_base = dict(pre_class_scores)
     while len(bg_free_picks) < int(bg_free_count):
-        pool = [item for item in ABILITY_IDS if item not in bg_free_picks]
+        pool = _creation_boost_pool(pre_class_scores, list(ABILITY_IDS), exclude=bg_free_picks)
         chosen = _pick_ability(
             game,
             title=f"KROK 5A: Background free boost {len(bg_free_picks) + 1}/{int(bg_free_count)}",
@@ -3625,7 +3682,7 @@ def create_character(game, repository: CharacterRepository) -> CharacterCreation
                 bg_free_picks.pop()
                 pre_class_scores = dict(bg_free_base)
                 for picked in bg_free_picks:
-                    apply_ability_boost(pre_class_scores, picked)
+                    apply_character_creation_ability_boost(pre_class_scores, picked)
                 _refresh_pre_class_boost_preview(
                     expected="Cofnięto ostatni background free boost.",
                     mechanics="Atrybuty aktualizowane na żywo po cofnięciu wyboru.",
@@ -3639,7 +3696,7 @@ def create_character(game, repository: CharacterRepository) -> CharacterCreation
         bg_free_picks.append(chosen)
         pre_class_scores = dict(bg_free_base)
         for picked in bg_free_picks:
-            apply_ability_boost(pre_class_scores, picked)
+            apply_character_creation_ability_boost(pre_class_scores, picked)
         _refresh_pre_class_boost_preview(
             expected=f"Background free boost {len(bg_free_picks)}/{int(bg_free_count)}: {_labelize(chosen)}",
             mechanics="Atrybuty aktualizowane na żywo po wyborach ancestry/background.",
@@ -3671,7 +3728,7 @@ def create_character(game, repository: CharacterRepository) -> CharacterCreation
     class_key_ability_preview = _selected_class_key_ability(hero, class_id)
     class_setup_preview_scores = dict(pre_class_scores)
     if _normalize(class_key_ability_preview) in ABILITY_IDS:
-        apply_ability_boost(class_setup_preview_scores, class_key_ability_preview)
+        apply_character_creation_ability_boost(class_setup_preview_scores, class_key_ability_preview)
     _update_live_creation_sheet(
         game,
         hero,
@@ -3850,7 +3907,7 @@ def create_character(game, repository: CharacterRepository) -> CharacterCreation
     ability_scores = dict(pre_class_scores)
     key_ability = _selected_class_key_ability(hero, class_id)
     if _normalize(key_ability) in ABILITY_IDS:
-        apply_ability_boost(ability_scores, key_ability)
+        apply_character_creation_ability_boost(ability_scores, key_ability)
     preview_trained_core = set(_trained_skills_from_statuses(hero))
     preview_lore_skills = list(_lore_skills_from_statuses(hero))
 
@@ -3866,7 +3923,7 @@ def create_character(game, repository: CharacterRepository) -> CharacterCreation
     free_boost_picks: list[str] = []
     free_boost_base = dict(ability_scores)
     while len(free_boost_picks) < 4:
-        pool = [item for item in ABILITY_IDS if item not in free_boost_picks]
+        pool = _creation_boost_pool(ability_scores, list(ABILITY_IDS), exclude=free_boost_picks)
         chosen = _pick_ability(
             game,
             title=f"KROK 7: Free boost {len(free_boost_picks) + 1}/4",
@@ -3881,7 +3938,7 @@ def create_character(game, repository: CharacterRepository) -> CharacterCreation
                 free_boost_picks.pop()
                 ability_scores = dict(free_boost_base)
                 for picked in free_boost_picks:
-                    apply_ability_boost(ability_scores, picked)
+                    apply_character_creation_ability_boost(ability_scores, picked)
                 _refresh_live_preview(
                     stage="KROK 7: Ability Boosts",
                     expected="Cofnięto ostatni free boost.",
@@ -3898,7 +3955,7 @@ def create_character(game, repository: CharacterRepository) -> CharacterCreation
         free_boost_picks.append(chosen)
         ability_scores = dict(free_boost_base)
         for picked in free_boost_picks:
-            apply_ability_boost(ability_scores, picked)
+            apply_character_creation_ability_boost(ability_scores, picked)
         _refresh_live_preview(
             stage="KROK 7: Ability Boosts",
             expected=f"Free boost {len(free_boost_picks)}/4: {_labelize(chosen)}",
@@ -4144,6 +4201,7 @@ def create_character(game, repository: CharacterRepository) -> CharacterCreation
         setattr(hero, "character_creation_in_progress", False)
     except Exception:
         pass
+    _, display_speed_feet = _speed_snapshot_values(hero)
     _notify_creation_progress(
         game,
         hero,
@@ -4159,7 +4217,7 @@ def create_character(game, repository: CharacterRepository) -> CharacterCreation
             f"Imię: {hero.name}\n"
             f"Ancestry/Heritage: {_labelize(ancestry_id)} / {_labelize(heritage_id)}\n"
             f"Klasa: {_labelize(class_id)}\n"
-            f"HP: {hero.max_hp}, AC: {hero.ac}, Speed: {hero.base_speed_feet} ft\n"
+            f"HP: {hero.max_hp}, AC: {hero.ac}, Speed: {display_speed_feet} ft\n"
             f"Sakiewka: {format_actor_money(hero)}\n"
             f"Bulk: {actor_bulk_summary(hero)['total_display']} / {actor_bulk_summary(hero)['encumbered_limit_display']} (encumbered)\n"
             f"Skille trained: {', '.join(_labelize(item) for item in sorted(trained_core)) or '-'}\n"

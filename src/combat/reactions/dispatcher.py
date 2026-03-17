@@ -172,6 +172,7 @@ def dispatch_reactions(game, event: dict[str, object]) -> None:
     event_payload.setdefault("game", game)
     can_pay_action = getattr(state, "can_pay_reaction_action_cost", None)
     consume_action = getattr(state, "consume_reaction_action_cost", None)
+    blocked_reactor_ids = {str(item) for item in list(event_payload.get("blocked_reactor_ids") or []) if str(item)}
 
     actor = event_payload.get("actor")
     if not _is_alive(actor, game):
@@ -215,6 +216,8 @@ def dispatch_reactions(game, event: dict[str, object]) -> None:
         if actor_side == "enemy" and reactor in enemies:
             continue
         for reaction in list(getattr(reactor, "reactions", [])):
+            if _actor_id(reactor) in blocked_reactor_ids:
+                continue
             blocks_range_attacker = bool(getattr(reaction, "blocks_range_attacker", True))
             if blocks_range_attacker and _has_status(reactor, "range_attacker"):
                 continue

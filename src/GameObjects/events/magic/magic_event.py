@@ -17,8 +17,10 @@ from .spell_types import SpellTradition
 from spell_management import (
     can_cast_managed_spell,
     classify_spell_tier,
+    consume_wizard_staff_nexus_resources,
     consume_managed_spell_resources,
     ensure_actor_spell_state,
+    _wizard_staff_nexus_options,
 )
 
 logger = logging.getLogger(__name__)
@@ -290,6 +292,7 @@ class MagicEventResolver:
                 "rank": int(max(0, rank)),
                 "is_focus": bool(is_focus),
                 "is_cantrip": bool(is_cantrip),
+                "cast_source": MagicEventResolver._normalize((ctx.metadata or {}).get("spell_cast_source")),
                 "tags": [tag for tag in normalized_tags if tag],
             }
         )
@@ -496,6 +499,7 @@ class MagicEventResolver:
             "action_tags": list(tags),
             "spell_name": str(getattr(event, "name", "spell")),
             "spell_tags": list(event.spell_tags or []),
+            "spell_tier": classify_spell_tier(list(tags)),
             "spell_tradition": str(getattr(event, "spell_tradition", "") or ""),
             "is_focus_spell": "focus" in {MagicEventResolver._normalize(t) for t in tags},
             "is_cantrip_spell": "cantrip" in {MagicEventResolver._normalize(t) for t in tags},
@@ -824,10 +828,29 @@ class MagicEventResolver:
         spell_tier = classify_spell_tier(event_tags)
         metadata = dict(ctx.metadata or {})
         wizard_drain_recast = bool(metadata.get("wizard_drain_recast"))
+        chosen_cast_source = "prepared"
         if not wizard_drain_recast:
             can_cast, reason = can_cast_managed_spell(actor, spell_id=spell_id, tier=spell_tier)
-            if not can_cast:
+            staff_options = _wizard_staff_nexus_options(actor, spell_id=spell_id, tier=spell_tier)
+            staff_available = bool(staff_options.get("available"))
+            if can_cast and staff_available:
+                answer = MagicEventResolver._prompt_choice(
+                    ctx,
+                    f"{spell_label}: wybierz zrodlo rzucenia",
+                    choices=["Prepared spell", "Staff Nexus"],
+                    source="staff_nexus",
+                )
+                if MagicEventResolver._normalize(answer) in {"staff_nexus", "staff", "kostur"}:
+                    chosen_cast_source = "staff_nexus"
+            elif not can_cast and staff_available:
+                chosen_cast_source = "staff_nexus"
+            elif not can_cast:
                 return EventResult.cancelled(message=reason or f"{spell_label}: cast blocked.")
+        metadata["spell_cast_source"] = chosen_cast_source
+        try:
+            ctx.metadata = metadata
+        except Exception:
+            pass
         emitted = MagicEventResolver._emit_cast_start(ctx, event, tags=event_tags)
         if isinstance(emitted, dict) and bool(emitted.get("disrupted", False)):
             if reach_applied:
@@ -864,9 +887,11 @@ class MagicEventResolver:
                         "game": getattr(ctx, "game", None),
                         "actor": actor,
                         "spell_name": str(getattr(event, "name", "spell") or "spell"),
+                        "spell_tier": spell_tier,
                         "spell_tags": list(event_tags),
                         "is_focus_spell": "focus" in {MagicEventResolver._normalize(t) for t in event_tags},
                         "is_cantrip_spell": "cantrip" in {MagicEventResolver._normalize(t) for t in event_tags},
+                        "spell_cast_source": chosen_cast_source,
                         "dangerous_sorcery_applied": False,
                     }
                 )
@@ -897,7 +922,13 @@ class MagicEventResolver:
                 pass
         if result.success and result.consumed_action and not wizard_drain_recast:
             try:
-                consume_managed_spell_resources(actor, spell_id=spell_id, tier=spell_tier)
+                if chosen_cast_source == "staff_nexus":
+                    consume_wizard_staff_nexus_resources(actor, spell_id=spell_id, tier=spell_tier)
+                    game_ui_log = getattr(ctx.game, "ui_log", None)
+                    if callable(game_ui_log):
+                        game_ui_log(f"Staff Nexus: rzucasz {spell_label} z makeshift staffu.")
+                else:
+                    consume_managed_spell_resources(actor, spell_id=spell_id, tier=spell_tier)
             except Exception:
                 logger.debug("Spell resource consume failed for spell %s", spell_id, exc_info=True)
         try:

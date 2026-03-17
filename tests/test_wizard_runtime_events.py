@@ -230,6 +230,25 @@ def test_drain_bonded_item_recasts_without_prepared_copy_or_slot():
     assert int(consumed_rank1.get("wizard_test_rank1_spell", 0) or 0) == 0
 
 
+def test_drain_bonded_item_ignores_spells_cast_from_staff_nexus():
+    actor = _wizard(arcane_study="evocation", drain_action="drain_bonded_item", thesis="staff_nexus")
+    actor.wizard_cast_spells_registry = [
+        {
+            "spell_id": "wizard_test_rank1_spell",
+            "rank": 1,
+            "is_focus": False,
+            "is_cantrip": False,
+            "cast_source": "staff_nexus",
+        }
+    ]
+    game = _game(ui=DummyUI(), conn=DummyConn(cards=["wizard_test_rank1_spell"]))
+
+    result = dispatch_event("drain_bonded_item", EventContext(game=game, actor=actor))
+
+    assert result.success is False
+    assert "no eligible" in str(result.message or "").lower()
+
+
 def test_refocus_restores_wizard_focus_point_up_to_pool_limit():
     actor = _wizard(focus=0)
     actor.focus_pool_max = 2

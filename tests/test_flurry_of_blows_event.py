@@ -13,6 +13,7 @@ import GameObjects.events.all_events  # noqa: F401
 from GameObjects.events.attack import basic_melee_attack_event
 from GameObjects.events.base import EventContext
 from GameObjects.events.registry import dispatch_event
+from GameObjects.items.weapon import create_weapon
 from states.combat import Combat
 from statuses.base import Status
 
@@ -142,3 +143,44 @@ def test_flurry_merges_damage_when_both_hits_same_target(monkeypatch):
     assert result.success is True
     assert enemy.hp == 27
     assert enemy.apply_calls == 1
+
+
+def test_flurry_of_blows_uses_equipped_monk_weapon_with_monastic_weaponry(monkeypatch):
+    hero = Hero((0, 0))
+    hero.statuses.append(Status(id="monastic_weaponry"))
+    hero.level = 1
+    hero.str_mod = 3
+    hero.weapon_proficiency_ranks = {"simple": "trained", "martial": "untrained", "unarmed": "trained"}
+
+    bo_staff = create_weapon("bo_staff")
+    assert bo_staff is not None
+    hero.inventory = [bo_staff]
+    hero.equipped_weapon_item_ids = [bo_staff.instance_id]
+
+    enemy = Enemy((1, 0), hp=40, ac=10, resistance_per_call=0)
+    game = FakeGame(conn=FakeConn([enemy.position, enemy.position]))
+    game.heroes = [hero]
+    game.enemies = [enemy]
+    game.board.occupants = {hero.position: hero, enemy.position: enemy}
+
+    prompts: list[str] = []
+
+    def _fake_prompt(*args, **kwargs):
+        prompt = kwargs.get("prompt")
+        if prompt is None and args:
+            prompt = args[0]
+        prompts.append(str(prompt or ""))
+        text = str(prompt or "").lower()
+        if "obra" in text:
+            return 8
+        return 15
+
+    monkeypatch.setattr(basic_melee_attack_event, "prompt_for_roll", _fake_prompt)
+    monkeypatch.setattr(basic_melee_attack_event, "refresh_flanking_statuses", lambda *_a, **_k: None)
+
+    result = dispatch_event("flurry_of_blows", _ctx(game, hero))
+
+    assert result.success is True
+    attack_payload = dict(getattr(game.state, "attack_state", {}).get(hero, {}) or {})
+    weapon_counts = dict(attack_payload.get("weapon_counts") or {})
+    assert int(weapon_counts.get("attack_bo_staff", 0) or 0) == 2

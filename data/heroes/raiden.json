@@ -1,0 +1,579 @@
+{
+  "character_id": "raiden",
+  "name": "Raiden",
+  "concept": "",
+  "level": 1,
+  "ancestry_id": "human",
+  "heritage_id": "versatile_heritage",
+  "ancestry_feat_id": "natural_ambition",
+  "background_id": "background_acrobat",
+  "class_id": "monk",
+  "class_feat_ids": [
+    "tiger_stance"
+  ],
+  "portrait_image": "/static/portraits/custom/hero_605ec727.png",
+  "status_ids": [
+    "human",
+    "versatile_heritage",
+    "fleet",
+    "background_acrobat",
+    "steady_balance",
+    "monk",
+    "flurry_of_blows",
+    "powerful_fist",
+    "tiger_stance",
+    "natural_ambition",
+    "ki_strike"
+  ],
+  "status_data": {
+    "human": {
+      "ui_description": "Punkty Zycia: 8\nRozmiar: Sredni\nPredkosc: 25 stop\nBoosty atrybutow: Dwa dowolne boosty\nJezyki: Common\nDodatkowe jezyki: 1 + modyfikator Inteligencji (jesli dodatni), z listy jezykow powszechnych i regionalnych.\nCechy: Human, Humanoid.",
+      "ancestry_hp": 8,
+      "base_speed_feet": 25,
+      "size": "medium",
+      "ancestry_traits": [
+        "human",
+        "humanoid"
+      ],
+      "ancestry_languages": [
+        "common"
+      ],
+      "ancestry_bonus_languages_base": 1,
+      "ancestry_bonus_languages_source": "int_modifier_positive",
+      "ability_boosts": [
+        "free",
+        "free"
+      ]
+    },
+    "versatile_heritage": {
+      "ui_description": "Ludzie sa niezwykle wszechstronni i ambitni.\nDzieki temu stali sie najpowszechniejsza ancestry w wielu krainach.\nWybierasz jeden general feat, dla ktorego spelnasz wymagania.\nTak jak ancestry feat, mozesz go wybrac w dowolnym momencie\ntworzenia postaci.",
+      "ui_choice_kind": "versatile_heritage",
+      "general_feat_choices": [
+        "additional_lore",
+        "adopted_ancestry",
+        "alchemical_crafting",
+        "arcane_sense",
+        "armor_proficiency",
+        "assurance",
+        "bargain_hunter",
+        "battle_medicine",
+        "breath_control",
+        "canny_acumen",
+        "cat_fall",
+        "charming_liar",
+        "combat_climber",
+        "courtly_graces",
+        "toughness",
+        "fleet",
+        "diehard",
+        "incredible_initiative",
+        "dubious_knowledge",
+        "experienced_professional",
+        "experienced_smuggler",
+        "experienced_tracker",
+        "fascinating_performance",
+        "fast_recovery",
+        "feather_step",
+        "forager",
+        "group_coercion",
+        "group_impression",
+        "hefty_hauler",
+        "hobnobber",
+        "impressive_performance",
+        "intimidating_glare",
+        "lengthy_diversion",
+        "multilingual",
+        "natural_medicine",
+        "oddity_identification",
+        "pickpocket",
+        "quick_coercion",
+        "quick_identification",
+        "quick_jump",
+        "quick_repair",
+        "quick_squeeze",
+        "read_lips",
+        "recognize_spell",
+        "ride",
+        "trick_magic_item",
+        "sign_language",
+        "snare_crafting",
+        "specialty_crafting",
+        "subtle_theft",
+        "survey_wildlife",
+        "terrain_expertise",
+        "terrain_stalker",
+        "titan_wrestler",
+        "train_animal",
+        "underwater_marauder",
+        "virtuosic_performer",
+        "shield_block",
+        "skill_training",
+        "weapon_proficiency"
+      ],
+      "general_feat": "fleet"
+    },
+    "fleet": {
+      "ui_description": "Twoja bazowa predkosc zwieksza sie o 5 stop (wdrozone mechanicznie).",
+      "base_speed_bonus_feet": 5
+    },
+    "background_acrobat": {
+      "ui_description": "Zarabiales wystepami cyrkowymi lub ulicznymi, uczac sie zwinnego ruchu.",
+      "ui_prompt": "Background: Akrobata",
+      "ui_prompt_long": "Zarabiales wystepami cyrkowymi lub ulicznymi, uczac sie zwinnego ruchu.\n\nMechanika (w tym silniku):\n- Boosty cech (informacyjnie w UI): Jeden boost do Sily lub Zrecznosci oraz jeden dowolny boost.\n- Szkolenie Skill/Lore (informacyjnie w UI): Akrobatyka oraz Wiedza: Cyrk.\n- Feat z backgroundu: Steady Balance (dodawany do bohatera jako status).\n- Mechanika featu (krotko): +2 status do testów Akrobatyki.\n\nPrzypomnienie reguły bazowej: Na 1. poziomie wybierasz jeden background i tej decyzji nie zmieniasz później. Każdy background daje dwa boosty cech (jeden ograniczony, jeden dowolny), trained w jednym skillu i jednym Lore oraz jeden skill feat. W tym silniku boosty cech i szkolenia skill/Lore są informacją UI, a feat z backgroundu jest dodawany do bohatera jako realny status.",
+      "is_background": true,
+      "background_key": "acrobat",
+      "background_label": "Akrobata",
+      "background_ability_boosts_ui": "Jeden boost do Sily lub Zrecznosci oraz jeden dowolny boost.",
+      "background_skill_training_ui": "Akrobatyka oraz Wiedza: Cyrk.",
+      "background_skill_training_ui_only": true,
+      "background_feat_id": "steady_balance",
+      "background_core_rules_ui": "Na 1. poziomie wybierasz jeden background i tej decyzji nie zmieniasz później. Każdy background daje dwa boosty cech (jeden ograniczony, jeden dowolny), trained w jednym skillu i jednym Lore oraz jeden skill feat. W tym silniku boosty cech i szkolenia skill/Lore są informacją UI, a feat z backgroundu jest dodawany do bohatera jako realny status.",
+      "grants_statuses": [
+        {
+          "id": "steady_balance",
+          "label": "Steady Balance",
+          "duration": null,
+          "source": null,
+          "stacks": false,
+          "data": {
+            "ui_description": "Utrzymujesz równowagę w trudnym terenie i na wąskich powierzchniach.\nMechanika: +2 status do testów Akrobatyki.",
+            "skill_feat_placeholder": false,
+            "skill_feat_fallback_mechanic": true
+          },
+          "check_effects": [
+            {
+              "applies_to": "source",
+              "skills": [
+                "acrobatics"
+              ],
+              "tags_required": null,
+              "bonus_effects": [
+                {
+                  "type": "status",
+                  "value": 2,
+                  "tag": "acrobatics",
+                  "source": "status:steady_balance",
+                  "target_id": null,
+                  "label": "steady_balance +2",
+                  "is_penalty": false,
+                  "duration_turns": null
+                }
+              ],
+              "promote": 0,
+              "demote": 0,
+              "promote_on": null,
+              "demote_on": null,
+              "prompt_notes": [
+                "Steady Balance: +2 status."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "steady_balance": {
+      "ui_description": "Utrzymujesz równowagę w trudnym terenie i na wąskich powierzchniach.\nMechanika: +2 status do testów Akrobatyki.",
+      "skill_feat_placeholder": false,
+      "skill_feat_fallback_mechanic": true
+    },
+    "monk": {
+      "ui_prompt": "KEY ABILITY: STRENGTH OR DEXTERITY\nAt 1st level, your class gives you an ability boost to your choice of Strength or Dexterity.\nHIT POINTS: 10 plus your Constitution Modifier\n\nINITIAL PROFICIENCIES (summary):\nPerception: Expert\nSaving Throws: Expert Fortitude, Expert Reflex, Expert Will\nAttacks: Trained simple weapons + unarmed\nDefenses: Trained unarmored defense\n\nCLASS FEATURES:\nFlurry of Blows: 2 unarmed Strikes (Flourish).\nPowerful Fist: bazowy fist 1k6 zamiast 1k4.\nPodczas setupu wybierasz key ability i 1 class feat poziomu 1.",
+      "class_hp": 10,
+      "ui_choice_kind": "monk_setup",
+      "monk_key_ability_choices": [
+        "strength",
+        "dexterity"
+      ],
+      "monk_feat_choices": [
+        "crane_stance",
+        "dragon_stance",
+        "ki_rush",
+        "ki_strike",
+        "monastic_weaponry",
+        "mountain_stance",
+        "tiger_stance",
+        "wolf_stance"
+      ],
+      "set_actor_attrs": {
+        "class_name": "monk"
+      },
+      "grants_statuses": [
+        {
+          "id": "flurry_of_blows",
+          "label": "Flurry of Blows",
+          "duration": null,
+          "source": null,
+          "stacks": false,
+          "data": {
+            "ui_description": "Flurry of Blows (Flourish): wykonaj dwa unarmed Strikes. Jeśli oba trafiają ten sam cel, łącz obrażenia do rozliczenia resist/weakness.",
+            "ui_prompt": "Flurry of Blows (Flourish): wykonaj dwa unarmed Strikes. Jeśli oba trafiają ten sam cel, łącz obrażenia do rozliczenia resist/weakness."
+          },
+          "check_effects": null
+        },
+        {
+          "id": "powerful_fist",
+          "label": "Powerful Fist",
+          "duration": null,
+          "source": null,
+          "stacks": false,
+          "data": {
+            "ui_description": "Powerful Fist: bazowy fist ma 1k6 zamiast 1k4. W tym uproszczeniu kara do lethal z nonlethal jest tylko przypomnieniem UI.",
+            "ui_prompt": "Powerful Fist: bazowy fist ma 1k6 zamiast 1k4. W tym uproszczeniu kara do lethal z nonlethal jest tylko przypomnieniem UI."
+          },
+          "check_effects": null
+        }
+      ],
+      "monk_setup": {
+        "key_ability": "dexterity",
+        "class_feat": "tiger_stance"
+      },
+      "monk_key_ability": "dexterity",
+      "monk_class_feat": "tiger_stance"
+    },
+    "flurry_of_blows": {
+      "ui_description": "Flurry of Blows (Flourish): wykonaj dwa unarmed Strikes. Jeśli oba trafiają ten sam cel, łącz obrażenia do rozliczenia resist/weakness.",
+      "ui_prompt": "Flurry of Blows (Flourish): wykonaj dwa unarmed Strikes. Jeśli oba trafiają ten sam cel, łącz obrażenia do rozliczenia resist/weakness."
+    },
+    "powerful_fist": {
+      "ui_description": "Powerful Fist: bazowy fist ma 1k6 zamiast 1k4. W tym uproszczeniu kara do lethal z nonlethal jest tylko przypomnieniem UI.",
+      "ui_prompt": "Powerful Fist: bazowy fist ma 1k6 zamiast 1k4. W tym uproszczeniu kara do lethal z nonlethal jest tylko przypomnieniem UI."
+    },
+    "tiger_stance": {
+      "ui_description": "Tiger Stance: atakujesz profilem Tiger Claw (1k8 S, agile, finesse). Na critical hit dochodzi 1k4 persistent bleed. Przy Speed co najmniej 20 ft możesz wykonać Step na 10 ft.",
+      "ui_prompt": "Tiger Stance: atakujesz profilem Tiger Claw (1k8 S, agile, finesse). Na critical hit dochodzi 1k4 persistent bleed. Przy Speed co najmniej 20 ft możesz wykonać Step na 10 ft."
+    },
+    "natural_ambition": {
+      "ui_description": "Mechanika: wybierasz dodatkowy class feat poziomu 1 dla swojej klasy.\nFeat jest od razu dodawany jako status bohatera i dziala normalnie jak inne featy klasowe.\nSpecjalne: tylko przy tworzeniu postaci na 1. poziomie.",
+      "ui_choice_kind": "natural_ambition",
+      "natural_ambition_class_feat_choices": {
+        "alchemist": [
+          "quick_alchemy_allow",
+          "quick_bomber",
+          "far_lobber",
+          "alchemical_savant",
+          "alchemist_familiar_guidance",
+          "advanced_alchemy"
+        ],
+        "barbarian": [
+          "moment_of_clarity",
+          "raging_thrower",
+          "cute_vision"
+        ],
+        "bard": [
+          "bardic_lore",
+          "lingering_composition",
+          "versatile_performance",
+          "reach_spell"
+        ],
+        "champion": [
+          "deitys_domain",
+          "ranged_reprisal",
+          "unimpeded_step",
+          "weight_of_guilt"
+        ],
+        "cleric": [
+          "deadly_simplicity",
+          "domain_initiate",
+          "harming_hands",
+          "healing_hands",
+          "holy_castigation",
+          "reach_spell"
+        ],
+        "druid": [
+          "animal_companion",
+          "leshy_familiar",
+          "reach_spell",
+          "storm_born",
+          "widen_spell",
+          "wild_shape"
+        ],
+        "fighter": [
+          "double_slice",
+          "exacting_strike",
+          "point_blank_shot",
+          "power_attack",
+          "reactive_shield",
+          "snagging_strike",
+          "sudden_charge"
+        ],
+        "monk": [
+          "crane_stance",
+          "dragon_stance",
+          "ki_rush",
+          "ki_strike",
+          "monastic_weaponry",
+          "mountain_stance",
+          "tiger_stance",
+          "wolf_stance"
+        ],
+        "ranger": [
+          "animal_companion",
+          "crossbow_ace",
+          "hunted_shot",
+          "monster_hunter",
+          "twin_takedown"
+        ],
+        "sorcerer": [
+          "counterspell",
+          "dangerous_sorcery",
+          "familiar",
+          "reach_spell",
+          "widen_spell"
+        ],
+        "wizard": [
+          "counterspell",
+          "eschew_materials",
+          "familiar",
+          "hand_of_the_apprentice",
+          "reach_spell",
+          "widen_spell"
+        ]
+      },
+      "class_name": "monk",
+      "class_feat": "ki_strike"
+    },
+    "ki_strike": {
+      "ui_description": "Ki Strike (Focus 1): unarmed Strike albo Flurry of Blows z +1 status do ataku i +1k6 extra damage (force/lawful/negative/positive).",
+      "ui_prompt": "Ki Strike (Focus 1): unarmed Strike albo Flurry of Blows z +1 status do ataku i +1k6 extra damage (force/lawful/negative/positive).",
+      "ki_strike_damage_type_choices": [
+        "force",
+        "lawful",
+        "negative",
+        "positive"
+      ],
+      "set_actor_attrs": {
+        "focus_point": 1
+      }
+    }
+  },
+  "ability_scores": {
+    "strength": 16,
+    "dexterity": 18,
+    "constitution": 12,
+    "intelligence": 10,
+    "wisdom": 12,
+    "charisma": 10
+  },
+  "ability_modifiers": {
+    "strength": 3,
+    "dexterity": 4,
+    "constitution": 1,
+    "intelligence": 0,
+    "wisdom": 1,
+    "charisma": 0
+  },
+  "skill_ranks": {
+    "acrobatics": "trained",
+    "athletics": "trained",
+    "crafting": "trained",
+    "medicine": "trained",
+    "stealth": "trained"
+  },
+  "skill_modifiers": {
+    "acrobatics": 7,
+    "arcana": 0,
+    "athletics": 6,
+    "crafting": 3,
+    "deception": 0,
+    "diplomacy": 0,
+    "intimidation": 0,
+    "medicine": 4,
+    "nature": 1,
+    "occultism": 0,
+    "performance": 0,
+    "religion": 1,
+    "society": 0,
+    "stealth": 7,
+    "survival": 1,
+    "thievery": 4
+  },
+  "trained_skills": [
+    "acrobatics",
+    "athletics",
+    "crafting",
+    "medicine",
+    "stealth"
+  ],
+  "lore_skills": [
+    "Circus (Wiedza)"
+  ],
+  "languages": [
+    "common"
+  ],
+  "traits": [
+    "human",
+    "humanoid"
+  ],
+  "perception_rank": "expert",
+  "perception_bonus": 6,
+  "focus_point": 1,
+  "focus_pool_max": 1,
+  "save_ranks": {
+    "fortitude": "expert",
+    "reflex": "expert",
+    "will": "expert"
+  },
+  "fortitude_bonus": 6,
+  "reflex_bonus": 9,
+  "will_bonus": 6,
+  "weapon_proficiency_ranks": {
+    "simple": "trained",
+    "unarmed": "trained"
+  },
+  "defense_proficiency_ranks": {
+    "unarmored": "trained"
+  },
+  "max_hp": 19,
+  "base_speed_feet": 25,
+  "speed_feet": 30,
+  "ac": 17,
+  "starting_gold_gp": 15,
+  "coin_pouch": {
+    "cp": 5,
+    "sp": 0,
+    "gp": 0,
+    "pp": 0
+  },
+  "track_ammo": true,
+  "inventory_items": [
+    {
+      "item_id": "unarmed",
+      "category": "weapon",
+      "name": "Unarmed",
+      "description": "",
+      "traits": [
+        "agile",
+        "finesse",
+        "unarmed",
+        "free_hand"
+      ],
+      "price_cp": 0,
+      "bulk": "-",
+      "instance_id": "item-a26c0a05d4",
+      "event_name": "unarmed",
+      "preparation_counter": 0,
+      "prepared_by_quick_alchemy": false,
+      "prepared_by_advanced_alchemy": false
+    },
+    {
+      "item_id": "rope_hemp_50ft",
+      "category": "gear",
+      "name": "Lina konopna (50 ft)",
+      "description": "Lina konopna dlugosci 50 stop.",
+      "traits": [],
+      "price_cp": 10,
+      "bulk": 1,
+      "instance_id": "item-336cfaa3bb"
+    },
+    {
+      "item_id": "climbing_kit",
+      "category": "gear",
+      "name": "Zestaw wspinaczkowy",
+      "description": "Kompletny zestaw do wspinaczki.",
+      "traits": [
+        "tools"
+      ],
+      "price_cp": 500,
+      "bulk": 1,
+      "instance_id": "item-3906743247"
+    },
+    {
+      "item_id": "rations_week",
+      "category": "gear",
+      "name": "Racje (1 tydzien)",
+      "description": "Racje zywnosciowe na tydzien.",
+      "traits": [
+        "consumable"
+      ],
+      "price_cp": 40,
+      "bulk": "L",
+      "instance_id": "item-6b0f497a57"
+    },
+    {
+      "item_id": "caltrops",
+      "category": "gear",
+      "name": "Kolce",
+      "description": "Rozsypywane kolce utrudniajace ruch.",
+      "traits": [
+        "consumable"
+      ],
+      "price_cp": 30,
+      "bulk": "L",
+      "instance_id": "item-de93abf3dd"
+    },
+    {
+      "item_id": "grappling_hook",
+      "category": "gear",
+      "name": "Hak zadziorny",
+      "description": "Hak do wspinaczki uzywany z lina.",
+      "traits": [],
+      "price_cp": 10,
+      "bulk": "L",
+      "instance_id": "item-9cbd274c4f"
+    },
+    {
+      "item_id": "flint_and_steel",
+      "category": "gear",
+      "name": "Krzesiwo",
+      "description": "Krzesiwo do rozpalania ognia.",
+      "traits": [],
+      "price_cp": 5,
+      "bulk": "-",
+      "instance_id": "item-79a57749be"
+    },
+    {
+      "item_id": "alchemical:smokestick",
+      "category": "potion",
+      "name": "Lesser Smokestick",
+      "description": "Przedmiot alchemiczny.",
+      "traits": [],
+      "price_cp": 300,
+      "bulk": "L",
+      "instance_id": "item-5c017c79d3",
+      "event_name": "smokestick",
+      "preparation_counter": 0,
+      "prepared_by_quick_alchemy": false,
+      "prepared_by_advanced_alchemy": false
+    },
+    {
+      "item_id": "alchemical:tanglefoot_bag",
+      "category": "potion",
+      "name": "Lesser Tanglefoot Bag",
+      "description": "Przedmiot alchemiczny.",
+      "traits": [],
+      "price_cp": 300,
+      "bulk": "L",
+      "instance_id": "item-ef02205248",
+      "event_name": "tanglefoot_bag",
+      "preparation_counter": 0,
+      "prepared_by_quick_alchemy": false,
+      "prepared_by_advanced_alchemy": false
+    },
+    {
+      "item_id": "alchemical:elixir_of_life",
+      "category": "potion",
+      "name": "Minor Elixir of Life",
+      "description": "Przedmiot alchemiczny.",
+      "traits": [],
+      "price_cp": 300,
+      "bulk": "L",
+      "instance_id": "item-1a64ffd205",
+      "event_name": "elixir_of_life",
+      "preparation_counter": 0,
+      "prepared_by_quick_alchemy": false,
+      "prepared_by_advanced_alchemy": false
+    }
+  ],
+  "weapon_loadout": [
+    "unarmed"
+  ],
+  "armor_loadout": [],
+  "shield_loadout": [],
+  "equipped_weapon_ids": [],
+  "equipped_armor_id": "",
+  "equipped_shield_id": "",
+  "equipped_armor_item_id": "",
+  "equipped_shield_hand": "",
+  "created_at": "2026-03-16T15:27:48.112653+00:00",
+  "updated_at": "2026-03-16T15:27:48.113177+00:00"
+}

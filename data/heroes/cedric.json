@@ -1,0 +1,597 @@
+{
+  "character_id": "cedric",
+  "name": "Cedric",
+  "concept": "",
+  "level": 1,
+  "ancestry_id": "human",
+  "heritage_id": "half_elf",
+  "ancestry_feat_id": "natural_ambition",
+  "background_id": "background_bounty_hunter",
+  "class_id": "ranger",
+  "class_feat_ids": [
+    "hunted_shot"
+  ],
+  "portrait_image": "/static/portraits/custom/hero_726c7902.jpg",
+  "status_ids": [
+    "human",
+    "half_elf",
+    "dim_light_vision",
+    "background_bounty_hunter",
+    "experienced_tracker",
+    "ranger",
+    "hunt_prey",
+    "hunted_shot",
+    "natural_ambition",
+    "animal_companion"
+  ],
+  "status_data": {
+    "human": {
+      "ui_description": "Punkty Zycia: 8\nRozmiar: Sredni\nPredkosc: 25 stop\nBoosty atrybutow: Dwa dowolne boosty\nJezyki: Common\nDodatkowe jezyki: 1 + modyfikator Inteligencji (jesli dodatni), z listy jezykow powszechnych i regionalnych.\nCechy: Human, Humanoid.",
+      "ancestry_hp": 8,
+      "base_speed_feet": 25,
+      "size": "medium",
+      "ancestry_traits": [
+        "human",
+        "humanoid"
+      ],
+      "ancestry_languages": [
+        "common"
+      ],
+      "ancestry_bonus_languages_base": 1,
+      "ancestry_bonus_languages_source": "int_modifier_positive",
+      "ability_boosts": [
+        "free",
+        "free"
+      ]
+    },
+    "half_elf": {
+      "ui_description": "Co najmniej jedno z twoich rodzicow jest elfem lub polelfem.\nMasz wyrazne cechy elfiego pochodzenia, jak ostre uszy.\nZyskujesz cechy elf i half-elf oraz widzenie w polmroku.\nDodatkowo przy wyborze ancestry featow mozesz wybierac featy\nz listy elf, half-elf i human.",
+      "ancestry_extra_traits": [
+        "elf",
+        "half_elf"
+      ],
+      "ancestry_feat_access": [
+        "elf",
+        "half_elf",
+        "human"
+      ],
+      "grants_statuses": [
+        {
+          "id": "dim_light_vision",
+          "label": "Dim Light Vision",
+          "duration": null,
+          "source": null,
+          "stacks": false,
+          "data": {},
+          "check_effects": [
+            {
+              "applies_to": "source",
+              "skills": [
+                "perception"
+              ],
+              "tags_required": null,
+              "bonus_effects": [],
+              "promote": 0,
+              "demote": 0,
+              "promote_on": null,
+              "demote_on": null,
+              "prompt_notes": [
+                "Ignorujesz efekty polmroku."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "dim_light_vision": {},
+    "background_bounty_hunter": {
+      "ui_description": "Scigales przestepcow dla sprawiedliwosci, zlota lub obu tych rzeczy.",
+      "ui_prompt": "Background: Lowca nagrod",
+      "ui_prompt_long": "Scigales przestepcow dla sprawiedliwosci, zlota lub obu tych rzeczy.\n\nMechanika (w tym silniku):\n- Boosty cech (informacyjnie w UI): Jeden boost do Sily lub Madrosci oraz jeden dowolny boost.\n- Szkolenie Skill/Lore (informacyjnie w UI): Przetrwanie oraz Wiedza: Prawo.\n- Feat z backgroundu: Experienced Tracker (dodawany do bohatera jako status).\n- Mechanika featu (krotko): +2 status do testów Przetrwania.\n\nPrzypomnienie reguły bazowej: Na 1. poziomie wybierasz jeden background i tej decyzji nie zmieniasz później. Każdy background daje dwa boosty cech (jeden ograniczony, jeden dowolny), trained w jednym skillu i jednym Lore oraz jeden skill feat. W tym silniku boosty cech i szkolenia skill/Lore są informacją UI, a feat z backgroundu jest dodawany do bohatera jako realny status.",
+      "is_background": true,
+      "background_key": "bounty_hunter",
+      "background_label": "Lowca nagrod",
+      "background_ability_boosts_ui": "Jeden boost do Sily lub Madrosci oraz jeden dowolny boost.",
+      "background_skill_training_ui": "Przetrwanie oraz Wiedza: Prawo.",
+      "background_skill_training_ui_only": true,
+      "background_feat_id": "experienced_tracker",
+      "background_core_rules_ui": "Na 1. poziomie wybierasz jeden background i tej decyzji nie zmieniasz później. Każdy background daje dwa boosty cech (jeden ograniczony, jeden dowolny), trained w jednym skillu i jednym Lore oraz jeden skill feat. W tym silniku boosty cech i szkolenia skill/Lore są informacją UI, a feat z backgroundu jest dodawany do bohatera jako realny status.",
+      "grants_statuses": [
+        {
+          "id": "experienced_tracker",
+          "label": "Experienced Tracker",
+          "duration": null,
+          "source": null,
+          "stacks": false,
+          "data": {
+            "ui_description": "Tropisz cele szybciej i bardziej niezawodnie.\nMechanika: +2 status do testów Przetrwania.",
+            "skill_feat_placeholder": false,
+            "skill_feat_fallback_mechanic": true
+          },
+          "check_effects": [
+            {
+              "applies_to": "source",
+              "skills": [
+                "survival"
+              ],
+              "tags_required": null,
+              "bonus_effects": [
+                {
+                  "type": "status",
+                  "value": 2,
+                  "tag": "survival",
+                  "source": "status:experienced_tracker",
+                  "target_id": null,
+                  "label": "experienced_tracker +2",
+                  "is_penalty": false,
+                  "duration_turns": null
+                }
+              ],
+              "promote": 0,
+              "demote": 0,
+              "promote_on": null,
+              "demote_on": null,
+              "prompt_notes": [
+                "Experienced Tracker: +2 status."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "experienced_tracker": {
+      "ui_description": "Tropisz cele szybciej i bardziej niezawodnie.\nMechanika: +2 status do testów Przetrwania.",
+      "skill_feat_placeholder": false,
+      "skill_feat_fallback_mechanic": true
+    },
+    "ranger": {
+      "ui_prompt": "KEY ABILITY: STRENGTH OR DEXTERITY\nAt 1st level, your class gives you an ability boost to your choice of Strength or Dexterity.\nHIT POINTS: 10 plus your Constitution Modifier\n\nINITIAL PROFICIENCIES (summary):\nPerception: Expert\nSaving Throws: Expert Fortitude, Expert Reflex, Trained Will\nAttacks: Trained simple/martial + unarmed\nDefenses: Trained light/medium armor + unarmored\nSkills: Trained in Nature + Survival\n\nCLASS FEATURES:\nHunt Prey: oznaczasz jednego przeciwnika jako cel.\nHunter's Edge: Flurry / Precision / Outwit.\nPodczas setupu wybierasz key ability, hunter's edge i 1 class feat poziomu 1.",
+      "class_hp": 10,
+      "ui_choice_kind": "ranger_setup",
+      "ranger_key_ability_choices": [
+        "strength",
+        "dexterity"
+      ],
+      "ranger_hunters_edge_choices": [
+        "flurry",
+        "precision",
+        "outwit"
+      ],
+      "ranger_feat_choices": [
+        "animal_companion",
+        "crossbow_ace",
+        "hunted_shot",
+        "monster_hunter",
+        "twin_takedown"
+      ],
+      "set_actor_attrs": {
+        "class_name": "ranger"
+      },
+      "grants_statuses": [
+        {
+          "id": "hunt_prey",
+          "label": "Hunt Prey",
+          "duration": null,
+          "source": null,
+          "stacks": false,
+          "data": {
+            "ui_description": "Hunt Prey: wybierz jednego przeciwnika jako hunted prey. Akcja wymagana do aktywacji Hunter's Edge i featów rangera.",
+            "ui_prompt": "Hunt Prey: wybierz jednego przeciwnika jako hunted prey. Akcja wymagana do aktywacji Hunter's Edge i featów rangera.",
+            "allowed_classes": [
+              "ranger"
+            ]
+          },
+          "check_effects": null
+        }
+      ],
+      "ranger_setup": {
+        "key_ability": "dexterity",
+        "hunter_edge": "precision",
+        "class_feat": "hunted_shot"
+      },
+      "ranger_key_ability": "dexterity",
+      "ranger_hunter_edge": "precision",
+      "ranger_class_feat": "hunted_shot"
+    },
+    "hunt_prey": {
+      "ui_description": "Hunt Prey: wybierz jednego przeciwnika jako hunted prey. Akcja wymagana do aktywacji Hunter's Edge i featów rangera.",
+      "ui_prompt": "Hunt Prey: wybierz jednego przeciwnika jako hunted prey. Akcja wymagana do aktywacji Hunter's Edge i featów rangera.",
+      "allowed_classes": [
+        "ranger"
+      ]
+    },
+    "hunted_shot": {
+      "ui_description": "Hunted Shot (Flourish): wykonaj 2 Strikes ranged przeciw hunted prey. Jeśli oba trafiają ten sam cel, obrażenia są scalane dla resist/weakness.",
+      "ui_prompt": "Hunted Shot (Flourish): wykonaj 2 Strikes ranged przeciw hunted prey. Jeśli oba trafiają ten sam cel, obrażenia są scalane dla resist/weakness.",
+      "allowed_classes": [
+        "ranger"
+      ]
+    },
+    "natural_ambition": {
+      "ui_description": "Mechanika: wybierasz dodatkowy class feat poziomu 1 dla swojej klasy.\nFeat jest od razu dodawany jako status bohatera i dziala normalnie jak inne featy klasowe.\nSpecjalne: tylko przy tworzeniu postaci na 1. poziomie.",
+      "ui_choice_kind": "natural_ambition",
+      "natural_ambition_class_feat_choices": {
+        "alchemist": [
+          "quick_alchemy_allow",
+          "quick_bomber",
+          "far_lobber",
+          "alchemical_savant",
+          "alchemist_familiar_guidance",
+          "advanced_alchemy"
+        ],
+        "barbarian": [
+          "moment_of_clarity",
+          "raging_thrower",
+          "cute_vision"
+        ],
+        "bard": [
+          "bardic_lore",
+          "lingering_composition",
+          "versatile_performance",
+          "reach_spell"
+        ],
+        "champion": [
+          "deitys_domain",
+          "ranged_reprisal",
+          "unimpeded_step",
+          "weight_of_guilt"
+        ],
+        "cleric": [
+          "deadly_simplicity",
+          "domain_initiate",
+          "harming_hands",
+          "healing_hands",
+          "holy_castigation",
+          "reach_spell"
+        ],
+        "druid": [
+          "animal_companion",
+          "leshy_familiar",
+          "reach_spell",
+          "storm_born",
+          "widen_spell",
+          "wild_shape"
+        ],
+        "fighter": [
+          "double_slice",
+          "exacting_strike",
+          "point_blank_shot",
+          "power_attack",
+          "reactive_shield",
+          "snagging_strike",
+          "sudden_charge"
+        ],
+        "monk": [
+          "crane_stance",
+          "dragon_stance",
+          "ki_rush",
+          "ki_strike",
+          "monastic_weaponry",
+          "mountain_stance",
+          "tiger_stance",
+          "wolf_stance"
+        ],
+        "ranger": [
+          "animal_companion",
+          "crossbow_ace",
+          "hunted_shot",
+          "monster_hunter",
+          "twin_takedown"
+        ],
+        "sorcerer": [
+          "counterspell",
+          "dangerous_sorcery",
+          "familiar",
+          "reach_spell",
+          "widen_spell"
+        ],
+        "wizard": [
+          "counterspell",
+          "eschew_materials",
+          "familiar",
+          "hand_of_the_apprentice",
+          "reach_spell",
+          "widen_spell"
+        ]
+      },
+      "class_name": "ranger",
+      "class_feat": "animal_companion"
+    },
+    "animal_companion": {
+      "ui_description": "Animal Companion: zyskujesz young animal companion. Companion jest deployowany na starcie walki i dziala przez Command Animal Companion.",
+      "ui_prompt": "Animal Companion: zyskujesz young animal companion. Companion jest deployowany na starcie walki i dziala przez Command Animal Companion.",
+      "allowed_classes": [
+        "ranger"
+      ],
+      "ui_choice_kind": "animal_companion_type",
+      "animal_companion_type_choices": [
+        "badger",
+        "bear",
+        "bird",
+        "cat",
+        "dromaeosaur",
+        "horse",
+        "snake",
+        "wolf"
+      ],
+      "animal_companion_type": "wolf",
+      "animal_companion_pending": false
+    }
+  },
+  "ability_scores": {
+    "strength": 12,
+    "dexterity": 18,
+    "constitution": 14,
+    "intelligence": 10,
+    "wisdom": 14,
+    "charisma": 10
+  },
+  "ability_modifiers": {
+    "strength": 1,
+    "dexterity": 4,
+    "constitution": 2,
+    "intelligence": 0,
+    "wisdom": 2,
+    "charisma": 0
+  },
+  "skill_ranks": {
+    "acrobatics": "trained",
+    "athletics": "trained",
+    "crafting": "trained",
+    "nature": "trained",
+    "occultism": "trained",
+    "stealth": "trained",
+    "survival": "trained"
+  },
+  "skill_modifiers": {
+    "acrobatics": 7,
+    "arcana": 0,
+    "athletics": 4,
+    "crafting": 3,
+    "deception": 0,
+    "diplomacy": 0,
+    "intimidation": 0,
+    "medicine": 2,
+    "nature": 5,
+    "occultism": 3,
+    "performance": 0,
+    "religion": 2,
+    "society": 0,
+    "stealth": 7,
+    "survival": 5,
+    "thievery": 4
+  },
+  "trained_skills": [
+    "acrobatics",
+    "athletics",
+    "crafting",
+    "nature",
+    "occultism",
+    "stealth",
+    "survival"
+  ],
+  "lore_skills": [
+    "Prawo (Wiedza)"
+  ],
+  "languages": [
+    "common"
+  ],
+  "traits": [
+    "human",
+    "humanoid"
+  ],
+  "perception_rank": "expert",
+  "perception_bonus": 7,
+  "focus_point": 0,
+  "focus_pool_max": 0,
+  "save_ranks": {
+    "fortitude": "expert",
+    "reflex": "expert",
+    "will": "trained"
+  },
+  "fortitude_bonus": 7,
+  "reflex_bonus": 9,
+  "will_bonus": 5,
+  "weapon_proficiency_ranks": {
+    "simple": "trained",
+    "martial": "trained",
+    "unarmed": "trained"
+  },
+  "defense_proficiency_ranks": {
+    "unarmored": "trained",
+    "light": "trained",
+    "medium": "trained"
+  },
+  "max_hp": 20,
+  "base_speed_feet": 25,
+  "ac": 18,
+  "starting_gold_gp": 15,
+  "coin_pouch": {
+    "cp": 0,
+    "sp": 1,
+    "gp": 2,
+    "pp": 0
+  },
+  "track_ammo": true,
+  "inventory_items": [
+    {
+      "item_id": "unarmed",
+      "category": "weapon",
+      "name": "Unarmed",
+      "description": "",
+      "traits": [
+        "agile",
+        "finesse",
+        "unarmed",
+        "free_hand"
+      ],
+      "price_cp": 0,
+      "bulk": "-",
+      "instance_id": "item-cee9e48b01",
+      "event_name": "unarmed",
+      "preparation_counter": 0,
+      "prepared_by_quick_alchemy": false,
+      "prepared_by_advanced_alchemy": false
+    },
+    {
+      "item_id": "longbow",
+      "category": "weapon",
+      "name": "Longbow",
+      "description": "",
+      "traits": [
+        "deadly:d10",
+        "volley:30"
+      ],
+      "price_cp": 600,
+      "bulk": 1,
+      "instance_id": "item-214b120b55",
+      "event_name": "longbow",
+      "preparation_counter": 0,
+      "prepared_by_quick_alchemy": false,
+      "prepared_by_advanced_alchemy": false
+    },
+    {
+      "item_id": "leather_armor",
+      "category": "armor",
+      "name": "Leather Armor",
+      "description": "Lekka, elastyczna zbroja.",
+      "traits": [],
+      "price_cp": 200,
+      "bulk": 1,
+      "instance_id": "item-7dd8fd051d"
+    },
+    {
+      "item_id": "arrows",
+      "category": "ammo",
+      "name": "Strzaly (10)",
+      "description": "Pek 10 strzal do lukow.",
+      "traits": [
+        "ammunition"
+      ],
+      "price_cp": 10,
+      "bulk": "L",
+      "instance_id": "item-2f2d1dfc3b",
+      "ammo_count": 50
+    },
+    {
+      "item_id": "sack",
+      "category": "gear",
+      "name": "Worek",
+      "description": "Prosty worek na zapasy.",
+      "traits": [
+        "container"
+      ],
+      "price_cp": 1,
+      "bulk": "L",
+      "instance_id": "item-58bb51977f"
+    },
+    {
+      "item_id": "waterskin",
+      "category": "gear",
+      "name": "Buklak",
+      "description": "Bukłak na wodę.",
+      "traits": [
+        "container"
+      ],
+      "price_cp": 5,
+      "bulk": "L",
+      "instance_id": "item-9b562c394a"
+    },
+    {
+      "item_id": "signal_whistle",
+      "category": "gear",
+      "name": "Gwizdek sygnalowy",
+      "description": "Gwizdek do sygnalizacji.",
+      "traits": [],
+      "price_cp": 8,
+      "bulk": "-",
+      "instance_id": "item-57075020da"
+    },
+    {
+      "item_id": "grappling_hook",
+      "category": "gear",
+      "name": "Hak zadziorny",
+      "description": "Hak do wspinaczki uzywany z lina.",
+      "traits": [],
+      "price_cp": 10,
+      "bulk": "L",
+      "instance_id": "item-4341ad1f7f"
+    },
+    {
+      "item_id": "flint_and_steel",
+      "category": "gear",
+      "name": "Krzesiwo",
+      "description": "Krzesiwo do rozpalania ognia.",
+      "traits": [],
+      "price_cp": 5,
+      "bulk": "-",
+      "instance_id": "item-4f0da58d98"
+    },
+    {
+      "item_id": "rope_hemp_50ft",
+      "category": "gear",
+      "name": "Lina konopna (50 ft)",
+      "description": "Lina konopna dlugosci 50 stop.",
+      "traits": [],
+      "price_cp": 10,
+      "bulk": 1,
+      "instance_id": "item-9c4112fd3a"
+    },
+    {
+      "item_id": "tent",
+      "category": "gear",
+      "name": "Namiot",
+      "description": "Dwuosobowy namiot podrozny.",
+      "traits": [
+        "camp"
+      ],
+      "price_cp": 100,
+      "bulk": 2,
+      "instance_id": "item-00ed4cde0b"
+    },
+    {
+      "item_id": "torch",
+      "category": "gear",
+      "name": "Pochodnia",
+      "description": "Pochodnia zapewniajaca swiatlo.",
+      "traits": [
+        "consumable",
+        "light_source"
+      ],
+      "price_cp": 1,
+      "bulk": "L",
+      "instance_id": "item-92ac5dec73"
+    },
+    {
+      "item_id": "alchemical:smokestick",
+      "category": "potion",
+      "name": "Lesser Smokestick",
+      "description": "Przedmiot alchemiczny.",
+      "traits": [],
+      "price_cp": 300,
+      "bulk": "L",
+      "instance_id": "item-e1a93068b2",
+      "event_name": "smokestick",
+      "preparation_counter": 0,
+      "prepared_by_quick_alchemy": false,
+      "prepared_by_advanced_alchemy": false
+    }
+  ],
+  "weapon_loadout": [
+    "unarmed",
+    "longbow"
+  ],
+  "armor_loadout": [
+    "leather_armor"
+  ],
+  "shield_loadout": [],
+  "equipped_weapon_ids": [
+    "longbow"
+  ],
+  "equipped_armor_id": "leather_armor",
+  "equipped_shield_id": "",
+  "equipped_armor_item_id": "item-7dd8fd051d",
+  "equipped_shield_hand": "",
+  "created_at": "2026-03-16T10:42:16.475932+00:00",
+  "updated_at": "2026-03-16T10:42:16.476522+00:00"
+}

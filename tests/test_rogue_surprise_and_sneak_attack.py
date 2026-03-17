@@ -188,3 +188,64 @@ def test_surprise_attack_does_not_apply_after_target_acted(monkeypatch):
     assert enemy.hp == 20
     assert not any("Sneak Attack:" in prompt for prompt in prompts)
 
+
+def test_hidden_attack_makes_target_off_guard_enables_sneak_attack_and_reveals_attacker(monkeypatch):
+    hero = Hero(
+        statuses=[
+            Status(id="rogue"),
+            Status(id="sneak_attack"),
+            Status(id="stealth", data={"stealth_detection_dc": 20}),
+            Status(id="hidden"),
+        ]
+    )
+    enemy = Enemy()
+
+    game = FakeGame()
+    game.heroes = [hero]
+    game.enemies = [enemy]
+    game.board.occupants = {hero.position: hero, enemy.position: enemy}
+    game.conn.choice = enemy.position
+
+    prompts: list[str] = []
+    rolls = iter([13, 5, 4])
+
+    def _prompt(*args, **_kwargs):
+        prompts.append(str(args[0]) if args else "")
+        return next(rolls)
+
+    monkeypatch.setattr("GameObjects.events.attack.basic_melee_attack_event.prompt_for_roll", _prompt)
+    monkeypatch.setattr("GameObjects.events.attack.basic_melee_attack_event.refresh_flanking_statuses", lambda *_a, **_k: None)
+
+    result = FinesseMeleeAttackEvent().run(EventContext(game=game, actor=hero))
+
+    assert result.success is True
+    assert bool((result.data or {}).get("hit", False)) is True
+    assert enemy.hp == 11
+    assert any("Sneak Attack:" in prompt for prompt in prompts)
+    assert hero.has_status("hidden") is False
+    assert hero.has_status("stealth") is False
+
+
+def test_undetected_target_requires_guessing_square_and_wrong_guess_still_counts_as_attack(monkeypatch):
+    hero = Hero(statuses=[Status(id="rogue"), Status(id="sneak_attack")])
+    enemy = Enemy()
+    enemy.statuses.append(Status(id="undetected"))
+
+    game = FakeGame()
+    game.heroes = [hero]
+    game.enemies = [enemy]
+    game.board.occupants = {hero.position: hero, enemy.position: enemy}
+    game.conn.choice = (0, 1)
+
+    monkeypatch.setattr("GameObjects.events.attack.basic_melee_attack_event.prompt_for_roll", lambda *a, **k: 20)
+    monkeypatch.setattr("GameObjects.events.attack.basic_melee_attack_event.refresh_flanking_statuses", lambda *_a, **_k: None)
+
+    result = FinesseMeleeAttackEvent().run(EventContext(game=game, actor=hero))
+
+    assert result.success is True
+    assert bool((result.data or {}).get("hit", True)) is False
+    assert (result.data or {}).get("target") is None
+    assert (result.data or {}).get("guessed_target_square") == (0, 1)
+    assert enemy.hp == 20
+    attack_state = getattr(game.state, "attack_state", {})
+    assert attack_state.get("actor:hero-1", {}).get("attacks_this_turn") == 1

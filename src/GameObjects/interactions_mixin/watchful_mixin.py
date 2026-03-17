@@ -54,7 +54,8 @@ class WatchfulMixin:
 
     def attempt_spot(self, hero, game) -> tuple[bool, str]:
         """Próba wykrycia ukrytego bohatera; zwraca (wykryto, komunikat)."""
-        from statuses import OBSERVABLE_STATUS, STEALTH_STATUS  # lokalnie, by unikać cykli
+        from statuses import STEALTH_STATUS  # lokalnie, by unikać cykli
+        from combat.stealth_runtime import clear_combat_stealth
 
         dc, _bonus = self._stealth_dc_from_status(hero)
         try:
@@ -69,8 +70,7 @@ class WatchfulMixin:
         roll = random.randint(1, 20) + self.perception_bonus
         if roll >= dc:
             try:
-                hero.remove_status(STEALTH_STATUS)  # type: ignore[attr-defined]
-                hero.add_status(OBSERVABLE_STATUS)  # type: ignore[attr-defined]
+                clear_combat_stealth(hero, clear_stealth=True, add_observable=True)
             except AttributeError:
                 pass
             spotted_msg = f"Wykryto bohatera (r={roll} vs DC {dc})."
@@ -94,6 +94,15 @@ class WatchfulMixin:
                     spotted_msg = f"{spotted_msg} {extra}"
             except Exception:
                 pass
+            try:
+                ui_hero = getattr(game, "ui_hero", None)
+                if callable(ui_hero):
+                    ui_hero(hero, note="Wykryto ukrycie")
+                ui_active = getattr(game, "ui_active_actor", None)
+                if callable(ui_active):
+                    ui_active(hero)
+            except Exception:
+                logger.debug("Nie udało się odświeżyć UI po wykryciu stealth.", exc_info=True)
             self._log_watch_event(spotted_msg, game)
             return True, spotted_msg
         miss_msg = f"Nie dostrzegasz bohatera (r={roll} vs DC {dc})."

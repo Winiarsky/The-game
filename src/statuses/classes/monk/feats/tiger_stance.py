@@ -4,7 +4,7 @@ from statuses.base import Status
 
 TIGER_STANCE_DESCRIPTION = (
     "Tiger Stance: atakujesz profilem Tiger Claw (1k8 S, agile, finesse). "
-    "Na critical hit dochodzi 1k4 persistent bleed. Step 10 ft: reminder (manual)."
+    "Na critical hit dochodzi 1k4 persistent bleed. Przy Speed co najmniej 20 ft możesz wykonać Step na 10 ft."
 )
 
 

@@ -469,7 +469,8 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
                         data={
                             "companion_type": str(getattr(companion, "companion_type", "wolf")),
                             "support_benefit": support_note,
-                            "manual_resolution": True,
+                            "manual_resolution": False,
+                            "owner_move_feet_this_turn": 0,
                         },
                     )
                 )

@@ -4,7 +4,7 @@ from statuses.base import Status
 
 WOLF_STANCE_DESCRIPTION = (
     "Wolf Stance: atakujesz profilem Wolf Jaw (1k8 P, agile, backstabber, finesse). "
-    "Trip trait przy flankowaniu: reminder (manual)."
+    "Trip przy flankowaniu jest ograniczony do obecnego runtime akcji Trip."
 )
 
 

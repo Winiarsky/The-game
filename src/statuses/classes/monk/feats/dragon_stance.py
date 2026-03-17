@@ -4,7 +4,7 @@ from statuses.base import Status
 
 DRAGON_STANCE_DESCRIPTION = (
     "Dragon Stance: atakujesz profilem Dragon Tail (1k10 B, backswing). "
-    "Ignorowanie 1. pola difficult terrain: reminder (manual)."
+    "Pierwsze pole difficult terrain w każdej twojej turze nie zwiększa kosztu ruchu."
 )
 
 

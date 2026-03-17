@@ -47,7 +47,7 @@ ANIMAL_COMPANION_TYPES: dict[str, dict[str, object]] = {
             {"id": "jaws", "label": "Jaws", "damage": "1d6", "damage_type": DamageType.PIERCING.value, "traits": ["finesse"]},
             {"id": "talon", "label": "Talon", "damage": "1d4", "damage_type": DamageType.SLASHING.value, "traits": ["agile", "finesse"]},
         ],
-        "support_benefit": "Twoje trafienia na celu zagrozonym przez ptaka moga nakladac persistent bleed 1d4 (manual).",
+        "support_benefit": "Twoje trafienia na celu zagrozonym przez ptaka nakladaja persistent bleed 1d4.",
     },
     "cat": {
         "label": "Cat",
@@ -72,7 +72,7 @@ ANIMAL_COMPANION_TYPES: dict[str, dict[str, object]] = {
             {"id": "jaws", "label": "Jaws", "damage": "1d8", "damage_type": DamageType.PIERCING.value, "traits": ["finesse"]},
             {"id": "talon", "label": "Talon", "damage": "1d6", "damage_type": DamageType.SLASHING.value, "traits": ["agile", "finesse"]},
         ],
-        "support_benefit": "Raptor wspiera flankowanie: traktuj go jako pozycje flankujaca (manual).",
+        "support_benefit": "Raptor wspiera flankowanie: twoje melee Strike'i traktuja jego pozycje jak pozycje flankujaca.",
     },
     "horse": {
         "label": "Horse",
@@ -83,7 +83,7 @@ ANIMAL_COMPANION_TYPES: dict[str, dict[str, object]] = {
         "attacks": [
             {"id": "hoof", "label": "Hoof", "damage": "1d6", "damage_type": DamageType.BLUDGEONING.value, "traits": ["agile"]},
         ],
-        "support_benefit": "Mounted: po ruchu >=10 ft przed melee Strike owner dostaje bonus do obrazen (manual).",
+        "support_benefit": "Mounted: po ruchu >=10 ft w tej turze przed melee Strike owner dostaje +2 circumstance do obrazen.",
         "special": "Mount",
     },
     "snake": {
@@ -95,7 +95,7 @@ ANIMAL_COMPANION_TYPES: dict[str, dict[str, object]] = {
         "attacks": [
             {"id": "jaws", "label": "Jaws", "damage": "1d8", "damage_type": DamageType.PIERCING.value, "traits": ["finesse"]},
         ],
-        "support_benefit": "Cele zagrozone przez weza nie moga triggerowac reakcji na twoje akcje (manual).",
+        "support_benefit": "Cele zagrozone przez weza nie moga triggerowac reakcji na twoje akcje.",
     },
     "wolf": {
         "label": "Wolf",
@@ -106,7 +106,7 @@ ANIMAL_COMPANION_TYPES: dict[str, dict[str, object]] = {
         "attacks": [
             {"id": "jaws", "label": "Jaws", "damage": "1d8", "damage_type": DamageType.PIERCING.value, "traits": ["finesse"]},
         ],
-        "support_benefit": "Twoje trafienia celu w zasiegu wilka daja -5ft status do Speed na 1 minute (manual).",
+        "support_benefit": "Twoje trafienia celu w zasiegu wilka daja -5 ft status do Speed na 1 minute.",
     },
 }
 

@@ -1,0 +1,1193 @@
+{
+  "character_id": "lorielen",
+  "name": "Lorielen",
+  "concept": "",
+  "level": 1,
+  "ancestry_id": "elf",
+  "heritage_id": "whisper_elf",
+  "ancestry_feat_id": "otherworldly_magic",
+  "background_id": "background_barrister",
+  "class_id": "cleric",
+  "class_feat_ids": [],
+  "portrait_image": "/static/portraits/custom/hero_1c3d91a3.jpg",
+  "status_ids": [
+    "elf",
+    "dim_light_vision",
+    "whisper_elf",
+    "otherworldly_magic",
+    "background_barrister",
+    "group_impression",
+    "cleric",
+    "shield_block",
+    "domain_initiate",
+    "encumbered",
+    "speed_penalty",
+    "clumsy"
+  ],
+  "status_data": {
+    "elf": {
+      "ui_description": "Punkty Zycia: 6\nRozmiar: Sredni\nPredkosc: 30 stop\nBoosty atrybutow: Zrecznosc, Inteligencja, Dowolna\nWada atrybutu: Kondycja\nJezyki: Common, Elven\nDodatkowe jezyki rowne modyfikatorowi Inteligencji: Celestial, Draconic, Gnoll, Gnomish, Goblin, Orcish, Sylvan (lub regionalne).\nCechy: Elf, Humanoid\nLow-Light Vision: w slabym swietle widzisz jak w jasnym i ignorujesz concealed z dim light.",
+      "ancestry_hp": 6,
+      "base_speed_feet": 30,
+      "size": "medium",
+      "ancestry_traits": [
+        "elf",
+        "humanoid"
+      ],
+      "ancestry_languages": [
+        "common",
+        "elven"
+      ],
+      "ancestry_bonus_languages": [
+        "celestial",
+        "draconic",
+        "gnoll",
+        "gnomish",
+        "goblin",
+        "orcish",
+        "sylvan"
+      ],
+      "ability_boosts": [
+        "dexterity",
+        "intelligence",
+        "free"
+      ],
+      "ability_flaw": "constitution",
+      "grants_statuses": [
+        {
+          "id": "dim_light_vision",
+          "label": "Dim Light Vision",
+          "duration": null,
+          "source": null,
+          "stacks": false,
+          "data": {},
+          "check_effects": [
+            {
+              "applies_to": "source",
+              "skills": [
+                "perception"
+              ],
+              "tags_required": null,
+              "bonus_effects": [],
+              "promote": 0,
+              "demote": 0,
+              "promote_on": null,
+              "demote_on": null,
+              "prompt_notes": [
+                "Ignorujesz efekty polmroku."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "dim_light_vision": {},
+    "whisper_elf": {
+      "ui_description": "Whisper Elf:\n- Przy akcji Seek zwiekszasz zasieg przeszukiwania z 30 do 60 stop.\n- Otrzymujesz +2 circumstance do namierzania niewykrytych stworzen, ktore slyszysz, w obrebie 30 stop (tagi: seek + undetected + auditory).",
+      "seek_sense_radius_feet": 60,
+      "seek_audio_locate_bonus_within_feet": 30
+    },
+    "otherworldly_magic": {
+      "ui_description": "Wybierz 1 arcane cantrip, który możesz rzucać jako innate spell at-will.\nW tym silniku wybór cantripa zapisywany jest na statusie.",
+      "ui_choice_kind": "otherworldly_magic",
+      "otherworldly_magic_choices": [
+        "detect_magic",
+        "daze",
+        "light",
+        "mage_hand",
+        "shield",
+        "ray_of_frost",
+        "telekinetic_projectile",
+        "produce_flame",
+        "ghost_sound",
+        "message"
+      ],
+      "otherworldly_magic_cantrip": "daze",
+      "granted_cantrips": [
+        "daze"
+      ],
+      "innate_magic_tradition": "arcane"
+    },
+    "background_barrister": {
+      "ui_description": "Szkolenie prawnicze i praktyka w sali sadowej nauczyly cie argumentacji.",
+      "ui_prompt": "Background: Prawnik",
+      "ui_prompt_long": "Szkolenie prawnicze i praktyka w sali sadowej nauczyly cie argumentacji.\n\nMechanika (w tym silniku):\n- Boosty cech (informacyjnie w UI): Jeden boost do Inteligencji lub Charyzmy oraz jeden dowolny boost.\n- Szkolenie Skill/Lore (informacyjnie w UI): Dyplomacja oraz Wiedza: Prawo.\n- Feat z backgroundu: Group Impression (dodawany do bohatera jako status).\n- Mechanika featu (krotko): +2 status do testów Dyplomacji.\n\nPrzypomnienie reguły bazowej: Na 1. poziomie wybierasz jeden background i tej decyzji nie zmieniasz później. Każdy background daje dwa boosty cech (jeden ograniczony, jeden dowolny), trained w jednym skillu i jednym Lore oraz jeden skill feat. W tym silniku boosty cech i szkolenia skill/Lore są informacją UI, a feat z backgroundu jest dodawany do bohatera jako realny status.",
+      "is_background": true,
+      "background_key": "barrister",
+      "background_label": "Prawnik",
+      "background_ability_boosts_ui": "Jeden boost do Inteligencji lub Charyzmy oraz jeden dowolny boost.",
+      "background_skill_training_ui": "Dyplomacja oraz Wiedza: Prawo.",
+      "background_skill_training_ui_only": true,
+      "background_feat_id": "group_impression",
+      "background_core_rules_ui": "Na 1. poziomie wybierasz jeden background i tej decyzji nie zmieniasz później. Każdy background daje dwa boosty cech (jeden ograniczony, jeden dowolny), trained w jednym skillu i jednym Lore oraz jeden skill feat. W tym silniku boosty cech i szkolenia skill/Lore są informacją UI, a feat z backgroundu jest dodawany do bohatera jako realny status.",
+      "grants_statuses": [
+        {
+          "id": "group_impression",
+          "label": "Group Impression",
+          "duration": null,
+          "source": null,
+          "stacks": false,
+          "data": {
+            "ui_description": "Możesz jednocześnie wywrzeć dobre wrażenie na wielu celach.\nMechanika: +2 status do testów Dyplomacji.",
+            "skill_feat_placeholder": false,
+            "skill_feat_fallback_mechanic": true
+          },
+          "check_effects": [
+            {
+              "applies_to": "source",
+              "skills": [
+                "diplomacy"
+              ],
+              "tags_required": null,
+              "bonus_effects": [
+                {
+                  "type": "status",
+                  "value": 2,
+                  "tag": "diplomacy",
+                  "source": "status:group_impression",
+                  "target_id": null,
+                  "label": "group_impression +2",
+                  "is_penalty": false,
+                  "duration_turns": null
+                }
+              ],
+              "promote": 0,
+              "demote": 0,
+              "promote_on": null,
+              "demote_on": null,
+              "prompt_notes": [
+                "Group Impression: +2 status."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "group_impression": {
+      "ui_description": "Możesz jednocześnie wywrzeć dobre wrażenie na wielu celach.\nMechanika: +2 status do testów Dyplomacji.",
+      "skill_feat_placeholder": false,
+      "skill_feat_fallback_mechanic": true
+    },
+    "cleric": {
+      "ui_prompt": "KEY ABILITY: WISDOM\nAt 1st level, your class gives you an ability boost to Wisdom.\nHIT POINTS: 8 plus your Constitution Modifier\n\nINITIAL PROFICIENCIES:\nPERCEPTION\nTrained in Perception\nSAVING THROWS\nTrained in Fortitude\nTrained in Reflex\nExpert in Will\nSKILLS\nTrained in Religion\nTrained in a number of additional skills equal to 2 plus your Intelligence modifier\nATTACKS\nTrained in simple weapons\nTrained in unarmed attacks\nDEFENSES\nTrained in unarmored defense\n\nDIVINE FONT:\nPodczas setupu wybierasz heal/harm zgodnie z deity (lub custom).\nNa poczatku scenariusza przygotowujesz czary zgodnie z tabela Cleric Spells per Day.\nDodatkowo Divine Font dodaje sloty Heal/Harm na najwyzszym dostepnym ranku (1 + modyfikator Charyzmy).\n\nDOCTRINE:\nCloistered Cleric: automatycznie dostajesz Domain Initiate.\nWarpriest: Shield Block, a dla favored weapon simple/unarmed takze Deadly Simplicity.",
+      "class_hp": 8,
+      "ui_choice_kind": "cleric_setup",
+      "cleric_key_ability_choices": [
+        "wisdom"
+      ],
+      "cleric_doctrine_choices": [
+        "cloistered_cleric",
+        "warpriest"
+      ],
+      "cleric_favored_weapon_choices": [
+        "crossbow",
+        "dagger",
+        "falchion",
+        "fist",
+        "glaive",
+        "greataxe",
+        "greatsword",
+        "longbow",
+        "longsword",
+        "mace",
+        "rapier",
+        "scimitar",
+        "scythe",
+        "shortsword",
+        "spiked_chain",
+        "staff",
+        "starknife",
+        "trident",
+        "warhammer",
+        "whip"
+      ],
+      "cleric_font_choices": [
+        "heal",
+        "harm"
+      ],
+      "cleric_weapon_groups": {
+        "crossbow": "simple",
+        "dagger": "simple",
+        "falchion": "martial",
+        "fist": "unarmed",
+        "glaive": "martial",
+        "greataxe": "martial",
+        "greatsword": "martial",
+        "longbow": "martial",
+        "longsword": "martial",
+        "mace": "simple",
+        "rapier": "martial",
+        "scimitar": "martial",
+        "scythe": "martial",
+        "shortsword": "martial",
+        "spiked_chain": "martial",
+        "staff": "simple",
+        "starknife": "martial",
+        "trident": "martial",
+        "warhammer": "martial",
+        "whip": "martial"
+      },
+      "cleric_deity_choices": [
+        "abadar",
+        "asmodeus",
+        "calistria",
+        "cayden_cailean",
+        "desna",
+        "erastil",
+        "gorum",
+        "gozreh",
+        "iomedae",
+        "irori",
+        "lamashtu",
+        "nethys",
+        "norgorber",
+        "pharasma",
+        "rovagug",
+        "sarenrae",
+        "shelyn",
+        "torag",
+        "urgathoa",
+        "zon_kuthon",
+        "custom"
+      ],
+      "cleric_deity_options": {
+        "abadar": {
+          "favored_weapon": "crossbow",
+          "favored_weapon_group": "simple",
+          "font_options": [
+            "heal",
+            "harm"
+          ],
+          "domain_choices": [
+            "cities",
+            "earth",
+            "travel",
+            "wealth"
+          ]
+        },
+        "asmodeus": {
+          "favored_weapon": "mace",
+          "favored_weapon_group": "simple",
+          "font_options": [
+            "harm"
+          ],
+          "domain_choices": [
+            "confidence",
+            "fire",
+            "trickery",
+            "tyranny"
+          ]
+        },
+        "calistria": {
+          "favored_weapon": "whip",
+          "favored_weapon_group": "martial",
+          "font_options": [
+            "heal",
+            "harm"
+          ],
+          "domain_choices": [
+            "pain",
+            "passion",
+            "secrecy",
+            "trickery"
+          ]
+        },
+        "cayden_cailean": {
+          "favored_weapon": "rapier",
+          "favored_weapon_group": "martial",
+          "font_options": [
+            "heal"
+          ],
+          "domain_choices": [
+            "cities",
+            "freedom",
+            "indulgence",
+            "might"
+          ]
+        },
+        "desna": {
+          "favored_weapon": "starknife",
+          "favored_weapon_group": "martial",
+          "font_options": [
+            "heal"
+          ],
+          "domain_choices": [
+            "dreams",
+            "luck",
+            "moon",
+            "travel"
+          ]
+        },
+        "erastil": {
+          "favored_weapon": "longbow",
+          "favored_weapon_group": "martial",
+          "font_options": [
+            "heal"
+          ],
+          "domain_choices": [
+            "earth",
+            "family",
+            "nature",
+            "wealth"
+          ]
+        },
+        "gorum": {
+          "favored_weapon": "greatsword",
+          "favored_weapon_group": "martial",
+          "font_options": [
+            "heal",
+            "harm"
+          ],
+          "domain_choices": [
+            "confidence",
+            "destruction",
+            "might",
+            "zeal"
+          ]
+        },
+        "gozreh": {
+          "favored_weapon": "trident",
+          "favored_weapon_group": "martial",
+          "font_options": [
+            "heal"
+          ],
+          "domain_choices": [
+            "air",
+            "nature",
+            "travel",
+            "water"
+          ]
+        },
+        "iomedae": {
+          "favored_weapon": "longsword",
+          "favored_weapon_group": "martial",
+          "font_options": [
+            "heal"
+          ],
+          "domain_choices": [
+            "confidence",
+            "might",
+            "truth",
+            "zeal"
+          ]
+        },
+        "irori": {
+          "favored_weapon": "fist",
+          "favored_weapon_group": "unarmed",
+          "font_options": [
+            "heal",
+            "harm"
+          ],
+          "domain_choices": [
+            "knowledge",
+            "might",
+            "perfection",
+            "truth"
+          ]
+        },
+        "lamashtu": {
+          "favored_weapon": "falchion",
+          "favored_weapon_group": "martial",
+          "font_options": [
+            "heal",
+            "harm"
+          ],
+          "domain_choices": [
+            "family",
+            "might",
+            "nightmares",
+            "trickery"
+          ]
+        },
+        "nethys": {
+          "favored_weapon": "staff",
+          "favored_weapon_group": "simple",
+          "font_options": [
+            "heal",
+            "harm"
+          ],
+          "domain_choices": [
+            "destruction",
+            "knowledge",
+            "magic",
+            "protection"
+          ]
+        },
+        "norgorber": {
+          "favored_weapon": "shortsword",
+          "favored_weapon_group": "martial",
+          "font_options": [
+            "harm"
+          ],
+          "domain_choices": [
+            "death",
+            "secrecy",
+            "trickery",
+            "wealth"
+          ]
+        },
+        "pharasma": {
+          "favored_weapon": "dagger",
+          "favored_weapon_group": "simple",
+          "font_options": [
+            "heal"
+          ],
+          "domain_choices": [
+            "death",
+            "fate",
+            "healing",
+            "knowledge"
+          ]
+        },
+        "rovagug": {
+          "favored_weapon": "greataxe",
+          "favored_weapon_group": "martial",
+          "font_options": [
+            "harm"
+          ],
+          "domain_choices": [
+            "air",
+            "destruction",
+            "earth",
+            "zeal"
+          ]
+        },
+        "sarenrae": {
+          "favored_weapon": "scimitar",
+          "favored_weapon_group": "martial",
+          "font_options": [
+            "heal"
+          ],
+          "domain_choices": [
+            "fire",
+            "healing",
+            "sun",
+            "truth"
+          ]
+        },
+        "shelyn": {
+          "favored_weapon": "glaive",
+          "favored_weapon_group": "martial",
+          "font_options": [
+            "heal"
+          ],
+          "domain_choices": [
+            "creation",
+            "family",
+            "passion",
+            "protection"
+          ]
+        },
+        "torag": {
+          "favored_weapon": "warhammer",
+          "favored_weapon_group": "martial",
+          "font_options": [
+            "heal"
+          ],
+          "domain_choices": [
+            "creation",
+            "earth",
+            "family",
+            "protection"
+          ]
+        },
+        "urgathoa": {
+          "favored_weapon": "scythe",
+          "favored_weapon_group": "martial",
+          "font_options": [
+            "harm"
+          ],
+          "domain_choices": [
+            "indulgence",
+            "magic",
+            "might",
+            "undeath"
+          ]
+        },
+        "zon_kuthon": {
+          "favored_weapon": "spiked_chain",
+          "favored_weapon_group": "martial",
+          "font_options": [
+            "harm"
+          ],
+          "domain_choices": [
+            "ambition",
+            "darkness",
+            "destruction",
+            "pain"
+          ]
+        },
+        "custom": {
+          "favored_weapon": null,
+          "favored_weapon_group": null,
+          "font_options": [
+            "heal",
+            "harm"
+          ],
+          "domain_choices": [
+            "custom_domain_a",
+            "custom_domain_b",
+            "custom_domain_c"
+          ]
+        }
+      },
+      "cleric_deity_skill_choices": {
+        "abadar": [
+          "society"
+        ],
+        "asmodeus": [
+          "deception"
+        ],
+        "calistria": [
+          "deception"
+        ],
+        "cayden_cailean": [
+          "athletics"
+        ],
+        "desna": [
+          "acrobatics"
+        ],
+        "erastil": [
+          "survival"
+        ],
+        "gorum": [
+          "athletics"
+        ],
+        "gozreh": [
+          "survival"
+        ],
+        "iomedae": [
+          "intimidation"
+        ],
+        "irori": [
+          "athletics"
+        ],
+        "lamashtu": [
+          "survival"
+        ],
+        "nethys": [
+          "arcana"
+        ],
+        "norgorber": [
+          "stealth"
+        ],
+        "pharasma": [
+          "medicine"
+        ],
+        "rovagug": [
+          "athletics"
+        ],
+        "sarenrae": [
+          "medicine"
+        ],
+        "shelyn": [
+          "crafting",
+          "performance"
+        ],
+        "torag": [
+          "crafting"
+        ],
+        "urgathoa": [
+          "intimidation"
+        ],
+        "zon_kuthon": [
+          "intimidation"
+        ],
+        "custom": [
+          "religion",
+          "diplomacy",
+          "intimidation",
+          "medicine",
+          "society",
+          "athletics",
+          "crafting"
+        ]
+      },
+      "cleric_domain_spell_placeholders": {
+        "air": "pushing_gust",
+        "ambition": "blind_ambition",
+        "cities": "face_in_the_crowd",
+        "confidence": "veil_of_confidence",
+        "creation": "splash_of_art",
+        "darkness": "cloak_of_shadow",
+        "death": "deaths_call",
+        "destruction": "cry_of_destruction",
+        "dreams": "sweet_dream",
+        "earth": "hurtling_stone",
+        "family": "soothing_words",
+        "fate": "read_fate",
+        "fire": "fire_ray",
+        "freedom": "unimpeded_stride",
+        "healing": "healers_blessing",
+        "indulgence": "overstuff",
+        "knowledge": "scholarly_recollection",
+        "luck": "bit_of_luck",
+        "magic": "magics_vessel",
+        "might": "athletic_rush",
+        "moon": "moonbeam",
+        "nature": "vibrant_thorns",
+        "nightmares": "waking_nightmare",
+        "pain": "savor_the_sting",
+        "passion": "charming_touch",
+        "perfection": "perfected_mind",
+        "protection": "protectors_sacrifice",
+        "secrecy": "forced_quiet",
+        "sun": "dazzling_flash",
+        "travel": "agile_feet",
+        "trickery": "sudden_shift",
+        "truth": "word_of_truth",
+        "tyranny": "touch_of_obedience",
+        "undeath": "touch_of_undeath",
+        "water": "tidal_surge",
+        "wealth": "appearance_of_wealth",
+        "zeal": "weapon_surge",
+        "custom_domain_a": "custom_domain_spell_a",
+        "custom_domain_b": "custom_domain_spell_b",
+        "custom_domain_c": "custom_domain_spell_c"
+      },
+      "cleric_spells_per_day": {
+        "1": {
+          "cantrip": 5,
+          "rank_1": 2
+        },
+        "2": {
+          "cantrip": 5,
+          "rank_1": 3
+        },
+        "3": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 2
+        },
+        "4": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3
+        },
+        "5": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 2
+        },
+        "6": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3
+        },
+        "7": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 2
+        },
+        "8": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3
+        },
+        "9": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3,
+          "rank_5": 2
+        },
+        "10": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3,
+          "rank_5": 3
+        },
+        "11": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3,
+          "rank_5": 3,
+          "rank_6": 2
+        },
+        "12": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3,
+          "rank_5": 3,
+          "rank_6": 3
+        },
+        "13": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3,
+          "rank_5": 3,
+          "rank_6": 3,
+          "rank_7": 2
+        },
+        "14": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3,
+          "rank_5": 3,
+          "rank_6": 3,
+          "rank_7": 3
+        },
+        "15": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3,
+          "rank_5": 3,
+          "rank_6": 3,
+          "rank_7": 3,
+          "rank_8": 2
+        },
+        "16": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3,
+          "rank_5": 3,
+          "rank_6": 3,
+          "rank_7": 3,
+          "rank_8": 3
+        },
+        "17": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3,
+          "rank_5": 3,
+          "rank_6": 3,
+          "rank_7": 3,
+          "rank_8": 3,
+          "rank_9": 2
+        },
+        "18": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3,
+          "rank_5": 3,
+          "rank_6": 3,
+          "rank_7": 3,
+          "rank_8": 3,
+          "rank_9": 3
+        },
+        "19": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3,
+          "rank_5": 3,
+          "rank_6": 3,
+          "rank_7": 3,
+          "rank_8": 3,
+          "rank_9": 3,
+          "rank_10": 1
+        },
+        "20": {
+          "cantrip": 5,
+          "rank_1": 3,
+          "rank_2": 3,
+          "rank_3": 3,
+          "rank_4": 3,
+          "rank_5": 3,
+          "rank_6": 3,
+          "rank_7": 3,
+          "rank_8": 3,
+          "rank_9": 3,
+          "rank_10": 1
+        }
+      },
+      "cleric_spell_tradition": "divine",
+      "cleric_prepared_cantrips_at_level1": 5,
+      "cleric_prepared_rank_1_slots_at_level1": 2,
+      "set_actor_attrs": {
+        "class_name": "cleric"
+      },
+      "grants_statuses": [
+        {
+          "id": "shield_block",
+          "label": "Shield Block",
+          "duration": null,
+          "source": null,
+          "stacks": false,
+          "data": {
+            "ui_description": "Reakcja: gdy masz podniesiona tarcze i otrzymujesz obrazenia fizyczne, tarcza pochlania obrazenia do Hardness (wdrozone mechanicznie przez reakcje)."
+          },
+          "check_effects": null
+        }
+      ],
+      "cleric_setup": {
+        "deity": "sarenrae",
+        "deity_skill": "medicine",
+        "trained_skill": "medicine",
+        "trained_skills": [
+          "religion",
+          "medicine"
+        ],
+        "doctrine": "cloistered_cleric",
+        "favored_weapon": "scimitar",
+        "favored_weapon_group": "martial",
+        "font": "heal",
+        "domain_choices": [
+          "fire",
+          "healing",
+          "sun",
+          "truth"
+        ],
+        "spell_tradition": "divine",
+        "prepared_cantrips_at_level1": 5,
+        "prepared_rank_1_slots_at_level1": 2
+      },
+      "cleric_deity": "sarenrae",
+      "cleric_deity_skill": "medicine",
+      "cleric_doctrine": "cloistered_cleric",
+      "cleric_favored_weapon": "scimitar",
+      "cleric_favored_weapon_group": "martial",
+      "cleric_font": "heal",
+      "cleric_domain_choices": [
+        "fire",
+        "healing",
+        "sun",
+        "truth"
+      ],
+      "trained_skills": [
+        "religion",
+        "medicine"
+      ]
+    },
+    "shield_block": {
+      "ui_description": "Reakcja: gdy masz podniesiona tarcze i otrzymujesz obrazenia fizyczne, tarcza pochlania obrazenia do Hardness (wdrozone mechanicznie przez reakcje)."
+    },
+    "domain_initiate": {
+      "ui_description": "Domain Initiate: wybierasz domene z listy deity i zyskujesz jej initial domain spell (focus spell). Koszt rzucenia: 1 Focus Point.",
+      "ui_choice_kind": "cleric_domain_initiate",
+      "selected_domain": "healing",
+      "domain_spell": "healers_blessing",
+      "set_actor_attrs": {
+        "focus_point": 1
+      }
+    },
+    "encumbered": {
+      "source_id": null,
+      "grants_statuses": [
+        {
+          "id": "speed_penalty",
+          "label": "speed -10ft",
+          "duration": null,
+          "source": "bulk:encumbered",
+          "stacks": true,
+          "data": {
+            "speed_penalty_feet": 10,
+            "source_id": null,
+            "source_turns_left": null,
+            "escape_dc": null,
+            "effect_tags": [
+              "speed_penalty"
+            ]
+          },
+          "check_effects": null
+        },
+        {
+          "id": "clumsy",
+          "label": "Clumsy",
+          "duration": null,
+          "source": "bulk:encumbered",
+          "stacks": true,
+          "data": {
+            "clumsy_ac_penalty": 1,
+            "clumsy_reflex_penalty": 1,
+            "clumsy_ranged_penalty": 1,
+            "clumsy_finesse_penalty": 1,
+            "clumsy_stealth_penalty": 1,
+            "effect_tags": [
+              "clumsy"
+            ]
+          },
+          "check_effects": [
+            {
+              "applies_to": "source",
+              "skills": [
+                "stealth"
+              ],
+              "tags_required": [
+                "stealth"
+              ],
+              "bonus_effects": [
+                {
+                  "type": "status",
+                  "value": 1,
+                  "tag": "stealth",
+                  "source": "status:clumsy",
+                  "target_id": null,
+                  "label": "clumsy",
+                  "is_penalty": true,
+                  "duration_turns": null
+                }
+              ],
+              "promote": 0,
+              "demote": 0,
+              "promote_on": null,
+              "demote_on": null,
+              "prompt_notes": []
+            }
+          ]
+        }
+      ],
+      "effect_tags": [
+        "encumbered"
+      ]
+    },
+    "speed_penalty": {
+      "speed_penalty_feet": 10,
+      "source_id": null,
+      "source_turns_left": null,
+      "escape_dc": null,
+      "effect_tags": [
+        "speed_penalty"
+      ]
+    },
+    "clumsy": {
+      "clumsy_ac_penalty": 1,
+      "clumsy_reflex_penalty": 1,
+      "clumsy_ranged_penalty": 1,
+      "clumsy_finesse_penalty": 1,
+      "clumsy_stealth_penalty": 1,
+      "effect_tags": [
+        "clumsy"
+      ]
+    }
+  },
+  "ability_scores": {
+    "strength": 10,
+    "dexterity": 14,
+    "constitution": 10,
+    "intelligence": 12,
+    "wisdom": 14,
+    "charisma": 18
+  },
+  "ability_modifiers": {
+    "strength": 0,
+    "dexterity": 2,
+    "constitution": 0,
+    "intelligence": 1,
+    "wisdom": 2,
+    "charisma": 4
+  },
+  "skill_ranks": {
+    "arcana": "trained",
+    "diplomacy": "trained",
+    "medicine": "trained",
+    "occultism": "trained",
+    "religion": "trained",
+    "society": "trained"
+  },
+  "skill_modifiers": {
+    "acrobatics": 2,
+    "arcana": 4,
+    "athletics": 0,
+    "crafting": 1,
+    "deception": 4,
+    "diplomacy": 7,
+    "intimidation": 4,
+    "medicine": 5,
+    "nature": 2,
+    "occultism": 4,
+    "performance": 4,
+    "religion": 5,
+    "society": 4,
+    "stealth": 2,
+    "survival": 2,
+    "thievery": 2
+  },
+  "trained_skills": [
+    "arcana",
+    "diplomacy",
+    "medicine",
+    "occultism",
+    "religion",
+    "society"
+  ],
+  "lore_skills": [
+    "Prawo (Wiedza)"
+  ],
+  "languages": [
+    "common",
+    "elven"
+  ],
+  "traits": [
+    "elf",
+    "humanoid"
+  ],
+  "perception_rank": "trained",
+  "perception_bonus": 5,
+  "focus_point": 1,
+  "focus_pool_max": 1,
+  "save_ranks": {
+    "fortitude": "trained",
+    "reflex": "trained",
+    "will": "expert"
+  },
+  "fortitude_bonus": 3,
+  "reflex_bonus": 5,
+  "will_bonus": 7,
+  "weapon_proficiency_ranks": {
+    "simple": "trained",
+    "unarmed": "trained"
+  },
+  "defense_proficiency_ranks": {
+    "unarmored": "trained"
+  },
+  "max_hp": 14,
+  "base_speed_feet": 30,
+  "ac": 15,
+  "starting_gold_gp": 15,
+  "coin_pouch": {
+    "cp": 0,
+    "sp": 0,
+    "gp": 0,
+    "pp": 0
+  },
+  "track_ammo": true,
+  "inventory_items": [
+    {
+      "item_id": "unarmed",
+      "category": "weapon",
+      "name": "Unarmed",
+      "description": "",
+      "traits": [
+        "agile",
+        "finesse",
+        "unarmed",
+        "free_hand"
+      ],
+      "price_cp": 0,
+      "bulk": "-",
+      "instance_id": "item-58a46c86da",
+      "event_name": "unarmed",
+      "preparation_counter": 0,
+      "prepared_by_quick_alchemy": false,
+      "prepared_by_advanced_alchemy": false
+    },
+    {
+      "item_id": "scimitar",
+      "category": "weapon",
+      "name": "Scimitar",
+      "description": "",
+      "traits": [
+        "forceful",
+        "sweep"
+      ],
+      "price_cp": 100,
+      "bulk": 1,
+      "instance_id": "item-fda713f83e",
+      "event_name": "scimitar",
+      "preparation_counter": 0,
+      "prepared_by_quick_alchemy": false,
+      "prepared_by_advanced_alchemy": false
+    },
+    {
+      "item_id": "hide_armor",
+      "category": "armor",
+      "name": "Hide Armor",
+      "description": "Solidna średnia zbroja.",
+      "traits": [],
+      "price_cp": 200,
+      "bulk": 2,
+      "instance_id": "item-8c1381843f"
+    },
+    {
+      "item_id": "wooden_shield",
+      "category": "shield",
+      "name": "Tarcza drewniana",
+      "description": "Podstawowa drewniana tarcza.",
+      "traits": [
+        "shield_block"
+      ],
+      "price_cp": 100,
+      "bulk": 1,
+      "instance_id": "item-8fc6055322",
+      "current_hp": 12,
+      "raised": false
+    },
+    {
+      "item_id": "alchemical:elixir_of_life",
+      "category": "potion",
+      "name": "Minor Elixir of Life",
+      "description": "Przedmiot alchemiczny.",
+      "traits": [],
+      "price_cp": 300,
+      "bulk": "L",
+      "instance_id": "item-4aa633601a",
+      "event_name": "elixir_of_life",
+      "preparation_counter": 0,
+      "prepared_by_quick_alchemy": false,
+      "prepared_by_advanced_alchemy": false
+    },
+    {
+      "item_id": "alchemical:antidote",
+      "category": "potion",
+      "name": "Lesser Antidote",
+      "description": "Przedmiot alchemiczny.",
+      "traits": [],
+      "price_cp": 300,
+      "bulk": "L",
+      "instance_id": "item-572baec2af",
+      "event_name": "antidote",
+      "preparation_counter": 0,
+      "prepared_by_quick_alchemy": false,
+      "prepared_by_advanced_alchemy": false
+    },
+    {
+      "item_id": "healer_tools",
+      "category": "gear",
+      "name": "Narzędzia medyka",
+      "description": "Narzędzia medyczne do leczenia ran.",
+      "traits": [
+        "tools",
+        "healing"
+      ],
+      "price_cp": 500,
+      "bulk": 1,
+      "instance_id": "item-479fcaef7f"
+    }
+  ],
+  "weapon_loadout": [
+    "unarmed",
+    "scimitar"
+  ],
+  "armor_loadout": [
+    "hide_armor"
+  ],
+  "shield_loadout": [
+    "wooden_shield"
+  ],
+  "equipped_weapon_ids": [
+    "scimitar"
+  ],
+  "equipped_armor_id": "hide_armor",
+  "equipped_shield_id": "wooden_shield",
+  "equipped_armor_item_id": "item-8c1381843f",
+  "equipped_shield_hand": "right",
+  "created_at": "2026-03-15T21:00:12.178853+00:00",
+  "updated_at": "2026-03-15T21:00:12.179711+00:00"
+}

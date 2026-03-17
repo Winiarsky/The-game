@@ -1,45 +1,13 @@
 from __future__ import annotations
 
+from statuses.base import Status
+
+from .composition_runtime import get_focus_points, is_bard, set_focus_points
+
 from ....base import EventContext, EventResult
 from ....registry import register_event
 from ...magic_event import MagicEvent
 from ...spell_types import SpellTradition
-
-
-def _is_bard(actor) -> bool:
-    has_status = getattr(actor, "has_status", None)
-    if callable(has_status):
-        try:
-            return bool(has_status("bard"))
-        except Exception:
-            pass
-    for status in getattr(actor, "statuses", []) or []:
-        if getattr(status, "id", None) == "bard":
-            return True
-    class_name = str(getattr(actor, "class_name", "") or "").strip().lower()
-    return class_name == "bard"
-
-
-def _focus_points(actor) -> int:
-    raw = getattr(actor, "focus_point", None)
-    if raw is None and _is_bard(actor):
-        try:
-            setattr(actor, "focus_point", 1)
-        except Exception:
-            return 0
-        raw = 1
-    try:
-        return max(0, int(raw or 0))
-    except Exception:
-        return 0
-
-
-def _set_focus_points(actor, value: int) -> None:
-    points = max(0, int(value))
-    try:
-        setattr(actor, "focus_point", points)
-    except Exception:
-        return
 
 
 @register_event
@@ -51,18 +19,17 @@ class LoremasterEtudeEvent(MagicEvent):
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["focus"]
     prompt = (
-        "Loremaster's Etude (Focus): nastepny test Recall Knowledge wykonaj z advantage "
-        "(rzuc 2x k20 i wybierz wyzszy wynik). "
-        "Aktualnie tylko opis UI - bez automatycznej mechaniki."
+        "Loremaster's Etude (Focus): do konca tej tury nastepny Recall Knowledge "
+        "wykonujesz 2x k20 i wybierasz wyzszy wynik."
     )
 
     def execute(self, ctx: EventContext) -> EventResult:
         actor = ctx.actor
         if actor is None:
             return EventResult.cancelled(message="Brak bohatera do rzucenia czaru.")
-        if not _is_bard(actor):
+        if not is_bard(actor):
             return EventResult.cancelled(message="Loremaster's Etude: tylko bard moze rzucic ten czar.")
-        current_focus = _focus_points(actor)
+        current_focus = get_focus_points(actor)
         if current_focus <= 0:
             return EventResult.cancelled(message="Loremaster's Etude: brak Focus Point.")
 
@@ -72,21 +39,42 @@ class LoremasterEtudeEvent(MagicEvent):
                 ui.prompt_info(
                     "Loremaster's Etude",
                     prompt_long=(
-                        "Do kolejnego testu Recall Knowledge rzuc 2x k20 i wybierz wyzszy wynik "
-                        "(advantage). Ten event wyswietla tylko przypomnienie UI i nie wymusza mechaniki."
+                        "Do kolejnego testu Recall Knowledge przed koncem twojej tury "
+                        "rzucasz 2x k20 i wybierasz wyzszy wynik. Efekt rozlicza sie automatycznie."
                     ),
                     source="loremaster_etude",
                 )
             except Exception:
                 pass
 
-        _set_focus_points(actor, current_focus - 1)
+        remover = getattr(actor, "remove_status", None)
+        if callable(remover):
+            try:
+                remover("loremaster_etude_ready")
+            except Exception:
+                pass
+        adder = getattr(actor, "add_status", None)
+        if callable(adder):
+            try:
+                adder(
+                    Status(
+                        id="loremaster_etude_ready",
+                        label="Loremaster's Etude",
+                        duration=1,
+                        source=self.name,
+                        data={"duration_tick_phase": "turn_end", "effect_tags": ["bard", "divination", "knowledge"]},
+                    )
+                )
+            except Exception:
+                pass
+
+        set_focus_points(actor, current_focus - 1)
         return EventResult(
             success=True,
             consumed_action=ctx.in_combat,
             actions_spent=1 if ctx.in_combat else None,
             message=(
-                "Loremaster's Etude: nastepny Recall Knowledge z advantage (2x k20, wybierz wyzszy). "
-                f"Efekt do rozliczenia recznie. Focus Point: {_focus_points(actor)}."
+                "Loremaster's Etude: nastepny Recall Knowledge przed koncem tury "
+                f"rzucasz 2x k20 i wybierasz wyzszy wynik. Focus Point: {get_focus_points(actor)}."
             ),
         )

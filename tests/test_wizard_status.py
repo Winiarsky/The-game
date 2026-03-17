@@ -39,5 +39,6 @@ def test_wizard_setup_choices_include_schools_theses_and_feats():
     assert "evocation" in studies
     assert "universalist" in studies
     assert "metamagical_experimentation" in theses
+    assert "staff_nexus" in theses
     assert "eschew_materials" in feats
-    assert "hand_of_the_apprentice" in feats
+    assert "hand_of_the_apprentice" not in feats

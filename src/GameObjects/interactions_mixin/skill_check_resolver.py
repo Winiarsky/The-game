@@ -126,6 +126,22 @@ SKILL_TO_ABILITY = {
 }
 
 
+def _actor_has_status_id(actor, status_id: str) -> bool:
+    if actor is None:
+        return False
+    has_status = getattr(actor, "has_status", None)
+    if callable(has_status):
+        try:
+            return bool(has_status(status_id))
+        except Exception:
+            return False
+    statuses = getattr(actor, "statuses", None)
+    if not isinstance(statuses, list):
+        return False
+    needle = str(status_id or "").strip().lower()
+    return any(str(getattr(status, "id", status) or "").strip().lower() == needle for status in statuses)
+
+
 def _ability_label_pl(ability_key: str) -> str:
     mapping = {
         "strength": "Siła",
@@ -237,6 +253,75 @@ def _resolve_base_modifier_components(actor, skill_id: str, requested_base_modif
             }
         )
     return int(resolved), components
+
+
+def _is_recall_knowledge(tags: Sequence[str]) -> bool:
+    normalized = {str(tag or "").strip().lower().replace("-", "_") for tag in list(tags or [])}
+    return bool({"knowledge", "recall_knowledge"}.intersection(normalized))
+
+
+def _bardic_lore_modifier(actor) -> int:
+    level = _int_or_default(getattr(actor, "level", 0), 0)
+    ability_mod = _ability_mod_for_actor(actor, "intelligence")
+    return int(level + RANK_STEP_BONUS["trained"] + ability_mod)
+
+
+def _versatile_performance_substitute(skill_id: str, tags: Sequence[str], actor) -> tuple[str, str] | None:
+    if not _actor_has_status_id(actor, "versatile_performance"):
+        return None
+    normalized_skill = str(skill_id or "").strip().lower()
+    normalized_tags = {str(tag or "").strip().lower().replace("-", "_") for tag in list(tags or [])}
+    if normalized_skill == Skill.DIPLOMACY.value and "make_impression" in normalized_tags:
+        return Skill.PERFORMANCE.value, "Versatile Performance: Make an Impression rozliczone przez Performance."
+    if normalized_skill == Skill.INTIMIDATION.value and "demoralize" in normalized_tags:
+        return Skill.PERFORMANCE.value, "Versatile Performance: Demoralize rozliczone przez Performance."
+    if normalized_skill == Skill.DECEPTION.value and "impersonate" in normalized_tags:
+        return Skill.PERFORMANCE.value, "Versatile Performance: Impersonate rozliczone przez Performance."
+    return None
+
+
+def _resolve_skill_runtime_context(
+    *,
+    actor,
+    skill_id: str,
+    tags: Sequence[str],
+    requested_base_modifier: int,
+) -> tuple[str, int, list[str]]:
+    normalized_skill = str(skill_id or "").strip().lower()
+    requested = _int_or_default(requested_base_modifier, 0)
+    notes: list[str] = []
+
+    effective_skill = normalized_skill
+    effective_requested = requested
+
+    original_default, _ = _resolve_base_modifier_components(actor, normalized_skill, 0)
+    original_resolved, _ = _resolve_base_modifier_components(actor, normalized_skill, requested)
+    extra_delta = int(original_resolved - original_default)
+
+    versatile = _versatile_performance_substitute(normalized_skill, tags, actor)
+    if versatile is not None:
+        effective_skill, note = versatile
+        substitute_default, _ = _resolve_base_modifier_components(actor, effective_skill, 0)
+        effective_requested = int(substitute_default + extra_delta)
+        notes.append(note)
+
+    effective_default, _ = _resolve_base_modifier_components(actor, effective_skill, 0)
+    effective_resolved, _ = _resolve_base_modifier_components(actor, effective_skill, effective_requested)
+    effective_extra_delta = int(effective_resolved - effective_default)
+
+    if _is_recall_knowledge(tags) and _actor_has_status_id(actor, "bardic_lore"):
+        bardic_total = int(_bardic_lore_modifier(actor) + effective_extra_delta)
+        if bardic_total > effective_resolved:
+            effective_requested = bardic_total
+            notes.append(
+                f"Bardic Lore: Recall Knowledge uzywa lepszego modyfikatora {bardic_total:+d}."
+            )
+        else:
+            notes.append(
+                f"Bardic Lore: dostepne do Recall Knowledge (aktualny modyfikator {effective_resolved:+d} jest rowny lub lepszy)."
+            )
+
+    return effective_skill, int(effective_requested), notes
 
 
 def _skill_roll_stack_payload(
@@ -510,14 +595,25 @@ def resolve_skill_check_with_sources(
     tags = list(tags)
     if "roll" not in tags:
         tags.append("roll")
-    resolved_base_modifier, base_components = _resolve_base_modifier_components(actor, skill_id, int(base_modifier or 0))
-    modifier, breakdown, notes, promote_src, demote_src, promote_tgt, demote_tgt, consume_src, consume_tgt, effects = _collect_modifier_data(
+    effective_skill_id, effective_requested_base, runtime_notes = _resolve_skill_runtime_context(
+        actor=actor,
         skill_id=skill_id,
+        tags=tags,
+        requested_base_modifier=int(base_modifier or 0),
+    )
+    resolved_base_modifier, base_components = _resolve_base_modifier_components(
+        actor,
+        effective_skill_id,
+        int(effective_requested_base or 0),
+    )
+    modifier, breakdown, notes, promote_src, demote_src, promote_tgt, demote_tgt, consume_src, consume_tgt, effects = _collect_modifier_data(
+        skill_id=effective_skill_id,
         tags=tags,
         actor=actor,
         target=target,
         base_modifier=resolved_base_modifier,
     )
+    notes = list(runtime_notes) + list(notes)
 
     prompt_msg = f"Test {skill_id} (DC {dc})."
     summary_lines = []
@@ -548,17 +644,57 @@ def resolve_skill_check_with_sources(
         modifiers_grid=modifiers_grid,
         total_modifier=int(modifier or 0),
     )
-    roll_data = prompt_for_roll(
-        prompt_msg,
-        layout="test",
-        prompt_long=prompt_long,
-        answer_placeholder="Wynik rzutu",
-        modifiers=modifiers_grid,
-        roll_stack=roll_stack_payload,
-        auto_total_modifier=int(modifier or 0),
-        return_details=True,
-        infer_natural_from_roll=bool(apply_modifiers),
-    )
+    use_loremaster_etude = _is_recall_knowledge(tags) and _actor_has_status_id(actor, "loremaster_etude_ready")
+    if use_loremaster_etude:
+        first_roll = prompt_for_roll(
+            f"{prompt_msg} (Loremaster's Etude 1/2)",
+            layout="test",
+            prompt_long=prompt_long,
+            answer_placeholder="Wynik rzutu",
+            modifiers=modifiers_grid,
+            roll_stack=roll_stack_payload,
+            auto_total_modifier=int(modifier or 0),
+            return_details=True,
+            infer_natural_from_roll=bool(apply_modifiers),
+        )
+        second_roll = prompt_for_roll(
+            f"{prompt_msg} (Loremaster's Etude 2/2)",
+            layout="test",
+            prompt_long=prompt_long,
+            answer_placeholder="Wynik rzutu",
+            modifiers=modifiers_grid,
+            roll_stack=roll_stack_payload,
+            auto_total_modifier=int(modifier or 0),
+            return_details=True,
+            infer_natural_from_roll=bool(apply_modifiers),
+        )
+
+        def _roll_value(payload) -> int:
+            if isinstance(payload, dict):
+                return int(payload.get("roll", 0) or 0)
+            return int(payload or 0)
+
+        roll_data = first_roll if _roll_value(first_roll) >= _roll_value(second_roll) else second_roll
+        remover = getattr(actor, "remove_status", None)
+        if callable(remover):
+            try:
+                remover("loremaster_etude_ready")
+            except Exception:
+                pass
+        runtime_notes.append("Loremaster's Etude: użyto lepszego z 2 rzutow do Recall Knowledge.")
+        notes = list(runtime_notes) + [note for note in notes if note not in runtime_notes]
+    else:
+        roll_data = prompt_for_roll(
+            prompt_msg,
+            layout="test",
+            prompt_long=prompt_long,
+            answer_placeholder="Wynik rzutu",
+            modifiers=modifiers_grid,
+            roll_stack=roll_stack_payload,
+            auto_total_modifier=int(modifier or 0),
+            return_details=True,
+            infer_natural_from_roll=bool(apply_modifiers),
+        )
     if isinstance(roll_data, dict):
         roll = int(roll_data.get("roll", 0) or 0)
         natural_shift = int(roll_data.get("natural_shift", 0) or 0)
@@ -583,7 +719,19 @@ def resolve_skill_check_with_sources(
         base_modifier=resolved_base_modifier,
         apply_modifiers=apply_modifiers,
         consume_statuses=consume_statuses,
-        _precomputed=(modifier, breakdown, notes, promote_src, demote_src, promote_tgt, demote_tgt, consume_src, consume_tgt, effects),
+        _precomputed=(
+            effective_skill_id,
+            modifier,
+            breakdown,
+            notes,
+            promote_src,
+            demote_src,
+            promote_tgt,
+            demote_tgt,
+            consume_src,
+            consume_tgt,
+            effects,
+        ),
     )
 
 
@@ -607,17 +755,43 @@ def resolve_skill_check_with_sources_from_roll(
     tags = list(tags)
     if "roll" not in tags:
         tags.append("roll")
-    resolved_base_modifier, _base_components = _resolve_base_modifier_components(actor, skill_id, int(base_modifier or 0))
     if _precomputed is None:
-        modifier, breakdown, notes, promote_src, demote_src, promote_tgt, demote_tgt, consume_src, consume_tgt, _effects = _collect_modifier_data(
+        effective_skill_id, effective_requested_base, runtime_notes = _resolve_skill_runtime_context(
+            actor=actor,
             skill_id=skill_id,
+            tags=tags,
+            requested_base_modifier=int(base_modifier or 0),
+        )
+        resolved_base_modifier, _base_components = _resolve_base_modifier_components(
+            actor,
+            effective_skill_id,
+            int(effective_requested_base or 0),
+        )
+        modifier, breakdown, notes, promote_src, demote_src, promote_tgt, demote_tgt, consume_src, consume_tgt, _effects = _collect_modifier_data(
+            skill_id=effective_skill_id,
             tags=tags,
             actor=actor,
             target=target,
             base_modifier=resolved_base_modifier,
         )
     else:
-        modifier, breakdown, notes, promote_src, demote_src, promote_tgt, demote_tgt, consume_src, consume_tgt, _effects = _precomputed
+        runtime_notes = []
+        resolved_base_modifier = _int_or_default(base_modifier, 0)
+        (
+            precomputed_skill_id,
+            modifier,
+            breakdown,
+            notes,
+            promote_src,
+            demote_src,
+            promote_tgt,
+            demote_tgt,
+            consume_src,
+            consume_tgt,
+            _effects,
+        ) = _precomputed
+        effective_skill_id = str(precomputed_skill_id or skill_id)
+    notes = list(runtime_notes) + list(notes)
 
     try:
         from statuses.pf2_conditions import forced_skill_outcome
@@ -748,7 +922,7 @@ def resolve_skill_check_with_sources_from_roll(
                 best = value
         return best
 
-    if skill_id in (Skill.FORTITUDE.value, Skill.REFLEX.value, Skill.WILL.value):
+    if effective_skill_id in (Skill.FORTITUDE.value, Skill.REFLEX.value, Skill.WILL.value):
         perf_total = _counter_performance_total(actor)
         if perf_total is not None and total < perf_total:
             original_total = total
@@ -979,7 +1153,7 @@ def _collect_modifier_data(
             )
         )
 
-    is_recall_knowledge = "knowledge" in tags or "recall_knowledge" in tags or "recall-knowledge" in tags
+    is_recall_knowledge = _is_recall_knowledge(tags)
     try:
         from statuses.classes.ranger.ranger_utils import hunter_edge as ranger_hunter_edge
         from statuses.classes.ranger.ranger_utils import is_hunted_prey as ranger_is_hunted_prey
@@ -1028,25 +1202,6 @@ def _collect_modifier_data(
                 )
     except Exception:
         pass
-    if is_recall_knowledge and _has_status(actor, Status(id="bardic_lore")):
-        notes.append(
-            "Bardic Lore: Recall Knowledge z advantage (rzuc 2x k20 i wybierz lepszy wynik) - opisowo."
-        )
-
-    if _has_status(actor, Status(id="versatile_performance")):
-        if skill_id == Skill.DIPLOMACY.value:
-            notes.append(
-                "Versatile Performance: zamiast Diplomacy mozesz wykonac test Performance (opisowo)."
-            )
-        elif skill_id == Skill.INTIMIDATION.value:
-            notes.append(
-                "Versatile Performance: zamiast Intimidation mozesz wykonac test Performance (opisowo)."
-            )
-        elif skill_id == Skill.DECEPTION.value:
-            notes.append(
-                "Versatile Performance: zamiast Deception mozesz wykonac test Performance (opisowo)."
-            )
-
     target_id = getattr(target, "object_id", None) if target is not None else None
     modifier = base_modifier + (compute_total_modifier(all_effects, skill_id, target_id) if all_effects else 0)
     breakdown = _format_breakdown(all_effects, skill_id, target_id)

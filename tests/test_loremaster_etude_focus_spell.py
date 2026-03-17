@@ -12,6 +12,7 @@ for path in (ROOT, SRC):
 
 from GameObjects.events.base import EventContext
 from GameObjects.events.magic.focus_spells.bard.loremaster_etude_event import LoremasterEtudeEvent
+from GameObjects.interactions_mixin.skill_check_resolver import resolve_skill_check_with_sources
 from GameObjects.interactions_mixin.status_mixin import StatusMixin
 from states.combat import Combat
 from statuses.classes.bard.bard import BARD_STATUS
@@ -68,6 +69,7 @@ def test_loremaster_etude_action_cost_and_ui_info():
     assert res_exploration.success is True
     assert res_exploration.consumed_action is False
     assert getattr(caster, "focus_point", None) == 0
+    assert caster.has_status("loremaster_etude_ready")
     assert "recall knowledge" in (res_exploration.message or "").lower()
     assert game._ui_calls
 
@@ -89,3 +91,36 @@ def test_loremaster_etude_spends_focus_point_in_combat():
     assert result.consumed_action is True
     assert result.actions_spent == 1
     assert getattr(caster, "focus_point", None) == 0
+    assert caster.has_status("loremaster_etude_ready")
+
+
+def test_loremaster_etude_rolls_twice_and_consumes_ready_status(monkeypatch):
+    rolls = iter([5, 17])
+    monkeypatch.setattr(
+        "GameObjects.interactions_mixin.skill_check_resolver.prompt_for_roll",
+        lambda *_a, **_k: next(rolls),
+    )
+
+    caster = _hero("bard")
+    caster.add_status(BARD_STATUS)
+    game = _game([caster])
+    game.state = Combat(game)
+
+    setup = LoremasterEtudeEvent().execute(EventContext(game=game, actor=caster))
+    assert setup.success is True
+    assert caster.has_status("loremaster_etude_ready")
+
+    result = resolve_skill_check_with_sources(
+        skill_id="arcana",
+        dc=18,
+        actor=caster,
+        tags=["knowledge", "recall_knowledge"],
+        game=game,
+        apply_modifiers=True,
+    )
+
+    assert result.roll == 17
+    assert result.total == 17
+    assert result.outcome == "failure"
+    assert any("loremaster's etude" in note.lower() or "loremaster" in note.lower() for note in result.notes)
+    assert not caster.has_status("loremaster_etude_ready")

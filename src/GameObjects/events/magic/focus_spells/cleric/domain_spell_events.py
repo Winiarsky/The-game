@@ -115,7 +115,7 @@ DOMAIN_SPELL_SPECS: dict[str, DomainSpellSpec] = {
         mode="self_speed_bonus",
         range_feet=None,
         add_speed_bonus_feet=10,
-        prompt_long="Simplified: difficult terrain ignore is a manual reminder.",
+        prompt_long="Zyskujesz +10 ft Speed i ignorujesz movement penalties z difficult terrain do konca tury.",
     ),
     "healers_blessing": DomainSpellSpec(
         mode="ally_status",
@@ -123,7 +123,7 @@ DOMAIN_SPELL_SPECS: dict[str, DomainSpellSpec] = {
         status_id="healers_blessing",
         status_label="Healer's Blessing",
         duration_turns=1,
-        prompt_long="Reminder: next Heal on this target gains +2 HP per spell level.",
+        prompt_long="Nastepny Heal na celu zyskuje +2 HP za kazdy poziom czaru.",
     ),
     "overstuff": DomainSpellSpec(
         mode="enemy_status",
@@ -220,7 +220,7 @@ DOMAIN_SPELL_SPECS: dict[str, DomainSpellSpec] = {
         range_feet=None,
         add_speed_bonus_feet=10,
         duration_turns=1,
-        prompt_long="Reminder: difficult terrain ignore is manual.",
+        prompt_long="Zyskujesz +10 ft Speed i ignorujesz movement penalties z difficult terrain do konca tury.",
     ),
     "sudden_shift": DomainSpellSpec(mode="self_move", actions_cost=2, range_feet=None, move_range_feet=15),
     "word_of_truth": DomainSpellSpec(
@@ -612,6 +612,17 @@ def _status_from_spec(spec: DomainSpellSpec, spell_id: str, source: str, actor, 
             data=dict(BLINDED_STATUS.data or {}),
             check_effects=BLINDED_STATUS.check_effects,
         )
+    if spec.status_id == "healers_blessing":
+        return Status(
+            id="healers_blessing",
+            label=spec.status_label or "Healer's Blessing",
+            duration=spec.duration_turns,
+            source=source,
+            data={
+                "healers_blessing_bonus_per_spell_level": 2,
+                "effect_tags": ["domain_spell", "healing", "healers_blessing"],
+            },
+        )
     status_id = str(spec.status_id or spell_id)
     return Status(
         id=status_id,
@@ -840,6 +851,20 @@ class ClericDomainSpellEvent(MagicEvent):
                     label=f"{self.spell_label} speed",
                 ),
             )
+            if spell_id in {"agile_feet", "unimpeded_stride"}:
+                _add_status(
+                    actor,
+                    Status(
+                        id=f"{spell_id}_terrain_ignore",
+                        label=f"{self.spell_label} terrain ignore",
+                        duration=spec.duration_turns,
+                        source=source,
+                        data={
+                            "ignore_difficult_terrain_squares_each_turn": 999,
+                            "effect_tags": ["movement", "difficult_terrain"],
+                        },
+                    ),
+                )
             if spec.bonus_tags:
                 _add_bonus(
                     actor,

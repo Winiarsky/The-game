@@ -17,6 +17,7 @@ WIZARD_ARCANE_STUDY_CHOICES = list(WIZARD_ARCANE_SCHOOL_CHOICES) + ["universalis
 WIZARD_ARCANE_THESIS_CHOICES = [
     "improved_familiar_attunement",
     "metamagical_experimentation",
+    "staff_nexus",
     "spell_blending",
     "spell_substitution",
 ]
@@ -24,12 +25,12 @@ WIZARD_FEAT_CHOICES = [
     "counterspell",
     "eschew_materials",
     "familiar",
-    "hand_of_the_apprentice",
     "reach_spell",
     "widen_spell",
 ]
 WIZARD_METAMAGIC_FEAT_CHOICES = ["reach_spell", "widen_spell"]
 WIZARD_BONDED_ITEM_CHOICES = ["wand", "ring", "staff", "weapon", "other_item"]
+WIZARD_UNIVERSALIST_FOCUS_SPELL = "hand_of_the_apprentice"
 
 WIZARD_SCHOOL_INITIAL_SPELLS = {
     "abjuration": "feather_fall",
@@ -90,6 +91,7 @@ WIZARD_PROMPT = (
     "Arcane Bond (Drain Bonded Item)\n"
     "Arcane Thesis\n"
     "Arcane School specialization OR Universalist\n"
+    "Universalist: dostajesz focus spell Hand of the Apprentice oraz dodatkowy class feat na starcie.\n"
     "During setup choose school/universalist, thesis, bonded focus, and 1st-level class feat.\n"
     "Daily preparations wykonujesz na początku scenariusza.\n"
     "Spell Blending: modyfikuje budżet slotów/cantripów podczas tych przygotowań.\n"
@@ -112,6 +114,7 @@ def WizardStatus() -> Status:
             "wizard_feat_choices": list(WIZARD_FEAT_CHOICES),
             "wizard_metamagic_feat_choices": list(WIZARD_METAMAGIC_FEAT_CHOICES),
             "wizard_bonded_item_choices": list(WIZARD_BONDED_ITEM_CHOICES),
+            "wizard_universalist_focus_spell": str(WIZARD_UNIVERSALIST_FOCUS_SPELL),
             "wizard_school_initial_spells": dict(WIZARD_SCHOOL_INITIAL_SPELLS),
             "wizard_school_focus_spells": dict(WIZARD_SCHOOL_FOCUS_SPELLS),
             "wizard_spells_per_day": {level: dict(slots) for level, slots in WIZARD_SPELLS_PER_DAY.items()},
@@ -138,6 +141,7 @@ __all__ = [
     "WIZARD_FEAT_CHOICES",
     "WIZARD_METAMAGIC_FEAT_CHOICES",
     "WIZARD_BONDED_ITEM_CHOICES",
+    "WIZARD_UNIVERSALIST_FOCUS_SPELL",
     "WIZARD_SCHOOL_INITIAL_SPELLS",
     "WIZARD_SCHOOL_FOCUS_SPELLS",
     "WIZARD_SPELLS_PER_DAY",

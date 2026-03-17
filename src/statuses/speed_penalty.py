@@ -10,6 +10,8 @@ def SpeedPenaltyStatus(
     source: str | None = None,
     source_id: str | None = None,
     source_turns_left: int | None = None,
+    combat_rounds_left: int | None = None,
+    expire_on_combat_end: bool = False,
     label: str | None = None,
     escape_dc: int | None = None,
 ) -> Status:
@@ -21,6 +23,10 @@ def SpeedPenaltyStatus(
         "escape_dc": escape_dc,
         "effect_tags": ["speed_penalty"],
     }
+    if combat_rounds_left is not None:
+        data["combat_rounds_left"] = max(0, int(combat_rounds_left))
+    if expire_on_combat_end:
+        data["expire_on_combat_end"] = True
     return Status(
         id="speed_penalty",
         label=label or f"speed -{int(penalty_feet)}ft",

@@ -192,13 +192,70 @@ def _ignores_terrain_move_cost(mover, terrain) -> bool:
     return False
 
 
-def terrain_move_bonus_feet(board, pos, mover=None) -> int:
+def difficult_terrain_ignore_squares_per_turn(mover) -> int:
+    """Ile pól trudnego terenu aktor może zignorować w swojej turze."""
+    if mover is None:
+        return 0
+    return max(0, _status_max_int(mover, "ignore_difficult_terrain_squares_each_turn", default=0))
+
+
+def difficult_terrain_ignore_squares_remaining(mover) -> int:
+    """Pozostały limit ignorowania trudnego terenu w bieżącej turze."""
+    if mover is None:
+        return 0
+    raw = getattr(mover, "_difficult_terrain_ignores_remaining", None)
+    if raw is None:
+        return difficult_terrain_ignore_squares_per_turn(mover)
+    return max(0, _safe_int(raw, 0))
+
+
+def reset_turn_movement_runtime(mover) -> None:
+    """Zresetuj liczniki ruchu odnawiane na początku tury."""
+    if mover is None:
+        return
+    try:
+        setattr(
+            mover,
+            "_difficult_terrain_ignores_remaining",
+            max(0, difficult_terrain_ignore_squares_per_turn(mover)),
+        )
+    except Exception:
+        pass
+
+
+def _raw_terrain_move_bonus_feet(board, pos) -> int:
     try:
         terrain = board.cell_at(pos).field
     except Exception:
         return 0
-    bonus = int(getattr(terrain, "move_cost_bonus_feet", 0) or 0)
+    return int(getattr(terrain, "move_cost_bonus_feet", 0) or 0)
+
+
+def _effective_terrain_step_bonus_feet(board, pos, mover=None, *, ignores_left: int | None = None) -> tuple[int, int]:
+    """Zwróć (koszt_terenu, remaining_ignores_left) dla pojedynczego kroku."""
+    bonus = _raw_terrain_move_bonus_feet(board, pos)
     if bonus <= 0:
+        return 0, max(0, _safe_int(ignores_left, 0)) if ignores_left is not None else difficult_terrain_ignore_squares_remaining(mover)
+    try:
+        terrain = board.cell_at(pos).field
+    except Exception:
+        terrain = None
+    if mover is not None and _ignores_terrain_move_cost(mover, terrain):
+        return 0, max(0, _safe_int(ignores_left, 0)) if ignores_left is not None else difficult_terrain_ignore_squares_remaining(mover)
+
+    remaining = difficult_terrain_ignore_squares_remaining(mover) if ignores_left is None else max(0, _safe_int(ignores_left, 0))
+    if remaining > 0:
+        return 0, remaining - 1
+    return bonus, remaining
+
+
+def terrain_move_bonus_feet(board, pos, mover=None) -> int:
+    bonus = _raw_terrain_move_bonus_feet(board, pos)
+    if bonus <= 0:
+        return 0
+    try:
+        terrain = board.cell_at(pos).field
+    except Exception:
         return 0
     if mover is not None and _ignores_terrain_move_cost(mover, terrain):
         return 0
@@ -220,22 +277,30 @@ def find_path(board, start, goal, *, allow_diagonal: bool = True, allow_occupied
         for dx, dy in deltas:
             yield x + dx, y + dy
 
-    def _step_cost(src, dst, diag_parity):
+    def _step_cost(src, dst, diag_parity, terrain_ignores_left):
         is_diag = _is_diagonal(src, dst)
         cost = 10 if (is_diag and diag_parity == 1) else 5
-        cost += terrain_move_bonus_feet(board, dst, mover)
+        terrain_bonus, next_ignores_left = _effective_terrain_step_bonus_feet(
+            board,
+            dst,
+            mover,
+            ignores_left=terrain_ignores_left,
+        )
+        cost += terrain_bonus
         next_parity = diag_parity ^ 1 if is_diag else diag_parity
-        return cost, next_parity
+        return cost, next_parity, next_ignores_left
 
-    prev: dict[tuple[tuple[int, int], int], tuple[tuple[int, int], int] | None] = {(start, 0): None}
-    cost_so_far: dict[tuple[tuple[int, int], int], int] = {(start, 0): 0}
-    heap = [(0, start, 0)]
+    start_terrain_ignores = difficult_terrain_ignore_squares_remaining(mover)
+    start_state = (start, 0, start_terrain_ignores)
+    prev: dict[tuple[tuple[int, int], int, int], tuple[tuple[int, int], int, int] | None] = {start_state: None}
+    cost_so_far: dict[tuple[tuple[int, int], int, int], int] = {start_state: 0}
+    heap = [(0, start, 0, start_terrain_ignores)]
 
     while heap:
-        cur_cost, cur, parity = heapq.heappop(heap)
+        cur_cost, cur, parity, terrain_ignores_left = heapq.heappop(heap)
         if cur == goal:
             break
-        if cur_cost != cost_so_far.get((cur, parity)):
+        if cur_cost != cost_so_far.get((cur, parity, terrain_ignores_left)):
             continue
         for nxt in _neighbors(cur):
             if not board.in_bounds(nxt):
@@ -250,13 +315,13 @@ def find_path(board, start, goal, *, allow_diagonal: bool = True, allow_occupied
                     continue
             except Exception:
                 pass
-            step_cost, next_parity = _step_cost(cur, nxt, parity)
+            step_cost, next_parity, next_ignores_left = _step_cost(cur, nxt, parity, terrain_ignores_left)
             new_cost = cur_cost + step_cost
-            state = (nxt, next_parity)
+            state = (nxt, next_parity, next_ignores_left)
             if new_cost < cost_so_far.get(state, float("inf")):
                 cost_so_far[state] = new_cost
-                prev[state] = (cur, parity)
-                heapq.heappush(heap, (new_cost, nxt, next_parity))
+                prev[state] = (cur, parity, terrain_ignores_left)
+                heapq.heappush(heap, (new_cost, nxt, next_parity, next_ignores_left))
 
     goal_states = [state for state in cost_so_far.keys() if state[0] == goal]
     if not goal_states:
@@ -279,13 +344,19 @@ def path_cost_feet(path, board=None, mover=None):
     diag_parity = 0
     bonus = 0
     total = 0
+    terrain_ignores_left = difficult_terrain_ignore_squares_remaining(mover)
     for prev, step in zip(path, path[1:]):
         is_diag = _is_diagonal(prev, step)
         step_cost = 10 if (is_diag and diag_parity == 1) else 5
         if is_diag:
             diag_parity ^= 1
         if board is not None and hasattr(board, "cell_at"):
-            bonus = terrain_move_bonus_feet(board, step, mover)
+            bonus, terrain_ignores_left = _effective_terrain_step_bonus_feet(
+                board,
+                step,
+                mover,
+                ignores_left=terrain_ignores_left,
+            )
         else:
             bonus = 0
         total += step_cost + bonus
@@ -299,18 +370,48 @@ def trim_path_to_feet(path, max_feet, board=None, mover=None):
     total = 0
     trimmed = [path[0]]
     diag_parity = 0
+    terrain_ignores_left = difficult_terrain_ignore_squares_remaining(mover)
     for prev, step in zip(path, path[1:]):
         is_diag = _is_diagonal(prev, step)
         step_cost = 10 if (is_diag and diag_parity == 1) else 5
         if is_diag:
             diag_parity ^= 1
         if board is not None and hasattr(board, "cell_at"):
-            step_cost += terrain_move_bonus_feet(board, step, mover)
+            terrain_bonus, next_ignores_left = _effective_terrain_step_bonus_feet(
+                board,
+                step,
+                mover,
+                ignores_left=terrain_ignores_left,
+            )
+            step_cost += terrain_bonus
+        else:
+            next_ignores_left = terrain_ignores_left
         if total + step_cost > max_feet:
             break
         total += step_cost
+        terrain_ignores_left = next_ignores_left
         trimmed.append(step)
     return trimmed
+
+
+def consume_difficult_terrain_ignores_for_path(mover, board, path) -> int:
+    """Skonsumuj liczbę zignorowanych pól trudnego terenu dla faktycznie przebytej ścieżki."""
+    if mover is None or board is None or not path or len(path) < 2:
+        return 0
+    remaining = difficult_terrain_ignore_squares_remaining(mover)
+    start_remaining = remaining
+    for _prev, step in zip(path, path[1:]):
+        _bonus, remaining = _effective_terrain_step_bonus_feet(
+            board,
+            step,
+            mover,
+            ignores_left=remaining,
+        )
+    try:
+        setattr(mover, "_difficult_terrain_ignores_remaining", max(0, int(remaining)))
+    except Exception:
+        pass
+    return max(0, int(start_remaining) - int(remaining))
 
 
 def follow_path(ctx_or_board, mover, path, *, led_color=None, on_enter=None, allow_occupied=True, step_delay: float = 0.0):

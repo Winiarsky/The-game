@@ -476,6 +476,19 @@ class BaseNPC(SocialMixin, TradeMixin, PickpocketMixin, InteractableMixin):
             if item_obj is None:
                 continue
             category = str(getattr(item_obj, "category", "") or "").strip().lower()
+            if category != "service" and str(getattr(item_obj, "item_id", "") or "").strip().lower() == "scroll_common_rank1":
+                from GameObjects.events.magic.consumables.events import prepare_common_rank1_scroll_purchase
+
+                configured = prepare_common_rank1_scroll_purchase(
+                    game,
+                    item_obj,
+                    source="npc_trade_scroll_common_rank1",
+                    title=f"Kupujesz zwoj od: {self.name}",
+                    subtitle="Najpierw wybierz czar zapisany na zwoju.",
+                    prompt_long="Kupowany zwoj staje sie konkretnym zwojem czaru 1. rangi. Przy późniejszym użyciu korzystasz już z wybranego czaru.",
+                )
+                if not configured:
+                    continue
 
             selected_spell = None
             if category == "service":

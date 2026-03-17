@@ -3,8 +3,8 @@ from __future__ import annotations
 from statuses.base import Status
 
 BARDIC_LORE_DESCRIPTION = (
-    "Bardic Lore: Recall Knowledge wykonujesz opisowo z advantage "
-    "(rzuc 2x k20 i wybierz lepszy wynik)."
+    "Bardic Lore: dostajesz specjalna, trained wiedze bardyczna do Recall Knowledge. "
+    "W silniku gra automatycznie moze uzyc lepszego modyfikatora Bardic Lore przy Recall Knowledge."
 )
 
 

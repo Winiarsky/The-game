@@ -321,6 +321,7 @@ class Start(State):
             "ac": snapshot.get("ac"),
             "max_hp": snapshot.get("max_hp"),
             "base_speed_feet": snapshot.get("base_speed_feet"),
+            "speed_feet": snapshot.get("speed_feet", snapshot.get("base_speed_feet")),
             "ability_scores": ability_scores,
             "ability_modifiers": ability_modifiers,
             "skill_ranks": skill_ranks,

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import random
 
 from bonuses import BonusEffect, BonusType
 from actions.move_utils import adjusted_forced_movement_squares
@@ -38,12 +37,12 @@ from statuses import (
     make_persistent_damage,
 )
 from GameObjects.NPC.base_npc import BaseNPC
+from GameObjects.Obstacles.basic_obstacle import Obstacle
 from GameObjects.interactions_mixin import prompt_for_roll
-from GameObjects.interactions_mixin.skill_check_resolver import compute_skill_modifier_with_sources
 
 from ...base import EventContext, EventResult
 from ...registry import register_event
-from ..base_attack_magic_event import BaseMagicAttackEvent
+from ..base_attack_magic_event import BaseMagicAttackEvent, prompt_spell_save_roll, spell_dc_details
 from ..magic_event import MagicEvent
 from ..magic_utils import grid_distance_feet, pick_position_in_range, pick_target_in_range
 from ..runtime_effects import add_alarm_ward
@@ -58,37 +57,19 @@ def _actor_id(actor) -> str | None:
     return getattr(actor, "object_id", None) or getattr(actor, "name", None) or str(actor)
 
 
-def _save_outcome(total: int, dc: int) -> str:
-    diff = int(total) - int(dc)
-    if diff >= 10:
-        return "critical_success"
-    if diff >= 0:
-        return "success"
-    if diff <= -10:
-        return "critical_failure"
-    return "failure"
-
-
 def _roll_enemy_save(target, skill_id: str, dc: int, *, attacker=None, tags: list[str] | None = None) -> tuple[str, int, int]:
-    tags = list(tags or [])
-    base_bonus = 0
-    if skill_id == Skill.WILL.value:
-        base_bonus = int(getattr(target, "will_bonus", 0) or 0)
-    elif skill_id == Skill.FORTITUDE.value:
-        base_bonus = int(getattr(target, "fortitude_bonus", 0) or 0)
-    elif skill_id == Skill.REFLEX.value:
-        base_bonus = int(getattr(target, "reflex_bonus", 0) or 0)
-
-    modifier, _breakdown, _notes = compute_skill_modifier_with_sources(
+    return prompt_spell_save_roll(
+        target=target,
         skill_id=skill_id,
-        actor=target,
-        target=attacker,
+        dc=dc,
+        attacker=attacker,
         tags=tags,
-        base_modifier=base_bonus,
     )
-    roll = random.randint(1, 20)
-    total = int(roll) + int(modifier)
-    return _save_outcome(total, dc), roll, total
+
+
+def _spell_dc_for_actor(actor, *, action_tag: str = "magic") -> int:
+    dc, _modifier, _best_effects, _log_lines = spell_dc_details(actor, action_tag=action_tag)
+    return int(dc)
 
 
 def _iter_enemy_candidates(game):
@@ -235,6 +216,44 @@ def _harm_heal_bonus_for_target(target) -> int:
     return max(0, best)
 
 
+def _healers_blessing_bonus_for_target(target, *, spell_level: int) -> int:
+    if target is None:
+        return 0
+    best = 0
+    multiplier = max(1, int(spell_level or 1))
+    for status in getattr(target, "statuses", []) or []:
+        if getattr(status, "id", None) != "healers_blessing":
+            continue
+        data = getattr(status, "data", None) or {}
+        try:
+            per_level = int(data.get("healers_blessing_bonus_per_spell_level", 0) or 0)
+        except Exception:
+            per_level = 0
+        if per_level <= 0:
+            continue
+        best = max(best, per_level * multiplier)
+    return max(0, best)
+
+
+def _consume_status_id(target, status_id: str) -> None:
+    if target is None:
+        return
+    remover = getattr(target, "remove_status", None)
+    if callable(remover):
+        try:
+            remover(status_id)
+            return
+        except Exception:
+            pass
+    statuses = getattr(target, "statuses", None)
+    if not isinstance(statuses, list) or not statuses:
+        return
+    for idx in range(len(statuses) - 1, -1, -1):
+        if getattr(statuses[idx], "id", None) == status_id:
+            del statuses[idx]
+            break
+
+
 def _is_fiend_target(target) -> bool:
     if target is None:
         return False
@@ -367,6 +386,14 @@ def _prompt_choice(ctx: EventContext, prompt: str, choices: list[str], *, source
     return None
 
 
+def _ui_log(game, message: str) -> None:
+    logger.info(message)
+    try:
+        game.ui_log(message)
+    except Exception:
+        pass
+
+
 def _targets_in_radius(candidates, center: tuple[int, int], radius_feet: int):
     result = []
     for target, pos, _kind in candidates:
@@ -444,25 +471,117 @@ def _command_release_holds(ctx: EventContext, commander) -> int:
     return removed
 
 
-def _direction_line(center: tuple[int, int], direction: str, steps: int) -> list[tuple[int, int]]:
-    mapping = {
-        "N": (0, -1),
-        "NE": (1, -1),
-        "E": (1, 0),
-        "SE": (1, 1),
-        "S": (0, 1),
-        "SW": (-1, 1),
-        "W": (-1, 0),
-        "NW": (-1, -1),
-    }
-    vec = mapping.get(direction.upper())
+def _position_in_bounds(board, pos: tuple[int, int]) -> bool:
+    if pos is None:
+        return False
+    in_bounds = getattr(board, "in_bounds", None)
+    if callable(in_bounds):
+        try:
+            return bool(in_bounds(pos))
+        except Exception:
+            return False
+    rows = int(getattr(board, "rows", 0) or 0)
+    cols = int(getattr(board, "cols", 0) or 0)
+    if rows > 0 and cols > 0:
+        x, y = pos
+        return 0 <= x < cols and 0 <= y < rows
+    return True
+
+
+def _bresenham_cells(a: tuple[int, int], b: tuple[int, int]) -> list[tuple[int, int]]:
+    x0, y0 = a
+    x1, y1 = b
+    dx = abs(x1 - x0)
+    dy = -abs(y1 - y0)
+    sx = 1 if x0 < x1 else -1
+    sy = 1 if y0 < y1 else -1
+    err = dx + dy
+    out = [(x0, y0)]
+    while (x0, y0) != (x1, y1):
+        e2 = 2 * err
+        if e2 >= dy:
+            err += dy
+            x0 += sx
+        if e2 <= dx:
+            err += dx
+            y0 += sy
+        out.append((x0, y0))
+    return out
+
+
+def _cell_blocks_line(board, pos: tuple[int, int]) -> bool:
+    if board is None or not _position_in_bounds(board, pos):
+        return True
+    try:
+        cell = board.cell_at(pos)
+    except Exception:
+        return True
+    terrain = getattr(cell, "field", None)
+    if terrain is not None and not bool(getattr(terrain, "walkable", True)):
+        return True
+    interactables = list(getattr(cell, "interactables", []) or [])
+    if any(getattr(obj, "blocks_movement", False) or not getattr(obj, "allow_same_cell_interact", True) for obj in interactables):
+        return True
+    occupant = getattr(cell, "occupant", None)
+    return isinstance(occupant, Obstacle)
+
+
+def _can_project_between(board, a: tuple[int, int], b: tuple[int, int]) -> bool:
+    if board is None or not (_position_in_bounds(board, a) and _position_in_bounds(board, b)):
+        return False
+    is_blocked = getattr(board, "is_blocked", None)
+    if callable(is_blocked):
+        try:
+            if bool(is_blocked(a, b)):
+                return False
+        except Exception:
+            return False
+    edge_between = getattr(board, "edge_interactables_between", None)
+    if callable(edge_between):
+        try:
+            for edge_obj in list(edge_between(a, b) or []):
+                blocks_passage = getattr(edge_obj, "blocks_passage", None)
+                if callable(blocks_passage) and blocks_passage(a, b):
+                    return False
+        except Exception:
+            return False
+    return not _cell_blocks_line(board, b)
+
+
+def _line_until_blocked(board, center: tuple[int, int], direction: str, steps: int) -> list[tuple[int, int]]:
+    vec = _direction_vec(direction)
     if vec is None:
         return []
     dx, dy = vec
-    out = []
-    for idx in range(1, max(0, int(steps)) + 1):
-        out.append((center[0] + dx * idx, center[1] + dy * idx))
+    current = center
+    out: list[tuple[int, int]] = []
+    for _ in range(max(0, int(steps))):
+        nxt = (current[0] + dx, current[1] + dy)
+        if not _can_project_between(board, current, nxt):
+            break
+        out.append(nxt)
+        current = nxt
     return out
+
+
+def _line_of_effect_clear(board, source_pos: tuple[int, int] | None, target_pos: tuple[int, int] | None) -> bool:
+    if source_pos is None or target_pos is None:
+        return False
+    if source_pos == target_pos:
+        return True
+    if board is None:
+        return True
+    try:
+        points = _bresenham_cells(source_pos, target_pos)
+    except Exception:
+        return False
+    current = tuple(source_pos)
+    for nxt in points[1:]:
+        nxt = tuple(nxt)
+        if not _can_project_between(board, current, nxt):
+            return False
+        current = nxt
+    return True
 
 
 def _direction_vec(direction: str) -> tuple[int, int] | None:
@@ -477,6 +596,226 @@ def _direction_vec(direction: str) -> tuple[int, int] | None:
         "NW": (-1, -1),
     }
     return mapping.get(str(direction or "").upper())
+
+
+def _spell_vibe_palette(vibe: str) -> dict[str, list[int]]:
+    normalized = str(vibe or "").strip().lower()
+    palettes = {
+        "air": {
+            "origin": [185, 225, 255],
+            "center": [150, 205, 255],
+            "direction": [95, 170, 255],
+            "line": [70, 145, 235],
+            "target": [180, 240, 255],
+        },
+        "water": {
+            "origin": [130, 205, 255],
+            "center": [80, 175, 255],
+            "direction": [35, 115, 240],
+            "line": [20, 85, 220],
+            "target": [110, 215, 255],
+        },
+        "fire": {
+            "origin": [255, 210, 140],
+            "center": [255, 185, 95],
+            "direction": [255, 145, 60],
+            "line": [240, 90, 30],
+            "target": [255, 205, 110],
+        },
+        "negative": {
+            "origin": [210, 170, 255],
+            "center": [185, 135, 245],
+            "direction": [155, 90, 220],
+            "line": [110, 45, 175],
+            "target": [230, 180, 255],
+        },
+        "positive": {
+            "origin": [255, 245, 185],
+            "center": [255, 230, 120],
+            "direction": [255, 215, 70],
+            "line": [240, 195, 45],
+            "target": [255, 248, 205],
+        },
+        "illusion": {
+            "origin": [255, 210, 255],
+            "center": [250, 180, 255],
+            "direction": [235, 120, 255],
+            "line": [205, 80, 235],
+            "target": [255, 235, 180],
+        },
+        "grease": {
+            "origin": [255, 230, 170],
+            "center": [240, 205, 120],
+            "direction": [220, 185, 70],
+            "line": [180, 145, 40],
+            "target": [255, 245, 170],
+        },
+        "sleep": {
+            "origin": [215, 205, 255],
+            "center": [195, 170, 255],
+            "direction": [160, 125, 235],
+            "line": [125, 90, 205],
+            "target": [225, 210, 255],
+        },
+    }
+    return dict(palettes.get(normalized, palettes["air"]))
+
+
+def _directional_area_positions(
+    board,
+    origin: tuple[int, int],
+    direction: str,
+    *,
+    area_kind: str,
+    steps: int,
+) -> list[tuple[int, int]]:
+    normalized_kind = str(area_kind or "").strip().lower()
+    if normalized_kind == "line":
+        return _line_until_blocked(board, origin, direction, steps)
+    if normalized_kind == "cone":
+        return sorted(_cone_positions(board, origin, direction, steps), key=lambda pos: (grid_distance_feet(origin, pos), pos[1], pos[0]))
+    return []
+
+
+def _pick_directional_area_from_caster(
+    ctx: EventContext,
+    origin: tuple[int, int],
+    *,
+    steps: int,
+    prompt_name: str,
+    source: str,
+    area_kind: str,
+    vibe: str = "air",
+    preview_targets: list[tuple[object, tuple[int, int] | None, str]] | None = None,
+) -> tuple[str, list[tuple[int, int]]] | tuple[None, None]:
+    board = getattr(ctx.game, "board", None)
+    directions = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+    line_map: dict[str, list[tuple[int, int]]] = {}
+    anchor_map: dict[tuple[int, int], str] = {}
+    for direction in directions:
+        area_positions = _directional_area_positions(board, origin, direction, area_kind=area_kind, steps=steps)
+        vec = _direction_vec(direction)
+        if not area_positions or vec is None:
+            continue
+        anchor = (origin[0] + vec[0], origin[1] + vec[1])
+        if not _can_project_between(board, origin, anchor):
+            continue
+        line_map[direction] = area_positions
+        anchor_map[tuple(anchor)] = direction
+
+    if not line_map:
+        return None, None
+
+    palette = _spell_vibe_palette(vibe)
+    conn = getattr(ctx.game, "conn", None)
+    if conn is not None and hasattr(conn, "scan_board"):
+        adjacent_positions = list(anchor_map.keys())
+        selected_direction: str | None = None
+
+        while True:
+            if selected_direction is None:
+                led_map: dict[tuple[int, int], list[int]] = {origin: list(palette["origin"])}
+                for pos in adjacent_positions:
+                    led_map[pos] = list(palette["direction"])
+                selectable = list(adjacent_positions)
+            else:
+                selected_line = list(line_map.get(selected_direction) or [])
+                target_positions = {
+                    tuple(pos)
+                    for _obj, pos, _kind in list(preview_targets or [])
+                    if pos is not None and tuple(pos) in selected_line
+                }
+                led_map = {origin: list(palette["origin"])}
+                for pos in adjacent_positions:
+                    led_map[pos] = list(palette["direction"])
+                for pos in selected_line:
+                    led_map[pos] = list(palette["line"])
+                for pos in target_positions:
+                    led_map[pos] = list(palette["target"])
+                selectable = [origin] + list(adjacent_positions)
+
+            choice = None
+            try:
+                try:
+                    conn.set_leds(list(led_map.keys()), list(led_map.values()))
+                except Exception:
+                    pass
+                try:
+                    choice = conn.scan_board(selectable)
+                except Exception:
+                    choice = None
+            finally:
+                try:
+                    conn.leds_off()
+                except Exception:
+                    pass
+
+            if choice is None:
+                break
+            normalized_choice = tuple(choice)
+            if selected_direction is not None and normalized_choice == tuple(origin):
+                return selected_direction, list(line_map.get(selected_direction) or [])
+
+            next_direction = anchor_map.get(normalized_choice)
+            if next_direction is None:
+                if selected_direction is None:
+                    _ui_log(ctx.game, f"{prompt_name}: wybierz podswietlone sasiednie pole, aby ustawic kierunek.")
+                else:
+                    _ui_log(ctx.game, f"{prompt_name}: kliknij pole kierunku lub pole rzucajacego, aby potwierdzic.")
+                continue
+            selected_direction = next_direction
+
+    direction = _prompt_choice(ctx, f"{prompt_name} - wybierz kierunek", directions, source=source)
+    if not direction:
+        return None, None
+    line_positions = list(line_map.get(direction) or [])
+    if not line_positions:
+        return None, None
+    return direction, line_positions
+
+
+def _pick_line_from_caster(
+    ctx: EventContext,
+    origin: tuple[int, int],
+    *,
+    steps: int,
+    prompt_name: str,
+    source: str,
+    vibe: str = "air",
+    preview_targets: list[tuple[object, tuple[int, int] | None, str]] | None = None,
+) -> tuple[str, list[tuple[int, int]]] | tuple[None, None]:
+    return _pick_directional_area_from_caster(
+        ctx,
+        origin,
+        steps=steps,
+        prompt_name=prompt_name,
+        source=source,
+        area_kind="line",
+        vibe=vibe,
+        preview_targets=preview_targets,
+    )
+
+
+def _pick_cone_from_caster(
+    ctx: EventContext,
+    origin: tuple[int, int],
+    *,
+    steps: int,
+    prompt_name: str,
+    source: str,
+    vibe: str = "fire",
+    preview_targets: list[tuple[object, tuple[int, int] | None, str]] | None = None,
+) -> tuple[str, list[tuple[int, int]]] | tuple[None, None]:
+    return _pick_directional_area_from_caster(
+        ctx,
+        origin,
+        steps=steps,
+        prompt_name=prompt_name,
+        source=source,
+        area_kind="cone",
+        vibe=vibe,
+        preview_targets=preview_targets,
+    )
 
 
 def _push_target_linear(ctx: EventContext, target, *, from_pos: tuple[int, int], squares: int = 1) -> int:
@@ -509,7 +848,7 @@ def _push_target_linear(ctx: EventContext, target, *, from_pos: tuple[int, int],
     return moved
 
 
-def _cone_positions(origin: tuple[int, int], direction: str, steps: int) -> set[tuple[int, int]]:
+def _cone_positions(board, origin: tuple[int, int], direction: str, steps: int) -> set[tuple[int, int]]:
     vec = _direction_vec(direction)
     if vec is None:
         return set()
@@ -524,8 +863,182 @@ def _cone_positions(origin: tuple[int, int], direction: str, steps: int) -> set[
                 pos = (origin[0] + dx * step, origin[1] + side)
             else:
                 pos = (origin[0] + dx * step + side * -dy, origin[1] + dy * step + side * dx)
-            out.add(pos)
+            if _position_in_bounds(board, pos) and _line_of_effect_clear(board, origin, pos):
+                out.add(pos)
     return out
+
+
+def _positions_in_radius(board, center: tuple[int, int], radius_feet: int) -> list[tuple[int, int]]:
+    if board is None or center is None:
+        return []
+    rows = int(getattr(board, "rows", 0) or 0)
+    cols = int(getattr(board, "cols", 0) or 0)
+    out: list[tuple[int, int]] = []
+    for row in range(rows):
+        for col in range(cols):
+            pos = (col, row)
+            if grid_distance_feet(center, pos) <= radius_feet:
+                out.append(pos)
+    return out
+
+
+def _describe_center_selection_issue(
+    board,
+    origin: tuple[int, int],
+    choice: tuple[int, int],
+    *,
+    max_range_feet: int | None,
+) -> str:
+    if not _position_in_bounds(board, choice):
+        return "Wybrane pole jest poza plansza."
+    if max_range_feet is not None and grid_distance_feet(origin, choice) > max_range_feet:
+        return "Przekroczona odleglosc czarowania."
+    if not _line_of_effect_clear(board, origin, choice):
+        return "Brak linii efektu do wskazanego pola."
+    return "Kliknij podswietlone pole obszaru."
+
+
+def _pick_centered_area(
+    ctx: EventContext,
+    origin: tuple[int, int],
+    *,
+    max_range_feet: int | None,
+    radius_feet: int,
+    prompt_name: str,
+    vibe: str,
+    preview_targets: list[tuple[object, tuple[int, int] | None, str]] | None = None,
+) -> tuple[tuple[int, int] | None, list[tuple[int, int]] | None]:
+    board = getattr(ctx.game, "board", None)
+    if board is None or origin is None:
+        return None, None
+
+    centers: list[tuple[int, int]] = []
+    rows = int(getattr(board, "rows", 0) or 0)
+    cols = int(getattr(board, "cols", 0) or 0)
+    for row in range(rows):
+        for col in range(cols):
+            pos = (col, row)
+            if max_range_feet is not None and grid_distance_feet(origin, pos) > max_range_feet:
+                continue
+            if not _line_of_effect_clear(board, origin, pos):
+                continue
+            centers.append(pos)
+
+    if not centers:
+        return None, None
+
+    palette = _spell_vibe_palette(vibe)
+    conn = getattr(ctx.game, "conn", None)
+    if conn is not None and hasattr(conn, "scan_board"):
+        center_set = {tuple(pos) for pos in centers}
+        selected_center: tuple[int, int] | None = None
+
+        while True:
+            led_map: dict[tuple[int, int], list[int]] = {origin: list(palette["origin"])}
+            if selected_center is None:
+                for pos in centers:
+                    led_map[pos] = list(palette["direction"])
+            else:
+                area_positions = _positions_in_radius(board, selected_center, radius_feet)
+                target_positions = {
+                    tuple(pos)
+                    for _obj, pos, _kind in list(preview_targets or [])
+                    if pos is not None and tuple(pos) in set(area_positions)
+                }
+                for pos in centers:
+                    led_map[pos] = list(palette["direction"])
+                for pos in area_positions:
+                    led_map[pos] = list(palette["line"])
+                led_map[selected_center] = list(palette["center"])
+                for pos in target_positions:
+                    led_map[pos] = list(palette["target"])
+
+            choice = None
+            try:
+                try:
+                    conn.set_leds(list(led_map.keys()), list(led_map.values()))
+                except Exception:
+                    pass
+                try:
+                    choice = conn.scan_board(None)
+                except Exception:
+                    choice = None
+            finally:
+                try:
+                    conn.leds_off()
+                except Exception:
+                    pass
+
+            if choice is None:
+                break
+            normalized_choice = tuple(choice)
+            if selected_center is not None and normalized_choice == selected_center:
+                return selected_center, _positions_in_radius(board, selected_center, radius_feet)
+            if normalized_choice not in center_set:
+                _ui_log(
+                    ctx.game,
+                    f"{prompt_name}: {_describe_center_selection_issue(board, origin, normalized_choice, max_range_feet=max_range_feet)}",
+                )
+                continue
+            selected_center = normalized_choice
+
+    center = pick_position_in_range(ctx, origin, max_range_feet=max_range_feet)
+    if center is None or not _line_of_effect_clear(board, origin, center):
+        return None, None
+    return center, _positions_in_radius(board, center, radius_feet)
+
+
+def _confirm_fixed_area(
+    ctx: EventContext,
+    origin: tuple[int, int],
+    *,
+    area_positions: list[tuple[int, int]],
+    prompt_name: str,
+    vibe: str,
+    preview_targets: list[tuple[object, tuple[int, int] | None, str]] | None = None,
+) -> bool:
+    if not area_positions:
+        return False
+    conn = getattr(ctx.game, "conn", None)
+    if conn is None or not hasattr(conn, "scan_board"):
+        return True
+
+    palette = _spell_vibe_palette(vibe)
+    area_set = {tuple(pos) for pos in area_positions}
+    target_positions = {
+        tuple(pos)
+        for _obj, pos, _kind in list(preview_targets or [])
+        if pos is not None and tuple(pos) in area_set
+    }
+
+    while True:
+        led_map: dict[tuple[int, int], list[int]] = {origin: list(palette["origin"])}
+        for pos in area_positions:
+            led_map[pos] = list(palette["line"])
+        for pos in target_positions:
+            led_map[pos] = list(palette["target"])
+
+        choice = None
+        try:
+            try:
+                conn.set_leds(list(led_map.keys()), list(led_map.values()))
+            except Exception:
+                pass
+            try:
+                choice = conn.scan_board(None)
+            except Exception:
+                choice = None
+        finally:
+            try:
+                conn.leds_off()
+            except Exception:
+                pass
+
+        if choice is None:
+            return False
+        if tuple(choice) == tuple(origin):
+            return True
+        _ui_log(ctx.game, f"{prompt_name}: kliknij pole rzucajacego, aby potwierdzic obszar.")
 
 
 def _runtime_state(game):
@@ -550,6 +1063,11 @@ class MagicMissileEvent(MagicEvent):
     magic_types = ["evocation"]
     range_feet = 120
     prompt = "Magic Missile - automatyczne trafienie, 1-3 pociski."
+    prompt_description = (
+        "Automatycznie trafiasz cel w 120 ft.\n"
+        "Przy rzuceniu wybierasz 1-3 pociski.\n"
+        "Kazdy pocisk zadaje osobno 1d4+1 force damage i moze trafic ten sam albo inny cel."
+    )
 
     def execute(self, ctx: EventContext) -> EventResult:
         actor = ctx.actor
@@ -767,9 +1285,24 @@ class ColorSprayEvent(MagicEvent):
         if actor is None or getattr(actor, "position", None) is None:
             return EventResult.cancelled(message="Brak bohatera do rzucenia czaru.")
 
-        spell_dc = int(prompt_for_roll("Color Spray - podaj Spell DC:", layout="test", answer_placeholder="Spell DC") or 0)
+        _direction, cone_positions = _pick_cone_from_caster(
+            ctx,
+            actor.position,
+            steps=3,
+            prompt_name="Color Spray",
+            source=self.name,
+            vibe="illusion",
+            preview_targets=list(_iter_enemy_candidates(ctx.game)),
+        )
+        if not cone_positions:
+            return EventResult.cancelled(message="Nie wybrano kierunku Color Spray.")
+
+        spell_dc = _spell_dc_for_actor(actor)
         affected = 0
-        for target in _targets_in_radius(_iter_enemy_candidates(ctx.game), actor.position, self.range_feet):
+        pos_set = set(cone_positions)
+        for target, pos, _kind in _iter_enemy_candidates(ctx.game):
+            if pos not in pos_set:
+                continue
             outcome, _roll, _total = _roll_enemy_save(
                 target,
                 Skill.WILL.value,
@@ -818,6 +1351,11 @@ class CommandEvent(MagicEvent):
     magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA)
     magic_types = ["enchantment"]
     range_feet = 30
+    prompt_description = (
+        "Enemy w 30 ft robi Will save przeciw Spell DC.\n"
+        "Na porazce wybierasz komende: approach, run, prone, stand albo release.\n"
+        "Na krytycznej porazce cel dodatkowo dostaje Stunned 1."
+    )
 
     def execute(self, ctx: EventContext) -> EventResult:
         actor = ctx.actor
@@ -835,7 +1373,7 @@ class CommandEvent(MagicEvent):
         if target is None:
             return EventResult.cancelled(message="Brak celu w zasiegu.")
 
-        spell_dc = int(prompt_for_roll("Command - podaj Spell DC:", layout="test", answer_placeholder="Spell DC") or 0)
+        spell_dc = _spell_dc_for_actor(actor)
         outcome, _roll, _total = _roll_enemy_save(
             target,
             Skill.WILL.value,
@@ -945,6 +1483,11 @@ class FearEvent(MagicEvent):
     magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA, SpellTradition.DIVINE)
     magic_types = ["enchantment"]
     range_feet = 30
+    prompt_description = (
+        "Enemy w 30 ft robi Will save przeciw Spell DC.\n"
+        "Porazka: Frightened 1.\n"
+        "Krytyczna porazka: Frightened 2 i dodatkowo -10 ft Speed."
+    )
 
     def execute(self, ctx: EventContext) -> EventResult:
         actor = ctx.actor
@@ -961,7 +1504,7 @@ class FearEvent(MagicEvent):
         if target is None:
             return EventResult.cancelled(message="Brak celu w zasiegu.")
 
-        spell_dc = int(prompt_for_roll("Fear - podaj Spell DC:", layout="test", answer_placeholder="Spell DC") or 0)
+        spell_dc = _spell_dc_for_actor(actor)
         outcome, _roll, _total = _roll_enemy_save(
             target,
             Skill.WILL.value,
@@ -1067,11 +1610,17 @@ class GrimTendrilsEvent(MagicEvent):
         if actor is None or getattr(actor, "position", None) is None:
             return EventResult.cancelled(message="Brak bohatera do rzucenia czaru.")
 
-        direction = _prompt_choice(ctx, "Grim Tendrils - wybierz kierunek", ["N", "NE", "E", "SE", "S", "SW", "W", "NW"], source="grim_tendrils")
+        direction, line_positions = _pick_line_from_caster(
+            ctx,
+            actor.position,
+            steps=6,
+            prompt_name="Grim Tendrils",
+            source="grim_tendrils",
+            vibe="negative",
+            preview_targets=list(_iter_enemy_candidates(ctx.game)),
+        )
         if not direction:
             return EventResult.cancelled(message="Nie wybrano kierunku.")
-
-        line_positions = _direction_line(actor.position, direction, 6)
         if not line_positions:
             return EventResult.cancelled(message="Nie udalo sie wyznaczyc linii.")
 
@@ -1083,7 +1632,7 @@ class GrimTendrilsEvent(MagicEvent):
         if not targets:
             return EventResult.cancelled(message="Brak celow na linii.")
 
-        spell_dc = int(prompt_for_roll("Grim Tendrils - podaj Spell DC:", layout="test", answer_placeholder="Spell DC") or 0)
+        spell_dc = _spell_dc_for_actor(actor)
         base_damage = int(prompt_for_roll("Grim Tendrils - podaj obrazenia negative:", layout="damage", answer_placeholder="Obrazenia") or 0)
 
         hit_count = 0
@@ -1270,6 +1819,10 @@ class MageArmorEvent(MagicEvent):
     spell_tags = ["rank1", "occult", "arcane", "abjuration"]
     magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA)
     magic_types = ["abjuration"]
+    prompt_description = (
+        "Nakladasz na siebie magiczny pancerz.\n"
+        "Dostajesz +1 item do AC na 10 tur."
+    )
 
     def execute(self, ctx: EventContext) -> EventResult:
         actor = ctx.actor
@@ -1344,6 +1897,10 @@ class MagicWeaponEvent(MagicEvent):
     magic_traditions = (SpellTradition.OCCULT, SpellTradition.ARCANA)
     magic_types = ["transmutation"]
     range_feet = 30
+    prompt_description = (
+        "Sojusznik w 30 ft otrzymuje magiczne wzmocnienie broni.\n"
+        "Daje +1 item do atakow melee i ranged na 1 ture."
+    )
 
     def execute(self, ctx: EventContext) -> EventResult:
         actor = ctx.actor
@@ -1489,7 +2046,7 @@ class PhantomPainEvent(MagicEvent):
         if target is None:
             return EventResult.cancelled(message="Brak celu w zasiegu.")
 
-        spell_dc = int(prompt_for_roll("Phantom Pain - podaj Spell DC:", layout="test", answer_placeholder="Spell DC") or 0)
+        spell_dc = _spell_dc_for_actor(actor)
         base_damage = int(prompt_for_roll("Phantom Pain - podaj obrazenia mental:", layout="damage", answer_placeholder="Obrazenia") or 0)
 
         outcome, _roll, _total = _roll_enemy_save(
@@ -1656,7 +2213,15 @@ class SleepEvent(MagicEvent):
         if actor is None or getattr(actor, "position", None) is None:
             return EventResult.cancelled(message="Brak bohatera do rzucenia czaru.")
 
-        center = pick_position_in_range(ctx, actor.position, max_range_feet=self.range_feet)
+        center, _area_positions = _pick_centered_area(
+            ctx,
+            actor.position,
+            max_range_feet=self.range_feet,
+            radius_feet=10,
+            prompt_name="Sleep",
+            vibe="sleep",
+            preview_targets=list(_iter_enemy_candidates(ctx.game)),
+        )
         if center is None:
             return EventResult.cancelled(message="Nie wybrano punktu Sleep.")
 
@@ -1719,6 +2284,10 @@ class SootheEvent(MagicEvent):
     magic_traditions = (SpellTradition.OCCULT,)
     magic_types = ["necromancy"]
     range_feet = 30
+    prompt_description = (
+        "Sojusznik w 30 ft odzyskuje wskazana wartosc HP.\n"
+        "Dodatkowo dostaje +2 status do Will save na 1 ture."
+    )
 
     def execute(self, ctx: EventContext) -> EventResult:
         actor = ctx.actor
@@ -2033,25 +2602,31 @@ class BurningHandsEvent(MagicEvent):
     magic_types = ["evocation"]
     range_feet = 15
     prompt = "Burning Hands: stozek ognia (15 stop), Reflex basic save."
+    prompt_description = (
+        "Tworzysz stozek ognia o dlugosci 15 ft od castera.\n"
+        "Kazdy enemy w obszarze robi basic Reflex save przeciw obrazeniom fire."
+    )
 
     def execute(self, ctx: EventContext) -> EventResult:
         actor = ctx.actor
         if actor is None or getattr(actor, "position", None) is None:
             return EventResult.cancelled(message="Brak bohatera do rzucenia czaru.")
-        direction = _prompt_choice(
+        _direction, cone_positions = _pick_cone_from_caster(
             ctx,
-            "Burning Hands - wybierz kierunek",
-            ["N", "NE", "E", "SE", "S", "SW", "W", "NW"],
+            actor.position,
+            steps=3,
+            prompt_name="Burning Hands",
             source=self.name,
+            vibe="fire",
+            preview_targets=list(_iter_enemy_candidates(ctx.game)),
         )
-        if not direction:
+        if not cone_positions:
             return EventResult.cancelled(message="Nie wybrano kierunku.")
-        cone_positions = _cone_positions(actor.position, direction, 3)
-        targets = [enemy for enemy, pos, _kind in _iter_enemy_candidates(ctx.game) if pos in cone_positions]
+        targets = [enemy for enemy, pos, _kind in _iter_enemy_candidates(ctx.game) if pos in set(cone_positions)]
         if not targets:
             return EventResult.cancelled(message="Brak celow w stozku.")
 
-        spell_dc = int(prompt_for_roll("Burning Hands - podaj Spell DC:", layout="test", answer_placeholder="Spell DC") or 0)
+        spell_dc = _spell_dc_for_actor(actor)
         burn_note = burn_it_prompt_note(
             actor,
             DamageType.FIRE.value,
@@ -2198,7 +2773,7 @@ class GoblinPoxEvent(MagicEvent):
         )
         if target is None:
             return EventResult.cancelled(message="Brak celu w zasiegu.")
-        spell_dc = int(prompt_for_roll("Goblin Pox - podaj Spell DC:", layout="test", answer_placeholder="Spell DC") or 0)
+        spell_dc = _spell_dc_for_actor(actor)
         base_damage = int(prompt_for_roll("Goblin Pox - podaj obrazenia poison:", layout="damage", answer_placeholder="Obrazenia") or 0)
         outcome, _roll, _total = _roll_enemy_save(
             target,
@@ -2240,6 +2815,11 @@ class GreaseEvent(MagicEvent):
     magic_types = ["conjuration"]
     range_feet = 30
     prompt = "Grease: sliska powierzchnia lub obiekt (uproszczenie)."
+    prompt_description = (
+        "Wybierasz obiekt albo pole w 30 ft.\n"
+        "Obiekt staje sie sliski.\n"
+        "Powierzchnia tworzy sliski obszar 5 ft burst; enemy w obszarze robi Reflex save, a na porazce upada Prone."
+    )
 
     def execute(self, ctx: EventContext) -> EventResult:
         actor = ctx.actor
@@ -2263,10 +2843,18 @@ class GreaseEvent(MagicEvent):
                 pass
             return EventResult(success=True, consumed_action=True, message="Grease: obiekt pokryty smarem.")
 
-        center = pick_position_in_range(ctx, actor.position, max_range_feet=self.range_feet, color=[190, 150, 40])
+        center, _area_positions = _pick_centered_area(
+            ctx,
+            actor.position,
+            max_range_feet=self.range_feet,
+            radius_feet=5,
+            prompt_name="Grease",
+            vibe="grease",
+            preview_targets=list(_iter_enemy_candidates(ctx.game)),
+        )
         if center is None:
             return EventResult.cancelled(message="Nie wybrano pola Grease.")
-        spell_dc = int(prompt_for_roll("Grease - podaj Spell DC:", layout="test", answer_placeholder="Spell DC") or 0)
+        spell_dc = _spell_dc_for_actor(actor)
         affected = 0
         for enemy, pos, _kind in _iter_enemy_candidates(ctx.game):
             if pos is None or grid_distance_feet(center, pos) > 5:
@@ -2306,18 +2894,21 @@ class GustOfWindEvent(MagicEvent):
         actor = ctx.actor
         if actor is None or getattr(actor, "position", None) is None:
             return EventResult.cancelled(message="Brak bohatera do rzucenia czaru.")
-        direction = _prompt_choice(
+        direction, line_positions = _pick_line_from_caster(
             ctx,
-            "Gust of Wind - wybierz kierunek",
-            ["N", "NE", "E", "SE", "S", "SW", "W", "NW"],
+            actor.position,
+            steps=12,
+            prompt_name="Gust of Wind",
             source=self.name,
+            vibe="air",
+            preview_targets=list(_iter_enemy_candidates(ctx.game)),
         )
         if not direction:
             return EventResult.cancelled(message="Nie wybrano kierunku.")
-        line = set(_direction_line(actor.position, direction, 12))
+        line = set(line_positions or [])
         if not line:
             return EventResult.cancelled(message="Nie udalo sie wyznaczyc linii.")
-        spell_dc = int(prompt_for_roll("Gust of Wind - podaj Spell DC:", layout="test", answer_placeholder="Spell DC") or 0)
+        spell_dc = _spell_dc_for_actor(actor)
 
         pushed = 0
         for enemy, pos, _kind in _iter_enemy_candidates(ctx.game):
@@ -2367,6 +2958,11 @@ class HydraulicPushEvent(BaseMagicAttackEvent):
     magic_traditions = (SpellTradition.ARCANA, SpellTradition.PRIMAL, SpellTradition.DIVINE)
     magic_types = ["evocation"]
     prompt = "Hydraulic Push: obrazenia i odrzut celu."
+    prompt_description = (
+        "Spell attack przeciw celowi w 60 ft.\n"
+        "Trafienie: bludgeoning damage i odrzut o 1 pole.\n"
+        "Krytyk: podwojone obrazenia i odrzut o 2 pola."
+    )
 
     def _resolve_on_target(self, target, pos, ctx: EventContext, *, critical: bool = False) -> EventResult:
         damage = int(prompt_for_roll("Hydraulic Push - podaj obrazenia:", layout="damage", answer_placeholder="Obrazenia") or 0)
@@ -2511,6 +3107,11 @@ class ShockingGraspEvent(BaseMagicAttackEvent):
     magic_traditions = (SpellTradition.ARCANA, SpellTradition.DIVINE)
     magic_types = ["evocation"]
     prompt = "Shocking Grasp: dotykowy atak elektryczny."
+    prompt_description = (
+        "Dotykowy spell attack o zasiegu 5 ft.\n"
+        "Trafienie: electric damage.\n"
+        "Jesli cel ma metalowa zbroje lub metalowy sprzet, dostaje dodatkowe +2 obrazenia."
+    )
 
     def _resolve_on_target(self, target, pos, ctx: EventContext, *, critical: bool = False) -> EventResult:
         damage = int(prompt_for_roll("Shocking Grasp - podaj obrazenia electric:", layout="damage", answer_placeholder="Obrazenia") or 0)
@@ -2689,6 +3290,12 @@ class HealEvent(MagicEvent):
         "2 akcje (30 ft): stale 8 HP; "
         "3 akcje: fala 30 ft."
     )
+    prompt_description = (
+        "Wybierasz 1, 2 albo 3 akcje.\n"
+        "1 akcja: dotyk, leczysz 1d8 + modyfikator spellcastingu; undead otrzymuje positive damage.\n"
+        "2 akcje: cel w 30 ft odzyskuje stale 8 HP; undead otrzymuje 8 positive damage.\n"
+        "3 akcje: fala 30 ft wokol castera, leczy zywych i rani undead."
+    )
 
     def execute(self, ctx: EventContext) -> EventResult:
         actor = ctx.actor
@@ -2756,7 +3363,11 @@ class HealEvent(MagicEvent):
                 if defeated:
                     msg += " Cel pokonany."
                 return EventResult(success=True, consumed_action=True, actions_spent=actions_used, message=msg)
+            blessing_bonus = _healers_blessing_bonus_for_target(target, spell_level=1)
+            total_amount += int(blessing_bonus)
             _apply_heal(target, total_amount)
+            if blessing_bonus > 0:
+                _consume_status_id(target, "healers_blessing")
             return EventResult(
                 success=True,
                 consumed_action=True,
@@ -2767,12 +3378,25 @@ class HealEvent(MagicEvent):
         healed = 0
         harmed = 0
         all_candidates = list(_iter_hero_candidates(ctx.game)) + list(_iter_enemy_candidates(ctx.game))
+        burst_positions = _positions_in_radius(ctx.game.board, actor.position, self.range_feet)
+        if not _confirm_fixed_area(
+            ctx,
+            actor.position,
+            area_positions=burst_positions,
+            prompt_name="Heal",
+            vibe="positive",
+            preview_targets=all_candidates,
+        ):
+            return EventResult.cancelled(message="Heal: anulowano potwierdzenie obszaru.")
         for target in _targets_in_radius(all_candidates, actor.position, self.range_feet):
             if _has_undead_tag(target):
                 _apply_damage(target, amount, DamageType.POSITIVE.value)
                 harmed += 1
                 continue
-            _apply_heal(target, amount)
+            heal_total = int(amount) + int(_healers_blessing_bonus_for_target(target, spell_level=1))
+            _apply_heal(target, heal_total)
+            if heal_total != amount:
+                _consume_status_id(target, "healers_blessing")
             healed += 1
         return EventResult(
             success=True,
@@ -2792,6 +3416,11 @@ class HarmEvent(MagicEvent):
     magic_types = ["necromancy"]
     range_feet = 30
     prompt = "Harm: rani zywych, leczy undead (uproszczenie single/burst)."
+    prompt_description = (
+        "Wybierasz tryb single albo burst.\n"
+        "Single: cel w 30 ft otrzymuje negative damage, a undead odzyskuje HP.\n"
+        "Burst: fala 30 ft wokol castera rani zywych i leczy undead."
+    )
 
     def execute(self, ctx: EventContext) -> EventResult:
         actor = ctx.actor
@@ -2844,6 +3473,17 @@ class HarmEvent(MagicEvent):
 
         harmed = 0
         healed_undead = 0
+        burst_targets = list(_iter_hero_candidates(ctx.game)) + list(_iter_enemy_candidates(ctx.game))
+        burst_positions = _positions_in_radius(ctx.game.board, actor.position, self.range_feet)
+        if not _confirm_fixed_area(
+            ctx,
+            actor.position,
+            area_positions=burst_positions,
+            prompt_name="Harm",
+            vibe="negative",
+            preview_targets=burst_targets,
+        ):
+            return EventResult.cancelled(message="Harm: anulowano potwierdzenie obszaru.")
         for hero in _targets_in_radius(_iter_hero_candidates(ctx.game), actor.position, self.range_feet):
             if _is_undead_target(hero):
                 _apply_heal(hero, int(amount) + int(_harm_heal_bonus_for_target(hero)))

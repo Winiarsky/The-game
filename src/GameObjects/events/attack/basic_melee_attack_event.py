@@ -9,11 +9,15 @@ from combat import refresh_flanking_statuses
 from combat.degree_of_success import is_critical_success, is_hit, natural_shift_from_roll, resolve_outcome
 from combat.damage_utils import burn_it_bonus, burn_it_prompt_note, remove_defeated_enemy
 from GameObjects.interactions_mixin import prompt_for_roll
+from GameObjects.companions.support_runtime import (
+    animal_companion_support_damage_bonus,
+    apply_on_hit_animal_companion_support,
+)
 from damage_types import DamageType
 from statuses import Status, inspire_courage_damage_bonus, make_persistent_damage
 
 from .attack_base import AttackEventBase, check_concealed
-from ..targeting import is_target_blocked_by_tags
+from ..targeting import is_target_blocked_by_tags, pick_target_or_guess_square
 from ..base import EventContext, EventResult
 
 logger = logging.getLogger(__name__)
@@ -128,7 +132,73 @@ class BasicMeleeAttackEvent(AttackEventBase):
             if enemy is None:
                 return EventResult.cancelled(message="Wymuszony cel nie jest w zasięgu ataku.")
         else:
-            enemy, enemy_pos = self._pick_enemy(ctx, candidates)
+            if any(self._has_status_id(candidate_enemy, "undetected") for candidate_enemy, _candidate_pos in candidates):
+                selection = pick_target_or_guess_square(
+                    ctx,
+                    hero_pos,
+                    [(candidate_enemy, candidate_pos, "enemy") for candidate_enemy, candidate_pos in candidates],
+                    max_range_feet=None,
+                    allowed_kinds=("enemy",),
+                    tags=tags,
+                    guess_positions=self._threat_positions(ctx.game, hero_pos, tags),
+                    target_color=list(consts.INTERACT_FIELD_RGB),
+                )
+                kind = str(selection.get("kind", "") or "")
+                if kind == "cancel":
+                    return EventResult.cancelled(message="Nie wybrano celu.")
+                if kind == "miss":
+                    guessed_pos = selection.get("pos")
+                    state = self._get_attack_state(ctx, hero)
+                    weapon_key = self._weapon_key()
+                    weapon_type = self._weapon_type_tag(tags)
+                    suppress_record = bool(metadata.get("suppress_attack_record", False))
+                    exacting_strike_press = bool(metadata.get("exacting_strike_press", False))
+                    try:
+                        map_attack_count = max(1, int(metadata.get("map_attack_count", 1) or 1))
+                    except Exception:
+                        map_attack_count = 1
+                    backswing_ready = state.setdefault("backswing_ready", set())
+                    if self._has_trait(tags, "backswing"):
+                        try:
+                            backswing_ready.add(weapon_key)
+                        except Exception:
+                            pass
+                    ctx.game.events.safe_emit_action(
+                        actor=hero,
+                        action_id=f"{self.action_id_base}_wrong_square",
+                        action_tags=tags,
+                        target=None,
+                        target_pos=guessed_pos,
+                    )
+                    if not exacting_strike_press and not suppress_record:
+                        self._record_attack(
+                            ctx,
+                            hero,
+                            weapon_key=weapon_key,
+                            weapon_type=weapon_type,
+                            target=None,
+                            attack_count=map_attack_count,
+                        )
+                    miss_message = f"Atak {self.weapon_label}: pudło, błędnie wskazane pole."
+                    if exacting_strike_press:
+                        miss_message = "Exacting Strike: pudło na błędnym polu (MAP bez zmian)."
+                    self._apply_concealing_trait(hero, tags)
+                    return EventResult(
+                        success=True,
+                        consumed_action=self.consumes_action,
+                        message=miss_message,
+                        data={
+                            "hit": False,
+                            "critical": False,
+                            "target": None,
+                            "target_pos": guessed_pos,
+                            "guessed_target_square": guessed_pos,
+                        },
+                    )
+                enemy = selection.get("target")
+                enemy_pos = selection.get("pos")
+            else:
+                enemy, enemy_pos = self._pick_enemy(ctx, candidates)
         if enemy is None:
             return EventResult.cancelled(message="Nie wybrano celu.")
 
@@ -223,6 +293,10 @@ class BasicMeleeAttackEvent(AttackEventBase):
             target=enemy,
             target_pos=enemy_pos,
         )
+
+        if self._attacker_has_combat_stealth(hero):
+            metadata.setdefault("force_off_guard", True)
+            metadata.setdefault("force_flat_footed_source", "stealth")
 
         is_off_guard_for_attack, target_natural_flat_footed, surprise_attack_active = self._is_off_guard_for_attack(
             ctx,
@@ -724,6 +798,16 @@ class BasicMeleeAttackEvent(AttackEventBase):
         if propulsive_bonus:
             damage_bonus += propulsive_bonus
             damage_notes.append(f"Propulsive: {propulsive_bonus:+d} do obrażeń (doliczone).")
+        support_damage_bonus, support_damage_notes = animal_companion_support_damage_bonus(
+            ctx.game,
+            hero,
+            enemy,
+            tags=tags,
+        )
+        if support_damage_bonus:
+            damage_bonus += support_damage_bonus
+        if support_damage_notes:
+            damage_notes.extend(list(support_damage_notes))
         damage_notes.extend(class_upgrade_notes)
         if damage_notes:
             note = f"{note}\n" + "\n".join(damage_notes) if note else "\n".join(damage_notes)
@@ -920,6 +1004,24 @@ class BasicMeleeAttackEvent(AttackEventBase):
         except Exception as exc:
             logger.error("Nie udało się zadać obrażeń: %s", exc)
             return EventResult(success=False, consumed_action=False, message=str(exc))
+
+        if not defeated:
+            support_result = apply_on_hit_animal_companion_support(
+                ctx,
+                hero,
+                enemy,
+                tags=tags,
+            )
+            extra_components = list(support_result.get("damage_components") or [])
+            if extra_components:
+                damage_components.extend(extra_components)
+            if support_result.get("defeated"):
+                defeated = True
+            for note_line in list(support_result.get("notes") or []):
+                try:
+                    ctx.game.ui_log(note_line)
+                except Exception:
+                    pass
 
         if pending_persistent_payload:
             self._apply_on_hit_persistent(enemy, pending_persistent_payload, ctx=ctx, source=self.action_id_base)
@@ -1131,7 +1233,6 @@ class BasicMeleeAttackEvent(AttackEventBase):
         return enemies
 
     def _reachable_enemies(self, game, pos, tags):
-        board = game.board
         reach_tag = self._tag_value(tags, "reach")
         if not self._has_trait(tags, "reach"):
             return self._adjacent_enemies(game, pos)
@@ -1140,6 +1241,7 @@ class BasicMeleeAttackEvent(AttackEventBase):
         except Exception:
             reach_ft = 10
         steps = max(1, int(reach_ft / 5))
+        board = game.board
         enemies = []
         for dx in range(-steps, steps + 1):
             for dy in range(-steps, steps + 1):
@@ -1157,6 +1259,42 @@ class BasicMeleeAttackEvent(AttackEventBase):
                 if occ in game.enemies:
                     enemies.append((occ, npos))
         return enemies
+
+    def _threat_positions(self, game, pos, tags):
+        board = game.board
+        reach_tag = self._tag_value(tags, "reach")
+        if not self._has_trait(tags, "reach"):
+            neighbors = []
+            for npos in board.get_neighbors(pos, include_position=False, diagonal=True):
+                in_bounds = getattr(board, "in_bounds", None)
+                if callable(in_bounds):
+                    try:
+                        if not in_bounds(npos):
+                            continue
+                    except Exception:
+                        continue
+                neighbors.append(tuple(npos))
+            return neighbors
+        try:
+            reach_ft = int(reach_tag) if reach_tag else 10
+        except Exception:
+            reach_ft = 10
+        steps = max(1, int(reach_ft / 5))
+        positions = []
+        for dx in range(-steps, steps + 1):
+            for dy in range(-steps, steps + 1):
+                if dx == 0 and dy == 0:
+                    continue
+                if max(abs(dx), abs(dy)) > steps:
+                    continue
+                npos = (pos[0] + dx, pos[1] + dy)
+                try:
+                    if not board.in_bounds(npos):
+                        continue
+                except Exception:
+                    continue
+                positions.append(npos)
+        return positions
 
     def _pick_enemy(self, ctx: EventContext, candidates):
         if not candidates:

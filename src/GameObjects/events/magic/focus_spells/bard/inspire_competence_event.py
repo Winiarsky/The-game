@@ -5,26 +5,13 @@ from skills import Skill
 from statuses import AidedStatus
 
 from GameObjects.interactions_mixin.skill_check_resolver import resolve_skill_check_with_sources
+from .composition_runtime import composition_blocked, is_bard
 
 from ....base import EventContext, EventResult
 from ....registry import register_event
 from ...magic_event import MagicEvent
 from ...magic_utils import grid_distance_feet
 from ...spell_types import SpellTradition
-
-
-def _is_bard(actor) -> bool:
-    has_status = getattr(actor, "has_status", None)
-    if callable(has_status):
-        try:
-            return bool(has_status("bard"))
-        except Exception:
-            pass
-    for status in getattr(actor, "statuses", []) or []:
-        if getattr(status, "id", None) == "bard":
-            return True
-    class_name = str(getattr(actor, "class_name", "") or "").strip().lower()
-    return class_name == "bard"
 
 
 @register_event
@@ -46,8 +33,12 @@ class InspireCompetenceEvent(MagicEvent):
         actor = ctx.actor
         if actor is None or getattr(actor, "position", None) is None:
             return EventResult.cancelled(message="Brak bohatera do rzucenia czaru.")
-        if not _is_bard(actor):
+        if not is_bard(actor):
             return EventResult.cancelled(message="Inspire Competence: tylko bard moze rzucic ten cantrip.")
+        if composition_blocked(actor):
+            return EventResult.cancelled(
+                message="Inspire Competence: po krytycznej porazce Lingering Composition nie mozesz teraz uzywac composition spells."
+            )
 
         ui = getattr(ctx.game, "ui", None)
         if ui is not None and hasattr(ui, "prompt_info"):

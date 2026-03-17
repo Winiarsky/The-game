@@ -1025,6 +1025,37 @@ function arrayDiff(previous, next) {
     return { added, removed };
 }
 
+function spellSlotLabel(tier) {
+    const raw = String(tier || "").toLowerCase().trim();
+    if (!raw) return "";
+    if (raw === "cantrip") return "Cantripy";
+    if (raw.startsWith("rank_")) return `R${raw.slice(5)}`;
+    return raw.replace(/_/g, " ");
+}
+
+function spellcastingCounterSummary(spellcasting) {
+    if (!spellcasting || typeof spellcasting !== "object") return [];
+    const rows = [];
+    const focusPoints = Number(spellcasting.focusPoints ?? spellcasting.focus_points);
+    const focusPoolMax = Number(spellcasting.focusPoolMax ?? spellcasting.focus_pool_max);
+    if (!Number.isNaN(focusPoolMax) && focusPoolMax > 0) {
+        rows.push(`Focus ${Number.isNaN(focusPoints) ? 0 : focusPoints}/${focusPoolMax}`);
+    }
+    const slotTotal = spellcasting.slotTotal ?? spellcasting.slot_total;
+    const slotRemaining = spellcasting.slotRemaining ?? spellcasting.slot_remaining;
+    const totalDict = slotTotal && typeof slotTotal === "object" ? slotTotal : {};
+    const remainingDict = slotRemaining && typeof slotRemaining === "object" ? slotRemaining : {};
+    Object.keys(totalDict)
+        .sort()
+        .forEach((tier) => {
+            const total = Number(totalDict[tier]);
+            if (Number.isNaN(total) || total <= 0 || tier === "cantrip") return;
+            const remaining = Number(remainingDict[tier]);
+            rows.push(`${spellSlotLabel(tier)} ${Number.isNaN(remaining) ? total : remaining}/${total}`);
+        });
+    return rows;
+}
+
 function buildHeroUpdateLog(previous, current) {
     if (!previous) {
         return {
@@ -1054,6 +1085,16 @@ function buildHeroUpdateLog(previous, current) {
     const currentAc = resolveArmorClass(current);
     if (previousAc !== currentAc && currentAc != null) {
         changes.push(`AC: ${str(previousAc)} -> ${str(currentAc)}`);
+        if (variant !== "warning") variant = "success";
+    }
+    if (previous.baseSpeedFeet !== current.baseSpeedFeet && current.baseSpeedFeet != null) {
+        changes.push(`Speed: ${str(previous.baseSpeedFeet)} -> ${str(current.baseSpeedFeet)} ft`);
+        if (variant !== "warning") variant = "success";
+    }
+    const previousSpellRows = spellcastingCounterSummary(previous.spellcasting || {});
+    const currentSpellRows = spellcastingCounterSummary(current.spellcasting || {});
+    if (previousSpellRows.join(" | ") !== currentSpellRows.join(" | ") && currentSpellRows.length) {
+        changes.push(`Magia: ${currentSpellRows.join(" · ")}`);
         if (variant !== "warning") variant = "success";
     }
     const statusesDiff = arrayDiff(previous.statuses, current.statuses);
@@ -1233,7 +1274,7 @@ function handleEvent(event) {
             acBase: payload.ac_base ?? payload.ac,
             acModifier: payload.ac_modifier ?? 0,
             maxHp: payload.max_hp,
-            baseSpeedFeet: payload.base_speed_feet,
+            baseSpeedFeet: payload.speed_feet ?? payload.base_speed_feet,
             abilityScores: payload.ability_scores || {},
             abilityModifiers: payload.ability_modifiers || {},
             skillRanks: payload.skill_ranks || {},
@@ -1252,6 +1293,7 @@ function handleEvent(event) {
             moneyText: payload.money_text || null,
             bulkSummary: payload.bulk_summary || null,
             inventoryItems: payload.inventory_items || [],
+            spellcasting: payload.spellcasting || null,
         };
         if (current.creationInProgress) {
             creationPreviewHeroId = id;
@@ -1880,7 +1922,7 @@ function openPrompt(prompt) {
             pill.appendChild(labelRow);
             const desc = document.createElement("div");
             desc.className = "desc";
-            desc.textContent = c.desc || "";
+            desc.appendChild(renderChoiceDescription(c.desc || ""));
             pill.appendChild(desc);
             pill.addEventListener("click", () => {
                 selectChoice(idx);
@@ -2350,6 +2392,105 @@ function normalizeChoices(prompt) {
         const effectiveKey = mapped || key || (title.length === 1 ? title : "");
         return { raw: norm, label, desc: ensureStructuredChoiceDesc(label, desc), key: effectiveKey };
     });
+}
+
+function renderChoiceDescription(rawDesc) {
+    const container = document.createElement("div");
+    container.className = "desc-structured";
+
+    const appendLabelValue = (parent, label, text, lineClass = "") => {
+        const row = document.createElement("div");
+        row.className = lineClass ? `desc-line ${lineClass}` : "desc-line";
+        if (label) {
+            const labelEl = document.createElement("span");
+            labelEl.className = "desc-label";
+            labelEl.textContent = `${label}:`;
+            row.appendChild(labelEl);
+        }
+        if (text) {
+            const textEl = document.createElement("span");
+            textEl.className = "desc-text";
+            textEl.textContent = text;
+            row.appendChild(textEl);
+        }
+        parent.appendChild(row);
+        return row;
+    };
+
+    const appendBullet = (text, nested = false) => {
+        const row = document.createElement("div");
+        row.className = nested ? "desc-bullet desc-bullet-nested" : "desc-bullet";
+        const marker = document.createElement("span");
+        marker.className = "desc-bullet-marker";
+        marker.textContent = "•";
+        row.appendChild(marker);
+
+        const body = document.createElement("span");
+        body.className = "desc-bullet-body";
+        const trimmed = String(text || "").trim();
+        const sep = trimmed.indexOf(":");
+        if (sep > 0 && sep < 42) {
+            const labelEl = document.createElement("span");
+            labelEl.className = "desc-label";
+            labelEl.textContent = `${trimmed.slice(0, sep).trim()}:`;
+            body.appendChild(labelEl);
+            const value = trimmed.slice(sep + 1).trim();
+            if (value) {
+                const valueEl = document.createElement("span");
+                valueEl.className = "desc-text";
+                valueEl.textContent = ` ${value}`;
+                body.appendChild(valueEl);
+            }
+        } else {
+            body.textContent = trimmed;
+        }
+        row.appendChild(body);
+        container.appendChild(row);
+    };
+
+    const desc = String(rawDesc || "").trim();
+    if (!desc) return container;
+
+    const lines = desc.split(/\r?\n/).filter((line) => String(line || "").trim());
+    lines.forEach((line) => {
+        const raw = String(line || "");
+        const trimmed = raw.trim();
+        if (!trimmed) return;
+
+        if (/^Fluff\s*:/i.test(trimmed)) {
+            appendLabelValue(container, "Fluff", trimmed.split(":", 2)[1]?.trim() || "", "desc-fluff");
+            return;
+        }
+        if (/^Mechanika\s*:\s*$/i.test(trimmed)) {
+            const header = document.createElement("div");
+            header.className = "desc-section-title";
+            header.textContent = "Mechanika";
+            container.appendChild(header);
+            return;
+        }
+        if (/^-\s*(Kiedy|Efekt)\s*:/i.test(trimmed)) {
+            const match = trimmed.match(/^-\s*([^:]+):\s*(.*)$/);
+            const label = match?.[1]?.trim() || "";
+            const value = match?.[2]?.trim() || "";
+            appendLabelValue(container, label, value, "desc-topline");
+            return;
+        }
+        if (/^\s+-\s+/.test(raw)) {
+            appendBullet(raw.replace(/^\s+-\s+/, ""), true);
+            return;
+        }
+        if (/^-\s+/.test(trimmed)) {
+            appendBullet(trimmed.replace(/^-\s+/, ""), false);
+            return;
+        }
+
+        const plain = document.createElement("div");
+        plain.className = "desc-line desc-plain";
+        plain.textContent = trimmed;
+        container.appendChild(plain);
+    });
+
+    return container;
 }
 
 function _coerceHeroPreview(rawPreview, fallbackLabel = "") {

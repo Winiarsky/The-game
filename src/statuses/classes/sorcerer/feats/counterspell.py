@@ -5,7 +5,8 @@ from statuses.base import Status
 COUNTERSPELL_DESCRIPTION = (
     "Counterspell (Reaction): gdy widzisz jak przeciwnik rzuca czar, "
     "mozesz probowac go skontrowac. Musisz miec DOKLADNIE ten sam czar "
-    "i zuzyc odpowiedni slot. Potem wykonujesz counteract check przeciw DC "
+    "i zaplacic odpowiednim zasobem (prepared copy, slot albo Focus Point). "
+    "Silnik sprawdza to automatycznie, a potem wykonujesz counteract check przeciw DC "
     "czaru przeciwnika; sukces anuluje czar."
 )
 

@@ -5,10 +5,15 @@ from statuses.base import Status
 from statuses.check_effects import CheckEffect
 
 UNFETTERED_HALFLING_DESCRIPTION = (
-    "Gdy osiągniesz sukces na check to Escape lub save vs grabbed/restrained, "
-    "otrzymujesz krytyczny sukces.\n"
-    "Gdy przeciwnik obleje check to Grapple przeciw tobie, traktuje to jako krytyczną porażkę.\n"
-    "Grab nie działa na tobie automatycznie - wymaga checka Athletics."
+    "Fluff: Unfettered Halfling pokazuje, jak trudno niziolka unieruchomic, gdy ten zacznie wywijac sie z chwytow i usciskow.\n"
+    "Mechanika:\n"
+    "- Kiedy: Gdy probujesz Escape albo ktos probuje cie zlapac lub utrzymac.\n"
+    "- Efekt:\n"
+    "  - Sukces na Escape automatycznie staje sie krytycznym sukcesem.\n"
+    "  - Sukces na save przeciw grabbed albo restrained tez staje sie krytycznym sukcesem.\n"
+    "  - Jesli przeciwnik obleje Grapple przeciw tobie, gra traktuje to jako krytyczna porazke.\n"
+    "  - Automatyczny Grab nie dziala na tobie bez testu Athletics przeciwnika.\n"
+    "  - Przykład: przeciwnik nie dosiega cie poprawnie Grapple i zwykla porazka zmienia sie w critical failure, wiec calkiem traci chwyt."
 )
 
 

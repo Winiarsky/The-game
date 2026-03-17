@@ -825,6 +825,20 @@ def forced_skill_outcome(actor: Any, *, tags: Sequence[str]) -> tuple[str | None
 def action_block_reason(actor: Any, *, action_tags: Sequence[str], action_name: str | None = None, target: Any | None = None) -> str | None:
     tags = {str(t).strip().lower() for t in action_tags}
     ids = {_status_id(s) for s in _iter_statuses(actor)}
+    if "step" in tags or str(action_name or "").strip().lower() == "step":
+        for status in _iter_statuses(actor):
+            if _status_id(status) != "animal_companion_badger_step_locked":
+                continue
+            data = getattr(status, "data", None) or {}
+            raw_pos = data.get("locked_position")
+            locked_position = None
+            if isinstance(raw_pos, (list, tuple)) and len(raw_pos) == 2:
+                try:
+                    locked_position = (int(raw_pos[0]), int(raw_pos[1]))
+                except Exception:
+                    locked_position = None
+            if locked_position is None or getattr(actor, "position", None) == locked_position:
+                return "Badger Support: nie możesz użyć Step, dopóki nie zmienisz pozycji."
     if "dead" in ids:
         return "Nie możesz działać będąc martwy."
     if "unconscious" in ids:

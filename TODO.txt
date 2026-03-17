@@ -32,6 +32,8 @@ TODO: Wizard - dopiąć pełne przygotowywanie i zużywanie slotów/spelli (spel
 TODO: Itemizacja PF2e (priorytet wysoki)
 - runy na broniach i pancerzach: potency/striking/resilient + impact na atak/obrażenia/AC/savy.
 - pełniejsza lista magicznych itemów (broń, pancerze, tarcze, talizmany, consumables).
+- dodać pełny runtime dla magicznych staffów jako itemów: własne spell listy, ładunki, daily prep i castowanie ze staffa poza samym thesis `Staff Nexus`.
+- dodać realne mechaniki do itemów użytkowych i narzędzi (np. healer_tools, thieves_tools, repair_kit), zamiast samych opisów/wymagań UI.
 - economy loop: ceny, loot, kupno/sprzedaż, sensowny progression gearu per level.
 - bulk, item management i czytelne UI pod ekwipunek.
 

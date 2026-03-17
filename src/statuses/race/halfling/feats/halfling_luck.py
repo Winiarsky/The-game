@@ -3,9 +3,15 @@ from __future__ import annotations
 from statuses.base import Status
 
 HALFLING_LUCK_DESCRIPTION = (
-    "Frequency: raz dziennie.\n"
-    "Trigger: oblejesz skill check albo saving throw.\n"
-    "Możesz wykonać przerzut, ale musisz użyć nowego wyniku."
+    "Fluff: Halfling Luck oddaje legendarna zdolnosc niziolkow do wychodzenia calo z sytuacji, ktore powinny skonczyc sie katastrofa.\n"
+    "Mechanika:\n"
+    "- Kiedy: Gdy oblejesz skill check albo saving throw.\n"
+    "- Efekt:\n"
+    "  - Raz dziennie mozesz aktywowac Halfling Luck i wykonac przerzut.\n"
+    "  - Gra pyta wtedy, czy chcesz wykonac przerzut.\n"
+    "  - Musisz uzyc nowego wyniku, nawet jesli jest gorszy.\n"
+    "  - Po uzyciu feat sie wyczerpuje do kolejnego dnia.\n"
+    "  - Przykład: oblewasz Will save przeciw Fear, aktywujesz Halfling Luck i rzucasz ponownie."
 )
 
 

@@ -72,7 +72,7 @@ def test_universalist_setup_gets_bonus_feat_and_familiar_bond(monkeypatch):
             "Universalist",
             "Improved Familiar Attunement",
             "Counterspell",
-            "Hand Of The Apprentice",
+            "Reach Spell",
         ]
     )
     monkeypatch.setattr("ui_client.get_ui_client", lambda: ui)
@@ -85,18 +85,34 @@ def test_universalist_setup_gets_bonus_feat_and_familiar_bond(monkeypatch):
     assert setup.get("school") is None
     assert setup.get("thesis") == "improved_familiar_attunement"
     assert setup.get("class_feat") == "counterspell"
-    assert setup.get("bonus_class_feat") == "hand_of_the_apprentice"
+    assert setup.get("bonus_class_feat") == "reach_spell"
     assert setup.get("bond_source") == "familiar"
     assert setup.get("drain_action") == "drain_familiar"
 
     assert hero.has_status("counterspell")
     assert hero.has_status("familiar")
     assert hero.has_status("FamiliarOwner")
+    assert hero.has_status("reach_spell")
     assert hero.has_status("hand_of_the_apprentice")
     assert "hand_of_the_apprentice" in list(getattr(hero, "wizard_focus_spells", []) or [])
     assert getattr(hero, "focus_point", 0) >= 1
     reaction_ids = [getattr(item, "id", None) for item in getattr(hero, "reactions", [])]
     assert "counterspell_reaction" in reaction_ids
+
+
+def test_staff_nexus_forces_staff_bonded_item(monkeypatch):
+    ui = DummyUI(["Evocation", "Staff Nexus", "Counterspell"])
+    monkeypatch.setattr("ui_client.get_ui_client", lambda: ui)
+
+    hero = DummyHero()
+    hero.add_status(WIZARD_STATUS)
+
+    setup = dict(hero.get_status_data("wizard", "wizard_setup", {}) or {})
+    assert setup.get("thesis") == "staff_nexus"
+    assert setup.get("bond_source") == "item"
+    assert setup.get("bonded_item") == "staff"
+    assert str(setup.get("staff_nexus_cantrip") or "").strip()
+    assert str(setup.get("staff_nexus_rank_1_spell") or "").strip()
 
 
 def test_metamagical_thesis_grants_selected_metamagic_feat(monkeypatch):

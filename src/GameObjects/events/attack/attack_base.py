@@ -7,6 +7,7 @@ import re
 from bonuses import BonusEffect, BonusType, compute_total_modifier, format_effects_log, select_best_effects
 from damage_types import DamageType
 from combat import ac_with_bonuses
+from combat.stealth_runtime import clear_combat_stealth, has_combat_stealth_state
 from GameObjects.interactions_mixin import prompt_for_roll
 from statuses import (
     CONCEALED_STATUS,
@@ -19,7 +20,7 @@ from statuses import (
     attack_penalty_effects,
 )
 
-from ..base import GameEvent, mapping_setdefault_actor
+from ..base import EventContext, GameEvent, mapping_setdefault_actor
 
 logger = logging.getLogger(__name__)
 
@@ -150,6 +151,43 @@ class AttackEventBase(GameEvent):
         "light_crossbow": "crossbow",
         "simple_crossbow": "crossbow",
     }
+
+    @staticmethod
+    def _attacker_has_combat_stealth(actor) -> bool:
+        return bool(has_combat_stealth_state(actor))
+
+    @staticmethod
+    def _refresh_actor_ui(game, actor, *, note: str | None = None) -> None:
+        try:
+            ui_hero = getattr(game, "ui_hero", None)
+            if callable(ui_hero):
+                ui_hero(actor, note=note)
+            ui_active = getattr(game, "ui_active_actor", None)
+            if callable(ui_active):
+                ui_active(actor)
+        except Exception:
+            logger.debug("Nie udało się odświeżyć UI aktora.", exc_info=True)
+
+    def _reveal_attacker_after_attack(self, ctx) -> None:
+        actor = getattr(ctx, "actor", None)
+        game = getattr(ctx, "game", None)
+        if actor is None or game is None:
+            return
+        if not self._attacker_has_combat_stealth(actor) and not self._has_status_id(actor, "stealth"):
+            return
+        clear_combat_stealth(actor, clear_stealth=True, add_observable=True)
+        try:
+            ui_log = getattr(game, "ui_log", None)
+            if callable(ui_log):
+                ui_log("Atak z ukrycia ujawnia twoją pozycję.")
+        except Exception:
+            pass
+        self._refresh_actor_ui(game, actor, note="Atak ujawnia twoją pozycję")
+
+    def post(self, ctx: EventContext, result) -> None:
+        if bool(getattr(result, "success", False)):
+            self._reveal_attacker_after_attack(ctx)
+        return None
     _SIMPLE_WEAPON_IDS = {
         "club",
         "crossbow",
@@ -698,7 +736,21 @@ class AttackEventBase(GameEvent):
         natural = self._is_flat_footed(target)
         feint_flat_footed = self._feint_flat_footed_status_applies(target, attacker, is_melee=bool(is_melee))
         surprise = self._rogue_surprise_attack_applies(ctx, attacker, target)
-        return bool(forced or natural or surprise or feint_flat_footed), bool(natural), bool(surprise)
+        support_off_guard = False
+        try:
+            from GameObjects.companions.support_runtime import animal_companion_support_forces_off_guard
+
+            support_off_guard = bool(
+                animal_companion_support_forces_off_guard(
+                    getattr(ctx, "game", None),
+                    attacker,
+                    target,
+                    is_melee=bool(is_melee),
+                )
+            )
+        except Exception:
+            support_off_guard = False
+        return bool(forced or natural or surprise or feint_flat_footed or support_off_guard), bool(natural), bool(surprise)
 
     @staticmethod
     def _target_allows_precision_damage(target) -> bool:

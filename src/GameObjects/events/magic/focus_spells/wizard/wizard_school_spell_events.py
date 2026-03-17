@@ -7,6 +7,7 @@ from combat.hp_engine import apply_damage as hp_apply_damage
 from damage_types import DamageType
 from skills import Skill
 from statuses import Status, StunnedStatus
+from GameObjects.companions.support_runtime import apply_spell_attack_animal_companion_support
 from GameObjects.interactions_mixin import prompt_for_roll
 
 from ....base import EventContext, EventResult
@@ -470,7 +471,23 @@ class CallOfTheGraveEvent(WizardFocusSpellEvent):
         else:
             _apply_sickened(target, 1, source=self.name)
             msg = "Call of the Grave: success, target becomes sickened 1."
-        return EventResult(success=True, consumed_action=True, message=msg, data={"target": target, "outcome": outcome})
+        support_result = apply_spell_attack_animal_companion_support(ctx, actor, target, tags=self.spell_tags)
+        if support_result.get("applied"):
+            notes = [str(note) for note in list(support_result.get("notes") or []) if str(note)]
+            if notes:
+                msg = f"{msg} {' '.join(notes)}".strip()
+        return EventResult(
+            success=True,
+            consumed_action=True,
+            message=msg,
+            data={
+                "target": target,
+                "outcome": outcome,
+                "animal_companion_support_applied": bool(support_result.get("applied")),
+                "animal_companion_support_notes": list(support_result.get("notes") or []),
+                "defeated": bool(support_result.get("defeated")),
+            },
+        )
 
 
 @register_event
@@ -691,11 +708,24 @@ class HandOfTheApprenticeEvent(WizardFocusSpellEvent):
         msg += " Weapon returns to your hand."
         if defeated:
             msg += " Target defeated."
+        support_result = apply_spell_attack_animal_companion_support(ctx, actor, target, tags=self.spell_tags)
+        if support_result.get("applied"):
+            notes = [str(note) for note in list(support_result.get("notes") or []) if str(note)]
+            if notes:
+                msg = f"{msg} {' '.join(notes)}".strip()
+        defeated = bool(defeated or support_result.get("defeated"))
         return EventResult(
             success=True,
             consumed_action=True,
             message=msg,
-            data={"target": target, "damage": damage, "outcome": outcome},
+            data={
+                "target": target,
+                "damage": damage,
+                "outcome": outcome,
+                "animal_companion_support_applied": bool(support_result.get("applied")),
+                "animal_companion_support_notes": list(support_result.get("notes") or []),
+                "defeated": defeated,
+            },
         )
 
 

@@ -87,7 +87,6 @@ NATURAL_AMBITION_CLASS_FEAT_CHOICES = {
         "counterspell",
         "eschew_materials",
         "familiar",
-        "hand_of_the_apprentice",
         "reach_spell",
         "widen_spell",
     ],

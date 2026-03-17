@@ -3,13 +3,14 @@ from __future__ import annotations
 from statuses.base import Status
 
 LINGERING_COMPOSITION_DESCRIPTION = (
-    "Lingering Composition: naucz sie focus spell 'Lingering Composition' "
-    "(dopisanie do znanych czarow recznie)."
+    "Lingering Composition: 1 akcja i 1 Focus Point. Wykonujesz test Performance; "
+    "na sukces nastepny composition cantrip w tej turze trwa 3 rundy, "
+    "na krytyczny sukces 4 rundy."
 )
 
 LINGERING_COMPOSITION_PROMPT = (
-    "Lingering Composition: dopisz do listy znanych czarow focus spell "
-    "'Lingering Composition'. Zwiekszasz Focus Pool o 1 (mechanicznie)."
+    "Lingering Composition: odblokowujesz osobna akcje metamagiczna dla barda "
+    "i zwiekszasz Focus Pool o 1."
 )
 
 

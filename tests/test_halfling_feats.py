@@ -8,6 +8,7 @@ from statuses import Status
 from statuses.race.halfling.feats.halfling_lore import HALFLING_LORE_STATUS
 from statuses.race.halfling.feats.halfling_luck import HALFLING_LUCK_STATUS
 from statuses.race.halfling.feats.halfling_weapon_familiarity import HALFLING_WEAPON_FAMILIARITY_STATUS
+from statuses.race.halfling.feats.distracting_shadows import DISTRACTING_SHADOWS_STATUS
 from statuses.race.halfling.feats.sure_feet import SURE_FEET_STATUS
 from statuses.race.halfling.feats.titan_slinger import TITAN_SLINGER_STATUS
 from statuses.race.halfling.feats.unfettered_halfling import UNFETTERED_HALFLING_STATUS
@@ -136,3 +137,42 @@ def test_unfettered_halfling_promotes_escape_and_punishes_grapple_failure():
         apply_modifiers=True,
     )
     assert grapple.outcome == "critical_failure"
+
+
+def test_halfling_feat_descriptions_include_mechanics_and_example():
+    statuses = [
+        DISTRACTING_SHADOWS_STATUS,
+        HALFLING_LORE_STATUS,
+        HALFLING_LUCK_STATUS,
+        HALFLING_WEAPON_FAMILIARITY_STATUS,
+        SURE_FEET_STATUS,
+        TITAN_SLINGER_STATUS,
+        UNFETTERED_HALFLING_STATUS,
+        WATCHFUL_HALFLING_STATUS,
+    ]
+
+    for status in statuses:
+        text = str((status.data or {}).get("ui_description") or "")
+        assert "Mechanika:" in text
+        assert "Przykład:" in text
+
+
+def test_halfling_choice_descriptions_are_not_generic_or_nested():
+    actor = DummyHero()
+    expected_tokens = {
+        "distracting_shadows": "wiekszych towarzyszy",
+        "halfling_lore": "typowe dla niziolkow",
+        "halfling_luck": "legendarna zdolnosc",
+        "halfling_weapon_familiarity": "broni, proc",
+        "sure_feet": "lekki krok",
+        "titan_slinger": "wielkich przeciwnikow",
+        "unfettered_halfling": "trudno niziolka unieruchomic",
+        "watchful_halfling": "czujnosc niziolka",
+    }
+
+    for choice_id, token in expected_tokens.items():
+        text = actor._choice_description(choice_id).lower()
+        assert "fluff: opcja wyboru." not in text
+        assert "fluff: mechanika:" not in text
+        assert "- efekt: mechanika:" not in text
+        assert token in text

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 
+from combat.stealth_runtime import clear_combat_stealth
 from statuses import clear_prone_effects, PRONE_STATUS, STEALTH_STATUS
 from .base import EventContext, EventResult, GameEvent
 from .registry import register_event
@@ -31,7 +32,7 @@ class StandEvent(GameEvent):
 
         if getattr(hero, "has_status", lambda _s: False)(STEALTH_STATUS):
             try:
-                hero.remove_status(STEALTH_STATUS)
+                clear_combat_stealth(hero, clear_stealth=True, add_observable=True)
             except Exception:
                 logger.debug("Nie udało się zdjąć stealth przy stand.", exc_info=True)
 

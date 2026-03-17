@@ -2,6 +2,7 @@ from hero import Hero
 from combat.weapon_proficiency import compute_weapon_attack_roll_bonus
 from statuses import Status
 from statuses.race.dwarf.feats.dwarven_weapon_familiarity import DWARVEN_WEAPON_FAMILIARITY_STATUS
+from statuses.classes.monk.feats.monastic_weaponry import MONASTIC_WEAPONRY_STATUS
 
 
 def test_proficiency_bonus_formula_level_plus_rank_step():
@@ -156,3 +157,44 @@ def test_ranged_attack_formula_with_dex_and_expert_matches_pf2_example_shape():
     assert str(result["ability_key"]) == "dexterity"
     assert int(result["item_bonus"]) == 1
     assert int(result["total"]) == 13
+
+
+def test_monastic_weaponry_reclassifies_monk_weapons_to_simple_for_proficiency():
+    hero = Hero()
+    hero.level = 1
+    hero.str_mod = 3
+    hero.add_status(Status(id="monk"))
+    hero.add_status(
+        Status(
+            id="weapon_prof_test",
+            data={
+                "weapon_proficiency_ranks": {
+                    "simple": "trained",
+                    "martial": "untrained",
+                    "advanced": "untrained",
+                    "unarmed": "trained",
+                }
+            },
+        )
+    )
+
+    without_feat = compute_weapon_attack_roll_bonus(
+        hero,
+        weapon_tags=["attack_melee", "bo_staff", "martial", "monk"],
+        is_ranged=False,
+        finesse=False,
+    )
+    hero.add_status(MONASTIC_WEAPONRY_STATUS)
+    with_feat = compute_weapon_attack_roll_bonus(
+        hero,
+        weapon_tags=["attack_melee", "bo_staff", "martial", "monk"],
+        is_ranged=False,
+        finesse=False,
+    )
+
+    assert without_feat["category"] == "martial"
+    assert without_feat["rank"] == "untrained"
+    assert with_feat["category"] == "simple"
+    assert with_feat["rank"] == "trained"
+    assert int(with_feat["proficiency_bonus"]) == 3
+    assert int(with_feat["total"]) == 6
