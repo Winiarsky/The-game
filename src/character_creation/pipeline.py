@@ -42,7 +42,6 @@ from economy import (
     set_actor_starting_money_gp,
     spend_actor_cp,
 )
-from hero import Hero
 from localization import localize_term_pl, localized_hint_pl
 from statuses.base import Status
 from ui_payloads import _speed_snapshot_values
@@ -3048,6 +3047,7 @@ class CharacterCreationResult:
 
 
 def create_character(game, repository: CharacterRepository) -> CharacterCreationResult | None:
+    from hero import Hero
     hero = Hero()
     hero.level = 1
     hero.wounds = 0
@@ -4230,6 +4230,7 @@ def create_character(game, repository: CharacterRepository) -> CharacterCreation
 
 
 def hero_from_snapshot(snapshot: dict[str, Any]) -> Hero:
+    from hero import Hero
     hero = Hero()
     hero.level = int(snapshot.get("level") or 1)
     hero.wounds = 0
