@@ -4,14 +4,14 @@ from statuses.base import Status
 from statuses.familiar import FAMILIAR_OWNER_STATUS
 
 FAMILIAR_DESCRIPTION = (
-    "Familiar: zyskujesz familiara i mozesz korzystac z akcji Command Familiar."
+    "Chowaniec: zyskujesz chowanca i mozesz korzystac z akcji Komenderuj chowanca."
 )
 
 
 def FamiliarStatus() -> Status:
     return Status(
         id="familiar",
-        label="Familiar",
+        label="Chowaniec",
         data={
             "ui_description": FAMILIAR_DESCRIPTION,
             "ui_prompt": FAMILIAR_DESCRIPTION,

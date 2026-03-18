@@ -9,7 +9,7 @@ def LowLightVisionStatus() -> Status:
     """Status: widzenie w polmroku."""
     return Status(
         id="low_light_vision",
-        label="Low-Light Vision",
+        label="Widzenie w slabym swietle",
         check_effects=[
             CheckEffect(
                 applies_to="source",

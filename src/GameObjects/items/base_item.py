@@ -64,8 +64,8 @@ class BaseItem:
         except Exception:
             ammo_line = ""
         if self.description:
-            return f"{self.description}\n" + "\n".join(economy_lines) + f"\n- Traits: {traits}{ammo_line}"
-        return "\n".join(economy_lines) + f"\n- Traits: {traits}{ammo_line}"
+            return f"{self.description}\n" + "\n".join(economy_lines) + f"\n- Cechy: {traits}{ammo_line}"
+        return "\n".join(economy_lines) + f"\n- Cechy: {traits}{ammo_line}"
 
 
 __all__ = [

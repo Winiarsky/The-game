@@ -31,7 +31,7 @@ class BaseRangeAttackEvent(AttackEventBase):
     """Wspólna logika dla ataków dystansowych (łuki, kusze itd.)."""
 
     weapon_label: str = "bronią dystansową"
-    damage_prompt: str | Sequence[str] = "1k6 + DEX"
+    damage_prompt: str | Sequence[str] = "1k6"
     action_id_base: str = "attack_ranged"
     damage_type: str | Sequence[str] = DamageType.PIERCING.value
     range_increment_ft: int = 60

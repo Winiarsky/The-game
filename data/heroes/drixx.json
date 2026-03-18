@@ -24,7 +24,7 @@
   ],
   "status_data": {
     "goblin": {
-      "ui_description": "Punkty Zycia: 6\nRozmiar: Maly\nPredkosc: 25 stop\nBoosty atrybutow: Zrecznosc, Charyzma, Dowolna\nWada atrybutu: Madrosc\nJezyki: Common, Goblin\nDodatkowe jezyki: Draconic, Dwarven, Gnoll, Gnomish, Halfling, Orcish.\nCechy: Goblin, Humanoid.\nDarkvision: w ciemnosci i slabym swietle widzisz jak w jasnym (ciemnosc w odcieniach szarosci).",
+      "ui_description": "Punkty Zycia: 6\nRozmiar: Maly\nPredkosc: 25 stop\nBoosty atrybutow: Zrecznosc, Charyzma, Dowolna\nWada atrybutu: Madrosc\nJezyki: Common, Goblin\nDodatkowe jezyki: Draconic, Dwarven, Gnoll, Gnomish, Halfling, Orcish.\nCechy: Goblin, Humanoid.\nWidzenie w ciemnosci: w ciemnosci i slabym swietle widzisz jak w jasnym (ciemnosc w odcieniach szarosci).",
       "ancestry_hp": 6,
       "base_speed_feet": 25,
       "size": "small",
@@ -53,7 +53,7 @@
       "grants_statuses": [
         {
           "id": "darkvision",
-          "label": "Darkvision",
+          "label": "Widzenie w ciemnosci",
           "duration": null,
           "source": null,
           "stacks": false,
@@ -109,7 +109,7 @@
     },
     "background_criminal": {
       "ui_description": "Przetrwales dzieki przestepczemu fachowi, samotnie lub w organizacji.",
-      "ui_prompt": "Background: Przestepca",
+      "ui_prompt": "Tlo: Przestepca",
       "ui_prompt_long": "Przetrwales dzieki przestepczemu fachowi, samotnie lub w organizacji.\n\nMechanika (w tym silniku):\n- Boosty cech (informacyjnie w UI): Jeden boost do Zrecznosci lub Inteligencji oraz jeden dowolny boost.\n- Szkolenie Skill/Lore (informacyjnie w UI): Skradanie oraz Wiedza: Podziemie.\n- Feat z backgroundu: Experienced Smuggler (dodawany do bohatera jako status).\n- Mechanika featu (krotko): +2 status do testów Skradania.\n\nPrzypomnienie reguły bazowej: Na 1. poziomie wybierasz jeden background i tej decyzji nie zmieniasz później. Każdy background daje dwa boosty cech (jeden ograniczony, jeden dowolny), trained w jednym skillu i jednym Lore oraz jeden skill feat. W tym silniku boosty cech i szkolenia skill/Lore są informacją UI, a feat z backgroundu jest dodawany do bohatera jako realny status.",
       "is_background": true,
       "background_key": "criminal",

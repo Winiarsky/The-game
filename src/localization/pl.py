@@ -881,7 +881,7 @@ _HINTS_PL: dict[str, str] = {
     "double_slice": "Dwa strike'i melee 1H na jednym celu; łączysz obrażenia przy 2 trafieniach.",
     "point_blank_shot": "Stance wojownika: premie dla ataków dystansowych na bliskim zasięgu.",
     "hunt_prey": "Oznacz cel łowów i aktywuj premie łowcy (Hunter's Edge).",
-    "hunted_shot": "Dwa szybkie strzały do oznaczonej ofiary (Hunt Prey).",
+    "hunted_shot": "Dwa szybkie strzaly do oznaczonej ofiary (Wyznacz ofiare).",
     "twin_takedown": "Dwa strike'i melee 1H przeciw oznaczonej ofierze.",
     "twin_feint": "2 akcje: dwa strike'i melee 1H; drugi atak korzysta z feint/off-guard.",
     "sudden_charge": "2x ruch + strike melee w jednej akcji specjalnej (2 akcje).",

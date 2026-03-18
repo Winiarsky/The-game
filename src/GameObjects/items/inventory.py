@@ -1024,8 +1024,8 @@ def item_use_description(item) -> str:
         hp = int(getattr(item, "current_hp", getattr(item, "max_hp", 0)) or 0)
         max_hp = int(getattr(item, "max_hp", hp) or hp)
         return (
-            "Użyj: Raise Shield "
-            f"(+{ac_bonus} AC) / Shield Block (Hardness {hardness}, HP tarczy {hp}/{max_hp})."
+            "Uzyj: Podnies tarcze "
+            f"(+{ac_bonus} AC) / Blok tarcza (Twardosc {hardness}, HP tarczy {hp}/{max_hp})."
         )
 
     item_id = str(getattr(item, "item_id", "") or "").strip().lower()

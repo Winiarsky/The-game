@@ -4,8 +4,8 @@ from GameObjects.companions import animal_companion_type_ids
 from statuses.base import Status
 
 ANIMAL_COMPANION_DESCRIPTION = (
-    "Animal Companion: zyskujesz young animal companion. "
-    "W walce companion pojawia sie jako osobny obiekt i dziala przez komende ownera."
+    "Zwierzecy towarzysz: zyskujesz mlodego zwierzecego towarzysza. "
+    "W walce towarzysz pojawia sie jako osobny obiekt i dziala przez komende wlasciciela."
 )
 
 
@@ -13,7 +13,7 @@ def AnimalCompanionStatus() -> Status:
     choices = animal_companion_type_ids()
     return Status(
         id="animal_companion",
-        label="Animal Companion",
+        label="Zwierzecy towarzysz",
         data={
             "ui_description": ANIMAL_COMPANION_DESCRIPTION,
             "ui_prompt": ANIMAL_COMPANION_DESCRIPTION,

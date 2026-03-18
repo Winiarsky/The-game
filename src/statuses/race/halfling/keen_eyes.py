@@ -17,7 +17,7 @@ def KeenEyesStatus() -> Status:
     """Cecha: Keen Eyes."""
     return Status(
         id="keen_eyes",
-        label="Keen Eyes",
+        label="Bystre oczy",
         data={
             "ui_description": KEEN_EYES_DESCRIPTION,
             "seek_hidden_undetected_bonus_feet": 30,
@@ -38,7 +38,7 @@ def KeenEyesStatus() -> Status:
                         label="keen eyes +2",
                     )
                 ],
-                prompt_notes=["Keen Eyes: +2 do Seek vs hidden/undetected w 30 stóp."],
+                prompt_notes=["Bystre oczy: +2 do Seek przeciw hidden/undetected w 30 stopach."],
             )
         ],
     )

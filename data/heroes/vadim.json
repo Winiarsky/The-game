@@ -25,7 +25,7 @@
   ],
   "status_data": {
     "elf": {
-      "ui_description": "Punkty Zycia: 6\nRozmiar: Sredni\nPredkosc: 30 stop\nBoosty atrybutow: Zrecznosc, Inteligencja, Dowolna\nWada atrybutu: Kondycja\nJezyki: Common, Elven\nDodatkowe jezyki rowne modyfikatorowi Inteligencji: Celestial, Draconic, Gnoll, Gnomish, Goblin, Orcish, Sylvan (lub regionalne).\nCechy: Elf, Humanoid\nLow-Light Vision: w slabym swietle widzisz jak w jasnym i ignorujesz concealed z dim light.",
+      "ui_description": "Punkty Zycia: 6\nRozmiar: Sredni\nPredkosc: 30 stop\nBoosty atrybutow: Zrecznosc, Inteligencja, Dowolna\nWada atrybutu: Kondycja\nJezyki: Common, Elven\nDodatkowe jezyki rowne modyfikatorowi Inteligencji: Celestial, Draconic, Gnoll, Gnomish, Goblin, Orcish, Sylvan (lub regionalne).\nCechy: Elf, Humanoid\nWidzenie w slabym swietle: w slabym swietle widzisz jak w jasnym i ignorujesz concealed z dim light.",
       "ancestry_hp": 6,
       "base_speed_feet": 30,
       "size": "medium",
@@ -55,7 +55,7 @@
       "grants_statuses": [
         {
           "id": "dim_light_vision",
-          "label": "Dim Light Vision",
+          "label": "Widzenie w polmroku",
           "duration": null,
           "source": null,
           "stacks": false,
@@ -81,11 +81,11 @@
       ]
     },
     "cavern_elf": {
-      "ui_description": "Zyskujesz Darkvision.\nDziedzictwo zastepuje bazowe widzenie w polmroku elfa.",
+      "ui_description": "Zyskujesz Widzenie w ciemnosci.\nDziedzictwo zastepuje bazowe widzenie w polmroku elfa.",
       "remove_statuses": [
         {
           "id": "dim_light_vision",
-          "label": "Dim Light Vision",
+          "label": "Widzenie w polmroku",
           "duration": null,
           "source": null,
           "stacks": false,
@@ -112,7 +112,7 @@
       "grants_statuses": [
         {
           "id": "darkvision",
-          "label": "Darkvision",
+          "label": "Widzenie w ciemnosci",
           "duration": null,
           "source": null,
           "stacks": false,
@@ -169,7 +169,7 @@
     },
     "background_hermit": {
       "ui_description": "Zyles w odosobnieniu i rozwineles nietypowa, praktyczna wiedze.",
-      "ui_prompt": "Background: Pustelnik",
+      "ui_prompt": "Tlo: Pustelnik",
       "ui_prompt_long": "Zyles w odosobnieniu i rozwineles nietypowa, praktyczna wiedze.\n\nMechanika (w tym silniku):\n- Boosty cech (informacyjnie w UI): Jeden boost do Kondycji lub Inteligencji oraz jeden dowolny boost.\n- Szkolenie Skill/Lore (informacyjnie w UI): Natura albo Okultyzm oraz jeden terenowy Lore zwiazany z twoim schronieniem.\n- Feat z backgroundu: Dubious Knowledge (dodawany do bohatera jako status).\n- Mechanika featu (krotko): Gdy nie zdasz (ale nie krytycznie) Recall Knowledge, otrzymujesz prawdziwa i falszywa informacje, bez mozliwosci odroznienia. Uproszczenie: sukces z tagiem knowledge staje sie krytycznym sukcesem.\n\nPrzypomnienie reguły bazowej: Na 1. poziomie wybierasz jeden background i tej decyzji nie zmieniasz później. Każdy background daje dwa boosty cech (jeden ograniczony, jeden dowolny), trained w jednym skillu i jednym Lore oraz jeden skill feat. W tym silniku boosty cech i szkolenia skill/Lore są informacją UI, a feat z backgroundu jest dodawany do bohatera jako realny status.",
       "is_background": true,
       "background_key": "hermit",
@@ -585,8 +585,8 @@
       "wizard_staff_nexus_rank_1_spell": "magic_missile"
     },
     "familiar": {
-      "ui_description": "Familiar: zyskujesz familiara i mozesz korzystac z akcji Command Familiar.",
-      "ui_prompt": "Familiar: zyskujesz familiara i mozesz korzystac z akcji Command Familiar.",
+      "ui_description": "Familiar: zyskujesz familiara i mozesz korzystac z akcji Komenderuj chowanca.",
+      "ui_prompt": "Familiar: zyskujesz familiara i mozesz korzystac z akcji Komenderuj chowanca.",
       "grants_statuses": [
         {
           "id": "FamiliarOwner",

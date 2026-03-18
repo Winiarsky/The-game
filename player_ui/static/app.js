@@ -1039,7 +1039,7 @@ function spellcastingCounterSummary(spellcasting) {
     const focusPoints = Number(spellcasting.focusPoints ?? spellcasting.focus_points);
     const focusPoolMax = Number(spellcasting.focusPoolMax ?? spellcasting.focus_pool_max);
     if (!Number.isNaN(focusPoolMax) && focusPoolMax > 0) {
-        rows.push(`Focus ${Number.isNaN(focusPoints) ? 0 : focusPoints}/${focusPoolMax}`);
+        rows.push(`Punkty Focus ${Number.isNaN(focusPoints) ? 0 : focusPoints}/${focusPoolMax}`);
     }
     const slotTotal = spellcasting.slotTotal ?? spellcasting.slot_total;
     const slotRemaining = spellcasting.slotRemaining ?? spellcasting.slot_remaining;
@@ -1204,7 +1204,7 @@ function handleEvent(event) {
             }
         }
         renderPrompt(payload);
-        const promptTag = payload.kind === "choice" ? "Wybór" : payload.kind === "info" ? "Info" : "Rzut";
+        const promptTag = payload.kind === "choice" ? "Wybór" : payload.kind === "info" ? "Informacja" : "Rzut";
         const sourceNote = payload.source ? ` [${payload.source}]` : "";
         const choicesCount = Array.isArray(payload.choices) ? payload.choices.length : 0;
         const choicesNote = choicesCount ? ` (${choicesCount} opcji)` : "";
@@ -1217,12 +1217,12 @@ function handleEvent(event) {
         actionTitle.textContent = title;
         actionText.textContent = payload.desc || "";
         setIllustration(payload.image);
-        addLogEntry(`Zdolność: ${title}`, meta, "info", "Special");
+        addLogEntry(`Zdolność: ${title}`, meta, "info", "Specjalne");
         updateSessionSummary();
         return;
     }
     if (type === "info") {
-        const infoText = payload.text || payload.message || "Info";
+        const infoText = payload.text || payload.message || "Informacja";
         const scenarioMatch = String(infoText).match(/Start scenariusza:\s*(.+)\s*$/i);
         if (scenarioMatch && scenarioMatch[1]) {
             currentScenario = String(scenarioMatch[1]).trim();
@@ -1235,7 +1235,7 @@ function handleEvent(event) {
             source: payload.source || "",
             image: payload.image || null,
         });
-        addLogEntry(infoText, meta, "info", payload.source || "Info");
+        addLogEntry(infoText, meta, "info", payload.source || "Informacja");
         updateSessionSummary();
         return;
     }
@@ -1247,7 +1247,7 @@ function handleEvent(event) {
         return;
     }
     if (type === "prompt_answered") {
-        addLogEntry(`Odpowiedź (${payload.prompt || ""}): ${payload.answer}`, meta, "success", "Prompt");
+        addLogEntry(`Odpowiedź (${payload.prompt || ""}): ${payload.answer}`, meta, "success", "Pytanie");
         if (activePrompt && String(activePrompt.id) === String(payload.id)) {
             closePrompt();
         }
@@ -1940,6 +1940,9 @@ function openPrompt(prompt) {
     const _SECTION_LABELS = {
         movement: "Ruch i Eksploracja",
         combat: "Walka",
+        generic: "Akcje Ogólne",
+        heritage: "Dziedzictwo / Pochodzenie",
+        class: "Akcje Klasowe",
         utility: "Zarządzanie",
         turn: "Tura",
     };

@@ -152,8 +152,8 @@ class HeroesTurn(State):
         except Exception:
             pass
 
-        grouped = group_events(available_events)
-        intent_options = build_intent_options(grouped, in_combat=False, actor=hero)
+        grouped = group_events(available_events, actor=hero)
+        intent_options = build_intent_options(grouped, in_combat=False, actor=hero, available_events=available_events)
         choice = choose_option(
             self.game,
             title="Akcje",

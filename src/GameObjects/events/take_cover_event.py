@@ -102,11 +102,11 @@ class TakeCoverEvent(GameEvent):
 
     def execute(self, ctx: EventContext) -> EventResult:
         if not ctx.in_combat:
-            return EventResult.cancelled(message="Take Cover dostępne tylko w walce.")
+            return EventResult.cancelled(message="Osłona dostępna tylko w walce.")
 
         hero = ctx.actor
         if hero is None:
-            return EventResult.cancelled(message="Brak bohatera do akcji Take Cover.")
+            return EventResult.cancelled(message="Brak bohatera do akcji Osłona.")
         hero_pos = getattr(hero, "position", None)
         if hero_pos is None:
             return EventResult.cancelled(message="Bohater nie stoi na planszy.")

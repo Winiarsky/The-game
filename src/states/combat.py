@@ -241,12 +241,12 @@ class Combat(State):
         spawn_options = self._find_spawn_positions(owner)
         if not spawn_options:
             self.game.ui_log(
-                f"{getattr(owner, 'name', 'Druid')}: brak wolnego pola do ustawienia Animal Companion."
+                f"{getattr(owner, 'name', 'Druid')}: brak wolnego pola do ustawienia zwierzecego towarzysza."
             )
             return
         try:
             self.game.ui_log(
-                f"Ustaw figurke Animal Companion dla {getattr(owner, 'name', 'bohatera')}."
+                f"Ustaw figurke zwierzecego towarzysza dla {getattr(owner, 'name', 'bohatera')}."
             )
         except Exception:
             pass
@@ -265,11 +265,11 @@ class Combat(State):
         try:
             board.place(companion, selected)
         except Exception as exc:
-            logger.error("Nie udalo sie ustawic Animal Companion: %s", exc)
+            logger.error("Nie udalo sie ustawic zwierzecego towarzysza: %s", exc)
             return
         self.animal_companions[owner_id] = companion
         self.game.ui_log(
-            f"{getattr(owner, 'name', 'Bohater')}: Animal Companion ({getattr(companion, 'companion_type', 'wolf')}) "
+            f"{getattr(owner, 'name', 'Bohater')}: Zwierzecy towarzysz ({getattr(companion, 'companion_type', 'wolf')}) "
             f"ustawiony na {selected}."
         )
 
@@ -334,13 +334,13 @@ class Combat(State):
                 except Exception:
                     pass
             owner_name = getattr(companion, "owner_name", owner_id)
-            companion_name = getattr(companion, "name", "Animal Companion")
+            companion_name = getattr(companion, "name", "Zwierzecy towarzysz")
             prompt = f"Koniec walki: zabierz figurke {companion_name} (owner: {owner_name})."
             self.game.ui_log(prompt)
             ui = getattr(self.game, "ui", None)
             if ui is not None and hasattr(ui, "prompt_info"):
                 try:
-                    ui.prompt_info("Animal Companion", prompt_long=prompt, source="animal_companion")
+                    ui.prompt_info("Zwierzecy towarzysz", prompt_long=prompt, source="animal_companion")
                 except Exception:
                     pass
         self.animal_companions.clear()
@@ -372,7 +372,7 @@ class Combat(State):
                     pass
             self.animal_companions.pop(owner_id, None)
             self.game.ui_log(
-                f"{getattr(companion, 'name', 'Animal Companion')} został pokonany i znika z planszy."
+                f"{getattr(companion, 'name', 'Zwierzecy towarzysz')} zostal pokonany i znika z planszy."
             )
 
     # --- Initiative helpers ---
@@ -407,7 +407,7 @@ class Combat(State):
                 try:
                     self._deploy_animal_companion_for_owner(hero)
                 except Exception as exc:
-                    logger.error("Nie udalo sie ustawic Animal Companion dla %s: %s", getattr(hero, "name", hero), exc)
+                    logger.error("Nie udalo sie ustawic zwierzecego towarzysza dla %s: %s", getattr(hero, "name", hero), exc)
             pending = [h for h in heroes if getattr(h, "initiative", None) is None]
 
     def _roll_enemy_initiatives(self) -> None:
@@ -1431,8 +1431,8 @@ class Combat(State):
         except Exception:
             pass
 
-        grouped = group_events(available_events)
-        intent_options = build_intent_options(grouped, in_combat=True, actor=actor)
+        grouped = group_events(available_events, actor=actor)
+        intent_options = build_intent_options(grouped, in_combat=True, actor=actor, available_events=available_events)
         logger.info("Dostępne intencje: %s", ", ".join(option["id"] for option in intent_options))
         self.game.ui_log(f"Aktywny: {getattr(actor, 'name', actor)}. Wybierz intencję akcji.")
         intent = choose_option(

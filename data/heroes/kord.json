@@ -57,7 +57,7 @@
       "grants_statuses": [
         {
           "id": "dim_light_vision",
-          "label": "Dim Light Vision",
+          "label": "Widzenie w polmroku",
           "duration": null,
           "source": null,
           "stacks": false,
@@ -90,7 +90,7 @@
     },
     "background_laborer": {
       "ui_description": "Lata ciezkiej pracy fizycznej zbudowaly wytrzymalosc i sile.",
-      "ui_prompt": "Background: Robotnik",
+      "ui_prompt": "Tlo: Robotnik",
       "ui_prompt_long": "Lata ciezkiej pracy fizycznej zbudowaly wytrzymalosc i sile.\n\nMechanika (w tym silniku):\n- Boosty cech (informacyjnie w UI): Jeden boost do Sily lub Kondycji oraz jeden dowolny boost.\n- Szkolenie Skill/Lore (informacyjnie w UI): Atletyka oraz Wiedza: Praca fizyczna.\n- Feat z backgroundu: Hefty Hauler (dodawany do bohatera jako status).\n- Mechanika featu (krotko): +2 status do testów Atletyki.\n\nPrzypomnienie reguły bazowej: Na 1. poziomie wybierasz jeden background i tej decyzji nie zmieniasz później. Każdy background daje dwa boosty cech (jeden ograniczony, jeden dowolny), trained w jednym skillu i jednym Lore oraz jeden skill feat. W tym silniku boosty cech i szkolenia skill/Lore są informacją UI, a feat z backgroundu jest dodawany do bohatera jako realny status.",
       "is_background": true,
       "background_key": "laborer",

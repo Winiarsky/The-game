@@ -403,8 +403,8 @@ def test_starting_shop_weapon_desc_contains_damage_and_trait_mechanics():
     assert "Kiedy:" in text
     assert "Efekt:" in text
     assert "Atak:" in text
-    assert "Traitsy:" in text
-    assert "Dzialanie traits:" in text
+    assert "Cechy:" in text
+    assert "Dzialanie cech:" in text
     assert " | " not in text
 
 
@@ -420,8 +420,8 @@ def test_starting_shop_armor_desc_contains_core_armor_stats_and_trait_mechanics(
     assert "Kara do testow" in text
     assert "Kara do predkosci:" in text
     assert "Bulk:" in text
-    assert "Traitsy:" in text
-    assert "Dzialanie traits:" in text
+    assert "Cechy:" in text
+    assert "Dzialanie cech:" in text
     assert " | " not in text
 
 

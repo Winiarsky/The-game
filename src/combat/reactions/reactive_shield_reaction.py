@@ -67,7 +67,7 @@ def _apply_tower_shield_speed_penalty(actor, *, source_tag: str, shield) -> None
 @dataclass
 class ReactiveShieldReaction(Reaction):
     id: str = "reactive_shield"
-    label: str = "Reactive Shield"
+    label: str = "Reaktywna tarcza"
     priority: int = 45
     action_cost: int = 1
     requires_reach: bool = False
@@ -95,7 +95,7 @@ class ReactiveShieldReaction(Reaction):
 
     def reason(self, actor, event: dict[str, object]) -> str:
         _ = event
-        return f"Reactive Shield: ochrona {getattr(actor, 'name', 'celu')}"
+        return f"Reaktywna tarcza: ochrona {getattr(actor, 'name', 'celu')}"
 
     def execute(self, actor, event: dict[str, object], ctx) -> bool:
         shield = get_equipped_shield(actor, create_default=False)
@@ -136,7 +136,7 @@ class ReactiveShieldReaction(Reaction):
         _apply_tower_shield_speed_penalty(actor, source_tag=source_tag, shield=shield)
 
         try:
-            ctx.game.ui_log(f"Reactive Shield: podnosisz tarczę (+{shield_ac_bonus} AC) na ten atak.")
+            ctx.game.ui_log(f"Reaktywna tarcza: podnosisz tarcze (+{shield_ac_bonus} AC) na ten atak.")
         except Exception:
             pass
         return True

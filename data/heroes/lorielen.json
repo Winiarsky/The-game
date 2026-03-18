@@ -26,7 +26,7 @@
   ],
   "status_data": {
     "elf": {
-      "ui_description": "Punkty Zycia: 6\nRozmiar: Sredni\nPredkosc: 30 stop\nBoosty atrybutow: Zrecznosc, Inteligencja, Dowolna\nWada atrybutu: Kondycja\nJezyki: Common, Elven\nDodatkowe jezyki rowne modyfikatorowi Inteligencji: Celestial, Draconic, Gnoll, Gnomish, Goblin, Orcish, Sylvan (lub regionalne).\nCechy: Elf, Humanoid\nLow-Light Vision: w slabym swietle widzisz jak w jasnym i ignorujesz concealed z dim light.",
+      "ui_description": "Punkty Zycia: 6\nRozmiar: Sredni\nPredkosc: 30 stop\nBoosty atrybutow: Zrecznosc, Inteligencja, Dowolna\nWada atrybutu: Kondycja\nJezyki: Common, Elven\nDodatkowe jezyki rowne modyfikatorowi Inteligencji: Celestial, Draconic, Gnoll, Gnomish, Goblin, Orcish, Sylvan (lub regionalne).\nCechy: Elf, Humanoid\nWidzenie w slabym swietle: w slabym swietle widzisz jak w jasnym i ignorujesz concealed z dim light.",
       "ancestry_hp": 6,
       "base_speed_feet": 30,
       "size": "medium",
@@ -56,7 +56,7 @@
       "grants_statuses": [
         {
           "id": "dim_light_vision",
-          "label": "Dim Light Vision",
+          "label": "Widzenie w polmroku",
           "duration": null,
           "source": null,
           "stacks": false,
@@ -110,7 +110,7 @@
     },
     "background_barrister": {
       "ui_description": "Szkolenie prawnicze i praktyka w sali sadowej nauczyly cie argumentacji.",
-      "ui_prompt": "Background: Prawnik",
+      "ui_prompt": "Tlo: Prawnik",
       "ui_prompt_long": "Szkolenie prawnicze i praktyka w sali sadowej nauczyly cie argumentacji.\n\nMechanika (w tym silniku):\n- Boosty cech (informacyjnie w UI): Jeden boost do Inteligencji lub Charyzmy oraz jeden dowolny boost.\n- Szkolenie Skill/Lore (informacyjnie w UI): Dyplomacja oraz Wiedza: Prawo.\n- Feat z backgroundu: Group Impression (dodawany do bohatera jako status).\n- Mechanika featu (krotko): +2 status do testów Dyplomacji.\n\nPrzypomnienie reguły bazowej: Na 1. poziomie wybierasz jeden background i tej decyzji nie zmieniasz później. Każdy background daje dwa boosty cech (jeden ograniczony, jeden dowolny), trained w jednym skillu i jednym Lore oraz jeden skill feat. W tym silniku boosty cech i szkolenia skill/Lore są informacją UI, a feat z backgroundu jest dodawany do bohatera jako realny status.",
       "is_background": true,
       "background_key": "barrister",
@@ -169,7 +169,7 @@
       "skill_feat_fallback_mechanic": true
     },
     "cleric": {
-      "ui_prompt": "KEY ABILITY: WISDOM\nAt 1st level, your class gives you an ability boost to Wisdom.\nHIT POINTS: 8 plus your Constitution Modifier\n\nINITIAL PROFICIENCIES:\nPERCEPTION\nTrained in Perception\nSAVING THROWS\nTrained in Fortitude\nTrained in Reflex\nExpert in Will\nSKILLS\nTrained in Religion\nTrained in a number of additional skills equal to 2 plus your Intelligence modifier\nATTACKS\nTrained in simple weapons\nTrained in unarmed attacks\nDEFENSES\nTrained in unarmored defense\n\nDIVINE FONT:\nPodczas setupu wybierasz heal/harm zgodnie z deity (lub custom).\nNa poczatku scenariusza przygotowujesz czary zgodnie z tabela Cleric Spells per Day.\nDodatkowo Divine Font dodaje sloty Heal/Harm na najwyzszym dostepnym ranku (1 + modyfikator Charyzmy).\n\nDOCTRINE:\nCloistered Cleric: automatycznie dostajesz Domain Initiate.\nWarpriest: Shield Block, a dla favored weapon simple/unarmed takze Deadly Simplicity.",
+      "ui_prompt": "KEY ABILITY: WISDOM\nAt 1st level, your class gives you an ability boost to Wisdom.\nHIT POINTS: 8 plus your Constitution Modifier\n\nINITIAL PROFICIENCIES:\nPERCEPTION\nTrained in Perception\nSAVING THROWS\nTrained in Fortitude\nTrained in Reflex\nExpert in Will\nSKILLS\nTrained in Religion\nTrained in a number of additional skills equal to 2 plus your Intelligence modifier\nATTACKS\nTrained in simple weapons\nTrained in unarmed attacks\nDEFENSES\nTrained in unarmored defense\n\nDIVINE FONT:\nPodczas setupu wybierasz heal/harm zgodnie z deity (lub custom).\nNa poczatku scenariusza przygotowujesz czary zgodnie z tabela Cleric Spells per Day.\nDodatkowo Divine Font dodaje sloty Heal/Harm na najwyzszym dostepnym ranku (1 + modyfikator Charyzmy).\n\nDOCTRINE:\nCloistered Cleric: automatycznie dostajesz Domain Initiate.\nWarpriest: Blok tarcza, a dla favored weapon simple/unarmed takze Deadly Simplicity.",
       "class_hp": 8,
       "ui_choice_kind": "cleric_setup",
       "cleric_key_ability_choices": [
@@ -826,7 +826,7 @@
       "grants_statuses": [
         {
           "id": "shield_block",
-          "label": "Shield Block",
+          "label": "Blok tarcza",
           "duration": null,
           "source": null,
           "stacks": false,
@@ -879,7 +879,7 @@
       "ui_description": "Reakcja: gdy masz podniesiona tarcze i otrzymujesz obrazenia fizyczne, tarcza pochlania obrazenia do Hardness (wdrozone mechanicznie przez reakcje)."
     },
     "domain_initiate": {
-      "ui_description": "Domain Initiate: wybierasz domene z listy deity i zyskujesz jej initial domain spell (focus spell). Koszt rzucenia: 1 Focus Point.",
+      "ui_description": "Domain Initiate: wybierasz domene z listy deity i zyskujesz jej initial domain spell (focus spell). Koszt rzucenia: 1 punkt Focus.",
       "ui_choice_kind": "cleric_domain_initiate",
       "selected_domain": "healing",
       "domain_spell": "healers_blessing",

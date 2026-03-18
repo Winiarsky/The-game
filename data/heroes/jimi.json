@@ -27,7 +27,7 @@
   ],
   "status_data": {
     "halfling": {
-      "ui_description": "Punkty Zycia: 6\nRozmiar: Maly\nPredkosc: 25 stop\nBoosty atrybutow: Zrecznosc, Madrosc, Dowolna\nWada atrybutu: Sila\nJezyki: Common, Halfling\nDodatkowe jezyki: Dwarven, Elven, Gnomish, Goblin.\nCechy: Halfling, Humanoid.\nKeen Eyes: latwiej wykrywasz cele ukryte i namierzasz concealed/hidden.",
+      "ui_description": "Punkty Zycia: 6\nRozmiar: Maly\nPredkosc: 25 stop\nBoosty atrybutow: Zrecznosc, Madrosc, Dowolna\nWada atrybutu: Sila\nJezyki: Common, Halfling\nDodatkowe jezyki: Dwarven, Elven, Gnomish, Goblin.\nCechy: Halfling, Humanoid.\nBystre oczy: latwiej wykrywasz cele ukryte i namierzasz concealed/hidden.",
       "ancestry_hp": 6,
       "base_speed_feet": 25,
       "size": "small",
@@ -54,7 +54,7 @@
       "grants_statuses": [
         {
           "id": "keen_eyes",
-          "label": "Keen Eyes",
+          "label": "Bystre oczy",
           "duration": null,
           "source": null,
           "stacks": false,
@@ -92,7 +92,7 @@
               "promote_on": null,
               "demote_on": null,
               "prompt_notes": [
-                "Keen Eyes: +2 do Seek vs hidden/undetected w 30 stóp."
+                "Bystre oczy: +2 do Seek vs hidden/undetected w 30 stóp."
               ]
             }
           ]
@@ -110,7 +110,7 @@
       "grants_statuses": [
         {
           "id": "dim_light_vision",
-          "label": "Dim Light Vision",
+          "label": "Widzenie w polmroku",
           "duration": null,
           "source": null,
           "stacks": false,
@@ -142,7 +142,7 @@
     },
     "background_criminal": {
       "ui_description": "Przetrwales dzieki przestepczemu fachowi, samotnie lub w organizacji.",
-      "ui_prompt": "Background: Przestepca",
+      "ui_prompt": "Tlo: Przestepca",
       "ui_prompt_long": "Przetrwales dzieki przestepczemu fachowi, samotnie lub w organizacji.\n\nMechanika (w tym silniku):\n- Boosty cech (informacyjnie w UI): Jeden boost do Zrecznosci lub Inteligencji oraz jeden dowolny boost.\n- Szkolenie Skill/Lore (informacyjnie w UI): Skradanie oraz Wiedza: Podziemie.\n- Feat z backgroundu: Experienced Smuggler (dodawany do bohatera jako status).\n- Mechanika featu (krotko): +2 status do testów Skradania.\n\nPrzypomnienie reguły bazowej: Na 1. poziomie wybierasz jeden background i tej decyzji nie zmieniasz później. Każdy background daje dwa boosty cech (jeden ograniczony, jeden dowolny), trained w jednym skillu i jednym Lore oraz jeden skill feat. W tym silniku boosty cech i szkolenia skill/Lore są informacją UI, a feat z backgroundu jest dodawany do bohatera jako realny status.",
       "is_background": true,
       "background_key": "criminal",
@@ -201,7 +201,7 @@
       "skill_feat_fallback_mechanic": true
     },
     "rogue": {
-      "ui_prompt": "KEY ABILITY: DEXTERITY (Scoundrel: CHA allowed, Ruffian: STR allowed)\nAt 1st level, your class gives you an ability boost based on racket.\nHIT POINTS: 8 plus your Constitution Modifier\n\nINITIAL PROFICIENCIES (summary):\nPerception: Expert\nSaving Throws: Expert Reflex, Trained Fortitude, Trained Will\nAttacks: Trained simple weapons + selected martial weapons + unarmed\nDefenses: Trained light armor + unarmored (Ruffian: medium armor)\n\nCLASS FEATURES:\nSneak Attack: +1k6 precision na odpowiednich atakach vs flat-footed.\nSurprise Attack: runda 1, cele przed swoją turą są flat-footed przeciw twoim atakom.\nPodczas setupu wybierasz racket, key ability i 1 class feat poziomu 1.",
+      "ui_prompt": "KEY ABILITY: DEXTERITY (Scoundrel: CHA allowed, Ruffian: STR allowed)\nAt 1st level, your class gives you an ability boost based on racket.\nHIT POINTS: 8 plus your Constitution Modifier\n\nINITIAL PROFICIENCIES (summary):\nPerception: Expert\nSaving Throws: Expert Reflex, Trained Fortitude, Trained Will\nAttacks: Trained simple weapons + selected martial weapons + unarmed\nDefenses: Trained light armor + unarmored (Ruffian: medium armor)\n\nCLASS FEATURES:\nZdradliwy atak: +1k6 precision na odpowiednich atakach vs flat-footed.\nZaskakujacy atak: runda 1, cele przed swoją turą są flat-footed przeciw twoim atakom.\nPodczas setupu wybierasz racket, key ability i 1 class feat poziomu 1.",
       "class_hp": 8,
       "ui_choice_kind": "rogue_setup",
       "rogue_racket_choices": [
@@ -221,13 +221,13 @@
       "grants_statuses": [
         {
           "id": "sneak_attack",
-          "label": "Sneak Attack",
+          "label": "Zdradliwy atak",
           "duration": null,
           "source": null,
           "stacks": false,
           "data": {
-            "ui_description": "Sneak Attack: przy trafieniu odpowiednim atakiem przeciw flat-footed zadajesz dodatkowe precision damage (1k6 na 1. poziomie, skaluje się z levelem).",
-            "ui_prompt": "Sneak Attack: przy trafieniu odpowiednim atakiem przeciw flat-footed zadajesz dodatkowe precision damage (1k6 na 1. poziomie, skaluje się z levelem).",
+            "ui_description": "Zdradliwy atak: przy trafieniu odpowiednim atakiem przeciw flat-footed zadajesz dodatkowe precision damage (1k6 na 1. poziomie, skaluje się z levelem).",
+            "ui_prompt": "Zdradliwy atak: przy trafieniu odpowiednim atakiem przeciw flat-footed zadajesz dodatkowe precision damage (1k6 na 1. poziomie, skaluje się z levelem).",
             "allowed_classes": [
               "rogue"
             ]
@@ -236,13 +236,13 @@
         },
         {
           "id": "surprise_attack",
-          "label": "Surprise Attack",
+          "label": "Zaskakujacy atak",
           "duration": null,
           "source": null,
           "stacks": false,
           "data": {
-            "ui_description": "Surprise Attack: w 1. rundzie walki przeciwnicy, którzy jeszcze nie mieli tury, są flat-footed przeciw twoim atakom.",
-            "ui_prompt": "Surprise Attack: w 1. rundzie walki przeciwnicy, którzy jeszcze nie mieli tury, są flat-footed przeciw twoim atakom.",
+            "ui_description": "Zaskakujacy atak: w 1. rundzie walki przeciwnicy, którzy jeszcze nie mieli tury, są flat-footed przeciw twoim atakom.",
+            "ui_prompt": "Zaskakujacy atak: w 1. rundzie walki przeciwnicy, którzy jeszcze nie mieli tury, są flat-footed przeciw twoim atakom.",
             "allowed_classes": [
               "rogue"
             ]
@@ -269,22 +269,22 @@
       ]
     },
     "sneak_attack": {
-      "ui_description": "Sneak Attack: przy trafieniu odpowiednim atakiem przeciw flat-footed zadajesz dodatkowe precision damage (1k6 na 1. poziomie, skaluje się z levelem).",
-      "ui_prompt": "Sneak Attack: przy trafieniu odpowiednim atakiem przeciw flat-footed zadajesz dodatkowe precision damage (1k6 na 1. poziomie, skaluje się z levelem).",
+      "ui_description": "Zdradliwy atak: przy trafieniu odpowiednim atakiem przeciw flat-footed zadajesz dodatkowe precision damage (1k6 na 1. poziomie, skaluje się z levelem).",
+      "ui_prompt": "Zdradliwy atak: przy trafieniu odpowiednim atakiem przeciw flat-footed zadajesz dodatkowe precision damage (1k6 na 1. poziomie, skaluje się z levelem).",
       "allowed_classes": [
         "rogue"
       ]
     },
     "surprise_attack": {
-      "ui_description": "Surprise Attack: w 1. rundzie walki przeciwnicy, którzy jeszcze nie mieli tury, są flat-footed przeciw twoim atakom.",
-      "ui_prompt": "Surprise Attack: w 1. rundzie walki przeciwnicy, którzy jeszcze nie mieli tury, są flat-footed przeciw twoim atakom.",
+      "ui_description": "Zaskakujacy atak: w 1. rundzie walki przeciwnicy, którzy jeszcze nie mieli tury, są flat-footed przeciw twoim atakom.",
+      "ui_prompt": "Zaskakujacy atak: w 1. rundzie walki przeciwnicy, którzy jeszcze nie mieli tury, są flat-footed przeciw twoim atakom.",
       "allowed_classes": [
         "rogue"
       ]
     },
     "twin_feint": {
-      "ui_description": "Fluff: Twin Feint to sekwencja dwoch szybkich ciosow, w ktorej pierwszy atak odwraca uwage celu, a drugi wykorzystuje otwarta garde.\nMechanika:\n- Kiedy: Gdy masz dwie bronie melee 1H i chcesz nacisnac jednym celem cala sekwencje.\n- Efekt:\n  - Koszt: 2 akcje.\n  - Wykonujesz 2 melee Strikes dwiema broniami przeciw temu samemu celowi.\n  - Drugi atak dostaje wymuszone off-guard zrodla Twin Feint.\n  - To bardzo dobrze wspiera Sneak Attack na drugim trafieniu.\n  - Przyklad: walczysz dwoma daggerami, pierwszy cios tylko naciska cel, a drugi korzysta z off-guard i latwiej wbija sneak damage.",
-      "ui_prompt": "Fluff: Twin Feint to sekwencja dwoch szybkich ciosow, w ktorej pierwszy atak odwraca uwage celu, a drugi wykorzystuje otwarta garde.\nMechanika:\n- Kiedy: Gdy masz dwie bronie melee 1H i chcesz nacisnac jednym celem cala sekwencje.\n- Efekt:\n  - Koszt: 2 akcje.\n  - Wykonujesz 2 melee Strikes dwiema broniami przeciw temu samemu celowi.\n  - Drugi atak dostaje wymuszone off-guard zrodla Twin Feint.\n  - To bardzo dobrze wspiera Sneak Attack na drugim trafieniu.\n  - Przyklad: walczysz dwoma daggerami, pierwszy cios tylko naciska cel, a drugi korzysta z off-guard i latwiej wbija sneak damage.",
+      "ui_description": "Fluff: Twin Feint to sekwencja dwoch szybkich ciosow, w ktorej pierwszy atak odwraca uwage celu, a drugi wykorzystuje otwarta garde.\nMechanika:\n- Kiedy: Gdy masz dwie bronie melee 1H i chcesz nacisnac jednym celem cala sekwencje.\n- Efekt:\n  - Koszt: 2 akcje.\n  - Wykonujesz 2 melee Strikes dwiema broniami przeciw temu samemu celowi.\n  - Drugi atak dostaje wymuszone off-guard zrodla Twin Feint.\n  - To bardzo dobrze wspiera Zdradliwy atak na drugim trafieniu.\n  - Przyklad: walczysz dwoma daggerami, pierwszy cios tylko naciska cel, a drugi korzysta z off-guard i latwiej wbija sneak damage.",
+      "ui_prompt": "Fluff: Twin Feint to sekwencja dwoch szybkich ciosow, w ktorej pierwszy atak odwraca uwage celu, a drugi wykorzystuje otwarta garde.\nMechanika:\n- Kiedy: Gdy masz dwie bronie melee 1H i chcesz nacisnac jednym celem cala sekwencje.\n- Efekt:\n  - Koszt: 2 akcje.\n  - Wykonujesz 2 melee Strikes dwiema broniami przeciw temu samemu celowi.\n  - Drugi atak dostaje wymuszone off-guard zrodla Twin Feint.\n  - To bardzo dobrze wspiera Zdradliwy atak na drugim trafieniu.\n  - Przyklad: walczysz dwoma daggerami, pierwszy cios tylko naciska cel, a drugi korzysta z off-guard i latwiej wbija sneak damage.",
       "allowed_classes": [
         "rogue"
       ]

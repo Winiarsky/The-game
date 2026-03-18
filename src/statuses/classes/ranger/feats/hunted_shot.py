@@ -3,15 +3,15 @@ from __future__ import annotations
 from statuses.base import Status
 
 HUNTED_SHOT_DESCRIPTION = (
-    "Hunted Shot (Flourish): wykonaj 2 Strikes ranged przeciw hunted prey. "
-    "Jeśli oba trafiają ten sam cel, obrażenia są scalane dla resist/weakness."
+    "Strzal na cel (Flourish): wykonaj 2 Strikes dystansowe przeciw oznaczonej ofierze. "
+    "Jesli oba trafiaja ten sam cel, obrazenia sa scalane dla resist/weakness."
 )
 
 
 def HuntedShotStatus() -> Status:
     return Status(
         id="hunted_shot",
-        label="Hunted Shot",
+        label="Strzal na cel",
         data={
             "ui_description": HUNTED_SHOT_DESCRIPTION,
             "ui_prompt": HUNTED_SHOT_DESCRIPTION,

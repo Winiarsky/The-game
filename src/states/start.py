@@ -389,7 +389,7 @@ class Start(State):
 
         definitions = list(BACKGROUND_DEFINITIONS)
         if not definitions:
-            self.game.ui_log("Background: brak zdefiniowanych backgroundów.")
+            self.game.ui_log("Tlo: brak zdefiniowanych teł.")
             return
 
         label_to_key: dict[str, str] = {}
@@ -405,10 +405,10 @@ class Start(State):
                 label_to_key[fallback_label] = key
             choices.append(label)
         if not choices:
-            self.game.ui_log("Background: brak poprawnych opcji wyboru.")
+            self.game.ui_log("Tlo: brak poprawnych opcji wyboru.")
             return
 
-        prompt = "Background: wybierz tło postaci"
+        prompt = "Tlo: wybierz tlo postaci"
         answer: str | None = None
         ui = getattr(self.game, "ui", None)
         if ui is not None and hasattr(ui, "prompt_choice"):
@@ -435,25 +435,25 @@ class Start(State):
                     selected_key = str((direct.data or {}).get("background_key") or "").strip().lower()
 
         if not selected_key:
-            self.game.ui_log("Background: nie wybrano poprawnej opcji.")
+            self.game.ui_log("Tlo: nie wybrano poprawnej opcji.")
             return
 
         background_status = get_background_status(selected_key)
         if background_status is None:
-            self.game.ui_log(f"Background: nie znaleziono statusu '{selected_key}'.")
+            self.game.ui_log(f"Tlo: nie znaleziono statusu '{selected_key}'.")
             return
         if not hero.add_status(background_status):
-            self.game.ui_log("Background: nie udało się dodać wybranego tła.")
+            self.game.ui_log("Tlo: nie udalo sie dodac wybranego tla.")
             return
 
         chosen_label = str((background_status.data or {}).get("background_label") or background_status.display_label)
         chosen_feat = str((background_status.data or {}).get("background_feat_id") or "").strip()
         if chosen_feat:
             self.game.ui_log(
-                f"Background: wybrano {chosen_label}. Feat dodany do hero: {chosen_feat}."
+                f"Tlo: wybrano {chosen_label}. Dodany feat: {chosen_feat}."
             )
         else:
-            self.game.ui_log(f"Background: wybrano {chosen_label}.")
+            self.game.ui_log(f"Tlo: wybrano {chosen_label}.")
 
     def _maybe_prompt_chameleon_gnome(self, hero: Hero) -> None:
         if not hero.has_status("chameleon_gnome"):
@@ -507,35 +507,35 @@ class Start(State):
             {
                 "raw": "Scout (Perception)",
                 "label": "Scout (Perception)",
-                "desc": "Fluff: Familiar wypatruje zagrozen.\nMechanika:\n- Kiedy: Po wyborze trybu i uzyciu Command Familiar.\n- Efekt: Jednorazowy +2 circumstance do najblizszego testu Percepcji.",
+                "desc": "Fluff: Chowaniec wypatruje zagrozen.\nMechanika:\n- Kiedy: Po wyborze trybu i uzyciu akcji Komenderuj chowanca.\n- Efekt: Jednorazowy +2 circumstance do najblizszego testu Percepcji.",
                 "key": "1",
             },
             {
                 "raw": "Guidance (Skill)",
                 "label": "Guidance (Skill)",
-                "desc": "Fluff: Familiar wspiera cie przy wybranej umiejetnosci.\nMechanika:\n- Kiedy: Po wyborze trybu i uzyciu Command Familiar.\n- Efekt: Jednorazowy +1 circumstance do wybranego skilla.",
+                "desc": "Fluff: Chowaniec wspiera cie przy wybranej umiejetnosci.\nMechanika:\n- Kiedy: Po wyborze trybu i uzyciu akcji Komenderuj chowanca.\n- Efekt: Jednorazowy +1 circumstance do wybranego skilla.",
                 "key": "2",
             },
             {
                 "raw": "Distract (Enemy)",
                 "label": "Distract (Enemy)",
-                "desc": "Fluff: Familiar rozprasza przeciwnika we wlasciwym momencie.\nMechanika:\n- Kiedy: Po wyborze celu i uzyciu Command Familiar.\n- Efekt: Wybrany wrog dostaje -1 do najblizszego ataku wręcz; efekt znika po tym ataku.",
+                "desc": "Fluff: Chowaniec rozprasza przeciwnika we wlasciwym momencie.\nMechanika:\n- Kiedy: Po wyborze celu i uzyciu akcji Komenderuj chowanca.\n- Efekt: Wybrany wrog dostaje -1 do najblizszego ataku wrecz; efekt znika po tym ataku.",
                 "key": "3",
             },
             {
                 "raw": "Deliver Touch Spell",
                 "label": "Deliver Touch Spell",
-                "desc": "Fluff: Familiar przenosi energie czaru dotykowego.\nMechanika:\n- Kiedy: Przy kolejnym touch spellu po uzyciu Command Familiar.\n- Efekt: Zasieg touch spell rośnie z 5 ft do 10 ft i efekt znika po uzyciu.",
+                "desc": "Fluff: Chowaniec przenosi energie czaru dotykowego.\nMechanika:\n- Kiedy: Przy kolejnym czarze dotykowym po uzyciu akcji Komenderuj chowanca.\n- Efekt: Zasieg czaru dotykowego rosnie z 5 ft do 10 ft i efekt znika po uzyciu.",
                 "key": "4",
             },
             {
                 "raw": "Scent/Seek",
                 "label": "Scent/Seek",
-                "desc": "Fluff: Familiar szuka ukrytych obiektow po zapachu i ruchu.\nMechanika:\n- Kiedy: Natychmiast po uzyciu Command Familiar.\n- Efekt: Gra informuje, czy w poblizu sa ukryte obiekty.",
+                "desc": "Fluff: Chowaniec szuka ukrytych obiektow po zapachu i ruchu.\nMechanika:\n- Kiedy: Natychmiast po uzyciu akcji Komenderuj chowanca.\n- Efekt: Gra informuje, czy w poblizu sa ukryte obiekty.",
                 "key": "5",
             },
         ]
-        prompt = "Familiar: wybierz tryb działania (stały dla Command Familiar)."
+        prompt = "Chowaniec: wybierz tryb dzialania (staly dla akcji Komenderuj chowanca)."
         answer: str | None = None
         ui = getattr(self.game, "ui", None)
         if ui is not None and hasattr(ui, "prompt_choice"):

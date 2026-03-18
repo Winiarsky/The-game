@@ -12,6 +12,7 @@ from GameObjects.events.base import EventContext
 from GameObjects.events.registry import dispatch_event
 from GameObjects.events.attack import basic_melee_attack_event
 from GameObjects.events.attack import base_attack_range_event
+from GameObjects.items.weapon import create_weapon
 from statuses import Status
 
 
@@ -94,6 +95,8 @@ class Hero:
     def __init__(self, pos):
         self.position = pos
         self.statuses = []
+        self.inventory = []
+        self.equipped_weapon_item_ids = []
 
     def add_status(self, status):
         self.statuses.append(status)
@@ -166,7 +169,8 @@ def test_deific_weapon_upgrades_longbow_prompt_only_for_matching_weapon(monkeypa
     monkeypatch.setattr(base_attack_range_event, "prompt_for_roll", _prompt_mismatch)
     result = dispatch_event("longbow", _ctx(game, hero))
     assert result.success
-    assert any("Obrażenia 1k8 + DEX" in text for text in prompts)
+    assert any("Obrażenia 1k8" in text for text in prompts)
+    assert not any("DEX" in text for text in prompts)
 
     # Potem match: wybrane longbow, atak longbow -> podbicie 1k8 -> 1k10.
     hero.statuses = [Status(id="deific_weapon", data={"deific_weapon_type": "longbow"})]
@@ -181,4 +185,63 @@ def test_deific_weapon_upgrades_longbow_prompt_only_for_matching_weapon(monkeypa
     monkeypatch.setattr(base_attack_range_event, "prompt_for_roll", _prompt_match)
     result = dispatch_event("longbow", _ctx(game, hero))
     assert result.success
-    assert any("Obrażenia 1k10 + DEX" in text for text in prompts)
+    assert any("Obrażenia 1k10" in text for text in prompts)
+    assert not any("DEX" in text for text in prompts)
+
+
+def test_crossbow_prompt_has_no_dexterity_modifier(monkeypatch):
+    hero = Hero((0, 0))
+    enemy = Enemy((2, 0), hp=10, ac=10)
+    game = FakeGame()
+    game.heroes = [hero]
+    game.enemies = [enemy]
+    game.board.occupants = {hero.position: hero, enemy.position: enemy}
+    game.conn.choice = enemy.position
+
+    prompts = []
+    rolls = iter([15, 4])
+
+    def _prompt(prompt, *_args, **_kwargs):
+        prompts.append(str(prompt))
+        return next(rolls)
+
+    monkeypatch.setattr(base_attack_range_event, "prompt_for_roll", _prompt)
+
+    result = dispatch_event("crossbow", _ctx(game, hero))
+
+    assert result.success
+    assert any("Obrażenia 1k8" in text for text in prompts)
+    assert not any("DEX" in text for text in prompts)
+
+
+def test_composite_longbow_generic_attack_keeps_propulsive_without_dex(monkeypatch):
+    hero = Hero((0, 0))
+    hero.str_mod = 4
+    hero.ability_modifiers = {"strength": 4, "dexterity": 3}
+    enemy = Enemy((2, 0), hp=10, ac=10)
+    weapon = create_weapon("composite_longbow")
+    assert weapon is not None
+    hero.inventory = [weapon]
+    hero.equipped_weapon_item_ids = [weapon.instance_id]
+
+    game = FakeGame()
+    game.heroes = [hero]
+    game.enemies = [enemy]
+    game.board.occupants = {hero.position: hero, enemy.position: enemy}
+    game.conn.choice = enemy.position
+
+    prompts = []
+    rolls = iter([15, 4])
+
+    def _prompt(prompt, *_args, **_kwargs):
+        prompts.append(str(prompt))
+        return next(rolls)
+
+    monkeypatch.setattr(base_attack_range_event, "prompt_for_roll", _prompt)
+
+    result = dispatch_event("attack", _ctx(game, hero))
+
+    assert result.success
+    assert enemy.hp == 4
+    assert any("Obrażenia 1k8" in text for text in prompts)
+    assert not any("DEX" in text for text in prompts)

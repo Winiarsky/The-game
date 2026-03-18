@@ -97,7 +97,7 @@ function spellcastingSummary(hero) {
     if (!spellcasting) return [];
     const rows = [];
     if (spellcasting.focusPoolMax > 0) {
-        rows.push(`Focus ${spellcasting.focusPoints}/${spellcasting.focusPoolMax}`);
+        rows.push(`Punkty Focus ${spellcasting.focusPoints}/${spellcasting.focusPoolMax}`);
     }
     Object.keys(spellcasting.slotTotal)
         .sort()
@@ -340,12 +340,12 @@ export function renderHeroesPanel({
         if (hero.creationInProgress) {
             const flag = document.createElement("span");
             flag.className = "hero-roster-flag preview";
-            flag.textContent = "Preview";
+            flag.textContent = "Podgląd";
             flags.appendChild(flag);
         } else if (hero.isPreview) {
             const flag = document.createElement("span");
             flag.className = "hero-roster-flag preview";
-            flag.textContent = "Select";
+            flag.textContent = "Wybór";
             flags.appendChild(flag);
         }
         if (flags.children.length) {
@@ -425,25 +425,25 @@ export function renderHeroesPanel({
         ? String(detailHero.backgroundFeatId).replace(/_/g, " ")
         : "";
     const backgroundFeatLine = backgroundFeatLabel
-        ? `<div class="hero-notes">Background feat: ${backgroundFeatLabel}</div>`
+        ? `<div class="hero-notes">Feat tla: ${backgroundFeatLabel}</div>`
         : "";
     const previewInstinctLine = detailHero.previewBarbarianInstinctId
         ? `<div class="hero-notes">Instynkt: ${pretty(detailHero.previewBarbarianInstinctId)}</div>`
         : "";
     const backgroundSkillsLine = detailHero.backgroundSkillTrainingUi
-        ? `<div class="hero-notes">BG skille/Lore: ${detailHero.backgroundSkillTrainingUi}</div>`
+        ? `<div class="hero-notes">Tlo: skille/Wiedza: ${detailHero.backgroundSkillTrainingUi}</div>`
         : "";
     const backgroundBoostsLine = detailHero.backgroundAbilityBoostsUi
-        ? `<div class="hero-notes">BG ability boosts: ${detailHero.backgroundAbilityBoostsUi}</div>`
+        ? `<div class="hero-notes">Tlo: boosty cech: ${detailHero.backgroundAbilityBoostsUi}</div>`
         : "";
     const classLabel = detailHero.classId ? pretty(detailHero.classId) : "-";
     const ancestryLabel = detailHero.ancestryId ? pretty(detailHero.ancestryId) : "-";
     const heritageLabel = detailHero.heritageId ? pretty(detailHero.heritageId) : "-";
     const hpNow = currentHp(detailHero);
     const hpLine = `HP: ${hpNow != null ? hpNow : "-"}/${detailHero.maxHp ?? "-"} · Rany: ${detailHero.wounds ?? "-"}`;
-    const speedLine = `${armorClassBreakdown(detailHero)} · Speed: ${detailHero.baseSpeedFeet ?? "-"} ft`;
+    const speedLine = `${armorClassBreakdown(detailHero)} · Predkosc: ${detailHero.baseSpeedFeet ?? "-"} ft`;
     const saves = detailHero.saveRanks && typeof detailHero.saveRanks === "object" ? detailHero.saveRanks : {};
-    const saveLine = `Save: F ${pretty(saves.fortitude || "untrained")} · R ${pretty(saves.reflex || "untrained")} · W ${pretty(saves.will || "untrained")}`;
+    const saveLine = `Rzuty obronne: F ${pretty(saves.fortitude || "untrained")} · R ${pretty(saves.reflex || "untrained")} · W ${pretty(saves.will || "untrained")}`;
     const percMod = detailHero.perceptionModifier;
     const percModStr = percMod != null ? ` (${percMod >= 0 ? "+" : ""}${percMod})` : "";
     const perceptionLine = `Percepcja: ${pretty(detailHero.perceptionRank || "untrained")}${percModStr}`;
@@ -485,8 +485,8 @@ export function renderHeroesPanel({
     const moneyLine = detailHero.moneyText ? `Sakiewka: ${detailHero.moneyText}` : "Sakiewka: -";
     const bulkLine =
         detailHero.bulkSummary && typeof detailHero.bulkSummary === "object"
-            ? `Bulk: ${detailHero.bulkSummary.total_display || "-"} / ${detailHero.bulkSummary.encumbered_limit_display || "-"} (enc.)`
-            : "Bulk: -";
+            ? `Obciazenie: ${detailHero.bulkSummary.total_display || "-"} / ${detailHero.bulkSummary.encumbered_limit_display || "-"} (przec.)`
+            : "Obciazenie: -";
     const inventoryItems = Array.isArray(detailHero.inventoryItems) ? detailHero.inventoryItems : [];
     const inventoryLabel = inventoryItems.length ? inventoryItems.join(", ") : "brak";
     const spellcasting = normalizeSpellcasting(detailHero.spellcasting);
@@ -502,16 +502,16 @@ export function renderHeroesPanel({
         <div class="hero-stats">${levelLine}</div>
         <div class="hero-stats">Klasa: ${classLabel}</div>
         <div class="hero-stats">Rasa: ${ancestryLabel}</div>
-        <div class="hero-stats">Heritage: ${heritageLabel}</div>
-        ${detailHero.backgroundLabel ? `<div class="hero-stats">Background: ${detailHero.backgroundLabel}</div>` : ""}
+        <div class="hero-stats">Dziedzictwo: ${heritageLabel}</div>
+        ${detailHero.backgroundLabel ? `<div class="hero-stats">Tlo: ${detailHero.backgroundLabel}</div>` : ""}
         ${backgroundFeatLine}
         ${previewInstinctLine}
         ${backgroundSkillsLine}
         ${backgroundBoostsLine}
         ${noteLine}
     `;
-    const spellDcLine = detailHero.spellDc != null ? `<div class="hero-stats">Spell DC: ${detailHero.spellDc}</div>` : "";
-    const classDcLine = detailHero.classDc != null ? `<div class="hero-stats">Class DC: ${detailHero.classDc}</div>` : "";
+    const spellDcLine = detailHero.spellDc != null ? `<div class="hero-stats">ST czarow: ${detailHero.spellDc}</div>` : "";
+    const classDcLine = detailHero.classDc != null ? `<div class="hero-stats">ST klasy: ${detailHero.classDc}</div>` : "";
     const combatBody = `
         <div class="hero-stats">${hpLine}</div>
         <div class="hero-stats">${speedLine}</div>
@@ -540,9 +540,9 @@ export function renderHeroesPanel({
         <div class="hero-stats">${slotLine}</div>
         <div class="hero-notes">Cantripy: ${cantripLine || "brak"}</div>
         <div class="hero-notes">Czary R1: ${rank1Line || "brak"}</div>
-        <div class="hero-notes">Focus spelle: ${focusLine || "brak"}</div>
+        <div class="hero-notes">Zaklęcia Focus: ${focusLine || "brak"}</div>
     `
-        : `<div class="hero-notes">Brak aktywnego spellcasting runtime.</div>`;
+        : `<div class="hero-notes">Brak aktywnej obsługi rzucania czarów.</div>`;
 
     heroesDetail.innerHTML = `
         <div class="hero-card detail-card ${String(detailHero.id || "") === String(activeActorId || "") ? "active" : ""}">

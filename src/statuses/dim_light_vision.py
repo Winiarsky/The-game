@@ -9,7 +9,7 @@ def DimLightVisionStatus() -> Status:
     """Status: widzenie w polmroku."""
     return Status(
         id="dim_light_vision",
-        label="Dim Light Vision",
+        label="Widzenie w polmroku",
         check_effects=[
             CheckEffect(
                 applies_to="source",

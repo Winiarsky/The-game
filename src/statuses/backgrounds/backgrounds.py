@@ -587,7 +587,7 @@ def _build_background_status(definition: BackgroundDefinition) -> Status:
     localized_description = _localized_background_description(definition)
     data: dict[str, object] = {
         "ui_description": localized_description,
-        "ui_prompt": f"Background: {localized_label}",
+        "ui_prompt": f"Tlo: {localized_label}",
         "ui_prompt_long": _build_prompt_long(definition, feat_status),
         "is_background": True,
         "background_key": definition.key,

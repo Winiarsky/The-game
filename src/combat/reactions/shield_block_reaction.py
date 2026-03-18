@@ -92,7 +92,7 @@ def _heal_prevented_damage(target, amount: int) -> None:
 @dataclass
 class ShieldBlockReaction(Reaction):
     id: str = "shield_block"
-    label: str = "Shield Block"
+    label: str = "Blok tarcza"
     priority: int = 35
     action_cost: int = 1
     requires_reach: bool = False
@@ -140,7 +140,7 @@ class ShieldBlockReaction(Reaction):
         game = ctx.game
         try:
             game.ui_log(
-                f"Shield Block: redukujesz obrazenia o {blocked} "
+                f"Blok tarcza: redukujesz obrazenia o {blocked} "
                 f"(Hardness {getattr(shield, 'hardness', 0)})."
             )
         except Exception:

@@ -1402,7 +1402,7 @@ _ARMOR_TRAIT_HINTS_PL: dict[str, str] = {
 }
 
 _SHIELD_TRAIT_HINTS_PL: dict[str, str] = {
-    "shield_block": "Umozliwia reakcje Shield Block (redukcja obrazen do Hardness, koszt reakcji).",
+    "shield_block": "Umozliwia reakcje Blok tarcza (redukcja obrazen do Twardosci, koszt reakcji).",
     "tower_shield": "Podniesiona tarcza wiezowa daje oslonowe premie; z Take Cover zapewnia greater cover (+4 AC).",
     "light_shield": "Lekka tarcza o mniejszej wytrzymalosci i bonusie do AC.",
 }
@@ -1467,9 +1467,9 @@ def _weapon_shop_mechanics_desc(item: BaseItem) -> str:
     if ranged and range_increment > 0:
         parts.append(f"Zasieg: {range_increment} ft")
     if reload > 0:
-        parts.append(f"Reload: {reload}")
-    parts.append(f"Traitsy: {trait_labels}")
-    parts.append(f"Dzialanie traits: {trait_effects}")
+        parts.append(f"Przeladowanie: {reload}")
+    parts.append(f"Cechy: {trait_labels}")
+    parts.append(f"Dzialanie cech: {trait_effects}")
     return "\n".join(f"- {part}" for part in parts)
 
 
@@ -1510,13 +1510,13 @@ def _armor_shop_mechanics_desc(item: BaseArmor) -> str:
         f"Specjalizacja pancerza: {specialization_effect}",
     ]
     if bulwark_floor is not None:
-        parts.append(f"Bulwark Reflex floor: +{bulwark_floor}")
-    parts.append(f"Traitsy: {trait_labels}")
+        parts.append(f"Bulwark (minimum Refleks): +{bulwark_floor}")
+    parts.append(f"Cechy: {trait_labels}")
     if trait_effects:
-        parts.append("Dzialanie traits:")
-        parts.extend(f"Dzialanie traitu: {effect}" for effect in trait_effects)
+        parts.append("Dzialanie cech:")
+        parts.extend(f"Dzialanie cechy: {effect}" for effect in trait_effects)
     else:
-        parts.append("Dzialanie traits: Brak dodatkowych efektow cech.")
+        parts.append("Dzialanie cech: Brak dodatkowych efektow cech.")
     return "\n".join(f"- {part}" for part in parts)
 
 
@@ -1543,18 +1543,18 @@ def _shield_shop_mechanics_desc(item: BaseShield) -> str:
 
     parts = [
         f"Bonus AC: +{ac_bonus} (dziala przy akcji Raise Shield)",
-        f"Hardness: {hardness}",
+        f"Twardosc: {hardness}",
         f"HP tarczy: {max_hp}",
-        f"Broken Threshold (BT): {bt}",
+        f"Prog zniszczenia (BT): {bt}",
     ]
     if take_cover_ac > ac_bonus:
-        parts.append(f"Take Cover: do +{take_cover_ac} AC")
+        parts.append(f"Oslona: do +{take_cover_ac} AC")
     if speed_penalty > 0:
         parts.append(f"Kara do predkosci po Raise Shield: -{speed_penalty} ft")
     if "tower_shield" in trait_keys:
-        parts.append("Tower Shield: podniesiona tarcza tworzy oslonowe utrudnienie dla strzalow; z Take Cover daje greater cover (+4 AC).")
-    parts.append(f"Traitsy: {trait_labels}")
-    parts.append(f"Dzialanie traits: {trait_effects}")
+        parts.append("Tarcza wiezowa: podniesiona tarcza tworzy oslone dla strzalow; z Oslona daje wieksza oslone (+4 AC).")
+    parts.append(f"Cechy: {trait_labels}")
+    parts.append(f"Dzialanie cech: {trait_effects}")
     return "\n".join(f"- {part}" for part in parts)
 
 
@@ -3527,7 +3527,7 @@ def create_character(game, repository: CharacterRepository) -> CharacterCreation
     hero.add_status(background_status)
     _prompt_info(
         game,
-        title=f"Wybrany Background: {_labelize(background_id)}",
+        title=f"Wybrane Tlo: {_labelize(background_id)}",
         text=_status_description(background_status),
         image=hero.image,
     )

@@ -9,7 +9,7 @@ def DarkVisionStatus() -> Status:
     """Status darkvision – blokuje efekty ciemności."""
     return Status(
         id="darkvision",
-        label="Darkvision",
+        label="Widzenie w ciemnosci",
         data={
             "immune_status_ids": ["blinded"],
         },

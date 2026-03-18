@@ -3,15 +3,15 @@ from __future__ import annotations
 from statuses.base import Status
 
 RANGED_REPRISAL_DESCRIPTION = (
-    "Ranged Reprisal: Retributive Strike moze byc wykonany bronia dystansowa, "
-    "a gdy cel jest 5 stop poza zasiegiem melee, mozesz Step jako czesc reakcji."
+    "Dystansowa reprymenda: Retributive Strike moze byc wykonany bronia dystansowa, "
+    "a gdy cel jest 5 stop poza zasiegiem walki wrecz, mozesz wykonac Krok jako czesc reakcji."
 )
 
 
 def RangedReprisalStatus() -> Status:
     return Status(
         id="ranged_reprisal",
-        label="Ranged Reprisal",
+        label="Dystansowa reprymenda",
         data={
             "ui_description": RANGED_REPRISAL_DESCRIPTION,
             "ui_prompt": RANGED_REPRISAL_DESCRIPTION,

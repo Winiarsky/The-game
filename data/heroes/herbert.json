@@ -25,7 +25,7 @@
   ],
   "status_data": {
     "gnome": {
-      "ui_description": "Punkty Zycia: 8\nRozmiar: Maly\nPredkosc: 25 stop\nBoosty atrybutow: Kondycja, Charyzma, Dowolna\nWada atrybutu: Sila\nJezyki: Common, Gnomish, Sylvan\nDodatkowe jezyki: Draconic, Dwarven, Elven, Goblin, Jotun, Orcish.\nCechy: Gnome, Humanoid.\nLow-Light Vision: w slabym swietle widzisz jak w jasnym i ignorujesz concealed z dim light.",
+      "ui_description": "Punkty Zycia: 8\nRozmiar: Maly\nPredkosc: 25 stop\nBoosty atrybutow: Kondycja, Charyzma, Dowolna\nWada atrybutu: Sila\nJezyki: Common, Gnomish, Sylvan\nDodatkowe jezyki: Draconic, Dwarven, Elven, Goblin, Jotun, Orcish.\nCechy: Gnome, Humanoid.\nWidzenie w slabym swietle: w slabym swietle widzisz jak w jasnym i ignorujesz concealed z dim light.",
       "ancestry_hp": 8,
       "base_speed_feet": 25,
       "size": "small",
@@ -55,7 +55,7 @@
       "grants_statuses": [
         {
           "id": "dim_light_vision",
-          "label": "Dim Light Vision",
+          "label": "Widzenie w polmroku",
           "duration": null,
           "source": null,
           "stacks": false,
@@ -128,7 +128,7 @@
     },
     "background_entertainer": {
       "ui_description": "Trenowales wystepy sceniczne i umiesz skupic na sobie uwage tlumu.",
-      "ui_prompt": "Background: Artysta sceniczny",
+      "ui_prompt": "Tlo: Artysta sceniczny",
       "ui_prompt_long": "Trenowales wystepy sceniczne i umiesz skupic na sobie uwage tlumu.\n\nMechanika (w tym silniku):\n- Boosty cech (informacyjnie w UI): Jeden boost do Zrecznosci lub Charyzmy oraz jeden dowolny boost.\n- Szkolenie Skill/Lore (informacyjnie w UI): Wystepy oraz Wiedza: Teatr.\n- Feat z backgroundu: Fascinating Performance (dodawany do bohatera jako status).\n- Mechanika featu (krotko): +2 status do testów Występów.\n\nPrzypomnienie reguły bazowej: Na 1. poziomie wybierasz jeden background i tej decyzji nie zmieniasz później. Każdy background daje dwa boosty cech (jeden ograniczony, jeden dowolny), trained w jednym skillu i jednym Lore oraz jeden skill feat. W tym silniku boosty cech i szkolenia skill/Lore są informacją UI, a feat z backgroundu jest dodawany do bohatera jako realny status.",
       "is_background": true,
       "background_key": "entertainer",
@@ -187,7 +187,7 @@
       "skill_feat_fallback_mechanic": true
     },
     "bard": {
-      "ui_prompt": "KLASA: BARD\nKey Ability: Charyzma (+2 na 1. poziomie).\nPunkty Zycia: 8 + modyfikator Kondycji.\n\nBieglosci startowe:\n- Percepcja: Expert\n- Rzuty obronne: Fortitude Trained, Reflex Trained, Will Expert\n- Skille: Performance Trained + 4 dodatkowe skille (+ INT mod)\n\nMagia:\n- Tradycja: okultystyczna (occult)\n- Repertuar na 1. poziomie: 5 cantripow i 2 czary 1. rangi\n- 5 cantripow wybierasz z listy occult podczas tworzenia postaci\n- Composition cantrips z klasy (automatycznie, bez wyboru): Inspire Courage, Counter Performance\n- Sloty na 1. poziomie: 2 czary 1. rangi / dzien\n- Focus Pool: 1 Focus Point\nPodczas setupu wybierasz Muse i kompletujesz repertuar.",
+      "ui_prompt": "KLASA: BARD\nKey Ability: Charyzma (+2 na 1. poziomie).\nPunkty Zycia: 8 + modyfikator Kondycji.\n\nBieglosci startowe:\n- Percepcja: Expert\n- Rzuty obronne: Fortitude Trained, Reflex Trained, Will Expert\n- Skille: Performance Trained + 4 dodatkowe skille (+ INT mod)\n\nMagia:\n- Tradycja: okultystyczna (occult)\n- Repertuar na 1. poziomie: 5 cantripow i 2 czary 1. rangi\n- 5 cantripow wybierasz z listy occult podczas tworzenia postaci\n- Composition cantrips z klasy (automatycznie, bez wyboru): Inspire Courage, Counter Performance\n- Sloty na 1. poziomie: 2 czary 1. rangi / dzien\n- Pula Focus: 1 punkt Focus\nPodczas setupu wybierasz Muse i kompletujesz repertuar.",
       "class_hp": 8,
       "ui_choice_kind": "bard_setup",
       "bard_spell_tradition": "occult",
@@ -343,7 +343,7 @@
     },
     "lingering_composition": {
       "ui_description": "Lingering Composition: naucz sie focus spell 'Lingering Composition' (dopisanie do znanych czarow recznie).",
-      "ui_prompt": "Lingering Composition: dopisz do listy znanych czarow focus spell 'Lingering Composition'. Zwiekszasz Focus Pool o 1 (mechanicznie).",
+      "ui_prompt": "Lingering Composition: dopisz do listy znanych czarow focus spell 'Lingering Composition'. Zwiekszasz Pula Focus o 1 (mechanicznie).",
       "add_actor_attrs": {
         "focus_point": 1
       }

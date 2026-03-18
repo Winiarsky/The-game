@@ -9,8 +9,8 @@ from statuses.classes.cleric.cleric import (
 )
 
 DEITYS_DOMAIN_DESCRIPTION = (
-    "Deity's Domain: wybierasz jedna z domen swojego bostwa i zyskujesz jej initial domain spell "
-    "jako devotion spell (focus spell)."
+    "Domena bostwa: wybierasz jedna z domen swojego bostwa i zyskujesz jej poczatkowy czar domenowy "
+    "jako czar oddania (zaklecie Focus)."
 )
 
 
@@ -26,7 +26,7 @@ def DeitysDomainStatus() -> Status:
 
     return Status(
         id="deitys_domain",
-        label="Deity's Domain",
+        label="Domena bostwa",
         data={
             "ui_description": DEITYS_DOMAIN_DESCRIPTION,
             "ui_prompt": DEITYS_DOMAIN_DESCRIPTION,

@@ -59,6 +59,19 @@ _CLASS_GATED_ACTIONS: dict[str, str] = {
     "rage": "barbarian",
 }
 
+_SPECIAL_SOURCE_CLASS_OVERRIDES = {
+    "command_animal_companion",
+    "commandfamilair",
+    "hunt_prey",
+    "hunted_shot",
+}
+
+_SPECIAL_SOURCE_HERITAGE_OVERRIDES = {
+    "ancientblood",
+    "goblin_scuttle",
+    "goblin_song",
+}
+
 _HINT_ALIASES: dict[str, str] = {
     "cover": "take_cover",
 }
@@ -1128,13 +1141,49 @@ def classify_event_bucket(name: str, event_cls: type) -> str:
     return "special"
 
 
-def group_events(available_events: dict[str, type]) -> dict[str, Any]:
+def _classify_special_action_source(
+    name: str,
+    event_cls: type | None,
+    *,
+    actor: Any | None = None,
+) -> str:
+    key = _normalize(name)
+    if not key:
+        return "generic"
+    if key in _SPECIAL_SOURCE_HERITAGE_OVERRIDES:
+        return "heritage"
+    if key in _SPECIAL_SOURCE_CLASS_OVERRIDES:
+        return "class"
+
+    tags = _event_tags(event_cls)
+    if "ancestry" in tags or "heritage" in tags or bool(tags & _ANCESTRY_TAGS):
+        return "heritage"
+    if bool(tags & _CLASS_TAGS):
+        return "class"
+
+    if key in _STATUS_GATED_ACTIONS or key in _CLASS_GATED_ACTIONS:
+        if key not in _SPECIAL_SOURCE_HERITAGE_OVERRIDES:
+            return "class"
+
+    if actor is not None and key in {"command_animal_companion", "commandfamilair"}:
+        if bool(_actor_identity_tags(actor) & _CLASS_TAGS):
+            return "class"
+
+    return "generic"
+
+
+def group_events(available_events: dict[str, type], *, actor: Any | None = None) -> dict[str, Any]:
     grouped: dict[str, Any] = {
         "direct": {},
         "attack": [],
         "magic": [],
         "alchemy": [],
         "special": [],
+        "special_by_source": {
+            "generic": [],
+            "heritage": [],
+            "class": [],
+        },
     }
     for name, cls in available_events.items():
         bucket = classify_event_bucket(name, cls)
@@ -1142,9 +1191,14 @@ def group_events(available_events: dict[str, type]) -> dict[str, Any]:
             grouped["direct"][name] = cls
         else:
             grouped[bucket].append(name)
+            if bucket == "special":
+                source = _classify_special_action_source(name, cls, actor=actor)
+                grouped["special_by_source"].setdefault(source, []).append(name)
 
     for bucket in ("attack", "magic", "alchemy", "special"):
         grouped[bucket] = sorted(set(grouped[bucket]))
+    for bucket in ("generic", "heritage", "class"):
+        grouped["special_by_source"][bucket] = sorted(set(grouped["special_by_source"].get(bucket, [])))
     return grouped
 
 
@@ -1153,8 +1207,11 @@ def build_intent_options(
     *,
     in_combat: bool,
     actor: Any | None = None,
+    available_events: dict[str, type] | None = None,
 ) -> list[dict[str, str]]:
     direct = grouped.get("direct", {}) or {}
+    event_lookup = dict(available_events or {})
+    special_by_source = dict(grouped.get("special_by_source", {}) or {})
     options: list[dict[str, str]] = []
 
     def _push(intent_id: str, label: str, desc: str, *, category: str = "general", icon: str = "") -> None:
@@ -1189,8 +1246,20 @@ def build_intent_options(
         _push("magic", "Magia", "Wybierz czar lub akcję magiczną.", category="combat", icon="✦")
     if grouped.get("alchemy"):
         _push("alchemy", "Alchemia", "Wybierz akcję alchemiczną.", category="combat", icon="⚗")
-    if grouped.get("special"):
-        _push("special", "Specjalne", "Akcje specjalne klasowe/rasowe i inne.", category="combat", icon="★")
+    for source, category, icon in (
+        ("generic", "generic", "◇"),
+        ("heritage", "heritage", "⬟"),
+        ("class", "class", "★"),
+    ):
+        for event_name in list(special_by_source.get(source, []) or []):
+            cls = event_lookup.get(event_name)
+            _push(
+                event_name,
+                _labelize(event_name),
+                _event_desc(event_name, cls),
+                category=category,
+                icon=icon,
+            )
     if "equip" in direct:
         _push("equipment", "Ekwipunek", "Ekwipunek i interakcje z przedmiotami.", category="utility", icon="◆")
     _push("stats", "Statystyki", "Pełne statystyki aktywnego bohatera.", category="utility", icon="◈")

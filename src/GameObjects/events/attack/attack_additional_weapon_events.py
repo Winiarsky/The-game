@@ -122,7 +122,7 @@ class JavelinAttackEvent(BaseRangeAttackEvent):
 class ShortbowAttackEvent(BaseRangeAttackEvent):
     name = "shortbow"
     weapon_label = "krótkim łukiem"
-    damage_prompt = "1k6 + DEX"
+    damage_prompt = "1k6"
     action_id_base = "attack_shortbow"
     damage_type = DamageType.PIERCING.value
     range_increment_ft = 60

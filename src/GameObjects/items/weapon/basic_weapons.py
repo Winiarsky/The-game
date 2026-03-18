@@ -210,7 +210,7 @@ class ShortbowWeapon(BaseWeapon):
     item_id: str = "shortbow"
     name: str = "Shortbow"
     event_name: str = "shortbow"
-    damage_prompt: str = "1k6 + DEX"
+    damage_prompt: str = "1k6"
     damage_type: str = DamageType.PIERCING.value
     proficiency_category: str = "martial"
     weapon_group: str = "bow"
@@ -227,7 +227,7 @@ class LongbowWeapon(BaseWeapon):
     item_id: str = "longbow"
     name: str = "Longbow"
     event_name: str = "longbow"
-    damage_prompt: str = "1k8 + DEX"
+    damage_prompt: str = "1k8"
     damage_type: str = DamageType.PIERCING.value
     proficiency_category: str = "martial"
     weapon_group: str = "bow"
@@ -367,7 +367,7 @@ _EXTRA_WEAPON_DEFS: dict[str, dict[str, object]] = {
     },
     "composite_longbow": {
         "name": "Composite Longbow",
-        "damage_prompt": "1k8 + DEX",
+        "damage_prompt": "1k8",
         "damage_type": DamageType.PIERCING.value,
         "proficiency_category": "martial",
         "weapon_group": "bow",
@@ -380,7 +380,7 @@ _EXTRA_WEAPON_DEFS: dict[str, dict[str, object]] = {
     },
     "composite_shortbow": {
         "name": "Composite Shortbow",
-        "damage_prompt": "1k6 + DEX",
+        "damage_prompt": "1k6",
         "damage_type": DamageType.PIERCING.value,
         "proficiency_category": "martial",
         "weapon_group": "bow",

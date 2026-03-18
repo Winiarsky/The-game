@@ -118,7 +118,7 @@
     },
     "background_acrobat": {
       "ui_description": "Zarabiales wystepami cyrkowymi lub ulicznymi, uczac sie zwinnego ruchu.",
-      "ui_prompt": "Background: Akrobata",
+      "ui_prompt": "Tlo: Akrobata",
       "ui_prompt_long": "Zarabiales wystepami cyrkowymi lub ulicznymi, uczac sie zwinnego ruchu.\n\nMechanika (w tym silniku):\n- Boosty cech (informacyjnie w UI): Jeden boost do Sily lub Zrecznosci oraz jeden dowolny boost.\n- Szkolenie Skill/Lore (informacyjnie w UI): Akrobatyka oraz Wiedza: Cyrk.\n- Feat z backgroundu: Steady Balance (dodawany do bohatera jako status).\n- Mechanika featu (krotko): +2 status do testów Akrobatyki.\n\nPrzypomnienie reguły bazowej: Na 1. poziomie wybierasz jeden background i tej decyzji nie zmieniasz później. Każdy background daje dwa boosty cech (jeden ograniczony, jeden dowolny), trained w jednym skillu i jednym Lore oraz jeden skill feat. W tym silniku boosty cech i szkolenia skill/Lore są informacją UI, a feat z backgroundu jest dodawany do bohatera jako realny status.",
       "is_background": true,
       "background_key": "acrobat",

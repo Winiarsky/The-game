@@ -357,9 +357,9 @@ class HuntPreyEvent(ActionCostEvent):
     def execute(self, ctx: EventContext) -> EventResult:
         actor = ctx.actor
         if actor is None:
-            return EventResult.cancelled(message="Hunt Prey: brak aktora.")
+            return EventResult.cancelled(message="Wyznacz ofiare: brak aktora.")
         if not _has_status(actor, "hunt_prey"):
-            return EventResult.cancelled(message="Hunt Prey: wymaga class feature Hunt Prey.")
+            return EventResult.cancelled(message="Wyznacz ofiare: wymaga cechy klasowej Wyznacz ofiare.")
 
         candidates = []
         for enemy in list(getattr(ctx.game, "enemies", []) or []):
@@ -368,7 +368,7 @@ class HuntPreyEvent(ActionCostEvent):
                 continue
             candidates.append((enemy, pos))
         if not candidates:
-            return EventResult.cancelled(message="Hunt Prey: brak celu do oznaczenia.")
+            return EventResult.cancelled(message="Wyznacz ofiare: brak celu do oznaczenia.")
 
         target = None
         target_pos = None
@@ -390,7 +390,7 @@ class HuntPreyEvent(ActionCostEvent):
                     target_pos = pos
                     break
             if target is None:
-                return EventResult.cancelled(message="Hunt Prey: nie wybrano poprawnego celu.")
+                return EventResult.cancelled(message="Wyznacz ofiare: nie wybrano poprawnego celu.")
 
         set_hunted_prey(actor, target, position=target_pos)
         refresh_outwit_bonus(actor)
@@ -407,7 +407,7 @@ class HuntPreyEvent(ActionCostEvent):
         except Exception:
             pass
 
-        messages = [f"Hunt Prey: oznaczono cel ({getattr(target, 'name', 'target')})."]
+        messages = [f"Wyznacz ofiare: oznaczono cel ({getattr(target, 'name', 'cel')})."]
 
         if _has_status(actor, "crossbow_ace"):
             crossbow_id = _equipped_crossbow_id(actor)
@@ -467,22 +467,22 @@ class HuntedShotEvent(ActionCostEvent):
     def execute(self, ctx: EventContext) -> EventResult:
         actor = ctx.actor
         if actor is None:
-            return EventResult.cancelled(message="Hunted Shot: brak aktora.")
+            return EventResult.cancelled(message="Strzal na cel: brak aktora.")
         if not _has_status(actor, "hunted_shot"):
-            return EventResult.cancelled(message="Hunted Shot: wymaga featu Hunted Shot.")
+            return EventResult.cancelled(message="Strzal na cel: wymaga featu Strzal na cel.")
         prey = _hunted_target(ctx, actor)
         if prey is None:
-            return EventResult.cancelled(message="Hunted Shot: brak aktywnego hunted prey.")
+            return EventResult.cancelled(message="Strzal na cel: brak aktywnej oznaczonej ofiary.")
 
         ranged_weapons = _equipped_ranged_weapons(actor)
         if not ranged_weapons:
-            return EventResult.cancelled(message="Hunted Shot: wymaga aktywnej broni ranged z reload 0.")
+            return EventResult.cancelled(message="Strzal na cel: wymaga aktywnej broni dystansowej z reload 0.")
         chosen = _select_weapon_from_equipped(ctx, ranged_weapons)
         if chosen is None:
-            return EventResult.cancelled(message="Hunted Shot: nie wybrano broni ranged.")
+            return EventResult.cancelled(message="Strzal na cel: nie wybrano broni dystansowej.")
         event_name = _weapon_event_name(chosen)
         if not event_name:
-            return EventResult.cancelled(message="Hunted Shot: brak eventu ataku dla wybranej broni.")
+            return EventResult.cancelled(message="Strzal na cel: brak eventu ataku dla wybranej broni.")
 
         initial_attacks = _current_attacks_this_turn(ctx, actor)
         base_metadata = dict(ctx.metadata or {})
@@ -577,7 +577,7 @@ class HuntedShotEvent(ActionCostEvent):
                     defeated=this_defeated,
                 )
 
-        msg = f"Hunted Shot: trafienia {hit_count}/2."
+        msg = f"Strzal na cel: trafienia {hit_count}/2."
         if defeated:
             msg += " Przeciwnik pokonany."
 

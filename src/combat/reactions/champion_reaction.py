@@ -227,7 +227,7 @@ def _pick_ranged_weapon(game, champion, weapons: list[object]) -> object | None:
     if ui is not None and getattr(ui, "enabled", False):
         try:
             choice = ui.prompt_choice(
-                "Ranged Reprisal: wybierz bron ranged do Retributive Strike",
+                "Dystansowa reprymenda: wybierz bron dystansowa do Retributive Strike",
                 choices=labels,
                 source="champion_ranged_reprisal",
             )
@@ -328,7 +328,7 @@ def _step_towards_target(champion, attacker, game) -> bool:
     if moved:
         try:
             game.ui_log(
-                f"Ranged Reprisal: {getattr(champion, 'name', 'Champion')} wykonuje Step na {destination}."
+                f"Dystansowa reprymenda: {getattr(champion, 'name', 'Czempion')} wykonuje Krok na {destination}."
             )
         except Exception:
             pass
@@ -353,7 +353,7 @@ def _paladin_retributive_strike(champion, attacker, game) -> None:
 
         if not _line_of_effect_clear(game, source_pos, target_pos):
             try:
-                game.ui_log("Ranged Reprisal: brak linii efektu do agresora.")
+                game.ui_log("Dystansowa reprymenda: brak linii efektu do agresora.")
             except Exception:
                 pass
             return
@@ -370,7 +370,7 @@ def _paladin_retributive_strike(champion, attacker, game) -> None:
                 )
                 return
         try:
-            game.ui_log("Ranged Reprisal: brak aktywnej broni ranged do kontrataku.")
+            game.ui_log("Dystansowa reprymenda: brak aktywnej broni dystansowej do kontrataku.")
         except Exception:
             pass
         return
@@ -738,7 +738,7 @@ CAUSE_STRATEGIES: dict[str, ChampionCauseStrategy] = {
 @dataclass
 class ChampionReaction(Reaction):
     id: str = "champion_reaction"
-    label: str = "Champion's Reaction"
+    label: str = "Reakcja czempiona"
     priority: int = 30
     action_cost: int = 1
     requires_reach: bool = False

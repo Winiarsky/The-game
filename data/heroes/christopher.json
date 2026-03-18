@@ -118,7 +118,7 @@
     },
     "background_barkeep": {
       "ui_description": "Pracowales w karczmie, uczac sie kontaktu z ludzmi i trudnymi klientami.",
-      "ui_prompt": "Background: Karczmarz",
+      "ui_prompt": "Tlo: Karczmarz",
       "ui_prompt_long": "Pracowales w karczmie, uczac sie kontaktu z ludzmi i trudnymi klientami.\n\nMechanika (w tym silniku):\n- Boosty cech (informacyjnie w UI): Jeden boost do Kondycji lub Charyzmy oraz jeden dowolny boost.\n- Szkolenie Skill/Lore (informacyjnie w UI): Dyplomacja oraz Wiedza: Alkohol.\n- Feat z backgroundu: Hobnobber (dodawany do bohatera jako status).\n- Mechanika featu (krotko): +2 status do testów Dyplomacji.\n\nPrzypomnienie reguły bazowej: Na 1. poziomie wybierasz jeden background i tej decyzji nie zmieniasz później. Każdy background daje dwa boosty cech (jeden ograniczony, jeden dowolny), trained w jednym skillu i jednym Lore oraz jeden skill feat. W tym silniku boosty cech i szkolenia skill/Lore są informacją UI, a feat z backgroundu jest dodawany do bohatera jako realny status.",
       "is_background": true,
       "background_key": "barkeep",
@@ -291,7 +291,7 @@
       "grants_statuses": [
         {
           "id": "shield_block",
-          "label": "Shield Block",
+          "label": "Blok tarcza",
           "duration": null,
           "source": null,
           "stacks": false,
@@ -325,7 +325,7 @@
       "ui_description": "Reakcja: gdy masz podniesiona tarcze i otrzymujesz obrazenia fizyczne, tarcza pochlania obrazenia do Hardness (wdrozone mechanicznie przez reakcje)."
     },
     "deific_weapon": {
-      "ui_description": "Deific Weapon: bron jest powiazana z favored weapon wybranego deity (dla custom deity wybierasz recznie). Przy ataku tą bronią zwiększasz kość obrażeń o jeden stopień.",
+      "ui_description": "Boska bron: bron jest powiazana z favored weapon wybranego deity (dla custom deity wybierasz recznie). Przy ataku tą bronią zwiększasz kość obrażeń o jeden stopień.",
       "ui_choice_kind": "deific_weapon",
       "deific_weapon_choices": [
         "sword",
@@ -338,8 +338,8 @@
       "deific_weapon_deity": "iomedae"
     },
     "deitys_domain": {
-      "ui_description": "Deity's Domain: wybierasz jedna z domen swojego bostwa i zyskujesz jej initial domain spell jako devotion spell (focus spell).",
-      "ui_prompt": "Deity's Domain: wybierasz jedna z domen swojego bostwa i zyskujesz jej initial domain spell jako devotion spell (focus spell).",
+      "ui_description": "Domena bostwa: wybierasz jedna z domen swojego bostwa i zyskujesz jej initial domain spell jako devotion spell (focus spell).",
+      "ui_prompt": "Domena bostwa: wybierasz jedna z domen swojego bostwa i zyskujesz jej initial domain spell jako devotion spell (focus spell).",
       "ui_choice_kind": "champion_deitys_domain",
       "domain_choices_by_deity": {
         "abadar": [
@@ -688,8 +688,8 @@
       "class_feat": "ranged_reprisal"
     },
     "ranged_reprisal": {
-      "ui_description": "Ranged Reprisal: Retributive Strike moze byc wykonany bronia dystansowa, a gdy cel jest 5 stop poza zasiegiem melee, mozesz Step jako czesc reakcji.",
-      "ui_prompt": "Ranged Reprisal: Retributive Strike moze byc wykonany bronia dystansowa, a gdy cel jest 5 stop poza zasiegiem melee, mozesz Step jako czesc reakcji.",
+      "ui_description": "Dystansowa reprymenda: Retributive Strike moze byc wykonany bronia dystansowa, a gdy cel jest 5 stop poza zasiegiem melee, mozesz Step jako czesc reakcji.",
+      "ui_prompt": "Dystansowa reprymenda: Retributive Strike moze byc wykonany bronia dystansowa, a gdy cel jest 5 stop poza zasiegiem melee, mozesz Step jako czesc reakcji.",
       "requires_champion_cause": "paladin"
     }
   },

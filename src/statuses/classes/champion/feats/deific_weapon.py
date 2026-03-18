@@ -11,7 +11,7 @@ DEIFIC_WEAPON_CHOICES = [
 ]
 
 DEIFIC_WEAPON_DESCRIPTION = (
-    "Deific Weapon: bron jest powiazana z favored weapon wybranego deity "
+    "Boska bron: bron jest powiazana z ulubiona bronia wybranego bostwa "
     "(dla custom deity wybierasz recznie). "
     "Przy ataku tą bronią zwiększasz kość obrażeń o jeden stopień."
 )
@@ -20,7 +20,7 @@ DEIFIC_WEAPON_DESCRIPTION = (
 def DeificWeaponStatus() -> Status:
     return Status(
         id="deific_weapon",
-        label="Deific Weapon",
+        label="Boska bron",
         data={
             "ui_description": DEIFIC_WEAPON_DESCRIPTION,
             "ui_choice_kind": "deific_weapon",

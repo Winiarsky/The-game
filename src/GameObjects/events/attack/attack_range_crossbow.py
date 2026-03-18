@@ -10,7 +10,7 @@ from .base_attack_range_event import BaseRangeAttackEvent
 class CrossbowAttackEvent(BaseRangeAttackEvent):
     name = "crossbow"
     weapon_label = "kuszą"
-    damage_prompt = "1k8 + DEX"
+    damage_prompt = "1k8"
     action_id_base = "attack_crossbow"
     damage_type = DamageType.PIERCING.value
     range_increment_ft = 120

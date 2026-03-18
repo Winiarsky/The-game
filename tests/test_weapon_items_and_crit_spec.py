@@ -170,6 +170,8 @@ def test_weapon_items_profiles_and_aliases():
     halberd = create_weapon("halberd")
     shortbow = create_weapon("shortbow")
     longbow = create_weapon("longbow")
+    composite_shortbow = create_weapon("composite_shortbow")
+    composite_longbow = create_weapon("composite_longbow")
     light_crossbow = create_weapon("light_crossbow")
     javelin = create_weapon("javelin")
 
@@ -180,8 +182,12 @@ def test_weapon_items_profiles_and_aliases():
     assert halberd is not None and int(halberd.hands_required) == 2
     assert "reach:10" in halberd.traits
     assert shortbow is not None and shortbow.range_increment_ft == 60
+    assert shortbow.damage_prompt == "1k6"
     assert "deadly:d10" in shortbow.traits
+    assert longbow is not None and longbow.damage_prompt == "1k8"
     assert longbow is not None and "deadly:d10" in longbow.traits
+    assert composite_shortbow is not None and composite_shortbow.damage_prompt == "1k6"
+    assert composite_longbow is not None and composite_longbow.damage_prompt == "1k8"
     assert light_crossbow is not None and int(light_crossbow.reload) == 1
     assert javelin is not None and javelin.ranged is True
     assert normalize_weapon_id("lekka kusza") == "light_crossbow"

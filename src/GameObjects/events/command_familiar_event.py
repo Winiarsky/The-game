@@ -148,7 +148,7 @@ class CommandFamiliarEvent(GameEvent):
                     "desc": self._structured_desc(
                         fluff=fluff,
                         mechanics=mechanics,
-                        when="Przy pierwszym użyciu Command Familiar lub po zmianie trybu.",
+                        when="Przy pierwszym uzyciu akcji Komenderuj chowanca lub po zmianie trybu.",
                     ),
                     "key": str(idx),
                 }
@@ -160,7 +160,7 @@ class CommandFamiliarEvent(GameEvent):
         labels = [str(item["label"]) for item in entries]
         raw_answer: str | None = None
         ui = getattr(game, "ui", None)
-        prompt = "Familiar: wybierz tryb działania dla akcji Command Familiar."
+        prompt = "Chowaniec: wybierz tryb dzialania dla akcji Komenderuj chowanca."
         if ui is not None and hasattr(ui, "prompt_choice"):
             raw_answer = ui.prompt_choice(
                 prompt,

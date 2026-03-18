@@ -80,7 +80,7 @@ class BaseShield:
             bulk = "L"
         ac_line = f"- AC: +{self.ac_bonus}"
         if int(self.take_cover_ac_bonus or 0) > int(self.ac_bonus):
-            ac_line = f"- AC: +{self.ac_bonus}/+{int(self.take_cover_ac_bonus)} (Take Cover)"
+            ac_line = f"- AC: +{self.ac_bonus}/+{int(self.take_cover_ac_bonus)} (Osłona)"
         speed_line = None
         if int(self.speed_penalty_feet or 0) > 0:
             speed_line = f"- Kara predkosci: -{int(self.speed_penalty_feet)} ft (gdy podniesiona)"

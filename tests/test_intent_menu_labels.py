@@ -9,7 +9,7 @@ for path in (PROJECT_ROOT, SRC_ROOT):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from states.intent_menu import build_intent_options
+from states.intent_menu import build_intent_options, group_events
 
 
 class _Actor:
@@ -28,7 +28,12 @@ def _grouped_with_stealth() -> dict:
         "magic": [],
         "alchemy": [],
         "special": [],
+        "special_by_source": {"generic": [], "heritage": [], "class": []},
     }
+
+
+def _event_cls(module: str, tags: list[str]):
+    return type("DummyEvent", (), {"__module__": module, "default_tags": tags, "available_in_combat": True, "available_in_exploration": True})
 
 
 def test_intent_uses_stealth_entry_when_actor_not_hidden():
@@ -41,3 +46,41 @@ def test_intent_uses_sneak_move_entry_when_actor_already_stealth():
     options = build_intent_options(_grouped_with_stealth(), in_combat=True, actor=_Actor(["stealth"]))
     stealth = next(item for item in options if item.get("id") == "stealth")
     assert stealth["label"] == "Poruszaj sie skrycie"
+
+
+def test_group_events_splits_special_actions_by_source():
+    actor = _Actor(["animal_companion", "hunt_prey", "hunted_shot", "goblin_song", "ranger", "goblin"])
+    setattr(actor, "class_name", "ranger")
+    setattr(actor, "ancestry", "goblin")
+    events = {
+        "grapple": _event_cls("GameObjects.events.grapple_event", ["attack", "athletics", "grapple"]),
+        "hunt_prey": _event_cls("GameObjects.events.ranger_feat_events", ["ranger", "concentrate"]),
+        "command_animal_companion": _event_cls("GameObjects.events.command_animal_companion_event", ["companion", "command"]),
+        "goblin_song": _event_cls("GameObjects.events.goblin_song_event", ["performance", "sonic"]),
+    }
+
+    grouped = group_events(events, actor=actor)
+
+    assert grouped["special_by_source"]["generic"] == ["grapple"]
+    assert grouped["special_by_source"]["heritage"] == ["goblin_song"]
+    assert grouped["special_by_source"]["class"] == ["command_animal_companion", "hunt_prey"]
+
+
+def test_intent_expands_special_actions_into_source_sections():
+    actor = _Actor(["animal_companion", "hunt_prey", "goblin_song", "ranger", "goblin"])
+    setattr(actor, "class_name", "ranger")
+    setattr(actor, "ancestry", "goblin")
+    events = {
+        "grapple": _event_cls("GameObjects.events.grapple_event", ["attack", "athletics", "grapple"]),
+        "hunt_prey": _event_cls("GameObjects.events.ranger_feat_events", ["ranger", "concentrate"]),
+        "goblin_song": _event_cls("GameObjects.events.goblin_song_event", ["performance", "sonic"]),
+    }
+
+    grouped = group_events(events, actor=actor)
+    options = build_intent_options(grouped, in_combat=True, actor=actor, available_events=events)
+
+    by_id = {item["id"]: item for item in options}
+    assert "special" not in by_id
+    assert by_id["grapple"]["category"] == "generic"
+    assert by_id["goblin_song"]["category"] == "heritage"
+    assert by_id["hunt_prey"]["category"] == "class"

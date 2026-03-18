@@ -3,15 +3,15 @@ from __future__ import annotations
 from statuses.base import Status
 
 HUNT_PREY_DESCRIPTION = (
-    "Hunt Prey: wybierz jednego przeciwnika jako hunted prey. "
-    "Akcja wymagana do aktywacji Hunter's Edge i featów rangera."
+    "Wyznacz ofiare: wybierz jednego przeciwnika jako oznaczony cel. "
+    "Akcja wymagana do aktywacji Przewagi lowcy i featow rangera."
 )
 
 
 def HuntPreyStatus() -> Status:
     return Status(
         id="hunt_prey",
-        label="Hunt Prey",
+        label="Wyznacz ofiare",
         data={
             "ui_description": HUNT_PREY_DESCRIPTION,
             "ui_prompt": HUNT_PREY_DESCRIPTION,

@@ -9,7 +9,7 @@ from damage_types import DamageType
 class LongBowAttackEvent(BaseRangeAttackEvent):
     name = "longbow"
     weapon_label = "długim łukiem"
-    damage_prompt = "1k8 + DEX"
+    damage_prompt = "1k8"
     action_id_base = "attack_long_bow"
     damage_type = DamageType.PIERCING.value
     range_increment_ft = 100

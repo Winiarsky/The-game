@@ -82,7 +82,7 @@ class BaseArmor(BaseItem):
             f"- Specjalizacja pancerza: {specialization_effect}",
         ]
         if self.bulwark_reflex_floor is not None:
-            lines.append(f"- Bulwark Reflex floor: +{int(self.bulwark_reflex_floor)}")
+            lines.append(f"- Bulwark (minimum Refleks): +{int(self.bulwark_reflex_floor)}")
         lines.extend(
             [
                 f"- Cena: {self._price_label(int(getattr(self, 'price_cp', 0) or 0))}",

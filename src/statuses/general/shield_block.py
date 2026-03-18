@@ -12,7 +12,7 @@ def ShieldBlockStatus() -> Status:
     """Feat: Shield Block."""
     return Status(
         id="shield_block",
-        label="Shield Block",
+        label="Blok tarcza",
         data={"ui_description": SHIELD_BLOCK_DESCRIPTION},
     )
 

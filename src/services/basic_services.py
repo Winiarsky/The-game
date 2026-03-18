@@ -356,7 +356,7 @@ def create_service(service_id: object) -> BaseItem | None:
         return None
     hands = int(data.get("hands", 0) or 0)
     base_desc = str(data.get("description") or "").strip()
-    extra = f"Usluga natychmiastowa. Bulk: {data.get('bulk', '-')}, Hands: {hands}."
+    extra = f"Usluga natychmiastowa. Bulk: {data.get('bulk', '-')}, Chwyt: {hands}."
     description = f"{base_desc}\n{extra}".strip()
     item = BaseItem(
         item_id=normalized,

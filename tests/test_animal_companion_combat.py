@@ -194,8 +194,9 @@ def test_animal_companion_deploy_expands_radius_when_adjacent_blocked():
     assert companion is not None
     assert companion.position == radius2_candidate
     assert conn.last_scan_options is not None
+    assert radius2_candidate in conn.last_scan_options
     assert all(
-        max(abs(pos[0] - owner.position[0]), abs(pos[1] - owner.position[1])) == 2
+        max(abs(pos[0] - owner.position[0]), abs(pos[1] - owner.position[1])) >= 2
         for pos in conn.last_scan_options
     )
 
@@ -246,7 +247,7 @@ def test_command_animal_companion_stride_moves_on_board(monkeypatch):
     companion = build_animal_companion(owner, "wolf")
     board.place(companion, (1, 2))
     combat.animal_companions[owner.object_id] = companion
-    conn.scan_queue = [(4, 2)]  # stride target
+    conn.scan_queue = [(4, 2), (4, 2)]  # stride target + confirmation click
 
     from GameObjects.events.command_animal_companion_event import CommandAnimalCompanionEvent
 

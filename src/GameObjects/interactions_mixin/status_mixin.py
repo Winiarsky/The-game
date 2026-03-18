@@ -837,7 +837,7 @@ class StatusMixin:
                 attack_parts.append(f"{attack_label}{trait_label}")
 
         mechanics_lines = [
-            "Po wybraniu companion pojawia sie w walce jako osobny obiekt; 1 akcja na Command Animal Companion daje mu 2 akcje.",
+            "Po wybraniu towarzysz pojawia sie w walce jako osobny obiekt; 1 akcja na komende zwierzecemu towarzyszowi daje mu 2 akcje.",
             f"Rozmiar: {localize_term_pl(size)}.",
             f"Predkosc: {speed} ft.",
             f"Skalowanie: HP i AC rosna z poziomem wlasciciela; bazowe hp ancestry dla tego typu = {hp_ancestry}.",
@@ -853,7 +853,7 @@ class StatusMixin:
             name=label,
             fluff=fluff_map.get(normalized, f"Wybierasz typ zwierzecego towarzysza: {label}."),
             mechanics="\n".join(mechanics_lines),
-            when="Przy wyborze typu Animal Companion.",
+            when="Przy wyborze typu zwierzecego towarzysza.",
         )
 
     @staticmethod
@@ -881,7 +881,7 @@ class StatusMixin:
                     )
                 return (
                     "Doktryna kleryka bojowego. "
-                    "Mechanika: otrzymujesz Shield Block; dla ulubionej broni typu simple/unarmed "
+                    "Mechanika: otrzymujesz Blok tarcza; dla ulubionej broni typu simple/unarmed "
                     "dostajesz tez Deadly Simplicity."
                 )
 
@@ -946,7 +946,7 @@ class StatusMixin:
                 details = dict(DRUID_ORDER_UI_DETAILS.get(normalized) or {})
                 starting_focus = max(0, 1 + focus_bonus)
                 focus_line = (
-                    f"bonus Focus: +{focus_bonus} (łącznie {starting_focus} Focus Point na starcie)."
+                    f"bonus Focus: +{focus_bonus} (lacznie {starting_focus} punkt Focus na starcie)."
                 )
                 effect_lines = [
                     f"trained skill: {localize_term_pl(skill)}.",
@@ -971,18 +971,18 @@ class StatusMixin:
         if normalized == "flurry":
             return (
                 "Hunter's Edge: Flurry. "
-                "Mechanika: przeciw Hunt Prey zmniejsza MAP dla kolejnych Strike'ow "
+                "Mechanika: przeciw Wyznacz ofiare zmniejsza MAP dla kolejnych Strike'ow "
                 "(2. atak: -2 agile/-3 standard; 3+: -4 agile/-6 standard)."
             )
         if normalized == "precision":
             return (
                 "Hunter's Edge: Precision. "
-                "Mechanika: raz na ture przeciw Hunt Prey dodajesz dodatkowe precision damage."
+                "Mechanika: raz na ture przeciw Wyznacz ofiare dodajesz dodatkowe precision damage."
             )
         if normalized == "outwit":
             return (
                 "Hunter's Edge: Outwit. "
-                "Mechanika: przeciw Hunt Prey zyskujesz premie taktyczne; w silniku m.in. +1 circumstance do AC "
+                "Mechanika: przeciw Wyznacz ofiare zyskujesz premie taktyczne; w silniku m.in. +1 circumstance do AC "
                 "oraz +2 do wybranych testow (Stealth/Recall Knowledge)."
             )
 
@@ -2175,7 +2175,7 @@ class StatusMixin:
                 if bool(existing_data.get("is_background")):
                     existing_label = getattr(existing, "display_label", None) or getattr(existing, "label", None) or getattr(existing, "id", "background")
                     self._ui_log(
-                        f"Background: masz juz wybrany {existing_label}. Mozesz miec tylko jeden background."
+                        f"Tlo: masz juz wybrane {existing_label}. Mozesz miec tylko jedno tlo."
                     )
                     return False
 
@@ -4204,7 +4204,7 @@ class StatusMixin:
         if not choices:
             choices = ["wolf"]
         chosen_type = self._pick_choice_id(
-            "Animal Companion: wybierz typ companions",
+            "Zwierzecy towarzysz: wybierz typ towarzysza",
             choices,
             source="status",
         )
@@ -4225,7 +4225,7 @@ class StatusMixin:
             setattr(self, "animal_companion_type", chosen_type)
         except Exception:
             pass
-        self._ui_log(f"Animal Companion: wybrano typ {self._labelize_choice(chosen_type)}.")
+        self._ui_log(f"Zwierzecy towarzysz: wybrano typ {self._labelize_choice(chosen_type)}.")
 
     def _handle_champion_setup_choice(self, status: "Status", data: dict) -> None:
         key_ability_choices = list(data.get("champion_key_ability_choices") or ["strength", "dexterity"])
@@ -4372,7 +4372,7 @@ class StatusMixin:
 
             self.add_status(DEIFIC_WEAPON_STATUS)
         except Exception:
-            self._ui_log("Nie udalo sie dodac cechy Deific Weapon.")
+            self._ui_log("Nie udalo sie dodac cechy Boska bron.")
 
         self._ui_log(
             "Champion setup: "
@@ -5676,7 +5676,7 @@ class StatusMixin:
 
                 self.add_status(SHIELD_BLOCK_STATUS)
             except Exception:
-                self._ui_log("Cleric setup: nie udalo sie dodac Shield Block.")
+                self._ui_log("Cleric setup: nie udalo sie dodac cechy Blok tarcza.")
             if favored_weapon_group in {"simple", "unarmed"}:
                 try:
                     from statuses.classes.cleric.feats.deadly_simplicity import DEADLY_SIMPLICITY_STATUS
@@ -5761,7 +5761,7 @@ class StatusMixin:
                 deity_choices = [item for item in deity_choices if item != "custom"] + ["custom"]
             if deity_choices:
                 chosen_deity = self._pick_choice_id(
-                    "Deity's Domain: wybierz deity",
+                    "Domena bostwa: wybierz bostwo",
                     deity_choices,
                     source="status",
                 )
@@ -5825,17 +5825,17 @@ class StatusMixin:
                         fluff=domain_desc or f"Domena {domain_label} daje czar {spell_label}.",
                         mechanics="\n".join(part for part in mechanics_parts if part).strip()
                         or f"Otrzymujesz czar domenowy {spell_label}.",
-                        when="Po wybraniu feata Deity's Domain.",
+                        when="Po wybraniu feata Domena bostwa.",
                     ),
                     "key": str(idx),
                 }
             )
         if not entries:
-            self._ui_log("Deity's Domain: brak domen do wyboru.")
+            self._ui_log("Domena bostwa: brak domen do wyboru.")
             return
         labels = [str(entry.get("label") or "") for entry in entries]
         chosen_label = self._prompt_choice(
-            f"Deity's Domain ({self._labelize_choice(deity)}): wybierz domene",
+            f"Domena bostwa ({self._labelize_choice(deity)}): wybierz domene",
             labels,
             source="status",
             choice_meta=entries,
@@ -5883,7 +5883,7 @@ class StatusMixin:
             pass
 
         self._ui_log(
-            "Deity's Domain: "
+            "Domena bostwa: "
             f"{self._labelize_choice(chosen_domain)} -> {self._labelize_choice(chosen_spell)}."
         )
 
@@ -5911,12 +5911,12 @@ class StatusMixin:
             if not choices:
                 return
             picked = self._pick_choice_id(
-                "Deific Weapon: wybierz typ broni",
+                "Boska bron: wybierz typ broni",
                 choices,
                 source="status",
             )
             if not picked:
-                self._ui_log("Deific Weapon: nie wybrano poprawnego typu broni.")
+                self._ui_log("Boska bron: nie wybrano poprawnego typu broni.")
                 return
             chosen_weapon = str(picked).strip().lower()
 
@@ -5930,7 +5930,7 @@ class StatusMixin:
                     self.statuses[idx] = replace(status, data=new_data)
                     break
         except Exception:
-            self._ui_log("Deific Weapon: nie udalo sie zapisac wyboru broni.")
+            self._ui_log("Boska bron: nie udalo sie zapisac wyboru broni.")
             return
 
         try:
@@ -5939,11 +5939,11 @@ class StatusMixin:
             pass
         if deity and chosen_weapon:
             self._ui_log(
-                "Deific Weapon: "
+                "Boska bron: "
                 f"{self._labelize_choice(deity)} -> {self._labelize_choice(chosen_weapon)} (favored weapon)."
             )
         else:
-            self._ui_log(f"Deific Weapon: wybrano {self._labelize_choice(chosen_weapon)}.")
+            self._ui_log(f"Boska bron: wybrano {self._labelize_choice(chosen_weapon)}.")
 
     def _sync_reactions_for_status(self, status: "Status") -> None:
         reactions = getattr(self, "reactions", None)
@@ -5961,11 +5961,11 @@ class StatusMixin:
                 if equipped is None:
                     if self._in_character_creation_mode():
                         self._ui_log(
-                            "Shield Block: feat aktywny. Wyposaz tarcze w ekwipunku, aby uzyc reakcji w walce."
+                            "Blok tarcza: feat aktywny. Wyposaz tarcze w ekwipunku, aby uzyc reakcji w walce."
                         )
                         return
                     choice = self._prompt_choice(
-                        "Shield Block: brak wyposazonej tarczy.\n"
+                        "Blok tarcza: brak wyposazonej tarczy.\n"
                         "Czy wyposazyc domyslna Standard Shield (szybki setup)?",
                         ["standard", "brak"],
                         source="status",
@@ -5982,7 +5982,7 @@ class StatusMixin:
                     else:
                         self._ui_log("Nie wybrano tarczy (brak wyposazenia).")
             except Exception:
-                self._ui_log("Nie udalo sie dodac reakcji Shield Block.")
+                self._ui_log("Nie udalo sie dodac reakcji Blok tarcza.")
         if status_id == "reactive_shield":
             try:
                 from combat.reactions.reactive_shield_reaction import ReactiveShieldReaction
@@ -5990,7 +5990,7 @@ class StatusMixin:
                 if not any(getattr(item, "id", None) == "reactive_shield" for item in reactions):
                     reactions.append(ReactiveShieldReaction())
             except Exception:
-                self._ui_log("Nie udalo sie dodac reakcji Reactive Shield.")
+                self._ui_log("Nie udalo sie dodac reakcji Reaktywna tarcza.")
         if status_id == "nimble_dodge":
             try:
                 from combat.reactions.nimble_dodge_reaction import NimbleDodgeReaction

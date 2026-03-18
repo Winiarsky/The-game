@@ -1679,7 +1679,7 @@ class AttackEventBase(GameEvent):
             damage_prompt=current_prompt,
         )
         if deific_applied:
-            notes.append("Deific Weapon: kosc obrazen zwiekszona o 1 stopien.")
+            notes.append("Boska bron: kosc obrazen zwiekszona o 1 stopien.")
 
         current_prompt, deadly_applied = self._deadly_simplicity_damage_prompt(
             actor,

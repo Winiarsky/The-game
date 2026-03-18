@@ -303,15 +303,15 @@ def _item_mechanics_description(item) -> str:
         lines.append(f"- Specjalizacja pancerza: {specialization}")
         bulwark_floor = getattr(item, "bulwark_reflex_floor", None)
         if bulwark_floor is not None:
-            lines.append(f"- Bulwark Reflex floor: +{int(bulwark_floor)}")
+            lines.append(f"- Bulwark (minimum Refleks): +{int(bulwark_floor)}")
         if traits:
             lines.append(f"- Cechy: {', '.join(traits)}")
             for tag in traits:
                 hint = trait_hints.get(tag)
                 if hint:
-                    lines.append(f"- Trait {tag}: {hint}")
+                    lines.append(f"- Cecha {tag}: {hint}")
                 else:
-                    lines.append(f"- Trait {tag}: cecha specjalna pancerza.")
+                    lines.append(f"- Cecha {tag}: cecha specjalna pancerza.")
     elif category == "shield":
         ac_bonus = int(getattr(item, "ac_bonus", 0) or 0)
         take_cover_ac = int(getattr(item, "take_cover_ac_bonus", ac_bonus) or ac_bonus)
@@ -324,16 +324,16 @@ def _item_mechanics_description(item) -> str:
         ac_line = f"- AC z Raise Shield: +{ac_bonus}"
         if take_cover_ac > ac_bonus:
             lines.append(ac_line)
-            lines.append(f"- AC z Take Cover: +{take_cover_ac}")
+            lines.append(f"- AC z Osłony: +{take_cover_ac}")
         else:
             lines.append(ac_line)
-        lines.append(f"- Hardness: {hardness}")
+        lines.append(f"- Twardość: {hardness}")
         lines.append(f"- HP: {hp}/{hp_max}")
         lines.append(f"- BT: {bt}")
         if speed_penalty > 0:
             lines.append(f"- Kara prędkości po Raise Shield: -{speed_penalty} ft")
         if "tower_shield" in traits:
-            lines.append("- Tower Shield: podniesiona tarcza daje osłonę na linii strzału; z Take Cover daje greater cover (+4 AC).")
+            lines.append("- Tarcza wieżowa: podniesiona tarcza daje osłonę na linii strzału; z Osłoną daje większą osłonę (+4 AC).")
     else:
         lines.append(f"- Typ przedmiotu: {category}")
 

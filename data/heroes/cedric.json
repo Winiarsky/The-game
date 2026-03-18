@@ -58,7 +58,7 @@
       "grants_statuses": [
         {
           "id": "dim_light_vision",
-          "label": "Dim Light Vision",
+          "label": "Widzenie w polmroku",
           "duration": null,
           "source": null,
           "stacks": false,
@@ -86,7 +86,7 @@
     "dim_light_vision": {},
     "background_bounty_hunter": {
       "ui_description": "Scigales przestepcow dla sprawiedliwosci, zlota lub obu tych rzeczy.",
-      "ui_prompt": "Background: Lowca nagrod",
+      "ui_prompt": "Tlo: Lowca nagrod",
       "ui_prompt_long": "Scigales przestepcow dla sprawiedliwosci, zlota lub obu tych rzeczy.\n\nMechanika (w tym silniku):\n- Boosty cech (informacyjnie w UI): Jeden boost do Sily lub Madrosci oraz jeden dowolny boost.\n- Szkolenie Skill/Lore (informacyjnie w UI): Przetrwanie oraz Wiedza: Prawo.\n- Feat z backgroundu: Experienced Tracker (dodawany do bohatera jako status).\n- Mechanika featu (krotko): +2 status do testów Przetrwania.\n\nPrzypomnienie reguły bazowej: Na 1. poziomie wybierasz jeden background i tej decyzji nie zmieniasz później. Każdy background daje dwa boosty cech (jeden ograniczony, jeden dowolny), trained w jednym skillu i jednym Lore oraz jeden skill feat. W tym silniku boosty cech i szkolenia skill/Lore są informacją UI, a feat z backgroundu jest dodawany do bohatera jako realny status.",
       "is_background": true,
       "background_key": "bounty_hunter",
@@ -145,7 +145,7 @@
       "skill_feat_fallback_mechanic": true
     },
     "ranger": {
-      "ui_prompt": "KEY ABILITY: STRENGTH OR DEXTERITY\nAt 1st level, your class gives you an ability boost to your choice of Strength or Dexterity.\nHIT POINTS: 10 plus your Constitution Modifier\n\nINITIAL PROFICIENCIES (summary):\nPerception: Expert\nSaving Throws: Expert Fortitude, Expert Reflex, Trained Will\nAttacks: Trained simple/martial + unarmed\nDefenses: Trained light/medium armor + unarmored\nSkills: Trained in Nature + Survival\n\nCLASS FEATURES:\nHunt Prey: oznaczasz jednego przeciwnika jako cel.\nHunter's Edge: Flurry / Precision / Outwit.\nPodczas setupu wybierasz key ability, hunter's edge i 1 class feat poziomu 1.",
+      "ui_prompt": "KEY ABILITY: STRENGTH OR DEXTERITY\nAt 1st level, your class gives you an ability boost to your choice of Strength or Dexterity.\nHIT POINTS: 10 plus your Constitution Modifier\n\nINITIAL PROFICIENCIES (summary):\nPerception: Expert\nSaving Throws: Expert Fortitude, Expert Reflex, Trained Will\nAttacks: Trained simple/martial + unarmed\nDefenses: Trained light/medium armor + unarmored\nSkills: Trained in Nature + Survival\n\nCLASS FEATURES:\nWyznacz ofiare: oznaczasz jednego przeciwnika jako cel.\nHunter's Edge: Flurry / Precision / Outwit.\nPodczas setupu wybierasz key ability, hunter's edge i 1 class feat poziomu 1.",
       "class_hp": 10,
       "ui_choice_kind": "ranger_setup",
       "ranger_key_ability_choices": [
@@ -170,13 +170,13 @@
       "grants_statuses": [
         {
           "id": "hunt_prey",
-          "label": "Hunt Prey",
+          "label": "Wyznacz ofiare",
           "duration": null,
           "source": null,
           "stacks": false,
           "data": {
-            "ui_description": "Hunt Prey: wybierz jednego przeciwnika jako hunted prey. Akcja wymagana do aktywacji Hunter's Edge i featów rangera.",
-            "ui_prompt": "Hunt Prey: wybierz jednego przeciwnika jako hunted prey. Akcja wymagana do aktywacji Hunter's Edge i featów rangera.",
+            "ui_description": "Wyznacz ofiare: wybierz jednego przeciwnika jako hunted prey. Akcja wymagana do aktywacji Hunter's Edge i featów rangera.",
+            "ui_prompt": "Wyznacz ofiare: wybierz jednego przeciwnika jako hunted prey. Akcja wymagana do aktywacji Hunter's Edge i featów rangera.",
             "allowed_classes": [
               "ranger"
             ]
@@ -194,15 +194,15 @@
       "ranger_class_feat": "hunted_shot"
     },
     "hunt_prey": {
-      "ui_description": "Hunt Prey: wybierz jednego przeciwnika jako hunted prey. Akcja wymagana do aktywacji Hunter's Edge i featów rangera.",
-      "ui_prompt": "Hunt Prey: wybierz jednego przeciwnika jako hunted prey. Akcja wymagana do aktywacji Hunter's Edge i featów rangera.",
+      "ui_description": "Wyznacz ofiare: wybierz jednego przeciwnika jako hunted prey. Akcja wymagana do aktywacji Hunter's Edge i featów rangera.",
+      "ui_prompt": "Wyznacz ofiare: wybierz jednego przeciwnika jako hunted prey. Akcja wymagana do aktywacji Hunter's Edge i featów rangera.",
       "allowed_classes": [
         "ranger"
       ]
     },
     "hunted_shot": {
-      "ui_description": "Hunted Shot (Flourish): wykonaj 2 Strikes ranged przeciw hunted prey. Jeśli oba trafiają ten sam cel, obrażenia są scalane dla resist/weakness.",
-      "ui_prompt": "Hunted Shot (Flourish): wykonaj 2 Strikes ranged przeciw hunted prey. Jeśli oba trafiają ten sam cel, obrażenia są scalane dla resist/weakness.",
+      "ui_description": "Strzal na cel (Flourish): wykonaj 2 Strikes ranged przeciw hunted prey. Jeśli oba trafiają ten sam cel, obrażenia są scalane dla resist/weakness.",
+      "ui_prompt": "Strzal na cel (Flourish): wykonaj 2 Strikes ranged przeciw hunted prey. Jeśli oba trafiają ten sam cel, obrażenia są scalane dla resist/weakness.",
       "allowed_classes": [
         "ranger"
       ]
@@ -298,8 +298,8 @@
       "class_feat": "animal_companion"
     },
     "animal_companion": {
-      "ui_description": "Animal Companion: zyskujesz young animal companion. Companion jest deployowany na starcie walki i dziala przez Command Animal Companion.",
-      "ui_prompt": "Animal Companion: zyskujesz young animal companion. Companion jest deployowany na starcie walki i dziala przez Command Animal Companion.",
+      "ui_description": "Zwierzecy towarzysz: zyskujesz young animal companion. Companion jest deployowany na starcie walki i dziala przez Command Zwierzecy towarzysz.",
+      "ui_prompt": "Zwierzecy towarzysz: zyskujesz young animal companion. Companion jest deployowany na starcie walki i dziala przez Command Zwierzecy towarzysz.",
       "allowed_classes": [
         "ranger"
       ],

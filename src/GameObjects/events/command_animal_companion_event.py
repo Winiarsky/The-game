@@ -82,23 +82,23 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
 
     def execute(self, ctx: EventContext) -> EventResult:
         if not ctx.in_combat:
-            return EventResult.cancelled(message="Animal Companion dziala tylko w walce.")
+            return EventResult.cancelled(message="Zwierzecy towarzysz dziala tylko w walce.")
         owner = ctx.actor
         if owner is None:
-            return EventResult.cancelled(message="Brak ownera do komendy companiona.")
+            return EventResult.cancelled(message="Brak wlasciciela do komendy towarzysza.")
         if not _has_status(owner, "animal_companion"):
-            return EventResult.cancelled(message="Bohater nie ma Animal Companion.")
+            return EventResult.cancelled(message="Bohater nie ma zwierzecego towarzysza.")
 
         combat_state = getattr(ctx.game, "state", None)
         getter = getattr(combat_state, "get_animal_companion", None)
         if not callable(getter):
-            return EventResult.cancelled(message="Brak runtime Animal Companion w stanie walki.")
+            return EventResult.cancelled(message="Brak runtime zwierzecego towarzysza w stanie walki.")
         companion = getter(owner)
         if companion is None:
-            return EventResult.cancelled(message="Animal Companion nie jest ustawiony na planszy.")
+            return EventResult.cancelled(message="Zwierzecy towarzysz nie jest ustawiony na planszy.")
 
         if _has_status(owner, "animal_companion_commanded"):
-            return EventResult.cancelled(message="Animal Companion byl juz komenderowany w tej turze.")
+            return EventResult.cancelled(message="Zwierzecy towarzysz byl juz komenderowany w tej turze.")
 
         actions_left = 2
         support_used = False
@@ -111,7 +111,7 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
                 choices = ["stride", "end"]
             choice = _prompt_choice(
                 ctx,
-                f"Animal Companion ({getattr(companion, 'name', 'companion')}): wybierz akcje ({actions_left} left)",
+                f"Zwierzecy towarzysz ({getattr(companion, 'name', 'towarzysz')}): wybierz akcje ({actions_left} pozostalo)",
                 choices,
                 source=self.name,
             )
@@ -127,7 +127,7 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
                 consumed, msg = self._companion_support(ctx, owner, companion)
                 support_used = True if consumed else support_used
             else:
-                consumed, msg = (False, "Nieznana akcja companiona.")
+                consumed, msg = (False, "Nieznana akcja towarzysza.")
 
             if msg:
                 action_logs.append(msg)
@@ -138,7 +138,7 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
                     strike_count += 1
 
         if not spent_any:
-            return EventResult.cancelled(message="Komenda anulowana - companion nie wykonal zadnej akcji.")
+            return EventResult.cancelled(message="Komenda anulowana - towarzysz nie wykonal zadnej akcji.")
 
         _remove_status(owner, "animal_companion_commanded")
         adder = getattr(owner, "add_status", None)
@@ -147,7 +147,7 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
                 adder(
                     Status(
                         id="animal_companion_commanded",
-                        label="Animal Companion Commanded",
+                        label="Zwierzecy towarzysz skomenderowany",
                         duration=1,
                         source=self.name,
                         data={"source_id": _actor_id(owner), "source_turns_left": 1},
@@ -156,7 +156,7 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
             except Exception:
                 pass
 
-        summary = "; ".join(action_logs) if action_logs else "Animal Companion wykonuje komende."
+        summary = "; ".join(action_logs) if action_logs else "Zwierzecy towarzysz wykonuje komende."
         return EventResult(success=True, consumed_action=True, message=summary)
 
     def _companion_stride(self, ctx: EventContext, owner, companion) -> tuple[bool, str]:
@@ -358,7 +358,7 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
             labels = [str(a.get("label", a.get("id", "attack")) or "attack").strip().lower().replace(" ", "_") for a in attacks]
             choice = _prompt_choice(
                 ctx,
-                "Animal Companion: wybierz atak",
+                "Zwierzecy towarzysz: wybierz atak",
                 labels,
                 source=self.name,
             )
@@ -448,7 +448,7 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
             prompt_notes.append(flurry_note)
 
         attack_roll_data = prompt_for_roll(
-            f"Animal Companion Strike ({attack_label}):",
+            f"Atak zwierzecego towarzysza ({attack_label}):",
             layout="test",
             answer_placeholder="Wynik k20",
             prompt_long="\n".join(prompt_notes),
@@ -484,7 +484,7 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
         dmg_roll_stack = {"components": dmg_components, "auto_total_modifier": dmg_auto_total}
         dmg_base = int(
             prompt_for_roll(
-                f"Animal Companion Strike ({attack_label}) – obrażenia ({damage_formula}):",
+                f"Atak zwierzecego towarzysza ({attack_label}) - obrazenia ({damage_formula}):",
                 layout="damage",
                 answer_placeholder="Suma obrażeń",
                 prompt_long="Przy trafeniu krytycznym obrażenia są podwajane automatycznie.",
@@ -558,7 +558,7 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
                 adder(
                     Status(
                         id="animal_companion_support",
-                        label=f"Animal Companion Support ({getattr(companion, 'companion_type', 'companion')})",
+                        label=f"Wsparcie zwierzecego towarzysza ({getattr(companion, 'companion_type', 'towarzysz')})",
                         duration=1,
                         source=self.name,
                         data={
