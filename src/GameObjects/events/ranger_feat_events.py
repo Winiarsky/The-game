@@ -512,7 +512,7 @@ class HuntedShotEvent(ActionCostEvent):
                 tags=list(ctx.tags or []),
                 metadata={
                     **base_metadata,
-                    "fixed_attacks_this_turn": initial_attacks + 1,
+                    "fixed_attacks_this_turn": initial_attacks,
                     "forced_target": prey,
                     "forced_target_pos": forced_pos,
                     "suppress_attack_record": True,

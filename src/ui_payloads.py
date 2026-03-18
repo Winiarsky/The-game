@@ -268,6 +268,22 @@ def build_hero_snapshot(hero: Any, *, note: str | None = None) -> dict[str, Any]
     raw_base_speed_feet, display_speed_feet = _speed_snapshot_values(hero)
     spellcasting = _spellcasting_snapshot(hero)
 
+    spell_dc: int | None = None
+    class_dc: int | None = None
+    perception_modifier: int | None = None
+    try:
+        spell_dc = int(getattr(hero, "spell_dc", None) or 0) or None
+    except Exception:
+        pass
+    try:
+        class_dc = int(getattr(hero, "class_dc", None) or 0) or None
+    except Exception:
+        pass
+    try:
+        perception_modifier = int(getattr(hero, "perception_modifier", None) or 0)
+    except Exception:
+        pass
+
     return {
         "id": str(hero_id),
         "character_id": getattr(hero, "character_id", None),
@@ -293,6 +309,9 @@ def build_hero_snapshot(hero: Any, *, note: str | None = None) -> dict[str, Any]
         "skill_ranks": normalized_skill_ranks,
         "save_ranks": dict(getattr(hero, "save_ranks", {}) or {}),
         "perception_rank": getattr(hero, "perception_rank", None),
+        "perception_modifier": perception_modifier,
+        "spell_dc": spell_dc,
+        "class_dc": class_dc,
         "trained_skills": trained_skills,
         "lore_skills": list(getattr(hero, "lore_skills", []) or []),
         "background_label": background_label,

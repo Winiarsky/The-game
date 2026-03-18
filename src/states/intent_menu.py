@@ -101,12 +101,10 @@ def _actions_cost_text_pl(value: object) -> str:
         cost = int(value or 1)
     except Exception:
         cost = 1
-    cost = max(0, cost)
+    cost = max(1, min(3, cost))
     if cost == 1:
         return "Koszt: 1 akcja"
-    if cost in (2, 3, 4):
-        return f"Koszt: {cost} akcje"
-    return f"Koszt: {cost} akcji"
+    return f"Koszt: {cost} akcje"
 
 
 def _first_nonempty_line(raw: object) -> str:
@@ -246,7 +244,24 @@ def _magic_event_desc(event_name: str, event_cls: type | None) -> str:
         if tag in tags
     ]
     if schools:
-        parts.append("Szkola: " + ", ".join(localize_term_pl(tag) for tag in schools))
+        parts.append("Szkoła: " + ", ".join(localize_term_pl(tag) for tag in schools))
+
+    save_type = str(getattr(event_cls, "save_type", "") or "").strip().lower()
+    _SAVE_LABELS = {"fortitude": "Wytrzymałość", "reflex": "Refleks", "will": "Wola"}
+    if save_type in _SAVE_LABELS:
+        is_basic = bool(getattr(event_cls, "basic_save", False))
+        save_label = _SAVE_LABELS[save_type]
+        parts.append(f"Rzut obronny: {save_label}{' (basic)' if is_basic else ''}")
+
+    area_feet = getattr(event_cls, "area_feet", None)
+    area_type = str(getattr(event_cls, "area_type", "") or "").strip().lower()
+    if isinstance(area_feet, int) and area_feet > 0:
+        area_suffix = f" {area_type}" if area_type else ""
+        parts.append(f"Obszar: {area_feet} ft{area_suffix}")
+
+    duration = str(getattr(event_cls, "duration", "") or "").strip()
+    if duration:
+        parts.append(f"Czas trwania: {duration}")
 
     mechanics = "\n".join(f"- {part}" for part in parts if part)
     if hint:
@@ -335,13 +350,13 @@ def _alchemy_tier_preview(tiers: object) -> str:
     _append_stat("duration", "czas")
 
     for key, label in (
-        ("damage_dice", "obrazenia"),
-        ("persistent", "persistent"),
+        ("damage_dice", "obrażenia"),
+        ("persistent", "trwałe"),
         ("heal_dice", "leczenie"),
-        ("fort_crit", "Fort kryt."),
-        ("will_crit", "Will kryt."),
-        ("extra_save", "dodatkowy save"),
-        ("trained_skill", "test umiejetnosci"),
+        ("fort_crit", "Wytrz. kryt."),
+        ("will_crit", "Wola kryt."),
+        ("extra_save", "dodatkowy rzut"),
+        ("trained_skill", "test umiejętności"),
     ):
         raw = chosen_data.get(key, None)
         if raw is None:

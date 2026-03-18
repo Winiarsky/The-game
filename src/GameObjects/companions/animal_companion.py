@@ -161,6 +161,7 @@ class AnimalCompanion(StatusMixin, BonusMixin):
     hp: int = 1
     max_hp: int = 1
     ac: int = 10
+    ability_mods: dict[str, int] = field(default_factory=dict)
     position: tuple[int, int] | None = None
     blocks_movement: bool = True
 
@@ -246,6 +247,7 @@ def build_animal_companion(owner, companion_type: str | None = None) -> AnimalCo
         hp=max_hp,
         max_hp=max_hp,
         ac=ac,
+        ability_mods={k: int(v or 0) for k, v in ability_mods.items()},
     )
 
 

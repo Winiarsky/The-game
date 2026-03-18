@@ -258,8 +258,9 @@ class Combat(State):
                 self.game.conn.leds_off()
             except Exception:
                 pass
-        if selected not in spawn_options:
-            selected = spawn_options[0]
+        if selected not in spawn_options or not board.can_enter(selected, allow_occupied=False):
+            valid = [p for p in spawn_options if board.can_enter(p, allow_occupied=False)]
+            selected = valid[0] if valid else spawn_options[0]
         companion = build_animal_companion(owner)
         try:
             board.place(companion, selected)

@@ -246,6 +246,9 @@ export function coerceHeroPreview(rawPreview, fallbackLabel = "", placeholderIma
         bulkSummary: asDict(preview.bulk_summary || preview.bulkSummary),
         inventoryItems: asList(preview.inventory_items || preview.inventoryItems),
         spellcasting: normalizeSpellcasting(preview.spellcasting),
+        spellDc: preview.spell_dc ?? preview.spellDc ?? null,
+        classDc: preview.class_dc ?? preview.classDc ?? null,
+        perceptionModifier: preview.perception_modifier ?? preview.perceptionModifier ?? null,
         creationInProgress: false,
     };
 }
@@ -423,7 +426,9 @@ export function renderHeroesPanel({
     const speedLine = `${armorClassBreakdown(detailHero)} · Speed: ${detailHero.baseSpeedFeet ?? "-"} ft`;
     const saves = detailHero.saveRanks && typeof detailHero.saveRanks === "object" ? detailHero.saveRanks : {};
     const saveLine = `Save: F ${pretty(saves.fortitude || "untrained")} · R ${pretty(saves.reflex || "untrained")} · W ${pretty(saves.will || "untrained")}`;
-    const perceptionLine = `Percepcja: ${pretty(detailHero.perceptionRank || "untrained")}`;
+    const percMod = detailHero.perceptionModifier;
+    const percModStr = percMod != null ? ` (${percMod >= 0 ? "+" : ""}${percMod})` : "";
+    const perceptionLine = `Percepcja: ${pretty(detailHero.perceptionRank || "untrained")}${percModStr}`;
     const rawScores = detailHero.abilityScores && typeof detailHero.abilityScores === "object" ? detailHero.abilityScores : {};
     const rawMods = detailHero.abilityModifiers && typeof detailHero.abilityModifiers === "object" ? detailHero.abilityModifiers : {};
     const missingAbilityScores = !rawScores || Object.keys(rawScores).length === 0;
@@ -487,11 +492,15 @@ export function renderHeroesPanel({
         ${backgroundBoostsLine}
         ${noteLine}
     `;
+    const spellDcLine = detailHero.spellDc != null ? `<div class="hero-stats">Spell DC: ${detailHero.spellDc}</div>` : "";
+    const classDcLine = detailHero.classDc != null ? `<div class="hero-stats">Class DC: ${detailHero.classDc}</div>` : "";
     const combatBody = `
         <div class="hero-stats">${hpLine}</div>
         <div class="hero-stats">${speedLine}</div>
         <div class="hero-stats">${saveLine}</div>
         <div class="hero-stats">${perceptionLine}</div>
+        ${spellDcLine}
+        ${classDcLine}
         <div class="hero-stats">Pozycja: ${formatPos(detailHero.pos)}</div>
     `;
     const skillsBody = `

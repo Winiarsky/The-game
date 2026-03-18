@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 
 from board import consts
 from actions.move_utils import find_path, follow_path, trim_path_to_feet
@@ -199,25 +200,43 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
             return False, "Stride: cel poza zasiegiem ruchu."
 
         dest = trimmed[-1]
+        path_leds = [start] + trimmed[1:]
+        path_colors = [consts.MOVE_START_RGB] + [consts.MOVE_FIELD_RGB] * (len(trimmed) - 2) + [consts.MOVE_TARGET_RGB]
         try:
-            leds = [start] + trimmed[1:]
-            colors = [consts.MOVE_START_RGB] + [consts.MOVE_FIELD_RGB] * (len(trimmed) - 1)
-            ctx.game.conn.set_leds(leds, colors)
+            ctx.game.conn.set_leds(path_leds, path_colors)
         except Exception:
             pass
+        try:
+            confirm = ctx.game.conn.scan_board(None)
+        except Exception:
+            confirm = None
+        if confirm != dest:
+            try:
+                ctx.game.conn.leds_off()
+            except Exception:
+                pass
+            return False, "Stride: ruch anulowany (kliknij podświetlone pole docelowe, aby potwierdzić)."
         try:
             completed, _stop_pos, reason = follow_path(
                 ctx,
                 companion,
                 trimmed,
                 allow_occupied=False,
-                step_delay=0.0,
+                step_delay=0.1,
             )
         finally:
             try:
+                fading = [list(map(int, c)) for c in path_colors]
+                for idx in range(len(path_leds)):
+                    fading[idx] = [0, 0, 0]
+                    ctx.game.conn.set_leds(path_leds, fading)
+                    time.sleep(0.05)
                 ctx.game.conn.leds_off()
             except Exception:
-                pass
+                try:
+                    ctx.game.conn.leds_off()
+                except Exception:
+                    pass
         if not completed:
             return False, f"Stride: ruch przerwany ({reason or 'unknown'})."
 
@@ -356,29 +375,90 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
         target_ac = int(effective_ac(target) or 10)
         traits = {str(item or "").strip().lower() for item in (profile.get("traits") or [])}
         hunted_target = self._companion_hunted_target_id(companion) == _actor_id(target)
+        agile = "agile" in traits
+        is_finesse = "finesse" in traits
+        flurry = self._companion_hunter_edge(companion) == "flurry" and hunted_target
+
+        # --- Oblicz modyfikator ataku (PF2e: proficiency + ability + MAP) ---
+        companion_level = max(1, int(getattr(companion, "level", 1) or 1))
+        ability_mods = dict(getattr(companion, "ability_mods", {}) or {})
+        str_mod = int(ability_mods.get("str", 0) or 0)
+        dex_mod = int(ability_mods.get("dex", 0) or 0)
+        prof_bonus = companion_level + 2  # wytrenowany (trained)
+        if is_finesse and dex_mod > str_mod:
+            ability_bonus = dex_mod
+            ability_label = "Zręczność"
+        else:
+            ability_bonus = str_mod
+            ability_label = "Siła"
+
+        if strike_count == 0:
+            map_penalty = 0
+        elif strike_count == 1:
+            map_penalty = (-2 if agile else -3) if flurry else (-4 if agile else -5)
+        else:
+            map_penalty = (-4 if agile else -6) if flurry else (-8 if agile else -10)
+
+        atk_components: list[dict] = [
+            {
+                "id": "proficiency",
+                "label": "Biegłość",
+                "value": prof_bonus,
+                "description": f"Wytrenowany: poziom {companion_level} + 2.",
+                "editable": True,
+            },
+            {
+                "id": "ability",
+                "label": ability_label,
+                "value": ability_bonus,
+                "description": f"Modyfikator {ability_label}{' (finesse)' if is_finesse and dex_mod > str_mod else ''}.",
+                "editable": True,
+            },
+            {
+                "id": "item",
+                "label": "Przedmiot",
+                "value": 0,
+                "description": "Premie z wyposażenia (brak).",
+                "editable": True,
+            },
+        ]
+        if map_penalty != 0:
+            map_label = "MAP (Flurry)" if flurry else "MAP"
+            atk_components.append({
+                "id": "situational",
+                "label": map_label,
+                "value": map_penalty,
+                "description": f"Multiple Attack Penalty ({'agile' if agile else 'standard'}).",
+                "editable": True,
+            })
+        atk_auto_total = sum(int(c["value"]) for c in atk_components)
+        atk_roll_stack = {"components": atk_components, "auto_total_modifier": atk_auto_total}
+
         flurry_note = ""
-        if self._companion_hunter_edge(companion) == "flurry" and hunted_target:
+        if flurry:
             if strike_count == 1:
                 flurry_note = "Hunter's Edge (Flurry): MAP dla 2. ataku: -2 agile / -3 standard."
             elif strike_count >= 2:
                 flurry_note = "Hunter's Edge (Flurry): MAP dla 3+ ataku: -4 agile / -6 standard."
             else:
                 flurry_note = "Hunter's Edge (Flurry): pierwszy atak bez MAP."
-        agile_note = "Atak ma trait agile." if "agile" in traits else "Atak bez traitu agile."
+        agile_note = "Atak ma trait agile." if agile else "Atak bez traitu agile."
         prompt_notes = [f"AC celu: {target_ac}", agile_note]
         if flurry_note:
             prompt_notes.append(flurry_note)
 
         attack_roll_data = prompt_for_roll(
-            f"Animal Companion Strike ({attack_label}) - podaj wynik ataku lacznie z modyfikatorem:",
+            f"Animal Companion Strike ({attack_label}):",
             layout="test",
-            answer_placeholder="Attack total",
+            answer_placeholder="Wynik k20",
             prompt_long="\n".join(prompt_notes),
+            roll_stack=atk_roll_stack,
+            auto_total_modifier=atk_auto_total,
             return_details=True,
             infer_natural_from_roll=False,
         )
         if isinstance(attack_roll_data, dict):
-            attack_roll = int(attack_roll_data.get("roll", 0) or 0)
+            attack_roll = int(attack_roll_data.get("computed_total", attack_roll_data.get("roll", 0)) or 0)
             natural_shift = int(attack_roll_data.get("natural_shift", 0) or 0)
         else:
             attack_roll = int(attack_roll_data or 0)
@@ -387,14 +467,29 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
         critical = is_critical_success(outcome)
         hit = is_hit(outcome)
         if not hit:
-            return True, f"Strike ({attack_label}): pudlo vs AC {target_ac}."
+            return True, f"Strike ({attack_label}): pudło vs AC {target_ac} (wynik: {attack_roll})."
 
+        # --- Roll obrażeń z modyfikatorem STR ---
+        dmg_str_mod = str_mod  # PF2e: obrażenia używają STR, nie DEX (nawet finesse)
+        dmg_components: list[dict] = [
+            {
+                "id": "ability",
+                "label": "Siła",
+                "value": dmg_str_mod,
+                "description": "Modyfikator Siły do obrażeń.",
+                "editable": True,
+            },
+        ]
+        dmg_auto_total = dmg_str_mod
+        dmg_roll_stack = {"components": dmg_components, "auto_total_modifier": dmg_auto_total}
         dmg_base = int(
             prompt_for_roll(
-                f"Animal Companion Strike ({attack_label}) - podaj obrazenia ({damage_formula}):",
+                f"Animal Companion Strike ({attack_label}) – obrażenia ({damage_formula}):",
                 layout="damage",
-                answer_placeholder="Damage",
-                prompt_long="Na critical obrazenia sa podwajane automatycznie.",
+                answer_placeholder="Suma obrażeń",
+                prompt_long="Przy trafeniu krytycznym obrażenia są podwajane automatycznie.",
+                roll_stack=dmg_roll_stack,
+                auto_total_modifier=dmg_auto_total,
             )
             or 0
         )
