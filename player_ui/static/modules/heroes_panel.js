@@ -71,7 +71,25 @@ function normalizeSpellcasting(rawSpellcasting) {
         slotRemaining: asDict(rawSpellcasting.slot_remaining || rawSpellcasting.slotRemaining),
         knownCounts: asDict(rawSpellcasting.known_counts || rawSpellcasting.knownCounts),
         knownSpells: asDict(rawSpellcasting.known_spells || rawSpellcasting.knownSpells),
+        preparedSpellUsage: asDict(rawSpellcasting.prepared_spell_usage || rawSpellcasting.preparedSpellUsage),
     };
+}
+
+function preparedSpellsLine(spellcasting, tier) {
+    if (!spellcasting || typeof spellcasting !== "object") return "";
+    const usage = spellcasting.preparedSpellUsage;
+    if (!usage || typeof usage !== "object") return "";
+    const entries = Array.isArray(usage[tier]) ? usage[tier] : [];
+    if (!entries.length) return "";
+    return entries
+        .map((e) => {
+            const name = pretty(e.id || "");
+            const rem = Number(e.remaining ?? e.prepared ?? 1);
+            const total = Number(e.prepared ?? 1);
+            if (total > 1) return `${name} ×${total} (${rem} lewy)`;
+            return rem > 0 ? name : `${name} ✗`;
+        })
+        .join(", ");
 }
 
 function spellcastingSummary(hero) {
@@ -474,8 +492,8 @@ export function renderHeroesPanel({
     const spellcasting = normalizeSpellcasting(detailHero.spellcasting);
     const spellSummaryRows = spellcastingSummary(detailHero);
     const slotLine = spellSummaryRows.length ? spellSummaryRows.join(" · ") : "Brak liczników slotów.";
-    const cantripLine = spellListLine(spellcasting, "cantrip");
-    const rank1Line = spellListLine(spellcasting, "rank_1");
+    const cantripLine = preparedSpellsLine(spellcasting, "cantrip") || spellListLine(spellcasting, "cantrip");
+    const rank1Line = preparedSpellsLine(spellcasting, "rank_1") || spellListLine(spellcasting, "rank_1");
     const focusLine = spellListLine(spellcasting, "focus");
     const section = (title, body) =>
         `<div class="hero-section"><div class="hero-section-title">${title}</div><div class="hero-section-body">${body}</div></div>`;

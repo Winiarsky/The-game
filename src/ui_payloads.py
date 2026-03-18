@@ -234,6 +234,29 @@ def _spellcasting_snapshot(actor: Any) -> dict[str, Any] | None:
         return None
 
     known_counts = {tier: len(items) for tier, items in known_spells.items()}
+
+    # Build prepared spell usage info for prepared casters (wizard/cleric/druid)
+    prepared_today = dict(state.get("prepared_today", {}) or {})
+    prepared_counts_raw = dict(state.get("prepared_counts", {}) or {})
+    consumed_counts_raw = dict(state.get("consumed_counts", {}) or {})
+    prepared_spell_usage: dict[str, list[dict]] = {}
+    for tier, spell_list in prepared_today.items():
+        if not spell_list:
+            continue
+        tier_counts = dict(prepared_counts_raw.get(tier, {}) or {})
+        tier_consumed = dict(consumed_counts_raw.get(tier, {}) or {})
+        seen: set[str] = set()
+        entries: list[dict] = []
+        for sid in spell_list:
+            if not sid or sid in seen:
+                continue
+            seen.add(sid)
+            total = int(tier_counts.get(sid, 1) or 1)
+            used = int(tier_consumed.get(sid, 0) or 0)
+            entries.append({"id": sid, "prepared": total, "used": used, "remaining": max(0, total - used)})
+        if entries:
+            prepared_spell_usage[tier] = entries
+
     return {
         "enabled": bool(state.get("enabled")) or bool(slot_total) or focus_pool_max > 0,
         "class_name": str(state.get("class_name") or getattr(actor, "class_name", "") or ""),
@@ -243,6 +266,7 @@ def _spellcasting_snapshot(actor: Any) -> dict[str, Any] | None:
         "slot_remaining": dict(slot_remaining),
         "known_counts": dict(known_counts),
         "known_spells": dict(known_spells),
+        "prepared_spell_usage": prepared_spell_usage,
     }
 
 

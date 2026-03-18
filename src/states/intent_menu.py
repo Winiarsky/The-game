@@ -182,15 +182,13 @@ def _magic_event_desc(event_name: str, event_cls: type | None) -> str:
     ]
     tags = set(spell_tags + default_tags)
 
-    parts: list[str] = []
-
     tier_label = ""
     if "cantrip" in tags:
         tier_label = "Cantrip"
     elif "focus" in tags:
         tier_label = "Focus"
     else:
-        for raw in tags:
+        for raw in sorted(tags):
             match = re.fullmatch(r"rank_?([0-9]+)", raw)
             if not match:
                 continue
@@ -200,73 +198,69 @@ def _magic_event_desc(event_name: str, event_cls: type | None) -> str:
                 continue
             tier_label = f"Ranga {rank}"
             break
-    if tier_label:
-        parts.append(f"Typ: {tier_label}")
 
+    spell_label = localize_term_pl(event_name) or event_name.replace("_", " ").title()
+    fluff_suffix = f" ({tier_label})" if tier_label else ""
+    fluff_line = f"Fluff: {spell_label}{fluff_suffix}"
+
+    # Build "Kiedy:" line — cost + range
     try:
         cost = int(getattr(event_cls, "actions_cost", 1) or 1)
     except Exception:
         cost = 1
     cost = max(1, min(3, cost))
-    if cost == 1:
-        parts.append("Koszt: 1 akcja")
-    elif cost in (2, 3, 4):
-        parts.append(f"Koszt: {cost} akcje")
-    else:
-        parts.append(f"Koszt: {cost} akcji")
+    cost_text = "1 akcja" if cost == 1 else f"{cost} akcje"
 
-    range_text = ""
     raw_range = getattr(event_cls, "range_feet", None)
     if isinstance(raw_range, int):
-        range_text = f"Zasieg: {max(0, raw_range)} ft"
+        range_text = f"zasięg {max(0, raw_range)} ft"
     elif "touch" in tags:
-        range_text = "Zasieg: dotyk"
+        range_text = "zasięg: dotyk"
     else:
-        range_text = "Zasieg: wg efektu"
-    parts.append(range_text)
+        range_text = ""
+    kiedy_parts = [cost_text]
+    if range_text:
+        kiedy_parts.append(range_text)
+    kiedy_line = "- Kiedy: " + ", ".join(kiedy_parts)
+
+    # Build "Efekt:" content — hint as primary, mechanics as sub-bullets
+    mech_parts: list[str] = []
 
     traditions = [tag for tag in ("arcane", "divine", "occult", "primal") if tag in tags]
     if traditions:
-        parts.append("Tradycja: " + ", ".join(localize_term_pl(tag) for tag in traditions))
+        mech_parts.append("Tradycja: " + ", ".join(localize_term_pl(tag) for tag in traditions))
 
     schools = [
         tag
-        for tag in (
-            "abjuration",
-            "conjuration",
-            "divination",
-            "enchantment",
-            "evocation",
-            "illusion",
-            "necromancy",
-            "transmutation",
-        )
+        for tag in ("abjuration", "conjuration", "divination", "enchantment", "evocation", "illusion", "necromancy", "transmutation")
         if tag in tags
     ]
     if schools:
-        parts.append("Szkoła: " + ", ".join(localize_term_pl(tag) for tag in schools))
+        mech_parts.append("Szkoła: " + ", ".join(localize_term_pl(tag) for tag in schools))
 
     save_type = str(getattr(event_cls, "save_type", "") or "").strip().lower()
     _SAVE_LABELS = {"fortitude": "Wytrzymałość", "reflex": "Refleks", "will": "Wola"}
     if save_type in _SAVE_LABELS:
         is_basic = bool(getattr(event_cls, "basic_save", False))
         save_label = _SAVE_LABELS[save_type]
-        parts.append(f"Rzut obronny: {save_label}{' (basic)' if is_basic else ''}")
+        mech_parts.append(f"Rzut obronny: {save_label}{' (basic)' if is_basic else ''}")
 
     area_feet = getattr(event_cls, "area_feet", None)
     area_type = str(getattr(event_cls, "area_type", "") or "").strip().lower()
     if isinstance(area_feet, int) and area_feet > 0:
         area_suffix = f" {area_type}" if area_type else ""
-        parts.append(f"Obszar: {area_feet} ft{area_suffix}")
+        mech_parts.append(f"Obszar: {area_feet} ft{area_suffix}")
 
     duration = str(getattr(event_cls, "duration", "") or "").strip()
     if duration:
-        parts.append(f"Czas trwania: {duration}")
+        mech_parts.append(f"Czas trwania: {duration}")
 
-    mechanics = "\n".join(f"- {part}" for part in parts if part)
-    if hint:
-        return f"{hint}\n{mechanics}".strip() if mechanics else hint
-    return mechanics
+    efekt_text = " ".join(hint.splitlines()).strip() if hint else "brak opisu"
+    efekt_line = f"- Efekt: {efekt_text}"
+    if mech_parts:
+        efekt_line += "\n" + "\n".join(f"  - {p}" for p in mech_parts)
+
+    return f"{fluff_line}\nMechanika:\n{kiedy_line}\n{efekt_line}"
 
 
 def _attack_event_desc(event_name: str, event_cls: type | None) -> str:
@@ -1163,43 +1157,47 @@ def build_intent_options(
     direct = grouped.get("direct", {}) or {}
     options: list[dict[str, str]] = []
 
-    def _push(intent_id: str, label: str, desc: str) -> None:
-        options.append({"id": intent_id, "label": label, "desc": desc})
+    def _push(intent_id: str, label: str, desc: str, *, category: str = "general", icon: str = "") -> None:
+        options.append({"id": intent_id, "label": label, "desc": desc, "category": category, "icon": icon})
 
     if "move" in direct:
-        _push("move", "Ruch", "Ruch po planszy.")
+        _push("move", "Ruch", "Ruch po planszy.", category="movement", icon="→")
     if "interaction" in direct:
-        _push("interact", "Interakcja", "Interakcja z obiektem na planszy.")
+        _push("interact", "Interakcja", "Interakcja z obiektem na planszy.", category="movement", icon="⊕")
     if "seek" in direct:
-        _push("seek", "Szukaj", "Rozglądanie i wykrywanie ukrytych elementów.")
+        _push("seek", "Szukaj", "Rozglądanie i wykrywanie ukrytych elementów.", category="movement", icon="◎")
     if "stealth" in direct:
         if _actor_has_status(actor, "stealth"):
             _push(
                 "stealth",
                 "Poruszaj sie skrycie",
                 "Ruch skradaniem (Sneak): do polowy Speed; Very Sneaky moze dodac +5 ft.",
+                category="movement",
+                icon="◈",
             )
         else:
             _push(
                 "stealth",
                 "Skradanie",
                 "Wejdz w ukrycie i poruszaj sie skrycie.",
+                category="movement",
+                icon="◈",
             )
     if grouped.get("attack"):
-        _push("attack", "Atak", "Wybierz akcję ataku.")
+        _push("attack", "Atak", "Wybierz akcję ataku.", category="combat", icon="⚔")
     if grouped.get("magic"):
-        _push("magic", "Magia", "Wybierz czar lub akcję magiczną.")
+        _push("magic", "Magia", "Wybierz czar lub akcję magiczną.", category="combat", icon="✦")
     if grouped.get("alchemy"):
-        _push("alchemy", "Alchemia", "Wybierz akcję alchemiczną.")
-    if "equip" in direct:
-        _push("equipment", "Ekwipunek", "Ekwipunek i interakcje z przedmiotami.")
-    _push("stats", "Statystyki", "Pełne statystyki aktywnego bohatera.")
+        _push("alchemy", "Alchemia", "Wybierz akcję alchemiczną.", category="combat", icon="⚗")
     if grouped.get("special"):
-        _push("special", "Specjalne", "Akcje specjalne klasowe/rasowe i inne.")
+        _push("special", "Specjalne", "Akcje specjalne klasowe/rasowe i inne.", category="combat", icon="★")
+    if "equip" in direct:
+        _push("equipment", "Ekwipunek", "Ekwipunek i interakcje z przedmiotami.", category="utility", icon="◆")
+    _push("stats", "Statystyki", "Pełne statystyki aktywnego bohatera.", category="utility", icon="◈")
     if in_combat and "delay" in direct:
-        _push("delay", "Opóźnij", "Opóźnij turę.")
+        _push("delay", "Opóźnij", "Opóźnij turę.", category="turn", icon="◧")
     if "end" in direct:
-        _push("end", "Koniec", "Zakończ turę.")
+        _push("end", "Koniec", "Zakończ turę.", category="turn", icon="■")
 
     return options
 
@@ -1216,6 +1214,8 @@ def _prompt_with_ui(game, *, title: str, subtitle: str, source: str, options: li
                 "label": option["label"],
                 "desc": option["desc"],
                 "key": str(idx),
+                "category": option.get("category", "general"),
+                "icon": option.get("icon", ""),
             }
         )
     answer = ui.prompt_choice(

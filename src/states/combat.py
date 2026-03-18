@@ -278,25 +278,49 @@ class Combat(State):
         owner_pos = getattr(owner, "position", None)
         if board is None or owner_pos is None:
             return []
-        max_radius = max(int(getattr(board, "rows", 0) or 0), int(getattr(board, "cols", 0) or 0))
-        if max_radius <= 0:
+        max_search = max(int(getattr(board, "rows", 0) or 0), int(getattr(board, "cols", 0) or 0))
+        if max_search <= 0:
             return []
-        ox, oy = owner_pos
-        for radius in range(1, max_radius + 1):
-            ring: list[tuple[int, int]] = []
-            for dx in range(-radius, radius + 1):
-                for dy in range(-radius, radius + 1):
-                    if max(abs(dx), abs(dy)) != radius:
-                        continue
-                    pos = (ox + dx, oy + dy)
-                    if not board.in_bounds(pos):
-                        continue
-                    if not board.can_enter(pos, allow_occupied=False):
-                        continue
-                    ring.append(pos)
-            if ring:
-                return ring
-        return []
+
+        # BFS from owner_pos using can_traverse to respect walls (not just can_enter).
+        # Karczma-style scenarios use walls between fields, not blocked_fields/obstacles,
+        # so can_enter alone would allow placing on wall-enclosed fields.
+        from collections import deque
+
+        visited: set[tuple[int, int]] = {owner_pos}
+        queue: deque[tuple[tuple[int, int], int]] = deque([(owner_pos, 0)])
+        best_dist: int | None = None
+        result: list[tuple[int, int]] = []
+
+        _DIRS = ((-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (-1, 1), (1, -1), (1, 1))
+
+        while queue:
+            pos, dist = queue.popleft()
+            if best_dist is not None and dist > best_dist:
+                break
+            if dist > max_search:
+                break
+            px, py = pos
+            for dx, dy in _DIRS:
+                npos = (px + dx, py + dy)
+                if npos in visited:
+                    continue
+                if not board.in_bounds(npos):
+                    continue
+                visited.add(npos)
+                # allow_occupied=True for BFS propagation through heroes/companions;
+                # wall barriers (is_blocked) still block traversal.
+                if not board.can_traverse(pos, npos, allow_occupied=True):
+                    continue
+                # Valid spawn only if the field is actually empty.
+                if board.can_enter(npos, allow_occupied=False):
+                    if best_dist is None:
+                        best_dist = dist + 1
+                    result.append(npos)
+                # Continue BFS through this field regardless of occupancy.
+                queue.append((npos, dist + 1))
+
+        return result
 
     def _cleanup_animal_companions(self) -> None:
         if not self.animal_companions:

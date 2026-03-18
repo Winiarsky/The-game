@@ -292,6 +292,53 @@ def _event_tier(spell_id: str) -> str | None:
     return None
 
 
+def _event_cls_for_spell(spell_id: str):
+    try:
+        import GameObjects.events.all_events  # noqa: F401
+        from GameObjects.events.registry import list_events
+    except Exception:
+        return None
+    return list_events().get(_normalize(spell_id))
+
+
+def _auto_spell_desc(event_cls) -> str:
+    """Build a brief Polish mechanical description from event class attributes."""
+    if event_cls is None:
+        return ""
+    _SAVE_LABELS = {"fortitude": "Wytrzymałość", "reflex": "Refleks", "will": "Wola"}
+    parts: list[str] = []
+    try:
+        cost = max(1, min(3, int(getattr(event_cls, "actions_cost", 1) or 1)))
+    except Exception:
+        cost = 1
+    parts.append("1 akcja" if cost == 1 else f"{cost} akcje")
+
+    raw_range = getattr(event_cls, "range_feet", None)
+    if isinstance(raw_range, int) and raw_range > 0:
+        parts.append(f"zasięg {raw_range} ft")
+
+    area_feet = getattr(event_cls, "area_feet", None)
+    area_type = str(getattr(event_cls, "area_type", "") or "").strip()
+    if isinstance(area_feet, int) and area_feet > 0:
+        area_suffix = f" ({area_type})" if area_type else ""
+        parts.append(f"obszar {area_feet} ft{area_suffix}")
+
+    damage_prompt = str(getattr(event_cls, "damage_prompt", "") or "").strip()
+    if damage_prompt:
+        parts.append(f"obrażenia {damage_prompt}")
+
+    save_type = str(getattr(event_cls, "save_type", "") or "").strip().lower()
+    if save_type in _SAVE_LABELS:
+        is_basic = bool(getattr(event_cls, "basic_save", False))
+        parts.append(f"rzut obronny: {_SAVE_LABELS[save_type]}{' (basic)' if is_basic else ''}")
+
+    duration = str(getattr(event_cls, "duration", "") or "").strip()
+    if duration:
+        parts.append(f"czas trwania: {duration}")
+
+    return ", ".join(parts)
+
+
 def _event_tags(spell_id: str) -> set[str]:
     try:
         import GameObjects.events.all_events  # noqa: F401
@@ -1162,6 +1209,40 @@ def _auto_pick(choices: list[str], count: int, *, allow_duplicates: bool) -> lis
     return list(choices[: min(count, len(choices))])
 
 
+def _build_spell_choice_meta(spell_ids: list[str]) -> list[dict[str, str]]:
+    """Build choice_meta entries with localized labels and structured descriptions for spell selection UI."""
+    try:
+        from localization import localize_term_pl, localized_hint_pl
+    except Exception:
+        return []
+    out: list[dict[str, str]] = []
+    for spell_id in spell_ids:
+        label = str(localize_term_pl(spell_id) or _labelize(spell_id)).strip()
+        hint = str(localized_hint_pl(spell_id) or "").strip()
+        event_cls = _event_cls_for_spell(spell_id)
+        tags = _event_tags(spell_id)
+        if "cantrip" in tags:
+            tier_label = "Cantrip"
+        elif "focus" in tags:
+            tier_label = "Focus"
+        else:
+            tier_label = ""
+            for tag in sorted(tags):
+                if tag.startswith("rank_"):
+                    try:
+                        num = int(tag[len("rank_"):])
+                        tier_label = f"Ranga {num}"
+                        break
+                    except ValueError:
+                        pass
+        fluff_suffix = f" ({tier_label})" if tier_label else ""
+        # Use hint from localization; if missing, auto-generate from event class attributes.
+        efekt = hint or _auto_spell_desc(event_cls) or "brak opisu mechaniki"
+        desc = f"Fluff: {label}{fluff_suffix}\nMechanika:\n- Kiedy: Wybierz do przygotowania.\n- Efekt: {efekt}"
+        out.append({"raw": spell_id, "label": label, "desc": desc})
+    return out
+
+
 def _pick_spells(
     game,
     *,
@@ -1188,12 +1269,24 @@ def _pick_spells(
         selectable = list(normalized_choices) if allow_duplicates else [item for item in normalized_choices if item not in selected]
         if not selectable:
             break
-        display_choices = [_labelize(item) for item in selectable] + ["Done"]
-        answer = chooser(
-            f"{title} ({len(selected) + 1}/{count})",
-            choices=display_choices,
-            source=source,
-        )
+        spell_meta = _build_spell_choice_meta(selectable)
+        if spell_meta:
+            done_entry: dict[str, str] = {"raw": "Done", "label": "Gotowe ✓", "desc": ""}
+            choice_meta = spell_meta + [done_entry]
+            display_choices = [entry["label"] for entry in spell_meta] + ["Done"]
+            answer = chooser(
+                f"{title} ({len(selected) + 1}/{count})",
+                choices=display_choices,
+                source=source,
+                choice_meta=choice_meta,
+            )
+        else:
+            display_choices = [_labelize(item) for item in selectable] + ["Done"]
+            answer = chooser(
+                f"{title} ({len(selected) + 1}/{count})",
+                choices=display_choices,
+                source=source,
+            )
         decoded = _decode_selection(str(answer or ""), selectable)
         if decoded == "done":
             break
@@ -1668,7 +1761,7 @@ def _wizard_prepare_today(state: dict[str, Any], actor, game, *, prompt: bool) -
     known_cantrips = list(known.get("cantrip", []) or [])
     prepared_cantrips = _pick_spells(
         game,
-        title="Wizard: wybierz przygotowane cantripy",
+        title="Czarodziej — Przygotuj cantrip (slot)",
         source="spell_prepare",
         choices=known_cantrips,
         count=max(0, int(cantrip_budget)),
@@ -1693,9 +1786,10 @@ def _wizard_prepare_today(state: dict[str, Any], actor, game, *, prompt: bool) -
         base_slots = max(0, int(slot_budget.get(tier, 0) or 0))
         bonus_slots = 1 if (is_specialist and specialist_slot_enabled and base_slots > 0) else 0
 
+        _tier_display = tier.replace("rank_", "Ranga ").replace("_", " ").title()
         prepared_base = _pick_spells(
             game,
-            title=f"Wizard: wybierz przygotowane czary {tier.replace('_', ' ')}",
+            title=f"Czarodziej — Przygotuj czar ({_tier_display}, slot)",
             source="spell_prepare",
             choices=known_rank_spells,
             count=base_slots,
@@ -1713,8 +1807,7 @@ def _wizard_prepare_today(state: dict[str, Any], actor, game, *, prompt: bool) -
             prepared_bonus = _pick_spells(
                 game,
                 title=(
-                    f"Wizard (Specialist): wybierz bonusowy czar {tier.replace('_', ' ')} "
-                    f"({chosen_school})"
+                    f"Czarodziej (Specjalista) — Przygotuj czar ({_tier_display}, {chosen_school}, slot)"
                 ),
                 source="spell_prepare",
                 choices=school_choices,
@@ -1811,7 +1904,7 @@ def _cleric_prepare_today(state: dict[str, Any], actor, game, *, prompt: bool) -
 
     prepared_cantrips = _pick_spells(
         game,
-        title="Cleric: wybierz przygotowane cantripy",
+        title="Kleryk — Przygotuj cantrip (slot)",
         source="spell_prepare",
         choices=known_cantrips,
         count=cantrip_budget,
@@ -1830,9 +1923,10 @@ def _cleric_prepare_today(state: dict[str, Any], actor, game, *, prompt: bool) -
         tier = _tier_for_rank(rank)
         tier_slots = int(slot_budget.get(tier, 0) or 0)
         tier_known = list(known.get(tier, []) or [])
+        _tier_display = tier.replace("rank_", "Ranga ").replace("_", " ").title()
         prepared_spells = _pick_spells(
             game,
-            title=f"Cleric: wybierz przygotowane czary {tier.replace('_', ' ')}",
+            title=f"Kleryk — Przygotuj czar ({_tier_display}, slot)",
             source="spell_prepare",
             choices=tier_known,
             count=tier_slots,
@@ -1885,7 +1979,7 @@ def _druid_prepare_today(state: dict[str, Any], actor, game, *, prompt: bool) ->
 
     prepared_cantrips = _pick_spells(
         game,
-        title="Druid: wybierz przygotowane cantripy",
+        title="Druid — Przygotuj cantrip (slot)",
         source="spell_prepare",
         choices=known_cantrips,
         count=cantrip_budget,
@@ -1904,9 +1998,10 @@ def _druid_prepare_today(state: dict[str, Any], actor, game, *, prompt: bool) ->
         tier = _tier_for_rank(rank)
         tier_slots = int(slot_budget.get(tier, 0) or 0)
         tier_known = list(known.get(tier, []) or [])
+        _tier_display = tier.replace("rank_", "Ranga ").replace("_", " ").title()
         prepared_spells = _pick_spells(
             game,
-            title=f"Druid: wybierz przygotowane czary {tier.replace('_', ' ')}",
+            title=f"Druid — Przygotuj czar ({_tier_display}, slot)",
             source="spell_prepare",
             choices=tier_known,
             count=tier_slots,

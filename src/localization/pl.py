@@ -1105,6 +1105,127 @@ _HINTS_PL: dict[str, str] = {
     "shield_cantrip": (
         "Cantrip: 1 akcja, +1 circumstance do AC i absorpcja 5 obrażeń do początku następnej tury."
     ),
+    # --- Rank 1 spells (combat-relevant) ---
+    "magic_missile": (
+        "Ranga 1: 1 akcja, zasięg 120 ft. Automatyczne trafienie — 1 pocisk force 1d4+1. "
+        "Za każdą kolejną akcję (do 3) — dodatkowy pocisk. Bez rzutu na atak, bez save."
+    ),
+    "burning_hands": (
+        "Ranga 1: 2 akcje, stożek 15 ft. Fala ognia — Reflex save (basic). Trafieni otrzymują fire damage."
+    ),
+    "fear": (
+        "Ranga 1: 2 akcje, zasięg 30 ft. Will save: sukces = brak; porażka = Frightened 1; "
+        "krit. porażka = Frightened 2."
+    ),
+    "charm": (
+        "Ranga 1: 2 akcje, zasięg 30 ft. Enchantment/mental. Will save: porażka = cel traktuje cię "
+        "jako sojusznika przez 1 minutę."
+    ),
+    "sleep": (
+        "Ranga 1: 2 akcje, zasięg 30 ft, obszar 5 ft burst. Will save: porażka = Slowed 1 (runda); "
+        "krit. porażka = Unconscious."
+    ),
+    "mage_armor": (
+        "Ranga 1: 2 akcje. Wzmacnia AC celu: ubrany w lekki/brak pancerza otrzymuje AC = 16 + Dex "
+        "(lub więcej jeśli ma już lepszy). Czas trwania: do następnego przygotowania czarów."
+    ),
+    "color_spray": (
+        "Ranga 1: 2 akcje, stożek 15 ft. Blask iluzji — Will save: porażka = Stunned 1 + Blinded 1 runda; "
+        "krit. porażka = Stunned 2 + Blinded 1 minuta."
+    ),
+    "command": (
+        "Ranga 1: 2 akcje, zasięg 30 ft. Will save: porażka = cel wykonuje jedną z wybranych akcji "
+        "(Approach, Drop, Release, Run, Halt) w swojej turze."
+    ),
+    "ray_of_enfeeblement": (
+        "Ranga 1: 2 akcje, zasięg 30 ft. Spell attack lub Fort save: trafienie = Enfeebled 2 (1 runda); "
+        "Fort krit. sukces = brak efektu."
+    ),
+    "grease": (
+        "Ranga 1: 2 akcje, zasięg 30 ft. Tworzy śliską powierzchnię 10 ft burst — wchodzący muszą zdać "
+        "Reflex save lub Upadają. Czas trwania: 1 minuta."
+    ),
+    "shocking_grasp": (
+        "Ranga 1: 2 akcje, zasięg dotyk (5 ft). Spell attack elektrycznym: basic Reflex save. "
+        "Metalowa zbroja: +1d6 do obrażeń i target jest Flat-footed."
+    ),
+    "hydraulic_push": (
+        "Ranga 1: 2 akcje, zasięg 60 ft. Atak wodą — Reflex save (basic). Krit. porażka: odpychany 10 ft."
+    ),
+    "goblin_pox": (
+        "Ranga 1: 2 akcje, zasięg 30 ft. Fort save: porażka = Sickened 1 + persistent poison 1d4; "
+        "krit. porażka = Sickened 2 + persistent poison 1d6."
+    ),
+    "bane": (
+        "Ranga 1: 2 akcje. Aura 10 ft. Wrogowie w zasięgu muszą zdać Will save lub dostają "
+        "-1 status do ataków. Czas trwania: do 1 minuty (wymaga Sustain)."
+    ),
+    "bless": (
+        "Ranga 1: 2 akcje. Aura 10 ft. Sojusznicy w zasięgu otrzymują +1 status do ataków. "
+        "Czas trwania: do 1 minuty (wymaga Sustain)."
+    ),
+    "longstrider": (
+        "Ranga 1: 2 akcje, zasięg dotyk. Cel otrzymuje +10 ft Status do Speed. "
+        "Czas trwania: 1 godzina."
+    ),
+    "mage_hand": (
+        "Ranga 1 (też Cantrip): 2 akcje, zasięg 30 ft. Telekinetycznie manipulujesz przedmiotem "
+        "do Bulk 1 (opisowe)."
+    ),
+    "harm": (
+        "Ranga 1: 1–3 akcje, zasięg 30 ft. Negative damage: rani żywych, leczy undead. "
+        "Za więcej akcji — większy zasięg lub obszar (burst)."
+    ),
+    "heal": (
+        "Ranga 1: 1–3 akcje, zasięg 30 ft. Positive energy: leczy żywych, szkodzi undead. "
+        "1 akcja = dotyk (1d8+modifier); 2 akcje = 30 ft; 3 akcje = burst 30 ft."
+    ),
+    "magic_weapon": (
+        "Ranga 1: 2 akcje, zasięg dotyk. Broń celu staje się +1 striking do końca starcia (1 minuta)."
+    ),
+    "true_strike": (
+        "Ranga 1: 1 akcja. Następny atak przed końcem tury traktuj jako dwa rzuty — wybierz lepszy "
+        "(ignore MAP for first attack after this)."
+    ),
+    "spider_sting": (
+        "Ranga 1: 2 akcje, zasięg dotyk. Fort save: porażka = 1d4 poison + Enfeebled 1 (1 minuta); "
+        "krit. porażka = 1d4 poison + Enfeebled 2."
+    ),
+    "pass_without_trace": (
+        "Ranga 1: 2 akcje, zasięg 30 ft. Cel otrzymuje +4 circumstance do Stealth i nie zostawia śladów. "
+        "Czas trwania: 10 minut."
+    ),
+    "phantom_pain": (
+        "Ranga 1: 2 akcje, zasięg 30 ft. Will save: porażka = mental illusory damage + Sickened 1."
+    ),
+    "summon_animal": (
+        "Ranga 1: 3 akcje, zasięg 30 ft. Przywołujesz zwierze (opisowe, DM zarządza stworzeniem)."
+    ),
+    # --- Focus spells ---
+    "inspire_courage": (
+        "Focus cantrip: 1 akcja, zasięg 60 ft (emanacja). Sojusznicy w zasięgu: +1 do ataków, "
+        "+1 do obrażeń i damage rolls, +1 do save vs fear. Czas trwania: do początku następnej tury."
+    ),
+    "inspire_competence": (
+        "Focus cantrip: 1 akcja, zasięg 30 ft. 1 sojusznik: +1 status do testów umiejętności. "
+        "Czas trwania: do początku następnej tury."
+    ),
+    "tempest_surge": (
+        "Focus: 2 akcje, zasięg 30 ft. Fala burzy — Reflex save (basic). "
+        "Porażka = electricity damage + Clumsy 2 + persistent electricity."
+    ),
+    "wild_shape": (
+        "Focus: 2 akcje. Druid: przemiana w zwierze (lista dostępnych form zależy od feats). "
+        "Czas trwania: 1 minuta."
+    ),
+    "goodberry": (
+        "Focus: 2 akcje. Tworzysz do 4 magicznych jagód. Każda w ciągu dnia leczy 1d6+4 HP "
+        "i usuwa efekty chorób (opisowe)."
+    ),
+    "heal_animal": (
+        "Focus: 1–3 akcje. Leczy zwierze (jak heal ale tylko zwierzęta). "
+        "1 akcja = dotyk 1d8; 2 akcje = 30 ft 1d8; 3 akcje = burst."
+    ),
     "sigil": (
         "Cantrip: 2 akcje, oznaczasz cel (hero/enemy/interactable) w 30 ft magicznym znakiem."
     ),

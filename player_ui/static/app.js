@@ -1908,10 +1908,17 @@ function openPrompt(prompt) {
     const createChoicePill = (c, idx) => {
             const pill = document.createElement("div");
             pill.className = "choice-pill";
+            if (c.category) pill.classList.add(`pill-cat-${c.category}`);
             pill.dataset.choiceIndex = String(idx);
             const displayKey = /^[0-9]+$/.test(String(c.key || "")) ? "" : (c.key || "");
             const labelRow = document.createElement("div");
             labelRow.className = "label";
+            if (c.icon) {
+                const iconEl = document.createElement("span");
+                iconEl.className = "pill-icon";
+                iconEl.textContent = c.icon;
+                labelRow.appendChild(iconEl);
+            }
             const keyEl = document.createElement("span");
             keyEl.className = "key";
             keyEl.textContent = displayKey;
@@ -1930,8 +1937,23 @@ function openPrompt(prompt) {
             return pill;
     };
 
+    const _SECTION_LABELS = {
+        movement: "Ruch i Eksploracja",
+        combat: "Walka",
+        utility: "Zarządzanie",
+        turn: "Tura",
+    };
     const ensureChoiceList = (list) => {
+        let lastCategory = null;
         list.forEach((c, idx) => {
+            const cat = c.category || "";
+            if (cat && cat !== "general" && cat !== lastCategory) {
+                const header = document.createElement("div");
+                header.className = `choice-section-head cat-${cat}`;
+                header.textContent = _SECTION_LABELS[cat] || cat;
+                actionChoices.appendChild(header);
+                lastCategory = cat;
+            }
             actionChoices.appendChild(createChoicePill(c, idx));
         });
     };
@@ -2345,6 +2367,8 @@ function normalizeChoices(prompt) {
             label: c.label || c.raw || "",
             desc: ensureStructuredChoiceDesc(c.label || c.raw || "", c.desc || ""),
             key: c.key || "",
+            category: c.category || "",
+            icon: c.icon || "",
             heroPreview:
                 c && typeof c.hero_preview === "object" && c.hero_preview
                     ? c.hero_preview
