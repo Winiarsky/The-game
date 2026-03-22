@@ -19,6 +19,7 @@ from board import Connection
 from states import Start, State
 from states.combat import Combat
 from hero import Hero
+from GameObjects.Enemies.basic_enemy import BasicEnemy
 from GameObjects.Enemies.simple_enemy import Enemy
 from GameObjects.Obstacles.basic_obstacle import Obstacle
 from GameObjects.Terrains.basic_terrain import BasicTerrain
@@ -55,7 +56,7 @@ class Game:
         self.events = ActionEventBus(self)
         self._attach_debug_event_listener()
         self.heroes: list[Hero] = []
-        self.enemies: list[Enemy] = []
+        self.enemies: list[BasicEnemy] = []
         self.board = self._init_board()
         self.state: State = Start(self)
         self._init_debug_undo()
@@ -132,8 +133,6 @@ class Game:
                 except Exception:
                     return None
 
-        from GameObjects.Enemies.simple_enemy import Enemy
-
         def _place_enemy(obj, pos):
             board.place(obj, pos)
             self.enemies.append(obj)
@@ -144,7 +143,7 @@ class Game:
             (BasicTerrain, lambda obj, pos: board.set_field(pos, obj)),
             (Obstacle, lambda obj, pos: board.place(obj, pos)),
             (InteractableMixin, lambda obj, pos: board.add_interactable(obj, pos)),
-            (Enemy, _place_enemy),
+            (BasicEnemy, _place_enemy),
         ]
 
         def place_logic(

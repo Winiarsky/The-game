@@ -87,4 +87,7 @@ from .magic.focus_spells.wizard import wizard_school_spell_events  # noqa: F401
 from . import phase_events  # noqa: F401
 from .enemy import enemy_move_event  # noqa: F401
 from .enemy import enemy_attack_melee_event  # noqa: F401
+from .enemy import enemy_strike_event  # noqa: F401
+from .enemy import enemy_trip_event  # noqa: F401
+from .enemy import goblin_dog_scratch_event  # noqa: F401
 from .checks import skill_check_event  # noqa: F401

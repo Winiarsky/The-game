@@ -5,7 +5,7 @@ import time
 
 from board import consts
 from actions.move_utils import find_path, path_cost_feet, trim_path_to_feet
-from combat import refresh_flanking_statuses
+from combat import flanking_positions, refresh_flanking_statuses
 from combat.reactions import dispatch_reactions
 
 from ..base import EventContext, EventResult, GameEvent
@@ -39,6 +39,140 @@ def _nearest_hero(game, enemy_pos: tuple[int, int]) -> tuple[tuple[int, int] | N
             best_dist = dist
             best_pos = hero.position
     return best_pos, best_dist
+
+
+def _normalize_goal_positions(raw) -> list[tuple[int, int]]:
+    if raw is None:
+        return []
+    if isinstance(raw, tuple) and len(raw) == 2:
+        try:
+            return [(int(raw[0]), int(raw[1]))]
+        except Exception:
+            return []
+    if not isinstance(raw, (list, tuple, set)):
+        return []
+    result: list[tuple[int, int]] = []
+    for item in raw:
+        if not isinstance(item, (list, tuple)) or len(item) != 2:
+            continue
+        try:
+            result.append((int(item[0]), int(item[1])))
+        except Exception:
+            continue
+    return result
+
+
+def _goal_positions_from_metadata(game, enemy, metadata: dict[str, object] | None) -> list[tuple[int, int]]:
+    metadata = dict(metadata or {})
+    direct = _normalize_goal_positions(metadata.get("goal_positions"))
+    direct.extend(_normalize_goal_positions(metadata.get("goal_position")))
+    if direct:
+        return direct
+
+    forced_target = metadata.get("forced_target")
+    target_pos = getattr(forced_target, "position", None)
+    if target_pos is None:
+        return []
+    if metadata.get("move_adjacent_to_target"):
+        board = game.board
+        return [
+            cand
+            for cand in board.get_neighbors(target_pos, include_position=False, diagonal=True)
+            if _adjacent_reachable(board, cand, target_pos)
+        ]
+    return []
+
+
+def _has_goblin_scuttle(actor) -> bool:
+    reactions = {str(item or "").strip().lower() for item in (getattr(actor, "special_reactions", ()) or ()) if str(item or "").strip()}
+    if "goblin_scuttle" in reactions:
+        return True
+    checker = getattr(actor, "has_trait", None)
+    if callable(checker):
+        try:
+            return bool(checker("goblin"))
+        except Exception:
+            return False
+    traits = {str(item or "").strip().lower() for item in (getattr(actor, "traits", ()) or ()) if str(item or "").strip()}
+    return "goblin" in traits
+
+
+def _scuttle_candidates(board, origin: tuple[int, int]) -> list[tuple[int, int]]:
+    result: list[tuple[int, int]] = []
+    for pos in board.get_neighbors(origin, include_position=False, diagonal=True):
+        if not _adjacent_reachable(board, origin, pos):
+            continue
+        if not board.can_enter(pos, allow_occupied=False):
+            continue
+        result.append(pos)
+    return result
+
+
+def _score_scuttle_position(game, scuttler, pos: tuple[int, int]) -> int:
+    board = game.board
+    heroes = [hero for hero in getattr(game, "heroes", []) or [] if getattr(hero, "position", None) is not None]
+    if not heroes:
+        return 0
+
+    ally_positions = [
+        getattr(enemy, "position", None)
+        for enemy in getattr(game, "enemies", []) or []
+        if enemy is not scuttler and getattr(enemy, "position", None) is not None
+    ]
+    score = 0
+    for hero in heroes:
+        hero_pos = getattr(hero, "position", None)
+        if hero_pos is None:
+            continue
+        if pos in flanking_positions(board, hero_pos, [ally for ally in ally_positions if ally is not None]):
+            score += 12
+        if max(abs(pos[0] - hero_pos[0]), abs(pos[1] - hero_pos[1])) <= 1:
+            score += 4
+    nearest = min(
+        max(abs(pos[0] - hero.position[0]), abs(pos[1] - hero.position[1]))
+        for hero in heroes
+        if getattr(hero, "position", None) is not None
+    )
+    behavior_id = str(getattr(scuttler, "behavior_id", "") or "")
+    if behavior_id == "goblin_commando_raider":
+        score -= abs(nearest * 5 - 10)
+    elif behavior_id == "goblin_dog_hunter":
+        score += nearest * 3
+    else:
+        score += max(0, 3 - nearest)
+    return score
+
+
+def _trigger_enemy_goblin_scuttle(game, mover, dest: tuple[int, int]) -> None:
+    state = getattr(game, "state", None)
+    if getattr(getattr(state, "__class__", None), "__name__", "") != "Combat":
+        return
+    if mover not in getattr(game, "enemies", []):
+        return
+
+    board = game.board
+    for scuttler in list(getattr(game, "enemies", []) or []):
+        if scuttler is mover or not _has_goblin_scuttle(scuttler):
+            continue
+        scuttler_pos = getattr(scuttler, "position", None)
+        if scuttler_pos is None:
+            continue
+        if max(abs(scuttler_pos[0] - dest[0]), abs(scuttler_pos[1] - dest[1])) > 1:
+            continue
+        candidates = _scuttle_candidates(board, scuttler_pos)
+        if not candidates:
+            continue
+        best = max(candidates, key=lambda pos: _score_scuttle_position(game, scuttler, pos))
+        if best == scuttler_pos:
+            continue
+        try:
+            board.move(scuttler_pos, best)
+        except Exception:
+            continue
+        try:
+            game.ui_log(f"Goblin Scuttle: {getattr(scuttler, 'name', 'Goblin')} wykonuje Step na {best}.")
+        except Exception:
+            pass
 
 
 def _safe_int(value, default=0) -> int:
@@ -184,17 +318,21 @@ class EnemyMoveEvent(GameEvent):
         move_budget_feet = _enemy_movement_budget_feet(enemy, default_feet=int(base_distance))
         if move_budget_feet <= 0:
             return EventResult(success=False, consumed_action=True, message="Wróg jest spowolniony i nie może się ruszyć.")
-        nearest_pos, _dist = _nearest_hero(game, enemy.position)
-        if nearest_pos is None:
-            return EventResult(success=False, consumed_action=False, message="Wróg nie widzi celu.")
-
-        neighbor_targets = [
-            cand
-            for cand in board.get_neighbors(nearest_pos, include_position=False, diagonal=True)
-            if _adjacent_reachable(board, cand, nearest_pos)
-        ]
+        metadata = dict(ctx.metadata or {})
+        neighbor_targets = _goal_positions_from_metadata(game, enemy, metadata)
+        if not neighbor_targets:
+            nearest_pos, _dist = _nearest_hero(game, enemy.position)
+            if nearest_pos is None:
+                return EventResult(success=False, consumed_action=False, message="Wróg nie widzi celu.")
+            neighbor_targets = [
+                cand
+                for cand in board.get_neighbors(nearest_pos, include_position=False, diagonal=True)
+                if _adjacent_reachable(board, cand, nearest_pos)
+            ]
         reachable_paths: list[tuple[list[tuple[int, int]], tuple[int, int], int]] = []
         for cand in neighbor_targets:
+            if cand == enemy.position:
+                continue
             if not board.can_enter(cand, allow_occupied=False):
                 continue
             path = find_path(board, enemy.position, cand, allow_diagonal=True, allow_occupied=False, mover=enemy)
@@ -237,6 +375,10 @@ class EnemyMoveEvent(GameEvent):
 
             _dispatch_move_reactions(game, enemy, enemy.position, dest)
             game.board.move(enemy.position, dest)
+            try:
+                _trigger_enemy_goblin_scuttle(game, enemy, dest)
+            except Exception:
+                logger.debug("Nie udało się wykonać Goblin Scuttle po ruchu wroga.", exc_info=True)
             try:
                 from GameObjects.events.magic.runtime_effects import process_alarm_wards_for_move
 

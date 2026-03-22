@@ -29,12 +29,18 @@ class BasicEnemy(StatusMixin, BonusMixin, WatchfulMixin, ReactiveMixin, MagicalM
 
     name: str = "Enemy"
     hp: int = 10
+    max_hp: int | None = None
     ac: int = 14
+    ac_includes_armor_bonus: bool = True
     initiative_bonus: int = 0
     distance: int = 25
+    base_speed_feet: int | None = None
     move_points: int | None = None
     attack_bonus: int = 0
     strength: int = 0
+    dex_mod: int = 0
+    fortitude_bonus: int = 0
+    reflex_bonus: int = 0
     behavior_id: str | None = "basic_melee"
     reach: int = 1
     enemy_type: EnemyType | str = EnemyType.HUMAN
@@ -42,6 +48,24 @@ class BasicEnemy(StatusMixin, BonusMixin, WatchfulMixin, ReactiveMixin, MagicalM
     watch_disabled: bool = False
     perception_bonus: int = 4
     will_bonus: int = 0
+    athletics_bonus: int = 0
+    intimidation_bonus: int = 0
+    stealth_bonus: int = 0
+    traits: tuple[str, ...] = ()
+    languages: tuple[str, ...] = ()
+    weapon_loadout: tuple[str, ...] = ()
+    armor_loadout: tuple[str, ...] = ()
+    inventory: list[object] = field(default_factory=list)
+    equipped_weapon_item_ids: list[str] = field(default_factory=list)
+    equipped_armor_item_id: str | None = None
+    active_weapon: str | None = None
+    weapon_attack_bonuses: dict[str, int] = field(default_factory=dict)
+    weapon_damage_bonuses: dict[str, int] = field(default_factory=dict)
+    special_actions: tuple[str, ...] = ()
+    special_reactions: tuple[str, ...] = ()
+    ai_profile: dict[str, object] = field(default_factory=dict)
+    ai_memory: dict[str, object] = field(default_factory=dict)
+    auto_opportunity_attack: bool = True
     loot_items: list[object] = field(default_factory=list)
     loot_cp: int = 0
     coin_pouch: dict[str, int] = field(default_factory=dict)
@@ -53,16 +77,37 @@ class BasicEnemy(StatusMixin, BonusMixin, WatchfulMixin, ReactiveMixin, MagicalM
 
     def __post_init__(self):
         self.object_id = assign_id(self)
+        if self.max_hp is None:
+            try:
+                self.max_hp = int(self.hp)
+            except Exception:
+                self.max_hp = 0
         if self.move_points is not None and (self.distance is None or self.distance == 25):
             try:
                 self.distance = max(5, int(self.move_points) * 5)
             except Exception:
                 self.distance = 25
-        if not self.reactions:
+        if self.base_speed_feet is None:
+            try:
+                self.base_speed_feet = max(5, int(self.distance or 25))
+            except Exception:
+                self.base_speed_feet = 25
+        elif self.distance in (None, 25):
+            try:
+                self.distance = max(5, int(self.base_speed_feet))
+            except Exception:
+                self.distance = 25
+        if self.auto_opportunity_attack and not self.reactions:
             try:
                 self.reactions.append(OpportunityAttack())
             except Exception:
                 pass
+        try:
+            from GameObjects.items.inventory import ensure_actor_inventory
+
+            ensure_actor_inventory(self)
+        except Exception:
+            pass
 
     def __hash__(self):
         return hash(self.object_id)
@@ -77,6 +122,28 @@ class BasicEnemy(StatusMixin, BonusMixin, WatchfulMixin, ReactiveMixin, MagicalM
 
     def set_position(self, position: Optional[tuple[int, int]]) -> None:
         self.position = position
+
+    def current_hp(self) -> int:
+        try:
+            return int(self.hp)
+        except Exception:
+            return 0
+
+    def hp_ratio(self) -> float:
+        try:
+            max_hp = max(1, int(self.max_hp or self.hp or 1))
+            return max(0.0, min(1.0, float(self.current_hp()) / float(max_hp)))
+        except Exception:
+            return 0.0
+
+    def is_dead(self) -> bool:
+        return self.current_hp() <= 0
+
+    def has_trait(self, trait: str) -> bool:
+        needle = str(trait or "").strip().lower()
+        if not needle:
+            return False
+        return needle in {str(item).strip().lower() for item in (self.traits or ())}
 
     def on_spot(self, hero, game) -> Optional[str]:
         """Po wykryciu bohatera przeciwnik wywołuje walkę."""

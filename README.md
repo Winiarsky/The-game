@@ -18,6 +18,17 @@ Na stronie zobaczysz podświetlenia wysłane przez `set_leds`, a każde kliknię
 - **Generator figurek** – w panelu „Figurki” dodasz żetony (litery + kolory), zaznaczysz je i ustawisz na polach w trybie przesuwania. Kliknięcie pola z figurką bez wybranej figurki zaznaczy ją, dzięki czemu łatwo ją przenieść.
 - **Tło planszy** – ustaw własny obraz (np. mapę scenariusza) lub usuń go jednym kliknięciem.
 
+### Techniczne wizualizacje scenariuszy
+
+Mozesz wygenerowac techniczne mapy `SVG` dla wszystkich scenariuszy:
+
+```bash
+python scripts/render_scenario_maps.py
+```
+
+Pliki trafia do katalogu `assets/scenario_maps/`. Kazda plansza ma siatke `20x15`, przeszkody, sciany, tereny specjalne i markery przeciwnikow. Skala wydruku jest ustawiona na `1 kratka = 3.33 cm`, wiec te same pliki mozna wykorzystac jako podklad do wydruku albo jako tlo w symulatorze planszy.
+Plik `*.svg` to czysta mapa do druku, a odpowiadajacy mu `*_legend.svg` zawiera osobna legende i metadane. Pola startowe nie sa rysowane na glownym pliku mapy.
+
 ## UI graczy (oddzielna aplikacja)
 
 Lekka aplikacja webowa do wyświetlania informacji dla graczy (log, dialogi, prompty na rzuty).

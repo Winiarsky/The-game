@@ -176,19 +176,27 @@ def _stage_effects(stage_data: dict[str, object], actor=None, game=None) -> tupl
 
 
 def _apply_stage_condition(actor, stage_data: dict[str, object]) -> None:
+    raw_conditions = []
+    if "conditions" in stage_data:
+        extra = stage_data.get("conditions") or []
+        if isinstance(extra, (list, tuple)):
+            raw_conditions.extend(list(extra))
     condition = stage_data.get("condition")
-    if not condition:
+    if condition:
+        raw_conditions.append(condition)
+    if not raw_conditions:
         return
     adder = getattr(actor, "add_status", None)
     if not callable(adder):
         return
-    try:
-        if isinstance(condition, Status):
-            adder(condition)
-        elif isinstance(condition, str):
-            adder(Status(id=condition))
-    except Exception:
-        pass
+    for current in raw_conditions:
+        try:
+            if isinstance(current, Status):
+                adder(current)
+            elif isinstance(current, str):
+                adder(Status(id=current))
+        except Exception:
+            continue
 
 
 def process_poisoned(actor, game) -> None:

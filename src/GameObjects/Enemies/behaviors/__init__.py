@@ -2,11 +2,17 @@
 
 from GameObjects.Enemies.behaviors.basic_melee import basic_melee
 from GameObjects.Enemies.behaviors.basic_melee_flanking import basic_melee_flanking
+from GameObjects.Enemies.behaviors.goblin_commando_raider import goblin_commando_raider
+from GameObjects.Enemies.behaviors.goblin_dog_hunter import goblin_dog_hunter
+from GameObjects.Enemies.behaviors.goblin_warrior_pack import goblin_warrior_pack
 
 # Prosty rejestr zachowań po identyfikatorze.
 _BEHAVIORS = {
     "basic_melee": basic_melee,
     "basic_melee_flanking": basic_melee_flanking,
+    "goblin_warrior_pack": goblin_warrior_pack,
+    "goblin_commando_raider": goblin_commando_raider,
+    "goblin_dog_hunter": goblin_dog_hunter,
 }
 
 
@@ -19,4 +25,11 @@ def get_behavior(behavior_id: str | None):
     return basic_melee
 
 
-__all__ = ["basic_melee", "basic_melee_flanking", "get_behavior"]
+__all__ = [
+    "basic_melee",
+    "basic_melee_flanking",
+    "goblin_warrior_pack",
+    "goblin_commando_raider",
+    "goblin_dog_hunter",
+    "get_behavior",
+]
