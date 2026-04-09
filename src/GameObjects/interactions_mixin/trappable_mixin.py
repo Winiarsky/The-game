@@ -151,6 +151,18 @@ class TrappableMixin:
             resolve_outcome = lambda total, dc, natural_shift=0: "success" if int(total) >= int(dc) else "failure"  # noqa: E731
             natural_shift_from_roll = lambda _roll: 0  # noqa: E731
         self.trap_armed = False
+        try:
+            events = getattr(game, "events", None)
+            if events is not None and hasattr(events, "safe_emit_action"):
+                events.safe_emit_action(
+                    actor=actor,
+                    action_id="trap_activated",
+                    action_tags=["trap", "trigger"],
+                    target=self,
+                    trap_id=str(getattr(self, "object_id", "") or getattr(self, "trap_name", "") or ""),
+                )
+        except Exception:
+            pass
         if actor is None:
             return self.trap_effect
         attack_bonus = self.trap_attack_bonus
@@ -207,6 +219,21 @@ class TrappableMixin:
             apply = getattr(actor, "apply_damage", None)
             if callable(apply):
                 apply(dealt, str(self.trap_damage_type or "piercing"))
+            try:
+                events = getattr(game, "events", None)
+                if dealt > 0 and events is not None and hasattr(events, "safe_emit_action"):
+                    events.safe_emit_action(
+                        actor=actor,
+                        action_id="damage_applied",
+                        action_tags=["damage", "trap"],
+                        target=actor,
+                        source_action="trap_activated",
+                        amount=int(dealt),
+                        damage=int(dealt),
+                        trap_id=str(getattr(self, "object_id", "") or getattr(self, "trap_name", "") or ""),
+                    )
+            except Exception:
+                pass
             return f"Pułapka trafia {target_name} za {dealt} ({self.trap_damage_type})."
         except Exception:
             return f"Pułapka trafia za {dealt}."

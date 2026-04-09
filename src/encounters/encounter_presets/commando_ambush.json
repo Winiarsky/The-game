@@ -1,0 +1,29 @@
+{
+  "preset_id": "commando_ambush",
+  "must_include": [
+    "goblin_commando"
+  ],
+  "preferred_layout": "chokepoints",
+  "fixed_enemies": [
+    {
+      "enemy_object_id": "goblin_commando",
+      "hidden": true,
+      "trigger_mode": "seek",
+      "ambush_mode": "interrupt_action",
+      "trigger_conditions": [
+        {
+          "kind": "attackable",
+          "weapon_scope": "active"
+        }
+      ],
+      "reveal_dc": 19,
+      "reveal_tags": [
+        "undetected",
+        "ambush"
+      ],
+      "config": {
+        "name": "Goblin Commando Ambusher"
+      }
+    }
+  ]
+}

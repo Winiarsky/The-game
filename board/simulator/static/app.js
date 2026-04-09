@@ -11,6 +11,20 @@ const scenarioReloadButton = document.getElementById("scenario-reload");
 const scenarioLoadButton = document.getElementById("scenario-load");
 const scenarioToggleButton = document.getElementById("scenario-toggle");
 const scenarioStatus = document.getElementById("scenario-status");
+const encounterBiomeSelect = document.getElementById("encounter-biome");
+const encounterThreatSelect = document.getElementById("encounter-threat");
+const encounterLayoutSelect = document.getElementById("encounter-layout");
+const encounterFormationPackSelect = document.getElementById("encounter-formation-pack");
+const encounterPresetSelect = document.getElementById("encounter-preset");
+const encounterSeedInput = document.getElementById("encounter-seed");
+const encounterGenerateButton = document.getElementById("encounter-generate");
+const encounterStartButton = document.getElementById("encounter-start");
+const encounterStatus = document.getElementById("encounter-status");
+const simulatorResetButton = document.getElementById("simulator-reset");
+const runtimeStopButton = document.getElementById("runtime-stop");
+const runtimeStatus = document.getElementById("runtime-status");
+const heroesListElement = document.getElementById("heroes-list");
+const heroesReloadButton = document.getElementById("heroes-reload");
 const dims = window.BOARD_DIMENSIONS || { rows: 15, cols: 20 };
 const posKey = (row, col) => `${row},${col}`;
 
@@ -20,6 +34,7 @@ const cells = Array.from({ length: dims.rows }, () => Array(dims.cols).fill(null
 let wallOverlay;
 const MODE_BOARD = "board";
 const MODE_MOVE = "move";
+const SECRET_OBJECT_IDS = new Set(["hidden_enemy_spawn", "trap_tile", "dart_launcher_trap", "hidden_cache"]);
 let currentMode = MODE_BOARD;
 
 const FIGURE_COLORS = [
@@ -37,6 +52,21 @@ const figures = [];
 let nextFigureNumber = 1;
 let selectedFigureId = null;
 let latestBoardState = [];
+let availableHeroes = [];
+const selectedHeroIds = new Set();
+
+const OBJECT_SHORT_CODES = {
+    blocked_field: "BL",
+    forest_field: "CV",
+    bushes_field: "DT",
+    rumble_field: "RB",
+    simple_obstacle: "OB",
+    simple_wall: "WL",
+    goblin_warrior: "GW",
+    goblin_dog: "GD",
+    goblin_commando: "GC",
+    dart_launcher_trap: "TR",
+};
 
 function normalizeScenarioPos(pos) {
     if (Array.isArray(pos) && pos.length >= 2) {
@@ -55,13 +85,27 @@ function fromScenarioPosition(pos) {
     return { row, col };
 }
 
+function scenarioObjectCode(label, objectId) {
+    const objectKey = String(objectId || "").trim().toLowerCase();
+    if (objectKey && OBJECT_SHORT_CODES[objectKey]) {
+        return OBJECT_SHORT_CODES[objectKey];
+    }
+    const source = String(label || objectId || "?")
+        .toUpperCase()
+        .replace(/[^A-Z0-9]+/g, "");
+    if (!source) return "?";
+    return source.slice(0, 2);
+}
+
 const scenarioState = {
     name: null,
     blocked: new Set(),
     obstacles: new Set(),
     walls: [],
-    cellObjects: new Map(), // key -> [{label,color}]
-    edgeObjects: [], // [{a:{row,col}, b:{row,col}, color, label, category, object_id}]
+    cellObjects: new Map(),
+    edgeObjects: [],
+    startingPositions: new Set(),
+    startingLabels: new Map(),
     visible: false,
 };
 
@@ -102,9 +146,15 @@ function createCell(row, col) {
     cell.dataset.col = col;
     cell.title = `R${row} C${col}`;
     cell.addEventListener("click", () => handleCellClick(row, col));
+
+    const startMarker = document.createElement("div");
+    startMarker.className = "start-marker";
+    cell.appendChild(startMarker);
+
     const figureMarker = document.createElement("div");
     figureMarker.className = "figure-marker";
     cell.appendChild(figureMarker);
+
     const scenarioMarkers = document.createElement("div");
     scenarioMarkers.className = "cell-objects scenario-objects";
     cell.appendChild(scenarioMarkers);
@@ -161,10 +211,15 @@ function applyBoardState(state) {
                 cell.style.backgroundColor = "";
                 cell.classList.remove("active");
             }
-            const key = `${row},${col}`;
+            const key = posKey(row, col);
             const scenarioOn = scenarioState.visible;
             cell.classList.toggle("terrain-blocked", scenarioOn && scenarioState.blocked.has(key));
             cell.classList.toggle("has-obstacle", scenarioOn && scenarioState.obstacles.has(key));
+            cell.classList.toggle("starting-position", scenarioOn && scenarioState.startingPositions.has(key));
+            const startMarker = cell.querySelector(".start-marker");
+            if (startMarker) {
+                startMarker.textContent = scenarioOn ? (scenarioState.startingLabels.get(key) || "S") : "";
+            }
         }
     }
     renderScenarioObjects();
@@ -217,6 +272,27 @@ function findFigureAt(row, col) {
     );
 }
 
+function nextFigureId(prefix = "F") {
+    let id = "";
+    do {
+        id = `${prefix}${nextFigureNumber}`;
+        nextFigureNumber += 1;
+    } while (findFigureById(id));
+    return id;
+}
+
+function shortMarker(name, fallbackIndex) {
+    const source = String(name || "").trim();
+    if (!source) {
+        return `P${fallbackIndex + 1}`;
+    }
+    const parts = source.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+        return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    }
+    return source.slice(0, 2).toUpperCase();
+}
+
 function updateFigureMarkers() {
     for (let row = 0; row < dims.rows; row += 1) {
         for (let col = 0; col < dims.cols; col += 1) {
@@ -225,11 +301,12 @@ function updateFigureMarkers() {
             const figure = findFigureAt(row, col);
             if (figure) {
                 cell.classList.add("has-figure");
-                marker.textContent = figure.label;
+                marker.textContent = figure.marker || figure.label;
                 marker.style.backgroundColor = figure.color;
             } else {
                 cell.classList.remove("has-figure");
                 marker.textContent = "";
+                marker.style.backgroundColor = "";
             }
         }
     }
@@ -259,7 +336,7 @@ function renderFiguresList() {
         dot.style.backgroundColor = figure.color;
 
         const label = document.createElement("span");
-        label.textContent = figure.label;
+        label.textContent = figure.name || figure.label;
 
         selectButton.append(dot, label);
         selectButton.addEventListener("click", () => {
@@ -286,19 +363,32 @@ function renderFiguresList() {
     });
 }
 
-function addFigure() {
-    const figureNumber = nextFigureNumber;
-    nextFigureNumber += 1;
+function addFigure(options = {}) {
+    const index = figures.findIndex((figure) => figure.id === options.id);
+    const isExisting = index !== -1;
+    const figureNumber = isExisting ? null : nextFigureNumber;
     const figure = {
-        id: `F${figureNumber}`,
-        label: `F${figureNumber}`,
-        color: FIGURE_COLORS[(figureNumber - 1) % FIGURE_COLORS.length],
-        position: null,
+        id: options.id || nextFigureId("F"),
+        label: options.label || (figureNumber ? `F${figureNumber}` : "Figura"),
+        marker: options.marker || options.label || (figureNumber ? `F${figureNumber}` : "F"),
+        name: options.name || options.label || (figureNumber ? `Figurka ${figureNumber}` : "Figurka"),
+        color: options.color || FIGURE_COLORS[figures.length % FIGURE_COLORS.length],
+        position: options.position ? { ...options.position } : null,
+        isHero: Boolean(options.isHero),
     };
-    figures.push(figure);
-    selectedFigureId = figure.id;
+    if (isExisting) {
+        figures[index] = { ...figures[index], ...figure };
+    } else {
+        figures.push(figure);
+    }
+    if (!options.keepSelection) {
+        selectedFigureId = figure.id;
+    }
     renderFiguresList();
-    showToast(`Dodano figurkę ${figure.label}. Kliknij na planszy w trybie przesuwania, aby ją ustawić.`);
+    updateFigureMarkers();
+    if (!options.silent) {
+        showToast(`Dodano figurkę ${figure.name || figure.label}. Kliknij na planszy w trybie przesuwania, aby ją ustawić.`);
+    }
 }
 
 function removeFigure(id) {
@@ -318,7 +408,7 @@ function handleMoveModeClick(row, col) {
         if (figureAtCell) {
             selectedFigureId = figureAtCell.id;
             renderFiguresList();
-            showToast(`Zaznaczono ${figureAtCell.label}.`);
+            showToast(`Zaznaczono ${figureAtCell.name || figureAtCell.label}.`);
         } else {
             showToast("Wybierz figurkę z panelu, aby ją przenieść.");
         }
@@ -339,7 +429,7 @@ function handleMoveModeClick(row, col) {
     figure.position = { row, col };
     updateFigureMarkers();
     renderFiguresList();
-    showToast(`Przeniesiono ${figure.label} na (${row}, ${col}).`);
+    showToast(`Przeniesiono ${figure.name || figure.label} na (${row}, ${col}).`);
 }
 
 function setMode(mode) {
@@ -378,14 +468,14 @@ function setScenarioData(scenario) {
               .map((pos) => fromScenarioPosition(pos))
               .filter((pos) => pos !== null)
         : [];
-    scenarioState.blocked = new Set(blocked.map((pos) => `${pos.row},${pos.col}`));
+    scenarioState.blocked = new Set(blocked.map((pos) => posKey(pos.row, pos.col)));
 
     const obstacles = Array.isArray(scenario?.obstacles)
         ? scenario.obstacles
               .map((pos) => fromScenarioPosition(pos))
               .filter((pos) => pos !== null)
         : [];
-    scenarioState.obstacles = new Set(obstacles.map((pos) => `${pos.row},${pos.col}`));
+    scenarioState.obstacles = new Set(obstacles.map((pos) => posKey(pos.row, pos.col)));
 
     scenarioState.walls = Array.isArray(scenario?.walls)
         ? scenario.walls
@@ -398,11 +488,22 @@ function setScenarioData(scenario) {
               .filter((wall) => wall !== null)
         : [];
 
+    const starts = Array.isArray(scenario?.starting_positions)
+        ? scenario.starting_positions
+              .map((pos) => fromScenarioPosition(pos))
+              .filter((pos) => pos !== null)
+        : [];
+    scenarioState.startingPositions = new Set(starts.map((pos) => posKey(pos.row, pos.col)));
+    scenarioState.startingLabels = new Map(
+        starts.map((pos, index) => [posKey(pos.row, pos.col), String(index + 1)]),
+    );
+
     scenarioState.cellObjects = new Map();
     scenarioState.edgeObjects = [];
     const objects = Array.isArray(scenario?.objects) ? scenario.objects : [];
     objects.forEach((obj) => {
         if (!obj || obj.category === "Rooms" || obj.category === "Starting") return;
+        if (SECRET_OBJECT_IDS.has(obj.object_id)) return;
         const placement = obj.placement || "cell";
         if (placement === "cell") {
             const addObj = (pos) => {
@@ -412,6 +513,7 @@ function setScenarioData(scenario) {
                 const list = scenarioState.cellObjects.get(key) || [];
                 list.push({
                     label: obj.label || obj.object_id || "?",
+                    code: scenarioObjectCode(obj.label, obj.object_id),
                     color: obj.color || "#555",
                 });
                 scenarioState.cellObjects.set(key, list);
@@ -489,8 +591,7 @@ function renderScenarioObjects() {
                 const marker = document.createElement("div");
                 marker.className = "object-marker";
                 marker.style.background = obj.color || "#555";
-                marker.textContent = (obj.label?.[0] || "?").toUpperCase();
-                marker.style.left = `${idx * 14}px`;
+                marker.textContent = obj.code || scenarioObjectCode(obj.label, "");
                 container.appendChild(marker);
             });
             if (objects.length > maxMarkers) {
@@ -511,7 +612,6 @@ function renderScenarioEdgesAndWalls() {
 
     const boardRect = boardElement.getBoundingClientRect();
     const thickness = 6;
-    const dotSize = 10;
 
     const renderSegment = (a, b, color) => {
         const cellA = cells?.[a.row]?.[a.col];
@@ -597,6 +697,297 @@ function toggleScenarioVisibility() {
     applyBoardState();
 }
 
+function renderHeroesList() {
+    if (!heroesListElement) return;
+    heroesListElement.innerHTML = "";
+    if (!availableHeroes.length) {
+        const empty = document.createElement("p");
+        empty.className = "figures-empty";
+        empty.textContent = "Brak zapisanych bohaterów.";
+        heroesListElement.appendChild(empty);
+        return;
+    }
+    availableHeroes.forEach((hero, index) => {
+        const row = document.createElement("label");
+        row.className = "hero-option";
+
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = selectedHeroIds.has(hero.character_id);
+        checkbox.addEventListener("change", () => {
+            if (checkbox.checked) {
+                selectedHeroIds.add(hero.character_id);
+            } else {
+                selectedHeroIds.delete(hero.character_id);
+            }
+        });
+
+        const text = document.createElement("span");
+        text.innerHTML = `<strong>${hero.name}</strong> <small>${hero.class_id || "class?"}, lvl ${hero.level || 1}</small>`;
+
+        row.append(checkbox, text);
+        heroesListElement.appendChild(row);
+    });
+}
+
+async function refreshHeroesList() {
+    if (!heroesListElement) return;
+    try {
+        const response = await fetch("/api/heroes");
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+            throw new Error(data.error || "Błąd pobierania bohaterów");
+        }
+        const heroes = Array.isArray(data.heroes) ? data.heroes : [];
+        availableHeroes = heroes;
+        const validIds = new Set(heroes.map((hero) => hero.character_id));
+        [...selectedHeroIds].forEach((characterId) => {
+            if (!validIds.has(characterId)) {
+                selectedHeroIds.delete(characterId);
+            }
+        });
+        if (!selectedHeroIds.size) {
+            heroes.slice(0, 4).forEach((hero) => selectedHeroIds.add(hero.character_id));
+        }
+        renderHeroesList();
+    } catch (error) {
+        heroesListElement.innerHTML = "";
+        const empty = document.createElement("p");
+        empty.className = "figures-empty";
+        empty.textContent = `Nie udało się pobrać bohaterów: ${error.message}`;
+        heroesListElement.appendChild(empty);
+    }
+}
+
+function applySelectedHeroesToStartingPositions(startingPositions) {
+    const starts = Array.isArray(startingPositions)
+        ? startingPositions.map((pos) => fromScenarioPosition(pos)).filter((pos) => pos !== null)
+        : [];
+    for (let index = figures.length - 1; index >= 0; index -= 1) {
+        if (figures[index].isHero) {
+            if (selectedFigureId === figures[index].id) {
+                selectedFigureId = null;
+            }
+            figures.splice(index, 1);
+        }
+    }
+
+    const selectedHeroes = availableHeroes.filter((hero) => selectedHeroIds.has(hero.character_id));
+    selectedHeroes.slice(0, starts.length).forEach((hero, index) => {
+        const start = starts[index];
+        addFigure({
+            id: `hero:${hero.character_id}`,
+            label: `P${index + 1}`,
+            marker: shortMarker(hero.name, index),
+            name: hero.name,
+            color: FIGURE_COLORS[index % FIGURE_COLORS.length],
+            position: start,
+            isHero: true,
+            silent: true,
+            keepSelection: index !== 0,
+        });
+    });
+    renderFiguresList();
+    updateFigureMarkers();
+}
+
+function currentEncounterRequest() {
+    return {
+        biome: encounterBiomeSelect?.value || "forest",
+        threat: encounterThreatSelect?.value || "moderate",
+        layout: encounterLayoutSelect?.value || "losowy",
+        formation_pack: encounterFormationPackSelect?.value || "losowy",
+        preset: encounterPresetSelect?.value || "losowy",
+        seed: encounterSeedInput?.value || "",
+    };
+}
+
+function selectedHeroIdsList() {
+    return availableHeroes
+        .filter((hero) => selectedHeroIds.has(hero.character_id))
+        .map((hero) => hero.character_id);
+}
+
+function applyEncounterResponse(data) {
+    const metadata = data.metadata || {};
+    scenarioState.name = `encounter:${metadata.layout || "random"}:${metadata.seed || "seed"}`;
+    setScenarioData(data.scenario || {});
+    scenarioState.visible = true;
+    scenarioToggleButton.textContent = "Ukryj elementy scenariusza";
+    if (scenarioStatus) {
+        scenarioStatus.textContent = `Widoczne (${scenarioState.name})`;
+    }
+    if (encounterSeedInput && metadata.seed) {
+        encounterSeedInput.value = String(metadata.seed);
+    }
+    if (encounterThreatSelect && metadata.threat) {
+        encounterThreatSelect.value = String(metadata.threat);
+    }
+    if (encounterFormationPackSelect && metadata.formation_pack) {
+        encounterFormationPackSelect.value = String(metadata.formation_pack);
+    }
+    applyBoardState();
+    applySelectedHeroesToStartingPositions(data.scenario?.starting_positions || []);
+    if (encounterStatus) {
+        encounterStatus.textContent =
+            `Wygenerowano encounter: ${metadata.biome || "?"}, ${metadata.layout || "?"}, pack ${metadata.formation_pack || "?"}, seed ${metadata.seed || "?"}, XP ${metadata.xp_total || 0}/${metadata.xp_budget || 0}.`;
+    }
+}
+
+function setRuntimeStatus(data) {
+    if (!runtimeStatus) return;
+    if (!data || !data.running) {
+        runtimeStatus.textContent = "Runtime gry nie działa.";
+        return;
+    }
+    const uiUrl = data.ui_url || "";
+    if (uiUrl) {
+        runtimeStatus.innerHTML = `Runtime działa (PID ${data.pid || "?"}). UI gracza: <a href="${uiUrl}" target="_blank" rel="noopener noreferrer">${uiUrl}</a>`;
+        return;
+    }
+    runtimeStatus.textContent = `Runtime działa (PID ${data.pid || "?"}).`;
+}
+
+async function refreshRuntimeStatus() {
+    try {
+        const response = await fetch("/api/runtime/status");
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+            throw new Error(data.error || "Błąd statusu runtime");
+        }
+        setRuntimeStatus(data);
+    } catch (error) {
+        if (runtimeStatus) {
+            runtimeStatus.textContent = `Błąd statusu runtime: ${error.message}`;
+        }
+    }
+}
+
+async function generateEncounter() {
+    encounterGenerateButton.disabled = true;
+    if (encounterStatus) {
+        encounterStatus.textContent = "Generowanie encountera...";
+    }
+    try {
+        const response = await fetch("/api/encounters/generate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                biome: encounterBiomeSelect?.value || "forest",
+                threat: encounterThreatSelect?.value || "moderate",
+                layout: encounterLayoutSelect?.value || "losowy",
+                formation_pack: encounterFormationPackSelect?.value || "losowy",
+                preset: encounterPresetSelect?.value || "losowy",
+                seed: encounterSeedInput?.value || "",
+            }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+            throw new Error(data.error || "Błąd generowania encountera");
+        }
+        applyEncounterResponse(data);
+        showToast("Wygenerowano proceduralny encounter.");
+    } catch (error) {
+        if (encounterStatus) {
+            encounterStatus.textContent = `Błąd: ${error.message}`;
+        }
+        showToast(`Nie udało się wygenerować encountera: ${error.message}`);
+    } finally {
+        encounterGenerateButton.disabled = false;
+    }
+}
+
+async function startEncounterRuntime() {
+    const heroIds = selectedHeroIdsList();
+    if (!heroIds.length) {
+        showToast("Wybierz co najmniej jednego bohatera.");
+        return;
+    }
+    encounterStartButton.disabled = true;
+    if (runtimeStatus) {
+        runtimeStatus.textContent = "Uruchamianie runtime gry...";
+    }
+    try {
+        const response = await fetch("/api/runtime/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                ...currentEncounterRequest(),
+                hero_ids: heroIds,
+            }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+            throw new Error(data.error || "Błąd uruchamiania runtime");
+        }
+        applyEncounterResponse(data);
+        setRuntimeStatus(data.runtime || {});
+        showToast("Uruchomiono pełny encounter.");
+    } catch (error) {
+        if (runtimeStatus) {
+            runtimeStatus.textContent = `Błąd runtime: ${error.message}`;
+        }
+        showToast(`Nie udało się uruchomić encountera: ${error.message}`);
+    } finally {
+        encounterStartButton.disabled = false;
+    }
+}
+
+async function stopEncounterRuntime() {
+    runtimeStopButton.disabled = true;
+    try {
+        const response = await fetch("/api/runtime/stop", { method: "POST" });
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+            throw new Error(data.error || "Błąd zatrzymania runtime");
+        }
+        setRuntimeStatus(data.runtime || {});
+        showToast(data.stopped ? "Zatrzymano runtime gry." : "Runtime nie był uruchomiony.");
+    } catch (error) {
+        if (runtimeStatus) {
+            runtimeStatus.textContent = `Błąd zatrzymania runtime: ${error.message}`;
+        }
+        showToast(`Nie udało się zatrzymać runtime: ${error.message}`);
+    } finally {
+        runtimeStopButton.disabled = false;
+    }
+}
+
+async function resetSimulator() {
+    simulatorResetButton.disabled = true;
+    try {
+        const response = await fetch("/api/reset", { method: "POST" });
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+            throw new Error(data.error || "Błąd resetu");
+        }
+        latestBoardState = [];
+        scenarioState.name = null;
+        scenarioState.visible = false;
+        setScenarioData({});
+        figures.splice(0, figures.length);
+        selectedFigureId = null;
+        renderFiguresList();
+        updateFigureMarkers();
+        if (scenarioStatus) {
+            scenarioStatus.textContent = "Brak danych scenariusza.";
+        }
+        if (encounterStatus) {
+            encounterStatus.textContent = "Symulator zresetowany.";
+        }
+        scenarioToggleButton.textContent = "Pokaż elementy scenariusza";
+        lastClickLabel.textContent = "Nie zarejestrowano kliknięć.";
+        showToast(`Zresetowano symulator. Usunięto ${data.cleared_clicks || 0} oczekujących kliknięć.`);
+    } catch (error) {
+        if (encounterStatus) {
+            encounterStatus.textContent = `Błąd resetu: ${error.message}`;
+        }
+        showToast(`Nie udało się zresetować symulatora: ${error.message}`);
+    } finally {
+        simulatorResetButton.disabled = false;
+    }
+}
+
 backgroundInput?.addEventListener("change", handleBackgroundFile);
 backgroundClearButton?.addEventListener("click", () => {
     if (backgroundInput) {
@@ -614,8 +1005,7 @@ modeInputs.forEach((input) => {
     });
 });
 
-addFigureButton?.addEventListener("click", addFigure);
-
+addFigureButton?.addEventListener("click", () => addFigure());
 scenarioReloadButton?.addEventListener("click", () => refreshScenarioList(scenarioState.name));
 scenarioLoadButton?.addEventListener("click", () => loadScenario(scenarioSelect?.value));
 scenarioToggleButton?.addEventListener("click", async () => {
@@ -624,8 +1014,17 @@ scenarioToggleButton?.addEventListener("click", async () => {
     }
     toggleScenarioVisibility();
 });
+encounterGenerateButton?.addEventListener("click", generateEncounter);
+encounterStartButton?.addEventListener("click", startEncounterRuntime);
+simulatorResetButton?.addEventListener("click", resetSimulator);
+runtimeStopButton?.addEventListener("click", stopEncounterRuntime);
+heroesReloadButton?.addEventListener("click", refreshHeroesList);
 
 renderFiguresList();
+renderHeroesList();
+refreshHeroesList();
+refreshRuntimeStatus();
+setInterval(refreshRuntimeStatus, 2000);
 refreshScenarioList("scenario_1").then(() => {
     if (scenarioSelect && scenarioSelect.value) {
         loadScenario(scenarioSelect.value);

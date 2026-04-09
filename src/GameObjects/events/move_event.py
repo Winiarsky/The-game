@@ -267,6 +267,18 @@ class MoveEvent(GameEvent):
                 except Exception as exc:
                     logger.error("Błąd on_enter obiektu na polu %s: %s", current_pos, exc)
                 try:
+                    from GameObjects.Interactables.hidden_enemy_spawn import evaluate_hidden_spawn_triggers
+
+                    outcome = evaluate_hidden_spawn_triggers(
+                        game,
+                        source_actor=hero_obj,
+                        moved_position=current_pos,
+                    )
+                    if outcome and outcome.get("message"):
+                        game.ui_log(str(outcome["message"]))
+                except Exception:
+                    logger.debug("Nie udało się ewaluować hidden spawn triggerów po kroku ruchu.", exc_info=True)
+                try:
                     _trigger_combat_if_enemy_in_room(current_pos)
                 except Exception as exc:
                     logger.error("Błąd przy sprawdzaniu walki po wejściu na pole: %s", exc)

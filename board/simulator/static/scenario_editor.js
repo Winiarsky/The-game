@@ -53,6 +53,19 @@ const state = {
     roomSelection: new Set(), // Set<posKey>
 };
 
+const OBJECT_SHORT_CODES = {
+    blocked_field: "BL",
+    forest_field: "CV",
+    bushes_field: "DT",
+    rumble_field: "RB",
+    simple_obstacle: "OB",
+    simple_wall: "WL",
+    goblin_warrior: "GW",
+    goblin_dog: "GD",
+    goblin_commando: "GC",
+    dart_launcher_trap: "TR",
+};
+
 let cells = [];
 let wallOverlay;
 
@@ -88,6 +101,18 @@ const hslToHex = (h, s, l) => {
     return `#${f(0)}${f(8)}${f(4)}`;
 };
 const randomRoomColor = () => hslToHex(Math.floor(Math.random() * 360), 60, 65);
+
+function objectShortCode(label, objectId) {
+    const objectKey = String(objectId || "").trim().toLowerCase();
+    if (objectKey && OBJECT_SHORT_CODES[objectKey]) {
+        return OBJECT_SHORT_CODES[objectKey];
+    }
+    const source = String(label || objectId || "?")
+        .toUpperCase()
+        .replace(/[^A-Z0-9]+/g, "");
+    if (!source) return "?";
+    return source.slice(0, 2);
+}
 
 function getRoomById(roomId) {
     return state.rooms.find((room) => room.id === roomId);
@@ -374,8 +399,7 @@ function renderCellObjects(row, col) {
         const marker = document.createElement("div");
         marker.className = "object-marker";
         marker.style.background = obj.color || "#444";
-        marker.textContent = (obj.label?.[0] || "?").toUpperCase();
-        marker.style.left = `${index * 14}px`;
+        marker.textContent = objectShortCode(obj.label, obj.object_id);
         container.appendChild(marker);
     });
     if (objects.length > 3) {

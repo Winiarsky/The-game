@@ -7,7 +7,7 @@ from GameObjects.Enemies.basic_enemy import BasicEnemy
 from GameObjects.Enemies.enemy_types import EnemyType
 
 
-@dataclass
+@dataclass(eq=False)
 class GoblinWarrior(BasicEnemy):
     name: str = "Goblin Warrior"
     hp: int = 6

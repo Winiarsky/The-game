@@ -1208,6 +1208,18 @@ class BaseRangeAttackEvent(AttackEventBase):
                 critical=critical,
                 nonlethal=nonlethal_attack,
             )
+            total_damage = sum(max(0, int(amount or 0)) for _, amount in damage_components)
+            if total_damage > 0:
+                game.events.safe_emit_action(
+                    actor=hero,
+                    action_id="damage_applied",
+                    action_tags=["damage", "attack", weapon_type],
+                    target=enemy,
+                    target_pos=target_pos,
+                    source_action=self.action_id_base,
+                    damage=total_damage,
+                    damage_components=damage_components,
+                )
             if not suppress_record:
                 self._record_attack(
                     ctx,

@@ -67,6 +67,8 @@ class _GameStub:
         self.logs: list[str] = []
         self.hints: list[tuple[str, str | None]] = []
         self.snapshots: list[tuple[object, str | None]] = []
+        self.preselected_character_ids = []
+        self.preselected_hero_count = 0
 
     def ui_log(self, message: str) -> None:
         self.logs.append(str(message))
@@ -148,3 +150,34 @@ def test_start_setup_offers_play_after_first_hero_without_second_card_scan():
     assert len(game.heroes) == 1 and game.heroes[0] is hero
     assert game.conn.calls.count("read_card") == 1
     assert any("Setup bohaterów zakończony. Start gry." in msg for msg in game.logs)
+
+
+def test_start_setup_uses_preselected_heroes_without_card_scan():
+    from collections import deque
+
+    game = _GameStub()
+    game.preselected_character_ids = deque(["cedric"])
+    game.preselected_hero_count = 1
+    start = Start(game)  # type: ignore[arg-type]
+
+    hero = _HeroStub("Cedric")
+    hero.character_id = "cedric"
+
+    def _consume(_used):
+        if game.preselected_character_ids:
+            game.preselected_character_ids.popleft()
+            return hero
+        return None
+
+    start._consume_preselected_hero = _consume  # type: ignore[method-assign]
+    start._maybe_prompt_chameleon_gnome = lambda *_a, **_k: None  # type: ignore[method-assign]
+    start._maybe_prompt_familiar_owner = lambda *_a, **_k: None  # type: ignore[method-assign]
+    start._maybe_prompt_advanced_alchemy = lambda *_a, **_k: None  # type: ignore[method-assign]
+    start._maybe_prepare_spells = lambda *_a, **_k: None  # type: ignore[method-assign]
+
+    result = start.set_heroes_starting_positions()
+
+    assert isinstance(result, HeroesTurn)
+    assert len(game.heroes) == 1 and game.heroes[0] is hero
+    assert game.conn.calls.count("read_card") == 0
+    assert any("automatycznie" in msg for msg in game.logs)

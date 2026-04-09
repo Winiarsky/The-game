@@ -25,6 +25,7 @@ from board import Connection
 from src.game import Game
 from src import ui_client
 from src.character_creation import CharacterRepository, create_character
+from src.encounters import EncounterRequest, generate_encounter, preset_directives
 from src.ui_client import UIClient, UndoRequested, get_ui_client
 from src.ui_payloads import build_active_actor_payload, build_hero_snapshot
 
@@ -99,6 +100,7 @@ def _decode_menu_choice(raw: str | None, options: list[dict[str, str]]) -> str |
 def choose_start_action(ui: UIClient | None = None) -> str:
     options = [
         {"id": "play", "label": "Graj", "desc": "Przejdź do wyboru scenariusza i startu gry."},
+        {"id": "encounter", "label": "Encounter proceduralny", "desc": "Wygeneruj potyczkę combat-only w locie."},
         {"id": "create", "label": "Stwórz postać", "desc": "Uruchom pipeline tworzenia postaci."},
     ]
     subtitle = "8/2 nawigacja, Enter potwierdzenie."
@@ -122,26 +124,176 @@ def choose_start_action(ui: UIClient | None = None) -> str:
             choice_meta=choice_meta,
         )
         decoded = _decode_menu_choice(answer, options)
-        if decoded in {"play", "create"}:
+        if decoded in {"play", "create", "encounter"}:
             return decoded
         logger.info("UI nie zwróciło poprawnego wyboru, domyślnie: Graj.")
         return "play"
 
     print("Start:")
     print("  1) Graj")
-    print("  2) Stwórz postać")
+    print("  2) Encounter proceduralny")
+    print("  3) Stwórz postać")
     while True:
         raw = input("> ").strip()
         decoded = _decode_menu_choice(
             raw,
             [
                 {"id": "play", "label": "Graj", "key": "1"},
-                {"id": "create", "label": "Stwórz postać", "key": "2"},
+                {"id": "encounter", "label": "Encounter proceduralny", "key": "2"},
+                {"id": "create", "label": "Stwórz postać", "key": "3"},
             ],
         )
-        if decoded in {"play", "create"}:
+        if decoded in {"play", "create", "encounter"}:
             return decoded
         print("Nieprawidłowy wybór, spróbuj ponownie.")
+
+
+def _prompt_text(ui: UIClient | None, prompt: str, *, default: str = "", choices: list[str] | None = None, source: str = "main") -> str:
+    if ui and ui.enabled:
+        answer = ui.prompt_choice(prompt, choices=choices or [], source=source)
+        text = str(answer or "").strip()
+        if text:
+            return text
+    if ui and not getattr(ui, "allow_cli_fallback", False):
+        return default
+    try:
+        raw = input(f"{prompt} ").strip()
+    except Exception:
+        raw = ""
+    return raw or default
+
+
+def build_encounter_configuration(
+    *,
+    biome: str,
+    threat: str,
+    layout_choice: str = "losowy",
+    formation_pack_choice: str = "losowy",
+    preset_choice: str = "losowy",
+    seed_value: str | int | None = None,
+) -> tuple[dict[str, Any], str]:
+    biome = str(biome or "forest").strip().lower()
+    if biome not in {"forest", "ruined_village"}:
+        biome = "forest"
+
+    threat = str(threat or "moderate").strip().lower()
+    if threat not in {"trivial", "low", "moderate", "severe", "extreme"}:
+        threat = "moderate"
+
+    layout_choice = str(layout_choice or "losowy").strip().lower()
+    preferred_layout = None if layout_choice in {"", "losowy", "random"} else layout_choice
+
+    formation_pack_choice = str(formation_pack_choice or "losowy").strip().lower()
+
+    preset_choice = str(preset_choice or "losowy").strip().lower()
+    if preset_choice == "commando_ambush" and threat in {"trivial", "low", "moderate"}:
+        threat = "severe"
+    directives = preset_directives(preset_choice)
+    if preferred_layout:
+        directives = type(directives)(
+            must_include=tuple(directives.must_include or ()),
+            fixed_enemies=tuple(directives.fixed_enemies or ()),
+            forbidden_cells=tuple(directives.forbidden_cells or ()),
+            preferred_layout=preferred_layout,
+            preset_id=directives.preset_id,
+        )
+
+    seed_text = str(seed_value or "losowy").strip().lower()
+    if seed_text in {"", "losowy", "random"}:
+        seed = int(time.time()) % 100000
+    else:
+        try:
+            seed = int(seed_text)
+        except ValueError:
+            seed = int(time.time()) % 100000
+
+    request = EncounterRequest(
+        biome=biome,
+        threat=threat,
+        seed=seed,
+        party_level=1,
+        party_size=4,
+        enemy_family="goblin",
+        directives=directives,
+        formation_pack=formation_pack_choice,
+    )
+    resolved = generate_encounter(request)
+    label = f"Encounter: {biome} / {threat} / seed {seed}"
+    return resolved.scenario_payload, label
+
+
+def choose_encounter_configuration(ui: UIClient | None = None) -> tuple[dict[str, Any], str]:
+    biome = _prompt_text(
+        ui,
+        "Biome encounteru",
+        default="forest",
+        choices=["forest", "ruined_village"],
+        source="encounter:biome",
+    ).lower()
+    if biome not in {"forest", "ruined_village"}:
+        biome = "forest"
+
+    threat = _prompt_text(
+        ui,
+        "Threat encounteru",
+        default="moderate",
+        choices=["trivial", "low", "moderate", "severe", "extreme"],
+        source="encounter:threat",
+    ).lower()
+    if threat not in {"trivial", "low", "moderate", "severe", "extreme"}:
+        threat = "moderate"
+
+    layout_choice = _prompt_text(
+        ui,
+        "Layout encounteru (losowy/open_field/split_lanes/chokepoints)",
+        default="losowy",
+        choices=["losowy", "open_field", "split_lanes", "chokepoints"],
+        source="encounter:layout",
+    ).lower()
+    preferred_layout = None if layout_choice in {"", "losowy", "random"} else layout_choice
+
+    formation_pack_choice = _prompt_text(
+        ui,
+        "Formation pack encounteru (losowy/fortifications/ruins/serpentine)",
+        default="losowy",
+        choices=["losowy", "fortifications", "ruins", "serpentine"],
+        source="encounter:formation_pack",
+    ).lower()
+
+    preset_choice = _prompt_text(
+        ui,
+        "Preset encounteru (losowy/commando_ambush)",
+        default="losowy",
+        choices=["losowy", "commando_ambush"],
+        source="encounter:preset",
+    ).lower()
+    if preset_choice == "commando_ambush" and threat in {"trivial", "low", "moderate"}:
+        threat = "severe"
+    directives = preset_directives(preset_choice)
+    if preferred_layout:
+        directives = type(directives)(
+            must_include=tuple(directives.must_include or ()),
+            fixed_enemies=tuple(directives.fixed_enemies or ()),
+            forbidden_cells=tuple(directives.forbidden_cells or ()),
+            preferred_layout=preferred_layout,
+            preset_id=directives.preset_id,
+        )
+
+    seed_text = _prompt_text(
+        ui,
+        "Seed encounteru (liczba lub 'losowy')",
+        default="losowy",
+        choices=["losowy"],
+        source="encounter:seed",
+    ).lower()
+    return build_encounter_configuration(
+        biome=biome,
+        threat=threat,
+        layout_choice=preferred_layout or "losowy",
+        formation_pack_choice=formation_pack_choice,
+        preset_choice=preset_choice,
+        seed_value=seed_text,
+    )
 
 
 @dataclass
@@ -175,8 +327,10 @@ class _CharacterCreationGame:
 
 def default_game_loop(game: Game) -> None:
     """Prosty loop: setup bohaterów, potem kolejne wybory akcji."""
-    game.run_action("set_heroes_starting_positions")
-    while True:
+    initial_action = getattr(game.state, "initial_action_name", None) or "set_heroes_starting_positions"
+    if initial_action:
+        game.run_action(initial_action)
+    while not getattr(game, "finished", False):
         game.run_action("choose_action")
 
 
@@ -250,6 +404,18 @@ def main(argv: list[str] | None = None) -> int:
         default="127.0.0.1",
         help="Host UI gracza (domyślnie 127.0.0.1).",
     )
+    parser.add_argument("--encounter-biome", help="Uruchom proceduralny encounter dla wskazanego biomu.")
+    parser.add_argument("--encounter-threat", help="Threat proceduralnego encounteru.")
+    parser.add_argument("--encounter-layout", default="losowy", help="Layout encounteru lub 'losowy'.")
+    parser.add_argument("--encounter-formation-pack", default="losowy", help="Paczka formacji encounteru lub 'losowy'.")
+    parser.add_argument("--encounter-preset", default="losowy", help="Preset encounteru lub 'losowy'.")
+    parser.add_argument("--encounter-seed", help="Seed proceduralnego encounteru.")
+    parser.add_argument(
+        "--hero-id",
+        action="append",
+        default=[],
+        help="ID zapisanej postaci do automatycznego setupu. Można podać wiele razy.",
+    )
     args = parser.parse_args(argv)
     # Debug trace włączony domyślnie dla aktywnego developmentu/testów.
     os.environ["GAME_DEBUG_TRACE"] = "1"
@@ -275,7 +441,20 @@ def main(argv: list[str] | None = None) -> int:
 
     scenarios = list_scenarios(args.scenarios_dir)
 
-    if args.scenario:
+    scenario_payload: dict[str, Any] | None = None
+    scenario_label: str | None = None
+
+    if args.encounter_biome:
+        scenario_payload, scenario_label = build_encounter_configuration(
+            biome=args.encounter_biome,
+            threat=args.encounter_threat or "moderate",
+            layout_choice=args.encounter_layout,
+            formation_pack_choice=args.encounter_formation_pack,
+            preset_choice=args.encounter_preset,
+            seed_value=args.encounter_seed,
+        )
+        scenario_name = "__procedural_encounter__"
+    elif args.scenario:
         scenario_name = args.scenario
     else:
         repo = CharacterRepository(ROOT_DIR / "data" / "heroes")
@@ -297,6 +476,14 @@ def main(argv: list[str] | None = None) -> int:
                 else:
                     logger.info("Postać zapisana: %s", getattr(created.hero, "name", "Bohater"))
                 continue
+            if action == "encounter":
+                try:
+                    scenario_payload, scenario_label = choose_encounter_configuration(ui)
+                except UndoRequested:
+                    logger.info("Cofnij nie działa na ekranie wyboru encounteru.")
+                    continue
+                scenario_name = "__procedural_encounter__"
+                break
             try:
                 scenario_name = choose_scenario(scenarios, ui)
             except UndoRequested:
@@ -305,11 +492,26 @@ def main(argv: list[str] | None = None) -> int:
             break
 
     if ui and ui.enabled:
-        ui.send_event("info", {"message": f"Start scenariusza: {scenario_name}", "source": "main"})
+        ui.send_event(
+            "info",
+            {
+                "message": f"Start scenariusza: {scenario_label or scenario_name}",
+                "source": "main",
+            },
+        )
 
     conn = Connection(esp_ip=args.esp_ip) if args.esp_ip else None
-    game = Game(conn=conn, scenario=scenario_name)
-    logger.info("Uruchamiam scenariusz: %s", scenario_name)
+    if scenario_payload is not None:
+        game = Game(
+            conn=conn,
+            scenario=scenario_name,
+            scenario_payload=scenario_payload,
+            scenario_label=scenario_label,
+            preselected_character_ids=args.hero_id or None,
+        )
+    else:
+        game = Game(conn=conn, scenario=scenario_name, preselected_character_ids=args.hero_id or None)
+    logger.info("Uruchamiam scenariusz: %s", scenario_label or scenario_name)
 
     try:
         default_game_loop(game)

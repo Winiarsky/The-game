@@ -431,6 +431,17 @@ class EnemyStrikeEvent(ActionCostEvent):
                 cover=cover_type,
                 ranged=ranged,
             )
+            if hp_dealt > 0:
+                ctx.game.events.safe_emit_action(
+                    actor=actor,
+                    action_id="damage_applied",
+                    action_tags=["damage", "attack", "enemy"],
+                    target=target,
+                    target_pos=target_pos,
+                    source_action=self.name,
+                    damage=int(hp_dealt),
+                    damage_type=damage_type,
+                )
         except Exception:
             pass
 

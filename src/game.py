@@ -16,7 +16,7 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from board import Connection
-from states import Start, State
+from states import EncounterSetupState, Start, State
 from states.combat import Combat
 from hero import Hero
 from GameObjects.Enemies.basic_enemy import BasicEnemy
@@ -39,28 +39,69 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 class Game:
-    def __init__(self, conn: Connection | None = None, scenario: str = "scenario_1"):
+    def __init__(
+        self,
+        conn: Connection | None = None,
+        scenario: str = "scenario_1",
+        *,
+        scenario_payload: dict[str, Any] | None = None,
+        scenario_label: str | None = None,
+        preselected_character_ids: list[str] | tuple[str, ...] | None = None,
+    ):
         with open('board/led_positions.json', 'r') as led_file:
             self.led_positions = json.load(led_file)
-        
-        with open(f'scenarios/{scenario}.json', 'r') as scenario_file:
-            self.scenario = json.load(scenario_file)
+
+        self.scenario_id = str(scenario_label or scenario or "scenario_1")
+        if scenario_payload is not None:
+            self.scenario = copy.deepcopy(dict(scenario_payload))
+        else:
+            with open(f'scenarios/{scenario}.json', 'r') as scenario_file:
+                self.scenario = json.load(scenario_file)
+            self.scenario_id = str(scenario or self.scenario.get("name") or "scenario_1")
     
         with open('board/config.json', 'r') as config_file:
             self.config = json.load(config_file)
         self.conn: Connection = self._init_connection() if conn is None else conn
         self.ui = get_ui_client()
         self.debug_trace: DebugTrace | None = None
-        self._init_debug_trace(scenario)
+        self._init_debug_trace(self.scenario_id)
         from action_events import ActionEventBus
         self.events = ActionEventBus(self)
         self._attach_debug_event_listener()
+        self._install_hidden_spawn_trigger_listener()
         self.heroes: list[Hero] = []
         self.enemies: list[BasicEnemy] = []
+        self.finished: bool = False
+        self.preselected_character_ids: deque[str] = deque(
+            str(item or "").strip().lower()
+            for item in (preselected_character_ids or [])
+            if str(item or "").strip()
+        )
+        self.preselected_hero_count: int = len(self.preselected_character_ids)
+        self.encounter_setup_plan = tuple(self.scenario.get("setup_plan") or ())
+        self.encounter_metadata = dict(self.scenario.get("metadata") or {})
+        self._pending_preinitiative_ambush: bool = False
         self.board = self._init_board()
-        self.state: State = Start(self)
+        if self.is_generated_encounter():
+            self.state = EncounterSetupState(self)
+        else:
+            self.state = Start(self)
         self._init_debug_undo()
         self._install_ui_prompt_trace_hooks()
+
+    def _install_hidden_spawn_trigger_listener(self) -> None:
+        try:
+            from GameObjects.Interactables.hidden_enemy_spawn import hidden_spawn_action_listener
+        except Exception:
+            return
+
+        def _listener(event):
+            hidden_spawn_action_listener(self, event)
+
+        try:
+            self.events.add_listener(_listener)
+        except Exception:
+            pass
         
 
     def _init_board(self) -> BoardGrid:
@@ -225,6 +266,36 @@ class Game:
                     except Exception as exc:
                         logger.error("Nie można ustawić obiektu %s na %s: %s", object_id, pos, exc)
 
+    def _build_object_registry(self) -> dict[tuple[str, str], Any]:
+        definitions = scan_game_objects(Path(__file__).resolve().parent / "GameObjects")
+        return {
+            (definition.meta.category, definition.meta.object_id): definition for definition in definitions
+        }
+
+    def _encounter_build_object_instance(
+        self,
+        category: str,
+        object_id: str,
+        config: dict[str, Any] | None = None,
+    ):
+        definition = self._build_object_registry().get((str(category or ""), str(object_id or "")))
+        if definition is None:
+            return None
+        logic_cls = definition.logic_cls
+        default_cfg = getattr(definition.meta, "default_config", None) or {}
+        effective_cfg = dict(default_cfg)
+        if isinstance(config, dict):
+            effective_cfg.update(config)
+        if not isinstance(logic_cls, type):
+            return None
+        try:
+            return logic_cls(**effective_cfg)
+        except TypeError:
+            try:
+                return logic_cls()
+            except Exception:
+                return None
+
     def _apply_rooms(self, board: BoardGrid, scenario: dict[str, Any]) -> None:
         """Zastosuj definicje pokoi z scenariusza (wspiera wiele pokoi na polu)."""
         rooms = scenario.get("rooms")
@@ -334,7 +405,7 @@ class Game:
         except Exception:
             return
 
-    def start_combat(self, trigger: object | None = None) -> None:
+    def start_combat(self, trigger: object | None = None, *, preinitiative_pause: bool = False) -> None:
         """Wejście w stan walki (ignorowane, jeśli już walczymy)."""
         if isinstance(self.state, Combat):
             logger.info("Walka już trwa – ignoruję wywołanie.")
@@ -346,8 +417,10 @@ class Game:
             logger.error("Brak aktywnego stanu – nie mogę rozpocząć walki.")
             return
         self.state.on_exit()
+        self._pending_preinitiative_ambush = bool(preinitiative_pause)
         self.state = Combat(self)
         self.state.on_enter()
+        self._pending_preinitiative_ambush = False
 
     @staticmethod
     def _is_enemy_combat_ready(enemy: object) -> bool:
@@ -372,6 +445,9 @@ class Game:
 
     def _has_combat_ready_enemies(self) -> bool:
         return any(self._is_enemy_combat_ready(enemy) for enemy in getattr(self, "enemies", []) or [])
+
+    def is_generated_encounter(self) -> bool:
+        return str(self.scenario.get("mode") or "").strip().lower() == "encounter"
 
     # --- UI helpery ---
     def ui_event(self, event_type: str, payload: dict[str, Any]) -> bool:

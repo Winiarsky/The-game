@@ -6,7 +6,7 @@ from GameObjects.base import GameObjectMeta
 from GameObjects.Enemies.basic_enemy import BasicEnemy
 
 
-@dataclass
+@dataclass(eq=False)
 class GoblinDog(BasicEnemy):
     name: str = "Goblin Dog"
     hp: int = 17

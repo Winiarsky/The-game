@@ -16,6 +16,7 @@ from board import consts
 from GameObjects.companions import build_animal_companion
 from GameObjects.Enemies.behaviors import get_behavior
 from .base import State
+from .encounter_finished import EncounterFinished
 from .heroes_turns import HeroesTurn
 from .intent_menu import (
     build_intent_options,
@@ -83,8 +84,10 @@ class Combat(State):
         ui_idle_hint = getattr(self.game, "ui_idle_hint", None)
         if callable(ui_idle_hint):
             ui_idle_hint("Walka", "Śledź inicjatywę i wybierz akcję aktywnego aktora.")
+        skip_initial_initiative = bool(getattr(self.game, "_pending_preinitiative_ambush", False))
         self._reset_heroes_initiative()
-        self._ensure_initiative_order()
+        if not skip_initial_initiative:
+            self._ensure_initiative_order()
         self._deploy_pending_animal_companions()
 
     def on_exit(self):
@@ -413,7 +416,8 @@ class Combat(State):
     def _roll_enemy_initiatives(self) -> None:
         for enemy in self.game.enemies:
             try:
-                val = enemy.roll_initiative()
+                current = getattr(enemy, "initiative", None)
+                val = int(current) if current is not None else int(enemy.roll_initiative())
                 self.base_initiative[enemy] = val
             except Exception as exc:
                 logger.error("Rzut inicjatywy wroga nie powiódł się: %s", exc)
@@ -1075,6 +1079,8 @@ class Combat(State):
         if enemies_alive:
             return None
         logger.info("Brak wrogów na planszy – koniec walki.")
+        if getattr(self.game, "is_generated_encounter", None) and self.game.is_generated_encounter():
+            return EncounterFinished(self.game)
         return HeroesTurn(self.game)
 
     def _effective_initiative(self, actor: Any) -> int:
@@ -1225,6 +1231,63 @@ class Combat(State):
             self.initiative_order = list(self.round_queue)
         self._send_initiative_event()
 
+    def add_revealed_enemy(self, enemy, *, join_current_round: bool = True) -> None:
+        if enemy is None or getattr(enemy, "position", None) is None:
+            return
+        if enemy not in self.game.enemies:
+            self.game.enemies.append(enemy)
+        if not self._initiatives_ready:
+            return
+        if enemy not in self.base_initiative:
+            try:
+                self.base_initiative[enemy] = int(enemy.roll_initiative())
+            except Exception:
+                self.base_initiative[enemy] = int(getattr(enemy, "initiative", 0) or 0)
+        if enemy not in self.base_order:
+            self.base_order.append(enemy)
+            self._resort_base_order()
+        if join_current_round and enemy not in self.round_queue:
+            self.round_queue.append(enemy)
+        self.initiative_order = list(self.round_queue)
+        if join_current_round:
+            self.game.ui_log(
+                f"{getattr(enemy, 'name', 'Enemy')} dołącza do walki i wejdzie do inicjatywy na końcu bieżącej rundy."
+            )
+        else:
+            self.game.ui_log(
+                f"{getattr(enemy, 'name', 'Enemy')} dołącza do walki i wejdzie do inicjatywy od następnej rundy."
+            )
+        self._send_initiative_event()
+
+    def resolve_hidden_ambush_spawn(self, enemy, *, source_actor=None) -> None:
+        if enemy is None or getattr(enemy, "position", None) is None:
+            return
+        if enemy not in self.game.enemies:
+            self.game.enemies.append(enemy)
+
+        behavior_fn = get_behavior(getattr(enemy, "behavior_id", None))
+        try:
+            behavior_fn(enemy, self.game, self, actions_left=1)
+        except Exception as exc:
+            logger.error("Ambush action przeciwnika (%s) nie powiodła się: %s", getattr(behavior_fn, "__name__", "behavior"), exc)
+            self.game.ui_log(f"Ambush action przeciwnika nie powiodła się: {exc}")
+
+        if getattr(enemy, "position", None) is None:
+            return
+        try:
+            if enemy not in self.base_initiative:
+                self.base_initiative[enemy] = int(getattr(enemy, "initiative", None) or enemy.roll_initiative())
+        except Exception:
+            pass
+
+        if not self._initiatives_ready:
+            self.game.ui_log(
+                f"{getattr(enemy, 'name', 'Enemy')} wykonuje akcję z zasadzki przed ustaleniem inicjatywy."
+            )
+            return
+
+        self.add_revealed_enemy(enemy, join_current_round=False)
+
     def _confirm_actor_position(self, actor) -> bool:
         return True
 
@@ -1343,6 +1406,8 @@ class Combat(State):
         actor = self._current_actor()
         if actor is None:
             logger.info("Brak uczestników – powrót do tury bohaterów.")
+            if getattr(self.game, "is_generated_encounter", None) and self.game.is_generated_encounter():
+                return EncounterFinished(self.game)
             return HeroesTurn(self.game)
         ui_active_actor = getattr(self.game, "ui_active_actor", None)
         if callable(ui_active_actor):

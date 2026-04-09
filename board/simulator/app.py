@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import json
 import logging
+import socket
+import subprocess
 import sys
+import time
 from pathlib import Path
-from queue import Queue
+from queue import Empty, Queue
 from threading import Lock
 from typing import Any
 
@@ -16,6 +19,7 @@ LED_POSITIONS_PATH = BASE_DIR / "led_positions.json"
 SCENARIOS_DIR = BASE_DIR.parent / "scenarios"
 SRC_DIR = BASE_DIR.parent / "src"
 GAME_OBJECTS_DIR = SRC_DIR / "GameObjects"
+HEROES_DIR = BASE_DIR.parent / "data" / "heroes"
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -81,10 +85,17 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 try:
     from game_objects_loader import scan_game_objects, serialize_meta
+    from character_creation.repository import CharacterRepository
+    from encounters import EncounterDirectives, EncounterRequest, generate_encounter, preset_directives
 except Exception as exc:  # pragma: no cover - zabezpieczenie gdy pakiet nie istnieje
     logger.warning("Nie udało się zaimportować game_objects_loader: %s", exc)
     scan_game_objects = None  # type: ignore
     serialize_meta = None  # type: ignore
+    CharacterRepository = None  # type: ignore
+    EncounterDirectives = None  # type: ignore
+    EncounterRequest = None  # type: ignore
+    generate_encounter = None  # type: ignore
+    preset_directives = None  # type: ignore
 
 
 BOARD_ROWS, BOARD_COLS = _load_board_config()
@@ -98,10 +109,143 @@ state_version = 0
 pending_scans = 0
 pending_lock = Lock()
 click_queue: "Queue[dict[str, int]]" = Queue()
+runtime_process: subprocess.Popen | None = None
+runtime_info: dict[str, Any] = {}
+runtime_lock = Lock()
 
 
 def _set_cell_color(row: int, col: int, rgb: list[int] | None) -> None:
     board_state[row][col] = rgb[:] if rgb is not None else None
+
+
+def _clear_click_queue() -> int:
+    cleared = 0
+    while True:
+        try:
+            click_queue.get_nowait()
+            cleared += 1
+        except Empty:
+            break
+    return cleared
+
+
+def _reset_board_state() -> dict[str, int]:
+    global state_version
+    with state_lock:
+        for row in range(BOARD_ROWS):
+            for col in range(BOARD_COLS):
+                _set_cell_color(row, col, None)
+        state_version += 1
+    cleared_clicks = _clear_click_queue()
+    return {"state_version": state_version, "cleared_clicks": cleared_clicks}
+
+
+def _find_free_port(host: str, preferred: int, attempts: int = 10) -> int:
+    for offset in range(attempts):
+        candidate = preferred + offset
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                sock.bind((host, candidate))
+                return candidate
+        except PermissionError:
+            return preferred
+        except OSError:
+            continue
+    return preferred
+
+
+def _resolve_encounter_request(payload: dict[str, Any]) -> tuple[Any, dict[str, Any]]:
+    if EncounterRequest is None or preset_directives is None or EncounterDirectives is None:
+        raise RuntimeError("Generator encounterów niedostępny.")
+    biome = str(payload.get("biome") or "forest").strip().lower()
+    threat = str(payload.get("threat") or "moderate").strip().lower()
+    preset = str(payload.get("preset") or "losowy").strip().lower()
+    layout = str(payload.get("layout") or "").strip().lower()
+    formation_pack = str(payload.get("formation_pack") or "losowy").strip().lower()
+    seed_raw = payload.get("seed")
+    try:
+        seed = int(seed_raw) if str(seed_raw or "").strip() else 0
+    except Exception:
+        seed = 0
+    if seed <= 0:
+        seed = int(time.time()) % 100000
+    if preset == "commando_ambush" and threat in {"trivial", "low", "moderate"}:
+        threat = "severe"
+    directives = preset_directives(preset)
+    if layout and layout not in {"losowy", "random"}:
+        directives = EncounterDirectives(
+            must_include=tuple(getattr(directives, "must_include", ()) or ()),
+            fixed_enemies=tuple(getattr(directives, "fixed_enemies", ()) or ()),
+            forbidden_cells=tuple(getattr(directives, "forbidden_cells", ()) or ()),
+            preferred_layout=layout,
+            preset_id=getattr(directives, "preset_id", None),
+        )
+    request_payload = EncounterRequest(
+        biome=biome,
+        threat=threat,
+        seed=seed,
+        party_level=1,
+        party_size=4,
+        enemy_family="goblin",
+        directives=directives,
+        formation_pack=formation_pack,
+    )
+    return request_payload, {
+        "biome": biome,
+        "threat": threat,
+        "preset": preset,
+        "layout": layout or "losowy",
+        "formation_pack": formation_pack,
+        "seed": seed,
+    }
+
+
+def _build_encounter_response(payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
+    if generate_encounter is None:
+        raise RuntimeError("Generator encounterów niedostępny.")
+    request_payload, normalized = _resolve_encounter_request(payload)
+    resolved = generate_encounter(request_payload)
+    scenario = dict(resolved.scenario_payload)
+    metadata = dict(resolved.metadata)
+    setup_plan = scenario.get("setup_plan") or []
+    return scenario, metadata, setup_plan, normalized
+
+
+def _runtime_status_payload() -> dict[str, Any]:
+    with runtime_lock:
+        proc = runtime_process
+        info = dict(runtime_info)
+    returncode = proc.poll() if proc is not None else None
+    return {
+        "ok": True,
+        "running": bool(proc is not None and returncode is None),
+        "pid": getattr(proc, "pid", None),
+        "returncode": returncode,
+        **info,
+    }
+
+
+def _stop_runtime_process() -> bool:
+    global runtime_process, runtime_info
+    with runtime_lock:
+        proc = runtime_process
+        if proc is None:
+            runtime_info = {}
+            return False
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=2)
+            except Exception:
+                proc.kill()
+                try:
+                    proc.wait(timeout=1)
+                except Exception:
+                    pass
+        runtime_process = None
+        runtime_info = {}
+        return True
 
 
 @app.route("/")
@@ -118,6 +262,128 @@ def scenario_editor():
 def list_scenarios():
     scenarios = sorted(path.stem for path in SCENARIOS_DIR.glob("*.json")) if SCENARIOS_DIR.exists() else []
     return jsonify({"scenarios": scenarios})
+
+
+@app.get("/api/heroes")
+def list_heroes():
+    if CharacterRepository is None:
+        return jsonify({"ok": False, "error": "Brak repozytorium bohaterów."}), 500
+    repo = CharacterRepository(HEROES_DIR)
+    heroes = repo.list_characters()
+    return jsonify({"ok": True, "heroes": heroes})
+
+
+@app.post("/api/reset")
+def reset_simulator():
+    snapshot = _reset_board_state()
+    logger.info("Zresetowano symulator planszy.")
+    return jsonify({"ok": True, **snapshot})
+
+
+@app.post("/api/encounters/generate")
+def generate_encounter_api():
+    if EncounterRequest is None or generate_encounter is None or preset_directives is None or EncounterDirectives is None:
+        return jsonify({"ok": False, "error": "Generator encounterów niedostępny."}), 500
+    payload: dict[str, Any] = request.get_json(force=True, silent=True) or {}
+    try:
+        scenario, metadata, setup_plan, _normalized = _build_encounter_response(payload)
+    except Exception as exc:
+        logger.exception("Błąd generowania encounteru")
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    return jsonify(
+        {
+            "ok": True,
+            "scenario": scenario,
+            "metadata": metadata,
+            "setup_plan": setup_plan,
+        }
+    )
+
+
+@app.get("/api/runtime/status")
+def runtime_status():
+    return jsonify(_runtime_status_payload())
+
+
+@app.post("/api/runtime/start")
+def runtime_start():
+    global runtime_process, runtime_info
+    payload: dict[str, Any] = request.get_json(force=True, silent=True) or {}
+    hero_ids_raw = payload.get("hero_ids") or []
+    if not isinstance(hero_ids_raw, list):
+        return jsonify({"ok": False, "error": "hero_ids musi być listą."}), 400
+    hero_ids = [str(item or "").strip().lower() for item in hero_ids_raw if str(item or "").strip()]
+    if not hero_ids:
+        return jsonify({"ok": False, "error": "Wybierz co najmniej jednego bohatera."}), 400
+    with runtime_lock:
+        already_running = runtime_process is not None and runtime_process.poll() is None
+    if already_running:
+        return jsonify({"ok": False, "error": "Runtime gry już działa.", "runtime": _runtime_status_payload()}), 409
+    try:
+        scenario, metadata, setup_plan, normalized = _build_encounter_response(payload)
+    except Exception as exc:
+        logger.exception("Błąd przygotowania runtime encounteru")
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+    ui_host = "127.0.0.1"
+    ui_port = _find_free_port(ui_host, int(payload.get("ui_port") or 5100))
+    esp_ip = request.host_url.rstrip("/")
+    cmd = [
+        sys.executable,
+        "main.py",
+        "--start-ui",
+        "--ui-host",
+        ui_host,
+        "--ui-port",
+        str(ui_port),
+        "--esp-ip",
+        esp_ip,
+        "--encounter-biome",
+        normalized["biome"],
+        "--encounter-threat",
+        normalized["threat"],
+        "--encounter-layout",
+        normalized["layout"],
+        "--encounter-formation-pack",
+        normalized["formation_pack"],
+        "--encounter-preset",
+        normalized["preset"],
+        "--encounter-seed",
+        str(normalized["seed"]),
+    ]
+    for hero_id in hero_ids:
+        cmd.extend(["--hero-id", hero_id])
+    try:
+        proc = subprocess.Popen(cmd, cwd=str(BASE_DIR.parent))
+    except Exception as exc:
+        logger.exception("Nie udało się uruchomić runtime gry")
+        return jsonify({"ok": False, "error": str(exc)}), 500
+    ui_url = f"http://{ui_host}:{ui_port}"
+    with runtime_lock:
+        runtime_process = proc
+        runtime_info = {
+            "ui_url": ui_url,
+            "esp_ip": esp_ip,
+            "hero_ids": hero_ids,
+            "encounter": normalized,
+            "metadata": metadata,
+        }
+    logger.info("Uruchomiono runtime encounteru PID=%s UI=%s", proc.pid, ui_url)
+    return jsonify(
+        {
+            "ok": True,
+            "scenario": scenario,
+            "metadata": metadata,
+            "setup_plan": setup_plan,
+            "runtime": _runtime_status_payload(),
+        }
+    )
+
+
+@app.post("/api/runtime/stop")
+def runtime_stop():
+    stopped = _stop_runtime_process()
+    return jsonify({"ok": True, "stopped": stopped, "runtime": _runtime_status_payload()})
 
 
 @app.get("/api/game-objects")

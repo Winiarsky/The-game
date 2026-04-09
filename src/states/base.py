@@ -9,6 +9,8 @@ if TYPE_CHECKING:
 class State:
     """Bazowa klasa stanów pozwalająca na dostęp do kontekstu gry."""
 
+    initial_action_name: str | None = None
+
     def __init__(self, game: "Game"):
         self.game = game
 

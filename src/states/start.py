@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 
 
 class Start(State):
+    initial_action_name = "set_heroes_starting_positions"
     
     def welcome_message(self):
         logger.info("Witamy w grze planszowej!")
@@ -39,13 +40,22 @@ class Start(State):
         heroes: list[Hero] = self.game.heroes
         used_character_ids: set[str] = set()
         starting_positions = [tuple(pos) for pos in self.game.scenario['starting_positions']]
+        preselected_count = int(getattr(self.game, "preselected_hero_count", 0) or 0)
         logger.info("Ustawianie pozycji startowych bohaterów.")
         self.game.ui_log("Ustawianie pozycji startowych bohaterów.")
         ui_idle_hint = getattr(self.game, "ui_idle_hint", None)
         logger.info(starting_positions)
 
-        def _setup_single_hero() -> bool:
-            hero = self._pick_or_create_hero(used_character_ids)
+        def _finish_setup() -> State:
+            self.game.heroes = heroes
+            if getattr(self.game, "is_generated_encounter", None) and self.game.is_generated_encounter():
+                from .combat import Combat
+
+                return Combat(self.game)
+            return HeroesTurn(self.game)
+
+        def _setup_single_hero(preselected_hero: Hero | None = None) -> bool:
+            hero = preselected_hero or self._pick_or_create_hero(used_character_ids)
             if hero is None:
                 self.game.ui_log("Nie wybrano bohatera. Spróbuj ponownie.")
                 return False
@@ -87,6 +97,16 @@ class Start(State):
             self.game.ui_hero(hero, note=f"Ustawiony na polu startowym {pos}")
             self.game.ui_log(f"Bohater ustawiony na pozycji {pos}.")
             return True
+
+        while getattr(self.game, "preselected_character_ids", None):
+            hero = self._consume_preselected_hero(used_character_ids)
+            if hero is None:
+                continue
+            _setup_single_hero(hero)
+
+        if preselected_count and any(getattr(hero, "position", None) is not None for hero in heroes):
+            self.game.ui_log("Setup bohaterów zakończony automatycznie z wybranych postaci.")
+            return _finish_setup()
 
         while True:
             has_hero_on_board = any(getattr(hero, "position", None) is not None for hero in heroes)
@@ -145,8 +165,7 @@ class Start(State):
             else:
                 self.game.ui_log("Nieznana komenda setupu. Użyj ACCEPT lub DECLINE.")
                 continue
-        self.game.heroes = heroes
-        return HeroesTurn(self.game)
+        return _finish_setup()
 
     def _character_repository(self) -> CharacterRepository:
         return CharacterRepository(PROJECT_ROOT / "data" / "heroes")
@@ -207,6 +226,24 @@ class Start(State):
         hero = hero_from_snapshot(snapshot)
         self.game.ui_log(f"Wczytano bohatera: {getattr(hero, 'name', picked)}.")
         return hero
+
+    def _consume_preselected_hero(self, used_character_ids: set[str]) -> Hero | None:
+        queue = getattr(self.game, "preselected_character_ids", None)
+        if queue is None:
+            return None
+        repo = self._character_repository()
+        while queue:
+            picked = str(queue.popleft() or "").strip().lower()
+            if not picked or picked in used_character_ids:
+                continue
+            snapshot = repo.load_character(picked)
+            if snapshot is None:
+                self.game.ui_log(f"Nie udało się wczytać preselected bohatera '{picked}'.")
+                continue
+            hero = hero_from_snapshot(snapshot)
+            self.game.ui_log(f"Wczytano bohatera: {getattr(hero, 'name', picked)}.")
+            return hero
+        return None
 
     def _prompt_menu_choice(
         self,

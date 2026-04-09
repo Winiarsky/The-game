@@ -227,6 +227,16 @@ class SeekEvent(GameEvent):
                     )
                     if desc:
                         reveal_notes.append(str(desc))
+                    on_reveal = getattr(obj, "on_reveal", None)
+                    if callable(on_reveal):
+                        try:
+                            extra = on_reveal(game, source_actor=actor)
+                        except TypeError:
+                            extra = on_reveal(game)
+                        except Exception:
+                            extra = None
+                        if extra:
+                            reveal_notes.append(str(extra))
                     logger.info("Odkrywasz %s na polu %s.", obj.__class__.__name__, pos)
 
         if hidden_candidates == 0 and trap_candidates == 0:
