@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -73,6 +74,7 @@ class Start(State):
                     "i potwierdź klikając w pole.",
                 )
             self.game.conn.set_leds(starting_positions, consts.MOVE_FIELD_RGB) # usunac pozycje zajete
+            time.sleep(0.12)
             logger.info("Odczytuje polozenie figurki...")
             pos = self.game.conn.scan_board(starting_positions)
             self.game.conn.leds_off()
@@ -110,6 +112,10 @@ class Start(State):
 
         while True:
             has_hero_on_board = any(getattr(hero, "position", None) is not None for hero in heroes)
+            if not has_hero_on_board:
+                if not _setup_single_hero():
+                    continue
+                continue
             if has_hero_on_board:
                 options = [
                     {
@@ -140,31 +146,6 @@ class Start(State):
                 if picked == "__add_hero__":
                     _setup_single_hero()
                     continue
-
-            if callable(ui_idle_hint):
-                ui_idle_hint(
-                    "Setup bohaterów",
-                    "Zeskanuj kartę ACCEPT, aby wybrać bohatera i ustawić jego figurkę. "
-                    "Zeskanuj DECLINE, aby zakończyć setup.",
-                )
-            response = self.game.conn.read_card(
-                "Skanuj karte ACCEPT by ustawic figurke na polu startowym, lub DECLINE by zakonczyc setup",
-                ["ACCEPT", "DECLINE"],
-            )
-            if response.upper() == "DECLINE":
-                if not has_hero_on_board:
-                    logger.warning("Nie można zakończyć setupu bez ustawienia bohatera.")
-                    self.game.ui_log("Najpierw ustaw co najmniej jednego bohatera na polu startowym.")
-                    continue
-                logger.info("Setup graczy zakonczony.")
-                self.game.ui_log("Setup bohaterów zakończony.")
-                break
-            if response.upper() == "ACCEPT":
-                _setup_single_hero()
-                continue
-            else:
-                self.game.ui_log("Nieznana komenda setupu. Użyj ACCEPT lub DECLINE.")
-                continue
         return _finish_setup()
 
     def _character_repository(self) -> CharacterRepository:
@@ -708,17 +689,39 @@ class Start(State):
         return max(0, level + int(int_mod or 0))
 
     def _prompt_advanced_alchemy_reagent_budget(self, *, available_reagents: int | None = None) -> int | None:
+        max_budget = max(0, int(available_reagents or 0))
+        options = [
+            {
+                "id": str(value),
+                "label": str(value),
+                "desc": f"Zużyj {value} reagentów.",
+                "key": str(value),
+            }
+            for value in range(0, max_budget + 1)
+        ]
+        options.append(
+            {
+                "id": "end",
+                "label": "Zakończ",
+                "desc": "Pomiń Advanced Alchemy.",
+                "key": "end",
+            }
+        )
         while True:
             header = "Advanced Alchemy: podaj liczbę reagentów do zużycia"
             if available_reagents is not None:
                 header += f" [dostępne: {available_reagents}]"
             header += " (lub end aby zakończyć)"
-            raw = self.game.conn.read_card(
-                header,
-                [],
-                translate_shortcuts=False,
+            raw = self._prompt_menu_choice(
+                title="Advanced Alchemy",
+                subtitle=header,
+                source="advanced_alchemy_budget",
+                options=options,
+                layout="menu_numpad",
             )
-            normalized = self._normalize_event_name(raw)
+            if raw is None:
+                return None
+            normalized = self._decode_menu_choice(str(raw or ""), options) or self._normalize_event_name(raw)
             if normalized == "end":
                 return None
             try:
@@ -748,10 +751,8 @@ class Start(State):
         try:
             preview = ", ".join(allowed[:10]) + (", ..." if len(allowed) > 10 else "")
             available_reagents = self._advanced_alchemy_available_reagents(hero)
-            from ui_client import get_ui_client
-
-            ui = get_ui_client()
-            if ui.enabled:
+            ui = getattr(self.game, "ui", None)
+            if ui is not None and hasattr(ui, "prompt_info"):
                 ui.prompt_info(
                     "Advanced Alchemy",
                     prompt_long=(
@@ -779,15 +780,30 @@ class Start(State):
         created_total = 0
         crafting_choices = list(allowed) + ["end"]
         crafting_choice_meta = self._advanced_alchemy_choice_meta(allowed)
+        crafting_options = [
+            {
+                "id": str(item.get("raw") or ""),
+                "label": str(item.get("label") or ""),
+                "desc": str(item.get("desc") or ""),
+                "key": str(item.get("key") or ""),
+            }
+            for item in crafting_choice_meta
+        ]
         for idx in range(1, budget + 1):
             while True:
-                raw_choice = self.game.conn.read_card(
-                    f"Advanced Alchemy [{idx}/{budget}]: zeskanuj event alchemiczny (lub end)",
-                    crafting_choices,
-                    translate_shortcuts=False,
-                    choice_meta=crafting_choice_meta,
+                raw_choice = self._prompt_menu_choice(
+                    title="Advanced Alchemy",
+                    subtitle=f"Wybierz event alchemiczny [{idx}/{budget}] albo zakończ.",
+                    source="advanced_alchemy_choice",
+                    options=crafting_options,
+                    layout="menu_numpad",
                 )
-                choice = self._normalize_event_name(raw_choice)
+                if raw_choice is None:
+                    self.game.ui_log(
+                        f"Advanced Alchemy: przerwano crafting po {created_total} stworzonych przedmiotach."
+                    )
+                    return
+                choice = self._decode_menu_choice(str(raw_choice or ""), crafting_options) or self._normalize_event_name(raw_choice)
                 if choice == "end":
                     self.game.ui_log(
                         f"Advanced Alchemy: przerwano crafting po {created_total} stworzonych przedmiotach."

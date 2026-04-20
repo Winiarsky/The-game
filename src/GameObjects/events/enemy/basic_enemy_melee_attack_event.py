@@ -99,8 +99,14 @@ class BasicEnemyMeleeAttackEvent(GameEvent):
         )
         if clumsy_note:
             prompt = f"{prompt} {clumsy_note}"
-        response = conn.read_card(prompt, ["ACCEPT", "DECLINE"])
-        if response.upper() != "ACCEPT":
+        ui = getattr(game, "ui", None)
+        response = "ACCEPT"
+        if ui is not None and hasattr(ui, "prompt_choice"):
+            try:
+                response = ui.prompt_choice(prompt, choices=["ACCEPT", "DECLINE"], source=self.action_id_base)
+            except Exception:
+                response = "ACCEPT"
+        if str(response or "").strip().upper() != "ACCEPT":
             logger.info("Atak wroga odrzucony.")
             game.ui_log("Atak wroga odrzucony.")
             return EventResult(success=True, consumed_action=True, message="Atak odrzucony.")

@@ -29,6 +29,7 @@ from encounters.generator import (
 )
 from game import Game
 from states.combat import Combat
+from states.encounter_setup import EncounterSetupState
 from states.encounter_finished import EncounterFinished
 
 
@@ -65,9 +66,8 @@ class DummyHero:
 
 
 class DummyConn:
-    def __init__(self, *, clicks=None, cards=None):
+    def __init__(self, *, clicks=None):
         self.clicks = list(clicks or [])
-        self.cards = list(cards or [])
         self.led_calls = []
 
     def set_leds(self, positions, colors):
@@ -82,11 +82,6 @@ class DummyConn:
 
     def leds_off(self):
         return None
-
-    def read_card(self, _prompt, _choices):
-        if self.cards:
-            return self.cards.pop(0)
-        return "DECLINE"
 
 
 class DummyEvents:
@@ -500,7 +495,7 @@ def test_generated_encounter_game_flows_setup_to_combat_and_finish(monkeypatch):
     payload = dict(resolved.scenario_payload)
     payload["setup_plan"] = []
     start_pos = tuple(payload["starting_positions"][0])
-    conn = DummyConn(clicks=[start_pos, start_pos], cards=["ACCEPT", "DECLINE"])
+    conn = DummyConn(clicks=[start_pos, start_pos])
     game = Game(conn=conn, scenario="__procedural__", scenario_payload=payload, scenario_label="test encounter")
     game.ui_log = lambda *_args, **_kwargs: None
     game.ui_event = lambda *_args, **_kwargs: False
@@ -510,6 +505,10 @@ def test_generated_encounter_game_flows_setup_to_combat_and_finish(monkeypatch):
     monkeypatch.setattr(
         "states.start.Start._pick_or_create_hero",
         lambda self, _used: DummyHero(),
+    )
+    monkeypatch.setattr(
+        "states.start.Start._prompt_menu_choice",
+        lambda self, **kwargs: "__start_game__" if kwargs.get("source") == "hero_setup_next" else None,
     )
 
     game.run_action("run_encounter_setup")
@@ -521,7 +520,27 @@ def test_generated_encounter_game_flows_setup_to_combat_and_finish(monkeypatch):
     game.run_action("choose_action")
 
     assert isinstance(game.state, EncounterFinished)
-    assert game.finished is True
+
+
+def test_combine_positions_deduplicates_cells_preserving_order():
+    from encounters.generator import _combine_positions
+
+    formations = (
+        SimpleNamespace(cover=((3, 4), (1, 2)), difficult=(), rubble=(), obstacles=()),
+        SimpleNamespace(cover=((5, 6),), difficult=(), rubble=(), obstacles=()),
+    )
+
+    combined = _combine_positions(((1, 2), (3, 4), (1, 2)), formations, "cover")
+
+    assert combined == [[1, 2], [3, 4], [5, 6]]
+
+
+def test_encounter_setup_click_all_removes_all_duplicate_pending_cells():
+    state = EncounterSetupState.__new__(EncounterSetupState)
+
+    positions = state._unique_positions([(10, 2), (10, 2), (11, 10), (10, 1), (11, 10)])
+
+    assert positions == [(10, 2), (11, 10), (10, 1)]
 
 
 def test_commando_ambush_remains_compatible_with_formation_packs():

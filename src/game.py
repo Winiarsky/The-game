@@ -16,6 +16,8 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from board import Connection
+from board.led_mapping import load_led_mapping
+from board.settings import board_dimensions, load_board_config
 from states import EncounterSetupState, Start, State
 from states.combat import Combat
 from hero import Hero
@@ -38,6 +40,17 @@ except Exception:  # pragma: no cover - gdy pakiet nie istnieje
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
+
+def _load_runtime_scenario_payload(scenario_name: str) -> dict[str, Any]:
+    candidate = Path(str(scenario_name))
+    if candidate.is_file():
+        return json.loads(candidate.read_text(encoding="utf-8"))
+
+    scenario_path = PROJECT_ROOT / "scenarios" / f"{scenario_name}.json"
+    if not scenario_path.exists():
+        raise FileNotFoundError(f"Nie znaleziono scenariusza runtime: {scenario_name}")
+    return json.loads(scenario_path.read_text(encoding="utf-8"))
+
 class Game:
     def __init__(
         self,
@@ -48,19 +61,17 @@ class Game:
         scenario_label: str | None = None,
         preselected_character_ids: list[str] | tuple[str, ...] | None = None,
     ):
-        with open('board/led_positions.json', 'r') as led_file:
-            self.led_positions = json.load(led_file)
+        self.config = load_board_config()
+        rows, cols = board_dimensions(self.config)
+        self.led_positions = load_led_mapping(rows=rows, cols=cols)
 
         self.scenario_id = str(scenario_label or scenario or "scenario_1")
         if scenario_payload is not None:
             self.scenario = copy.deepcopy(dict(scenario_payload))
         else:
-            with open(f'scenarios/{scenario}.json', 'r') as scenario_file:
-                self.scenario = json.load(scenario_file)
+            self.scenario = _load_runtime_scenario_payload(str(scenario))
             self.scenario_id = str(scenario or self.scenario.get("name") or "scenario_1")
     
-        with open('board/config.json', 'r') as config_file:
-            self.config = json.load(config_file)
         self.conn: Connection = self._init_connection() if conn is None else conn
         self.ui = get_ui_client()
         self.debug_trace: DebugTrace | None = None
@@ -82,7 +93,7 @@ class Game:
         self.encounter_metadata = dict(self.scenario.get("metadata") or {})
         self._pending_preinitiative_ambush: bool = False
         self.board = self._init_board()
-        if self.is_generated_encounter():
+        if self.requires_setup_phase():
             self.state = EncounterSetupState(self)
         else:
             self.state = Start(self)
@@ -105,8 +116,7 @@ class Game:
         
 
     def _init_board(self) -> BoardGrid:
-        rows = self.config['n_rows']
-        cols = self.config['n_cols']
+        rows, cols = board_dimensions(self.config)
         board = BoardGrid(rows, cols)
         scenario = self.scenario
 
@@ -448,6 +458,9 @@ class Game:
 
     def is_generated_encounter(self) -> bool:
         return str(self.scenario.get("mode") or "").strip().lower() == "encounter"
+
+    def requires_setup_phase(self) -> bool:
+        return bool(self.encounter_setup_plan) or self.is_generated_encounter()
 
     # --- UI helpery ---
     def ui_event(self, event_type: str, payload: dict[str, Any]) -> bool:

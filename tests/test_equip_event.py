@@ -14,7 +14,7 @@ from GameObjects.events.base import EventContext
 from GameObjects.events.registry import dispatch_event
 from GameObjects.events.attack import basic_melee_attack_event
 from GameObjects.items.goodberry_item import GoodberryItem
-from GameObjects.items.inventory import ensure_actor_inventory, get_equipped_weapons, hand_slots_snapshot
+from GameObjects.items.inventory import all_inventory_sections, ensure_actor_inventory, get_equipped_weapons, hand_slots_snapshot
 from GameObjects.items.shield import StandardShield
 from board_grid import BoardGrid
 
@@ -40,15 +40,9 @@ class ExplorationCtx(EventContext):
 
 
 class FakeConn:
-    def __init__(self, card_choices=None, scan_choices=None):
-        self.card_choices = list(card_choices or [])
+    def __init__(self, scan_choices=None):
         self.scan_choices = list(scan_choices or [])
         self.scan_calls = []
-
-    def read_card(self, *_args, **_kwargs):
-        if self.card_choices:
-            return self.card_choices.pop(0)
-        return "0"
 
     def set_leds(self, *_args, **_kwargs):
         return None
@@ -147,12 +141,21 @@ class FakeGame:
         self.heroes = []
         self.enemies = []
         self.state = types.SimpleNamespace(ACTION_LIMIT=3, actions_used={})
+        self.start_combat_calls = []
+
+    def start_combat(self, trigger=None, *, preinitiative_pause=False):
+        self.start_combat_calls.append(
+            {
+                "trigger": trigger,
+                "preinitiative_pause": preinitiative_pause,
+            }
+        )
 
 
 def test_equip_combat_costs_one_action_and_handles_navigation():
     hero = Hero("A", (0, 0))
     hero.equipped_shield = None
-    game = FakeGame(conn=FakeConn(card_choices=["2", "5"]))
+    game = FakeGame(conn=FakeConn(), ui=FakeUI(enabled=True, answer=["2", "0"]))
     game.heroes = [hero]
     game.board.place(hero, hero.position)
     game.state.actions_used = {hero: 0}
@@ -168,7 +171,7 @@ def test_equip_combat_costs_one_action_and_handles_navigation():
 
 def test_equip_cancel_does_not_consume_action():
     hero = Hero("A", (0, 0))
-    game = FakeGame(conn=FakeConn(card_choices=["0"]))
+    game = FakeGame(conn=FakeConn(), ui=FakeUI(enabled=True, answer=["0"]))
     game.heroes = [hero]
     game.board.place(hero, hero.position)
     game.state.actions_used = {hero: 0}
@@ -182,7 +185,10 @@ def test_equip_cancel_does_not_consume_action():
 def test_equip_transfer_in_exploration_ignores_distance():
     hero_a = Hero("A", (0, 0))
     hero_b = Hero("B", (5, 5))
-    game = FakeGame(conn=FakeConn(card_choices=["*"]))
+    game = FakeGame(
+        conn=FakeConn(),
+        ui=FakeUI(enabled=True, answer=[{"cmd": "transfer", "selected": "item:0"}, "0"]),
+    )
     game.heroes = [hero_a, hero_b]
     game.board.place(hero_a, hero_a.position)
     game.board.place(hero_b, hero_b.position)
@@ -201,8 +207,11 @@ def test_equip_transfer_selects_target_via_board_scan_expected_fields():
     hero_a = Hero("A", (0, 0))
     hero_b = Hero("B", (5, 5))
     hero_c = Hero("C", (4, 4))
-    conn = FakeConn(card_choices=["*"], scan_choices=[hero_c.position])
-    game = FakeGame(conn=conn)
+    conn = FakeConn(scan_choices=[hero_c.position])
+    game = FakeGame(
+        conn=conn,
+        ui=FakeUI(enabled=True, answer=[{"cmd": "transfer", "selected": "item:0"}, "0"]),
+    )
     game.heroes = [hero_a, hero_b, hero_c]
     game.board.place(hero_a, hero_a.position)
     game.board.place(hero_b, hero_b.position)
@@ -226,7 +235,10 @@ def test_equip_transfer_selects_target_via_board_scan_expected_fields():
 def test_equip_transfer_in_combat_requires_adjacent_target():
     hero_a = Hero("A", (0, 0))
     hero_b = Hero("B", (5, 5))
-    game = FakeGame(conn=FakeConn(card_choices=["*"]))
+    game = FakeGame(
+        conn=FakeConn(),
+        ui=FakeUI(enabled=True, answer=[{"cmd": "transfer", "selected": "item:0"}, "0"]),
+    )
     game.heroes = [hero_a, hero_b]
     game.board.place(hero_a, hero_a.position)
     game.board.place(hero_b, hero_b.position)
@@ -241,7 +253,10 @@ def test_equip_transfer_in_combat_requires_adjacent_target():
 
 def test_equip_drop_creates_loot_and_interaction_picks_it_up():
     hero = Hero("A", (0, 0))
-    game = FakeGame(conn=FakeConn(card_choices=["2", "/"], scan_choices=[hero.position]), ui=FakeUI(enabled=False))
+    game = FakeGame(
+        conn=FakeConn(scan_choices=[hero.position]),
+        ui=FakeUI(enabled=True, answer=[{"cmd": "drop", "selected": "item:1"}, "0"]),
+    )
     game.heroes = [hero]
     game.board.place(hero, hero.position)
     game.state.actions_used = {hero: 0}
@@ -306,8 +321,18 @@ def test_equip_toggle_consumes_goodberry_and_heals(monkeypatch):
     hero = Hero("A", (0, 0))
     hero.equipped_shield = None
     hero.inventory = [GoodberryItem(cast_rank=1)]
-    ui = FakeUI(enabled=False)
-    game = FakeGame(conn=FakeConn(card_choices=["2", "5"]), ui=ui)
+    ensure_actor_inventory(hero)
+    entries = []
+    for category, items in all_inventory_sections(hero):
+        for item in items:
+            entries.append((category, item))
+    goodberry_idx = next(
+        idx
+        for idx, (_category, item) in enumerate(entries)
+        if str(getattr(item, "item_id", "")).strip().lower() == "goodberry"
+    )
+    ui = FakeUI(enabled=True, answer=[f"item:{goodberry_idx}", "0"])
+    game = FakeGame(conn=FakeConn(), ui=ui)
     game.heroes = [hero]
     game.board.place(hero, hero.position)
     game.state.actions_used = {hero: 0}
@@ -347,6 +372,7 @@ def test_attack_with_two_active_weapons_uses_primary_active_weapon(monkeypatch):
 
     assert result.success
     assert any(str(ev.get("action_id", "")).startswith("attack_sword") for ev in game.events.emitted)
+    assert len(game.start_combat_calls) == 1
 
 
 def test_equip_ui_can_assign_item_to_left_hand_with_special_command_payload():
@@ -406,7 +432,10 @@ def test_equip_ui_section_switch_command_is_handled_without_unknown_error():
 
 def test_equip_cli_key_7_assigns_selected_item_to_left_hand():
     hero = Hero("A", (0, 0))
-    game = FakeGame(conn=FakeConn(card_choices=["7", "0"]), ui=FakeUI(enabled=False))
+    game = FakeGame(
+        conn=FakeConn(),
+        ui=FakeUI(enabled=True, answer=[{"cmd": "hand_left", "selected": "item:0"}, "0"]),
+    )
     game.heroes = [hero]
     game.board.place(hero, hero.position)
     game.state.actions_used = {hero: 0}

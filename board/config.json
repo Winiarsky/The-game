@@ -1,21 +1,27 @@
 {
-    "serial_port": "/dev/rfcomm1",
-    "baud_rate": 9600,
-    "n_rows": 15,
-    "n_cols": 20,
-    "max_players": 6,
-    "cards": {
-        "confirm_decline_cards": {
-            "32:CD:D4:4E": "confirm",
-            "C2:09:99:9A": "decline"
-        },
-        "player_cards": {
-            "74:4F:6E:05": "player_1",
-            "22:D4:16:01": "player_2",
-            "F2:C9:7C:9A": "player_3",
-            "52:B3:86:9A": "player_4",
-            "F2:70:B2:9A": "player_5",
-            "A2:10:A9:9A": "player_6"
-        }
+    "board": {
+        "rows": 30,
+        "cols": 20
+    },
+    "connection": {
+        "backend": "hardware",
+        "simulator_url": "http://127.0.0.1:5000"
+    },
+    "hardware": {
+        "protocol": "board_scan_usb_v1",
+        "serial_port": "",
+        "baud_rate": 115200,
+        "scan_command": "SCAN",
+        "probe_timeout_s": 6.0,
+        "line_timeout_s": 0.25,
+        "write_timeout_s": 0.5
+    },
+    "wled": {
+        "base_url": "http://192.168.0.165",
+        "segment_id": 0,
+        "led_offset": 0,
+        "led_count": 620,
+        "brightness": 128,
+        "request_timeout_s": 2.0
     }
 }

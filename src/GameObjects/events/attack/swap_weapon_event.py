@@ -29,10 +29,27 @@ class SwapWeaponEvent(GameEvent):
 
         choice_raw = (ctx.metadata or {}).get("weapon_id") or (ctx.metadata or {}).get("weapon")
         if choice_raw is None:
-            choice_raw = ctx.game.conn.read_card(
-                f"Wybierz broń ({', '.join(available)})",
-                list(available),
-            )
+            ui = getattr(ctx.game, "ui", None)
+            if ui is not None and hasattr(ui, "prompt_choice"):
+                choice_meta = [
+                    {
+                        "raw": normalize_weapon_id(getattr(item, "item_id", None)) or "",
+                        "label": item_label(item),
+                        "desc": "",
+                        "key": str(idx),
+                    }
+                    for idx, item in enumerate(weapons, start=1)
+                    if normalize_weapon_id(getattr(item, "item_id", None))
+                ]
+                choice_raw = ui.prompt_choice(
+                    "Wybierz broń",
+                    choices=[entry["label"] for entry in choice_meta],
+                    source=self.name,
+                    layout="menu_numpad",
+                    title="Zmiana broni",
+                    subtitle="Wybierz aktywną broń.",
+                    choice_meta=choice_meta,
+                )
 
         normalized = normalize_weapon_id(choice_raw)
         if not normalized:

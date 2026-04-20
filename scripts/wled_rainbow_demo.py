@@ -4,42 +4,45 @@ from __future__ import annotations
 import argparse
 import colorsys
 import json
-import socket
 import time
 from typing import Any
-from urllib import error, request
+from urllib import error, parse, request
+
+
+class WLEDError(RuntimeError):
+    pass
+
+
+def _state_url(host: str) -> str:
+    text = str(host).strip()
+    if not text:
+        raise ValueError("host nie może być pusty")
+    if "://" not in text:
+        text = f"http://{text}"
+    parsed = parse.urlsplit(text)
+    if not parsed.netloc:
+        raise ValueError("host musi być adresem IP, hostname albo URL-em do WLED")
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError("obsługiwane są tylko adresy http:// albo https://")
+    base = f"{parsed.scheme}://{parsed.netloc}"
+    return f"{base}/json/state"
 
 
 def _post_json(host: str, payload: dict[str, Any], *, timeout: float) -> None:
     body = json.dumps(payload).encode("utf-8")
-    host_name, port = _split_host_port(host)
-    request_bytes = (
-        f"POST /json/state HTTP/1.1\r\n"
-        f"Host: {host_name}\r\n"
-        f"Content-Type: application/json\r\n"
-        f"Connection: close\r\n"
-        f"Content-Length: {len(body)}\r\n"
-        f"\r\n"
-    ).encode("ascii") + body
-    with socket.create_connection((host_name, port), timeout=timeout) as sock:
-        sock.sendall(request_bytes)
-
-
-def _split_host_port(host: str) -> tuple[str, int]:
-    text = str(host).strip()
-    if not text:
-        raise ValueError("host nie może być pusty")
-    if text.startswith("[") and "]" in text:
-        closing = text.index("]")
-        hostname = text[1:closing]
-        rest = text[closing + 1 :]
-        if rest.startswith(":"):
-            return hostname, int(rest[1:])
-        return hostname, 80
-    if text.count(":") == 1 and "." in text.split(":")[0]:
-        hostname, raw_port = text.rsplit(":", 1)
-        return hostname, int(raw_port)
-    return text, 80
+    req = request.Request(
+        _state_url(host),
+        data=body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with request.urlopen(req, timeout=timeout) as response:
+            response.read()
+    except error.HTTPError as exc:
+        details = exc.read().decode("utf-8", errors="replace").strip()
+        message = details or exc.reason or "nieznany błąd HTTP"
+        raise WLEDError(f"WLED zwrócił HTTP {exc.code}: {message}") from exc
 
 
 def _parse_rgb(raw: str) -> list[int]:
@@ -81,6 +84,7 @@ def _segment_payload(
                 "id": 0,
                 "start": start_index,
                 "stop": start_index + len(colors),
+                "fx": 0,
                 "i": colors,
             }
         ],
@@ -91,11 +95,14 @@ def _rainbow_frame(
     *,
     led_count: int,
     phase: float,
-    start_index: int,
-    brightness: int,
+    chunk_start: int,
+    chunk_size: int,
 ) -> dict[str, Any]:
-    colors = [_rgb_from_hue(phase + (index / max(1, led_count))) for index in range(led_count)]
-    return _segment_payload(start_index=start_index, colors=colors, brightness=brightness)
+    entries: list[Any] = [chunk_start]
+    for index in range(chunk_size):
+        color = _rgb_from_hue(phase + ((chunk_start + index) / max(1, led_count)))
+        entries.append(_rgb_to_hex(color))
+    return {"seg": [{"id": 0, "i": entries}]}
 
 
 def _chase_frame(
@@ -136,7 +143,7 @@ def _segment_setup_payload(
                 "id": 0,
                 "start": start_index,
                 "stop": start_index + led_count,
-                "col": [list(background_color)],
+                "col": [list(background_color), [0, 0, 0], [0, 0, 0]],
                 "fx": 0,
             }
         ],
@@ -171,7 +178,7 @@ def _chase_sparse_payload(
     touched = sorted(set(previous_map) | set(current_map))
     for idx in touched:
         color = current_map.get(idx, background_color)
-        entries.extend([idx, _rgb_to_hex(color)])
+        entries.extend([idx, list(color)])
     return {"seg": [{"id": 0, "i": entries}]}
 
 
@@ -182,10 +189,9 @@ def _even_sparse_payload(
     color: list[int],
 ) -> dict[str, Any]:
     entries: list[Any] = []
-    color_hex = _rgb_to_hex(color)
     for led_number in range(start_led, end_led + 1):
         if led_number % 2 == 0:
-            entries.extend([led_number - start_led, color_hex])
+            entries.extend([led_number - start_led, list(color)])
     return {"seg": [{"id": 0, "i": entries}]}
 
 
@@ -195,6 +201,25 @@ def _off_payload(*, start_index: int, led_count: int) -> dict[str, Any]:
         colors=[[0, 0, 0] for _ in range(led_count)],
         brightness=255,
     )
+
+
+def _rainbow_chunks(
+    *,
+    led_count: int,
+    phase: float,
+    chunk_size: int = 256,
+) -> list[dict[str, Any]]:
+    payloads: list[dict[str, Any]] = []
+    for chunk_start in range(0, led_count, chunk_size):
+        payloads.append(
+            _rainbow_frame(
+                led_count=led_count,
+                phase=phase,
+                chunk_start=chunk_start,
+                chunk_size=min(chunk_size, led_count - chunk_start),
+            )
+        )
+    return payloads
 
 
 def _resolve_range(*, start_led: int, end_led: int) -> tuple[int, int]:
@@ -248,7 +273,7 @@ def run_animation(
     head_position = 0.0
     previous_map: dict[int, list[int]] = {}
 
-    if mode == "chase":
+    if mode in {"chase", "rainbow"}:
         _post_json(
             host,
             _segment_setup_payload(
@@ -262,12 +287,7 @@ def run_animation(
 
     while True:
         if mode == "rainbow":
-            payload = _rainbow_frame(
-                led_count=led_count,
-                phase=phase,
-                start_index=start_index,
-                brightness=brightness,
-            )
+            payloads = _rainbow_chunks(led_count=led_count, phase=phase)
             phase = (phase + phase_step) % 1.0
         else:
             head_index = int(head_position) % led_count
@@ -284,8 +304,10 @@ def run_animation(
             )
             previous_map = current_map
             head_position = (head_position + (speed / max(fps, 1.0))) % led_count
+            payloads = [payload]
 
-        _post_json(host, payload, timeout=timeout)
+        for payload in payloads:
+            _post_json(host, payload, timeout=timeout)
 
         if duration is not None and (time.monotonic() - started_at) >= duration:
             break
@@ -387,6 +409,9 @@ def main() -> int:
     except ValueError as exc:
         print(f"Błąd parametrów: {exc}")
         return 1
+    except WLEDError as exc:
+        print(f"Błąd odpowiedzi WLED: {exc}")
+        return 1
     except error.URLError as exc:
         print(f"Błąd połączenia z WLED ({args.host}): {exc}")
         return 1
@@ -394,23 +419,16 @@ def main() -> int:
         if args.clear_on_exit:
             try:
                 start_index, led_count = _resolve_range(start_led=args.start_led, end_led=args.end_led)
-                if args.mode in {"chase", "even"}:
-                    _post_json(
-                        args.host,
-                        _segment_setup_payload(
-                            start_index=start_index,
-                            led_count=led_count,
-                            brightness=args.brightness,
-                            background_color=args.background,
-                        ),
-                        timeout=args.timeout,
-                    )
-                else:
-                    _post_json(
-                        args.host,
-                        _off_payload(start_index=start_index, led_count=led_count),
-                        timeout=args.timeout,
-                    )
+                _post_json(
+                    args.host,
+                    _segment_setup_payload(
+                        start_index=start_index,
+                        led_count=led_count,
+                        brightness=args.brightness,
+                        background_color=[0, 0, 0],
+                    ),
+                    timeout=args.timeout,
+                )
             except Exception:
                 pass
 

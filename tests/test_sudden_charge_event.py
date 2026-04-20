@@ -13,21 +13,26 @@ from GameObjects.events.sudden_charge_event import SuddenChargeEvent
 from GameObjects.events.base import EventContext, EventResult
 
 
-class FakeConn:
+class DummyUI:
     def __init__(self, choices):
+        self.enabled = True
+        self.allow_cli_fallback = False
         self._choices = list(choices)
-        self.read_calls = 0
+        self.prompt_calls = 0
 
-    def read_card(self, *_args, **_kwargs):
-        self.read_calls += 1
-        if not self._choices:
-            return ""
-        return self._choices.pop(0)
+    def prompt_choice(self, _prompt, choices=None, **_kwargs):
+        self.prompt_calls += 1
+        if self._choices:
+            return self._choices.pop(0)
+        if choices:
+            return choices[0]
+        return None
 
 
 class FakeGame:
     def __init__(self, choices):
-        self.conn = FakeConn(choices)
+        self.conn = object()
+        self.ui = DummyUI(choices)
         self.ui_log = lambda *_a, **_k: None
         self.ui_idle_hint = lambda *_a, **_k: None
         from states.combat import Combat
@@ -100,7 +105,7 @@ def test_sudden_charge_reprompts_until_melee(monkeypatch):
     result = SuddenChargeEvent().execute(ctx)
 
     assert move_calls["count"] == 2
-    assert game.conn.read_calls == 2
+    assert game.ui.prompt_calls == 2
     assert result.success
     assert result.actions_spent == 2
     assert "melee ok" in (result.message or "")
@@ -125,7 +130,7 @@ def test_sudden_charge_reprompts_then_end(monkeypatch):
     result = SuddenChargeEvent().execute(ctx)
 
     assert move_calls["count"] == 2
-    assert game.conn.read_calls == 2
+    assert game.ui.prompt_calls == 2
     assert result.success
     assert result.actions_spent == 2
     assert "pominięty" in (result.message or "")

@@ -108,49 +108,6 @@ class MoveEvent(GameEvent):
 
         started_in_combat = getattr(game.state, "__class__", None).__name__ == "Combat"
 
-        def _is_enemy_combat_ready(enemy: object) -> bool:
-            checker = getattr(game, "_is_enemy_combat_ready", None)
-            if callable(checker):
-                try:
-                    return bool(checker(enemy))
-                except Exception:
-                    pass
-            if enemy is None:
-                return False
-            if getattr(enemy, "position", None) is None:
-                return False
-            try:
-                if int(getattr(enemy, "hp", 1) or 0) <= 0:
-                    return False
-            except Exception:
-                pass
-            has_status = getattr(enemy, "has_status", None)
-            if callable(has_status):
-                try:
-                    if bool(has_status("dead")):
-                        return False
-                except Exception:
-                    pass
-            return True
-
-        def _trigger_combat_if_enemy_in_room(pos: tuple[int, int]) -> None:
-            if getattr(game.state, "__class__", None).__name__ == "Combat":
-                return
-            rooms_here = board.rooms_at(pos)
-            if not rooms_here:
-                return
-            for enemy in getattr(game, "enemies", []):
-                if not _is_enemy_combat_ready(enemy):
-                    continue
-                enemy_rooms = board.rooms_at(enemy.position)
-                if rooms_here.intersection(enemy_rooms):
-                    logger.info("W pokoju są żywi wrogowie – wywołuję walkę.")
-                    try:
-                        enemy.trigger_combat(game)  # type: ignore[attr-defined]
-                    except Exception as exc:
-                        logger.error("Nie udało się uruchomić walki: %s", exc)
-                    break
-
         def _fade_leds(positions: list[tuple[int, int]] | None, colors) -> None:
             """Wygaszanie wzdłuż ścieżki: co krok gasi kolejny LED od startu do celu."""
             nonlocal last_led_positions, last_led_colors
@@ -198,15 +155,6 @@ class MoveEvent(GameEvent):
 
         try:
             fade_on_exit = False
-            # sprawdź startową pozycję przed ruchem
-            try:
-                _trigger_combat_if_enemy_in_room(moving_hero.position)
-            except Exception as exc:
-                logger.error("Błąd sprawdzania wrogów w pokoju: %s", exc)
-            if not started_in_combat and getattr(game.state, "__class__", None).__name__ == "Combat":
-                logger.info("Walka rozpoczęta podczas wyboru ruchu – kończę akcję.")
-                return EventResult(success=True, consumed_action=self.consumes_action, message="Rozpoczęto walkę – ruch zakończony.")
-
             # natychmiast podświetl pole startowe po wejściu w akcję ruchu
             try:
                 _set_leds([moving_hero.position], consts.MOVE_START_RGB)
@@ -278,10 +226,6 @@ class MoveEvent(GameEvent):
                         game.ui_log(str(outcome["message"]))
                 except Exception:
                     logger.debug("Nie udało się ewaluować hidden spawn triggerów po kroku ruchu.", exc_info=True)
-                try:
-                    _trigger_combat_if_enemy_in_room(current_pos)
-                except Exception as exc:
-                    logger.error("Błąd przy sprawdzaniu walki po wejściu na pole: %s", exc)
                 if not started_in_combat and getattr(game.state, "__class__", None).__name__ == "Combat":
                     return True
                 return stopped

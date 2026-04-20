@@ -32,11 +32,20 @@ class GoblinDog(BasicEnemy):
     special_actions: tuple[str, ...] = ("goblin_dog_scratch",)
     special_reactions: tuple[str, ...] = ("buck", "juke")
     ai_profile: dict[str, object] = None  # type: ignore[assignment]
+    awareness_profile: dict[str, object] = None  # type: ignore[assignment]
     auto_opportunity_attack: bool = False
 
     def __post_init__(self):
         if self.ai_profile is None:
             self.ai_profile = {"role": "hunter", "flee_threshold": 0.4}
+        if self.awareness_profile is None:
+            self.awareness_profile = {
+                "awareness_range_feet": 40,
+                "move_trigger_threshold": 0.90,
+                "interaction_trigger_threshold": 0.55,
+                "spell_trigger_threshold": 0.75,
+                "stealth_fail_trigger_threshold": 0.85,
+            }
         super().__post_init__()
 
 
@@ -74,6 +83,13 @@ META = GameObjectMeta(
         "special_reactions": ["buck", "juke"],
         "auto_opportunity_attack": False,
         "ai_profile": {"role": "hunter", "flee_threshold": 0.4},
+        "awareness_profile": {
+            "awareness_range_feet": 40,
+            "move_trigger_threshold": 0.9,
+            "interaction_trigger_threshold": 0.55,
+            "spell_trigger_threshold": 0.75,
+            "stealth_fail_trigger_threshold": 0.85
+        },
     },
 )
 

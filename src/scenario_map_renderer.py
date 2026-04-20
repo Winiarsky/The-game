@@ -7,8 +7,10 @@ from html import escape
 from pathlib import Path
 from typing import Any
 
+from board.settings import board_dimensions, load_board_config
+from layered_scenarios import LAYERED_SCENARIO_FORMAT, compile_layered_scenario, validate_layered_scenario
 
-BOARD_CONFIG_PATH = Path("board/config.json")
+
 DEFAULT_SCENARIOS_DIR = Path("scenarios")
 DEFAULT_OUTPUT_DIR = Path("assets/scenario_maps")
 
@@ -52,12 +54,15 @@ class ScenarioMapData:
     obstacles: set[tuple[int, int]]
     enemies: list[EnemyMarker]
     walls: list[tuple[tuple[int, int], tuple[int, int]]]
+    doors: list[tuple[tuple[int, int], tuple[int, int]]]
+    rooms: list[dict[str, Any]]
+    biome_name: str | None
     notes: list[str]
 
 
-def load_board_dimensions(config_path: Path = BOARD_CONFIG_PATH) -> tuple[int, int]:
-    payload = json.loads(config_path.read_text(encoding="utf-8"))
-    return int(payload["n_rows"]), int(payload["n_cols"])
+def load_board_dimensions(config_path: Path | None = None) -> tuple[int, int]:
+    payload = load_board_config(config_path)
+    return board_dimensions(payload)
 
 
 def load_scenario_data(
@@ -72,6 +77,15 @@ def load_scenario_data(
     enemies: list[EnemyMarker] = []
     walls_seen: set[frozenset[tuple[int, int]]] = set()
     walls: list[tuple[tuple[int, int], tuple[int, int]]] = []
+    doors_seen: set[frozenset[tuple[int, int]]] = set()
+    doors: list[tuple[tuple[int, int], tuple[int, int]]] = []
+
+    raw_payload = json.loads(scenario_path.read_text(encoding="utf-8"))
+    if str(raw_payload.get("format") or "").strip().lower() == LAYERED_SCENARIO_FORMAT:
+        layered_payload = validate_layered_scenario(raw_payload, rows=rows, cols=cols)
+        payload = compile_layered_scenario(layered_payload, rows=rows, cols=cols)
+    else:
+        payload = raw_payload
 
     def add_wall(a: tuple[int, int], b: tuple[int, int]) -> None:
         if a == b:
@@ -81,6 +95,15 @@ def load_scenario_data(
             return
         walls_seen.add(key)
         walls.append((a, b))
+
+    def add_door(a: tuple[int, int], b: tuple[int, int]) -> None:
+        if a == b:
+            return
+        key = frozenset((a, b))
+        if key in doors_seen:
+            return
+        doors_seen.add(key)
+        doors.append((a, b))
 
     def normalize_pos(raw: Any) -> tuple[int, int] | None:
         try:
@@ -130,7 +153,9 @@ def load_scenario_data(
             for edge in obj.get("edges", []) or []:
                 a = normalize_pos(edge.get("a"))
                 b = normalize_pos(edge.get("b"))
-                if a is not None and b is not None:
+                if a is not None and b is not None and category == "Interactables" and object_id == "door":
+                    add_door(a, b)
+                elif a is not None and b is not None:
                     add_wall(a, b)
             continue
 
@@ -165,6 +190,23 @@ def load_scenario_data(
             starts.append(pos)
 
     notes = [str(item) for item in (payload.get("notes") or []) if str(item).strip()]
+    rooms_meta = []
+    biome_name = None
+    for room in payload.get("rooms", []) or []:
+        room_positions = []
+        for raw in room.get("positions", []) or []:
+            pos = normalize_pos(raw)
+            if pos is not None:
+                room_positions.append(pos)
+        room_entry = {
+            "id": str(room.get("id") or room.get("name") or ""),
+            "name": str(room.get("name") or room.get("id") or ""),
+            "color": room.get("color"),
+            "positions": room_positions,
+        }
+        rooms_meta.append(room_entry)
+        if room_entry["id"].startswith("biome_"):
+            biome_name = room_entry["name"] or room_entry["id"]
 
     return ScenarioMapData(
         scenario_name=str(payload.get("name") or scenario_path.stem),
@@ -176,6 +218,9 @@ def load_scenario_data(
         obstacles=obstacles,
         enemies=enemies,
         walls=walls,
+        doors=doors,
+        rooms=rooms_meta,
+        biome_name=biome_name,
         notes=notes,
     )
 
@@ -481,6 +526,17 @@ def _draw_grid_map(parts: list[str], data: ScenarioMapData, *, grid_x: float, gr
                 f'fill="{_earth_tint(col, row)}" opacity="0.22" stroke="none" />'
             )
 
+    for room in data.rooms:
+        color = str(room.get("color") or "").strip()
+        if not color:
+            continue
+        for col, row in sorted(room.get("positions") or [], key=lambda item: (item[1], item[0])):
+            x, y = _cell_origin(col, row, grid_x, grid_y)
+            parts.append(
+                f'<rect x="{x + 0.6:.1f}" y="{y + 0.6:.1f}" width="{CELL_SIZE_MM - 1.2:.1f}" height="{CELL_SIZE_MM - 1.2:.1f}" '
+                f'fill="{color}" opacity="0.14" stroke="none" />'
+            )
+
     for (col, row), terrain_id in sorted(data.terrains.items(), key=lambda item: (item[0][1], item[0][0])):
         style = TERRAIN_STYLES.get(terrain_id, {"fill": "#ececec", "stroke": "#c9c9c9", "label": terrain_id})
         x, y = _cell_origin(col, row, grid_x, grid_y)
@@ -595,6 +651,27 @@ def _draw_grid_map(parts: list[str], data: ScenarioMapData, *, grid_x: float, gr
 
     for a, b in data.walls:
         parts.extend(_wall_fantasy_parts(a, b, x0=grid_x, y0=grid_y))
+    for a, b in data.doors:
+        ax, ay = _cell_center(a[0], a[1], grid_x, grid_y)
+        bx, by = _cell_center(b[0], b[1], grid_x, grid_y)
+        mx = (ax + bx) / 2.0
+        my = (ay + by) / 2.0
+        dx = bx - ax
+        dy = by - ay
+        if abs(dx) > abs(dy):
+            parts.append(
+                f'<line x1="{mx:.1f}" y1="{my - 5.2:.1f}" x2="{mx:.1f}" y2="{my + 5.2:.1f}" stroke="#bb8a20" stroke-width="4.2" stroke-linecap="round" />'
+            )
+            parts.append(
+                f'<line x1="{mx:.1f}" y1="{my - 4.4:.1f}" x2="{mx:.1f}" y2="{my + 4.4:.1f}" stroke="#f3d37a" stroke-width="2.1" stroke-linecap="round" />'
+            )
+        else:
+            parts.append(
+                f'<line x1="{mx - 5.2:.1f}" y1="{my:.1f}" x2="{mx + 5.2:.1f}" y2="{my:.1f}" stroke="#bb8a20" stroke-width="4.2" stroke-linecap="round" />'
+            )
+            parts.append(
+                f'<line x1="{mx - 4.4:.1f}" y1="{my:.1f}" x2="{mx + 4.4:.1f}" y2="{my:.1f}" stroke="#f3d37a" stroke-width="2.1" stroke-linecap="round" />'
+            )
 
 
 def render_svg(data: ScenarioMapData) -> str:
@@ -626,6 +703,9 @@ def render_legend_svg(data: ScenarioMapData) -> str:
     legend_cursor += 9.0
     legend_cursor += 14.0
     legend_cursor += 13.0 * 5.0
+    if data.biome_name:
+        legend_cursor += 13.0
+    legend_cursor += 16.0
     legend_cursor += 16.0
     legend_cursor += 11.0 + float(len(ENEMY_STYLES) * 12)
     legend_cursor += 13.0 + 40.0
@@ -662,12 +742,24 @@ def render_legend_svg(data: ScenarioMapData) -> str:
     add_legend_box("#9bbb59", "#6c7d30", "Bushes / difficult")
     add_legend_box("#d8b48a", "#9d6f47", "Rumble / difficult")
     add_legend_box("#424242", "#111111", "Obstacle")
+    if data.biome_name:
+        add_legend_box("#b9d6a2", "#87a86f", f"Biome: {data.biome_name}")
 
     parts.append(
         f'<line x1="{legend_x:.1f}" y1="{legend_cursor - 1.0:.1f}" x2="{legend_x + 10:.1f}" y2="{legend_cursor - 1.0:.1f}" stroke="#111111" stroke-width="3.4" stroke-linecap="round" />'
     )
     parts.append(
         f'<text x="{legend_x + 16:.1f}" y="{legend_cursor + 1.2:.1f}" class="legend-label">Wall / blocked edge</text>'
+    )
+    legend_cursor += 16.0
+    parts.append(
+        f'<line x1="{legend_x:.1f}" y1="{legend_cursor - 1.0:.1f}" x2="{legend_x + 10:.1f}" y2="{legend_cursor - 1.0:.1f}" stroke="#bb8a20" stroke-width="4.2" stroke-linecap="round" />'
+    )
+    parts.append(
+        f'<line x1="{legend_x:.1f}" y1="{legend_cursor - 1.0:.1f}" x2="{legend_x + 10:.1f}" y2="{legend_cursor - 1.0:.1f}" stroke="#f3d37a" stroke-width="2.1" stroke-linecap="round" />'
+    )
+    parts.append(
+        f'<text x="{legend_x + 16:.1f}" y="{legend_cursor + 1.2:.1f}" class="legend-label">Door / passage edge</text>'
     )
     legend_cursor += 16.0
 
@@ -691,6 +783,7 @@ def render_legend_svg(data: ScenarioMapData) -> str:
         f"terrains: {len(data.terrains)}",
         f"obstacles: {len(data.obstacles)}",
         f"walls: {len(data.walls)}",
+        f"doors: {len(data.doors)}",
         f"enemies: {len(data.enemies)}",
     ]
     for line in counts:

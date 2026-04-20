@@ -368,14 +368,15 @@ if __name__ == "__main__":
     port = int(os.environ.get("PLAYER_UI_PORT", "5100"))
     debug_flag = str(os.environ.get("FLASK_DEBUG", "1")).lower() not in ("0", "false", "no")
 
-    # Opcjonalne auto-otwarcie przeglądarki – wyłącz przez PLAYER_UI_NO_BROWSER=1.
+    # Opcjonalne auto-otwarcie przeglądarki – domyślnie wyłączone.
+    # Włącz tylko przez PLAYER_UI_AUTO_BROWSER=1.
     def _open_browser() -> None:
         try:
             webbrowser.open(f"http://{host}:{port}/")
         except Exception:
             pass
 
-    if os.environ.get("PLAYER_UI_NO_BROWSER") not in ("1", "true", "yes"):
+    if os.environ.get("PLAYER_UI_AUTO_BROWSER") in ("1", "true", "yes"):
         # W debug mode reloader odpala kod 2x; otwieramy tylko w głównym procesie.
         if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not app.debug:
             threading.Timer(0.8, _open_browser).start()

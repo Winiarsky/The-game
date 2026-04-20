@@ -11,10 +11,9 @@ from GameObjects.Obstacles.simple_obstacle import SimpleObstacle
 from GameObjects.Terrains.blocked_field import BlockedField
 from GameObjects.Walls.simple_wall import SimpleWall
 from board_grid import BoardGrid
+from board.settings import board_dimensions, load_board_config
 
-
-ROWS = 15
-COLS = 20
+ROWS, COLS = board_dimensions(load_board_config())
 
 THREAT_BUDGETS = {
     "trivial": 40,
@@ -894,7 +893,15 @@ def _combine_positions(
     combined = list(base)
     for formation in formations:
         combined.extend(getattr(formation, attr_name))
-    return [list(pos) for pos in combined]
+    unique_positions: list[tuple[int, int]] = []
+    seen: set[tuple[int, int]] = set()
+    for pos in combined:
+        normalized = tuple(pos)
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        unique_positions.append(normalized)
+    return [list(pos) for pos in unique_positions]
 
 
 def _combine_edges(

@@ -56,6 +56,21 @@ class StealthEvent(GameEvent):
     consumes_action = True
 
     @staticmethod
+    def _result_with_outcome(
+        *,
+        outcome: str,
+        message: str,
+        success: bool = True,
+        consumed_action: bool = False,
+    ) -> EventResult:
+        return EventResult(
+            success=success,
+            consumed_action=consumed_action,
+            message=message,
+            data={"stealth_outcome": outcome},
+        )
+
+    @staticmethod
     def _stealth_stats(hero) -> tuple[int | None, int]:
         """
         Odczytaj (detection_dc, stealth_bonus) z aktywnego StealthStatus.
@@ -102,13 +117,13 @@ class StealthEvent(GameEvent):
         penalty, blockers = summarize_watchers(watchers) if watchers else (0, [])
         if illuminated:
             logger.info("Magiczne światło uniemożliwia ukrycie.")
-            return EventResult.noop(message="Nie możesz się ukryć w zasięgu Light.")
+            return self._result_with_outcome(outcome="blocked", message="Nie możesz się ukryć w zasięgu Light.")
         if has_status_id(hero, OBSERVABLE_STATUS.id) and not in_dim_light and not in_dark:
             logger.info("Masz status observable – nie możesz wejść w ukrycie.")
-            return EventResult.noop(message="Status observable blokuje stealth.")
+            return self._result_with_outcome(outcome="blocked", message="Status observable blokuje stealth.")
         if rooms_here and any(room in blocked_rooms for room in rooms_here):
             logger.info("Ten bohater ma zablokowane próby stealth w tym pokoju.")
-            return EventResult.noop(message="Pokój zablokowany dla stealth.")
+            return self._result_with_outcome(outcome="blocked", message="Pokój zablokowany dla stealth.")
 
         already_stealth = bool(has_status_id(hero, STEALTH_STATUS.id) or has_combat_stealth_state(hero))
         covered = bool(cover_state["covered"])
@@ -122,7 +137,7 @@ class StealthEvent(GameEvent):
                     game.conn.set_leds(positions, consts.WATCH_ALERT_RGB)
                     sleep(consts.WATCH_ALERT_SECONDS)
                     game.conn.leds_off()
-                return EventResult.noop(message="Obserwatorzy blokują stealth.")
+                return self._result_with_outcome(outcome="blocked", message="Obserwatorzy blokują stealth.")
             game.events.safe_emit_action(
                 actor=hero,
                 action_id="stealth_start",
@@ -164,11 +179,11 @@ class StealthEvent(GameEvent):
                 self._apply_fail(hero, rooms_here, critical=True)
                 self._trigger_critical_fail_effects(ctx, hero_pos)
                 logger.info("Krytyczna porażka – pokój zablokowany dla stealth.")
-                return EventResult.noop(message="Krytyczna porażka stealth.")
+                return self._result_with_outcome(outcome="critical_failure", message="Krytyczna porażka stealth.")
             if outcome in ("failure", None) or total < consts.STEALTH_FAIL:
                 self._apply_fail(hero, rooms_here, critical=False)
                 logger.info("Nie udaje się wejść w ukrycie.")
-                return EventResult.noop(message="Nie weszto w stealth.")
+                return self._result_with_outcome(outcome="failure", message="Nie weszto w stealth.")
 
             bonus = self._apply_success(hero, rooms_here, total)
             game.conn.set_leds([hero_pos], consts.STEALTH_SUCCESS_RGB)
@@ -182,7 +197,7 @@ class StealthEvent(GameEvent):
             dc, bonus = self._stealth_stats(hero)
             logger.info("Już jesteś w ukryciu – przejdź w trybie stealth. (DC=%s, bonus=%s)", dc, bonus)
             if self._attempt_spot_here(ctx, hero, hero_pos):
-                return EventResult.noop(message="Zostałeś dostrzeżony.")
+                return self._result_with_outcome(outcome="revealed", message="Zostałeś dostrzeżony.")
 
         moved = self._stealth_move(ctx, hero, hero_pos)
         final_message = "Stealth wykonany."
@@ -197,7 +212,7 @@ class StealthEvent(GameEvent):
             )
             if self._attempt_spot_here(ctx, hero, final_pos):
                 self._refresh_ui(game, hero, note="Wykryto ukrycie")
-                return EventResult.noop(message="Zostałeś dostrzeżony.")
+                return self._result_with_outcome(outcome="revealed", message="Zostałeś dostrzeżony.")
             if can_remain_hidden:
                 stealth_mode = "undetected" if moved else "hidden"
                 apply_combat_stealth_state(hero, mode=stealth_mode, source="stealth")
@@ -210,7 +225,12 @@ class StealthEvent(GameEvent):
                 clear_combat_stealth(hero, clear_stealth=True, add_observable=True)
                 final_message = "Kończysz ruch bez osłony - ujawniasz się."
             self._refresh_ui(game, hero, note=final_message)
-        return EventResult(success=True, consumed_action=self.consumes_action, message=final_message)
+        return EventResult(
+            success=True,
+            consumed_action=self.consumes_action,
+            message=final_message,
+            data={"stealth_outcome": "success", "stealth_moved": bool(moved)},
+        )
 
     # --- helpery przeniesione z akcji ---
     def _validate_neighbors(self, ctx: EventContext, current: Tuple[int, int], neighbours: list[Tuple[int, int]]) -> list[Tuple[int, int]]:

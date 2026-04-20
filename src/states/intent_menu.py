@@ -1273,7 +1273,7 @@ def build_intent_options(
 
 def _prompt_with_ui(game, *, title: str, subtitle: str, source: str, options: list[dict[str, str]]) -> str | None:
     ui = getattr(game, "ui", None)
-    if not (ui and getattr(ui, "enabled", False)):
+    if not (ui and hasattr(ui, "prompt_choice")):
         return None
     choice_meta = []
     for idx, option in enumerate(options, start=1):
@@ -1305,8 +1305,6 @@ def _prompt_with_ui(game, *, title: str, subtitle: str, source: str, options: li
 def choose_option(game, *, title: str, subtitle: str, source: str, options: list[dict[str, str]]) -> str | None:
     if not options:
         return None
-    ui = getattr(game, "ui", None)
-    ui_enabled = bool(ui is not None and getattr(ui, "enabled", False))
 
     by_id = {str(option["id"]).strip().lower(): str(option["id"]).strip().lower() for option in options}
     by_label = {str(option["label"]).strip().lower(): str(option["id"]).strip().lower() for option in options}
@@ -1336,21 +1334,6 @@ def choose_option(game, *, title: str, subtitle: str, source: str, options: list
     picked = _decode(ui_raw)
     if picked:
         return picked
-    if ui_enabled:
-        return None
-
-    conn = getattr(game, "conn", None)
-    if conn is not None and hasattr(conn, "read_card"):
-        try:
-            fallback = conn.read_card(title, [])
-            picked = _decode(fallback)
-            if picked:
-                return picked
-            raw_fallback = str(fallback or "").strip().lower()
-            if raw_fallback:
-                return raw_fallback
-        except Exception:
-            pass
     return None
 
 

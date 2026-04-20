@@ -34,11 +34,20 @@ class GoblinWarrior(BasicEnemy):
     active_weapon: str | None = "dogslicer"
     special_reactions: tuple[str, ...] = ("goblin_scuttle",)
     ai_profile: dict[str, object] = None  # type: ignore[assignment]
+    awareness_profile: dict[str, object] = None  # type: ignore[assignment]
     auto_opportunity_attack: bool = False
 
     def __post_init__(self):
         if self.ai_profile is None:
             self.ai_profile = {"role": "pack_melee", "cowardice_threshold": 0.4}
+        if self.awareness_profile is None:
+            self.awareness_profile = {
+                "awareness_range_feet": 30,
+                "move_trigger_threshold": 0.65,
+                "interaction_trigger_threshold": 0.20,
+                "spell_trigger_threshold": 0.35,
+                "stealth_fail_trigger_threshold": 0.25,
+            }
         super().__post_init__()
 
 
@@ -77,6 +86,13 @@ META = GameObjectMeta(
         "special_reactions": ["goblin_scuttle"],
         "auto_opportunity_attack": False,
         "ai_profile": {"role": "pack_melee", "cowardice_threshold": 0.4},
+        "awareness_profile": {
+            "awareness_range_feet": 30,
+            "move_trigger_threshold": 0.65,
+            "interaction_trigger_threshold": 0.2,
+            "spell_trigger_threshold": 0.35,
+            "stealth_fail_trigger_threshold": 0.25
+        },
     },
 )
 

@@ -1,126 +1,409 @@
-import requests
+from __future__ import annotations
+
 import json
 import logging
-import sys
+import time
+from dataclasses import dataclass
 from pathlib import Path
-from . import consts
-from time import sleep
+from typing import Any
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1].parent
-SRC_ROOT = PROJECT_ROOT / "src"
-if str(SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(SRC_ROOT))
+import requests
 
-from src.ui_client import get_ui_client
+from .led_mapping import load_led_mapping
+from .settings import (
+    board_dimensions,
+    connection_backend,
+    hardware_scan_config,
+    load_board_config,
+    simulator_url as config_simulator_url,
+    wled_config,
+)
+
+try:
+    import serial
+    from serial.tools import list_ports
+except Exception:  # pragma: no cover
+    serial = None  # type: ignore[assignment]
+    list_ports = None  # type: ignore[assignment]
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-class Connection:
-    def __init__(self, esp_ip:str = consts.ESP_IP):
-        self.led_config = json.load(open('board/led_positions.json', 'r'))
-        self.esp_ip = esp_ip
+PORT_HINTS = ("esp32", "silabs", "cp210", "wch", "ch340", "usb", "uart")
+
+
+@dataclass(slots=True)
+class PortProbeResult:
+    port: str
+    description: str
+    serial_handle: serial.Serial  # type: ignore[name-defined]
+
+
+def _parse_json_line(raw_line: str) -> dict[str, Any] | None:
+    candidates = [raw_line]
+    start = raw_line.find("{")
+    end = raw_line.rfind("}")
+    if start != -1 and end != -1 and end >= start:
+        trimmed = raw_line[start : end + 1]
+        if trimmed != raw_line:
+            candidates.append(trimmed)
+    for candidate in candidates:
+        try:
+            payload = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict):
+            return payload
+    return None
+
+
+def _normalize_wled_url(url: str) -> str:
+    return str(url or "").strip().rstrip("/")
+
+
+def _color_to_hex(color: list[int]) -> str:
+    clipped = [max(0, min(255, int(component))) for component in color[:3]]
+    while len(clipped) < 3:
+        clipped.append(0)
+    return "".join(f"{component:02X}" for component in clipped[:3])
+
+
+def _candidate_ports() -> list[Any]:
+    if list_ports is None:
+        return []
+    ports = list(list_ports.comports())
+    scored: list[tuple[int, Any]] = []
+    for port in ports:
+        haystack = " ".join(
+            str(part or "")
+            for part in (port.device, port.description, port.manufacturer, port.product)
+        ).lower()
+        score = sum(1 for hint in PORT_HINTS if hint in haystack)
+        scored.append((score, port))
+    scored.sort(key=lambda item: item[0], reverse=True)
+    return [port for _, port in scored]
+
+
+def _read_lines_until(
+    ser: serial.Serial,  # type: ignore[name-defined]
+    *,
+    protocol_name: str,
+    timeout_s: float,
+) -> tuple[dict[str, Any] | None, list[str]]:
+    deadline = time.monotonic() + timeout_s
+    seen_lines: list[str] = []
+    while time.monotonic() < deadline:
+        raw = ser.readline().decode("utf-8", errors="replace").strip()
+        if not raw:
+            continue
+        seen_lines.append(raw)
+        payload = _parse_json_line(raw)
+        if payload and payload.get("protocol") == protocol_name:
+            return payload, seen_lines
+    return None, seen_lines
+
+
+def _probe_port(
+    port_name: str,
+    *,
+    protocol_name: str,
+    baud_rate: int,
+    probe_timeout_s: float,
+    line_timeout_s: float,
+    write_timeout_s: float,
+) -> PortProbeResult | None:
+    if serial is None:
+        raise RuntimeError("Brakuje pakietu pyserial. Zainstaluj zależności z requirements.txt.")
+    try:
+        ser = serial.Serial(
+            port=port_name,
+            baudrate=baud_rate,
+            timeout=line_timeout_s,
+            write_timeout=write_timeout_s,
+        )
+    except serial.SerialException:
+        return None
+
+    try:
+        ser.setDTR(False)
+        ser.setRTS(False)
+        time.sleep(0.1)
+        ser.reset_input_buffer()
+        ser.reset_output_buffer()
+        payload, _seen = _read_lines_until(ser, protocol_name=protocol_name, timeout_s=probe_timeout_s)
+        if payload is None:
+            ser.reset_input_buffer()
+            ser.write(b"PING\n")
+            ser.flush()
+            payload, _seen = _read_lines_until(ser, protocol_name=protocol_name, timeout_s=3.0)
+        if payload is None:
+            ser.close()
+            return None
+        return PortProbeResult(
+            port=port_name,
+            description=str(payload.get("event") or "ready"),
+            serial_handle=ser,
+        )
+    except Exception:
+        ser.close()
+        return None
+
+
+def _open_serial_probe(scan_cfg: dict[str, Any]) -> PortProbeResult:
+    protocol_name = str(scan_cfg.get("protocol") or "board_scan_usb_v1")
+    baud_rate = int(scan_cfg.get("baud_rate") or 115200)
+    probe_timeout_s = float(scan_cfg.get("probe_timeout_s") or 6.0)
+    line_timeout_s = float(scan_cfg.get("line_timeout_s") or 0.25)
+    write_timeout_s = float(scan_cfg.get("write_timeout_s") or 0.5)
+    port_name = str(scan_cfg.get("serial_port") or "").strip()
+    if port_name:
+        result = _probe_port(
+            port_name,
+            protocol_name=protocol_name,
+            baud_rate=baud_rate,
+            probe_timeout_s=probe_timeout_s,
+            line_timeout_s=line_timeout_s,
+            write_timeout_s=write_timeout_s,
+        )
+        if result is None:
+            raise RuntimeError(
+                f"Port {port_name} nie odpowiedział protokołem {protocol_name}. "
+                "Sprawdź port, baud rate i wgrany szkic."
+            )
+        return result
+
+    ports = _candidate_ports()
+    if not ports:
+        raise RuntimeError("Nie znaleziono żadnych portów szeregowych.")
+    for port in ports:
+        result = _probe_port(
+            port.device,
+            protocol_name=protocol_name,
+            baud_rate=baud_rate,
+            probe_timeout_s=probe_timeout_s,
+            line_timeout_s=line_timeout_s,
+            write_timeout_s=write_timeout_s,
+        )
+        if result is not None:
+            return result
+    checked = ", ".join(port.device for port in ports)
+    raise RuntimeError(f"Nie udało się wykryć płytki z protokołem {protocol_name}. Sprawdzone porty: {checked}")
+
+
+class _SimulatorBackend:
+    def __init__(self, base_url: str) -> None:
+        self.base_url = str(base_url).rstrip("/")
 
     def scan_board(self, acceptable_responses: list[tuple[int, int]] | None = None) -> tuple[int, int]:
-        """Scan the board for activit."""
         while True:
-            try:
-                r = requests.get(f"{self.esp_ip}/scan_board")
-                r.raise_for_status()
-                sleep(consts.RESPONSE_DELAY)  # wait for esp to process
-                data = r.json()
-                response = (int(data['col']-1), int(data['row']-1)) # to fix on board
-                if acceptable_responses and response not in acceptable_responses:
-                    logger.warning(f"Nieakceptowalna odpowiedz: {response}")
-                    logger.warning(f"Acceptable responses: {acceptable_responses}")
-                    continue
-                logger.info(f"Scanned board data: {json.dumps(data, indent=2)}")
-                return response
-            except Exception as e:
-                logger.error(f"Error scanning board: {e}")
-                raise RuntimeError("Failed to scan board") from e
+            response = requests.get(f"{self.base_url}/scan_board", timeout=30.0)
+            response.raise_for_status()
+            data = response.json()
+            result = (int(data["col"] - 1), int(data["row"] - 1))
+            if acceptable_responses and result not in acceptable_responses:
+                logger.warning("Nieakceptowalna odpowiedź z symulatora: %s", result)
+                continue
+            return result
 
-    def set_leds(self, positions: list[tuple[int, int]], rgb_color):
-        """Ustaw diody; rgb_color może być listą [r,g,b] lub listą list (per pozycja)."""
-        logger.info(positions)
-        if not positions:
+    def set_leds(self, led_updates: list[tuple[int, list[int]]]) -> None:
+        payload = {"leds": [{"i": idx + 1, "rgb": rgb} for idx, rgb in led_updates]}
+        requests.post(f"{self.base_url}/set", json=payload, timeout=5.0).raise_for_status()
+
+    def leds_off(self) -> None:
+        requests.get(f"{self.base_url}/off", timeout=5.0).raise_for_status()
+
+
+class _WledClient:
+    def __init__(self, cfg: dict[str, Any]) -> None:
+        self.base_url = _normalize_wled_url(str(cfg.get("base_url") or ""))
+        self.segment_id = int(cfg.get("segment_id") or 0)
+        self.led_offset = int(cfg.get("led_offset") or 0)
+        self.led_count = int(cfg.get("led_count") or 620)
+        self.brightness = max(1, min(255, int(cfg.get("brightness") or 128)))
+        self.request_timeout_s = float(cfg.get("request_timeout_s") or 2.0)
+        if not self.base_url:
+            raise RuntimeError("Brak konfiguracji WLED base_url.")
+
+    def _post_state(self, payload: dict[str, Any]) -> dict[str, Any]:
+        response = requests.post(f"{self.base_url}/json/state", json=payload, timeout=self.request_timeout_s)
+        response.raise_for_status()
+        data = response.json()
+        if not isinstance(data, dict):
+            raise RuntimeError(f"Nieoczekiwana odpowiedź WLED: {data!r}")
+        return data
+
+    def _get_info(self) -> dict[str, Any]:
+        response = requests.get(f"{self.base_url}/json/info", timeout=self.request_timeout_s)
+        response.raise_for_status()
+        data = response.json()
+        if not isinstance(data, dict):
+            raise RuntimeError(f"Nieoczekiwana odpowiedź WLED info: {data!r}")
+        return data
+
+    def validate(self) -> None:
+        info = self._get_info()
+        leds = info.get("leds") or {}
+        count = int(leds.get("count") or 0)
+        expected = self.led_offset + self.led_count
+        if count < expected:
+            raise RuntimeError(f"WLED raportuje tylko {count} LED, a konfiguracja wymaga co najmniej {expected}.")
+
+    def clear(self) -> None:
+        start = self.led_offset
+        stop = self.led_offset + self.led_count
+        self._post_state({"seg": [{"id": self.segment_id, "i": [start, stop, "000000"]}]})
+
+    def set_leds(self, led_updates: list[tuple[int, list[int]]]) -> None:
+        if not led_updates:
+            return
+        start = self.led_offset
+        stop = self.led_offset + self.led_count
+        instructions: list[Any] = [start, stop, "000000"]
+        for led_index, color in led_updates:
+            instructions.extend([self.led_offset + int(led_index), _color_to_hex(color)])
+        self._post_state({"on": True, "bri": self.brightness, "seg": [{"id": self.segment_id, "i": instructions}]})
+
+
+class _HardwareBackend:
+    def __init__(self, scan_cfg: dict[str, Any], wled_cfg: dict[str, Any]) -> None:
+        self.scan_cfg = dict(scan_cfg)
+        self.protocol_name = str(self.scan_cfg.get("protocol") or "board_scan_usb_v1")
+        self.scan_command = str(self.scan_cfg.get("scan_command") or "SCAN").strip() or "SCAN"
+        self.pre_scan_delay_s = max(0.0, float(self.scan_cfg.get("pre_scan_delay_s") or 0.12))
+        self.port_result = _open_serial_probe(self.scan_cfg)
+        self.ser = self.port_result.serial_handle
+        self.wled = _WledClient(wled_cfg)
+        self.wled.validate()
+        self.wled.clear()
+        self.serial_port = self.port_result.port
+
+    def _send_scan_command(self) -> None:
+        try:
+            self.ser.reset_input_buffer()
+        except Exception:
+            pass
+        self.ser.write(f"{self.scan_command}\n".encode("ascii", errors="ignore"))
+        self.ser.flush()
+        if self.pre_scan_delay_s > 0:
+            time.sleep(self.pre_scan_delay_s)
+
+    def _read_protocol_payload(self, *, timeout_s: float | None = None) -> dict[str, Any]:
+        deadline = None if timeout_s is None else (time.monotonic() + timeout_s)
+        while deadline is None or time.monotonic() < deadline:
+            raw = self.ser.readline().decode("utf-8", errors="replace").strip()
+            if not raw:
+                continue
+            payload = _parse_json_line(raw)
+            if payload and payload.get("protocol") == self.protocol_name:
+                return payload
+        raise RuntimeError(f"Timeout oczekiwania na odpowiedź protokołu {self.protocol_name}.")
+
+    def scan_board(self, acceptable_responses: list[tuple[int, int]] | None = None) -> tuple[int, int]:
+        while True:
+            self._send_scan_command()
+            while True:
+                payload = self._read_protocol_payload(timeout_s=None)
+                event = str(payload.get("event") or "").lower()
+                if event != "press":
+                    continue
+                result = (int(payload["col"]), int(payload["row"]))
+                if acceptable_responses and result not in acceptable_responses:
+                    logger.warning("Nieakceptowalna odpowiedź z planszy: %s", result)
+                    break
+                return result
+
+    def set_leds(self, led_updates: list[tuple[int, list[int]]]) -> None:
+        self.wled.set_leds(led_updates)
+
+    def leds_off(self) -> None:
+        self.wled.clear()
+
+    def close(self) -> None:
+        try:
+            self.ser.close()
+        except Exception:
+            pass
+
+
+class Connection:
+    def __init__(
+        self,
+        target: str | None = None,
+        *,
+        backend: str | None = None,
+        simulator_url: str | None = None,
+        serial_port: str | None = None,
+        wled_url: str | None = None,
+        config_path: str | Path | None = None,
+    ) -> None:
+        self.config_path = Path(config_path) if config_path is not None else Path(__file__).resolve().parent / "config.json"
+        self.config = load_board_config(self.config_path)
+        self.rows, self.cols = board_dimensions(self.config)
+        self.led_config = load_led_mapping(rows=self.rows, cols=self.cols)
+
+        resolved_backend = backend
+        resolved_simulator_url = simulator_url
+        if resolved_backend is None:
+            if target in {"hardware", "simulator"}:
+                resolved_backend = target
+            elif isinstance(target, str) and target.startswith("http"):
+                resolved_backend = "simulator"
+                resolved_simulator_url = target
+            else:
+                resolved_backend = connection_backend(self.config)
+        resolved_backend = str(resolved_backend or "hardware").strip().lower()
+        self.backend = resolved_backend
+
+        if resolved_backend == "simulator":
+            self.simulator_url = str(resolved_simulator_url or config_simulator_url(self.config)).rstrip("/")
+            self._backend: Any = _SimulatorBackend(self.simulator_url)
             return
 
-        per_position: list[list[int]] = []
+        scan_cfg = hardware_scan_config(self.config)
+        if serial_port is not None:
+            scan_cfg["serial_port"] = serial_port
+        wled_cfg = wled_config(self.config)
+        if wled_url is not None:
+            wled_cfg["base_url"] = wled_url
+        self._backend = _HardwareBackend(scan_cfg, wled_cfg)
+        self.serial_port = getattr(self._backend, "serial_port", None)
+        self.wled_url = _normalize_wled_url(str(wled_cfg.get("base_url") or ""))
+
+    def _resolve_led_updates(self, positions: list[tuple[int, int]], rgb_color) -> list[tuple[int, list[int]]]:
+        if not positions:
+            return []
         if isinstance(rgb_color, list) and rgb_color and isinstance(rgb_color[0], list):
-            # lista kolorów – musi odpowiadać długości positions
             if len(rgb_color) != len(positions):
                 raise ValueError("rgb_color length must match positions length when passing per-position colors.")
-            per_position = [list(map(int, color)) for color in rgb_color]
+            colors = [list(map(int, color)) for color in rgb_color]
         else:
-            per_position = [list(map(int, rgb_color)) for _ in positions]  # type: ignore[arg-type]
+            colors = [list(map(int, rgb_color)) for _ in positions]  # type: ignore[arg-type]
+        updates: list[tuple[int, list[int]]] = []
+        for (col, row), color in zip(positions, colors):
+            led_index = int(self.led_config[str(col)][str(row)])
+            updates.append((led_index, color))
+        return updates
 
-        leds_to_light = []
-        for (col, row), color in zip(positions, per_position):
-            leds_to_light.append((self.led_config[str(col)][str(row)], color))
+    def scan_board(self, acceptable_responses: list[tuple[int, int]] | None = None) -> tuple[int, int]:
+        return self._backend.scan_board(acceptable_responses)
 
-        logger.info(f"Setting LEDs: {leds_to_light}")
-        payload = {"leds": [{"i": idx + 1, "rgb": rgb} for idx, rgb in leds_to_light]}
-        r = requests.post(f"{self.esp_ip}/set", json=payload)
-        logger.info(f"Set LEDs response: {r.status_code}, {r.text}")
+    def set_leds(self, positions: list[tuple[int, int]], rgb_color) -> None:
+        led_updates = self._resolve_led_updates(positions, rgb_color)
+        if not led_updates:
+            return
+        self._backend.set_leds(led_updates)
 
-    def leds_off(self):
-        r = requests.get(f"{self.esp_ip}/off")
-        logger.info(f"LEDs off response: {r.status_code}, {r.text}")
-        
-    def read_card(
-        self,
-        msg: str = "Zeskanuj karte",
-        acceptable_responses: list[str] | None = None,
-        *,
-        translate_shortcuts: bool = True,
-        choice_meta: list[dict] | None = None,
-    ) -> str:
-        translate_map = {
-            "+": "ACCEPT",
-            "-": "DECLINE",
-            "1": "move",
-            "2": "interact",
-            "3": "seek",
-            "4": "stealth",
-            "5": "test_attack",
-            "6": "special",
-            "7": "delay",
-            "8": "end",
-        }
+    def leds_off(self) -> None:
+        self._backend.leds_off()
 
-        def _translate(raw: str) -> str:
-            if not translate_shortcuts:
-                return raw
-            return translate_map.get(raw, raw)
+    def close(self) -> None:
+        closer = getattr(self._backend, "close", None)
+        if callable(closer):
+            closer()
 
-        while True:
-            # UI prompt (jeśli dostępny)
-            ui = get_ui_client()
-            if ui.enabled:
-                ui_answer = ui.prompt_choice(
-                    msg,
-                    choices=acceptable_responses,
-                    source="card",
-                    choice_meta=choice_meta,
-                )
-                if ui_answer:
-                    card_response = _translate(ui_answer)
-                    if acceptable_responses and card_response not in acceptable_responses:
-                        logger.warning(f"Nieakceptowalna odpowiedz (UI): {card_response}")
-                    else:
-                        logger.info(f"Scanned via UI {ui_answer}: {card_response}")
-                        return card_response
-                if not getattr(ui, "allow_cli_fallback", False):
-                    raise RuntimeError("UI-only mode: read_card nie otrzymał odpowiedzi z UI.")
-                logger.warning("Brak odpowiedzi UI dla read_card, przechodzę do fallback CLI.")
-            if not getattr(ui, "allow_cli_fallback", False):
-                raise RuntimeError("UI-only mode: read_card wymaga aktywnego UI lub ALLOW_CLI_FALLBACK=1.")
-
-            card = input(msg) #trzeba bedze dodac slownik do mapowania
-            card_response = _translate(card)
-            logger.info(f"Scanned {card}: {card_response}")
-            if acceptable_responses and card_response not in acceptable_responses:
-                logger.warning(f"Nieakceptowalna odpowiedz: {card_response}")
-                continue
-            return card_response
+    def __del__(self) -> None:  # pragma: no cover
+        try:
+            self.close()
+        except Exception:
+            pass

@@ -66,18 +66,26 @@ class HeroesTurn(State):
         return any(getattr(hero, "position", None) is not None for hero in list(getattr(self.game, "heroes", []) or []))
 
     def _recover_no_heroes_on_board(self) -> State:
-        prompt = (
-            "Brak bohaterów na planszy. "
-            "ACCEPT: wróć do ustawiania pozycji startowych, DECLINE: pozostan w tym stanie."
+        answer = choose_option(
+            self.game,
+            title="Brak bohaterów",
+            subtitle="Wybierz dalsze działanie.",
+            source="heroes_missing",
+            options=[
+                {
+                    "id": "recover",
+                    "label": "Ustaw bohaterów",
+                    "desc": "Wróć do ustawiania pozycji startowych bohaterów.",
+                },
+                {
+                    "id": "stay",
+                    "label": "Pozostań",
+                    "desc": "Pozostań w tym stanie bez bohaterów na planszy.",
+                },
+            ],
         )
-        try:
-            answer = str(self.game.conn.read_card(prompt, ["ACCEPT", "DECLINE"]) or "").strip().upper()
-        except Exception as exc:
-            logger.error("Nie udało się odczytać decyzji przy braku bohaterów: %s", exc)
-            self.game.ui_log("Brak bohaterów na planszy i brak odpowiedzi wejścia.")
-            return self
 
-        if answer == "ACCEPT":
+        if answer == "recover":
             from .start import Start
 
             return Start(self.game).set_heroes_starting_positions()
@@ -170,20 +178,8 @@ class HeroesTurn(State):
 
         event_name: str | None = None
         if not choice:
-            ui = getattr(self.game, "ui", None)
-            ui_enabled = bool(ui is not None and getattr(ui, "enabled", False))
-            if ui_enabled:
-                self.game.ui_log("Nie wybrano akcji.")
-                return self
-            try:
-                fallback_raw = str(self.game.conn.read_card("Podaj nazwę akcji", []) or "").strip().lower()
-            except Exception:
-                fallback_raw = ""
-            if fallback_raw in available_events:
-                event_name = fallback_raw
-            else:
-                self.game.ui_log("Nie wybrano akcji.")
-                return self
+            self.game.ui_log("Nie wybrano akcji.")
+            return self
 
         if choice == "stats":
             self._show_actor_stats(hero)

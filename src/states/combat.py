@@ -1515,20 +1515,8 @@ class Combat(State):
 
         raw_choice: str | None = None
         if not intent:
-            ui = getattr(self.game, "ui", None)
-            ui_enabled = bool(ui is not None and getattr(ui, "enabled", False))
-            try:
-                fallback_raw = str(self.game.conn.read_card("Podaj nazwę akcji", []) or "").strip().lower()
-            except Exception:
-                fallback_raw = ""
-            if fallback_raw in available_events:
-                raw_choice = fallback_raw
-            else:
-                if ui_enabled:
-                    self.game.ui_log("Nie wybrano akcji.")
-                    return self
-                self.game.ui_log("Nie wybrano akcji.")
-                return self
+            self.game.ui_log("Nie wybrano akcji.")
+            return self
 
         if intent == "stats":
             self._show_actor_stats(actor)

@@ -25,7 +25,7 @@ const runtimeStopButton = document.getElementById("runtime-stop");
 const runtimeStatus = document.getElementById("runtime-status");
 const heroesListElement = document.getElementById("heroes-list");
 const heroesReloadButton = document.getElementById("heroes-reload");
-const dims = window.BOARD_DIMENSIONS || { rows: 15, cols: 20 };
+const dims = window.BOARD_DIMENSIONS || { rows: 30, cols: 20 };
 const posKey = (row, col) => `${row},${col}`;
 
 boardElement.style.gridTemplateColumns = `repeat(${dims.cols}, 32px)`;

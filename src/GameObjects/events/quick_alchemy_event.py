@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from GameObjects.items.inventory import add_alchemical_item, item_label
+from localization import localize_term_pl, localized_hint_pl
 
 from .base import ActionCostEvent, EventContext, EventResult
 from .registry import list_events, register_event
@@ -100,11 +101,42 @@ class QuickAlchemyEvent(ActionCostEvent):
 
         self._show_prompt(allowed)
 
-        while True:
-            raw = ctx.game.conn.read_card(
-                "Quick Alchemy: zeskanuj event alchemiczny (end = anuluj)",
-                [],
+        ui = getattr(ctx.game, "ui", None)
+        choice_meta = []
+        for idx, event_name in enumerate(allowed, start=1):
+            label = localize_term_pl(event_name)
+            hint = localized_hint_pl(event_name) or "Przedmiot alchemiczny gotowy do użycia po stworzeniu."
+            choice_meta.append(
+                {
+                    "raw": event_name,
+                    "label": label,
+                    "desc": f"Quick Alchemy: {hint}",
+                    "key": str(idx),
+                }
             )
+        choice_meta.append(
+            {
+                "raw": "end",
+                "label": "Zakończ",
+                "desc": "Anuluj Quick Alchemy bez wyboru eventu.",
+                "key": "0",
+            }
+        )
+
+        while True:
+            raw = None
+            if ui is not None and hasattr(ui, "prompt_choice"):
+                raw = ui.prompt_choice(
+                    "Quick Alchemy",
+                    choices=[entry["label"] for entry in choice_meta],
+                    source=self.name,
+                    layout="menu_numpad",
+                    title="Quick Alchemy",
+                    subtitle="Wybierz event alchemiczny lub zakończ.",
+                    choice_meta=choice_meta,
+                )
+            if raw is None:
+                return EventResult.cancelled(message="Quick Alchemy anulowane.")
             choice = str(raw or "").strip().lower()
             if not choice:
                 try:
@@ -112,6 +144,12 @@ class QuickAlchemyEvent(ActionCostEvent):
                 except Exception:
                     pass
                 continue
+            for entry in choice_meta:
+                raw_id = str(entry.get("raw") or "").strip().lower()
+                label = str(entry.get("label") or "").strip().lower()
+                if choice in {raw_id, label, str(entry.get("key") or "").strip().lower()}:
+                    choice = raw_id
+                    break
             if choice == "end":
                 return EventResult.cancelled(message="Quick Alchemy anulowane.")
             if choice not in allowed:

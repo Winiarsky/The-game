@@ -13,9 +13,10 @@ from typing import Any
 
 from flask import Flask, jsonify, render_template, request
 
+from board.led_mapping import invert_led_mapping, load_led_mapping
+from board.settings import board_dimensions, load_board_config
+
 BASE_DIR = Path(__file__).resolve().parents[1]
-CONFIG_PATH = BASE_DIR / "config.json"
-LED_POSITIONS_PATH = BASE_DIR / "led_positions.json"
 SCENARIOS_DIR = BASE_DIR.parent / "scenarios"
 SRC_DIR = BASE_DIR.parent / "src"
 GAME_OBJECTS_DIR = SRC_DIR / "GameObjects"
@@ -25,51 +26,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
-
-
-def _load_board_config() -> tuple[int, int]:
-    if not CONFIG_PATH.exists():
-        logger.warning("Nie znaleziono pliku config.json, uzywam wartosci domyslnych 15x20.")
-        return 15, 20
-    with CONFIG_PATH.open("r", encoding="utf-8") as cfg_file:
-        config_data = json.load(cfg_file)
-    return config_data.get("n_rows", 15), config_data.get("n_cols", 20)
-
-
-def _load_led_mapping(rows: int, cols: int) -> dict[int, tuple[int, int]]:
-    """Zamien mapowanie (row, col) -> led na odwrotne."""
-    with LED_POSITIONS_PATH.open("r", encoding="utf-8") as led_file:
-        led_positions: dict[str, dict[str, int]] = json.load(led_file)
-
-    outer_count = len(led_positions)
-    inner_count = len(next(iter(led_positions.values())))
-
-    if outer_count == rows and inner_count == cols:
-        logger.info("LED mapping dopasowano bez transponowania (%s x %s).", rows, cols)
-
-        def to_cell(outer_key: str, inner_key: str) -> tuple[int, int]:
-            return int(outer_key), int(inner_key)
-
-    elif outer_count == cols and inner_count == rows:
-        logger.info("LED mapping wymaga transpozycji (%s x %s).", rows, cols)
-
-        def to_cell(outer_key: str, inner_key: str) -> tuple[int, int]:
-            # Obsługa niezgodności kolejności wymiarów w pliku konfiguracyjnym.
-            return int(inner_key), int(outer_key)
-
-    else:
-        raise ValueError(
-            f"Nieoczekiwany rozmiar mapowania LED ({outer_count} x {inner_count}) "
-            f"dla planszy {rows} x {cols}."
-        )
-
-    led_to_cell: dict[int, tuple[int, int]] = {}
-    for outer_key, inner_values in led_positions.items():
-        for inner_key, led_index in inner_values.items():
-            led_to_cell[int(led_index)] = to_cell(outer_key, inner_key)
-
-    return led_to_cell
-
 
 def _scenario_path(name: str) -> Path:
     safe_name = Path(name).stem  # usuń rozszerzenia / ścieżki
@@ -98,8 +54,9 @@ except Exception as exc:  # pragma: no cover - zabezpieczenie gdy pakiet nie ist
     preset_directives = None  # type: ignore
 
 
-BOARD_ROWS, BOARD_COLS = _load_board_config()
-LED_TO_CELL = _load_led_mapping(BOARD_ROWS, BOARD_COLS)
+BOARD_CONFIG = load_board_config()
+BOARD_ROWS, BOARD_COLS = board_dimensions(BOARD_CONFIG)
+LED_TO_CELL = invert_led_mapping(load_led_mapping(rows=BOARD_ROWS, cols=BOARD_COLS))
 
 board_state: list[list[list[int] | None]] = [
     [None for _ in range(BOARD_COLS)] for _ in range(BOARD_ROWS)
@@ -327,7 +284,7 @@ def runtime_start():
 
     ui_host = "127.0.0.1"
     ui_port = _find_free_port(ui_host, int(payload.get("ui_port") or 5100))
-    esp_ip = request.host_url.rstrip("/")
+    board_url = request.host_url.rstrip("/")
     cmd = [
         sys.executable,
         "main.py",
@@ -336,8 +293,10 @@ def runtime_start():
         ui_host,
         "--ui-port",
         str(ui_port),
-        "--esp-ip",
-        esp_ip,
+        "--board-backend",
+        "simulator",
+        "--board-url",
+        board_url,
         "--encounter-biome",
         normalized["biome"],
         "--encounter-threat",
@@ -363,7 +322,8 @@ def runtime_start():
         runtime_process = proc
         runtime_info = {
             "ui_url": ui_url,
-            "esp_ip": esp_ip,
+            "board_backend": "simulator",
+            "board_url": board_url,
             "hero_ids": hero_ids,
             "encounter": normalized,
             "metadata": metadata,

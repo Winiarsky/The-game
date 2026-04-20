@@ -1,0 +1,85 @@
+{
+    "format": "layered_scenario_v1",
+    "name": "Layered Forest Rooms",
+    "description": "Testowy scenariusz warstwowy: biome forest, 2 roomy, ściany, drzwi, obiekty i dwa gobliny.",
+    "notes": [
+        "Biome obejmuje całą planszę jako warstwa bazowa.",
+        "Stone room jest odgrodzony ścianami i ma jedno przejście przez drzwi.",
+        "Garden patch nakłada trudny teren na część planszy."
+    ],
+    "biome": "forest",
+    "rooms": [
+        {
+            "room_id": "stone_hall",
+            "room_type": "stone_room",
+            "name": "Stone Hall",
+            "origin": [3, 4],
+            "size": [5, 5]
+        },
+        {
+            "room_id": "garden_patch_alpha",
+            "room_type": "garden_patch",
+            "name": "Garden Patch",
+            "origin": [12, 6],
+            "size": [4, 4]
+        }
+    ],
+    "walls": [
+        {"a": [7, 4], "b": [8, 4]},
+        {"a": [7, 5], "b": [8, 5]},
+        {"a": [7, 6], "b": [8, 6]},
+        {"a": [4, 4], "b": [4, 3]},
+        {"a": [5, 4], "b": [5, 3]},
+        {"a": [6, 4], "b": [6, 3]}
+    ],
+    "doors": [
+        {
+            "a": [7, 7],
+            "b": [8, 7],
+            "config": {
+                "locked": false
+            }
+        }
+    ],
+    "objects": [
+        {
+            "category": "Obstacles",
+            "object_id": "simple_obstacle",
+            "positions": [
+                [5, 6],
+                [10, 11]
+            ]
+        },
+        {
+            "category": "Terrains",
+            "object_id": "blocked_field",
+            "positions": [
+                [9, 10]
+            ]
+        }
+    ],
+    "enemies": [
+        {
+            "object_id": "goblin_warrior",
+            "position": [13, 7],
+            "config": {
+                "name": "Garden Goblin"
+            }
+        },
+        {
+            "object_id": "goblin_dog",
+            "position": [15, 8],
+            "config": {
+                "name": "Hunting Dog"
+            }
+        }
+    ],
+    "starting_positions": [
+        [1, 12],
+        [2, 12],
+        [3, 12],
+        [1, 13],
+        [2, 13],
+        [3, 13]
+    ]
+}

@@ -52,11 +52,6 @@ def _prompt_choice(ctx: EventContext, prompt: str, choices: list[str], *, source
         except Exception:
             answer = None
     if answer is None:
-        try:
-            answer = ctx.game.conn.read_card(prompt, choices)
-        except Exception:
-            answer = None
-    if answer is None:
         return None
     raw = str(answer).strip().lower().replace(" ", "_")
     if not raw:

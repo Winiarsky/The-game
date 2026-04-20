@@ -25,6 +25,32 @@ def _has_status(actor, status_id: str) -> bool:
     return False
 
 
+def _prompt_action_choice(ctx: EventContext, prompt: str, choices: list[str], *, source: str) -> str | None:
+    ui = getattr(ctx.game, "ui", None)
+    if ui is None or not hasattr(ui, "prompt_choice"):
+        return None
+    choice_meta = [
+        {
+            "raw": entry,
+            "label": entry,
+            "desc": "Zakończ bez ataku." if entry == "end" else "Wykonaj wybraną akcję.",
+            "key": str(idx),
+        }
+        for idx, entry in enumerate(choices, start=1)
+    ]
+    answer = ui.prompt_choice(
+        prompt,
+        choices=choices,
+        source=source,
+        layout="menu_numpad",
+        title="Sudden Charge",
+        subtitle="Wybierz atak wręcz albo end.",
+        choice_meta=choice_meta,
+    )
+    raw = str(answer or "").strip().lower()
+    return raw or None
+
+
 @register_event
 class SuddenChargeEvent(ActionCostEvent):
     name = "sudden_charge"
@@ -70,9 +96,19 @@ class SuddenChargeEvent(ActionCostEvent):
         except Exception:
             pass
 
-        allowed_melee = self._allowed_melee_events()
+        allowed_melee = sorted(self._allowed_melee_events())
         while True:
-            raw_choice = ctx.game.conn.read_card("Podaj nazwę akcji").strip().lower()
+            raw_choice = str(
+                _prompt_action_choice(
+                    ctx,
+                    "Sudden Charge - wybierz akcję ataku wręcz",
+                    allowed_melee + ["end"],
+                    source=self.name,
+                )
+                or ""
+            ).strip().lower()
+            if not raw_choice:
+                return EventResult.cancelled(message="Sudden Charge: nie wybrano akcji ataku.")
 
             if raw_choice == "end":
                 return EventResult(

@@ -25,7 +25,7 @@ const clearRoomSelectionButton = document.getElementById("clear-room-selection")
 const clearRoomAssignmentsButton = document.getElementById("clear-room-assignments");
 const roomSelectionInfo = document.getElementById("room-selection-info");
 
-const dims = window.BOARD_DIMENSIONS || { rows: 15, cols: 20 };
+const dims = window.BOARD_DIMENSIONS || { rows: 30, cols: 20 };
 
 const VIRTUAL_START_META = {
     category: "Starting",

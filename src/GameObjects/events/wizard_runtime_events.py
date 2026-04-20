@@ -272,20 +272,6 @@ def _decode_menu_selection(answer: str | None, labels: list[str]) -> str | None:
     return None
 
 
-def _read_card(ctx: EventContext, prompt: str, acceptable: list[str]) -> str | None:
-    conn = getattr(ctx.game, "conn", None)
-    reader = getattr(conn, "read_card", None)
-    if not callable(reader):
-        return None
-    try:
-        return str(reader(prompt, acceptable_responses=acceptable) or "").strip().lower() or None
-    except Exception:
-        try:
-            return str(reader(prompt, acceptable) or "").strip().lower() or None
-        except Exception:
-            return None
-
-
 class _DrainWizardBondBase(GameEvent):
     consumes_action = False
     available_in_combat = True
@@ -357,16 +343,6 @@ class _DrainWizardBondBase(GameEvent):
             return EventResult.cancelled(message=f"{self.name}: invalid selection.")
 
         spell_id = str(selected["spell_id"])
-        scanned = _read_card(
-            ctx,
-            f"{self.name}: scan the selected spell card ({spell_id})",
-            acceptable=[spell_id, "cancel"],
-        )
-        if scanned is None or _normalize(scanned) == "cancel":
-            return EventResult.cancelled(message=f"{self.name}: cancelled before casting.")
-        if _normalize(scanned) != spell_id:
-            return EventResult.cancelled(message=f"{self.name}: scanned card does not match chosen spell.")
-
         cast_result = dispatch_event(
             spell_id,
             EventContext(

@@ -22,6 +22,7 @@ for path in (ROOT_DIR, SRC_DIR):
         sys.path.insert(0, str(path))
 
 from board import Connection
+from board.settings import connection_backend, load_board_config, simulator_url as config_simulator_url
 from src.game import Game
 from src import ui_client
 from src.character_creation import CharacterRepository, create_character
@@ -34,12 +35,11 @@ logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
 
-def list_scenarios(directory: Path) -> list[str]:
-    """Zwróć listę dostępnych scenariuszy (nazwy plików bez .json)."""
-    if not directory.exists():
-        logger.error("Katalog ze scenariuszami nie istnieje: %s", directory)
+def list_runtime_scenario_names(scenarios_dir: Path) -> list[str]:
+    root = Path(scenarios_dir)
+    if not root.exists():
         return []
-    return sorted(p.stem for p in directory.glob("*.json"))
+    return sorted(path.stem for path in root.glob("*.json") if path.is_file())
 
 
 def choose_scenario(scenarios: Iterable[str], ui: UIClient | None = None) -> str:
@@ -384,10 +384,10 @@ def main(argv: list[str] | None = None) -> int:
         default=Path("scenarios"),
         help="Katalog z plikami scenariuszy JSON.",
     )
-    parser.add_argument(
-        "--esp-ip",
-        help="Adres HTTP ESP. Jeśli nie podasz, użyjemy domyślnego z board/consts.py.",
-    )
+    parser.add_argument("--board-backend", choices=["hardware", "simulator"], help="Backend planszy.")
+    parser.add_argument("--board-url", help="URL backendu symulatora planszy.")
+    parser.add_argument("--board-serial-port", help="Port szeregowy planszy USB.")
+    parser.add_argument("--wled-url", help="Adres WLED, np. http://wled.local.")
     parser.add_argument(
         "--start-ui",
         action="store_true",
@@ -439,7 +439,7 @@ def main(argv: list[str] | None = None) -> int:
         # nadpisz też ewentualne stare wartości env, by kolejne instancje używały właściwego adresu
         os.environ["PLAYER_UI_URL"] = ui_base
 
-    scenarios = list_scenarios(args.scenarios_dir)
+    scenarios = list_runtime_scenario_names(args.scenarios_dir)
 
     scenario_payload: dict[str, Any] | None = None
     scenario_label: str | None = None
@@ -500,7 +500,15 @@ def main(argv: list[str] | None = None) -> int:
             },
         )
 
-    conn = Connection(esp_ip=args.esp_ip) if args.esp_ip else None
+    board_cfg = load_board_config()
+    resolved_backend = str(args.board_backend or connection_backend(board_cfg)).strip().lower()
+    resolved_board_url = str(args.board_url or config_simulator_url(board_cfg)).strip()
+    conn = Connection(
+        backend=resolved_backend,
+        simulator_url=resolved_board_url or None,
+        serial_port=args.board_serial_port,
+        wled_url=args.wled_url,
+    )
     if scenario_payload is not None:
         game = Game(
             conn=conn,

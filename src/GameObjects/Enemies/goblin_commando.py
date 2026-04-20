@@ -36,11 +36,20 @@ class GoblinCommando(BasicEnemy):
     special_actions: tuple[str, ...] = ("demoralize", "enemy_trip")
     special_reactions: tuple[str, ...] = ("goblin_scuttle",)
     ai_profile: dict[str, object] = None  # type: ignore[assignment]
+    awareness_profile: dict[str, object] = None  # type: ignore[assignment]
     auto_opportunity_attack: bool = False
 
     def __post_init__(self):
         if self.ai_profile is None:
             self.ai_profile = {"role": "raider", "demoralize_opening": True, "preferred_reach_feet": 10}
+        if self.awareness_profile is None:
+            self.awareness_profile = {
+                "awareness_range_feet": 35,
+                "move_trigger_threshold": 0.80,
+                "interaction_trigger_threshold": 0.30,
+                "spell_trigger_threshold": 0.55,
+                "stealth_fail_trigger_threshold": 0.40,
+            }
         super().__post_init__()
 
 
@@ -81,6 +90,13 @@ META = GameObjectMeta(
         "special_reactions": ["goblin_scuttle"],
         "auto_opportunity_attack": False,
         "ai_profile": {"role": "raider", "demoralize_opening": True, "preferred_reach_feet": 10},
+        "awareness_profile": {
+            "awareness_range_feet": 35,
+            "move_trigger_threshold": 0.8,
+            "interaction_trigger_threshold": 0.3,
+            "spell_trigger_threshold": 0.55,
+            "stealth_fail_trigger_threshold": 0.4
+        },
     },
 )
 

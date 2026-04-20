@@ -3,12 +3,12 @@ Repo for e-board game project v2
 
 ## Symulator planszy
 
-Do szybszego testowania logiki gry możesz użyć wbudowanej aplikacji webowej (15×20 pól), która odtwarza zachowanie metod `scan_board`, `set_leds` i `leds_off` klasy `Connection`.
+Do szybszego testowania logiki gry możesz użyć wbudowanej aplikacji webowej (20×30 pól), która odtwarza zachowanie metod `scan_board`, `set_leds` i `leds_off` klasy `Connection`.
 
 1. Zainstaluj zależności: `pip install -r requirements.txt`.
 2. Uruchom serwer: `python -m board.simulator.app`.
 3. Wejdź w przeglądarce na `http://127.0.0.1:5000`.
-4. W kodzie gry ustaw adres `Connection` na `http://127.0.0.1:5000` (np. `Connection(esp_ip="http://127.0.0.1:5000")` albo tymczasowo zmień `ESP_IP` w `board/consts.py`).
+4. Uruchamiaj grę z backendem symulatora, np. `python main.py --board-backend simulator --board-url http://127.0.0.1:5000`.
 
 Na stronie zobaczysz podświetlenia wysłane przez `set_leds`, a każde kliknięcie pola zasymuluje odpowiedź `scan_board` (żądanie GET blokuje się do czasu kliknięcia). Przycisk `leds_off` w kodzie gry czyści całą tablicę.
 
@@ -26,7 +26,7 @@ Mozesz wygenerowac techniczne mapy `SVG` dla wszystkich scenariuszy:
 python scripts/render_scenario_maps.py
 ```
 
-Pliki trafia do katalogu `assets/scenario_maps/`. Kazda plansza ma siatke `20x15`, przeszkody, sciany, tereny specjalne i markery przeciwnikow. Skala wydruku jest ustawiona na `1 kratka = 3.33 cm`, wiec te same pliki mozna wykorzystac jako podklad do wydruku albo jako tlo w symulatorze planszy.
+Pliki trafia do katalogu `assets/scenario_maps/`. Kazda plansza ma siatke `20x30`, przeszkody, sciany, tereny specjalne i markery przeciwnikow. Skala wydruku jest ustawiona na `1 kratka = 3.33 cm`, wiec te same pliki mozna wykorzystac jako podklad do wydruku albo jako tlo w symulatorze planszy.
 Plik `*.svg` to czysta mapa do druku, a odpowiadajacy mu `*_legend.svg` zawiera osobna legende i metadane. Pola startowe nie sa rysowane na glownym pliku mapy.
 
 ## UI graczy (oddzielna aplikacja)

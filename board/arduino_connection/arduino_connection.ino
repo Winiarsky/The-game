@@ -21,7 +21,7 @@
 // #define SDA_PIN 21   // <- ZMIEŃ jeśli używasz innych pinów I²C
 // #define SCL_PIN 22
 
-// // ===== KONFIG MCP23017 (matryca 15x20) =====
+// // ===== KONFIG MCP23017 (archiwalny szkic legacy, dawna matryca) =====
 // Adafruit_MCP23X17 mcpRows;
 // Adafruit_MCP23X17 mcpCols1;
 // Adafruit_MCP23X17 mcpCols2;

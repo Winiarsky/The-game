@@ -1,49 +1,61 @@
 from pathlib import Path
 import sys
+
+import pytest
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from board.connection import Connection
-from time import sleep
 
 
-def test_connection(conn):
+class _FakeHardwareBackend:
+    def __init__(self, scan_cfg, wled_cfg):
+        self.scan_cfg = dict(scan_cfg)
+        self.wled_cfg = dict(wled_cfg)
+        self.serial_port = self.scan_cfg.get("serial_port") or "/dev/fakeUSB0"
+        self.led_updates = []
+        self.closed = False
+
+    def scan_board(self, acceptable_responses=None):
+        if acceptable_responses:
+            return acceptable_responses[0]
+        return (0, 0)
+
+    def set_leds(self, led_updates):
+        self.led_updates = list(led_updates)
+
+    def leds_off(self):
+        self.led_updates = []
+
+    def close(self):
+        self.closed = True
+
+
+@pytest.fixture
+def conn(monkeypatch):
+    monkeypatch.setattr("board.connection._HardwareBackend", _FakeHardwareBackend)
+    return Connection(backend="hardware", serial_port="/dev/ttyUSB0", wled_url="http://192.168.0.77")
+
+
+def test_connection_builds_hardware_backend(conn):
     assert conn is not None
-    assert conn.esp_ip == "http://192.168.0.77"
+    assert conn.backend == "hardware"
+    assert conn.serial_port == "/dev/ttyUSB0"
+    assert conn.wled_url == "http://192.168.0.77"
 
-def test_scan_board(conn):
-    data = conn.scan_board()
-    assert data is not None
-    print("Scanned board data:", data)
+
+def test_scan_board_returns_board_position(conn):
+    assert conn.scan_board([(2, 3)]) == (2, 3)
+
 
 def test_leds_set_and_off(conn):
-    fields = [
-        (0, 0),     # LED 1 - czerwony
-        (1, 1),     # LED 2 - zielony
-        (2, 2),     # LED 3 - niebieski
-        (3, 3),   # LED 4 - żółty
-        (4, 4),
+    conn.set_leds([(0, 0), (1, 29)], [0, 200, 0])
+    assert conn._backend.led_updates == [
+        (0, [0, 200, 0]),
+        (31, [0, 200, 0]),
     ]
-    conn.set_leds(fields, [0,200,0])
-    sleep(5)
-    conn.leds_off()
-    sleep(5)
-    conn.set_leds(fields, [200,0,0])
-    sleep(5)
-    conn.leds_off()
-    sleep(5)
-    conn.set_leds(fields, [0,0,200])
-    sleep(5)
-    conn.leds_off()
 
-def test_read_card(conn):
-    card = conn.read_card("Please scan your card: ")
-    print("Scanned card:", card)
-
-if __name__ == "__main__":
-    conn = Connection()
-    test_connection(conn)
-    test_scan_board(conn)
-    test_leds_set_and_off(conn)
-    test_read_card(conn)
+    conn.leds_off()
+    assert conn._backend.led_updates == []

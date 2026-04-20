@@ -16,14 +16,8 @@ from src.states.start import Start
 
 class _ConnStub:
     def __init__(self, timeline: list[str]):
-        self._responses = ["ACCEPT", "DECLINE"]
         self.calls: list[str] = []
         self.timeline = timeline
-
-    def read_card(self, *_args, **_kwargs):
-        self.calls.append("read_card")
-        self.timeline.append("read_card")
-        return self._responses.pop(0)
 
     def set_leds(self, *_args, **_kwargs):
         self.calls.append("set_leds")
@@ -69,6 +63,7 @@ class _GameStub:
         self.snapshots: list[tuple[object, str | None]] = []
         self.preselected_character_ids = []
         self.preselected_hero_count = 0
+        self.ui = None
 
     def ui_log(self, message: str) -> None:
         self.logs.append(str(message))
@@ -95,6 +90,7 @@ def test_start_setup_selects_hero_before_board_scan_and_shows_place_hint():
     start._maybe_prompt_familiar_owner = lambda *_a, **_k: None  # type: ignore[method-assign]
     start._maybe_prompt_advanced_alchemy = lambda *_a, **_k: None  # type: ignore[method-assign]
     start._maybe_prepare_spells = lambda *_a, **_k: None  # type: ignore[method-assign]
+    start._prompt_menu_choice = lambda **_kwargs: "__start_game__"  # type: ignore[method-assign]
 
     result = start.set_heroes_starting_positions()
 
@@ -148,7 +144,7 @@ def test_start_setup_offers_play_after_first_hero_without_second_card_scan():
 
     assert isinstance(result, HeroesTurn)
     assert len(game.heroes) == 1 and game.heroes[0] is hero
-    assert game.conn.calls.count("read_card") == 1
+    assert "read_card" not in game.conn.calls
     assert any("Setup bohaterów zakończony. Start gry." in msg for msg in game.logs)
 
 
@@ -179,5 +175,5 @@ def test_start_setup_uses_preselected_heroes_without_card_scan():
 
     assert isinstance(result, HeroesTurn)
     assert len(game.heroes) == 1 and game.heroes[0] is hero
-    assert game.conn.calls.count("read_card") == 0
+    assert "read_card" not in game.conn.calls
     assert any("automatycznie" in msg for msg in game.logs)

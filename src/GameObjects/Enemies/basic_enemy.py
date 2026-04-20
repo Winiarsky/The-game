@@ -64,6 +64,7 @@ class BasicEnemy(StatusMixin, BonusMixin, WatchfulMixin, ReactiveMixin, MagicalM
     special_actions: tuple[str, ...] = ()
     special_reactions: tuple[str, ...] = ()
     ai_profile: dict[str, object] = field(default_factory=dict)
+    awareness_profile: dict[str, object] = field(default_factory=dict)
     ai_memory: dict[str, object] = field(default_factory=dict)
     auto_opportunity_attack: bool = True
     loot_items: list[object] = field(default_factory=list)
@@ -108,6 +109,17 @@ class BasicEnemy(StatusMixin, BonusMixin, WatchfulMixin, ReactiveMixin, MagicalM
             ensure_actor_inventory(self)
         except Exception:
             pass
+        default_awareness = {
+            "awareness_range_feet": 30,
+            "move_trigger_threshold": 0.70,
+            "interaction_trigger_threshold": 0.20,
+            "spell_trigger_threshold": 0.40,
+            "stealth_fail_trigger_threshold": 0.20,
+        }
+        merged_awareness = dict(default_awareness)
+        if isinstance(self.awareness_profile, dict):
+            merged_awareness.update(self.awareness_profile)
+        self.awareness_profile = merged_awareness
 
     def __hash__(self):
         return hash(self.object_id)

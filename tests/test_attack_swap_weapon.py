@@ -24,9 +24,8 @@ class FakeEvents:
 
 
 class FakeConn:
-    def __init__(self, *, board_choice=None, card_choices=None):
+    def __init__(self, *, board_choice=None):
         self.board_choice = board_choice
-        self.card_choices = list(card_choices or [])
 
     def set_leds(self, *args, **kwargs):
         return None
@@ -41,10 +40,19 @@ class FakeConn:
     def leds_off(self):
         return None
 
-    def read_card(self, *_args, **_kwargs):
-        if self.card_choices:
-            return self.card_choices.pop(0)
-        return ""
+
+class DummyUI:
+    def __init__(self, choices=None):
+        self.enabled = True
+        self.allow_cli_fallback = False
+        self.choices = list(choices or [])
+
+    def prompt_choice(self, _prompt, choices=None, **_kwargs):
+        if self.choices:
+            return self.choices.pop(0)
+        if choices:
+            return choices[0]
+        return None
 
 
 class FakeBoard:
@@ -87,12 +95,13 @@ class FakeBoard:
 
 
 class FakeGame:
-    def __init__(self, *, conn):
+    def __init__(self, *, conn, ui=None):
         self.events = FakeEvents()
         self.heroes = []
         self.enemies = []
         self.board = FakeBoard()
         self.conn = conn
+        self.ui = ui if ui is not None else DummyUI()
         self.ui_log = lambda *_a, **_k: None
 
 
@@ -133,7 +142,7 @@ def _ctx(game, hero):
 
 def test_swap_weapon_changes_active_weapon_from_scanned_card():
     hero = Hero((0, 0))
-    game = FakeGame(conn=FakeConn(card_choices=["longbow"]))
+    game = FakeGame(conn=FakeConn(), ui=DummyUI(["longbow"]))
     game.heroes = [hero]
 
     result = dispatch_event("swap_weapon", _ctx(game, hero))
@@ -147,7 +156,7 @@ def test_swap_weapon_rejects_weapon_outside_hero_loadout():
     hero = Hero((0, 0))
     hero.weapon_loadout = ["sword", "unarmed"]
     hero.active_weapon = "sword"
-    game = FakeGame(conn=FakeConn(card_choices=["longbow"]))
+    game = FakeGame(conn=FakeConn(), ui=DummyUI(["longbow"]))
     game.heroes = [hero]
 
     result = dispatch_event("swap_weapon", _ctx(game, hero))
@@ -180,7 +189,7 @@ def test_attack_uses_current_active_weapon_sword(monkeypatch):
 def test_attack_after_swap_weapon_uses_longbow(monkeypatch):
     hero = Hero((0, 0))
     enemy = Enemy((2, 0), hp=11, ac=10)
-    game = FakeGame(conn=FakeConn(board_choice=enemy.position, card_choices=["longbow"]))
+    game = FakeGame(conn=FakeConn(board_choice=enemy.position), ui=DummyUI(["longbow"]))
     game.heroes = [hero]
     game.enemies = [enemy]
     game.board.occupants = {hero.position: hero, enemy.position: enemy}

@@ -50,9 +50,26 @@ class FakeConn:
 
 class DummyUI:
     enabled = True
+    allow_cli_fallback = False
 
-    def __init__(self):
+    def __init__(self, responses=None):
         self.info_calls = []
+        self.prompt_calls = []
+        self.responses = list(responses or [])
+
+    def prompt_choice(self, prompt, choices=None, **kwargs):
+        self.prompt_calls.append(
+            {
+                "prompt": prompt,
+                "choices": list(choices or []),
+                "kwargs": dict(kwargs),
+            }
+        )
+        if self.responses:
+            return self.responses.pop(0)
+        if choices:
+            return choices[0]
+        return None
 
     def prompt_info(self, title, *, prompt_long=None, **_kwargs):
         self.info_calls.append((title, prompt_long))
@@ -99,18 +116,18 @@ def test_alchemsit_alias_points_to_alchemist_status():
 def test_quick_alchemy_reprompts_invalid_then_creates_item(monkeypatch):
     hero = Hero(position=(0, 0))
     hero.add_status(Status(id="quick_alchemy_allow"))
-    conn = FakeConn(["attack", "alchemists_fire"])
+    conn = FakeConn([])
     game = _make_game(hero, conn)
 
-    ui = DummyUI()
+    ui = DummyUI(["attack", "alchemists_fire"])
     monkeypatch.setattr("ui_client.get_ui_client", lambda: ui)
+    game.ui = ui
 
     result = QuickAlchemyEvent().run(EventContext(game=game, actor=hero))
 
     assert result.success is True
     assert result.consumed_action is True
     assert result.actions_spent == 1
-    assert conn.read_calls == 2
     assert "alchemists fire" in (result.message or "").lower()
     assert has_ready_alchemical_item(hero, "alchemists_fire") is False
 
@@ -122,8 +139,9 @@ def test_quick_alchemy_reprompts_invalid_then_creates_item(monkeypatch):
 def test_quick_alchemy_end_cancels_without_cost():
     hero = Hero(position=(0, 0))
     hero.add_status(Status(id="quick_alchemy_allow"))
-    conn = FakeConn(["end"])
+    conn = FakeConn([])
     game = _make_game(hero, conn)
+    game.ui = DummyUI(["end"])
 
     result = QuickAlchemyEvent().run(EventContext(game=game, actor=hero))
 
@@ -136,10 +154,13 @@ def test_quick_alchemy_end_cancels_without_cost():
 def test_quick_alchemy_item_becomes_ready_after_end_of_turn():
     hero = Hero(position=(0, 0))
     hero.add_status(Status(id="quick_alchemy_allow"))
-    conn = FakeConn(["alchemists_fire"])
+    conn = FakeConn([])
     game = _make_game(hero, conn)
+    game.ui = DummyUI(["alchemists_fire"])
     combat = game.state
 
+    hero.initiative = 10
+    combat.base_initiative = {hero: 10}
     combat.base_order = [hero]
     combat.round_queue = [hero]
     combat.initiative_order = [hero]

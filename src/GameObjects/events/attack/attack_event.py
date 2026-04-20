@@ -34,7 +34,7 @@ def _select_weapon_from_equipped(ctx: EventContext, equipped: list[object]) -> o
         )
 
     ui = getattr(ctx.game, "ui", None)
-    if ui and getattr(ui, "enabled", False):
+    if ui and hasattr(ui, "prompt_choice"):
         answer = ui.prompt_choice(
             "Wybierz broń do ataku",
             choices=[entry["label"] for entry in labels],
@@ -54,15 +54,6 @@ def _select_weapon_from_equipped(ctx: EventContext, equipped: list[object]) -> o
             for entry, weapon in zip(labels, equipped):
                 if normalized in (entry["raw"].lower(), entry["label"].lower()):
                     return weapon
-
-    acceptable = [normalize_weapon_id(getattr(item, "item_id", None)) or item_label(item).lower() for item in equipped]
-    answer = ctx.game.conn.read_card("Wybierz broń do ataku", acceptable).strip().lower()
-    for weapon in equipped:
-        weapon_id = normalize_weapon_id(getattr(weapon, "item_id", None))
-        if answer == (weapon_id or "").lower():
-            return weapon
-        if answer == item_label(weapon).strip().lower():
-            return weapon
     return None
 
 

@@ -498,7 +498,7 @@ class EquipEvent(ActionCostEvent):
 
     def _read_command(self, ctx: EventContext, *, prompt_long: str, subtitle: str) -> str:
         ui = getattr(ctx.game, "ui", None)
-        if ui and getattr(ui, "enabled", False):
+        if ui and hasattr(ui, "prompt_choice"):
             choice_meta: list[dict[str, str]] = [
                 {"raw": "up", "label": "Góra", "desc": "Przesuń zaznaczenie do góry.", "key": "8"},
                 {"raw": "down", "label": "Dół", "desc": "Przesuń zaznaczenie w dół.", "key": "2"},
@@ -523,11 +523,7 @@ class EquipEvent(ActionCostEvent):
                 image=_PROMPT_IMAGE,
             )
             return _decode_ui_command(ans, choice_meta)
-        try:
-            raw = ctx.game.conn.read_card("Ekwipunek: 8/2/4/6/7/9/*//Enter/0", [])
-        except Exception:
-            raw = ""
-        return _command_from_raw(raw)
+        return None
 
     def _drop_item(self, ctx: EventContext, actor, item) -> tuple[bool, str]:
         actor_pos = getattr(actor, "position", None)

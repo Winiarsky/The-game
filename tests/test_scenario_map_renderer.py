@@ -20,7 +20,7 @@ def test_load_scenario_data_collects_goblin_features():
     data = load_scenario_data(PROJECT_ROOT / "scenarios" / "goblin_skirmish.json", rows=rows, cols=cols)
 
     assert data.cols == 20
-    assert data.rows == 15
+    assert data.rows == 30
     assert len(data.starting_positions) == 6
     assert data.terrains[(6, 5)] == "blocked_field"
     assert (4, 6) in data.obstacles
