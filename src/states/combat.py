@@ -33,6 +33,7 @@ from spell_management import ensure_actor_spell_state
 from GameObjects.events import EventContext
 from GameObjects.events.registry import dispatch_event, list_events
 import GameObjects.events.all_events  # noqa: F401
+from enemy_prompting import clear_enemy_highlight, enemy_highlight, enemy_prompt_step
 
 logger = logging.getLogger(__name__)
 
@@ -275,6 +276,16 @@ class Combat(State):
             f"{getattr(owner, 'name', 'Bohater')}: Zwierzecy towarzysz ({getattr(companion, 'companion_type', 'wolf')}) "
             f"ustawiony na {selected}."
         )
+        try:
+            self.game.ui_companion(
+                companion,
+                note=(
+                    f"Towarzysz: {getattr(companion, 'companion_type', 'wolf')} · "
+                    f"Właściciel: {getattr(owner, 'name', 'Bohater')}"
+                ),
+            )
+        except Exception:
+            logger.debug("Nie udało się wysłać snapshotu UI companiona.", exc_info=True)
 
     def _find_spawn_positions(self, owner) -> list[tuple[int, int]]:
         board = getattr(self.game, "board", None)
@@ -373,6 +384,10 @@ class Combat(State):
                     board.remove(pos)
                 except Exception:
                     pass
+            try:
+                self.game.ui_companion(companion, note="Pokonany towarzysz")
+            except Exception:
+                logger.debug("Nie udało się odświeżyć UI dla pokonanego companiona.", exc_info=True)
             self.animal_companions.pop(owner_id, None)
             self.game.ui_log(
                 f"{getattr(companion, 'name', 'Zwierzecy towarzysz')} zostal pokonany i znika z planszy."
@@ -1380,20 +1395,33 @@ class Combat(State):
         used = self.actions_used.get(enemy, 0)
         limit = self._action_limit(enemy)
         behavior_fn = get_behavior(getattr(enemy, "behavior_id", None))
-        while used < limit:
-            try:
-                spent = behavior_fn(enemy, self.game, self, actions_left=limit - used)
-            except Exception as exc:
-                logger.error("AI przeciwnika (%s) nie powiodło się: %s", behavior_fn.__name__, exc)
-                self.game.ui_log(f"AI przeciwnika nie powiodło się: {exc}")
-                break
-            spent = int(spent or 0)
-            used += spent
-            self.actions_used[enemy] = used
-            if spent <= 0:
-                break
-            if used >= limit:
-                break
+        try:
+            while used < limit:
+                enemy_prompt_step(
+                    self.game,
+                    f"{getattr(enemy, 'name', 'Enemy')} myśli...",
+                    prompt_long=(
+                        f"Przeciwnik analizuje sytuację.\n"
+                        f"Akcje wykorzystane: {used}/{limit}.\n"
+                        "Potwierdź Enterem, aby przejść do jego decyzji."
+                    ),
+                    source="enemy_turn_thinking",
+                )
+                try:
+                    spent = behavior_fn(enemy, self.game, self, actions_left=limit - used)
+                except Exception as exc:
+                    logger.error("AI przeciwnika (%s) nie powiodło się: %s", behavior_fn.__name__, exc)
+                    self.game.ui_log(f"AI przeciwnika nie powiodło się: {exc}")
+                    break
+                spent = int(spent or 0)
+                used += spent
+                self.actions_used[enemy] = used
+                if spent <= 0:
+                    break
+                if used >= limit:
+                    break
+        finally:
+            clear_enemy_highlight(self.game)
         self._advance_turn()
         return self
 
@@ -1418,6 +1446,19 @@ class Combat(State):
             remaining = limit - self.actions_used.get(actor, 0)
             logger.info("Tura przeciwnika: %s (akcje pozostałe: %s/%s)", getattr(actor, "name", "Enemy"), remaining, limit)
             self.game.ui_log(f"Tura przeciwnika: {getattr(actor, 'name', 'Enemy')} (akcje {remaining}/{limit})")
+            actor_pos = getattr(actor, "position", None)
+            if actor_pos is not None:
+                enemy_highlight(self.game, [actor_pos], [consts.ENEMY_START_RGB])
+            enemy_prompt_step(
+                self.game,
+                f"Tura przeciwnika: {getattr(actor, 'name', 'Enemy')}",
+                prompt_long=(
+                    f"Przeciwnik rozpoczyna turę.\n"
+                    f"Akcje pozostałe: {remaining}/{limit}.\n"
+                    "Potwierdź Enterem, aby obserwować kolejne kroki przeciwnika."
+                ),
+                source="enemy_turn_start",
+            )
             return self._process_enemy_turn(actor)
 
         # Hero turn

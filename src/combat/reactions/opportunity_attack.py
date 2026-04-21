@@ -10,6 +10,7 @@ from combat.damage_utils import burn_it_bonus, burn_it_prompt_note, remove_defea
 from combat.degree_of_success import is_critical_success, is_hit, natural_shift_from_roll, resolve_outcome
 from combat.flanking import effective_ac
 from combat.hp_engine import apply_damage as hp_apply_damage
+from enemy_prompting import enemy_prompt_step
 from .base import Reaction
 
 logger = logging.getLogger(__name__)
@@ -133,7 +134,19 @@ class OpportunityAttack(Reaction):
         total, target_ac, crit, hit = self._roll_attack(enemy, target, game)
         msg = f"{getattr(enemy, 'name', 'wróg')} wykonuje atak okazyjny: r={total} vs AC {target_ac}"
         logger.info(msg)
-        game.ui_log(msg)
+        enemy_prompt_step(
+            game,
+            f"Reakcja przeciwnika: {getattr(enemy, 'name', 'wróg')}",
+            prompt_long=(
+                f"Przeciwnik wykonuje atak okazyjny przeciw {getattr(target, 'name', 'celowi')}.\n"
+                f"Wynik testu: {total}\n"
+                f"Próg obrony: AC {target_ac}\n"
+                f"Outcome: {'hit' if hit else 'miss'}{' (critical)' if crit else ''}\n"
+                "Potwierdź Enterem, aby rozstrzygnąć reakcję."
+            ),
+            source="reaction:opportunity_attack_enemy",
+            log_message=msg,
+        )
         if not hit:
             return True, False
         damage = random.randint(1, 6) + getattr(enemy, "strength", 0)
@@ -147,7 +160,18 @@ class OpportunityAttack(Reaction):
                 defeated = bool(info.get("defeated", False))
         except Exception:
             pass
-        game.ui_log(f"Atak okazyjny zadaje {damage} obrażeń.")
+        enemy_prompt_step(
+            game,
+            f"Wynik reakcji: {getattr(enemy, 'name', 'wróg')}",
+            prompt_long=(
+                f"Atak okazyjny trafia.\n"
+                f"Obrażenia: {damage}.\n"
+                f"Cel pokonany: {'tak' if defeated else 'nie'}.\n"
+                "Zastosuj wynik i potwierdź Enterem."
+            ),
+            source="reaction:opportunity_attack_enemy_result",
+            log_message=f"Atak okazyjny zadaje {damage} obrażeń.",
+        )
         if defeated:
             try:
                 game.ui_log(f"{getattr(target, 'name', 'Cel')} pada od ataku okazyjnego.")

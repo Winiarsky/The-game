@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Edytor Flow Scenariusza</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body class="scenario-editor">
+    <header class="page-header">
+        <div>
+            <h1>Edytor flow scenariusza</h1>
+            <p>Łącz wiele map w grywalny scenariusz: przejścia, flagi, eventy i cele.</p>
+        </div>
+        <a class="link-back" href="/">⬅ Powrót do symulatora</a>
+    </header>
+
+    <main class="editor-layout flow-editor-layout">
+        <aside class="side-panel flow-editor-full">
+            <section class="panel">
+                <h2>Scenario Flow</h2>
+                <div class="form-row">
+                    <label for="flow-select">Istniejące flow:</label>
+                    <div class="inline-group">
+                        <select id="flow-select"></select>
+                        <button type="button" id="flow-load">Wczytaj</button>
+                        <button type="button" id="flow-refresh">Odśwież</button>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <label for="flow-name">Nazwa zapisu (.json):</label>
+                    <input id="flow-name" type="text" placeholder="bandit_cave">
+                </div>
+                <div class="form-row">
+                    <label for="flow-label">Etykieta:</label>
+                    <input id="flow-label" type="text" placeholder="Bandit Cave">
+                </div>
+                <div class="form-row">
+                    <label for="flow-description">Opis:</label>
+                    <textarea id="flow-description" rows="3" placeholder="Opis scenariusza"></textarea>
+                </div>
+                <div class="form-row">
+                    <label for="entry-map-id">Entry map:</label>
+                    <select id="entry-map-id"></select>
+                </div>
+                <div class="inline-group">
+                    <button type="button" id="flow-save">Zapisz flow</button>
+                    <button type="button" id="flow-download">Pobierz JSON</button>
+                </div>
+                <p id="flow-status" class="muted">Wczytaj flow albo zbuduj nowe.</p>
+            </section>
+
+            <section class="panel">
+                <h2>Mapa źródeł</h2>
+                <p class="muted" id="map-catalog-status">Ładowanie katalogu map...</p>
+                <div id="maps-list" class="flow-list"></div>
+                <button type="button" id="map-add">+ Dodaj mapę</button>
+            </section>
+
+            <section class="panel">
+                <h2>Przejścia</h2>
+                <p class="muted">`exit_id` musi istnieć na mapie źródłowej, a anchor na mapie docelowej.</p>
+                <div id="transitions-list" class="flow-list"></div>
+                <button type="button" id="transition-add">+ Dodaj przejście</button>
+            </section>
+
+            <section class="panel">
+                <h2>Global Flags</h2>
+                <div id="flags-list" class="flow-list"></div>
+                <button type="button" id="flag-add">+ Dodaj flagę</button>
+            </section>
+
+            <section class="panel">
+                <h2>Eventy</h2>
+                <p class="muted">Conditions i actions wpisujesz jako JSON array.</p>
+                <div id="events-list" class="flow-list"></div>
+                <button type="button" id="event-add">+ Dodaj event</button>
+            </section>
+
+            <section class="panel">
+                <h2>Cele</h2>
+                <div id="objectives-list" class="flow-list"></div>
+                <button type="button" id="objective-add">+ Dodaj cel</button>
+            </section>
+
+            <section class="panel">
+                <h2>Checkpoint Policy</h2>
+                <div class="form-row">
+                    <label for="checkpoint-transition">Checkpoint na transition:</label>
+                    <select id="checkpoint-transition">
+                        <option value="auto" selected>auto</option>
+                        <option value="off">off</option>
+                    </select>
+                </div>
+            </section>
+        </aside>
+    </main>
+
+    <template id="toast-template">
+        <div class="toast"></div>
+    </template>
+
+    <script src="{{ url_for('static', filename='scenario_flow_editor.js') }}"></script>
+</body>
+</html>

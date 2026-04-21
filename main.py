@@ -24,6 +24,8 @@ for path in (ROOT_DIR, SRC_DIR):
 from board import Connection
 from board.settings import connection_backend, load_board_config, simulator_url as config_simulator_url
 from src.game import Game
+from src.scenario_flow import list_scenario_flow_names, scenario_flow_path
+from src.scenario_session import ScenarioSession
 from src import ui_client
 from src.character_creation import CharacterRepository, create_character
 from src.encounters import EncounterRequest, generate_encounter, preset_directives
@@ -37,9 +39,11 @@ logger = logging.getLogger(__name__)
 
 def list_runtime_scenario_names(scenarios_dir: Path) -> list[str]:
     root = Path(scenarios_dir)
-    if not root.exists():
-        return []
-    return sorted(path.stem for path in root.glob("*.json") if path.is_file())
+    names: set[str] = set()
+    if root.exists():
+        names.update(path.stem for path in root.glob("*.json") if path.is_file())
+    names.update(list_scenario_flow_names())
+    return sorted(names)
 
 
 def choose_scenario(scenarios: Iterable[str], ui: UIClient | None = None) -> str:
@@ -334,6 +338,17 @@ def default_game_loop(game: Game) -> None:
         game.run_action("choose_action")
 
 
+def default_session_loop(session: ScenarioSession) -> None:
+    session.run_loop()
+
+
+def _has_scenario_flow(name: str) -> bool:
+    try:
+        return scenario_flow_path(name).exists()
+    except Exception:
+        return False
+
+
 def _find_free_port(host: str, preferred: int, attempts: int = 10) -> int:
     """Znajdź wolny port zaczynając od preferred na wskazanym hoście."""
     for offset in range(attempts):
@@ -491,7 +506,8 @@ def main(argv: list[str] | None = None) -> int:
                 continue
             break
 
-    if ui and ui.enabled:
+    should_announce_start = not (scenario_payload is None and _has_scenario_flow(scenario_name))
+    if ui and ui.enabled and should_announce_start:
         ui.send_event(
             "info",
             {
@@ -509,25 +525,35 @@ def main(argv: list[str] | None = None) -> int:
         serial_port=args.board_serial_port,
         wled_url=args.wled_url,
     )
+    runtime = None
     if scenario_payload is not None:
-        game = Game(
+        runtime = Game(
             conn=conn,
             scenario=scenario_name,
             scenario_payload=scenario_payload,
             scenario_label=scenario_label,
             preselected_character_ids=args.hero_id or None,
         )
+    elif _has_scenario_flow(scenario_name):
+        runtime = ScenarioSession(
+            conn=conn,
+            scenario=scenario_name,
+            preselected_character_ids=args.hero_id or None,
+        )
     else:
-        game = Game(conn=conn, scenario=scenario_name, preselected_character_ids=args.hero_id or None)
+        runtime = Game(conn=conn, scenario=scenario_name, preselected_character_ids=args.hero_id or None)
     logger.info("Uruchamiam scenariusz: %s", scenario_label or scenario_name)
 
     try:
-        default_game_loop(game)
+        if isinstance(runtime, ScenarioSession):
+            default_session_loop(runtime)
+        else:
+            default_game_loop(runtime)
     except KeyboardInterrupt:
         logger.info("Przerwano przez użytkownika.")
     finally:
         try:
-            game.conn.leds_off()
+            conn.leds_off()
         except Exception:
             pass
         if ui_proc is not None:

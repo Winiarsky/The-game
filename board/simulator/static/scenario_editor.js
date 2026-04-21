@@ -64,6 +64,8 @@ const OBJECT_SHORT_CODES = {
     goblin_dog: "GD",
     goblin_commando: "GC",
     dart_launcher_trap: "TR",
+    scenario_exit: "EX",
+    entry_anchor: "EN",
 };
 
 let cells = [];
@@ -1150,6 +1152,42 @@ function buildScenarioPayload() {
     };
 }
 
+function validateScenarioPayload(payload) {
+    const exitIds = new Set();
+    const anchorIds = new Set();
+    const duplicateExits = new Set();
+    const duplicateAnchors = new Set();
+    const objects = Array.isArray(payload?.objects) ? payload.objects : [];
+    objects.forEach((obj) => {
+        if (obj?.category !== "Interactables") return;
+        const instances = Array.isArray(obj.instances) ? obj.instances : [];
+        instances.forEach((inst) => {
+            const config = inst?.config || {};
+            if (obj.object_id === "scenario_exit") {
+                const exitId = String(config.exit_id || "").trim();
+                if (!exitId) return;
+                if (exitIds.has(exitId)) duplicateExits.add(exitId);
+                exitIds.add(exitId);
+            }
+            if (obj.object_id === "entry_anchor") {
+                const anchorId = String(config.entry_anchor_id || "").trim();
+                if (!anchorId) return;
+                if (anchorIds.has(anchorId)) duplicateAnchors.add(anchorId);
+                anchorIds.add(anchorId);
+            }
+        });
+    });
+    if (duplicateExits.size) {
+        throw new Error(`Zduplikowane exit_id: ${Array.from(duplicateExits).join(", ")}`);
+    }
+    if (duplicateAnchors.size) {
+        throw new Error(`Zduplikowane entry_anchor_id: ${Array.from(duplicateAnchors).join(", ")}`);
+    }
+    if (!anchorIds.size) {
+        showToast("Ostrzeżenie: mapa nie ma żadnego entry_anchor.");
+    }
+}
+
 async function saveScenario() {
     const name = (scenarioNameInput.value || "scenario_edited").trim();
     if (!name) {
@@ -1157,6 +1195,12 @@ async function saveScenario() {
         return;
     }
     const payload = buildScenarioPayload();
+    try {
+        validateScenarioPayload(payload);
+    } catch (error) {
+        showToast(error.message);
+        return;
+    }
     try {
         const response = await fetch(`/api/scenarios/${encodeURIComponent(name)}`, {
             method: "POST",
@@ -1177,6 +1221,12 @@ async function saveScenario() {
 function downloadScenario() {
     const name = (scenarioNameInput.value || "scenario_edited").replace(/\.[^/.]+$/, "");
     const payload = buildScenarioPayload();
+    try {
+        validateScenarioPayload(payload);
+    } catch (error) {
+        showToast(error.message);
+        return;
+    }
     const blob = new Blob([JSON.stringify(payload, null, 4)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");

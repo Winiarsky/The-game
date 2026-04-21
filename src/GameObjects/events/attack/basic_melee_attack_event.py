@@ -297,6 +297,9 @@ class BasicMeleeAttackEvent(AttackEventBase):
         if self._attacker_has_combat_stealth(hero):
             metadata.setdefault("force_off_guard", True)
             metadata.setdefault("force_flat_footed_source", "stealth")
+        elif self._exploration_ambush_applies(ctx, hero, enemy):
+            metadata.setdefault("force_off_guard", True)
+            metadata.setdefault("force_flat_footed_source", "exploration_ambush")
 
         is_off_guard_for_attack, target_natural_flat_footed, surprise_attack_active = self._is_off_guard_for_attack(
             ctx,
@@ -494,6 +497,8 @@ class BasicMeleeAttackEvent(AttackEventBase):
             trait_notes.append("Finesse: możesz użyć ZR zamiast SI do premii ataku.")
         if surprise_attack_active:
             trait_notes.append("Surprise Attack: cel traktowany jako flat-footed (-2 AC vs ten atak).")
+        elif str(metadata.get("force_flat_footed_source", "") or "").strip().lower() == "exploration_ambush":
+            trait_notes.append("Atak z zaskoczenia: poza walką cel jest flat-footed (-2 AC vs ten atak).")
         modifier, best_effects, log_lines = self._attack_modifier_details(
             hero, action_tag, target=enemy, extra_effects=extra_effects or None
         )
@@ -1240,7 +1245,7 @@ class BasicMeleeAttackEvent(AttackEventBase):
         enemies = []
         for npos in neighbors:
             occ = board.occupant_at(npos)
-            if occ in game.enemies:
+            if BasicMeleeAttackEvent._is_enemy_candidate(game, occ):
                 enemies.append((occ, npos))
         return enemies
 
@@ -1268,9 +1273,37 @@ class BasicMeleeAttackEvent(AttackEventBase):
                 except Exception:
                     continue
                 occ = board.occupant_at(npos)
-                if occ in game.enemies:
+                if self._is_enemy_candidate(game, occ):
                     enemies.append((occ, npos))
         return enemies
+
+    @staticmethod
+    def _is_enemy_candidate(game, occ) -> bool:
+        if occ is None:
+            return False
+        if occ in getattr(game, "heroes", []):
+            return False
+        if occ in getattr(game, "enemies", []):
+            return True
+        module_name = str(getattr(getattr(occ, "__class__", None), "__module__", "") or "")
+        if module_name.startswith("GameObjects.Enemies.") or module_name == "GameObjects.Enemies.basic_enemy":
+            if getattr(occ, "position", None) is None:
+                return False
+            try:
+                return int(getattr(occ, "hp", 1) or 0) > 0
+            except Exception:
+                return True
+        if getattr(occ, "behavior_id", None) is not None and getattr(occ, "position", None) is not None:
+            try:
+                return int(getattr(occ, "hp", 1) or 0) > 0
+            except Exception:
+                return True
+        if getattr(occ, "position", None) is not None and hasattr(occ, "hp") and hasattr(occ, "ac"):
+            try:
+                return int(getattr(occ, "hp", 1) or 0) > 0
+            except Exception:
+                return True
+        return False
 
     def _threat_positions(self, game, pos, tags):
         board = game.board

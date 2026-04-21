@@ -11,6 +11,7 @@
         <h1>Symulator planszy</h1>
         <p>Kliknij pole aby odpowiedzieć na <code>scan_board</code>. Podświetlenia pokazują wynik <code>set_leds</code> dla planszy 20x30.</p>
         <p><a class="link-secondary" href="/scenario-editor">Przejdź do edytora scenariuszy</a></p>
+        <p><a class="link-secondary" href="/scenario-flow-editor">Przejdź do edytora flow scenariusza</a></p>
     </header>
 
     <section class="status-panel">
@@ -41,6 +42,18 @@
             <button id="scenario-toggle" type="button">Pokaż elementy scenariusza</button>
         </div>
         <p class="muted" id="scenario-status">Brak danych scenariusza.</p>
+    </section>
+
+    <section class="scenario-controls">
+        <div class="scenario-row">
+            <label for="scenario-flow-select">Scenario flow:</label>
+            <select id="scenario-flow-select"></select>
+            <button id="scenario-flow-reload" type="button">Odśwież listę</button>
+        </div>
+        <div class="scenario-row">
+            <button id="scenario-flow-start" type="button">Start scenariusza</button>
+        </div>
+        <p class="muted" id="scenario-flow-status">Brak wybranego flow scenariusza.</p>
     </section>
 
     <section class="encounter-controls">

@@ -29,6 +29,20 @@ def test_karczma_scenario_loads_with_simple_wall():
     assert game.board.walls, "Powinny zostać wczytane ściany ze scenariusza karczma"
 
 
+def test_bandit_cave_entrance_loads_with_closed_top_right_and_bottom_walls():
+    game = Game(conn=DummyConnection(), scenario="bandit_cave_cave_entrance")
+
+    assert game.board.get_wall((0, 3), (0, 4)) is not None
+    assert game.board.get_wall((9, 3), (9, 4)) is not None
+    assert game.board.get_wall((18, 3), (18, 4)) is not None
+    assert game.board.get_wall((18, 4), (19, 4)) is not None
+    assert game.board.get_wall((18, 9), (19, 9)) is not None
+    assert game.board.get_wall((18, 13), (19, 13)) is not None
+    assert game.board.get_wall((0, 13), (0, 14)) is not None
+    assert game.board.get_wall((9, 13), (9, 14)) is not None
+    assert game.board.get_wall((18, 13), (18, 14)) is not None
+
+
 def test_karczma_scenario_loads_trade_npcs_with_default_inventory():
     game = Game(conn=DummyConnection(), scenario="karczma")
 

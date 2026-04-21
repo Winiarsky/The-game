@@ -26,6 +26,45 @@ from .registry import register_event
 logger = logging.getLogger(__name__)
 
 
+def _trigger_room_enemy_combat_if_needed(game, hero) -> None:
+    if getattr(getattr(game, "state", None), "__class__", None).__name__ == "Combat":
+        return
+    hero_pos = getattr(hero, "position", None)
+    board = getattr(game, "board", None)
+    if hero_pos is None or board is None:
+        return
+    rooms_at = getattr(board, "rooms_at", None)
+    hero_rooms = set()
+    if callable(rooms_at):
+        try:
+            hero_rooms = set(rooms_at(hero_pos) or [])
+        except Exception:
+            hero_rooms = set()
+    for enemy in getattr(game, "enemies", []) or []:
+        enemy_pos = getattr(enemy, "position", None)
+        if enemy_pos is None:
+            continue
+        try:
+            if int(getattr(enemy, "hp", 1) or 0) <= 0:
+                continue
+        except Exception:
+            pass
+        if hero_rooms and callable(rooms_at):
+            try:
+                if not hero_rooms.intersection(set(rooms_at(enemy_pos) or [])):
+                    continue
+            except Exception:
+                continue
+        trigger = getattr(enemy, "trigger_combat", None)
+        if callable(trigger):
+            trigger(game)
+        else:
+            starter = getattr(game, "start_combat", None)
+            if callable(starter):
+                starter(trigger=enemy)
+        break
+
+
 @register_event
 class MoveEvent(GameEvent):
     name = "move"
@@ -257,6 +296,7 @@ class MoveEvent(GameEvent):
 
                 if choice == hero_pos:
                     logger.info("Ruch z pozycji prone anulowany.")
+                    _trigger_room_enemy_combat_if_needed(game, moving_hero)
                     return EventResult.noop(message="Anulowano ruch z pozycji prone.")
                 if choice not in available:
                     game.ui_log("Wybierz jedno z podświetlonych pól obok bohatera.")
@@ -307,6 +347,7 @@ class MoveEvent(GameEvent):
                         logger.info("Kliknięto bieżące pole – kończę akcję ruchu.")
                         if active_path_id:
                             game.ui_event("path_clear", {"id": active_path_id})
+                        _trigger_room_enemy_combat_if_needed(game, moving_hero)
                         return EventResult.noop(message="Ruch bez zmian.")
 
                     if not board.can_enter(target, allow_occupied=False):

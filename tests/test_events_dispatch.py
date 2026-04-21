@@ -11,6 +11,7 @@ for path in (PROJECT_ROOT, SRC_ROOT):
         sys.path.insert(0, str(path))
 
 import GameObjects.events.all_events  # noqa: F401  # rejestruje eventy
+from action_events import ActionEventBus
 from GameObjects.events.registry import dispatch_event
 from GameObjects.events.base import EventContext
 from GameObjects.events import attack_sword_event
@@ -129,3 +130,29 @@ def test_attack_sword_applies_damage(monkeypatch):
     result = dispatch_event("sword", ctx)
     assert result.success
     assert enemy.hp == 5
+
+
+def test_action_event_bus_triggers_game_ui_refresh_after_action():
+    actor = types.SimpleNamespace(object_id="hero-1", name="Hero", position=(0, 0))
+    calls = []
+
+    class FakeGameWithRefresh:
+        def __init__(self):
+            self.heroes = [actor]
+            self.enemies = []
+            self.state = None
+
+        def ui_event(self, *_args, **_kwargs):
+            return True
+
+        def refresh_ui_after_action(self, event):
+            calls.append(dict(event))
+
+    game = FakeGameWithRefresh()
+    bus = ActionEventBus(game)
+
+    emitted = bus.safe_emit_action(return_event=True, actor=actor, action_id="move", action_tags=["move"])
+
+    assert emitted is not None
+    assert calls
+    assert calls[-1]["action_id"] == "move"

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from actions.move_utils import find_path, movement_budget_feet, path_cost_feet
 from combat import flanking_positions
+from combat.hero_side_targets import hero_side_targets
 from GameObjects.events.enemy.enemy_strike_event import _EnemyRangeAnalyzer, _select_weapon, _weapon_reach_ft
 
 
@@ -24,7 +25,7 @@ def is_alive(actor) -> bool:
 
 
 def living_heroes(game) -> list[object]:
-    return [hero for hero in getattr(game, "heroes", []) or [] if is_alive(hero)]
+    return [hero for hero in hero_side_targets(game, only_living=True) if is_alive(hero)]
 
 
 def living_enemy_allies(game, actor) -> list[object]:

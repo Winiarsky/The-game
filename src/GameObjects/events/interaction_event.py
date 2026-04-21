@@ -74,6 +74,16 @@ class InteractionEvent(GameEvent):
         if getattr(interactable, "hidden", False) and not getattr(interactable, "revealed", False):
             if getattr(interactable, "allow_hidden_interaction", False):
                 interactable.revealed = True
+                on_reveal = getattr(interactable, "on_reveal", None)
+                if callable(on_reveal):
+                    try:
+                        extra = on_reveal(game, source_actor=actor)
+                    except TypeError:
+                        extra = on_reveal(game)
+                    except Exception:
+                        extra = None
+                    if extra:
+                        game.ui_log(str(extra))
                 logger.info("Odkrywasz ukryty element.")
                 game.conn.set_leds([target], consts.HIDDEN_REVEAL_RGB)
                 sleep(consts.RESPONSE_DELAY)

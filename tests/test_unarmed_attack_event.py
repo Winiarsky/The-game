@@ -98,6 +98,22 @@ class Enemy:
         return self.hp, self.hp <= 0
 
 
+class EnemyLike:
+    def __init__(self, pos, hp=12, ac=10):
+        self.position = pos
+        self.hp = hp
+        self.ac = ac
+        self.behavior_id = "test_enemy"
+        self.last_damage_type = None
+        self.last_damage_amount = None
+
+    def apply_damage(self, amount, dmg_type=""):
+        self.last_damage_type = dmg_type
+        self.last_damage_amount = amount
+        self.hp -= amount
+        return self.hp, self.hp <= 0
+
+
 def _ctx(game, hero):
     return EventContext(game=game, actor=hero)
 
@@ -144,3 +160,27 @@ def test_unarmed_attack_fails_when_enemy_not_adjacent(monkeypatch):
 
     assert not result.success
     assert "zasięgu" in (result.message or "")
+
+
+def test_unarmed_attack_can_hit_enemy_when_companion_is_also_adjacent(monkeypatch):
+    hero = Hero((0, 0))
+    companion = Hero((0, 1))
+    enemy = EnemyLike((1, 0), hp=8, ac=10)
+    game = FakeGame()
+    game.heroes = [hero, companion]
+    game.enemies = []  # fallback do occupant_at na planszy
+    game.board.occupants = {
+        hero.position: hero,
+        companion.position: companion,
+        enemy.position: enemy,
+    }
+    game.conn.choice = enemy.position
+
+    rolls = iter([15, 4])
+    monkeypatch.setattr(basic_melee_attack_event, "prompt_for_roll", lambda *_a, **_k: next(rolls))
+    monkeypatch.setattr(basic_melee_attack_event, "refresh_flanking_statuses", lambda *_a, **_k: None)
+
+    result = dispatch_event("unarmed", _ctx(game, hero))
+
+    assert result.success is True
+    assert enemy.last_damage_amount == 4

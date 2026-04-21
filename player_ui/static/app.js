@@ -1294,6 +1294,10 @@ function handleEvent(event) {
             bulkSummary: payload.bulk_summary || null,
             inventoryItems: payload.inventory_items || [],
             spellcasting: payload.spellcasting || null,
+            isCompanion: Boolean(payload.is_companion),
+            ownerId: payload.owner_id || null,
+            ownerName: payload.owner_name || null,
+            companionType: payload.companion_type || null,
         };
         if (current.creationInProgress) {
             creationPreviewHeroId = id;

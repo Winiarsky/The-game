@@ -228,7 +228,8 @@ def test_command_familiar_distract_applies_penalty_and_consumes(monkeypatch):
     monkeypatch.setattr("GameObjects.events.enemy.basic_enemy_melee_attack_event.random.randint", lambda *_a, **_k: 10)
     BasicEnemyMeleeAttackEvent().execute(EventContext(game=game, actor=enemy))
     assert conn.last_prompt is not None
-    assert "r=9" in conn.last_prompt
+    assert "wynik końcowy" in conn.last_prompt.lower()
+    assert "9" in conn.last_prompt
     assert not enemy.has_status("familiar_distract")
 
 

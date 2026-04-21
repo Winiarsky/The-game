@@ -30,7 +30,7 @@ from board_grid import BoardGrid
 from object_registry import OBJECT_REGISTRY, get_object
 from ui_client import UndoRequested, get_ui_client
 from debug_trace import DebugTrace
-from ui_payloads import build_active_actor_payload, build_hero_snapshot
+from ui_payloads import build_active_actor_payload, build_companion_snapshot, build_hero_snapshot
 
 try:
     from game_objects_loader import scan_game_objects
@@ -502,6 +502,65 @@ class Game:
 
     def ui_hero(self, hero: Hero, note: str | None = None) -> None:
         self.ui_event("hero_snapshot", build_hero_snapshot(hero, note=note))
+
+    def ui_companion(self, companion: Any, note: str | None = None) -> None:
+        self.ui_event("hero_snapshot", build_companion_snapshot(companion, note=note))
+
+    @staticmethod
+    def _is_animal_companion_actor(actor: Any) -> bool:
+        return bool(actor is not None and getattr(actor, "owner_id", None) is not None and getattr(actor, "companion_type", None) is not None)
+
+    def ui_actor_snapshot(self, actor: Any, note: str | None = None) -> None:
+        if actor in getattr(self, "heroes", []):
+            self.ui_hero(actor, note=note)
+        elif self._is_animal_companion_actor(actor):
+            self.ui_companion(actor, note=note)
+
+    def refresh_ui_after_action(self, event: dict[str, Any] | None = None) -> None:
+        event = dict(event or {})
+        state = getattr(self, "state", None)
+        actor = event.get("actor")
+        target = event.get("target")
+
+        refreshed_ids: set[str] = set()
+
+        def _actor_key(obj: Any) -> str:
+            return str(getattr(obj, "object_id", None) or getattr(obj, "name", None) or id(obj))
+
+        def _refresh_one(obj: Any) -> None:
+            if obj is None:
+                return
+            key = _actor_key(obj)
+            if key in refreshed_ids:
+                return
+            refreshed_ids.add(key)
+            if obj in getattr(self, "heroes", []):
+                refresher = getattr(state, "_refresh_hero_ui_snapshot", None)
+                if callable(refresher):
+                    try:
+                        refresher(obj)
+                        return
+                    except Exception:
+                        pass
+                self.ui_hero(obj)
+                return
+            if self._is_animal_companion_actor(obj):
+                owner_name = str(getattr(obj, "owner_name", "") or "").strip()
+                companion_type = str(getattr(obj, "companion_type", "towarzysz") or "towarzysz").replace("_", " ")
+                note_text = f"Towarzysz: {companion_type}"
+                if owner_name:
+                    note_text = f"{note_text} · Właściciel: {owner_name}"
+                self.ui_companion(obj, note=note_text)
+
+        _refresh_one(actor)
+        _refresh_one(target)
+
+        initiative_fn = getattr(state, "_send_initiative_event", None)
+        if callable(initiative_fn):
+            try:
+                initiative_fn()
+            except Exception:
+                pass
 
     def ui_active_actor(self, actor: Any | None) -> None:
         self.ui_event(

@@ -15,7 +15,7 @@ from combat import ac_with_bonuses, effective_ac  # noqa: E402
 from hero import Hero  # noqa: E402
 from statuses.general.fleet import FLEET_STATUS  # noqa: E402
 from statuses.race.human.human import HUMAN_STATUS  # noqa: E402
-from ui_payloads import build_hero_snapshot  # noqa: E402
+from ui_payloads import build_companion_snapshot, build_hero_snapshot  # noqa: E402
 
 
 class CombatCtx(EventContext):
@@ -114,3 +114,34 @@ def test_build_hero_snapshot_includes_spellcasting_counters_and_known_spells():
     assert dict(spellcasting.get("slot_remaining") or {}).get("rank_1") == 2
     assert "gust_of_wind" in list((spellcasting.get("known_spells") or {}).get("rank_1") or [])
     assert "hydraulic_push" in list((spellcasting.get("known_spells") or {}).get("rank_1") or [])
+
+
+def test_build_companion_snapshot_includes_hp_owner_and_companion_flag():
+    companion = type(
+        "Companion",
+        (),
+        {
+            "object_id": "comp-1",
+            "name": "Cedric Companion (Wolf)",
+            "owner_id": "hero-1",
+            "owner_name": "Cedric",
+            "companion_type": "wolf",
+            "level": 1,
+            "position": (4, 5),
+            "hp": 9,
+            "max_hp": 14,
+            "ac": 14,
+            "land_speed_feet": 40,
+            "ability_mods": {"str": 2, "dex": 3, "con": 2},
+            "statuses": [],
+        },
+    )()
+
+    payload = build_companion_snapshot(companion, note="Towarzysz")
+
+    assert payload["is_companion"] is True
+    assert payload["owner_name"] == "Cedric"
+    assert payload["companion_type"] == "wolf"
+    assert payload["wounds"] == 5
+    assert payload["max_hp"] == 14
+    assert payload["speed_feet"] == 40

@@ -11,6 +11,10 @@ const scenarioReloadButton = document.getElementById("scenario-reload");
 const scenarioLoadButton = document.getElementById("scenario-load");
 const scenarioToggleButton = document.getElementById("scenario-toggle");
 const scenarioStatus = document.getElementById("scenario-status");
+const scenarioFlowSelect = document.getElementById("scenario-flow-select");
+const scenarioFlowReloadButton = document.getElementById("scenario-flow-reload");
+const scenarioFlowStartButton = document.getElementById("scenario-flow-start");
+const scenarioFlowStatus = document.getElementById("scenario-flow-status");
 const encounterBiomeSelect = document.getElementById("encounter-biome");
 const encounterThreatSelect = document.getElementById("encounter-threat");
 const encounterLayoutSelect = document.getElementById("encounter-layout");
@@ -66,6 +70,8 @@ const OBJECT_SHORT_CODES = {
     goblin_dog: "GD",
     goblin_commando: "GC",
     dart_launcher_trap: "TR",
+    scenario_exit: "EX",
+    entry_anchor: "EN",
 };
 
 function normalizeScenarioPos(pos) {
@@ -575,6 +581,40 @@ async function refreshScenarioList(selectName) {
     }
 }
 
+async function refreshScenarioFlowList(selectName) {
+    if (!scenarioFlowSelect) return;
+    try {
+        const response = await fetch("/api/scenario-flows");
+        const data = await response.json();
+        const flows = data.scenario_flows || [];
+        scenarioFlowSelect.innerHTML = "";
+        if (!flows.length) {
+            const opt = document.createElement("option");
+            opt.value = "";
+            opt.textContent = "(brak)";
+            scenarioFlowSelect.appendChild(opt);
+            if (scenarioFlowStatus) {
+                scenarioFlowStatus.textContent = "Brak dostępnych flow scenariuszy.";
+            }
+            return;
+        }
+        flows.forEach((name) => {
+            const opt = document.createElement("option");
+            opt.value = name;
+            opt.textContent = name;
+            scenarioFlowSelect.appendChild(opt);
+        });
+        if (selectName && flows.includes(selectName)) {
+            scenarioFlowSelect.value = selectName;
+        }
+        if (scenarioFlowStatus) {
+            scenarioFlowStatus.textContent = `Wybrany flow: ${scenarioFlowSelect.value || flows[0]}`;
+        }
+    } catch (error) {
+        console.error("Nie udało się pobrać listy flow scenariuszy", error);
+    }
+}
+
 function renderScenarioObjects() {
     const scenarioOn = scenarioState.visible;
     for (let row = 0; row < dims.rows; row += 1) {
@@ -933,6 +973,49 @@ async function startEncounterRuntime() {
     }
 }
 
+async function startScenarioFlowRuntime() {
+    const heroIds = selectedHeroIdsList();
+    if (!heroIds.length) {
+        showToast("Wybierz co najmniej jednego bohatera.");
+        return;
+    }
+    const scenario = scenarioFlowSelect?.value || "";
+    if (!scenario) {
+        showToast("Wybierz flow scenariusza.");
+        return;
+    }
+    scenarioFlowStartButton.disabled = true;
+    if (runtimeStatus) {
+        runtimeStatus.textContent = "Uruchamianie runtime scenariusza...";
+    }
+    try {
+        const response = await fetch("/api/runtime/start-scenario", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                scenario,
+                hero_ids: heroIds,
+            }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+            throw new Error(data.error || "Błąd uruchamiania scenariusza");
+        }
+        setRuntimeStatus(data.runtime || {});
+        if (scenarioFlowStatus) {
+            scenarioFlowStatus.textContent = `Uruchomiono flow scenariusza: ${scenario}`;
+        }
+        showToast(`Uruchomiono scenariusz ${scenario}.`);
+    } catch (error) {
+        if (runtimeStatus) {
+            runtimeStatus.textContent = `Błąd runtime: ${error.message}`;
+        }
+        showToast(`Nie udało się uruchomić scenariusza: ${error.message}`);
+    } finally {
+        scenarioFlowStartButton.disabled = false;
+    }
+}
+
 async function stopEncounterRuntime() {
     runtimeStopButton.disabled = true;
     try {
@@ -1014,6 +1097,8 @@ scenarioToggleButton?.addEventListener("click", async () => {
     }
     toggleScenarioVisibility();
 });
+scenarioFlowReloadButton?.addEventListener("click", () => refreshScenarioFlowList(scenarioFlowSelect?.value));
+scenarioFlowStartButton?.addEventListener("click", startScenarioFlowRuntime);
 encounterGenerateButton?.addEventListener("click", generateEncounter);
 encounterStartButton?.addEventListener("click", startEncounterRuntime);
 simulatorResetButton?.addEventListener("click", resetSimulator);
@@ -1025,6 +1110,7 @@ renderHeroesList();
 refreshHeroesList();
 refreshRuntimeStatus();
 setInterval(refreshRuntimeStatus, 2000);
+refreshScenarioFlowList("bandit_cave");
 refreshScenarioList("scenario_1").then(() => {
     if (scenarioSelect && scenarioSelect.value) {
         loadScenario(scenarioSelect.value);

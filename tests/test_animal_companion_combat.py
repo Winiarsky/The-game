@@ -50,7 +50,7 @@ class DummyConn:
 
 
 class DummyUI:
-    enabled = False
+    enabled = True
     allow_cli_fallback = False
 
     def __init__(self):
@@ -231,6 +231,67 @@ def test_command_animal_companion_strike_damages_enemy(monkeypatch):
     assert result.success is True
     assert enemy.hp == 6
     assert owner.has_status("animal_companion_commanded")
+
+
+def test_command_animal_companion_strike_without_target_shows_prompt():
+    board = BoardGrid(6, 6)
+    conn = DummyConn()
+    ui = DummyUI()
+    game = DummyGame(board=board, conn=conn, ui=ui)
+    owner = DummyOwner(position=(1, 1), initiative=17)
+    _add_druid_animal_setup(owner)
+    enemy = DummyEnemy(position=(5, 5), hp=20, ac=14)
+    game.heroes = [owner]
+    game.enemies = [enemy]
+    board.place(owner, owner.position)
+    board.place(enemy, enemy.position)
+
+    combat = Combat(game)
+    game.state = combat
+    companion = build_animal_companion(owner, "wolf")
+    board.place(companion, (1, 2))
+    combat.animal_companions[owner.object_id] = companion
+
+    conn.read_queue = ["strike", "end"]
+
+    result = dispatch_event("command_animal_companion", EventContext(game=game, actor=owner))
+
+    assert result.success is False
+    assert "nie wykonal zadnej akcji" in str(result.message or "").lower()
+    info_prompts = [call for call in ui.info_calls if call.get("title") == "Zwierzęcy towarzysz: akcja niemożliwa"]
+    assert info_prompts
+    assert "brak wroga w zasiegu companiona" in str(info_prompts[-1].get("prompt_long") or "").lower()
+
+
+def test_command_animal_companion_strike_falls_back_to_board_enemy_when_registry_missing(monkeypatch):
+    board = BoardGrid(6, 6)
+    conn = DummyConn()
+    game = DummyGame(board=board, conn=conn)
+    owner = DummyOwner(position=(1, 1), initiative=17)
+    _add_druid_animal_setup(owner)
+    enemy = DummyEnemy(position=(2, 1), hp=20, ac=14)
+    game.heroes = [owner]
+    game.enemies = []
+    board.place(owner, owner.position)
+    board.place(enemy, enemy.position)
+
+    combat = Combat(game)
+    game.state = combat
+    companion = build_animal_companion(owner, "wolf")
+    board.place(companion, (1, 2))
+    combat.animal_companions[owner.object_id] = companion
+
+    conn.read_queue = ["strike", "end"]
+    rolls = iter([24, 7])
+    monkeypatch.setattr(
+        "GameObjects.events.command_animal_companion_event.prompt_for_roll",
+        lambda *_a, **_k: next(rolls),
+    )
+
+    result = dispatch_event("command_animal_companion", EventContext(game=game, actor=owner))
+
+    assert result.success is True
+    assert enemy.hp == 6
 
 
 def test_command_animal_companion_stride_moves_on_board(monkeypatch):

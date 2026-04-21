@@ -306,12 +306,10 @@ def find_path(board, start, goal, *, allow_diagonal: bool = True, allow_occupied
             if not board.in_bounds(nxt):
                 continue
             try:
-                if board.is_blocked(cur, nxt):
-                    continue
-            except Exception:
-                pass
-            try:
-                if not allow_occupied and not board.can_enter(nxt, allow_occupied=False):
+                if hasattr(board, "can_traverse"):
+                    if not board.can_traverse(cur, nxt, allow_occupied=allow_occupied):
+                        continue
+                elif board.is_blocked(cur, nxt):
                     continue
             except Exception:
                 pass
@@ -428,13 +426,14 @@ def follow_path(ctx_or_board, mover, path, *, led_color=None, on_enter=None, all
 
     for step in path[1:]:
         try:
-            if board is not None and hasattr(board, "is_blocked") and board.is_blocked(current, step):
-                return False, current, "blocked"
-        except Exception:
-            pass
-        try:
-            if board is not None and hasattr(board, "can_enter") and not board.can_enter(step, allow_occupied=allow_occupied):
-                return False, current, "occupied"
+            if board is not None and hasattr(board, "can_traverse"):
+                if not board.can_traverse(current, step, allow_occupied=allow_occupied):
+                    return False, current, "blocked"
+            else:
+                if board is not None and hasattr(board, "is_blocked") and board.is_blocked(current, step):
+                    return False, current, "blocked"
+                if board is not None and hasattr(board, "can_enter") and not board.can_enter(step, allow_occupied=allow_occupied):
+                    return False, current, "occupied"
         except Exception:
             pass
 

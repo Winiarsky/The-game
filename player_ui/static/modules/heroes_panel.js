@@ -221,6 +221,7 @@ function detailContextText(hero, activeActorId) {
     if (!hero) return "Brak aktywnego bohatera.";
     if (hero.isPreview) return "Podgląd wyboru bohatera";
     if (hero.creationInProgress) return "Podgląd tworzenia postaci";
+    if (hero.isCompanion) return "Wybrany towarzysz";
     if (String(hero.id || "") === String(activeActorId || "")) return "Aktywny bohater";
     return "Wybrany bohater";
 }
@@ -337,6 +338,12 @@ export function renderHeroesPanel({
             flag.textContent = "Aktywny";
             flags.appendChild(flag);
         }
+        if (hero.isCompanion) {
+            const flag = document.createElement("span");
+            flag.className = "hero-roster-flag preview";
+            flag.textContent = "Companion";
+            flags.appendChild(flag);
+        }
         if (hero.creationInProgress) {
             const flag = document.createElement("span");
             flag.className = "hero-roster-flag preview";
@@ -439,6 +446,8 @@ export function renderHeroesPanel({
     const classLabel = detailHero.classId ? pretty(detailHero.classId) : "-";
     const ancestryLabel = detailHero.ancestryId ? pretty(detailHero.ancestryId) : "-";
     const heritageLabel = detailHero.heritageId ? pretty(detailHero.heritageId) : "-";
+    const companionTypeLabel = detailHero.companionType ? pretty(detailHero.companionType) : "-";
+    const ownerLabel = detailHero.ownerName || "-";
     const hpNow = currentHp(detailHero);
     const hpLine = `HP: ${hpNow != null ? hpNow : "-"}/${detailHero.maxHp ?? "-"} · Rany: ${detailHero.wounds ?? "-"}`;
     const speedLine = `${armorClassBreakdown(detailHero)} · Predkosc: ${detailHero.baseSpeedFeet ?? "-"} ft`;
@@ -501,6 +510,8 @@ export function renderHeroesPanel({
     const identityBody = `
         <div class="hero-stats">${levelLine}</div>
         <div class="hero-stats">Klasa: ${classLabel}</div>
+        ${detailHero.isCompanion ? `<div class="hero-stats">Typ: ${companionTypeLabel}</div>` : ""}
+        ${detailHero.isCompanion ? `<div class="hero-stats">Właściciel: ${ownerLabel}</div>` : ""}
         <div class="hero-stats">Rasa: ${ancestryLabel}</div>
         <div class="hero-stats">Dziedzictwo: ${heritageLabel}</div>
         ${detailHero.backgroundLabel ? `<div class="hero-stats">Tlo: ${detailHero.backgroundLabel}</div>` : ""}

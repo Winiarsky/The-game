@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 import sys
+import types
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = PROJECT_ROOT / "src"
@@ -138,8 +139,8 @@ def test_surprise_attack_makes_unacted_target_off_guard_and_enables_sneak_attack
     prompts: list[str] = []
     rolls = iter([13, 5, 4])
 
-    def _prompt(*args, **_kwargs):
-        prompts.append(str(args[0]) if args else "")
+    def _prompt(*args, **kwargs):
+        prompts.append("\n".join(filter(None, [str(args[0]) if args else "", str(kwargs.get("prompt_long") or "")])))
         return next(rolls)
 
     monkeypatch.setattr("GameObjects.events.attack.basic_melee_attack_event.prompt_for_roll", _prompt)
@@ -209,8 +210,8 @@ def test_hidden_attack_makes_target_off_guard_enables_sneak_attack_and_reveals_a
     prompts: list[str] = []
     rolls = iter([13, 5, 4])
 
-    def _prompt(*args, **_kwargs):
-        prompts.append(str(args[0]) if args else "")
+    def _prompt(*args, **kwargs):
+        prompts.append("\n".join(filter(None, [str(args[0]) if args else "", str(kwargs.get("prompt_long") or "")])))
         return next(rolls)
 
     monkeypatch.setattr("GameObjects.events.attack.basic_melee_attack_event.prompt_for_roll", _prompt)
@@ -224,6 +225,33 @@ def test_hidden_attack_makes_target_off_guard_enables_sneak_attack_and_reveals_a
     assert any("Sneak Attack:" in prompt for prompt in prompts)
     assert hero.has_status("hidden") is False
     assert hero.has_status("stealth") is False
+
+
+def test_exploration_melee_attack_applies_ambush_off_guard_note(monkeypatch):
+    hero = Hero(statuses=[Status(id="rogue"), Status(id="sneak_attack")])
+    enemy = Enemy()
+
+    game = FakeGame()
+    game.state = types.SimpleNamespace()
+    game.heroes = [hero]
+    game.enemies = [enemy]
+    game.board.occupants = {hero.position: hero, enemy.position: enemy}
+    game.conn.choice = enemy.position
+
+    prompts: list[str] = []
+    rolls = iter([13, 5, 4])
+
+    def _prompt(*args, **kwargs):
+        prompts.append("\n".join(filter(None, [str(args[0]) if args else "", str(kwargs.get("prompt_long") or "")])))
+        return next(rolls)
+
+    monkeypatch.setattr("GameObjects.events.attack.basic_melee_attack_event.prompt_for_roll", _prompt)
+    monkeypatch.setattr("GameObjects.events.attack.basic_melee_attack_event.refresh_flanking_statuses", lambda *_a, **_k: None)
+
+    result = FinesseMeleeAttackEvent().run(EventContext(game=game, actor=hero))
+
+    assert result.success is True
+    assert any("Atak z zaskoczenia" in prompt for prompt in prompts)
 
 
 def test_undetected_target_requires_guessing_square_and_wrong_guess_still_counts_as_attack(monkeypatch):

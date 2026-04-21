@@ -152,5 +152,11 @@ class ActionEventBus:
                     )
                 except Exception:
                     logger.debug("Nie udało się wysłać narracji akcji do UI", exc_info=True)
+            refresh_ui = getattr(self.game, "refresh_ui_after_action", None)
+            if callable(refresh_ui):
+                try:
+                    refresh_ui(event)
+                except Exception:
+                    logger.debug("Nie udało się odświeżyć UI po akcji", exc_info=True)
 
         self.add_listener(_listener)

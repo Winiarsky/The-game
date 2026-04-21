@@ -89,6 +89,25 @@ class DummyHero:
         return True
 
 
+class DummyCompanion:
+    def __init__(self, pos=(2, 0)):
+        self.position = pos
+        self.statuses = []
+        self.object_id = "companion-1"
+        self.hp = 12
+        self.ac = 14
+
+    def has_status(self, status_id):
+        return any(s.id == status_id for s in self.statuses)
+
+    def add_status(self, status):
+        self.statuses.append(status)
+        return True
+
+    def is_dead(self):
+        return int(self.hp) <= 0
+
+
 class RoomBoardStub(BoardStub):
     def rooms_at(self, _pos):
         return {"karczma"}
@@ -164,6 +183,39 @@ def test_enemy_move_blocked_when_speed_zero(monkeypatch):
     res = EnemyMoveEvent().run(ctx)
     assert res.success is False
     assert res.consumed_action is True
+
+
+def test_enemy_move_uses_animal_companion_as_nearest_target(monkeypatch):
+    board = BoardStub()
+    conn = DummyConn()
+    enemy = DummyEnemy(distance=25)
+    companion = DummyCompanion(pos=(3, 0))
+    game = SimpleNamespace(
+        board=board,
+        conn=conn,
+        heroes=[],
+        enemies=[enemy],
+        state=SimpleNamespace(animal_companions={"owner-1": companion}),
+        ui_event=lambda *a, **k: None,
+    )
+
+    monkeypatch.setattr(
+        "GameObjects.events.enemy.enemy_move_event.find_path",
+        lambda *_a, **_k: [(0, 0), (1, 0), (2, 0)],
+    )
+    monkeypatch.setattr(
+        "GameObjects.events.enemy.enemy_move_event.path_cost_feet",
+        lambda path, *_a, **_k: max(0, (len(path) - 1) * 5),
+    )
+    monkeypatch.setattr(
+        "GameObjects.events.enemy.enemy_move_event.trim_path_to_feet",
+        lambda path, *_a, **_k: list(path),
+    )
+
+    ctx = EventContext(game=game, actor=enemy)
+    res = EnemyMoveEvent().run(ctx)
+    assert res.success is True
+    assert board.moved == (2, 0)
 
 
 def test_immobilized_blocks_move_for_enemy():

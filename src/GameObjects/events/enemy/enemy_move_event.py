@@ -4,8 +4,10 @@ import logging
 import time
 
 from board import consts
+from enemy_prompting import enemy_prompt_step
 from actions.move_utils import find_path, path_cost_feet, trim_path_to_feet
 from combat import flanking_positions, refresh_flanking_statuses
+from combat.hero_side_targets import hero_side_targets
 from combat.reactions import dispatch_reactions
 
 from ..base import EventContext, EventResult, GameEvent
@@ -29,7 +31,7 @@ def _adjacent_reachable(board, a: tuple[int, int], b: tuple[int, int]) -> bool:
 def _nearest_hero(game, enemy_pos: tuple[int, int]) -> tuple[tuple[int, int] | None, int]:
     best_pos = None
     best_dist = 999
-    for hero in game.heroes:
+    for hero in hero_side_targets(game, only_living=True):
         if getattr(hero, "position", None) is None:
             continue
         hx, hy = hero.position
@@ -110,7 +112,7 @@ def _scuttle_candidates(board, origin: tuple[int, int]) -> list[tuple[int, int]]
 
 def _score_scuttle_position(game, scuttler, pos: tuple[int, int]) -> int:
     board = game.board
-    heroes = [hero for hero in getattr(game, "heroes", []) or [] if getattr(hero, "position", None) is not None]
+    heroes = [hero for hero in hero_side_targets(game, only_living=True) if getattr(hero, "position", None) is not None]
     if not heroes:
         return 0
 
@@ -349,6 +351,20 @@ class EnemyMoveEvent(GameEvent):
         if len(truncated) < 2:
             return EventResult(success=False, consumed_action=True, message="Nie można wykonać kroku w budżecie ruchu.")
         dest = truncated[-1]
+        enemy_prompt_step(
+            game,
+            f"Ruch przeciwnika: {getattr(enemy, 'name', 'Enemy')}",
+            prompt_long=(
+                f"Przeciwnik wykonuje ruch.\n"
+                f"Pozycja startowa: {enemy.position}\n"
+                f"Pole docelowe: {dest}\n"
+                f"Budżet ruchu: {move_budget_feet} ft\n"
+                f"Wykorzystany ruch: {used_feet} ft\n"
+                "Przesuń figurkę przeciwnika na pole docelowe i potwierdź klikając docelowe pole."
+            ),
+            source=self.name,
+            log_message=f"{getattr(enemy, 'name', 'Enemy')} przemieszcza się z {enemy.position} na {dest}.",
+        )
 
         path_id = f"enemy-path-{time.time_ns()}"
         game.ui_event(
@@ -389,6 +405,16 @@ class EnemyMoveEvent(GameEvent):
                 refresh_flanking_statuses(game)
             except Exception as exc:
                 logger.error("Nie udało się odświeżyć flankowania po ruchu wroga: %s", exc)
+            enemy_prompt_step(
+                game,
+                f"Ruch wykonany: {getattr(enemy, 'name', 'Enemy')}",
+                prompt_long=(
+                    f"Przeciwnik zakończył ruch.\n"
+                    f"Nowa pozycja: {dest}\n"
+                    "Potwierdź Enterem, aby przejść do kolejnej akcji."
+                ),
+                source=f"{self.name}_result",
+            )
             return EventResult(success=True, consumed_action=True, message=f"Wróg przemieszcza się na {dest}.")
         except Exception as exc:
             logger.error("Ruch wroga nie powiódł się: %s", exc)

@@ -19,6 +19,7 @@ from GameObjects.events.attack import attack_range_long_bow
 from GameObjects.Obstacles.simple_obstacle import SimpleObstacle
 from bonuses import BonusEffect, BonusType
 from GameObjects.items.shield import create_shield
+from board import consts
 
 
 class FakeEvents:
@@ -32,8 +33,10 @@ class FakeEvents:
 class FakeConn:
     def __init__(self, choice=None):
         self.choice = choice
+        self.led_calls = []
 
     def set_leds(self, *args, **kwargs):
+        self.led_calls.append((args, kwargs))
         return None
 
     def scan_board(self, acceptable_responses=None):
@@ -41,6 +44,18 @@ class FakeConn:
 
     def leds_off(self):
         return None
+
+
+class FakeUI:
+    enabled = True
+    allow_cli_fallback = False
+
+    def __init__(self):
+        self.info_calls = []
+
+    def prompt_info(self, title, *, prompt_long=None, **_kwargs):
+        self.info_calls.append({"title": title, "prompt_long": prompt_long})
+        return "ok"
 
 
 class FakeBoard:
@@ -75,6 +90,8 @@ class FakeGame:
         self.enemies = []
         self.board = FakeBoard()
         self.conn = FakeConn()
+        self.ui = None
+        self.ui_log = lambda *_a, **_k: None
 
 
 class Hero:
@@ -167,10 +184,75 @@ def test_cover_and_range_penalty_emitted(monkeypatch):
     event = ShortBow()
     result = event.run(_ctx(game, hero))
     assert result.success
-    emitted = game.events.emitted[-1]
+    emitted = next(payload for payload in game.events.emitted if payload.get("action_id") == "attack_short_test")
     assert emitted.get("cover") == "greater"
     assert emitted.get("range_penalty") == 10  # 6 increment -> (6-1)*2
     assert enemy.hp == 8
+
+
+def test_ranged_attack_prompts_targeting_legend_and_shot_analysis(monkeypatch):
+    class ShortBow(base_attack_range_event.BaseRangeAttackEvent):
+        name = "attack_short_prompt_test"
+        range_increment_ft = 5
+        max_range_increments = 6
+        action_id_base = "attack_short_prompt_test"
+
+    hero = Hero((0, 0))
+    enemy = Enemy((6, 0), ac=12)
+    obstacle = SimpleObstacle()
+    game = FakeGame()
+    game.ui = FakeUI()
+    game.heroes = [hero]
+    game.enemies = [enemy]
+    game.board.occupants = {hero.position: hero, enemy.position: enemy, (1, 0): obstacle}
+    game.conn.choice = enemy.position
+
+    rolls = iter([30, 4])
+    monkeypatch.setattr(base_attack_range_event, "prompt_for_roll", lambda *_, **__: next(rolls))
+
+    result = ShortBow().run(_ctx(game, hero))
+
+    assert result.success
+    titles = [call["title"] for call in game.ui.info_calls]
+    assert "Atak dystansowy: wybór celu" in titles
+    assert "Atak dystansowy: analiza strzału" in titles
+    legend_prompt = next(call["prompt_long"] for call in game.ui.info_calls if call["title"] == "Atak dystansowy: wybór celu")
+    assert "legalne cele" in str(legend_prompt or "").lower()
+    assert "minor cover" in str(legend_prompt or "").lower()
+    assert "turkusowe pola" in str(legend_prompt or "").lower()
+    assert "standard cover" in str(legend_prompt or "").lower()
+    analysis_prompt = next(call["prompt_long"] for call in game.ui.info_calls if call["title"] == "Atak dystansowy: analiza strzału")
+    assert "kara za zasięg" in str(analysis_prompt or "").lower()
+    assert "typ osłony" in str(analysis_prompt or "").lower()
+
+
+def test_ranged_attack_minor_cover_led_differs_from_move_green(monkeypatch):
+    assert base_attack_range_event.BaseRangeAttackEvent.COVER_LED["minor"] == [0, 150, 150]
+    assert base_attack_range_event.BaseRangeAttackEvent.COVER_LED["minor"] != consts.MOVE_FIELD_RGB
+
+
+def test_ranged_attack_in_exploration_adds_ambush_off_guard_note(monkeypatch):
+    hero = Hero((0, 0))
+    enemy = Enemy((2, 0), hp=8, ac=10)
+    game = FakeGame()
+    game.heroes = [hero]
+    game.enemies = [enemy]
+    game.board.occupants = {hero.position: hero, enemy.position: enemy}
+    game.conn.choice = enemy.position
+
+    prompts: list[str] = []
+    rolls = iter([15, 5])
+
+    def _prompt(*args, **kwargs):
+        prompts.append("\n".join(filter(None, [str(args[0]) if args else "", str(kwargs.get("prompt_long") or "")])))
+        return next(rolls)
+
+    monkeypatch.setattr(base_attack_range_event, "prompt_for_roll", _prompt)
+
+    result = dispatch_event("longbow", _ctx(game, hero))
+
+    assert result.success
+    assert any("Atak z zaskoczenia" in prompt for prompt in prompts)
 
 
 def test_longbow_wrong_square_against_undetected_target_still_counts_as_attack():

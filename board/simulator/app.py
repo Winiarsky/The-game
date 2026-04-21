@@ -37,12 +37,32 @@ def _scenario_path(name: str) -> Path:
     return SCENARIOS_DIR / f"{safe_name}.json"
 
 
+def _scenario_flow_path(name: str) -> Path:
+    safe_name = Path(name).stem
+    if not safe_name:
+        raise ValueError("Nazwa flow scenariusza jest wymagana.")
+    if "/" in name or "\\" in name:
+        raise ValueError("Nazwa flow scenariusza nie może zawierać separatorów katalogów.")
+    if scenario_flow_path is None:
+        raise RuntimeError("Obsługa scenario flow jest niedostępna.")
+    path = scenario_flow_path(safe_name)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 try:
     from game_objects_loader import scan_game_objects, serialize_meta
     from character_creation.repository import CharacterRepository
     from encounters import EncounterDirectives, EncounterRequest, generate_encounter, preset_directives
+    from scenario_flow import (
+        list_scenario_flow_names,
+        map_catalog,
+        load_scenario_flow,
+        scenario_flow_path,
+        validate_scenario_flow,
+    )
 except Exception as exc:  # pragma: no cover - zabezpieczenie gdy pakiet nie istnieje
     logger.warning("Nie udało się zaimportować game_objects_loader: %s", exc)
     scan_game_objects = None  # type: ignore
@@ -52,6 +72,11 @@ except Exception as exc:  # pragma: no cover - zabezpieczenie gdy pakiet nie ist
     EncounterRequest = None  # type: ignore
     generate_encounter = None  # type: ignore
     preset_directives = None  # type: ignore
+    list_scenario_flow_names = None  # type: ignore
+    map_catalog = None  # type: ignore
+    load_scenario_flow = None  # type: ignore
+    scenario_flow_path = None  # type: ignore
+    validate_scenario_flow = None  # type: ignore
 
 
 BOARD_CONFIG = load_board_config()
@@ -215,10 +240,29 @@ def scenario_editor():
     return render_template("scenario_editor.html", rows=BOARD_ROWS, cols=BOARD_COLS)
 
 
+@app.route("/scenario-flow-editor")
+def scenario_flow_editor():
+    return render_template("scenario_flow_editor.html", rows=BOARD_ROWS, cols=BOARD_COLS)
+
+
 @app.get("/api/scenarios")
 def list_scenarios():
     scenarios = sorted(path.stem for path in SCENARIOS_DIR.glob("*.json")) if SCENARIOS_DIR.exists() else []
     return jsonify({"scenarios": scenarios})
+
+
+@app.get("/api/scenario-map-catalog")
+def scenario_map_catalog():
+    if map_catalog is None:
+        return jsonify({"ok": False, "error": "Katalog map scenariuszy niedostępny."}), 500
+    return jsonify({"ok": True, "catalog": map_catalog()})
+
+
+@app.get("/api/scenario-flows")
+def list_scenario_flows():
+    if list_scenario_flow_names is None:
+        return jsonify({"ok": False, "error": "Obsługa scenario flow jest niedostępna."}), 500
+    return jsonify({"ok": True, "scenario_flows": list_scenario_flow_names()})
 
 
 @app.get("/api/heroes")
@@ -340,6 +384,65 @@ def runtime_start():
     )
 
 
+@app.post("/api/runtime/start-scenario")
+def runtime_start_scenario():
+    global runtime_process, runtime_info
+    payload: dict[str, Any] = request.get_json(force=True, silent=True) or {}
+    scenario_name = str(payload.get("scenario") or "").strip()
+    if not scenario_name:
+        return jsonify({"ok": False, "error": "Pole 'scenario' jest wymagane."}), 400
+    hero_ids_raw = payload.get("hero_ids") or []
+    if not isinstance(hero_ids_raw, list):
+        return jsonify({"ok": False, "error": "hero_ids musi być listą."}), 400
+    hero_ids = [str(item or "").strip().lower() for item in hero_ids_raw if str(item or "").strip()]
+    if not hero_ids:
+        return jsonify({"ok": False, "error": "Wybierz co najmniej jednego bohatera."}), 400
+    with runtime_lock:
+        already_running = runtime_process is not None and runtime_process.poll() is None
+    if already_running:
+        return jsonify({"ok": False, "error": "Runtime gry już działa.", "runtime": _runtime_status_payload()}), 409
+
+    ui_host = "127.0.0.1"
+    ui_port = _find_free_port(ui_host, int(payload.get("ui_port") or 5100))
+    board_url = request.host_url.rstrip("/")
+    cmd = [
+        sys.executable,
+        "main.py",
+        "--start-ui",
+        "--ui-host",
+        ui_host,
+        "--ui-port",
+        str(ui_port),
+        "--board-backend",
+        "simulator",
+        "--board-url",
+        board_url,
+        "--scenario",
+        scenario_name,
+    ]
+    for hero_id in hero_ids:
+        cmd.extend(["--hero-id", hero_id])
+    try:
+        proc = subprocess.Popen(cmd, cwd=str(BASE_DIR.parent))
+    except Exception as exc:
+        logger.exception("Nie udało się uruchomić runtime scenariusza")
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+    ui_url = f"http://{ui_host}:{ui_port}"
+    with runtime_lock:
+        runtime_process = proc
+        runtime_info = {
+            "ui_url": ui_url,
+            "board_backend": "simulator",
+            "board_url": board_url,
+            "hero_ids": hero_ids,
+            "scenario": scenario_name,
+            "scenario_kind": "flow_or_runtime",
+        }
+    logger.info("Uruchomiono runtime scenariusza %s PID=%s UI=%s", scenario_name, proc.pid, ui_url)
+    return jsonify({"ok": True, "runtime": _runtime_status_payload()})
+
+
 @app.post("/api/runtime/stop")
 def runtime_stop():
     stopped = _stop_runtime_process()
@@ -378,6 +481,23 @@ def load_scenario(name: str):
         return jsonify({"ok": False, "error": str(exc)}), 500
 
 
+@app.get("/api/scenario-flows/<name>")
+def load_scenario_flow_api(name: str):
+    if load_scenario_flow is None:
+        return jsonify({"ok": False, "error": "Obsługa scenario flow jest niedostępna."}), 500
+    try:
+        path = _scenario_flow_path(name)
+        if not path.exists():
+            return jsonify({"ok": False, "error": "Scenario flow nie istnieje."}), 404
+        data = load_scenario_flow(path)
+        return jsonify({"ok": True, "scenario_flow": data})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    except Exception as exc:  # pragma: no cover - zabezpieczenie
+        logger.exception("Błąd podczas wczytywania scenario flow")
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
 @app.post("/api/scenarios/<name>")
 def save_scenario(name: str):
     try:
@@ -393,6 +513,28 @@ def save_scenario(name: str):
         return jsonify({"ok": False, "error": str(exc)}), 400
     except Exception as exc:  # pragma: no cover - zabezpieczenie
         logger.exception("Błąd podczas zapisu scenariusza")
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
+@app.post("/api/scenario-flows/<name>")
+def save_scenario_flow_api(name: str):
+    if load_scenario_flow is None or validate_scenario_flow is None:
+        return jsonify({"ok": False, "error": "Obsługa scenario flow jest niedostępna."}), 500
+    try:
+        flow_data = request.get_json(force=True, silent=True)
+        if not isinstance(flow_data, dict):
+            return jsonify({"ok": False, "error": "Brak danych scenario flow."}), 400
+        validated = validate_scenario_flow(flow_data)
+        path = _scenario_flow_path(name)
+        with path.open("w", encoding="utf-8") as file:
+            json.dump(flow_data, file, ensure_ascii=False, indent=4)
+        validated["_source_path"] = str(path)
+        logger.info("Zapisano scenario flow do %s", path)
+        return jsonify({"ok": True, "path": str(path), "scenario_flow": validated}), 201
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    except Exception as exc:  # pragma: no cover - zabezpieczenie
+        logger.exception("Błąd podczas zapisu scenario flow")
         return jsonify({"ok": False, "error": str(exc)}), 500
 
 

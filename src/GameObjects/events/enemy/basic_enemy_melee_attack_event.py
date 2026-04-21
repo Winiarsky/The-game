@@ -5,10 +5,12 @@ import random
 
 from board import consts
 from combat import effective_ac
+from combat.hero_side_targets import hero_side_targets, is_hero_side_target
 from combat.hp_engine import apply_damage as hp_apply_damage
 from combat.degree_of_success import is_critical_success, natural_shift_from_roll, resolve_outcome
 from damage_types import DamageType
 from statuses.race.dwarf.feats.vengeful_hatred import grant_vengeful_hatred_revenge
+from enemy_prompting import clear_enemy_highlight, enemy_highlight, enemy_prompt_step, format_roll_components
 
 from ..base import EventContext, EventResult, GameEvent
 from ..attack.attack_base import check_concealed
@@ -54,8 +56,8 @@ class BasicEnemyMeleeAttackEvent(GameEvent):
             return EventResult(success=False, consumed_action=False, message="Atak wroga anulowany.")
 
         hero = board.occupant_at(target_pos)
-        if hero not in game.heroes:
-            return EventResult(success=False, consumed_action=True, message="Wybrano cel niebędący bohaterem.")
+        if not is_hero_side_target(game, hero):
+            return EventResult(success=False, consumed_action=True, message="Wybrano cel spoza strony bohaterów.")
 
         if not check_concealed(ctx, hero):
             game.events.safe_emit_action(
@@ -83,6 +85,7 @@ class BasicEnemyMeleeAttackEvent(GameEvent):
         target_ac = effective_ac(hero)
         outcome = resolve_outcome(roll, target_ac, natural_shift=natural_shift_from_roll(natural_roll))
         critical_hit = is_critical_success(outcome)
+        hit = outcome in {"success", "critical_success"}
         clumsy_note = None
         try:
             from statuses.clumsy import clumsy_ac_prompt_note
@@ -91,45 +94,85 @@ class BasicEnemyMeleeAttackEvent(GameEvent):
         except Exception:
             clumsy_note = None
 
+        roll_components = [
+            {
+                "label": "k20",
+                "value": natural_roll,
+                "description": "Naturalny wynik rzutu.",
+            },
+            {
+                "label": "Bonus ataku",
+                "value": int(attack_bonus or 0),
+                "description": "Podstawowy bonus przeciwnika.",
+            },
+            {
+                "label": "Modyfikator sytuacyjny",
+                "value": int(extra_mod or 0),
+                "description": "Dodatkowe premie lub kary.",
+            },
+        ]
         prompt = (
-            f"{getattr(enemy, 'name', 'wróg')} {self.weapon_label} na {target_pos}: "
-            f"r={roll} (1d20={natural_roll} + {attack_bonus} {'+' if extra_mod >=0 else ''}{extra_mod}). "
-            f"AC celu: {target_ac}. "
-            "Potwierdź trafienie: ACCEPT/DECLINE"
+            f"{getattr(enemy, 'name', 'wróg')} wykonuje {self.weapon_label} przeciw {getattr(hero, 'name', 'celowi')}.\n"
+            f"Cel stoi na polu {target_pos}.\n"
+            "Jeśli przeciwnik ma więcej niż jeden możliwy cel, wskaż odpowiednią figurkę na planszy.\n\n"
+            f"Rozpiska rzutu:\n{format_roll_components(roll_components)}\n\n"
+            f"Wynik końcowy: {roll}\n"
+            f"Próg obrony: AC {target_ac}\n"
+            f"Wynik testu: {outcome}"
         )
         if clumsy_note:
             prompt = f"{prompt} {clumsy_note}"
-        ui = getattr(game, "ui", None)
-        response = "ACCEPT"
-        if ui is not None and hasattr(ui, "prompt_choice"):
-            try:
-                response = ui.prompt_choice(prompt, choices=["ACCEPT", "DECLINE"], source=self.action_id_base)
-            except Exception:
-                response = "ACCEPT"
-        if str(response or "").strip().upper() != "ACCEPT":
-            logger.info("Atak wroga odrzucony.")
-            game.ui_log("Atak wroga odrzucony.")
-            return EventResult(success=True, consumed_action=True, message="Atak odrzucony.")
+        enemy_highlight(
+            game,
+            [enemy_pos, target_pos],
+            [consts.ENEMY_START_RGB, consts.HERO_HIGHLIGHT_RGB],
+        )
+        try:
+            enemy_prompt_step(
+                game,
+                f"Atak przeciwnika: {getattr(enemy, 'name', 'wróg')}",
+                prompt_long=prompt,
+                source=self.action_id_base,
+                log_message=(
+                    f"{getattr(enemy, 'name', 'wróg')} atakuje {getattr(hero, 'name', 'cel')} "
+                    f"({roll} vs AC {target_ac}, {outcome})."
+                ),
+            )
+            if not hit:
+                return EventResult(success=True, consumed_action=True, message="Atak wroga pudłuje.")
 
-        damage = self.roll_damage(enemy)
-        hp_dealt = self.apply_damage(hero, damage)
-        if critical_hit and hp_dealt > 0:
+            damage = self.roll_damage(enemy)
+            hp_dealt = self.apply_damage(hero, damage)
+            if critical_hit and hp_dealt > 0:
+                try:
+                    grant_vengeful_hatred_revenge(hero, enemy, rounds=10)
+                except Exception:
+                    pass
+
+            dmg_msg = (
+                f"{getattr(enemy, 'name', 'wróg')} zadaje {damage} obrażeń "
+                f"(1d{self.damage_die_sides} + {getattr(enemy, self.strength_attr, 0)}). "
+                f"Rany bohatera: {getattr(hero, 'wounds', '?')}."
+            )
+            logger.info(dmg_msg)
+            enemy_prompt_step(
+                game,
+                f"Wynik ataku: {getattr(enemy, 'name', 'wróg')}",
+                prompt_long=(
+                    f"Atak trafia {'krytycznie' if critical_hit else 'normalnie'}.\n"
+                    f"Obrażenia: {damage} {self.damage_type}.\n"
+                    f"Rany celu po trafieniu: {getattr(hero, 'wounds', '?')}.\n"
+                    "Zastosuj wynik na planszy i potwierdź Enterem."
+                ),
+                source=f"{self.action_id_base}_result",
+                log_message=dmg_msg,
+            )
             try:
-                grant_vengeful_hatred_revenge(hero, enemy, rounds=10)
+                game.ui_hero(hero)
             except Exception:
                 pass
-
-        dmg_msg = (
-            f"{getattr(enemy, 'name', 'wróg')} zadaje {damage} obrażeń "
-            f"(1d{self.damage_die_sides} + {getattr(enemy, self.strength_attr, 0)}). "
-            f"Rany bohatera: {getattr(hero, 'wounds', '?')}."
-        )
-        logger.info(dmg_msg)
-        game.ui_log(dmg_msg)
-        try:
-            game.ui_hero(hero)
-        except Exception:
-            pass
+        finally:
+            clear_enemy_highlight(game)
 
         game.events.safe_emit_action(
             actor=enemy,
@@ -166,11 +209,12 @@ class BasicEnemyMeleeAttackEvent(GameEvent):
     def _adjacent_heroes(game, pos):
         board = game.board
         neighbors = board.get_neighbors(pos, include_position=False, diagonal=True)
-        return [p for p in neighbors if board.occupant_at(p) in game.heroes]
+        targets = list(hero_side_targets(game, only_living=True))
+        return [p for p in neighbors if board.occupant_at(p) in targets]
 
     @staticmethod
     def _pick_target(conn, targets):
-        conn.set_leds(targets, consts.MOVE_FIELD_RGB)
+        conn.set_leds(targets, consts.HERO_HIGHLIGHT_RGB)
         try:
             return conn.scan_board(targets)
         finally:

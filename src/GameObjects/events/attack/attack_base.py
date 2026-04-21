@@ -722,6 +722,28 @@ class AttackEventBase(GameEvent):
             return False
         return True
 
+    @staticmethod
+    def _exploration_ambush_applies(ctx, actor, target) -> bool:
+        if actor is None or target is None:
+            return False
+        if getattr(ctx, "in_combat", False):
+            return False
+        game = getattr(ctx, "game", None)
+        if game is None:
+            return False
+        heroes = list(getattr(game, "heroes", []) or [])
+        enemies = list(getattr(game, "enemies", []) or [])
+        if actor not in heroes or target not in enemies:
+            return False
+        if getattr(target, "position", None) is None:
+            return False
+        try:
+            if int(getattr(target, "hp", 1) or 0) <= 0:
+                return False
+        except Exception:
+            pass
+        return True
+
     def _is_off_guard_for_attack(
         self,
         ctx,
@@ -736,6 +758,7 @@ class AttackEventBase(GameEvent):
         natural = self._is_flat_footed(target)
         feint_flat_footed = self._feint_flat_footed_status_applies(target, attacker, is_melee=bool(is_melee))
         surprise = self._rogue_surprise_attack_applies(ctx, attacker, target)
+        exploration_ambush = self._exploration_ambush_applies(ctx, attacker, target)
         support_off_guard = False
         try:
             from GameObjects.companions.support_runtime import animal_companion_support_forces_off_guard
@@ -750,7 +773,11 @@ class AttackEventBase(GameEvent):
             )
         except Exception:
             support_off_guard = False
-        return bool(forced or natural or surprise or feint_flat_footed or support_off_guard), bool(natural), bool(surprise)
+        return (
+            bool(forced or natural or surprise or exploration_ambush or feint_flat_footed or support_off_guard),
+            bool(natural),
+            bool(surprise),
+        )
 
     @staticmethod
     def _target_allows_precision_damage(target) -> bool:

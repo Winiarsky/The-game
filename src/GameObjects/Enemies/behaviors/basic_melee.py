@@ -6,6 +6,7 @@ import random
 from GameObjects.events import EventContext
 from GameObjects.events.registry import dispatch_event
 from combat import refresh_flanking_statuses
+from combat.hero_side_targets import hero_side_targets
 
 logger = logging.getLogger(__name__)
 
@@ -13,10 +14,11 @@ logger = logging.getLogger(__name__)
 def _heroes_in_range(game, enemy_pos: tuple[int, int], include_diagonal: bool = True) -> list[tuple[int, int]]:
     board = game.board
     neighbors = board.get_neighbors(enemy_pos, include_position=False, diagonal=include_diagonal)
+    targets = list(hero_side_targets(game, only_living=True))
     positions: list[tuple[int, int]] = []
     for pos in neighbors:
         occ = board.occupant_at(pos)
-        if occ in game.heroes and _adjacent_reachable(board, enemy_pos, pos):
+        if occ in targets and _adjacent_reachable(board, enemy_pos, pos):
             positions.append(pos)
     return positions
 
@@ -25,7 +27,7 @@ def _nearest_hero(game, enemy_pos: tuple[int, int]) -> tuple[tuple[int, int] | N
     """Zwraca (pozycja, dystans) najbliższego bohatera (manhattan)."""
     best_pos = None
     best_dist = 999
-    for hero in game.heroes:
+    for hero in hero_side_targets(game, only_living=True):
         if hero.position is None:
             continue
         hx, hy = hero.position

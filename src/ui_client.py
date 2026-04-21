@@ -65,6 +65,25 @@ def _normalize_url(value: Optional[str]) -> Optional[str]:
     return urlunsplit((scheme, netloc, parsed.path or "", parsed.query, parsed.fragment))
 
 
+def _json_safe(value: Any) -> Any:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, dict):
+        return {str(key): _json_safe(val) for key, val in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_json_safe(item) for item in value]
+    if hasattr(value, "isoformat"):
+        try:
+            return value.isoformat()
+        except Exception:
+            pass
+    for attr in ("object_id", "id", "name"):
+        raw = getattr(value, attr, None)
+        if raw is not None:
+            return str(raw)
+    return repr(value)
+
+
 @dataclass
 class UIClient:
     """Minimalny klient HTTP do komunikacji z aplikacją UI graczy."""
@@ -103,7 +122,7 @@ class UIClient:
         """Wyślij prosty event do UI (np. log, zmiana stanu)."""
         if not self.enabled:
             return False
-        body = {"type": event_type, "payload": payload}
+        body = {"type": event_type, "payload": _json_safe(payload)}
         session_id = self._ensure_session_id()
         if session_id:
             body["session_id"] = session_id

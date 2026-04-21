@@ -27,6 +27,21 @@ logger = logging.getLogger(__name__)
 CoverType = str
 
 
+def _ranged_prompt_info(game, title: str, text: str, *, source: str) -> None:
+    ui = getattr(game, "ui", None)
+    if ui is not None and hasattr(ui, "prompt_info"):
+        try:
+            ui.prompt_info(title, prompt_long=text, source=source)
+            return
+        except Exception:
+            pass
+    try:
+        if hasattr(game, "ui_log"):
+            game.ui_log(text)
+    except Exception:
+        return
+
+
 class BaseRangeAttackEvent(AttackEventBase):
     """Wspólna logika dla ataków dystansowych (łuki, kusze itd.)."""
 
@@ -44,7 +59,7 @@ class BaseRangeAttackEvent(AttackEventBase):
     COVER_RANK = {"none": 0, "minor": 1, "standard": 2, "greater": 3, "block": 4}
     COVER_AC = {"minor": 1, "standard": 2, "greater": 4}
     COVER_LED = {
-        "minor": [30, 120, 0],
+        "minor": [0, 150, 150],
         "standard": [90, 90, 0],
         "greater": [150, 60, 0],
         "block": [180, 0, 0],
@@ -262,6 +277,22 @@ class BaseRangeAttackEvent(AttackEventBase):
                 game.conn.set_leds(led_positions, led_colors)
             except Exception as exc:
                 logger.warning("Nie udało się ustawić LEDów: %s", exc)
+        if hittable:
+            _ranged_prompt_info(
+                game,
+                "Atak dystansowy: wybór celu",
+                (
+                    "Wybierz cel ataku dystansowego.\n"
+                    "Legenda podświetlenia:\n"
+                    "- niebieskie pola: legalne cele,\n"
+                    "- turkusowe pola: minor cover / lekka przeszkoda,\n"
+                    "- żółte pola: standard cover,\n"
+                    "- pomarańczowe pola: greater cover,\n"
+                    "- czerwone pola: linia strzału zablokowana.\n\n"
+                    "Nie każde podświetlone pole jest wyborem celu. Kliknij pole celu."
+                ),
+                source=f"{self.action_id_base}_targeting",
+            )
 
         try:
             if not hittable:
@@ -413,6 +444,20 @@ class BaseRangeAttackEvent(AttackEventBase):
             increments = target_analysis["increments"]
             if self._is_hunted_prey(hero, enemy) and increments >= 2:
                 range_penalty = max(0, int(range_penalty) - 2)
+            _ranged_prompt_info(
+                game,
+                "Atak dystansowy: analiza strzału",
+                (
+                    f"Cel: {getattr(enemy, 'name', 'Wróg')} na polu {target_pos}\n"
+                    f"Dystans: {distance_ft} ft\n"
+                    f"Przyrost zasięgu: {increments}\n"
+                    f"Kara za zasięg: -{range_penalty}\n"
+                    f"Typ osłony: {cover_type}\n"
+                    f"Linia strzału zablokowana: {'tak' if bool(target_analysis.get('blocked', False)) else 'nie'}\n\n"
+                    "Potwierdź Enterem i wykonaj rzut ataku."
+                ),
+                source=f"{self.action_id_base}_analysis",
+            )
             target_id = self._target_id(enemy)
             extra_actions_spent, reload_cancelled = self._handle_reload_before_shot(ctx, hero, selected_weapon)
             if reload_cancelled is not None:
@@ -483,6 +528,9 @@ class BaseRangeAttackEvent(AttackEventBase):
             if self._attacker_has_combat_stealth(hero):
                 metadata.setdefault("force_off_guard", True)
                 metadata.setdefault("force_flat_footed_source", "stealth")
+            elif self._exploration_ambush_applies(ctx, hero, enemy):
+                metadata.setdefault("force_off_guard", True)
+                metadata.setdefault("force_flat_footed_source", "exploration_ambush")
 
             is_off_guard_for_attack, target_natural_flat_footed, surprise_attack_active = self._is_off_guard_for_attack(
                 ctx,
@@ -657,6 +705,8 @@ class BaseRangeAttackEvent(AttackEventBase):
                 trait_notes.append("Finesse: możesz użyć ZR zamiast SI do premii ataku.")
             if surprise_attack_active:
                 trait_notes.append("Surprise Attack: cel traktowany jako flat-footed (-2 AC vs ten atak).")
+            elif str(metadata.get("force_flat_footed_source", "") or "").strip().lower() == "exploration_ambush":
+                trait_notes.append("Atak z zaskoczenia: poza walką cel jest flat-footed (-2 AC vs ten atak).")
             try:
                 from statuses.clumsy import clumsy_attack_penalty_effects
 

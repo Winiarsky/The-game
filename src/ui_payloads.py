@@ -353,6 +353,81 @@ def build_hero_snapshot(hero: Any, *, note: str | None = None) -> dict[str, Any]
     }
 
 
+def build_companion_snapshot(companion: Any, *, note: str | None = None) -> dict[str, Any]:
+    companion_id = getattr(companion, "object_id", None) or getattr(companion, "name", None) or "companion"
+    try:
+        max_hp = int(getattr(companion, "max_hp", 0) or 0)
+    except Exception:
+        max_hp = 0
+    try:
+        hp = int(getattr(companion, "hp", 0) or 0)
+    except Exception:
+        hp = 0
+    try:
+        speed_feet = max(0, int(getattr(companion, "land_speed_feet", 25) or 25))
+    except Exception:
+        speed_feet = 25
+
+    raw_mods = dict(getattr(companion, "ability_mods", {}) or {})
+    ability_modifiers = {
+        "strength": int(raw_mods.get("str", 0) or 0),
+        "dexterity": int(raw_mods.get("dex", 0) or 0),
+        "constitution": int(raw_mods.get("con", 0) or 0),
+        "intelligence": int(raw_mods.get("int", 0) or 0),
+        "wisdom": int(raw_mods.get("wis", 0) or 0),
+        "charisma": int(raw_mods.get("cha", 0) or 0),
+    }
+    owner_name = str(getattr(companion, "owner_name", "") or "").strip()
+
+    return {
+        "id": str(companion_id),
+        "character_id": None,
+        "name": getattr(companion, "name", None) or str(companion_id),
+        "image": getattr(companion, "image", None),
+        "statuses": status_labels(companion),
+        "note": note,
+        "level": getattr(companion, "level", None),
+        "pos": getattr(companion, "position", None),
+        "wounds": max(0, max_hp - hp) if max_hp > 0 else None,
+        "initiative": None,
+        "class_id": "animal_companion",
+        "ancestry_id": None,
+        "heritage_id": None,
+        "ac": getattr(companion, "ac", None),
+        "ac_base": getattr(companion, "ac", None),
+        "ac_modifier": 0,
+        "max_hp": max_hp or None,
+        "base_speed_feet": speed_feet,
+        "speed_feet": speed_feet,
+        "ability_scores": {},
+        "ability_modifiers": ability_modifiers,
+        "skill_ranks": {},
+        "save_ranks": {},
+        "perception_rank": None,
+        "perception_modifier": None,
+        "spell_dc": None,
+        "class_dc": None,
+        "trained_skills": [],
+        "lore_skills": [],
+        "background_label": None,
+        "background_feat_id": None,
+        "background_ability_boosts_ui": None,
+        "background_skill_training_ui": None,
+        "preview_barbarian_instinct_id": None,
+        "creation_in_progress": False,
+        "hand_slots": None,
+        "coin_pouch": None,
+        "money_text": None,
+        "bulk_summary": None,
+        "inventory_items": [],
+        "spellcasting": None,
+        "is_companion": True,
+        "owner_id": getattr(companion, "owner_id", None),
+        "owner_name": owner_name or None,
+        "companion_type": getattr(companion, "companion_type", None),
+    }
+
+
 def build_active_actor_payload(
     actor: Any | None,
     *,
@@ -385,6 +460,7 @@ __all__ = [
     "_speed_snapshot_values",
     "background_preview",
     "build_active_actor_payload",
+    "build_companion_snapshot",
     "build_hero_snapshot",
     "status_labels",
 ]

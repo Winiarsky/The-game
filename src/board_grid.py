@@ -191,6 +191,21 @@ class BoardGrid:
     def _is_obstacle(self, occupant: Optional[Occupant]) -> bool:
         return isinstance(occupant, Obstacle)
 
+    @staticmethod
+    def _is_diagonal_step(a: Tuple[int, int], b: Tuple[int, int]) -> bool:
+        return abs(int(a[0]) - int(b[0])) == 1 and abs(int(a[1]) - int(b[1])) == 1
+
+    def _can_step_direct(self, a: Tuple[int, int], b: Tuple[int, int], *, allow_occupied: bool = False) -> bool:
+        if not (self.in_bounds(a) and self.in_bounds(b)):
+            return False
+        if self.is_blocked(a, b):
+            return False
+        for edge_obj in self.edge_interactables_between(a, b):
+            blocks_passage = getattr(edge_obj, "blocks_passage", None)
+            if callable(blocks_passage) and blocks_passage(a, b):
+                return False
+        return self.can_enter(b, allow_occupied=allow_occupied)
+
     def can_enter(self, position: Tuple[int, int], allow_occupied: bool = False) -> bool:
         """Sprawdź czy pole można zająć/przejść (teren przechodni, brak ściany i brak przeszkody)."""
         cell = self.cell_at(position)
@@ -213,14 +228,21 @@ class BoardGrid:
         """Czy z pola a można przejść na b (brak ściany, teren przechodni, brak przeszkody)."""
         if not (self.in_bounds(a) and self.in_bounds(b)):
             return False
-        if self.is_blocked(a, b):
-            return False
-        # Obiekty krawędziowe (np. drzwi) mogą blokować przejście.
-        for edge_obj in self.edge_interactables_between(a, b):
-            blocks_passage = getattr(edge_obj, "blocks_passage", None)
-            if callable(blocks_passage) and blocks_passage(a, b):
-                return False
-        return self.can_enter(b, allow_occupied=allow_occupied)
+        if self._is_diagonal_step(a, b):
+            mid_a = (int(b[0]), int(a[1]))
+            mid_b = (int(a[0]), int(b[1]))
+            route_a = self._can_step_direct(a, mid_a, allow_occupied=False) and self._can_step_direct(
+                mid_a,
+                b,
+                allow_occupied=allow_occupied,
+            )
+            route_b = self._can_step_direct(a, mid_b, allow_occupied=False) and self._can_step_direct(
+                mid_b,
+                b,
+                allow_occupied=allow_occupied,
+            )
+            return bool(route_a or route_b)
+        return self._can_step_direct(a, b, allow_occupied=allow_occupied)
 
     def place(self, occupant: Occupant, position: Tuple[int, int]) -> None:
         cell = self.cell_at(position)

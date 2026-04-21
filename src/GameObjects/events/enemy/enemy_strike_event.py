@@ -4,11 +4,14 @@ import logging
 import random
 import re
 
+from board import consts
 from combat import effective_ac
+from combat.hero_side_targets import hero_side_targets
 from combat.degree_of_success import is_critical_success, is_hit, natural_shift_from_roll, resolve_outcome
 from combat.hp_engine import apply_damage as hp_apply_damage
 from damage_types import DamageType
 from statuses import PoisonedStatus, SickenedStatus, SlowedStatus
+from enemy_prompting import clear_enemy_highlight, enemy_highlight, enemy_prompt_step, format_roll_components
 
 from GameObjects.items.inventory import ensure_actor_inventory
 from GameObjects.items.weapon import normalize_weapon_id
@@ -107,13 +110,13 @@ def _pick_target(ctx: EventContext, actor, weapon):
 
     candidates = []
     if bool(getattr(weapon, "ranged", False)):
-        for hero in getattr(game, "heroes", []) or []:
+        for hero in hero_side_targets(game, only_living=True):
             if getattr(hero, "position", None) is None:
                 continue
             candidates.append(hero)
     else:
         reach_squares = max(1, _weapon_reach_ft(actor, weapon) // 5)
-        for hero in getattr(game, "heroes", []) or []:
+        for hero in hero_side_targets(game, only_living=True):
             pos = getattr(hero, "position", None)
             if pos is None:
                 continue
@@ -128,8 +131,19 @@ def _pick_target(ctx: EventContext, actor, weapon):
     positions = [getattr(target, "position", None) for target in candidates if getattr(target, "position", None) is not None]
     if not positions:
         return None
+    enemy_prompt_step(
+        game,
+        f"Wybór celu: {getattr(actor, 'name', 'Wróg')}",
+        prompt_long=(
+            f"Przeciwnik wybiera cel dla ataku {getattr(weapon, 'name', 'bronią')}.\n"
+            "Wskaż figurkę bohatera lub zwierzęcego towarzysza będącego celem ataku i potwierdź na planszy."
+        ),
+        source="enemy_strike_target",
+    )
     try:
-        ctx.game.conn.set_leds(positions, [[180, 50, 50] for _ in positions])
+        led_positions = [actor_pos] + positions
+        led_colors = [consts.ENEMY_START_RGB] + [consts.HERO_HIGHLIGHT_RGB for _ in positions]
+        ctx.game.conn.set_leds(led_positions, led_colors)
         choice = ctx.game.conn.scan_board(positions)
     finally:
         try:
@@ -249,6 +263,16 @@ def apply_goblin_pox(target) -> bool:
         return False
 
 
+def goblin_pox_description() -> str:
+    return (
+        "Goblin Pox: choroba postępująca.\n"
+        "Etap 1: Sickened 1.\n"
+        "Etap 2: Sickened 1 oraz Slowed 1.\n"
+        "Etap 3: Sickened 2 na dłużej.\n"
+        "Przy kolejnych rzutach obronnych efekt może się pogarszać albo słabnąć."
+    )
+
+
 def _apply_damage(target, amount: int, damage_type: str) -> int:
     before_hp = None
     current_hp = getattr(target, "current_hp", None)
@@ -356,126 +380,205 @@ class EnemyStrikeEvent(ActionCostEvent):
         if actor_pos is None or target_pos is None:
             return EventResult.cancelled(message="Strike: brak pozycji.")
 
-        ranged = bool(getattr(weapon, "ranged", False))
-        cover_type = "none"
-        range_penalty = 0
-        if ranged:
-            analyzer = _EnemyRangeAnalyzer()
-            analyzer.range_increment_ft = int(getattr(weapon, "range_increment_ft", 60) or 60)
-            analysis = analyzer._analyze_shot(ctx.game, actor_pos, target_pos, target=target)
-            cover_type = str(analysis.get("cover_type", "none") or "none")
-            range_penalty = int(analysis.get("range_penalty", 0) or 0)
-            if bool(analysis.get("blocked", False)):
-                return EventResult.cancelled(message="Strike: linia strzału jest zablokowana.")
-        else:
-            reach_squares = max(1, _weapon_reach_ft(actor, weapon) // 5)
-            if max(abs(actor_pos[0] - target_pos[0]), abs(actor_pos[1] - target_pos[1])) > reach_squares:
-                return EventResult.cancelled(message="Strike: cel jest poza zasięgiem broni.")
+        try:
+            enemy_highlight(
+                ctx.game,
+                [actor_pos, target_pos],
+                [consts.ENEMY_START_RGB, consts.HERO_HIGHLIGHT_RGB],
+            )
 
-        if not check_concealed(ctx, target):
+            ranged = bool(getattr(weapon, "ranged", False))
+            cover_type = "none"
+            range_penalty = 0
+            if ranged:
+                analyzer = _EnemyRangeAnalyzer()
+                analyzer.range_increment_ft = int(getattr(weapon, "range_increment_ft", 60) or 60)
+                analysis = analyzer._analyze_shot(ctx.game, actor_pos, target_pos, target=target)
+                cover_type = str(analysis.get("cover_type", "none") or "none")
+                range_penalty = int(analysis.get("range_penalty", 0) or 0)
+                enemy_prompt_step(
+                    ctx.game,
+                    f"Analiza strzału: {getattr(actor, 'name', 'Wróg')}",
+                    prompt_long=(
+                        "Legenda podświetlenia:\n"
+                        "- niebieski: cel ataku,\n"
+                        "- turkusowy: minor cover / lekka przeszkoda,\n"
+                        "- żółty: standard cover,\n"
+                        "- pomarańczowy: greater cover,\n"
+                        "- czerwony: linia strzału zablokowana.\n\n"
+                        f"Cel: {getattr(target, 'name', 'cel')} na polu {target_pos}\n"
+                        f"Dystans: {int(analysis.get('distance_ft', 0) or 0)} ft\n"
+                        f"Kara za zasięg: -{range_penalty}\n"
+                        f"Typ osłony: {cover_type}\n"
+                        f"Linia strzału zablokowana: {'tak' if bool(analysis.get('blocked', False)) else 'nie'}"
+                    ),
+                    source="enemy_strike_ranged_legend",
+                )
+                if bool(analysis.get("blocked", False)):
+                    return EventResult.cancelled(message="Strike: linia strzału jest zablokowana.")
+            else:
+                reach_squares = max(1, _weapon_reach_ft(actor, weapon) // 5)
+                if max(abs(actor_pos[0] - target_pos[0]), abs(actor_pos[1] - target_pos[1])) > reach_squares:
+                    return EventResult.cancelled(message="Strike: cel jest poza zasięgiem broni.")
+
+            if not check_concealed(ctx, target):
+                _bump_attack_state(ctx, actor, weapon=weapon)
+                return EventResult(
+                    success=True,
+                    consumed_action=True,
+                    actions_spent=1,
+                    message="Strike chybia przez concealed.",
+                    data={"outcome": "concealed_miss", "target": target},
+                )
+
+            weapon_id = normalize_weapon_id(getattr(weapon, "item_id", None)) or "weapon"
+            attack_bonus = int(dict(getattr(actor, "weapon_attack_bonuses", {}) or {}).get(weapon_id, getattr(actor, "attack_bonus", 0)) or 0)
+            extra_mod = 0
+            compute_modifier = getattr(actor, "compute_modifier", None)
+            if callable(compute_modifier):
+                try:
+                    extra_mod = int(compute_modifier("attack_ranged" if ranged else "attack_melee", target=target) or 0)
+                except Exception:
+                    extra_mod = 0
+
+            map_penalty = _map_penalty(ctx, actor, weapon)
+            natural_roll = random.randint(1, 20)
+            total_attack = natural_roll + attack_bonus + extra_mod - map_penalty - range_penalty
+            cover_bonus = _EnemyRangeAnalyzer.COVER_AC.get(cover_type, 0) if ranged else 0
+            target_ac = int(effective_ac(target) or 10) + int(cover_bonus or 0)
+            outcome = resolve_outcome(total_attack, target_ac, natural_shift=natural_shift_from_roll(natural_roll))
+            roll_components = [
+                {"label": "k20", "value": natural_roll, "description": "Naturalny wynik rzutu."},
+                {"label": "Bonus ataku", "value": attack_bonus, "description": "Premia ataku przeciwnika."},
+                {"label": "Modyfikator sytuacyjny", "value": extra_mod, "description": "Dodatkowe premie i kary."},
+                {"label": "MAP", "value": -int(map_penalty or 0), "description": "Multiple Attack Penalty."},
+            ]
+            if ranged:
+                roll_components.append(
+                    {"label": "Kara za zasięg", "value": -int(range_penalty or 0), "description": "Penalty za dystans."}
+                )
+            enemy_prompt_step(
+                ctx.game,
+                f"Rzut ataku: {getattr(actor, 'name', 'Wróg')}",
+                prompt_long=(
+                    f"{getattr(actor, 'name', 'Wróg')} wykonuje Strike {getattr(weapon, 'name', 'bronią')} "
+                    f"przeciw {getattr(target, 'name', 'celowi')}.\n\n"
+                    f"Rozpiska rzutu:\n{format_roll_components(roll_components)}\n\n"
+                    f"Wynik końcowy: {total_attack}\n"
+                    f"Próg obrony: AC {target_ac}\n"
+                    f"Typ osłony: {cover_type}\n"
+                    f"Wynik testu: {outcome}"
+                ),
+                source=self.name,
+                log_message=(
+                    f"{getattr(actor, 'name', 'Wróg')} atakuje {getattr(target, 'name', 'cel')} "
+                    f"({total_attack} vs AC {target_ac}, {outcome})."
+                ),
+            )
+
+            damage = 0
+            hp_dealt = 0
+            damage_type = str(getattr(weapon, "damage_type", DamageType.NORMAL.value) or DamageType.NORMAL.value)
+            pox_applied = False
+            if is_hit(outcome):
+                damage, damage_type = _roll_damage(actor, weapon)
+                if _weapon_has_trait(weapon, "backstabber") and _target_is_off_guard(target):
+                    damage += 1
+                if is_critical_success(outcome):
+                    damage = max(0, int(damage) * 2)
+                    damage += _deadly_bonus(weapon)
+                hp_dealt = _apply_damage(target, damage, damage_type)
+                if _weapon_has_trait(weapon, "jaws") and getattr(actor, "behavior_id", None) == "goblin_dog_hunter":
+                    pox_applied = apply_goblin_pox(target)
+
             _bump_attack_state(ctx, actor, weapon=weapon)
+
+            try:
+                ctx.game.events.safe_emit_action(
+                    actor=actor,
+                    action_id=self.name,
+                    action_tags=self._effective_tags(ctx),
+                    target=target,
+                    target_pos=target_pos,
+                    weapon_id=weapon_id,
+                    outcome=outcome,
+                    damage=damage,
+                    damage_type=damage_type,
+                    map_penalty=map_penalty,
+                    cover=cover_type,
+                    ranged=ranged,
+                )
+                if hp_dealt > 0:
+                    ctx.game.events.safe_emit_action(
+                        actor=actor,
+                        action_id="damage_applied",
+                        action_tags=["damage", "attack", "enemy"],
+                        target=target,
+                        target_pos=target_pos,
+                        source_action=self.name,
+                        damage=int(hp_dealt),
+                        damage_type=damage_type,
+                    )
+            except Exception:
+                pass
+
+            summary = (
+                f"{getattr(actor, 'name', 'Wróg')} wykonuje Strike {getattr(weapon, 'name', 'bronią')}"
+                f" przeciw {getattr(target, 'name', 'celowi')}: {outcome}."
+            )
+            if is_hit(outcome):
+                summary = f"{summary} Obrażenia {damage} ({damage_type})."
+                if pox_applied:
+                    summary = f"{summary} Cel łapie goblin pox."
+            elif ranged and cover_bonus:
+                summary = f"{summary} Osłona celu: +{cover_bonus} AC."
+            try:
+                enemy_prompt_step(
+                    ctx.game,
+                    f"Wynik ataku: {getattr(actor, 'name', 'Wróg')}",
+                    prompt_long=(
+                        f"Outcome: {outcome}\n"
+                        f"Cel: {getattr(target, 'name', 'cel')} ({target_pos})\n"
+                        f"Obrażenia: {damage} {damage_type}\n"
+                        f"Realnie zadane HP: {hp_dealt}\n"
+                        f"Efekt goblin pox: {'tak' if pox_applied else 'nie'}\n"
+                        f"{goblin_pox_description() if pox_applied else ''}\n"
+                        "Zastosuj wynik na planszy i potwierdź Enterem."
+                    ),
+                    source=f"{self.name}_result",
+                    log_message=summary,
+                )
+            except Exception:
+                pass
+            try:
+                ui_actor_snapshot = getattr(ctx.game, "ui_actor_snapshot", None)
+                if callable(ui_actor_snapshot):
+                    ui_actor_snapshot(target, note="Otrzymane obrazenia")
+                elif target in list(getattr(ctx.game, "heroes", []) or []):
+                    ui_hero = getattr(ctx.game, "ui_hero", None)
+                    if callable(ui_hero):
+                        ui_hero(target, note="Otrzymane obrazenia")
+            except Exception:
+                pass
+
             return EventResult(
                 success=True,
                 consumed_action=True,
                 actions_spent=1,
-                message="Strike chybia przez concealed.",
-                data={"outcome": "concealed_miss", "target": target},
+                message=summary,
+                data={
+                    "outcome": outcome,
+                    "target": target,
+                    "weapon": weapon,
+                    "damage": damage,
+                    "hp_dealt": hp_dealt,
+                    "cover_type": cover_type,
+                    "map_penalty": map_penalty,
+                    "pox_applied": pox_applied,
+                },
             )
-
-        weapon_id = normalize_weapon_id(getattr(weapon, "item_id", None)) or "weapon"
-        attack_bonus = int(dict(getattr(actor, "weapon_attack_bonuses", {}) or {}).get(weapon_id, getattr(actor, "attack_bonus", 0)) or 0)
-        extra_mod = 0
-        compute_modifier = getattr(actor, "compute_modifier", None)
-        if callable(compute_modifier):
-            try:
-                extra_mod = int(compute_modifier("attack_ranged" if ranged else "attack_melee", target=target) or 0)
-            except Exception:
-                extra_mod = 0
-
-        map_penalty = _map_penalty(ctx, actor, weapon)
-        natural_roll = random.randint(1, 20)
-        total_attack = natural_roll + attack_bonus + extra_mod - map_penalty - range_penalty
-        cover_bonus = _EnemyRangeAnalyzer.COVER_AC.get(cover_type, 0) if ranged else 0
-        target_ac = int(effective_ac(target) or 10) + int(cover_bonus or 0)
-        outcome = resolve_outcome(total_attack, target_ac, natural_shift=natural_shift_from_roll(natural_roll))
-
-        damage = 0
-        hp_dealt = 0
-        damage_type = str(getattr(weapon, "damage_type", DamageType.NORMAL.value) or DamageType.NORMAL.value)
-        pox_applied = False
-        if is_hit(outcome):
-            damage, damage_type = _roll_damage(actor, weapon)
-            if _weapon_has_trait(weapon, "backstabber") and _target_is_off_guard(target):
-                damage += 1
-            if is_critical_success(outcome):
-                damage = max(0, int(damage) * 2)
-                damage += _deadly_bonus(weapon)
-            hp_dealt = _apply_damage(target, damage, damage_type)
-            if _weapon_has_trait(weapon, "jaws") and getattr(actor, "behavior_id", None) == "goblin_dog_hunter":
-                pox_applied = apply_goblin_pox(target)
-
-        _bump_attack_state(ctx, actor, weapon=weapon)
-
-        try:
-            ctx.game.events.safe_emit_action(
-                actor=actor,
-                action_id=self.name,
-                action_tags=self._effective_tags(ctx),
-                target=target,
-                target_pos=target_pos,
-                weapon_id=weapon_id,
-                outcome=outcome,
-                damage=damage,
-                damage_type=damage_type,
-                map_penalty=map_penalty,
-                cover=cover_type,
-                ranged=ranged,
-            )
-            if hp_dealt > 0:
-                ctx.game.events.safe_emit_action(
-                    actor=actor,
-                    action_id="damage_applied",
-                    action_tags=["damage", "attack", "enemy"],
-                    target=target,
-                    target_pos=target_pos,
-                    source_action=self.name,
-                    damage=int(hp_dealt),
-                    damage_type=damage_type,
-                )
-        except Exception:
-            pass
-
-        summary = (
-            f"{getattr(actor, 'name', 'Wróg')} wykonuje Strike {getattr(weapon, 'name', 'bronią')}"
-            f" przeciw {getattr(target, 'name', 'celowi')}: {outcome}."
-        )
-        if is_hit(outcome):
-            summary = f"{summary} Obrażenia {damage} ({damage_type})."
-            if pox_applied:
-                summary = f"{summary} Cel łapie goblin pox."
-        elif ranged and cover_bonus:
-            summary = f"{summary} Osłona celu: +{cover_bonus} AC."
-        try:
-            ctx.game.ui_log(summary)
-        except Exception:
-            pass
-
-        return EventResult(
-            success=True,
-            consumed_action=True,
-            actions_spent=1,
-            message=summary,
-            data={
-                "outcome": outcome,
-                "target": target,
-                "weapon": weapon,
-                "damage": damage,
-                "hp_dealt": hp_dealt,
-                "cover_type": cover_type,
-                "map_penalty": map_penalty,
-                "pox_applied": pox_applied,
-            },
-        )
+        finally:
+            clear_enemy_highlight(ctx.game)
 
 
-__all__ = ["EnemyStrikeEvent", "apply_goblin_pox"]
+__all__ = ["EnemyStrikeEvent", "apply_goblin_pox", "goblin_pox_description"]

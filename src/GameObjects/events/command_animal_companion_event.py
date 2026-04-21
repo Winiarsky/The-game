@@ -43,6 +43,32 @@ def _remove_status(actor, status_id: str) -> None:
             pass
 
 
+def _is_enemy_target(game, target) -> bool:
+    if target is None:
+        return False
+    if target in getattr(game, "enemies", []):
+        return True
+    module_name = str(getattr(getattr(target, "__class__", None), "__module__", "") or "")
+    if module_name.startswith("GameObjects.Enemies.") or module_name == "GameObjects.Enemies.basic_enemy":
+        if getattr(target, "position", None) is None:
+            return False
+        try:
+            return int(getattr(target, "hp", 1) or 0) > 0
+        except Exception:
+            return True
+    if getattr(target, "behavior_id", None) is not None and getattr(target, "position", None) is not None:
+        try:
+            return int(getattr(target, "hp", 1) or 0) > 0
+        except Exception:
+            return True
+    if getattr(target, "position", None) is not None and hasattr(target, "hp") and hasattr(target, "ac"):
+        try:
+            return int(getattr(target, "hp", 1) or 0) > 0
+        except Exception:
+            return True
+    return False
+
+
 def _prompt_choice(ctx: EventContext, prompt: str, choices: list[str], *, source: str) -> str | None:
     ui = getattr(ctx.game, "ui", None)
     answer = None
@@ -51,6 +77,14 @@ def _prompt_choice(ctx: EventContext, prompt: str, choices: list[str], *, source
             answer = ui.prompt_choice(prompt, choices=choices, source=source)
         except Exception:
             answer = None
+    if answer is None:
+        conn = getattr(ctx.game, "conn", None)
+        reader = getattr(conn, "read_card", None)
+        if callable(reader):
+            try:
+                answer = reader(f"{prompt}: {', '.join(choices)}", source=source)
+            except Exception:
+                answer = None
     if answer is None:
         return None
     raw = str(answer).strip().lower().replace(" ", "_")
@@ -64,6 +98,38 @@ def _prompt_choice(ctx: EventContext, prompt: str, choices: list[str], *, source
         if raw == entry:
             return entry
     return None
+
+
+def _prompt_info(ctx: EventContext, title: str, text: str, *, source: str) -> None:
+    ui = getattr(ctx.game, "ui", None)
+    if ui is not None and getattr(ui, "enabled", False) and hasattr(ui, "prompt_info"):
+        try:
+            ui.prompt_info(title, prompt_long=text, source=source)
+            return
+        except Exception:
+            pass
+    logger.info("%s: %s", title, text)
+
+
+def _highlight_companion_and_positions(ctx: EventContext, companion, positions: list[tuple[int, int]]) -> None:
+    conn = getattr(ctx.game, "conn", None)
+    if conn is None or not hasattr(conn, "set_leds"):
+        return
+    source_pos = getattr(companion, "position", None)
+    led_positions: list[tuple[int, int]] = []
+    led_colors: list[list[int]] = []
+    if source_pos is not None:
+        led_positions.append(tuple(source_pos))
+        led_colors.append(list(consts.HERO_HIGHLIGHT_RGB))
+    for pos in positions:
+        led_positions.append(tuple(pos))
+        led_colors.append(list(consts.INTERACT_FIELD_RGB))
+    if not led_positions:
+        return
+    try:
+        conn.set_leds(led_positions, led_colors)
+    except Exception:
+        pass
 
 
 @register_event
@@ -126,6 +192,13 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
 
             if msg:
                 action_logs.append(msg)
+                if not consumed:
+                    _prompt_info(
+                        ctx,
+                        "Zwierzęcy towarzysz: akcja niemożliwa",
+                        str(msg),
+                        source=self.name,
+                    )
             if consumed:
                 actions_left -= 1
                 spent_any = True
@@ -321,6 +394,14 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
             if max(abs(pos[0] - source_pos[0]), abs(pos[1] - source_pos[1])) > reach:
                 continue
             candidates.append(enemy)
+        if not candidates and board is not None:
+            for pos in board.get_neighbors(source_pos, include_position=False, diagonal=True):
+                target = board.occupant_at(pos)
+                if not _is_enemy_target(ctx.game, target):
+                    continue
+                if max(abs(pos[0] - source_pos[0]), abs(pos[1] - source_pos[1])) > reach:
+                    continue
+                candidates.append(target)
         if not candidates:
             return False, "Strike: brak wroga w zasiegu companiona."
 
@@ -329,8 +410,17 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
             target = candidates[0]
         else:
             positions = [getattr(enemy, "position", None) for enemy in candidates if getattr(enemy, "position", None) is not None]
+            _prompt_info(
+                ctx,
+                "Zwierzęcy towarzysz: wybór celu",
+                (
+                    f"Wybierz figurkę przeciwnika, którego zaatakuje {getattr(companion, 'name', 'towarzysz')}.\n"
+                    "Podświetlona figurka to twój towarzysz, a pola celu są oznaczone osobnym kolorem."
+                ),
+                source=self.name,
+            )
             try:
-                ctx.game.conn.set_leds(positions, consts.INTERACT_FIELD_RGB)
+                _highlight_companion_and_positions(ctx, companion, positions)
                 selected = ctx.game.conn.scan_board(positions)
             finally:
                 try:
@@ -368,6 +458,8 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
         damage_formula = str(profile.get("damage", "1d6") or "1d6")
         damage_type = str(profile.get("damage_type", "normal") or "normal")
         target_ac = int(effective_ac(target) or 10)
+        target_name = getattr(target, "name", "target")
+        target_pos = getattr(target, "position", None)
         traits = {str(item or "").strip().lower() for item in (profile.get("traits") or [])}
         hunted_target = self._companion_hunted_target_id(companion) == _actor_id(target)
         agile = "agile" in traits
@@ -442,6 +534,22 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
         if flurry_note:
             prompt_notes.append(flurry_note)
 
+        if target_pos is not None:
+            try:
+                _highlight_companion_and_positions(ctx, companion, [tuple(target_pos)])
+            except Exception:
+                pass
+        _prompt_info(
+            ctx,
+            "Zwierzęcy towarzysz: Strike",
+            (
+                f"{getattr(companion, 'name', 'Towarzysz')} wykonuje {attack_label} przeciw {target_name}"
+                f"{f' na polu {target_pos}' if target_pos is not None else ''}.\n"
+                f"Teraz wykonaj rzut ataku przeciw AC {target_ac} i potwierdź w UI."
+            ),
+            source=self.name,
+        )
+
         attack_roll_data = prompt_for_roll(
             f"Atak zwierzecego towarzysza ({attack_label}):",
             layout="test",
@@ -462,6 +570,10 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
         critical = is_critical_success(outcome)
         hit = is_hit(outcome)
         if not hit:
+            try:
+                ctx.game.conn.leds_off()
+            except Exception:
+                pass
             return True, f"Strike ({attack_label}): pudło vs AC {target_ac} (wynik: {attack_roll})."
 
         # --- Roll obrażeń z modyfikatorem STR ---
@@ -477,6 +589,16 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
         ]
         dmg_auto_total = dmg_str_mod
         dmg_roll_stack = {"components": dmg_components, "auto_total_modifier": dmg_auto_total}
+        _prompt_info(
+            ctx,
+            "Zwierzęcy towarzysz: obrażenia",
+            (
+                f"Atak {attack_label} trafia {target_name}.\n"
+                f"Rzuć teraz obrażenia ({damage_formula})"
+                f"{' x2 dla krytyka' if critical else ''} i potwierdź w UI."
+            ),
+            source=self.name,
+        )
         dmg_base = int(
             prompt_for_roll(
                 f"Atak zwierzecego towarzysza ({attack_label}) - obrazenia ({damage_formula}):",
@@ -490,6 +612,12 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
         )
         precision_bonus = 0
         if self._companion_precision_ready(ctx, companion, target):
+            _prompt_info(
+                ctx,
+                "Zwierzęcy towarzysz: Precision",
+                "Hunter's Edge (Precision) jest aktywne. Rzuć dodatkowe obrażenia i potwierdź w UI.",
+                source=self.name,
+            )
             precision_roll = prompt_for_roll(
                 "Hunter's Edge (Precision) - dodatkowe obrażenia 1k8:",
                 layout="damage",
@@ -534,7 +662,10 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
                 )
             except Exception:
                 pass
-        target_name = getattr(target, "name", "target")
+        try:
+            ctx.game.conn.leds_off()
+        except Exception:
+            pass
         msg = f"Strike ({attack_label}) trafia {target_name} za {damage} {damage_type}."
         if precision_bonus > 0:
             msg += f" Precision +{precision_bonus}."

@@ -62,25 +62,35 @@ class Start(State):
                 return False
 
             hero_name = str(getattr(hero, "name", "Bohater") or "Bohater")
-            logger.info("Ustaw figurke bohatera %s na wolnym polu startowym.", hero_name)
+            logger.info("Wybierz pole startowe dla bohatera %s.", hero_name)
             self.game.ui_log(
-                f"Postaw figurkę bohatera {hero_name} na jednym z podświetlonych pól startowych "
-                "i potwierdź klikając w pole."
+                f"Wybierz puste pole startowe dla bohatera {hero_name}, klikając jedno z podświetlonych pól."
             )
             if callable(ui_idle_hint):
                 ui_idle_hint(
-                    "Czekam na działanie",
-                    f"Postaw figurkę bohatera {hero_name} na jednym z podświetlonych pól startowych "
-                    "i potwierdź klikając w pole.",
+                    "Wskaż miejsce dla figurki",
+                    f"Wybierz puste pole startowe dla bohatera {hero_name}, klikając jedno z podświetlonych pól.",
                 )
             self.game.conn.set_leds(starting_positions, consts.MOVE_FIELD_RGB) # usunac pozycje zajete
             time.sleep(0.12)
-            logger.info("Odczytuje polozenie figurki...")
+            logger.info("Odczytuje wybrane pole startowe...")
             pos = self.game.conn.scan_board(starting_positions)
             self.game.conn.leds_off()
             if pos is None:
                 self.game.ui_log("Nie odczytano pola. Spróbuj ponownie.")
                 return False
+            prompt = (
+                f"Wybrane pole startowe dla bohatera {hero_name}: {pos}.\n"
+                "Postaw teraz figurkę na tym polu i potwierdź Enterem."
+            )
+            ui = getattr(self.game, "ui", None)
+            if ui is not None and getattr(ui, "enabled", False) and hasattr(ui, "prompt_info"):
+                try:
+                    ui.prompt_info("Ustaw figurkę bohatera", prompt_long=prompt, source="hero_setup_place")
+                except Exception:
+                    self.game.ui_log(prompt)
+            else:
+                self.game.ui_log(prompt)
             try:
                 self.game.board.place(hero, pos)
             except ValueError as exc:

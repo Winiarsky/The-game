@@ -11,6 +11,7 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 from src.states.heroes_turns import HeroesTurn
+from src.states.encounter_setup import run_setup_batches
 from src.states.start import Start
 
 
@@ -18,10 +19,13 @@ class _ConnStub:
     def __init__(self, timeline: list[str]):
         self.calls: list[str] = []
         self.timeline = timeline
+        self.led_payloads: list[tuple[object, object]] = []
 
-    def set_leds(self, *_args, **_kwargs):
+    def set_leds(self, *args, **_kwargs):
         self.calls.append("set_leds")
         self.timeline.append("set_leds")
+        if len(args) >= 2:
+            self.led_payloads.append((args[0], args[1]))
         return True
 
     def scan_board(self, *_args, **_kwargs):
@@ -105,7 +109,7 @@ def test_start_setup_selects_hero_before_board_scan_and_shows_place_hint():
     assert game.timeline.index("pick_hero") < game.timeline.index("scan_board")
 
     # Hint oczekiwania powinien zawierać imię bohatera i instrukcję ustawienia figurki.
-    place_hints = [text for title, text in game.hints if title == "Czekam na działanie" and text]
+    place_hints = [text for title, text in game.hints if title == "Wskaż miejsce dla figurki" and text]
     assert place_hints
     assert any("Grog" in hint and "podświetlonych pól" in hint for hint in place_hints)
 
@@ -177,3 +181,32 @@ def test_start_setup_uses_preselected_heroes_without_card_scan():
     assert len(game.heroes) == 1 and game.heroes[0] is hero
     assert "read_card" not in game.conn.calls
     assert any("automatycznie" in msg for msg in game.logs)
+
+
+def test_wall_setup_uses_two_endpoint_colors_and_explains_them():
+    game = _GameStub()
+
+    run_setup_batches(
+        game,
+        [
+            {
+                "kind": "wall",
+                "positions": [(0, 0), (1, 0), (0, 1), (1, 1)],
+                "edges": [{"a": [0, 0], "b": [1, 0]}],
+                "prompt": "Ustaw ściany zgodnie z podświetlonymi krawędziami i potwierdź w UI.",
+                "confirmation_mode": "confirm_only",
+                "color": [255, 140, 0],
+            }
+        ],
+    )
+
+    assert game.conn.led_payloads
+    positions, colors = game.conn.led_payloads[0]
+    assert list(positions) == [(0, 0), (1, 0), (0, 1), (1, 1)]
+    assert colors == [
+        [0, 160, 0],
+        [255, 140, 0],
+        [255, 140, 0],
+        [0, 160, 0],
+    ]
+    assert any("zielony" in msg and "pomarańczowy" in msg for msg in game.logs)
