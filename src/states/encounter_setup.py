@@ -4,6 +4,7 @@ import logging
 from dataclasses import asdict
 
 from board import consts
+from communication import make_debug_communication, make_setup_step_communication
 
 from .start import Start
 
@@ -11,7 +12,9 @@ logger = logging.getLogger(__name__)
 
 
 def run_setup_batches(game, batches) -> None:
-    for raw_batch in batches or []:
+    prepared_batches = list(batches or [])
+    total_steps = len(prepared_batches)
+    for idx, raw_batch in enumerate(prepared_batches, start=1):
         batch = asdict(raw_batch) if hasattr(raw_batch, "__dataclass_fields__") else dict(raw_batch)
         kind = str(batch.get("kind") or "").strip().lower()
         prompt = str(batch.get("prompt") or "Przygotuj planszę.")
@@ -19,6 +22,11 @@ def run_setup_batches(game, batches) -> None:
         positions = EncounterSetupState._unique_positions(tuple(pos) for pos in list(batch.get("positions") or []))
         color = batch.get("color") or consts.MOVE_FIELD_RGB
         edges = list(batch.get("edges") or [])
+        progress = {
+            "current": idx,
+            "total": total_steps,
+            "label": f"Krok {idx}/{total_steps}",
+        }
         led_colors = color
         if kind == "wall" and positions:
             led_colors = _wall_endpoint_colors(positions)
@@ -27,7 +35,6 @@ def run_setup_batches(game, batches) -> None:
                 "Końce każdej ściany są rozróżnione kolorami: zielony <-> pomarańczowy. "
                 "Ustaw segment ściany pomiędzy sąsiednimi LED-ami w tych dwóch kolorach."
             )
-        game.ui_log(prompt)
         ui = getattr(game, "ui", None)
         if mode == "click_all" and positions:
             pending = list(positions)
@@ -53,10 +60,36 @@ def run_setup_batches(game, batches) -> None:
             except Exception:
                 pass
         if edges:
-            game.ui_log(f"Krawędzie: {edges}")
+            try:
+                game.ui_log(
+                    "Dane techniczne ścian dostępne w szczegółach.",
+                    communication=make_debug_communication(
+                        title="Krawędzie setupu",
+                        details_markdown=f"Krawędzie: {edges}",
+                        dedupe_key=f"setup_edges:{idx}",
+                    ),
+                )
+            except TypeError:
+                game.ui_log(f"Krawędzie: {edges}")
+        setup_communication = make_setup_step_communication(
+            title="Setup encounteru",
+            body_markdown=prompt,
+            progress=progress,
+            details_markdown=(f"Krawędzie: {edges}" if edges else None),
+            blocking=True,
+        )
+        try:
+            game.ui_log(prompt, communication=setup_communication)
+        except TypeError:
+            game.ui_log(prompt)
         if ui is not None and hasattr(ui, "prompt_info"):
             try:
-                ui.prompt_info("Setup encounteru", prompt_long=prompt, source="encounter_setup")
+                ui.prompt_info(
+                    "Setup encounteru",
+                    prompt_long=prompt,
+                    source="encounter_setup",
+                    communication=setup_communication,
+                )
             except Exception:
                 pass
         elif not getattr(ui, "enabled", False):

@@ -364,6 +364,12 @@ class EnemyMoveEvent(GameEvent):
             ),
             source=self.name,
             log_message=f"{getattr(enemy, 'name', 'Enemy')} przemieszcza się z {enemy.position} na {dest}.",
+            blocking=True,
+            semantic_type="required_action",
+            dedupe_key=f"enemy_move:{getattr(enemy, 'object_id', getattr(enemy, 'name', 'enemy'))}:{enemy.position}->{dest}",
+            next_hint="Po potwierdzeniu ruch zostanie zastosowany na planszy.",
+            continue_hint="Kliknij pole docelowe po przesunięciu figurki.",
+            emit_log=False,
         )
 
         path_id = f"enemy-path-{time.time_ns()}"
@@ -411,9 +417,14 @@ class EnemyMoveEvent(GameEvent):
                 prompt_long=(
                     f"Przeciwnik zakończył ruch.\n"
                     f"Nowa pozycja: {dest}\n"
-                    "Potwierdź Enterem, aby przejść do kolejnej akcji."
+                    "Przeciwnik może teraz wykonać kolejną akcję."
                 ),
                 source=f"{self.name}_result",
+                blocking=False,
+                semantic_type="result",
+                dedupe_key=f"enemy_move_result:{getattr(enemy, 'object_id', getattr(enemy, 'name', 'enemy'))}:{dest}",
+                next_hint="Jeśli ma jeszcze akcje, zobaczysz kolejną decyzję przeciwnika.",
+                continue_hint="Nie musisz nic potwierdzać.",
             )
             return EventResult(success=True, consumed_action=True, message=f"Wróg przemieszcza się na {dest}.")
         except Exception as exc:

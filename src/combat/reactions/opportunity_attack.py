@@ -146,6 +146,11 @@ class OpportunityAttack(Reaction):
             ),
             source="reaction:opportunity_attack_enemy",
             log_message=msg,
+            blocking=False,
+            semantic_type="explanation",
+            dedupe_key=f"enemy_oa:roll:{getattr(enemy, 'object_id', getattr(enemy, 'name', 'enemy'))}:{getattr(target, 'object_id', getattr(target, 'name', 'target'))}",
+            next_hint="Za chwilę zobaczysz końcowy wynik reakcji.",
+            continue_hint="Nie musisz nic potwierdzać.",
         )
         if not hit:
             return True, False
@@ -171,6 +176,12 @@ class OpportunityAttack(Reaction):
             ),
             source="reaction:opportunity_attack_enemy_result",
             log_message=f"Atak okazyjny zadaje {damage} obrażeń.",
+            blocking=True,
+            semantic_type="result",
+            dedupe_key=f"enemy_oa:result:{getattr(enemy, 'object_id', getattr(enemy, 'name', 'enemy'))}:{getattr(target, 'object_id', getattr(target, 'name', 'target'))}:{damage}",
+            next_hint="Po potwierdzeniu gra wróci do przerwanej sekwencji.",
+            continue_hint="Enter po zastosowaniu obrażeń.",
+            emit_log=False,
         )
         if defeated:
             try:

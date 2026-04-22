@@ -474,6 +474,11 @@ class EnemyStrikeEvent(ActionCostEvent):
                     f"{getattr(actor, 'name', 'Wróg')} atakuje {getattr(target, 'name', 'cel')} "
                     f"({total_attack} vs AC {target_ac}, {outcome})."
                 ),
+                blocking=False,
+                semantic_type="explanation",
+                dedupe_key=f"enemy_attack_roll:{getattr(actor, 'object_id', getattr(actor, 'name', 'enemy'))}:{getattr(target, 'object_id', getattr(target, 'name', 'target'))}:{weapon_id}:{map_penalty}",
+                next_hint="Za chwilę zobaczysz końcowy wynik ataku.",
+                continue_hint="Nie musisz nic potwierdzać.",
             )
 
             damage = 0
@@ -547,6 +552,12 @@ class EnemyStrikeEvent(ActionCostEvent):
                     ),
                     source=f"{self.name}_result",
                     log_message=summary,
+                    blocking=True,
+                    semantic_type="result",
+                    dedupe_key=f"enemy_attack_result:{getattr(actor, 'object_id', getattr(actor, 'name', 'enemy'))}:{getattr(target, 'object_id', getattr(target, 'name', 'target'))}:{weapon_id}:{outcome}",
+                    next_hint="Po potwierdzeniu przeciwnik przejdzie do kolejnej akcji lub końca tury.",
+                    continue_hint="Enter po zastosowaniu wyniku na planszy.",
+                    emit_log=False,
                 )
             except Exception:
                 pass

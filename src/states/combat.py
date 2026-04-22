@@ -1403,9 +1403,15 @@ class Combat(State):
                     prompt_long=(
                         f"Przeciwnik analizuje sytuację.\n"
                         f"Akcje wykorzystane: {used}/{limit}.\n"
-                        "Potwierdź Enterem, aby przejść do jego decyzji."
+                        "System zaraz wybierze następną akcję przeciwnika."
                     ),
                     source="enemy_turn_thinking",
+                    blocking=False,
+                    semantic_type="status_update",
+                    dedupe_key=f"enemy_turn_thinking:{getattr(enemy, 'object_id', getattr(enemy, 'name', 'enemy'))}:{used}",
+                    next_hint="Za chwilę zobaczysz decyzję przeciwnika.",
+                    continue_hint="Nie musisz nic potwierdzać.",
+                    emit_log=True,
                 )
                 try:
                     spent = behavior_fn(enemy, self.game, self, actions_left=limit - used)
@@ -1445,7 +1451,6 @@ class Combat(State):
             limit = self._action_limit(actor)
             remaining = limit - self.actions_used.get(actor, 0)
             logger.info("Tura przeciwnika: %s (akcje pozostałe: %s/%s)", getattr(actor, "name", "Enemy"), remaining, limit)
-            self.game.ui_log(f"Tura przeciwnika: {getattr(actor, 'name', 'Enemy')} (akcje {remaining}/{limit})")
             actor_pos = getattr(actor, "position", None)
             if actor_pos is not None:
                 enemy_highlight(self.game, [actor_pos], [consts.ENEMY_START_RGB])
@@ -1458,6 +1463,12 @@ class Combat(State):
                     "Potwierdź Enterem, aby obserwować kolejne kroki przeciwnika."
                 ),
                 source="enemy_turn_start",
+                blocking=True,
+                semantic_type="required_action",
+                dedupe_key=f"enemy_turn_start:{getattr(actor, 'object_id', getattr(actor, 'name', 'enemy'))}:{remaining}/{limit}",
+                next_hint="Przeciwnik zacznie wykonywać akcje.",
+                continue_hint="Enter po przygotowaniu się do obserwacji.",
+                emit_log=False,
             )
             return self._process_enemy_turn(actor)
 

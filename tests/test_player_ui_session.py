@@ -109,3 +109,54 @@ def test_late_response_to_reset_prompt_is_ignored(ui_client):
 
     assert len(player_ui_app_module.events_history) == 1
     assert player_ui_app_module.events_history[0]["type"] == "session_reset"
+
+
+def test_prompt_api_returns_normalized_communication_envelope(ui_client):
+    create = ui_client.post(
+        "/api/prompts",
+        json={
+            "prompt": "Tura przeciwnika: Bandit Sharpshot",
+            "kind": "info",
+            "title": "Tura przeciwnika: Bandit Sharpshot",
+            "prompt_long": "Przeciwnik rozpoczyna turę.\nAkcje pozostałe: **3**/**3**.",
+            "source": "enemy_turn_start",
+            "communication": {
+                "blocking": True,
+                "semantic_type": "required_action",
+                "priority": "action",
+                "cta": "Enter po przygotowaniu się do obserwacji.",
+            },
+        },
+    )
+    assert create.status_code == 200
+    prompt_id = create.get_json()["id"]
+
+    fetched = ui_client.get(f"/api/prompts/{prompt_id}")
+    assert fetched.status_code == 200
+    payload = fetched.get_json()
+    comm = payload["communication"]
+    assert comm["blocking"] is True
+    assert comm["semantic_type"] == "required_action"
+    assert comm["priority"] == "action"
+    assert comm["body_markdown"].startswith("Przeciwnik rozpoczyna turę.")
+    assert comm["cta"] == "Enter po przygotowaniu się do obserwacji."
+    assert comm["dedupe_key"]
+
+
+def test_event_api_returns_normalized_debug_communication(ui_client):
+    resp = ui_client.post(
+        "/api/events",
+        json={
+            "type": "log",
+            "payload": {
+                "message": "Krawędzie: [{'a': [0, 1], 'b': [0, 2]}]",
+                "tag": "Debug",
+            },
+        },
+    )
+    assert resp.status_code == 200
+    event = resp.get_json()["event"]
+    comm = event["payload"]["communication"]
+    assert comm["priority"] == "debug"
+    assert comm["debug_only"] is True
+    assert comm["details_markdown"].startswith("Krawędzie:")

@@ -137,7 +137,8 @@ def test_combat_enemy_turn_prompts_start_and_thinking(monkeypatch):
 
     titles = [call["title"] for call in ui.info_calls]
     assert "Tura przeciwnika: Bandit Bruiser" in titles
-    assert "Bandit Bruiser myśli..." in titles
+    assert "Bandit Bruiser myśli..." not in titles
+    assert any("Bandit Bruiser myśli..." in msg for msg in game.logs)
 
 
 def test_enemy_move_emits_prompt_before_and_after_move(monkeypatch):
@@ -167,9 +168,10 @@ def test_enemy_move_emits_prompt_before_and_after_move(monkeypatch):
     assert result.success is True
     titles = [call["title"] for call in ui.info_calls]
     assert "Ruch przeciwnika: Bandit Lookout" in titles
-    assert "Ruch wykonany: Bandit Lookout" in titles
+    assert "Ruch wykonany: Bandit Lookout" not in titles
     prompt_text = next(call["prompt_long"] for call in ui.info_calls if call["title"] == "Ruch przeciwnika: Bandit Lookout")
     assert "pole docelowe" in str(prompt_text or "").lower()
+    assert any("Ruch wykonany: Bandit Lookout" in msg for msg in game.logs)
 
 
 def test_enemy_strike_emits_roll_breakdown_and_result_prompts(monkeypatch):
@@ -188,11 +190,9 @@ def test_enemy_strike_emits_roll_breakdown_and_result_prompts(monkeypatch):
 
     assert result.success is True
     titles = [call["title"] for call in ui.info_calls]
-    assert "Rzut ataku: Bandit Bruiser" in titles
     assert "Wynik ataku: Bandit Bruiser" in titles
-    roll_prompt = next(call["prompt_long"] for call in ui.info_calls if call["title"] == "Rzut ataku: Bandit Bruiser")
-    assert "rozpiska rzutu" in str(roll_prompt or "").lower()
-    assert "próg obrony" in str(roll_prompt or "").lower()
+    assert "Rzut ataku: Bandit Bruiser" not in titles
+    assert any("Bandit Bruiser atakuje Cedric" in msg for msg in game.logs)
     assert game.hero_updates
     assert game.hero_updates[-1]["hero"] is hero
 
@@ -213,8 +213,9 @@ def test_enemy_opportunity_attack_uses_blocking_prompts(monkeypatch):
 
     assert executed is True
     titles = [call["title"] for call in ui.info_calls]
-    assert "Reakcja przeciwnika: Bandit Bruiser" in titles
     assert "Wynik reakcji: Bandit Bruiser" in titles
+    assert "Reakcja przeciwnika: Bandit Bruiser" not in titles
+    assert any("Bandit Bruiser wykonuje atak okazyjny" in msg for msg in game.logs)
 
 
 def test_enemy_strike_can_auto_target_animal_companion(monkeypatch):

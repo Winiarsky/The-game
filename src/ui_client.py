@@ -254,6 +254,7 @@ class UIClient:
         prompt_long: str | None = None,
         source: str | None = None,
         image: str | None = None,
+        **extra,
     ) -> Optional[str]:
         """Pokaż informację i poczekaj na potwierdzenie (Enter)."""
         if self.enabled:
@@ -265,6 +266,7 @@ class UIClient:
                 title=title,
                 prompt_long=prompt_long,
                 image=image,
+                **extra,
             )
             if prompt_id is not None:
                 return self._wait_for_text_answer(prompt_id, max_wait=self.max_wait)

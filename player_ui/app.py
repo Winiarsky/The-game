@@ -4,6 +4,8 @@ import itertools
 import json
 import time
 import os
+from pathlib import Path
+import sys
 import threading
 import webbrowser
 from queue import Empty, Queue
@@ -11,6 +13,14 @@ from threading import Lock
 from typing import Any
 
 from flask import Flask, Response, jsonify, render_template, request
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SRC_ROOT = PROJECT_ROOT / "src"
+for path in (PROJECT_ROOT, SRC_ROOT):
+    if str(path) not in sys.path:
+        sys.path.insert(0, str(path))
+
+from communication import normalize_communication
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 
@@ -116,6 +126,34 @@ def _answer_session_prompts_unlocked(session_id: str, answer: Any) -> int:
     return changed
 
 
+def _serialize_prompt(entry: dict[str, Any]) -> dict[str, Any]:
+    payload = {
+        "ok": True,
+        "id": entry["id"],
+        "prompt": entry["prompt"],
+        "status": entry["status"],
+        "answer": entry["answer"],
+        "kind": entry.get("kind"),
+        "source": entry.get("source"),
+        "session_id": entry.get("session_id"),
+        "choices": entry.get("choices"),
+        "choice_meta": entry.get("choice_meta"),
+        "title": entry.get("title"),
+        "subtitle": entry.get("subtitle"),
+        "prompt_long": entry.get("prompt_long"),
+        "image": entry.get("image"),
+        "layout": entry.get("layout"),
+        "action_desc": entry.get("action_desc"),
+        "desc": entry.get("desc"),
+        "answer_placeholder": entry.get("answer_placeholder"),
+        "modifiers": entry.get("modifiers"),
+        "roll_stack": entry.get("roll_stack"),
+        "communication": entry.get("communication"),
+    }
+    payload["communication"] = normalize_communication(event_type="prompt", payload=payload, prompt=True)
+    return payload
+
+
 # --- Routes ---
 
 
@@ -192,6 +230,14 @@ def api_events():
         return error_response, 409
     event_type = payload.get("type") or "log"
     body = payload.get("payload") or {}
+    if isinstance(body, dict):
+        normalized_body = dict(body)
+        normalized_body["communication"] = normalize_communication(
+            event_type=str(event_type),
+            payload=normalized_body,
+            prompt=False,
+        )
+        body = normalized_body
     event = _make_event(event_type, body)
     _record_event(event)
     _broadcast(event)
@@ -238,7 +284,9 @@ def create_prompt():
         "answer_placeholder": data.get("answer_placeholder"),
         "modifiers": modifiers,
         "roll_stack": data.get("roll_stack") if isinstance(data.get("roll_stack"), dict) else None,
+        "communication": data.get("communication") if isinstance(data.get("communication"), dict) else None,
     }
+    entry["communication"] = normalize_communication(event_type="prompt", payload=entry, prompt=True)
     with prompts_lock:
         prompts[prompt_id] = entry
         _prune_prompts_unlocked()
@@ -253,6 +301,7 @@ def create_prompt():
             "id": prompt_id,
             "prompt": prompt_text,
             "session_id": current_session_id,
+            "communication": entry.get("communication"),
         }
     )
 
@@ -270,7 +319,7 @@ def list_prompts():
         "history_size": len(events_history),
         "prompt_count": len(values),
     }
-    return jsonify({"ok": True, "session": session, "prompts": values})
+    return jsonify({"ok": True, "session": session, "prompts": [_serialize_prompt(value) for value in values]})
 
 
 @app.get("/api/prompts/<prompt_id>")
@@ -279,30 +328,7 @@ def get_prompt(prompt_id: str):
         entry = prompts.get(prompt_id)
     if not entry:
         return jsonify({"ok": False, "error": "prompt not found"}), 404
-    return jsonify(
-        {
-            "ok": True,
-            "id": entry["id"],
-            "prompt": entry["prompt"],
-            "status": entry["status"],
-            "answer": entry["answer"],
-            "kind": entry.get("kind"),
-            "source": entry.get("source"),
-            "session_id": entry.get("session_id"),
-            "choices": entry.get("choices"),
-            "choice_meta": entry.get("choice_meta"),
-            "title": entry.get("title"),
-            "subtitle": entry.get("subtitle"),
-            "prompt_long": entry.get("prompt_long"),
-            "image": entry.get("image"),
-            "layout": entry.get("layout"),
-            "action_desc": entry.get("action_desc"),
-            "desc": entry.get("desc"),
-            "answer_placeholder": entry.get("answer_placeholder"),
-            "modifiers": entry.get("modifiers"),
-            "roll_stack": entry.get("roll_stack"),
-        }
-    )
+    return jsonify(_serialize_prompt(entry))
 
 
 @app.post("/api/prompts/<prompt_id>/response")

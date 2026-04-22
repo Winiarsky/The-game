@@ -19,8 +19,18 @@ const {
     initRoundNum,
     actionIllustration,
     actionTitle,
+    actionGuidance,
+    actionNow,
+    actionNext,
+    actionContinue,
+    actionProgress,
+    actionProgressLabel,
+    actionProgressValue,
+    actionProgressBar,
     actionText,
     actionPrompt,
+    actionDetails,
+    actionDetailsBody,
     actionChoices,
     actionDesc,
     actionForm,
@@ -73,6 +83,7 @@ let creationPreviewHeroId = null;
 let selectedHeroId = null;
 const CREATION_PREVIEW_FALLBACK_ID = "__creation_preview__";
 let menuNumpadContext = null;
+let lastCommunicationKey = null;
 actionForm.classList.add("hidden");
 const DEBUG_UNDO_COMMAND = "__debug_undo__";
 const DEFAULT_CREATION_ABILITY_SCORES = {
@@ -770,17 +781,19 @@ function resetLocalSessionState({ sessionId = null, reason = "", showMenuScreen 
     creationPreviewHeroId = null;
     selectedHeroId = null;
     menuNumpadContext = null;
+    lastCommunicationKey = null;
     pathState = clearPathPreview(refs, pathState, null);
 
     actionForm.classList.add("hidden");
     actionChoices.innerHTML = "";
     actionDesc.textContent = "";
     actionDesc.classList.remove("hidden");
-    actionPrompt.textContent = "";
+    actionPrompt.innerHTML = "";
     actionPrompt.classList.add("hidden");
     actionTitle.textContent = "Czekam na działania...";
-    actionText.textContent = "";
+    actionText.innerHTML = "";
     actionText.classList.remove("hidden");
+    resetActionCommunication();
     actionAnswer.value = "";
     actionAnswer.placeholder = "Wpisz odpowiedź lub wybierz kartę...";
     actionAnswer.classList.remove("input-hidden");
@@ -850,6 +863,164 @@ async function resetUiSession(reason = "manual") {
 function str(value, fallback = "-") {
     if (value === null || value === undefined || value === "") return fallback;
     return String(value);
+}
+
+function _appendInlineMarkdown(target, text) {
+    const raw = String(text || "");
+    const tokenRe = /(\*\*[^*]+\*\*|`[^`]+`|\*[^*\n]+\*)/g;
+    let cursor = 0;
+    let match = null;
+    while ((match = tokenRe.exec(raw)) !== null) {
+        if (match.index > cursor) {
+            target.appendChild(document.createTextNode(raw.slice(cursor, match.index)));
+        }
+        const token = match[0];
+        if (token.startsWith("**") && token.endsWith("**")) {
+            const strong = document.createElement("strong");
+            strong.textContent = token.slice(2, -2);
+            target.appendChild(strong);
+        } else if (token.startsWith("`") && token.endsWith("`")) {
+            const code = document.createElement("code");
+            code.className = "md-inline-code";
+            code.textContent = token.slice(1, -1);
+            target.appendChild(code);
+        } else if (token.startsWith("*") && token.endsWith("*")) {
+            const em = document.createElement("em");
+            em.textContent = token.slice(1, -1);
+            target.appendChild(em);
+        } else {
+            target.appendChild(document.createTextNode(token));
+        }
+        cursor = match.index + token.length;
+    }
+    if (cursor < raw.length) {
+        target.appendChild(document.createTextNode(raw.slice(cursor)));
+    }
+}
+
+function renderMarkdownBlock(markdown, className = "") {
+    const wrapper = document.createElement("div");
+    if (className) wrapper.className = className;
+    const raw = String(markdown || "").replace(/\r\n/g, "\n").trim();
+    if (!raw) return wrapper;
+    const lines = raw.split("\n");
+    let paragraph = [];
+    let listEl = null;
+
+    const flushParagraph = () => {
+        if (!paragraph.length) return;
+        const p = document.createElement("p");
+        paragraph.forEach((line, idx) => {
+            if (idx > 0) p.appendChild(document.createElement("br"));
+            _appendInlineMarkdown(p, line);
+        });
+        wrapper.appendChild(p);
+        paragraph = [];
+    };
+
+    const flushList = () => {
+        if (!listEl) return;
+        wrapper.appendChild(listEl);
+        listEl = null;
+    };
+
+    lines.forEach((line) => {
+        const trimmed = String(line || "").trim();
+        if (!trimmed) {
+            flushParagraph();
+            flushList();
+            return;
+        }
+        const bullet = trimmed.match(/^[-*]\s+(.*)$/);
+        if (bullet) {
+            flushParagraph();
+            if (!listEl) listEl = document.createElement("ul");
+            const li = document.createElement("li");
+            _appendInlineMarkdown(li, bullet[1]);
+            listEl.appendChild(li);
+            return;
+        }
+        flushList();
+        paragraph.push(trimmed);
+    });
+    flushParagraph();
+    flushList();
+    return wrapper;
+}
+
+function setMarkdownContent(element, markdown, className = "") {
+    if (!element) return;
+    element.innerHTML = "";
+    const block = renderMarkdownBlock(markdown, className);
+    if (!block.childNodes.length) return;
+    while (block.firstChild) {
+        element.appendChild(block.firstChild);
+    }
+}
+
+function communicationOf(payload, fallbackType = "log") {
+    const raw =
+        payload && typeof payload === "object"
+            ? payload.communication && typeof payload.communication === "object"
+                ? payload.communication
+                : payload
+            : {};
+    const context = raw.context && typeof raw.context === "object" ? raw.context : {};
+    const progress = raw.progress && typeof raw.progress === "object" ? raw.progress : null;
+    return {
+        channel: String(raw.channel || (fallbackType === "prompt" ? "prompt" : "log")),
+        priority: String(raw.priority || "info"),
+        semanticType: String(raw.semantic_type || raw.semanticType || "status_update"),
+        title: String(raw.title || payload?.title || payload?.prompt || ""),
+        summary: String(raw.summary || payload?.message || payload?.prompt || ""),
+        bodyMarkdown: String(raw.body_markdown || raw.bodyMarkdown || payload?.prompt_long || payload?.message || ""),
+        detailsMarkdown: String(raw.details_markdown || raw.detailsMarkdown || ""),
+        cta: String(raw.cta || ""),
+        context,
+        dedupeKey: String(raw.dedupe_key || raw.dedupeKey || ""),
+        blocking: Boolean(raw.blocking),
+        debugOnly: Boolean(raw.debug_only || raw.debugOnly),
+        progress,
+    };
+}
+
+function resetActionCommunication() {
+    if (actionNow) actionNow.textContent = "Czekam na działania gracza lub systemu.";
+    if (actionNext) actionNext.textContent = "Kolejny krok pojawi się automatycznie.";
+    if (actionContinue) actionContinue.textContent = "Enter lub wybór z panelu.";
+    if (actionProgress) actionProgress.classList.add("hidden");
+    if (actionProgressLabel) actionProgressLabel.textContent = "Postęp";
+    if (actionProgressValue) actionProgressValue.textContent = "0/0";
+    if (actionProgressBar) actionProgressBar.style.width = "0%";
+    if (actionDetailsBody) actionDetailsBody.innerHTML = "";
+    if (actionDetails) {
+        actionDetails.classList.add("hidden");
+        actionDetails.open = false;
+    }
+}
+
+function applyActionCommunication(comm) {
+    const current = comm || communicationOf({}, "prompt");
+    if (actionNow) actionNow.textContent = current.summary || current.title || "Czekam na działania.";
+    if (actionNext) actionNext.textContent = String(current.context?.next || "Kolejny krok pojawi się automatycznie.");
+    if (actionContinue) actionContinue.textContent = current.cta || String(current.context?.continue || "Enter lub wybór z panelu.");
+    if (actionProgress && current.progress && current.progress.total) {
+        const currentStep = Number(current.progress.current || 0);
+        const total = Math.max(1, Number(current.progress.total || 1));
+        const pct = Math.max(0, Math.min(100, Math.round((currentStep / total) * 100)));
+        actionProgress.classList.remove("hidden");
+        if (actionProgressLabel) actionProgressLabel.textContent = current.progress.label || "Postęp";
+        if (actionProgressValue) actionProgressValue.textContent = `${currentStep}/${total}`;
+        if (actionProgressBar) actionProgressBar.style.width = `${pct}%`;
+    } else if (actionProgress) {
+        actionProgress.classList.add("hidden");
+    }
+    if (actionDetails && actionDetailsBody) {
+        const details = current.detailsMarkdown || "";
+        actionDetails.classList.toggle("hidden", !details);
+        actionDetails.open = false;
+        setMarkdownContent(actionDetailsBody, details, "action-details-md");
+    }
 }
 
 function actorNameById(id) {
@@ -926,7 +1097,9 @@ function appendTag(container, tag) {
     container.appendChild(tagEl);
 }
 
-function addEventFeedEntry(text, meta, variant = "", tag = "") {
+function addEventFeedEntry(text, meta, variant = "", tag = "", options = {}) {
+    const comm = communicationOf(options.communication || {}, "log");
+    if (options.skipFeed || comm.debugOnly) return;
     if (!eventFeed) return;
     const empty = eventFeed.querySelector(".event-feed-empty");
     if (empty) empty.remove();
@@ -936,8 +1109,9 @@ function addEventFeedEntry(text, meta, variant = "", tag = "") {
     const main = document.createElement("div");
     main.className = "event-main";
     appendTag(main, tag);
-    const textEl = document.createElement("span");
-    textEl.textContent = str(text, "");
+    const textEl = document.createElement("div");
+    textEl.className = "event-md";
+    setMarkdownContent(textEl, comm.summary || str(text, ""), "event-md");
     main.appendChild(textEl);
 
     const metaEl = document.createElement("div");
@@ -946,6 +1120,18 @@ function addEventFeedEntry(text, meta, variant = "", tag = "") {
 
     item.appendChild(main);
     item.appendChild(metaEl);
+    if (comm.detailsMarkdown) {
+        const details = document.createElement("details");
+        details.className = "event-details";
+        const summary = document.createElement("summary");
+        summary.textContent = "Szczegóły";
+        const body = document.createElement("div");
+        body.className = "event-details-body";
+        setMarkdownContent(body, comm.detailsMarkdown, "event-md");
+        details.appendChild(summary);
+        details.appendChild(body);
+        item.appendChild(details);
+    }
     eventFeed.prepend(item);
 
     while (eventFeed.children.length > 8) {
@@ -953,7 +1139,11 @@ function addEventFeedEntry(text, meta, variant = "", tag = "") {
     }
 }
 
-function addLogEntry(text, meta, variant = "", tag = "", image = "") {
+function addLogEntry(text, meta, variant = "", tag = "", image = "", options = {}) {
+    const comm = communicationOf(options.communication || {}, "log");
+    const dedupeKey = comm.dedupeKey || "";
+    if (dedupeKey && dedupeKey === lastCommunicationKey && options.allowDuplicate !== true) return;
+    if (dedupeKey) lastCommunicationKey = dedupeKey;
     const item = document.createElement("li");
     item.className = "log-item" + (variant ? ` ${variant}` : "");
 
@@ -972,15 +1162,31 @@ function addLogEntry(text, meta, variant = "", tag = "", image = "") {
     body.className = "log-body";
     const logText = document.createElement("div");
     logText.className = "log-text";
-    appendTag(logText, tag);
-    const textEl = document.createElement("span");
-    textEl.textContent = str(text, "");
-    logText.appendChild(textEl);
+    const main = document.createElement("div");
+    main.className = "log-main";
+    appendTag(main, tag);
+    const textEl = document.createElement("div");
+    textEl.className = "log-md";
+    setMarkdownContent(textEl, comm.summary || str(text, ""), "log-md");
+    main.appendChild(textEl);
+    logText.appendChild(main);
     const metaEl = document.createElement("div");
     metaEl.className = "meta";
     metaEl.textContent = str(meta, "");
     body.appendChild(logText);
     body.appendChild(metaEl);
+    if (comm.detailsMarkdown) {
+        const details = document.createElement("details");
+        details.className = "log-details";
+        const summaryEl = document.createElement("summary");
+        summaryEl.textContent = "Szczegóły";
+        const detailsBody = document.createElement("div");
+        detailsBody.className = "log-details-body";
+        setMarkdownContent(detailsBody, comm.detailsMarkdown, "log-md");
+        details.appendChild(summaryEl);
+        details.appendChild(detailsBody);
+        body.appendChild(details);
+    }
     item.appendChild(body);
 
     logList.prepend(item);
@@ -988,10 +1194,10 @@ function addLogEntry(text, meta, variant = "", tag = "", image = "") {
         logLast.innerHTML = "";
         appendTag(logLast, tag);
         const lastText = document.createElement("span");
-        lastText.textContent = str(text, "");
+        lastText.textContent = comm.summary || str(text, "");
         logLast.appendChild(lastText);
     }
-    addEventFeedEntry(text, meta, variant, tag);
+    addEventFeedEntry(text, meta, variant, tag, options);
     // limit log length
     while (logList.children.length > 60) {
         logList.removeChild(logList.lastChild);
@@ -1002,6 +1208,17 @@ function renderPrompt(prompt) {
     ensureCreationPreviewFallbackFromPrompt(prompt);
     if (renderedPrompts.has(prompt.id)) return;
     renderedPrompts.add(prompt.id);
+    const comm = communicationOf(prompt, "prompt");
+    if (!comm.debugOnly) {
+        addLogEntry(
+            comm.summary || prompt.title || prompt.prompt || "Prompt",
+            comm.progress?.label || `Prompt · ${str(prompt.source || prompt.kind || "info", "")}`,
+            comm.priority === "warning" ? "warning" : "info",
+            comm.blocking ? "Teraz" : "Info",
+            "",
+            { communication: comm, skipFeed: comm.debugOnly }
+        );
+    }
     promptQueue.push(prompt);
     processPromptQueue();
 }
@@ -1204,11 +1421,6 @@ function handleEvent(event) {
             }
         }
         renderPrompt(payload);
-        const promptTag = payload.kind === "choice" ? "Wybór" : payload.kind === "info" ? "Informacja" : "Rzut";
-        const sourceNote = payload.source ? ` [${payload.source}]` : "";
-        const choicesCount = Array.isArray(payload.choices) ? payload.choices.length : 0;
-        const choicesNote = choicesCount ? ` (${choicesCount} opcji)` : "";
-        addLogEntry(`Nowy prompt${sourceNote}: ${payload.prompt}${choicesNote}`, meta, "info", promptTag);
         updateSessionSummary();
         return;
     }
@@ -1242,7 +1454,8 @@ function handleEvent(event) {
     if (type === "idle_hint") {
         if (!activePrompt) {
             actionTitle.textContent = payload.title || "Czekam na działania...";
-            actionText.textContent = payload.text || "";
+            setMarkdownContent(actionText, payload.text || "", "action-text-md");
+            resetActionCommunication();
         }
         return;
     }
@@ -1348,7 +1561,7 @@ function handleEvent(event) {
             const actionId = str(payload.action_id || "akcja", "akcja").replace(/_/g, " ");
             const target = payload.target?.name || payload.target?.id;
             actionTitle.textContent = actor;
-            actionText.textContent = target ? `${actionId} -> ${target}` : actionId;
+            setMarkdownContent(actionText, target ? `${actionId} -> ${target}` : actionId, "action-text-md");
         }
         return;
     }
@@ -1393,7 +1606,10 @@ function handleEvent(event) {
     let variant = "";
     if (level === "error") variant = "error";
     else if (level === "warn" || level === "warning") variant = "warning";
-    addLogEntry(payload.message || type, meta, variant, payload.tag || "", payload.image || "");
+    addLogEntry(payload.message || type, meta, variant, payload.tag || "", payload.image || "", {
+        communication: payload.communication || null,
+        skipFeed: Boolean(payload.communication?.debug_only),
+    });
 }
 
 function connectStream() {
@@ -1877,18 +2093,20 @@ function openPrompt(prompt) {
     storedSelection = "";
     rollNaturalMode = "none";
     rollStackState = null;
-    actionTitle.textContent = prompt.title || prompt.prompt || "Akcja";
-    actionText.textContent = prompt.subtitle || "";
-    const promptBody = prompt.prompt_long || (layoutMode === "dialog" ? prompt.prompt : "");
-    actionPrompt.textContent = promptBody || "";
+    const comm = communicationOf(prompt, "prompt");
+    actionTitle.textContent = comm.title || prompt.title || prompt.prompt || "Akcja";
+    setMarkdownContent(actionText, prompt.subtitle || comm.summary || "", "action-text-md");
+    const promptBody = comm.bodyMarkdown || prompt.prompt_long || (layoutMode === "dialog" ? prompt.prompt : "");
+    setMarkdownContent(actionPrompt, promptBody || "", "action-prompt-md");
     actionPrompt.classList.toggle("hidden", !promptBody);
+    applyActionCommunication(comm);
     const creationImage =
         String(prompt?.source || "").toLowerCase() === "character_creation" ? creationPreviewImage() : null;
     setIllustration(prompt.image || creationImage || activeHeroImage() || PLACEHOLDER_IMAGE);
-    actionKind.textContent = "";
-    actionKind.classList.add("hidden");
-    actionSource.textContent = "";
-    actionSource.classList.add("hidden");
+    actionKind.textContent = comm.semanticType || "";
+    actionKind.classList.toggle("hidden", !comm.semanticType);
+    actionSource.textContent = comm.priority || "";
+    actionSource.classList.toggle("hidden", !comm.priority);
     actionChoices.innerHTML = "";
     _resetMenuNumpadContext();
     actionDesc.textContent = "";
@@ -2144,11 +2362,12 @@ function closePrompt() {
     actionChoices.innerHTML = "";
     actionDesc.textContent = "";
     actionDesc.classList.remove("hidden");
-    actionPrompt.textContent = "";
+    actionPrompt.innerHTML = "";
     actionPrompt.classList.add("hidden");
     actionTitle.textContent = "Czekam na działania...";
-    actionText.textContent = "";
+    actionText.innerHTML = "";
     actionText.classList.remove("hidden");
+    resetActionCommunication();
     clearMods();
     _renderNaturalControls(null);
     refreshLeftIllustration();

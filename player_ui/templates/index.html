@@ -105,6 +105,29 @@
                                     <span class="badge" id="action-source"></span>
                                 </div>
                                 <div class="action-title" id="action-title">Czekam na działania...</div>
+                                <div class="action-guidance" id="action-guidance">
+                                    <div class="action-guidance-card">
+                                        <div class="action-guidance-label">Teraz zrób</div>
+                                        <div class="action-guidance-value" id="action-now">Czekam na działania gracza lub systemu.</div>
+                                    </div>
+                                    <div class="action-guidance-card">
+                                        <div class="action-guidance-label">Potem wydarzy się</div>
+                                        <div class="action-guidance-value" id="action-next">Kolejny krok pojawi się automatycznie.</div>
+                                    </div>
+                                    <div class="action-guidance-card">
+                                        <div class="action-guidance-label">Aby kontynuować użyj</div>
+                                        <div class="action-guidance-value" id="action-continue">Enter lub wybór z panelu.</div>
+                                    </div>
+                                </div>
+                                <div class="action-progress hidden" id="action-progress">
+                                    <div class="action-progress-head">
+                                        <span id="action-progress-label">Postęp</span>
+                                        <span id="action-progress-value">0/0</span>
+                                    </div>
+                                    <div class="action-progress-track">
+                                        <span id="action-progress-bar"></span>
+                                    </div>
+                                </div>
                                 <div class="action-separator"></div>
                                 <div class="action-text" id="action-text"></div>
                                 <div class="action-mods hidden" id="action-mods">
@@ -160,6 +183,10 @@
                                     <div id="path-hint" class="path-summary-hint"></div>
                                 </div>
                                 <div class="action-prompt" id="action-prompt"></div>
+                                <details class="action-details hidden" id="action-details">
+                                    <summary>Szczegóły</summary>
+                                    <div class="action-details-body" id="action-details-body"></div>
+                                </details>
                                 <div class="action-choices" id="action-choices"></div>
                                 <div class="action-desc" id="action-desc"></div>
                                 <form id="action-form" class="action-form">

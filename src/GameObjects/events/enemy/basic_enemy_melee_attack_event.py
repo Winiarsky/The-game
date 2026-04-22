@@ -137,6 +137,11 @@ class BasicEnemyMeleeAttackEvent(GameEvent):
                     f"{getattr(enemy, 'name', 'wróg')} atakuje {getattr(hero, 'name', 'cel')} "
                     f"({roll} vs AC {target_ac}, {outcome})."
                 ),
+                blocking=False,
+                semantic_type="explanation",
+                dedupe_key=f"{self.action_id_base}:roll:{getattr(enemy, 'object_id', getattr(enemy, 'name', 'enemy'))}:{getattr(hero, 'object_id', getattr(hero, 'name', 'hero'))}",
+                next_hint="Za chwilę zobaczysz końcowy wynik trafienia.",
+                continue_hint="Nie musisz nic potwierdzać.",
             )
             if not hit:
                 return EventResult(success=True, consumed_action=True, message="Atak wroga pudłuje.")
@@ -166,6 +171,12 @@ class BasicEnemyMeleeAttackEvent(GameEvent):
                 ),
                 source=f"{self.action_id_base}_result",
                 log_message=dmg_msg,
+                blocking=True,
+                semantic_type="result",
+                dedupe_key=f"{self.action_id_base}:result:{getattr(enemy, 'object_id', getattr(enemy, 'name', 'enemy'))}:{getattr(hero, 'object_id', getattr(hero, 'name', 'hero'))}:{critical_hit}",
+                next_hint="Po potwierdzeniu przeciwnik wróci do swojej sekwencji akcji.",
+                continue_hint="Enter po zastosowaniu obrażeń.",
+                emit_log=False,
             )
             try:
                 game.ui_hero(hero)

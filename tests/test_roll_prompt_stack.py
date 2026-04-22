@@ -77,3 +77,6 @@ def test_prompt_api_roundtrip_keeps_roll_stack_payload():
         payload = fetched.get_json()
         assert payload["roll_stack"]["auto_total_modifier"] == 9
         assert payload["roll_stack"]["components"][0]["label"] == "Biegłość"
+        assert payload["communication"]["channel"] == "prompt"
+        assert payload["communication"]["blocking"] is True
+        assert payload["communication"]["body_markdown"] == "Test rzutu"

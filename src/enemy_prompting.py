@@ -4,6 +4,7 @@ import re
 from typing import Any
 
 from board import consts
+from communication import make_enemy_turn_communication
 
 _NUMBER_RE = re.compile(r"(?<!\*)\b([+-]?\d+)\b(?!\*)")
 
@@ -20,20 +21,50 @@ def enemy_prompt_step(
     prompt_long: str | None = None,
     source: str = "enemy_turn",
     log_message: str | None = None,
+    blocking: bool = True,
+    semantic_type: str | None = None,
+    dedupe_key: str | None = None,
+    next_hint: str | None = None,
+    continue_hint: str | None = None,
+    communication: dict[str, Any] | None = None,
+    emit_log: bool | None = None,
 ) -> None:
     """Pokaż blokujący prompt dla akcji przeciwnika, a log traktuj wtórnie."""
     text = emphasize_numbers(str(prompt_long or "").strip())
     message = str(log_message or title or "").strip()
-    if message and hasattr(game, "ui_log"):
+    effective_emit_log = bool(emit_log) if emit_log is not None else not bool(blocking)
+    effective_semantic = str(semantic_type or ("required_action" if blocking else "status_update"))
+    envelope = dict(communication or {}) or make_enemy_turn_communication(
+        title=str(title or "Przeciwnik"),
+        body_markdown=text or message or str(title or "Przeciwnik"),
+        dedupe_key=str(dedupe_key or source or title or "enemy"),
+        blocking=blocking,
+        semantic_type=effective_semantic,
+        next_hint=next_hint,
+        continue_hint=continue_hint,
+    )
+    if effective_emit_log and message and hasattr(game, "ui_log"):
         try:
-            game.ui_log(message)
+            game.ui_log(message, communication=envelope)
         except Exception:
             pass
+    if not blocking:
+        return
     ui = getattr(game, "ui", None)
     if ui is not None and getattr(ui, "enabled", False) and hasattr(ui, "prompt_info"):
         try:
-            ui.prompt_info(str(title or "Przeciwnik"), prompt_long=text or None, source=source)
+            ui.prompt_info(
+                str(title or "Przeciwnik"),
+                prompt_long=text or None,
+                source=source,
+                communication=envelope,
+            )
             return
+        except Exception:
+            pass
+    if message and not effective_emit_log and hasattr(game, "ui_log"):
+        try:
+            game.ui_log(message, communication=envelope)
         except Exception:
             pass
     conn = getattr(game, "conn", None)

@@ -481,6 +481,7 @@ class Game:
         level: str | None = None,
         tag: str | None = None,
         image: str | None = None,
+        communication: dict[str, Any] | None = None,
     ) -> None:
         """Wyślij komunikat do logów UI (opcjonalnie z levelem, tagiem lub obrazkiem)."""
         if self.debug_trace is not None:
@@ -490,6 +491,7 @@ class Game:
                 level=level,
                 tag=tag,
                 image=image,
+                communication=communication,
             )
         payload: dict[str, Any] = {"message": message}
         if level:
@@ -498,6 +500,8 @@ class Game:
             payload["tag"] = tag
         if image:
             payload["image"] = image
+        if isinstance(communication, dict) and communication:
+            payload["communication"] = dict(communication)
         self.ui_event("log", payload)
 
     def ui_hero(self, hero: Hero, note: str | None = None) -> None:
