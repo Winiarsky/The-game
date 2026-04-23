@@ -10,6 +10,7 @@ from .tactical_utils import (
     can_attack_from_position,
     count_adjacent_heroes,
     distance_ft,
+    flank_positions_for_target,
     hp_ratio,
     living_heroes,
     reachable_positions,
@@ -26,6 +27,8 @@ def _focus_target(enemy, game):
     for hero in living_heroes(game):
         score = 0
         score += int((1.0 - hp_ratio(hero)) * 30)
+        if flank_positions_for_target(game, enemy, hero):
+            score += 18
         if target_is_lone(game, hero):
             score += 12
         score -= distance_ft(getattr(enemy, "position", None), getattr(hero, "position", None))
@@ -46,6 +49,9 @@ def _nearest_hero(enemy, game):
 
 def _score_hunt_position(enemy, game, target, jaws, pos) -> int:
     score = 0
+    flank_positions = set(flank_positions_for_target(game, enemy, target))
+    if pos in flank_positions:
+        score += 20
     if can_attack_from_position(game, enemy, target, jaws, pos):
         score += 14
     score += int((1.0 - hp_ratio(target)) * 12)

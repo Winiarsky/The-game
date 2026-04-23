@@ -504,6 +504,51 @@ class Game:
             payload["communication"] = dict(communication)
         self.ui_event("log", payload)
 
+    def ui_narration(
+        self,
+        message: str,
+        *,
+        summary: str = "Co się dzieje",
+        source: str = "narrator",
+        priority: str = "info",
+        semantic_type: str = "status_update",
+        image: str | None = None,
+        dedupe_key: str | None = None,
+        channel: str = "timeline",
+        blocking: bool = False,
+        next_hint: str | None = None,
+    ) -> None:
+        """Wyślij nieblokującą lub blokującą narrację do UI z tytułem Mistrza gry."""
+        if not str(message or "").strip():
+            return
+        try:
+            from narration import build_narration_communication
+        except Exception:
+            return
+
+        if not dedupe_key:
+            seq = int(getattr(self, "_ui_narration_seq", 0) or 0) + 1
+            setattr(self, "_ui_narration_seq", seq)
+            dedupe_key = f"narration:{seq}"
+
+        payload: dict[str, Any] = {
+            "message": str(message),
+            "source": source,
+            "communication": build_narration_communication(
+                summary=summary,
+                body_markdown=str(message),
+                dedupe_key=dedupe_key,
+                priority=priority,
+                semantic_type=semantic_type,
+                channel=channel,
+                blocking=blocking,
+                next_hint=next_hint,
+            ),
+        }
+        if image:
+            payload["image"] = image
+        self.ui_event("narration", payload)
+
     def ui_hero(self, hero: Hero, note: str | None = None) -> None:
         self.ui_event("hero_snapshot", build_hero_snapshot(hero, note=note))
 

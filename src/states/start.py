@@ -71,26 +71,50 @@ class Start(State):
                     "Wskaż miejsce dla figurki",
                     f"Wybierz puste pole startowe dla bohatera {hero_name}, klikając jedno z podświetlonych pól.",
                 )
-            self.game.conn.set_leds(starting_positions, consts.MOVE_FIELD_RGB) # usunac pozycje zajete
+            board_occupant_at = getattr(self.game.board, "occupant_at", None)
+            occupied_positions = {
+                tuple(getattr(existing, "position", None))
+                for existing in heroes
+                if isinstance(getattr(existing, "position", None), tuple)
+            }
+            available_positions = [
+                pos
+                for pos in starting_positions
+                if (
+                    callable(board_occupant_at)
+                    and getattr(board_occupant_at(pos), "position", None) is None
+                ) or (not callable(board_occupant_at) and pos not in occupied_positions)
+            ]
+            if not available_positions:
+                self.game.ui_log("Brak wolnych pól startowych dla kolejnego bohatera.")
+                return False
+            self.game.conn.set_leds(available_positions, consts.MOVE_FIELD_RGB)
             time.sleep(0.12)
             logger.info("Odczytuje wybrane pole startowe...")
-            pos = self.game.conn.scan_board(starting_positions)
-            self.game.conn.leds_off()
+            try:
+                pos = self.game.conn.scan_board(available_positions)
+            finally:
+                self.game.conn.leds_off()
             if pos is None:
                 self.game.ui_log("Nie odczytano pola. Spróbuj ponownie.")
                 return False
-            prompt = (
-                f"Wybrane pole startowe dla bohatera {hero_name}: {pos}.\n"
-                "Postaw teraz figurkę na tym polu i potwierdź Enterem."
-            )
-            ui = getattr(self.game, "ui", None)
-            if ui is not None and getattr(ui, "enabled", False) and hasattr(ui, "prompt_info"):
+            prompt = f"Ustaw figurkę bohatera {hero_name} na polu startowym {pos}."
+            self.game.ui_log(prompt)
+            if callable(ui_idle_hint):
+                ui_idle_hint("Ustaw figurkę bohatera", prompt)
+            ui_narration = getattr(self.game, "ui_narration", None)
+            if callable(ui_narration):
                 try:
-                    ui.prompt_info("Ustaw figurkę bohatera", prompt_long=prompt, source="hero_setup_place")
+                    ui_narration(
+                        prompt,
+                        summary="Co robić teraz",
+                        source="hero_setup_place",
+                        channel="timeline",
+                        blocking=False,
+                        next_hint="Po ustawieniu figurki wybierz kolejny krok w setupie.",
+                    )
                 except Exception:
-                    self.game.ui_log(prompt)
-            else:
-                self.game.ui_log(prompt)
+                    pass
             try:
                 self.game.board.place(hero, pos)
             except ValueError as exc:

@@ -18,7 +18,7 @@ class _FakeHardwareBackend:
         self.led_updates = []
         self.closed = False
 
-    def scan_board(self, acceptable_responses=None):
+    def scan_board(self, acceptable_responses=None, *, timeout_s=None):
         if acceptable_responses:
             return acceptable_responses[0]
         return (0, 0)
@@ -48,6 +48,10 @@ def test_connection_builds_hardware_backend(conn):
 
 def test_scan_board_returns_board_position(conn):
     assert conn.scan_board([(2, 3)]) == (2, 3)
+
+
+def test_scan_board_forwards_timeout(conn):
+    assert conn.scan_board([(2, 3)], timeout_s=4.0) == (2, 3)
 
 
 def test_leds_set_and_off(conn):

@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Iterable
 
+from board import consts
 from combat.stealth_runtime import clear_combat_stealth, has_combat_stealth_state
 from GameObjects.interactions_mixin import prompt_for_roll
 from GameObjects.interactions_mixin.skill_check_resolver import compute_skill_modifier_with_sources
@@ -12,6 +13,7 @@ from combat import ac_with_bonuses
 from combat.degree_of_success import is_critical_success, is_hit, natural_shift_from_roll, resolve_outcome
 from character_creation.catalog import CLASS_KEY_ABILITY_DEFAULT
 from character_creation.mechanics import RANK_BONUS, proficiency_bonus
+from led_fx import animate_projectile_line
 from skills import Skill
 
 from ..base import EventContext, EventResult
@@ -489,10 +491,28 @@ class BaseMagicAttackEvent(MagicEvent):
     target_kind: str = "enemy"  # enemy | hero | any
     range_feet: int | None = 30
     default_tags = ["magic", "spell"]
+    projectile_trail_rgb = [40, 100, 160]
+    projectile_head_rgb = [120, 220, 255]
+    projectile_impact_rgb = [210, 245, 255]
+    projectile_palette = consts.MAGIC_PROJECTILE_PALETTE
 
     def _resolve_on_target(self, target, pos, ctx: EventContext, *, critical: bool = False) -> EventResult:
         """Zaimplementuj w klasach pochodnych faktyczny efekt czaru."""
         raise NotImplementedError
+
+    def _play_projectile_animation(self, game, start: tuple[int, int] | None, end: tuple[int, int] | None) -> None:
+        try:
+            animate_projectile_line(
+                getattr(game, "conn", None),
+                start,
+                end,
+                trail_color=self.projectile_trail_rgb,
+                head_color=self.projectile_head_rgb,
+                impact_color=self.projectile_impact_rgb,
+                palette=self.projectile_palette,
+            )
+        except Exception:
+            logger.debug("Nie udało się odtworzyć animacji zaklęcia.", exc_info=True)
 
     def _iter_candidates(self, game) -> Iterable[tuple[object, tuple[int, int] | None, str]]:
         if self.target_kind == "hero":
@@ -549,6 +569,7 @@ class BaseMagicAttackEvent(MagicEvent):
                 pass
         if str(selection.get("kind", "")) == "miss":
             guessed_pos = selection.get("pos")
+            self._play_projectile_animation(ctx.game, source_pos, guessed_pos)
             return EventResult(
                 success=True,
                 consumed_action=self.consumes_action,
@@ -565,6 +586,7 @@ class BaseMagicAttackEvent(MagicEvent):
             return EventResult.cancelled(message="Brak celu w zasięgu.")
 
         if not check_concealed(ctx, target):
+            self._play_projectile_animation(ctx.game, source_pos, target_pos)
             return EventResult(
                 success=True,
                 consumed_action=self.consumes_action,
@@ -616,6 +638,7 @@ class BaseMagicAttackEvent(MagicEvent):
         outcome = str(attack_result.get("outcome", "failure"))
         critical = bool(attack_result.get("critical"))
         hit = bool(attack_result.get("hit"))
+        self._play_projectile_animation(ctx.game, source_pos, target_pos)
         if not hit:
             return EventResult(
                 success=True,

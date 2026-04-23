@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import heapq
 import logging
 
 from board import consts
@@ -75,6 +76,125 @@ class SeekEvent(GameEvent):
                 best = distance
         return max(default, best)
 
+    @staticmethod
+    def _seek_step_cost(current: tuple[int, int], nxt: tuple[int, int], diag_parity: int) -> tuple[int, int]:
+        is_diag = abs(int(current[0]) - int(nxt[0])) == 1 and abs(int(current[1]) - int(nxt[1])) == 1
+        step_cost = 10 if (is_diag and diag_parity == 1) else 5
+        next_parity = diag_parity ^ 1 if is_diag else diag_parity
+        return step_cost, next_parity
+
+    @staticmethod
+    def _seek_step_direct(board, current: tuple[int, int], nxt: tuple[int, int]) -> bool:
+        in_bounds = getattr(board, "in_bounds", None)
+        is_blocked = getattr(board, "is_blocked", None)
+        edge_between = getattr(board, "edge_interactables_between", None)
+        if not callable(in_bounds) or not callable(is_blocked):
+            return False
+        if not in_bounds(current) or not in_bounds(nxt):
+            return False
+        if is_blocked(current, nxt):
+            return False
+        if callable(edge_between):
+            for edge_obj in edge_between(current, nxt):
+                blocks_passage = getattr(edge_obj, "blocks_passage", None)
+                if callable(blocks_passage) and blocks_passage(current, nxt):
+                    return False
+        return True
+
+    @classmethod
+    def _can_seek_step(cls, board, current: tuple[int, int], nxt: tuple[int, int]) -> bool:
+        if abs(int(current[0]) - int(nxt[0])) == 1 and abs(int(current[1]) - int(nxt[1])) == 1:
+            mid_a = (int(nxt[0]), int(current[1]))
+            mid_b = (int(current[0]), int(nxt[1]))
+            route_a = cls._seek_step_direct(board, current, mid_a) and cls._seek_step_direct(board, mid_a, nxt)
+            route_b = cls._seek_step_direct(board, current, mid_b) and cls._seek_step_direct(board, mid_b, nxt)
+            return bool(route_a or route_b)
+        return cls._seek_step_direct(board, current, nxt)
+
+    @staticmethod
+    def _can_seek_expand(board, pos: tuple[int, int]) -> bool:
+        can_enter = getattr(board, "can_enter", None)
+        if not callable(can_enter):
+            return True
+        try:
+            return bool(can_enter(pos, allow_occupied=True))
+        except TypeError:
+            return bool(can_enter(pos))
+        except Exception:
+            return False
+
+    @classmethod
+    def _reachable_seek_positions(cls, board, origin: tuple[int, int] | None, max_feet: int) -> set[tuple[int, int]]:
+        if origin is None:
+            return set()
+        if max_feet <= 0:
+            return {origin}
+        in_bounds = getattr(board, "in_bounds", None)
+        get_neighbors = getattr(board, "get_neighbors", None)
+        if not callable(in_bounds) or not callable(get_neighbors):
+            return {origin}
+
+        best_cost_by_state: dict[tuple[tuple[int, int], int], int] = {(origin, 0): 0}
+        best_cost_by_pos: dict[tuple[int, int], int] = {origin: 0}
+        frontier: list[tuple[int, int, tuple[int, int]]] = [(0, 0, origin)]
+
+        while frontier:
+            cost, diag_parity, current = heapq.heappop(frontier)
+            if cost != best_cost_by_state.get((current, diag_parity)):
+                continue
+            for nxt in get_neighbors(current, include_position=False, diagonal=True):
+                if not in_bounds(nxt):
+                    continue
+                if not cls._can_seek_step(board, current, nxt):
+                    continue
+                step_cost, next_parity = cls._seek_step_cost(current, nxt, diag_parity)
+                new_cost = cost + step_cost
+                if new_cost > max_feet:
+                    continue
+                if new_cost < best_cost_by_pos.get(nxt, float("inf")):
+                    best_cost_by_pos[nxt] = new_cost
+                if not cls._can_seek_expand(board, nxt):
+                    continue
+                state = (nxt, next_parity)
+                if new_cost < best_cost_by_state.get(state, float("inf")):
+                    best_cost_by_state[state] = new_cost
+                    heapq.heappush(frontier, (new_cost, next_parity, nxt))
+
+        return set(best_cost_by_pos)
+
+    @classmethod
+    def _build_seek_positions(
+        cls,
+        board,
+        hero_pos: tuple[int, int],
+        allowed_rooms: list[str],
+        seek_radius: int,
+    ) -> set[tuple[int, int]]:
+        reachable = cls._reachable_seek_positions(board, hero_pos, seek_radius)
+        if not allowed_rooms:
+            return set(reachable or {hero_pos})
+        room_positions_fn = getattr(board, "positions_in_rooms", None)
+        if not callable(room_positions_fn):
+            return {hero_pos}
+        room_positions = set(room_positions_fn(set(allowed_rooms)) or set())
+        search_positions = reachable.intersection(room_positions) if reachable else set()
+        if hero_pos in room_positions or not search_positions:
+            search_positions.add(hero_pos)
+        return search_positions
+
+    @staticmethod
+    def _show_seek_area(game, hero_pos: tuple[int, int], search_positions: set[tuple[int, int]]) -> bool:
+        positions = sorted(set(search_positions or {hero_pos}), key=lambda pos: (int(pos[1]), int(pos[0])))
+        colors = [
+            list(consts.HERO_HIGHLIGHT_RGB) if pos == hero_pos else list(consts.SEEK_AREA_RGB)
+            for pos in positions
+        ]
+        try:
+            game.conn.set_leds(positions, colors)
+            return True
+        except Exception:
+            return False
+
     def execute(self, ctx: EventContext) -> EventResult:
         game = ctx.game
         actor = ctx.actor
@@ -116,12 +236,9 @@ class SeekEvent(GameEvent):
             logger.info("Nie możesz już przeszukiwać żadnego z tych pokoi.")
             return EventResult.noop(message="Brak dostępnych pokoi do przeszukania.")
 
-        search_positions = board.positions_in_rooms(set(allowed_rooms)) if allowed_rooms else set()
-        search_positions.add(hero_pos)
         seek_radius = self._seek_radius_feet(actor)
-        search_positions = {
-            pos for pos in search_positions if grid_distance_feet(hero_pos, pos) <= seek_radius
-        }
+        search_positions = self._build_seek_positions(board, hero_pos, allowed_rooms, seek_radius)
+        seek_area_lit = self._show_seek_area(game, hero_pos, search_positions)
 
         base_tags = ["seek", Skill.PERCEPTION.value]
         base_resolution = check_resolver.resolve_skill_check_with_sources(
@@ -141,6 +258,11 @@ class SeekEvent(GameEvent):
             for room_id in rooms_here:
                 board.lock_room_seek(room_id)
             logger.info("Krytyczna porażka – dalsze przeszukiwanie tych pokoi zablokowane.")
+            if seek_area_lit:
+                try:
+                    game.conn.leds_off()
+                except Exception:
+                    pass
             return EventResult.noop(message="Krytyczna porażka – pokoje zablokowane.")
 
         newly_revealed_positions: set[tuple[int, int]] = set()
@@ -241,6 +363,11 @@ class SeekEvent(GameEvent):
 
         if hidden_candidates == 0 and trap_candidates == 0:
             logger.info("W wybranych pokojach nie ma ukrytych elementów ani pułapek do przeszukania.")
+            if seek_area_lit:
+                try:
+                    game.conn.leds_off()
+                except Exception:
+                    pass
             return EventResult.noop(message="Brak ukrytych elementów ani pułapek.")
         if not newly_revealed_positions and not detected_trap_positions:
             logger.info("Przeszukiwanie niczego nie ujawnia.")
@@ -251,6 +378,11 @@ class SeekEvent(GameEvent):
                     "Nieudana próba – pozostałe próby: %s",
                     {room: max(0, consts.SEEK_FAIL_MAX_ATTEMPTS - board.room_seek_failures(room)) for room in allowed_rooms},
                 )
+            if seek_area_lit:
+                try:
+                    game.conn.leds_off()
+                except Exception:
+                    pass
             return EventResult.noop(message="Nic nie znaleziono.")
 
         logger.info(
@@ -268,6 +400,11 @@ class SeekEvent(GameEvent):
             traps_count=trap_detected_count,
         )
         reveal_positions = list(newly_revealed_positions.union(detected_trap_positions))
+        if seek_area_lit:
+            try:
+                game.conn.leds_off()
+            except Exception:
+                pass
         game.conn.set_leds(reveal_positions, consts.HIDDEN_REVEAL_RGB)
         info_text = "Odkryto ukryte obiekty i/lub pułapki."
         if reveal_notes:

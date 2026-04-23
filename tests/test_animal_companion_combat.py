@@ -55,10 +55,20 @@ class DummyUI:
 
     def __init__(self):
         self.info_calls = []
+        self.choice_calls = []
+        self.choice_answers = []
 
     def prompt_info(self, title, **kwargs):
         self.info_calls.append({"title": title, **kwargs})
         return "ok"
+
+    def prompt_choice(self, prompt, choices=None, **kwargs):
+        self.choice_calls.append({"prompt": prompt, "choices": list(choices or []), **kwargs})
+        if self.choice_answers:
+            return self.choice_answers.pop(0)
+        if choices:
+            return choices[0]
+        return None
 
 
 class FakeEvents:
@@ -135,6 +145,7 @@ class DummyGame:
         self.heroes = []
         self.enemies = []
         self.state = None
+        self.idle_hints = []
 
     def ui_log(self, _msg: str, **_kwargs):
         return None
@@ -149,6 +160,7 @@ class DummyGame:
         return None
 
     def ui_idle_hint(self, *_args, **_kwargs):
+        self.idle_hints.append((_args, _kwargs))
         return None
 
 
@@ -199,6 +211,33 @@ def test_animal_companion_deploy_expands_radius_when_adjacent_blocked():
         max(abs(pos[0] - owner.position[0]), abs(pos[1] - owner.position[1])) >= 2
         for pos in conn.last_scan_options
     )
+    assert game.idle_hints
+    assert any("Ustaw figurkę towarzysza" in str(hint_args[0]) for hint_args, _hint_kwargs in game.idle_hints)
+    hint_args, _hint_kwargs = game.idle_hints[-1]
+    assert "Towarzysz ustawiony" in str(hint_args[0])
+    assert "Gra przechodzi do następnego kroku" in str(hint_args[1])
+
+
+def test_animal_companion_deploy_updates_hint_to_next_initiative_step():
+    board = BoardGrid(7, 7)
+    conn = DummyConn()
+    game = DummyGame(board=board, conn=conn)
+    owner = DummyOwner(name="Cedric", object_id="hero-ranger", position=(3, 3), initiative=18)
+    pending_hero = DummyOwner(name="Freya", object_id="hero-sorcerer", position=(1, 1), initiative=None)
+    _add_druid_animal_setup(owner)
+    game.heroes = [owner, pending_hero]
+    board.place(owner, owner.position)
+    board.place(pending_hero, pending_hero.position)
+    conn.scan_queue = [(4, 3)]
+
+    combat = Combat(game)
+    game.state = combat
+    combat._deploy_animal_companion_for_owner(owner)
+
+    assert game.idle_hints
+    hint_args, _hint_kwargs = game.idle_hints[-1]
+    assert "Towarzysz ustawiony" in str(hint_args[0])
+    assert "Wybierz kolejnego bohatera" in str(hint_args[1])
 
 
 def test_command_animal_companion_strike_damages_enemy(monkeypatch):
@@ -233,6 +272,39 @@ def test_command_animal_companion_strike_damages_enemy(monkeypatch):
     assert owner.has_status("animal_companion_commanded")
 
 
+def test_command_animal_companion_menu_exposes_strike_and_support_details():
+    board = BoardGrid(6, 6)
+    conn = DummyConn()
+    ui = DummyUI()
+    game = DummyGame(board=board, conn=conn, ui=ui)
+    owner = DummyOwner(position=(1, 1), initiative=17)
+    _add_druid_animal_setup(owner)
+    enemy = DummyEnemy(position=(5, 5), hp=20, ac=14)
+    game.heroes = [owner]
+    game.enemies = [enemy]
+    board.place(owner, owner.position)
+    board.place(enemy, enemy.position)
+
+    combat = Combat(game)
+    game.state = combat
+    companion = build_animal_companion(owner, "wolf")
+    board.place(companion, (1, 2))
+    combat.animal_companions[owner.object_id] = companion
+
+    ui.choice_answers = ["end"]
+
+    result = dispatch_event("command_animal_companion", EventContext(game=game, actor=owner))
+
+    assert result.success is False
+    prompt = ui.choice_calls[0]
+    choice_meta = list(prompt.get("choice_meta") or [])
+    by_raw = {str(item.get("raw")): item for item in choice_meta}
+    assert "strike" in by_raw
+    assert "support" in by_raw
+    assert "1d8" in str(by_raw["strike"].get("desc") or "")
+    assert "Speed" in str(by_raw["support"].get("desc") or "")
+
+
 def test_command_animal_companion_strike_without_target_shows_prompt():
     board = BoardGrid(6, 6)
     conn = DummyConn()
@@ -261,6 +333,38 @@ def test_command_animal_companion_strike_without_target_shows_prompt():
     info_prompts = [call for call in ui.info_calls if call.get("title") == "Zwierzęcy towarzysz: akcja niemożliwa"]
     assert info_prompts
     assert "brak wroga w zasiegu companiona" in str(info_prompts[-1].get("prompt_long") or "").lower()
+
+
+def test_command_animal_companion_recovers_existing_companion_from_board(monkeypatch):
+    board = BoardGrid(6, 6)
+    conn = DummyConn()
+    game = DummyGame(board=board, conn=conn)
+    owner = DummyOwner(position=(1, 1), initiative=17)
+    _add_druid_animal_setup(owner)
+    enemy = DummyEnemy(position=(2, 1), hp=20, ac=14)
+    game.heroes = [owner]
+    game.enemies = [enemy]
+    board.place(owner, owner.position)
+    board.place(enemy, enemy.position)
+
+    combat = Combat(game)
+    game.state = combat
+    companion = build_animal_companion(owner, "wolf")
+    board.place(companion, (1, 2))
+    combat.animal_companions.clear()
+
+    conn.read_queue = ["strike", "end"]
+    rolls = iter([24, 7])
+    monkeypatch.setattr(
+        "GameObjects.events.command_animal_companion_event.prompt_for_roll",
+        lambda *_a, **_k: next(rolls),
+    )
+
+    result = dispatch_event("command_animal_companion", EventContext(game=game, actor=owner))
+
+    assert result.success is True
+    assert combat.get_animal_companion(owner) is companion
+    assert enemy.hp == 6
 
 
 def test_command_animal_companion_strike_falls_back_to_board_enemy_when_registry_missing(monkeypatch):

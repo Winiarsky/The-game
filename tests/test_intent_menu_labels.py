@@ -48,6 +48,24 @@ def test_intent_uses_sneak_move_entry_when_actor_already_stealth():
     assert stealth["label"] == "Poruszaj sie skrycie"
 
 
+def test_seek_intent_describes_grid_range_and_wall_blocking():
+    grouped = {
+        "direct": {"seek": object()},
+        "attack": [],
+        "magic": [],
+        "alchemy": [],
+        "special": [],
+        "special_by_source": {"generic": [], "heritage": [], "class": []},
+    }
+
+    options = build_intent_options(grouped, in_combat=True, actor=_Actor([]))
+    seek = next(item for item in options if item.get("id") == "seek")
+
+    assert "30 ft" in seek["desc"]
+    assert "gridowo" in seek["desc"]
+    assert "sciany" in seek["desc"]
+
+
 def test_group_events_splits_special_actions_by_source():
     actor = _Actor(["animal_companion", "hunt_prey", "hunted_shot", "goblin_song", "ranger", "goblin"])
     setattr(actor, "class_name", "ranger")
@@ -84,3 +102,23 @@ def test_intent_expands_special_actions_into_source_sections():
     assert by_id["grapple"]["category"] == "generic"
     assert by_id["goblin_song"]["category"] == "heritage"
     assert by_id["hunt_prey"]["category"] == "class"
+
+
+def test_ranger_special_action_descriptions_include_hunt_prey_persistence_and_companion_details():
+    actor = _Actor(["animal_companion", "hunt_prey", "hunted_shot", "ranger"])
+    setattr(actor, "class_name", "ranger")
+    setattr(actor, "animal_companion_type", "wolf")
+    events = {
+        "command_animal_companion": _event_cls("GameObjects.events.command_animal_companion_event", ["companion", "command"]),
+        "hunt_prey": _event_cls("GameObjects.events.ranger_feat_events", ["ranger", "concentrate"]),
+        "hunted_shot": _event_cls("GameObjects.events.ranger_feat_events", ["ranger", "attack", "attack_ranged"]),
+    }
+
+    grouped = group_events(events, actor=actor)
+    options = build_intent_options(grouped, in_combat=True, actor=actor, available_events=events)
+
+    by_id = {item["id"]: item for item in options}
+    assert "nie odnawia się co turę" in by_id["hunt_prey"]["desc"]
+    assert "Support" in by_id["command_animal_companion"]["desc"]
+    assert "1d8" in by_id["command_animal_companion"]["desc"]
+    assert "Jeśli poprzedni cel zginął" in by_id["hunted_shot"]["desc"]

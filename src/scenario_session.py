@@ -16,6 +16,7 @@ from states.heroes_turns import HeroesTurn
 
 from game import Game
 from runtime_setup import build_runtime_setup_plan
+from narration import NARRATOR_TITLE, build_narration_communication
 from scenario_flow import load_scenario_flow, resolve_map_payload
 
 
@@ -220,14 +221,29 @@ class ScenarioSession:
                 if not message:
                     continue
                 if self.current_game is not None:
-                    self.current_game.ui_log(message)
                     if kind == "show_prompt":
                         ui = getattr(self.current_game, "ui", None)
                         if ui is not None and getattr(ui, "enabled", False) and hasattr(ui, "prompt_info"):
                             try:
-                                ui.prompt_info("Scenariusz", prompt_long=message, source="scenario_flow")
+                                ui.prompt_info(
+                                    NARRATOR_TITLE,
+                                    prompt_long=message,
+                                    source="scenario_flow",
+                                    communication=build_narration_communication(
+                                        summary="Co się dzieje",
+                                        body_markdown=message,
+                                        priority="info",
+                                        semantic_type="status_update",
+                                        channel="prompt",
+                                        blocking=True,
+                                    ),
+                                )
                             except Exception:
-                                pass
+                                self.current_game.ui_narration(message, summary="Co się dzieje", source="scenario_flow")
+                        else:
+                            self.current_game.ui_narration(message, summary="Co się dzieje", source="scenario_flow")
+                    else:
+                        self.current_game.ui_narration(message, summary="Co się dzieje", source="scenario_flow")
                 continue
             if kind == "go_to_map":
                 target_map_id = str(action.get("map_id") or "").strip()
@@ -369,25 +385,25 @@ class ScenarioSession:
     def _announce_session_start(self) -> None:
         if self._session_announced or self.current_game is None:
             return
-        ui = getattr(self.current_game, "ui", None)
-        if ui is not None and getattr(ui, "enabled", False) and hasattr(ui, "send_event"):
-            try:
-                ui.send_event(
-                    "info",
-                    {
-                        "message": f"Start scenariusza: {self.label}",
-                        "source": "scenario_flow",
-                    },
-                )
-            except Exception:
-                pass
+        try:
+            self.current_game.ui_narration(
+                f"Rozpoczyna się scenariusz: {self.label}.",
+                summary="Co się dzieje",
+                source="scenario_flow",
+            )
+        except Exception:
+            pass
         self._session_announced = True
 
     def _announce_map_entry(self) -> None:
         if self.current_game is None:
             return
         map_ref = self.maps.get(str(self.current_map_id or "").strip()) or {}
-        self.current_game.ui_log(f"Wejście na mapę: {map_ref.get('label') or self.current_map_id}.")
+        self.current_game.ui_narration(
+            f"Wchodzicie na mapę: {map_ref.get('label') or self.current_map_id}.",
+            summary="Co się dzieje",
+            source="scenario_flow",
+        )
 
     def _prepare_opening_exploration_state(self) -> None:
         if self.current_game is None:

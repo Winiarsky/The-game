@@ -34,6 +34,7 @@ from GameObjects.events import EventContext
 from GameObjects.events.registry import dispatch_event, list_events
 import GameObjects.events.all_events  # noqa: F401
 from enemy_prompting import clear_enemy_highlight, enemy_highlight, enemy_prompt_step
+from narration import narrate_action_result
 
 logger = logging.getLogger(__name__)
 
@@ -220,7 +221,21 @@ class Combat(State):
         owner_id = self._actor_id(owner)
         companion = self.animal_companions.get(owner_id)
         if companion is None:
-            return None
+            board = getattr(self.game, "board", None)
+            iterator = getattr(board, "_iter_occupants", None)
+            if callable(iterator):
+                for candidate in iterator():
+                    if str(getattr(candidate, "owner_id", "") or "") != owner_id:
+                        continue
+                    if getattr(candidate, "companion_type", None) is None:
+                        continue
+                    if getattr(candidate, "position", None) is None:
+                        continue
+                    self.animal_companions[owner_id] = candidate
+                    companion = candidate
+                    break
+            if companion is None:
+                return None
         if getattr(companion, "position", None) is None:
             return None
         return companion
@@ -228,6 +243,48 @@ class Combat(State):
     def _deploy_pending_animal_companions(self) -> None:
         for hero in list(getattr(self.game, "heroes", []) or []):
             self._deploy_animal_companion_for_owner(hero)
+
+    def _advance_companion_setup_prompt(self, owner, companion) -> None:
+        owner_name = str(getattr(owner, "name", "Bohater") or "Bohater")
+        companion_type = str(getattr(companion, "companion_type", "towarzysz") or "towarzysz").replace("_", " ")
+        pending = [
+            hero
+            for hero in list(getattr(self.game, "heroes", []) or [])
+            if getattr(hero, "position", None) is not None and getattr(hero, "initiative", None) is None
+        ]
+        if pending:
+            title = "Towarzysz ustawiony"
+            text = (
+                f"{owner_name}: {companion_type} stoi już na planszy. "
+                "Wybierz kolejnego bohatera, aby ustawić inicjatywę."
+            )
+            next_hint = "Kliknij figurkę kolejnego bohatera na planszy."
+        else:
+            title = "Towarzysz ustawiony"
+            text = (
+                f"{owner_name}: {companion_type} stoi już na planszy. "
+                "Gra przechodzi do następnego kroku."
+            )
+            next_hint = "Śledź inicjatywę i wybierz akcję aktywnego aktora."
+        try:
+            ui_idle_hint = getattr(self.game, "ui_idle_hint", None)
+            if callable(ui_idle_hint):
+                ui_idle_hint(title, text)
+        except Exception:
+            logger.debug("Nie udało się odświeżyć idle hint po ustawieniu towarzysza.", exc_info=True)
+        try:
+            ui_narration = getattr(self.game, "ui_narration", None)
+            if callable(ui_narration):
+                ui_narration(
+                    text,
+                    summary="Co się dzieje",
+                    source="animal_companion_setup",
+                    channel="timeline",
+                    blocking=False,
+                    next_hint=next_hint,
+                )
+        except Exception:
+            logger.debug("Nie udało się wysłać narracji po ustawieniu towarzysza.", exc_info=True)
 
     def _deploy_animal_companion_for_owner(self, owner) -> None:
         if owner is None:
@@ -255,6 +312,18 @@ class Combat(State):
         except Exception:
             pass
         try:
+            ui_idle_hint = getattr(self.game, "ui_idle_hint", None)
+            if callable(ui_idle_hint):
+                ui_idle_hint(
+                    "Ustaw figurkę towarzysza",
+                    (
+                        f"Gra czeka na klik pola dla zwierzęcego towarzysza bohatera "
+                        f"{getattr(owner, 'name', 'Bohater')}. Kliknij jedno z podświetlonych pól obok właściciela."
+                    ),
+                )
+        except Exception:
+            pass
+        try:
             self.game.conn.set_leds(spawn_options, consts.HERO_HIGHLIGHT_RGB)
             selected = self.game.conn.scan_board(spawn_options)
         finally:
@@ -276,6 +345,7 @@ class Combat(State):
             f"{getattr(owner, 'name', 'Bohater')}: Zwierzecy towarzysz ({getattr(companion, 'companion_type', 'wolf')}) "
             f"ustawiony na {selected}."
         )
+        self._advance_companion_setup_prompt(owner, companion)
         try:
             self.game.ui_companion(
                 companion,
@@ -1657,6 +1727,16 @@ class Combat(State):
         else:
             status = "powiodła się" if result.success else "nie powiodła się"
             self.game.ui_log(f"Akcja '{raw_choice}' {status}.")
+        try:
+            self.game.ui_narration(
+                narrate_action_result(actor=actor, action_id=raw_choice, result=result),
+                summary="Jaki był efekt akcji",
+                source=f"action_result:{raw_choice}",
+                priority="result" if result.success else "warning",
+                semantic_type="result",
+            )
+        except Exception:
+            logger.debug("Nie udało się wysłać narracji wyniku akcji '%s'.", raw_choice, exc_info=True)
         # end i delay same wywołują zmianę kolejki; jeśli aktywny uległ zmianie, nie ruszaj tutaj
         if raw_choice in ("end",):
             return self

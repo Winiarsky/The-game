@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 
+from led_fx import animate_area_wave
 from bonuses import BonusEffect, BonusType
 from actions.move_utils import adjusted_forced_movement_squares
 from combat.damage_utils import burn_it_bonus, burn_it_prompt_note
@@ -40,7 +41,7 @@ from GameObjects.NPC.base_npc import BaseNPC
 from GameObjects.Obstacles.basic_obstacle import Obstacle
 from GameObjects.interactions_mixin import prompt_for_roll
 
-from ...base import EventContext, EventResult
+from ...base import EventContext, EventResult, emit_prompt_narration, format_board_selection_message
 from ...registry import register_event
 from ..base_attack_magic_event import BaseMagicAttackEvent, prompt_spell_save_roll, spell_dc_details
 from ..magic_event import MagicEvent
@@ -394,6 +395,33 @@ def _ui_log(game, message: str) -> None:
         pass
 
 
+def _ui_narration(
+    game,
+    message: str,
+    *,
+    summary: str = "Co robić teraz",
+    source: str = "magic",
+    priority: str = "info",
+    semantic_type: str = "required_action",
+    dedupe_key: str | None = None,
+    next_hint: str | None = None,
+) -> None:
+    if emit_prompt_narration(
+        game,
+        message,
+        summary=summary,
+        source=source,
+        priority=priority,
+        semantic_type=semantic_type,
+        dedupe_key=dedupe_key,
+        next_hint=next_hint,
+        blocking=True,
+        channel="prompt",
+    ):
+        return
+    _ui_log(game, message)
+
+
 def _targets_in_radius(candidates, center: tuple[int, int], radius_feet: int):
     result = []
     for target, pos, _kind in candidates:
@@ -605,6 +633,7 @@ def _spell_vibe_palette(vibe: str) -> dict[str, list[int]]:
             "origin": [185, 225, 255],
             "center": [150, 205, 255],
             "direction": [95, 170, 255],
+            "selected_direction": [70, 145, 235],
             "line": [70, 145, 235],
             "target": [180, 240, 255],
         },
@@ -612,20 +641,23 @@ def _spell_vibe_palette(vibe: str) -> dict[str, list[int]]:
             "origin": [130, 205, 255],
             "center": [80, 175, 255],
             "direction": [35, 115, 240],
+            "selected_direction": [20, 85, 220],
             "line": [20, 85, 220],
             "target": [110, 215, 255],
         },
         "fire": {
             "origin": [255, 210, 140],
             "center": [255, 185, 95],
-            "direction": [255, 145, 60],
-            "line": [240, 90, 30],
-            "target": [255, 205, 110],
+            "direction": [255, 190, 45],
+            "selected_direction": [255, 120, 25],
+            "line": [255, 48, 18],
+            "target": [255, 238, 170],
         },
         "negative": {
             "origin": [210, 170, 255],
             "center": [185, 135, 245],
             "direction": [155, 90, 220],
+            "selected_direction": [110, 45, 175],
             "line": [110, 45, 175],
             "target": [230, 180, 255],
         },
@@ -633,6 +665,7 @@ def _spell_vibe_palette(vibe: str) -> dict[str, list[int]]:
             "origin": [255, 245, 185],
             "center": [255, 230, 120],
             "direction": [255, 215, 70],
+            "selected_direction": [240, 195, 45],
             "line": [240, 195, 45],
             "target": [255, 248, 205],
         },
@@ -640,6 +673,7 @@ def _spell_vibe_palette(vibe: str) -> dict[str, list[int]]:
             "origin": [255, 210, 255],
             "center": [250, 180, 255],
             "direction": [235, 120, 255],
+            "selected_direction": [205, 80, 235],
             "line": [205, 80, 235],
             "target": [255, 235, 180],
         },
@@ -647,6 +681,7 @@ def _spell_vibe_palette(vibe: str) -> dict[str, list[int]]:
             "origin": [255, 230, 170],
             "center": [240, 205, 120],
             "direction": [220, 185, 70],
+            "selected_direction": [180, 145, 40],
             "line": [180, 145, 40],
             "target": [255, 245, 170],
         },
@@ -654,11 +689,33 @@ def _spell_vibe_palette(vibe: str) -> dict[str, list[int]]:
             "origin": [215, 205, 255],
             "center": [195, 170, 255],
             "direction": [160, 125, 235],
+            "selected_direction": [125, 90, 205],
             "line": [125, 90, 205],
             "target": [225, 210, 255],
         },
     }
     return dict(palettes.get(normalized, palettes["air"]))
+
+
+def _spell_vibe_effect_palette(vibe: str) -> list[list[int]]:
+    palette = _spell_vibe_palette(vibe)
+    return [
+        list(palette.get("direction") or palette.get("line") or [80, 140, 220]),
+        list(palette.get("line") or palette.get("target") or [150, 210, 255]),
+        list(palette.get("target") or palette.get("center") or [220, 240, 255]),
+    ]
+
+
+def _play_area_spell_animation(game, origin: tuple[int, int] | None, area_positions: list[tuple[int, int]] | None, *, vibe: str) -> None:
+    try:
+        animate_area_wave(
+            getattr(game, "conn", None),
+            origin,
+            area_positions or [],
+            palette=_spell_vibe_effect_palette(vibe),
+        )
+    except Exception:
+        logger.debug("Nie udało się odtworzyć animacji obszaru czaru.", exc_info=True)
 
 
 def _directional_area_positions(
@@ -711,6 +768,20 @@ def _pick_directional_area_from_caster(
     if conn is not None and hasattr(conn, "scan_board"):
         adjacent_positions = list(anchor_map.keys())
         selected_direction: str | None = None
+        selected_anchor: tuple[int, int] | None = None
+        area_label = "linii" if str(area_kind or "").strip().lower() == "line" else "stozka"
+        spell_label = str(prompt_name or "czaru").strip() or "czaru"
+
+        _ui_narration(
+            ctx.game,
+            format_board_selection_message(
+                f"podswietlone pole obok rzucajacego, aby ustawic kierunek {area_label}",
+                confirmation="kliknij pole rzucajacego, aby potwierdzic",
+            ),
+            source=f"{source}:direction_pick",
+            dedupe_key=f"{source}:direction_pick:start",
+            next_hint="Najpierw wybierz kierunek na planszy, potem potwierdz na polu rzucajacego.",
+        )
 
         while True:
             if selected_direction is None:
@@ -727,9 +798,13 @@ def _pick_directional_area_from_caster(
                 }
                 led_map = {origin: list(palette["origin"])}
                 for pos in adjacent_positions:
+                    if selected_anchor is not None and pos == selected_anchor:
+                        continue
                     led_map[pos] = list(palette["direction"])
                 for pos in selected_line:
                     led_map[pos] = list(palette["line"])
+                if selected_anchor is not None and selected_anchor not in selected_line:
+                    led_map[selected_anchor] = list(palette.get("selected_direction") or palette["line"])
                 for pos in target_positions:
                     led_map[pos] = list(palette["target"])
                 selectable = [origin] + list(adjacent_positions)
@@ -754,16 +829,38 @@ def _pick_directional_area_from_caster(
                 break
             normalized_choice = tuple(choice)
             if selected_direction is not None and normalized_choice == tuple(origin):
-                return selected_direction, list(line_map.get(selected_direction) or [])
+                selected_line = list(line_map.get(selected_direction) or [])
+                _play_area_spell_animation(ctx.game, origin, selected_line, vibe=vibe)
+                return selected_direction, selected_line
 
             next_direction = anchor_map.get(normalized_choice)
             if next_direction is None:
                 if selected_direction is None:
-                    _ui_log(ctx.game, f"{prompt_name}: wybierz podswietlone sasiednie pole, aby ustawic kierunek.")
+                    message = "Wybierz podswietlone sasiednie pole, aby ustawic kierunek."
                 else:
-                    _ui_log(ctx.game, f"{prompt_name}: kliknij pole kierunku lub pole rzucajacego, aby potwierdzic.")
+                    message = "Kliknij pole rzucajacego, aby potwierdzic, albo wybierz inne sasiednie pole, aby zmienic kierunek."
+                _ui_log(ctx.game, message)
+                _ui_narration(
+                    ctx.game,
+                    message,
+                    source=f"{source}:direction_pick",
+                    priority="warning",
+                    dedupe_key=f"{source}:direction_pick:invalid",
+                    next_hint="Wybierz sasiednie pole kierunku albo pole rzucajacego.",
+                )
                 continue
             selected_direction = next_direction
+            selected_anchor = normalized_choice
+            _ui_narration(
+                ctx.game,
+                (
+                    f"Wybrany kierunek {area_label} jest teraz podswietlony mocniejszym kolorem. "
+                    "Kliknij pole rzucajacego, aby potwierdzic, albo wybierz inne sasiednie pole, aby zmienic kierunek."
+                ),
+                source=f"{source}:direction_pick",
+                dedupe_key=f"{source}:direction_pick:selected",
+                next_hint="Potwierdz na polu rzucajacego albo zmien kierunek innym sasiednim polem.",
+            )
 
     direction = _prompt_choice(ctx, f"{prompt_name} - wybierz kierunek", directions, source=source)
     if not direction:
@@ -973,7 +1070,9 @@ def _pick_centered_area(
                 break
             normalized_choice = tuple(choice)
             if selected_center is not None and normalized_choice == selected_center:
-                return selected_center, _positions_in_radius(board, selected_center, radius_feet)
+                area_positions = _positions_in_radius(board, selected_center, radius_feet)
+                _play_area_spell_animation(ctx.game, selected_center, area_positions, vibe=vibe)
+                return selected_center, area_positions
             if normalized_choice not in center_set:
                 _ui_log(
                     ctx.game,
@@ -1037,6 +1136,7 @@ def _confirm_fixed_area(
         if choice is None:
             return False
         if tuple(choice) == tuple(origin):
+            _play_area_spell_animation(ctx.game, origin, area_positions, vibe=vibe)
             return True
         _ui_log(ctx.game, f"{prompt_name}: kliknij pole rzucajacego, aby potwierdzic obszar.")
 

@@ -38,6 +38,24 @@ class DummyConn:
         return None
 
 
+class HiddenThing:
+    def __init__(self, reveal_dc=12):
+        self.hidden = True
+        self.revealed = False
+        self.seekable = True
+        self.reveal_dc = int(reveal_dc)
+        self.reveal_tags = ()
+        self.description_on_reveal = "Ukryty mechanizm."
+        self.position = None
+
+    def set_position(self, position):
+        self.position = position
+
+    def try_reveal(self, total):
+        if int(total or 0) >= self.reveal_dc:
+            self.revealed = True
+
+
 class DummyEvents:
     def safe_emit_action(self, **_kwargs):
         return None
@@ -165,3 +183,35 @@ def test_trap_finder_auto_detects_before_trigger_on_enter(monkeypatch):
     assert trap.trap_detected is True
     assert trap.trap_armed is True
 
+
+def test_seek_highlights_only_traversable_area_within_radius(monkeypatch):
+    board = BoardGrid(rows=1, cols=3)
+    board.apply_rooms([{"id": "hall", "positions": [[0, 0], [1, 0], [2, 0]]}])
+    board.add_wall((1, 0), (2, 0))
+
+    hero = Hero(position=(0, 0))
+    board.place(hero, hero.position)
+    secret = HiddenThing(reveal_dc=0)
+    board.add_interactable(secret, (2, 0))
+
+    conn = DummyConn()
+    game = _build_game(board, hero, conn)
+
+    monkeypatch.setattr(
+        "GameObjects.events.seek_event.check_resolver.resolve_skill_check_with_sources",
+        lambda **_k: SimpleNamespace(outcome="success", roll=14, total=23),
+    )
+    monkeypatch.setattr(
+        "GameObjects.events.seek_event.check_resolver.resolve_skill_check_with_sources_from_roll",
+        lambda **_k: SimpleNamespace(outcome="success", total=23),
+    )
+
+    result = SeekEvent().run(EventContext(game=game, actor=hero))
+
+    assert result.success is True
+    assert secret.revealed is False
+    assert conn.led_calls
+    highlighted = set(conn.led_calls[0][0])
+    assert (0, 0) in highlighted
+    assert (1, 0) in highlighted
+    assert (2, 0) not in highlighted

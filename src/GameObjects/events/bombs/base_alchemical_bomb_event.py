@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import math
 
+from led_fx import animate_area_wave, animate_projectile_line
 from bonuses import BonusEffect, BonusType, build_modifiers_grid
 from damage_types import DamageType
 from GameObjects.interactions_mixin import prompt_for_roll
@@ -251,6 +252,12 @@ class BaseAlchemicalBombEvent(ActionCostEvent, AttackEventBase):
         outcome = resolve_outcome(total_roll, target_ac, natural_shift=natural_shift)
         critical = is_critical_success(outcome)
         hit = is_hit(outcome)
+        impact_positions = self._bomb_impact_positions(
+            ctx.game,
+            target_pos,
+            splash_enabled=bool(int(tier_data.get("splash", 0) or 0) > 0 and not ctx.metadata.get("bomb_splash_target_only")),
+        )
+        self._play_bomb_animation(ctx.game, source_pos, target_pos, impact_positions=impact_positions)
         self._record_attack(
             ctx,
             actor,
@@ -295,6 +302,70 @@ class BaseAlchemicalBombEvent(ActionCostEvent, AttackEventBase):
 
     def _event_label(self) -> str:
         return getattr(self, "name", "bomba").replace("_", " ").title()
+
+    def _bomb_fx_palette(self) -> list[list[int]]:
+        damage_key = str(self.splash_damage_type or self.damage_type or "").strip().lower()
+        mapping = {
+            DamageType.FIRE.value: [[180, 70, 20], [240, 120, 45], [255, 205, 110]],
+            DamageType.ACID.value: [[45, 120, 35], [80, 190, 55], [175, 255, 130]],
+            DamageType.COLD.value: [[50, 110, 170], [110, 190, 255], [220, 245, 255]],
+            DamageType.ELECTRIC.value: [[70, 90, 210], [170, 220, 255], [255, 245, 150]],
+            DamageType.SONIC.value: [[120, 70, 180], [200, 120, 255], [255, 210, 255]],
+            DamageType.PIERCING.value: [[130, 95, 40], [210, 155, 80], [255, 220, 150]],
+            DamageType.BLUDGEONING.value: [[125, 95, 65], [185, 145, 110], [245, 220, 190]],
+        }
+        return [list(color) for color in mapping.get(damage_key, [[130, 95, 40], [210, 155, 80], [255, 220, 150]])]
+
+    def _bomb_impact_positions(
+        self,
+        game,
+        target_pos: tuple[int, int] | None,
+        *,
+        splash_enabled: bool,
+    ) -> list[tuple[int, int]]:
+        if target_pos is None:
+            return []
+        if not splash_enabled:
+            return [tuple(target_pos)]
+        board = getattr(game, "board", None)
+        neighbors = getattr(board, "get_neighbors", None)
+        if callable(neighbors):
+            try:
+                return [tuple(pos) for pos in neighbors(target_pos, include_position=True, diagonal=True)]
+            except Exception:
+                pass
+        return [tuple(target_pos)]
+
+    def _play_bomb_animation(
+        self,
+        game,
+        start: tuple[int, int] | None,
+        end: tuple[int, int] | None,
+        *,
+        impact_positions: list[tuple[int, int]] | None = None,
+    ) -> None:
+        conn = getattr(game, "conn", None)
+        palette = self._bomb_fx_palette()
+        try:
+            animate_projectile_line(
+                conn,
+                start,
+                end,
+                trail_color=palette[0],
+                head_color=palette[1],
+                impact_color=palette[-1],
+            )
+        except Exception:
+            logger.debug("Nie udało się odtworzyć lotu bomby.", exc_info=True)
+        try:
+            animate_area_wave(
+                conn,
+                end,
+                impact_positions or [end] if end is not None else [],
+                palette=palette,
+            )
+        except Exception:
+            logger.debug("Nie udało się odtworzyć efektu rozprysku bomby.", exc_info=True)
 
     def _required_event_name(self) -> str:
         explicit = str(getattr(self, "required_inventory_event_name", "") or "").strip().lower()

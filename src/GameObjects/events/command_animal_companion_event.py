@@ -69,12 +69,25 @@ def _is_enemy_target(game, target) -> bool:
     return False
 
 
-def _prompt_choice(ctx: EventContext, prompt: str, choices: list[str], *, source: str) -> str | None:
+def _prompt_choice(
+    ctx: EventContext,
+    prompt: str,
+    choices: list[str],
+    *,
+    source: str,
+    choice_meta: list[dict] | None = None,
+) -> str | None:
     ui = getattr(ctx.game, "ui", None)
     answer = None
     if ui is not None and hasattr(ui, "prompt_choice"):
         try:
-            answer = ui.prompt_choice(prompt, choices=choices, source=source)
+            answer = ui.prompt_choice(
+                prompt,
+                choices=choices,
+                source=source,
+                choice_meta=choice_meta,
+                layout="menu_numpad",
+            )
         except Exception:
             answer = None
     if answer is None:
@@ -132,6 +145,132 @@ def _highlight_companion_and_positions(ctx: EventContext, companion, positions: 
         pass
 
 
+def _recover_companion_from_board(ctx: EventContext, owner):
+    state = getattr(ctx.game, "state", None)
+    owner_id = _actor_id(owner)
+    board = getattr(ctx.game, "board", None)
+    iterator = getattr(board, "_iter_occupants", None)
+    if not callable(iterator):
+        return None
+    for candidate in iterator():
+        if str(getattr(candidate, "owner_id", "") or "") != owner_id:
+            continue
+        if getattr(candidate, "companion_type", None) is None:
+            continue
+        if getattr(candidate, "position", None) is None:
+            continue
+        mapping = getattr(state, "animal_companions", None)
+        if isinstance(mapping, dict):
+            mapping[owner_id] = candidate
+        return candidate
+    return None
+
+
+def _iter_enemy_like_targets(ctx: EventContext):
+    seen: set[str] = set()
+    for enemy in list(getattr(ctx.game, "enemies", []) or []):
+        enemy_id = _actor_id(enemy)
+        if enemy_id in seen:
+            continue
+        seen.add(enemy_id)
+        yield enemy
+    board = getattr(ctx.game, "board", None)
+    iterator = getattr(board, "_iter_occupants", None)
+    if not callable(iterator):
+        return
+    for candidate in iterator():
+        candidate_id = _actor_id(candidate)
+        if candidate_id in seen:
+            continue
+        if not _is_enemy_target(ctx.game, candidate):
+            continue
+        seen.add(candidate_id)
+        yield candidate
+
+
+def _damage_formula_average(damage_formula: str) -> int:
+    raw = str(damage_formula or "").strip().lower().replace(" ", "")
+    if "d" not in raw:
+        try:
+            return max(0, int(raw or 0))
+        except Exception:
+            return 0
+    count_part, rest = raw.split("d", 1)
+    bonus = 0
+    sides_part = rest
+    if "+" in rest:
+        sides_part, bonus_part = rest.split("+", 1)
+        try:
+            bonus = int(bonus_part or 0)
+        except Exception:
+            bonus = 0
+    count = int(count_part or 1)
+    sides = int(sides_part or 0)
+    if count <= 0 or sides <= 0:
+        return max(0, bonus)
+    return max(0, int(round(count * ((sides + 1) / 2.0) + bonus)))
+
+
+def _companion_attack_bonus(companion, profile: dict[str, object], *, strike_count: int = 0) -> int:
+    traits = {str(item or "").strip().lower() for item in (profile.get("traits") or [])}
+    level = max(1, int(getattr(companion, "level", 1) or 1))
+    ability_mods = dict(getattr(companion, "ability_mods", {}) or {})
+    str_mod = int(ability_mods.get("str", 0) or 0)
+    dex_mod = int(ability_mods.get("dex", 0) or 0)
+    prof_bonus = level + 2
+    is_finesse = "finesse" in traits
+    ability_bonus = dex_mod if is_finesse and dex_mod > str_mod else str_mod
+    agile = "agile" in traits
+    if strike_count <= 0:
+        map_penalty = 0
+    elif strike_count == 1:
+        map_penalty = -4 if agile else -5
+    else:
+        map_penalty = -8 if agile else -10
+    return int(prof_bonus + ability_bonus + map_penalty)
+
+
+def _companion_action_choice_meta(companion) -> list[dict[str, str]]:
+    speed = max(5, int(getattr(companion, "land_speed_feet", 25) or 25))
+    support_note = str(getattr(companion, "support_benefit", "") or "").strip()
+    attacks = list(getattr(companion, "attack_profiles", []) or [])
+    strike_lines: list[str] = []
+    for attack in attacks:
+        label = str(attack.get("label", attack.get("id", "Atak")) or "Atak")
+        damage = str(attack.get("damage", "1d6") or "1d6")
+        damage_type = str(attack.get("damage_type", "normal") or "normal")
+        bonus = _companion_attack_bonus(companion, attack, strike_count=0)
+        avg = _damage_formula_average(damage) + max(0, int(dict(getattr(companion, "ability_mods", {}) or {}).get("str", 0) or 0))
+        strike_lines.append(f"{label}: atak {bonus:+d}, obrażenia {damage}+STR ({damage_type}, średnio ok. {avg}).")
+    strike_desc = " ".join(strike_lines) if strike_lines else "Wykonuje podstawowy atak w zasięgu 5 ft."
+    return [
+        {
+            "raw": "stride",
+            "label": "Ruch",
+            "desc": f"Ruch towarzysza do {speed} ft zgodnie z podświetloną ścieżką.",
+            "category": "movement",
+        },
+        {
+            "raw": "strike",
+            "label": "Atak",
+            "desc": strike_desc,
+            "category": "combat",
+        },
+        {
+            "raw": "support",
+            "label": "Wsparcie",
+            "desc": support_note or "Towarzysz wspiera właściciela do początku jego następnej tury.",
+            "category": "class",
+        },
+        {
+            "raw": "end",
+            "label": "Koniec",
+            "desc": "Zakończ komendę i zachowaj niewydane akcje towarzysza.",
+            "category": "turn",
+        },
+    ]
+
+
 @register_event
 class CommandAnimalCompanionEvent(ActionCostEvent):
     name = "command_animal_companion"
@@ -156,6 +295,8 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
             return EventResult.cancelled(message="Brak runtime zwierzecego towarzysza w stanie walki.")
         companion = getter(owner)
         if companion is None:
+            companion = _recover_companion_from_board(ctx, owner)
+        if companion is None:
             return EventResult.cancelled(message="Zwierzecy towarzysz nie jest ustawiony na planszy.")
 
         if _has_status(owner, "animal_companion_commanded"):
@@ -170,11 +311,13 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
             choices = ["stride", "strike", "support", "end"]
             if support_used:
                 choices = ["stride", "end"]
+            choice_meta = [row for row in _companion_action_choice_meta(companion) if row.get("raw") in choices]
             choice = _prompt_choice(
                 ctx,
                 f"Zwierzecy towarzysz ({getattr(companion, 'name', 'towarzysz')}): wybierz akcje ({actions_left} pozostalo)",
                 choices,
                 source=self.name,
+                choice_meta=choice_meta,
             )
             if choice is None:
                 break
@@ -225,6 +368,17 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
                 pass
 
         summary = "; ".join(action_logs) if action_logs else "Zwierzecy towarzysz wykonuje komende."
+        try:
+            ctx.game.events.safe_emit_action(
+                actor=owner,
+                action_id=self.name,
+                action_tags=self._effective_tags(ctx),
+                summary=summary,
+                companion_id=_actor_id(companion),
+                companion_name=getattr(companion, "name", "Towarzysz"),
+            )
+        except Exception:
+            pass
         return EventResult(success=True, consumed_action=True, message=summary)
 
     def _companion_stride(self, ctx: EventContext, owner, companion) -> tuple[bool, str]:
@@ -385,7 +539,7 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
 
         reach = max(1, int(getattr(companion, "reach_cells", 1) or 1))
         candidates = []
-        for enemy in getattr(ctx.game, "enemies", []) or []:
+        for enemy in _iter_enemy_like_targets(ctx):
             pos = getattr(enemy, "position", None)
             if pos is None:
                 continue
@@ -441,11 +595,25 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
             profile = attacks[0]
         else:
             labels = [str(a.get("label", a.get("id", "attack")) or "attack").strip().lower().replace(" ", "_") for a in attacks]
+            choice_meta = []
+            for attack, label in zip(attacks, labels):
+                damage = str(attack.get("damage", "1d6") or "1d6")
+                damage_type = str(attack.get("damage_type", "normal") or "normal")
+                attack_bonus = _companion_attack_bonus(companion, attack, strike_count=strike_count)
+                choice_meta.append(
+                    {
+                        "raw": label,
+                        "label": str(attack.get("label", label) or label),
+                        "desc": f"Atak {attack_bonus:+d}; obrażenia {damage}+STR ({damage_type}).",
+                        "category": "combat",
+                    }
+                )
             choice = _prompt_choice(
                 ctx,
                 "Zwierzecy towarzysz: wybierz atak",
                 labels,
                 source=self.name,
+                choice_meta=choice_meta,
             )
             profile = attacks[0]
             if choice:

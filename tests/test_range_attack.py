@@ -40,6 +40,10 @@ class FakeConn:
         return None
 
     def scan_board(self, acceptable_responses=None):
+        if isinstance(self.choice, list):
+            if not self.choice:
+                return None
+            return self.choice.pop(0)
         return self.choice
 
     def leds_off(self):
@@ -52,10 +56,20 @@ class FakeUI:
 
     def __init__(self):
         self.info_calls = []
+        self.choice_calls = []
+        self.choice_answers = []
 
     def prompt_info(self, title, *, prompt_long=None, **_kwargs):
         self.info_calls.append({"title": title, "prompt_long": prompt_long})
         return "ok"
+
+    def prompt_choice(self, title, *, choices=None, prompt_long=None, **_kwargs):
+        self.choice_calls.append({"title": title, "choices": list(choices or []), "prompt_long": prompt_long})
+        if self.choice_answers:
+            return self.choice_answers.pop(0)
+        if choices:
+            return choices[0]
+        return None
 
 
 class FakeBoard:
@@ -190,6 +204,49 @@ def test_cover_and_range_penalty_emitted(monkeypatch):
     assert enemy.hp == 8
 
 
+def test_ranged_attack_triggers_projectile_led_animation(monkeypatch):
+    hero = Hero((0, 0))
+    enemy = Enemy((2, 0), hp=8, ac=10)
+    game = FakeGame()
+    game.heroes = [hero]
+    game.enemies = [enemy]
+    game.board.occupants = {hero.position: hero, enemy.position: enemy}
+    game.conn.choice = enemy.position
+
+    rolls = iter([15, 5])
+    monkeypatch.setattr(base_attack_range_event, "prompt_for_roll", lambda *_, **__: next(rolls))
+    calls = []
+    monkeypatch.setattr(
+        base_attack_range_event,
+        "animate_projectile_line",
+        lambda conn, start, end, **_kwargs: calls.append((start, end)) or True,
+    )
+
+    result = dispatch_event("longbow", _ctx(game, hero))
+
+    assert result.success
+    assert calls == [((0, 0), (2, 0))]
+
+
+def test_analyze_shot_uses_pf2e_grid_distance_for_diagonal_range():
+    shooter = Hero((0, 0))
+    target = Enemy((6, 6), ac=12)
+    game = FakeGame()
+    game.heroes = [shooter]
+    game.enemies = [target]
+    game.board.occupants = {
+        shooter.position: shooter,
+        target.position: target,
+    }
+
+    event = attack_range_long_bow.LongBowAttackEvent()
+    analyzed = event._analyze_shot(game, shooter.position, target.position, target=target)
+
+    assert analyzed.get("distance_ft") == 45
+    assert analyzed.get("increments") == 1
+    assert analyzed.get("range_penalty") == 0
+
+
 def test_ranged_attack_prompts_targeting_legend_and_shot_analysis(monkeypatch):
     class ShortBow(base_attack_range_event.BaseRangeAttackEvent):
         name = "attack_short_prompt_test"
@@ -215,15 +272,44 @@ def test_ranged_attack_prompts_targeting_legend_and_shot_analysis(monkeypatch):
     assert result.success
     titles = [call["title"] for call in game.ui.info_calls]
     assert "Atak dystansowy: wybór celu" in titles
-    assert "Atak dystansowy: analiza strzału" in titles
     legend_prompt = next(call["prompt_long"] for call in game.ui.info_calls if call["title"] == "Atak dystansowy: wybór celu")
     assert "legalne cele" in str(legend_prompt or "").lower()
     assert "minor cover" in str(legend_prompt or "").lower()
     assert "turkusowe pola" in str(legend_prompt or "").lower()
     assert "standard cover" in str(legend_prompt or "").lower()
-    analysis_prompt = next(call["prompt_long"] for call in game.ui.info_calls if call["title"] == "Atak dystansowy: analiza strzału")
+    choice_titles = [call["title"] for call in game.ui.choice_calls]
+    assert "Atak dystansowy: analiza strzału" in choice_titles
+    analysis_prompt = next(call["prompt_long"] for call in game.ui.choice_calls if call["title"] == "Atak dystansowy: analiza strzału")
     assert "kara za zasięg" in str(analysis_prompt or "").lower()
     assert "typ osłony" in str(analysis_prompt or "").lower()
+
+
+def test_ranged_attack_analysis_can_retarget_before_roll(monkeypatch):
+    hero = Hero((0, 0))
+    enemy_a = Enemy((2, 0), hp=8, ac=10)
+    enemy_b = Enemy((3, 0), hp=8, ac=10)
+    game = FakeGame()
+    game.ui = FakeUI()
+    game.ui.choice_answers = ["Wybierz inny cel", "Potwierdź strzał"]
+    game.heroes = [hero]
+    game.enemies = [enemy_a, enemy_b]
+    game.board.occupants = {
+        hero.position: hero,
+        enemy_a.position: enemy_a,
+        enemy_b.position: enemy_b,
+    }
+    game.conn.choice = [enemy_a.position, enemy_b.position]
+
+    rolls = iter([15, 5])
+    monkeypatch.setattr(base_attack_range_event, "prompt_for_roll", lambda *_, **__: next(rolls))
+
+    result = dispatch_event("longbow", _ctx(game, hero))
+
+    assert result.success is True
+    assert (result.data or {}).get("target") is enemy_b
+    assert enemy_a.hp == 8
+    assert enemy_b.hp < 8
+    assert [call["title"] for call in game.ui.choice_calls].count("Atak dystansowy: analiza strzału") == 2
 
 
 def test_ranged_attack_minor_cover_led_differs_from_move_green(monkeypatch):

@@ -81,6 +81,8 @@ let lastLoggedRound = null;
 let lastLoggedActiveActorId = null;
 let creationPreviewHeroId = null;
 let selectedHeroId = null;
+let passiveCommunicationState = null;
+let pendingPassiveCommunication = null;
 const CREATION_PREVIEW_FALLBACK_ID = "__creation_preview__";
 let menuNumpadContext = null;
 let lastCommunicationKey = null;
@@ -1023,6 +1025,50 @@ function applyActionCommunication(comm) {
     }
 }
 
+function _isStickyPassiveCommunication(comm) {
+    const semantic = String(comm?.semanticType || "").toLowerCase();
+    const priority = String(comm?.priority || "").toLowerCase();
+    return semantic === "result" || priority === "result" || semantic === "status_update";
+}
+
+function showPassiveCommunication(payload, fallbackTitle = "Mistrz gry") {
+    const comm = communicationOf(payload, "log");
+    pendingPassiveCommunication = null;
+    passiveCommunicationState = {
+        payload,
+        sticky: _isStickyPassiveCommunication(comm),
+        dedupeKey: comm.dedupeKey || "",
+    };
+    actionTitle.textContent = comm.title || payload?.title || fallbackTitle;
+    setMarkdownContent(actionText, payload?.subtitle || comm.summary || "", "action-text-md");
+    const body = comm.bodyMarkdown || payload?.prompt_long || payload?.message || "";
+    setMarkdownContent(actionPrompt, body, "action-prompt-md");
+    actionPrompt.classList.toggle("hidden", !body);
+    applyActionCommunication(comm);
+    actionText.classList.remove("hidden");
+    actionForm.classList.add("hidden");
+    actionChoices.innerHTML = "";
+    actionDesc.textContent = "";
+    clearMods();
+    actionKind.textContent = comm.semanticType || "";
+    actionKind.classList.toggle("hidden", !comm.semanticType);
+    actionSource.textContent = comm.priority || "";
+    actionSource.classList.toggle("hidden", !comm.priority);
+    setIllustration(payload?.image || activeHeroImage() || PLACEHOLDER_IMAGE);
+}
+
+function clearPassiveCommunicationState() {
+    passiveCommunicationState = null;
+}
+
+function flushPendingPassiveCommunication() {
+    if (activePrompt || !pendingPassiveCommunication) return false;
+    const next = pendingPassiveCommunication;
+    pendingPassiveCommunication = null;
+    showPassiveCommunication(next.payload, next.fallbackTitle || "Mistrz gry");
+    return true;
+}
+
 function actorNameById(id) {
     if (!id) return "-";
     const fromInit = initiativeState.order.find((entry) => String(entry.id) === String(id));
@@ -1452,10 +1498,12 @@ function handleEvent(event) {
         return;
     }
     if (type === "idle_hint") {
-        if (!activePrompt) {
+        const stickyVisible = Boolean(passiveCommunicationState?.sticky);
+        if (!activePrompt && !stickyVisible) {
             actionTitle.textContent = payload.title || "Czekam na działania...";
             setMarkdownContent(actionText, payload.text || "", "action-text-md");
             resetActionCommunication();
+            clearPassiveCommunicationState();
         }
         return;
     }
@@ -1552,11 +1600,25 @@ function handleEvent(event) {
         return;
     }
     if (type === "narration") {
-        addLogEntry(payload.message || "Narrator", meta, "info", "Narrator");
+        const comm = communicationOf(payload, "log");
+        const variant =
+            comm.priority === "warning" ? "warning" : comm.priority === "error" ? "error" : "info";
+        addLogEntry(payload.message || comm.summary || "Narrator", meta, variant, comm.title || "Narrator", payload.image || "", {
+            communication: payload.communication || null,
+        });
+        if (!activePrompt) {
+            showPassiveCommunication(payload, comm.title || "Mistrz gry");
+        } else {
+            pendingPassiveCommunication = {
+                payload,
+                fallbackTitle: comm.title || "Mistrz gry",
+            };
+        }
         return;
     }
     if (type === "action") {
         if (!activePrompt) {
+            clearPassiveCommunicationState();
             const actor = payload.actor?.name || payload.actor?.id || "Aktor";
             const actionId = str(payload.action_id || "akcja", "akcja").replace(/_/g, " ");
             const target = payload.target?.name || payload.target?.id;
@@ -2086,6 +2148,8 @@ document.addEventListener("keydown", (evt) => {
 });
 
 function openPrompt(prompt) {
+    pendingPassiveCommunication = null;
+    clearPassiveCommunicationState();
     activePrompt = prompt;
     renderedPrompts.add(prompt.id);
     layoutMode = prompt.layout || prompt.kind || "info";
@@ -2374,6 +2438,7 @@ function closePrompt() {
     renderHeroes();
     updateSessionSummary();
     processPromptQueue();
+    flushPendingPassiveCommunication();
 }
 
 function processPromptQueue() {

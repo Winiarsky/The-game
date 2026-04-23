@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 
+from board import consts
 from bonuses import BonusEffect, BonusType
 from combat import refresh_flanking_statuses
 from combat.damage_utils import remove_defeated_enemy
@@ -62,6 +63,46 @@ def _hunted_target(ctx: EventContext, actor):
     for item in list(getattr(ctx.game, "enemies", []) or []) + list(getattr(ctx.game, "heroes", []) or []):
         if _actor_id(item) == target_id and getattr(item, "position", None) is not None:
             return item
+    return None
+
+
+def _prompt_info(ctx: EventContext, title: str, text: str, *, source: str) -> None:
+    ui = getattr(ctx.game, "ui", None)
+    if ui is not None and hasattr(ui, "prompt_info"):
+        try:
+            ui.prompt_info(title, prompt_long=text, source=source)
+            return
+        except Exception:
+            pass
+    try:
+        ctx.game.ui_log(text)
+    except Exception:
+        pass
+
+
+def _prompt_choice(
+    ctx: EventContext,
+    title: str,
+    *,
+    choices: list[str],
+    source: str,
+    prompt_long: str = "",
+    choice_meta: list[dict] | None = None,
+) -> str | None:
+    ui = getattr(ctx.game, "ui", None)
+    if ui is not None and hasattr(ui, "prompt_choice"):
+        try:
+            answer = ui.prompt_choice(
+                title,
+                choices=choices,
+                source=source,
+                prompt_long=prompt_long,
+                choice_meta=choice_meta,
+                layout="menu_numpad",
+            )
+            return str(answer).strip() if answer is not None else None
+        except Exception:
+            return None
     return None
 
 
@@ -376,6 +417,34 @@ class HuntPreyEvent(ActionCostEvent):
             target, target_pos = candidates[0]
         else:
             positions = [pos for _enemy, pos in candidates]
+            selected = None
+            choice_meta = [
+                {
+                    "raw": _actor_id(enemy),
+                    "label": getattr(enemy, "name", f"Cel {idx + 1}"),
+                    "desc": (
+                        f"Pozycja {tuple(pos)} · AC {int(getattr(enemy, 'ac', 0) or 0)} · "
+                        f"HP {int(getattr(enemy, 'hp', 0) or 0)}"
+                    ),
+                    "category": "combat",
+                }
+                for idx, (enemy, pos) in enumerate(candidates)
+            ]
+            _prompt_info(
+                ctx,
+                "Wyznacz ofiarę",
+                (
+                    "Wskaż na planszy przeciwnika, którego oznaczasz jako hunted prey.\n"
+                    "Ten wybór nie odnawia się co turę. Trwa, dopóki nie oznaczysz nowej ofiary albo obecny cel przestanie być ważny."
+                ),
+                source=self.name,
+            )
+            ui_idle_hint = getattr(ctx.game, "ui_idle_hint", None)
+            if callable(ui_idle_hint):
+                ui_idle_hint(
+                    "Wyznacz ofiarę",
+                    "Kliknij podświetlonego przeciwnika na planszy.",
+                )
             try:
                 ctx.game.conn.set_leds(positions, [0, 120, 20])
                 selected = ctx.game.conn.scan_board(positions)
@@ -384,6 +453,21 @@ class HuntPreyEvent(ActionCostEvent):
                     ctx.game.conn.leds_off()
                 except Exception:
                     pass
+            if selected is None:
+                fallback = _prompt_choice(
+                    ctx,
+                    "Wyznacz ofiarę",
+                    choices=[entry["label"] for entry in choice_meta],
+                    source=self.name,
+                    prompt_long="Plansza nie zwróciła wyboru. Wskaż cel z listy.",
+                    choice_meta=choice_meta,
+                )
+                normalized = str(fallback or "").strip().lower()
+                for enemy, pos in candidates:
+                    if normalized == _actor_id(enemy).lower() or normalized == str(getattr(enemy, "name", "")).strip().lower():
+                        target = enemy
+                        target_pos = pos
+                        break
             for enemy, pos in candidates:
                 if pos == selected:
                     target = enemy
@@ -442,6 +526,18 @@ class HuntPreyEvent(ActionCostEvent):
                         f"Monster Hunter: Recall Knowledge ({skill_id}, DC {dc}) = {outcome or 'brak'}."
                     )
 
+        try:
+            ctx.game.events.safe_emit_action(
+                actor=actor,
+                action_id=self.name,
+                action_tags=self._effective_tags(ctx),
+                target=target,
+                target_pos=target_pos,
+                summary=" ".join(messages).strip(),
+            )
+        except Exception:
+            pass
+
         return EventResult(
             success=True,
             consumed_action=True,
@@ -472,7 +568,9 @@ class HuntedShotEvent(ActionCostEvent):
             return EventResult.cancelled(message="Strzal na cel: wymaga featu Strzal na cel.")
         prey = _hunted_target(ctx, actor)
         if prey is None:
-            return EventResult.cancelled(message="Strzal na cel: brak aktywnej oznaczonej ofiary.")
+            return EventResult.cancelled(
+                message="Strzal na cel: brak aktywnej oznaczonej ofiary. Jesli poprzedni cel padl, uzyj ponownie Wyznacz ofiare."
+            )
 
         ranged_weapons = _equipped_ranged_weapons(actor)
         if not ranged_weapons:

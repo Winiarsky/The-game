@@ -17,6 +17,7 @@ from GameObjects.items.inventory import ensure_actor_inventory
 from GameObjects.items.weapon import normalize_weapon_id
 from GameObjects.events.attack.attack_base import check_concealed
 from GameObjects.events.attack.base_attack_range_event import BaseRangeAttackEvent
+from led_fx import animate_projectile_line
 
 from ..base import ActionCostEvent, EventContext, EventResult, mapping_setdefault_actor
 from ..registry import register_event
@@ -28,6 +29,20 @@ _DAMAGE_RE = re.compile(r"(?P<count>\d+)[kd](?P<sides>\d+)", re.IGNORECASE)
 
 class _EnemyRangeAnalyzer(BaseRangeAttackEvent):
     pass
+
+
+def _play_enemy_projectile_animation(game, start: tuple[int, int] | None, end: tuple[int, int] | None) -> None:
+    try:
+        animate_projectile_line(
+            getattr(game, "conn", None),
+            start,
+            end,
+            trail_color=consts.RANGED_PROJECTILE_TRAIL_RGB,
+            head_color=consts.RANGED_PROJECTILE_HEAD_RGB,
+            impact_color=consts.RANGED_PROJECTILE_IMPACT_RGB,
+        )
+    except Exception:
+        logger.debug("Nie udało się odtworzyć animacji pocisku przeciwnika.", exc_info=True)
 
 
 def _weapon_traits(weapon) -> set[str]:
@@ -422,6 +437,8 @@ class EnemyStrikeEvent(ActionCostEvent):
                     return EventResult.cancelled(message="Strike: cel jest poza zasięgiem broni.")
 
             if not check_concealed(ctx, target):
+                if ranged:
+                    _play_enemy_projectile_animation(ctx.game, actor_pos, target_pos)
                 _bump_attack_state(ctx, actor, weapon=weapon)
                 return EventResult(
                     success=True,
@@ -447,6 +464,8 @@ class EnemyStrikeEvent(ActionCostEvent):
             cover_bonus = _EnemyRangeAnalyzer.COVER_AC.get(cover_type, 0) if ranged else 0
             target_ac = int(effective_ac(target) or 10) + int(cover_bonus or 0)
             outcome = resolve_outcome(total_attack, target_ac, natural_shift=natural_shift_from_roll(natural_roll))
+            if ranged:
+                _play_enemy_projectile_animation(ctx.game, actor_pos, target_pos)
             roll_components = [
                 {"label": "k20", "value": natural_roll, "description": "Naturalny wynik rzutu."},
                 {"label": "Bonus ataku", "value": attack_bonus, "description": "Premia ataku przeciwnika."},

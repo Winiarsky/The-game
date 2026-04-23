@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from board import consts
+from led_fx import animate_area_wave
 from statuses import Status
 
 from .base_elixir_event import BaseElixirEvent, _minutes
@@ -66,6 +68,7 @@ class SmokestickEvent(BaseElixirEvent):
 
         affected = 0
         seen: set[object] = set()
+        cloud_positions: list[tuple[int, int]] = []
         if board is not None and actor_pos is not None:
             positions = [actor_pos]
             if radius >= 1:
@@ -73,6 +76,7 @@ class SmokestickEvent(BaseElixirEvent):
                     positions.extend(list(board.get_neighbors(actor_pos, include_position=False, diagonal=True)))
                 except Exception:
                     pass
+            cloud_positions = [tuple(pos) for pos in positions]
             for pos in positions:
                 try:
                     occ = board.occupant_at(pos)
@@ -88,10 +92,48 @@ class SmokestickEvent(BaseElixirEvent):
             affected = 1
 
         try:
+            animate_area_wave(
+                getattr(ctx.game, "conn", None),
+                actor_pos,
+                cloud_positions,
+                palette=getattr(consts, "SMOKE_CLOUD_PALETTE", None),
+            )
+        except Exception:
+            pass
+
+        try:
             ctx.game.ui_log(
                 f"Smokestick ({tier}): zaslona dymna aktywna przez {duration} rund. "
                 f"Concealed na {affected} obiektach."
             )
         except Exception:
             pass
-
+        ui = getattr(ctx.game, "ui", None)
+        if ui is not None and hasattr(ui, "prompt_info"):
+            try:
+                ui.prompt_info(
+                    "Dymna fiolka",
+                    prompt_long=(
+                        f"Przy tobie powstaje zasłona dymna w obszarze 3x3 na {duration} rund.\n"
+                        "W tej implementacji istoty stojące w chmurze dostają status Concealed. "
+                        "Ataki przeciw takim celom wymagają flat checku przeciw concealment."
+                    ),
+                    source=self.name,
+                )
+            except Exception:
+                pass
+        try:
+            ctx.game.events.safe_emit_action(
+                actor=actor,
+                action_id=self.name,
+                action_tags=self.default_tags,
+                summary=(
+                    f"Dymna fiolka: chmura 3x3 przy {getattr(actor, 'name', 'bohaterze')} "
+                    f"na {duration} rund, concealed na {affected} obiektach."
+                ),
+                duration_rounds=duration,
+                affected_count=affected,
+                area_positions=cloud_positions,
+            )
+        except Exception:
+            pass

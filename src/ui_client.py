@@ -116,6 +116,75 @@ class UIClient:
                 logger.warning("PLAYER_UI_MAX_WAIT musi być liczbą (sekundy); ignoruję wartość: %s", env_wait)
         self._ensure_session_id()
 
+    def _extract_session_id_from_payload(self, payload: Any) -> Optional[str]:
+        if not isinstance(payload, dict):
+            return None
+        current = payload.get("current_session_id")
+        if current:
+            session_id = str(current).strip()
+            if session_id:
+                return session_id
+        session = payload.get("session")
+        if isinstance(session, dict):
+            current = session.get("id") or session.get("session_id")
+            if current:
+                session_id = str(current).strip()
+                if session_id:
+                    return session_id
+        current = payload.get("session_id")
+        if current:
+            session_id = str(current).strip()
+            if session_id:
+                return session_id
+        return None
+
+    def _invalidate_session_id(self) -> None:
+        self.session_id = None
+
+    def _refresh_session_id_from_response(self, response: Any | None = None) -> Optional[str]:
+        session_id = None
+        if response is not None:
+            try:
+                session_id = self._extract_session_id_from_payload(response.json())
+            except Exception:
+                session_id = None
+        if session_id:
+            self.session_id = session_id
+            return session_id
+        self._invalidate_session_id()
+        return self._ensure_session_id()
+
+    def _default_prompt_communication(
+        self,
+        title: str,
+        *,
+        prompt_long: str | None = None,
+        source: str | None = None,
+        kind: str = "info",
+        choices: list[str] | None = None,
+    ) -> dict[str, Any] | None:
+        text = str(prompt_long or title or "").strip()
+        if not text:
+            return None
+        try:
+            from GameObjects.events.base import build_prompt_communication, format_default_prompt_body
+        except Exception:
+            return None
+        body, next_hint = format_default_prompt_body(text, kind=kind)
+        if not body:
+            return None
+        dedupe_key = ""
+        if source:
+            dedupe_key = f"ui_prompt:{kind}:{str(source).strip().lower()}"
+        return build_prompt_communication(
+            body,
+            source=str(source or f"ui:{kind}"),
+            dedupe_key=dedupe_key or None,
+            next_hint=next_hint,
+            blocking=True,
+            channel="prompt",
+        )
+
     # --- Public API ---
 
     def send_event(self, event_type: str, payload: dict[str, Any]) -> bool:
@@ -123,23 +192,30 @@ class UIClient:
         if not self.enabled:
             return False
         body = {"type": event_type, "payload": _json_safe(payload)}
-        session_id = self._ensure_session_id()
-        if session_id:
-            body["session_id"] = session_id
-        try:
-            resp = requests.post(
-                f"{self.base_url}/api/events",
-                json=body,
-                timeout=self.request_timeout,
-            )
-            if resp.status_code == 409:
-                logger.warning("Sesja UI dla eventu %s jest nieaktualna; pomijam wysyłkę.", event_type)
+        for attempt in range(2):
+            request_body = dict(body)
+            session_id = self._ensure_session_id()
+            if session_id:
+                request_body["session_id"] = session_id
+            try:
+                resp = requests.post(
+                    f"{self.base_url}/api/events",
+                    json=request_body,
+                    timeout=self.request_timeout,
+                )
+                if resp.status_code == 409:
+                    refreshed = self._refresh_session_id_from_response(resp)
+                    if attempt == 0 and refreshed:
+                        logger.info("Odświeżam sesję UI po 409 dla eventu %s.", event_type)
+                        continue
+                    logger.warning("Sesja UI dla eventu %s jest nieaktualna; pomijam wysyłkę.", event_type)
+                    return False
+                resp.raise_for_status()
+                return True
+            except Exception as exc:  # pragma: no cover - tylko logujemy
+                logger.warning("Nie udało się wysłać eventu do UI: %s", exc)
                 return False
-            resp.raise_for_status()
-            return True
-        except Exception as exc:  # pragma: no cover - tylko logujemy
-            logger.warning("Nie udało się wysłać eventu do UI: %s", exc)
-            return False
+        return False
 
     def prompt_roll(self, prompt: str, source: str | None = None, **extra) -> Optional[Any]:
         """Wyślij prompt na rzut; fallback CLI tylko w trybie debug."""
@@ -173,6 +249,17 @@ class UIClient:
     ) -> Optional[str]:
         """Wyślij prompt tekstowy z opcjonalną listą wyboru; fallback CLI tylko w debug."""
         if self.enabled:
+            if "communication" not in extra:
+                communication = self._default_prompt_communication(
+                    prompt,
+                    prompt_long=extra.get("prompt_long"),
+                    source=source,
+                    kind="choice",
+                    choices=choices,
+                )
+                if communication:
+                    extra = dict(extra)
+                    extra["communication"] = communication
             prompt_id = self._create_prompt(prompt, kind="choice", source=source, choices=choices, **extra)
             if prompt_id is not None:
                 ans = self._wait_for_text_answer(prompt_id, max_wait=self.max_wait)
@@ -258,6 +345,16 @@ class UIClient:
     ) -> Optional[str]:
         """Pokaż informację i poczekaj na potwierdzenie (Enter)."""
         if self.enabled:
+            if "communication" not in extra:
+                communication = self._default_prompt_communication(
+                    title,
+                    prompt_long=prompt_long,
+                    source=source,
+                    kind="info",
+                )
+                if communication:
+                    extra = dict(extra)
+                    extra["communication"] = communication
             prompt_id = self._create_prompt(
                 title,
                 kind="info",
@@ -290,31 +387,38 @@ class UIClient:
         choices: list[str] | None = None,
         **extra,
     ) -> Optional[str]:
-        session_id = self._ensure_session_id()
-        payload = {
+        base_payload = {
             "prompt": prompt,
             "kind": kind,
             "source": source,
             "choices": choices or None,
             **extra,
         }
-        if session_id:
-            payload["session_id"] = session_id
-        try:
-            resp = requests.post(
-                f"{self.base_url}/api/prompts",
-                json=payload,
-                timeout=self.request_timeout,
-            )
-            if resp.status_code == 409:
-                logger.warning("Sesja UI dla promptu '%s' jest nieaktualna; nie tworzę promptu.", prompt)
+        for attempt in range(2):
+            payload = dict(base_payload)
+            session_id = self._ensure_session_id()
+            if session_id:
+                payload["session_id"] = session_id
+            try:
+                resp = requests.post(
+                    f"{self.base_url}/api/prompts",
+                    json=payload,
+                    timeout=self.request_timeout,
+                )
+                if resp.status_code == 409:
+                    refreshed = self._refresh_session_id_from_response(resp)
+                    if attempt == 0 and refreshed:
+                        logger.info("Odświeżam sesję UI po 409 dla promptu '%s'.", prompt)
+                        continue
+                    logger.warning("Sesja UI dla promptu '%s' jest nieaktualna; nie tworzę promptu.", prompt)
+                    return None
+                resp.raise_for_status()
+                data = resp.json()
+                return str(data.get("id"))
+            except Exception as exc:  # pragma: no cover - fallback na CLI
+                logger.warning("Nie udało się utworzyć promptu w UI: %s", exc)
                 return None
-            resp.raise_for_status()
-            data = resp.json()
-            return str(data.get("id"))
-        except Exception as exc:  # pragma: no cover - fallback na CLI
-            logger.warning("Nie udało się utworzyć promptu w UI: %s", exc)
-            return None
+        return None
 
     # --- CLI fallbacks ---
 

@@ -142,13 +142,17 @@ class ActionEventBus:
                     ui_event("action", safe_event)
                 except Exception:  # pragma: no cover - logowanie poniżej
                     logger.debug("Nie udało się wysłać eventu akcji do UI", exc_info=True)
+            ui_narration = getattr(self.game, "ui_narration", None)
+            if callable(ui_narration):
                 try:
-                    ui_event(
-                        "narration",
-                        {
-                            "message": narrate_action_event(dict(event)),
-                            "action_id": event.get("action_id"),
-                        },
+                    ui_narration(
+                        narrate_action_event(dict(event)),
+                        summary="Co się dzieje",
+                        source=f"action:{event.get('action_id')}",
+                        priority="info",
+                        semantic_type="status_update",
+                        dedupe_key=f"action-start:{event.get('event_uid')}",
+                        next_hint="Po zakończeniu tej akcji pojawi się jej efekt.",
                     )
                 except Exception:
                     logger.debug("Nie udało się wysłać narracji akcji do UI", exc_info=True)

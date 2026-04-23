@@ -12,6 +12,7 @@ if str(SRC) not in sys.path:
 from GameObjects.events.base import EventContext, EventResult
 from GameObjects.events.magic.magic_utils import pick_target_in_range
 from GameObjects.events.magic.base_attack_magic_event import BaseMagicAttackEvent
+from ui_client import UIClient
 
 
 class FakeConn:
@@ -87,6 +88,48 @@ def test_pick_target_in_range_filters_by_kind():
     assert conn.leds_set == [(2, 0)]
 
 
+def test_pick_target_in_range_emits_prompt_narration_when_available():
+    conn = FakeConn(responses=[(1, 0)])
+    calls = []
+    game = SimpleNamespace(
+        conn=conn,
+        ui_narration=lambda message, **kwargs: calls.append((message, kwargs)),
+    )
+    ctx = EventContext(game=game)
+    enemy = object()
+
+    target, pos = pick_target_in_range(
+        ctx,
+        (0, 0),
+        [(enemy, (1, 0), "enemy")],
+        max_range_feet=15,
+        allowed_kinds=("enemy",),
+    )
+
+    assert target is enemy
+    assert pos == (1, 0)
+    assert calls
+    assert "Wybierz podswietlony cel" in calls[0][0]
+    assert calls[0][1]["semantic_type"] == "required_action"
+
+
+def test_ui_client_builds_default_prompt_communication():
+    ui = UIClient(base_url=None)
+
+    communication = ui._default_prompt_communication(
+        "Test prompt",
+        prompt_long="Wybierz akcje testowa.",
+        source="unit_test",
+        kind="choice",
+    )
+
+    assert isinstance(communication, dict)
+    assert communication["title"] == "Mistrz gry"
+    assert communication["channel"] == "prompt"
+    assert communication["semantic_type"] == "required_action"
+    assert "Wybierz opcje i potwierdz wybor." in communication["body_markdown"]
+
+
 class _DummyMagicAttack(BaseMagicAttackEvent):
     target_kind = "enemy"
     range_feet = 15
@@ -131,6 +174,36 @@ def test_base_magic_attack_event_hits_on_roll(monkeypatch):
     res = event.execute(ctx)
     assert res.success is True
     assert res.message == "hit"
+
+
+def test_base_magic_attack_event_triggers_projectile_led_animation(monkeypatch):
+    from GameObjects.events.magic import base_attack_magic_event as bam
+    monkeypatch.setattr(bam, "prompt_for_roll", lambda *_, **__: 15)
+
+    hero = SimpleNamespace(position=(0, 0))
+    enemy = SimpleNamespace(position=(1, 0), ac=15, bonuses=[])
+    conn = FakeConn(responses=[(1, 0)])
+    game = SimpleNamespace(conn=conn, heroes=[hero], enemies=[enemy])
+    ctx = EventContext(game=game, actor=hero)
+    calls = []
+    monkeypatch.setattr(
+        bam,
+        "animate_projectile_line",
+        lambda conn, start, end, **_kwargs: calls.append((start, end)) or True,
+    )
+
+    class HitSpell(BaseMagicAttackEvent):
+        target_kind = "enemy"
+        range_feet = 30
+
+        def _resolve_on_target(self, target, pos, ctx, *, critical: bool = False):
+            return EventResult(success=True, consumed_action=True, message="hit")
+
+    event = HitSpell()
+    res = event.execute(ctx)
+
+    assert res.success is True
+    assert calls == [((0, 0), (1, 0))]
 
 
 def test_base_magic_attack_event_miss_does_not_resolve(monkeypatch):

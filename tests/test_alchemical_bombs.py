@@ -268,6 +268,45 @@ def test_alchemists_fire_adds_persistent_damage(monkeypatch):
     assert any(s.id == PERSISTENT_DAMAGE_STATUS.id for s in target.statuses)
 
 
+def test_bomb_triggers_projectile_and_blast_led_fx(monkeypatch):
+    event = AlchemistsFireEvent()
+    monkeypatch.setattr(event, "_prompt_level", lambda: "lesser")
+    monkeypatch.setattr(event, "_prompt_damage", lambda *_args, **_kwargs: 6)
+    monkeypatch.setattr("GameObjects.events.bombs.base_alchemical_bomb_event.prompt_for_roll", lambda *_, **__: 15)
+    _dummy_ui(monkeypatch)
+
+    projectile_calls = []
+    burst_calls = []
+    monkeypatch.setattr(
+        "GameObjects.events.bombs.base_alchemical_bomb_event.animate_projectile_line",
+        lambda conn, start, end, **_kwargs: projectile_calls.append((start, end)) or True,
+    )
+    monkeypatch.setattr(
+        "GameObjects.events.bombs.base_alchemical_bomb_event.animate_area_wave",
+        lambda conn, origin, area_positions, **_kwargs: burst_calls.append((origin, list(area_positions))) or True,
+    )
+
+    hero = DummyHero((0, 0), object_id="hero-1")
+    _give_alchemical_item(hero, event.name)
+    target = DummyEnemy((1, 0), object_id="enemy-1")
+    game = SimpleNamespace(
+        conn=FakeConn(responses=[(1, 0)]),
+        board=BoardStub(),
+        heroes=[hero],
+        enemies=[target],
+        ui_log=lambda _msg=None: None,
+    )
+    ctx = EventContext(game=game, actor=hero)
+
+    res = event.execute(ctx)
+
+    assert res.success
+    assert projectile_calls == [((0, 0), (1, 0))]
+    assert burst_calls
+    assert burst_calls[0][0] == (1, 0)
+    assert (1, 0) in set(burst_calls[0][1])
+
+
 def test_alchemists_fire_burn_it_increases_persistent(monkeypatch):
     event = AlchemistsFireEvent()
     monkeypatch.setattr(event, "_prompt_level", lambda: "lesser")

@@ -119,16 +119,6 @@ class EncounterSetupState(Start):
             unique.append(normalized)
         return unique
 
-
-def _wall_endpoint_colors(positions: list[tuple[int, int]] | tuple[tuple[int, int], ...]) -> list[list[int]]:
-    colors: list[list[int]] = []
-    for col, row in positions:
-        if (int(col) + int(row)) % 2 == 0:
-            colors.append(list(consts.WALL_ENDPOINT_A_RGB))
-        else:
-            colors.append(list(consts.WALL_ENDPOINT_B_RGB))
-    return colors
-
     def _setup_batches(self):
         batches = getattr(self.game, "encounter_setup_plan", None) or []
         run_setup_batches(self.game, batches)
@@ -138,3 +128,13 @@ def _wall_endpoint_colors(positions: list[tuple[int, int]] | tuple[tuple[int, in
         self.game.ui_log("Start setupu proceduralnego encounteru.")
         self._setup_batches()
         return self.set_heroes_starting_positions()
+
+
+def _wall_endpoint_colors(positions: list[tuple[int, int]] | tuple[tuple[int, int], ...]) -> list[list[int]]:
+    colors: list[list[int]] = []
+    for col, row in positions:
+        if (int(col) + int(row)) % 2 == 0:
+            colors.append(list(consts.WALL_ENDPOINT_A_RGB))
+        else:
+            colors.append(list(consts.WALL_ENDPOINT_B_RGB))
+    return colors

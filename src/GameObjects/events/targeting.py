@@ -4,6 +4,7 @@ import math
 
 from board import consts
 from combat.stealth_runtime import has_status_id
+from .base import emit_prompt_narration, format_board_selection_message
 
 
 def _has_status(target, status_id: str) -> bool:
@@ -114,6 +115,18 @@ def pick_target_or_guess_square(
 
     if not valid:
         return {"kind": "cancel"}
+
+    emit_prompt_narration(
+        ctx.game,
+        format_board_selection_message(
+            "podswietlony cel albo pole do zgadniecia",
+            max_range_feet=max_range_feet,
+            alternative="Jesli przeciwnik jest niewykryty, mozesz wskazac jego pole na chybil trafil",
+        ),
+        source="targeting:pick_target_or_guess",
+        dedupe_key="targeting:pick_target_or_guess:start",
+        next_hint="Kliknij wybrany cel albo pole do zgadniecia na planszy.",
+    )
 
     visible: list[tuple[object, tuple[int, int], str]] = []
     undetected: list[tuple[object, tuple[int, int], str]] = []

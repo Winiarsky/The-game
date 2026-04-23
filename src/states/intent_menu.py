@@ -455,6 +455,66 @@ def _event_desc(event_name: str, event_cls: type | None) -> str:
     return _generic_event_desc(event_name, event_cls)
 
 
+def _companion_command_desc(actor: Any, event_cls: type | None) -> str:
+    base = _event_desc("command_animal_companion", event_cls)
+    companion_type = "towarzysz"
+    support_note = ""
+    strike_lines: list[str] = []
+    if actor is not None:
+        getter = getattr(actor, "get_status_data", None)
+        if callable(getter):
+            try:
+                companion_type = str(getter("animal_companion", "animal_companion_type", "") or "").strip().lower() or companion_type
+            except Exception:
+                pass
+        try:
+            from GameObjects.companions import companion_type_data
+
+            data = dict(companion_type_data(companion_type) or {})
+            support_note = str(data.get("support_benefit", "") or "").strip()
+            for attack in list(data.get("attacks", []) or []):
+                label = str(attack.get("label", attack.get("id", "Atak")) or "Atak")
+                damage = str(attack.get("damage", "1d6") or "1d6")
+                damage_type = str(attack.get("damage_type", "normal") or "normal")
+                strike_lines.append(f"{label}: {damage} ({damage_type}).")
+        except Exception:
+            pass
+    extras = []
+    if strike_lines:
+        extras.append("Ataki towarzysza: " + " ".join(strike_lines))
+    if support_note:
+        extras.append(f"Support: {support_note}")
+    if extras:
+        return f"{base}\n- Towarzysz: {companion_type.title()}.\n- " + "\n- ".join(extras)
+    return base
+
+
+def _hunt_prey_desc(event_cls: type | None) -> str:
+    base = _event_desc("hunt_prey", event_cls)
+    extra = (
+        "Oznaczenie nie odnawia się co turę. Trwa, dopóki nie wyznaczysz nowej ofiary "
+        "albo bieżący cel nie przestanie być ważny."
+    )
+    return f"{base}\n- {extra}".strip()
+
+
+def _hunted_shot_desc(event_cls: type | None) -> str:
+    base = _event_desc("hunted_shot", event_cls)
+    extra = "Wymaga wcześniej oznaczonej ofiary. Jeśli poprzedni cel zginął, najpierw użyj Wyznacz ofiarę."
+    return f"{base}\n- {extra}".strip()
+
+
+def _contextual_event_desc(event_name: str, event_cls: type | None, actor: Any | None) -> str:
+    key = _normalize(event_name)
+    if key == "command_animal_companion":
+        return _companion_command_desc(actor, event_cls)
+    if key == "hunt_prey":
+        return _hunt_prey_desc(event_cls)
+    if key == "hunted_shot":
+        return _hunted_shot_desc(event_cls)
+    return _event_desc(event_name, event_cls)
+
+
 def _actor_has_status(actor: Any, status_id: str) -> bool:
     if actor is None:
         return False
@@ -1222,7 +1282,13 @@ def build_intent_options(
     if "interaction" in direct:
         _push("interact", "Interakcja", "Interakcja z obiektem na planszy.", category="movement", icon="⊕")
     if "seek" in direct:
-        _push("seek", "Szukaj", "Rozglądanie i wykrywanie ukrytych elementów.", category="movement", icon="◎")
+        _push(
+            "seek",
+            "Szukaj",
+            "Przeszukaj obszar do 30 ft gridowo; UI podswietla pola objete akcja i nie przechodzi przez sciany.",
+            category="movement",
+            icon="◎",
+        )
     if "stealth" in direct:
         if _actor_has_status(actor, "stealth"):
             _push(
@@ -1256,7 +1322,7 @@ def build_intent_options(
             _push(
                 event_name,
                 _labelize(event_name),
-                _event_desc(event_name, cls),
+                _contextual_event_desc(event_name, cls, actor),
                 category=category,
                 icon=icon,
             )

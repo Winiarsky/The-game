@@ -195,9 +195,15 @@ class _SimulatorBackend:
     def __init__(self, base_url: str) -> None:
         self.base_url = str(base_url).rstrip("/")
 
-    def scan_board(self, acceptable_responses: list[tuple[int, int]] | None = None) -> tuple[int, int]:
+    def scan_board(
+        self,
+        acceptable_responses: list[tuple[int, int]] | None = None,
+        *,
+        timeout_s: float | None = None,
+    ) -> tuple[int, int]:
         while True:
-            response = requests.get(f"{self.base_url}/scan_board", timeout=30.0)
+            request_timeout = 30.0 if timeout_s is None else max(0.1, float(timeout_s))
+            response = requests.get(f"{self.base_url}/scan_board", timeout=request_timeout)
             response.raise_for_status()
             data = response.json()
             result = (int(data["col"] - 1), int(data["row"] - 1))
@@ -222,8 +228,32 @@ class _WledClient:
         self.led_count = int(cfg.get("led_count") or 620)
         self.brightness = max(1, min(255, int(cfg.get("brightness") or 128)))
         self.request_timeout_s = float(cfg.get("request_timeout_s") or 2.0)
+        retry_cooldown_raw = cfg.get("retry_cooldown_s")
+        self.retry_cooldown_s = max(0.0, float(3.0 if retry_cooldown_raw is None else retry_cooldown_raw))
+        self.available = False
+        self.last_error: str | None = None
+        self.last_error_at: float | None = None
+        self._last_warning_at = 0.0
         if not self.base_url:
             raise RuntimeError("Brak konfiguracji WLED base_url.")
+
+    def _mark_available(self) -> None:
+        self.available = True
+        self.last_error = None
+        self.last_error_at = None
+
+    def _mark_unavailable(self, exc: Exception, *, action: str) -> None:
+        self.available = False
+        self.last_error = f"{action}: {exc}"
+        self.last_error_at = time.monotonic()
+        now = time.monotonic()
+        if now - self._last_warning_at >= 5.0:
+            logger.warning(
+                "WLED offline podczas %s: %s. LED-y zostaja tymczasowo wylaczone i beda ponawiane automatycznie.",
+                action,
+                exc,
+            )
+            self._last_warning_at = now
 
     def _post_state(self, payload: dict[str, Any]) -> dict[str, Any]:
         response = requests.post(f"{self.base_url}/json/state", json=payload, timeout=self.request_timeout_s)
@@ -241,28 +271,60 @@ class _WledClient:
             raise RuntimeError(f"Nieoczekiwana odpowiedź WLED info: {data!r}")
         return data
 
-    def validate(self) -> None:
-        info = self._get_info()
-        leds = info.get("leds") or {}
-        count = int(leds.get("count") or 0)
-        expected = self.led_offset + self.led_count
-        if count < expected:
-            raise RuntimeError(f"WLED raportuje tylko {count} LED, a konfiguracja wymaga co najmniej {expected}.")
+    def validate(self, *, raise_on_failure: bool = True) -> bool:
+        try:
+            info = self._get_info()
+            leds = info.get("leds") or {}
+            count = int(leds.get("count") or 0)
+            expected = self.led_offset + self.led_count
+            if count < expected:
+                raise RuntimeError(f"WLED raportuje tylko {count} LED, a konfiguracja wymaga co najmniej {expected}.")
+        except Exception as exc:
+            self._mark_unavailable(exc, action="validate")
+            if raise_on_failure:
+                raise
+            return False
+        self._mark_available()
+        return True
 
-    def clear(self) -> None:
+    def ensure_available(self, *, force: bool = False) -> bool:
+        if self.available:
+            return True
+        if not force and self.last_error_at is not None:
+            if (time.monotonic() - self.last_error_at) < self.retry_cooldown_s:
+                return False
+        return self.validate(raise_on_failure=False)
+
+    def clear(self) -> bool:
+        if not self.ensure_available():
+            return False
         start = self.led_offset
         stop = self.led_offset + self.led_count
-        self._post_state({"seg": [{"id": self.segment_id, "i": [start, stop, "000000"]}]})
+        try:
+            self._post_state({"seg": [{"id": self.segment_id, "i": [start, stop, "000000"]}]})
+        except Exception as exc:
+            self._mark_unavailable(exc, action="clear")
+            return False
+        self._mark_available()
+        return True
 
-    def set_leds(self, led_updates: list[tuple[int, list[int]]]) -> None:
+    def set_leds(self, led_updates: list[tuple[int, list[int]]]) -> bool:
         if not led_updates:
-            return
+            return True
+        if not self.ensure_available():
+            return False
         start = self.led_offset
         stop = self.led_offset + self.led_count
         instructions: list[Any] = [start, stop, "000000"]
         for led_index, color in led_updates:
             instructions.extend([self.led_offset + int(led_index), _color_to_hex(color)])
-        self._post_state({"on": True, "bri": self.brightness, "seg": [{"id": self.segment_id, "i": instructions}]})
+        try:
+            self._post_state({"on": True, "bri": self.brightness, "seg": [{"id": self.segment_id, "i": instructions}]})
+        except Exception as exc:
+            self._mark_unavailable(exc, action="set_leds")
+            return False
+        self._mark_available()
+        return True
 
 
 class _HardwareBackend:
@@ -274,8 +336,10 @@ class _HardwareBackend:
         self.port_result = _open_serial_probe(self.scan_cfg)
         self.ser = self.port_result.serial_handle
         self.wled = _WledClient(wled_cfg)
-        self.wled.validate()
-        self.wled.clear()
+        if self.wled.validate(raise_on_failure=False):
+            self.wled.clear()
+        else:
+            logger.warning("Start hardware bez aktywnego WLED. Skan planszy dziala, ale LED-y beda ponawiane automatycznie.")
         self.serial_port = self.port_result.port
 
     def _send_scan_command(self) -> None:
@@ -299,11 +363,28 @@ class _HardwareBackend:
                 return payload
         raise RuntimeError(f"Timeout oczekiwania na odpowiedź protokołu {self.protocol_name}.")
 
-    def scan_board(self, acceptable_responses: list[tuple[int, int]] | None = None) -> tuple[int, int]:
+    def scan_board(
+        self,
+        acceptable_responses: list[tuple[int, int]] | None = None,
+        *,
+        timeout_s: float | None = None,
+    ) -> tuple[int, int]:
+        deadline = None if timeout_s is None else (time.monotonic() + max(0.0, float(timeout_s)))
         while True:
+            remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
+            if remaining is not None and remaining <= 0:
+                raise TimeoutError("Timeout oczekiwania na wybór pola na planszy.")
             self._send_scan_command()
             while True:
-                payload = self._read_protocol_payload(timeout_s=None)
+                remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
+                if remaining is not None and remaining <= 0:
+                    raise TimeoutError("Timeout oczekiwania na wybór pola na planszy.")
+                try:
+                    payload = self._read_protocol_payload(timeout_s=remaining)
+                except RuntimeError as exc:
+                    if remaining is not None:
+                        raise TimeoutError("Timeout oczekiwania na wybór pola na planszy.") from exc
+                    raise
                 event = str(payload.get("event") or "").lower()
                 if event != "press":
                     continue
@@ -385,8 +466,16 @@ class Connection:
             updates.append((led_index, color))
         return updates
 
-    def scan_board(self, acceptable_responses: list[tuple[int, int]] | None = None) -> tuple[int, int]:
-        return self._backend.scan_board(acceptable_responses)
+    def scan_board(
+        self,
+        acceptable_responses: list[tuple[int, int]] | None = None,
+        *,
+        timeout_s: float | None = None,
+    ) -> tuple[int, int]:
+        try:
+            return self._backend.scan_board(acceptable_responses, timeout_s=timeout_s)
+        except TypeError:
+            return self._backend.scan_board(acceptable_responses)
 
     def set_leds(self, positions: list[tuple[int, int]], rgb_color) -> None:
         led_updates = self._resolve_led_updates(positions, rgb_color)

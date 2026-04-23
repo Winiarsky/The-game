@@ -4,6 +4,7 @@ import logging
 import math
 from typing import Sequence
 
+from board import consts
 from bonuses import BonusEffect, BonusType, build_modifiers_grid
 from GameObjects.companions.support_runtime import apply_on_hit_animal_companion_support
 from GameObjects.interactions_mixin import RangeAttackAffectMixin, prompt_for_roll
@@ -15,10 +16,11 @@ from statuses.classes.ranger.ranger_utils import set_crossbow_ace_ready
 from damage_types import DamageType
 from combat.damage_utils import burn_it_bonus, burn_it_prompt_note, remove_defeated_enemy
 from combat.degree_of_success import is_critical_success, is_hit, natural_shift_from_roll, resolve_outcome
+from led_fx import animate_projectile_line
 
 from .attack_base import AttackEventBase, check_concealed
 from . import basic_melee_attack_event
-from ..targeting import is_target_blocked_by_tags, pick_target_or_guess_square
+from ..targeting import grid_distance_feet, is_target_blocked_by_tags, pick_target_or_guess_square
 from ..base import EventContext, EventResult, mapping_get_actor
 
 logger = logging.getLogger(__name__)
@@ -42,6 +44,32 @@ def _ranged_prompt_info(game, title: str, text: str, *, source: str) -> None:
         return
 
 
+def _ranged_prompt_choice(
+    game,
+    title: str,
+    text: str,
+    *,
+    choices: list[str],
+    source: str,
+    choice_meta: list[dict] | None = None,
+) -> str | None:
+    ui = getattr(game, "ui", None)
+    if ui is not None and hasattr(ui, "prompt_choice"):
+        try:
+            return ui.prompt_choice(
+                title,
+                choices=choices,
+                prompt_long=text,
+                source=source,
+                choice_meta=choice_meta,
+                layout="menu_numpad",
+            )
+        except Exception:
+            pass
+    _ranged_prompt_info(game, title, text, source=source)
+    return choices[0] if choices else None
+
+
 class BaseRangeAttackEvent(AttackEventBase):
     """Wspólna logika dla ataków dystansowych (łuki, kusze itd.)."""
 
@@ -55,6 +83,9 @@ class BaseRangeAttackEvent(AttackEventBase):
     default_tags = ["attack_ranged", "ranged_attack"]
     consumes_action = True
     critical_doubles_damage: bool = False
+    projectile_trail_rgb = consts.RANGED_PROJECTILE_TRAIL_RGB
+    projectile_head_rgb = consts.RANGED_PROJECTILE_HEAD_RGB
+    projectile_impact_rgb = consts.RANGED_PROJECTILE_IMPACT_RGB
 
     COVER_RANK = {"none": 0, "minor": 1, "standard": 2, "greater": 3, "block": 4}
     COVER_AC = {"minor": 1, "standard": 2, "greater": 4}
@@ -78,6 +109,19 @@ class BaseRangeAttackEvent(AttackEventBase):
         except Exception:
             return None
         return max(0, limit - used)
+
+    def _play_projectile_animation(self, game, start: tuple[int, int] | None, end: tuple[int, int] | None) -> None:
+        try:
+            animate_projectile_line(
+                getattr(game, "conn", None),
+                start,
+                end,
+                trail_color=self.projectile_trail_rgb,
+                head_color=self.projectile_head_rgb,
+                impact_color=self.projectile_impact_rgb,
+            )
+        except Exception:
+            logger.debug("Nie udało się odtworzyć animacji pocisku.", exc_info=True)
 
     @staticmethod
     def _ammo_tracking_enabled(actor) -> bool:
@@ -243,6 +287,8 @@ class BaseRangeAttackEvent(AttackEventBase):
         candidates = [(e, pos) for e, pos in candidates if pos is not None]
         tags = self._effective_tags(ctx)
         metadata = dict(getattr(ctx, "metadata", None) or {})
+        forced_target = metadata.get("forced_target")
+        forced_target_pos = metadata.get("forced_target_pos")
         candidates = [(e, pos) for e, pos in candidates if not is_target_blocked_by_tags(e, tags)]
         if not candidates:
             return EventResult.cancelled(message="Brak wrogów na planszy.")
@@ -253,17 +299,23 @@ class BaseRangeAttackEvent(AttackEventBase):
             analysis["enemy"] = enemy
             analyses.append(analysis)
 
+        targeted_candidates = list(analyses)
+        if forced_target is not None:
+            targeted_candidates = [a for a in analyses if a["enemy"] is forced_target]
+        elif isinstance(forced_target_pos, tuple) and len(forced_target_pos) == 2:
+            targeted_candidates = [a for a in analyses if tuple(a["target_pos"]) == tuple(forced_target_pos)]
+
         # LED: przeszkody + potencjalne cele
         led_positions: list[tuple[int, int]] = []
         led_colors: list[list[int]] = []
         obstacle_led: dict[tuple[int, int], CoverType] = {}
-        for analysis in analyses:
+        for analysis in targeted_candidates:
             for obs in analysis.get("obstacles", []):
                 for p in obs["positions"]:
                     current = obstacle_led.get(p, "none")
                     if self.COVER_RANK[obs["cover_type"]] > self.COVER_RANK[current]:
                         obstacle_led[p] = obs["cover_type"]
-        hittable = [a for a in analyses if not a["blocked"]]
+        hittable = [a for a in targeted_candidates if not a["blocked"]]
         for pos, ctype in obstacle_led.items():
             led_positions.append(pos)
             led_colors.append(self.COVER_LED.get(ctype, self.COVER_LED["standard"]))
@@ -277,7 +329,10 @@ class BaseRangeAttackEvent(AttackEventBase):
                 game.conn.set_leds(led_positions, led_colors)
             except Exception as exc:
                 logger.warning("Nie udało się ustawić LEDów: %s", exc)
-        if hittable:
+        should_prompt_targeting = hittable and forced_target is None and not (
+            isinstance(forced_target_pos, tuple) and len(forced_target_pos) == 2
+        )
+        if should_prompt_targeting:
             _ranged_prompt_info(
                 game,
                 "Atak dystansowy: wybór celu",
@@ -299,8 +354,6 @@ class BaseRangeAttackEvent(AttackEventBase):
                 return EventResult.cancelled(message="Brak wrogów w zasięgu lub linia strzału zablokowana.")
 
             target_analysis = None
-            forced_target = metadata.get("forced_target")
-            forced_target_pos = metadata.get("forced_target_pos")
             if forced_target is not None:
                 for a in hittable:
                     if a["enemy"] is forced_target:
@@ -347,117 +400,160 @@ class BaseRangeAttackEvent(AttackEventBase):
                 tags = self._merged_weapon_tags(tags, selected_weapon)
             force_lethal = self._bool_from_metadata(metadata.get("force_lethal"), default=False)
             nonlethal_attack = self._has_trait(tags, "nonlethal") and not force_lethal
-            if target_analysis is None:
-                if has_undetected_hittable:
-                    selection = pick_target_or_guess_square(
-                        ctx,
-                        hero_pos,
-                        [(a["enemy"], a["target_pos"], "enemy") for a in hittable],
-                        max_range_feet=self.range_increment_ft * self.max_range_increments,
-                        allowed_kinds=("enemy",),
-                        tags=tags,
-                        target_color=list(self.TARGET_LED),
-                    )
-                    kind = str(selection.get("kind", "") or "")
-                    if kind == "cancel":
-                        return EventResult.cancelled(message="Nie wybrano poprawnego celu.")
-                    if kind == "miss":
-                        guessed_pos = selection.get("pos")
-                        extra_actions_spent, reload_cancelled = self._handle_reload_before_shot(ctx, hero, selected_weapon)
-                        if reload_cancelled is not None:
-                            return reload_cancelled
-                        actions_spent = 1 + max(0, int(extra_actions_spent or 0))
-                        if self._ammo_tracking_enabled(hero):
-                            ammo_ok, ammo_message = consume_ammo_for_weapon(hero, selected_weapon, amount=1)
-                            if not ammo_ok:
-                                return EventResult.cancelled(message=str(ammo_message or "Brak amunicji."))
-                            if ammo_message:
+            while True:
+                if target_analysis is None:
+                    if has_undetected_hittable:
+                        selection = pick_target_or_guess_square(
+                            ctx,
+                            hero_pos,
+                            [(a["enemy"], a["target_pos"], "enemy") for a in hittable],
+                            max_range_feet=self.range_increment_ft * self.max_range_increments,
+                            allowed_kinds=("enemy",),
+                            tags=tags,
+                            target_color=list(self.TARGET_LED),
+                        )
+                        kind = str(selection.get("kind", "") or "")
+                        if kind == "cancel":
+                            return EventResult.cancelled(message="Nie wybrano poprawnego celu.")
+                        if kind == "miss":
+                            guessed_pos = selection.get("pos")
+                            extra_actions_spent, reload_cancelled = self._handle_reload_before_shot(ctx, hero, selected_weapon)
+                            if reload_cancelled is not None:
+                                return reload_cancelled
+                            actions_spent = 1 + max(0, int(extra_actions_spent or 0))
+                            if self._ammo_tracking_enabled(hero):
+                                ammo_ok, ammo_message = consume_ammo_for_weapon(hero, selected_weapon, amount=1)
+                                if not ammo_ok:
+                                    return EventResult.cancelled(message=str(ammo_message or "Brak amunicji."))
+                                if ammo_message:
+                                    try:
+                                        game.ui_log(ammo_message)
+                                    except Exception:
+                                        pass
+                            self._play_projectile_animation(game, hero_pos, guessed_pos)
+                            game.events.safe_emit_action(
+                                actor=hero,
+                                action_id=f"{self.action_id_base}_wrong_square",
+                                action_tags=tags,
+                                target=None,
+                                target_pos=guessed_pos,
+                            )
+                            if self._has_trait(tags, "backswing"):
                                 try:
-                                    game.ui_log(ammo_message)
+                                    backswing_ready.add(weapon_key)
                                 except Exception:
                                     pass
-                        game.events.safe_emit_action(
-                            actor=hero,
-                            action_id=f"{self.action_id_base}_wrong_square",
-                            action_tags=tags,
-                            target=None,
-                            target_pos=guessed_pos,
-                        )
-                        if self._has_trait(tags, "backswing"):
-                            try:
-                                backswing_ready.add(weapon_key)
-                            except Exception:
-                                pass
-                        if not exacting_strike_press and not suppress_record:
-                            self._record_attack(
-                                ctx,
-                                hero,
-                                weapon_key=weapon_key,
-                                weapon_type=weapon_type,
-                                target=None,
-                                attack_count=map_attack_count,
+                            if not exacting_strike_press and not suppress_record:
+                                self._record_attack(
+                                    ctx,
+                                    hero,
+                                    weapon_key=weapon_key,
+                                    weapon_type=weapon_type,
+                                    target=None,
+                                    attack_count=map_attack_count,
+                                )
+                            self._apply_range_attacker_status(hero)
+                            self._apply_concealing_trait(hero, tags)
+                            self._mark_weapon_need_reload(selected_weapon)
+                            miss_message = "Strzał chybia: błędnie wskazane pole."
+                            if exacting_strike_press:
+                                miss_message = "Exacting Strike: pudło na błędnym polu (MAP bez zmian)."
+                            return EventResult(
+                                success=True,
+                                consumed_action=self.consumes_action,
+                                actions_spent=actions_spent,
+                                message=miss_message,
+                                data={
+                                    "hit": False,
+                                    "critical": False,
+                                    "target": None,
+                                    "target_pos": guessed_pos,
+                                    "guessed_target_square": guessed_pos,
+                                },
                             )
-                        self._apply_range_attacker_status(hero)
-                        self._apply_concealing_trait(hero, tags)
-                        self._mark_weapon_need_reload(selected_weapon)
-                        miss_message = "Strzał chybia: błędnie wskazane pole."
-                        if exacting_strike_press:
-                            miss_message = "Exacting Strike: pudło na błędnym polu (MAP bez zmian)."
-                        return EventResult(
-                            success=True,
-                            consumed_action=self.consumes_action,
-                            actions_spent=actions_spent,
-                            message=miss_message,
-                            data={
-                                "hit": False,
-                                "critical": False,
-                                "target": None,
-                                "target_pos": guessed_pos,
-                                "guessed_target_square": guessed_pos,
-                            },
-                        )
-                    guessed_target = selection.get("target")
-                    guessed_pos = selection.get("pos")
-                    for a in hittable:
-                        if a["enemy"] is guessed_target and tuple(a["target_pos"]) == tuple(guessed_pos):
-                            target_analysis = a
-                            break
-                else:
-                    target_pos_list = [a["target_pos"] for a in hittable]
-                    try:
-                        choice = game.conn.scan_board(target_pos_list)
-                    except Exception:
-                        choice = None
-                    for a in hittable:
-                        if a["target_pos"] == choice:
-                            target_analysis = a
-                            break
-            if target_analysis is None:
-                return EventResult.cancelled(message="Nie wybrano poprawnego celu.")
+                        guessed_target = selection.get("target")
+                        guessed_pos = selection.get("pos")
+                        for a in hittable:
+                            if a["enemy"] is guessed_target and tuple(a["target_pos"]) == tuple(guessed_pos):
+                                target_analysis = a
+                                break
+                    else:
+                        target_pos_list = [a["target_pos"] for a in hittable]
+                        try:
+                            choice = game.conn.scan_board(target_pos_list)
+                        except Exception:
+                            choice = None
+                        for a in hittable:
+                            if a["target_pos"] == choice:
+                                target_analysis = a
+                                break
+                if target_analysis is None:
+                    return EventResult.cancelled(message="Nie wybrano poprawnego celu.")
 
-            enemy = target_analysis["enemy"]
-            target_pos = target_analysis["target_pos"]
-            cover_type = target_analysis["cover_type"]
-            cover_bonus = self.COVER_AC.get(cover_type, 0)
-            distance_ft = target_analysis["distance_ft"]
-            range_penalty = target_analysis["range_penalty"]
-            increments = target_analysis["increments"]
-            if self._is_hunted_prey(hero, enemy) and increments >= 2:
-                range_penalty = max(0, int(range_penalty) - 2)
-            _ranged_prompt_info(
-                game,
-                "Atak dystansowy: analiza strzału",
-                (
+                enemy = target_analysis["enemy"]
+                target_pos = target_analysis["target_pos"]
+                cover_type = target_analysis["cover_type"]
+                cover_bonus = self.COVER_AC.get(cover_type, 0)
+                distance_ft = target_analysis["distance_ft"]
+                range_penalty = target_analysis["range_penalty"]
+                increments = target_analysis["increments"]
+                if self._is_hunted_prey(hero, enemy) and increments >= 2:
+                    range_penalty = max(0, int(range_penalty) - 2)
+
+                analysis_text = (
                     f"Cel: {getattr(enemy, 'name', 'Wróg')} na polu {target_pos}\n"
                     f"Dystans: {distance_ft} ft\n"
                     f"Przyrost zasięgu: {increments}\n"
                     f"Kara za zasięg: -{range_penalty}\n"
                     f"Typ osłony: {cover_type}\n"
                     f"Linia strzału zablokowana: {'tak' if bool(target_analysis.get('blocked', False)) else 'nie'}\n\n"
-                    "Potwierdź Enterem i wykonaj rzut ataku."
-                ),
-                source=f"{self.action_id_base}_analysis",
-            )
+                    "Możesz potwierdzić strzał albo wrócić do wyboru celu."
+                )
+                allow_retarget = forced_target is None and not (
+                    isinstance(forced_target_pos, tuple) and len(forced_target_pos) == 2
+                )
+                if not allow_retarget:
+                    _ranged_prompt_info(
+                        game,
+                        "Atak dystansowy: analiza strzału",
+                        analysis_text,
+                        source=f"{self.action_id_base}_analysis",
+                    )
+                    break
+
+                analysis_choice = str(
+                    _ranged_prompt_choice(
+                        game,
+                        "Atak dystansowy: analiza strzału",
+                        analysis_text,
+                        choices=["Potwierdź strzał", "Wybierz inny cel"],
+                        choice_meta=[
+                            {
+                                "raw": "confirm",
+                                "label": "Potwierdź strzał",
+                                "desc": "Przejdź do rzutu ataku przeciw wybranemu celowi.",
+                                "key": "1",
+                                "category": "combat",
+                                "icon": "✓",
+                            },
+                            {
+                                "raw": "retarget",
+                                "label": "Wybierz inny cel",
+                                "desc": "Wróć do podświetlonych celów i wskaż inne pole na planszy.",
+                                "key": "2",
+                                "category": "utility",
+                                "icon": "◎",
+                            },
+                        ],
+                        source=f"{self.action_id_base}_analysis",
+                    )
+                    or ""
+                ).strip().lower()
+                if "inny" in analysis_choice or analysis_choice == "retarget":
+                    target_analysis = None
+                    continue
+                break
+
             target_id = self._target_id(enemy)
             extra_actions_spent, reload_cancelled = self._handle_reload_before_shot(ctx, hero, selected_weapon)
             if reload_cancelled is not None:
@@ -474,6 +570,7 @@ class BaseRangeAttackEvent(AttackEventBase):
                         pass
 
             if not check_concealed(ctx, enemy):
+                self._play_projectile_animation(game, hero_pos, target_pos)
                 game.events.safe_emit_action(
                     actor=hero,
                     action_id=f"{self.action_id_base}_concealed_miss",
@@ -778,6 +875,7 @@ class BaseRangeAttackEvent(AttackEventBase):
             outcome = resolve_outcome(total_roll, target_ac, natural_shift=natural_shift)
             critical = is_critical_success(outcome)
             hit = is_hit(outcome)
+            self._play_projectile_animation(game, hero_pos, target_pos)
             if not hit:
                 game.events.safe_emit_action(
                     actor=hero,
@@ -1443,8 +1541,7 @@ class BaseRangeAttackEvent(AttackEventBase):
         seen_ids: set[int] = set()
 
         # dystans / zakres
-        dx, dy = abs(start[0] - end[0]), abs(start[1] - end[1])
-        distance_ft = math.sqrt(dx * dx + dy * dy) * self.feet_per_cell
+        distance_ft = int(grid_distance_feet(start, end) or 0)
         increments = max(1, math.ceil(distance_ft / self.range_increment_ft))
         range_penalty = max(0, increments - 1) * 2
         if increments > self.max_range_increments:

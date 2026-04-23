@@ -47,6 +47,12 @@ class _BoardStub:
         obj.position = pos
         self.placed.append((obj, pos))
 
+    def occupant_at(self, pos):
+        for obj, placed_pos in self.placed:
+            if placed_pos == pos:
+                return obj
+        return None
+
 
 class _HeroStub:
     def __init__(self, name: str):
@@ -77,6 +83,23 @@ class _GameStub:
 
     def ui_hero(self, hero, note: str | None = None) -> None:
         self.snapshots.append((hero, note))
+
+
+class _ChoiceUiStub:
+    def __init__(self, answer: str):
+        self.answer = answer
+        self.calls: list[dict[str, object]] = []
+
+    def prompt_choice(self, prompt, choices=None, source=None, **extra):
+        self.calls.append(
+            {
+                "prompt": prompt,
+                "choices": list(choices or []),
+                "source": source,
+                "extra": dict(extra),
+            }
+        )
+        return self.answer
 
 
 def test_start_setup_selects_hero_before_board_scan_and_shows_place_hint():
@@ -181,6 +204,69 @@ def test_start_setup_uses_preselected_heroes_without_card_scan():
     assert len(game.heroes) == 1 and game.heroes[0] is hero
     assert "read_card" not in game.conn.calls
     assert any("automatycznie" in msg for msg in game.logs)
+
+
+def test_start_setup_filters_out_already_occupied_start_positions():
+    game = _GameStub()
+    start = Start(game)  # type: ignore[arg-type]
+
+    first_hero = _HeroStub("Cedric")
+    second_hero = _HeroStub("Freya")
+    picks = iter([first_hero, second_hero])
+    scan_choices = iter([(1, 1), (2, 2)])
+
+    def _pick(_used):
+        return next(picks)
+
+    def _scan(_choices):
+        return next(scan_choices)
+
+    def _prompt_menu_choice(**_kwargs):
+        return "__add_hero__" if len(game.heroes) == 1 else "__start_game__"
+
+    start._pick_or_create_hero = _pick  # type: ignore[method-assign]
+    start._maybe_prompt_chameleon_gnome = lambda *_a, **_k: None  # type: ignore[method-assign]
+    start._maybe_prompt_familiar_owner = lambda *_a, **_k: None  # type: ignore[method-assign]
+    start._maybe_prompt_advanced_alchemy = lambda *_a, **_k: None  # type: ignore[method-assign]
+    start._maybe_prepare_spells = lambda *_a, **_k: None  # type: ignore[method-assign]
+    start._prompt_menu_choice = _prompt_menu_choice  # type: ignore[method-assign]
+    game.conn.scan_board = _scan  # type: ignore[method-assign]
+
+    result = start.set_heroes_starting_positions()
+
+    assert isinstance(result, HeroesTurn)
+    assert len(game.conn.led_payloads) >= 2
+    first_led_positions, _first_colors = game.conn.led_payloads[0]
+    second_led_positions, _second_colors = game.conn.led_payloads[1]
+    assert list(first_led_positions) == [(1, 1), (2, 2)]
+    assert list(second_led_positions) == [(2, 2)]
+    assert [hero.position for hero in game.heroes] == [(1, 1), (2, 2)]
+
+
+def test_heroes_turn_falls_back_to_ui_when_board_selection_times_out():
+    game = _GameStub()
+    cedric = _HeroStub("Cedric")
+    freya = _HeroStub("Freya")
+    cedric.class_id = "ranger"
+    freya.class_id = "sorcerer"
+    game.heroes = [cedric, freya]
+    game.board.place(cedric, (1, 1))
+    game.board.place(freya, (2, 2))
+    game.ui = _ChoiceUiStub("Freya")
+
+    def _scan_board(*_args, **_kwargs):
+        raise TimeoutError("board timeout")
+
+    game.conn.scan_board = _scan_board  # type: ignore[method-assign]
+
+    state = HeroesTurn(game)  # type: ignore[arg-type]
+
+    picked = state._choose_active_hero()
+
+    assert picked is freya
+    assert any("Kontynuuj wybór w UI" in msg for msg in game.logs)
+    assert game.ui.calls
+    assert game.ui.calls[-1]["source"] == "hero_select"
 
 
 def test_wall_setup_uses_two_endpoint_colors_and_explains_them():

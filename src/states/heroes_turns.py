@@ -21,6 +21,7 @@ from .intent_menu import (
     render_actor_stats,
 )
 from spell_management import ensure_actor_spell_state
+from narration import narrate_action_result
 
 from GameObjects.events import EventContext
 from GameObjects.events.registry import dispatch_event, list_events
@@ -44,23 +45,77 @@ class HeroesTurn(State):
             ui_active_actor(None)
         ui_idle_hint = getattr(self.game, "ui_idle_hint", None)
         if callable(ui_idle_hint):
-            ui_idle_hint("Tura bohaterów", "Wybierz bohatera i akcję.")
+            ui_idle_hint(
+                "Tura bohaterów",
+                "Kliknij figurkę bohatera na planszy, aby wybrać aktywnego bohatera, a potem akcję.",
+            )
 
     def on_exit(self):
         logger.info("Koniec tury bohaterow.")
         self.game.ui_log("Koniec tury bohaterów.")
 
     def _choose_active_hero(self):
-        heroes_positions = [hero.position for hero in self.game.heroes if hero.position is not None]
+        available_heroes = [hero for hero in self.game.heroes if hero.position is not None]
+        heroes_positions = [hero.position for hero in available_heroes]
         if not heroes_positions:
             logger.info("Brak bohaterów na planszy.")
             self.game.ui_log("Brak bohaterów na planszy.")
             return None
+        ui_idle_hint = getattr(self.game, "ui_idle_hint", None)
+        if callable(ui_idle_hint):
+            ui_idle_hint(
+                "Wybór bohatera",
+                "Gra czeka teraz na klik figurki bohatera na planszy.",
+            )
         self.game.conn.set_leds(heroes_positions, consts.HERO_HIGHLIGHT_RGB)
-        pos = self.game.conn.scan_board(heroes_positions)
-        self.game.conn.leds_off()
-        hero = self.game.board.occupant_at(pos)
-        return hero
+        try:
+            try:
+                pos = self.game.conn.scan_board(heroes_positions)
+            except TimeoutError:
+                self.game.ui_log("Kontynuuj wybór w UI. Plansza nie zwróciła kliknięcia bohatera.")
+                return self._choose_active_hero_from_ui(available_heroes)
+            hero = self.game.board.occupant_at(pos)
+            if hero is not None:
+                return hero
+        finally:
+            self.game.conn.leds_off()
+        return self._choose_active_hero_from_ui(available_heroes)
+
+    def _choose_active_hero_from_ui(self, available_heroes):
+        if not available_heroes:
+            return None
+        if len(available_heroes) == 1:
+            return available_heroes[0]
+        options = []
+        for hero in available_heroes:
+            pos = getattr(hero, "position", None)
+            pos_text = f"Pole {tuple(pos)}" if pos is not None else "Poza planszą"
+            class_name = str(getattr(hero, "class_name", None) or getattr(hero, "class_id", "") or "").strip()
+            class_text = class_name if class_name else "Bohater"
+            options.append(
+                {
+                    "id": str(getattr(hero, "object_id", "") or getattr(hero, "character_id", "") or hero.name).strip().lower(),
+                    "label": str(getattr(hero, "name", "Bohater")),
+                    "desc": f"{class_text} · {pos_text}",
+                    "category": "utility",
+                    "icon": "◈",
+                }
+            )
+        ui_idle_hint = getattr(self.game, "ui_idle_hint", None)
+        if callable(ui_idle_hint):
+            ui_idle_hint(
+                "Wybór bohatera",
+                "Plansza nie zwróciła kliknięcia. Wybierz aktywnego bohatera z listy w UI.",
+            )
+        answer = choose_option(
+            self.game,
+            title="Aktywny bohater",
+            subtitle="Wybierz bohatera do wykonania akcji.",
+            source="hero_select",
+            options=options,
+        )
+        by_id = {str(option["id"]).strip().lower(): hero for option, hero in zip(options, available_heroes)}
+        return by_id.get(str(answer or "").strip().lower())
 
     def _has_any_hero_on_board(self) -> bool:
         return any(getattr(hero, "position", None) is not None for hero in list(getattr(self.game, "heroes", []) or []))
@@ -230,6 +285,16 @@ class HeroesTurn(State):
         else:
             status = "powiodła się" if result.success else "nie powiodła się"
             self.game.ui_log(f"Akcja '{event_name}' {status}.")
+        try:
+            self.game.ui_narration(
+                narrate_action_result(actor=hero, action_id=event_name, result=result),
+                summary="Jaki był efekt akcji",
+                source=f"action_result:{event_name}",
+                priority="result" if result.success else "warning",
+                semantic_type="result",
+            )
+        except Exception:
+            logger.debug("Nie udało się wysłać narracji wyniku akcji '%s'.", event_name, exc_info=True)
         if event_name == "end" and result.success:
             self.active_hero = None  # wymuś wybór kolejnego bohatera
         return self

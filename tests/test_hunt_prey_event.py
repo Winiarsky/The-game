@@ -41,7 +41,10 @@ class FakeGame:
         self.enemies = []
         self.conn = FakeConn()
         self.state = None
+        self.ui = None
+        self.idle_hints = []
         self.ui_log = lambda *_a, **_k: None
+        self.ui_idle_hint = lambda *args, **kwargs: self.idle_hints.append((args, kwargs))
 
 
 @dataclass
@@ -64,6 +67,27 @@ class DummyEnemy:
     position: tuple[int, int] | None = (1, 0)
     hp: int = 20
     ac: int = 15
+
+
+class FakeUI:
+    enabled = True
+
+    def __init__(self, answers: list[str] | None = None):
+        self.answers = list(answers or [])
+        self.info_calls = []
+        self.choice_calls = []
+
+    def prompt_info(self, title, **kwargs):
+        self.info_calls.append({"title": title, **kwargs})
+        return "ok"
+
+    def prompt_choice(self, prompt, choices=None, **kwargs):
+        self.choice_calls.append({"prompt": prompt, "choices": list(choices or []), **kwargs})
+        if self.answers:
+            return self.answers.pop(0)
+        if choices:
+            return choices[0]
+        return None
 
 
 def test_hunt_prey_sets_target_and_grants_outwit_and_monster_hunter(monkeypatch):
@@ -177,3 +201,33 @@ def test_monster_hunter_uses_dynamic_recall_skill_for_undead(monkeypatch):
     assert result.success is True
     assert captured["skill_id"] == Skill.RELIGION.value
     assert int(captured["dc"]) >= 10
+
+
+def test_hunt_prey_falls_back_to_ui_choice_when_board_selection_times_out():
+    actor = DummyHero(object_id="hero-ranger", name="Ranger")
+    enemy_a = DummyEnemy(object_id="enemy-a", name="Goblin A", position=(1, 0), ac=16, hp=6)
+    enemy_b = DummyEnemy(object_id="enemy-b", name="Goblin B", position=(2, 0), ac=17, hp=8)
+    actor.statuses.extend(
+        [
+            Status(id="hunt_prey"),
+            Status(id="ranger", data={"ranger_setup": {"hunter_edge": "precision"}}),
+        ]
+    )
+
+    game = FakeGame()
+    game.heroes = [actor]
+    game.enemies = [enemy_a, enemy_b]
+    game.state = Combat(game)
+    game.ui = FakeUI(answers=[enemy_b.object_id])
+
+    def _timed_out(*_args, **_kwargs):
+        raise TimeoutError("no board input")
+
+    game.conn.scan_board = _timed_out
+
+    result = dispatch_event("hunt_prey", EventContext(game=game, actor=actor))
+
+    assert result.success is True
+    assert actor.get_status_data("ranger", "ranger_setup", {}).get("hunted_prey_target_id") == enemy_b.object_id
+    assert game.ui.info_calls
+    assert game.ui.choice_calls

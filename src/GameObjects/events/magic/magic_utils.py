@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from combat.stealth_runtime import has_status_id
 
+from ..base import emit_prompt_narration, format_board_selection_message
 from ..targeting import pick_target_or_guess_square
 
 
@@ -54,6 +55,14 @@ def pick_target_in_range(
         if return_selection_details:
             return {"kind": "cancel"}
         return None, None
+
+    emit_prompt_narration(
+        ctx.game,
+        format_board_selection_message("podswietlony cel", max_range_feet=max_range_feet),
+        source="magic:pick_target",
+        dedupe_key="magic:pick_target:start",
+        next_hint="Kliknij wybrane pole celu na planszy.",
+    )
 
     if allow_guess_undetected and any(has_status_id(obj, "undetected") for obj, _pos, _kind, _dist in valid):
         selection = pick_target_or_guess_square(
@@ -130,6 +139,13 @@ def pick_position_in_range(
     positions = positions_within_range(ctx.game.board, source_pos, max_range_feet)
     if not positions:
         return None
+    emit_prompt_narration(
+        ctx.game,
+        format_board_selection_message("podswietlone pole", max_range_feet=max_range_feet),
+        source="magic:pick_position",
+        dedupe_key="magic:pick_position:start",
+        next_hint="Kliknij wybrane pole na planszy.",
+    )
     if color is None:
         color = [0, 80, 180]
     try:

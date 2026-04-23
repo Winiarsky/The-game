@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="pl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>The Game · Player UI v2</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Spectral:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="shell">
+        <div id="runtime-error-modal" class="runtime-modal hidden" role="dialog" aria-modal="true" aria-labelledby="runtime-error-title">
+            <div class="runtime-modal-card">
+                <div class="panel-kicker">Runtime Error</div>
+                <h2 id="runtime-error-title">Błąd połączenia</h2>
+                <p id="runtime-error-body"></p>
+                <div class="cta-row">
+                    <button id="btn-runtime-retry" class="btn-primary">Ponów połączenie</button>
+                    <button id="btn-runtime-dismiss" class="btn-ghost">Zamknij</button>
+                </div>
+            </div>
+        </div>
+
+        <header class="masthead">
+            <div>
+                <div class="eyebrow">The Game · Pirate Slice</div>
+                <h1>Player UI v2</h1>
+            </div>
+            <div class="masthead-status">
+                <span id="runtime-badge" class="badge badge-idle">Idle</span>
+                <span id="board-badge" class="badge badge-idle">Board: -</span>
+                <span id="session-chip" class="session-chip">Session: -</span>
+            </div>
+        </header>
+
+        <main>
+            <section id="screen-start" class="screen screen-active">
+                <div class="hero-panel">
+                    <div class="hero-copy">
+                        <div class="panel-kicker">Start Hall</div>
+                        <h2>Szlak kontrabandy zaczyna się tutaj.</h2>
+                        <p id="start-tagline">Nowy companion UI do scenariusza piratów.</p>
+                        <div class="cta-row">
+                            <button id="btn-begin" class="btn-primary">Nowa gra</button>
+                        </div>
+                    </div>
+                    <div class="hero-aside">
+                        <div class="lore-card">
+                            <div class="lore-label">V1</div>
+                            <p>Launcher, briefing i grywalny shell dla `bandit_cave`, z finałem w `smuggler_docks`.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="screen-assembly" class="screen">
+                <div class="screen-head">
+                    <div>
+                        <div class="panel-kicker">Party Assembly</div>
+                        <h2>Zbierz drużynę</h2>
+                    </div>
+                    <div class="screen-actions">
+                        <button id="btn-assembly-back" class="btn-ghost">Powrót</button>
+                        <button id="btn-assembly-next" class="btn-primary">Do briefingu</button>
+                    </div>
+                </div>
+                <div id="selection-summary" class="selection-summary">Wybierz od 1 do 4 bohaterów.</div>
+                <div id="party-grid" class="party-grid"></div>
+            </section>
+
+            <section id="screen-briefing" class="screen">
+                <div class="screen-head">
+                    <div>
+                        <div class="panel-kicker">Mission Briefing</div>
+                        <h2 id="briefing-title">Misja</h2>
+                    </div>
+                    <div class="screen-actions">
+                        <button id="btn-briefing-back" class="btn-ghost">Zmień drużynę</button>
+                        <button id="btn-start-runtime" class="btn-primary">Uruchom scenariusz</button>
+                    </div>
+                </div>
+                <div class="briefing-layout">
+                    <article class="panel-card">
+                        <div class="panel-kicker">Stawka</div>
+                        <p id="briefing-intro"></p>
+                        <p id="briefing-stakes" class="muted-strong"></p>
+                    </article>
+                    <article class="panel-card">
+                        <div class="panel-kicker">Przebieg</div>
+                        <ul id="briefing-points" class="plain-list"></ul>
+                    </article>
+                    <article class="panel-card">
+                        <div class="panel-kicker">Priorytety</div>
+                        <ul id="briefing-objectives" class="plain-list"></ul>
+                    </article>
+                </div>
+            </section>
+
+            <section id="screen-game" class="screen">
+                <div class="game-topbar">
+                    <div class="topbar-block">
+                        <span class="topbar-label">Scenariusz</span>
+                        <span id="top-scenario" class="topbar-value">Bandit Cave</span>
+                    </div>
+                    <div class="topbar-block">
+                        <span class="topbar-label">Mapa</span>
+                        <span id="top-map" class="topbar-value">-</span>
+                    </div>
+                    <div class="topbar-block">
+                        <span class="topbar-label">Rozdział</span>
+                        <span id="top-chapter" class="topbar-value">-</span>
+                    </div>
+                    <div class="topbar-block">
+                        <span class="topbar-label">Aktywny cel</span>
+                        <span id="top-objective" class="topbar-value">-</span>
+                    </div>
+                    <button id="btn-stop-runtime" class="btn-ghost danger">Zatrzymaj runtime</button>
+                </div>
+
+                <div class="game-layout">
+                    <aside class="column side-left">
+                        <section class="panel-card">
+                            <div class="panel-kicker">Drużyna</div>
+                            <div id="team-list" class="team-list empty-state">Brak danych o drużynie.</div>
+                        </section>
+                        <section class="panel-card">
+                            <div class="panel-kicker">Inicjatywa</div>
+                            <div id="initiative-list" class="initiative-list empty-state">Brak aktywnej inicjatywy.</div>
+                        </section>
+                    </aside>
+
+                    <section class="column center">
+                        <section class="action-card">
+                            <div class="action-head">
+                                <div>
+                                    <div id="action-channel" class="panel-kicker">Ready</div>
+                                    <h2 id="action-title">Czekam na wydarzenia</h2>
+                                </div>
+                                <div id="action-priority" class="badge badge-info">info</div>
+                            </div>
+                            <p id="action-summary" class="action-summary">Po uruchomieniu scenariusza centralna karta pokaże bieżące instrukcje dla gracza.</p>
+                            <div id="action-progress" class="progress hidden">
+                                <div class="progress-head">
+                                    <span id="action-progress-label">Postęp</span>
+                                    <span id="action-progress-value">0/0</span>
+                                </div>
+                                <div class="progress-track"><span id="action-progress-bar"></span></div>
+                            </div>
+                            <div id="action-body" class="prose"></div>
+                            <details id="action-details" class="details-box hidden">
+                                <summary>Szczegóły techniczne</summary>
+                                <div id="action-details-body" class="prose compact"></div>
+                            </details>
+                            <div id="prompt-meta" class="prompt-meta"></div>
+                            <div id="roll-breakdown" class="roll-breakdown hidden"></div>
+                            <div id="choice-list" class="choice-list"></div>
+                            <section id="choice-detail" class="choice-detail hidden">
+                                <div class="panel-kicker">Wybrana opcja</div>
+                                <h3 id="choice-detail-title">Opcja</h3>
+                                <div id="choice-detail-body" class="prose compact"></div>
+                            </section>
+                            <form id="prompt-form" class="prompt-form hidden">
+                                <input id="prompt-input" type="text" autocomplete="off" placeholder="Wpisz odpowiedź..." />
+                                <div id="natural-controls" class="natural-controls hidden">
+                                    <button type="button" data-natural="nat20">Nat 20</button>
+                                    <button type="button" data-natural="nat1">Nat 1</button>
+                                </div>
+                                <button id="prompt-submit" type="submit" class="btn-primary">Potwierdź</button>
+                            </form>
+                        </section>
+                    </section>
+
+                    <aside class="column side-right">
+                        <section class="panel-card">
+                            <div class="panel-kicker">Cele</div>
+                            <div id="objective-list" class="objective-list empty-state">Cele pojawią się po starcie scenariusza.</div>
+                        </section>
+                        <section class="panel-card">
+                            <div class="panel-kicker">Przejścia map</div>
+                            <div id="transition-list" class="transition-list empty-state">Brak danych o przejściach.</div>
+                        </section>
+                        <section class="panel-card">
+                            <div class="panel-kicker">Dziennik</div>
+                            <div id="journal-list" class="journal-list empty-state">Brak wpisów.</div>
+                        </section>
+                        <section class="panel-card debug-panel">
+                            <div class="debug-head">
+                                <div class="panel-kicker">Debug</div>
+                                <button id="btn-toggle-debug" class="btn-ghost small">Pokaż</button>
+                            </div>
+                            <div id="debug-list" class="debug-list hidden empty-state">Brak wpisów debug.</div>
+                        </section>
+                    </aside>
+                </div>
+            </section>
+
+            <section id="screen-result" class="screen">
+                <div class="hero-panel result-panel">
+                    <div class="hero-copy">
+                        <div class="panel-kicker">Scenario Result</div>
+                        <h2 id="result-title">Statek Przejęty</h2>
+                        <p id="result-summary"></p>
+                        <div id="result-objectives" class="result-objectives"></div>
+                        <div class="cta-row">
+                            <button id="btn-result-restart" class="btn-primary">Nowa gra</button>
+                            <button id="btn-result-back" class="btn-ghost">Powrót do startu</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script type="module" src="/static/app.js"></script>
+</body>
+</html>

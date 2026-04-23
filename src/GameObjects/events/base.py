@@ -10,6 +10,128 @@ logger = logging.getLogger(__name__)
 _MISSING = object()
 
 
+def format_range_text(max_range_feet: int | None) -> str:
+    if max_range_feet is None:
+        return "bez limitu zasiegu"
+    try:
+        return f"w zasiegu {int(max_range_feet)} ft"
+    except Exception:
+        return "w dostepnym zasiegu"
+
+
+def format_board_selection_message(
+    subject: str,
+    *,
+    max_range_feet: int | None = None,
+    confirmation: str | None = None,
+    alternative: str | None = None,
+) -> str:
+    text = f"Wybierz {str(subject or 'podswietlone pole').strip()}"
+    if max_range_feet is not None:
+        text = f"{text} {format_range_text(max_range_feet)}"
+    text = f"{text} na planszy."
+    if confirmation:
+        text = f"{text} Po wyborze {str(confirmation).strip().rstrip('.') }."
+    if alternative:
+        text = f"{text} {str(alternative).strip().rstrip('.') }."
+    return text
+
+
+def format_default_prompt_body(
+    text: str,
+    *,
+    kind: str,
+) -> tuple[str, str]:
+    body = str(text or "").strip()
+    if not body:
+        return "", ""
+    if str(kind or "").strip().lower() == "choice":
+        suffix = "Wybierz opcje i potwierdz wybor."
+        next_hint = "Wybierz opcje w panelu promptu."
+    else:
+        suffix = "Zapoznaj sie z informacja i potwierdz, gdy bedziesz gotow."
+        next_hint = "Potwierdz prompt, gdy bedziesz gotow."
+    if not body.endswith(suffix):
+        body = f"{body}\n\n{suffix}"
+    return body, next_hint
+
+
+def build_prompt_communication(
+    message: str,
+    *,
+    summary: str = "Co robić teraz",
+    source: str = "event_prompt",
+    priority: str = "info",
+    semantic_type: str | None = None,
+    dedupe_key: str | None = None,
+    next_hint: str | None = None,
+    blocking: bool = True,
+    channel: str | None = None,
+) -> dict[str, Any] | None:
+    text = str(message or "").strip()
+    if not text:
+        return None
+    try:
+        from narration import build_narration_communication
+    except Exception:
+        return None
+    effective_channel = str(channel or ("prompt" if blocking else "timeline"))
+    effective_semantic = str(semantic_type or ("required_action" if blocking else "status_update"))
+    return build_narration_communication(
+        summary=summary,
+        body_markdown=text,
+        dedupe_key=dedupe_key,
+        priority=priority,
+        semantic_type=effective_semantic,
+        channel=effective_channel,
+        blocking=blocking,
+        next_hint=next_hint,
+    )
+
+
+def emit_prompt_narration(
+    game,
+    message: str,
+    *,
+    summary: str = "Co robić teraz",
+    source: str = "event_prompt",
+    priority: str = "info",
+    semantic_type: str | None = None,
+    dedupe_key: str | None = None,
+    next_hint: str | None = None,
+    blocking: bool = True,
+    channel: str | None = None,
+) -> bool:
+    text = str(message or "").strip()
+    if not text:
+        return False
+    narrator = getattr(game, "ui_narration", None)
+    if callable(narrator):
+        try:
+            narrator(
+                text,
+                summary=summary,
+                source=source,
+                priority=priority,
+                semantic_type=semantic_type or ("required_action" if blocking else "status_update"),
+                dedupe_key=dedupe_key,
+                channel=channel or ("prompt" if blocking else "timeline"),
+                blocking=blocking,
+                next_hint=next_hint,
+            )
+            return True
+        except Exception:
+            logger.debug("Nie udało się wysłać promptowej narracji do UI.", exc_info=True)
+    ui_log = getattr(game, "ui_log", None)
+    if callable(ui_log):
+        try:
+            ui_log(text)
+            return True
+        except Exception:
+            logger.debug("Nie udało się wysłać fallbackowego logu promptowego.", exc_info=True)
+    return False
+
+
 def actor_state_fallback_key(actor) -> str:
     return f"actor:{getattr(actor, 'object_id', None) or getattr(actor, 'name', None) or id(actor)}"
 

@@ -26,11 +26,15 @@ class FakeEvents:
 class FakeConn:
     def __init__(self, choice=None):
         self.choice = choice
+        self.scan_calls = 0
+        self.led_calls = []
 
-    def set_leds(self, *_args, **_kwargs):
+    def set_leds(self, positions, colors, *_args, **_kwargs):
+        self.led_calls.append((list(positions), colors))
         return None
 
     def scan_board(self, _acceptable_responses=None):
+        self.scan_calls += 1
         return self.choice
 
     def leds_off(self):
@@ -145,6 +149,47 @@ def test_hunted_shot_merges_damage_when_both_shots_hit(monkeypatch):
     assert result.success is True
     assert enemy.hp == 26
     assert enemy.apply_calls == 1
+
+
+def test_hunted_shot_locks_targeting_to_hunted_prey(monkeypatch):
+    hero = Hero()
+    prey = Enemy(object_id="enemy-1", position=(1, 0), hp=40, ac=10)
+    other = Enemy(object_id="enemy-2", position=(2, 0), hp=40, ac=10)
+
+    bow = create_weapon("longbow")
+    assert bow is not None
+    hero.inventory = [bow]
+    hero.equipped_weapon_item_ids = [bow.instance_id]
+    hero.statuses.extend(
+        [
+            Status(id="hunted_shot"),
+            Status(id="ranger", data={"ranger_setup": {"hunted_prey_target_id": prey.object_id}}),
+        ]
+    )
+
+    game = FakeGame()
+    game.heroes = [hero]
+    game.enemies = [prey, other]
+    game.board.occupants = {
+        hero.position: hero,
+        prey.position: prey,
+        other.position: other,
+    }
+    game.conn.choice = other.position
+
+    rolls = iter([15, 6, 15, 8])
+    monkeypatch.setattr("GameObjects.events.attack.base_attack_range_event.prompt_for_roll", lambda *_a, **_k: next(rolls))
+
+    result = dispatch_event("hunted_shot", EventContext(game=game, actor=hero))
+
+    assert result.success is True
+    assert prey.hp == 26
+    assert other.hp == 40
+    assert game.conn.scan_calls == 0
+    assert game.conn.led_calls
+    highlighted_positions = {tuple(pos) for pos in game.conn.led_calls[0][0]}
+    assert prey.position in highlighted_positions
+    assert other.position not in highlighted_positions
 
 
 def test_twin_takedown_merges_damage_when_both_hits(monkeypatch):
