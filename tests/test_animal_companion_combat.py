@@ -75,6 +75,15 @@ class FakeEvents:
         return True
 
 
+class PromptRecorder:
+    def __init__(self):
+        self.card_calls = []
+
+    def card(self, **kwargs):
+        self.card_calls.append(kwargs)
+        return True
+
+
 @dataclass
 class DummyOwner(StatusMixin):
     name: str = "Druid"
@@ -535,6 +544,31 @@ def test_combat_cleanup_removes_companion_and_prompts_pickup():
     assert companion.position is None
     assert len(ui.info_calls) == 1
     assert "zabierz figurke" in str(ui.info_calls[0].get("prompt_long") or "").lower()
+
+
+def test_dead_companion_cleanup_emits_player_card():
+    board = BoardGrid(6, 6)
+    game = DummyGame(board=board, conn=DummyConn(), ui=DummyUI())
+    owner = DummyOwner(position=(1, 1), initiative=17)
+    _add_ranger_animal_setup(owner)
+    game.heroes = [owner]
+    board.place(owner, owner.position)
+    prompt = PromptRecorder()
+    game.player_prompt = prompt
+
+    combat = Combat(game)
+    game.state = combat
+    companion = build_animal_companion(owner, "wolf")
+    companion.hp = 0
+    board.place(companion, (2, 1))
+    combat.animal_companions[owner.object_id] = companion
+
+    combat._purge_dead_animal_companions()
+
+    assert companion.position is None
+    assert len(prompt.card_calls) == 1
+    assert prompt.card_calls[0]["title"] == "Towarzysz pokonany"
+    assert prompt.card_calls[0]["ack_required"] is False
 
 
 def test_combat_deploys_two_animal_companions_for_distinct_owners():

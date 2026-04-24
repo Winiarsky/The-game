@@ -189,12 +189,33 @@ def _parse_damage_prompt(prompt: object) -> tuple[int, int, str | None]:
     return count, sides, ability
 
 
-def _roll_damage(actor, weapon) -> tuple[int, str]:
+def _emit_enemy_dice_roll(game, *, actor, target, roll_type: str, formula: str, rolls: list[int], total: int, label: str) -> None:
+    try:
+        getattr(game, "ui_event", lambda *_args, **_kwargs: None)(
+            "dice_roll",
+            {
+                "actor_name": getattr(actor, "name", "Wróg"),
+                "target_name": getattr(target, "name", "cel"),
+                "roll_type": roll_type,
+                "formula": formula,
+                "rolls": list(rolls or []),
+                "total": int(total),
+                "label": label,
+            },
+        )
+    except Exception:
+        pass
+
+
+def _roll_damage(actor, weapon) -> tuple[int, str, list[int]]:
     prompt = getattr(weapon, "damage_prompt", "1k6")
     count, sides, ability = _parse_damage_prompt(prompt)
     total = 0
+    rolls: list[int] = []
     for _ in range(max(1, count)):
-        total += random.randint(1, max(1, sides))
+        roll = random.randint(1, max(1, sides))
+        rolls.append(roll)
+        total += roll
 
     weapon_id = normalize_weapon_id(getattr(weapon, "item_id", None))
     bonuses = dict(getattr(actor, "weapon_damage_bonuses", {}) or {})
@@ -206,7 +227,7 @@ def _roll_damage(actor, weapon) -> tuple[int, str]:
         total += int(getattr(actor, "dex_mod", 0) or 0)
 
     damage_type = str(getattr(weapon, "damage_type", DamageType.NORMAL.value) or DamageType.NORMAL.value)
-    return max(0, int(total)), damage_type
+    return max(0, int(total)), damage_type, rolls
 
 
 def _deadly_bonus(weapon) -> int:
@@ -431,6 +452,9 @@ class EnemyStrikeEvent(ActionCostEvent):
                         f"Linia strzału zablokowana: {'tak' if bool(analysis.get('blocked', False)) else 'nie'}"
                     ),
                     source="enemy_strike_ranged_legend",
+                    blocking=False,
+                    semantic_type="explanation",
+                    emit_log=True,
                 )
                 if bool(analysis.get("blocked", False)):
                     return EventResult.cancelled(message="Strike: linia strzału jest zablokowana.")
@@ -469,6 +493,16 @@ class EnemyStrikeEvent(ActionCostEvent):
             outcome = resolve_outcome(total_attack, target_ac, natural_shift=natural_shift_from_roll(natural_roll))
             if ranged:
                 _play_enemy_projectile_animation(ctx.game, actor_pos, target_pos)
+            _emit_enemy_dice_roll(
+                ctx.game,
+                actor=actor,
+                target=target,
+                roll_type="attack",
+                formula="k20",
+                rolls=[natural_roll],
+                total=total_attack,
+                label=f"Rzut ataku: {getattr(actor, 'name', 'Wróg')}",
+            )
             roll_components = [
                 {"label": "k20", "value": natural_roll, "description": "Naturalny wynik rzutu."},
                 {"label": "Bonus ataku", "value": attack_bonus, "description": "Premia ataku przeciwnika."},
@@ -509,12 +543,22 @@ class EnemyStrikeEvent(ActionCostEvent):
             pox_applied = False
             target_status_snapshot = snapshot_statuses(target)
             if is_hit(outcome):
-                damage, damage_type = _roll_damage(actor, weapon)
+                damage, damage_type, damage_rolls = _roll_damage(actor, weapon)
                 if _weapon_has_trait(weapon, "backstabber") and _target_is_off_guard(target):
                     damage += 1
                 if is_critical_success(outcome):
                     damage = max(0, int(damage) * 2)
                     damage += _deadly_bonus(weapon)
+                _emit_enemy_dice_roll(
+                    ctx.game,
+                    actor=actor,
+                    target=target,
+                    roll_type="damage",
+                    formula=str(getattr(weapon, "damage_prompt", "1k6") or "1k6"),
+                    rolls=damage_rolls,
+                    total=damage,
+                    label=f"Obrażenia: {getattr(actor, 'name', 'Wróg')}",
+                )
                 hp_dealt = _apply_damage(target, damage, damage_type)
                 if _weapon_has_trait(weapon, "jaws") and getattr(actor, "behavior_id", None) == "goblin_dog_hunter":
                     pox_applied = apply_goblin_pox(target)
@@ -562,6 +606,7 @@ class EnemyStrikeEvent(ActionCostEvent):
                     summary = f"{summary} Cel łapie goblin pox."
             elif ranged and cover_bonus:
                 summary = f"{summary} Osłona celu: +{cover_bonus} AC."
+            result_blocks = bool(is_hit(outcome) and hp_dealt > 0)
             try:
                 enemy_prompt_step(
                     ctx.game,
@@ -577,12 +622,12 @@ class EnemyStrikeEvent(ActionCostEvent):
                     ),
                     source=f"{self.name}_result",
                     log_message=summary,
-                    blocking=True,
+                    blocking=result_blocks,
                     semantic_type="result",
                     dedupe_key=f"enemy_attack_result:{getattr(actor, 'object_id', getattr(actor, 'name', 'enemy'))}:{getattr(target, 'object_id', getattr(target, 'name', 'target'))}:{weapon_id}:{outcome}",
                     next_hint="Po potwierdzeniu przeciwnik przejdzie do kolejnej akcji lub końca tury.",
-                    continue_hint="Enter po zastosowaniu wyniku na planszy.",
-                    emit_log=False,
+                    continue_hint="Enter po zastosowaniu wyniku na planszy." if result_blocks else "Nie musisz nic potwierdzać.",
+                    emit_log=not result_blocks,
                 )
             except Exception:
                 pass

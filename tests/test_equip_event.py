@@ -270,7 +270,33 @@ def test_equip_drop_creates_loot_and_interaction_picks_it_up():
     game.ui = FakeUI(enabled=True, answer="pickup_loot")
     pick_result = dispatch_event("interaction", ExplorationCtx(game=game, actor=hero))
     assert pick_result.success
-    assert len(hero.inventory) == before
+    assert len(hero.inventory) == before - 1
+    assert len(getattr(game, "party_stash", [])) == 1
+    interaction_call = game.ui.calls[-1]
+    assert interaction_call["prompt"] == "Loot na polu"
+    assert "Loot na polu" in str(interaction_call.get("prompt_long") or "")
+    meta = list(interaction_call.get("choice_meta") or [])
+    assert meta
+    assert "Zabierz z pola:" in str(meta[0].get("desc") or "")
+
+
+def test_equip_outside_combat_can_take_item_from_party_stash():
+    hero = Hero("A", (0, 0))
+    stash_item = types.SimpleNamespace(name="Dogslicer", item_id="dogslicer", category="weapon")
+    ui = FakeUI(enabled=True, answer=["stash:0", "exit"])
+    game = FakeGame(conn=FakeConn(), ui=ui)
+    game.party_stash = [stash_item]
+    game.heroes = [hero]
+    game.board.place(hero, hero.position)
+    ensure_actor_inventory(hero)
+    before = len(hero.inventory)
+
+    result = dispatch_event("equip", ExplorationCtx(game=game, actor=hero))
+
+    assert result.success
+    assert len(hero.inventory) == before + 1
+    assert stash_item in hero.inventory
+    assert game.party_stash == []
 
 
 def test_attack_fallbacks_to_unarmed_when_no_weapon_equipped(monkeypatch):

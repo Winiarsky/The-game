@@ -588,6 +588,73 @@ button:hover,
     background: linear-gradient(180deg, rgba(231, 221, 196, 0.06), rgba(255, 255, 255, 0.02));
 }
 
+.dice-overlay {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid rgba(198, 161, 90, 0.34);
+    background: rgba(18, 20, 20, 0.94);
+    animation: dice-pop 0.45s ease-out;
+}
+
+.dice-copy {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+.dice-copy span,
+.dice-copy small {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.dice-copy strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dice-faces {
+    display: flex;
+    gap: 7px;
+}
+
+.die-face {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+    background: #e7ddc4;
+    color: #1f1b15;
+    font-family: var(--font-title);
+    font-weight: 700;
+    animation: die-tumble 0.7s ease-out;
+}
+
+.dice-total {
+    min-width: 42px;
+    text-align: right;
+    font-family: var(--font-title);
+    font-size: 24px;
+    color: #fff3d7;
+}
+
+@keyframes dice-pop {
+    from { opacity: 0; transform: translateY(8px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes die-tumble {
+    0% { transform: rotate(-22deg) scale(0.75); }
+    65% { transform: rotate(9deg) scale(1.08); }
+    100% { transform: rotate(0deg) scale(1); }
+}
+
 .choice-detail {
     display: grid;
     gap: 8px;

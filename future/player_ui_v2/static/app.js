@@ -54,6 +54,7 @@ const refs = {
     actionProgressValue: document.getElementById("action-progress-value"),
     actionProgressBar: document.getElementById("action-progress-bar"),
     promptMeta: document.getElementById("prompt-meta"),
+    diceOverlay: document.getElementById("dice-overlay"),
     rollBreakdown: document.getElementById("roll-breakdown"),
     choiceList: document.getElementById("choice-list"),
     choiceDetail: document.getElementById("choice-detail"),
@@ -111,10 +112,12 @@ const state = {
     promptDrafts: new Map(),
     lastRenderedPromptId: null,
     dismissedRuntimeErrorKey: null,
+    diceRoll: null,
+    diceRollTimer: null,
 };
 
 function escapeHtml(text) {
-    return String(text || "")
+    return String(text == null ? "" : text)
         .replaceAll("&", "&amp;")
         .replaceAll("<", "&lt;")
         .replaceAll(">", "&gt;")
@@ -663,6 +666,17 @@ function handleEvent(event) {
         return;
     }
 
+    if (event.type === "dice_roll") {
+        state.diceRoll = { ...payload, nonce: Date.now() };
+        if (state.diceRollTimer) window.clearTimeout(state.diceRollTimer);
+        renderDiceOverlay();
+        state.diceRollTimer = window.setTimeout(() => {
+            state.diceRoll = null;
+            renderDiceOverlay();
+        }, 1800);
+        return;
+    }
+
     if (["log", "info", "narration", "idle_hint"].includes(event.type)) {
         const mapMatch = String(payload.message || payload.text || "").match(/Wejście na mapę:\s*(.+?)\.?$/i);
         if (mapMatch && mapMatch[1]) handleMapEntry(mapMatch[1].trim());
@@ -804,7 +818,8 @@ function promptCommandLines(prompt) {
         const lines = [
             "**`8` / `2` albo strzałki** zmieniają zaznaczenie.",
             "**`Enter`** zatwierdza aktualną opcję.",
-            "**Kliknięcie opcji** zatwierdza ją od razu.",
+            "**Kliknięcie opcji** pokazuje jej opis.",
+            "**Przycisk Potwierdź** wysyła zaznaczoną opcję.",
         ];
         if (promptCancelChoice(prompt)) {
             lines.push("**`Esc`** anuluje bieżący wybór.");
@@ -835,8 +850,8 @@ function promptCommandSummary(prompt) {
     if (prompt.kind === "choice" && promptChoices(prompt).length) {
         const hasCancel = Boolean(promptCancelChoice(prompt));
         return hasCancel
-            ? "8/2 lub strzałki: wybór · Enter: zatwierdź · Esc: anuluj"
-            : "8/2 lub strzałki: wybór · Enter: zatwierdź";
+            ? "8/2 lub strzałki: wybór · Enter/przycisk: zatwierdź · Esc: anuluj"
+            : "8/2 lub strzałki: wybór · Enter/przycisk: zatwierdź";
     }
     if (prompt.kind === "roll") {
         return "Wpisz wynik · Enter: wyślij · Nat 20/Nat 1: wynik naturalny";
@@ -940,7 +955,8 @@ function promptChoices(prompt) {
         return prompt.choice_meta.map((item, index) => ({
             id: item.raw || String(index),
             label: item.label || item.raw || `Opcja ${index + 1}`,
-            desc: item.desc || "",
+            desc: item.desc_short || item.short_desc || item.desc || "",
+            detail: item.desc || item.details_markdown || item.description || item.desc_short || item.short_desc || "",
             raw: item.raw || item.label || String(index),
             category: item.category || "",
             icon: item.icon || "",
@@ -951,6 +967,7 @@ function promptChoices(prompt) {
         id: String(index),
         label: String(item),
         desc: "",
+        detail: "",
         raw: String(item),
         category: "",
         icon: "",
@@ -1018,10 +1035,19 @@ function buildRollBreakdown(prompt) {
     }
     const total = components.reduce((acc, row) => acc + Number(row.value || 0), 0);
     if (!components.length) return null;
+    const targetDc = [
+        stack.target_dc,
+        stack.dc,
+        stack.target_ac,
+        prompt.communication?.context?.target_dc,
+        prompt.communication?.context?.dc,
+        prompt.communication?.context?.target_ac,
+    ].map((value) => Number(value)).find((value) => Number.isFinite(value) && value > 0) || null;
     return {
         title: layout === "damage" ? "Składniki obrażeń" : "Składniki modyfikatora",
         total,
         components,
+        targetDc: layout === "damage" ? null : targetDc,
     };
 }
 
@@ -1048,8 +1074,37 @@ function renderRollBreakdown(prompt) {
                 </article>
             `).join("")}
         </div>
+        ${breakdown.targetDc ? `
+            <div class="roll-breakdown-note">
+                DC/AC ${escapeHtml(breakdown.targetDc)}: sukces od ${escapeHtml(breakdown.targetDc)}, krytyczny sukces od ${escapeHtml(breakdown.targetDc + 10)}, krytyczna porażka przy ${escapeHtml(breakdown.targetDc - 10)} lub mniej.
+            </div>
+        ` : ""}
     `;
     refs.rollBreakdown.classList.remove("hidden");
+}
+
+function renderDiceOverlay() {
+    if (!refs.diceOverlay) return;
+    const roll = state.diceRoll;
+    if (!roll) {
+        refs.diceOverlay.classList.add("hidden");
+        refs.diceOverlay.innerHTML = "";
+        return;
+    }
+    const rolls = Array.isArray(roll.rolls) ? roll.rolls.map((item) => Number(item || 0)).filter((item) => Number.isFinite(item)) : [];
+    const faces = rolls.length ? rolls : [Number(roll.total || 0)];
+    refs.diceOverlay.innerHTML = `
+        <div class="dice-copy">
+            <span>${escapeHtml(roll.label || "Rzut przeciwnika")}</span>
+            <strong>${escapeHtml(roll.actor_name || "Przeciwnik")}${roll.target_name ? ` -> ${escapeHtml(roll.target_name)}` : ""}</strong>
+            <small>${escapeHtml(roll.formula || roll.roll_type || "k20")}</small>
+        </div>
+        <div class="dice-faces">
+            ${faces.map((face) => `<span class="die-face">${escapeHtml(face)}</span>`).join("")}
+        </div>
+        <div class="dice-total">${escapeHtml(roll.total ?? "")}</div>
+    `;
+    refs.diceOverlay.classList.remove("hidden");
 }
 
 function ensureSelectedChoiceIndex(choices) {
@@ -1135,7 +1190,15 @@ function createChoiceButton(choice) {
             state.selectedChoiceIndex = nextIndex;
             updateChoiceSelectionUI();
         }
-        answerPrompt(choice.raw);
+    });
+    button.addEventListener("dblclick", () => {
+        const choices = promptChoices(state.view.activePrompt);
+        const nextIndex = choices.findIndex((entry) => entry.raw === choice.raw);
+        if (nextIndex >= 0) {
+            state.selectedChoiceIndex = nextIndex;
+            updateChoiceSelectionUI();
+        }
+        answerPrompt(choice.raw).catch((error) => window.alert(error.message));
     });
     return button;
 }
@@ -1157,7 +1220,7 @@ function renderSelectedChoiceDetail() {
         return;
     }
     refs.choiceDetailTitle.textContent = choice.label || "Opcja";
-    refs.choiceDetailBody.innerHTML = markdownish(choice.desc || "Brak dodatkowego opisu tej opcji.");
+    refs.choiceDetailBody.innerHTML = markdownish(choice.detail || choice.desc || "Brak dodatkowego opisu tej opcji.");
     refs.choiceDetail.classList.remove("hidden");
 }
 
@@ -1244,19 +1307,24 @@ function renderPrompt(prompt) {
         state.selectedChoiceIndex = -1;
     }
 
+    const needsChoiceConfirm = choices.length > 0;
     const needsInput = prompt.kind === "roll" || (!choices.length && prompt.kind !== "info");
     const isConfirmOnly = prompt.kind === "info" && !choices.length;
-    if (needsInput || isConfirmOnly) {
+    if (needsChoiceConfirm || needsInput || isConfirmOnly) {
         refs.promptForm.classList.remove("hidden");
-        refs.promptInput.classList.toggle("hidden", isConfirmOnly);
+        refs.promptInput.classList.toggle("hidden", isConfirmOnly || needsChoiceConfirm);
         refs.promptInput.placeholder = prompt.kind === "roll"
             ? (prompt.answer_placeholder || "Wpisz wynik rzutu...")
             : "Wpisz odpowiedź...";
         refs.naturalControls.classList.toggle("hidden", prompt.kind !== "roll");
-        refs.promptSubmit.textContent = isConfirmOnly ? "Potwierdź (Enter)" : "Potwierdź";
+        refs.promptSubmit.textContent = needsChoiceConfirm
+            ? "Potwierdź wybór (Enter)"
+            : isConfirmOnly
+            ? "Potwierdź (Enter)"
+            : "Potwierdź";
         if (promptChanged) {
             queueMicrotask(() => {
-                if (isConfirmOnly) refs.promptSubmit.focus();
+                if (isConfirmOnly || needsChoiceConfirm) refs.promptSubmit.focus();
                 else refs.promptInput.focus();
             });
         }
@@ -1422,6 +1490,7 @@ function renderAll() {
     renderObjectives();
     renderTransitions();
     renderJournal();
+    renderDiceOverlay();
     renderResult();
 }
 
@@ -1512,6 +1581,10 @@ refs.btnResultBack.addEventListener("click", async () => {
 refs.promptForm.addEventListener("submit", (event) => {
     event.preventDefault();
     if (!state.view.activePrompt) return;
+    if (promptChoices(state.view.activePrompt).length) {
+        submitSelectedChoice();
+        return;
+    }
     if (state.view.activePrompt.kind === "info" && !state.view.activePrompt.choices.length) {
         answerPrompt("ok").catch((error) => window.alert(error.message));
         return;

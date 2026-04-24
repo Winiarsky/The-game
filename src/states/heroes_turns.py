@@ -274,6 +274,7 @@ class HeroesTurn(State):
                         available_events=available_events,
                         event_names=list(grouped.get(choice, [])),
                         source=f"intent:{choice}",
+                        actor=hero,
                     )
                     if not event_name:
                         self.game.ui_log("Nie wybrano akcji ataku.")
@@ -285,6 +286,7 @@ class HeroesTurn(State):
                     available_events=available_events,
                     event_names=list(grouped.get(choice, [])),
                     source=f"intent:{choice}",
+                    actor=hero,
                 )
                 if not event_name:
                     self.game.ui_log(f"Nie wybrano akcji z kategorii '{choice}'.")

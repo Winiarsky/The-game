@@ -26,6 +26,8 @@ class CommunicationEnvelope:
     blocking: bool = False
     debug_only: bool = False
     progress: dict[str, Any] | None = None
+    ack_required: bool | None = None
+    pause_policy: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
@@ -34,6 +36,23 @@ class CommunicationEnvelope:
 
 def _as_text(value: Any) -> str:
     return str(value or "").strip()
+
+
+def _optional_bool(value: Any) -> bool | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    text = _as_text(value).lower()
+    if not text:
+        return None
+    if text in {"1", "true", "yes", "y", "on", "required", "require", "ack", "pause"}:
+        return True
+    if text in {"0", "false", "no", "n", "off", "none", "skip", "passive", "silent"}:
+        return False
+    return None
 
 
 def _normalize_multiline(text: str | None) -> str:
@@ -147,6 +166,8 @@ def make_communication(
     blocking: bool = False,
     debug_only: bool = False,
     progress: dict[str, Any] | None = None,
+    ack_required: bool | None = None,
+    pause_policy: str | None = None,
 ) -> dict[str, Any]:
     return CommunicationEnvelope(
         channel=channel,
@@ -162,6 +183,8 @@ def make_communication(
         blocking=bool(blocking),
         debug_only=bool(debug_only),
         progress=dict(progress or {}) or None,
+        ack_required=_optional_bool(ack_required),
+        pause_policy=_as_text(pause_policy) or None,
     ).to_dict()
 
 
@@ -288,6 +311,14 @@ def normalize_communication(
     channel = _as_text(raw.get("channel") or payload.get("channel")) or ("prompt" if prompt else "log")
     context = dict(raw.get("context") or payload.get("context") or {}) or None
     progress = dict(raw.get("progress") or payload.get("progress") or {}) or None
+    ack_required = _optional_bool(
+        raw.get("ack_required")
+        if "ack_required" in raw
+        else payload.get("ack_required")
+        if "ack_required" in payload
+        else None
+    )
+    pause_policy = _as_text(raw.get("pause_policy") or payload.get("pause_policy"))
     cta = _as_text(raw.get("cta") or payload.get("cta"))
     if not cta and prompt:
         cta = "Potwierdź, gdy zakończysz ten krok."
@@ -313,5 +344,7 @@ def normalize_communication(
         blocking=blocking,
         debug_only=debug_only,
         progress=progress,
+        ack_required=ack_required,
+        pause_policy=pause_policy or None,
     )
     return envelope.to_dict()

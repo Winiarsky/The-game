@@ -98,7 +98,7 @@ class InteractionEvent(GameEvent):
             logger.info("Nie możesz teraz wejść w interakcję z tym obiektem.")
             return EventResult.noop(message="Brak możliwości interakcji.")
 
-        action_id = self._choose_action(interactable, game)
+        action_id = self._choose_action(interactable, game, actor=actor)
         while True:
             interaction = interactable.actions.get(action_id) if action_id else None
             tags = interaction.tags if interaction and getattr(interaction, "tags", None) else self._effective_tags(ctx)
@@ -135,31 +135,56 @@ class InteractionEvent(GameEvent):
                 )
                 break
 
-            action_id = self._choose_action(interactable, game)
+            action_id = self._choose_action(interactable, game, actor=actor)
             if not action_id:
                 break
 
         return EventResult(success=True, consumed_action=self.consumes_action, message="Interakcja zakończona.")
 
-    def _choose_action(self, interactable, game):
+    def _prompt_value(self, interactable, name: str, actor, game) -> str | None:
+        method = getattr(interactable, name, None)
+        if not callable(method):
+            return None
+        try:
+            value = method(actor, game)
+        except TypeError:
+            try:
+                value = method()
+            except Exception:
+                return None
+        except Exception:
+            return None
+        text = str(value or "").strip()
+        return text or None
+
+    def _choose_action(self, interactable, game, actor=None):
         actions = getattr(interactable, "available_actions", lambda: [])()
         if not actions:
             return None
         ui = getattr(game, "ui", None)
         if ui and ui.enabled:
+            title = self._prompt_value(interactable, "interaction_prompt_title", actor, game) or "Wybierz akcję"
+            subtitle = self._prompt_value(interactable, "interaction_prompt_summary", actor, game)
+            body = self._prompt_value(interactable, "interaction_prompt_body", actor, game)
+            details = self._prompt_value(interactable, "interaction_prompt_details", actor, game)
             choice_meta = [
                 {
                     "raw": act.id,
                     "label": act.label,
                     "desc": act.description or "",
+                    "desc_short": act.description or "",
+                    "detail": act.description or "",
                     "key": str(idx + 1),
                 }
                 for idx, act in enumerate(actions)
             ]
             ans = ui.prompt_choice(
-                "Wybierz akcję",
+                title,
                 choices=[c["label"] for c in choice_meta],
                 source="interaction",
+                subtitle=subtitle,
+                prompt_long=body,
+                details_markdown=details,
                 layout="dialog",
                 choice_meta=choice_meta,
             )

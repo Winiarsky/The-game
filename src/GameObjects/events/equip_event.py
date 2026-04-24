@@ -8,6 +8,7 @@ from board import consts
 from GameObjects.Interactables.loot_pile import LootPile
 from GameObjects.items.goodberry_item import is_goodberry_item
 from GameObjects.items.inventory import (
+    add_item,
     all_inventory_sections,
     assign_item_to_hand,
     hand_slots_snapshot,
@@ -21,6 +22,7 @@ from GameObjects.items.inventory import (
     transfer_item,
 )
 from GameObjects.items.weapon import normalize_weapon_id
+from party_stash import party_stash_items, take_party_stash_item
 
 from .base import ActionCostEvent, EventContext, EventResult
 from .registry import register_event
@@ -401,7 +403,13 @@ def _render_hand_slots_line(actor) -> str:
     return f"Ręce: L={left} · P={right}{suffix}"
 
 
-def _build_ui_item_choice_meta(actor, entries: list[tuple[str, object]]) -> list[dict[str, str]]:
+def _build_ui_item_choice_meta(
+    actor,
+    entries: list[tuple[str, object]],
+    *,
+    stash_entries: list[object] | None = None,
+    stash_locked: bool = False,
+) -> list[dict[str, str]]:
     out: list[dict[str, str]] = []
     hands_line = _render_hand_slots_line(actor)
     for idx, (category, item) in enumerate(entries):
@@ -419,6 +427,32 @@ def _build_ui_item_choice_meta(actor, entries: list[tuple[str, object]]) -> list
                 "label": label,
                 "desc": desc,
                 "key": "",
+            }
+        )
+    for idx, item in enumerate(list(stash_entries or [])):
+        label = item_label(item)
+        if stash_locked:
+            out.append(
+                {
+                    "raw": "stash_locked",
+                    "label": f"[PARTY STASH] {label}",
+                    "desc": "Party Stash jest zablokowany w trakcie walki. Przedmiot jest bezpieczny, ale nie jest pod ręką.",
+                    "key": "",
+                    "category": "stash",
+                }
+            )
+            continue
+        out.append(
+            {
+                "raw": f"stash:{idx}",
+                "label": f"[PARTY STASH] {label}",
+                "desc": (
+                    f"{label}\n"
+                    "Weź z Party Stash do ekwipunku aktywnego bohatera. "
+                    "Dostępne tylko po walce / poza aktywnym encounterem."
+                ),
+                "key": "",
+                "category": "stash",
             }
         )
     out.append(
@@ -445,7 +479,14 @@ class EquipEvent(ActionCostEvent):
         ui = getattr(ctx.game, "ui", None)
         if not (ui and getattr(ui, "enabled", False)):
             return "noop"
-        choice_meta = _build_ui_item_choice_meta(actor, entries)
+        raw_stash = party_stash_items(ctx.game)
+        stash_entries = raw_stash if (raw_stash and not ctx.in_combat) else raw_stash[:1]
+        choice_meta = _build_ui_item_choice_meta(
+            actor,
+            entries,
+            stash_entries=stash_entries,
+            stash_locked=bool(raw_stash and ctx.in_combat),
+        )
         section_idx = _section_index_for_cursor(entries, selected_idx) + 1 if entries else 0
         section_count = len(_ordered_categories(entries))
         ans = ui.prompt_choice(
@@ -455,7 +496,7 @@ class EquipEvent(ActionCostEvent):
             layout="menu_numpad",
             choice_meta=choice_meta,
             title="Ekwipunek",
-            subtitle=f"Sekcja {section_idx}/{section_count} · 8/2 item · 4/6 sekcja · 7/9 ręce · Enter użyj",
+            subtitle=f"Sekcja {section_idx}/{section_count} · 8/2 item · 4/6 sekcja · 7/9 ręce · Enter użyj · Party Stash po walce",
             prompt_long="",
             image=_PROMPT_IMAGE,
             preselected_index=max(0, int(selected_idx)),
@@ -584,7 +625,8 @@ class EquipEvent(ActionCostEvent):
             cursor = int(getattr(actor, "inventory_cursor", 0) or 0)
             while True:
                 entries = _selection_entries(actor)
-                if not entries:
+                stash_available = party_stash_items(ctx.game)
+                if not entries and not stash_available:
                     if spent_actions > 0:
                         return EventResult(
                             success=True,
@@ -594,19 +636,53 @@ class EquipEvent(ActionCostEvent):
                         )
                     return EventResult.cancelled(message="Ekwipunek jest pusty.")
 
-                cursor = max(0, min(cursor, len(entries) - 1))
+                cursor = max(0, min(cursor, len(entries) - 1)) if entries else 0
                 command = self._read_ui_selection(ctx, actor, entries, cursor)
+                if command == "stash_locked":
+                    last_message = "Party Stash jest dostępny dopiero po walce."
+                    try:
+                        ctx.game.ui_log(last_message)
+                    except Exception:
+                        pass
+                    continue
+                if command.startswith("stash:"):
+                    if ctx.in_combat:
+                        last_message = "Party Stash jest dostępny dopiero po walce."
+                        try:
+                            ctx.game.ui_log(last_message)
+                        except Exception:
+                            pass
+                        continue
+                    try:
+                        stash_idx = int(command.split(":", 1)[1])
+                    except Exception:
+                        last_message = "Nieprawidłowy wybór z Party Stash."
+                        continue
+                    item = take_party_stash_item(ctx.game, stash_idx)
+                    if item is None:
+                        last_message = "Nieprawidłowy wybór z Party Stash."
+                        continue
+                    add_item(actor, item)
+                    success, message = True, f"Przeniesiono {item_label(item)} z Party Stash do ekwipunku: {getattr(actor, 'name', 'bohater')}."
+                    maybe_finish = _finish_or_continue(success, message)
+                    if maybe_finish is not None:
+                        return maybe_finish
+                    continue
                 if command == "up":
-                    cursor = (cursor - 1 + len(entries)) % len(entries)
+                    if entries:
+                        cursor = (cursor - 1 + len(entries)) % len(entries)
                     continue
                 if command == "down":
-                    cursor = (cursor + 1) % len(entries)
+                    if entries:
+                        cursor = (cursor + 1) % len(entries)
                     continue
                 if command == "section_prev":
-                    cursor = _move_cursor_section(entries, cursor, -1)
+                    if entries:
+                        cursor = _move_cursor_section(entries, cursor, -1)
                     continue
                 if command == "section_next":
-                    cursor = _move_cursor_section(entries, cursor, 1)
+                    if entries:
+                        cursor = _move_cursor_section(entries, cursor, 1)
                     continue
                 if command == "exit":
                     try:

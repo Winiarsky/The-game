@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections import Counter
 from typing import Any, Iterable
 
 from localization import localize_term_pl, localized_hint_pl
@@ -98,6 +99,41 @@ def _normalize_spell_id(value: str | None) -> str:
     if not raw:
         return ""
     return _SPELL_ID_ALIASES.get(raw, raw)
+
+
+def _compact_counted_labels(values: Iterable[object]) -> list[str]:
+    normalized = [_normalize_spell_id(str(item or "")) for item in list(values or []) if _normalize_spell_id(str(item or ""))]
+    counts = Counter(normalized)
+    out: list[str] = []
+    for spell_id, count in counts.items():
+        label = _labelize(spell_id) or spell_id.replace("_", " ").title()
+        out.append(f"{label} x{count}" if count > 1 else label)
+    return out
+
+
+def _prepared_spell_count(actor: Any | None, spell_id: str) -> int:
+    if actor is None:
+        return 0
+    normalized = _normalize_spell_id(spell_id)
+    if not normalized:
+        return 0
+    spell_state = getattr(actor, "spell_state", None)
+    if not isinstance(spell_state, dict):
+        return 0
+    prepared = spell_state.get("prepared_today", {}) or {}
+    listed_total = 0
+    for values in prepared.values():
+        listed_total += sum(1 for item in list(values or []) if _normalize_spell_id(str(item or "")) == normalized)
+    prepared_counts = spell_state.get("prepared_counts", {}) or {}
+    counted_total = 0
+    if isinstance(prepared_counts, dict):
+        for bucket in prepared_counts.values():
+            if isinstance(bucket, dict):
+                try:
+                    counted_total += int(bucket.get(normalized, 0) or 0)
+                except Exception:
+                    pass
+    return max(0, counted_total or listed_total)
 
 
 def _with_numpad_hint(subtitle: str) -> str:
@@ -1477,6 +1513,7 @@ def choose_event_from_bucket(
     available_events: dict[str, type],
     event_names: list[str],
     source: str,
+    actor: Any | None = None,
 ) -> str | None:
     if not event_names:
         return None
@@ -1502,10 +1539,15 @@ def choose_event_from_bucket(
     options: list[dict[str, str]] = []
     for event_name in event_names:
         cls = available_events.get(event_name)
+        label = _labelize(event_name)
+        if bucket_id == "magic":
+            prepared_count = _prepared_spell_count(actor, event_name)
+            if prepared_count > 1:
+                label = f"{label} x{prepared_count}"
         options.append(
             {
                 "id": event_name,
-                "label": _labelize(event_name),
+                "label": label,
                 "desc": _event_desc(event_name, cls),
             }
         )
@@ -1782,10 +1824,12 @@ def render_actor_stats(actor: Any, *, combat_state: Any | None = None) -> str:
             f"focus={len(list(known.get('focus', []) or []))}, "
             f"innate={len(list(known.get('innate', []) or []))}"
         )
-        if list(prepared.get("cantrip", []) or []):
-            lines.append(f"- przygotowane cantripy: {', '.join(list(prepared.get('cantrip', []) or []))}")
-        if list(prepared.get("rank_1", []) or []):
-            lines.append(f"- przygotowane rank 1: {', '.join(list(prepared.get('rank_1', []) or []))}")
+        cantrip_labels = _compact_counted_labels(prepared.get("cantrip", []) or [])
+        if cantrip_labels:
+            lines.append(f"- przygotowane cantripy: {', '.join(cantrip_labels)}")
+        rank1_labels = _compact_counted_labels(prepared.get("rank_1", []) or [])
+        if rank1_labels:
+            lines.append(f"- przygotowane rank 1: {', '.join(rank1_labels)}")
         if "rank_1" in remaining:
             lines.append(f"- pozostale sloty rank 1: {remaining.get('rank_1')}")
         lines.append(f"- enforce: {bool(spell_state.get('enforce', False))}")

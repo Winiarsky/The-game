@@ -564,9 +564,31 @@ class Combat(State):
             except Exception:
                 logger.debug("Nie udało się odświeżyć UI dla pokonanego companiona.", exc_info=True)
             self.animal_companions.pop(owner_id, None)
-            self.game.ui_log(
-                f"{getattr(companion, 'name', 'Zwierzecy towarzysz')} zostal pokonany i znika z planszy."
-            )
+            companion_name = getattr(companion, "name", "Zwierzecy towarzysz")
+            owner_name = getattr(companion, "owner_name", owner_id)
+            message = f"{companion_name} zostal pokonany i znika z planszy."
+            self.game.ui_log(message)
+            player_prompt = getattr(self.game, "player_prompt", None)
+            if player_prompt is not None and hasattr(player_prompt, "card"):
+                try:
+                    player_prompt.card(
+                        kind="result",
+                        title="Towarzysz pokonany",
+                        summary=f"{companion_name} wypada z walki.",
+                        body_markdown=(
+                            f"**{companion_name}** ({owner_name}) zostal pokonany i znika z planszy.\n\n"
+                            "Zdejmij figurke z pola, na ktorym stal towarzysz. "
+                            "Dalsze skutki dla towarzysza rozlicz po walce zgodnie z zasadami scenariusza."
+                        ),
+                        priority="result",
+                        scope_key="combat:companion",
+                        dedupe_key=f"companion_defeated:{owner_id}:{getattr(companion, 'object_id', id(companion))}",
+                        prompt_id="companion.defeated",
+                        ack_required=False,
+                        pause_policy="passive",
+                    )
+                except Exception:
+                    logger.debug("Nie udało się wysłać karty o pokonanym companionie.", exc_info=True)
 
     # --- Initiative helpers ---
     def _reset_heroes_initiative(self) -> None:
@@ -1279,9 +1301,107 @@ class Combat(State):
         if enemies_alive:
             return None
         logger.info("Brak wrogów na planszy – koniec walki.")
+        self._offer_collect_remaining_loot()
         if getattr(self.game, "is_generated_encounter", None) and self.game.is_generated_encounter():
             return EncounterFinished(self.game)
         return HeroesTurn(self.game)
+
+    def _loot_all_actor(self) -> Any | None:
+        for hero in list(getattr(self.game, "heroes", []) or []):
+            if getattr(hero, "position", None) is not None:
+                return hero
+        heroes = list(getattr(self.game, "heroes", []) or [])
+        return heroes[0] if heroes else None
+
+    def _remaining_loot_summary(self, piles: list[object]) -> str:
+        rows: list[str] = []
+        for pile in piles:
+            position = getattr(pile, "position", None)
+            summary_fn = getattr(pile, "loot_summary", None)
+            try:
+                summary = summary_fn() if callable(summary_fn) else ""
+            except Exception:
+                summary = ""
+            rows.append(f"- pole {position}: {summary or 'loot'}")
+        return "\n".join(rows) if rows else "- brak lootu"
+
+    def _offer_collect_remaining_loot(self) -> None:
+        if bool(getattr(self, "_combat_end_loot_prompt_done", False)):
+            return
+        self._combat_end_loot_prompt_done = True
+        try:
+            from party_stash import find_loot_piles
+        except Exception:
+            return
+        piles = find_loot_piles(self.game)
+        if not piles:
+            return
+        actor = self._loot_all_actor()
+        player_prompt = getattr(self.game, "player_prompt", None)
+        if player_prompt is None or not hasattr(player_prompt, "choice"):
+            return
+        loot_list = self._remaining_loot_summary(piles)
+        prompt_text = render_prompt_text("interaction.combat_end_loot_all", loot_list=loot_list)
+        body_markdown = (
+            "**Na planszy został loot**\n"
+            f"{loot_list}\n\n"
+            "Możesz zebrać wszystko do **Party Stash** albo przejrzeć stosy przed zapisaniem."
+        )
+        choice_meta = [
+            {
+                "raw": "stash_all",
+                "label": "Zbierz wszystko do Party Stash",
+                "desc": "Wszystkie stosy znikną z planszy, a przedmioty i monety trafią do magazynu drużyny.",
+                "key": "Enter",
+            },
+            {
+                "raw": "review",
+                "label": "Przejrzyj przed zapisaniem",
+                "desc": "Przejdź przez stosy lootu i wybierz rzeczy, które od razu trafią do aktywnego bohatera.",
+                "key": "R",
+            },
+            {
+                "raw": "leave",
+                "label": "Zostaw na planszy",
+                "desc": "Loot zostaje tam, gdzie leży. Można go zebrać ręcznie później.",
+                "key": "Esc",
+            },
+        ]
+        try:
+            answer = player_prompt.choice(
+                str(prompt_text.get("title") or "Loot po walce"),
+                choices=[entry["label"] for entry in choice_meta],
+                source="combat_end_loot",
+                subtitle=str(prompt_text.get("summary") or "Na planszy został loot."),
+                body_markdown=body_markdown,
+                details_markdown=str(prompt_text.get("details_markdown") or ""),
+                choice_meta=choice_meta,
+                scope_key="combat:end:loot",
+                dedupe_key="combat_end_loot_all",
+                prompt_id="interaction.combat_end_loot_all",
+            )
+        except Exception:
+            answer = None
+        normalized = str(answer or "leave").strip().lower()
+        if normalized == "leave":
+            return
+        if normalized == "review" and actor is not None:
+            for pile in list(find_loot_piles(self.game)):
+                collect = getattr(pile, "collect", None)
+                if callable(collect):
+                    try:
+                        collect(actor, self.game, allow_prompt=True)
+                    except Exception:
+                        logger.debug("Nie udało się przejrzeć stosu lootu po walce.", exc_info=True)
+            return
+        if normalized in {"stash_all", "confirm", "ok", ""}:
+            for pile in list(find_loot_piles(self.game)):
+                collect = getattr(pile, "collect", None)
+                if callable(collect):
+                    try:
+                        collect(actor, self.game, allow_prompt=False)
+                    except Exception:
+                        logger.debug("Nie udało się zebrać stosu lootu po walce.", exc_info=True)
 
     def _effective_initiative(self, actor: Any) -> int:
         if actor in self.temp_initiative:
@@ -1668,12 +1788,12 @@ class Combat(State):
                     "Potwierdź Enterem, aby obserwować kolejne kroki przeciwnika."
                 ),
                 source="enemy_turn_start",
-                blocking=True,
-                semantic_type="required_action",
+                blocking=False,
+                semantic_type="status_update",
                 dedupe_key=f"enemy_turn_start:{getattr(actor, 'object_id', getattr(actor, 'name', 'enemy'))}:{remaining}/{limit}",
                 next_hint="Przeciwnik zacznie wykonywać akcje.",
-                continue_hint="Enter po przygotowaniu się do obserwacji.",
-                emit_log=False,
+                continue_hint="Nie musisz nic potwierdzać.",
+                emit_log=True,
             )
             return self._process_enemy_turn(actor)
 
@@ -1801,6 +1921,7 @@ class Combat(State):
                         available_events=available_events,
                         event_names=list(grouped.get(intent, [])),
                         source=f"intent:{intent}",
+                        actor=actor,
                     )
                     if not raw_choice:
                         self.game.ui_log("Nie wybrano akcji ataku.")
@@ -1812,6 +1933,7 @@ class Combat(State):
                     available_events=available_events,
                     event_names=list(grouped.get(intent, [])),
                     source=f"intent:{intent}",
+                    actor=actor,
                 )
                 if not raw_choice:
                     self.game.ui_log(f"Nie wybrano akcji z kategorii '{intent}'.")

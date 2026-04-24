@@ -88,6 +88,7 @@ class DummyOwner:
 
 def _build_game(board: BoardGrid, heroes: list[DummyHero], enemies: list[object], ui: PromptUI):
     logs = []
+    events = []
     hero_updates = []
     game = SimpleNamespace(
         board=board,
@@ -96,12 +97,13 @@ def _build_game(board: BoardGrid, heroes: list[DummyHero], enemies: list[object]
         ui=ui,
         conn=DummyConn(),
         ui_log=lambda message, **_kwargs: logs.append(str(message)),
-        ui_event=lambda *_a, **_k: None,
+        ui_event=lambda event_type, payload=None, **_k: events.append({"type": event_type, "payload": payload or {}}),
         ui_hero=lambda hero, **_kwargs: hero_updates.append({"hero": hero, **_kwargs}),
         ui_active_actor=lambda *_a, **_k: None,
         ui_idle_hint=lambda *_a, **_k: None,
     )
     game.logs = logs
+    game.ui_events = events
     game.hero_updates = hero_updates
     game.events = SimpleNamespace(safe_emit_action=lambda **_kwargs: True)
     return game
@@ -136,7 +138,8 @@ def test_combat_enemy_turn_prompts_start_and_thinking(monkeypatch):
     combat.choose_action()
 
     titles = [call["title"] for call in ui.info_calls]
-    assert "Tura przeciwnika: Bandit Bruiser" in titles
+    assert "Tura przeciwnika: Bandit Bruiser" not in titles
+    assert any("Tura przeciwnika: Bandit Bruiser" in msg for msg in game.logs)
     assert "Bandit Bruiser myśli..." not in titles
     assert any("Bandit Bruiser myśli..." in msg for msg in game.logs)
 
@@ -193,6 +196,8 @@ def test_enemy_strike_emits_roll_breakdown_and_result_prompts(monkeypatch):
     assert "Wynik ataku: Bandit Bruiser" in titles
     assert "Rzut ataku: Bandit Bruiser" not in titles
     assert any("Bandit Bruiser atakuje Cedric" in msg for msg in game.logs)
+    dice_events = [event for event in game.ui_events if event["type"] == "dice_roll"]
+    assert [event["payload"]["roll_type"] for event in dice_events] == ["attack", "damage"]
     assert game.hero_updates
     assert game.hero_updates[-1]["hero"] is hero
 

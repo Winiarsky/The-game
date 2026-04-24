@@ -11,7 +11,7 @@ for path in (PROJECT_ROOT, SRC_ROOT):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from states.intent_menu import filter_magic_events_for_actor
+from states.intent_menu import choose_event_from_bucket, filter_magic_events_for_actor, render_actor_stats
 
 
 class _MoveEvent:
@@ -35,6 +35,12 @@ class _MagicMissileRank2Event:
     __module__ = "GameObjects.events.magic.level_1st.events"
     default_tags = ["magic", "spell"]
     spell_tags = ["rank2", "arcane", "evocation"]
+
+
+class _AcidSplashEvent:
+    __module__ = "GameObjects.events.magic.cantrips.events"
+    default_tags = ["magic", "spell"]
+    spell_tags = ["cantrip", "arcane", "evocation"]
 
 
 class _ReachSpellEvent:
@@ -61,6 +67,19 @@ class _Actor:
             if str(getattr(status, "id", status) or "").strip().lower() == needle:
                 return True
         return False
+
+
+class _ChoiceUI:
+    enabled = True
+    allow_cli_fallback = False
+
+    def __init__(self, answer: str = "acid_splash"):
+        self.answer = answer
+        self.choice_calls = []
+
+    def prompt_choice(self, prompt, choices=None, **kwargs):
+        self.choice_calls.append({"prompt": prompt, "choices": list(choices or []), **kwargs})
+        return self.answer
 
 
 def test_magic_bucket_keeps_only_known_castable_spells_for_actor():
@@ -244,3 +263,50 @@ def test_magic_bucket_keeps_staff_nexus_spells_when_prepared_copy_is_missing():
 
     assert "magic_missile" in filtered
     assert "detect_magic" in filtered
+
+
+def test_magic_bucket_labels_duplicate_prepared_spells_with_count():
+    actor = _Actor(
+        spell_state={
+            "enabled": True,
+            "enforce": True,
+            "class_name": "wizard",
+            "known": {"cantrip": ["acid_splash"], "focus": [], "rank_1": [], "innate": []},
+            "prepared_today": {"cantrip": ["acid_splash", "acid_splash"], "rank_1": []},
+            "prepared_counts": {"cantrip": {"acid_splash": 2}, "rank_1": {}},
+        }
+    )
+    ui = _ChoiceUI(answer="acid_splash")
+    game = SimpleNamespace(ui=ui)
+
+    picked = choose_event_from_bucket(
+        game,
+        bucket_id="magic",
+        available_events={"acid_splash": _AcidSplashEvent},
+        event_names=["acid_splash"],
+        source="test:magic",
+        actor=actor,
+    )
+
+    assert picked == "acid_splash"
+    meta = ui.choice_calls[0]["choice_meta"]
+    assert meta[0]["label"] == "Kwasowy rozprysk x2"
+
+
+def test_actor_stats_compacts_duplicate_prepared_spells():
+    actor = _Actor(
+        spell_state={
+            "enabled": True,
+            "enforce": True,
+            "class_name": "wizard",
+            "known": {"cantrip": ["acid_splash"], "focus": [], "rank_1": [], "innate": []},
+            "prepared_today": {"cantrip": ["acid_splash", "acid_splash"], "rank_1": []},
+            "prepared_counts": {"cantrip": {"acid_splash": 2}, "rank_1": {}},
+            "slot_remaining": {},
+        }
+    )
+
+    text = render_actor_stats(actor)
+
+    assert "przygotowane cantripy: Kwasowy rozprysk x2" in text
+    assert "Kwasowy rozprysk, Kwasowy rozprysk" not in text

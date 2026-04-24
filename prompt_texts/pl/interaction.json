@@ -7,7 +7,30 @@
     "cta": "Stań na polu lootu i użyj Interakcji."
   },
   "interaction.loot_pickup_action": {
-    "description": "Stań na polu lootu, użyj Interakcja i wybierz tę opcję, aby zabrać wszystkie przedmioty i monety."
+    "description": "Zabierz z pola: {loot_summary}."
+  },
+  "interaction.loot_pickup_prompt": {
+    "title": "Loot na polu",
+    "summary": "Pole {position_text}: {loot_summary}.",
+    "body_markdown": "**Loot na polu {position_text}**\n{loot_list}",
+    "details_markdown": "**Po potwierdzeniu**\n- niewybrane przedmioty trafią do **Party Stash**\n- wybrane przedmioty trafią do ekwipunku aktywnego bohatera\n- monety trafią do sakiewki drużyny\n- stos lootu zniknie z planszy"
+  },
+  "interaction.loot_pickup_result": {
+    "title": "Loot podniesiony",
+    "summary": "{actor_name} podnosi: {loot_summary}.",
+    "body_markdown": "**{actor_name}** podnosi loot z pola **{position_text}**.\n\n**Trafia do:**\n{destination_list}",
+    "details_markdown": "Ten loot został już przeniesiony do ekwipunku i nie powinien być dalej widoczny na planszy."
+  },
+  "interaction.loot_pickup_assign": {
+    "title": "Loot zdobyty",
+    "summary": "Wybierz rzeczy do ekwipunku albo zapisz resztę w Party Stash.",
+    "body_markdown": "{prompt_long}"
+  },
+  "interaction.combat_end_loot_all": {
+    "title": "Loot po walce",
+    "summary": "Na planszy zostały stosy lootu.",
+    "body_markdown": "{prompt_long}",
+    "details_markdown": "**Party Stash** jest dostępny po walce przez akcję **Ekwipunek**. W trakcie walki przedmioty ze stashu nie są dostępne do użycia."
   },
   "interaction.enemy_defeated_loot": {
     "title": "Przeciwnik pokonany",

@@ -61,6 +61,23 @@ def _normalize_prompt_key(value: Any) -> str:
     return raw
 
 
+def _optional_bool(value: Any) -> bool | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    normalized = _text(value).lower()
+    if not normalized:
+        return None
+    if normalized in {"1", "true", "yes", "y", "on", "required", "require", "ack", "pause"}:
+        return True
+    if normalized in {"0", "false", "no", "n", "off", "none", "skip", "passive", "silent"}:
+        return False
+    return None
+
+
 def _default_prompt_key(*, source: str = "", prompt_type: str = "info", event_type: str = "", card_kind: str = "") -> str:
     source_key = _normalize_prompt_key(source)
     prompt_type_key = _normalize_prompt_key(prompt_type) or "info"
@@ -500,6 +517,15 @@ class PromptDirector:
         if card.kind in {"debug", "idle"}:
             return False
         communication = dict(card.communication or {})
+        if "ack_required" in communication:
+            explicit_ack = _optional_bool(communication.get("ack_required"))
+            if explicit_ack is not None:
+                return explicit_ack
+        pause_policy = _text(communication.get("pause_policy")).lower()
+        if pause_policy in {"none", "skip", "passive", "silent", "no_ack"}:
+            return False
+        if pause_policy in {"ack", "require_ack", "required", "pause"}:
+            return True
         if bool(communication.get("debug_only")):
             return False
         if bool(communication.get("blocking")):
@@ -614,6 +640,8 @@ class PromptDirector:
             cta=_text(data.get("cta") or communication.get("cta")) or None,
             dedupe_key=dedupe_key,
             blocking=True,
+            ack_required=_optional_bool(communication.get("ack_required")) if "ack_required" in communication else None,
+            pause_policy=_text(communication.get("pause_policy")) or None,
             context={
                 **dict(communication.get("context") or {}),
                 "scope_key": scope_key,
@@ -923,6 +951,8 @@ class GamePromptFacade:
         progress: dict[str, Any] | None = None,
         context: dict[str, Any] | None = None,
         prompt_key: str | None = None,
+        ack_required: bool | None = None,
+        pause_policy: str | None = None,
     ) -> dict[str, Any]:
         extra_context = dict(context or {})
         if scope_key:
@@ -941,6 +971,8 @@ class GamePromptFacade:
             blocking=blocking,
             context=extra_context or None,
             progress=progress,
+            ack_required=ack_required,
+            pause_policy=pause_policy,
         )
 
     def info(
@@ -1104,6 +1136,8 @@ class GamePromptFacade:
         scope_key: str = "system",
         dedupe_key: str | None = None,
         prompt_id: str | None = None,
+        ack_required: bool | None = None,
+        pause_policy: str | None = None,
     ) -> bool:
         return bool(
             getattr(self.game, "ui_event", lambda *_args, **_kwargs: False)(
@@ -1118,6 +1152,8 @@ class GamePromptFacade:
                     "scope_key": scope_key,
                     "dedupe_key": dedupe_key,
                     "prompt_id": prompt_id,
+                    "ack_required": ack_required,
+                    "pause_policy": pause_policy,
                 },
             )
         )

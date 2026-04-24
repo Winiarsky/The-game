@@ -367,6 +367,32 @@ def test_plain_logs_do_not_create_player_facing_prompt(ui_client):
     assert view_state["journal"] == []
 
 
+def test_player_card_can_opt_out_of_ack_prompt(ui_client):
+    posted = ui_client.post(
+        "/api/events",
+        json={
+            "type": "player_card",
+            "session_id": "ui-session-1",
+            "payload": {
+                "kind": "narration",
+                "title": "Krótki status",
+                "body_markdown": "Drużyna czeka przy wejściu.",
+                "communication": {
+                    "ack_required": False,
+                    "pause_policy": "passive",
+                },
+            },
+        },
+    )
+    assert posted.status_code == 200
+
+    view_state = ui_client.get("/api/view-state").get_json()["view_state"]
+    assert view_state["active_prompt"] is None
+    assert view_state["journal"][0]["title"] == "Krótki status"
+    assert view_state["journal"][0]["communication"]["ack_required"] is False
+    assert view_state["journal"][0]["communication"]["pause_policy"] == "passive"
+
+
 def test_duplicate_consecutive_cards_are_deduplicated(ui_client):
     first = ui_client.post(
         "/api/events",

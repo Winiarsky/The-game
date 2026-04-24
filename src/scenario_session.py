@@ -65,6 +65,8 @@ class ScenarioSession:
         self.completed_objectives: set[str] = set()
         self.triggered_once_events: set[str] = set()
         self.loot_journal: list[dict[str, Any]] = []
+        self.party_stash: list[object] = []
+        self.party_coin_pouch: dict[str, int] = {"cp": 0, "sp": 0, "gp": 0, "pp": 0}
         self.checkpoints: list[dict[str, Any]] = []
         self.preselected_character_ids = deque(
             str(item or "").strip().lower()
@@ -362,6 +364,8 @@ class ScenarioSession:
         )
         game.scenario_session = self
         game.scenario_session_map_id = map_id
+        game.party_stash = self.party_stash
+        game.party_coin_pouch = self.party_coin_pouch
         self.current_game = game
 
         snapshot = self.map_snapshots.get(map_id)

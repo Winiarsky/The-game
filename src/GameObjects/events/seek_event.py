@@ -647,9 +647,34 @@ class SeekEvent(GameEvent):
         if trap_notes:
             trap_text = "Wykryte pułapki:\n" + "\n".join(trap_notes)
             info_text = f"{info_text}\n{trap_text}" if info_text else trap_text
+        title = "Odkryto przejście" if "przej" in info_text.lower() else "Odkryto coś!"
+        details = (
+            "LED w kolorze odkrycia wskazuje dokładne pole. "
+            "Po potwierdzeniu możesz podejść do tego miejsca i użyć Interakcji, jeśli obiekt tego wymaga."
+        )
+        prompted = False
+        player_prompt = getattr(game, "player_prompt", None)
+        if player_prompt is not None and hasattr(player_prompt, "info"):
+            try:
+                prompted = player_prompt.info(
+                    title,
+                    body_markdown=info_text,
+                    source="seek",
+                    summary="Seek ujawnia ukryty element.",
+                    details_markdown=details,
+                    scope_key="seek:reveal",
+                    dedupe_key=f"seek_reveal:{','.join(str(pos) for pos in reveal_positions)}",
+                    priority="result",
+                    semantic_type="result",
+                    prompt_id="interaction.seek_reveal",
+                ) is not None
+            except Exception:
+                prompted = False
         ui = get_ui_client()
-        if ui.enabled:
-            ui.prompt_info("Odkryto coś!", prompt_long=info_text, source="seek")
+        if prompted:
+            pass
+        elif ui.enabled:
+            ui.prompt_info(title, prompt_long=info_text, source="seek")
         else:
             time_to_show = getattr(consts, "SEEK_REVEAL_SECONDS", 3)
             try:

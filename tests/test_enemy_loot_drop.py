@@ -11,10 +11,13 @@ for path in (PROJECT_ROOT, SRC_ROOT):
 
 from GameObjects.Interactables.loot_pile import LootPile
 from combat.damage_utils import cleanup_defeated_enemies, remove_defeated_enemy
+from states.combat import Combat
 
 
 class BoardStub:
     def __init__(self):
+        self.rows = 6
+        self.cols = 6
         self.occupants = {}
         self.interactables = {}
         self.removed = []
@@ -35,6 +38,11 @@ class BoardStub:
     def interactables_at(self, position):
         return list(self.interactables.get(position, []))
 
+    def remove_interactable(self, interactable, position):
+        if interactable in self.interactables.get(position, []):
+            self.interactables[position].remove(interactable)
+            interactable.set_position(None)
+
 
 class EnemyStub:
     def __init__(self, *, pos=(1, 1), hp=0, loot_items=None, loot_cp=0):
@@ -48,6 +56,23 @@ class EnemyStub:
 
     def has_status(self, status_id):
         return False
+
+
+class PromptRecorder:
+    def __init__(self, answers=None):
+        self.card_calls = []
+        self.choice_calls = []
+        self.answers = list(answers or [])
+
+    def card(self, **kwargs):
+        self.card_calls.append(kwargs)
+        return True
+
+    def choice(self, title, **kwargs):
+        self.choice_calls.append({"title": title, **kwargs})
+        if self.answers:
+            return self.answers.pop(0)
+        return "stash_all"
 
 
 def test_remove_defeated_enemy_drops_loot_pile_and_removes_enemy():
@@ -83,6 +108,58 @@ def test_remove_defeated_enemy_drops_loot_pile_and_removes_enemy():
     assert "Jak zebrać loot" in str(communication.get("details_markdown") or "")
 
 
+def test_loot_pile_pickup_names_loot_in_action_and_result_prompt():
+    item = SimpleNamespace(name="Dogslicer", item_id="dogslicer", category="weapon")
+    pile = LootPile(
+        loot_items=[
+            item,
+            {"kind": "currency_cp", "amount_cp": 35},
+        ]
+    )
+    pile.set_position((2, 3))
+    prompt = PromptRecorder()
+    hero = SimpleNamespace(name="Valeros", inventory=[], weapon_loadout=[], coin_pouch={})
+    game = SimpleNamespace(board=BoardStub(), player_prompt=prompt)
+
+    actions = pile.available_actions()
+
+    assert len(actions) == 1
+    assert "Dogslicer" in actions[0].description
+    assert "3 sp, 5 cp" in actions[0].description
+
+    message = pile._pickup_handler(pile, hero, game, {})
+
+    assert "Dogslicer" in message
+    assert "3 sp, 5 cp" in message
+    assert len(prompt.card_calls) == 1
+    card = prompt.card_calls[0]
+    assert card["title"] == "Loot podniesiony"
+    assert card["ack_required"] is True
+    assert card["pause_policy"] == "ack"
+    assert "Dogslicer" in str(card["body_markdown"])
+    assert "3 sp, 5 cp" in str(card["body_markdown"])
+    assert getattr(game, "party_stash", []) == [item]
+    assert getattr(game, "party_coin_pouch", {}).get("sp") == 3
+    assert getattr(game, "party_coin_pouch", {}).get("cp") == 5
+
+
+def test_loot_pile_pickup_can_assign_selected_item_to_actor_before_stashing_rest():
+    dogslicer = SimpleNamespace(name="Dogslicer", item_id="dogslicer", category="weapon")
+    shortbow = SimpleNamespace(name="Shortbow", item_id="shortbow", category="weapon")
+    pile = LootPile(loot_items=[dogslicer, shortbow])
+    pile.set_position((2, 3))
+    prompt = PromptRecorder(answers=["take:0", "stash_all"])
+    hero = SimpleNamespace(name="Valeros", inventory=[], weapon_loadout=[], coin_pouch={})
+    game = SimpleNamespace(board=BoardStub(), player_prompt=prompt)
+
+    message = pile._pickup_handler(pile, hero, game, {})
+
+    assert "Dogslicer" in message
+    assert dogslicer in hero.inventory
+    assert getattr(game, "party_stash", []) == [shortbow]
+    assert len(prompt.choice_calls) == 2
+
+
 def test_cleanup_defeated_enemies_removes_only_dead_targets():
     board = BoardStub()
     dead_enemy = EnemyStub(pos=(1, 1), hp=0, loot_cp=10)
@@ -98,3 +175,27 @@ def test_cleanup_defeated_enemies_removes_only_dead_targets():
     assert live_enemy in game.enemies
     piles = [obj for obj in board.interactables_at((1, 1)) if isinstance(obj, LootPile)]
     assert len(piles) == 1
+
+
+def test_combat_end_loot_all_collects_remaining_piles_to_party_stash():
+    board = BoardStub()
+    dogslicer = SimpleNamespace(name="Dogslicer", item_id="dogslicer", category="weapon")
+    pile = LootPile(loot_items=[dogslicer, {"kind": "currency_cp", "amount_cp": 12}])
+    board.add_interactable(pile, (1, 1))
+    hero = SimpleNamespace(name="Valeros", position=(0, 0), inventory=[], weapon_loadout=[])
+    prompt = PromptRecorder(answers=["stash_all"])
+    game = SimpleNamespace(
+        board=board,
+        heroes=[hero],
+        enemies=[],
+        player_prompt=prompt,
+        ui_log=lambda *_args, **_kwargs: None,
+    )
+    combat = Combat(game)
+
+    combat._offer_collect_remaining_loot()
+
+    assert board.interactables_at((1, 1)) == []
+    assert getattr(game, "party_stash", []) == [dogslicer]
+    assert getattr(game, "party_coin_pouch", {}).get("sp") == 1
+    assert getattr(game, "party_coin_pouch", {}).get("cp") == 2

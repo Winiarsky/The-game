@@ -85,6 +85,8 @@ class Game:
         self._install_hidden_spawn_trigger_listener()
         self.heroes: list[Hero] = []
         self.enemies: list[BasicEnemy] = []
+        self.party_stash: list[object] = []
+        self.party_coin_pouch: dict[str, int] = {"cp": 0, "sp": 0, "gp": 0, "pp": 0}
         self.finished: bool = False
         self.preselected_character_ids: deque[str] = deque(
             str(item or "").strip().lower()
