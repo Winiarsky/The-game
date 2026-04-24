@@ -136,7 +136,7 @@ class ReactiveShieldReaction(Reaction):
         _apply_tower_shield_speed_penalty(actor, source_tag=source_tag, shield=shield)
 
         try:
-            ctx.game.ui_log(f"Reaktywna tarcza: podnosisz tarcze (+{shield_ac_bonus} AC) na ten atak.")
+            ctx.game.ui_log(f"Reactive Shield (Reaktywna tarcza): podnosisz tarcze (+{shield_ac_bonus} AC) na ten atak.")
         except Exception:
             pass
         return True

@@ -4,6 +4,7 @@
 
 - Run pytest in small, targeted batches instead of broad or parallel runs.
 - Run pytest through `scripts/safe_pytest.sh` by default, with a concrete test file or node id.
+- For a full suite, use `scripts/safe_pytest_suite.sh`; it runs `tests/test_*.py` one file at a time through the safe wrapper.
 - Avoid launching multiple `pytest` processes at once in this workspace; the wrapper refuses to start if one is already active.
 - Use a timeout for every pytest run. The wrapper defaults to 60 seconds and supports `--timeout SECONDS`.
 - Keep command output capped when reading logs or test output.

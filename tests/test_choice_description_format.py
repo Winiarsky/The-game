@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 import sys
+import unicodedata
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = PROJECT_ROOT / "src"
@@ -31,6 +32,11 @@ def _assert_structured(desc: str) -> None:
     assert "Kiedy:" in text
     assert "Efekt:" in text
     assert " | " not in text
+
+
+def _ascii_lower(text: str) -> str:
+    normalized = str(text or "").translate(str.maketrans({"ł": "l", "Ł": "L"}))
+    return unicodedata.normalize("NFKD", normalized).encode("ascii", "ignore").decode("ascii").lower()
 
 
 def _spell_ids_from_registry() -> set[str]:
@@ -133,7 +139,7 @@ def test_deity_description_contains_weapon_domains_font_and_divine_skill():
     actor = _DummyActor()
     desc = actor._choice_description("abadar")
     _assert_structured(desc)
-    desc = desc.lower()
+    desc = _ascii_lower(desc)
     assert "ulubiona bron:" in desc
     assert "divine skill:" in desc
     assert "dozwolony divine font:" in desc
@@ -146,7 +152,7 @@ def test_cleric_deity_description_lists_domain_spells_for_cayden_cailean():
     actor = _DummyActor()
     desc = actor._choice_description("cayden_cailean")
     _assert_structured(desc)
-    desc = desc.lower()
+    desc = _ascii_lower(desc)
     assert "wybor bostwa kleryka." not in desc
     assert "bog wolnosci" in desc
     assert "rapier" in desc
@@ -244,7 +250,7 @@ def test_rogue_racket_descriptions_include_concrete_runtime_mechanics():
 def test_sorcerer_bloodline_descriptions_include_spell_and_focus_details():
     actor = _DummyActor()
 
-    imperial = actor._choice_description("imperial").lower()
+    imperial = _ascii_lower(actor._choice_description("imperial"))
     assert "magiczny pocisk" in imperial
     assert "pamiec przodkow" in imperial
     assert "blood magic" in imperial
@@ -253,15 +259,15 @@ def test_sorcerer_bloodline_descriptions_include_spell_and_focus_details():
 def test_wizard_study_and_thesis_descriptions_include_runtime_mechanics():
     actor = _DummyActor()
 
-    universalist = actor._choice_description("universalist").lower()
+    universalist = _ascii_lower(actor._choice_description("universalist"))
     assert "dlon adepta" in universalist
     assert "dodatkowy class feat" in universalist
 
-    abjuration = actor._choice_description("abjuration").lower()
+    abjuration = _ascii_lower(actor._choice_description("abjuration"))
     assert "ochronna aura" in abjuration
     assert "bonusowy czar" in abjuration
 
-    staff_nexus = actor._choice_description("staff_nexus").lower()
+    staff_nexus = _ascii_lower(actor._choice_description("staff_nexus"))
     assert "bonded item" in staff_nexus
     assert "kostur" in staff_nexus
 
@@ -289,7 +295,7 @@ def test_druid_order_descriptions_list_feat_and_spell_on_separate_lines():
     for choice_id, (feat_label, spell_label, rules_hint) in expected.items():
         desc = actor._choice_description(choice_id)
         _assert_structured(desc)
-        low = desc.lower()
+        low = _ascii_lower(desc)
         assert "trained skill=" not in low
         assert "\n  - feat startowy - " in low
         assert "\n  - order spell - " in low
@@ -302,7 +308,7 @@ def test_animal_companion_type_description_uses_runtime_details_instead_of_gener
     actor = _DummyActor()
     desc = actor._choice_description("cat")
     _assert_structured(desc)
-    low = desc.lower()
+    low = _ascii_lower(desc)
     assert "efekt zalezy od opcji" not in low
     assert "predkosc: 35 ft." in low
     assert "ataki:" in low

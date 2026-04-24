@@ -242,9 +242,15 @@ class EventContext:
 
     @property
     def in_combat(self) -> bool:
-        from states.combat import Combat  # lokalny import by uniknąć cykli
+        state = getattr(self.game, "state", None)
+        if state is None:
+            return False
+        try:
+            from states.combat import Combat  # lokalny import by uniknąć cykli
 
-        return isinstance(getattr(self.game, "state", None), Combat)
+            return isinstance(state, Combat)
+        except Exception:
+            return state.__class__.__name__ == "Combat"
 
     @property
     def in_exploration(self) -> bool:

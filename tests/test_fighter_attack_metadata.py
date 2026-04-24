@@ -158,9 +158,9 @@ def test_map_attack_count_metadata_counts_as_two_attacks(monkeypatch):
 
 
 def test_point_blank_shot_stance_ignores_volley_penalty(monkeypatch):
-    # Bez stance: 10 vs AC10, volley -2 => pudło.
+    # Bez stance: 10 vs efektywne AC10, volley -2 => pudlo.
     hero = Hero((0, 0))
-    enemy = Enemy((1, 0), hp=10, ac=10)
+    enemy = Enemy((1, 0), hp=10, ac=12)
     game = FakeGame()
     game.heroes = [hero]
     game.enemies = [enemy]
@@ -175,7 +175,7 @@ def test_point_blank_shot_stance_ignores_volley_penalty(monkeypatch):
     # Ze stance: kara volley ignorowana, ten sam rzut trafia.
     hero2 = Hero((0, 0))
     hero2.add_status(Status(id="point_blank_shot_stance"))
-    enemy2 = Enemy((1, 0), hp=10, ac=10)
+    enemy2 = Enemy((1, 0), hp=10, ac=12)
     game2 = FakeGame()
     game2.heroes = [hero2]
     game2.enemies = [enemy2]

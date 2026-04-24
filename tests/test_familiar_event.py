@@ -62,9 +62,13 @@ class DummyGame:
         self.enemies = []
         self.board = None
         self.logs = []
+        self.communications = []
 
-    def ui_log(self, msg: str):
+    def ui_log(self, msg: str, **kwargs):
         self.logs.append(msg)
+        communication = kwargs.get("communication")
+        if isinstance(communication, dict):
+            self.communications.append(communication)
 
 
 class DummyBoard:
@@ -227,9 +231,8 @@ def test_command_familiar_distract_applies_penalty_and_consumes(monkeypatch):
 
     monkeypatch.setattr("GameObjects.events.enemy.basic_enemy_melee_attack_event.random.randint", lambda *_a, **_k: 10)
     BasicEnemyMeleeAttackEvent().execute(EventContext(game=game, actor=enemy))
-    assert conn.last_prompt is not None
-    assert "wynik końcowy" in conn.last_prompt.lower()
-    assert "9" in conn.last_prompt
+    prompt_bodies = [str(item.get("body_markdown") or "") for item in game.communications]
+    assert any("wynik końcowy" in body.lower() and "9" in body for body in prompt_bodies)
     assert not enemy.has_status("familiar_distract")
 
 

@@ -138,7 +138,7 @@ class RaiseShieldEvent(GameEvent):
                 if take_cover_bonus > shield_ac_bonus:
                     ctx.game.ui_log(
                         f"Tarcza wieżowa: samo Raise Shield daje +{shield_ac_bonus} AC. "
-                        f"Użyj akcji Osłona, aby mieć większą osłonę (+{take_cover_bonus} AC)."
+                        f"Użyj akcji Take Cover (Osłona), aby mieć większą osłonę (+{take_cover_bonus} AC)."
                     )
         except Exception:
             pass

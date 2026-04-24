@@ -108,6 +108,15 @@ def _build_incapacitated_prompt_content(actor: Any, *, recovery_message: str | N
     }
 
 
+def _build_incapacitated_prompt_body(actor: Any, *, recovery_message: str | None = None) -> str:
+    content = _build_incapacitated_prompt_content(actor, recovery_message=recovery_message)
+    parts = [
+        str(content.get("body_markdown") or "").strip(),
+        str(content.get("details_markdown") or "").strip(),
+    ]
+    return "\n\n".join(part for part in parts if part)
+
+
 class Combat(State):
     ACTION_LIMIT = 3
 

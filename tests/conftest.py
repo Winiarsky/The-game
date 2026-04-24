@@ -16,8 +16,116 @@ _move_utils.default_on_enter = lambda *a, **k: None
 _move_utils.follow_path = lambda *a, **k: []
 _move_utils._maybe_dispatch_move_reactions = lambda *a, **k: None
 _move_utils.terrain_move_bonus_feet = lambda *a, **k: 0
-_move_utils.movement_budget_feet = lambda *a, **k: 25
-_move_utils.adjusted_forced_movement_squares = lambda _target, squares, *a, **k: int(squares or 0)
+
+def _stub_status_data(actor):
+    for status in getattr(actor, "statuses", []) or []:
+        data = getattr(status, "data", {}) or {}
+        if isinstance(data, dict):
+            yield data
+
+def _stub_first_status_int(actor, key):
+    for data in _stub_status_data(actor):
+        if key in data:
+            try:
+                return int(data.get(key) or 0)
+            except Exception:
+                return None
+    return None
+
+def _stub_sum_status_int(actor, key):
+    total = 0
+    for data in _stub_status_data(actor):
+        try:
+            total += int(data.get(key) or 0)
+        except Exception:
+            continue
+    return total
+
+def _stub_max_status_int(actor, key):
+    best = 0
+    for data in _stub_status_data(actor):
+        try:
+            best = max(best, int(data.get(key) or 0))
+        except Exception:
+            continue
+    return best
+
+def _stub_status_any_true(actor, key):
+    return any(bool(data.get(key)) for data in _stub_status_data(actor))
+
+def _stub_movement_budget_feet(mover, *, default_feet=25):
+    base = None
+    for attr in ("base_speed_feet", "speed_feet", "speed"):
+        raw = getattr(mover, attr, None)
+        if raw is not None:
+            try:
+                val = int(raw or 0)
+            except Exception:
+                val = 0
+            if val > 0:
+                base = val
+                break
+    if base is None:
+        status_speed = _stub_first_status_int(mover, "base_speed_feet")
+        if status_speed is not None and status_speed > 0:
+            base = status_speed
+    if base is None:
+        distance = getattr(mover, "distance", None)
+        if distance is not None:
+            try:
+                val = int(distance or 0)
+            except Exception:
+                val = 0
+            if val > 0:
+                base = val
+    if base is None:
+        move_points = getattr(mover, "move_points", None)
+        if move_points is not None:
+            try:
+                val = int(move_points or 0) * 5
+            except Exception:
+                val = 0
+            if val > 0:
+                base = val
+    if base is None:
+        base = max(0, int(default_feet or 25))
+    base += max(0, _stub_sum_status_int(mover, "base_speed_bonus_feet"))
+    bonus = max(0, _stub_sum_status_int(mover, "speed_bonus_feet"))
+    penalty = max(0, _stub_sum_status_int(mover, "speed_penalty_feet"))
+    armor_penalty = 0
+    for attr in ("armor_speed_penalty_feet", "speed_penalty_armor_feet"):
+        raw = getattr(mover, attr, None)
+        if raw is not None:
+            try:
+                armor_penalty = max(armor_penalty, max(0, int(raw or 0)))
+            except Exception:
+                continue
+    if _stub_status_any_true(mover, "ignore_armor_move_penalty"):
+        armor_penalty = 0
+    reduction = _stub_max_status_int(mover, "magical_slow_reduction_feet")
+    if reduction > 0 and penalty > 0:
+        penalty = max(0, penalty - reduction)
+    return max(0, int(base + bonus - penalty - armor_penalty))
+
+_move_utils.movement_budget_feet = _stub_movement_budget_feet
+
+def _stub_adjusted_forced_movement_squares(target, squares, *a, **k):
+    base = max(0, int(squares or 0))
+    if target is None or base <= 0:
+        return base
+    base_feet = base * 5
+    multiplier = 1.0
+    for status in getattr(target, "statuses", []) or []:
+        data = getattr(status, "data", {}) or {}
+        if "forced_movement_multiplier" not in data:
+            continue
+        threshold = int(data.get("forced_movement_threshold_feet", 0) or 0)
+        if threshold > 0 and base_feet < threshold:
+            continue
+        multiplier = min(multiplier, float(data.get("forced_movement_multiplier", 1.0) or 1.0))
+    return max(0, int(base_feet * multiplier) // 5)
+
+_move_utils.adjusted_forced_movement_squares = _stub_adjusted_forced_movement_squares
 _move_utils.consume_difficult_terrain_ignores_for_path = lambda *a, **k: 0
 _move_utils.reset_turn_movement_runtime = lambda *a, **k: None
 _move_utils.difficult_terrain_ignore_squares_per_turn = lambda *a, **k: 0

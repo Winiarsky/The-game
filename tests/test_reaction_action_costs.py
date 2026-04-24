@@ -19,7 +19,6 @@ from states.combat import Combat
 class DummyConn:
     def __init__(self, answer: str = "test_action"):
         self.answer = answer
-        self.read_calls = 0
 
     def set_leds(self, *_args, **_kwargs):
         return None
@@ -29,10 +28,6 @@ class DummyConn:
 
     def leds_off(self):
         return None
-
-    def read_card(self, *_args, **_kwargs):
-        self.read_calls += 1
-        return self.answer
 
 
 class DummyUI:
@@ -44,6 +39,16 @@ class DummyUI:
 
     def prompt_choice(self, *_args, **_kwargs):
         self.prompt_calls += 1
+        return self.answer
+
+
+class DummyPlayerPrompt:
+    def __init__(self, *, answer: str = "test_action"):
+        self.answer = answer
+        self.choice_calls = 0
+
+    def choice(self, *_args, **_kwargs):
+        self.choice_calls += 1
         return self.answer
 
 
@@ -95,12 +100,14 @@ class DummyReaction:
 def _build_game():
     ui = DummyUI()
     conn = DummyConn()
+    player_prompt = DummyPlayerPrompt()
     logs: list[str] = []
     game = SimpleNamespace(
         heroes=[],
         enemies=[],
         conn=conn,
         ui=ui,
+        player_prompt=player_prompt,
         board=SimpleNamespace(),
         ui_log=lambda msg: logs.append(str(msg)),
         ui_event=lambda *_a, **_k: None,
@@ -192,7 +199,7 @@ def test_auto_end_turn_when_action_spends_last_slot(monkeypatch):
     combat.choose_action()
 
     assert combat.round_queue[0] is enemy
-    assert conn.read_calls == 1
+    assert game.player_prompt.choice_calls == 1
 
 
 def test_auto_end_turn_when_no_actions_left_at_start():
@@ -214,7 +221,7 @@ def test_auto_end_turn_when_no_actions_left_at_start():
     combat.choose_action()
 
     assert combat.round_queue[0] is enemy
-    assert conn.read_calls == 0
+    assert game.player_prompt.choice_calls == 0
 
 
 def test_full_round_reaction_then_two_actions_auto_end(monkeypatch):
@@ -257,7 +264,7 @@ def test_full_round_reaction_then_two_actions_auto_end(monkeypatch):
     assert combat.round_queue[0] is hero
     combat.choose_action()
     assert combat.round_queue[0] is enemy
-    assert conn.read_calls == 2
+    assert game.player_prompt.choice_calls == 2
 
 
 def test_hero_ui_note_contains_shield_status():

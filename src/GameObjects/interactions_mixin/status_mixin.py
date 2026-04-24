@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 import logging
+import unicodedata
 from typing import TYPE_CHECKING
 
 from localization import localized_hint_pl, localize_term_pl
@@ -380,6 +381,16 @@ class StatusMixin:
 
         by_raw = {str(entry["raw"]).strip().lower(): str(entry["raw"]).strip() for entry in entries}
         by_label = {str(entry["label"]).strip().lower(): str(entry["raw"]).strip() for entry in entries}
+        by_key = {
+            self._choice_match_key(entry["raw"]): str(entry["raw"]).strip()
+            for entry in entries
+        }
+        by_key.update(
+            {
+                self._choice_match_key(entry["label"]): str(entry["raw"]).strip()
+                for entry in entries
+            }
+        )
 
         text = str(chosen_label).strip()
         if text.lower() in by_raw:
@@ -390,12 +401,21 @@ class StatusMixin:
         normalized = text.lower().replace("-", "_").replace(" ", "_")
         if normalized in by_raw:
             return by_raw[normalized]
+        match_key = self._choice_match_key(text)
+        if match_key in by_key:
+            return by_key[match_key]
 
         if text.isdigit():
             idx = int(text) - 1
             if 0 <= idx < len(entries):
                 return str(entries[idx]["raw"]).strip()
         return None
+
+    @staticmethod
+    def _choice_match_key(value: object) -> str:
+        text = str(value or "").strip().lower().translate(str.maketrans({"ł": "l", "Ł": "L"}))
+        text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+        return text.replace("-", "_").replace(" ", "_")
 
     @staticmethod
     def _status_ui_description(status: "Status" | None) -> str:
@@ -2175,7 +2195,7 @@ class StatusMixin:
                 if bool(existing_data.get("is_background")):
                     existing_label = getattr(existing, "display_label", None) or getattr(existing, "label", None) or getattr(existing, "id", "background")
                     self._ui_log(
-                        f"Tlo: masz juz wybrane {existing_label}. Mozesz miec tylko jedno tlo."
+                        f"Background: masz juz wybrane {existing_label}. Mozesz miec tylko jeden background."
                     )
                     return False
 
@@ -5806,10 +5826,11 @@ class StatusMixin:
             domain_label = self._labelize_choice(raw_domain)
             spell_label = self._labelize_choice(spell_id)
             advanced_label = self._labelize_choice(advanced_spell_id) if advanced_spell_id else ""
+            spell_alias = spell_id.replace("_", " ")
             domain_desc = self._first_line(str(domain_desc_map.get(raw_domain) or ""))
             event_hint = self._event_fallback_hint(spell_id)
             spec_hint = self._domain_spell_fallback_hint(spell_id)
-            mechanics_parts = [f"Czar domenowy: {spell_label}."]
+            mechanics_parts = [f"Czar domenowy: {spell_label} ({spell_alias})."]
             if advanced_label:
                 mechanics_parts.append(f"Advanced domain spell: {advanced_label}.")
             if event_hint:
@@ -5835,7 +5856,7 @@ class StatusMixin:
             return
         labels = [str(entry.get("label") or "") for entry in entries]
         chosen_label = self._prompt_choice(
-            f"Domena bostwa ({self._labelize_choice(deity)}): wybierz domene",
+            f"Deity's Domain ({self._labelize_choice(deity)}): wybierz domene",
             labels,
             source="status",
             choice_meta=entries,

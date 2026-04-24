@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 from pathlib import Path
 import sys
+import unicodedata
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -13,6 +14,11 @@ from GameObjects.events.base import EventContext, EventResult
 from GameObjects.events.magic.magic_utils import pick_target_in_range
 from GameObjects.events.magic.base_attack_magic_event import BaseMagicAttackEvent
 from ui_client import UIClient
+
+
+def _ascii_text(value: object) -> str:
+    text = str(value or "").translate(str.maketrans({"ł": "l", "Ł": "L"}))
+    return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
 
 
 class FakeConn:
@@ -127,7 +133,7 @@ def test_ui_client_builds_default_prompt_communication():
     assert communication["title"] == "Mistrz gry"
     assert communication["channel"] == "prompt"
     assert communication["semantic_type"] == "required_action"
-    assert "Wybierz opcje i potwierdz wybor." in communication["body_markdown"]
+    assert "Wybierz opcje i potwierdz wybor." in _ascii_text(communication["body_markdown"])
 
 
 class _DummyMagicAttack(BaseMagicAttackEvent):

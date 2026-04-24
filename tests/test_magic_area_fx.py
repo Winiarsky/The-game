@@ -40,7 +40,7 @@ def _game_with_board(board, responses):
 def test_directional_area_confirmation_triggers_led_animation(monkeypatch):
     board = BoardGrid(rows=5, cols=5)
     origin = (2, 2)
-    game = _game_with_board(board, responses=[(3, 2)])
+    game = _game_with_board(board, responses=[(3, 2), origin])
     ctx = EventContext(game=game)
 
     calls = []

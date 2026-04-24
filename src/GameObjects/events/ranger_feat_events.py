@@ -447,7 +447,10 @@ class HuntPreyEvent(ActionCostEvent):
                 )
             try:
                 ctx.game.conn.set_leds(positions, [0, 120, 20])
-                selected = ctx.game.conn.scan_board(positions)
+                try:
+                    selected = ctx.game.conn.scan_board(positions)
+                except TimeoutError:
+                    selected = None
             finally:
                 try:
                     ctx.game.conn.leds_off()

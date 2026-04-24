@@ -1067,6 +1067,7 @@ class BasicMeleeAttackEvent(AttackEventBase):
                 damage_components=damage_components,
                 applied_statuses=added_status_labels(target_status_snapshot, enemy),
                 defeated=defeated,
+                nonlethal=nonlethal_attack,
             )
         if not suppress_record:
             self._record_attack(
@@ -1295,9 +1296,9 @@ class BasicMeleeAttackEvent(AttackEventBase):
     def _is_enemy_candidate(game, occ) -> bool:
         if occ is None:
             return False
-        if occ in getattr(game, "heroes", []):
+        if any(occ is hero for hero in getattr(game, "heroes", []) or []):
             return False
-        if occ in getattr(game, "enemies", []):
+        if any(occ is enemy for enemy in getattr(game, "enemies", []) or []):
             return True
         module_name = str(getattr(getattr(occ, "__class__", None), "__module__", "") or "")
         if module_name.startswith("GameObjects.Enemies.") or module_name == "GameObjects.Enemies.basic_enemy":

@@ -1450,6 +1450,7 @@ class BaseRangeAttackEvent(AttackEventBase):
                     damage_components=damage_components,
                     applied_statuses=added_status_labels(target_status_snapshot, enemy),
                     defeated=defeated,
+                    nonlethal=nonlethal_attack,
                 )
             if not suppress_record:
                 self._record_attack(

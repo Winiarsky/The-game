@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import unicodedata
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -57,6 +58,8 @@ def test_status_mechanics_short_prefers_mechanical_line():
 
 def test_status_mechanics_short_does_not_duplicate_same_bonus_without_target():
     text = _status_mechanics_short(CITY_SCAVENGER_STATUS)
+    normalized_text = text.translate(str.maketrans({"ł": "l", "Ł": "L"}))
+    ascii_text = unicodedata.normalize("NFKD", normalized_text).encode("ascii", "ignore").decode("ascii")
     assert "+1 circumstance, +1 circumstance" not in text
-    assert "Spoleczenstwo" in text
-    assert "Przetrwanie" in text
+    assert "Spoleczenstwo" in ascii_text
+    assert "Przetrwanie" in ascii_text

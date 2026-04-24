@@ -79,4 +79,6 @@ if [[ -n "$running_pytest" ]]; then
     exit 3
 fi
 
+export PYTHONPATH="$PWD:$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
+
 exec timeout --preserve-status "${timeout_seconds}s" pytest -q --tb=short "${args[@]}"
