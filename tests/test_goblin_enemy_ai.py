@@ -22,6 +22,8 @@ from GameObjects.events.base import EventContext, EventResult
 from GameObjects.events.enemy.enemy_move_event import _goal_positions_from_metadata
 from GameObjects.events.enemy.enemy_strike_event import EnemyStrikeEvent
 from GameObjects.events.enemy.goblin_dog_scratch_event import GoblinDogScratchEvent
+from GameObjects.interactions_mixin.status_mixin import StatusMixin
+from statuses import Status
 from states.combat import Combat
 
 commando_ai = importlib.import_module("GameObjects.Enemies.behaviors.goblin_commando_raider")
@@ -90,6 +92,21 @@ class DummyConn:
 
     def read_card(self, *_args, **_kwargs):
         return "ACCEPT"
+
+
+class DummyWoundsHero(StatusMixin):
+    def __init__(self, *, name: str, object_id: str, ac: int, max_hp: int, wounds: int, position=None):
+        super().__init__()
+        self.name = name
+        self.object_id = object_id
+        self.ac = ac
+        self.max_hp = max_hp
+        self.wounds = wounds
+        self.position = position
+        self.bonuses = []
+
+    def set_position(self, pos):
+        self.position = pos
 
 
 def build_game(board: BoardGrid, heroes: list[DummyHero], enemies: list[object]):
@@ -197,6 +214,39 @@ def test_goblin_dog_focuses_wounded_lone_target():
     target = dog_ai._focus_target(dog, game)
 
     assert target is hero_weak
+
+
+def test_downed_hero_is_excluded_from_enemy_target_selection():
+    board = BoardGrid(rows=7, cols=7)
+    freya = DummyWoundsHero(name="Freya", object_id="hero-f", ac=16, max_hp=20, wounds=20, position=(4, 3))
+    freya.add_status(Status(id="unconscious", label="Unconscious"))
+    freya.add_status(Status(id="dying_2", label="Dying 2", data={"value": 2}))
+    cedric = DummyHero(name="Cedric", object_id="hero-c", ac=17, hp=20, max_hp=20, position=(5, 3))
+    dog = GoblinDog(position=(2, 3))
+    place_all(board, [freya, cedric, dog])
+    game = build_game(board, [freya, cedric], [dog])
+
+    target = dog_ai._focus_target(dog, game)
+
+    assert target is cedric
+
+
+def test_enemy_strike_cancels_when_forced_target_is_downed():
+    board = BoardGrid(rows=5, cols=5)
+    freya = DummyWoundsHero(name="Freya", object_id="hero-f", ac=15, max_hp=20, wounds=20, position=(2, 2))
+    freya.add_status(Status(id="unconscious", label="Unconscious"))
+    freya.add_status(Status(id="dying_3", label="Dying 3", data={"value": 3}))
+    dog = GoblinDog(position=(2, 1))
+    place_all(board, [freya, dog])
+    game = build_game(board, [freya], [dog])
+
+    result = EnemyStrikeEvent().run(
+        EventContext(game=game, actor=dog, metadata={"forced_target": freya, "weapon_id": "jaws"})
+    )
+
+    assert result.success is False
+    assert result.consumed_action is False
+    assert result.message == "Strike: brak celu."
 
 
 def test_goblin_dog_retreat_scoring_prefers_farther_square():

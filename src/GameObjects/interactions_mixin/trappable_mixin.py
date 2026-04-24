@@ -228,8 +228,10 @@ class TrappableMixin:
                         action_tags=["damage", "trap"],
                         target=actor,
                         source_action="trap_activated",
+                        source_label=str(getattr(self, "trap_name", "") or "Pułapka"),
                         amount=int(dealt),
                         damage=int(dealt),
+                        damage_type=str(self.trap_damage_type or "piercing"),
                         trap_id=str(getattr(self, "object_id", "") or getattr(self, "trap_name", "") or ""),
                     )
             except Exception:

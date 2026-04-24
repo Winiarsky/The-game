@@ -34,6 +34,7 @@ class FakeConn:
     def __init__(self, choice=None):
         self.choice = choice
         self.led_calls = []
+        self.leds_off_calls = 0
 
     def set_leds(self, *args, **kwargs):
         self.led_calls.append((args, kwargs))
@@ -47,6 +48,7 @@ class FakeConn:
         return self.choice
 
     def leds_off(self):
+        self.leds_off_calls += 1
         return None
 
 
@@ -204,6 +206,35 @@ def test_cover_and_range_penalty_emitted(monkeypatch):
     assert enemy.hp == 8
 
 
+def test_roll_only_forced_target_skips_analysis_prompt(monkeypatch):
+    hero = Hero((0, 0))
+    enemy = Enemy((2, 0), hp=8, ac=10)
+    game = FakeGame()
+    game.heroes = [hero]
+    game.enemies = [enemy]
+    game.board.occupants = {hero.position: hero, enemy.position: enemy}
+    game.ui = FakeUI()
+
+    rolls = iter([15, 5])
+    monkeypatch.setattr(base_attack_range_event, "prompt_for_roll", lambda *_, **__: next(rolls))
+
+    result = dispatch_event(
+        "longbow",
+        EventContext(
+            game=game,
+            actor=hero,
+            metadata={
+                "forced_target": enemy,
+                "forced_target_pos": enemy.position,
+                "roll_only": True,
+            },
+        ),
+    )
+
+    assert result.success is True
+    assert not any(call["title"] == "Atak dystansowy: analiza strzału" for call in game.ui.info_calls)
+
+
 def test_ranged_attack_triggers_projectile_led_animation(monkeypatch):
     hero = Hero((0, 0))
     enemy = Enemy((2, 0), hp=8, ac=10)
@@ -282,6 +313,68 @@ def test_ranged_attack_prompts_targeting_legend_and_shot_analysis(monkeypatch):
     analysis_prompt = next(call["prompt_long"] for call in game.ui.choice_calls if call["title"] == "Atak dystansowy: analiza strzału")
     assert "kara za zasięg" in str(analysis_prompt or "").lower()
     assert "typ osłony" in str(analysis_prompt or "").lower()
+
+
+def test_ranged_attack_targeting_hint_is_non_blocking_during_board_scan(monkeypatch):
+    class ShortBow(base_attack_range_event.BaseRangeAttackEvent):
+        name = "attack_short_idle_hint_test"
+        range_increment_ft = 5
+        max_range_increments = 6
+        action_id_base = "attack_short_idle_hint_test"
+
+    hero = Hero((0, 0))
+    enemy = Enemy((6, 0), ac=12)
+    game = FakeGame()
+    game.ui = FakeUI()
+    game.heroes = [hero]
+    game.enemies = [enemy]
+    game.board.occupants = {hero.position: hero, enemy.position: enemy}
+    game.conn.choice = enemy.position
+    idle_calls = []
+    game.ui_idle_hint = lambda title, text=None: idle_calls.append({"title": title, "text": text})
+
+    rolls = iter([30, 4])
+    monkeypatch.setattr(base_attack_range_event, "prompt_for_roll", lambda *_, **__: next(rolls))
+
+    result = ShortBow().run(_ctx(game, hero))
+
+    assert result.success
+    assert idle_calls and idle_calls[0]["title"] == "Atak dystansowy: wybór celu"
+    assert "kliknij pole celu" in str(idle_calls[0]["text"] or "").lower()
+    assert "Atak dystansowy: wybór celu" not in [call["title"] for call in game.ui.info_calls]
+
+
+def test_ranged_attack_focuses_leds_on_selected_target_before_confirmation(monkeypatch):
+    hero = Hero((0, 0))
+    enemy_a = Enemy((2, 0), hp=8, ac=10)
+    enemy_b = Enemy((3, 0), hp=8, ac=10)
+    game = FakeGame()
+    game.ui = FakeUI()
+    game.heroes = [hero]
+    game.enemies = [enemy_a, enemy_b]
+    game.board.occupants = {
+        hero.position: hero,
+        enemy_a.position: enemy_a,
+        enemy_b.position: enemy_b,
+    }
+    game.conn.choice = enemy_b.position
+
+    rolls = iter([15, 5])
+    monkeypatch.setattr(base_attack_range_event, "prompt_for_roll", lambda *_, **__: next(rolls))
+
+    result = dispatch_event("longbow", _ctx(game, hero))
+
+    assert result.success is True
+    assert len(game.conn.led_calls) >= 2
+    focused_led_calls = []
+    for call in game.conn.led_calls:
+        positions = list(call[0][0])
+        colors = list(call[0][1])
+        target_color_count = sum(1 for color in colors if color == base_attack_range_event.BaseRangeAttackEvent.TARGET_LED)
+        if enemy_b.position in positions and target_color_count == 1:
+            focused_led_calls.append((positions, colors))
+    assert focused_led_calls
+    assert game.conn.leds_off_calls >= 2
 
 
 def test_ranged_attack_analysis_can_retarget_before_roll(monkeypatch):

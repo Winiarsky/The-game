@@ -1,5 +1,6 @@
 from typing import Optional
 
+from board import consts
 from GameObjects.base import GameObjectMeta
 from GameObjects.interactions_mixin.base_interaction import Interaction, InteractableMixin
 from GameObjects.interactions_mixin import HiddenMixin
@@ -44,6 +45,9 @@ class HiddenCache(HiddenMixin, InteractableMixin):
         self.auto_reveal_on_enter = auto_reveal_on_enter
         self.auto_trigger_on_enter = auto_trigger_on_enter
         self.trap_effect = trap_effect or "Cichy alarm – czujesz niepokój."
+        self.seek_color = list(consts.SEEK_CONTAINER_RGB)
+        self.seek_color_name = "zielone"
+        self.seek_label = "skrytka"
         self.register_default_actions()
 
     def register_default_actions(self) -> None:

@@ -200,12 +200,15 @@ class _SimulatorBackend:
         acceptable_responses: list[tuple[int, int]] | None = None,
         *,
         timeout_s: float | None = None,
-    ) -> tuple[int, int]:
+    ) -> tuple[int, int] | None:
         while True:
             request_timeout = 30.0 if timeout_s is None else max(0.1, float(timeout_s))
             response = requests.get(f"{self.base_url}/scan_board", timeout=request_timeout)
             response.raise_for_status()
             data = response.json()
+            event = str(data.get("event") or data.get("type") or "").strip().lower()
+            if event in {"cancel", "cancelled", "stop", "abort"} or bool(data.get("cancelled")):
+                return None
             result = (int(data["col"] - 1), int(data["row"] - 1))
             if acceptable_responses and result not in acceptable_responses:
                 logger.warning("Nieakceptowalna odpowiedź z symulatora: %s", result)
@@ -218,6 +221,9 @@ class _SimulatorBackend:
 
     def leds_off(self) -> None:
         requests.get(f"{self.base_url}/off", timeout=5.0).raise_for_status()
+
+    def cancel_scan(self) -> None:
+        requests.post(f"{self.base_url}/simulate/cancel_scan", timeout=5.0).raise_for_status()
 
 
 class _WledClient:
@@ -332,6 +338,7 @@ class _HardwareBackend:
         self.scan_cfg = dict(scan_cfg)
         self.protocol_name = str(self.scan_cfg.get("protocol") or "board_scan_usb_v1")
         self.scan_command = str(self.scan_cfg.get("scan_command") or "SCAN").strip() or "SCAN"
+        self.stop_command = str(self.scan_cfg.get("stop_command") or "STOP").strip() or "STOP"
         self.pre_scan_delay_s = max(0.0, float(self.scan_cfg.get("pre_scan_delay_s") or 0.12))
         self.port_result = _open_serial_probe(self.scan_cfg)
         self.ser = self.port_result.serial_handle
@@ -352,6 +359,13 @@ class _HardwareBackend:
         if self.pre_scan_delay_s > 0:
             time.sleep(self.pre_scan_delay_s)
 
+    def cancel_scan(self) -> None:
+        try:
+            self.ser.write(f"{self.stop_command}\n".encode("ascii", errors="ignore"))
+            self.ser.flush()
+        except Exception:
+            logger.debug("Nie udało się wysłać komendy zatrzymania skanu.", exc_info=True)
+
     def _read_protocol_payload(self, *, timeout_s: float | None = None) -> dict[str, Any]:
         deadline = None if timeout_s is None else (time.monotonic() + timeout_s)
         while deadline is None or time.monotonic() < deadline:
@@ -368,7 +382,7 @@ class _HardwareBackend:
         acceptable_responses: list[tuple[int, int]] | None = None,
         *,
         timeout_s: float | None = None,
-    ) -> tuple[int, int]:
+    ) -> tuple[int, int] | None:
         deadline = None if timeout_s is None else (time.monotonic() + max(0.0, float(timeout_s)))
         while True:
             remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
@@ -386,6 +400,8 @@ class _HardwareBackend:
                         raise TimeoutError("Timeout oczekiwania na wybór pola na planszy.") from exc
                     raise
                 event = str(payload.get("event") or "").lower()
+                if event in {"cancel", "cancelled", "stop", "abort"} or bool(payload.get("cancelled")):
+                    return None
                 if event != "press":
                     continue
                 result = (int(payload["col"]), int(payload["row"]))
@@ -471,7 +487,7 @@ class Connection:
         acceptable_responses: list[tuple[int, int]] | None = None,
         *,
         timeout_s: float | None = None,
-    ) -> tuple[int, int]:
+    ) -> tuple[int, int] | None:
         try:
             return self._backend.scan_board(acceptable_responses, timeout_s=timeout_s)
         except TypeError:
@@ -485,6 +501,11 @@ class Connection:
 
     def leds_off(self) -> None:
         self._backend.leds_off()
+
+    def cancel_scan(self) -> None:
+        canceller = getattr(self._backend, "cancel_scan", None)
+        if callable(canceller):
+            canceller()
 
     def close(self) -> None:
         closer = getattr(self._backend, "close", None)

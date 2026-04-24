@@ -132,7 +132,7 @@ def test_start_setup_selects_hero_before_board_scan_and_shows_place_hint():
     assert game.timeline.index("pick_hero") < game.timeline.index("scan_board")
 
     # Hint oczekiwania powinien zawierać imię bohatera i instrukcję ustawienia figurki.
-    place_hints = [text for title, text in game.hints if title == "Wskaż miejsce dla figurki" and text]
+    place_hints = [text for title, text in game.hints if "Wskaż miejsce dla figurki" in title and text]
     assert place_hints
     assert any("Grog" in hint and "podświetlonych pól" in hint for hint in place_hints)
 
@@ -154,7 +154,7 @@ def test_start_setup_offers_play_after_first_hero_without_second_card_scan():
 
     original_prompt_menu_choice = start._prompt_menu_choice
 
-    def _prompt_menu_choice(*, title, subtitle, source, options, layout="dialog"):  # noqa: ARG001
+    def _prompt_menu_choice(*, title, subtitle, source, options, layout="dialog", prompt_id=None):  # noqa: ARG001
         if source == "hero_setup_next":
             return "__start_game__"
         return original_prompt_menu_choice(
@@ -163,6 +163,7 @@ def test_start_setup_offers_play_after_first_hero_without_second_card_scan():
             source=source,
             options=options,
             layout=layout,
+            prompt_id=prompt_id,
         )
 
     start._prompt_menu_choice = _prompt_menu_choice  # type: ignore[method-assign]
@@ -206,6 +207,55 @@ def test_start_setup_uses_preselected_heroes_without_card_scan():
     assert any("automatycznie" in msg for msg in game.logs)
 
 
+def test_start_setup_retries_same_preselected_hero_after_cancel_without_manual_menu():
+    from collections import deque
+
+    game = _GameStub()
+    game.preselected_character_ids = deque(["cedric"])
+    game.preselected_hero_count = 1
+    start = Start(game)  # type: ignore[arg-type]
+
+    hero = _HeroStub("Cedric")
+    hero.character_id = "cedric"
+    consume_calls = {"count": 0}
+    scan_calls = {"count": 0}
+    menu_calls: list[str] = []
+
+    def _consume(_used):
+        consume_calls["count"] += 1
+        if game.preselected_character_ids:
+            game.preselected_character_ids.popleft()
+            return hero
+        return None
+
+    def _scan(_choices):
+        scan_calls["count"] += 1
+        if scan_calls["count"] == 1:
+            return None
+        return (1, 1)
+
+    def _prompt_menu_choice(**kwargs):
+        menu_calls.append(str(kwargs.get("source") or ""))
+        return "__start_game__"
+
+    start._consume_preselected_hero = _consume  # type: ignore[method-assign]
+    start._maybe_prompt_chameleon_gnome = lambda *_a, **_k: None  # type: ignore[method-assign]
+    start._maybe_prompt_familiar_owner = lambda *_a, **_k: None  # type: ignore[method-assign]
+    start._maybe_prompt_advanced_alchemy = lambda *_a, **_k: None  # type: ignore[method-assign]
+    start._maybe_prepare_spells = lambda *_a, **_k: None  # type: ignore[method-assign]
+    start._prompt_menu_choice = _prompt_menu_choice  # type: ignore[method-assign]
+    game.conn.scan_board = _scan  # type: ignore[method-assign]
+
+    result = start.set_heroes_starting_positions()
+
+    assert isinstance(result, HeroesTurn)
+    assert hero.position == (1, 1)
+    assert consume_calls["count"] == 1
+    assert scan_calls["count"] == 2
+    assert "hero_setup_next" not in menu_calls
+    assert any("Ponów ustawienie figurki" in msg for msg in game.logs)
+
+
 def test_start_setup_filters_out_already_occupied_start_positions():
     game = _GameStub()
     start = Start(game)  # type: ignore[arg-type]
@@ -243,7 +293,7 @@ def test_start_setup_filters_out_already_occupied_start_positions():
     assert [hero.position for hero in game.heroes] == [(1, 1), (2, 2)]
 
 
-def test_heroes_turn_falls_back_to_ui_when_board_selection_times_out():
+def test_heroes_turn_stays_on_board_selection_when_cancelled():
     game = _GameStub()
     cedric = _HeroStub("Cedric")
     freya = _HeroStub("Freya")
@@ -252,10 +302,8 @@ def test_heroes_turn_falls_back_to_ui_when_board_selection_times_out():
     game.heroes = [cedric, freya]
     game.board.place(cedric, (1, 1))
     game.board.place(freya, (2, 2))
-    game.ui = _ChoiceUiStub("Freya")
-
     def _scan_board(*_args, **_kwargs):
-        raise TimeoutError("board timeout")
+        return None
 
     game.conn.scan_board = _scan_board  # type: ignore[method-assign]
 
@@ -263,10 +311,40 @@ def test_heroes_turn_falls_back_to_ui_when_board_selection_times_out():
 
     picked = state._choose_active_hero()
 
-    assert picked is freya
-    assert any("Kontynuuj wybór w UI" in msg for msg in game.logs)
-    assert game.ui.calls
-    assert game.ui.calls[-1]["source"] == "hero_select"
+    assert picked is None
+    assert any("został anulowany" in msg for msg in game.logs)
+
+
+def test_start_setup_retries_when_board_selection_is_cancelled():
+    game = _GameStub()
+    start = Start(game)  # type: ignore[arg-type]
+
+    hero = _HeroStub("Grog")
+
+    def _pick(_used):
+        return hero
+
+    scan_calls = {"count": 0}
+
+    def _scan_board(*_args, **_kwargs):
+        scan_calls["count"] += 1
+        if scan_calls["count"] == 1:
+            return None
+        return (2, 2)
+
+    game.conn.scan_board = _scan_board  # type: ignore[method-assign]
+    start._pick_or_create_hero = _pick  # type: ignore[method-assign]
+    start._maybe_prompt_chameleon_gnome = lambda *_a, **_k: None  # type: ignore[method-assign]
+    start._maybe_prompt_familiar_owner = lambda *_a, **_k: None  # type: ignore[method-assign]
+    start._maybe_prompt_advanced_alchemy = lambda *_a, **_k: None  # type: ignore[method-assign]
+    start._maybe_prepare_spells = lambda *_a, **_k: None  # type: ignore[method-assign]
+    start._prompt_menu_choice = lambda **_kwargs: "__start_game__"  # type: ignore[method-assign]
+
+    result = start.set_heroes_starting_positions()
+
+    assert isinstance(result, HeroesTurn)
+    assert hero.position == (2, 2)
+    assert any("Nie wybrano pola startowego" in msg for msg in game.logs)
 
 
 def test_wall_setup_uses_two_endpoint_colors_and_explains_them():

@@ -6,7 +6,8 @@ import re
 
 from board import consts
 from combat import effective_ac
-from combat.hero_side_targets import hero_side_targets
+from combat.hero_side_targets import hero_side_targets, is_targetable_actor
+from combat.damage_utils import added_status_labels, snapshot_statuses
 from combat.degree_of_success import is_critical_success, is_hit, natural_shift_from_roll, resolve_outcome
 from combat.hp_engine import apply_damage as hp_apply_damage
 from damage_types import DamageType
@@ -117,6 +118,8 @@ def _pick_target(ctx: EventContext, actor, weapon):
     board = game.board
     forced_target = (ctx.metadata or {}).get("forced_target")
     if forced_target is not None:
+        if not is_targetable_actor(forced_target):
+            return None
         return forced_target
 
     actor_pos = getattr(actor, "position", None)
@@ -504,6 +507,7 @@ class EnemyStrikeEvent(ActionCostEvent):
             hp_dealt = 0
             damage_type = str(getattr(weapon, "damage_type", DamageType.NORMAL.value) or DamageType.NORMAL.value)
             pox_applied = False
+            target_status_snapshot = snapshot_statuses(target)
             if is_hit(outcome):
                 damage, damage_type = _roll_damage(actor, weapon)
                 if _weapon_has_trait(weapon, "backstabber") and _target_is_off_guard(target):
@@ -540,8 +544,10 @@ class EnemyStrikeEvent(ActionCostEvent):
                         target=target,
                         target_pos=target_pos,
                         source_action=self.name,
+                        source_label=str(getattr(weapon, "name", None) or getattr(weapon, "item_id", None) or "Strike"),
                         damage=int(hp_dealt),
                         damage_type=damage_type,
+                        applied_statuses=added_status_labels(target_status_snapshot, target),
                     )
             except Exception:
                 pass

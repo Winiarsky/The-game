@@ -1,6 +1,7 @@
 const boardElement = document.getElementById("board");
 const pendingIndicator = document.getElementById("pending-indicator");
 const lastClickLabel = document.getElementById("last-click");
+const cancelScanButton = document.getElementById("cancel-scan");
 const backgroundInput = document.getElementById("background-input");
 const backgroundClearButton = document.getElementById("background-clear");
 const modeInputs = document.querySelectorAll('input[name="board-mode"]');
@@ -234,6 +235,9 @@ function applyBoardState(state) {
 }
 
 function updatePendingIndicator(count) {
+    if (cancelScanButton) {
+        cancelScanButton.disabled = count <= 0;
+    }
     if (count > 0) {
         pendingIndicator.textContent = `Oczekiwanie na kliknięcie... (${count})`;
         pendingIndicator.style.color = "#b30000";
@@ -263,6 +267,23 @@ function showToast(message) {
     toast.textContent = message;
     document.body.appendChild(toast);
     setTimeout(() => toast.remove(), 3000);
+}
+
+async function requestCancelScan() {
+    try {
+        const response = await fetch("/simulate/cancel_scan", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+            throw new Error(data.error || "Nieznany błąd");
+        }
+        lastClickLabel.textContent = "Ostatnia akcja: anulowano aktywny scan.";
+        showToast("Wysłano anulowanie aktywnego scan_board.");
+    } catch (error) {
+        showToast(`Błąd anulowania scan_board: ${error.message}`);
+    }
 }
 
 refreshState();
@@ -1086,6 +1107,18 @@ modeInputs.forEach((input) => {
             setMode(event.target.value === MODE_MOVE ? MODE_MOVE : MODE_BOARD);
         }
     });
+});
+
+cancelScanButton?.addEventListener("click", () => {
+    requestCancelScan();
+});
+
+document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    if (currentMode !== MODE_BOARD) return;
+    if (!cancelScanButton || cancelScanButton.disabled) return;
+    event.preventDefault();
+    requestCancelScan();
 });
 
 addFigureButton?.addEventListener("click", () => addFigure());

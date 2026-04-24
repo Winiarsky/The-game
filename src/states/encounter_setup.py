@@ -5,6 +5,7 @@ from dataclasses import asdict
 
 from board import consts
 from communication import make_debug_communication, make_setup_step_communication
+from prompt_copy import prompt_value
 
 from .start import Start
 
@@ -61,42 +62,78 @@ def run_setup_batches(game, batches) -> None:
                 pass
         if edges:
             try:
-                game.ui_log(
-                    "Dane techniczne ścian dostępne w szczegółach.",
-                    communication=make_debug_communication(
-                        title="Krawędzie setupu",
-                        details_markdown=f"Krawędzie: {edges}",
-                        dedupe_key=f"setup_edges:{idx}",
+                game.player_prompt.card(
+                    kind="debug",
+                    title=str(prompt_value("setup.encounter_edges_debug", "title", "Krawędzie setupu")),
+                    body_markdown=str(
+                        prompt_value(
+                            "setup.encounter_edges_debug",
+                            "body_markdown",
+                            "Dane techniczne ścian dostępne w szczegółach.",
+                        )
                     ),
+                    details_markdown=f"Krawędzie: {edges}",
+                    priority="debug",
+                    scope_key="setup",
+                    dedupe_key=f"setup_edges:{idx}",
                 )
-            except TypeError:
-                game.ui_log(f"Krawędzie: {edges}")
+            except Exception:
+                try:
+                    game.ui_log(
+                        "Dane techniczne ścian dostępne w szczegółach.",
+                        communication=make_debug_communication(
+                            title=str(prompt_value("setup.encounter_edges_debug", "title", "Krawędzie setupu")),
+                            details_markdown=f"Krawędzie: {edges}",
+                            dedupe_key=f"setup_edges:{idx}",
+                        ),
+                    )
+                except TypeError:
+                    game.ui_log(f"Krawędzie: {edges}")
         setup_communication = make_setup_step_communication(
-            title="Setup encounteru",
+            title=str(prompt_value("setup.encounter_step", "title", "Setup encounteru")),
             body_markdown=prompt,
             progress=progress,
             details_markdown=(f"Krawędzie: {edges}" if edges else None),
             blocking=True,
         )
+        prompt_handled = False
         try:
-            game.ui_log(prompt, communication=setup_communication)
-        except TypeError:
-            game.ui_log(prompt)
-        if ui is not None and hasattr(ui, "prompt_info"):
+            prompt_handled = game.player_prompt.info(
+                str(prompt_value("setup.encounter_step", "title", "Setup encounteru")),
+                body_markdown=prompt,
+                summary=str(prompt_value("setup.encounter_step", "summary", "Setup encounteru")),
+                details_markdown=(f"Krawędzie: {edges}" if edges else None),
+                source="encounter_setup",
+                scope_key="setup",
+                dedupe_key=f"setup:{idx}/{total_steps}",
+                progress=progress,
+            ) is not None
+        except Exception:
+            prompt_handled = False
+        if not prompt_handled:
             try:
-                ui.prompt_info(
-                    "Setup encounteru",
-                    prompt_long=prompt,
-                    source="encounter_setup",
+                game.ui_log(
+                    prompt,
                     communication=setup_communication,
                 )
-            except Exception:
-                pass
-        elif not getattr(ui, "enabled", False):
-            try:
-                input(f"{prompt} (Enter aby kontynuować) ")
-            except Exception:
-                pass
+            except TypeError:
+                game.ui_log(prompt)
+            if ui is not None and getattr(ui, "enabled", False) and hasattr(ui, "prompt_info"):
+                try:
+                    ui.prompt_info(
+                        str(prompt_value("setup.encounter_step", "title", "Setup encounteru")),
+                        prompt_long=prompt,
+                        source="encounter_setup",
+                        communication=setup_communication,
+                        prompt_id="setup.encounter_step",
+                    )
+                except Exception:
+                    pass
+            elif not getattr(ui, "enabled", False):
+                try:
+                    input(f"{prompt} (Enter aby kontynuować) ")
+                except Exception:
+                    pass
         if positions:
             try:
                 game.conn.leds_off()

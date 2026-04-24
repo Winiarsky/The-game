@@ -7,6 +7,7 @@ import os
 import time
 from collections import deque
 from typing import Any
+from threading import Event as ThreadEvent, Lock as ThreadLock, Thread
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -30,6 +31,7 @@ from board_grid import BoardGrid
 from object_registry import OBJECT_REGISTRY, get_object
 from ui_client import UndoRequested, get_ui_client
 from debug_trace import DebugTrace
+from player_prompting import GamePromptFacade
 from ui_payloads import build_active_actor_payload, build_companion_snapshot, build_hero_snapshot
 
 try:
@@ -74,6 +76,7 @@ class Game:
     
         self.conn: Connection = self._init_connection() if conn is None else conn
         self.ui = get_ui_client()
+        self.player_prompt = GamePromptFacade(self)
         self.debug_trace: DebugTrace | None = None
         self._init_debug_trace(self.scenario_id)
         from action_events import ActionEventBus
@@ -98,6 +101,7 @@ class Game:
         else:
             self.state = Start(self)
         self._init_debug_undo()
+        self._install_board_scan_cancel_controls()
         self._install_ui_prompt_trace_hooks()
 
     def _install_hidden_spawn_trigger_listener(self) -> None:
@@ -319,6 +323,142 @@ class Game:
             return conn
         logger.error("Failed to connect to board.")
         raise ConnectionError("Could not connect to board.")
+
+    def _install_board_scan_cancel_controls(self) -> None:
+        conn = getattr(self, "conn", None)
+        original_scan = getattr(conn, "scan_board", None)
+        if conn is None or not callable(original_scan):
+            return
+        if bool(getattr(conn, "_scan_cancel_wrapped", False)):
+            return
+        self._board_scan_prompt_lock = ThreadLock()
+        self._board_scan_prompt_seq = 0
+        self._raw_conn_scan_board = original_scan
+
+        def _wrapped_scan_board(
+            acceptable_responses=None,
+            *,
+            timeout_s=None,
+        ):
+            return self._scan_board_with_cancel_prompt(
+                acceptable_responses,
+                timeout_s=timeout_s,
+            )
+
+        setattr(conn, "scan_board", _wrapped_scan_board)
+        setattr(conn, "_scan_cancel_wrapped", True)
+
+    def _next_board_scan_scope_key(self) -> str:
+        with self._board_scan_prompt_lock:
+            seq = int(getattr(self, "_board_scan_prompt_seq", 0) or 0) + 1
+            self._board_scan_prompt_seq = seq
+        return f"board_scan:{seq}"
+
+    def _supports_board_scan_cancel_prompt(self) -> bool:
+        ui = getattr(self, "ui", None)
+        return bool(
+            ui is not None
+            and getattr(ui, "enabled", False)
+            and hasattr(ui, "_create_prompt")
+            and hasattr(ui, "_wait_for_text_answer")
+        )
+
+    def _start_board_scan_cancel_prompt(self, scope_key: str) -> tuple[ThreadEvent, Thread | None, str | None]:
+        cancel_requested = ThreadEvent()
+        if not self._supports_board_scan_cancel_prompt():
+            return cancel_requested, None, None
+
+        ui = self.ui
+        conn = getattr(self, "conn", None)
+        prompt_id = None
+        try:
+            prompt_id = ui._create_prompt(  # noqa: SLF001
+                "Plansza czeka na klik",
+                kind="choice",
+                source="board_scan_cancel",
+                choices=["Anuluj"],
+                title="Oczekiwanie na planszę",
+                subtitle="Możesz anulować bieżący wybór bez potwierdzania akcji.",
+                scope_key=scope_key,
+                dedupe_key=scope_key,
+                layout="dialog",
+                choice_meta=[
+                    {
+                        "raw": "__cancel_board_scan__",
+                        "label": "Anuluj",
+                        "desc": "Przerwij bieżący wybór na planszy i wróć do poprzedniego kroku.",
+                        "category": "utility",
+                        "key": "Esc",
+                    }
+                ],
+            )
+        except Exception:
+            logger.debug("Nie udało się utworzyć promptu anulowania skanu planszy.", exc_info=True)
+            prompt_id = None
+        if not prompt_id:
+            return cancel_requested, None, None
+
+        def _run() -> None:
+            try:
+                answer = ui._wait_for_text_answer(prompt_id, max_wait=None)  # noqa: SLF001
+            except UndoRequested:
+                return
+            except Exception:
+                logger.debug("Prompt anulowania skanu planszy zakończył się błędem.", exc_info=True)
+                return
+            if str(answer or "").strip().lower() != "__cancel_board_scan__":
+                return
+            cancel_requested.set()
+            canceller = getattr(conn, "cancel_scan", None)
+            if callable(canceller):
+                try:
+                    canceller()
+                except Exception:
+                    logger.debug("Nie udało się anulować aktywnego skanu planszy.", exc_info=True)
+
+        thread = Thread(target=_run, name=f"board-scan-cancel-{scope_key}", daemon=True)
+        thread.start()
+        return cancel_requested, thread, str(prompt_id)
+
+    def _close_board_scan_cancel_prompt(self, scope_key: str, prompt_id: str | None) -> None:
+        if prompt_id:
+            player_prompt = getattr(self, "player_prompt", None)
+            if player_prompt is not None:
+                try:
+                    if player_prompt.answer(prompt_id, "__board_scan_closed__"):
+                        return
+                except Exception:
+                    logger.debug("Nie udało się zamknąć promptu skanu przez odpowiedź techniczną.", exc_info=True)
+        player_prompt = getattr(self, "player_prompt", None)
+        if player_prompt is None:
+            return
+        try:
+            player_prompt.cancel_scope(scope_key)
+        except Exception:
+            logger.debug("Nie udało się zamknąć promptu anulowania skanu planszy.", exc_info=True)
+
+    def _scan_board_with_cancel_prompt(
+        self,
+        acceptable_responses=None,
+        *,
+        timeout_s=None,
+    ):
+        raw_scan = getattr(self, "_raw_conn_scan_board", None)
+        if not callable(raw_scan):
+            raw_scan = getattr(self.conn, "scan_board")
+        scope_key = self._next_board_scan_scope_key()
+        cancel_requested, prompt_thread, prompt_id = self._start_board_scan_cancel_prompt(scope_key)
+        try:
+            return raw_scan(acceptable_responses, timeout_s=timeout_s)
+        except TypeError:
+            return raw_scan(acceptable_responses)
+        finally:
+            if cancel_requested.is_set():
+                self._close_board_scan_cancel_prompt(scope_key, None)
+            else:
+                self._close_board_scan_cancel_prompt(scope_key, prompt_id)
+            if prompt_thread is not None and cancel_requested.is_set():
+                prompt_thread.join(timeout=0.2)
 
     def run_action(self, action_name: str, *args, **kwargs):
         """Wywołaj akcję stanu i obsłuż ewentualną zmianę stanu."""
@@ -623,6 +763,13 @@ class Game:
 
     def ui_idle_hint(self, title: str, text: str | None = None) -> None:
         """Wyślij wskazówkę do UI dla stanu bez aktywnego promptu."""
+        player_prompt = getattr(self, "player_prompt", None)
+        if player_prompt is not None:
+            try:
+                player_prompt.idle(str(title or "Wskazówka"), text, scope_key="system")
+                return
+            except Exception:
+                pass
         payload: dict[str, Any] = {"title": title}
         if text:
             payload["text"] = text
@@ -868,13 +1015,39 @@ class Game:
                 def _wrapped(*args, **kwargs):
                     started = time.perf_counter()
                     prompt = args[0] if args else kwargs.get("prompt") or kwargs.get("title")
+                    prompt_type = (
+                        "choice" if meth in {"prompt_choice", "prompt_file_image", "prompt_action_select"}
+                        else "roll" if meth == "prompt_roll"
+                        else "info"
+                    )
+                    prompt_key = ""
+                    try:
+                        from prompt_copy import resolve_ui_prompt_copy
+
+                        prompt_copy = resolve_ui_prompt_copy(
+                            kind=prompt_type,
+                            source=kwargs.get("source"),
+                            title=str(kwargs.get("title") or prompt or ""),
+                            subtitle=kwargs.get("subtitle"),
+                            prompt_long=kwargs.get("prompt_long"),
+                            choice_meta=kwargs.get("choice_meta"),
+                            prompt_id=kwargs.get("prompt_id"),
+                        )
+                        prompt_key = str(prompt_copy.get("prompt_id") or kwargs.get("prompt_id") or "")
+                    except Exception:
+                        prompt_key = str(kwargs.get("prompt_id") or "")
                     if self.debug_trace is not None:
                         self.debug_trace.write(
                             "prompt_start",
                             method=meth,
                             prompt=prompt,
+                            prompt_key=prompt_key or None,
                             kwargs=kwargs,
                         )
+                    try:
+                        setattr(ui, "_last_created_prompt_meta", {})
+                    except Exception:
+                        pass
                     try:
                         answer = orig_fn(*args, **kwargs)
                     except Exception as exc:
@@ -883,14 +1056,22 @@ class Game:
                                 f"ui.{meth}",
                                 exc,
                                 prompt=prompt,
+                                prompt_key=prompt_key or None,
                                 duration_ms=round((time.perf_counter() - started) * 1000, 3),
                             )
                         raise
+                    created_meta = {}
+                    try:
+                        created_meta = dict(getattr(ui, "_last_created_prompt_meta", {}) or {})
+                    except Exception:
+                        created_meta = {}
                     if self.debug_trace is not None:
                         self.debug_trace.write(
                             "prompt_answer",
                             method=meth,
                             prompt=prompt,
+                            prompt_key=str(created_meta.get("prompt_key") or prompt_key or "") or None,
+                            ui_prompt_instance_id=str(created_meta.get("id") or "") or None,
                             answer=answer,
                             duration_ms=round((time.perf_counter() - started) * 1000, 3),
                         )

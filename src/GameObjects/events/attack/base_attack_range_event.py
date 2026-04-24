@@ -14,7 +14,13 @@ from GameObjects.items.weapon import normalize_weapon_id
 from statuses import Status, inspire_courage_damage_bonus
 from statuses.classes.ranger.ranger_utils import set_crossbow_ace_ready
 from damage_types import DamageType
-from combat.damage_utils import burn_it_bonus, burn_it_prompt_note, remove_defeated_enemy
+from combat.damage_utils import (
+    added_status_labels,
+    burn_it_bonus,
+    burn_it_prompt_note,
+    remove_defeated_enemy,
+    snapshot_statuses,
+)
 from combat.degree_of_success import is_critical_success, is_hit, natural_shift_from_roll, resolve_outcome
 from led_fx import animate_projectile_line
 
@@ -29,7 +35,28 @@ logger = logging.getLogger(__name__)
 CoverType = str
 
 
-def _ranged_prompt_info(game, title: str, text: str, *, source: str) -> None:
+def _ranged_prompt_info(game, title: str, text: str, *, source: str, blocking: bool = True) -> None:
+    if not blocking:
+        idle_hint = getattr(game, "ui_idle_hint", None)
+        if callable(idle_hint):
+            try:
+                idle_hint(title, text)
+                return
+            except Exception:
+                pass
+    player_prompt = getattr(game, "player_prompt", None)
+    if blocking and player_prompt is not None:
+        try:
+            if player_prompt.info(
+                title,
+                body_markdown=text,
+                source=source,
+                scope_key="hero_turn:targeting",
+                dedupe_key=f"{source}:{title}",
+            ) is not None:
+                return
+        except Exception:
+            pass
     ui = getattr(game, "ui", None)
     if ui is not None and hasattr(ui, "prompt_info"):
         try:
@@ -53,6 +80,23 @@ def _ranged_prompt_choice(
     source: str,
     choice_meta: list[dict] | None = None,
 ) -> str | None:
+    player_prompt = getattr(game, "player_prompt", None)
+    if player_prompt is not None:
+        try:
+            answer = player_prompt.choice(
+                title,
+                choices=list(choices or []),
+                source=source,
+                subtitle=text,
+                choice_meta=list(choice_meta or []),
+                scope_key="hero_turn:targeting",
+                dedupe_key=f"{source}:{title}",
+                layout="menu_numpad",
+            )
+            if answer is not None:
+                return str(answer)
+        except Exception:
+            pass
     ui = getattr(game, "ui", None)
     if ui is not None and hasattr(ui, "prompt_choice"):
         try:
@@ -324,11 +368,40 @@ class BaseRangeAttackEvent(AttackEventBase):
             led_colors.append(self.TARGET_LED)
 
         has_undetected_hittable = any(self._has_status_id(a.get("enemy"), "undetected") for a in hittable)
-        if led_positions and not has_undetected_hittable:
+
+        def _render_leds(positions: list[tuple[int, int]], colors: list[list[int]]) -> None:
+            if has_undetected_hittable:
+                return
             try:
-                game.conn.set_leds(led_positions, led_colors)
+                game.conn.leds_off()
+            except Exception:
+                pass
+            if not positions:
+                return
+            try:
+                game.conn.set_leds(positions, colors)
             except Exception as exc:
                 logger.warning("Nie udało się ustawić LEDów: %s", exc)
+
+        def _render_target_analysis_leds(analysis: dict) -> None:
+            obstacle_map: dict[tuple[int, int], CoverType] = {}
+            for obs in analysis.get("obstacles", []):
+                cover_type = str(obs.get("cover_type") or "standard")
+                for pos in obs.get("positions", []):
+                    current = obstacle_map.get(pos, "none")
+                    if self.COVER_RANK.get(cover_type, 0) > self.COVER_RANK.get(current, 0):
+                        obstacle_map[pos] = cover_type
+            focused_positions: list[tuple[int, int]] = []
+            focused_colors: list[list[int]] = []
+            for pos, cover_type in obstacle_map.items():
+                focused_positions.append(pos)
+                focused_colors.append(self.COVER_LED.get(cover_type, self.COVER_LED["standard"]))
+            focused_positions.append(analysis["target_pos"])
+            focused_colors.append(self.TARGET_LED)
+            _render_leds(focused_positions, focused_colors)
+
+        if led_positions:
+            _render_leds(led_positions, led_colors)
         should_prompt_targeting = hittable and forced_target is None and not (
             isinstance(forced_target_pos, tuple) and len(forced_target_pos) == 2
         )
@@ -347,6 +420,7 @@ class BaseRangeAttackEvent(AttackEventBase):
                     "Nie każde podświetlone pole jest wyborem celu. Kliknij pole celu."
                 ),
                 source=f"{self.action_id_base}_targeting",
+                blocking=False,
             )
 
         try:
@@ -497,6 +571,7 @@ class BaseRangeAttackEvent(AttackEventBase):
                 distance_ft = target_analysis["distance_ft"]
                 range_penalty = target_analysis["range_penalty"]
                 increments = target_analysis["increments"]
+                _render_target_analysis_leds(target_analysis)
                 if self._is_hunted_prey(hero, enemy) and increments >= 2:
                     range_penalty = max(0, int(range_penalty) - 2)
 
@@ -512,6 +587,9 @@ class BaseRangeAttackEvent(AttackEventBase):
                 allow_retarget = forced_target is None and not (
                     isinstance(forced_target_pos, tuple) and len(forced_target_pos) == 2
                 )
+                should_prompt_analysis = not (roll_only and not allow_retarget)
+                if not should_prompt_analysis:
+                    break
                 if not allow_retarget:
                     _ranged_prompt_info(
                         game,
@@ -550,6 +628,7 @@ class BaseRangeAttackEvent(AttackEventBase):
                     or ""
                 ).strip().lower()
                 if "inny" in analysis_choice or analysis_choice == "retarget":
+                    _render_leds(led_positions, led_colors)
                     target_analysis = None
                     continue
                 break
@@ -1292,6 +1371,7 @@ class BaseRangeAttackEvent(AttackEventBase):
                         "nonlethal": nonlethal_attack,
                     },
                 )
+            target_status_snapshot = snapshot_statuses(enemy)
             defeated = False
             crit_spec_notes = self._apply_weapon_critical_specialization(
                 ctx,
@@ -1365,8 +1445,11 @@ class BaseRangeAttackEvent(AttackEventBase):
                     target=enemy,
                     target_pos=target_pos,
                     source_action=self.action_id_base,
+                    source_label=self._weapon_name(selected_weapon) if selected_weapon is not None else self.weapon_label,
                     damage=total_damage,
                     damage_components=damage_components,
+                    applied_statuses=added_status_labels(target_status_snapshot, enemy),
+                    defeated=defeated,
                 )
             if not suppress_record:
                 self._record_attack(

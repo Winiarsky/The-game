@@ -76,7 +76,33 @@ def _prompt_choice(
     *,
     source: str,
     choice_meta: list[dict] | None = None,
+    body_markdown: str | None = None,
+    details_markdown: str | None = None,
+    prompt_id: str | None = None,
 ) -> str | None:
+    player_prompt = getattr(ctx.game, "player_prompt", None)
+    if player_prompt is not None:
+        try:
+            answer = player_prompt.choice(
+                prompt,
+                choices=list(choices or []),
+                source=source,
+                subtitle=body_markdown,
+                body_markdown=body_markdown,
+                details_markdown=details_markdown,
+                choice_meta=list(choice_meta or []),
+                scope_key="hero_turn:companion",
+                dedupe_key=prompt_id or f"{source}:{prompt}",
+                layout="menu_numpad",
+                prompt_id=prompt_id,
+            )
+            if answer is not None:
+                raw_answer = str(answer).strip()
+                if raw_answer:
+                    return _normalize_choice(raw_answer, choices)
+        except Exception:
+            pass
+
     ui = getattr(ctx.game, "ui", None)
     answer = None
     if ui is not None and hasattr(ui, "prompt_choice"):
@@ -86,6 +112,11 @@ def _prompt_choice(
                 choices=choices,
                 source=source,
                 choice_meta=choice_meta,
+                prompt_long=body_markdown,
+                details_markdown=details_markdown,
+                scope_key="hero_turn:companion",
+                dedupe_key=prompt_id or f"{source}:{prompt}",
+                prompt_id=prompt_id,
                 layout="menu_numpad",
             )
         except Exception:
@@ -100,7 +131,11 @@ def _prompt_choice(
                 answer = None
     if answer is None:
         return None
-    raw = str(answer).strip().lower().replace(" ", "_")
+    return _normalize_choice(str(answer), choices)
+
+
+def _normalize_choice(answer: str, choices: list[str]) -> str | None:
+    raw = str(answer or "").strip().lower().replace(" ", "_")
     if not raw:
         return None
     if raw.isdigit():
@@ -113,11 +148,32 @@ def _prompt_choice(
     return None
 
 
-def _prompt_info(ctx: EventContext, title: str, text: str, *, source: str) -> None:
+def _prompt_info(ctx: EventContext, title: str, text: str, *, source: str, prompt_id: str | None = None) -> None:
+    player_prompt = getattr(ctx.game, "player_prompt", None)
+    if player_prompt is not None:
+        try:
+            if player_prompt.info(
+                title,
+                body_markdown=text,
+                source=source,
+                scope_key="hero_turn:companion",
+                dedupe_key=prompt_id or f"{source}:{title}",
+                prompt_id=prompt_id,
+            ) is not None:
+                return
+        except Exception:
+            pass
     ui = getattr(ctx.game, "ui", None)
     if ui is not None and getattr(ui, "enabled", False) and hasattr(ui, "prompt_info"):
         try:
-            ui.prompt_info(title, prompt_long=text, source=source)
+            ui.prompt_info(
+                title,
+                prompt_long=text,
+                source=source,
+                scope_key="hero_turn:companion",
+                dedupe_key=prompt_id or f"{source}:{title}",
+                prompt_id=prompt_id,
+            )
             return
         except Exception:
             pass
@@ -188,6 +244,17 @@ def _iter_enemy_like_targets(ctx: EventContext):
         yield candidate
 
 
+def _companion_ally_ids(game, owner, companion) -> set[str]:
+    ids = {_actor_id(owner), _actor_id(companion)}
+    for hero in getattr(game, "heroes", []) or []:
+        ids.add(_actor_id(hero))
+    companions = getattr(getattr(game, "state", None), "animal_companions", None)
+    if isinstance(companions, dict):
+        for value in companions.values():
+            ids.add(_actor_id(value))
+    return {item for item in ids if item}
+
+
 def _damage_formula_average(damage_formula: str) -> int:
     raw = str(damage_formula or "").strip().lower().replace(" ", "")
     if "d" not in raw:
@@ -209,6 +276,15 @@ def _damage_formula_average(damage_formula: str) -> int:
     if count <= 0 or sides <= 0:
         return max(0, bonus)
     return max(0, int(round(count * ((sides + 1) / 2.0) + bonus)))
+
+
+def _companion_name(companion) -> str:
+    return str(getattr(companion, "name", "") or "Towarzysz")
+
+
+def _companion_type(companion) -> str:
+    raw = str(getattr(companion, "companion_type", "") or "towarzysz").replace("_", " ").strip()
+    return raw or "towarzysz"
 
 
 def _companion_attack_bonus(companion, profile: dict[str, object], *, strike_count: int = 0) -> int:
@@ -248,27 +324,53 @@ def _companion_action_choice_meta(companion) -> list[dict[str, str]]:
             "raw": "stride",
             "label": "Ruch",
             "desc": f"Ruch towarzysza do {speed} ft zgodnie z podświetloną ścieżką.",
+            "key": "1",
             "category": "movement",
+            "icon": "M",
         },
         {
             "raw": "strike",
             "label": "Atak",
             "desc": strike_desc,
+            "key": "2",
             "category": "combat",
+            "icon": "A",
         },
         {
             "raw": "support",
             "label": "Wsparcie",
             "desc": support_note or "Towarzysz wspiera właściciela do początku jego następnej tury.",
+            "key": "3",
             "category": "class",
+            "icon": "S",
         },
         {
             "raw": "end",
             "label": "Koniec",
             "desc": "Zakończ komendę i zachowaj niewydane akcje towarzysza.",
+            "key": "4",
             "category": "turn",
+            "icon": "E",
         },
     ]
+
+
+def _companion_menu_body(owner, companion, actions_left: int) -> str:
+    support_note = str(getattr(companion, "support_benefit", "") or "").strip()
+    speed = max(5, int(getattr(companion, "land_speed_feet", 25) or 25))
+    lines = [
+        f"**Właściciel:** {getattr(owner, 'name', 'bohater')}",
+        f"**Towarzysz:** {_companion_name(companion)} ({_companion_type(companion)})",
+        f"**Akcje towarzysza w tej komendzie:** {actions_left}/2",
+        "",
+        "Wydanie komendy kosztuje bohatera 1 akcję. Towarzysz może teraz wykonać maksymalnie 2 akcje.",
+        f"**Ruch** podświetla ścieżkę do {speed} ft i wymaga kliknięcia pola docelowego, aby potwierdzić.",
+        "**Atak** wybiera cel w zasięgu towarzysza, potem prosi o rzut ataku i obrażenia.",
+        "**Wsparcie** aktywuje efekt supportu do początku następnej tury właściciela.",
+    ]
+    if support_note:
+        lines.extend(["", f"**Efekt wsparcia:** {support_note}"])
+    return "\n".join(lines)
 
 
 @register_event
@@ -307,17 +409,21 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
         action_logs: list[str] = []
         spent_any = False
         strike_count = 0
-        while actions_left > 0:
+        loop_guard = 0
+        while actions_left > 0 and loop_guard < 8:
+            loop_guard += 1
             choices = ["stride", "strike", "support", "end"]
             if support_used:
                 choices = ["stride", "end"]
             choice_meta = [row for row in _companion_action_choice_meta(companion) if row.get("raw") in choices]
             choice = _prompt_choice(
                 ctx,
-                f"Zwierzecy towarzysz ({getattr(companion, 'name', 'towarzysz')}): wybierz akcje ({actions_left} pozostalo)",
+                f"Zwierzęcy towarzysz: wybierz akcję ({actions_left} pozostało)",
                 choices,
                 source=self.name,
                 choice_meta=choice_meta,
+                body_markdown=_companion_menu_body(owner, companion, actions_left),
+                prompt_id="companion.command.menu",
             )
             if choice is None:
                 break
@@ -341,6 +447,7 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
                         "Zwierzęcy towarzysz: akcja niemożliwa",
                         str(msg),
                         source=self.name,
+                        prompt_id="companion.command.action_blocked",
                     )
             if consumed:
                 actions_left -= 1
@@ -538,8 +645,11 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
             return False, "Strike: companion nie jest na planszy."
 
         reach = max(1, int(getattr(companion, "reach_cells", 1) or 1))
+        ally_ids = _companion_ally_ids(ctx.game, owner, companion)
         candidates = []
         for enemy in _iter_enemy_like_targets(ctx):
+            if _actor_id(enemy) in ally_ids:
+                continue
             pos = getattr(enemy, "position", None)
             if pos is None:
                 continue
@@ -551,6 +661,8 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
         if not candidates and board is not None:
             for pos in board.get_neighbors(source_pos, include_position=False, diagonal=True):
                 target = board.occupant_at(pos)
+                if _actor_id(target) in ally_ids:
+                    continue
                 if not _is_enemy_target(ctx.game, target):
                     continue
                 if max(abs(pos[0] - source_pos[0]), abs(pos[1] - source_pos[1])) > reach:
@@ -572,6 +684,7 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
                     "Podświetlona figurka to twój towarzysz, a pola celu są oznaczone osobnym kolorem."
                 ),
                 source=self.name,
+                prompt_id="companion.command.pick_target",
             )
             try:
                 _highlight_companion_and_positions(ctx, companion, positions)
@@ -591,6 +704,7 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
         attacks = list(getattr(companion, "attack_profiles", []) or [])
         if not attacks:
             return False, "Strike: companion nie ma atakow."
+        target_name = getattr(target, "name", "target")
         if len(attacks) == 1:
             profile = attacks[0]
         else:
@@ -614,6 +728,11 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
                 labels,
                 source=self.name,
                 choice_meta=choice_meta,
+                body_markdown=(
+                    f"Towarzysz {_companion_name(companion)} atakuje {target_name}. "
+                    "Wybierz profil ataku, którego użyje w tej akcji."
+                ),
+                prompt_id="companion.command.pick_attack",
             )
             profile = attacks[0]
             if choice:
@@ -626,7 +745,6 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
         damage_formula = str(profile.get("damage", "1d6") or "1d6")
         damage_type = str(profile.get("damage_type", "normal") or "normal")
         target_ac = int(effective_ac(target) or 10)
-        target_name = getattr(target, "name", "target")
         target_pos = getattr(target, "position", None)
         traits = {str(item or "").strip().lower() for item in (profile.get("traits") or [])}
         hunted_target = self._companion_hunted_target_id(companion) == _actor_id(target)
@@ -716,6 +834,7 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
                 f"Teraz wykonaj rzut ataku przeciw AC {target_ac} i potwierdź w UI."
             ),
             source=self.name,
+            prompt_id="companion.command.strike",
         )
 
         attack_roll_data = prompt_for_roll(
@@ -766,6 +885,7 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
                 f"{' x2 dla krytyka' if critical else ''} i potwierdź w UI."
             ),
             source=self.name,
+            prompt_id="companion.command.damage",
         )
         dmg_base = int(
             prompt_for_roll(
@@ -785,6 +905,7 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
                 "Zwierzęcy towarzysz: Precision",
                 "Hunter's Edge (Precision) jest aktywne. Rzuć dodatkowe obrażenia i potwierdź w UI.",
                 source=self.name,
+                prompt_id="companion.command.precision",
             )
             precision_roll = prompt_for_roll(
                 "Hunter's Edge (Precision) - dodatkowe obrażenia 1k8:",

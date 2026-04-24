@@ -23,6 +23,7 @@ for path in (PROJECT_ROOT, SRC_ROOT):
 from board.settings import connection_backend, hardware_scan_config, load_board_config, simulator_url
 from character_creation.repository import CharacterRepository
 from communication import normalize_communication
+from player_prompting import PromptDirector, SESSION_RESET_COMMAND
 
 APP_ROOT = Path(__file__).resolve().parent
 CONTENT_ROOT = APP_ROOT / "content"
@@ -35,15 +36,11 @@ subscribers: set[Queue] = set()
 subscribers_lock = Lock()
 events_history: list[dict[str, Any]] = []
 history_limit = 250
-prompts: dict[str, dict[str, Any]] = {}
-prompts_lock = Lock()
-prompt_limit = 300
-SESSION_RESET_COMMAND = "__session_reset__"
 
 event_ids = itertools.count(1)
-prompt_ids = itertools.count(1)
 session_ids = itertools.count(1)
 current_session_id = f"ui-session-{next(session_ids)}"
+prompt_director = PromptDirector(session_id=current_session_id)
 
 runtime_lock = Lock()
 runtime_state: dict[str, Any] = {
@@ -92,45 +89,23 @@ def _make_event(event_type: str, payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _answer_session_prompts_unlocked(session_id: str, answer: Any) -> int:
-    changed = 0
-    for entry in prompts.values():
-        if str(entry.get("session_id") or "") != session_id:
-            continue
-        if entry.get("status") == "answered":
-            continue
-        entry["status"] = "answered"
-        entry["answer"] = answer
-        changed += 1
-    return changed
+def _publish(event_type: str, payload: dict[str, Any]) -> dict[str, Any]:
+    event = _make_event(event_type, payload)
+    _record_event(event)
+    _broadcast(event)
+    return event
 
 
-def _prune_prompts_unlocked() -> None:
-    if len(prompts) <= prompt_limit:
-        return
-    ordered = sorted(
-        prompts.values(),
-        key=lambda item: (item.get("session_id") == current_session_id, float(item.get("created_at", 0.0))),
-    )
-    for entry in ordered:
-        if len(prompts) <= prompt_limit:
-            break
-        if entry.get("status") == "answered":
-            prompts.pop(str(entry.get("id")), None)
-    while len(prompts) > prompt_limit and ordered:
-        oldest = ordered.pop(0)
-        prompts.pop(str(oldest.get("id")), None)
+prompt_director.set_publisher(_publish)
 
 
 def _session_info() -> dict[str, Any]:
-    with prompts_lock:
-        current_prompts = [
-            entry for entry in prompts.values() if str(entry.get("session_id") or "") == current_session_id
-        ]
+    current_prompts = prompt_director.list_prompts(session_id=current_session_id)
     return {
         "id": current_session_id,
         "history_size": len(events_history),
         "prompt_count": len(current_prompts),
+        "revision": prompt_director.revision,
     }
 
 
@@ -146,33 +121,6 @@ def _validate_request_session_id(data: dict[str, Any]) -> tuple[bool, Response |
         )
     return True, None
 
-
-def _serialize_prompt(entry: dict[str, Any]) -> dict[str, Any]:
-    payload = {
-        "ok": True,
-        "id": entry["id"],
-        "prompt": entry["prompt"],
-        "status": entry["status"],
-        "answer": entry["answer"],
-        "kind": entry.get("kind"),
-        "source": entry.get("source"),
-        "session_id": entry.get("session_id"),
-        "choices": entry.get("choices"),
-        "choice_meta": entry.get("choice_meta"),
-        "title": entry.get("title"),
-        "subtitle": entry.get("subtitle"),
-        "prompt_long": entry.get("prompt_long"),
-        "image": entry.get("image"),
-        "layout": entry.get("layout"),
-        "action_desc": entry.get("action_desc"),
-        "desc": entry.get("desc"),
-        "answer_placeholder": entry.get("answer_placeholder"),
-        "modifiers": entry.get("modifiers"),
-        "roll_stack": entry.get("roll_stack"),
-        "communication": entry.get("communication"),
-    }
-    payload["communication"] = normalize_communication(event_type="prompt", payload=payload, prompt=True)
-    return payload
 
 
 def _normalize_skill_ranks(snapshot: dict[str, Any]) -> list[str]:
@@ -334,12 +282,16 @@ def _runtime_status_payload() -> dict[str, Any]:
 def reset_session_state(*, reason: str = "manual") -> dict[str, Any]:
     global current_session_id
     previous_session_id = current_session_id
-    with prompts_lock:
-        retired_prompts = _answer_session_prompts_unlocked(previous_session_id, SESSION_RESET_COMMAND)
-        _prune_prompts_unlocked()
     current_session_id = f"ui-session-{next(session_ids)}"
     events_history.clear()
-    event = _make_event(
+    with runtime_lock:
+        runtime_state["session_id"] = current_session_id
+    retired_prompts = prompt_director.rotate_session(
+        current_session_id,
+        retired_answer=SESSION_RESET_COMMAND,
+        runtime_status=_runtime_status_payload(),
+    )
+    _publish(
         "session_reset",
         {
             "reason": reason,
@@ -347,10 +299,6 @@ def reset_session_state(*, reason: str = "manual") -> dict[str, Any]:
             "retired_prompts": retired_prompts,
         },
     )
-    _record_event(event)
-    _broadcast(event)
-    with runtime_lock:
-        runtime_state["session_id"] = current_session_id
     return {
         "ok": True,
         "session": _session_info(),
@@ -583,15 +531,25 @@ def api_events():
     body = payload.get("payload") or {}
     if isinstance(body, dict):
         normalized_body = dict(body)
+        normalized_body["_communication_explicit"] = isinstance(body.get("communication"), dict)
         normalized_body["communication"] = normalize_communication(
             event_type=str(event_type),
             payload=normalized_body,
             prompt=False,
         )
         body = normalized_body
-    event = _make_event(event_type, body)
-    _record_event(event)
-    _broadcast(event)
+    event = _publish(str(event_type), body)
+    if str(event_type) in {"log", "info", "narration", "idle_hint", "player_card"}:
+        prompt_director.ingest_event(str(event_type), body, runtime_status=_runtime_status_payload())
+    elif str(event_type) == "prompt_scope_cancel":
+        prompt_director.cancel_scope(str(body.get("scope_key") or ""), runtime_status=_runtime_status_payload())
+    elif str(event_type) == "prompt_answer":
+        prompt_director.answer_prompt(
+            str(body.get("prompt_id") or ""),
+            body.get("answer"),
+            current_session_id=current_session_id,
+            runtime_status=_runtime_status_payload(),
+        )
     return jsonify({"ok": True, "event": event})
 
 
@@ -604,133 +562,85 @@ def create_prompt():
     prompt_text = str(data.get("prompt") or "").strip()
     if not prompt_text:
         return jsonify({"ok": False, "error": "prompt is required"}), 400
-    kind = data.get("kind") or "info"
-    source = data.get("source")
-    choices = data.get("choices")
-    if choices is not None and not isinstance(choices, list):
-        choices = None
-    choice_meta = data.get("choice_meta") if isinstance(data.get("choice_meta"), list) else None
-    modifiers = data.get("modifiers") if isinstance(data.get("modifiers"), dict) else None
-    layout = data.get("layout")
-
-    prompt_id = str(next(prompt_ids))
-    entry = {
-        "id": prompt_id,
-        "prompt": prompt_text,
-        "kind": kind,
-        "source": source,
-        "session_id": current_session_id,
-        "status": "pending",
-        "answer": None,
-        "created_at": time.time(),
-        "choices": choices,
-        "choice_meta": choice_meta,
-        "title": data.get("title"),
-        "subtitle": data.get("subtitle"),
-        "prompt_long": data.get("prompt_long"),
-        "image": data.get("image"),
-        "layout": layout,
-        "action_desc": data.get("action_desc"),
-        "desc": data.get("desc"),
-        "answer_placeholder": data.get("answer_placeholder"),
-        "modifiers": modifiers,
-        "roll_stack": data.get("roll_stack") if isinstance(data.get("roll_stack"), dict) else None,
-        "communication": data.get("communication") if isinstance(data.get("communication"), dict) else None,
-    }
-    entry["communication"] = normalize_communication(event_type="prompt", payload=entry, prompt=True)
-    with prompts_lock:
-        prompts[prompt_id] = entry
-        _prune_prompts_unlocked()
-
-    event = _make_event("prompt", entry)
-    _record_event(event)
-    _broadcast(event)
+    payload = dict(data)
+    payload["prompt"] = prompt_text
+    prompt = prompt_director.create_prompt_from_api(
+        payload,
+        session_id=current_session_id,
+        runtime_status=_runtime_status_payload(),
+    )
     return jsonify(
         {
             "ok": True,
-            "id": prompt_id,
+            "id": prompt["id"],
+            "prompt_key": prompt.get("prompt_key"),
             "prompt": prompt_text,
             "session_id": current_session_id,
-            "communication": entry.get("communication"),
+            "communication": prompt.get("communication"),
         }
     )
 
 
 @app.get("/api/prompts")
 def list_prompts():
-    with prompts_lock:
-        values = [
-            value
-            for value in prompts.values()
-            if str(value.get("session_id") or "") == current_session_id
-        ]
     session = {
         "id": current_session_id,
         "history_size": len(events_history),
-        "prompt_count": len(values),
+        "prompt_count": len(prompt_director.list_prompts(session_id=current_session_id)),
+        "revision": prompt_director.revision,
     }
-    return jsonify({"ok": True, "session": session, "prompts": [_serialize_prompt(value) for value in values]})
+    return jsonify({"ok": True, "session": session, "prompts": prompt_director.list_prompts(session_id=current_session_id)})
 
 
 @app.get("/api/prompts/<prompt_id>")
 def get_prompt(prompt_id: str):
-    with prompts_lock:
-        entry = prompts.get(prompt_id)
+    entry = prompt_director.get_prompt(prompt_id)
     if not entry:
         return jsonify({"ok": False, "error": "prompt not found"}), 404
-    return jsonify(_serialize_prompt(entry))
+    return jsonify({"ok": True, **entry})
 
 
 @app.post("/api/prompts/<prompt_id>/response")
 def set_prompt_response(prompt_id: str):
     data = request.get_json(force=True, silent=True) or {}
     answer = data.get("answer")
-    entry_session_id = None
-    stored_answer = None
-    already_answered = False
-    with prompts_lock:
-        entry = prompts.get(prompt_id)
-        if not entry:
-            return jsonify({"ok": False, "error": "prompt not found"}), 404
-        entry_session_id = str(entry.get("session_id") or "")
-        if entry.get("status") == "answered":
-            already_answered = True
-            stored_answer = entry.get("answer")
-        else:
-            entry["status"] = "answered"
-            entry["answer"] = answer
-            stored_answer = answer
-        _prune_prompts_unlocked()
-    if already_answered:
-        return jsonify(
-            {
-                "ok": True,
-                "id": prompt_id,
-                "answer": stored_answer,
-                "session_id": entry_session_id,
-                "ignored": True,
-            }
-        )
-    if entry_session_id != current_session_id:
-        return jsonify(
-            {
-                "ok": True,
-                "id": prompt_id,
-                "answer": stored_answer,
-                "session_id": entry_session_id,
-            }
-        )
-    event = _make_event("prompt_answered", {"id": prompt_id, "answer": stored_answer, "prompt": entry["prompt"]})
-    _record_event(event)
-    _broadcast(event)
+    entry = prompt_director.get_prompt(prompt_id)
+    if not entry:
+        return jsonify({"ok": False, "error": "prompt not found"}), 404
+    result = prompt_director.answer_prompt(
+        prompt_id,
+        answer,
+        current_session_id=current_session_id,
+        runtime_status=_runtime_status_payload(),
+    )
+    assert result is not None
+    return jsonify({"ok": True, **result})
+
+
+@app.post("/api/prompts/<prompt_id>/answer")
+def set_prompt_answer(prompt_id: str):
+    return set_prompt_response(prompt_id)
+
+
+@app.get("/api/view-state")
+def api_view_state():
     return jsonify(
         {
             "ok": True,
-            "id": prompt_id,
-            "answer": stored_answer,
-            "session_id": entry.get("session_id"),
+            "session": _session_info(),
+            "view_state": prompt_director.snapshot(runtime_status=_runtime_status_payload()),
         }
     )
+
+
+@app.get("/api/journal")
+def api_journal():
+    try:
+        after = max(0, int(request.args.get("after", "0") or 0))
+    except Exception:
+        after = 0
+    payload = prompt_director.journal_after(after)
+    return jsonify({"ok": True, "session": _session_info(), **payload})
 
 
 @app.get("/api/catalog")

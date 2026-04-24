@@ -142,8 +142,15 @@ class ActionEventBus:
                     ui_event("action", safe_event)
                 except Exception:  # pragma: no cover - logowanie poniżej
                     logger.debug("Nie udało się wysłać eventu akcji do UI", exc_info=True)
+            if str(event.get("action_id") or "").strip().lower() == "damage_applied":
+                try:
+                    from combat.damage_utils import announce_damage_applied
+
+                    announce_damage_applied(self.game, dict(event))
+                except Exception:
+                    logger.debug("Nie udało się pokazać promptu podsumowania obrażeń.", exc_info=True)
             ui_narration = getattr(self.game, "ui_narration", None)
-            if callable(ui_narration):
+            if callable(ui_narration) and str(event.get("action_id") or "").strip().lower() != "damage_applied":
                 try:
                     ui_narration(
                         narrate_action_event(dict(event)),

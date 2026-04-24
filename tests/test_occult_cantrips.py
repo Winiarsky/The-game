@@ -27,11 +27,13 @@ class DummyConn:
     def __init__(self, scans=None):
         self.scans = list(scans or [])
         self.last_led_positions = None
+        self.scan_inputs = []
 
     def set_leds(self, positions, _colors):
         self.last_led_positions = list(positions)
 
     def scan_board(self, _positions):
+        self.scan_inputs.append(None if _positions is None else list(_positions))
         if self.scans:
             return self.scans.pop(0)
         return None
@@ -178,7 +180,7 @@ def test_acid_splash_spell_attack_prompt_includes_proficiency_and_key_ability(mo
         return 0
 
     monkeypatch.setattr("GameObjects.events.magic.base_attack_magic_event.prompt_for_roll", _prompt)
-    monkeypatch.setattr(occ.AcidSplashEvent, "_prompt_damage", lambda self: 4)
+    monkeypatch.setattr(occ.AcidSplashEvent, "_prompt_damage", lambda self, **_kwargs: 4)
 
     res = occ.AcidSplashEvent().execute(EventContext(game=game, actor=hero))
 
@@ -190,6 +192,52 @@ def test_acid_splash_spell_attack_prompt_includes_proficiency_and_key_ability(mo
     assert int(proficiency.get("value", 0) or 0) == 3
     assert int(key_ability.get("value", 0) or 0) == 4
     assert int(stack.get("auto_total_modifier", 0) or 0) == 7
+
+
+def test_targeted_spell_requires_second_click_to_confirm_target(monkeypatch):
+    hero = DummyActor("Freya", (0, 0))
+    enemy = DummyActor("enemy", (1, 0), hp=20)
+    enemy.ac = 10
+    conn = DummyConn(scans=[enemy.position, enemy.position])
+    game = _game(actor=hero, enemies=[enemy], conn=conn)
+    game.ui.enabled = True
+
+    monkeypatch.setattr("GameObjects.events.magic.base_attack_magic_event.prompt_for_roll", lambda *_a, **_k: 20)
+    monkeypatch.setattr(occ.AcidSplashEvent, "_prompt_damage", lambda self, **_kwargs: 4)
+
+    res = occ.AcidSplashEvent().execute(EventContext(game=game, actor=hero))
+
+    assert res.success is True
+    assert enemy.hp == 16
+    assert len(conn.scan_inputs) == 2
+    assert conn.scan_inputs[0] == [enemy.position]
+    assert enemy.position in conn.scan_inputs[1]
+    assert hero.position in conn.scan_inputs[1]
+
+
+def test_telekinetic_projectile_damage_prompt_includes_formula(monkeypatch):
+    caster = DummyActor("caster", (0, 0))
+    caster.level = 3
+    enemy = DummyActor("enemy", (1, 0), hp=20)
+    game = _game(actor=caster, enemies=[enemy])
+    captured = {}
+
+    def _prompt(prompt, **kwargs):
+        captured["prompt"] = str(prompt)
+        captured["kwargs"] = dict(kwargs)
+        return 4
+
+    monkeypatch.setattr(occ, "prompt_for_roll", _prompt)
+
+    result = occ.TelekineticProjectileEvent()._resolve_on_target(
+        enemy,
+        enemy.position,
+        EventContext(game=game, actor=caster),
+    )
+
+    assert result.success is True
+    assert "2k6" in captured["prompt"]
+    assert "2k6" in str(captured["kwargs"].get("prompt_long") or "")
 
 
 def test_forbidding_ward_sets_target_id(monkeypatch):

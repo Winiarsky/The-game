@@ -5,8 +5,15 @@ import logging
 from led_fx import animate_area_wave
 from bonuses import BonusEffect, BonusType
 from actions.move_utils import adjusted_forced_movement_squares
-from combat.damage_utils import burn_it_bonus, burn_it_prompt_note
+from combat.damage_utils import (
+    added_status_labels,
+    burn_it_bonus,
+    burn_it_prompt_note,
+    remove_defeated_enemy,
+    snapshot_statuses,
+)
 from combat.hp_engine import apply_damage as hp_apply_damage
+from combat.hp_engine import current_hp
 from combat.hp_engine import heal as hp_heal
 from damage_types import DamageType
 from skills import Skill
@@ -44,8 +51,9 @@ from GameObjects.interactions_mixin import prompt_for_roll
 from ...base import EventContext, EventResult, emit_prompt_narration, format_board_selection_message
 from ...registry import register_event
 from ..base_attack_magic_event import BaseMagicAttackEvent, prompt_spell_save_roll, spell_dc_details
-from ..magic_event import MagicEvent
+from ..magic_event import MagicEvent, MagicEventResolver
 from ..magic_utils import grid_distance_feet, pick_position_in_range, pick_target_in_range
+from ..prompting import spell_formula_prompt
 from ..runtime_effects import add_alarm_ward
 from ..spell_types import SpellTradition
 
@@ -131,21 +139,75 @@ def _remove_bonus_prefix(target, prefix: str) -> None:
         pass
 
 
-def _apply_damage(target, amount: int, damage_type: str) -> bool:
+def _apply_damage(
+    target,
+    amount: int,
+    damage_type: str,
+    *,
+    game=None,
+    actor=None,
+    source_action: str | None = None,
+    source_label: str | None = None,
+) -> bool:
+    incoming = max(0, int(amount))
+    if incoming <= 0:
+        return False
+    before_hp = current_hp(target)
+    target_status_snapshot = snapshot_statuses(target)
     defeated = False
+    hp_damage = 0
     apply = getattr(target, "apply_damage", None)
     if callable(apply):
         try:
             _, defeated = apply(max(0, int(amount)), damage_type)
-            return bool(defeated)
+            after_hp = current_hp(target)
+            if before_hp is not None and after_hp is not None:
+                hp_damage = max(0, int(before_hp) - int(after_hp))
+            else:
+                hp_damage = incoming
         except Exception as exc:
             logger.error("Nie udalo sie zadac obrazen: %s", exc)
             return False
-    try:
-        info = hp_apply_damage(target, amount, damage_type, source=f"spell:{damage_type}")
-        return bool(info.get("defeated", False))
-    except Exception:
-        return False
+    else:
+        try:
+            info = hp_apply_damage(target, amount, damage_type, source=f"spell:{damage_type}")
+            defeated = bool(info.get("defeated", False))
+            hp_damage = max(0, int(info.get("hp_damage", 0) or 0))
+        except Exception:
+            return False
+
+    if game is not None and actor is not None and hp_damage > 0:
+        try:
+            events = getattr(game, "events", None)
+            if events is not None and hasattr(events, "safe_emit_action"):
+                events.safe_emit_action(
+                    actor=actor,
+                    action_id="damage_applied",
+                    action_tags=["damage", "magic", "spell"],
+                    target=target,
+                    target_pos=getattr(target, "position", None),
+                    source_action=str(source_action or "spell_damage"),
+                    source_label=str(source_label or source_action or "Czar"),
+                    damage=hp_damage,
+                    damage_type=damage_type,
+                    damage_components=[(damage_type, hp_damage)],
+                    applied_statuses=added_status_labels(target_status_snapshot, target),
+                    defeated=defeated,
+                )
+        except Exception:
+            pass
+
+    if defeated and game is not None and target in list(getattr(game, "enemies", []) or []):
+        try:
+            remove_defeated_enemy(
+                game,
+                target,
+                position=getattr(target, "position", None),
+                source=str(source_action or source_label or "spell_damage"),
+            )
+        except Exception:
+            pass
+    return bool(defeated)
 
 
 def _apply_heal(target, amount: int) -> None:
@@ -776,11 +838,10 @@ def _pick_directional_area_from_caster(
             ctx.game,
             format_board_selection_message(
                 f"podswietlone pole obok rzucajacego, aby ustawic kierunek {area_label}",
-                confirmation="kliknij pole rzucajacego, aby potwierdzic",
             ),
             source=f"{source}:direction_pick",
             dedupe_key=f"{source}:direction_pick:start",
-            next_hint="Najpierw wybierz kierunek na planszy, potem potwierdz na polu rzucajacego.",
+            next_hint="Kliknij sasiednie pole, a potem kliknij pole rzucajacego, aby potwierdzic kierunek.",
         )
 
         while True:
@@ -828,17 +889,18 @@ def _pick_directional_area_from_caster(
             if choice is None:
                 break
             normalized_choice = tuple(choice)
-            if selected_direction is not None and normalized_choice == tuple(origin):
+
+            next_direction = anchor_map.get(normalized_choice)
+            if selected_direction is not None and normalized_choice == origin:
                 selected_line = list(line_map.get(selected_direction) or [])
                 _play_area_spell_animation(ctx.game, origin, selected_line, vibe=vibe)
                 return selected_direction, selected_line
-
-            next_direction = anchor_map.get(normalized_choice)
             if next_direction is None:
-                if selected_direction is None:
-                    message = "Wybierz podswietlone sasiednie pole, aby ustawic kierunek."
-                else:
-                    message = "Kliknij pole rzucajacego, aby potwierdzic, albo wybierz inne sasiednie pole, aby zmienic kierunek."
+                message = (
+                    "Kliknij sasiednie pole, aby zmienic kierunek, albo pole rzucajacego, aby potwierdzic."
+                    if selected_direction is not None
+                    else "Wybierz podswietlone sasiednie pole, aby ustawic kierunek."
+                )
                 _ui_log(ctx.game, message)
                 _ui_narration(
                     ctx.game,
@@ -846,7 +908,11 @@ def _pick_directional_area_from_caster(
                     source=f"{source}:direction_pick",
                     priority="warning",
                     dedupe_key=f"{source}:direction_pick:invalid",
-                    next_hint="Wybierz sasiednie pole kierunku albo pole rzucajacego.",
+                    next_hint=(
+                        "Kliknij jedno z sasiednich podswietlonych pol albo pole rzucajacego."
+                        if selected_direction is not None
+                        else "Kliknij jedno z sasiednich podswietlonych pol."
+                    ),
                 )
                 continue
             selected_direction = next_direction
@@ -854,12 +920,12 @@ def _pick_directional_area_from_caster(
             _ui_narration(
                 ctx.game,
                 (
-                    f"Wybrany kierunek {area_label} jest teraz podswietlony mocniejszym kolorem. "
-                    "Kliknij pole rzucajacego, aby potwierdzic, albo wybierz inne sasiednie pole, aby zmienic kierunek."
+                    f"Wybrano kierunek {area_label} dla {spell_label}. "
+                    "Kliknij pole rzucajacego, aby potwierdzic, albo inne sasiednie pole, aby zmienic kierunek."
                 ),
                 source=f"{source}:direction_pick",
                 dedupe_key=f"{source}:direction_pick:selected",
-                next_hint="Potwierdz na polu rzucajacego albo zmien kierunek innym sasiednim polem.",
+                next_hint="Kliknij pole rzucajacego, aby potwierdzic, albo inne sasiednie pole, aby zmienic kierunek.",
             )
 
     direction = _prompt_choice(ctx, f"{prompt_name} - wybierz kierunek", directions, source=source)
@@ -1208,7 +1274,15 @@ class MagicMissileEvent(MagicEvent):
                 )
                 or 0
             )
-            defeated = _apply_damage(target, dmg, DamageType.FORCE.value)
+            defeated = _apply_damage(
+                target,
+                dmg,
+                DamageType.FORCE.value,
+                game=ctx.game,
+                actor=ctx.actor,
+                source_action=self.name,
+                source_label=MagicEventResolver._spell_label(self),
+            )
             spent += 1
             msg = f"{getattr(target, 'name', 'cel')}: {dmg} force"
             if defeated:
@@ -1733,7 +1807,21 @@ class GrimTendrilsEvent(MagicEvent):
             return EventResult.cancelled(message="Brak celow na linii.")
 
         spell_dc = _spell_dc_for_actor(actor)
-        base_damage = int(prompt_for_roll("Grim Tendrils - podaj obrazenia negative:", layout="damage", answer_placeholder="Obrazenia") or 0)
+        prompt_text, answer_placeholder, prompt_long = spell_formula_prompt(
+            "Grim Tendrils",
+            "2k4",
+            subject="obrazenia negative",
+            answer_placeholder="Obrazenia",
+        )
+        base_damage = int(
+            prompt_for_roll(
+                prompt_text,
+                layout="damage",
+                answer_placeholder=answer_placeholder,
+                prompt_long=prompt_long,
+            )
+            or 0
+        )
 
         hit_count = 0
         for target in targets:
@@ -1757,7 +1845,15 @@ class GrimTendrilsEvent(MagicEvent):
                 damage = max(0, base_damage * 2)
                 bleed = 2
 
-            _apply_damage(target, damage, DamageType.NEGATIVE.value)
+            _apply_damage(
+                target,
+                damage,
+                DamageType.NEGATIVE.value,
+                game=ctx.game,
+                actor=ctx.actor,
+                source_action=self.name,
+                source_label=MagicEventResolver._spell_label(self),
+            )
             if bleed > 0:
                 try:
                     target.add_status(make_persistent_damage(bleed, DamageType.BLEED.value, source=self.name))
@@ -2147,7 +2243,21 @@ class PhantomPainEvent(MagicEvent):
             return EventResult.cancelled(message="Brak celu w zasiegu.")
 
         spell_dc = _spell_dc_for_actor(actor)
-        base_damage = int(prompt_for_roll("Phantom Pain - podaj obrazenia mental:", layout="damage", answer_placeholder="Obrazenia") or 0)
+        prompt_text, answer_placeholder, prompt_long = spell_formula_prompt(
+            "Phantom Pain",
+            "2k4",
+            subject="obrazenia mental",
+            answer_placeholder="Obrazenia",
+        )
+        base_damage = int(
+            prompt_for_roll(
+                prompt_text,
+                layout="damage",
+                answer_placeholder=answer_placeholder,
+                prompt_long=prompt_long,
+            )
+            or 0
+        )
 
         outcome, _roll, _total = _roll_enemy_save(
             target,
@@ -2173,7 +2283,15 @@ class PhantomPainEvent(MagicEvent):
             sickened_like = 1
             duration = 2
 
-        _apply_damage(target, damage, DamageType.MENTAL.value)
+        _apply_damage(
+            target,
+            damage,
+            DamageType.MENTAL.value,
+            game=ctx.game,
+            actor=ctx.actor,
+            source_action=self.name,
+            source_label=MagicEventResolver._spell_label(self),
+        )
         if sickened_like > 0:
             _remove_bonus_prefix(target, "phantom_pain:")
             for tag in ("attack_melee", "attack_ranged", "magic"):
@@ -2405,7 +2523,21 @@ class SootheEvent(MagicEvent):
         if target is None:
             return EventResult.cancelled(message="Brak celu w zasiegu.")
 
-        heal_amount = int(prompt_for_roll("Soothe - podaj wartosc leczenia:", layout="damage", answer_placeholder="Leczenie") or 0)
+        prompt_text, answer_placeholder, prompt_long = spell_formula_prompt(
+            "Soothe",
+            "1k10+4",
+            subject="wartosc leczenia",
+            answer_placeholder="Leczenie",
+        )
+        heal_amount = int(
+            prompt_for_roll(
+                prompt_text,
+                layout="damage",
+                answer_placeholder=answer_placeholder,
+                prompt_long=prompt_long,
+            )
+            or 0
+        )
         _apply_heal(target, heal_amount)
         _remove_bonus_prefix(target, "soothe:")
         try:
@@ -2733,12 +2865,19 @@ class BurningHandsEvent(MagicEvent):
             source_kind="spell",
             spell_rank=1,
         )
+        prompt_text, answer_placeholder, prompt_long = spell_formula_prompt(
+            "Burning Hands",
+            "2k6",
+            subject="obrazenia fire",
+            answer_placeholder="Obrazenia",
+            prompt_long=burn_note,
+        )
         base_damage = int(
             prompt_for_roll(
-                "Burning Hands - podaj obrazenia fire:",
+                prompt_text,
                 layout="damage",
-                answer_placeholder="Obrazenia",
-                prompt_long=burn_note,
+                answer_placeholder=answer_placeholder,
+                prompt_long=prompt_long,
             )
             or 0
         )
@@ -2762,7 +2901,15 @@ class BurningHandsEvent(MagicEvent):
                 tags=["save", Skill.REFLEX.value, "fire", "evocation"],
             )
             damage = _basic_save_damage(base_damage, outcome)
-            _apply_damage(target, damage, DamageType.FIRE.value)
+            _apply_damage(
+                target,
+                damage,
+                DamageType.FIRE.value,
+                game=ctx.game,
+                actor=ctx.actor,
+                source_action=self.name,
+                source_label=MagicEventResolver._spell_label(self),
+            )
             if damage > 0:
                 hit_count += 1
         return EventResult(success=True, consumed_action=True, message=f"Burning Hands trafia {hit_count} celow.")
@@ -2874,7 +3021,21 @@ class GoblinPoxEvent(MagicEvent):
         if target is None:
             return EventResult.cancelled(message="Brak celu w zasiegu.")
         spell_dc = _spell_dc_for_actor(actor)
-        base_damage = int(prompt_for_roll("Goblin Pox - podaj obrazenia poison:", layout="damage", answer_placeholder="Obrazenia") or 0)
+        prompt_text, answer_placeholder, prompt_long = spell_formula_prompt(
+            "Goblin Pox",
+            "1k6",
+            subject="obrazenia poison",
+            answer_placeholder="Obrazenia",
+        )
+        base_damage = int(
+            prompt_for_roll(
+                prompt_text,
+                layout="damage",
+                answer_placeholder=answer_placeholder,
+                prompt_long=prompt_long,
+            )
+            or 0
+        )
         outcome, _roll, _total = _roll_enemy_save(
             target,
             Skill.FORTITUDE.value,
@@ -2883,7 +3044,15 @@ class GoblinPoxEvent(MagicEvent):
             tags=["save", Skill.FORTITUDE.value, "poison", "necromancy"],
         )
         damage = _basic_save_damage(base_damage, outcome)
-        _apply_damage(target, damage, DamageType.POISON.value)
+        _apply_damage(
+            target,
+            damage,
+            DamageType.POISON.value,
+            game=ctx.game,
+            actor=ctx.actor,
+            source_action=self.name,
+            source_label=MagicEventResolver._spell_label(self),
+        )
         if outcome in ("failure", "critical_failure"):
             try:
                 target.add_status(
@@ -3065,10 +3234,32 @@ class HydraulicPushEvent(BaseMagicAttackEvent):
     )
 
     def _resolve_on_target(self, target, pos, ctx: EventContext, *, critical: bool = False) -> EventResult:
-        damage = int(prompt_for_roll("Hydraulic Push - podaj obrazenia:", layout="damage", answer_placeholder="Obrazenia") or 0)
+        prompt_text, answer_placeholder, prompt_long = spell_formula_prompt(
+            "Hydraulic Push",
+            "3k6",
+            subject="obrazenia",
+            answer_placeholder="Obrazenia",
+        )
+        damage = int(
+            prompt_for_roll(
+                prompt_text,
+                layout="damage",
+                answer_placeholder=answer_placeholder,
+                prompt_long=prompt_long,
+            )
+            or 0
+        )
         if critical:
             damage *= 2
-        defeated = _apply_damage(target, damage, DamageType.BLUDGEONING.value)
+        defeated = _apply_damage(
+            target,
+            damage,
+            DamageType.BLUDGEONING.value,
+            game=ctx.game,
+            actor=ctx.actor,
+            source_action=self.name,
+            source_label=MagicEventResolver._spell_label(self),
+        )
         squares = 2 if critical else 1
         moved = _push_target_linear(ctx, target, from_pos=getattr(ctx.actor, "position", (0, 0)), squares=squares)
         msg = f"Hydraulic Push trafia za {damage} bludgeoning."
@@ -3214,13 +3405,36 @@ class ShockingGraspEvent(BaseMagicAttackEvent):
     )
 
     def _resolve_on_target(self, target, pos, ctx: EventContext, *, critical: bool = False) -> EventResult:
-        damage = int(prompt_for_roll("Shocking Grasp - podaj obrazenia electric:", layout="damage", answer_placeholder="Obrazenia") or 0)
+        prompt_text, answer_placeholder, prompt_long = spell_formula_prompt(
+            "Shocking Grasp",
+            "2k12",
+            subject="obrazenia electric",
+            answer_placeholder="Obrazenia",
+            prompt_long="Jesli cel ma metalowa zbroje lub metalowy sprzet, system doliczy +2 po potwierdzeniu.",
+        )
+        damage = int(
+            prompt_for_roll(
+                prompt_text,
+                layout="damage",
+                answer_placeholder=answer_placeholder,
+                prompt_long=prompt_long,
+            )
+            or 0
+        )
         metal = _prompt_choice(ctx, "Shocking Grasp - cel ma metalowa zbroje?", ["nie", "tak"], source=self.name) or "nie"
         if metal == "tak":
             damage += 2
         if critical:
             damage *= 2
-        defeated = _apply_damage(target, damage, DamageType.ELECTRIC.value)
+        defeated = _apply_damage(
+            target,
+            damage,
+            DamageType.ELECTRIC.value,
+            game=ctx.game,
+            actor=ctx.actor,
+            source_action=self.name,
+            source_label=MagicEventResolver._spell_label(self),
+        )
         msg = f"Shocking Grasp trafia za {damage} electric."
         if defeated:
             msg += " Cel pokonany."
@@ -3239,11 +3453,33 @@ class SpiderStingEvent(BaseMagicAttackEvent):
     prompt = "Spider Sting: jad pajeczy i obrazenia poison."
 
     def _resolve_on_target(self, target, pos, ctx: EventContext, *, critical: bool = False) -> EventResult:
-        damage = int(prompt_for_roll("Spider Sting - podaj obrazenia poison:", layout="damage", answer_placeholder="Obrazenia") or 0)
+        prompt_text, answer_placeholder, prompt_long = spell_formula_prompt(
+            "Spider Sting",
+            "1k4",
+            subject="obrazenia poison",
+            answer_placeholder="Obrazenia",
+        )
+        damage = int(
+            prompt_for_roll(
+                prompt_text,
+                layout="damage",
+                answer_placeholder=answer_placeholder,
+                prompt_long=prompt_long,
+            )
+            or 0
+        )
         if critical:
             damage *= 2
         dc = int(prompt_for_roll("Spider Sting - podaj DC jadu:", layout="test", answer_placeholder="DC") or 15)
-        defeated = _apply_damage(target, damage, DamageType.POISON.value)
+        defeated = _apply_damage(
+            target,
+            damage,
+            DamageType.POISON.value,
+            game=ctx.game,
+            actor=ctx.actor,
+            source_action=self.name,
+            source_label=MagicEventResolver._spell_label(self),
+        )
         try:
             target.add_status(
                 PoisonedStatus(
@@ -3427,12 +3663,27 @@ class HealEvent(MagicEvent):
         prompt_hint = "\n".join(prompt_hint_parts) if prompt_hint_parts else None
         amount = 0
         if actions_used != 2:
+            heal_formula = "1k10" if has_healing_hands else "1k8"
+            extra_hint = prompt_hint
+            if actions_used == 1:
+                extra_hint = (
+                    f"{extra_hint}\nModyfikator spellcastingu zostanie doliczony automatycznie."
+                    if extra_hint
+                    else "Modyfikator spellcastingu zostanie doliczony automatycznie."
+                )
+            prompt_text, answer_placeholder, prompt_long = spell_formula_prompt(
+                "Heal",
+                heal_formula,
+                subject="wartosc leczenia/obrazen positive",
+                answer_placeholder="Wartosc",
+                prompt_long=extra_hint,
+            )
             amount = int(
                 prompt_for_roll(
-                    "Heal - podaj wartosc leczenia/obrazen positive:",
+                    prompt_text,
                     layout="damage",
-                    answer_placeholder="Wartosc",
-                    prompt_long=prompt_hint,
+                    answer_placeholder=answer_placeholder,
+                    prompt_long=prompt_long,
                 )
                 or 0
             )
@@ -3458,7 +3709,15 @@ class HealEvent(MagicEvent):
             if target is None:
                 return EventResult.cancelled(message="Brak celu dla Heal.")
             if _has_undead_tag(target):
-                defeated = _apply_damage(target, total_amount, DamageType.POSITIVE.value)
+                defeated = _apply_damage(
+                    target,
+                    total_amount,
+                    DamageType.POSITIVE.value,
+                    game=ctx.game,
+                    actor=ctx.actor,
+                    source_action=self.name,
+                    source_label=MagicEventResolver._spell_label(self),
+                )
                 msg = f"Heal ({actions_used} akcje): undead otrzymuje {total_amount} positive."
                 if defeated:
                     msg += " Cel pokonany."
@@ -3490,7 +3749,15 @@ class HealEvent(MagicEvent):
             return EventResult.cancelled(message="Heal: anulowano potwierdzenie obszaru.")
         for target in _targets_in_radius(all_candidates, actor.position, self.range_feet):
             if _has_undead_tag(target):
-                _apply_damage(target, amount, DamageType.POSITIVE.value)
+                _apply_damage(
+                    target,
+                    amount,
+                    DamageType.POSITIVE.value,
+                    game=ctx.game,
+                    actor=ctx.actor,
+                    source_action=self.name,
+                    source_label=MagicEventResolver._spell_label(self),
+                )
                 harmed += 1
                 continue
             heal_total = int(amount) + int(_healers_blessing_bonus_for_target(target, spell_level=1))
@@ -3530,12 +3797,20 @@ class HarmEvent(MagicEvent):
 
         mode = _prompt_choice(ctx, "Harm - wybierz tryb", ["single", "burst"], source=self.name) or "single"
         prompt_hint = "Harming Hands: rozlicz Harm na kosciach d10 zamiast d8." if has_harming_hands else None
+        harm_formula = "1k10" if has_harming_hands else "1k8"
+        prompt_text, answer_placeholder, prompt_long = spell_formula_prompt(
+            "Harm",
+            harm_formula,
+            subject="wartosc leczenia/obrazen negative",
+            answer_placeholder="Wartosc",
+            prompt_long=prompt_hint,
+        )
         amount = int(
             prompt_for_roll(
-                "Harm - podaj wartosc leczenia/obrazen negative:",
+                prompt_text,
                 layout="damage",
-                answer_placeholder="Wartosc",
-                prompt_long=prompt_hint,
+                answer_placeholder=answer_placeholder,
+                prompt_long=prompt_long,
             )
             or 0
         )
@@ -3565,7 +3840,15 @@ class HarmEvent(MagicEvent):
                         message=f"Harm: undead odzyskuje {healed} HP ({amount} + {bonus} bonus).",
                     )
                 return EventResult(success=True, consumed_action=True, message=f"Harm: undead odzyskuje {healed} HP.")
-            defeated = _apply_damage(target, amount, DamageType.NEGATIVE.value)
+            defeated = _apply_damage(
+                target,
+                amount,
+                DamageType.NEGATIVE.value,
+                game=ctx.game,
+                actor=ctx.actor,
+                source_action=self.name,
+                source_label=MagicEventResolver._spell_label(self),
+            )
             msg = f"Harm: cel otrzymuje {amount} negative."
             if defeated:
                 msg += " Cel pokonany."
@@ -3589,14 +3872,30 @@ class HarmEvent(MagicEvent):
                 _apply_heal(hero, int(amount) + int(_harm_heal_bonus_for_target(hero)))
                 healed_undead += 1
                 continue
-            _apply_damage(hero, amount, DamageType.NEGATIVE.value)
+            _apply_damage(
+                hero,
+                amount,
+                DamageType.NEGATIVE.value,
+                game=ctx.game,
+                actor=ctx.actor,
+                source_action=self.name,
+                source_label=MagicEventResolver._spell_label(self),
+            )
             harmed += 1
         for enemy in _targets_in_radius(_iter_enemy_candidates(ctx.game), actor.position, self.range_feet):
             if _is_undead_target(enemy):
                 _apply_heal(enemy, int(amount) + int(_harm_heal_bonus_for_target(enemy)))
                 healed_undead += 1
                 continue
-            _apply_damage(enemy, amount, DamageType.NEGATIVE.value)
+            _apply_damage(
+                enemy,
+                amount,
+                DamageType.NEGATIVE.value,
+                game=ctx.game,
+                actor=ctx.actor,
+                source_action=self.name,
+                source_label=MagicEventResolver._spell_label(self),
+            )
             harmed += 1
 
         return EventResult(

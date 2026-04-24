@@ -45,10 +45,10 @@ const refs = {
     actionChannel: document.getElementById("action-channel"),
     actionTitle: document.getElementById("action-title"),
     actionPriority: document.getElementById("action-priority"),
-    actionSummary: document.getElementById("action-summary"),
-    actionBody: document.getElementById("action-body"),
-    actionDetails: document.getElementById("action-details"),
-    actionDetailsBody: document.getElementById("action-details-body"),
+    actionScene: document.getElementById("action-scene"),
+    actionSceneBody: document.getElementById("action-scene-body"),
+    actionHelp: document.getElementById("action-help"),
+    actionHelpBody: document.getElementById("action-help-body"),
     actionProgress: document.getElementById("action-progress"),
     actionProgressLabel: document.getElementById("action-progress-label"),
     actionProgressValue: document.getElementById("action-progress-value"),
@@ -90,12 +90,15 @@ const state = {
     heroes: new Map(),
     initiative: { round: null, order: [], active_id: null },
     activeActor: null,
-    currentPrompt: null,
-    currentPromptId: null,
-    promptQueue: [],
-    journal: [],
-    debug: [],
-    latestCard: null,
+    view: {
+        sessionId: null,
+        revision: 0,
+        activePrompt: null,
+        focusCard: null,
+        idleState: null,
+        journal: [],
+        debugFeed: [],
+    },
     currentMapId: null,
     currentMapLabel: null,
     completedObjectives: new Set(),
@@ -104,7 +107,6 @@ const state = {
     runtimePoll: null,
     debugOpen: false,
     naturalMode: "none",
-    lastIdleHint: null,
     selectedChoiceIndex: -1,
     promptDrafts: new Map(),
     lastRenderedPromptId: null,
@@ -120,17 +122,67 @@ function escapeHtml(text) {
         .replaceAll("'", "&#39;");
 }
 
+function inlineMarkdown(text) {
+    return escapeHtml(text)
+        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+        .replace(/`(.+?)`/g, "<code>$1</code>");
+}
+
 function markdownish(text) {
-    const lines = String(text || "").split(/\n+/).map((line) => line.trim()).filter(Boolean);
-    if (!lines.length) return "";
-    return lines
-        .map((line) => {
-            const safe = escapeHtml(line)
-                .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-                .replace(/`(.+?)`/g, "<code>$1</code>");
-            return `<p>${safe}</p>`;
-        })
-        .join("");
+    const lines = String(text || "").replace(/\r/g, "").split("\n");
+    const blocks = [];
+    let paragraph = [];
+    let list = [];
+
+    const flushParagraph = () => {
+        if (!paragraph.length) return;
+        blocks.push(`<p>${inlineMarkdown(paragraph.join(" "))}</p>`);
+        paragraph = [];
+    };
+
+    const flushList = () => {
+        if (!list.length) return;
+        blocks.push(`<ul>${list.map((item) => `<li>${inlineMarkdown(item)}</li>`).join("")}</ul>`);
+        list = [];
+    };
+
+    lines.forEach((line) => {
+        const trimmed = String(line || "").trim();
+        if (!trimmed) {
+            flushParagraph();
+            flushList();
+            return;
+        }
+        const heading = trimmed.match(/^#{1,3}\s+(.+)$/);
+        if (heading) {
+            flushParagraph();
+            flushList();
+            blocks.push(`<h3>${inlineMarkdown(heading[1])}</h3>`);
+            return;
+        }
+        const bullet = trimmed.match(/^[-*]\s+(.+)$/);
+        if (bullet) {
+            flushParagraph();
+            list.push(bullet[1]);
+            return;
+        }
+        flushList();
+        paragraph.push(trimmed);
+    });
+
+    flushParagraph();
+    flushList();
+    return blocks.join("");
+}
+
+function normalizedText(text) {
+    return String(text || "").replace(/\s+/g, " ").trim();
+}
+
+function sameMeaning(a, b) {
+    const left = normalizedText(a);
+    const right = normalizedText(b);
+    return Boolean(left) && left === right;
 }
 
 function _isUpNavigationKey(event) {
@@ -461,11 +513,12 @@ function normalizePrompt(prompt) {
     if (!prompt) return null;
     return {
         id: String(prompt.id),
+        prompt_key: String(prompt.prompt_key || prompt.communication?.context?.prompt_key || ""),
         kind: String(prompt.kind || "info"),
         title: prompt.title || prompt.prompt || "Prompt",
-        prompt: prompt.prompt || "",
-        subtitle: prompt.subtitle || "",
-        prompt_long: prompt.prompt_long || "",
+        prompt: prompt.prompt || prompt.title || "",
+        subtitle: prompt.subtitle || prompt.summary || "",
+        prompt_long: prompt.prompt_long || prompt.body_markdown || "",
         choices: Array.isArray(prompt.choices) ? prompt.choices : [],
         choice_meta: Array.isArray(prompt.choice_meta) ? prompt.choice_meta : [],
         communication: prompt.communication || {},
@@ -477,40 +530,63 @@ function normalizePrompt(prompt) {
         roll_stack: prompt.roll_stack || null,
         action_desc: prompt.action_desc || "",
         desc: prompt.desc || "",
+        details_markdown: prompt.details_markdown || "",
+        summary: prompt.summary || "",
+        scope_key: prompt.scope_key || "",
     };
 }
 
-function chooseCurrentPrompt() {
-    const next = state.promptQueue.find((item) => item.status !== "answered") || null;
-    const previousId = state.currentPromptId;
-    state.currentPrompt = next;
-    state.currentPromptId = next ? next.id : null;
-    if (state.currentPromptId !== previousId) {
+function normalizeCard(card) {
+    if (!card) return null;
+    return {
+        id: String(card.id || ""),
+        prompt_key: String(card.prompt_key || card.communication?.context?.prompt_key || ""),
+        seq: Number(card.seq || 0),
+        kind: String(card.kind || "narration"),
+        title: card.title || "Karta",
+        summary: card.summary || "",
+        body_markdown: card.body_markdown || "",
+        details_markdown: card.details_markdown || "",
+        priority: card.priority || "info",
+        scope_key: card.scope_key || "system",
+        dedupe_key: card.dedupe_key || "",
+        communication: card.communication || {},
+    };
+}
+
+function promptDisplayId(item) {
+    if (!item) return "";
+    const stable = String(item.prompt_key || item.communication?.context?.prompt_key || "").trim();
+    const instanceId = String(item.id || "").trim();
+    if (stable && instanceId) return `ID: ${stable} · #${instanceId}`;
+    if (stable) return `ID: ${stable}`;
+    if (instanceId) return `#${instanceId}`;
+    return "";
+}
+
+function syncViewState(viewState) {
+    const previousPromptId = state.view.activePrompt?.id || null;
+    state.view = {
+        sessionId: viewState?.session_id || null,
+        revision: Number(viewState?.revision || 0),
+        activePrompt: normalizePrompt(viewState?.active_prompt),
+        focusCard: normalizeCard(viewState?.focus_card),
+        idleState: normalizeCard(viewState?.idle_state),
+        journal: Array.isArray(viewState?.journal) ? viewState.journal.map(normalizeCard).filter(Boolean) : [],
+        debugFeed: Array.isArray(viewState?.debug_feed) ? viewState.debug_feed.map(normalizeCard).filter(Boolean) : [],
+    };
+    if (state.view.sessionId) {
+        state.sessionId = state.view.sessionId;
+    }
+    const nextPromptId = state.view.activePrompt?.id || null;
+    if (previousPromptId !== nextPromptId) {
         state.selectedChoiceIndex = -1;
     }
-}
-
-function recordCard(entry) {
-    state.latestCard = entry;
-}
-
-function addJournalEntry(kind, title, body, communication = {}, raw = {}) {
-    const entry = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        kind,
-        title: title || "Wpis",
-        body: body || "",
-        communication,
-        raw,
-    };
-    if (communication.debug_only || communication.priority === "debug") {
-        state.debug.unshift(entry);
-        state.debug = state.debug.slice(0, 30);
-        return;
-    }
-    state.journal.unshift(entry);
-    state.journal = state.journal.slice(0, 40);
-    if (communication.priority !== "debug") recordCard(entry);
+    state.completedObjectives = new Set();
+    state.scenarioFinished = false;
+    state.view.journal.forEach((entry) => {
+        inferScenarioStateFromText([entry.title, entry.summary, entry.body_markdown].filter(Boolean).join("\n"));
+    });
 }
 
 function inferScenarioStateFromText(text) {
@@ -542,15 +618,9 @@ function handleEvent(event) {
     const payload = event.payload || {};
     if (event.type === "session_reset") {
         state.heroes.clear();
-        state.promptQueue = [];
-        state.currentPrompt = null;
-        state.currentPromptId = null;
+        syncViewState(null);
         state.initiative = { round: null, order: [], active_id: null };
         state.activeActor = null;
-        state.journal = [];
-        state.debug = [];
-        state.latestCard = null;
-        state.lastIdleHint = null;
         state.promptDrafts.clear();
         state.lastRenderedPromptId = null;
         state.currentMapId = null;
@@ -559,23 +629,14 @@ function handleEvent(event) {
         state.scenarioFinished = false;
         state.sessionId = event.session_id || state.sessionId;
         renderAll();
+        queueMicrotask(() => {
+            refreshViewState().catch(() => {});
+        });
         return;
     }
 
-    if (event.type === "prompt") {
-        const normalized = normalizePrompt(payload);
-        if (normalized) {
-            state.promptQueue.push(normalized);
-            chooseCurrentPrompt();
-        }
-        renderAll();
-        return;
-    }
-
-    if (event.type === "prompt_answered") {
-        const promptId = String(payload.id || "");
-        state.promptQueue = state.promptQueue.map((item) => item.id === promptId ? { ...item, status: "answered" } : item);
-        chooseCurrentPrompt();
+    if (event.type === "view_state") {
+        syncViewState(payload);
         renderAll();
         return;
     }
@@ -602,38 +663,10 @@ function handleEvent(event) {
         return;
     }
 
-    if (event.type === "idle_hint") {
-        state.lastIdleHint = {
-            title: payload.title || "Wskazówka",
-            body: payload.text || "",
-            communication: {
-                channel: "idle_hint",
-                priority: "info",
-                title: payload.title || "Wskazówka",
-                body_markdown: payload.text || "",
-                summary: payload.text || payload.title || "",
-            },
-        };
-    }
-
-    if (event.type === "action") {
-        const card = actionResultCard(payload);
-        if (card) {
-            addJournalEntry("action", card.title, card.body, card.communication, payload);
-            renderAll();
-        }
-        return;
-    }
-
-    if (["log", "info", "idle_hint"].includes(event.type)) {
-        const communication = payload.communication || {};
-        const title = communication.title || payload.title || payload.tag || event.type;
-        const body = communication.body_markdown || payload.message || payload.text || "";
-        addJournalEntry(event.type, title, body, communication, payload);
+    if (["log", "info", "narration", "idle_hint"].includes(event.type)) {
         const mapMatch = String(payload.message || payload.text || "").match(/Wejście na mapę:\s*(.+?)\.?$/i);
         if (mapMatch && mapMatch[1]) handleMapEntry(mapMatch[1].trim());
-        inferScenarioStateFromText(body || title);
-        renderAll();
+        inferScenarioStateFromText(String(payload.message || payload.text || ""));
     }
 }
 
@@ -652,66 +685,73 @@ function connectStream() {
 }
 
 async function loadInitialState() {
-    const [sessionPayload, catalogPayload, promptPayload, runtimePayload] = await Promise.all([
-        fetchJson("/api/session"),
+    const [viewPayload, catalogPayload, runtimePayload] = await Promise.all([
+        fetchJson("/api/view-state"),
         fetchJson("/api/catalog"),
-        fetchJson("/api/prompts"),
         fetchJson("/api/runtime/status"),
     ]);
-    state.sessionId = sessionPayload.session?.id || null;
+    state.sessionId = viewPayload.session?.id || null;
     state.catalog = catalogPayload.catalog || { heroes: [], scenarios: [] };
     state.scenario = state.catalog.scenarios[0] || null;
-    state.promptQueue = (promptPayload.prompts || []).map(normalizePrompt).filter(Boolean);
-    chooseCurrentPrompt();
+    syncViewState(viewPayload.view_state || null);
     state.runtimeStatus = runtimePayload.runtime_status || state.runtimeStatus;
     if (state.scenario) refs.startTagline.textContent = state.scenario.tagline || refs.startTagline.textContent;
     renderAll();
 }
 
+async function refreshViewState() {
+    const payload = await fetchJson("/api/view-state");
+    state.sessionId = payload.session?.id || state.sessionId;
+    syncViewState(payload.view_state || null);
+    renderAll();
+}
+
 function activeCardData() {
-    if (state.currentPrompt) {
-        const prompt = state.currentPrompt;
+    if (state.view.activePrompt) {
+        const prompt = state.view.activePrompt;
         const communication = prompt.communication || {};
         const title = communication.title || prompt.title || prompt.prompt || "Prompt";
-        const summaryCandidate = communication.summary || prompt.subtitle || prompt.prompt || "";
+        const summaryCandidate = communication.summary || prompt.summary || prompt.subtitle || prompt.prompt || "";
         const bodyCandidate = communication.body_markdown || prompt.prompt_long || "";
         const deduped = dedupeCardText(title, summaryCandidate, bodyCandidate);
+        const focusCard = state.view.focusCard;
+        let details = communication.details_markdown || prompt.details_markdown || "";
+        if (!details && focusCard) {
+            details = [focusCard.title, focusCard.body_markdown || focusCard.details_markdown || ""].filter(Boolean).join("\n\n");
+        }
         return {
             title: deduped.title,
             summary: deduped.summary,
             body: deduped.body,
-            details: communication.details_markdown || "",
+            details,
             communication,
             prompt,
         };
     }
-    if (state.lastIdleHint) {
+    if (state.view.focusCard) {
+        const card = state.view.focusCard;
         const deduped = dedupeCardText(
-            state.lastIdleHint.title,
-            state.lastIdleHint.communication.summary || state.lastIdleHint.body || "",
-            state.lastIdleHint.body || "",
+            card.title,
+            card.summary || "",
+            card.body_markdown || "",
         );
         return {
             title: deduped.title,
             summary: deduped.summary,
             body: deduped.body,
-            details: "",
-            communication: state.lastIdleHint.communication || {},
+            details: card.details_markdown || "",
+            communication: card.communication || {},
             prompt: null,
         };
     }
-    if (state.latestCard) {
-        const deduped = dedupeCardText(
-            state.latestCard.title,
-            state.latestCard.communication.summary || state.latestCard.body || "",
-            state.latestCard.communication.body_markdown || state.latestCard.body || "",
-        );
+    if (state.view.idleState) {
+        const idle = state.view.idleState;
         return {
-            title: deduped.title,
-            summary: deduped.summary,
-            body: deduped.body,
-            details: state.latestCard.communication.details_markdown || "",
-            communication: state.latestCard.communication || {},
+            title: idle.title,
+            summary: idle.summary || "",
+            body: idle.body_markdown || "",
+            details: idle.details_markdown || "",
+            communication: idle.communication || {},
             prompt: null,
         };
     }
@@ -725,9 +765,144 @@ function activeCardData() {
     };
 }
 
+function derivedInstructionText(card) {
+    const prompt = card.prompt;
+    const communication = card.communication || {};
+    const cta = String(communication.cta || "").trim();
+    if (cta) return cta;
+    const continueHint = String(communication.context?.continue || "").trim();
+    if (continueHint) return continueHint;
+    if (!prompt) {
+        if (String(communication.semantic_type || "").toLowerCase() === "result") {
+            return "Zapoznaj się z wynikiem bieżącej akcji.";
+        }
+        return "";
+    }
+    if (prompt.kind === "choice") {
+        return promptChoices(prompt).length
+            ? "Wybierz jedną z dostępnych opcji."
+            : "Wpisz odpowiedź i zatwierdź ją, aby kontynuować.";
+    }
+    if (prompt.kind === "roll") {
+        return "Wpisz wynik rzutu i zatwierdź go, aby rozliczyć akcję.";
+    }
+    if (prompt.kind === "info") {
+        return "Przeczytaj komunikat i potwierdź, aby przejść dalej.";
+    }
+    return "Wpisz odpowiedź i zatwierdź ją, aby kontynuować.";
+}
+
+function promptCommandLines(prompt) {
+    if (!prompt) return [];
+    if (isBoardScanCancelPrompt(prompt)) {
+        return [
+            "**Kliknij `Anuluj`**, jeśli chcesz przerwać bieżący wybór na planszy.",
+            "**`Esc`** anuluje bieżący wybór.",
+        ];
+    }
+    if (prompt.kind === "choice" && promptChoices(prompt).length) {
+        const lines = [
+            "**`8` / `2` albo strzałki** zmieniają zaznaczenie.",
+            "**`Enter`** zatwierdza aktualną opcję.",
+            "**Kliknięcie opcji** zatwierdza ją od razu.",
+        ];
+        if (promptCancelChoice(prompt)) {
+            lines.push("**`Esc`** anuluje bieżący wybór.");
+        }
+        return lines;
+    }
+    if (prompt.kind === "roll") {
+        return [
+            "**Wpisz wynik rzutu** w polu odpowiedzi.",
+            "**`Enter`** wysyła wynik do gry.",
+            "**`Nat 20`** i **`Nat 1`** oznaczają wynik naturalny.",
+        ];
+    }
+    if (prompt.kind === "info") {
+        return ["**`Enter`** potwierdza komunikat i przechodzi do kolejnego kroku."];
+    }
+    return [
+        "**Wpisz odpowiedź** w polu tekstowym.",
+        "**`Enter`** zatwierdza odpowiedź.",
+    ];
+}
+
+function promptCommandSummary(prompt) {
+    if (!prompt) return "";
+    if (isBoardScanCancelPrompt(prompt)) {
+        return "Esc anuluje skan planszy.";
+    }
+    if (prompt.kind === "choice" && promptChoices(prompt).length) {
+        const hasCancel = Boolean(promptCancelChoice(prompt));
+        return hasCancel
+            ? "8/2 lub strzałki: wybór · Enter: zatwierdź · Esc: anuluj"
+            : "8/2 lub strzałki: wybór · Enter: zatwierdź";
+    }
+    if (prompt.kind === "roll") {
+        return "Wpisz wynik · Enter: wyślij · Nat 20/Nat 1: wynik naturalny";
+    }
+    if (prompt.kind === "info") {
+        return "Enter: dalej";
+    }
+    return "Enter: zatwierdź";
+}
+
+function shouldShowCommandHelp(card, details, nextLines) {
+    const prompt = card.prompt;
+    if (!prompt) return false;
+    return Boolean(details || nextLines.length || promptCommandLines(prompt).length);
+}
+
+function buildActionHelp(card, instructionLead) {
+    const communication = card.communication || {};
+    const blocks = [];
+    const details = String(card.details || "").trim();
+    if (details) blocks.push(details);
+
+    const nextLines = [];
+    const nextHint = String(communication.context?.next || "").trim();
+    const continueHint = String(communication.context?.continue || "").trim();
+    if (nextHint) nextLines.push(nextHint);
+    if (continueHint && !sameMeaning(continueHint, instructionLead)) nextLines.push(continueHint);
+    if (nextLines.length) {
+        blocks.push(`### Dalej\n${nextLines.map((line) => `- ${line}`).join("\n")}`);
+    }
+
+    const commands = promptCommandLines(card.prompt);
+    if (commands.length && shouldShowCommandHelp(card, details, nextLines)) {
+        blocks.push(`### Komendy\n${commands.map((line) => `- ${line}`).join("\n")}`);
+    }
+    return blocks.join("\n\n").trim();
+}
+
+function buildActionSections(card) {
+    const summary = String(card.summary || "").trim();
+    let body = String(card.body || "").trim();
+    const instructionLead = derivedInstructionText(card);
+
+    if (!body && instructionLead && !sameMeaning(summary, instructionLead)) {
+        body = instructionLead;
+    } else if (body && instructionLead && !sameMeaning(body, instructionLead) && !sameMeaning(summary, instructionLead)) {
+        body = `${body}\n\n**Dalej:** ${instructionLead}`;
+    }
+
+    let scene = summary;
+    if (!scene) {
+        scene = body;
+        body = "";
+    } else if (body && !sameMeaning(summary, body)) {
+        scene = `${summary}\n\n${body}`;
+        body = "";
+    }
+
+    const help = buildActionHelp(card, instructionLead);
+    return { scene, help };
+}
+
 function renderActionCard() {
     const card = activeCardData();
     const communication = card.communication || {};
+    const sections = buildActionSections(card);
     refs.actionChannel.textContent = String(communication.channel || "ready");
     refs.actionTitle.textContent = card.title || "Czekam na wydarzenia";
     refs.actionPriority.textContent = String(communication.priority || "info");
@@ -736,12 +911,10 @@ function renderActionCard() {
     else if (communication.priority === "result") refs.actionPriority.classList.add("badge-result");
     else if (communication.priority === "debug") refs.actionPriority.classList.add("badge-debug");
     else refs.actionPriority.classList.add("badge-idle");
-    refs.actionSummary.textContent = card.summary || "";
-    refs.actionSummary.classList.toggle("hidden", !card.summary);
-    refs.actionBody.innerHTML = markdownish(card.body);
-    refs.actionBody.classList.toggle("hidden", !card.body);
-    refs.actionDetailsBody.innerHTML = markdownish(card.details);
-    refs.actionDetails.classList.toggle("hidden", !card.details);
+    refs.actionSceneBody.innerHTML = markdownish(sections.scene);
+    refs.actionScene.classList.toggle("hidden", !sections.scene);
+    refs.actionHelpBody.innerHTML = markdownish(sections.help);
+    refs.actionHelp.classList.toggle("hidden", !sections.help);
 
     const progress = communication.progress || null;
     const current = Number(progress?.current ?? 0);
@@ -752,9 +925,11 @@ function renderActionCard() {
     refs.actionProgressValue.textContent = total > 0 ? `${current}/${total}` : "0/0";
     refs.actionProgressBar.style.width = `${percentage}%`;
 
-    refs.promptMeta.textContent = card.prompt
-        ? [card.prompt.kind, card.prompt.source].filter(Boolean).join(" · ")
-        : "";
+    const metaParts = [];
+    const displayId = promptDisplayId(card.prompt || card);
+    if (displayId) metaParts.push(displayId);
+    if (card.prompt) metaParts.push(promptCommandSummary(card.prompt));
+    refs.promptMeta.textContent = metaParts.filter(Boolean).join(" · ");
 
     renderPrompt(card.prompt);
 }
@@ -781,6 +956,15 @@ function promptChoices(prompt) {
         icon: "",
         key: "",
     }));
+}
+
+function promptCancelChoice(prompt) {
+    const choices = promptChoices(prompt);
+    return choices.find((choice) => {
+        const raw = String(choice.raw || "").trim().toLowerCase();
+        const label = String(choice.label || "").trim().toLowerCase();
+        return raw.includes("cancel") || raw.includes("anuluj") || label.includes("anuluj");
+    }) || null;
 }
 
 function _modifierBucketTotal(modifiers, bonusKey, penaltyKey) {
@@ -891,7 +1075,7 @@ function updateChoiceSelectionUI() {
 }
 
 function moveSelectedChoice(delta) {
-    const choices = promptChoices(state.currentPrompt);
+    const choices = promptChoices(state.view.activePrompt);
     if (!choices.length) return;
     ensureSelectedChoiceIndex(choices);
     const length = choices.length;
@@ -900,7 +1084,7 @@ function moveSelectedChoice(delta) {
 }
 
 function submitSelectedChoice() {
-    const choices = promptChoices(state.currentPrompt);
+    const choices = promptChoices(state.view.activePrompt);
     if (!choices.length) return;
     ensureSelectedChoiceIndex(choices);
     const choice = choices[state.selectedChoiceIndex];
@@ -945,7 +1129,7 @@ function createChoiceButton(choice) {
         ${desc}
     `;
     button.addEventListener("click", () => {
-        const choices = promptChoices(state.currentPrompt);
+        const choices = promptChoices(state.view.activePrompt);
         const nextIndex = choices.findIndex((entry) => entry.raw === choice.raw);
         if (nextIndex >= 0) {
             state.selectedChoiceIndex = nextIndex;
@@ -957,7 +1141,7 @@ function createChoiceButton(choice) {
 }
 
 function renderSelectedChoiceDetail() {
-    const choices = promptChoices(state.currentPrompt);
+    const choices = promptChoices(state.view.activePrompt);
     if (!choices.length) {
         refs.choiceDetail.classList.add("hidden");
         refs.choiceDetailTitle.textContent = "";
@@ -978,18 +1162,29 @@ function renderSelectedChoiceDetail() {
 }
 
 async function answerPrompt(answer) {
-    if (!state.currentPromptId) return;
-    const promptId = state.currentPromptId;
+    const promptId = state.view.activePrompt?.id;
+    if (!promptId) return;
     await fetchJson(`/api/prompts/${promptId}/response`, {
         method: "POST",
         body: JSON.stringify({ answer }),
     });
     state.promptDrafts.delete(promptId);
-    state.promptQueue = state.promptQueue.map((item) => item.id === promptId ? { ...item, status: "answered", answer } : item);
+    const refreshed = await fetchJson("/api/view-state");
+    syncViewState(refreshed.view_state || null);
     state.naturalMode = "none";
     state.selectedChoiceIndex = -1;
-    chooseCurrentPrompt();
     renderAll();
+}
+
+function submitCancelChoice() {
+    const cancelChoice = promptCancelChoice(state.view.activePrompt);
+    if (!cancelChoice) return false;
+    answerPrompt(cancelChoice.raw).catch((error) => window.alert(error.message));
+    return true;
+}
+
+function isBoardScanCancelPrompt(prompt) {
+    return String(prompt?.source || "").trim().toLowerCase() === "board_scan_cancel";
 }
 
 function renderPrompt(prompt) {
@@ -1131,10 +1326,19 @@ function renderInitiative() {
         const delta = Number.isFinite(entry.delta) ? Number(entry.delta) : null;
         const score = current ?? base ?? "-";
         const modifier = delta === null || delta === 0 ? "" : ` (${delta > 0 ? "+" : ""}${delta})`;
+        const wounds = Number.isFinite(Number(entry.wounds)) ? Number(entry.wounds) : null;
+        const maxHp = Number.isFinite(Number(entry.max_hp)) ? Number(entry.max_hp) : null;
+        const woundLine = wounds === null ? "" : `Rany ${escapeHtml(maxHp ? `${wounds}/${maxHp}` : String(wounds))}`;
+        const statuses = Array.isArray(entry.statuses)
+            ? entry.statuses.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 4)
+            : [];
+        const statusLine = statuses.length ? statuses.join(", ") : "";
         return `
             <article class="initiative-entry${active ? " active" : ""}">
                 <strong class="initiative-order">${index + 1}. ${escapeHtml(label)}</strong>
                 <div class="initiative-line">Init ${escapeHtml(score)}${escapeHtml(modifier)}</div>
+                ${woundLine ? `<div class="initiative-line">${woundLine}</div>` : ""}
+                ${statusLine ? `<div class="initiative-line">${escapeHtml(statusLine)}</div>` : ""}
             </article>
         `;
     }).join("");
@@ -1155,25 +1359,30 @@ function renderTransitions() {
 }
 
 function renderJournal() {
-    if (!state.journal.length) {
+    if (!state.view.journal.length) {
         refs.journalList.innerHTML = `<div class="empty-state">Brak wpisów.</div>`;
     } else {
-        refs.journalList.innerHTML = state.journal.map((entry) => `
+        refs.journalList.innerHTML = state.view.journal.map((entry) => `
             <article class="journal-entry">
-                <strong>${escapeHtml(entry.title)}</strong>
-                <small>${escapeHtml(entry.kind)}</small>
-                <div>${markdownish(entry.body || "")}</div>
+                <div class="journal-entry-head">
+                    <strong>${escapeHtml(entry.title)}</strong>
+                    <small>${escapeHtml(entry.kind)}</small>
+                </div>
+                ${promptDisplayId(entry) ? `<div class="journal-entry-id">${escapeHtml(promptDisplayId(entry))}</div>` : ""}
+                ${entry.summary ? `<div class="journal-entry-summary">${escapeHtml(entry.summary)}</div>` : ""}
+                ${entry.body_markdown ? `<div class="journal-entry-body">${markdownish(entry.body_markdown || "")}</div>` : ""}
             </article>
         `).join("");
     }
-    if (!state.debug.length) {
+    if (!state.view.debugFeed.length) {
         refs.debugList.innerHTML = `<div class="empty-state">Brak wpisów debug.</div>`;
     } else {
-        refs.debugList.innerHTML = state.debug.map((entry) => `
+        refs.debugList.innerHTML = state.view.debugFeed.map((entry) => `
             <article class="debug-entry">
                 <strong>${escapeHtml(entry.title)}</strong>
                 <small>${escapeHtml(entry.kind)}</small>
-                <div>${markdownish(entry.body || "")}</div>
+                ${promptDisplayId(entry) ? `<div class="journal-entry-id">${escapeHtml(promptDisplayId(entry))}</div>` : ""}
+                <div>${markdownish(entry.body_markdown || "")}</div>
             </article>
         `).join("");
     }
@@ -1302,14 +1511,14 @@ refs.btnResultBack.addEventListener("click", async () => {
 
 refs.promptForm.addEventListener("submit", (event) => {
     event.preventDefault();
-    if (!state.currentPrompt) return;
-    if (state.currentPrompt.kind === "info" && !state.currentPrompt.choices.length) {
+    if (!state.view.activePrompt) return;
+    if (state.view.activePrompt.kind === "info" && !state.view.activePrompt.choices.length) {
         answerPrompt("ok").catch((error) => window.alert(error.message));
         return;
     }
     const raw = refs.promptInput.value.trim();
-    if (!raw && state.currentPrompt.kind !== "roll") return;
-    if (state.currentPrompt.kind === "roll") {
+    if (!raw && state.view.activePrompt.kind !== "roll") return;
+    if (state.view.activePrompt.kind === "roll") {
         if (!raw) {
             refs.promptInput.focus();
             return;
@@ -1323,17 +1532,18 @@ refs.promptForm.addEventListener("submit", (event) => {
 });
 
 refs.promptInput.addEventListener("input", () => {
-    if (!state.currentPromptId) return;
-    state.promptDrafts.set(state.currentPromptId, refs.promptInput.value);
+    const promptId = state.view.activePrompt?.id;
+    if (!promptId) return;
+    state.promptDrafts.set(promptId, refs.promptInput.value);
 });
 
 document.addEventListener("keydown", (event) => {
     if (state.screen !== "game") return;
-    if (!state.currentPrompt) return;
+    if (!state.view.activePrompt) return;
     if (_isUpNavigationKey(event)) {
         const target = event.target;
         const isTypingTarget = target instanceof HTMLInputElement && !target.classList.contains("hidden");
-        if (!isTypingTarget && promptChoices(state.currentPrompt).length) {
+        if (!isTypingTarget && promptChoices(state.view.activePrompt).length) {
             event.preventDefault();
             moveSelectedChoice(-1);
         }
@@ -1342,22 +1552,31 @@ document.addEventListener("keydown", (event) => {
     if (_isDownNavigationKey(event)) {
         const target = event.target;
         const isTypingTarget = target instanceof HTMLInputElement && !target.classList.contains("hidden");
-        if (!isTypingTarget && promptChoices(state.currentPrompt).length) {
+        if (!isTypingTarget && promptChoices(state.view.activePrompt).length) {
             event.preventDefault();
             moveSelectedChoice(1);
+        }
+        return;
+    }
+    if (event.key === "Escape") {
+        if (submitCancelChoice()) {
+            event.preventDefault();
         }
         return;
     }
     if (event.key !== "Enter") return;
     const target = event.target;
     if (target instanceof HTMLTextAreaElement) return;
-    if (state.currentPrompt.kind === "info" && !state.currentPrompt.choices.length) {
+    if (isBoardScanCancelPrompt(state.view.activePrompt)) {
+        return;
+    }
+    if (state.view.activePrompt.kind === "info" && !state.view.activePrompt.choices.length) {
         event.preventDefault();
         answerPrompt("ok").catch((error) => window.alert(error.message));
         return;
     }
     const isTypingTarget = target instanceof HTMLInputElement && !target.classList.contains("hidden");
-    if (!isTypingTarget && promptChoices(state.currentPrompt).length) {
+    if (!isTypingTarget && promptChoices(state.view.activePrompt).length) {
         event.preventDefault();
         submitSelectedChoice();
     }

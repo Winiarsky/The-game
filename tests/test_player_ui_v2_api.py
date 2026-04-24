@@ -16,12 +16,13 @@ import future.player_ui_v2.app as player_ui_v2_app_module  # noqa: E402
 @pytest.fixture()
 def ui_client(monkeypatch):
     monkeypatch.setattr(player_ui_v2_app_module, "events_history", [])
-    monkeypatch.setattr(player_ui_v2_app_module, "prompts", {})
     monkeypatch.setattr(player_ui_v2_app_module, "subscribers", set())
     monkeypatch.setattr(player_ui_v2_app_module, "event_ids", itertools.count(1))
-    monkeypatch.setattr(player_ui_v2_app_module, "prompt_ids", itertools.count(1))
     monkeypatch.setattr(player_ui_v2_app_module, "session_ids", itertools.count(2))
     monkeypatch.setattr(player_ui_v2_app_module, "current_session_id", "ui-session-1")
+    prompt_director = player_ui_v2_app_module.PromptDirector(session_id="ui-session-1")
+    prompt_director.set_publisher(player_ui_v2_app_module._publish)
+    monkeypatch.setattr(player_ui_v2_app_module, "prompt_director", prompt_director)
     monkeypatch.setattr(
         player_ui_v2_app_module,
         "runtime_state",
@@ -37,6 +38,8 @@ def ui_client(monkeypatch):
             "command": [],
             "base_url": None,
             "error": None,
+            "board_backend": None,
+            "board_url": None,
         },
     )
 
@@ -93,14 +96,17 @@ def test_prompt_api_returns_normalized_communication_envelope(ui_client):
                 "priority": "action",
                 "cta": "Enter po przygotowaniu się do obserwacji.",
             },
+            "prompt_id": "enemy.turn.start",
         },
     )
     assert create.status_code == 200
     prompt_id = create.get_json()["id"]
+    assert create.get_json()["prompt_key"] == "enemy.turn.start"
 
     fetched = ui_client.get(f"/api/prompts/{prompt_id}")
     assert fetched.status_code == 200
     payload = fetched.get_json()
+    assert payload["prompt_key"] == "enemy.turn.start"
     comm = payload["communication"]
     assert comm["blocking"] is True
     assert comm["semantic_type"] == "required_action"
@@ -108,6 +114,335 @@ def test_prompt_api_returns_normalized_communication_envelope(ui_client):
     assert comm["body_markdown"].startswith("Przeciwnik rozpoczyna turę.")
     assert comm["cta"] == "Enter po przygotowaniu się do obserwacji."
     assert comm["dedupe_key"]
+    assert comm["context"]["prompt_key"] == "enemy.turn.start"
+
+
+def test_player_card_and_ack_prompt_expose_prompt_key(ui_client):
+    response = ui_client.post(
+        "/api/events",
+        json={
+            "type": "player_card",
+            "session_id": "ui-session-1",
+            "payload": {
+                "title": "Setup bohaterów",
+                "summary": "Co robić teraz",
+                "body_markdown": "Ustaw figurkę Cedrica.",
+                "prompt_id": "setup.hero_setup_place_figure",
+            },
+        },
+    )
+    assert response.status_code == 200
+
+    view_state = ui_client.get("/api/view-state").get_json()["view_state"]
+    assert view_state["active_prompt"]["prompt_key"] == "setup.hero_setup_place_figure"
+    assert view_state["journal"][0]["prompt_key"] == "setup.hero_setup_place_figure"
+
+
+def test_debug_player_card_does_not_create_hidden_ack_prompt(ui_client):
+    created = ui_client.post(
+        "/api/prompts",
+        json={
+            "prompt": "Setup encounteru",
+            "kind": "info",
+            "title": "Setup encounteru",
+            "prompt_long": "Przygotuj obszar mapy: Bandit Cave.",
+            "source": "encounter_setup",
+            "scope_key": "setup",
+            "dedupe_key": "setup:1/7",
+            "session_id": "ui-session-1",
+        },
+    )
+    assert created.status_code == 200
+    first_prompt_id = created.get_json()["id"]
+
+    answered = ui_client.post(f"/api/prompts/{first_prompt_id}/answer", json={"answer": "ok"})
+    assert answered.status_code == 200
+
+    debug_card = ui_client.post(
+        "/api/events",
+        json={
+            "type": "player_card",
+            "session_id": "ui-session-1",
+            "payload": {
+                "kind": "debug",
+                "title": "Krawędzie setupu",
+                "body_markdown": "Dane techniczne ścian dostępne w szczegółach.",
+                "details_markdown": "Krawędzie: ...",
+                "priority": "debug",
+                "scope_key": "setup",
+                "dedupe_key": "setup_edges:2",
+            },
+        },
+    )
+    assert debug_card.status_code == 200
+
+    interim = ui_client.get("/api/view-state").get_json()["view_state"]
+    assert interim["active_prompt"] is None
+    assert interim["debug_feed"][0]["title"] == "Krawędzie setupu"
+
+    next_prompt = ui_client.post(
+        "/api/prompts",
+        json={
+            "prompt": "Setup encounteru",
+            "kind": "info",
+            "title": "Setup encounteru",
+            "prompt_long": "Ustaw ściany zgodnie z podświetlonymi krawędziami i potwierdź w UI.",
+            "source": "encounter_setup",
+            "scope_key": "setup",
+            "dedupe_key": "setup:2/7",
+            "session_id": "ui-session-1",
+        },
+    )
+    assert next_prompt.status_code == 200
+    assert next_prompt.get_json()["id"] == "2"
+
+
+def test_view_state_separates_active_prompt_from_journal_cards(ui_client):
+    created = ui_client.post(
+        "/api/prompts",
+        json={
+            "prompt": "Wybierz akcję",
+            "kind": "choice",
+            "choices": ["Move", "End"],
+            "source": "intent_menu",
+            "scope_key": "hero_turn:intent",
+            "session_id": "ui-session-1",
+        },
+    )
+    assert created.status_code == 200
+
+    card_event = ui_client.post(
+        "/api/events",
+        json={
+            "type": "player_card",
+            "session_id": "ui-session-1",
+            "payload": {
+                "kind": "result",
+                "title": "Wynik akcji",
+                "body_markdown": "Bohater przygotowuje się do ruchu.",
+                "scope_key": "hero_turn:resolution",
+            },
+        },
+    )
+    assert card_event.status_code == 200
+
+    response = ui_client.get("/api/view-state")
+    assert response.status_code == 200
+    payload = response.get_json()["view_state"]
+    assert payload["active_prompt"]["title"] == "Wybierz akcję"
+    assert payload["active_prompt"]["scope_key"] == "hero_turn:intent"
+    assert payload["focus_card"]["title"] == "Wynik akcji"
+    assert payload["focus_card"]["kind"] == "result"
+    assert payload["journal"][0]["title"] == "Wynik akcji"
+
+
+def test_prompt_supersedes_previous_prompt_in_same_scope(ui_client):
+    first = ui_client.post(
+        "/api/prompts",
+        json={
+            "prompt": "Pierwszy prompt",
+            "kind": "info",
+            "source": "setup",
+            "scope_key": "setup",
+            "session_id": "ui-session-1",
+        },
+    )
+    assert first.status_code == 200
+    first_id = first.get_json()["id"]
+
+    second = ui_client.post(
+        "/api/prompts",
+        json={
+            "prompt": "Drugi prompt",
+            "kind": "info",
+            "source": "setup",
+            "scope_key": "setup",
+            "session_id": "ui-session-1",
+        },
+    )
+    assert second.status_code == 200
+    second_id = second.get_json()["id"]
+
+    first_payload = ui_client.get(f"/api/prompts/{first_id}").get_json()
+    second_payload = ui_client.get(f"/api/prompts/{second_id}").get_json()
+    view_state = ui_client.get("/api/view-state").get_json()["view_state"]
+
+    assert first_payload["status"] == "superseded"
+    assert second_payload["status"] == "pending"
+    assert second_payload["replaces_prompt_id"] == first_id
+    assert view_state["active_prompt"]["id"] == second_id
+
+
+def test_journal_endpoint_returns_incremental_cards(ui_client):
+    first = ui_client.post(
+        "/api/events",
+        json={
+            "type": "player_card",
+            "session_id": "ui-session-1",
+            "payload": {
+                "kind": "narration",
+                "title": "Start",
+                "body_markdown": "Rozpoczyna się tura.",
+            },
+        },
+    )
+    second = ui_client.post(
+        "/api/events",
+        json={
+            "type": "player_card",
+            "session_id": "ui-session-1",
+            "payload": {
+                "kind": "result",
+                "title": "Wynik",
+                "body_markdown": "Rzut zakończony sukcesem.",
+            },
+        },
+    )
+    assert first.status_code == 200
+    assert second.status_code == 200
+
+    snapshot = ui_client.get("/api/view-state").get_json()["view_state"]
+    older_seq = snapshot["journal"][-1]["seq"]
+
+    journal = ui_client.get(f"/api/journal?after={older_seq}")
+    assert journal.status_code == 200
+    payload = journal.get_json()
+    assert [entry["title"] for entry in payload["journal"]] == ["Wynik"]
+
+
+def test_cards_require_enter_before_next_transition(ui_client):
+    first = ui_client.post(
+        "/api/events",
+        json={
+            "type": "narration",
+            "session_id": "ui-session-1",
+            "payload": {
+                "message": "Krok pierwszy.",
+                "source": "scenario_flow",
+            },
+        },
+    )
+    second = ui_client.post(
+        "/api/events",
+        json={
+            "type": "narration",
+            "session_id": "ui-session-1",
+            "payload": {
+                "message": "Krok drugi.",
+                "source": "scenario_flow",
+            },
+        },
+    )
+    assert first.status_code == 200
+    assert second.status_code == 200
+
+    initial_view = ui_client.get("/api/view-state").get_json()["view_state"]
+    first_prompt = initial_view["active_prompt"]
+    assert first_prompt["body_markdown"] == "Krok pierwszy."
+    assert first_prompt["input_mode"] == "confirm"
+    assert first_prompt["communication"]["cta"] == "Enter, aby przejść do kolejnego kroku."
+
+    answered = ui_client.post(f"/api/prompts/{first_prompt['id']}/answer", json={"answer": "ok"})
+    assert answered.status_code == 200
+
+    next_view = ui_client.get("/api/view-state").get_json()["view_state"]
+    assert next_view["active_prompt"]["body_markdown"] == "Krok drugi."
+
+
+def test_plain_logs_do_not_create_player_facing_prompt(ui_client):
+    logged = ui_client.post(
+        "/api/events",
+        json={
+            "type": "log",
+            "session_id": "ui-session-1",
+            "payload": {
+                "message": "Techniczny log bez semantyki promptu.",
+            },
+        },
+    )
+    assert logged.status_code == 200
+
+    view_state = ui_client.get("/api/view-state").get_json()["view_state"]
+    assert view_state["active_prompt"] is None
+    assert view_state["journal"] == []
+
+
+def test_duplicate_consecutive_cards_are_deduplicated(ui_client):
+    first = ui_client.post(
+        "/api/events",
+        json={
+            "type": "narration",
+            "session_id": "ui-session-1",
+            "payload": {
+                "message": "Ten sam krok.",
+                "source": "scenario_flow",
+            },
+        },
+    )
+    second = ui_client.post(
+        "/api/events",
+        json={
+            "type": "narration",
+            "session_id": "ui-session-1",
+            "payload": {
+                "message": "Ten sam krok.",
+                "source": "scenario_flow",
+            },
+        },
+    )
+    assert first.status_code == 200
+    assert second.status_code == 200
+
+    view_state = ui_client.get("/api/view-state").get_json()["view_state"]
+    assert len(view_state["journal"]) == 1
+    assert view_state["active_prompt"]["body_markdown"] == "Ten sam krok."
+
+    prompt_id = view_state["active_prompt"]["id"]
+    answered = ui_client.post(f"/api/prompts/{prompt_id}/answer", json={"answer": "ok"})
+    assert answered.status_code == 200
+
+    after = ui_client.get("/api/view-state").get_json()["view_state"]
+    assert after["active_prompt"] is None
+
+
+def test_duplicate_api_prompts_are_deduplicated(ui_client):
+    first = ui_client.post(
+        "/api/prompts",
+        json={
+            "prompt": "Atak dystansowy: analiza strzału",
+            "kind": "choice",
+            "title": "Atak dystansowy: analiza strzału",
+            "prompt_long": "Cel: Wróg\nMożesz potwierdzić strzał albo wrócić do wyboru celu.",
+            "choices": ["Potwierdź strzał", "Wybierz inny cel"],
+            "source": "attack_ranged_analysis",
+            "scope_key": "hero_turn:targeting",
+            "dedupe_key": "attack_ranged_analysis:Atak dystansowy: analiza strzału",
+            "session_id": "ui-session-1",
+        },
+    )
+    second = ui_client.post(
+        "/api/prompts",
+        json={
+            "prompt": "Atak dystansowy: analiza strzału",
+            "kind": "choice",
+            "title": "Atak dystansowy: analiza strzału",
+            "prompt_long": "Cel: Wróg\nMożesz potwierdzić strzał albo wrócić do wyboru celu.",
+            "choices": ["Potwierdź strzał", "Wybierz inny cel"],
+            "source": "attack_ranged_analysis",
+            "scope_key": "hero_turn:targeting",
+            "dedupe_key": "attack_ranged_analysis:Atak dystansowy: analiza strzału",
+            "session_id": "ui-session-1",
+        },
+    )
+    assert first.status_code == 200
+    assert second.status_code == 200
+
+    first_id = first.get_json()["id"]
+    second_id = second.get_json()["id"]
+    prompts = ui_client.get("/api/prompts").get_json()["prompts"]
+
+    assert first_id == second_id
+    assert len(prompts) == 1
 
 
 def test_catalog_returns_bandit_cave_and_hero_cards(ui_client):

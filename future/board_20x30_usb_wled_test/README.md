@@ -5,6 +5,7 @@ To jest odseparowany prototyp do sprawdzenia synchronizacji:
 - PC wysyla do ESP komende `SCAN`
 - ESP uzbraja pojedynczy skan i czeka na jedno nacisniecie
 - ESP odsylka jeden event `press` po USB
+- opcjonalnie moze odeslac event `cancel`, jesli skan zostal anulowany lokalnie
 - skrypt odbiera `press`
 - skrypt mapuje `(col,row)` na LED nowej planszy 20x30
 - odpowiadajacy LED zapala sie przez WLED
@@ -23,6 +24,15 @@ Obsluguje komendy po serialu:
 - `STATUS`
 - `SCAN`
 - `STOP`
+
+Backend gry rozumie teraz rowniez anulowanie skanu przez event JSON:
+
+```json
+{"protocol":"board_scan_usb_v1","event":"cancel"}
+```
+
+To pozwala dodac na ESP32 np. osobny przycisk anulowania albo lokalna logike timeoutu,
+bez udawania klikniecia w pole planszy.
 
 Docelowy przeplyw testu jest taki:
 

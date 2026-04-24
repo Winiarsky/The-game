@@ -1,0 +1,145 @@
+{
+  "turns.active_hero_board_scan": {
+    "title": "Wybór bohatera",
+    "body_markdown": "Gra czeka teraz na klik figurki bohatera na planszy."
+  },
+  "turns.active_hero_menu": {
+    "title": "Aktywny bohater",
+    "subtitle": "Wybierz bohatera do wykonania akcji.",
+    "body_markdown": "Plansza nie zwróciła kliknięcia. Wybierz aktywnego bohatera z listy w UI."
+  },
+  "turns.no_heroes_on_board": {
+    "title": "Brak bohaterów",
+    "subtitle": "Wybierz dalsze działanie.",
+    "options": {
+      "recover": {
+        "label": "Ustaw bohaterów",
+        "desc": "Wróć do ustawiania pozycji startowych bohaterów."
+      },
+      "stay": {
+        "label": "Pozostań",
+        "desc": "Pozostań w tym stanie bez bohaterów na planszy."
+      }
+    }
+  },
+  "turns.actor_stats": {
+    "title": "Statystyki"
+  },
+  "turns.intent_menu": {
+    "title": "Akcje",
+    "subtitle": "8/2 nawigacja, Enter potwierdzenie."
+  },
+  "turns.intent_options": {
+    "options": {
+      "move": {
+        "label": "Ruch",
+        "desc": "Ruch po planszy."
+      },
+      "interact": {
+        "label": "Interakcja",
+        "desc": "Interakcja z obiektem na planszy."
+      },
+      "seek": {
+        "label": "Szukaj",
+        "desc": "Przeszukaj obszar do 30 ft gridowo; UI podświetla pola objęte akcją i nie przechodzi przez sciany."
+      },
+      "attack": {
+        "label": "Atak",
+        "desc": "Wybierz akcję ataku."
+      },
+      "magic": {
+        "label": "Magia",
+        "desc": "Wybierz czar lub akcję magiczną."
+      },
+      "alchemy": {
+        "label": "Alchemia",
+        "desc": "Wybierz akcję alchemiczną."
+      },
+      "equipment": {
+        "label": "Ekwipunek",
+        "desc": "Ekwipunek i interakcje z przedmiotami."
+      },
+      "stats": {
+        "label": "Statystyki",
+        "desc": "Pełne statystyki aktywnego bohatera."
+      },
+      "delay": {
+        "label": "Opóźnij",
+        "desc": "Obniż inicjatywę i zagraj później."
+      },
+      "end": {
+        "label": "Koniec",
+        "desc": "Zakończ turę."
+      }
+    }
+  },
+  "turns.bucket.attack": {
+    "title": "Atak",
+    "subtitle": "Wybierz rodzaj ataku."
+  },
+  "turns.bucket.magic": {
+    "title": "Magia",
+    "subtitle": "Wybierz czar lub akcję magiczną."
+  },
+  "turns.bucket.alchemy": {
+    "title": "Alchemia",
+    "subtitle": "Wybierz akcję alchemiczną."
+  },
+  "turns.bucket.special": {
+    "title": "Specjalne",
+    "subtitle": "Wybierz akcję specjalną."
+  },
+  "turns.end_delay_menu": {
+    "title": "Koniec tury",
+    "options": {
+      "end": {
+        "label": "Koniec",
+        "desc": "Zakończ turę."
+      },
+      "delay": {
+        "label": "Opóźnij",
+        "desc": "Obniż inicjatywę i zagraj później."
+      }
+    }
+  },
+  "ui.choice.intent": {
+    "title": "Akcje",
+    "subtitle": "8/2 nawigacja, Enter potwierdzenie."
+  },
+  "ui.choice.active_hero_select": {
+    "title": "Aktywny bohater",
+    "subtitle": "Wybierz bohatera do wykonania akcji."
+  },
+  "ui.choice.heroes_missing": {
+    "title": "Brak bohaterów",
+    "subtitle": "Wybierz dalsze działanie."
+  },
+  "ui.choice.end_delay": {
+    "title": "Koniec tury"
+  },
+  "ui.choice.intent:attack": {
+    "title": "Atak",
+    "subtitle": "Wybierz rodzaj ataku."
+  },
+  "ui.choice.intent:magic": {
+    "title": "Magia",
+    "subtitle": "Wybierz czar lub akcję magiczną."
+  },
+  "ui.choice.intent:alchemy": {
+    "title": "Alchemia",
+    "subtitle": "Wybierz akcję alchemiczną."
+  },
+  "ui.choice.intent:special": {
+    "title": "Specjalne",
+    "subtitle": "Wybierz akcję specjalną."
+  },
+  "ui.info.stats": {
+    "title": "Statystyki"
+  },
+  "ui.info.enemy_turn_start": {
+    "title": "{title}"
+  },
+  "ui.info.enemy_turn_thinking": {
+    "title": "{title}"
+  }
+}

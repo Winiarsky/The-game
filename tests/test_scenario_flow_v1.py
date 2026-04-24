@@ -197,7 +197,7 @@ def test_initial_scenario_intro_waits_until_after_hero_setup(monkeypatch):
     meaningful = [
         (event_type, payload.get("message") or payload.get("prompt") or payload.get("title") or "")
         for event_type, payload in recording_ui.events
-        if event_type in {"log", "info", "prompt_info"}
+        if event_type in {"log", "info", "prompt_info", "narration"}
         and "Sesja debug:" not in str(payload.get("message") or payload.get("prompt") or payload.get("title") or "")
     ]
     assert meaningful
@@ -206,10 +206,10 @@ def test_initial_scenario_intro_waits_until_after_hero_setup(monkeypatch):
         idx for idx, (_event, message) in enumerate(meaningful) if "Ustawianie pozycji startowych bohaterów." in str(message)
     )
     start_idx = next(
-        idx for idx, (_event, message) in enumerate(meaningful) if "Start scenariusza:" in str(message)
+        idx for idx, (_event, message) in enumerate(meaningful) if "Rozpoczyna się scenariusz:" in str(message)
     )
     map_entry_idx = next(
-        idx for idx, (_event, message) in enumerate(meaningful) if "Wejście na mapę:" in str(message)
+        idx for idx, (_event, message) in enumerate(meaningful) if "Wchodzicie na mapę:" in str(message)
     )
 
     assert setup_idx < start_idx

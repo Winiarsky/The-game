@@ -220,6 +220,25 @@ class UIClient:
     def prompt_roll(self, prompt: str, source: str | None = None, **extra) -> Optional[Any]:
         """Wyślij prompt na rzut; fallback CLI tylko w trybie debug."""
         return_meta = bool(extra.pop("return_meta", False))
+        try:
+            from prompt_copy import resolve_ui_prompt_copy
+
+            prompt_copy = resolve_ui_prompt_copy(
+                kind="roll",
+                source=source,
+                title=prompt,
+                subtitle=extra.get("subtitle"),
+                prompt_long=extra.get("prompt_long"),
+                prompt_id=extra.get("prompt_id"),
+            )
+            extra = dict(extra)
+            prompt = str(prompt_copy.get("title") or prompt or "")
+            if prompt_copy.get("subtitle") not in (None, ""):
+                extra["subtitle"] = prompt_copy.get("subtitle")
+            if prompt_copy.get("prompt_long") not in (None, ""):
+                extra["prompt_long"] = prompt_copy.get("prompt_long")
+        except Exception:
+            pass
         if self.enabled:
             prompt_id = self._create_prompt(prompt, source=source, **extra)
             if prompt_id is not None:
@@ -248,6 +267,27 @@ class UIClient:
         **extra,
     ) -> Optional[str]:
         """Wyślij prompt tekstowy z opcjonalną listą wyboru; fallback CLI tylko w debug."""
+        try:
+            from prompt_copy import resolve_ui_prompt_copy
+
+            prompt_copy = resolve_ui_prompt_copy(
+                kind="choice",
+                source=source,
+                title=str(extra.get("title") or prompt or ""),
+                subtitle=extra.get("subtitle"),
+                prompt_long=extra.get("prompt_long"),
+                choice_meta=extra.get("choice_meta"),
+                prompt_id=extra.get("prompt_id"),
+            )
+            extra = dict(extra)
+            prompt = str(prompt_copy.get("title") or prompt or "")
+            extra["title"] = prompt
+            extra["subtitle"] = prompt_copy.get("subtitle")
+            extra["prompt_long"] = prompt_copy.get("prompt_long")
+            if prompt_copy.get("choice_meta") is not None:
+                extra["choice_meta"] = prompt_copy.get("choice_meta")
+        except Exception:
+            pass
         if self.enabled:
             if "communication" not in extra:
                 communication = self._default_prompt_communication(
@@ -344,6 +384,24 @@ class UIClient:
         **extra,
     ) -> Optional[str]:
         """Pokaż informację i poczekaj na potwierdzenie (Enter)."""
+        try:
+            from prompt_copy import resolve_ui_prompt_copy
+
+            prompt_copy = resolve_ui_prompt_copy(
+                kind="info",
+                source=source,
+                title=title,
+                subtitle=extra.get("subtitle"),
+                prompt_long=prompt_long,
+                prompt_id=extra.get("prompt_id"),
+            )
+            extra = dict(extra)
+            title = str(prompt_copy.get("title") or title or "")
+            prompt_long = prompt_copy.get("prompt_long")
+            if prompt_copy.get("subtitle") not in (None, ""):
+                extra["subtitle"] = prompt_copy.get("subtitle")
+        except Exception:
+            pass
         if self.enabled:
             if "communication" not in extra:
                 communication = self._default_prompt_communication(
@@ -394,6 +452,8 @@ class UIClient:
             "choices": choices or None,
             **extra,
         }
+        if not base_payload.get("prompt_key") and base_payload.get("prompt_id"):
+            base_payload["prompt_key"] = base_payload.get("prompt_id")
         for attempt in range(2):
             payload = dict(base_payload)
             session_id = self._ensure_session_id()
@@ -414,6 +474,15 @@ class UIClient:
                     return None
                 resp.raise_for_status()
                 data = resp.json()
+                try:
+                    self._last_created_prompt_meta = {
+                        "id": str(data.get("id") or ""),
+                        "prompt_key": str(data.get("prompt_key") or payload.get("prompt_key") or payload.get("prompt_id") or ""),
+                        "source": str(payload.get("source") or ""),
+                        "kind": str(payload.get("kind") or ""),
+                    }
+                except Exception:
+                    pass
                 return str(data.get("id"))
             except Exception as exc:  # pragma: no cover - fallback na CLI
                 logger.warning("Nie udało się utworzyć promptu w UI: %s", exc)
@@ -534,7 +603,10 @@ class UIClient:
                 resp = requests.get(url, timeout=self.request_timeout)
                 resp.raise_for_status()
                 data = resp.json()
-                if data.get("status") == "answered":
+                status = str(data.get("status") or "").strip().lower()
+                if status in {"cancelled", "superseded", "expired"}:
+                    return None
+                if status == "answered":
                     answer = data.get("answer")
                     if str(answer).strip().lower() == SESSION_RESET_COMMAND:
                         logger.info("Prompt %s zamknięty przez reset sesji UI.", prompt_id)
@@ -563,7 +635,10 @@ class UIClient:
                 resp = requests.get(url, timeout=self.request_timeout)
                 resp.raise_for_status()
                 data = resp.json()
-                if data.get("status") == "answered":
+                status = str(data.get("status") or "").strip().lower()
+                if status in {"cancelled", "superseded", "expired"}:
+                    return None
+                if status == "answered":
                     answer = data.get("answer")
                     if str(answer).strip().lower() == SESSION_RESET_COMMAND:
                         logger.info("Prompt %s zamknięty przez reset sesji UI.", prompt_id)

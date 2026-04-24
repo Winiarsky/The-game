@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from board import consts
 from GameObjects.interactions_mixin.base_interaction import InteractableMixin, Interaction
 from GameObjects.items.inventory import add_item, item_label
 from economy import add_actor_cp, format_cp_value
+from prompt_text_catalog import render_prompt_text
 
 
 @dataclass
@@ -15,14 +17,21 @@ class LootPile(InteractableMixin):
     require_same_cell_interact: bool = False
     allow_hidden_interaction: bool = False
     blocks_movement: bool = False
+    seek_color: list[int] = field(default_factory=lambda: list(consts.SEEK_LOOT_RGB))
+    seek_color_name: str = "niebieskie"
+    seek_label: str = "loot"
 
     def __post_init__(self) -> None:
         super().__post_init__()
+        action_text = render_prompt_text("interaction.loot_pickup_action")
         self.register_action(
             Interaction(
                 id="pickup_loot",
                 label="Podnieś loot",
-                description="Podnosi wszystkie przedmioty z tego pola.",
+                description=str(
+                    action_text.get("description")
+                    or "Stań na polu lootu, użyj Interakcja i wybierz tę opcję, aby zabrać wszystkie przedmioty i monety."
+                ),
                 handler=self._pickup_handler,
                 tags=["interaction", "manipulate", "loot"],
                 end_interaction=True,

@@ -5,8 +5,15 @@ from typing import Iterable
 
 from board import consts
 from bonuses import BonusEffect, BonusType
-from combat.damage_utils import burn_it_bonus, burn_it_prompt_note
+from combat.damage_utils import (
+    added_status_labels,
+    burn_it_bonus,
+    burn_it_prompt_note,
+    remove_defeated_enemy,
+    snapshot_statuses,
+)
 from combat.hp_engine import apply_damage as hp_apply_damage
+from combat.hp_engine import current_hp
 from damage_types import DamageType
 from skills import Skill
 from statuses import (
@@ -27,8 +34,9 @@ from ...base import EventContext, EventResult
 from ...registry import register_event
 from ..base_attack_magic_event import BaseMagicAttackEvent, prompt_spell_save_roll, spell_dc_details
 from ..magic_utils import grid_distance_feet
-from ..magic_event import MagicEvent
+from ..magic_event import MagicEvent, MagicEventResolver
 from ..magic_utils import pick_position_in_range, pick_target_in_range, positions_within_range
+from ..prompting import spell_formula_prompt
 from ..spell_types import SpellTradition
 from ..lighting_effects import (
     set_dancing_positions,
@@ -54,21 +62,75 @@ def _auto_cantrip_rank(actor) -> int:
     return max(1, (max(1, level) + 1) // 2)
 
 
-def _apply_damage(target, amount: int, damage_type: str) -> bool:
+def _apply_damage(
+    target,
+    amount: int,
+    damage_type: str,
+    *,
+    game=None,
+    actor=None,
+    source_action: str | None = None,
+    source_label: str | None = None,
+) -> bool:
+    incoming = max(0, int(amount))
+    if incoming <= 0:
+        return False
+    before_hp = current_hp(target)
+    target_status_snapshot = snapshot_statuses(target)
     defeated = False
+    hp_damage = 0
     apply = getattr(target, "apply_damage", None)
     if callable(apply):
         try:
             _, defeated = apply(max(0, int(amount)), damage_type)
-            return bool(defeated)
+            after_hp = current_hp(target)
+            if before_hp is not None and after_hp is not None:
+                hp_damage = max(0, int(before_hp) - int(after_hp))
+            else:
+                hp_damage = incoming
         except Exception as exc:
             logger.error("Nie udalo sie zadac obrazen: %s", exc)
             return False
-    try:
-        info = hp_apply_damage(target, amount, damage_type, source=f"cantrip:{damage_type}")
-        return bool(info.get("defeated", False))
-    except Exception:
-        return False
+    else:
+        try:
+            info = hp_apply_damage(target, amount, damage_type, source=f"cantrip:{damage_type}")
+            defeated = bool(info.get("defeated", False))
+            hp_damage = max(0, int(info.get("hp_damage", 0) or 0))
+        except Exception:
+            return False
+
+    if game is not None and actor is not None and hp_damage > 0:
+        try:
+            events = getattr(game, "events", None)
+            if events is not None and hasattr(events, "safe_emit_action"):
+                events.safe_emit_action(
+                    actor=actor,
+                    action_id="damage_applied",
+                    action_tags=["damage", "magic", "spell"],
+                    target=target,
+                    target_pos=getattr(target, "position", None),
+                    source_action=str(source_action or "spell_damage"),
+                    source_label=str(source_label or source_action or "Czar"),
+                    damage=hp_damage,
+                    damage_type=damage_type,
+                    damage_components=[(damage_type, hp_damage)],
+                    applied_statuses=added_status_labels(target_status_snapshot, target),
+                    defeated=defeated,
+                )
+        except Exception:
+            pass
+
+    if defeated and game is not None and target in list(getattr(game, "enemies", []) or []):
+        try:
+            remove_defeated_enemy(
+                game,
+                target,
+                position=getattr(target, "position", None),
+                source=str(source_action or source_label or "spell_damage"),
+            )
+        except Exception:
+            pass
+    return bool(defeated)
 
 
 def _iter_enemy_candidates(game) -> Iterable[tuple[object, tuple[int, int] | None, str]]:
@@ -125,6 +187,10 @@ def _basic_save_damage(base_damage: int, outcome: str) -> int:
     if outcome == "critical_failure":
         return max(0, base * 2)
     return base
+
+
+def _cantrip_damage_formula(actor, die_size: int) -> str:
+    return f"{_auto_cantrip_rank(actor)}k{int(die_size)}"
 
 
 def _prompt_choice(ctx: EventContext, prompt: str, choices: list[str], *, source: str) -> str | None:
@@ -347,11 +413,18 @@ class ChillTouchEvent(MagicEvent):
             return EventResult.cancelled(message="Brak celu w zasiegu dotyku.")
 
         spell_dc = _spell_dc_for_actor(actor)
+        prompt_text, answer_placeholder, prompt_long = spell_formula_prompt(
+            "Chill Touch",
+            _cantrip_damage_formula(actor, 4),
+            subject="obrazenia negative",
+            answer_placeholder="Obrazenia",
+        )
         base_damage = int(
             prompt_for_roll(
-                "Chill Touch - obrazenia negative (podaj wynik 1k4):",
+                prompt_text,
                 layout="damage",
-                answer_placeholder="1k4",
+                answer_placeholder=answer_placeholder,
+                prompt_long=prompt_long,
             )
             or 0
         )
@@ -377,7 +450,15 @@ class ChillTouchEvent(MagicEvent):
             damage = max(0, base_damage * 2)
             enfeebled = 2
 
-        defeated = _apply_damage(target, damage, DamageType.NEGATIVE.value)
+        defeated = _apply_damage(
+            target,
+            damage,
+            DamageType.NEGATIVE.value,
+            game=ctx.game,
+            actor=actor,
+            source_action=self.name,
+            source_label=MagicEventResolver._spell_label(self),
+        )
         if enfeebled > 0:
             _remove_statuses(target, "enfeebled")
             try:
@@ -511,11 +592,18 @@ class DazeEvent(MagicEvent):
             return EventResult.cancelled(message="Brak celu w zasiegu.")
 
         spell_dc = _spell_dc_for_actor(actor)
+        prompt_text, answer_placeholder, prompt_long = spell_formula_prompt(
+            "Daze",
+            "mod. spellcastingu",
+            subject="obrazenia mental",
+            answer_placeholder="Obrazenia",
+        )
         base_damage = int(
             prompt_for_roll(
-                "Daze - podaj obrazenia mental:",
+                prompt_text,
                 layout="damage",
-                answer_placeholder="Obrazenia",
+                answer_placeholder=answer_placeholder,
+                prompt_long=prompt_long,
             )
             or 0
         )
@@ -541,7 +629,15 @@ class DazeEvent(MagicEvent):
             damage = max(0, base_damage)
             stunned = 1
 
-        defeated = _apply_damage(target, damage, DamageType.MENTAL.value)
+        defeated = _apply_damage(
+            target,
+            damage,
+            DamageType.MENTAL.value,
+            game=ctx.game,
+            actor=actor,
+            source_action=self.name,
+            source_label=MagicEventResolver._spell_label(self),
+        )
         if stunned > 0:
             _remove_statuses(target, "stunned")
             try:
@@ -967,11 +1063,18 @@ class TelekineticProjectileEvent(BaseMagicAttackEvent):
     magic_types = ["evocation"]
 
     def _resolve_on_target(self, target, pos, ctx: EventContext, *, critical: bool = False) -> EventResult:
+        prompt_text, answer_placeholder, prompt_long = spell_formula_prompt(
+            "Telekinetic Projectile",
+            _cantrip_damage_formula(ctx.actor, 6),
+            subject="obrazenia",
+            answer_placeholder="Obrazenia",
+        )
         damage = int(
             prompt_for_roll(
-                "Telekinetic Projectile - podaj obrazenia:",
+                prompt_text,
                 layout="damage",
-                answer_placeholder="Obrazenia",
+                answer_placeholder=answer_placeholder,
+                prompt_long=prompt_long,
             )
             or 0
         )
@@ -996,7 +1099,15 @@ class TelekineticProjectileEvent(BaseMagicAttackEvent):
         except Exception:
             pass
 
-        defeated = _apply_damage(target, damage, dtype)
+        defeated = _apply_damage(
+            target,
+            damage,
+            dtype,
+            game=ctx.game,
+            actor=ctx.actor,
+            source_action=self.name,
+            source_label=MagicEventResolver._spell_label(self),
+        )
         msg = f"Telekinetic Projectile trafia za {damage} {dtype}."
         if critical:
             msg = f"Telekinetic Projectile - krytyk! {damage} {dtype}."
@@ -1018,9 +1129,17 @@ class AcidSplashEvent(BaseMagicAttackEvent):
 
     def _resolve_on_target(self, target, pos, ctx: EventContext, *, critical: bool = False) -> EventResult:
         spell_rank = _auto_cantrip_rank(ctx.actor)
-        dmg = self._prompt_damage()
+        dmg = self._prompt_damage(spell_rank=spell_rank)
         dmg += int(inspire_courage_damage_bonus(ctx.actor) or 0)
-        defeated = _apply_damage(target, dmg, DamageType.ACID.value)
+        defeated = _apply_damage(
+            target,
+            dmg,
+            DamageType.ACID.value,
+            game=ctx.game,
+            actor=ctx.actor,
+            source_action=self.name,
+            source_label=MagicEventResolver._spell_label(self),
+        )
 
         persistent_value = None
         if critical:
@@ -1051,15 +1170,24 @@ class AcidSplashEvent(BaseMagicAttackEvent):
             },
         )
 
-    def _prompt_damage(self) -> int:
+    def _prompt_damage(self, *, spell_rank: int | None = None) -> int:
         from ui_client import get_ui_client
 
         ui = get_ui_client()
+        rank = max(1, int(spell_rank or 1))
+        dice = f"{rank}k6"
+        prompt_text, answer_placeholder, prompt_long = spell_formula_prompt(
+            "Acid Splash",
+            f"{dice} acid",
+            subject="obrazenia kwasowe",
+            answer_placeholder="Obrazenia kwasowe",
+        )
         val = ui.prompt_roll(
-            "Acid Splash - podaj obrazenia kwasowe:",
+            prompt_text,
             source="game",
             layout="damage",
-            answer_placeholder="Obrazenia kwasowe",
+            answer_placeholder=answer_placeholder,
+            prompt_long=prompt_long,
         )
         return int(val or 0)
 
@@ -1272,11 +1400,18 @@ class DisruptUndeadEvent(MagicEvent):
             return EventResult.cancelled(message="Nie wybrano undead.")
 
         spell_dc = _spell_dc_for_actor(actor)
+        prompt_text, answer_placeholder, prompt_long = spell_formula_prompt(
+            "Disrupt Undead",
+            _cantrip_damage_formula(actor, 6),
+            subject="obrazenia positive",
+            answer_placeholder="Obrazenia",
+        )
         base_damage = int(
             prompt_for_roll(
-                "Disrupt Undead - podaj obrazenia positive:",
+                prompt_text,
                 layout="damage",
-                answer_placeholder="Obrazenia",
+                answer_placeholder=answer_placeholder,
+                prompt_long=prompt_long,
             )
             or 0
         )
@@ -1289,7 +1424,15 @@ class DisruptUndeadEvent(MagicEvent):
             tags=["save", Skill.FORTITUDE.value, "magic", "positive"],
         )
         damage = _basic_save_damage(base_damage, outcome)
-        defeated = _apply_damage(target, damage, DamageType.POSITIVE.value)
+        defeated = _apply_damage(
+            target,
+            damage,
+            DamageType.POSITIVE.value,
+            game=ctx.game,
+            actor=actor,
+            source_action=self.name,
+            source_label=MagicEventResolver._spell_label(self),
+        )
 
         try:
             ctx.game.ui_log(
@@ -1326,11 +1469,19 @@ class DivineLanceEvent(BaseMagicAttackEvent):
                 message=f"Divine Lance trafia, ale cel nie ma przeciwnej aury ({damage_alignment}).",
             )
 
+        prompt_text, answer_placeholder, prompt_long = spell_formula_prompt(
+            "Divine Lance",
+            f"{_cantrip_damage_formula(actor, 4)} {damage_alignment}",
+            subject="obrazenia",
+            answer_placeholder="Obrazenia",
+            prompt_long=f"Typ obrazen: **{damage_alignment}**.",
+        )
         damage = int(
             prompt_for_roll(
-                "Divine Lance - podaj obrazenia:",
+                prompt_text,
                 layout="damage",
-                answer_placeholder="Obrazenia",
+                answer_placeholder=answer_placeholder,
+                prompt_long=prompt_long,
             )
             or 0
         )
@@ -1338,7 +1489,15 @@ class DivineLanceEvent(BaseMagicAttackEvent):
         if critical:
             damage *= 2
 
-        defeated = _apply_damage(target, damage, damage_alignment)
+        defeated = _apply_damage(
+            target,
+            damage,
+            damage_alignment,
+            game=ctx.game,
+            actor=actor,
+            source_action=self.name,
+            source_label=MagicEventResolver._spell_label(self),
+        )
         msg = f"Divine Lance trafia za {damage} {damage_alignment}."
         if critical:
             msg = f"Divine Lance - krytyk! {damage} {damage_alignment}."
@@ -1487,11 +1646,18 @@ class ElectricArcEvent(MagicEvent):
                     targets.append((second, second_pos))
 
         spell_dc = _spell_dc_for_actor(actor)
+        prompt_text, answer_placeholder, prompt_long = spell_formula_prompt(
+            "Electric Arc",
+            _cantrip_damage_formula(actor, 4),
+            subject="obrazenia electric",
+            answer_placeholder="Obrazenia",
+        )
         base_damage = int(
             prompt_for_roll(
-                "Electric Arc - podaj obrazenia electric:",
+                prompt_text,
                 layout="damage",
-                answer_placeholder="Obrazenia",
+                answer_placeholder=answer_placeholder,
+                prompt_long=prompt_long,
             )
             or 0
         )
@@ -1506,7 +1672,15 @@ class ElectricArcEvent(MagicEvent):
                 tags=["save", Skill.REFLEX.value, "magic", "electric"],
             )
             damage = _basic_save_damage(base_damage, outcome)
-            defeated = _apply_damage(target, damage, DamageType.ELECTRIC.value)
+            defeated = _apply_damage(
+                target,
+                damage,
+                DamageType.ELECTRIC.value,
+                game=ctx.game,
+                actor=actor,
+                source_action=self.name,
+                source_label=MagicEventResolver._spell_label(self),
+            )
             name = getattr(target, "name", "cel")
             messages.append(f"{name}: {outcome}, {damage} electric")
             try:
@@ -1588,11 +1762,26 @@ class ProduceFlameEvent(BaseMagicAttackEvent):
 
     def _resolve_on_target(self, target, pos, ctx: EventContext, *, critical: bool = False) -> EventResult:
         spell_rank = _auto_cantrip_rank(ctx.actor)
+        burn_note = burn_it_prompt_note(
+            ctx.actor,
+            DamageType.FIRE.value,
+            persistent=False,
+            source_kind="spell",
+            spell_rank=spell_rank,
+        )
+        prompt_text, answer_placeholder, prompt_long = spell_formula_prompt(
+            "Produce Flame",
+            _cantrip_damage_formula(ctx.actor, 4),
+            subject="obrazenia fire",
+            answer_placeholder="Obrazenia",
+            prompt_long=burn_note,
+        )
         damage = int(
             prompt_for_roll(
-                "Produce Flame - podaj obrazenia fire:",
+                prompt_text,
                 layout="damage",
-                answer_placeholder="Obrazenia",
+                answer_placeholder=answer_placeholder,
+                prompt_long=prompt_long,
             )
             or 0
         )
@@ -1610,7 +1799,15 @@ class ProduceFlameEvent(BaseMagicAttackEvent):
         if critical:
             damage *= 2
 
-        defeated = _apply_damage(target, damage, DamageType.FIRE.value)
+        defeated = _apply_damage(
+            target,
+            damage,
+            DamageType.FIRE.value,
+            game=ctx.game,
+            actor=ctx.actor,
+            source_action=self.name,
+            source_label=MagicEventResolver._spell_label(self),
+        )
         persistent = None
         if critical:
             persistent = self._prompt_persistent(ctx.actor, spell_rank=spell_rank)
@@ -1670,18 +1867,33 @@ class RayOfFrostEvent(BaseMagicAttackEvent):
     prompt = "Ray of Frost - atak zimnem; krytyk spowalnia cel."
 
     def _resolve_on_target(self, target, pos, ctx: EventContext, *, critical: bool = False) -> EventResult:
+        prompt_text, answer_placeholder, prompt_long = spell_formula_prompt(
+            "Ray of Frost",
+            _cantrip_damage_formula(ctx.actor, 4),
+            subject="obrazenia cold",
+            answer_placeholder="Obrazenia",
+        )
         damage = int(
             prompt_for_roll(
-                "Ray of Frost - podaj obrazenia cold:",
+                prompt_text,
                 layout="damage",
-                answer_placeholder="Obrazenia",
+                answer_placeholder=answer_placeholder,
+                prompt_long=prompt_long,
             )
             or 0
         )
         damage += int(inspire_courage_damage_bonus(ctx.actor) or 0)
         if critical:
             damage *= 2
-        defeated = _apply_damage(target, damage, DamageType.COLD.value)
+        defeated = _apply_damage(
+            target,
+            damage,
+            DamageType.COLD.value,
+            game=ctx.game,
+            actor=ctx.actor,
+            source_action=self.name,
+            source_label=MagicEventResolver._spell_label(self),
+        )
 
         slowed = False
         if critical:

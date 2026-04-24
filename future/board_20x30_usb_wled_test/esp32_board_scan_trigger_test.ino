@@ -160,6 +160,16 @@ void writeJsonEventLine(const char *eventName, const char *message) {
   Serial.println("\"}");
 }
 
+void writeJsonCancelLine(const char *reason) {
+  Serial.print("{\"event\":\"cancel\",\"protocol\":\"");
+  Serial.print(PROTOCOL_NAME);
+  Serial.print("\",\"reason\":\"");
+  Serial.print(reason);
+  Serial.print("\",\"ts_ms\":");
+  Serial.print(millis());
+  Serial.println("}");
+}
+
 void allColumnsHigh() {
   for (uint8_t col = 0; col < BOARD_COLS; ++col) {
     const PinRef &pin = COL_PINS[col];
@@ -236,12 +246,13 @@ void armScan() {
   writeJsonInfoLine("armed");
 }
 
-void stopScan() {
+void stopScan(const char *reason = "cancelled") {
   scanArmed = false;
   waitingForClear = true;
+  clearSinceMs = millis();
   lastCandidate = CellRef();
   candidateSinceMs = millis();
-  writeJsonInfoLine("scan_stopped");
+  writeJsonCancelLine(reason);
 }
 
 void handleSerialCommand(String command) {
@@ -266,7 +277,7 @@ void handleSerialCommand(String command) {
   }
 
   if (cleaned == "STOP" || cleaned == "CANCEL") {
-    stopScan();
+    stopScan("serial_stop");
     return;
   }
 
@@ -299,8 +310,8 @@ void pollSerialCommands() {
 }
 
 void handleTriggeredScan() {
-  const CellRef sample = scanBoardOnce();
   const unsigned long nowMs = millis();
+  const CellRef sample = scanBoardOnce();
 
   if (!sameCell(sample, lastCandidate)) {
     lastCandidate = sample;
@@ -330,6 +341,7 @@ void handleTriggeredScan() {
     writeJsonCellLine("press", sample);
     scanArmed = false;
     waitingForClear = true;
+    clearSinceMs = nowMs;
     lastCandidate = CellRef();
     candidateSinceMs = nowMs;
   }

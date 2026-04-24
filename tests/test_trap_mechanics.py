@@ -16,6 +16,7 @@ from GameObjects.Interactables.dart_launcher_trap import DartLauncherTrap
 from GameObjects.events.base import EventContext
 from GameObjects.events.seek_event import SeekEvent
 from GameObjects.events.trap_events import DisableDeviceEvent, IdentifyTrapEvent
+from board import consts
 from statuses.base import Status
 
 
@@ -61,6 +62,28 @@ class DummyEvents:
         return None
 
 
+class DummyUI:
+    enabled = True
+    allow_cli_fallback = False
+
+    def __init__(self, answers=None):
+        self.answers = list(answers or [])
+        self.choice_calls = []
+
+    def prompt_choice(self, title, *, choices=None, prompt_long=None, **kwargs):
+        self.choice_calls.append(
+            {
+                "title": title,
+                "choices": list(choices or []),
+                "prompt_long": prompt_long,
+                "kwargs": dict(kwargs),
+            }
+        )
+        if self.answers:
+            return self.answers.pop(0)
+        return "confirm"
+
+
 @dataclass
 class Hero:
     object_id: str = "hero-trap"
@@ -82,7 +105,7 @@ class Hero:
         return self.hp, self.hp <= 0
 
 
-def _build_game(board, hero, conn):
+def _build_game(board, hero, conn, ui=None):
     game = SimpleNamespace(
         board=board,
         conn=conn,
@@ -90,6 +113,7 @@ def _build_game(board, hero, conn):
         enemies=[],
         events=DummyEvents(),
         state=SimpleNamespace(),  # exploration
+        ui=ui or SimpleNamespace(enabled=False, allow_cli_fallback=False),
         ui_log=lambda *_a, **_k: None,
         ui_event=lambda *_a, **_k: None,
         ui_hero=lambda *_a, **_k: None,
@@ -185,8 +209,8 @@ def test_trap_finder_auto_detects_before_trigger_on_enter(monkeypatch):
 
 
 def test_seek_highlights_only_traversable_area_within_radius(monkeypatch):
-    board = BoardGrid(rows=1, cols=3)
-    board.apply_rooms([{"id": "hall", "positions": [[0, 0], [1, 0], [2, 0]]}])
+    board = BoardGrid(rows=1, cols=4)
+    board.apply_rooms([{"id": "hall", "positions": [[0, 0], [1, 0], [2, 0], [3, 0]]}])
     board.add_wall((1, 0), (2, 0))
 
     hero = Hero(position=(0, 0))
@@ -215,3 +239,48 @@ def test_seek_highlights_only_traversable_area_within_radius(monkeypatch):
     assert (0, 0) in highlighted
     assert (1, 0) in highlighted
     assert (2, 0) not in highlighted
+
+
+def test_seek_preview_lists_visible_objects_and_allows_cancel(monkeypatch):
+    class VisibleThing:
+        def __init__(self, label, color, color_name):
+            self.hidden = False
+            self.revealed = True
+            self.seekable = False
+            self.seek_label = label
+            self.seek_color = list(color)
+            self.seek_color_name = color_name
+            self.position = None
+
+        def set_position(self, position):
+            self.position = position
+
+        def can_interact(self, actor, game):
+            return True
+
+    board = BoardGrid(rows=1, cols=4)
+    board.apply_rooms([{"id": "hall", "positions": [[0, 0], [1, 0], [2, 0], [3, 0]]}])
+    hero = Hero(position=(0, 0))
+    board.place(hero, hero.position)
+    loot = VisibleThing("loot", consts.SEEK_LOOT_RGB, "niebieskie")
+    exit_obj = VisibleThing("przejście", consts.SEEK_EXIT_RGB, "pomarańczowe")
+    board.add_interactable(loot, (1, 0))
+    board.add_interactable(exit_obj, (2, 0))
+
+    conn = DummyConn()
+    ui = DummyUI(answers=["cancel"])
+    game = _build_game(board, hero, conn, ui=ui)
+
+    result = SeekEvent().run(EventContext(game=game, actor=hero))
+
+    assert result.success is False
+    assert result.consumed_action is False
+    assert ui.choice_calls
+    body = str(ui.choice_calls[0]["prompt_long"] or "")
+    assert "**Niebieskie**: loot" in body
+    assert "**Pomarańczowe**: przejście" in body
+    highlighted_positions, highlighted_colors = conn.led_calls[0]
+    color_map = {tuple(pos): list(color) for pos, color in zip(highlighted_positions, highlighted_colors)}
+    assert color_map[(1, 0)] == SeekEvent._seek_object_preview_rgb(consts.SEEK_LOOT_RGB)
+    assert color_map[(2, 0)] == SeekEvent._seek_object_preview_rgb(consts.SEEK_EXIT_RGB)
+    assert color_map[(3, 0)] == SeekEvent._seek_area_preview_rgb()

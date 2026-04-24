@@ -35,6 +35,18 @@ class DummyConn:
         return None
 
 
+class ClickSequenceConn(DummyConn):
+    def __init__(self, clicks):
+        super().__init__()
+        self.clicks = list(clicks)
+
+    def scan_board(self, positions):
+        self.scan_inputs.append(None if positions is None else list(positions))
+        if self.clicks:
+            return self.clicks.pop(0)
+        return None
+
+
 class DummyBoard:
     def __init__(self, rows=8, cols=8, interactables=None):
         self.rows = rows
@@ -218,6 +230,38 @@ def test_sleep_targets_low_hp_enemies(monkeypatch):
     assert low.has_status("sleep")
     assert low.has_status("prone")
     assert not high.has_status("sleep")
+
+
+def test_directional_spell_requires_confirm_click_on_caster(monkeypatch):
+    caster = DummyActor("caster", (2, 2))
+    game = _game(actor=caster, board=DummyBoard(rows=6, cols=6))
+    game.conn = ClickSequenceConn(clicks=[(3, 2), (2, 2)])
+    animation_calls = []
+
+    monkeypatch.setattr(occ1, "_ui_narration", lambda *args, **kwargs: None)
+    monkeypatch.setattr(occ1, "_ui_log", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        occ1,
+        "_play_area_spell_animation",
+        lambda _game, origin, area_positions, *, vibe: animation_calls.append((origin, list(area_positions), vibe)),
+    )
+
+    direction, area_positions = occ1._pick_directional_area_from_caster(
+        EventContext(game=game, actor=caster),
+        caster.position,
+        steps=3,
+        prompt_name="Burning Hands",
+        source="burning_hands",
+        area_kind="cone",
+        vibe="fire",
+    )
+
+    assert direction == "E"
+    assert area_positions
+    assert len(game.conn.scan_inputs) == 2
+    assert caster.position not in game.conn.scan_inputs[0]
+    assert caster.position in game.conn.scan_inputs[1]
+    assert len(animation_calls) == 1
 
 
 def test_command_prone_applies_prone(monkeypatch):
@@ -500,6 +544,31 @@ def test_hydraulic_push_deals_damage_and_pushes(monkeypatch):
     assert "Odepchniecie" in (result.message or "")
 
 
+def test_hydraulic_push_prompt_includes_formula(monkeypatch):
+    caster = DummyActor("caster", (0, 0))
+    enemy = DummyActor("enemy", (1, 0), hp=20)
+    game = _game(actor=caster, enemies=[enemy])
+    captured = {}
+
+    def _prompt(prompt, **kwargs):
+        captured["prompt"] = str(prompt)
+        captured["kwargs"] = dict(kwargs)
+        return 5
+
+    monkeypatch.setattr(occ1, "prompt_for_roll", _prompt)
+    monkeypatch.setattr(occ1, "_push_target_linear", lambda *_a, **_k: 1)
+
+    result = occ1.HydraulicPushEvent()._resolve_on_target(
+        enemy,
+        enemy.position,
+        EventContext(game=game, actor=caster),
+    )
+
+    assert result.success is True
+    assert "3k6" in captured["prompt"]
+    assert "3k6" in str(captured["kwargs"].get("prompt_long") or "")
+
+
 def test_gust_of_wind_uses_board_line_selection_with_reselect(monkeypatch):
     caster = DummyActor("caster", (2, 2))
     caster.add_bonus(BonusEffect(BonusType.STATUS, 5, "magic", source="spell_dc", label="spell dc"))
@@ -511,7 +580,7 @@ def test_gust_of_wind_uses_board_line_selection_with_reselect(monkeypatch):
     board.set_field((5, 2), SimpleNamespace(name="blocked", walkable=False))
     game = _game(actor=caster, enemies=[north_enemy, east_enemy], board=board)
 
-    selections = iter([(2, 1), (3, 2), caster.position])
+    selections = iter([(3, 2), caster.position])
 
     def _scan_board(positions):
         game.conn.scan_inputs.append(list(positions))
@@ -534,8 +603,7 @@ def test_gust_of_wind_uses_board_line_selection_with_reselect(monkeypatch):
     assert sorted(game.conn.scan_inputs[0]) == sorted(
         [(1, 1), (2, 1), (3, 1), (1, 2), (3, 2), (1, 3), (2, 3), (3, 3)]
     )
-    assert sorted(game.conn.scan_inputs[1]) == sorted([caster.position] + [(1, 1), (2, 1), (3, 1), (1, 2), (3, 2), (1, 3), (2, 3), (3, 3)])
-    assert sorted(game.conn.scan_inputs[2]) == sorted([caster.position] + [(1, 1), (2, 1), (3, 1), (1, 2), (3, 2), (1, 3), (2, 3), (3, 3)])
+    assert caster.position in game.conn.scan_inputs[1]
     assert ("east", caster.position, 2) in pushed
     assert all(name != "north" for name, _origin, _squares in pushed)
     assert east_fire.on_fire is True
@@ -543,7 +611,7 @@ def test_gust_of_wind_uses_board_line_selection_with_reselect(monkeypatch):
     preview_positions, preview_colors = game.conn.led_calls[-1]
     preview_map = {tuple(pos): color for pos, color in zip(preview_positions, preview_colors)}
     assert (5, 2) not in preview_map
-    assert preview_map[(4, 2)] != preview_map[(3, 2)]
+    assert preview_map[(3, 2)] != preview_map[caster.position]
     assert "odepchnieto 1" in (result.message or "").lower()
 
 
@@ -591,6 +659,7 @@ def test_gust_of_wind_direction_choices_respect_adjacent_walls(monkeypatch):
     assert result.success is True
     assert (2, 1) not in game.conn.scan_inputs[0]
     assert (3, 2) in game.conn.scan_inputs[0]
+    assert caster.position in game.conn.scan_inputs[1]
 
 
 def test_grease_surface_prones_enemy_and_creates_zone(monkeypatch):
@@ -759,6 +828,29 @@ def test_heal_single_heals_living_target(monkeypatch):
     assert result.success is True
     assert ally.hp == 16
     assert result.actions_spent == 1
+
+
+def test_heal_touch_prompt_includes_formula_and_auto_modifier_note(monkeypatch):
+    caster = DummyActor("caster", (0, 0))
+    ally = DummyActor("ally", (1, 0), hp=10)
+    game = _game(actor=caster, heroes=[caster, ally], enemies=[])
+    captured = {}
+
+    monkeypatch.setattr(occ1, "_prompt_choice", lambda *_a, **_k: "1")
+
+    def _prompt(prompt, **kwargs):
+        captured["prompt"] = str(prompt)
+        captured["kwargs"] = dict(kwargs)
+        return 6
+
+    monkeypatch.setattr(occ1, "prompt_for_roll", _prompt)
+    monkeypatch.setattr(occ1, "pick_target_in_range", lambda *_a, **_k: (ally, ally.position))
+
+    result = occ1.HealEvent().execute(EventContext(game=game, actor=caster))
+
+    assert result.success is True
+    assert "1k8" in captured["prompt"]
+    assert "Modyfikator spellcastingu zostanie doliczony automatycznie." in str(captured["kwargs"].get("prompt_long") or "")
 
 
 def test_heal_two_actions_adds_flat_bonus(monkeypatch):

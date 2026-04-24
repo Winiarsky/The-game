@@ -47,7 +47,7 @@ def test_debug_trace_writes_action_snapshot_and_prompt_events(tmp_path, monkeypa
 
     game.state = DummyState()
     game.run_action("ping")
-    game.ui.prompt_choice("Debug prompt", choices=["A", "B"], source="test")
+    game.ui.prompt_choice("Debug prompt", choices=["A", "B"], source="test", prompt_id="tests.debug_prompt")
 
     files = list(tmp_path.glob("*.jsonl"))
     assert len(files) == 1
@@ -58,6 +58,11 @@ def test_debug_trace_writes_action_snapshot_and_prompt_events(tmp_path, monkeypa
     assert "run_action_end" in event_types
     assert "prompt_start" in event_types
     assert "prompt_answer" in event_types
+
+    prompt_start = next(item for item in rows if item.get("event_type") == "prompt_start")
+    prompt_answer = next(item for item in rows if item.get("event_type") == "prompt_answer")
+    assert prompt_start["payload"]["prompt_key"] == "tests.debug_prompt"
+    assert prompt_answer["payload"]["prompt_key"] == "tests.debug_prompt"
 
     run_end = next(item for item in rows if item.get("event_type") == "run_action_end")
     payload = dict(run_end.get("payload") or {})

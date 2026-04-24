@@ -13,6 +13,7 @@ for path in (PROJECT_ROOT, SRC_ROOT):
 from GameObjects.interactions_mixin.status_mixin import StatusMixin
 from statuses import Status
 import statuses.death_dying as dd
+from states.combat import _build_incapacitated_prompt_body
 
 
 @dataclass
@@ -76,3 +77,17 @@ def test_recovery_check_critical_failure_can_kill(monkeypatch):
 
     assert result["processed"] is True
     assert actor.has_status("dead")
+
+
+def test_incapacitated_prompt_explains_how_to_help_hero():
+    actor = DummyActor(name="Freya", max_hp=20, wounds=20)
+    actor.add_status(Status(id="dying_2", label="Dying 2", data={"value": 2}))
+    actor.add_status(Status(id="unconscious", label="Unconscious"))
+    actor.add_status(Status(id="wounded", label="Wounded 1", data={"value": 1}))
+
+    body = _build_incapacitated_prompt_body(actor, recovery_message="Recovery check success: Dying 2 -> 1.")
+
+    assert "Recovery check success: Dying 2 -> 1." in body
+    assert "Leczenie powyżej 0 HP usuwa Dying i Unconscious." in body
+    assert "Stabilizacja usuwa Dying" in body
+    assert "kolejny Recovery Check" in body

@@ -2,18 +2,47 @@ from __future__ import annotations
 
 from typing import Any
 
+from combat.hp_engine import current_hp as combat_current_hp
 
 def _actor_uid(actor: Any) -> str:
     return str(getattr(actor, "object_id", None) or id(actor))
 
 
-def _is_alive(actor: Any) -> bool:
+def current_hp_value(actor: Any) -> int | None:
+    if actor is None:
+        return None
+    current_hp = getattr(actor, "current_hp", None)
+    if callable(current_hp):
+        try:
+            return int(current_hp())
+        except Exception:
+            pass
+    try:
+        hp = combat_current_hp(actor)
+    except Exception:
+        hp = None
+    if hp is not None:
+        try:
+            return int(hp)
+        except Exception:
+            return None
+    raw_hp = getattr(actor, "hp", None)
+    if raw_hp is None:
+        return None
+    try:
+        return int(raw_hp)
+    except Exception:
+        return None
+
+
+def is_targetable_actor(actor: Any) -> bool:
     if actor is None:
         return False
     if getattr(actor, "position", None) is None:
         return False
     try:
-        if int(getattr(actor, "hp", 1) or 0) <= 0:
+        hp = current_hp_value(actor)
+        if hp is not None and hp <= 0:
             return False
     except Exception:
         return False
@@ -24,7 +53,22 @@ def _is_alive(actor: Any) -> bool:
                 return False
         except Exception:
             return False
+    checker = getattr(actor, "has_status", None)
+    if callable(checker):
+        try:
+            if bool(checker("dead")) or bool(checker("unconscious")):
+                return False
+        except Exception:
+            return False
+    for status in getattr(actor, "statuses", []) or []:
+        status_id = str(getattr(status, "id", status) or "").strip().lower()
+        if status_id in {"dead", "unconscious", "stable"} or status_id.startswith("dying"):
+            return False
     return True
+
+
+def _is_alive(actor: Any) -> bool:
+    return is_targetable_actor(actor)
 
 
 def _animal_companions(game: Any) -> list[Any]:
@@ -61,4 +105,3 @@ def is_hero_side_target(game: Any, actor: Any, *, only_living: bool = False) -> 
         if candidate is actor:
             return True
     return False
-

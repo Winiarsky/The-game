@@ -44,7 +44,9 @@ class BoardGrid:
         self.room_seek_locked: set[str] = set()
         self.room_seek_fail_counts: dict[str, int] = {}
 
-    def in_bounds(self, position: Tuple[int, int]) -> bool:
+    def in_bounds(self, position: Tuple[int, int] | None) -> bool:
+        if position is None:
+            return False
         col, row = position
         return 0 <= row < self.rows and 0 <= col < self.cols
 
@@ -118,7 +120,9 @@ class BoardGrid:
         self.room_seek_fail_counts[room_id] = current
         return current
 
-    def occupant_at(self, position: Tuple[int, int]) -> Optional[Occupant]:
+    def occupant_at(self, position: Tuple[int, int] | None) -> Optional[Occupant]:
+        if position is None:
+            return None
         return self.cell_at(position).occupant
 
     def interactables_at(self, position: Tuple[int, int]) -> list[InteractableMixin]:

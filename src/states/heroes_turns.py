@@ -27,6 +27,7 @@ from GameObjects.events import EventContext
 from GameObjects.events.registry import dispatch_event, list_events
 import GameObjects.events.all_events  # noqa: F401  # rejestruj eventy
 from board import consts
+from prompt_copy import prompt_value
 
 logger = logging.getLogger(__name__)
 
@@ -64,16 +65,24 @@ class HeroesTurn(State):
         ui_idle_hint = getattr(self.game, "ui_idle_hint", None)
         if callable(ui_idle_hint):
             ui_idle_hint(
-                "Wybór bohatera",
-                "Gra czeka teraz na klik figurki bohatera na planszy.",
+                str(prompt_value("turns.active_hero_board_scan", "title", "Wybór bohatera")),
+                str(
+                    prompt_value(
+                        "turns.active_hero_board_scan",
+                        "body_markdown",
+                        "Gra czeka teraz na klik figurki bohatera na planszy.",
+                    )
+                ),
             )
         self.game.conn.set_leds(heroes_positions, consts.HERO_HIGHLIGHT_RGB)
         try:
             try:
                 pos = self.game.conn.scan_board(heroes_positions)
-            except TimeoutError:
-                self.game.ui_log("Kontynuuj wybór w UI. Plansza nie zwróciła kliknięcia bohatera.")
-                return self._choose_active_hero_from_ui(available_heroes)
+            except TypeError:
+                pos = self.game.conn.scan_board(heroes_positions)
+            if pos is None:
+                self.game.ui_log("Wybór bohatera na planszy został anulowany.")
+                return None
             hero = self.game.board.occupant_at(pos)
             if hero is not None:
                 return hero
@@ -104,15 +113,22 @@ class HeroesTurn(State):
         ui_idle_hint = getattr(self.game, "ui_idle_hint", None)
         if callable(ui_idle_hint):
             ui_idle_hint(
-                "Wybór bohatera",
-                "Plansza nie zwróciła kliknięcia. Wybierz aktywnego bohatera z listy w UI.",
+                str(prompt_value("turns.active_hero_menu", "title", "Wybór bohatera")),
+                str(
+                    prompt_value(
+                        "turns.active_hero_menu",
+                        "body_markdown",
+                        "Plansza nie zwróciła kliknięcia. Wybierz aktywnego bohatera z listy w UI.",
+                    )
+                ),
             )
         answer = choose_option(
             self.game,
             title="Aktywny bohater",
             subtitle="Wybierz bohatera do wykonania akcji.",
-            source="hero_select",
+            source="active_hero_select",
             options=options,
+            prompt_id="turns.active_hero_menu",
         )
         by_id = {str(option["id"]).strip().lower(): hero for option, hero in zip(options, available_heroes)}
         return by_id.get(str(answer or "").strip().lower())
@@ -138,6 +154,7 @@ class HeroesTurn(State):
                     "desc": "Pozostań w tym stanie bez bohaterów na planszy.",
                 },
             ],
+            prompt_id="turns.no_heroes_on_board",
         )
 
         if answer == "recover":
@@ -154,9 +171,10 @@ class HeroesTurn(State):
         if ui is not None and hasattr(ui, "prompt_info") and getattr(ui, "enabled", False):
             try:
                 ui.prompt_info(
-                    "Statystyki",
+                    str(prompt_value("turns.actor_stats", "title", "Statystyki")),
                     prompt_long=text,
                     source="stats",
+                    prompt_id="turns.actor_stats",
                 )
                 return
             except Exception:
@@ -223,6 +241,7 @@ class HeroesTurn(State):
             subtitle="8/2 nawigacja, Enter potwierdzenie.",
             source="intent",
             options=intent_options,
+            prompt_id="turns.intent_menu",
         )
 
         if highlighted:

@@ -5,6 +5,7 @@ import logging
 
 from board import consts
 import GameObjects.interactions_mixin.skill_check_resolver as check_resolver
+from prompt_text_catalog import render_prompt_text
 from ui_client import get_ui_client
 from skills import Skill
 from GameObjects.events.magic.magic_utils import grid_distance_feet
@@ -15,11 +16,35 @@ from .registry import register_event
 logger = logging.getLogger(__name__)
 
 
+def _color_tuple(value) -> tuple[int, int, int]:
+    try:
+        rgb = list(value or [])
+        return (int(rgb[0]), int(rgb[1]), int(rgb[2]))
+    except Exception:
+        base = list(consts.SEEK_OBJECT_RGB)
+        return (int(base[0]), int(base[1]), int(base[2]))
+
+
+def _scaled_rgb(value, factor: float) -> list[int]:
+    base = _color_tuple(value)
+    return [max(0, min(255, int(round(channel * factor)))) for channel in base]
+
+
 @register_event
 class SeekEvent(GameEvent):
     name = "seek"
     default_tags = ["seek", Skill.PERCEPTION.value]
     consumes_action = True
+
+    @staticmethod
+    def _seek_area_preview_rgb() -> list[int]:
+        factor = float(getattr(consts, "SEEK_AREA_PREVIEW_BRIGHTNESS", 0.45) or 0.45)
+        return _scaled_rgb(consts.SEEK_AREA_RGB, factor)
+
+    @staticmethod
+    def _seek_object_preview_rgb(color) -> list[int]:
+        factor = float(getattr(consts, "SEEK_OBJECT_PREVIEW_BRIGHTNESS", 1.35) or 1.35)
+        return _scaled_rgb(color or consts.SEEK_OBJECT_RGB, factor)
 
     @staticmethod
     def _seek_radius_feet(actor) -> int:
@@ -183,12 +208,214 @@ class SeekEvent(GameEvent):
         return search_positions
 
     @staticmethod
-    def _show_seek_area(game, hero_pos: tuple[int, int], search_positions: set[tuple[int, int]]) -> bool:
-        positions = sorted(set(search_positions or {hero_pos}), key=lambda pos: (int(pos[1]), int(pos[0])))
-        colors = [
-            list(consts.HERO_HIGHLIGHT_RGB) if pos == hero_pos else list(consts.SEEK_AREA_RGB)
-            for pos in positions
+    def _is_trap_like(obj) -> bool:
+        return bool(
+            hasattr(obj, "trap_armed")
+            and callable(getattr(obj, "detect_trap", None))
+            and callable(getattr(obj, "disable_trap", None))
+        )
+
+    @classmethod
+    def _is_seek_preview_visible(cls, obj) -> bool:
+        if bool(getattr(obj, "hide_from_seek_preview", False)):
+            return False
+        hidden = bool(getattr(obj, "hidden", False))
+        revealed = bool(getattr(obj, "revealed", False))
+        trap_detected = bool(getattr(obj, "trap_detected", False))
+        if hidden and not (revealed or trap_detected):
+            return False
+        if cls._is_trap_like(obj) and not bool(getattr(obj, "trap_armed", False)):
+            return False
+        return True
+
+    @staticmethod
+    def _seek_preview_descriptor(obj) -> dict[str, object]:
+        if bool(
+            hasattr(obj, "trap_armed")
+            and callable(getattr(obj, "detect_trap", None))
+            and callable(getattr(obj, "disable_trap", None))
+        ):
+            trap_name = str(getattr(obj, "trap_name", "") or "").strip() or "Pułapka"
+            return {
+                "label": trap_name,
+                "legend": "pułapka",
+                "color": list(consts.SEEK_TRAP_RGB),
+                "color_name": "czerwone",
+                "priority": 100,
+            }
+        label = str(getattr(obj, "seek_label", "") or "").strip()
+        if not label:
+            label = str(getattr(obj, "name", "") or getattr(obj, "exit_label", "") or obj.__class__.__name__).strip()
+        color = getattr(obj, "seek_color", None)
+        if not isinstance(color, (list, tuple)) or len(color) < 3:
+            color = list(consts.SEEK_OBJECT_RGB)
+        color_name = str(getattr(obj, "seek_color_name", "") or "").strip() or "szare"
+        return {
+            "label": label,
+            "legend": label.lower(),
+            "color": [int(color[0]), int(color[1]), int(color[2])],
+            "color_name": color_name,
+            "priority": 10,
+        }
+
+    @classmethod
+    def _preview_interactables(
+        cls,
+        board,
+        actor,
+        game,
+        search_positions: set[tuple[int, int]],
+    ) -> tuple[dict[tuple[int, int], dict[str, object]], list[dict[str, object]]]:
+        preview_by_pos: dict[tuple[int, int], dict[str, object]] = {}
+        preview_items: list[dict[str, object]] = []
+        seen_labels: set[tuple[str, tuple[int, int, int]]] = set()
+
+        for pos in sorted(set(search_positions or set()), key=lambda item: (int(item[1]), int(item[0]))):
+            for obj in list(board.interactables_at(pos) or []):
+                if not cls._is_seek_preview_visible(obj):
+                    continue
+                can_interact = getattr(obj, "can_interact", None)
+                if callable(can_interact):
+                    try:
+                        if not bool(can_interact(actor, game)):
+                            continue
+                    except Exception:
+                        pass
+                descriptor = cls._seek_preview_descriptor(obj)
+                descriptor["position"] = pos
+                preview_items.append(descriptor)
+                current = preview_by_pos.get(pos)
+                if current is None or int(descriptor.get("priority", 0) or 0) >= int(current.get("priority", 0) or 0):
+                    preview_by_pos[pos] = descriptor
+                legend_key = (str(descriptor.get("legend", "")).strip().lower(), _color_tuple(descriptor.get("color")))
+                seen_labels.add(legend_key)
+
+        legend_entries: list[dict[str, object]] = []
+        for legend, color in sorted(seen_labels, key=lambda item: (item[0], item[1])):
+            match = next(
+                (
+                    item for item in preview_items
+                    if str(item.get("legend", "")).strip().lower() == legend
+                    and _color_tuple(item.get("color")) == color
+                ),
+                None,
+            )
+            if match is None:
+                continue
+            legend_entries.append(
+                {
+                    "legend": str(match.get("legend") or "").strip(),
+                    "color_name": str(match.get("color_name") or "").strip() or "szare",
+                    "color": list(match.get("color") or consts.SEEK_OBJECT_RGB),
+                }
+            )
+        legend_entries.sort(key=lambda item: (str(item.get("color_name") or ""), str(item.get("legend") or "")))
+        return preview_by_pos, legend_entries
+
+    @staticmethod
+    def _seek_preview_legend_markdown(legend_entries: list[dict[str, object]]) -> str:
+        if not legend_entries:
+            return "- Brak jawnych obiektów interaktywnych w zasięgu."
+        lines = []
+        for entry in legend_entries:
+            color_name = str(entry.get("color_name") or "").strip() or "szare"
+            legend = str(entry.get("legend") or "").strip() or "obiekt"
+            lines.append(f"- **{color_name.capitalize()}**: {legend}")
+        return "\n".join(lines)
+
+    @classmethod
+    def _confirm_seek_preview(cls, game, legend_entries: list[dict[str, object]]) -> bool:
+        prompt_text = render_prompt_text(
+            "interaction.seek_preview",
+            legend_block=cls._seek_preview_legend_markdown(legend_entries),
+        )
+        title = str(prompt_text.get("title") or "Seek")
+        summary = str(prompt_text.get("summary") or "Rozejrzyj się po zasięgu akcji.")
+        body_markdown = str(prompt_text.get("body_markdown") or "")
+        details_markdown = str(prompt_text.get("details_markdown") or "")
+        choice_meta = [
+            {
+                "raw": "confirm",
+                "label": "Wykonaj Seek",
+                "desc": "Rzuć Perception, aby wykryć ukryte obiekty i pułapki w zasięgu.",
+                "key": "Enter",
+                "category": "combat",
+                "icon": "S",
+            },
+            {
+                "raw": "cancel",
+                "label": "Anuluj",
+                "desc": "Wycofaj się z akcji Seek bez wykonywania rzutu.",
+                "key": "Esc",
+                "category": "utility",
+                "icon": "X",
+            },
         ]
+        player_prompt = getattr(game, "player_prompt", None)
+        if player_prompt is not None and hasattr(player_prompt, "choice"):
+            try:
+                answer = player_prompt.choice(
+                    title,
+                    choices=["confirm", "cancel"],
+                    source="seek_preview",
+                    subtitle=summary,
+                    body_markdown=body_markdown,
+                    details_markdown=details_markdown,
+                    choice_meta=choice_meta,
+                    scope_key="hero_turn:resolution",
+                    dedupe_key="interaction.seek_preview",
+                    layout="dialog",
+                    prompt_id="interaction.seek_preview",
+                )
+                if answer is not None:
+                    return str(answer or "").strip().lower() == "confirm"
+            except Exception:
+                pass
+
+        ui = getattr(game, "ui", None)
+        if ui is None or not getattr(ui, "enabled", False) or not hasattr(ui, "prompt_choice"):
+            return True
+        answer = ui.prompt_choice(
+            title,
+            choices=["confirm", "cancel"],
+            source="seek_preview",
+            prompt_id="interaction.seek_preview",
+            prompt_long=body_markdown,
+            details_markdown=details_markdown,
+            communication={
+                "channel": "prompt",
+                "priority": "action",
+                "semantic_type": "required_action",
+                "title": title,
+                "summary": summary,
+                "body_markdown": body_markdown,
+                "details_markdown": details_markdown,
+                "blocking": True,
+                "context": {"prompt_key": "interaction.seek_preview"},
+            },
+            choice_meta=choice_meta,
+        )
+        return str(answer or "").strip().lower() == "confirm"
+
+    @staticmethod
+    def _show_seek_area(
+        game,
+        hero_pos: tuple[int, int],
+        search_positions: set[tuple[int, int]],
+        preview_by_pos: dict[tuple[int, int], dict[str, object]] | None = None,
+    ) -> bool:
+        positions = sorted(set(search_positions or {hero_pos}), key=lambda pos: (int(pos[1]), int(pos[0])))
+        preview_by_pos = dict(preview_by_pos or {})
+        colors = []
+        for pos in positions:
+            if pos == hero_pos:
+                colors.append(list(consts.HERO_HIGHLIGHT_RGB))
+                continue
+            preview = preview_by_pos.get(pos)
+            if preview is not None:
+                colors.append(SeekEvent._seek_object_preview_rgb(preview.get("color") or consts.SEEK_OBJECT_RGB))
+                continue
+            colors.append(SeekEvent._seek_area_preview_rgb())
         try:
             game.conn.set_leds(positions, colors)
             return True
@@ -238,7 +465,15 @@ class SeekEvent(GameEvent):
 
         seek_radius = self._seek_radius_feet(actor)
         search_positions = self._build_seek_positions(board, hero_pos, allowed_rooms, seek_radius)
-        seek_area_lit = self._show_seek_area(game, hero_pos, search_positions)
+        preview_by_pos, legend_entries = self._preview_interactables(board, actor, game, search_positions)
+        seek_area_lit = self._show_seek_area(game, hero_pos, search_positions, preview_by_pos)
+        if not self._confirm_seek_preview(game, legend_entries):
+            if seek_area_lit:
+                try:
+                    game.conn.leds_off()
+                except Exception:
+                    pass
+            return EventResult.cancelled(message="Przerwano akcję Seek.")
 
         base_tags = ["seek", Skill.PERCEPTION.value]
         base_resolution = check_resolver.resolve_skill_check_with_sources(

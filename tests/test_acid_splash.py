@@ -41,10 +41,19 @@ class DummyTarget:
         return True
 
 
+class DummyUI:
+    def __init__(self):
+        self.calls = []
+
+    def prompt_roll(self, prompt, **kwargs):
+        self.calls.append({"prompt": prompt, "kwargs": kwargs})
+        return 4
+
+
 def test_acid_splash_hit(monkeypatch):
     # roll: attack hits (handled in BaseMagicAttackEvent), damage=7
     monkeypatch.setattr("GameObjects.events.magic.base_attack_magic_event.prompt_for_roll", lambda *_, **__: 15)
-    monkeypatch.setattr("GameObjects.events.magic.cantrips.events.AcidSplashEvent._prompt_damage", lambda self: 7)
+    monkeypatch.setattr("GameObjects.events.magic.cantrips.events.AcidSplashEvent._prompt_damage", lambda self, **_kwargs: 7)
 
     hero = SimpleNamespace(position=(0, 0))
     target = DummyTarget((1, 0))
@@ -68,7 +77,7 @@ def test_acid_splash_critical_adds_persistent(monkeypatch):
             return 2
         return 5
 
-    monkeypatch.setattr("GameObjects.events.magic.cantrips.events.AcidSplashEvent._prompt_damage", lambda self: 5)
+    monkeypatch.setattr("GameObjects.events.magic.cantrips.events.AcidSplashEvent._prompt_damage", lambda self, **_kwargs: 5)
     monkeypatch.setattr("GameObjects.events.magic.cantrips.events.AcidSplashEvent._prompt_persistent", lambda *_, **__: 2)
 
     hero = SimpleNamespace(position=(0, 0))
@@ -83,3 +92,16 @@ def test_acid_splash_critical_adds_persistent(monkeypatch):
     assert res.data["critical"] is True
     assert target.hp == 95
     assert any(s.id == PERSISTENT_DAMAGE_STATUS.id for s in target.statuses)
+
+
+def test_acid_splash_damage_prompt_includes_damage_formula(monkeypatch):
+    dummy_ui = DummyUI()
+    monkeypatch.setattr("ui_client.get_ui_client", lambda: dummy_ui)
+
+    result = AcidSplashEvent()._prompt_damage(spell_rank=2)
+
+    assert result == 4
+    assert dummy_ui.calls
+    call = dummy_ui.calls[0]
+    assert "2k6 acid" in call["prompt"]
+    assert "2k6" in str(call["kwargs"].get("prompt_long") or "")

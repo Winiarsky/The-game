@@ -50,6 +50,25 @@ def enemy_prompt_step(
             pass
     if not blocking:
         return
+    prompt_sent = False
+    player_prompt = getattr(game, "player_prompt", None)
+    if player_prompt is not None:
+        try:
+            prompt_sent = player_prompt.info(
+                str(title or "Przeciwnik"),
+                body_markdown=text or None,
+                source=source,
+                summary=str(envelope.get("summary") or title or "Przeciwnik"),
+                details_markdown=str(envelope.get("details_markdown") or "").strip() or None,
+                scope_key="enemy_turn",
+                dedupe_key=str(dedupe_key or source or title or "enemy"),
+                priority=str(envelope.get("priority") or "action"),
+                semantic_type=str(envelope.get("semantic_type") or effective_semantic),
+            ) is not None
+        except Exception:
+            prompt_sent = False
+    if prompt_sent:
+        return
     ui = getattr(game, "ui", None)
     if ui is not None and getattr(ui, "enabled", False) and hasattr(ui, "prompt_info"):
         try:

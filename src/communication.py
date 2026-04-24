@@ -244,9 +244,15 @@ def normalize_communication(
     source = _as_text(payload.get("source") or raw.get("source"))
     tag = _as_text(payload.get("tag"))
     level = _as_text(payload.get("level"))
-    body = _normalize_multiline(raw.get("body_markdown") or payload.get("prompt_long") or payload.get("message"))
-    details = _normalize_multiline(raw.get("details_markdown"))
-    debug_only = bool(raw.get("debug_only")) or tag.lower() == "debug"
+    body = _normalize_multiline(
+        raw.get("body_markdown")
+        or payload.get("body_markdown")
+        or payload.get("prompt_long")
+        or payload.get("message")
+        or payload.get("text")
+    )
+    details = _normalize_multiline(raw.get("details_markdown") or payload.get("details_markdown"))
+    debug_only = bool(raw.get("debug_only") or payload.get("debug_only")) or tag.lower() == "debug"
 
     if not details and _looks_technical_dump(body):
         details = body
@@ -254,28 +260,35 @@ def normalize_communication(
     if not body and prompt and _normalize_multiline(payload.get("prompt")):
         body = _normalize_multiline(payload.get("prompt"))
 
-    summary = _as_text(raw.get("summary")) or _strip_markdown(
-        _first_meaningful_line(raw.get("summary") or body or payload.get("message") or payload.get("prompt") or title)
+    summary = _as_text(raw.get("summary") or payload.get("summary")) or _strip_markdown(
+        _first_meaningful_line(
+            raw.get("summary")
+            or payload.get("summary")
+            or body
+            or payload.get("message")
+            or payload.get("prompt")
+            or title
+        )
     )
     if not details and body and _rest_after_first_line(body):
         details = _rest_after_first_line(body)
-    blocking = bool(raw.get("blocking")) or (prompt and event_type == "prompt")
-    priority = _as_text(raw.get("priority")) or _default_priority(
+    blocking = bool(raw.get("blocking") or payload.get("blocking")) or (prompt and event_type == "prompt")
+    priority = _as_text(raw.get("priority") or payload.get("priority")) or _default_priority(
         level=level,
         source=source,
         tag=tag,
         debug_only=debug_only,
     )
-    semantic_type = _as_text(raw.get("semantic_type")) or _default_semantic_type(
+    semantic_type = _as_text(raw.get("semantic_type") or payload.get("semantic_type")) or _default_semantic_type(
         prompt=prompt,
         source=source,
         title=title,
         blocking=blocking,
     )
-    channel = _as_text(raw.get("channel")) or ("prompt" if prompt else "log")
-    context = dict(raw.get("context") or {}) or None
-    progress = dict(raw.get("progress") or {}) or None
-    cta = _as_text(raw.get("cta"))
+    channel = _as_text(raw.get("channel") or payload.get("channel")) or ("prompt" if prompt else "log")
+    context = dict(raw.get("context") or payload.get("context") or {}) or None
+    progress = dict(raw.get("progress") or payload.get("progress") or {}) or None
+    cta = _as_text(raw.get("cta") or payload.get("cta"))
     if not cta and prompt:
         cta = "Potwierdź, gdy zakończysz ten krok."
     dedupe_key = _as_text(raw.get("dedupe_key")) or _build_dedupe_key(

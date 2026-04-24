@@ -4,6 +4,7 @@ import re
 from typing import Any, Iterable
 
 from localization import localize_term_pl, localized_hint_pl
+from prompt_copy import merge_menu_prompt, render_prompt_copy
 
 _SPELL_ID_ALIASES = {
     "shield": "shield_cantrip",
@@ -1097,9 +1098,13 @@ def filter_player_events(available_events: dict[str, type], *, actor_is_hero: bo
     filtered: dict[str, type] = {}
     for name, cls in available_events.items():
         key = _normalize(name)
+        module = _normalize(getattr(cls, "__module__", ""))
+        tags = _event_tags(cls)
         if key in {"cancel", "skill_check"}:
             continue
         if actor_is_hero and (key.startswith("enemy_") or key.startswith("phase_")):
+            continue
+        if actor_is_hero and ("enemy" in tags or ".events.enemy" in module):
             continue
         if actor_is_hero and _is_internal_attack_event(key, cls):
             # Eventy szczegółowe ataku bronią są wywoływane przez główną akcję "attack".
@@ -1273,9 +1278,19 @@ def build_intent_options(
     event_lookup = dict(available_events or {})
     special_by_source = dict(grouped.get("special_by_source", {}) or {})
     options: list[dict[str, str]] = []
+    intent_copy = render_prompt_copy("turns.intent_options")
 
     def _push(intent_id: str, label: str, desc: str, *, category: str = "general", icon: str = "") -> None:
+        override = {}
+        if isinstance(intent_copy.get("options"), dict):
+            override = intent_copy.get("options", {}).get(intent_id) or intent_copy.get("options", {}).get(str(intent_id).lower()) or {}
         options.append({"id": intent_id, "label": label, "desc": desc, "category": category, "icon": icon})
+        if isinstance(override, dict):
+            current = options[-1]
+            for field in ("label", "desc", "category", "icon"):
+                value = override.get(field)
+                if value not in (None, ""):
+                    current[field] = value
 
     if "move" in direct:
         _push("move", "Ruch", "Ruch po planszy.", category="movement", icon="→")
@@ -1337,10 +1352,23 @@ def build_intent_options(
     return options
 
 
-def _prompt_with_ui(game, *, title: str, subtitle: str, source: str, options: list[dict[str, str]]) -> str | None:
+def _prompt_with_ui(
+    game,
+    *,
+    title: str,
+    subtitle: str,
+    source: str,
+    options: list[dict[str, str]],
+    prompt_id: str | None = None,
+) -> str | None:
+    title, subtitle, options = merge_menu_prompt(
+        prompt_id,
+        title=title,
+        subtitle=subtitle,
+        options=options,
+        source=source,
+    )
     ui = getattr(game, "ui", None)
-    if not (ui and hasattr(ui, "prompt_choice")):
-        return None
     choice_meta = []
     for idx, option in enumerate(options, start=1):
         choice_meta.append(
@@ -1353,6 +1381,27 @@ def _prompt_with_ui(game, *, title: str, subtitle: str, source: str, options: li
                 "icon": option.get("icon", ""),
             }
         )
+    player_prompt = getattr(game, "player_prompt", None)
+    if player_prompt is not None:
+        try:
+            answer = player_prompt.choice(
+                title,
+                choices=[entry["raw"] for entry in choice_meta],
+                source=source,
+                subtitle=_with_numpad_hint(subtitle),
+                choice_meta=choice_meta,
+                scope_key="hero_turn:intent",
+                dedupe_key=f"intent_menu:{source}",
+                layout="dialog",
+                prompt_id=prompt_id,
+            )
+            raw = str(answer or "").strip()
+            if raw:
+                return raw
+        except Exception:
+            pass
+    if not (ui and hasattr(ui, "prompt_choice")):
+        return None
     answer = ui.prompt_choice(
         title,
         choices=[entry["label"] for entry in choice_meta],
@@ -1361,6 +1410,7 @@ def _prompt_with_ui(game, *, title: str, subtitle: str, source: str, options: li
         choice_meta=choice_meta,
         title=title,
         subtitle=_with_numpad_hint(subtitle),
+        prompt_id=prompt_id,
     )
     raw = str(answer or "").strip()
     if not raw:
@@ -1368,9 +1418,25 @@ def _prompt_with_ui(game, *, title: str, subtitle: str, source: str, options: li
     return raw
 
 
-def choose_option(game, *, title: str, subtitle: str, source: str, options: list[dict[str, str]]) -> str | None:
+def choose_option(
+    game,
+    *,
+    title: str,
+    subtitle: str,
+    source: str,
+    options: list[dict[str, str]],
+    prompt_id: str | None = None,
+) -> str | None:
     if not options:
         return None
+
+    title, subtitle, options = merge_menu_prompt(
+        prompt_id,
+        title=title,
+        subtitle=subtitle,
+        options=options,
+        source=source,
+    )
 
     by_id = {str(option["id"]).strip().lower(): str(option["id"]).strip().lower() for option in options}
     by_label = {str(option["label"]).strip().lower(): str(option["id"]).strip().lower() for option in options}
@@ -1396,6 +1462,7 @@ def choose_option(game, *, title: str, subtitle: str, source: str, options: list
         subtitle=subtitle,
         source=source,
         options=options,
+        prompt_id=prompt_id,
     )
     picked = _decode(ui_raw)
     if picked:
@@ -1414,18 +1481,23 @@ def choose_event_from_bucket(
     if not event_names:
         return None
 
+    prompt_id = ""
     if bucket_id == "attack":
         title = "Atak"
         subtitle = "Wybierz rodzaj ataku."
+        prompt_id = "turns.bucket.attack"
     elif bucket_id == "magic":
         title = "Magia"
         subtitle = "Wybierz czar lub akcję magiczną."
+        prompt_id = "turns.bucket.magic"
     elif bucket_id == "alchemy":
         title = "Alchemia"
         subtitle = "Wybierz akcję alchemiczną."
+        prompt_id = "turns.bucket.alchemy"
     else:
         title = "Specjalne"
         subtitle = "Wybierz akcję specjalną."
+        prompt_id = "turns.bucket.special"
 
     options: list[dict[str, str]] = []
     for event_name in event_names:
@@ -1444,6 +1516,7 @@ def choose_event_from_bucket(
         subtitle=subtitle,
         source=source,
         options=options,
+        prompt_id=prompt_id,
     )
 
 

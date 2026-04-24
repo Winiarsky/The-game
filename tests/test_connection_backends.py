@@ -24,6 +24,9 @@ class _FakeSimulatorBackend:
     def leds_off(self):
         self.cleared = True
 
+    def cancel_scan(self):
+        self.cancelled = True
+
 
 class _FakeHardwareBackend:
     def __init__(self, scan_cfg, wled_cfg):
@@ -42,6 +45,9 @@ class _FakeHardwareBackend:
     def leds_off(self):
         self.cleared = True
 
+    def cancel_scan(self):
+        self.cancelled = True
+
     def close(self):
         self.closed = True
 
@@ -54,6 +60,27 @@ def test_connection_uses_simulator_backend_for_http_target(monkeypatch):
     assert conn.backend == "simulator"
     assert conn.simulator_url == "http://127.0.0.1:5000"
     assert conn.scan_board([(3, 4)]) == (3, 4)
+
+
+def test_connection_allows_cancelled_scan_from_backend(monkeypatch):
+    class _CancelSimulatorBackend:
+        def __init__(self, base_url: str):
+            self.base_url = base_url
+
+        def scan_board(self, acceptable_responses=None, *, timeout_s=None):  # noqa: ARG002
+            return None
+
+        def set_leds(self, led_updates):  # noqa: ARG002
+            return None
+
+        def leds_off(self):
+            return None
+
+    monkeypatch.setattr("board.connection._SimulatorBackend", _CancelSimulatorBackend)
+
+    conn = Connection("http://127.0.0.1:5000/")
+
+    assert conn.scan_board([(3, 4)]) is None
 
 
 def test_connection_passes_hardware_overrides_to_backend(monkeypatch):
@@ -96,3 +123,21 @@ def test_connection_supports_per_cell_colors(monkeypatch):
         (0, [255, 0, 0]),
         (31, [0, 0, 255]),
     ]
+
+
+def test_connection_forwards_cancel_scan_to_simulator_backend(monkeypatch):
+    monkeypatch.setattr("board.connection._SimulatorBackend", _FakeSimulatorBackend)
+
+    conn = Connection("http://127.0.0.1:5000/")
+    conn.cancel_scan()
+
+    assert getattr(conn._backend, "cancelled", False) is True
+
+
+def test_connection_forwards_cancel_scan_to_hardware_backend(monkeypatch):
+    monkeypatch.setattr("board.connection._HardwareBackend", _FakeHardwareBackend)
+
+    conn = Connection(backend="hardware")
+    conn.cancel_scan()
+
+    assert getattr(conn._backend, "cancelled", False) is True

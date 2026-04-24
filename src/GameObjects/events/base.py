@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 import logging
 
+from prompt_copy import prompt_value
+
 logger = logging.getLogger(__name__)
 _MISSING = object()
 
@@ -26,15 +28,28 @@ def format_board_selection_message(
     confirmation: str | None = None,
     alternative: str | None = None,
 ) -> str:
-    text = f"Wybierz {str(subject or 'podswietlone pole').strip()}"
+    fallback = f"Wybierz {str(subject or 'podswietlone pole').strip()}"
     if max_range_feet is not None:
-        text = f"{text} {format_range_text(max_range_feet)}"
-    text = f"{text} na planszy."
+        fallback = f"{fallback} {format_range_text(max_range_feet)}"
+    fallback = f"{fallback} na planszy."
     if confirmation:
-        text = f"{text} Po wyborze {str(confirmation).strip().rstrip('.') }."
+        fallback = f"{fallback} Po wyborze {str(confirmation).strip().rstrip('.') }."
     if alternative:
-        text = f"{text} {str(alternative).strip().rstrip('.') }."
-    return text
+        fallback = f"{fallback} {str(alternative).strip().rstrip('.') }."
+    range_suffix = f" {format_range_text(max_range_feet)}" if max_range_feet is not None else ""
+    confirmation_suffix = f" Po wyborze {str(confirmation).strip().rstrip('.') }." if confirmation else ""
+    alternative_suffix = f" {str(alternative).strip().rstrip('.') }." if alternative else ""
+    return str(
+        prompt_value(
+            "events.board_selection_message",
+            "body_markdown",
+            fallback,
+            subject=str(subject or "podswietlone pole").strip(),
+            range_suffix=range_suffix,
+            confirmation_suffix=confirmation_suffix,
+            alternative_suffix=alternative_suffix,
+        )
+    )
 
 
 def format_default_prompt_body(
@@ -45,14 +60,29 @@ def format_default_prompt_body(
     body = str(text or "").strip()
     if not body:
         return "", ""
-    if str(kind or "").strip().lower() == "choice":
-        suffix = "Wybierz opcje i potwierdz wybor."
-        next_hint = "Wybierz opcje w panelu promptu."
-    else:
-        suffix = "Zapoznaj sie z informacja i potwierdz, gdy bedziesz gotow."
-        next_hint = "Potwierdz prompt, gdy bedziesz gotow."
-    if not body.endswith(suffix):
-        body = f"{body}\n\n{suffix}"
+    kind_key = "choice" if str(kind or "").strip().lower() == "choice" else "info"
+    default_suffix = (
+        "Wybierz opcje i potwierdz wybor." if kind_key == "choice" else "Zapoznaj sie z informacja i potwierdz, gdy bedziesz gotow."
+    )
+    default_next_hint = "Wybierz opcje w panelu promptu." if kind_key == "choice" else "Potwierdz prompt, gdy bedziesz gotow."
+    rendered_body = prompt_value(
+        f"events.default_prompt_body.{kind_key}",
+        "body_markdown",
+        None,
+        body=body,
+    )
+    next_hint = str(
+        prompt_value(
+            f"events.default_prompt_body.{kind_key}",
+            "next_hint",
+            default_next_hint,
+            body=body,
+        )
+    )
+    if rendered_body:
+        return str(rendered_body), next_hint
+    if not body.endswith(default_suffix):
+        body = f"{body}\n\n{default_suffix}"
     return body, next_hint
 
 
@@ -105,6 +135,38 @@ def emit_prompt_narration(
     text = str(message or "").strip()
     if not text:
         return False
+    player_prompt = getattr(game, "player_prompt", None)
+    if player_prompt is not None:
+        try:
+            scope_key = (
+                "enemy_turn" if str(source or "").startswith("enemy") else
+                "hero_turn:targeting" if any(token in str(source or "") for token in ("target", "pick_", "magic")) else
+                "system"
+            )
+            if blocking:
+                player_prompt.info(
+                    summary or "Co robić teraz",
+                    body_markdown=text,
+                    summary=summary,
+                    source=source,
+                    priority=priority,
+                    semantic_type=semantic_type or "required_action",
+                    dedupe_key=dedupe_key,
+                    scope_key=scope_key,
+                )
+            else:
+                player_prompt.card(
+                    kind="narration",
+                    title=summary or "Co się dzieje",
+                    body_markdown=text,
+                    summary=summary,
+                    priority=priority,
+                    scope_key=scope_key,
+                    dedupe_key=dedupe_key,
+                )
+            return True
+        except Exception:
+            logger.debug("Nie udało się wysłać promptowej narracji przez PromptFacade.", exc_info=True)
     narrator = getattr(game, "ui_narration", None)
     if callable(narrator):
         try:

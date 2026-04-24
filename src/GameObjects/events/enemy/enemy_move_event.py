@@ -351,11 +351,26 @@ class EnemyMoveEvent(GameEvent):
         if len(truncated) < 2:
             return EventResult(success=False, consumed_action=True, message="Nie można wykonać kroku w budżecie ruchu.")
         dest = truncated[-1]
+        state = getattr(game, "state", None)
+        used_actions = 0
+        action_limit = 3
+        try:
+            used_actions = int(getattr(state, "actions_used", {}).get(enemy, 0) or 0)
+        except Exception:
+            used_actions = 0
+        limit_getter = getattr(state, "_action_limit", None)
+        if callable(limit_getter):
+            try:
+                action_limit = int(limit_getter(enemy) or action_limit)
+            except Exception:
+                action_limit = 3
+        action_number = min(action_limit, used_actions + 1)
         enemy_prompt_step(
             game,
             f"Ruch przeciwnika: {getattr(enemy, 'name', 'Enemy')}",
             prompt_long=(
                 f"Przeciwnik wykonuje ruch.\n"
+                f"Akcja przeciwnika: {action_number}/{action_limit}\n"
                 f"Pozycja startowa: {enemy.position}\n"
                 f"Pole docelowe: {dest}\n"
                 f"Budżet ruchu: {move_budget_feet} ft\n"

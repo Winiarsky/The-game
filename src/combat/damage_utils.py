@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+from collections import Counter
 from typing import Any, Iterable, Optional, Sequence, Tuple
 
+from communication import make_communication
+from localization.pl import localize_term_pl
+from prompt_text_catalog import render_prompt_text
 from statuses import Status
 from ui_client import get_ui_client
 from damage_types import DamageType
@@ -16,6 +20,33 @@ def _status_list(target: Any) -> Iterable[Status]:
         if isinstance(status, Status):
             result.append(status)
     return result
+
+
+def snapshot_statuses(target: Any) -> Counter[tuple[str, str]]:
+    snapshot: Counter[tuple[str, str]] = Counter()
+    for status in _status_list(target):
+        status_id = str(getattr(status, "id", "") or "").strip()
+        label = str(
+            getattr(status, "display_label", None)
+            or getattr(status, "label", None)
+            or status_id
+            or "status"
+        ).strip()
+        snapshot[(status_id, label)] += 1
+    return snapshot
+
+
+def added_status_labels(before: Counter[tuple[str, str]] | None, target: Any) -> list[str]:
+    current = snapshot_statuses(target)
+    delta: list[str] = []
+    baseline = before or Counter()
+    for key, count in current.items():
+        extra = int(count) - int(baseline.get(key, 0))
+        if extra <= 0:
+            continue
+        _status_id, label = key
+        delta.extend([label] * extra)
+    return delta
 
 
 def _compute_resistance_value(target: Any, raw_val: object) -> Optional[int]:
@@ -90,6 +121,153 @@ def format_damage_prompt(target: Any, components: Sequence[tuple[str, int]]) -> 
             notes.append(f"-{reduction} za odpornosc z {src_label}")
     notes_text = f" ({'; '.join(notes)})" if notes else ""
     return " ".join(parts) + notes_text
+
+
+def _format_damage_breakdown(components: Sequence[tuple[str, int]]) -> str:
+    parts: list[str] = []
+    for dmg_type, amount in components:
+        try:
+            dealt = max(0, int(amount or 0))
+        except Exception:
+            dealt = 0
+        if dealt <= 0:
+            continue
+        label = localize_term_pl(str(dmg_type or "").strip()) or str(dmg_type or "obrażenia")
+        parts.append(f"{label}: {dealt}")
+    return ", ".join(parts) if parts else "brak rozpiski"
+
+
+def _humanize_source_label(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return "efekt"
+    localized = localize_term_pl(text)
+    return localized or text
+
+
+def _prompt_game_info(
+    game: Any,
+    *,
+    title: str,
+    body_markdown: str,
+    source: str,
+    prompt_id: str,
+    summary: str | None = None,
+    details_markdown: str | None = None,
+    scope_key: str | None = None,
+    dedupe_key: str | None = None,
+    priority: str = "result",
+    semantic_type: str = "result",
+) -> bool:
+    player_prompt = getattr(game, "player_prompt", None)
+    if player_prompt is not None and hasattr(player_prompt, "info"):
+        try:
+            player_prompt.info(
+                title,
+                body_markdown=body_markdown,
+                source=source,
+                summary=summary,
+                details_markdown=details_markdown,
+                scope_key=scope_key,
+                dedupe_key=dedupe_key,
+                priority=priority,
+                semantic_type=semantic_type,
+                prompt_id=prompt_id,
+            )
+            return True
+        except Exception:
+            pass
+    ui = getattr(game, "ui", None)
+    if ui is not None and getattr(ui, "enabled", False) and hasattr(ui, "prompt_info"):
+        try:
+            ui.prompt_info(
+                title,
+                prompt_long=body_markdown,
+                source=source,
+                summary=summary,
+                details_markdown=details_markdown,
+                scope_key=scope_key,
+                dedupe_key=dedupe_key,
+                priority=priority,
+                prompt_id=prompt_id,
+            )
+            return True
+        except Exception:
+            return False
+    return False
+
+
+def _is_hero_side_actor(game: Any, actor: Any) -> bool:
+    if actor is None:
+        return False
+    heroes = list(getattr(game, "heroes", []) or [])
+    if actor in heroes:
+        return True
+    owner_id = str(getattr(actor, "owner_id", "") or "").strip()
+    return bool(owner_id)
+
+
+def announce_damage_applied(game: Any, event: dict[str, Any]) -> bool:
+    if game is None or not isinstance(event, dict):
+        return False
+    actor = event.get("actor")
+    if not _is_hero_side_actor(game, actor):
+        return False
+    try:
+        damage_total = max(0, int(event.get("damage", 0) or 0))
+    except Exception:
+        damage_total = 0
+    if damage_total <= 0:
+        return False
+
+    target = event.get("target")
+    actor_name = str(getattr(actor, "name", None) or "Bohater")
+    target_name = str(getattr(target, "name", None) or "cel")
+    source_label = _humanize_source_label(
+        event.get("source_label") or event.get("source_action") or event.get("action_id") or "efekt"
+    )
+    components_raw = event.get("damage_components")
+    components: list[tuple[str, int]] = []
+    if isinstance(components_raw, (list, tuple)):
+        for item in components_raw:
+            if isinstance(item, (list, tuple)) and len(item) >= 2:
+                components.append((str(item[0] or ""), int(item[1] or 0)))
+    damage_breakdown = _format_damage_breakdown(components)
+    applied_statuses = [str(item).strip() for item in list(event.get("applied_statuses") or []) if str(item).strip()]
+    status_line = ""
+    if applied_statuses:
+        status_line = f"\n\n**Nałożone statusy:** {', '.join(f'**{label}**' for label in applied_statuses)}."
+    prompt_text = render_prompt_text(
+        "combat.damage_applied_summary",
+        actor_name=actor_name,
+        target_name=target_name,
+        damage_total=damage_total,
+        source_label=source_label,
+        damage_breakdown=damage_breakdown,
+        status_line=status_line,
+    )
+    title = str(prompt_text.get("title") or "Efekt akcji")
+    summary = str(prompt_text.get("summary") or f"{actor_name} zadaje {damage_total} obrażeń celowi {target_name}.")
+    body_markdown = str(
+        prompt_text.get("body_markdown")
+        or (
+            f"Zadałeś **{damage_total}** obrażeń celowi **{target_name}** "
+            f"za pomocą **{source_label}**.{status_line}"
+        )
+    )
+    details_markdown = str(prompt_text.get("details_markdown") or "").strip() or None
+    dedupe_key = str(event.get("event_uid") or f"{actor_name}:{target_name}:{damage_total}")
+    return _prompt_game_info(
+        game,
+        title=title,
+        body_markdown=body_markdown,
+        source=str(event.get("source_action") or "damage_applied"),
+        prompt_id="combat.damage_applied_summary",
+        summary=summary,
+        details_markdown=details_markdown,
+        scope_key="combat:resolution",
+        dedupe_key=f"damage_summary:{dedupe_key}",
+    )
 
 
 def prompt_damage_summary(target: Any, components: Sequence[tuple[str, int]]) -> str:
@@ -304,6 +482,124 @@ def _drop_loot_pile(game: Any, pos: tuple[int, int], loot: list[object]) -> int:
     return int(added)
 
 
+def _loot_summary(loot: list[object]) -> str:
+    parts: list[str] = []
+    try:
+        from GameObjects.items.inventory import item_label
+    except Exception:
+        item_label = None  # type: ignore
+    try:
+        from economy import format_cp_value
+    except Exception:
+        format_cp_value = None  # type: ignore
+
+    for item in list(loot or []):
+        if item is None:
+            continue
+        if isinstance(item, dict) and str(item.get("kind", "")).strip().lower() == "currency_cp":
+            amount_cp = max(0, int(item.get("amount_cp", 0) or 0))
+            if amount_cp <= 0:
+                continue
+            if callable(format_cp_value):
+                parts.append(f"monety: {format_cp_value(amount_cp)}")
+            else:
+                parts.append(f"monety: {amount_cp} cp")
+            continue
+        if callable(item_label):
+            try:
+                parts.append(str(item_label(item)))
+                continue
+            except Exception:
+                pass
+        parts.append(str(getattr(item, "name", None) or getattr(item, "item_id", None) or "przedmiot"))
+    if not parts:
+        return "brak użytecznego łupu"
+    if len(parts) <= 4:
+        return ", ".join(parts)
+    return ", ".join(parts[:4]) + f", +{len(parts) - 4} więcej"
+
+
+def _announce_loot_drop(game: Any, enemy: Any, pos: tuple[int, int], loot: list[object], *, source: str) -> None:
+    logger_fn = getattr(game, "ui_log", None)
+    if not callable(logger_fn):
+        return
+    enemy_name = str(getattr(enemy, "name", None) or "Przeciwnik")
+    position_text = f"({int(pos[0])}, {int(pos[1])})"
+    loot_summary = _loot_summary(loot)
+    prompt_text = render_prompt_text(
+        "interaction.loot_drop",
+        enemy_name=enemy_name,
+        position_text=position_text,
+        loot_summary=loot_summary,
+    )
+    title = str(prompt_text.get("title") or f"Loot po {enemy_name}")
+    summary = str(prompt_text.get("summary") or f"Na polu {position_text} zostaje loot.")
+    body_markdown = str(
+        prompt_text.get("body_markdown")
+        or f"**{enemy_name}** zostawia loot na polu **{position_text}**.\n\nDostępny łup: {loot_summary}."
+    )
+    details_markdown = str(prompt_text.get("details_markdown") or "").strip() or None
+    communication = make_communication(
+        channel="timeline",
+        priority="result",
+        semantic_type="result",
+        title=title,
+        summary=summary,
+        body_markdown=body_markdown,
+        details_markdown=details_markdown,
+        cta=str(prompt_text.get("cta") or "Stań na polu lootu i użyj Interakcji."),
+        context={"source": source, "next": "Wejdź na pole lootu, aby go podnieść."},
+        dedupe_key=f"loot_drop:{enemy_name}:{position_text}:{source}",
+        blocking=False,
+    )
+    try:
+        logger_fn(summary, communication=communication)
+    except Exception:
+        return
+
+
+def _prompt_enemy_defeat(game: Any, enemy: Any, pos: tuple[int, int] | None, loot: list[object], *, source: str) -> bool:
+    enemy_name = str(getattr(enemy, "name", None) or "Przeciwnik")
+    position_text = (
+        f"({int(pos[0])}, {int(pos[1])})"
+        if isinstance(pos, tuple) and len(pos) == 2
+        else "na ostatnim polu przeciwnika"
+    )
+    loot_summary = _loot_summary(loot)
+    has_loot = bool(list(loot or []))
+    loot_line = (
+        f"\n\nNa polu **{position_text}** zostaje loot: {loot_summary}."
+        if has_loot
+        else "\n\nPo przeciwniku nie zostaje żaden użyteczny loot."
+    )
+    prompt_text = render_prompt_text(
+        "interaction.enemy_defeated_loot",
+        enemy_name=enemy_name,
+        position_text=position_text,
+        loot_summary=loot_summary,
+        loot_line=loot_line,
+    )
+    title = str(prompt_text.get("title") or "Przeciwnik pokonany")
+    summary = str(prompt_text.get("summary") or f"{enemy_name} pada.")
+    body_markdown = str(
+        prompt_text.get("body_markdown")
+        or f"**{enemy_name}** pada.{loot_line}"
+    )
+    details_markdown = str(prompt_text.get("details_markdown") or "").strip() or None
+    dedupe_key = f"enemy_defeated:{enemy_name}:{position_text}:{source}"
+    return _prompt_game_info(
+        game,
+        title=title,
+        body_markdown=body_markdown,
+        source=source,
+        prompt_id="interaction.enemy_defeated_loot",
+        summary=summary,
+        details_markdown=details_markdown,
+        scope_key="combat:resolution",
+        dedupe_key=dedupe_key,
+    )
+
+
 def remove_defeated_enemy(
     game: Any,
     enemy: Any,
@@ -315,6 +611,7 @@ def remove_defeated_enemy(
     """Usuń pokonanego przeciwnika z planszy/listy i opcjonalnie zostaw loot."""
     pos = position if isinstance(position, tuple) else getattr(enemy, "position", None)
     loot = _extract_enemy_loot(enemy) if drop_loot else []
+    prompted = _prompt_enemy_defeat(game, enemy, pos if isinstance(pos, tuple) else None, loot, source=source)
     removed_from_board = False
 
     board = getattr(game, "board", None)
@@ -352,6 +649,8 @@ def remove_defeated_enemy(
     dropped = 0
     if isinstance(pos, tuple) and loot:
         dropped = _drop_loot_pile(game, pos, loot)
+        if dropped > 0 and not prompted:
+            _announce_loot_drop(game, enemy, pos, loot, source=source)
     try:
         setattr(enemy, "loot_items", [])
     except Exception:

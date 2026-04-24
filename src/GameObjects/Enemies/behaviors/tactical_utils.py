@@ -2,26 +2,12 @@ from __future__ import annotations
 
 from actions.move_utils import find_path, movement_budget_feet, path_cost_feet
 from combat import flanking_positions
-from combat.hero_side_targets import hero_side_targets
+from combat.hero_side_targets import current_hp_value, hero_side_targets, is_targetable_actor
 from GameObjects.events.enemy.enemy_strike_event import _EnemyRangeAnalyzer, _select_weapon, _weapon_reach_ft
 
 
 def is_alive(actor) -> bool:
-    if actor is None or getattr(actor, "position", None) is None:
-        return False
-    hp = getattr(actor, "hp", None)
-    try:
-        if hp is not None and int(hp) <= 0:
-            return False
-    except Exception:
-        return False
-    checker = getattr(actor, "is_dead", None)
-    if callable(checker):
-        try:
-            return not bool(checker())
-        except Exception:
-            return True
-    return True
+    return is_targetable_actor(actor)
 
 
 def living_heroes(game) -> list[object]:
@@ -46,8 +32,9 @@ def hp_ratio(actor) -> float:
     if actor is None:
         return 0.0
     try:
-        max_hp = max(1, int(getattr(actor, "max_hp", getattr(actor, "hp", 1)) or 1))
-        return max(0.0, min(1.0, float(int(getattr(actor, "hp", 0) or 0)) / float(max_hp)))
+        max_hp = max(1, int(getattr(actor, "max_hp", current_hp_value(actor) or 1) or 1))
+        current = max(0, int(current_hp_value(actor) or 0))
+        return max(0.0, min(1.0, float(current) / float(max_hp)))
     except Exception:
         return 0.0
 

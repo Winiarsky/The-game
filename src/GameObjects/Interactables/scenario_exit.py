@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 
+from board import consts
 from GameObjects.base import GameObjectMeta
 from GameObjects.interactions_mixin import HiddenMixin
 from GameObjects.interactions_mixin.base_interaction import Interaction, InteractableMixin
@@ -49,6 +50,9 @@ class ScenarioExit(HiddenMixin, InteractableMixin):
             if reveal_message
             else "Odkrywasz przejście prowadzące dalej."
         )
+        self.seek_color = list(consts.SEEK_EXIT_RGB)
+        self.seek_color_name = "pomarańczowe"
+        self.seek_label = "przejście"
         self.register_default_actions()
 
     def register_default_actions(self) -> None:

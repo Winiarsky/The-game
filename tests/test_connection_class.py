@@ -29,6 +29,9 @@ class _FakeHardwareBackend:
     def leds_off(self):
         self.led_updates = []
 
+    def cancel_scan(self):
+        self.cancelled = True
+
     def close(self):
         self.closed = True
 
@@ -63,3 +66,8 @@ def test_leds_set_and_off(conn):
 
     conn.leds_off()
     assert conn._backend.led_updates == []
+
+
+def test_cancel_scan_is_forwarded(conn):
+    conn.cancel_scan()
+    assert conn._backend.cancelled is True

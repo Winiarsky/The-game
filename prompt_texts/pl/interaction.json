@@ -1,0 +1,24 @@
+{
+  "interaction.loot_drop": {
+    "title": "Loot po {enemy_name}",
+    "summary": "Na polu {position_text} zostaje loot.",
+    "body_markdown": "**{enemy_name}** zostawia loot na polu **{position_text}**.\n\nDostępny łup: {loot_summary}.",
+    "details_markdown": "**Jak zebrać loot**\n- ustaw bohatera na polu lootu\n- użyj akcji **Interakcja**\n- wybierz **Podnieś loot**",
+    "cta": "Stań na polu lootu i użyj Interakcji."
+  },
+  "interaction.loot_pickup_action": {
+    "description": "Stań na polu lootu, użyj Interakcja i wybierz tę opcję, aby zabrać wszystkie przedmioty i monety."
+  },
+  "interaction.enemy_defeated_loot": {
+    "title": "Przeciwnik pokonany",
+    "summary": "{enemy_name} pada.",
+    "body_markdown": "**{enemy_name}** pada.{loot_line}",
+    "details_markdown": "**Jak zebrać loot**\n- ustaw bohatera na polu lootu\n- użyj akcji **Interakcja**\n- wybierz **Podnieś loot**"
+  },
+  "interaction.seek_preview": {
+    "title": "Seek",
+    "summary": "Rozejrzyj się po zasięgu akcji.",
+    "body_markdown": "**Widzisz w zasięgu Seek**\n{legend_block}\n\n**Ukryte obiekty** nie są jeszcze pokazane. Rzut **Seek** spróbuje je wykryć.",
+    "details_markdown": "**Komendy**\n- **Enter**: wykonaj **Seek**\n- **Esc**: **Anuluj**\n\n**Kolory na planszy**\n- podświetlone pole bohatera to źródło akcji\n- turkusowe pola pokazują cały zasięg **Seek**\n- kolory obiektów pokazują jawne rzeczy, z którymi możesz wejść w interakcję"
+  }
+}

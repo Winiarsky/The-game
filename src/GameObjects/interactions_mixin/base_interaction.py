@@ -45,6 +45,9 @@ class InteractableMixin(MagicalMixin):
     critical_failure_dc: int = dc - 10   # próg krytycznej porażki
     critical_success_dc: int = dc + 10  # próg krytycznego sukcesu
     stealth_impact: int = 0
+    seek_color: Optional[list[int]] = None
+    seek_color_name: Optional[str] = None
+    seek_label: Optional[str] = None
     actions: dict[str, Interaction] = field(default_factory=dict, init=False, repr=False)
 
     def __post_init__(self):

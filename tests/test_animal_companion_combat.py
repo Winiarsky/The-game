@@ -17,6 +17,7 @@ from GameObjects.events.base import EventContext
 from GameObjects.events.registry import dispatch_event, list_events
 from GameObjects.interactions_mixin.status_mixin import StatusMixin
 from board_grid import BoardGrid
+from player_prompting import GamePromptFacade
 from states.combat import Combat
 from statuses.base import Status
 from statuses.classes.druid.feats.animal_companion import AnimalCompanionStatus
@@ -66,8 +67,6 @@ class DummyUI:
         self.choice_calls.append({"prompt": prompt, "choices": list(choices or []), **kwargs})
         if self.choice_answers:
             return self.choice_answers.pop(0)
-        if choices:
-            return choices[0]
         return None
 
 
@@ -146,6 +145,7 @@ class DummyGame:
         self.enemies = []
         self.state = None
         self.idle_hints = []
+        self.player_prompt = None
 
     def ui_log(self, _msg: str, **_kwargs):
         return None
@@ -272,14 +272,13 @@ def test_command_animal_companion_strike_damages_enemy(monkeypatch):
     assert owner.has_status("animal_companion_commanded")
 
 
-def test_command_animal_companion_menu_exposes_strike_and_support_details():
+def test_command_animal_companion_multiple_attack_profiles_can_be_selected(monkeypatch):
     board = BoardGrid(6, 6)
     conn = DummyConn()
-    ui = DummyUI()
-    game = DummyGame(board=board, conn=conn, ui=ui)
+    game = DummyGame(board=board, conn=conn)
     owner = DummyOwner(position=(1, 1), initiative=17)
     _add_druid_animal_setup(owner)
-    enemy = DummyEnemy(position=(5, 5), hp=20, ac=14)
+    enemy = DummyEnemy(position=(2, 1), hp=20, ac=14)
     game.heroes = [owner]
     game.enemies = [enemy]
     board.place(owner, owner.position)
@@ -287,9 +286,41 @@ def test_command_animal_companion_menu_exposes_strike_and_support_details():
 
     combat = Combat(game)
     game.state = combat
+    companion = build_animal_companion(owner, "badger")
+    board.place(companion, (1, 2))
+    combat.animal_companions[owner.object_id] = companion
+
+    conn.read_queue = ["strike", "claw", "end"]
+    rolls = iter([18, 5])
+    monkeypatch.setattr(
+        "GameObjects.events.command_animal_companion_event.prompt_for_roll",
+        lambda *_a, **_k: next(rolls),
+    )
+
+    result = dispatch_event("command_animal_companion", EventContext(game=game, actor=owner))
+
+    assert result.success is True
+    assert "Claw" in str(result.message)
+    assert enemy.hp == 15
+
+
+def test_command_animal_companion_menu_exposes_strike_and_support_details():
+    board = BoardGrid(6, 6)
+    conn = DummyConn()
+    ui = DummyUI()
+    game = DummyGame(board=board, conn=conn, ui=ui)
+    owner = DummyOwner(position=(1, 1), initiative=17)
+    _add_druid_animal_setup(owner)
+    game.heroes = [owner]
+    game.enemies = []
+    board.place(owner, owner.position)
+
+    combat = Combat(game)
+    game.state = combat
     companion = build_animal_companion(owner, "wolf")
     board.place(companion, (1, 2))
     combat.animal_companions[owner.object_id] = companion
+    game.player_prompt = GamePromptFacade(game)
 
     ui.choice_answers = ["end"]
 
@@ -303,6 +334,10 @@ def test_command_animal_companion_menu_exposes_strike_and_support_details():
     assert "support" in by_raw
     assert "1d8" in str(by_raw["strike"].get("desc") or "")
     assert "Speed" in str(by_raw["support"].get("desc") or "")
+    assert prompt.get("prompt_id") == "companion.command.menu"
+    assert prompt.get("scope_key") == "hero_turn:companion"
+    assert "Akcje towarzysza w tej komendzie" in str(prompt.get("prompt_long") or "")
+    assert "Wydanie komendy kosztuje bohatera 1 akcję" in str(prompt.get("prompt_long") or "")
 
 
 def test_command_animal_companion_strike_without_target_shows_prompt():
@@ -312,19 +347,18 @@ def test_command_animal_companion_strike_without_target_shows_prompt():
     game = DummyGame(board=board, conn=conn, ui=ui)
     owner = DummyOwner(position=(1, 1), initiative=17)
     _add_druid_animal_setup(owner)
-    enemy = DummyEnemy(position=(5, 5), hp=20, ac=14)
     game.heroes = [owner]
-    game.enemies = [enemy]
+    game.enemies = []
     board.place(owner, owner.position)
-    board.place(enemy, enemy.position)
 
     combat = Combat(game)
     game.state = combat
     companion = build_animal_companion(owner, "wolf")
     board.place(companion, (1, 2))
     combat.animal_companions[owner.object_id] = companion
+    game.player_prompt = GamePromptFacade(game)
 
-    conn.read_queue = ["strike", "end"]
+    ui.choice_answers = ["strike", "end"]
 
     result = dispatch_event("command_animal_companion", EventContext(game=game, actor=owner))
 
@@ -333,6 +367,8 @@ def test_command_animal_companion_strike_without_target_shows_prompt():
     info_prompts = [call for call in ui.info_calls if call.get("title") == "Zwierzęcy towarzysz: akcja niemożliwa"]
     assert info_prompts
     assert "brak wroga w zasiegu companiona" in str(info_prompts[-1].get("prompt_long") or "").lower()
+    assert info_prompts[-1].get("prompt_id") == "companion.command.action_blocked"
+    assert info_prompts[-1].get("scope_key") == "hero_turn:companion"
 
 
 def test_command_animal_companion_recovers_existing_companion_from_board(monkeypatch):

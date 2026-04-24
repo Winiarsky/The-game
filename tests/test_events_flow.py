@@ -290,6 +290,9 @@ def test_initiative_event_payload_excludes_removed_dead_enemy():
             self.object_id = "hero-1"
             self.position = (0, 0)
             self.initiative = 15
+            self.wounds = 3
+            self.max_hp = 20
+            self.statuses = []
 
         def reset_reactions(self):
             return None
@@ -304,6 +307,8 @@ def test_initiative_event_payload_excludes_removed_dead_enemy():
             self.position = (1, 0) if alive else (2, 0)
             self.initiative = 10
             self.hp = 10 if alive else 0
+            self.max_hp = 12
+            self.statuses = []
 
         def __hash__(self):
             return id(self)
@@ -335,3 +340,10 @@ def test_initiative_event_payload_excludes_removed_dead_enemy():
     ids = [entry["id"] for entry in payload["order"]]
     assert "enemy-dead" not in ids
     assert payload["active_id"] == "hero-1"
+    hero_entry = next(entry for entry in payload["order"] if entry["id"] == "hero-1")
+    alive_enemy_entry = next(entry for entry in payload["order"] if entry["id"] == "enemy-alive")
+    assert hero_entry["wounds"] == 3
+    assert hero_entry["max_hp"] == 20
+    assert hero_entry["statuses"] == []
+    assert alive_enemy_entry["wounds"] == 2
+    assert alive_enemy_entry["max_hp"] == 12

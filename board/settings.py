@@ -23,6 +23,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "serial_port": "",
         "baud_rate": 115200,
         "scan_command": "SCAN",
+        "stop_command": "STOP",
         "probe_timeout_s": 6.0,
         "line_timeout_s": 0.25,
         "write_timeout_s": 0.5,
@@ -88,6 +89,8 @@ def _apply_env_overrides(config: dict[str, Any]) -> dict[str, Any]:
         hardware_cfg["baud_rate"] = int(os.environ["BOARD_SERIAL_BAUD"])
     if os.environ.get("BOARD_SCAN_COMMAND"):
         hardware_cfg["scan_command"] = str(os.environ["BOARD_SCAN_COMMAND"]).strip()
+    if os.environ.get("BOARD_STOP_COMMAND"):
+        hardware_cfg["stop_command"] = str(os.environ["BOARD_STOP_COMMAND"]).strip()
     if os.environ.get("WLED_URL"):
         wled_cfg["base_url"] = str(os.environ["WLED_URL"]).strip()
     if os.environ.get("WLED_SEGMENT_ID"):

@@ -1,0 +1,20 @@
+{
+  "combat.player_wounds": {
+    "title": "Rany: {actor_name}",
+    "summary": "{actor_name} otrzymuje {hp_damage} ran.",
+    "body_markdown": "{actor_name} otrzymuje **{hp_damage}** ran.\n\nZapisz **{hp_damage}** ran na karcie postaci i potwierdź.",
+    "details_markdown": "{total_wounds_line}\n{damage_type_line}",
+    "cta": "Zapisz rany na karcie postaci i potwierdź."
+  },
+  "combat.hero_incapacitated": {
+    "summary": "{state_summary}",
+    "body_markdown": "{recovery_message_block}**Aktualny stan**\n- HP: {hp_summary}\n- Dying: {dying_line}\n- Wounded: {wounded_line}\n- Unconscious: {unconscious_line}\n- Stable: {stable_line}\n- Śmierć nastąpi przy Dying {threshold}.",
+    "details_markdown": "**Co to oznacza**\n- Ta postać nie wykonuje akcji, dopóki jest nieprzytomna.\n- Leczenie powyżej 0 HP usuwa Dying i Unconscious.\n- Stabilizacja usuwa Dying, ale bohater zostaje Unconscious i Stable przy 0 HP.\n- Jeśli postać nadal ma Dying i nie jest Stable, na początku swojej tury wykona kolejny Recovery Check.\n\n**Jak wyjść z tego stanu**\n- Użyj leczenia od sojusznika albo efektu przywracającego HP.\n- Użyj efektu stabilizacji, jeśli nie możesz jej od razu podnieść.\n- Jeśli nic nie zrobisz, liczysz na kolejne Recovery Checki."
+  },
+  "combat.damage_applied_summary": {
+    "title": "Efekt akcji",
+    "summary": "{actor_name} zadaje {damage_total} obrażeń celowi {target_name}.",
+    "body_markdown": "Zadałeś **{damage_total}** obrażeń celowi **{target_name}** za pomocą **{source_label}**.{status_line}",
+    "details_markdown": "**Rozliczenie obrażeń**\n- Cel: **{target_name}**\n- Suma obrażeń: **{damage_total}**\n- Źródło: **{source_label}**\n- Rozpiska: {damage_breakdown}"
+  }
+}

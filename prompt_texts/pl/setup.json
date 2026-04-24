@@ -1,0 +1,77 @@
+{
+  "setup.welcome": {
+    "body_markdown": "Witamy w grze planszowej!"
+  },
+  "setup.hero_setup_select_position": {
+    "title": "Wskaż miejsce dla figurki: {hero_name}",
+    "body_markdown": "Wybierz puste pole startowe dla bohatera {hero_name}, klikając jedno z podświetlonych pól."
+  },
+  "setup.hero_setup_retry_position": {
+    "body_markdown": "Nie wybrano pola startowego dla {hero_name}. Spróbuj ponownie."
+  },
+  "setup.hero_setup_place_figure": {
+    "title": "Ustaw figurkę: {hero_name}",
+    "summary": "Co robić teraz",
+    "body_markdown": "Ustaw figurkę bohatera {hero_name} na polu startowym {position}.",
+    "cta": "Po ustawieniu figurki wybierz kolejny krok w setupie."
+  },
+  "setup.hero_setup_retry_preselected": {
+    "body_markdown": "Ponów ustawienie figurki dla wybranego bohatera {hero_name}."
+  },
+  "setup.hero_setup_complete_preselected": {
+    "body_markdown": "Setup bohaterów zakończony automatycznie z wybranych postaci."
+  },
+  "setup.hero_setup_next": {
+    "title": "Setup bohaterów",
+    "subtitle": "Enter: graj, *: dodaj bohatera",
+    "options": {
+      "__start_game__": {
+        "label": "Graj",
+        "desc": "Rozpocznij grę z aktualnie ustawionymi bohaterami."
+      },
+      "__add_hero__": {
+        "label": "Dodaj kolejnego bohatera",
+        "desc": "Wybierz kolejnego bohatera i ustaw jego figurkę na planszy."
+      }
+    }
+  },
+  "setup.hero_select_menu": {
+    "title": "Wybór Bohatera",
+    "subtitle": "8 góra, 2 dół, Enter potwierdzenie, * nowy bohater",
+    "options": {
+      "__create_new__": {
+        "label": "Stwórz nowego bohatera",
+        "desc": "Uruchamia pełny pipeline tworzenia postaci."
+      }
+    }
+  },
+  "setup.encounter_step": {
+    "title": "Setup encounteru",
+    "summary": "Setup encounteru"
+  },
+  "setup.encounter_edges_debug": {
+    "title": "Krawędzie setupu",
+    "body_markdown": "Dane techniczne ścian dostępne w szczegółach."
+  },
+  "setup.advanced_alchemy_budget": {
+    "title": "Advanced Alchemy"
+  },
+  "setup.advanced_alchemy_intro": {
+    "title": "Advanced Alchemy"
+  },
+  "setup.advanced_alchemy_choice": {
+    "title": "Advanced Alchemy"
+  },
+  "ui.info.encounter_setup": {
+    "title": "Setup encounteru"
+  },
+  "ui.info.advanced_alchemy": {
+    "title": "Advanced Alchemy"
+  },
+  "ui.choice.advanced_alchemy_budget": {
+    "title": "Advanced Alchemy"
+  },
+  "ui.choice.advanced_alchemy_choice": {
+    "title": "Advanced Alchemy"
+  }
+}

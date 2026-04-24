@@ -1,6 +1,7 @@
 import logging
 from typing import Optional
 
+from board import consts
 from GameObjects.base import GameObjectMeta
 from GameObjects.interactions_mixin.base_interaction import Interaction, InteractableMixin
 from GameObjects.interactions_mixin import (
@@ -81,6 +82,9 @@ class Door(RangeAttackAffectMixin, LockableMixin, TrappableMixin, HiddenMixin, D
         self.hp = hp
         self.hardness = hardness
         self.destroyed = False
+        self.seek_color = list(consts.SEEK_DOOR_RGB)
+        self.seek_color_name = "brązowe"
+        self.seek_label = "drzwi"
 
         self.is_open = False
         self.edge: tuple[tuple[int, int], tuple[int, int]] | None = None  # para pól, między którymi stoją drzwi

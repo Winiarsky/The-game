@@ -90,7 +90,7 @@ state_lock = Lock()
 state_version = 0
 pending_scans = 0
 pending_lock = Lock()
-click_queue: "Queue[dict[str, int]]" = Queue()
+click_queue: "Queue[dict[str, Any]]" = Queue()
 runtime_process: subprocess.Popen | None = None
 runtime_info: dict[str, Any] = {}
 runtime_lock = Lock()
@@ -576,6 +576,13 @@ def simulate_click():
     return jsonify({"ok": True})
 
 
+@app.post("/simulate/cancel_scan")
+def simulate_cancel_scan():
+    click_queue.put({"event": "cancel"})
+    logger.info("Dodano anulowanie aktywnego scan_board do kolejki.")
+    return jsonify({"ok": True, "event": "cancel"})
+
+
 @app.get("/scan_board")
 def scan_board():
     global pending_scans
@@ -587,9 +594,21 @@ def scan_board():
         with pending_lock:
             pending_scans -= 1
 
+    event = str(click.get("event") or "press").strip().lower()
+    if event in {"cancel", "cancelled", "stop", "abort"}:
+        response = {
+            "ok": True,
+            "type": "cancel",
+            "event": "cancel",
+            "cancelled": True,
+        }
+        logger.info("Zwracam anulowanie scan_board: %s", response)
+        return jsonify(response)
+
     response = {
         "ok": True,
         "type": "key",
+        "event": "press",
         "row": click["row"] + 1,
         "col": click["col"] + 1,
     }

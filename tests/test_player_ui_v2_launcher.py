@@ -38,12 +38,13 @@ class _ProcStub:
 @pytest.fixture()
 def ui_client(monkeypatch):
     monkeypatch.setattr(player_ui_v2_app_module, "events_history", [])
-    monkeypatch.setattr(player_ui_v2_app_module, "prompts", {})
     monkeypatch.setattr(player_ui_v2_app_module, "subscribers", set())
     monkeypatch.setattr(player_ui_v2_app_module, "event_ids", itertools.count(1))
-    monkeypatch.setattr(player_ui_v2_app_module, "prompt_ids", itertools.count(1))
     monkeypatch.setattr(player_ui_v2_app_module, "session_ids", itertools.count(2))
     monkeypatch.setattr(player_ui_v2_app_module, "current_session_id", "ui-session-1")
+    prompt_director = player_ui_v2_app_module.PromptDirector(session_id="ui-session-1")
+    prompt_director.set_publisher(player_ui_v2_app_module._publish)
+    monkeypatch.setattr(player_ui_v2_app_module, "prompt_director", prompt_director)
     monkeypatch.setattr(
         player_ui_v2_app_module,
         "runtime_state",
@@ -59,6 +60,8 @@ def ui_client(monkeypatch):
             "command": [],
             "base_url": None,
             "error": None,
+            "board_backend": None,
+            "board_url": None,
         },
     )
     with player_ui_v2_app_module.app.test_client() as client:

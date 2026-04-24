@@ -16,7 +16,7 @@ from states.heroes_turns import HeroesTurn
 
 from game import Game
 from runtime_setup import build_runtime_setup_plan
-from narration import NARRATOR_TITLE, build_narration_communication
+from narration import NARRATOR_TITLE
 from scenario_flow import load_scenario_flow, resolve_map_payload
 
 
@@ -222,25 +222,20 @@ class ScenarioSession:
                     continue
                 if self.current_game is not None:
                     if kind == "show_prompt":
-                        ui = getattr(self.current_game, "ui", None)
-                        if ui is not None and getattr(ui, "enabled", False) and hasattr(ui, "prompt_info"):
-                            try:
-                                ui.prompt_info(
-                                    NARRATOR_TITLE,
-                                    prompt_long=message,
-                                    source="scenario_flow",
-                                    communication=build_narration_communication(
-                                        summary="Co się dzieje",
-                                        body_markdown=message,
-                                        priority="info",
-                                        semantic_type="status_update",
-                                        channel="prompt",
-                                        blocking=True,
-                                    ),
-                                )
-                            except Exception:
-                                self.current_game.ui_narration(message, summary="Co się dzieje", source="scenario_flow")
-                        else:
+                        prompt_sent = False
+                        try:
+                            prompt_sent = self.current_game.player_prompt.info(
+                                NARRATOR_TITLE,
+                                body_markdown=message,
+                                summary="Co się dzieje",
+                                source="scenario_flow",
+                                scope_key="scenario_transition",
+                                dedupe_key=f"scenario_prompt:{_safe_id(trigger)}:{_safe_id(map_id)}:{_safe_id(target_id)}:{_safe_id(message)}",
+                                semantic_type="required_action",
+                            ) is not None
+                        except Exception:
+                            prompt_sent = False
+                        if not prompt_sent:
                             self.current_game.ui_narration(message, summary="Co się dzieje", source="scenario_flow")
                     else:
                         self.current_game.ui_narration(message, summary="Co się dzieje", source="scenario_flow")
@@ -501,13 +496,19 @@ class ScenarioSession:
                     f"Wybrane pole wejścia dla bohatera {hero_name}: {target_position}.\n"
                     "Przenieś figurkę na to pole i potwierdź Enterem."
                 )
-                ui = getattr(game, "ui", None)
-                if ui is not None and getattr(ui, "enabled", False) and hasattr(ui, "prompt_info"):
-                    try:
-                        ui.prompt_info("Przenieś bohatera", prompt_long=confirm_prompt, source="scenario_transition_place")
-                    except Exception:
-                        game.ui_log(confirm_prompt)
-                else:
+                confirm_sent = False
+                try:
+                    confirm_sent = game.player_prompt.info(
+                        "Przenieś bohatera",
+                        body_markdown=confirm_prompt,
+                        summary="Zmiana mapy",
+                        source="scenario_transition_place",
+                        scope_key="scenario_transition",
+                        dedupe_key=f"scenario_transition_place:{self.current_map_id}:{hero_name}",
+                    ) is not None
+                except Exception:
+                    confirm_sent = False
+                if not confirm_sent:
                     game.ui_log(confirm_prompt)
             try:
                 game.board.place(hero, target_position)
@@ -698,3 +699,11 @@ class ScenarioSession:
                     self.current_game.board.add_interactable(obj, pos_tuple)
             except Exception:
                 logger.debug("Nie udało się zespawnować obiektu %s na %s.", object_id, pos_tuple, exc_info=True)
+
+
+def _safe_id(value: object) -> str:
+    text = str(value or "").strip().lower()
+    if not text:
+        return "none"
+    normalized = "".join(ch if ch.isalnum() else "_" for ch in text)
+    return normalized[:64] or "none"

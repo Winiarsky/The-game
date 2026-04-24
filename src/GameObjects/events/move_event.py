@@ -90,6 +90,8 @@ class MoveEvent(GameEvent):
         """Czeka na kliknięcie pola na planszy, odrzuca wybory poza planszą."""
         while True:
             target = ctx.game.conn.scan_board(None)
+            if target is None:
+                return None
             if board.in_bounds(target):
                 return target
             logger.info("Wybrane pole %s jest poza planszą.", target)
@@ -448,6 +450,19 @@ class MoveEvent(GameEvent):
                         leds_colors.append(color)
                     _set_leds(leds_positions, leds_colors)
                     confirm = game.conn.scan_board(None)
+
+                    if confirm is None:
+                        if active_path_id:
+                            game.ui_event("path_clear", {"id": active_path_id})
+                            active_path_id = None
+                        last_led_positions = None
+                        last_led_colors = None
+                        try:
+                            game.conn.leds_off()
+                        except Exception:
+                            pass
+                        logger.info("Ruch anulowany przed potwierdzeniem.")
+                        return EventResult.noop(message="Anulowano ruch.")
 
                     if confirm != confirm_target:
                         if active_path_id:

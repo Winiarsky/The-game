@@ -13,6 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from board import consts
 from hero import Hero
 from localization import localize_term_pl, localized_hint_pl
+from prompt_copy import merge_menu_prompt, prompt_value
 from skills import Skill
 from spell_management import initialize_actor_spell_management
 from character_creation import (
@@ -35,13 +36,14 @@ class Start(State):
     
     def welcome_message(self):
         logger.info("Witamy w grze planszowej!")
-        self.game.ui_log("Witamy w grze planszowej!")
+        self.game.ui_log(str(prompt_value("setup.welcome", "body_markdown", "Witamy w grze planszowej!")))
         
     def set_heroes_starting_positions(self) -> State:
         heroes: list[Hero] = self.game.heroes
         used_character_ids: set[str] = set()
         starting_positions = [tuple(pos) for pos in self.game.scenario['starting_positions']]
         preselected_count = int(getattr(self.game, "preselected_hero_count", 0) or 0)
+        locked_preselected_setup = preselected_count > 0
         logger.info("Ustawianie pozycji startowych bohaterów.")
         self.game.ui_log("Ustawianie pozycji startowych bohaterów.")
         ui_idle_hint = getattr(self.game, "ui_idle_hint", None)
@@ -55,21 +57,34 @@ class Start(State):
                 return Combat(self.game)
             return HeroesTurn(self.game)
 
-        def _setup_single_hero(preselected_hero: Hero | None = None) -> bool:
+        def _setup_single_hero(preselected_hero: Hero | None = None) -> str:
             hero = preselected_hero or self._pick_or_create_hero(used_character_ids)
             if hero is None:
                 self.game.ui_log("Nie wybrano bohatera. Spróbuj ponownie.")
-                return False
+                return "retry"
 
             hero_name = str(getattr(hero, "name", "Bohater") or "Bohater")
             logger.info("Wybierz pole startowe dla bohatera %s.", hero_name)
-            self.game.ui_log(
-                f"Wybierz puste pole startowe dla bohatera {hero_name}, klikając jedno z podświetlonych pól."
+            selection_prompt = str(
+                prompt_value(
+                    "setup.hero_setup_select_position",
+                    "body_markdown",
+                    f"Wybierz puste pole startowe dla bohatera {hero_name}, klikając jedno z podświetlonych pól.",
+                    hero_name=hero_name,
+                )
             )
+            self.game.ui_log(selection_prompt)
             if callable(ui_idle_hint):
                 ui_idle_hint(
-                    "Wskaż miejsce dla figurki",
-                    f"Wybierz puste pole startowe dla bohatera {hero_name}, klikając jedno z podświetlonych pól.",
+                    str(
+                        prompt_value(
+                            "setup.hero_setup_select_position",
+                            "title",
+                            f"Wskaż miejsce dla figurki: {hero_name}",
+                            hero_name=hero_name,
+                        )
+                    ),
+                    selection_prompt,
                 )
             board_occupant_at = getattr(self.game.board, "occupant_at", None)
             occupied_positions = {
@@ -87,31 +102,78 @@ class Start(State):
             ]
             if not available_positions:
                 self.game.ui_log("Brak wolnych pól startowych dla kolejnego bohatera.")
-                return False
+                return "failed"
             self.game.conn.set_leds(available_positions, consts.MOVE_FIELD_RGB)
             time.sleep(0.12)
             logger.info("Odczytuje wybrane pole startowe...")
             try:
-                pos = self.game.conn.scan_board(available_positions)
+                try:
+                    pos = self.game.conn.scan_board(available_positions)
+                except TypeError:
+                    pos = self.game.conn.scan_board(available_positions)
             finally:
                 self.game.conn.leds_off()
             if pos is None:
-                self.game.ui_log("Nie odczytano pola. Spróbuj ponownie.")
-                return False
-            prompt = f"Ustaw figurkę bohatera {hero_name} na polu startowym {pos}."
+                self.game.ui_log(
+                    str(
+                        prompt_value(
+                            "setup.hero_setup_retry_position",
+                            "body_markdown",
+                            "Nie wybrano pola startowego. Spróbuj ponownie.",
+                            hero_name=hero_name,
+                        )
+                    )
+                )
+                return "cancelled"
+            prompt = str(
+                prompt_value(
+                    "setup.hero_setup_place_figure",
+                    "body_markdown",
+                    f"Ustaw figurkę bohatera {hero_name} na polu startowym {pos}.",
+                    hero_name=hero_name,
+                    position=pos,
+                )
+            )
             self.game.ui_log(prompt)
             if callable(ui_idle_hint):
-                ui_idle_hint("Ustaw figurkę bohatera", prompt)
+                ui_idle_hint(
+                    str(
+                        prompt_value(
+                            "setup.hero_setup_place_figure",
+                            "title",
+                            f"Ustaw figurkę: {hero_name}",
+                            hero_name=hero_name,
+                            position=pos,
+                        )
+                    ),
+                    prompt,
+                )
             ui_narration = getattr(self.game, "ui_narration", None)
             if callable(ui_narration):
                 try:
                     ui_narration(
                         prompt,
-                        summary="Co robić teraz",
+                        summary=str(
+                            prompt_value(
+                                "setup.hero_setup_place_figure",
+                                "summary",
+                                "Co robić teraz",
+                                hero_name=hero_name,
+                                position=pos,
+                            )
+                        ),
                         source="hero_setup_place",
                         channel="timeline",
                         blocking=False,
-                        next_hint="Po ustawieniu figurki wybierz kolejny krok w setupie.",
+                        next_hint=str(
+                            prompt_value(
+                                "setup.hero_setup_place_figure",
+                                "cta",
+                                "Po ustawieniu figurki wybierz kolejny krok w setupie.",
+                                hero_name=hero_name,
+                                position=pos,
+                            )
+                        ),
                     )
                 except Exception:
                     pass
@@ -119,7 +181,7 @@ class Start(State):
                 self.game.board.place(hero, pos)
             except ValueError as exc:
                 logger.error("Nie można ustawić bohatera: %s", exc)
-                return False
+                return "failed"
             heroes.append(hero)
             char_id = str(getattr(hero, "character_id", "") or "").strip().lower()
             if char_id:
@@ -132,22 +194,49 @@ class Start(State):
             self._maybe_prepare_spells(hero)
             self.game.ui_hero(hero, note=f"Ustawiony na polu startowym {pos}")
             self.game.ui_log(f"Bohater ustawiony na pozycji {pos}.")
-            return True
+            return "placed"
 
-        while getattr(self.game, "preselected_character_ids", None):
-            hero = self._consume_preselected_hero(used_character_ids)
+        pending_preselected_hero: Hero | None = None
+        while pending_preselected_hero is not None or getattr(self.game, "preselected_character_ids", None):
+            hero = pending_preselected_hero or self._consume_preselected_hero(used_character_ids)
             if hero is None:
+                pending_preselected_hero = None
                 continue
-            _setup_single_hero(hero)
+            outcome = _setup_single_hero(hero)
+            if outcome == "placed":
+                pending_preselected_hero = None
+                continue
+            if locked_preselected_setup and outcome == "cancelled":
+                self.game.ui_log(
+                    str(
+                        prompt_value(
+                            "setup.hero_setup_retry_preselected",
+                            "body_markdown",
+                            f"Ponów ustawienie figurki dla wybranego bohatera {getattr(hero, 'name', 'Bohater')}.",
+                            hero_name=str(getattr(hero, "name", "Bohater") or "Bohater"),
+                        )
+                    )
+                )
+                pending_preselected_hero = hero
+                continue
+            pending_preselected_hero = None
 
         if preselected_count and any(getattr(hero, "position", None) is not None for hero in heroes):
-            self.game.ui_log("Setup bohaterów zakończony automatycznie z wybranych postaci.")
+            self.game.ui_log(
+                str(
+                    prompt_value(
+                        "setup.hero_setup_complete_preselected",
+                        "body_markdown",
+                        "Setup bohaterów zakończony automatycznie z wybranych postaci.",
+                    )
+                )
+            )
             return _finish_setup()
 
         while True:
             has_hero_on_board = any(getattr(hero, "position", None) is not None for hero in heroes)
             if not has_hero_on_board:
-                if not _setup_single_hero():
+                if _setup_single_hero() != "placed":
                     continue
                 continue
             if has_hero_on_board:
@@ -171,6 +260,7 @@ class Start(State):
                     source="hero_setup_next",
                     options=options,
                     layout="menu_numpad",
+                    prompt_id="setup.hero_setup_next",
                 )
                 picked = self._decode_menu_choice(answer or "", options) if answer else None
                 if picked == "__start_game__":
@@ -181,6 +271,55 @@ class Start(State):
                     _setup_single_hero()
                     continue
         return _finish_setup()
+
+    def _choose_start_position_from_ui(
+        self,
+        available_positions: list[tuple[int, int]],
+        hero_name: str,
+    ) -> tuple[int, int] | None:
+        if not available_positions:
+            return None
+        if len(available_positions) == 1:
+            return tuple(available_positions[0])
+        ui = getattr(self.game, "ui", None)
+        options: list[dict[str, Any]] = []
+        for pos in available_positions:
+            options.append(
+                {
+                    "id": str(tuple(pos)),
+                    "label": f"Pole {tuple(pos)}",
+                    "desc": f"Ustaw {hero_name} na polu startowym {tuple(pos)}.",
+                    "key": "",
+                }
+            )
+        if ui is not None and hasattr(ui, "prompt_choice"):
+            try:
+                answer = ui.prompt_choice(
+                    f"Wybierz pole startowe dla bohatera {hero_name}",
+                    choices=[item["label"] for item in options],
+                    source="hero_setup_position",
+                    layout="menu_numpad",
+                    title="Wybór pola startowego",
+                    subtitle="Jeśli plansza nie odpowiada, wybierz pole tutaj.",
+                    choice_meta=[
+                        {
+                            "raw": item["id"],
+                            "label": item["label"],
+                            "desc": item["desc"],
+                            "key": "",
+                        }
+                        for item in options
+                    ],
+                )
+            except Exception:
+                answer = None
+            if answer:
+                picked = self._decode_menu_choice(str(answer), options)
+                if picked:
+                    for pos in available_positions:
+                        if str(tuple(pos)) == str(picked):
+                            return tuple(pos)
+        return None
 
     def _character_repository(self) -> CharacterRepository:
         return CharacterRepository(PROJECT_ROOT / "data" / "heroes")
@@ -222,6 +361,7 @@ class Start(State):
             source="hero_select",
             options=options_with_create,
             layout="menu_numpad",
+            prompt_id="setup.hero_select_menu",
         )
         if not answer:
             return None
@@ -268,9 +408,17 @@ class Start(State):
         source: str,
         options: list[dict[str, Any]],
         layout: str = "dialog",
+        prompt_id: str | None = None,
     ) -> str | None:
         if not options:
             return None
+        title, subtitle, options = merge_menu_prompt(
+            prompt_id,
+            title=title,
+            subtitle=subtitle,
+            options=options,
+            source=source,
+        )
         ui = getattr(self.game, "ui", None)
         choice_meta = []
         for idx, option in enumerate(options, start=1):
@@ -295,6 +443,7 @@ class Start(State):
                     title=title,
                     subtitle=subtitle,
                     choice_meta=choice_meta,
+                    prompt_id=prompt_id,
                 )
                 if answer:
                     return str(answer)
@@ -752,6 +901,7 @@ class Start(State):
                 source="advanced_alchemy_budget",
                 options=options,
                 layout="menu_numpad",
+                prompt_id="setup.advanced_alchemy_budget",
             )
             if raw is None:
                 return None
@@ -797,6 +947,7 @@ class Start(State):
                         f"Dostępne eventy: {preview}"
                     ),
                     source="advanced_alchemy",
+                    prompt_id="setup.advanced_alchemy_intro",
                 )
         except Exception:
             pass
@@ -831,6 +982,7 @@ class Start(State):
                     source="advanced_alchemy_choice",
                     options=crafting_options,
                     layout="menu_numpad",
+                    prompt_id="setup.advanced_alchemy_choice",
                 )
                 if raw_choice is None:
                     self.game.ui_log(

@@ -16,7 +16,7 @@ from character_creation.mechanics import RANK_BONUS, proficiency_bonus
 from led_fx import animate_projectile_line
 from skills import Skill
 
-from ..base import EventContext, EventResult
+from ..base import EventContext, EventResult, emit_prompt_narration
 from ..attack.attack_base import check_concealed
 from .magic_event import MagicEvent
 from .magic_utils import pick_target_in_range
@@ -514,6 +514,52 @@ class BaseMagicAttackEvent(MagicEvent):
         except Exception:
             logger.debug("Nie udało się odtworzyć animacji zaklęcia.", exc_info=True)
 
+    def _confirm_target_click(
+        self,
+        ctx: EventContext,
+        *,
+        source_pos: tuple[int, int],
+        target,
+        target_pos: tuple[int, int],
+    ) -> bool:
+        ui = getattr(ctx.game, "ui", None)
+        if ui is None or not getattr(ui, "enabled", False):
+            return True
+        conn = getattr(ctx.game, "conn", None)
+        if conn is None or not hasattr(conn, "scan_board"):
+            return True
+
+        target_name = str(getattr(target, "name", None) or "cel")
+        emit_prompt_narration(
+            ctx.game,
+            f"Potwierdź cel czaru: kliknij figurkę/pole {target_name} jeszcze raz. Kliknięcie rzucającego anuluje wybór.",
+            source=f"{getattr(self, 'name', 'spell')}:target_confirm",
+            dedupe_key=f"{getattr(self, 'name', 'spell')}:target_confirm:{target_pos}",
+            next_hint="Kliknij wybrany cel jeszcze raz, aby wykonać czar.",
+        )
+        positions = [target_pos]
+        if source_pos != target_pos:
+            positions.append(source_pos)
+        colors = [list(getattr(consts, "MAGIC_TARGET_CONFIRM_RGB", [80, 180, 255]))]
+        if source_pos != target_pos:
+            colors.append(list(consts.HERO_HIGHLIGHT_RGB))
+        choice = None
+        try:
+            try:
+                conn.set_leds(positions, colors)
+            except Exception:
+                pass
+            try:
+                choice = conn.scan_board(positions)
+            except Exception:
+                choice = None
+        finally:
+            try:
+                conn.leds_off()
+            except Exception:
+                pass
+        return choice is not None and tuple(choice) == tuple(target_pos)
+
     def _iter_candidates(self, game) -> Iterable[tuple[object, tuple[int, int] | None, str]]:
         if self.target_kind == "hero":
             for hero in getattr(game, "heroes", []):
@@ -584,6 +630,10 @@ class BaseMagicAttackEvent(MagicEvent):
             )
         if target is None or target_pos is None:
             return EventResult.cancelled(message="Brak celu w zasięgu.")
+
+        target_pos = tuple(target_pos)
+        if not self._confirm_target_click(ctx, source_pos=source_pos, target=target, target_pos=target_pos):
+            return EventResult.cancelled(message="Nie potwierdzono celu czaru.")
 
         if not check_concealed(ctx, target):
             self._play_projectile_animation(ctx.game, source_pos, target_pos)

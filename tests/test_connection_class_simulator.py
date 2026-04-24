@@ -27,6 +27,9 @@ class _FakeSimulatorBackend:
     def leds_off(self):
         self.cleared = True
 
+    def cancel_scan(self):
+        self.cancelled = True
+
 
 @pytest.fixture
 def conn(monkeypatch):
@@ -53,3 +56,8 @@ def test_leds_set_and_off(conn):
 
     conn.leds_off()
     assert conn._backend.cleared is True
+
+
+def test_cancel_scan_is_forwarded(conn):
+    conn.cancel_scan()
+    assert conn._backend.cancelled is True

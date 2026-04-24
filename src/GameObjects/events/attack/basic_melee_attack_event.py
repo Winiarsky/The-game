@@ -7,7 +7,13 @@ from board import consts
 from bonuses import BonusEffect, BonusType, build_modifiers_grid
 from combat import refresh_flanking_statuses
 from combat.degree_of_success import is_critical_success, is_hit, natural_shift_from_roll, resolve_outcome
-from combat.damage_utils import burn_it_bonus, burn_it_prompt_note, remove_defeated_enemy
+from combat.damage_utils import (
+    added_status_labels,
+    burn_it_bonus,
+    burn_it_prompt_note,
+    remove_defeated_enemy,
+    snapshot_statuses,
+)
 from GameObjects.interactions_mixin import prompt_for_roll
 from GameObjects.companions.support_runtime import (
     animal_companion_support_damage_bonus,
@@ -1003,6 +1009,7 @@ class BasicMeleeAttackEvent(AttackEventBase):
             except Exception:
                 pass
 
+        target_status_snapshot = snapshot_statuses(enemy)
         defeated = False
         try:
             defeated = self._apply_damage_components(enemy, damage_components, nonlethal=nonlethal_attack)
@@ -1051,8 +1058,15 @@ class BasicMeleeAttackEvent(AttackEventBase):
                 target=enemy,
                 target_pos=enemy_pos,
                 source_action=self.action_id_base,
+                source_label=str(
+                    getattr(selected_weapon, "name", None)
+                    or getattr(selected_weapon, "item_id", None)
+                    or self.weapon_label
+                ),
                 damage=total_damage,
                 damage_components=damage_components,
+                applied_statuses=added_status_labels(target_status_snapshot, enemy),
+                defeated=defeated,
             )
         if not suppress_record:
             self._record_attack(

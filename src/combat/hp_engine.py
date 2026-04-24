@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from prompt_text_catalog import render_prompt_text
+
 
 _HP_MAX_FLAT_KEYS = (
     "hp_max_flat",
@@ -205,6 +207,68 @@ def _consume_temp_hp(actor: Any, amount: int) -> tuple[int, int]:
     return absorbed, incoming - absorbed
 
 
+def _is_player_wound_target(actor: Any) -> bool:
+    if actor is None:
+        return False
+    if bool(getattr(actor, "character_id", None)):
+        return True
+    try:
+        from hero import Hero
+
+        return isinstance(actor, Hero)
+    except Exception:
+        return False
+
+
+def _prompt_player_wounds(actor: Any, hp_damage: int, damage_type: str, *, source: str | None = None) -> None:
+    if hp_damage <= 0 or not _is_player_wound_target(actor):
+        return
+    try:
+        from ui_client import get_ui_client
+
+        ui = get_ui_client()
+    except Exception:
+        return
+    if ui is None or not getattr(ui, "enabled", False):
+        return
+
+    name = str(getattr(actor, "name", None) or "Bohater")
+    total_wounds = max(0, _safe_int(getattr(actor, "wounds", 0), 0))
+    max_hp = computed_max_hp(actor)
+    total_line = f"Łącznie ran: {total_wounds}/{max_hp}." if max_hp else f"Łącznie ran: {total_wounds}."
+    damage_type_label = str(damage_type or "").strip().lower()
+    damage_line = f"Typ obrażeń: {damage_type_label}." if damage_type_label else None
+    prompt_text = render_prompt_text(
+        "combat.player_wounds",
+        actor_name=name,
+        hp_damage=hp_damage,
+        total_wounds_line=total_line,
+        damage_type_line=damage_line or "",
+    )
+    title = str(prompt_text.get("title") or f"Rany: {name}")
+    prompt_long = str(
+        prompt_text.get("body_markdown")
+        or (
+            f"{name} otrzymuje {hp_damage} ran.\n"
+            f"Zapisz {hp_damage} ran na karcie postaci i potwierdź."
+        )
+    )
+    details_markdown = str(prompt_text.get("details_markdown") or "").strip() or None
+    summary = str(prompt_text.get("summary") or f"{name} otrzymuje {hp_damage} ran.")
+    try:
+        ui.prompt_info(
+            title,
+            prompt_long=prompt_long,
+            source=source or "player_wounds",
+            scope_key=f"wounds:{getattr(actor, 'object_id', name)}",
+            dedupe_key=f"wounds:{getattr(actor, 'object_id', name)}:{total_wounds}:{hp_damage}:{damage_type_label}",
+            summary=summary,
+            details_markdown=details_markdown,
+        )
+    except Exception:
+        return
+
+
 def apply_damage(
     actor: Any,
     amount: int,
@@ -246,6 +310,8 @@ def apply_damage(
             except Exception:
                 pass
             defeated = hp_now <= 0
+
+    _prompt_player_wounds(actor, hp_damage, damage_type, source=source)
 
     return {
         "incoming": incoming,

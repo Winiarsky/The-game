@@ -63,6 +63,18 @@ def test_filter_player_events_hides_internal_cancel_and_skill_check():
     assert "move" in filtered
 
 
+def test_filter_player_events_hides_enemy_module_and_enemy_tag_actions():
+    events = {
+        "goblin_dog_scratch": _event_cls("GameObjects.events.enemy.goblin_dog_scratch_event", ["enemy", "disease"]),
+        "move": _event_cls("GameObjects.events.move_event", ["move"]),
+    }
+
+    filtered = filter_player_events(events, actor_is_hero=True)
+
+    assert "goblin_dog_scratch" not in filtered
+    assert "move" in filtered
+
+
 def test_filter_events_for_actor_hides_command_animal_without_status():
     events = {
         "command_animal_companion": _event_cls("GameObjects.events.command_animal_companion_event", ["companion", "command"]),

@@ -140,7 +140,14 @@
                                 </div>
                                 <div id="action-priority" class="badge badge-info">info</div>
                             </div>
-                            <p id="action-summary" class="action-summary">Po uruchomieniu scenariusza centralna karta pokaże bieżące instrukcje dla gracza.</p>
+                            <section id="action-help" class="action-block action-block-help hidden">
+                                <div class="panel-kicker">Zasady i komendy</div>
+                                <div id="action-help-body" class="prose"></div>
+                            </section>
+                            <section id="action-scene" class="action-block action-block-scene hidden">
+                                <div class="panel-kicker">Sytuacja</div>
+                                <div id="action-scene-body" class="prose compact"></div>
+                            </section>
                             <div id="action-progress" class="progress hidden">
                                 <div class="progress-head">
                                     <span id="action-progress-label">Postęp</span>
@@ -148,11 +155,6 @@
                                 </div>
                                 <div class="progress-track"><span id="action-progress-bar"></span></div>
                             </div>
-                            <div id="action-body" class="prose"></div>
-                            <details id="action-details" class="details-box hidden">
-                                <summary>Szczegóły techniczne</summary>
-                                <div id="action-details-body" class="prose compact"></div>
-                            </details>
                             <div id="prompt-meta" class="prompt-meta"></div>
                             <div id="roll-breakdown" class="roll-breakdown hidden"></div>
                             <div id="choice-list" class="choice-list"></div>

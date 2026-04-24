@@ -1,0 +1,13 @@
+{
+  "events.board_selection_message": {
+    "body_markdown": "Wybierz {subject}{range_suffix} na planszy.{confirmation_suffix}{alternative_suffix}"
+  },
+  "events.default_prompt_body.info": {
+    "body_markdown": "{body}\n\nZapoznaj się z informacją i potwierdź, gdy będziesz gotów.",
+    "next_hint": "Potwierdź prompt, gdy będziesz gotów."
+  },
+  "events.default_prompt_body.choice": {
+    "body_markdown": "{body}\n\nWybierz opcję i potwierdź wybór.",
+    "next_hint": "Wybierz opcję w panelu promptu."
+  }
+}

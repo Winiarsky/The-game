@@ -35,8 +35,77 @@ from GameObjects.events.registry import dispatch_event, list_events
 import GameObjects.events.all_events  # noqa: F401
 from enemy_prompting import clear_enemy_highlight, enemy_highlight, enemy_prompt_step
 from narration import narrate_action_result
+from prompt_copy import prompt_value
+from prompt_text_catalog import render_prompt_text
 
 logger = logging.getLogger(__name__)
+
+
+def _format_hp_summary(actor: Any) -> str:
+    try:
+        from combat.hp_engine import computed_max_hp, current_hp
+
+        hp = current_hp(actor)
+        max_hp = computed_max_hp(actor)
+        if hp is None or max_hp is None:
+            return "nieznane"
+        return f"{int(hp)}/{int(max_hp)}"
+    except Exception:
+        return "nieznane"
+
+
+def _build_incapacitated_prompt_content(actor: Any, *, recovery_message: str | None = None) -> dict[str, str]:
+    try:
+        from statuses import death_threshold, dying_value, is_stable, is_unconscious, wounded_value
+
+        dying = max(0, int(dying_value(actor) or 0))
+        wounded = max(0, int(wounded_value(actor) or 0))
+        stable = bool(is_stable(actor))
+        unconscious = bool(is_unconscious(actor))
+        threshold = max(1, int(death_threshold(actor) or 4))
+    except Exception:
+        dying = 0
+        wounded = 0
+        stable = False
+        unconscious = False
+        threshold = 4
+
+    hp_summary = _format_hp_summary(actor)
+    recovery_message_block = f"{str(recovery_message).strip()}\n\n" if str(recovery_message or "").strip() else ""
+    state_summary = (
+        str(recovery_message).strip()
+        if str(recovery_message or "").strip()
+        else f"{getattr(actor, 'name', 'Postać')} nie może teraz działać."
+    )
+    rendered = render_prompt_text(
+        "combat.hero_incapacitated",
+        state_summary=state_summary,
+        recovery_message_block=recovery_message_block,
+        hp_summary=hp_summary,
+        dying_line=(str(dying) if dying > 0 else "brak"),
+        wounded_line=(str(wounded) if wounded > 0 else "brak"),
+        unconscious_line=("tak" if unconscious else "nie"),
+        stable_line=("tak" if stable else "nie"),
+        threshold=threshold,
+    )
+    body = str(rendered.get("body_markdown") or "").strip()
+    details = str(rendered.get("details_markdown") or "").strip()
+    summary = str(rendered.get("summary") or state_summary).strip()
+    if not body:
+        body = (
+            f"**Aktualny stan**\n"
+            f"- HP: {hp_summary}\n"
+            f"- Dying: {dying if dying > 0 else 'brak'}\n"
+            f"- Wounded: {wounded if wounded > 0 else 'brak'}\n"
+            f"- Unconscious: {'tak' if unconscious else 'nie'}\n"
+            f"- Stable: {'tak' if stable else 'nie'}\n"
+            f"- Śmierć nastąpi przy Dying {threshold}."
+        )
+    return {
+        "summary": summary,
+        "body_markdown": body,
+        "details_markdown": details,
+    }
 
 
 class Combat(State):
@@ -215,6 +284,33 @@ class Combat(State):
             return bool(is_unconscious(actor))
         except Exception:
             return False
+
+    def _is_player_side_actor(self, actor: Any) -> bool:
+        if actor in list(getattr(self.game, "heroes", []) or []):
+            return True
+        return actor in list(getattr(self, "animal_companions", {}).values())
+
+    def _show_incapacitated_prompt(self, actor: Any, *, title: str, source: str, dedupe_key: str, recovery_message: str | None = None) -> None:
+        if not self._is_player_side_actor(actor):
+            return
+        player_prompt = getattr(self.game, "player_prompt", None)
+        if player_prompt is None:
+            return
+        try:
+            content = _build_incapacitated_prompt_content(actor, recovery_message=recovery_message)
+            player_prompt.info(
+                title,
+                body_markdown=content.get("body_markdown"),
+                source=source,
+                summary=content.get("summary"),
+                details_markdown=content.get("details_markdown") or None,
+                scope_key=f"hero_turn:incapacitated:{self._actor_id(actor)}",
+                dedupe_key=dedupe_key,
+                priority="action",
+                semantic_type="required_action",
+            )
+        except Exception:
+            logger.debug("Nie udało się pokazać promptu o stanie incapacitated dla %s.", actor, exc_info=True)
 
     def get_animal_companion(self, owner) -> Any | None:
         self._purge_dead_animal_companions()
@@ -755,6 +851,16 @@ class Combat(State):
                     message = str(recovery.get("message", "") or "").strip()
                     if message:
                         self.game.ui_log(f"{getattr(actor, 'name', 'Aktor')}: {message}")
+                        self._show_incapacitated_prompt(
+                            actor,
+                            title=f"{getattr(actor, 'name', 'Aktor')}: Recovery Check",
+                            source="combat_recovery_check",
+                            dedupe_key=(
+                                f"recovery_check:{self.round_index}:{self._actor_id(actor)}:"
+                                f"{message}:{self.actions_used.get(actor, 0)}"
+                            ),
+                            recovery_message=message,
+                        )
             except Exception as exc:
                 logger.debug("Nie udało się wykonać recovery check dla %s: %s", actor, exc)
 
@@ -1199,6 +1305,21 @@ class Combat(State):
             base = self.base_initiative.get(obj, getattr(obj, "initiative", -1))
             eff = self._effective_initiative(obj)
             delta = eff - base
+            status_labels: list[str] = []
+            try:
+                from ui_payloads import status_labels as _status_labels
+
+                status_labels = list(_status_labels(obj) or [])
+            except Exception:
+                status_labels = []
+            wounds = getattr(obj, "wounds", None)
+            if wounds is None and hasattr(obj, "hp") and hasattr(obj, "max_hp"):
+                try:
+                    max_hp = int(getattr(obj, "max_hp", 0) or 0)
+                    hp = int(getattr(obj, "hp", 0) or 0)
+                    wounds = max(0, max_hp - hp) if max_hp > 0 else None
+                except Exception:
+                    wounds = None
             order_payload.append(
                 {
                     "id": self._actor_id(obj),
@@ -1208,6 +1329,9 @@ class Combat(State):
                     "current": eff,
                     "delta": delta,
                     "done": obj in done_set,
+                    "wounds": wounds,
+                    "max_hp": getattr(obj, "max_hp", None),
+                    "statuses": status_labels,
                 }
             )
         self.game.ui_event(
@@ -1382,9 +1506,10 @@ class Combat(State):
         if ui is not None and hasattr(ui, "prompt_info") and getattr(ui, "enabled", False):
             try:
                 ui.prompt_info(
-                    "Statystyki",
+                    str(prompt_value("turns.actor_stats", "title", "Statystyki")),
                     prompt_long=text,
                     source="stats",
+                    prompt_id="turns.actor_stats",
                 )
                 return
             except Exception:
@@ -1414,6 +1539,7 @@ class Combat(State):
                     {"id": "end", "label": "Koniec", "desc": "Zakończ turę."},
                     {"id": "delay", "label": "Opóźnij", "desc": "Obniż inicjatywę i zagraj później."},
                 ],
+                prompt_id="turns.end_delay_menu",
             )
             decision = str(picked or "end").strip().lower()
 
@@ -1558,6 +1684,12 @@ class Combat(State):
                 self.game.ui_log(
                     f"{getattr(actor, 'name', 'Aktor')} jest nieprzytomny/dying - tura kończy się automatycznie."
                 )
+                self._show_incapacitated_prompt(
+                    actor,
+                    title=f"{getattr(actor, 'name', 'Aktor')} nie może działać",
+                    source="combat_incapacitated_turn",
+                    dedupe_key=f"incapacitated_turn:{self.round_index}:{self._actor_id(actor)}",
+                )
                 self._advance_turn()
                 return self
         except Exception:
@@ -1628,6 +1760,7 @@ class Combat(State):
             subtitle="8/2 nawigacja, Enter potwierdzenie.",
             source="intent",
             options=intent_options,
+            prompt_id="turns.intent_menu",
         )
         if highlighted:
             try:

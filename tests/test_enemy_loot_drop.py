@@ -1,4 +1,13 @@
+from pathlib import Path
+import sys
 from types import SimpleNamespace
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SRC_ROOT = PROJECT_ROOT / "src"
+for path in (PROJECT_ROOT, SRC_ROOT):
+    if str(path) not in sys.path:
+        sys.path.insert(0, str(path))
 
 from GameObjects.Interactables.loot_pile import LootPile
 from combat.damage_utils import cleanup_defeated_enemies, remove_defeated_enemy
@@ -46,7 +55,8 @@ def test_remove_defeated_enemy_drops_loot_pile_and_removes_enemy():
     item = SimpleNamespace(name="Sztylet", item_id="dagger", category="weapon")
     enemy = EnemyStub(loot_items=[item], loot_cp=35)
     board.occupants[enemy.position] = enemy
-    game = SimpleNamespace(board=board, enemies=[enemy], heroes=[])
+    logs = []
+    game = SimpleNamespace(board=board, enemies=[enemy], heroes=[], ui_log=lambda message, **kwargs: logs.append((message, kwargs)))
 
     result = remove_defeated_enemy(game, enemy, source="test")
 
@@ -66,6 +76,11 @@ def test_remove_defeated_enemy_drops_loot_pile_and_removes_enemy():
         if isinstance(entry, dict) and str(entry.get("kind", "")).lower() == "currency_cp"
     ]
     assert currency_entries and int(currency_entries[0].get("amount_cp", 0) or 0) == 35
+    assert logs
+    message, kwargs = logs[-1]
+    assert "zostaje loot" in message.lower()
+    communication = kwargs.get("communication") or {}
+    assert "Jak zebrać loot" in str(communication.get("details_markdown") or "")
 
 
 def test_cleanup_defeated_enemies_removes_only_dead_targets():
