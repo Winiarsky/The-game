@@ -34,9 +34,9 @@
   },
   "interaction.enemy_defeated_loot": {
     "title": "Przeciwnik pokonany",
-    "summary": "{enemy_name} pada.",
-    "body_markdown": "**{enemy_name}** pada.{loot_line}",
-    "details_markdown": "**Jak zebrać loot**\n- ustaw bohatera na polu lootu\n- użyj akcji **Interakcja**\n- wybierz **Podnieś loot**"
+    "summary": "{enemy_name} pada i schodzi z planszy.",
+    "body_markdown": "**{enemy_name}** pada.{remove_line}{loot_line}",
+    "details_markdown": "{defeat_details}"
   },
   "interaction.seek_preview": {
     "title": "Seek",

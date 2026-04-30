@@ -1223,15 +1223,19 @@ def _build_spell_choice_meta(spell_ids: list[str]) -> list[dict[str, str]]:
         tags = _event_tags(spell_id)
         if "cantrip" in tags:
             tier_label = "Cantrip"
+            tier_asset = "cantrip"
         elif "focus" in tags:
             tier_label = "Focus"
+            tier_asset = "focus"
         else:
             tier_label = ""
+            tier_asset = ""
             for tag in sorted(tags):
                 if tag.startswith("rank_"):
                     try:
                         num = int(tag[len("rank_"):])
                         tier_label = f"Ranga {num}"
+                        tier_asset = tag
                         break
                     except ValueError:
                         pass
@@ -1239,7 +1243,17 @@ def _build_spell_choice_meta(spell_ids: list[str]) -> list[dict[str, str]]:
         # Use hint from localization; if missing, auto-generate from event class attributes.
         efekt = hint or _auto_spell_desc(event_cls) or "brak opisu mechaniki"
         desc = f"Fluff: {label}{fluff_suffix}\nMechanika:\n- Kiedy: Wybierz do przygotowania.\n- Efekt: {efekt}"
-        out.append({"raw": spell_id, "label": label, "desc": desc})
+        out.append(
+            {
+                "raw": spell_id,
+                "label": label,
+                "desc": desc,
+                "spell_id": spell_id,
+                "asset_id": spell_id,
+                "spell_tier": tier_asset,
+                "category": "class",
+            }
+        )
     return out
 
 

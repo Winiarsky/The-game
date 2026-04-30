@@ -132,6 +132,8 @@ class ActionEventBus:
             }
 
         def _listener(event: ActionEvent) -> None:
+            if bool(event.get("internal_roll_only", False)):
+                return
             ui_event = getattr(self.game, "ui_event", None)
             if callable(ui_event):
                 try:

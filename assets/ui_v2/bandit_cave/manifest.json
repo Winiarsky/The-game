@@ -1,0 +1,227 @@
+{
+  "scenario_id": "bandit_cave",
+  "version": 1,
+  "base_path": "/assets/ui_v2/bandit_cave/",
+  "fallbacks": {
+    "actor": {
+      "id": "default_actor",
+      "label": "Default actor",
+      "image": "images/placeholders/default_actor.svg",
+      "alt": "Sylwetka postaci"
+    },
+    "choice": {
+      "id": "default_choice",
+      "label": "Default choice",
+      "image": "images/placeholders/default_choice.svg",
+      "alt": "Symbol wyboru"
+    },
+    "spell": {
+      "id": "default_spell",
+      "label": "Default spell",
+      "image": "images/spells/default_spell.svg",
+      "alt": "Symbol czaru"
+    },
+    "action": {
+      "id": "default_action",
+      "label": "Default action",
+      "image": "images/actions/default_action.svg",
+      "alt": "Symbol akcji"
+    },
+    "enemy": {
+      "id": "default_enemy",
+      "label": "Default enemy",
+      "image": "images/enemies/default_enemy.svg",
+      "alt": "Sylwetka przeciwnika"
+    }
+  },
+  "characters": {
+    "narrator": {
+      "id": "narrator",
+      "label": "Mistrz gry",
+      "image": "images/characters/narrator.svg",
+      "audio": "audio/voiceover/intro_001.mp3",
+      "alt": "Narrator scenariusza",
+      "category": "narration"
+    }
+  },
+  "enemies": {
+    "bandit": {
+      "id": "bandit",
+      "label": "Bandit",
+      "image": "images/enemies/bandit.svg",
+      "alt": "Bandyta z jaskini",
+      "category": "enemy"
+    },
+    "bandit_sharpshot": {
+      "id": "bandit_sharpshot",
+      "label": "Bandit Sharpshot",
+      "image": "images/enemies/bandit_sharpshot.svg",
+      "alt": "Bandyta strzelec",
+      "category": "enemy"
+    },
+    "guard_dog": {
+      "id": "guard_dog",
+      "label": "Guard Dog",
+      "image": "images/enemies/guard_dog.svg",
+      "alt": "Pies strażniczy",
+      "category": "enemy"
+    }
+  },
+  "spells": {
+    "acid_splash": {
+      "id": "acid_splash",
+      "label": "Acid Splash",
+      "image": "images/spells/acid_splash.svg",
+      "alt": "Rozprysk kwasu",
+      "category": "cantrip"
+    },
+    "electric_arc": {
+      "id": "electric_arc",
+      "label": "Electric Arc",
+      "image": "images/spells/electric_arc.svg",
+      "alt": "Łuk elektryczny",
+      "category": "cantrip"
+    },
+    "heal": {
+      "id": "heal",
+      "label": "Heal",
+      "image": "images/spells/heal.svg",
+      "alt": "Leczące światło",
+      "category": "rank_1"
+    },
+    "magic_missile": {
+      "id": "magic_missile",
+      "label": "Magic Missile",
+      "image": "images/spells/magic_missile.svg",
+      "alt": "Magiczny pocisk",
+      "category": "rank_1"
+    },
+    "cantrip": {
+      "id": "cantrip",
+      "label": "Cantrip",
+      "image": "images/spells/cantrip.svg",
+      "alt": "Symbol cantripu",
+      "category": "fallback"
+    },
+    "focus": {
+      "id": "focus",
+      "label": "Focus Spell",
+      "image": "images/spells/focus.svg",
+      "alt": "Symbol czaru focus",
+      "category": "fallback"
+    },
+    "rank_1": {
+      "id": "rank_1",
+      "label": "Rank 1 Spell",
+      "image": "images/spells/rank_1.svg",
+      "alt": "Symbol czaru pierwszej rangi",
+      "category": "fallback"
+    }
+  },
+  "actions": {
+    "move": {
+      "id": "move",
+      "label": "Ruch",
+      "image": "images/actions/stride.svg",
+      "alt": "Ślad ruchu",
+      "category": "movement"
+    },
+    "stride": {
+      "id": "stride",
+      "label": "Stride",
+      "image": "images/actions/stride.svg",
+      "alt": "Ślad ruchu",
+      "category": "movement"
+    },
+    "strike": {
+      "id": "strike",
+      "label": "Strike",
+      "image": "images/actions/strike.svg",
+      "alt": "Cięcie bronią",
+      "category": "combat"
+    },
+    "attack": {
+      "id": "attack",
+      "label": "Attack",
+      "image": "images/actions/strike.svg",
+      "alt": "Cięcie bronią",
+      "category": "combat"
+    },
+    "interact": {
+      "id": "interact",
+      "label": "Interact",
+      "image": "images/actions/interact.svg",
+      "alt": "Dłoń przy obiekcie",
+      "category": "generic"
+    },
+    "seek": {
+      "id": "seek",
+      "label": "Seek",
+      "image": "images/actions/seek.svg",
+      "alt": "Oko zwiadowcy",
+      "category": "generic"
+    },
+    "end": {
+      "id": "end",
+      "label": "End Turn",
+      "image": "images/actions/end_turn.svg",
+      "alt": "Koniec tury",
+      "category": "turn"
+    },
+    "raise_shield": {
+      "id": "raise_shield",
+      "label": "Raise Shield",
+      "image": "images/actions/defend.svg",
+      "alt": "Tarcza obronna",
+      "category": "combat"
+    }
+  },
+  "narration": {
+    "party_assembly": {
+      "id": "party_assembly",
+      "label": "Party assembly",
+      "audio": "audio/voiceover/ui_party_assembly_001.mp3",
+      "category": "voiceover"
+    },
+    "briefing_intro": {
+      "id": "briefing_intro",
+      "label": "Intro",
+      "audio": "audio/voiceover/intro_001.mp3",
+      "category": "voiceover"
+    },
+    "hint_dog_barking": {
+      "id": "hint_dog_barking",
+      "label": "Szczekanie psa",
+      "audio": "audio/voiceover/hint_dog_barking_001.mp3",
+      "category": "voiceover"
+    }
+  },
+  "music": {
+    "default": {
+      "id": "default",
+      "label": "Cave tension loop",
+      "audio": "audio/music/cave_tension_loop.mp3",
+      "category": "music"
+    },
+    "cave_entrance": {
+      "id": "cave_entrance",
+      "label": "Cave entrance ambience",
+      "audio": "audio/music/cave_entrance_ambience.mp3",
+      "category": "ambience"
+    }
+  },
+  "sfx": {
+    "choice_confirm": {
+      "id": "choice_confirm",
+      "label": "Choice confirm",
+      "audio": "audio/sfx/choice_confirm.mp3",
+      "category": "ui"
+    },
+    "active_actor": {
+      "id": "active_actor",
+      "label": "Active actor",
+      "audio": "audio/sfx/active_actor.mp3",
+      "category": "ui"
+    }
+  }
+}

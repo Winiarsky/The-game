@@ -1339,6 +1339,7 @@ class BaseRangeAttackEvent(AttackEventBase):
                     range_penalty=range_penalty,
                     critical=critical,
                     roll_only=True,
+                    internal_roll_only=True,
                     nonlethal=nonlethal_attack,
                 )
                 if not suppress_record:

@@ -18,6 +18,7 @@ from actions.move_utils import (
     _maybe_dispatch_move_reactions,
     terrain_move_bonus_feet,
 )
+from movement_markers import SCENARIO_TRANSITION_ACCEPTED, SCENARIO_TRANSITION_CANCELLED
 from statuses import STEALTH_STATUS
 
 from .base import EventContext, EventResult, GameEvent
@@ -228,7 +229,7 @@ class MoveEvent(GameEvent):
                 except Exception:
                     logger.debug("Nie udało się zaktualizować runtime trudnego terenu.", exc_info=True)
 
-            def _on_enter_wrapper(context, hero_obj, current_pos: tuple[int, int]) -> bool:
+            def _on_enter_wrapper(context, hero_obj, current_pos: tuple[int, int]):
                 nonlocal last_was_difficult
                 now_difficult = _is_difficult(current_pos)
                 if now_difficult and not last_was_difficult:
@@ -242,12 +243,16 @@ class MoveEvent(GameEvent):
                         pass
                 last_was_difficult = now_difficult
                 stopped = default_on_enter(context, hero_obj, current_pos)
+                if stopped in {SCENARIO_TRANSITION_ACCEPTED, SCENARIO_TRANSITION_CANCELLED}:
+                    return stopped
                 # sprawdź on_enter na obiektach pola (np. pułapki); zatrzymaj jeśli coś zwróci komunikat
                 try:
                     for obj in board.interactables_at(current_pos):
                         on_enter = getattr(obj, "on_enter", None)
                         if callable(on_enter):
                             msg = on_enter(hero_obj, game)
+                            if msg in {SCENARIO_TRANSITION_ACCEPTED, SCENARIO_TRANSITION_CANCELLED}:
+                                return msg
                             if msg:
                                 game.ui_log(msg)
                                 logger.info("on_enter zatrzymał ruch: %s", msg)
@@ -321,6 +326,7 @@ class MoveEvent(GameEvent):
                         "occupied": "Ruch zatrzymany – pole zajęte.",
                         "move_error": "Ruch przerwany przez błąd przesunięcia.",
                         "on_enter": "Ruch zatrzymany przez zdarzenie na polu.",
+                        "transition_cancelled": "Przejście anulowane. Bohater zostaje przed przejściem.",
                     }
                     msg = reason_map.get(reason or "", "Ruch zatrzymany.")
                     game.ui_log(msg)
@@ -517,6 +523,7 @@ class MoveEvent(GameEvent):
                         "occupied": "Ruch zatrzymany – pole zajęte.",
                         "move_error": "Ruch przerwany przez błąd przesunięcia.",
                         "on_enter": "Ruch zatrzymany przez zdarzenie na polu.",
+                        "transition_cancelled": "Przejście anulowane. Bohater zostaje przed przejściem.",
                     }
                     msg = reason_map.get(reason or "", "Ruch zatrzymany.")
                     game.ui_log(msg)

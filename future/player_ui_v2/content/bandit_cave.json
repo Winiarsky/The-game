@@ -3,6 +3,29 @@
   "title": "Bandit Cave",
   "tagline": "Wyprawa do jaskini przemytników, finał w dokach gotowych do ucieczki.",
   "tone": "PF2e codex meets smugglers' hideout",
+  "asset_manifest": "/assets/ui_v2/bandit_cave/manifest.json",
+  "audio_cues": {
+    "party_assembly": {
+      "audio": "/assets/ui_v2/bandit_cave/audio/voiceover/ui_party_assembly_001.mp3",
+      "kind": "voiceover"
+    },
+    "briefing_intro": {
+      "audio": "/assets/ui_v2/bandit_cave/audio/voiceover/intro_001.mp3",
+      "kind": "voiceover"
+    },
+    "music_default": {
+      "audio": "/assets/ui_v2/bandit_cave/audio/music/cave_tension_loop.mp3",
+      "kind": "music"
+    },
+    "ambience_cave_entrance": {
+      "audio": "/assets/ui_v2/bandit_cave/audio/music/cave_entrance_ambience.mp3",
+      "kind": "ambience"
+    },
+    "hint_dog_barking": {
+      "audio": "/assets/ui_v2/bandit_cave/audio/voiceover/hint_dog_barking_001.mp3",
+      "kind": "voiceover"
+    }
+  },
   "briefing_title": "Misja: Szlak Kontrabandy",
   "briefing_intro": "Drużyna schodzi do bandyckiej jaskini, aby przerwać szlak kontrabandy i przejąć statek gotowy do odpłynięcia. Po drodze trzeba przejść przez wejściową grotę, odkryć ukryte przejścia i oczyścić podziemne doki.",
   "stakes": "Jeśli załoga doków odpłynie, kontrabanda zniknie wraz z dowodami i łupem.",

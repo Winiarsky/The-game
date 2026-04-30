@@ -66,6 +66,9 @@ instance/
 .webassets-cache
 data/debug_sessions/*.jsonl
 
+# Local/generated audio assets
+*.mp3
+*.svg
 # Scrapy stuff:
 .scrapy
 

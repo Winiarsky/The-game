@@ -14,6 +14,7 @@ class HiddenCache(HiddenMixin, InteractableMixin):
     def __init__(
         self,
         *,
+        cache_id: str | None = None,
         loot: Optional[list[str]] = None,
         hidden: bool = True,
         allow_hidden_interaction: bool = True,
@@ -23,8 +24,11 @@ class HiddenCache(HiddenMixin, InteractableMixin):
         auto_reveal_on_enter: bool = False,
         auto_trigger_on_enter: bool = False,
         trap_effect: str | None = None,
+        trap_armed: bool = False,
+        trap_name: str = "Pułapka w skrytce",
         magical: bool = True,
         magical_description: str = "Wyczuwasz obecnosc magicznej skrytki",
+        description_on_reveal: str | None = None,
     ):
         InteractableMixin.__init__(
             self,
@@ -33,6 +37,7 @@ class HiddenCache(HiddenMixin, InteractableMixin):
             allow_hidden_interaction=allow_hidden_interaction,
             blocks_movement=False,
         )
+        self.cache_id = str(cache_id or "").strip()
         self.hidden = hidden
         self.revealed = not hidden
         self.reveal_dc = reveal_dc
@@ -40,11 +45,20 @@ class HiddenCache(HiddenMixin, InteractableMixin):
         self.reveal_tags = tuple(reveal_tags or [])
         self.loot = list(loot or [])
         self.opened = False
+        self.trap_armed = bool(trap_armed)
+        self.trap_name = str(trap_name or "Pułapka w skrytce")
+        self.trap_triggered = False
+        self.revealed_by_seek = False
         self.magical = magical
         self.magical_description = magical_description
         self.auto_reveal_on_enter = auto_reveal_on_enter
         self.auto_trigger_on_enter = auto_trigger_on_enter
         self.trap_effect = trap_effect or "Cichy alarm – czujesz niepokój."
+        self.description_on_reveal = (
+            str(description_on_reveal).strip()
+            if str(description_on_reveal or "").strip()
+            else None
+        )
         self.seek_color = list(consts.SEEK_CONTAINER_RGB)
         self.seek_color_name = "zielone"
         self.seek_label = "skrytka"
@@ -111,6 +125,12 @@ class HiddenCache(HiddenMixin, InteractableMixin):
         outcome, msg = self.try_reveal(result.total)
         return f"{msg} (wynik: {outcome})"
 
+    def try_reveal(self, roll: int) -> tuple[str, str]:
+        outcome, msg = super().try_reveal(roll)
+        if outcome in ("success", "critical_success") and self.revealed:
+            self.revealed_by_seek = True
+        return outcome, msg
+
     def action_blind_probe(self, actor, game, _payload=None) -> str:
         if not self.hidden:
             return "Ten element nie jest ukryty."
@@ -140,16 +160,23 @@ class HiddenCache(HiddenMixin, InteractableMixin):
         if self.opened:
             return "Sekret już otwarty."
         self.opened = True
+        if self.trap_armed:
+            self.trap_armed = False
+            self.trap_triggered = True
+            return f"Odsuwasz panel. {self.trap_name} aktywuje się! {self.trap_effect}"
         return "Odsuwasz panel, odkrywając skrytkę."
 
     def action_loot(self, actor, game, _payload=None) -> str:
         if not self.opened:
-            return "Najpierw musisz otworzyć skrytkę."
+            open_message = self.action_open(actor, game, _payload)
+        else:
+            open_message = ""
         if not self.loot:
-            return "W środku pusto."
+            return f"{open_message} W środku pusto.".strip()
         loot_items = self.loot[:]
         self.loot = []
-        return f"Zabierasz: {', '.join(loot_items)}."
+        loot_message = f"Zabierasz: {', '.join(loot_items)}."
+        return f"{open_message} {loot_message}".strip()
 
     def on_enter(self, actor, game) -> str | None:
         """Wejście na pole: opcjonalne auto-odkrycie/wyzwolenie efektu."""
@@ -185,6 +212,7 @@ META = GameObjectMeta(
     logic_cls=HiddenCache,
     default_config={
         "loot": [],
+        "cache_id": "",
         "hidden": True,
         "allow_hidden_interaction": True,
         "reveal_dc": 18,
@@ -193,5 +221,8 @@ META = GameObjectMeta(
         "auto_reveal_on_enter": False,
         "auto_trigger_on_enter": False,
         "trap_effect": None,
+        "trap_armed": False,
+        "trap_name": "Pułapka w skrytce",
+        "description_on_reveal": None,
     },
 )

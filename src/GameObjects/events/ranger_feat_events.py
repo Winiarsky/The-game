@@ -80,32 +80,6 @@ def _prompt_info(ctx: EventContext, title: str, text: str, *, source: str) -> No
         pass
 
 
-def _prompt_choice(
-    ctx: EventContext,
-    title: str,
-    *,
-    choices: list[str],
-    source: str,
-    prompt_long: str = "",
-    choice_meta: list[dict] | None = None,
-) -> str | None:
-    ui = getattr(ctx.game, "ui", None)
-    if ui is not None and hasattr(ui, "prompt_choice"):
-        try:
-            answer = ui.prompt_choice(
-                title,
-                choices=choices,
-                source=source,
-                prompt_long=prompt_long,
-                choice_meta=choice_meta,
-                layout="menu_numpad",
-            )
-            return str(answer).strip() if answer is not None else None
-        except Exception:
-            return None
-    return None
-
-
 def _equipped_melee_weapons(actor) -> list[object]:
     equipped = list(get_equipped_weapons(actor) or [])
     out: list[object] = []
@@ -418,18 +392,6 @@ class HuntPreyEvent(ActionCostEvent):
         else:
             positions = [pos for _enemy, pos in candidates]
             selected = None
-            choice_meta = [
-                {
-                    "raw": _actor_id(enemy),
-                    "label": getattr(enemy, "name", f"Cel {idx + 1}"),
-                    "desc": (
-                        f"Pozycja {tuple(pos)} · AC {int(getattr(enemy, 'ac', 0) or 0)} · "
-                        f"HP {int(getattr(enemy, 'hp', 0) or 0)}"
-                    ),
-                    "category": "combat",
-                }
-                for idx, (enemy, pos) in enumerate(candidates)
-            ]
             _prompt_info(
                 ctx,
                 "Wyznacz ofiarę",
@@ -447,30 +409,12 @@ class HuntPreyEvent(ActionCostEvent):
                 )
             try:
                 ctx.game.conn.set_leds(positions, [0, 120, 20])
-                try:
-                    selected = ctx.game.conn.scan_board(positions)
-                except TimeoutError:
-                    selected = None
+                selected = ctx.game.conn.scan_board(positions)
             finally:
                 try:
                     ctx.game.conn.leds_off()
                 except Exception:
                     pass
-            if selected is None:
-                fallback = _prompt_choice(
-                    ctx,
-                    "Wyznacz ofiarę",
-                    choices=[entry["label"] for entry in choice_meta],
-                    source=self.name,
-                    prompt_long="Plansza nie zwróciła wyboru. Wskaż cel z listy.",
-                    choice_meta=choice_meta,
-                )
-                normalized = str(fallback or "").strip().lower()
-                for enemy, pos in candidates:
-                    if normalized == _actor_id(enemy).lower() or normalized == str(getattr(enemy, "name", "")).strip().lower():
-                        target = enemy
-                        target_pos = pos
-                        break
             for enemy, pos in candidates:
                 if pos == selected:
                     target = enemy
@@ -605,6 +549,8 @@ class HuntedShotEvent(ActionCostEvent):
                 },
             ),
         )
+        if not first_result.success:
+            return EventResult.cancelled(message=first_result.message or "Strzal na cel: pierwszy atak przerwany.")
         second_result = dispatch_event(
             str(event_name),
             EventContext(
@@ -621,6 +567,8 @@ class HuntedShotEvent(ActionCostEvent):
                 },
             ),
         )
+        if not second_result.success:
+            return EventResult.cancelled(message=second_result.message or "Strzal na cel: drugi atak przerwany.")
 
         _bump_attack_state(ctx, actor, event_name=str(event_name), count=2)
 
@@ -741,6 +689,8 @@ class TwinTakedownEvent(ActionCostEvent):
                 },
             ),
         )
+        if not first_result.success:
+            return EventResult.cancelled(message=first_result.message or "Twin Takedown: pierwszy atak przerwany.")
         second_result = dispatch_event(
             str(second_event),
             EventContext(
@@ -757,6 +707,8 @@ class TwinTakedownEvent(ActionCostEvent):
                 },
             ),
         )
+        if not second_result.success:
+            return EventResult.cancelled(message=second_result.message or "Twin Takedown: drugi atak przerwany.")
 
         _bump_attack_state(ctx, actor, event_name=str(first_event), count=1)
         _bump_attack_state(ctx, actor, event_name=str(second_event), count=1)

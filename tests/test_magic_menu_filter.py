@@ -293,6 +293,35 @@ def test_magic_bucket_labels_duplicate_prepared_spells_with_count():
     assert meta[0]["label"] == "Kwasowy rozprysk x2"
 
 
+def test_magic_bucket_collapses_duplicate_event_names_into_single_choice():
+    actor = _Actor(
+        spell_state={
+            "enabled": True,
+            "enforce": True,
+            "class_name": "wizard",
+            "known": {"cantrip": ["acid_splash"], "focus": [], "rank_1": [], "innate": []},
+            "prepared_today": {"cantrip": ["acid_splash", "acid_splash"], "rank_1": []},
+            "prepared_counts": {"cantrip": {"acid_splash": 2}, "rank_1": {}},
+        }
+    )
+    ui = _ChoiceUI(answer="acid_splash")
+    game = SimpleNamespace(ui=ui)
+
+    picked = choose_event_from_bucket(
+        game,
+        bucket_id="magic",
+        available_events={"acid_splash": _AcidSplashEvent},
+        event_names=["acid_splash", "acid_splash"],
+        source="test:magic",
+        actor=actor,
+    )
+
+    assert picked == "acid_splash"
+    meta = ui.choice_calls[0]["choice_meta"]
+    assert [item["raw"] for item in meta] == ["acid_splash"]
+    assert meta[0]["label"] == "Kwasowy rozprysk x2"
+
+
 def test_actor_stats_compacts_duplicate_prepared_spells():
     actor = _Actor(
         spell_state={

@@ -20,6 +20,7 @@ class _ConnStub:
         self.calls: list[str] = []
         self.timeline = timeline
         self.led_payloads: list[tuple[object, object]] = []
+        self.cancel_calls = 0
 
     def set_leds(self, *args, **_kwargs):
         self.calls.append("set_leds")
@@ -36,6 +37,12 @@ class _ConnStub:
     def leds_off(self, *_args, **_kwargs):
         self.calls.append("leds_off")
         self.timeline.append("leds_off")
+        return True
+
+    def cancel_scan(self, *_args, **_kwargs):
+        self.cancel_calls += 1
+        self.calls.append("cancel_scan")
+        self.timeline.append("cancel_scan")
         return True
 
 
@@ -345,6 +352,39 @@ def test_start_setup_retries_when_board_selection_is_cancelled():
     assert isinstance(result, HeroesTurn)
     assert hero.position == (2, 2)
     assert any("Nie wybrano pola startowego" in msg for msg in game.logs)
+
+
+def test_start_setup_waits_on_board_without_timeout_or_ui_fallback():
+    game = _GameStub()
+    game.ui = _ChoiceUiStub("(2, 2)")
+    start = Start(game)  # type: ignore[arg-type]
+
+    hero = _HeroStub("Grog")
+    scan_kwargs: list[dict[str, object]] = []
+
+    def _pick(_used):
+        return hero
+
+    def _scan_board(_choices, **kwargs):
+        scan_kwargs.append(dict(kwargs))
+        return (2, 2)
+
+    game.conn.scan_board = _scan_board  # type: ignore[method-assign]
+    start._pick_or_create_hero = _pick  # type: ignore[method-assign]
+    start._maybe_prompt_chameleon_gnome = lambda *_a, **_k: None  # type: ignore[method-assign]
+    start._maybe_prompt_familiar_owner = lambda *_a, **_k: None  # type: ignore[method-assign]
+    start._maybe_prompt_advanced_alchemy = lambda *_a, **_k: None  # type: ignore[method-assign]
+    start._maybe_prepare_spells = lambda *_a, **_k: None  # type: ignore[method-assign]
+    start._prompt_menu_choice = lambda **_kwargs: "__start_game__"  # type: ignore[method-assign]
+
+    result = start.set_heroes_starting_positions()
+
+    assert isinstance(result, HeroesTurn)
+    assert hero.position == (2, 2)
+    assert scan_kwargs == [{}]
+    assert game.conn.cancel_calls == 0
+    assert game.ui.calls == []
+    assert not any("Plansza nie zwróciła pola startowego" in msg for msg in game.logs)
 
 
 def test_wall_setup_uses_two_endpoint_colors_and_explains_them():

@@ -7,6 +7,7 @@ from GameObjects.base import GameObjectMeta
 from GameObjects.interactions_mixin import HiddenMixin
 from GameObjects.interactions_mixin.base_interaction import Interaction, InteractableMixin
 from GameObjects.interactions_mixin.skill_check_resolver import resolve_skill_check_with_sources
+from movement_markers import SCENARIO_TRANSITION_ACCEPTED, SCENARIO_TRANSITION_CANCELLED
 from skills import Skill
 
 
@@ -148,7 +149,11 @@ class ScenarioExit(HiddenMixin, InteractableMixin):
             actor=actor,
             source_object=self,
         )
-        return str(message) if (ok or message) else None
+        if ok:
+            return SCENARIO_TRANSITION_ACCEPTED
+        if str(message or "").strip().lower() == "przejście anulowane.":
+            return SCENARIO_TRANSITION_CANCELLED
+        return str(message) if message else None
 
     def on_reveal(self, game, source_actor=None) -> str | None:
         session = getattr(game, "scenario_session", None)

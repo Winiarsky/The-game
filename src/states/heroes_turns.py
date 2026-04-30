@@ -88,50 +88,7 @@ class HeroesTurn(State):
                 return hero
         finally:
             self.game.conn.leds_off()
-        return self._choose_active_hero_from_ui(available_heroes)
-
-    def _choose_active_hero_from_ui(self, available_heroes):
-        if not available_heroes:
-            return None
-        if len(available_heroes) == 1:
-            return available_heroes[0]
-        options = []
-        for hero in available_heroes:
-            pos = getattr(hero, "position", None)
-            pos_text = f"Pole {tuple(pos)}" if pos is not None else "Poza planszą"
-            class_name = str(getattr(hero, "class_name", None) or getattr(hero, "class_id", "") or "").strip()
-            class_text = class_name if class_name else "Bohater"
-            options.append(
-                {
-                    "id": str(getattr(hero, "object_id", "") or getattr(hero, "character_id", "") or hero.name).strip().lower(),
-                    "label": str(getattr(hero, "name", "Bohater")),
-                    "desc": f"{class_text} · {pos_text}",
-                    "category": "utility",
-                    "icon": "◈",
-                }
-            )
-        ui_idle_hint = getattr(self.game, "ui_idle_hint", None)
-        if callable(ui_idle_hint):
-            ui_idle_hint(
-                str(prompt_value("turns.active_hero_menu", "title", "Wybór bohatera")),
-                str(
-                    prompt_value(
-                        "turns.active_hero_menu",
-                        "body_markdown",
-                        "Plansza nie zwróciła kliknięcia. Wybierz aktywnego bohatera z listy w UI.",
-                    )
-                ),
-            )
-        answer = choose_option(
-            self.game,
-            title="Aktywny bohater",
-            subtitle="Wybierz bohatera do wykonania akcji.",
-            source="active_hero_select",
-            options=options,
-            prompt_id="turns.active_hero_menu",
-        )
-        by_id = {str(option["id"]).strip().lower(): hero for option, hero in zip(options, available_heroes)}
-        return by_id.get(str(answer or "").strip().lower())
+        return None
 
     def _has_any_hero_on_board(self) -> bool:
         return any(getattr(hero, "position", None) is not None for hero in list(getattr(self.game, "heroes", []) or []))

@@ -106,11 +106,15 @@ class Start(State):
             self.game.conn.set_leds(available_positions, consts.MOVE_FIELD_RGB)
             time.sleep(0.12)
             logger.info("Odczytuje wybrane pole startowe...")
-            try:
+
+            def _scan_start_position():
                 try:
-                    pos = self.game.conn.scan_board(available_positions)
+                    return self.game.conn.scan_board(available_positions)
                 except TypeError:
-                    pos = self.game.conn.scan_board(available_positions)
+                    return self.game.conn.scan_board(available_positions)
+
+            try:
+                pos = _scan_start_position()
             finally:
                 self.game.conn.leds_off()
             if pos is None:
@@ -271,55 +275,6 @@ class Start(State):
                     _setup_single_hero()
                     continue
         return _finish_setup()
-
-    def _choose_start_position_from_ui(
-        self,
-        available_positions: list[tuple[int, int]],
-        hero_name: str,
-    ) -> tuple[int, int] | None:
-        if not available_positions:
-            return None
-        if len(available_positions) == 1:
-            return tuple(available_positions[0])
-        ui = getattr(self.game, "ui", None)
-        options: list[dict[str, Any]] = []
-        for pos in available_positions:
-            options.append(
-                {
-                    "id": str(tuple(pos)),
-                    "label": f"Pole {tuple(pos)}",
-                    "desc": f"Ustaw {hero_name} na polu startowym {tuple(pos)}.",
-                    "key": "",
-                }
-            )
-        if ui is not None and hasattr(ui, "prompt_choice"):
-            try:
-                answer = ui.prompt_choice(
-                    f"Wybierz pole startowe dla bohatera {hero_name}",
-                    choices=[item["label"] for item in options],
-                    source="hero_setup_position",
-                    layout="menu_numpad",
-                    title="Wybór pola startowego",
-                    subtitle="Jeśli plansza nie odpowiada, wybierz pole tutaj.",
-                    choice_meta=[
-                        {
-                            "raw": item["id"],
-                            "label": item["label"],
-                            "desc": item["desc"],
-                            "key": "",
-                        }
-                        for item in options
-                    ],
-                )
-            except Exception:
-                answer = None
-            if answer:
-                picked = self._decode_menu_choice(str(answer), options)
-                if picked:
-                    for pos in available_positions:
-                        if str(tuple(pos)) == str(picked):
-                            return tuple(pos)
-        return None
 
     def _character_repository(self) -> CharacterRepository:
         return CharacterRepository(PROJECT_ROOT / "data" / "heroes")

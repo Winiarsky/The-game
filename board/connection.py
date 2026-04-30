@@ -202,7 +202,7 @@ class _SimulatorBackend:
         timeout_s: float | None = None,
     ) -> tuple[int, int] | None:
         while True:
-            request_timeout = 30.0 if timeout_s is None else max(0.1, float(timeout_s))
+            request_timeout = None if timeout_s is None else max(0.1, float(timeout_s))
             response = requests.get(f"{self.base_url}/scan_board", timeout=request_timeout)
             response.raise_for_status()
             data = response.json()
@@ -307,7 +307,7 @@ class _WledClient:
         start = self.led_offset
         stop = self.led_offset + self.led_count
         try:
-            self._post_state({"seg": [{"id": self.segment_id, "i": [start, stop, "000000"]}]})
+            self._post_state({"on": True, "seg": [{"id": self.segment_id, "on": True, "i": [start, stop, "000000"]}]})
         except Exception as exc:
             self._mark_unavailable(exc, action="clear")
             return False
@@ -325,7 +325,13 @@ class _WledClient:
         for led_index, color in led_updates:
             instructions.extend([self.led_offset + int(led_index), _color_to_hex(color)])
         try:
-            self._post_state({"on": True, "bri": self.brightness, "seg": [{"id": self.segment_id, "i": instructions}]})
+            self._post_state(
+                {
+                    "on": True,
+                    "bri": self.brightness,
+                    "seg": [{"id": self.segment_id, "on": True, "i": instructions}],
+                }
+            )
         except Exception as exc:
             self._mark_unavailable(exc, action="set_leds")
             return False
@@ -339,6 +345,8 @@ class _HardwareBackend:
         self.protocol_name = str(self.scan_cfg.get("protocol") or "board_scan_usb_v1")
         self.scan_command = str(self.scan_cfg.get("scan_command") or "SCAN").strip() or "SCAN"
         self.stop_command = str(self.scan_cfg.get("stop_command") or "STOP").strip() or "STOP"
+        self.stop_before_scan = bool(self.scan_cfg.get("stop_before_scan", True))
+        self.pre_scan_stop_s = max(0.0, float(self.scan_cfg.get("pre_scan_stop_s", 0.08)))
         self.pre_scan_delay_s = max(0.0, float(self.scan_cfg.get("pre_scan_delay_s") or 0.12))
         self.port_result = _open_serial_probe(self.scan_cfg)
         self.ser = self.port_result.serial_handle
@@ -349,11 +357,25 @@ class _HardwareBackend:
             logger.warning("Start hardware bez aktywnego WLED. Skan planszy dziala, ale LED-y beda ponawiane automatycznie.")
         self.serial_port = self.port_result.port
 
-    def _send_scan_command(self) -> None:
+    def _reset_input_buffer(self) -> None:
         try:
             self.ser.reset_input_buffer()
         except Exception:
             pass
+
+    def _send_stop_command(self) -> None:
+        self.ser.write(f"{self.stop_command}\n".encode("ascii", errors="ignore"))
+        self.ser.flush()
+
+    def _send_scan_command(self) -> None:
+        if self.stop_before_scan:
+            try:
+                self._send_stop_command()
+                if self.pre_scan_stop_s > 0:
+                    time.sleep(self.pre_scan_stop_s)
+            except Exception:
+                logger.debug("Nie udało się asekuracyjnie zatrzymać poprzedniego skanu.", exc_info=True)
+        self._reset_input_buffer()
         self.ser.write(f"{self.scan_command}\n".encode("ascii", errors="ignore"))
         self.ser.flush()
         if self.pre_scan_delay_s > 0:
@@ -361,8 +383,7 @@ class _HardwareBackend:
 
     def cancel_scan(self) -> None:
         try:
-            self.ser.write(f"{self.stop_command}\n".encode("ascii", errors="ignore"))
-            self.ser.flush()
+            self._send_stop_command()
         except Exception:
             logger.debug("Nie udało się wysłać komendy zatrzymania skanu.", exc_info=True)
 
@@ -407,6 +428,7 @@ class _HardwareBackend:
                 result = (int(payload["col"]), int(payload["row"]))
                 if acceptable_responses and result not in acceptable_responses:
                     logger.warning("Nieakceptowalna odpowiedź z planszy: %s", result)
+                    self.cancel_scan()
                     break
                 return result
 

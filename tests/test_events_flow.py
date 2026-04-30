@@ -293,6 +293,7 @@ def test_initiative_event_payload_excludes_removed_dead_enemy():
             self.wounds = 3
             self.max_hp = 20
             self.statuses = []
+            self.image = "/static/portraits/custom/hero-test.jpg"
 
         def reset_reactions(self):
             return None
@@ -309,6 +310,7 @@ def test_initiative_event_payload_excludes_removed_dead_enemy():
             self.hp = 10 if alive else 0
             self.max_hp = 12
             self.statuses = []
+            self.image = "/assets/ui_v2/bandit_cave/images/enemies/bandit.svg"
 
         def __hash__(self):
             return id(self)
@@ -318,20 +320,24 @@ def test_initiative_event_payload_excludes_removed_dead_enemy():
     hero = Hero()
     alive_enemy = Enemy(alive=True)
     dead_enemy = Enemy(alive=False)
+    overkilled_enemy = Enemy(alive=True)
+    overkilled_enemy.object_id = "enemy-overkilled"
+    overkilled_enemy.hp = -4
     game = FakeGame()
     game.heroes = [hero]
-    game.enemies = [alive_enemy, dead_enemy]
+    game.enemies = [alive_enemy, dead_enemy, overkilled_enemy]
     game.ui = object()
     game.ui_event = lambda event_type, payload: captured.append((event_type, payload))
     game.ui_active_actor = lambda *_a, **_k: None
 
     combat = Combat(game)
     game.state = combat
-    combat.base_order = [hero, dead_enemy, alive_enemy]
-    combat.round_queue = [hero, dead_enemy, alive_enemy]
+    combat.base_order = [hero, dead_enemy, alive_enemy, overkilled_enemy]
+    combat.round_queue = [hero, dead_enemy, alive_enemy, overkilled_enemy]
     combat.base_initiative[hero] = 15
     combat.base_initiative[dead_enemy] = 11
     combat.base_initiative[alive_enemy] = 10
+    combat.base_initiative[overkilled_enemy] = 9
 
     combat._send_initiative_event()
 
@@ -339,11 +345,16 @@ def test_initiative_event_payload_excludes_removed_dead_enemy():
     assert evt_type == "initiative"
     ids = [entry["id"] for entry in payload["order"]]
     assert "enemy-dead" not in ids
+    assert "enemy-overkilled" not in ids
     assert payload["active_id"] == "hero-1"
     hero_entry = next(entry for entry in payload["order"] if entry["id"] == "hero-1")
     alive_enemy_entry = next(entry for entry in payload["order"] if entry["id"] == "enemy-alive")
     assert hero_entry["wounds"] == 3
     assert hero_entry["max_hp"] == 20
     assert hero_entry["statuses"] == []
+    assert hero_entry["image"] == "/static/portraits/custom/hero-test.jpg"
+    assert hero_entry["asset_id"] == "hero-1"
     assert alive_enemy_entry["wounds"] == 2
     assert alive_enemy_entry["max_hp"] == 12
+    assert alive_enemy_entry["image"].endswith("bandit.svg")
+    assert alive_enemy_entry["asset_id"] == "enemy-alive"

@@ -125,6 +125,22 @@
                     }
                 }
             ]
+        },
+        {
+            "category": "NPC",
+            "object_id": "bound_smuggler_npc",
+            "placement": "cell",
+            "instances": [
+                {
+                    "position": [7, 10],
+                    "config": {
+                        "name": "Marek \"Lina\" Voss",
+                        "npc_id": "marek_bound_smuggler",
+                        "cache_map_id": "treasure_room",
+                        "cache_id": "upper_smuggler_cache"
+                    }
+                }
+            ]
         }
     ],
     "blocked_fields": [

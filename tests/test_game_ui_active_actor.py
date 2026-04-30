@@ -28,6 +28,7 @@ def test_ui_active_actor_marks_creation_hero_as_hero_kind():
     carrier = _UiCarrier()
     actor = Hero()
     actor.character_creation_in_progress = True
+    actor.image = "/static/portraits/custom/test.jpg"
 
     Game.ui_active_actor(carrier, actor)
 
@@ -35,3 +36,5 @@ def test_ui_active_actor_marks_creation_hero_as_hero_kind():
     event_type, payload = carrier.events[-1]
     assert event_type == "active_actor_changed"
     assert payload.get("kind") == "hero"
+    assert payload.get("image") == "/static/portraits/custom/test.jpg"
+    assert payload.get("asset_id")

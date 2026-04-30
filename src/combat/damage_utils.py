@@ -572,18 +572,29 @@ def _prompt_enemy_defeat(game: Any, enemy: Any, pos: tuple[int, int] | None, loo
         if has_loot
         else "\n\nPo przeciwniku nie zostaje żaden użyteczny loot."
     )
+    remove_line = f"\n\nZdejmij figurkę **{enemy_name}** z planszy."
+    defeat_details = "**Plansza**\n- przeciwnik został usunięty z inicjatywy\n- zdejmij jego figurkę z planszy"
+    if has_loot:
+        defeat_details += (
+            "\n\n**Jak zebrać loot**\n"
+            "- ustaw bohatera na polu lootu\n"
+            "- użyj akcji **Interakcja**\n"
+            "- wybierz **Podnieś loot**"
+        )
     prompt_text = render_prompt_text(
         "interaction.enemy_defeated_loot",
         enemy_name=enemy_name,
         position_text=position_text,
         loot_summary=loot_summary,
         loot_line=loot_line,
+        remove_line=remove_line,
+        defeat_details=defeat_details,
     )
     title = str(prompt_text.get("title") or "Przeciwnik pokonany")
-    summary = str(prompt_text.get("summary") or f"{enemy_name} pada.")
+    summary = str(prompt_text.get("summary") or f"{enemy_name} pada i schodzi z planszy.")
     body_markdown = str(
         prompt_text.get("body_markdown")
-        or f"**{enemy_name}** pada.{loot_line}"
+        or f"**{enemy_name}** pada.{remove_line}{loot_line}"
     )
     details_markdown = str(prompt_text.get("details_markdown") or "").strip() or None
     dedupe_key = f"enemy_defeated:{enemy_name}:{position_text}:{source}"
@@ -600,6 +611,24 @@ def _prompt_enemy_defeat(game: Any, enemy: Any, pos: tuple[int, int] | None, loo
     )
 
 
+def _refresh_combat_ui_after_enemy_removed(game: Any) -> None:
+    state = getattr(game, "state", None)
+    if state is None:
+        return
+    cleanup = getattr(state, "_cleanup_removed", None)
+    if callable(cleanup):
+        try:
+            cleanup()
+        except Exception:
+            pass
+    sender = getattr(state, "_send_initiative_event", None)
+    if callable(sender):
+        try:
+            sender()
+        except Exception:
+            pass
+
+
 def remove_defeated_enemy(
     game: Any,
     enemy: Any,
@@ -611,7 +640,6 @@ def remove_defeated_enemy(
     """Usuń pokonanego przeciwnika z planszy/listy i opcjonalnie zostaw loot."""
     pos = position if isinstance(position, tuple) else getattr(enemy, "position", None)
     loot = _extract_enemy_loot(enemy) if drop_loot else []
-    prompted = _prompt_enemy_defeat(game, enemy, pos if isinstance(pos, tuple) else None, loot, source=source)
     removed_from_board = False
 
     board = getattr(game, "board", None)
@@ -649,8 +677,6 @@ def remove_defeated_enemy(
     dropped = 0
     if isinstance(pos, tuple) and loot:
         dropped = _drop_loot_pile(game, pos, loot)
-        if dropped > 0 and not prompted:
-            _announce_loot_drop(game, enemy, pos, loot, source=source)
     try:
         setattr(enemy, "loot_items", [])
     except Exception:
@@ -667,6 +693,11 @@ def remove_defeated_enemy(
         setattr(enemy, "coin_pouch", {"cp": 0, "sp": 0, "gp": 0, "pp": 0})
     except Exception:
         pass
+
+    _refresh_combat_ui_after_enemy_removed(game)
+    prompted = _prompt_enemy_defeat(game, enemy, pos if isinstance(pos, tuple) else None, loot, source=source)
+    if isinstance(pos, tuple) and loot and dropped > 0 and not prompted:
+        _announce_loot_drop(game, enemy, pos, loot, source=source)
 
     return {
         "removed_from_board": bool(removed_from_board),

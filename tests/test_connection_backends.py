@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from board.connection import Connection
+from board.connection import Connection, _HardwareBackend
 
 
 class _FakeSimulatorBackend:
@@ -50,6 +50,21 @@ class _FakeHardwareBackend:
 
     def close(self):
         self.closed = True
+
+
+class _FakeSerial:
+    def __init__(self):
+        self.writes = []
+        self.reset_input_calls = 0
+
+    def write(self, data):
+        self.writes.append(data.decode("ascii").strip())
+
+    def flush(self):
+        return None
+
+    def reset_input_buffer(self):
+        self.reset_input_calls += 1
 
 
 def test_connection_uses_simulator_backend_for_http_target(monkeypatch):
@@ -141,3 +156,42 @@ def test_connection_forwards_cancel_scan_to_hardware_backend(monkeypatch):
     conn.cancel_scan()
 
     assert getattr(conn._backend, "cancelled", False) is True
+
+
+def test_hardware_backend_stops_previous_scan_before_new_scan():
+    backend = _HardwareBackend.__new__(_HardwareBackend)
+    fake_serial = _FakeSerial()
+    backend.ser = fake_serial
+    backend.scan_command = "SCAN"
+    backend.stop_command = "STOP"
+    backend.stop_before_scan = True
+    backend.pre_scan_stop_s = 0.0
+    backend.pre_scan_delay_s = 0.0
+
+    backend._send_scan_command()
+
+    assert fake_serial.writes == ["STOP", "SCAN"]
+    assert fake_serial.reset_input_calls == 1
+
+
+def test_hardware_backend_stops_scan_after_rejected_press():
+    backend = _HardwareBackend.__new__(_HardwareBackend)
+    fake_serial = _FakeSerial()
+    backend.ser = fake_serial
+    backend.protocol_name = "board_scan_usb_v1"
+    backend.scan_command = "SCAN"
+    backend.stop_command = "STOP"
+    backend.stop_before_scan = False
+    backend.pre_scan_delay_s = 0.0
+    payloads = iter(
+        [
+            {"protocol": "board_scan_usb_v1", "event": "press", "col": 1, "row": 1},
+            {"protocol": "board_scan_usb_v1", "event": "press", "col": 2, "row": 2},
+        ]
+    )
+    backend._read_protocol_payload = lambda *, timeout_s=None: next(payloads)  # noqa: ARG005
+
+    result = backend.scan_board([(2, 2)])
+
+    assert result == (2, 2)
+    assert fake_serial.writes == ["SCAN", "STOP", "SCAN"]

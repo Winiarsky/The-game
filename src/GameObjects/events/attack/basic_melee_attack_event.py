@@ -948,6 +948,7 @@ class BasicMeleeAttackEvent(AttackEventBase):
                 damage_components=damage_components,
                 defeated=False,
                 roll_only=True,
+                internal_roll_only=True,
                 nonlethal=nonlethal_attack,
             )
             if not suppress_record:

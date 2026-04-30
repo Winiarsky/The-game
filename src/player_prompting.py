@@ -192,6 +192,7 @@ class PlayerPrompt:
     created_at: float = field(default_factory=time.time)
     layout: str | None = None
     image: str | None = None
+    audio: str | None = None
     action_desc: str | None = None
     desc: str | None = None
     communication: dict[str, Any] | None = None
@@ -689,6 +690,7 @@ class PromptDirector:
             status="pending",
             layout=_text(data.get("layout")) or None,
             image=_text(data.get("image")) or None,
+            audio=_text(data.get("audio") or data.get("voiceover")) or None,
             action_desc=_text(data.get("action_desc")) or None,
             desc=_text(data.get("desc")) or None,
             communication=envelope,
@@ -991,6 +993,7 @@ class GamePromptFacade:
         progress: dict[str, Any] | None = None,
         answer_placeholder: str | None = None,
         prompt_id: str | None = None,
+        audio: str | None = None,
     ) -> Any:
         ui = self._ui
         if ui is None or not getattr(ui, "enabled", False) or not hasattr(ui, "prompt_info"):
@@ -1021,6 +1024,7 @@ class GamePromptFacade:
             details_markdown=details_markdown,
             answer_placeholder=answer_placeholder,
             prompt_id=prompt_id,
+            audio=audio,
         )
 
     def choice(

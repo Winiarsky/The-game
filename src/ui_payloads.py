@@ -452,6 +452,8 @@ def build_active_actor_payload(
         "id": str(actor_id),
         "name": getattr(actor, "name", None) or str(actor_id),
         "kind": kind,
+        "image": getattr(actor, "image", None) or getattr(actor, "portrait_image", None),
+        "asset_id": str(actor_id),
     }
 
 

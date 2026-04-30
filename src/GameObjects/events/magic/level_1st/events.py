@@ -834,14 +834,12 @@ def _pick_directional_area_from_caster(
         area_label = "linii" if str(area_kind or "").strip().lower() == "line" else "stozka"
         spell_label = str(prompt_name or "czaru").strip() or "czaru"
 
-        _ui_narration(
+        _ui_log(
             ctx.game,
             format_board_selection_message(
-                f"podswietlone pole obok rzucajacego, aby ustawic kierunek {area_label}",
+                f"podswietlone pole obok rzucajacego, aby ustawic kierunek {area_label}. "
+                "Kliknij sasiednie pole, a potem pole rzucajacego, aby potwierdzic."
             ),
-            source=f"{source}:direction_pick",
-            dedupe_key=f"{source}:direction_pick:start",
-            next_hint="Kliknij sasiednie pole, a potem kliknij pole rzucajacego, aby potwierdzic kierunek.",
         )
 
         while True:
@@ -902,30 +900,13 @@ def _pick_directional_area_from_caster(
                     else "Wybierz podswietlone sasiednie pole, aby ustawic kierunek."
                 )
                 _ui_log(ctx.game, message)
-                _ui_narration(
-                    ctx.game,
-                    message,
-                    source=f"{source}:direction_pick",
-                    priority="warning",
-                    dedupe_key=f"{source}:direction_pick:invalid",
-                    next_hint=(
-                        "Kliknij jedno z sasiednich podswietlonych pol albo pole rzucajacego."
-                        if selected_direction is not None
-                        else "Kliknij jedno z sasiednich podswietlonych pol."
-                    ),
-                )
                 continue
             selected_direction = next_direction
             selected_anchor = normalized_choice
-            _ui_narration(
+            _ui_log(
                 ctx.game,
-                (
-                    f"Wybrano kierunek {area_label} dla {spell_label}. "
-                    "Kliknij pole rzucajacego, aby potwierdzic, albo inne sasiednie pole, aby zmienic kierunek."
-                ),
-                source=f"{source}:direction_pick",
-                dedupe_key=f"{source}:direction_pick:selected",
-                next_hint="Kliknij pole rzucajacego, aby potwierdzic, albo inne sasiednie pole, aby zmienic kierunek.",
+                f"Wybrano kierunek {area_label} dla {spell_label}. "
+                "Kliknij pole rzucajacego, aby potwierdzic, albo inne sasiednie pole, aby zmienic kierunek.",
             )
 
     direction = _prompt_choice(ctx, f"{prompt_name} - wybierz kierunek", directions, source=source)

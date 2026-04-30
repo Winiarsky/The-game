@@ -76,3 +76,30 @@ def test_wled_client_retries_after_failure_and_recovers(monkeypatch):
     assert client.set_leds([(1, [255, 0, 0])]) is True
     assert client.available is True
     assert state["post_calls"] == 1
+
+
+def test_wled_client_reenables_segment_when_setting_leds(monkeypatch):
+    client = _WledClient(
+        {
+            "base_url": "http://192.168.0.165",
+            "segment_id": 2,
+            "led_count": 10,
+            "request_timeout_s": 0.01,
+            "retry_cooldown_s": 0,
+        }
+    )
+    posted_payloads = []
+
+    monkeypatch.setattr("board.connection.requests.get", lambda *_args, **_kwargs: _ResponseStub({"leds": {"count": 20}}))
+
+    def _fake_post(_url, *, json, **_kwargs):  # noqa: A002
+        posted_payloads.append(json)
+        return _ResponseStub({"ok": True})
+
+    monkeypatch.setattr("board.connection.requests.post", _fake_post)
+
+    assert client.set_leds([(1, [255, 0, 0])]) is True
+
+    assert posted_payloads[-1]["on"] is True
+    assert posted_payloads[-1]["seg"][0]["id"] == 2
+    assert posted_payloads[-1]["seg"][0]["on"] is True

@@ -122,7 +122,18 @@ class InteractionEvent(GameEvent):
             if message:
                 logger.info(message)
                 game.ui_log(message)
-                game.ui_event("info", {"text": message})
+                payload = {"text": message}
+                audio_getter = getattr(interactable, "interaction_result_audio", None)
+                if callable(audio_getter):
+                    try:
+                        audio = audio_getter(action_id, message)
+                    except TypeError:
+                        audio = audio_getter(message)
+                    except Exception:
+                        audio = None
+                    if audio:
+                        payload["audio"] = str(audio)
+                game.ui_event("info", payload)
 
             interaction = interactable.actions.get(action_id) if action_id else None
             if interaction is None or getattr(interaction, "end_interaction", False):
@@ -167,6 +178,7 @@ class InteractionEvent(GameEvent):
             subtitle = self._prompt_value(interactable, "interaction_prompt_summary", actor, game)
             body = self._prompt_value(interactable, "interaction_prompt_body", actor, game)
             details = self._prompt_value(interactable, "interaction_prompt_details", actor, game)
+            audio = self._prompt_value(interactable, "interaction_prompt_audio", actor, game)
             choice_meta = [
                 {
                     "raw": act.id,
@@ -185,6 +197,7 @@ class InteractionEvent(GameEvent):
                 subtitle=subtitle,
                 prompt_long=body,
                 details_markdown=details,
+                audio=audio,
                 layout="dialog",
                 choice_meta=choice_meta,
             )

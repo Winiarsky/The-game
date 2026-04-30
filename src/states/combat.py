@@ -515,6 +515,7 @@ class Combat(State):
         if not self.animal_companions:
             return
         board = getattr(self.game, "board", None)
+        cleanup_lines: list[str] = []
         for owner_id, companion in list(self.animal_companions.items()):
             pos = getattr(companion, "position", None)
             if board is not None and pos is not None:
@@ -525,14 +526,38 @@ class Combat(State):
             owner_name = getattr(companion, "owner_name", owner_id)
             companion_name = getattr(companion, "name", "Zwierzecy towarzysz")
             prompt = f"Koniec walki: zabierz figurke {companion_name} (owner: {owner_name})."
+            cleanup_lines.append(f"- {companion_name} ({owner_name})")
             self.game.ui_log(prompt)
-            ui = getattr(self.game, "ui", None)
-            if ui is not None and hasattr(ui, "prompt_info"):
+        self.animal_companions.clear()
+        if cleanup_lines:
+            body = (
+                "Walka dobiegła końca. Zdejmij z planszy figurki zwierzęcych towarzyszy:\n"
+                + "\n".join(cleanup_lines)
+            )
+            player_prompt = getattr(self.game, "player_prompt", None)
+            if player_prompt is not None and hasattr(player_prompt, "card"):
                 try:
-                    ui.prompt_info("Zwierzecy towarzysz", prompt_long=prompt, source="animal_companion")
+                    player_prompt.card(
+                        kind="result",
+                        title="Zwierzęcy towarzysz",
+                        summary="Koniec walki",
+                        body_markdown=body,
+                        priority="result",
+                        scope_key="combat:companion",
+                        dedupe_key="companion_cleanup:combat_end",
+                        prompt_id="companion.cleanup",
+                        ack_required=False,
+                        pause_policy="passive",
+                    )
                 except Exception:
                     pass
-        self.animal_companions.clear()
+            else:
+                ui = getattr(self.game, "ui", None)
+                if ui is not None and hasattr(ui, "prompt_info"):
+                    try:
+                        ui.prompt_info("Zwierzęcy towarzysz", prompt_long=body, source="animal_companion")
+                    except Exception:
+                        pass
 
     def _purge_dead_animal_companions(self) -> None:
         if not self.animal_companions:
@@ -652,6 +677,11 @@ class Combat(State):
         for enemy in self.game.enemies:
             if getattr(enemy, "position", None) is None:
                 continue
+            try:
+                if int(getattr(enemy, "hp", 1) or 0) <= 0:
+                    continue
+            except Exception:
+                pass
             self.base_initiative.setdefault(enemy, getattr(enemy, "initiative", -1))
             penalty = self._status_initiative_penalty_value(enemy)
             if penalty:
@@ -696,7 +726,7 @@ class Combat(State):
         self.animal_companions.clear()
 
     # --- Turn helpers ---
-    def _cleanup_removed(self) -> None:
+    def _cleanup_removed(self) -> bool:
         self._purge_dead_animal_companions()
 
         def _alive(objs: list[Any]) -> list[Any]:
@@ -710,12 +740,21 @@ class Combat(State):
                 elif obj in self.game.enemies:
                     if getattr(obj, "position", None) is None or getattr(obj, "hp", 1) <= 0:
                         continue
+                else:
+                    if getattr(obj, "position", None) is None:
+                        continue
+                    try:
+                        if hasattr(obj, "hp") and int(getattr(obj, "hp", 1) or 0) <= 0:
+                            continue
+                    except Exception:
+                        pass
                 alive.append(obj)
             return alive
 
+        before = (len(self.base_order), len(self.round_queue), len(self.initiative_order))
         self.base_order = _alive(self.base_order)
         self.round_queue = _alive(self.round_queue)
-        self.initiative_order = list(self.base_order)
+        self.initiative_order = list(self.round_queue)
         # usuń martwe z map inicjatywy
         for mapping in (self.base_initiative, self.temp_initiative):
             for dead in [k for k in list(mapping.keys()) if k not in self.base_order]:
@@ -727,6 +766,8 @@ class Combat(State):
         for dead in [k for k in list(self.out_of_turn_actions_used.keys()) if k not in self.base_order]:
             self.out_of_turn_actions_used.pop(dead, None)
         self.turn_initialized = {actor for actor in self.turn_initialized if actor in self.base_order}
+        after = (len(self.base_order), len(self.round_queue), len(self.initiative_order))
+        return before != after
 
     def _status_initiative_penalty_value(self, actor) -> int:
         statuses = getattr(actor, "statuses", None)
@@ -1425,6 +1466,7 @@ class Combat(State):
         """Wyślij kolejkę inicjatywy do UI."""
         if not getattr(self.game, "ui", None):
             return
+        self._cleanup_removed()
         active = self._current_actor()
         order_payload: list[dict[str, Any]] = []
         done_set = set(self.base_order) - set(self.round_queue)
@@ -1446,7 +1488,7 @@ class Combat(State):
                 try:
                     max_hp = int(getattr(obj, "max_hp", 0) or 0)
                     hp = int(getattr(obj, "hp", 0) or 0)
-                    wounds = max(0, max_hp - hp) if max_hp > 0 else None
+                    wounds = min(max_hp, max(0, max_hp - hp)) if max_hp > 0 else None
                 except Exception:
                     wounds = None
             order_payload.append(
@@ -1454,6 +1496,8 @@ class Combat(State):
                     "id": self._actor_id(obj),
                     "name": getattr(obj, "name", None) or getattr(obj, "object_id", "actor"),
                     "kind": "hero" if obj in self.game.heroes else "enemy",
+                    "image": getattr(obj, "image", None) or getattr(obj, "portrait_image", None),
+                    "asset_id": str(getattr(obj, "object_id", None) or getattr(obj, "name", "") or self._actor_id(obj)),
                     "base": base,
                     "current": eff,
                     "delta": delta,
@@ -1968,6 +2012,22 @@ class Combat(State):
         ctx = EventContext(game=self.game, actor=actor)
         result = dispatch_event(raw_choice, ctx)
 
+        if result.message:
+            self.game.ui_log(result.message)
+        else:
+            status = "powiodła się" if result.success else "nie powiodła się"
+            self.game.ui_log(f"Akcja '{raw_choice}' {status}.")
+        try:
+            self.game.ui_narration(
+                narrate_action_result(actor=actor, action_id=raw_choice, result=result),
+                summary="Jaki był efekt akcji",
+                source=f"action_result:{raw_choice}",
+                priority="result" if result.success else "warning",
+                semantic_type="result",
+            )
+        except Exception:
+            logger.debug("Nie udało się wysłać narracji wyniku akcji '%s'.", raw_choice, exc_info=True)
+
         # delay/end mogą nie zużywać akcji
         if result.consumed_action:
             spent = getattr(result, "actions_spent", None)
@@ -1986,21 +2046,6 @@ class Combat(State):
                 return self
         else:
             self._refresh_hero_ui_snapshot(actor)
-        if result.message:
-            self.game.ui_log(result.message)
-        else:
-            status = "powiodła się" if result.success else "nie powiodła się"
-            self.game.ui_log(f"Akcja '{raw_choice}' {status}.")
-        try:
-            self.game.ui_narration(
-                narrate_action_result(actor=actor, action_id=raw_choice, result=result),
-                summary="Jaki był efekt akcji",
-                source=f"action_result:{raw_choice}",
-                priority="result" if result.success else "warning",
-                semantic_type="result",
-            )
-        except Exception:
-            logger.debug("Nie udało się wysłać narracji wyniku akcji '%s'.", raw_choice, exc_info=True)
         # end i delay same wywołują zmianę kolejki; jeśli aktywny uległ zmianie, nie ruszaj tutaj
         if raw_choice in ("end",):
             return self

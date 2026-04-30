@@ -117,5 +117,6 @@ def test_remove_defeated_enemy_uses_prompt_for_defeat_and_loot_when_available():
     assert title == "Przeciwnik pokonany"
     assert kwargs["prompt_id"] == "interaction.enemy_defeated_loot"
     assert "Bandit Bruiser" in kwargs["body_markdown"]
+    assert "Zdejmij figurkę" in kwargs["body_markdown"]
     assert "loot" in kwargs["body_markdown"].lower()
     assert "Jak zebrać loot" in kwargs["details_markdown"]

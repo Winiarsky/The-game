@@ -4,7 +4,25 @@ import logging
 import time
 import heapq
 
+from movement_markers import (
+    SCENARIO_TRANSITION_ACCEPTED,
+    SCENARIO_TRANSITION_CANCELLED,
+    SCENARIO_TRANSITION_REASON,
+)
+
 logger = logging.getLogger(__name__)
+
+def _rollback_step(board, mover, previous, current) -> None:
+    if board is not None and hasattr(board, "move"):
+        try:
+            board.move(current, previous)
+            return
+        except Exception as exc:
+            logger.debug("rollback board.move failed: %s", exc)
+    try:
+        mover.position = previous  # type: ignore[attr-defined]
+    except Exception:
+        pass
 
 
 def _is_diagonal(a, b) -> bool:
@@ -449,6 +467,25 @@ def follow_path(ctx_or_board, mover, path, *, led_color=None, on_enter=None, all
             logger.debug("board.move failed: %s", exc)
             return False, prev, "move_error"
 
+        if callable(on_enter):
+            try:
+                try:
+                    setattr(mover, "_movement_previous_position", prev)
+                    setattr(mover, "_movement_current_position", step)
+                except Exception:
+                    pass
+                stop = on_enter(ctx_or_board, mover, step)
+                if stop == SCENARIO_TRANSITION_CANCELLED:
+                    _rollback_step(board, mover, prev, step)
+                    return False, prev, "transition_cancelled"
+                if stop == SCENARIO_TRANSITION_ACCEPTED:
+                    return True, step, SCENARIO_TRANSITION_REASON
+                if stop:
+                    return False, step, "on_enter"
+            except Exception as exc:
+                logger.debug("on_enter hook failed: %s", exc)
+                return False, step, "on_enter"
+
         try:
             from GameObjects.events.magic.runtime_effects import process_alarm_wards_for_move
 
@@ -456,15 +493,6 @@ def follow_path(ctx_or_board, mover, path, *, led_color=None, on_enter=None, all
             process_alarm_wards_for_move(game, mover, step)
         except Exception:
             pass
-
-        if callable(on_enter):
-            try:
-                stop = on_enter(ctx_or_board, mover, step)
-                if stop:
-                    return False, step, "on_enter"
-            except Exception as exc:
-                logger.debug("on_enter hook failed: %s", exc)
-                return False, step, "on_enter"
 
         if step_delay:
             time.sleep(step_delay)
@@ -578,6 +606,8 @@ def perform_movement(
 
         spent += step_cost
         used_any = True
+        if reason == SCENARIO_TRANSITION_REASON:
+            break
 
     if used_any and end_message and game is not None and hasattr(game, "ui_log"):
         try:

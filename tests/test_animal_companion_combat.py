@@ -450,6 +450,8 @@ def test_command_animal_companion_stride_moves_on_board(monkeypatch):
     owner = DummyOwner(position=(1, 1), initiative=17)
     _add_druid_animal_setup(owner)
     game.heroes = [owner]
+    prompt = PromptRecorder()
+    game.player_prompt = prompt
     board.place(owner, owner.position)
 
     combat = Combat(game)
@@ -531,6 +533,8 @@ def test_combat_cleanup_removes_companion_and_prompts_pickup():
     owner = DummyOwner(position=(1, 1), initiative=17)
     _add_druid_animal_setup(owner)
     game.heroes = [owner]
+    prompt = PromptRecorder()
+    game.player_prompt = prompt
     board.place(owner, owner.position)
 
     combat = Combat(game)
@@ -542,8 +546,11 @@ def test_combat_cleanup_removes_companion_and_prompts_pickup():
     combat._cleanup_animal_companions()
 
     assert companion.position is None
-    assert len(ui.info_calls) == 1
-    assert "zabierz figurke" in str(ui.info_calls[0].get("prompt_long") or "").lower()
+    assert ui.info_calls == []
+    assert len(prompt.card_calls) == 1
+    assert prompt.card_calls[0]["ack_required"] is False
+    assert prompt.card_calls[0]["pause_policy"] == "passive"
+    assert "zdejmij z planszy" in str(prompt.card_calls[0].get("body_markdown") or "").lower()
 
 
 def test_dead_companion_cleanup_emits_player_card():

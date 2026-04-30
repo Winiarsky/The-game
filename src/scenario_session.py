@@ -6,10 +6,13 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Any
 
+from bonuses import BonusEffect, BonusType
 from board import consts
 from GameObjects.Enemies.basic_enemy import BasicEnemy
 from GameObjects.Interactables.entry_anchor import EntryAnchor
+from GameObjects.interactions_mixin.skill_check_resolver import resolve_skill_check_with_sources
 from hero import Hero
+from skills import Skill
 from states.combat import Combat
 from states.encounter_setup import run_setup_batches
 from states.heroes_turns import HeroesTurn
@@ -65,6 +68,7 @@ class ScenarioSession:
         self.completed_objectives: set[str] = set()
         self.triggered_once_events: set[str] = set()
         self.loot_journal: list[dict[str, Any]] = []
+        self.object_state_overrides: dict[str, dict[str, dict[str, Any]]] = {}
         self.party_stash: list[object] = []
         self.party_coin_pouch: dict[str, int] = {"cp": 0, "sp": 0, "gp": 0, "pp": 0}
         self.checkpoints: list[dict[str, Any]] = []
@@ -145,6 +149,15 @@ class ScenarioSession:
                 "to_map_id": transition["to_map_id"],
                 "entry_anchor_id": transition["target_entry_anchor_id"],
                 "reason": trigger_type,
+                "exit_id": exit_id,
+                "actor": actor,
+                "requires_confirmation": bool(getattr(source_object, "requires_confirmation", False)),
+                "entry_position": getattr(actor, "position", None),
+                "rollback_position": (
+                    getattr(actor, "_movement_previous_position", None)
+                    if str(trigger_type or "").strip().lower() == "exit_enter"
+                    else None
+                ),
             }
         return True, f"Przejście do mapy '{self.pending_transition['to_map_id']}' zostało aktywowane."
 
@@ -222,6 +235,12 @@ class ScenarioSession:
                 message = str(action.get("message") or action.get("text") or "").strip()
                 if not message:
                     continue
+                audio = self._flow_voiceover_for(
+                    trigger=trigger,
+                    map_id=map_id,
+                    target_id=target_id,
+                    message=message,
+                )
                 if self.current_game is not None:
                     if kind == "show_prompt":
                         prompt_sent = False
@@ -234,13 +253,24 @@ class ScenarioSession:
                                 scope_key="scenario_transition",
                                 dedupe_key=f"scenario_prompt:{_safe_id(trigger)}:{_safe_id(map_id)}:{_safe_id(target_id)}:{_safe_id(message)}",
                                 semantic_type="required_action",
+                                audio=audio,
                             ) is not None
                         except Exception:
                             prompt_sent = False
                         if not prompt_sent:
-                            self.current_game.ui_narration(message, summary="Co się dzieje", source="scenario_flow")
+                            self.current_game.ui_narration(
+                                message,
+                                summary="Co się dzieje",
+                                source="scenario_flow",
+                                audio=audio,
+                            )
                     else:
-                        self.current_game.ui_narration(message, summary="Co się dzieje", source="scenario_flow")
+                        self.current_game.ui_narration(
+                            message,
+                            summary="Co się dzieje",
+                            source="scenario_flow",
+                            audio=audio,
+                        )
                 continue
             if kind == "go_to_map":
                 target_map_id = str(action.get("map_id") or "").strip()
@@ -294,11 +324,132 @@ class ScenarioSession:
                 if self.current_game is not None and entry["message"]:
                     self.current_game.ui_log(entry["message"])
                 continue
+            if kind in {"reveal_object", "set_object_state"}:
+                target_map = str(action.get("map_id") or map_id or self.current_map_id or "").strip()
+                object_id = str(
+                    action.get("target_id")
+                    or action.get("object_id")
+                    or action.get("cache_id")
+                    or target_id
+                    or ""
+                ).strip()
+                state_updates = dict(action.get("state_updates") or {})
+                if kind == "reveal_object":
+                    state_updates.setdefault("hidden", False)
+                    state_updates.setdefault("revealed", True)
+                for key, value in dict(action.get("set") or {}).items():
+                    state_updates[str(key)] = value
+                if target_map and object_id and state_updates:
+                    self.reveal_object(
+                        target_map,
+                        object_id,
+                        state_updates=state_updates,
+                        message=str(action.get("message") or "").strip() or None,
+                    )
+                continue
             if kind == "finish_scenario":
                 self.finished = True
                 if self.current_game is not None:
                     self.current_game.ui_log("Scenariusz zakończony.")
                 continue
+
+    def _flow_voiceover_for(
+        self,
+        *,
+        trigger: str,
+        map_id: str | None,
+        target_id: str | None,
+        message: str,
+    ) -> str | None:
+        trigger_key = str(trigger or "").strip().lower()
+        map_key = str(map_id or self.current_map_id or "").strip().lower()
+        target_key = str(target_id or "").strip().lower()
+        base = "audio/voiceover/"
+        mapping = {
+            ("map_start", "cave_entrance", ""): "cave_intro_001.mp3",
+            ("object_revealed", "cave_entrance", "secret_treasure"): "secret_passage_found_001.mp3",
+            ("combat_end", "cave_entrance", ""): "cave_cleared_001.mp3",
+            ("map_start", "treasure_room", ""): "treasure_intro_001.mp3",
+            ("map_start", "smuggler_docks", ""): "docks_intro_001.mp3",
+            ("combat_end", "smuggler_docks", ""): "docks_cleared_001.mp3",
+            ("exit_interact", "smuggler_docks", "escape_ship"): "escape_ship_ending_001.mp3",
+        }
+        filename = mapping.get((trigger_key, map_key, target_key)) or mapping.get((trigger_key, map_key, ""))
+        if filename:
+            return f"{base}{filename}"
+        return None
+
+    def reveal_object(
+        self,
+        map_id: str,
+        target_id: str,
+        *,
+        state_updates: dict[str, Any] | None = None,
+        message: str | None = None,
+    ) -> bool:
+        target_map = str(map_id or "").strip()
+        target = str(target_id or "").strip()
+        updates = dict(state_updates or {})
+        if not target_map or not target or not updates:
+            return False
+        self.object_state_overrides.setdefault(target_map, {}).setdefault(target, {}).update(updates)
+        applied = False
+        if target_map == self.current_map_id and self.current_game is not None:
+            applied = self._apply_object_state_override_to_board(self.current_game.board, target, updates) or applied
+        snapshot = self.map_snapshots.get(target_map)
+        if snapshot is not None:
+            applied = self._apply_object_state_override_to_board(snapshot.board, target, updates) or applied
+        if self.current_game is not None and str(message or "").strip():
+            self.current_game.ui_log(str(message).strip())
+        return applied
+
+    def _apply_object_state_overrides(self, map_id: str, board) -> None:
+        overrides = dict(self.object_state_overrides.get(str(map_id or "").strip(), {}) or {})
+        for target_id, updates in overrides.items():
+            self._apply_object_state_override_to_board(board, str(target_id), dict(updates or {}))
+
+    def _apply_object_state_override_to_board(self, board, target_id: str, updates: dict[str, Any]) -> bool:
+        if board is None:
+            return False
+        applied = False
+        rows = int(getattr(board, "rows", 0) or 0)
+        cols = int(getattr(board, "cols", 0) or 0)
+        for row in range(rows):
+            for col in range(cols):
+                pos = (col, row)
+                try:
+                    objects = list(board.interactables_at(pos) or [])
+                except Exception:
+                    objects = []
+                for obj in objects:
+                    if not self._object_matches_target(obj, target_id):
+                        continue
+                    for key, value in updates.items():
+                        try:
+                            setattr(obj, str(key), value)
+                        except Exception:
+                            continue
+                    applied = True
+        return applied
+
+    @staticmethod
+    def _object_matches_target(obj: object, target_id: str) -> bool:
+        target = str(target_id or "").strip()
+        if not target:
+            return False
+        for attr in (
+            "cache_id",
+            "npc_id",
+            "exit_id",
+            "entry_anchor_id",
+            "scenario_object_id",
+            "object_id",
+            "name",
+            "trap_name",
+        ):
+            if str(getattr(obj, attr, "") or "").strip() == target:
+                return True
+        return False
 
     def save_checkpoint(self, *, reason: str) -> None:
         checkpoint = {
@@ -315,6 +466,16 @@ class ScenarioSession:
             return
         transition = dict(self.pending_transition)
         self.pending_transition = None
+        transition_def = self._find_transition(transition_id=str(transition.get("transition_id") or "").strip())
+        transition_requires_confirmation = bool(
+            transition.get("requires_confirmation")
+            or (transition_def is not None and transition_def.get("requires_confirmation"))
+        )
+        if transition_requires_confirmation and not self._confirm_pending_transition(transition):
+            self._rollback_cancelled_transition(transition)
+            return
+        if transition_def is not None:
+            self._maybe_run_docks_stealth_challenge(transition_def)
         self._snapshot_current_map()
         from_map_id = str(self.current_map_id or "")
         self.visited_maps.add(from_map_id)
@@ -336,6 +497,252 @@ class ScenarioSession:
             target_id=anchor_id,
             payload={"from_map_id": from_map_id},
         )
+        self._after_transition_applied(dict(transition), from_map_id=from_map_id, target_map_id=target_map_id)
+
+    def _map_label(self, map_id: str | None) -> str:
+        key = str(map_id or "").strip()
+        map_ref = self.maps.get(key) or {}
+        return str(map_ref.get("label") or key or "nieznana mapa")
+
+    def _confirm_pending_transition(self, transition: dict[str, Any]) -> bool:
+        if self.current_game is None:
+            return True
+        target_map_id = str(transition.get("to_map_id") or "").strip()
+        target_label = self._map_label(target_map_id)
+        source_label = self._map_label(str(transition.get("from_map_id") or self.current_map_id or ""))
+        actor = transition.get("actor")
+        actor_name = str(getattr(actor, "name", None) or "Bohater")
+        body = (
+            f"{actor_name} kończy ruch przy przejściu z mapy **{source_label}**.\n\n"
+            f"Potwierdź, jeśli chcesz przejść do: **{target_label}**.\n\n"
+            "Po potwierdzeniu gra wykona wymagane testy i rozpocznie setup nowej mapy. "
+            "Jeśli anulujesz, bohater zostaje przed przejściem."
+        )
+        choice_meta = [
+            {
+                "raw": "confirm",
+                "label": "Przejdź",
+                "desc": f"Rozpocznij przejście do mapy {target_label}.",
+                "key": "Enter",
+                "category": "movement",
+            },
+            {
+                "raw": "cancel",
+                "label": "Zostań",
+                "desc": "Anuluj przejście i wróć na poprzednie pole.",
+                "key": "Esc",
+                "category": "turn",
+            },
+        ]
+        answer = None
+        try:
+            answer = self.current_game.player_prompt.choice(
+                f"Przejście do {target_label}",
+                choices=["confirm", "cancel"],
+                source="scenario_transition_confirm",
+                subtitle="Potwierdź przejście po zakończeniu ruchu.",
+                body_markdown=body,
+                choice_meta=choice_meta,
+                scope_key="scenario_transition",
+                dedupe_key=(
+                    "scenario_transition_confirm:"
+                    f"{_safe_id(transition.get('from_map_id'))}:"
+                    f"{_safe_id(transition.get('exit_id'))}:"
+                    f"{_safe_id(target_map_id)}"
+                ),
+                prompt_id="ui.choice.scenario_transition_confirm",
+            )
+        except Exception:
+            answer = None
+        if answer is None:
+            logger.debug("Brak odpowiedzi UI na potwierdzenie przejścia; kontynuuję przejście.")
+            return True
+        normalized = str(answer or "").strip().lower()
+        if normalized in {"cancel", "no", "nie", "zostan", "zostań", "stay", "back", "return"}:
+            return False
+        return normalized in {"confirm", "ok", "tak", "yes", "y", "przejdz", "przejdź", "przejsc", "przejść"}
+
+    def _rollback_cancelled_transition(self, transition: dict[str, Any]) -> None:
+        game = self.current_game
+        actor = transition.get("actor")
+        rollback = _position_tuple(transition.get("rollback_position"))
+        current = _position_tuple(getattr(actor, "position", None))
+        if game is None or actor is None:
+            return
+        if rollback is not None and current is not None and current != rollback:
+            try:
+                game.board.move(current, rollback)
+            except Exception:
+                try:
+                    actor.set_position(rollback)
+                except Exception:
+                    pass
+        try:
+            game.ui_log("Przejście anulowane. Bohater zostaje przed przejściem.")
+            game.ui_hero(actor, note="Przejście anulowane")
+        except Exception:
+            pass
+
+    def _maybe_run_docks_stealth_challenge(self, transition: dict[str, Any]) -> None:
+        if str(transition.get("id") or "").strip() != "cave_to_docks":
+            return
+        if bool(self.global_flags.get("docks_stealth_challenge_resolved")):
+            return
+        self.global_flags["docks_stealth_challenge_resolved"] = True
+        active_heroes = [hero for hero in list(self.heroes or []) if getattr(hero, "position", None) is not None]
+        if not active_heroes:
+            active_heroes = list(self.heroes or [])
+        results = []
+        for hero in active_heroes:
+            try:
+                result = resolve_skill_check_with_sources(
+                    skill_id=Skill.STEALTH.value,
+                    dc=15,
+                    actor=hero,
+                    tags=["stealth", "hide", "scenario", "docks_descent"],
+                    game=self.current_game,
+                    apply_modifiers=True,
+                )
+            except Exception:
+                logger.debug("Nie udało się rozstrzygnąć testu skradania dla %s.", getattr(hero, "name", hero), exc_info=True)
+                continue
+            results.append((hero, result))
+        all_success = bool(results) and all(
+            str(getattr(result, "outcome", "") or "") in {"success", "critical_success"}
+            for _hero, result in results
+        )
+        any_critical_failure = any(
+            str(getattr(result, "outcome", "") or "") == "critical_failure"
+            for _hero, result in results
+        )
+        self.global_flags["docks_stealth_all_success"] = all_success
+        self.global_flags["docks_stealth_critical_failure"] = any_critical_failure
+        summary_lines = [
+            f"{getattr(hero, 'name', 'Bohater')}: {getattr(result, 'outcome', '?')} "
+            f"({getattr(result, 'total', '?')} vs DC {getattr(result, 'dc', 15)})"
+            for hero, result in results
+        ]
+        answer = "tak" if all_success else "nie"
+        body = (
+            "Czy wszyscy zdali test skradania/ukrywania? "
+            f"**{answer.upper()}**.\n\n"
+            + ("\n".join(f"- {line}" for line in summary_lines) if summary_lines else "Brak aktywnych bohaterów do testu.")
+        )
+        if any_critical_failure:
+            body += "\n\nKrytyczna porażka: przeciwnicy dostaną +2 circumstance do inicjatywy i pierwszego rzutu w pierwszej kolejce."
+        elif all_success:
+            body += "\n\nDrużyna schodzi cicho. Po wejściu do doków możliwa jest otwierająca akcja z zaskoczenia przed normalną inicjatywą."
+        else:
+            body += "\n\nBandyci są czujni. Po wejściu do doków walka rozpocznie się normalnie."
+        self._show_scenario_info("Zejście do doków", body, dedupe_key="docks_stealth_challenge")
+
+    def _after_transition_applied(self, transition: dict[str, Any], *, from_map_id: str, target_map_id: str) -> None:
+        if str(transition.get("transition_id") or transition.get("id") or "").strip() != "cave_to_docks":
+            return
+        if str(target_map_id or "").strip() != "smuggler_docks":
+            return
+        if self.current_game is None:
+            return
+        if bool(self.global_flags.get("docks_stealth_all_success")):
+            body = (
+                "W dokach nikt jeszcze nie zdążył zareagować. Wybierz bohatera i wykonaj pierwszą akcję; "
+                "pierwszy wrogi alarm rozpocznie normalną walkę."
+            )
+            try:
+                self.current_game.player_prompt.card(
+                    kind="idle",
+                    title="Ciche wejście",
+                    summary="Scenariusz",
+                    body_markdown=body,
+                    priority="info",
+                    scope_key="scenario_flow",
+                    dedupe_key="docks_stealth_success_entry",
+                    pause_policy="none",
+                )
+            except Exception:
+                try:
+                    self.current_game.ui_idle_hint("Ciche wejście", body)
+                except Exception:
+                    pass
+            return
+        if bool(self.global_flags.get("docks_stealth_critical_failure")):
+            self._grant_docks_enemy_alert_bonus()
+        try:
+            self.current_game.start_combat(trigger=None)
+        except Exception:
+            logger.debug("Nie udało się automatycznie rozpocząć walki w dokach.", exc_info=True)
+
+    def _grant_docks_enemy_alert_bonus(self) -> None:
+        if self.current_game is None:
+            return
+        for enemy in list(getattr(self.current_game, "enemies", []) or []):
+            if getattr(enemy, "position", None) is None:
+                continue
+            try:
+                if int(getattr(enemy, "hp", 1) or 0) <= 0:
+                    continue
+            except Exception:
+                pass
+            remover = getattr(enemy, "remove_bonuses_with_prefix", None)
+            if callable(remover):
+                try:
+                    remover("bandit_cave:docks_alert")
+                except Exception:
+                    pass
+            add_bonus = getattr(enemy, "add_bonus", None)
+            if not callable(add_bonus):
+                continue
+            add_bonus(
+                BonusEffect(
+                    type=BonusType.CIRCUMSTANCE,
+                    value=2,
+                    tag="initiative",
+                    source="bandit_cave:docks_alert:initiative",
+                    label="alarm w dokach",
+                    duration_turns=2,
+                )
+            )
+            for tag in ("attack_melee", "attack_ranged"):
+                add_bonus(
+                    BonusEffect(
+                        type=BonusType.CIRCUMSTANCE,
+                        value=2,
+                        tag=tag,
+                        source=f"bandit_cave:docks_alert:{tag}",
+                        label="alarm w dokach",
+                        duration_turns=2,
+                    )
+                )
+        self._show_scenario_info(
+            "Alarm w dokach",
+            "Krytyczna porażka przy zejściu zaalarmowała strażników: przeciwnicy mają +2 circumstance do inicjatywy oraz pierwszego rzutu w pierwszej kolejce.",
+            dedupe_key="docks_stealth_critical_failure_bonus",
+        )
+
+    def _show_scenario_info(self, title: str, body: str, *, dedupe_key: str) -> None:
+        if self.current_game is None:
+            return
+        prompt_sent = False
+        try:
+            prompt_sent = self.current_game.player_prompt.info(
+                title,
+                body_markdown=body,
+                summary="Scenariusz",
+                source="scenario_flow",
+                scope_key="scenario_flow",
+                dedupe_key=dedupe_key,
+                semantic_type="required_action",
+            ) is not None
+        except Exception:
+            prompt_sent = False
+        if not prompt_sent:
+            try:
+                self.current_game.ui_narration(body, summary=title, source="scenario_flow")
+            except Exception:
+                try:
+                    self.current_game.ui_log(body)
+                except Exception:
+                    pass
 
     def _load_map(
         self,
@@ -374,6 +781,8 @@ class ScenarioSession:
             game.enemies = self._collect_enemies_from_board(game.board)
             game.state = HeroesTurn(game)
             game._rebuild_object_registry_after_undo()
+
+        self._apply_object_state_overrides(map_id, game.board)
 
         if self.heroes and place_party:
             game.heroes = list(self.heroes)
@@ -711,3 +1120,12 @@ def _safe_id(value: object) -> str:
         return "none"
     normalized = "".join(ch if ch.isalnum() else "_" for ch in text)
     return normalized[:64] or "none"
+
+
+def _position_tuple(value: object) -> tuple[int, int] | None:
+    if not isinstance(value, (list, tuple)) or len(value) < 2:
+        return None
+    try:
+        return (int(value[0]), int(value[1]))
+    except Exception:
+        return None

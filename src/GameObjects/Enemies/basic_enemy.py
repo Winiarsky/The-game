@@ -171,7 +171,14 @@ class BasicEnemy(StatusMixin, BonusMixin, WatchfulMixin, ReactiveMixin, MagicalM
 
     def roll_initiative(self) -> int:
         """Losowy rzut inicjatywy dla wrogów."""
-        roll = random.randint(1, 20) + self.initiative_bonus
+        extra_mod = 0
+        compute_modifier = getattr(self, "compute_modifier", None)
+        if callable(compute_modifier):
+            try:
+                extra_mod = int(compute_modifier("initiative") or 0)
+            except Exception:
+                extra_mod = 0
+        roll = random.randint(1, 20) + self.initiative_bonus + extra_mod
         if getattr(self, "has_status", lambda _s: False)("deafened"):
             roll -= 2
             try:
@@ -181,7 +188,7 @@ class BasicEnemy(StatusMixin, BonusMixin, WatchfulMixin, ReactiveMixin, MagicalM
             except Exception:
                 pass
         self.initiative = roll
-        logger.info("%s rzuca inicjatywę: %s (bonus %s).", self.name, roll, self.initiative_bonus)
+        logger.info("%s rzuca inicjatywę: %s (bonus %s, modyfikator %s).", self.name, roll, self.initiative_bonus, extra_mod)
         return roll
 
     def apply_damage(

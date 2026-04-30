@@ -3,11 +3,6 @@
     "title": "Wybór bohatera",
     "body_markdown": "Gra czeka teraz na klik figurki bohatera na planszy."
   },
-  "turns.active_hero_menu": {
-    "title": "Aktywny bohater",
-    "subtitle": "Wybierz bohatera do wykonania akcji.",
-    "body_markdown": "Plansza nie zwróciła kliknięcia. Wybierz aktywnego bohatera z listy w UI."
-  },
   "turns.no_heroes_on_board": {
     "title": "Brak bohaterów",
     "subtitle": "Wybierz dalsze działanie.",
@@ -105,10 +100,6 @@
   "ui.choice.intent": {
     "title": "Akcje",
     "subtitle": "8/2 nawigacja, Enter potwierdzenie."
-  },
-  "ui.choice.active_hero_select": {
-    "title": "Aktywny bohater",
-    "subtitle": "Wybierz bohatera do wykonania akcji."
   },
   "ui.choice.heroes_missing": {
     "title": "Brak bohaterów",

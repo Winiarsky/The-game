@@ -203,7 +203,7 @@ def test_monster_hunter_uses_dynamic_recall_skill_for_undead(monkeypatch):
     assert int(captured["dc"]) >= 10
 
 
-def test_hunt_prey_falls_back_to_ui_choice_when_board_selection_times_out():
+def test_hunt_prey_does_not_fallback_to_ui_when_board_selection_is_cancelled():
     actor = DummyHero(object_id="hero-ranger", name="Ranger")
     enemy_a = DummyEnemy(object_id="enemy-a", name="Goblin A", position=(1, 0), ac=16, hp=6)
     enemy_b = DummyEnemy(object_id="enemy-b", name="Goblin B", position=(2, 0), ac=17, hp=8)
@@ -220,14 +220,14 @@ def test_hunt_prey_falls_back_to_ui_choice_when_board_selection_times_out():
     game.state = Combat(game)
     game.ui = FakeUI(answers=[enemy_b.object_id])
 
-    def _timed_out(*_args, **_kwargs):
-        raise TimeoutError("no board input")
+    def _cancelled(*_args, **_kwargs):
+        return None
 
-    game.conn.scan_board = _timed_out
+    game.conn.scan_board = _cancelled
 
     result = dispatch_event("hunt_prey", EventContext(game=game, actor=actor))
 
-    assert result.success is True
-    assert actor.get_status_data("ranger", "ranger_setup", {}).get("hunted_prey_target_id") == enemy_b.object_id
+    assert result.success is False
+    assert actor.get_status_data("ranger", "ranger_setup", {}).get("hunted_prey_target_id") is None
     assert game.ui.info_calls
-    assert game.ui.choice_calls
+    assert game.ui.choice_calls == []

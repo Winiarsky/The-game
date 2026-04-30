@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import atexit
 import itertools
 import json
 import os
@@ -12,6 +13,7 @@ from queue import Empty, Queue
 from threading import Lock
 from typing import Any
 
+import requests
 from flask import Flask, Response, abort, jsonify, render_template, request, send_from_directory
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -29,6 +31,7 @@ APP_ROOT = Path(__file__).resolve().parent
 CONTENT_ROOT = APP_ROOT / "content"
 V2_STATIC_ROOT = APP_ROOT / "static"
 LEGACY_STATIC_ROOT = PROJECT_ROOT / "player_ui" / "static"
+ASSETS_ROOT = PROJECT_ROOT / "assets"
 
 app = Flask(__name__, static_folder=None, template_folder="templates")
 
@@ -97,6 +100,57 @@ def _publish(event_type: str, payload: dict[str, Any]) -> dict[str, Any]:
 
 
 prompt_director.set_publisher(_publish)
+
+
+def _configured_wled_state() -> tuple[str, int, int, int]:
+    env_url = str(os.environ.get("WLED_URL") or "").strip()
+    segment_id = int(os.environ.get("WLED_SEGMENT_ID") or 0)
+    led_offset = int(os.environ.get("WLED_LED_OFFSET") or 0)
+    led_count = int(os.environ.get("WLED_LED_COUNT") or 620)
+    if env_url:
+        return env_url.rstrip("/"), segment_id, led_offset, led_count
+    try:
+        cfg = load_board_config()
+    except Exception:
+        return "", segment_id, led_offset, led_count
+    wled_cfg = cfg.get("wled") or {}
+    return (
+        str(wled_cfg.get("base_url") or "").strip().rstrip("/"),
+        int(wled_cfg.get("segment_id") or segment_id),
+        int(wled_cfg.get("led_offset") or led_offset),
+        int(wled_cfg.get("led_count") or led_count),
+    )
+
+
+def _power_off_wled(*, reason: str, log_failure: bool = True) -> None:
+    base_url, segment_id, led_offset, led_count = _configured_wled_state()
+    if not base_url:
+        return
+    stop = led_offset + led_count
+    payload = {
+        "on": False,
+        "seg": [
+            {
+                "id": segment_id,
+                "on": False,
+                "fx": 0,
+                "col": [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
+                "i": [led_offset, stop, "000000"],
+            }
+        ],
+    }
+    try:
+        requests.post(f"{base_url}/json/state", json=payload, timeout=2.0).raise_for_status()
+    except Exception as exc:
+        if log_failure:
+            app.logger.warning("Nie udało się wyłączyć WLED podczas %s: %s", reason, exc)
+
+
+def _shutdown_hardware_outputs() -> None:
+    _power_off_wled(reason="shutdown", log_failure=False)
+
+
+atexit.register(_shutdown_hardware_outputs)
 
 
 def _session_info() -> dict[str, Any]:
@@ -220,6 +274,8 @@ def build_catalog() -> dict[str, Any]:
         "primary_objectives": list(scenario.get("primary_objectives") or []),
         "optional_objectives": list(scenario.get("optional_objectives") or []),
         "transitions": dict(scenario.get("transitions") or {}),
+        "asset_manifest": str(scenario.get("asset_manifest") or ""),
+        "audio_cues": dict(scenario.get("audio_cues") or {}),
         "result_title": str(scenario.get("result_title") or ""),
         "result_summary": str(scenario.get("result_summary") or ""),
     }
@@ -259,6 +315,7 @@ def _refresh_runtime_state_unlocked() -> None:
     runtime_state["state"] = "stopped" if int(code) == 0 else "error"
     if int(code) != 0 and not runtime_state.get("error"):
         runtime_state["error"] = f"Runtime finished with code {code}."
+    _power_off_wled(reason="runtime_exit")
 
 
 def _runtime_status_payload() -> dict[str, Any]:
@@ -356,6 +413,7 @@ def stop_runtime_process(*, reason: str = "manual") -> dict[str, Any]:
         if process is None:
             runtime_state["state"] = "stopped"
             runtime_state["stopped_at"] = time.time()
+            _power_off_wled(reason=reason)
             return {
                 "state": runtime_state.get("state"),
                 "scenario_id": runtime_state.get("scenario_id"),
@@ -377,6 +435,7 @@ def stop_runtime_process(*, reason: str = "manual") -> dict[str, Any]:
                 process.kill()
             except Exception:
                 pass
+        _power_off_wled(reason=reason)
         runtime_state["process"] = None
         runtime_state["stopped_at"] = time.time()
         runtime_state["state"] = "stopped"
@@ -480,6 +539,17 @@ def static_files(filename: str):
         candidate = root / normalized
         if candidate.exists() and candidate.is_file():
             return send_from_directory(root, normalized)
+    abort(404)
+
+
+@app.get("/assets/<path:filename>")
+def asset_files(filename: str):
+    normalized = str(filename).strip().lstrip("/")
+    if not normalized or normalized.startswith("../") or "/../" in f"/{normalized}/":
+        abort(404)
+    candidate = ASSETS_ROOT / normalized
+    if candidate.exists() and candidate.is_file():
+        return send_from_directory(ASSETS_ROOT, normalized)
     abort(404)
 
 

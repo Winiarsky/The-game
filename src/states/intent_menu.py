@@ -1536,12 +1536,22 @@ def choose_event_from_bucket(
         subtitle = "Wybierz akcję specjalną."
         prompt_id = "turns.bucket.special"
 
-    options: list[dict[str, str]] = []
+    event_name_counts = Counter(str(item or "") for item in list(event_names or []) if str(item or "").strip())
+    unique_event_names: list[str] = []
+    seen_event_names: set[str] = set()
     for event_name in event_names:
+        raw_event_name = str(event_name or "").strip()
+        if not raw_event_name or raw_event_name in seen_event_names:
+            continue
+        seen_event_names.add(raw_event_name)
+        unique_event_names.append(raw_event_name)
+
+    options: list[dict[str, str]] = []
+    for event_name in unique_event_names:
         cls = available_events.get(event_name)
         label = _labelize(event_name)
         if bucket_id == "magic":
-            prepared_count = _prepared_spell_count(actor, event_name)
+            prepared_count = max(_prepared_spell_count(actor, event_name), int(event_name_counts.get(event_name, 0) or 0))
             if prepared_count > 1:
                 label = f"{label} x{prepared_count}"
         options.append(

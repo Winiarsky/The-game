@@ -1,0 +1,3 @@
+SCENARIO_TRANSITION_ACCEPTED = "__scenario_transition_accepted__"
+SCENARIO_TRANSITION_CANCELLED = "__scenario_transition_cancelled__"
+SCENARIO_TRANSITION_REASON = "scenario_transition"

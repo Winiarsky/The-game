@@ -10,6 +10,11 @@ const refs = {
     runtimeBadge: document.getElementById("runtime-badge"),
     boardBadge: document.getElementById("board-badge"),
     sessionChip: document.getElementById("session-chip"),
+    mastheadShell: document.getElementById("masthead-shell"),
+    mastheadSummaryStatus: document.getElementById("masthead-summary-status"),
+    audioToggle: document.getElementById("audio-toggle"),
+    audioVolume: document.getElementById("audio-volume"),
+    audioStatus: document.getElementById("audio-status"),
     runtimeErrorModal: document.getElementById("runtime-error-modal"),
     runtimeErrorTitle: document.getElementById("runtime-error-title"),
     runtimeErrorBody: document.getElementById("runtime-error-body"),
@@ -36,6 +41,10 @@ const refs = {
     topMap: document.getElementById("top-map"),
     topChapter: document.getElementById("top-chapter"),
     topObjective: document.getElementById("top-objective"),
+    adventureDrawer: document.getElementById("adventure-drawer"),
+    adventureDrawerStatus: document.getElementById("adventure-drawer-status"),
+    actorRailLabel: document.getElementById("actor-rail-label"),
+    actorInfoBody: document.getElementById("actor-info-body"),
     teamList: document.getElementById("team-list"),
     initiativeList: document.getElementById("initiative-list"),
     objectiveList: document.getElementById("objective-list"),
@@ -43,8 +52,13 @@ const refs = {
     journalList: document.getElementById("journal-list"),
     debugList: document.getElementById("debug-list"),
     actionChannel: document.getElementById("action-channel"),
+    actionCard: document.querySelector(".action-card"),
     actionTitle: document.getElementById("action-title"),
     actionPriority: document.getElementById("action-priority"),
+    activeActorPanel: document.getElementById("active-actor-panel"),
+    activeActorPortrait: document.getElementById("active-actor-portrait"),
+    activeActorName: document.getElementById("active-actor-name"),
+    activeActorMeta: document.getElementById("active-actor-meta"),
     actionScene: document.getElementById("action-scene"),
     actionSceneBody: document.getElementById("action-scene-body"),
     actionHelp: document.getElementById("action-help"),
@@ -88,6 +102,8 @@ const state = {
     selectedHeroIds: [],
     sessionId: null,
     runtimeStatus: { state: "idle", scenario_id: null, hero_ids: [] },
+    assetManifest: null,
+    assetManifestUrl: "",
     heroes: new Map(),
     initiative: { round: null, order: [], active_id: null },
     activeActor: null,
@@ -114,6 +130,11 @@ const state = {
     dismissedRuntimeErrorKey: null,
     diceRoll: null,
     diceRollTimer: null,
+    audioEnabled: false,
+    audioPreferenceLocked: false,
+    audioVolume: 0.58,
+    playedAudioCues: new Set(),
+    currentAmbienceKey: "",
 };
 
 function escapeHtml(text) {
@@ -186,6 +207,131 @@ function sameMeaning(a, b) {
     const left = normalizedText(a);
     const right = normalizedText(b);
     return Boolean(left) && left === right;
+}
+
+function firstMeaningfulLine(value) {
+    return String(value || "")
+        .split(/\n+/)
+        .map((line) => line.trim())
+        .find(Boolean) || "";
+}
+
+function isGenericPromptTitle(value) {
+    const text = normalizedText(value).toLowerCase();
+    return ["mistrz gry", "prompt", "karta", "komunikat"].includes(text);
+}
+
+function isGenericPromptSummary(value) {
+    const text = normalizedText(value).toLowerCase();
+    return ["co się dzieje", "co sie dzieje", "co robić teraz", "co robic teraz"].includes(text);
+}
+
+function focusCardTitleCandidate(focusCard) {
+    if (!focusCard) return "";
+    const candidates = [
+        focusCard.title,
+        focusCard.summary,
+        focusCard.body_markdown,
+    ].map(firstMeaningfulLine).filter(Boolean);
+    return candidates.find((candidate) => !isGenericPromptTitle(candidate) && !isGenericPromptSummary(candidate)) || "";
+}
+
+function normalizedAssetKey(value) {
+    return String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "");
+}
+
+function resolveAssetUrl(path) {
+    const raw = String(path || "").trim();
+    if (!raw) return "";
+    if (/^(https?:|data:|blob:)/i.test(raw) || raw.startsWith("/")) return raw;
+    const base = String(state.assetManifest?.base_path || "/assets/ui_v2/bandit_cave/").replace(/\/?$/, "/");
+    return `${base}${raw.replace(/^\/+/, "")}`;
+}
+
+function assetSection(sectionName) {
+    const section = state.assetManifest?.[sectionName];
+    return section && typeof section === "object" ? section : {};
+}
+
+function findAssetEntry(sectionName, idOrLabel) {
+    const key = normalizedAssetKey(idOrLabel);
+    if (!key) return null;
+    const section = assetSection(sectionName);
+    if (section[key]) return section[key];
+    for (const entry of Object.values(section)) {
+        if (!entry || typeof entry !== "object") continue;
+        if (normalizedAssetKey(entry.id) === key || normalizedAssetKey(entry.label) === key) return entry;
+    }
+    return null;
+}
+
+function fallbackAssetImage(kind) {
+    const fallbacks = state.assetManifest?.fallbacks || {};
+    const entry = fallbacks[kind] || fallbacks.choice || {};
+    return resolveAssetUrl(entry.image || "/static/placeholder.png");
+}
+
+function audioEntrySource(entry) {
+    if (!entry) return "";
+    if (typeof entry === "string") return resolveAssetUrl(entry);
+    if (typeof entry === "object") return resolveAssetUrl(entry.audio || entry.src || entry.path || "");
+    return "";
+}
+
+function scenarioAudioCue(key) {
+    const scenarioCue = scenarioConfig()?.audio_cues?.[key];
+    if (scenarioCue) return scenarioCue;
+    return findAssetEntry("narration", key) || findAssetEntry("music", key) || findAssetEntry("sfx", key);
+}
+
+function resolveChoiceImage(choice) {
+    const explicit = choice.image || choice.thumbnail;
+    if (explicit) return resolveAssetUrl(explicit);
+
+    const candidates = [choice.asset_id, choice.spell_id, choice.raw, choice.id, choice.label].filter(Boolean);
+    for (const candidate of candidates) {
+        const spell = findAssetEntry("spells", candidate);
+        if (spell?.image) return resolveAssetUrl(spell.image);
+    }
+    if (choice.spell_tier) {
+        const spellFallback = findAssetEntry("spells", choice.spell_tier);
+        if (spellFallback?.image) return resolveAssetUrl(spellFallback.image);
+    }
+    for (const candidate of candidates) {
+        const action = findAssetEntry("actions", candidate);
+        if (action?.image) return resolveAssetUrl(action.image);
+    }
+    const category = normalizedAssetKey(choice.category);
+    if (["movement", "combat", "generic", "utility", "turn"].includes(category)) {
+        return fallbackAssetImage("action");
+    }
+    if (category === "class" || choice.spell_id || choice.spell_tier) {
+        return fallbackAssetImage("spell");
+    }
+    return fallbackAssetImage("choice");
+}
+
+function resolveActorImage(actor) {
+    if (!actor) return fallbackAssetImage("actor");
+    const explicit = actor.image || actor.portrait || actor.portrait_image;
+    if (explicit) return resolveAssetUrl(explicit);
+    const id = String(actor.id || actor.asset_id || "").trim();
+    if (id && state.heroes.has(id)) {
+        const hero = state.heroes.get(id);
+        if (hero?.image) return resolveAssetUrl(hero.image);
+    }
+    const candidates = [actor.asset_id, actor.id, actor.name].filter(Boolean);
+    const kind = normalizedAssetKey(actor.kind);
+    for (const candidate of candidates) {
+        const sectionName = kind === "enemy" ? "enemies" : "characters";
+        const entry = findAssetEntry(sectionName, candidate) || findAssetEntry("enemies", candidate) || findAssetEntry("characters", candidate);
+        if (entry?.image) return resolveAssetUrl(entry.image);
+    }
+    return fallbackAssetImage(kind === "enemy" ? "enemy" : "actor");
 }
 
 function _isUpNavigationKey(event) {
@@ -325,11 +471,18 @@ function actionResultCard(payload) {
 }
 
 function setScreen(name) {
+    const previousScreen = state.screen;
+    if (previousScreen && previousScreen !== name) {
+        audioManager.stopVoiceovers();
+    }
     state.screen = name;
+    document.body.dataset.screen = name;
+    if (refs.mastheadShell) refs.mastheadShell.open = name !== "game";
     Object.entries(screens).forEach(([key, node]) => {
         if (!node) return;
         node.classList.toggle("screen-active", key === name);
     });
+    updateScenarioAudio();
 }
 
 async function fetchJson(url, options = {}) {
@@ -344,8 +497,154 @@ async function fetchJson(url, options = {}) {
     return payload;
 }
 
+const audioManager = (() => {
+    const loops = { music: null, ambience: null };
+    const voiceovers = new Set();
+    let enabled = false;
+    let volume = state.audioVolume;
+
+    function applyVolume(audio, multiplier = 1) {
+        if (!audio) return;
+        audio.volume = Math.max(0, Math.min(1, volume * multiplier));
+    }
+
+    function stopLoop(slot) {
+        const current = loops[slot];
+        if (current) {
+            current.pause();
+            current.src = "";
+        }
+        loops[slot] = null;
+    }
+
+    function stopVoiceovers() {
+        voiceovers.forEach((audio) => {
+            try {
+                audio.pause();
+                audio.src = "";
+            } catch (_error) {
+                // ignore stale audio handles
+            }
+        });
+        voiceovers.clear();
+    }
+
+    function playLoop(slot, src, multiplier = 0.55) {
+        const resolved = resolveAssetUrl(src);
+        if (!enabled || !resolved) {
+            stopLoop(slot);
+            return;
+        }
+        if (loops[slot] && loops[slot]._assetSrc === resolved) {
+            applyVolume(loops[slot], multiplier);
+            return;
+        }
+        stopLoop(slot);
+        const audio = new Audio(resolved);
+        audio.loop = true;
+        audio.preload = "auto";
+        audio._assetSrc = resolved;
+        applyVolume(audio, multiplier);
+        loops[slot] = audio;
+        audio.play().catch(() => {});
+    }
+
+    function playOneShot(src, multiplier = 0.75, { voiceover = false } = {}) {
+        const resolved = resolveAssetUrl(src);
+        if (!enabled || !resolved) return;
+        if (voiceover) stopVoiceovers();
+        const audio = new Audio(resolved);
+        audio.preload = "auto";
+        applyVolume(audio, multiplier);
+        if (voiceover) {
+            voiceovers.add(audio);
+            const cleanup = () => voiceovers.delete(audio);
+            audio.addEventListener("ended", cleanup, { once: true });
+            audio.addEventListener("error", cleanup, { once: true });
+        }
+        audio.play().catch(() => {});
+    }
+
+    return {
+        setEnabled(next) {
+            enabled = Boolean(next);
+            if (!enabled) {
+                stopLoop("music");
+                stopLoop("ambience");
+                stopVoiceovers();
+            }
+        },
+        setVolume(next) {
+            volume = Math.max(0, Math.min(1, Number(next) || 0));
+            applyVolume(loops.music, 0.55);
+            applyVolume(loops.ambience, 0.5);
+        },
+        playLoop,
+        playVoice(src) {
+            playOneShot(src, 0.88, { voiceover: true });
+        },
+        playSfx(src) {
+            playOneShot(src, 0.7);
+        },
+        stopVoiceovers,
+    };
+})();
+
 function scenarioConfig() {
     return state.catalog.scenarios[0] || null;
+}
+
+function playAudioCueOnce(key) {
+    if (!state.audioEnabled || state.playedAudioCues.has(key)) return;
+    const src = audioEntrySource(scenarioAudioCue(key));
+    if (!src) return;
+    state.playedAudioCues.add(key);
+    audioManager.playVoice(src);
+}
+
+function playPromptAudioOnce(prompt) {
+    if (!prompt || !prompt.audio) return;
+    const key = `prompt:${prompt.id}:audio`;
+    if (!state.audioEnabled || state.playedAudioCues.has(key)) return;
+    const src = audioEntrySource(prompt.audio);
+    if (!src) return;
+    state.playedAudioCues.add(key);
+    audioManager.playVoice(src);
+}
+
+function enableAudioFromGesture() {
+    if (state.audioEnabled || state.audioPreferenceLocked) return;
+    state.audioEnabled = true;
+}
+
+function updateAudioControls() {
+    if (!refs.audioToggle || !refs.audioStatus) return;
+    refs.audioToggle.textContent = state.audioEnabled ? "Audio on" : "Audio off";
+    refs.audioStatus.textContent = state.audioEnabled ? "Audio" : "Muted";
+    refs.audioStatus.className = "badge";
+    refs.audioStatus.classList.add(state.audioEnabled ? "badge-running" : "badge-idle");
+    if (refs.audioVolume) refs.audioVolume.value = String(Math.round(state.audioVolume * 100));
+}
+
+function updateScenarioAudio() {
+    audioManager.setEnabled(state.audioEnabled);
+    audioManager.setVolume(state.audioVolume);
+    if (!state.audioEnabled) {
+        updateAudioControls();
+        return;
+    }
+    const musicSrc = audioEntrySource(scenarioAudioCue("music_default") || findAssetEntry("music", "default"));
+    if (musicSrc) audioManager.playLoop("music", musicSrc, 0.5);
+    if (state.screen === "assembly") playAudioCueOnce("party_assembly");
+    if (state.screen === "briefing") playAudioCueOnce("briefing_intro");
+
+    const ambienceKey = state.currentMapId ? `ambience_${state.currentMapId}` : "";
+    if (ambienceKey && ambienceKey !== state.currentAmbienceKey) {
+        state.currentAmbienceKey = ambienceKey;
+        const ambienceSrc = audioEntrySource(scenarioAudioCue(ambienceKey) || findAssetEntry("music", state.currentMapId));
+        if (ambienceSrc) audioManager.playLoop("ambience", ambienceSrc, 0.45);
+    }
+    updateAudioControls();
 }
 
 function objectiveOrder() {
@@ -470,6 +769,11 @@ function renderRuntimeBadge() {
         refs.boardBadge.classList.add("badge-idle");
     }
     refs.sessionChip.textContent = `Session: ${state.sessionId || "-"}`;
+    if (refs.mastheadSummaryStatus) {
+        const audio = state.audioEnabled ? "audio on" : "audio off";
+        const board = boardBackend ? boardBackend : "board -";
+        refs.mastheadSummaryStatus.textContent = `${runtimeState} · ${board} · ${audio}`;
+    }
 }
 
 function currentRuntimeErrorKey() {
@@ -531,6 +835,7 @@ function normalizePrompt(prompt) {
         answer_placeholder: prompt.answer_placeholder || "",
         modifiers: prompt.modifiers || null,
         roll_stack: prompt.roll_stack || null,
+        audio: prompt.audio || prompt.voiceover || "",
         action_desc: prompt.action_desc || "",
         desc: prompt.desc || "",
         details_markdown: prompt.details_markdown || "",
@@ -584,6 +889,7 @@ function syncViewState(viewState) {
     const nextPromptId = state.view.activePrompt?.id || null;
     if (previousPromptId !== nextPromptId) {
         state.selectedChoiceIndex = -1;
+        playPromptAudioOnce(state.view.activePrompt);
     }
     state.completedObjectives = new Set();
     state.scenarioFinished = false;
@@ -661,7 +967,11 @@ function handleEvent(event) {
     }
 
     if (event.type === "active_actor_changed") {
+        const previousId = String(state.activeActor?.id || "");
         state.activeActor = payload;
+        if (state.audioEnabled && String(payload.id || "") && String(payload.id || "") !== previousId) {
+            audioManager.playSfx(audioEntrySource(scenarioAudioCue("active_actor")));
+        }
         renderAll();
         return;
     }
@@ -673,14 +983,21 @@ function handleEvent(event) {
         state.diceRollTimer = window.setTimeout(() => {
             state.diceRoll = null;
             renderDiceOverlay();
-        }, 1800);
+        }, 3200);
         return;
     }
 
     if (["log", "info", "narration", "idle_hint"].includes(event.type)) {
+        if (payload.audio) {
+            audioManager.playVoice(audioEntrySource(payload.audio));
+        }
         const mapMatch = String(payload.message || payload.text || "").match(/Wejście na mapę:\s*(.+?)\.?$/i);
         if (mapMatch && mapMatch[1]) handleMapEntry(mapMatch[1].trim());
         inferScenarioStateFromText(String(payload.message || payload.text || ""));
+        if (/szczek|pies|dog/i.test(String(payload.message || payload.text || payload.summary || ""))) {
+            playAudioCueOnce("hint_dog_barking");
+        }
+        updateScenarioAudio();
     }
 }
 
@@ -707,10 +1024,19 @@ async function loadInitialState() {
     state.sessionId = viewPayload.session?.id || null;
     state.catalog = catalogPayload.catalog || { heroes: [], scenarios: [] };
     state.scenario = state.catalog.scenarios[0] || null;
+    state.assetManifestUrl = String(state.scenario?.asset_manifest || "").trim();
+    if (state.assetManifestUrl) {
+        try {
+            state.assetManifest = await fetchJson(state.assetManifestUrl);
+        } catch (_error) {
+            state.assetManifest = null;
+        }
+    }
     syncViewState(viewPayload.view_state || null);
     state.runtimeStatus = runtimePayload.runtime_status || state.runtimeStatus;
     if (state.scenario) refs.startTagline.textContent = state.scenario.tagline || refs.startTagline.textContent;
     renderAll();
+    updateScenarioAudio();
 }
 
 async function refreshViewState() {
@@ -724,13 +1050,20 @@ function activeCardData() {
     if (state.view.activePrompt) {
         const prompt = state.view.activePrompt;
         const communication = prompt.communication || {};
-        const title = communication.title || prompt.title || prompt.prompt || "Prompt";
-        const summaryCandidate = communication.summary || prompt.summary || prompt.subtitle || prompt.prompt || "";
-        const bodyCandidate = communication.body_markdown || prompt.prompt_long || "";
-        const deduped = dedupeCardText(title, summaryCandidate, bodyCandidate);
+        const rawTitle = communication.title || prompt.title || prompt.prompt || "Prompt";
+        const rawSummary = communication.summary || prompt.summary || prompt.subtitle || "";
         const focusCard = state.view.focusCard;
+        const focusTitle = focusCardTitleCandidate(focusCard);
+        const bodyCandidate = communication.body_markdown || prompt.prompt_long || "";
+        const title = isGenericPromptTitle(rawTitle)
+            ? (focusTitle || firstMeaningfulLine(bodyCandidate) || rawTitle)
+            : rawTitle;
+        const summaryCandidate = isGenericPromptSummary(rawSummary) || sameMeaning(rawSummary, title)
+            ? ""
+            : rawSummary;
+        const deduped = dedupeCardText(title, summaryCandidate, bodyCandidate);
         let details = communication.details_markdown || prompt.details_markdown || "";
-        if (!details && focusCard) {
+        if (!details && focusCard && !sameMeaning(focusTitle, deduped.title)) {
             details = [focusCard.title, focusCard.body_markdown || focusCard.details_markdown || ""].filter(Boolean).join("\n\n");
         }
         return {
@@ -808,12 +1141,6 @@ function derivedInstructionText(card) {
 
 function promptCommandLines(prompt) {
     if (!prompt) return [];
-    if (isBoardScanCancelPrompt(prompt)) {
-        return [
-            "**Kliknij `Anuluj`**, jeśli chcesz przerwać bieżący wybór na planszy.",
-            "**`Esc`** anuluje bieżący wybór.",
-        ];
-    }
     if (prompt.kind === "choice" && promptChoices(prompt).length) {
         const lines = [
             "**`8` / `2` albo strzałki** zmieniają zaznaczenie.",
@@ -844,9 +1171,6 @@ function promptCommandLines(prompt) {
 
 function promptCommandSummary(prompt) {
     if (!prompt) return "";
-    if (isBoardScanCancelPrompt(prompt)) {
-        return "Esc anuluje skan planszy.";
-    }
     if (prompt.kind === "choice" && promptChoices(prompt).length) {
         const hasCancel = Boolean(promptCancelChoice(prompt));
         return hasCancel
@@ -862,43 +1186,77 @@ function promptCommandSummary(prompt) {
     return "Enter: zatwierdź";
 }
 
+function isRollLikePrompt(prompt) {
+    if (!prompt) return false;
+    const layout = String(prompt.layout || "").toLowerCase();
+    return prompt.kind === "roll" || layout === "test" || layout === "damage";
+}
+
 function shouldShowCommandHelp(card, details, nextLines) {
     const prompt = card.prompt;
     if (!prompt) return false;
     return Boolean(details || nextLines.length || promptCommandLines(prompt).length);
 }
 
-function buildActionHelp(card, instructionLead) {
-    const communication = card.communication || {};
+function buildActionHelp(card) {
     const blocks = [];
     const details = String(card.details || "").trim();
     if (details) blocks.push(details);
-
-    const nextLines = [];
-    const nextHint = String(communication.context?.next || "").trim();
-    const continueHint = String(communication.context?.continue || "").trim();
-    if (nextHint) nextLines.push(nextHint);
-    if (continueHint && !sameMeaning(continueHint, instructionLead)) nextLines.push(continueHint);
-    if (nextLines.length) {
-        blocks.push(`### Dalej\n${nextLines.map((line) => `- ${line}`).join("\n")}`);
-    }
-
-    const commands = promptCommandLines(card.prompt);
-    if (commands.length && shouldShowCommandHelp(card, details, nextLines)) {
-        blocks.push(`### Komendy\n${commands.map((line) => `- ${line}`).join("\n")}`);
-    }
     return blocks.join("\n\n").trim();
+}
+
+function compactChoicePromptText(text) {
+    const raw = String(text || "").trim();
+    if (!raw) return { preview: "", full: "" };
+
+    const maxLines = 6;
+    const maxChars = 520;
+    const lines = raw.split("\n");
+    const kept = [];
+    let charCount = 0;
+    let truncated = false;
+
+    for (const line of lines) {
+        const nextCharCount = charCount + line.length + 1;
+        if (kept.length >= maxLines || nextCharCount > maxChars) {
+            truncated = true;
+            break;
+        }
+        kept.push(line);
+        charCount = nextCharCount;
+    }
+
+    if (!truncated) return { preview: raw, full: "" };
+    const preview = kept.length ? kept.join("\n").trim() : raw.slice(0, maxChars).trim();
+    return { preview: `${preview}\n\n...`, full: raw };
 }
 
 function buildActionSections(card) {
     const summary = String(card.summary || "").trim();
     let body = String(card.body || "").trim();
-    const instructionLead = derivedInstructionText(card);
+    const prompt = card.prompt;
 
-    if (!body && instructionLead && !sameMeaning(summary, instructionLead)) {
-        body = instructionLead;
-    } else if (body && instructionLead && !sameMeaning(body, instructionLead) && !sameMeaning(summary, instructionLead)) {
-        body = `${body}\n\n**Dalej:** ${instructionLead}`;
+    if (isRollLikePrompt(prompt)) {
+        return {
+            scene: summary,
+            help: String(card.details || "").trim(),
+            disclosureTitle: "Szczegóły rzutu",
+            disclosureBody: body && !sameMeaning(body, summary) ? body : "",
+        };
+    }
+
+    if (prompt?.kind === "choice" && promptChoices(prompt).length) {
+        const fullScene = [
+            summary,
+            body && !sameMeaning(summary, body) ? body : "",
+        ].filter(Boolean).join("\n\n");
+        const compacted = compactChoicePromptText(fullScene);
+        return {
+            scene: compacted.preview,
+            help: buildActionHelp(card),
+            disclosureTitle: "Pełny opis",
+            disclosureBody: compacted.full,
+        };
     }
 
     let scene = summary;
@@ -910,14 +1268,55 @@ function buildActionSections(card) {
         body = "";
     }
 
-    const help = buildActionHelp(card, instructionLead);
-    return { scene, help };
+    const help = buildActionHelp(card);
+    return { scene, help, disclosureTitle: "", disclosureBody: "" };
+}
+
+function activeActorEntry() {
+    if (state.activeActor?.id) return state.activeActor;
+    if (state.initiative.active_id && Array.isArray(state.initiative.order)) {
+        return state.initiative.order.find((entry) => String(entry.id || "") === String(state.initiative.active_id || "")) || null;
+    }
+    return null;
+}
+
+function renderActiveActorFocus() {
+    if (!refs.activeActorPanel) return;
+    const actor = activeActorEntry();
+    if (!actor?.id) {
+        refs.activeActorPanel.classList.add("hidden");
+        refs.activeActorName.textContent = "-";
+        refs.activeActorMeta.textContent = "";
+        refs.activeActorPortrait.style.backgroundImage = "";
+        return;
+    }
+    const image = resolveActorImage(actor);
+    const kind = String(actor.kind || "").trim().toLowerCase();
+    const meta = [];
+    if (kind) meta.push(kind === "hero" ? "Bohater" : kind === "enemy" ? "Przeciwnik" : kind);
+    if (actor.current ?? actor.effective_initiative ?? actor.initiative) {
+        meta.push(`Init ${actor.current ?? actor.effective_initiative ?? actor.initiative}`);
+    }
+    refs.activeActorName.textContent = actor.name || actor.id || "Aktor";
+    refs.activeActorMeta.textContent = meta.join(" · ");
+    refs.activeActorPortrait.style.backgroundImage = image ? `url("${image}")` : "";
+    refs.activeActorPanel.classList.remove("hidden");
+}
+
+function toggleAdventureDrawer() {
+    if (!refs.adventureDrawer) return;
+    const nextOpen = !refs.adventureDrawer.open;
+    if (nextOpen && refs.mastheadShell) refs.mastheadShell.open = true;
+    refs.adventureDrawer.open = nextOpen;
 }
 
 function renderActionCard() {
     const card = activeCardData();
     const communication = card.communication || {};
     const sections = buildActionSections(card);
+    const prompt = card.prompt || null;
+    refs.actionCard?.classList.toggle("prompt-roll-card", isRollLikePrompt(prompt));
+    renderActiveActorFocus();
     refs.actionChannel.textContent = String(communication.channel || "ready");
     refs.actionTitle.textContent = card.title || "Czekam na wydarzenia";
     refs.actionPriority.textContent = String(communication.priority || "info");
@@ -926,10 +1325,18 @@ function renderActionCard() {
     else if (communication.priority === "result") refs.actionPriority.classList.add("badge-result");
     else if (communication.priority === "debug") refs.actionPriority.classList.add("badge-debug");
     else refs.actionPriority.classList.add("badge-idle");
-    refs.actionSceneBody.innerHTML = markdownish(sections.scene);
-    refs.actionScene.classList.toggle("hidden", !sections.scene);
-    refs.actionHelpBody.innerHTML = markdownish(sections.help);
-    refs.actionHelp.classList.toggle("hidden", !sections.help);
+    const disclosureHtml = sections.disclosureBody
+        ? `<details class="prompt-disclosure"><summary>${escapeHtml(sections.disclosureTitle || "Szczegóły")}</summary><div class="prose compact">${markdownish(sections.disclosureBody)}</div></details>`
+        : "";
+    const sceneHtml = [
+        sections.scene ? markdownish(sections.scene) : "",
+        disclosureHtml,
+    ].filter(Boolean).join("");
+    refs.actionSceneBody.innerHTML = sceneHtml;
+    refs.actionScene.classList.toggle("hidden", !sceneHtml);
+    const helpHtml = sections.help ? markdownish(sections.help) : "";
+    refs.actionHelpBody.innerHTML = helpHtml;
+    refs.actionHelp.classList.toggle("hidden", !helpHtml);
 
     const progress = communication.progress || null;
     const current = Number(progress?.current ?? 0);
@@ -943,10 +1350,11 @@ function renderActionCard() {
     const metaParts = [];
     const displayId = promptDisplayId(card.prompt || card);
     if (displayId) metaParts.push(displayId);
-    if (card.prompt) metaParts.push(promptCommandSummary(card.prompt));
+    const commandSummary = promptCommandSummary(card.prompt);
+    if (commandSummary) metaParts.push(commandSummary);
     refs.promptMeta.textContent = metaParts.filter(Boolean).join(" · ");
 
-    renderPrompt(card.prompt);
+    renderPrompt(prompt);
 }
 
 function promptChoices(prompt) {
@@ -960,6 +1368,11 @@ function promptChoices(prompt) {
             raw: item.raw || item.label || String(index),
             category: item.category || "",
             icon: item.icon || "",
+            image: item.image || item.thumbnail || "",
+            thumbnail: item.thumbnail || item.image || "",
+            asset_id: item.asset_id || "",
+            spell_id: item.spell_id || "",
+            spell_tier: item.spell_tier || item.tier || "",
             key: item.key || "",
         }));
     }
@@ -971,6 +1384,11 @@ function promptChoices(prompt) {
         raw: String(item),
         category: "",
         icon: "",
+        image: "",
+        thumbnail: "",
+        asset_id: "",
+        spell_id: "",
+        spell_tier: "",
         key: "",
     }));
 }
@@ -995,8 +1413,7 @@ function _modifierBucketTotal(modifiers, bonusKey, penaltyKey) {
 function buildRollBreakdown(prompt) {
     if (!prompt) return null;
     const layout = String(prompt.layout || "").toLowerCase();
-    const isRollPrompt = prompt.kind === "roll" || layout === "test" || layout === "damage";
-    if (!isRollPrompt) return null;
+    if (!isRollLikePrompt(prompt)) return null;
 
     const stack = prompt.roll_stack && typeof prompt.roll_stack === "object" ? prompt.roll_stack : {};
     const components = [];
@@ -1144,6 +1561,7 @@ function submitSelectedChoice() {
     ensureSelectedChoiceIndex(choices);
     const choice = choices[state.selectedChoiceIndex];
     if (!choice) return;
+    audioManager.playSfx(audioEntrySource(scenarioAudioCue("choice_confirm")));
     answerPrompt(choice.raw).catch((error) => window.alert(error.message));
 }
 
@@ -1175,10 +1593,12 @@ function createChoiceButton(choice) {
     if (category) button.classList.add(`choice-cat-${category}`);
     const key = choice.key ? `<span class="choice-key">${escapeHtml(choice.key)}</span>` : "";
     const icon = choice.icon ? `<span class="choice-icon">${escapeHtml(choice.icon)}</span>` : "";
+    const image = resolveChoiceImage(choice);
+    const thumb = image ? `<img class="choice-thumb" src="${escapeHtml(image)}" alt="" loading="lazy">` : "";
     const desc = choice.desc ? `<span>${escapeHtml(choice.desc)}</span>` : "";
     button.innerHTML = `
         <div class="choice-btn-head">
-            <div class="choice-btn-title">${icon}<strong>${escapeHtml(choice.label)}</strong></div>
+            <div class="choice-btn-title">${thumb}${icon}<strong>${escapeHtml(choice.label)}</strong></div>
             ${key}
         </div>
         ${desc}
@@ -1198,6 +1618,7 @@ function createChoiceButton(choice) {
             state.selectedChoiceIndex = nextIndex;
             updateChoiceSelectionUI();
         }
+        audioManager.playSfx(audioEntrySource(scenarioAudioCue("choice_confirm")));
         answerPrompt(choice.raw).catch((error) => window.alert(error.message));
     });
     return button;
@@ -1227,6 +1648,7 @@ function renderSelectedChoiceDetail() {
 async function answerPrompt(answer) {
     const promptId = state.view.activePrompt?.id;
     if (!promptId) return;
+    audioManager.stopVoiceovers();
     await fetchJson(`/api/prompts/${promptId}/response`, {
         method: "POST",
         body: JSON.stringify({ answer }),
@@ -1244,10 +1666,6 @@ function submitCancelChoice() {
     if (!cancelChoice) return false;
     answerPrompt(cancelChoice.raw).catch((error) => window.alert(error.message));
     return true;
-}
-
-function isBoardScanCancelPrompt(prompt) {
-    return String(prompt?.source || "").trim().toLowerCase() === "board_scan_cancel";
 }
 
 function renderPrompt(prompt) {
@@ -1358,31 +1776,44 @@ function currentTeamEntries() {
 
 function renderTeam() {
     const entries = currentTeamEntries();
+    const activeActor = actorInfoEntry();
     if (!entries.length) {
         refs.teamList.innerHTML = `<div class="empty-state">Brak danych o drużynie.</div>`;
         return;
     }
     refs.teamList.innerHTML = entries.map((hero) => {
-        const active = String(hero.id || "") === String(state.activeActor?.id || "");
+        const active = String(hero.id || "") === String(activeActor?.id || "");
         const hp = hero.max_hp && hero.wounds != null ? Math.max(0, Number(hero.max_hp) - Number(hero.wounds || 0)) : hero.max_hp;
         const tags = Array.isArray(hero.statuses) ? hero.statuses.slice(0, 4).join(", ") : "";
+        const image = resolveActorImage(hero);
         return `
             <article class="team-card${active ? " active" : ""}">
-                <strong>${escapeHtml(hero.name || hero.id || "Hero")}</strong>
-                <div class="team-meta">
-                    <span>${escapeHtml((hero.class_id || "-").replaceAll("_", " "))}</span>
-                    <span>HP ${hp ?? "-"}</span>
-                    <span>AC ${hero.ac ?? "-"}</span>
-                    <span>Speed ${hero.speed_feet ?? hero.base_speed_feet ?? "-"}</span>
+                <img class="team-avatar" src="${escapeHtml(image)}" alt="" loading="lazy">
+                <div class="team-copy">
+                    <strong>${escapeHtml(hero.name || hero.id || "Hero")}</strong>
+                    <div class="team-meta">
+                        <span>${escapeHtml((hero.class_id || "-").replaceAll("_", " "))}</span>
+                        <span>HP ${hp ?? "-"}</span>
+                        <span>AC ${hero.ac ?? "-"}</span>
+                        <span>Speed ${hero.speed_feet ?? hero.base_speed_feet ?? "-"}</span>
+                    </div>
+                    <div class="team-note">${escapeHtml(tags || hero.note || "")}</div>
                 </div>
-                <div class="team-note">${escapeHtml(tags || hero.note || "")}</div>
             </article>
         `;
     }).join("");
 }
 
 function renderInitiative() {
-    if (!Array.isArray(state.initiative.order) || !state.initiative.order.length) {
+    const hasInitiative = Array.isArray(state.initiative.order) && state.initiative.order.length;
+    refs.teamList.classList.toggle("hidden", Boolean(hasInitiative));
+    refs.initiativeList.classList.toggle("hidden", !hasInitiative);
+    if (refs.actorRailLabel) {
+        refs.actorRailLabel.textContent = hasInitiative
+            ? `Inicjatywa${state.initiative.round ? ` · Runda ${state.initiative.round}` : ""}`
+            : "Drużyna";
+    }
+    if (!hasInitiative) {
         refs.initiativeList.innerHTML = `<div class="empty-state">Brak aktywnej inicjatywy.</div>`;
         return;
     }
@@ -1401,15 +1832,81 @@ function renderInitiative() {
             ? entry.statuses.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 4)
             : [];
         const statusLine = statuses.length ? statuses.join(", ") : "";
+        const image = resolveActorImage(entry);
         return `
             <article class="initiative-entry${active ? " active" : ""}">
-                <strong class="initiative-order">${index + 1}. ${escapeHtml(label)}</strong>
-                <div class="initiative-line">Init ${escapeHtml(score)}${escapeHtml(modifier)}</div>
-                ${woundLine ? `<div class="initiative-line">${woundLine}</div>` : ""}
-                ${statusLine ? `<div class="initiative-line">${escapeHtml(statusLine)}</div>` : ""}
+                <img class="initiative-avatar" src="${escapeHtml(image)}" alt="" loading="lazy">
+                <div class="initiative-copy">
+                    <strong class="initiative-order">${index + 1}. ${escapeHtml(label)}</strong>
+                    <div class="initiative-line">Init ${escapeHtml(score)}${escapeHtml(modifier)}</div>
+                    ${woundLine ? `<div class="initiative-line">${woundLine}</div>` : ""}
+                    ${statusLine ? `<div class="initiative-line">${escapeHtml(statusLine)}</div>` : ""}
+                </div>
             </article>
         `;
     }).join("");
+}
+
+function actorInfoEntry() {
+    const active = activeActorEntry();
+    if (active?.id) return active;
+    const heroes = currentTeamEntries();
+    return heroes.length ? heroes[0] : null;
+}
+
+function actorInfoRows(actor) {
+    if (!actor) return [];
+    const rows = [];
+    const kind = String(actor.kind || "").trim().toLowerCase();
+    if (kind) rows.push(["Typ", kind === "hero" ? "Bohater" : kind === "enemy" ? "Przeciwnik" : kind]);
+    const hp = actor.max_hp && actor.wounds != null ? Math.max(0, Number(actor.max_hp) - Number(actor.wounds || 0)) : actor.hp;
+    if (hp != null || actor.max_hp != null) rows.push(["HP", actor.max_hp != null ? `${hp ?? "-"} / ${actor.max_hp}` : String(hp)]);
+    if (actor.ac != null) rows.push(["AC", actor.ac]);
+    const speed = actor.speed_feet ?? actor.base_speed_feet ?? actor.speed;
+    if (speed != null) rows.push(["Speed", speed]);
+    const initiative = actor.current ?? actor.effective_initiative ?? actor.initiative;
+    if (initiative != null) rows.push(["Inicjatywa", initiative]);
+    const position = actor.position || actor.pos;
+    if (Array.isArray(position) && position.length >= 2) rows.push(["Pole", `(${position[0]}, ${position[1]})`]);
+    if (actor.class_id) rows.push(["Klasa", String(actor.class_id).replaceAll("_", " ")]);
+    if (actor.ancestry_id) rows.push(["Pochodzenie", String(actor.ancestry_id).replaceAll("_", " ")]);
+    return rows;
+}
+
+function renderActorInfo() {
+    if (!refs.actorInfoBody) return;
+    const actor = actorInfoEntry();
+    if (!actor) {
+        refs.actorInfoBody.innerHTML = `<div class="empty-state">Brak aktywnego bohatera.</div>`;
+        return;
+    }
+    const image = resolveActorImage(actor);
+    const rows = actorInfoRows(actor);
+    const statuses = Array.isArray(actor.statuses)
+        ? actor.statuses.map((item) => String(item || "").trim()).filter(Boolean)
+        : [];
+    refs.actorInfoBody.innerHTML = `
+        <div class="actor-info-card">
+            <img class="actor-info-portrait" src="${escapeHtml(image)}" alt="" loading="lazy">
+            <div>
+                <div class="panel-kicker">Aktywny uczestnik</div>
+                <h3>${escapeHtml(actor.name || actor.id || "Aktor")}</h3>
+                <div class="actor-info-grid">
+                    ${rows.map(([label, value]) => `
+                        <div>
+                            <span>${escapeHtml(label)}</span>
+                            <strong>${escapeHtml(value)}</strong>
+                        </div>
+                    `).join("")}
+                </div>
+            </div>
+        </div>
+        ${statuses.length ? `
+            <div class="actor-info-statuses">
+                ${statuses.slice(0, 18).map((status) => `<span>${escapeHtml(status)}</span>`).join("")}
+            </div>
+        ` : `<div class="empty-state">Brak statusów do pokazania.</div>`}
+    `;
 }
 
 function renderTransitions() {
@@ -1466,6 +1963,13 @@ function renderTopbar() {
     refs.topMap.textContent = state.currentMapLabel || "-";
     refs.topChapter.textContent = chapter?.chapter_title || "-";
     refs.topObjective.textContent = objective?.label || (state.scenarioFinished ? "Scenariusz zakończony" : "-");
+    if (refs.adventureDrawerStatus) {
+        refs.adventureDrawerStatus.textContent = objective?.label
+            ? `Cel: ${objective.label}`
+            : state.scenarioFinished
+            ? "Scenariusz zakończony"
+            : "Dziennik przygody";
+    }
 }
 
 function renderResult() {
@@ -1481,12 +1985,14 @@ function renderResult() {
 function renderAll() {
     renderRuntimeBadge();
     renderRuntimeErrorModal();
+    updateAudioControls();
     renderAssembly();
     renderBriefing();
     renderTopbar();
     renderActionCard();
     renderTeam();
     renderInitiative();
+    renderActorInfo();
     renderObjectives();
     renderTransitions();
     renderJournal();
@@ -1497,6 +2003,7 @@ function renderAll() {
 async function startRuntime() {
     refs.btnStartRuntime.disabled = true;
     try {
+        audioManager.stopVoiceovers();
         state.dismissedRuntimeErrorKey = null;
         const payload = await fetchJson("/api/runtime/start", {
             method: "POST",
@@ -1515,6 +2022,7 @@ async function startRuntime() {
 }
 
 async function stopRuntime() {
+    audioManager.stopVoiceovers();
     const payload = await fetchJson("/api/runtime/stop", { method: "POST", body: JSON.stringify({}) });
     state.runtimeStatus = payload.runtime_status || state.runtimeStatus;
     renderAll();
@@ -1523,6 +2031,7 @@ async function stopRuntime() {
 async function retryRuntime() {
     refs.btnRuntimeRetry.disabled = true;
     try {
+        audioManager.stopVoiceovers();
         state.dismissedRuntimeErrorKey = null;
         const payload = await fetchJson("/api/runtime/retry", { method: "POST", body: JSON.stringify({}) });
         state.sessionId = payload.session_id || state.sessionId;
@@ -1551,10 +2060,23 @@ async function pollRuntimeStatus() {
     }
 }
 
-refs.btnBegin.addEventListener("click", () => setScreen("assembly"));
+refs.btnBegin.addEventListener("click", () => {
+    enableAudioFromGesture();
+    setScreen("assembly");
+});
+refs.audioToggle.addEventListener("click", () => {
+    state.audioPreferenceLocked = true;
+    state.audioEnabled = !state.audioEnabled;
+    updateScenarioAudio();
+});
+refs.audioVolume.addEventListener("input", () => {
+    state.audioVolume = Math.max(0, Math.min(1, Number(refs.audioVolume.value || 0) / 100));
+    updateScenarioAudio();
+});
 refs.btnAssemblyBack.addEventListener("click", () => setScreen("start"));
 refs.btnAssemblyNext.addEventListener("click", () => {
     if (!state.selectedHeroIds.length) return;
+    enableAudioFromGesture();
     setScreen("briefing");
 });
 refs.btnBriefingBack.addEventListener("click", () => setScreen("assembly"));
@@ -1612,6 +2134,15 @@ refs.promptInput.addEventListener("input", () => {
 
 document.addEventListener("keydown", (event) => {
     if (state.screen !== "game") return;
+    if (event.key === "*") {
+        const target = event.target;
+        const isTypingTarget = target instanceof HTMLInputElement && !target.classList.contains("hidden");
+        if (!isTypingTarget) {
+            event.preventDefault();
+            toggleAdventureDrawer();
+        }
+        return;
+    }
     if (!state.view.activePrompt) return;
     if (_isUpNavigationKey(event)) {
         const target = event.target;
@@ -1640,9 +2171,6 @@ document.addEventListener("keydown", (event) => {
     if (event.key !== "Enter") return;
     const target = event.target;
     if (target instanceof HTMLTextAreaElement) return;
-    if (isBoardScanCancelPrompt(state.view.activePrompt)) {
-        return;
-    }
     if (state.view.activePrompt.kind === "info" && !state.view.activePrompt.choices.length) {
         event.preventDefault();
         answerPrompt("ok").catch((error) => window.alert(error.message));

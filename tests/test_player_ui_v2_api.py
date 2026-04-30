@@ -117,6 +117,61 @@ def test_prompt_api_returns_normalized_communication_envelope(ui_client):
     assert comm["context"]["prompt_key"] == "enemy.turn.start"
 
 
+def test_catalog_exposes_bandit_cave_asset_manifest_and_audio_cues(ui_client):
+    response = ui_client.get("/api/catalog")
+
+    assert response.status_code == 200
+    scenario = response.get_json()["catalog"]["scenarios"][0]
+    assert scenario["id"] == "bandit_cave"
+    assert scenario["asset_manifest"] == "/assets/ui_v2/bandit_cave/manifest.json"
+    assert scenario["audio_cues"]["briefing_intro"]["kind"] == "voiceover"
+    dog_hint = scenario["audio_cues"]["hint_dog_barking"]["audio"]
+    assert dog_hint.endswith("hint_dog_barking_001.mp3")
+    assert ui_client.get(dog_hint).status_code == 200
+
+
+def test_asset_route_serves_manifest_and_draft_svg(ui_client):
+    manifest = ui_client.get("/assets/ui_v2/bandit_cave/manifest.json")
+    assert manifest.status_code == 200
+    payload = manifest.get_json()
+    assert payload["scenario_id"] == "bandit_cave"
+    assert payload["spells"]["acid_splash"]["image"].endswith("acid_splash.svg")
+
+    image = ui_client.get("/assets/ui_v2/bandit_cave/images/spells/acid_splash.svg")
+    assert image.status_code == 200
+    assert image.data.startswith(b"<svg")
+
+
+def test_choice_meta_can_carry_image_and_spell_asset_hints(ui_client):
+    create = ui_client.post(
+        "/api/prompts",
+        json={
+            "prompt": "Wybierz czar",
+            "kind": "choice",
+            "choices": ["Acid Splash"],
+            "session_id": "ui-session-1",
+            "choice_meta": [
+                {
+                    "raw": "acid_splash",
+                    "label": "Acid Splash",
+                    "spell_id": "acid_splash",
+                    "spell_tier": "cantrip",
+                    "image": "/assets/ui_v2/bandit_cave/images/spells/acid_splash.svg",
+                }
+            ],
+        },
+    )
+    assert create.status_code == 200
+    prompt_id = create.get_json()["id"]
+
+    fetched = ui_client.get(f"/api/prompts/{prompt_id}")
+    assert fetched.status_code == 200
+    meta = fetched.get_json()["choice_meta"][0]
+    assert meta["spell_id"] == "acid_splash"
+    assert meta["spell_tier"] == "cantrip"
+    assert meta["image"].endswith("acid_splash.svg")
+
+
 def test_player_card_and_ack_prompt_expose_prompt_key(ui_client):
     response = ui_client.post(
         "/api/events",

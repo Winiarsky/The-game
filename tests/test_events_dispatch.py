@@ -156,3 +156,43 @@ def test_action_event_bus_triggers_game_ui_refresh_after_action():
     assert emitted is not None
     assert calls
     assert calls[-1]["action_id"] == "move"
+
+
+def test_action_event_bus_keeps_internal_roll_only_events_out_of_public_ui():
+    actor = types.SimpleNamespace(object_id="hero-1", name="Hero", position=(0, 0))
+    ui_calls = []
+    refresh_calls = []
+
+    class FakeGameWithRefresh:
+        def __init__(self):
+            self.heroes = [actor]
+            self.enemies = []
+            self.state = None
+
+        def ui_event(self, *args, **kwargs):
+            ui_calls.append((args, kwargs))
+            return True
+
+        def ui_narration(self, *args, **kwargs):
+            ui_calls.append((args, kwargs))
+            return True
+
+        def refresh_ui_after_action(self, event):
+            refresh_calls.append(dict(event))
+
+    game = FakeGameWithRefresh()
+    bus = ActionEventBus(game)
+
+    emitted = bus.safe_emit_action(
+        return_event=True,
+        actor=actor,
+        action_id="longbow",
+        action_tags=["attack"],
+        roll_only=True,
+        internal_roll_only=True,
+    )
+
+    assert emitted is not None
+    assert emitted["internal_roll_only"] is True
+    assert ui_calls == []
+    assert refresh_calls == []

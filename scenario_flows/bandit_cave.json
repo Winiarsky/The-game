@@ -64,7 +64,17 @@
         "secret_passage_found": false,
         "treasure_room_entered": false,
         "docks_cleared": false,
-        "ship_escaped": false
+        "ship_escaped": false,
+        "upper_cache_revealed": false,
+        "upper_cache_revealed_by_marek": false,
+        "dock_prisoner_freed": false,
+        "dock_prisoner_cooperative": false,
+        "dock_prisoner_escape_attempt": false,
+        "dock_prisoner_escape_stopped": false,
+        "dock_prisoner_loose": false,
+        "docks_stealth_challenge_resolved": false,
+        "docks_stealth_all_success": false,
+        "docks_stealth_critical_failure": false
     },
     "events": [
         {

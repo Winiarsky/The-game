@@ -108,6 +108,44 @@ def test_remove_defeated_enemy_drops_loot_pile_and_removes_enemy():
     assert "Jak zebrać loot" in str(communication.get("details_markdown") or "")
 
 
+def test_remove_defeated_enemy_refreshes_combat_initiative_before_prompt():
+    board = BoardStub()
+    enemy = EnemyStub(hp=-4)
+    enemy.name = "Bandit Lookout"
+    enemy.max_hp = 6
+    enemy.object_id = "enemy-lookout"
+    board.occupants[enemy.position] = enemy
+
+    captured = []
+    prompt_calls = []
+    game = SimpleNamespace(
+        board=board,
+        enemies=[enemy],
+        heroes=[],
+        ui=SimpleNamespace(enabled=True),
+        ui_event=lambda event_type, payload: captured.append((event_type, payload)),
+        ui_log=lambda *_args, **_kwargs: None,
+        player_prompt=SimpleNamespace(info=lambda title, **kwargs: prompt_calls.append((title, kwargs)) or "ok"),
+    )
+    combat = Combat(game)
+    game.state = combat
+    combat.base_order = [enemy]
+    combat.round_queue = [enemy]
+    combat.base_initiative[enemy] = 7
+
+    result = remove_defeated_enemy(game, enemy, source="test")
+
+    assert result["removed_from_list"] is True
+    assert enemy not in game.enemies
+    initiative_events = [payload for event_type, payload in captured if event_type == "initiative"]
+    assert initiative_events
+    assert initiative_events[-1]["order"] == []
+    assert combat.base_order == []
+    assert combat.round_queue == []
+    assert prompt_calls
+    assert "Zdejmij figurkę" in prompt_calls[0][1]["body_markdown"]
+
+
 def test_loot_pile_pickup_names_loot_in_action_and_result_prompt():
     item = SimpleNamespace(name="Dogslicer", item_id="dogslicer", category="weapon")
     pile = LootPile(
