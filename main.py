@@ -363,7 +363,7 @@ def _find_free_port(host: str, preferred: int, attempts: int = 10) -> int:
     return preferred
 
 
-def start_ui_server(host: str = "127.0.0.1", port: int = 5100) -> tuple[subprocess.Popen, int]:
+def start_ui_server(host: str = "127.0.0.1", port: int = 5200) -> tuple[subprocess.Popen, int]:
     """Uruchom Flask UI w tle."""
     env = os.environ.copy()
     env["PLAYER_UI_HOST"] = host
@@ -411,8 +411,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--ui-port",
         type=int,
-        default=5100,
-        help="Port UI gracza (domyślnie 5100). Przy konflikcie spróbujemy następnych portów.",
+        default=5200,
+        help="Port UI gracza (domyślnie 5200). Przy konflikcie spróbujemy następnych portów.",
     )
     parser.add_argument(
         "--ui-host",

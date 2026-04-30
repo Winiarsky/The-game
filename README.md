@@ -33,9 +33,9 @@ Plik `*.svg` to czysta mapa do druku, a odpowiadajacy mu `*_legend.svg` zawiera 
 
 Lekka aplikacja webowa do wyświetlania informacji dla graczy (log, dialogi, prompty na rzuty).
 
-1. Uruchom: `python -m player_ui.app` (domyślnie `http://127.0.0.1:5100`).
-2. Domyślny adres UI możesz wpisać w `src/consts.py` (`PLAYER_UI_URL="http://127.0.0.1:5100"`). Możesz go też nadpisać zmienną środowiskową `PLAYER_UI_URL` lub `PLAYER_UI_BASE_URL`, aby prompty i komunikaty kierować do UI.
-3. W przeglądarce otwórz `http://127.0.0.1:5100`, wybierz „Nowa gra” → scenariusz „karczma”.
+1. Uruchom: `python -m player_ui.app` (domyślnie `http://127.0.0.1:5200`).
+2. Domyślny adres UI możesz wpisać w `src/consts.py` (`PLAYER_UI_URL="http://127.0.0.1:5200"`). Możesz go też nadpisać zmienną środowiskową `PLAYER_UI_URL` lub `PLAYER_UI_BASE_URL`, aby prompty i komunikaty kierować do UI.
+3. W przeglądarce otwórz `http://127.0.0.1:5200`, wybierz scenariusz i drużynę z ekranu startowego.
 
 ### Tryb UI-only
 

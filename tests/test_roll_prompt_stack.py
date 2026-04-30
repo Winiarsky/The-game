@@ -9,6 +9,7 @@ for path in (PROJECT_ROOT, SRC_ROOT):
 
 import player_ui.app as player_ui_app_module  # noqa: E402
 from GameObjects.interactions_mixin.prompt_utils import _parse_roll_details  # noqa: E402
+from player_prompting import PromptDirector  # noqa: E402
 from ui_client import UIClient  # noqa: E402
 
 
@@ -44,8 +45,10 @@ def test_parse_roll_details_uses_raw_roll_for_natural_inference():
 
 def test_prompt_api_roundtrip_keeps_roll_stack_payload():
     app = player_ui_app_module.app
-    with player_ui_app_module.prompts_lock:
-        player_ui_app_module.prompts.clear()
+    prompt_director = PromptDirector(session_id=player_ui_app_module.current_session_id)
+    prompt_director.set_publisher(player_ui_app_module._publish)
+    original_prompt_director = player_ui_app_module.prompt_director
+    player_ui_app_module.prompt_director = prompt_director
 
     roll_stack = {
         "auto_total_modifier": 9,
@@ -59,24 +62,27 @@ def test_prompt_api_roundtrip_keeps_roll_stack_payload():
             }
         ],
     }
-    with app.test_client() as client:
-        create = client.post(
-            "/api/prompts",
-            json={
-                "prompt": "Test rzutu",
-                "kind": "roll",
-                "layout": "test",
-                "roll_stack": roll_stack,
-            },
-        )
-        assert create.status_code == 200
-        prompt_id = create.get_json()["id"]
+    try:
+        with app.test_client() as client:
+            create = client.post(
+                "/api/prompts",
+                json={
+                    "prompt": "Test rzutu",
+                    "kind": "roll",
+                    "layout": "test",
+                    "roll_stack": roll_stack,
+                },
+            )
+            assert create.status_code == 200
+            prompt_id = create.get_json()["id"]
 
-        fetched = client.get(f"/api/prompts/{prompt_id}")
-        assert fetched.status_code == 200
-        payload = fetched.get_json()
-        assert payload["roll_stack"]["auto_total_modifier"] == 9
-        assert payload["roll_stack"]["components"][0]["label"] == "Biegłość"
-        assert payload["communication"]["channel"] == "prompt"
-        assert payload["communication"]["blocking"] is True
-        assert payload["communication"]["body_markdown"] == "Test rzutu"
+            fetched = client.get(f"/api/prompts/{prompt_id}")
+            assert fetched.status_code == 200
+            payload = fetched.get_json()
+            assert payload["roll_stack"]["auto_total_modifier"] == 9
+            assert payload["roll_stack"]["components"][0]["label"] == "Biegłość"
+            assert payload["communication"]["channel"] == "prompt"
+            assert payload["communication"]["blocking"] is True
+            assert payload["communication"]["body_markdown"] == "Test rzutu"
+    finally:
+        player_ui_app_module.prompt_director = original_prompt_director

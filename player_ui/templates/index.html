@@ -2,237 +2,233 @@
 <html lang="pl">
 <head>
     <meta charset="utf-8">
-    <title>Boardgame Player UI</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>The Game · Player UI</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Text:wght@400;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Spectral:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
-    <div class="frame">
-        <header class="topbar" id="topbar">
-            <div class="logo">The Game · UI</div>
-            <div class="menu">
-                <button id="btn-new-game">Nowa gra</button>
-                <button id="btn-load" class="disabled" title="Jeszcze nieaktywne" disabled>Wczytaj</button>
-                <button id="btn-quit">Quit</button>
-            </div>
-            <button class="bar-toggle" id="topbar-toggle" title="Schowaj pasek">▲</button>
-        </header>
-
-        <section id="screen-menu" class="panel">
-            <div class="panel-header">Scenariusz</div>
-            <div class="panel-body scenario-picker">
-                <p>Wybierz scenariusz, aby wystartować UI dla graczy.</p>
-                <div class="scenario-list">
-                    <button class="scenario-btn" data-scenario="karczma">Karczma</button>
+    <div class="shell">
+        <div id="runtime-error-modal" class="runtime-modal hidden" role="dialog" aria-modal="true" aria-labelledby="runtime-error-title">
+            <div class="runtime-modal-card">
+                <div class="panel-kicker">Runtime Error</div>
+                <h2 id="runtime-error-title">Błąd połączenia</h2>
+                <p id="runtime-error-body"></p>
+                <div class="cta-row">
+                    <button id="btn-runtime-retry" class="btn-primary">Ponów połączenie</button>
+                    <button id="btn-runtime-dismiss" class="btn-ghost">Zamknij</button>
                 </div>
             </div>
-        </section>
+        </div>
 
-        <section id="screen-game" class="screen hidden">
-            <div class="game-layout">
-                <aside class="side-column">
-                    <div class="panel initiative-panel">
-                        <div class="panel-header">Inicjatywa</div>
-                        <div class="panel-body">
-                            <div id="initiative-summary" class="initiative-summary hidden">
-                                <div class="init-active">
-                                    <div class="label">Aktywny</div>
-                                    <div id="init-active-name" class="value">-</div>
-                                </div>
-                                <div class="init-next">
-                                    <div class="label">Następny</div>
-                                    <div id="init-next-name" class="value">-</div>
-                                </div>
-                                <div class="init-round">
-                                    <div class="label">Runda</div>
-                                    <div id="init-round-num" class="value">-</div>
-                                </div>
+        <details id="masthead-shell" class="masthead-shell" open>
+            <summary class="masthead-summary">
+                <span>The Game · Bandit Cave</span>
+                <span id="masthead-summary-status">System</span>
+            </summary>
+            <header class="masthead">
+                <div>
+                    <div class="eyebrow">The Game · Bandit Cave</div>
+                    <h1>Player UI</h1>
+                </div>
+                <div class="masthead-status">
+                    <button id="audio-toggle" class="btn-ghost small" type="button">Audio off</button>
+                    <input id="audio-volume" class="audio-volume" type="range" min="0" max="100" value="58" aria-label="Audio volume">
+                    <span id="audio-status" class="badge badge-idle">Muted</span>
+                    <span id="runtime-badge" class="badge badge-idle">Idle</span>
+                    <span id="board-badge" class="badge badge-idle">Board: -</span>
+                    <span id="session-chip" class="session-chip">Session: -</span>
+                </div>
+            </header>
+            <div class="game-topbar masthead-game-panel">
+                <div class="topbar-block">
+                    <span class="topbar-label">Scenariusz</span>
+                    <span id="top-scenario" class="topbar-value">Bandit Cave</span>
+                    <span id="top-chapter" class="topbar-subvalue">-</span>
+                </div>
+                <div class="topbar-block">
+                    <span class="topbar-label">Mapa</span>
+                    <span id="top-map" class="topbar-value">-</span>
+                </div>
+                <div class="topbar-block">
+                    <span class="topbar-label">Aktywny cel</span>
+                    <span id="top-objective" class="topbar-value">-</span>
+                </div>
+                <details id="adventure-drawer" class="adventure-drawer">
+                    <summary>
+                        <span class="adventure-hotkey">*</span>
+                        <small id="adventure-drawer-status">Dziennik przygody</small>
+                    </summary>
+                    <div class="adventure-drawer-content">
+                        <section class="panel-card">
+                            <div class="panel-kicker">Cele questa</div>
+                            <div id="objective-list" class="objective-list empty-state">Cele pojawią się po starcie scenariusza.</div>
+                        </section>
+                        <section class="panel-card">
+                            <div class="panel-kicker">Przejścia map</div>
+                            <div id="transition-list" class="transition-list empty-state">Brak danych o przejściach.</div>
+                        </section>
+                        <section class="panel-card">
+                            <div class="panel-kicker">Dziennik</div>
+                            <div id="journal-list" class="journal-list empty-state">Brak wpisów.</div>
+                        </section>
+                        <section class="panel-card debug-panel">
+                            <div class="debug-head">
+                                <div class="panel-kicker">Debug</div>
+                                <button id="btn-toggle-debug" class="btn-ghost small">Pokaż</button>
                             </div>
-                            <div id="initiative-list" class="initiative-list empty-note">Brak danych o inicjatywie.</div>
+                            <div id="debug-list" class="debug-list hidden empty-state">Brak wpisów debug.</div>
+                        </section>
+                    </div>
+                </details>
+                <button id="btn-stop-runtime" class="btn-ghost danger">Zatrzymaj runtime</button>
+            </div>
+        </details>
+
+        <main>
+            <section id="screen-start" class="screen screen-active">
+                <div class="hero-panel">
+                    <div class="hero-copy">
+                        <div class="panel-kicker">Start Hall</div>
+                        <h2>Szlak kontrabandy zaczyna się tutaj.</h2>
+                        <p id="start-tagline">Nowy companion UI do scenariusza bandytów.</p>
+                        <div class="cta-row">
+                            <button id="btn-begin" class="btn-primary">Nowa gra</button>
                         </div>
                     </div>
-
-                    <div class="panel heroes-panel">
-                        <div class="panel-header">Drużyna</div>
-                        <div class="panel-body heroes-layout">
-                            <div id="heroes-roster" class="heroes-roster empty-note">Brak danych o bohaterach.</div>
-                            <div class="heroes-detail-wrap">
-                                <div class="heroes-detail-head">
-                                    <div class="heroes-detail-title">Szczegóły</div>
-                                    <div id="hero-detail-context" class="heroes-detail-context">Brak aktywnego bohatera.</div>
-                                </div>
-                                <div id="heroes-detail" class="heroes-detail empty-note">Brak danych o bohaterze.</div>
-                            </div>
+                    <div class="hero-aside">
+                        <div class="lore-card">
+                            <div class="lore-label">V1</div>
+                            <p>Launcher, briefing i grywalny shell dla `bandit_cave`, z finałem w `smuggler_docks`.</p>
                         </div>
                     </div>
-                </aside>
+                </div>
+            </section>
 
-                <main class="center-column">
-                    <div class="panel session-panel">
-                        <div class="panel-header">Sesja</div>
-                        <div class="panel-body session-body">
-                            <div class="session-chip">
-                                <div class="session-key">Scenariusz</div>
-                                <div id="status-scenario" class="session-val">-</div>
-                            </div>
-                            <div class="session-chip">
-                                <div class="session-key">Aktywny</div>
-                                <div id="status-actor" class="session-val">-</div>
-                            </div>
-                            <div class="session-chip">
-                                <div class="session-key">Następny</div>
-                                <div id="status-next" class="session-val">-</div>
-                            </div>
-                            <div class="session-chip">
-                                <div class="session-key">Runda</div>
-                                <div id="status-round" class="session-val">-</div>
-                            </div>
-                            <div class="session-chip">
-                                <div class="session-key">Prompt</div>
-                                <div id="status-prompt" class="session-val">Brak</div>
-                            </div>
-                        </div>
+            <section id="screen-assembly" class="screen">
+                <div class="screen-head">
+                    <div>
+                        <div class="panel-kicker">Party Assembly</div>
+                        <h2>Zbierz drużynę</h2>
                     </div>
+                    <div class="screen-actions">
+                        <button id="btn-assembly-back" class="btn-ghost">Powrót</button>
+                        <button id="btn-assembly-next" class="btn-primary">Do briefingu</button>
+                    </div>
+                </div>
+                <div id="selection-summary" class="selection-summary">Wybierz od 1 do 4 bohaterów.</div>
+                <div id="party-grid" class="party-grid"></div>
+            </section>
 
-                    <div class="panel action-panel">
-                        <div class="panel-body action-body">
-                            <div class="action-illustration" id="action-illustration"></div>
-                            <div class="action-content">
-                                <div class="action-badges">
-                                    <span class="badge" id="action-kind"></span>
-                                    <span class="badge" id="action-source"></span>
+            <section id="screen-briefing" class="screen">
+                <div class="screen-head">
+                    <div>
+                        <div class="panel-kicker">Mission Briefing</div>
+                        <h2 id="briefing-title">Misja</h2>
+                    </div>
+                    <div class="screen-actions">
+                        <button id="btn-briefing-back" class="btn-ghost">Zmień drużynę</button>
+                        <button id="btn-start-runtime" class="btn-primary">Uruchom scenariusz</button>
+                    </div>
+                </div>
+                <div class="briefing-layout">
+                    <article class="panel-card">
+                        <div class="panel-kicker">Stawka</div>
+                        <p id="briefing-intro"></p>
+                        <p id="briefing-stakes" class="muted-strong"></p>
+                    </article>
+                    <article class="panel-card">
+                        <div class="panel-kicker">Przebieg</div>
+                        <ul id="briefing-points" class="plain-list"></ul>
+                    </article>
+                    <article class="panel-card">
+                        <div class="panel-kicker">Priorytety</div>
+                        <ul id="briefing-objectives" class="plain-list"></ul>
+                    </article>
+                </div>
+            </section>
+
+            <section id="screen-game" class="screen">
+                <div class="game-layout">
+                    <section class="column center">
+                        <section class="action-card">
+                            <div class="action-head">
+                                <div>
+                                    <div id="action-channel" class="panel-kicker">Ready</div>
+                                    <h2 id="action-title">Czekam na wydarzenia</h2>
                                 </div>
-                                <div class="action-title" id="action-title">Czekam na działania...</div>
-                                <div class="action-guidance" id="action-guidance">
-                                    <div class="action-guidance-card">
-                                        <div class="action-guidance-label">Teraz zrób</div>
-                                        <div class="action-guidance-value" id="action-now">Czekam na działania gracza lub systemu.</div>
-                                    </div>
-                                    <div class="action-guidance-card">
-                                        <div class="action-guidance-label">Potem wydarzy się</div>
-                                        <div class="action-guidance-value" id="action-next">Kolejny krok pojawi się automatycznie.</div>
-                                    </div>
-                                    <div class="action-guidance-card">
-                                        <div class="action-guidance-label">Aby kontynuować użyj</div>
-                                        <div class="action-guidance-value" id="action-continue">Enter lub wybór z panelu.</div>
-                                    </div>
-                                </div>
-                                <div class="action-progress hidden" id="action-progress">
-                                    <div class="action-progress-head">
+                                <div id="action-priority" class="badge badge-info">info</div>
+                            </div>
+                            <div class="prompt-scroll" aria-live="polite">
+                                <section id="action-help" class="action-block action-block-help hidden">
+                                    <div id="action-help-body" class="prose"></div>
+                                </section>
+                                <section id="action-scene" class="action-block action-block-scene hidden">
+                                    <div id="action-scene-body" class="prose compact"></div>
+                                </section>
+                                <div id="action-progress" class="progress hidden">
+                                    <div class="progress-head">
                                         <span id="action-progress-label">Postęp</span>
                                         <span id="action-progress-value">0/0</span>
                                     </div>
-                                    <div class="action-progress-track">
-                                        <span id="action-progress-bar"></span>
-                                    </div>
+                                    <div class="progress-track"><span id="action-progress-bar"></span></div>
                                 </div>
-                                <div class="action-separator"></div>
-                                <div class="action-text" id="action-text"></div>
-                                <div class="action-mods hidden" id="action-mods">
-                                    <div class="mods-col">
-                                        <div class="mods-head">Penalties · Circumstances</div>
-                                        <ul id="mods-pen-circ" class="mods-list"></ul>
-                                    </div>
-                                    <div class="mods-col">
-                                        <div class="mods-head">Bonuses · Circumstances</div>
-                                        <ul id="mods-bon-circ" class="mods-list"></ul>
-                                    </div>
-                                    <div class="mods-col">
-                                        <div class="mods-head">Penalties · Status</div>
-                                        <ul id="mods-pen-stat" class="mods-list"></ul>
-                                    </div>
-                                    <div class="mods-col">
-                                        <div class="mods-head">Bonuses · Status</div>
-                                        <ul id="mods-bon-stat" class="mods-list"></ul>
-                                    </div>
-                                    <div class="mods-col">
-                                        <div class="mods-head">Penalties · Item</div>
-                                        <ul id="mods-pen-item" class="mods-list"></ul>
-                                    </div>
-                                    <div class="mods-col">
-                                        <div class="mods-head">Bonuses · Item</div>
-                                        <ul id="mods-bon-item" class="mods-list"></ul>
-                                    </div>
-                                </div>
-                                <div id="path-summary" class="path-summary hidden">
-                                    <div class="path-summary-head">Ruch</div>
-                                    <div class="path-summary-grid">
-                                        <div class="path-metric">
-                                            <div class="label">Żądany cel</div>
-                                            <div id="path-requested" class="value">-</div>
-                                        </div>
-                                        <div class="path-metric">
-                                            <div class="label">Końcowy cel</div>
-                                            <div id="path-confirmed" class="value">-</div>
-                                        </div>
-                                        <div class="path-metric">
-                                            <div class="label">Koszt</div>
-                                            <div id="path-cost" class="value">-</div>
-                                        </div>
-                                        <div class="path-metric">
-                                            <div class="label">Budżet</div>
-                                            <div id="path-budget" class="value">-</div>
-                                        </div>
-                                        <div class="path-metric">
-                                            <div class="label">Status</div>
-                                            <div id="path-status" class="value">-</div>
-                                        </div>
-                                    </div>
-                                    <div id="path-hint" class="path-summary-hint"></div>
-                                </div>
-                                <div class="action-prompt" id="action-prompt"></div>
-                                <details class="action-details hidden" id="action-details">
-                                    <summary>Szczegóły</summary>
-                                    <div class="action-details-body" id="action-details-body"></div>
-                                </details>
-                                <div class="action-choices" id="action-choices"></div>
-                                <div class="action-desc" id="action-desc"></div>
-                                <form id="action-form" class="action-form">
-                                    <div class="roll-input-wrap">
-                                        <input type="text" id="action-answer" autocomplete="off" placeholder="Wpisz odpowiedź lub wybierz kartę..." />
-                                        <div id="roll-natural-controls" class="roll-natural-controls hidden">
-                                            <button type="button" id="nat20-toggle" class="nat-toggle">Nat 20</button>
-                                            <button type="button" id="nat1-toggle" class="nat-toggle">Nat 1</button>
-                                            <span id="nat-mode-hint" class="nat-mode-hint">* : brak -> nat20 -> nat1</span>
-                                        </div>
-                                    </div>
-                                    <button type="submit">OK</button>
-                                </form>
+                                <div id="prompt-meta" class="prompt-meta"></div>
+                                <div id="dice-overlay" class="dice-overlay hidden" aria-live="polite"></div>
+                                <div id="roll-breakdown" class="roll-breakdown hidden"></div>
+                                <div id="choice-list" class="choice-list"></div>
+                                <section id="choice-detail" class="choice-detail hidden">
+                                    <div class="panel-kicker">Wybrana opcja</div>
+                                    <h3 id="choice-detail-title">Opcja</h3>
+                                    <div id="choice-detail-body" class="prose compact"></div>
+                                </section>
                             </div>
+                            <form id="prompt-form" class="prompt-form hidden">
+                                <input id="prompt-input" type="text" autocomplete="off" placeholder="Wpisz odpowiedź..." />
+                                <div id="natural-controls" class="natural-controls hidden">
+                                    <button type="button" data-natural="nat20">Nat 20</button>
+                                    <button type="button" data-natural="nat1">Nat 1</button>
+                                </div>
+                                <button id="prompt-submit" type="submit" class="btn-primary">Potwierdź</button>
+                            </form>
+                        </section>
+                    </section>
+                </div>
+                <section class="actor-rail panel-card">
+                    <div class="actor-rail-head">
+                        <div>
+                            <div class="panel-kicker" id="actor-rail-label">Drużyna</div>
+                            <div class="actor-rail-subtitle">Aktywny uczestnik jest podświetlany; w walce pas przełącza się na kolejność inicjatywy.</div>
+                        </div>
+                        <details id="actor-info-panel" class="actor-info-panel">
+                            <summary>Info</summary>
+                            <div id="actor-info-body" class="actor-info-body"></div>
+                        </details>
+                    </div>
+                    <div id="team-list" class="team-list actor-strip empty-state">Brak danych o drużynie.</div>
+                    <div id="initiative-list" class="initiative-list actor-strip hidden empty-state">Brak aktywnej inicjatywy.</div>
+                </section>
+            </section>
+
+            <section id="screen-result" class="screen">
+                <div class="hero-panel result-panel">
+                    <div class="hero-copy">
+                        <div class="panel-kicker">Scenario Result</div>
+                        <h2 id="result-title">Statek Przejęty</h2>
+                        <p id="result-summary"></p>
+                        <div id="result-objectives" class="result-objectives"></div>
+                        <div class="cta-row">
+                            <button id="btn-result-restart" class="btn-primary">Nowa gra</button>
+                            <button id="btn-result-back" class="btn-ghost">Powrót do startu</button>
                         </div>
                     </div>
-
-                    <div class="panel feed-panel">
-                        <div class="panel-header">Ostatnie zdarzenia</div>
-                        <div class="panel-body">
-                            <ul id="event-feed" class="event-feed">
-                                <li class="event-feed-empty">Brak zdarzeń.</li>
-                            </ul>
-                        </div>
-                    </div>
-                </main>
-
-            </div>
-        </section>
+                </div>
+            </section>
+        </main>
     </div>
 
-    <div id="path-toast" class="toast hidden"></div>
-
-    <button id="log-fab" class="log-fab" title="Pokaż logi">Log</button>
-    <button id="debug-undo-btn" class="debug-undo-btn" title="Debug: cofnij o 1 akcję (Ctrl+Z)">Cofnij</button>
-    <div id="log-modal" class="log-modal hidden" role="dialog" aria-modal="true">
-        <div class="log-modal-body">
-            <div class="log-modal-header">
-                <div class="log-modal-title">Logi</div>
-                <button id="log-close" class="log-close" title="Zamknij">✕</button>
-            </div>
-            <div class="log-last" id="log-last">Logi będą tu widoczne.</div>
-            <ul id="log-list" class="log-list"></ul>
-        </div>
-    </div>
-
-    <script type="module" src="{{ url_for('static', filename='app.js') }}"></script>
+    <script type="module" src="/static/app.js"></script>
 </body>
 </html>

@@ -58,7 +58,7 @@ def test_ui_client_raises_undo_requested_for_debug_command(monkeypatch):
             return {"status": "answered", "answer": DEBUG_UNDO_COMMAND}
 
     monkeypatch.setattr("ui_client.requests.get", lambda *_a, **_k: _Resp())
-    client = UIClient(base_url="http://127.0.0.1:5100")
+    client = UIClient(base_url="http://127.0.0.1:5200")
     with pytest.raises(UndoRequested):
         client._wait_for_text_answer("1", max_wait=0.01)
 
@@ -76,7 +76,7 @@ def test_ui_client_maps_debug_undo_to_back_inside_character_creation(monkeypatch
             }
 
     monkeypatch.setattr("ui_client.requests.get", lambda *_a, **_k: _Resp())
-    client = UIClient(base_url="http://127.0.0.1:5100")
+    client = UIClient(base_url="http://127.0.0.1:5200")
     answer = client._wait_for_text_answer("1", max_wait=0.01)
     assert answer == "/back"
 

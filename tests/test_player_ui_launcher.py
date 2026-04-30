@@ -10,7 +10,7 @@ for path in (PROJECT_ROOT, SRC_ROOT):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-import future.player_ui_v2.app as player_ui_v2_app_module  # noqa: E402
+import player_ui.app as player_ui_app_module  # noqa: E402
 
 
 class _ProcStub:
@@ -37,16 +37,16 @@ class _ProcStub:
 
 @pytest.fixture()
 def ui_client(monkeypatch):
-    monkeypatch.setattr(player_ui_v2_app_module, "events_history", [])
-    monkeypatch.setattr(player_ui_v2_app_module, "subscribers", set())
-    monkeypatch.setattr(player_ui_v2_app_module, "event_ids", itertools.count(1))
-    monkeypatch.setattr(player_ui_v2_app_module, "session_ids", itertools.count(2))
-    monkeypatch.setattr(player_ui_v2_app_module, "current_session_id", "ui-session-1")
-    prompt_director = player_ui_v2_app_module.PromptDirector(session_id="ui-session-1")
-    prompt_director.set_publisher(player_ui_v2_app_module._publish)
-    monkeypatch.setattr(player_ui_v2_app_module, "prompt_director", prompt_director)
+    monkeypatch.setattr(player_ui_app_module, "events_history", [])
+    monkeypatch.setattr(player_ui_app_module, "subscribers", set())
+    monkeypatch.setattr(player_ui_app_module, "event_ids", itertools.count(1))
+    monkeypatch.setattr(player_ui_app_module, "session_ids", itertools.count(2))
+    monkeypatch.setattr(player_ui_app_module, "current_session_id", "ui-session-1")
+    prompt_director = player_ui_app_module.PromptDirector(session_id="ui-session-1")
+    prompt_director.set_publisher(player_ui_app_module._publish)
+    monkeypatch.setattr(player_ui_app_module, "prompt_director", prompt_director)
     monkeypatch.setattr(
-        player_ui_v2_app_module,
+        player_ui_app_module,
         "runtime_state",
         {
             "process": None,
@@ -64,7 +64,7 @@ def ui_client(monkeypatch):
             "board_url": None,
         },
     )
-    with player_ui_v2_app_module.app.test_client() as client:
+    with player_ui_app_module.app.test_client() as client:
         yield client
 
 
@@ -76,9 +76,9 @@ def test_runtime_start_resets_session_and_tracks_process(ui_client, monkeypatch)
         popen_calls.append({"cmd": cmd, "cwd": cwd, "env": env})
         return proc
 
-    monkeypatch.setattr(player_ui_v2_app_module.subprocess, "Popen", _fake_popen)
+    monkeypatch.setattr(player_ui_app_module.subprocess, "Popen", _fake_popen)
     monkeypatch.setattr(
-        player_ui_v2_app_module,
+        player_ui_app_module,
         "_resolve_runtime_board_settings",
         lambda: {
             "backend": "simulator",
@@ -114,23 +114,23 @@ def test_runtime_start_resets_session_and_tracks_process(ui_client, monkeypatch)
 
 
 def test_runtime_board_settings_fall_back_to_simulator_when_hardware_has_no_serial(monkeypatch):
-    monkeypatch.delenv("PLAYER_UI_V2_BOARD_BACKEND", raising=False)
-    monkeypatch.delenv("PLAYER_UI_V2_BOARD_URL", raising=False)
-    monkeypatch.delenv("PLAYER_UI_V2_BOARD_SERIAL_PORT", raising=False)
-    monkeypatch.delenv("PLAYER_UI_V2_WLED_URL", raising=False)
+    monkeypatch.delenv("PLAYER_UI_BOARD_BACKEND", raising=False)
+    monkeypatch.delenv("PLAYER_UI_BOARD_URL", raising=False)
+    monkeypatch.delenv("PLAYER_UI_BOARD_SERIAL_PORT", raising=False)
+    monkeypatch.delenv("PLAYER_UI_WLED_URL", raising=False)
     monkeypatch.setattr(
-        player_ui_v2_app_module,
+        player_ui_app_module,
         "load_board_config",
         lambda: {
             "connection": {"backend": "hardware", "simulator_url": "http://127.0.0.1:5000"},
             "hardware": {"serial_port": ""},
         },
     )
-    monkeypatch.setattr(player_ui_v2_app_module, "connection_backend", lambda config: "hardware")
-    monkeypatch.setattr(player_ui_v2_app_module, "simulator_url", lambda config: "http://127.0.0.1:5000")
-    monkeypatch.setattr(player_ui_v2_app_module, "hardware_scan_config", lambda config: {"serial_port": ""})
+    monkeypatch.setattr(player_ui_app_module, "connection_backend", lambda config: "hardware")
+    monkeypatch.setattr(player_ui_app_module, "simulator_url", lambda config: "http://127.0.0.1:5000")
+    monkeypatch.setattr(player_ui_app_module, "hardware_scan_config", lambda config: {"serial_port": ""})
 
-    resolved = player_ui_v2_app_module._resolve_runtime_board_settings()
+    resolved = player_ui_app_module._resolve_runtime_board_settings()
 
     assert resolved["backend"] == "simulator"
     assert resolved["board_url"] == "http://127.0.0.1:5000"
@@ -149,7 +149,7 @@ def test_runtime_start_requires_at_least_one_hero(ui_client):
 def test_runtime_stop_terminates_running_process(ui_client, monkeypatch):
     proc = _ProcStub()
     monkeypatch.setattr(
-        player_ui_v2_app_module,
+        player_ui_app_module,
         "runtime_state",
         {
             "process": proc,
@@ -180,9 +180,9 @@ def test_runtime_retry_reuses_previous_configuration(ui_client, monkeypatch):
         popen_calls.append({"cmd": cmd, "cwd": cwd, "env": env})
         return proc
 
-    monkeypatch.setattr(player_ui_v2_app_module.subprocess, "Popen", _fake_popen)
+    monkeypatch.setattr(player_ui_app_module.subprocess, "Popen", _fake_popen)
     monkeypatch.setattr(
-        player_ui_v2_app_module,
+        player_ui_app_module,
         "_resolve_runtime_board_settings",
         lambda: {
             "backend": "hardware",
@@ -192,7 +192,7 @@ def test_runtime_retry_reuses_previous_configuration(ui_client, monkeypatch):
         },
     )
     monkeypatch.setattr(
-        player_ui_v2_app_module,
+        player_ui_app_module,
         "runtime_state",
         {
             "process": None,

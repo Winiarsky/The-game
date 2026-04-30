@@ -59,7 +59,7 @@ def _normalize_url(value: Optional[str]) -> Optional[str]:
         netloc = f"{parsed.username}:{parsed.password}@{parsed.hostname}"
     if port is None:
         # domyślny port UI
-        netloc = f"{netloc}:5100"
+        netloc = f"{netloc}:5200"
     else:
         netloc = f"{netloc}:{port}"
     return urlunsplit((scheme, netloc, parsed.path or "", parsed.query, parsed.fragment))

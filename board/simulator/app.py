@@ -327,7 +327,7 @@ def runtime_start():
         return jsonify({"ok": False, "error": str(exc)}), 400
 
     ui_host = "127.0.0.1"
-    ui_port = _find_free_port(ui_host, int(payload.get("ui_port") or 5100))
+    ui_port = _find_free_port(ui_host, int(payload.get("ui_port") or 5200))
     board_url = request.host_url.rstrip("/")
     cmd = [
         sys.executable,
@@ -403,7 +403,7 @@ def runtime_start_scenario():
         return jsonify({"ok": False, "error": "Runtime gry już działa.", "runtime": _runtime_status_payload()}), 409
 
     ui_host = "127.0.0.1"
-    ui_port = _find_free_port(ui_host, int(payload.get("ui_port") or 5100))
+    ui_port = _find_free_port(ui_host, int(payload.get("ui_port") or 5200))
     board_url = request.host_url.rstrip("/")
     cmd = [
         sys.executable,

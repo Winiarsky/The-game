@@ -25,7 +25,7 @@ class _ResponseStub:
 
 
 def test_ui_client_send_event_refreshes_session_after_409(monkeypatch):
-    client = UIClient(base_url="http://127.0.0.1:5100")
+    client = UIClient(base_url="http://127.0.0.1:5200")
     client.session_id = None
 
     get_responses = iter(
@@ -57,7 +57,7 @@ def test_ui_client_send_event_refreshes_session_after_409(monkeypatch):
 
 
 def test_ui_client_create_prompt_refreshes_session_after_409(monkeypatch):
-    client = UIClient(base_url="http://127.0.0.1:5100")
+    client = UIClient(base_url="http://127.0.0.1:5200")
     client.session_id = None
 
     get_responses = iter(

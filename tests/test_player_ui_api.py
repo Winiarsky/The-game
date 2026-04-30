@@ -10,21 +10,21 @@ for path in (PROJECT_ROOT, SRC_ROOT):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-import future.player_ui_v2.app as player_ui_v2_app_module  # noqa: E402
+import player_ui.app as player_ui_app_module  # noqa: E402
 
 
 @pytest.fixture()
 def ui_client(monkeypatch):
-    monkeypatch.setattr(player_ui_v2_app_module, "events_history", [])
-    monkeypatch.setattr(player_ui_v2_app_module, "subscribers", set())
-    monkeypatch.setattr(player_ui_v2_app_module, "event_ids", itertools.count(1))
-    monkeypatch.setattr(player_ui_v2_app_module, "session_ids", itertools.count(2))
-    monkeypatch.setattr(player_ui_v2_app_module, "current_session_id", "ui-session-1")
-    prompt_director = player_ui_v2_app_module.PromptDirector(session_id="ui-session-1")
-    prompt_director.set_publisher(player_ui_v2_app_module._publish)
-    monkeypatch.setattr(player_ui_v2_app_module, "prompt_director", prompt_director)
+    monkeypatch.setattr(player_ui_app_module, "events_history", [])
+    monkeypatch.setattr(player_ui_app_module, "subscribers", set())
+    monkeypatch.setattr(player_ui_app_module, "event_ids", itertools.count(1))
+    monkeypatch.setattr(player_ui_app_module, "session_ids", itertools.count(2))
+    monkeypatch.setattr(player_ui_app_module, "current_session_id", "ui-session-1")
+    prompt_director = player_ui_app_module.PromptDirector(session_id="ui-session-1")
+    prompt_director.set_publisher(player_ui_app_module._publish)
+    monkeypatch.setattr(player_ui_app_module, "prompt_director", prompt_director)
     monkeypatch.setattr(
-        player_ui_v2_app_module,
+        player_ui_app_module,
         "runtime_state",
         {
             "process": None,
@@ -43,7 +43,7 @@ def ui_client(monkeypatch):
         },
     )
 
-    with player_ui_v2_app_module.app.test_client() as client:
+    with player_ui_app_module.app.test_client() as client:
         yield client
 
 
@@ -78,7 +78,7 @@ def test_session_reset_rotates_session_and_hides_old_prompts(ui_client):
     old_payload = old_prompt.get_json()
     assert old_payload["session_id"] == "ui-session-1"
     assert old_payload["status"] == "answered"
-    assert old_payload["answer"] == player_ui_v2_app_module.SESSION_RESET_COMMAND
+    assert old_payload["answer"] == player_ui_app_module.SESSION_RESET_COMMAND
 
 
 def test_prompt_api_returns_normalized_communication_envelope(ui_client):

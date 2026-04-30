@@ -1,929 +1,173 @@
-import { PLACEHOLDER_IMAGE, refs } from "./modules/dom.js";
-import { renderHeroesPanel, coerceHeroPreview, resolveArmorClass } from "./modules/heroes_panel.js";
-import { renderInitiativePanel } from "./modules/initiative_panel.js";
-import { clearPathPreview, showPathPreview } from "./modules/path_panel.js";
-
-const {
-    screenMenu,
-    screenGame,
-    logList,
-    logLast,
-    logFab,
-    debugUndoBtn,
-    logModal,
-    logClose,
-    initiativeList,
-    initiativeSummary,
-    initActiveName,
-    initNextName,
-    initRoundNum,
-    actionIllustration,
-    actionTitle,
-    actionGuidance,
-    actionNow,
-    actionNext,
-    actionContinue,
-    actionProgress,
-    actionProgressLabel,
-    actionProgressValue,
-    actionProgressBar,
-    actionText,
-    actionPrompt,
-    actionDetails,
-    actionDetailsBody,
-    actionChoices,
-    actionDesc,
-    actionForm,
-    actionAnswer,
-    rollNaturalControls,
-    nat20Toggle,
-    nat1Toggle,
-    natModeHint,
-    actionKind,
-    actionSource,
-    modsBox,
-    modsPenCirc,
-    modsBonCirc,
-    modsPenStat,
-    modsBonStat,
-    modsPenItem,
-    modsBonItem,
-    topbar,
-    topbarToggle,
-    eventFeed,
-    statusScenario,
-    statusActor,
-    statusNext,
-    statusRound,
-    statusPrompt,
-} = refs;
-
-let currentScenario = null;
-let currentSessionId = null;
-let eventSource = null;
-const renderedPrompts = new Set();
-const heroes = new Map();
-let promptQueue = [];
-let activePrompt = null;
-let currentChoices = [];
-let selectedChoiceIndex = -1;
-let choiceMeta = [];
-let confirmMode = false;
-let storedSelection = "";
-let layoutMode = "info";
-let rollNaturalMode = "none";
-let fileImagePayload = null;
-let rollStackState = null;
-let pathState = { activeId: null, data: null };
-let initiativeState = { order: [], activeId: null, round: 1 };
-let activeActorId = null;
-let lastLoggedRound = null;
-let lastLoggedActiveActorId = null;
-let creationPreviewHeroId = null;
-let selectedHeroId = null;
-let passiveCommunicationState = null;
-let pendingPassiveCommunication = null;
-const CREATION_PREVIEW_FALLBACK_ID = "__creation_preview__";
-let menuNumpadContext = null;
-let lastCommunicationKey = null;
-actionForm.classList.add("hidden");
-const DEBUG_UNDO_COMMAND = "__debug_undo__";
-const DEFAULT_CREATION_ABILITY_SCORES = {
-    strength: 10,
-    dexterity: 10,
-    constitution: 10,
-    intelligence: 10,
-    wisdom: 10,
-    charisma: 10,
-};
-const DEFAULT_CREATION_ABILITY_MODIFIERS = {
-    strength: 0,
-    dexterity: 0,
-    constitution: 0,
-    intelligence: 0,
-    wisdom: 0,
-    charisma: 0,
+const screens = {
+    start: document.getElementById("screen-start"),
+    assembly: document.getElementById("screen-assembly"),
+    briefing: document.getElementById("screen-briefing"),
+    game: document.getElementById("screen-game"),
+    result: document.getElementById("screen-result"),
 };
 
-function _cloneCreationAbilityDefaults() {
-    return {
-        abilityScores: { ...DEFAULT_CREATION_ABILITY_SCORES },
-        abilityModifiers: { ...DEFAULT_CREATION_ABILITY_MODIFIERS },
-    };
+const refs = {
+    runtimeBadge: document.getElementById("runtime-badge"),
+    boardBadge: document.getElementById("board-badge"),
+    sessionChip: document.getElementById("session-chip"),
+    mastheadShell: document.getElementById("masthead-shell"),
+    mastheadSummaryStatus: document.getElementById("masthead-summary-status"),
+    audioToggle: document.getElementById("audio-toggle"),
+    audioVolume: document.getElementById("audio-volume"),
+    audioStatus: document.getElementById("audio-status"),
+    runtimeErrorModal: document.getElementById("runtime-error-modal"),
+    runtimeErrorTitle: document.getElementById("runtime-error-title"),
+    runtimeErrorBody: document.getElementById("runtime-error-body"),
+    btnRuntimeRetry: document.getElementById("btn-runtime-retry"),
+    btnRuntimeDismiss: document.getElementById("btn-runtime-dismiss"),
+    startTagline: document.getElementById("start-tagline"),
+    btnBegin: document.getElementById("btn-begin"),
+    btnAssemblyBack: document.getElementById("btn-assembly-back"),
+    btnAssemblyNext: document.getElementById("btn-assembly-next"),
+    btnBriefingBack: document.getElementById("btn-briefing-back"),
+    btnStartRuntime: document.getElementById("btn-start-runtime"),
+    btnStopRuntime: document.getElementById("btn-stop-runtime"),
+    btnToggleDebug: document.getElementById("btn-toggle-debug"),
+    btnResultRestart: document.getElementById("btn-result-restart"),
+    btnResultBack: document.getElementById("btn-result-back"),
+    selectionSummary: document.getElementById("selection-summary"),
+    partyGrid: document.getElementById("party-grid"),
+    briefingTitle: document.getElementById("briefing-title"),
+    briefingIntro: document.getElementById("briefing-intro"),
+    briefingStakes: document.getElementById("briefing-stakes"),
+    briefingPoints: document.getElementById("briefing-points"),
+    briefingObjectives: document.getElementById("briefing-objectives"),
+    topScenario: document.getElementById("top-scenario"),
+    topMap: document.getElementById("top-map"),
+    topChapter: document.getElementById("top-chapter"),
+    topObjective: document.getElementById("top-objective"),
+    adventureDrawer: document.getElementById("adventure-drawer"),
+    adventureDrawerStatus: document.getElementById("adventure-drawer-status"),
+    actorRailLabel: document.getElementById("actor-rail-label"),
+    actorInfoBody: document.getElementById("actor-info-body"),
+    teamList: document.getElementById("team-list"),
+    initiativeList: document.getElementById("initiative-list"),
+    objectiveList: document.getElementById("objective-list"),
+    transitionList: document.getElementById("transition-list"),
+    journalList: document.getElementById("journal-list"),
+    debugList: document.getElementById("debug-list"),
+    actionChannel: document.getElementById("action-channel"),
+    actionCard: document.querySelector(".action-card"),
+    actionTitle: document.getElementById("action-title"),
+    actionPriority: document.getElementById("action-priority"),
+    activeActorPanel: document.getElementById("active-actor-panel"),
+    activeActorPortrait: document.getElementById("active-actor-portrait"),
+    activeActorName: document.getElementById("active-actor-name"),
+    activeActorMeta: document.getElementById("active-actor-meta"),
+    actionScene: document.getElementById("action-scene"),
+    actionSceneBody: document.getElementById("action-scene-body"),
+    actionHelp: document.getElementById("action-help"),
+    actionHelpBody: document.getElementById("action-help-body"),
+    actionProgress: document.getElementById("action-progress"),
+    actionProgressLabel: document.getElementById("action-progress-label"),
+    actionProgressValue: document.getElementById("action-progress-value"),
+    actionProgressBar: document.getElementById("action-progress-bar"),
+    promptMeta: document.getElementById("prompt-meta"),
+    diceOverlay: document.getElementById("dice-overlay"),
+    rollBreakdown: document.getElementById("roll-breakdown"),
+    choiceList: document.getElementById("choice-list"),
+    choiceDetail: document.getElementById("choice-detail"),
+    choiceDetailTitle: document.getElementById("choice-detail-title"),
+    choiceDetailBody: document.getElementById("choice-detail-body"),
+    promptForm: document.getElementById("prompt-form"),
+    promptInput: document.getElementById("prompt-input"),
+    promptSubmit: document.getElementById("prompt-submit"),
+    naturalControls: document.getElementById("natural-controls"),
+    resultTitle: document.getElementById("result-title"),
+    resultSummary: document.getElementById("result-summary"),
+    resultObjectives: document.getElementById("result-objectives"),
+};
+
+const CHOICE_SECTION_LABELS = {
+    movement: "Ruch i eksploracja",
+    combat: "Walka",
+    generic: "Akcje ogólne",
+    heritage: "Dziedzictwo",
+    class: "Akcje klasowe",
+    utility: "Zarządzanie",
+    turn: "Tura",
+};
+
+const CHOICE_SECTION_ORDER = ["movement", "combat", "generic", "heritage", "class", "utility", "turn"];
+
+const state = {
+    screen: "start",
+    catalog: { heroes: [], scenarios: [] },
+    scenario: null,
+    selectedHeroIds: [],
+    sessionId: null,
+    runtimeStatus: { state: "idle", scenario_id: null, hero_ids: [] },
+    assetManifest: null,
+    assetManifestUrl: "",
+    heroes: new Map(),
+    initiative: { round: null, order: [], active_id: null },
+    activeActor: null,
+    view: {
+        sessionId: null,
+        revision: 0,
+        activePrompt: null,
+        focusCard: null,
+        idleState: null,
+        journal: [],
+        debugFeed: [],
+    },
+    currentMapId: null,
+    currentMapLabel: null,
+    completedObjectives: new Set(),
+    scenarioFinished: false,
+    eventSource: null,
+    runtimePoll: null,
+    debugOpen: false,
+    naturalMode: "none",
+    selectedChoiceIndex: -1,
+    promptDrafts: new Map(),
+    lastRenderedPromptId: null,
+    dismissedRuntimeErrorKey: null,
+    diceRoll: null,
+    diceRollTimer: null,
+    audioEnabled: false,
+    audioPreferenceLocked: false,
+    audioVolume: 0.58,
+    playedAudioCues: new Set(),
+    currentAmbienceKey: "",
+};
+
+function escapeHtml(text) {
+    return String(text == null ? "" : text)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
 }
 
-function _resetMenuNumpadContext() {
-    menuNumpadContext = null;
-    if (actionChoices) {
-        actionChoices.classList.remove("choice-columns-mode");
-    }
+function inlineMarkdown(text) {
+    return escapeHtml(text)
+        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+        .replace(/`(.+?)`/g, "<code>$1</code>");
 }
 
-function _isGroupedMenuNumpad() {
-    if (!menuNumpadContext || !menuNumpadContext.enabled) return false;
-    const groups = menuNumpadContext.groups || {};
-    return Array.isArray(groups.filters) && Array.isArray(groups.list) && groups.filters.length > 0 && groups.list.length > 0;
-}
-
-function _groupIndices(name) {
-    if (!_isGroupedMenuNumpad()) return [];
-    return Array.isArray(menuNumpadContext.groups?.[name]) ? menuNumpadContext.groups[name] : [];
-}
-
-function _setGroupedMenuActive(name) {
-    if (!_isGroupedMenuNumpad()) return;
-    const groupName = name === "filters" ? "filters" : "list";
-    const indices = _groupIndices(groupName);
-    if (!indices.length) return;
-    menuNumpadContext.activeGroup = groupName;
-    if (!indices.includes(selectedChoiceIndex)) {
-        selectChoice(indices[0]);
-        return;
-    }
-    updateChoiceHighlight();
-}
-
-function _moveGroupedMenuSelection(delta) {
-    if (!_isGroupedMenuNumpad()) return false;
-    const step = Number.parseInt(String(delta || 0), 10);
-    if (!step) return false;
-    const groupName = menuNumpadContext.activeGroup === "filters" ? "filters" : "list";
-    const indices = _groupIndices(groupName);
-    if (!indices.length) return false;
-    let currentPos = indices.indexOf(selectedChoiceIndex);
-    if (currentPos < 0) currentPos = 0;
-    const nextPos = (currentPos + (step > 0 ? 1 : -1) + indices.length) % indices.length;
-    selectChoice(indices[nextPos]);
-    return true;
-}
-
-function _isNaturalRollPrompt(prompt) {
-    if (!prompt) return false;
-    const kind = String(prompt.kind || "").toLowerCase();
-    const layout = String(prompt.layout || "").toLowerCase();
-    if (layout === "damage") return false;
-    return layout === "test" || kind === "roll";
-}
-
-function _setNaturalMode(mode) {
-    const next = mode === "nat20" || mode === "nat1" ? mode : "none";
-    rollNaturalMode = next;
-    if (nat20Toggle) nat20Toggle.classList.toggle("active", next === "nat20");
-    if (nat1Toggle) nat1Toggle.classList.toggle("active", next === "nat1");
-}
-
-function _cycleNaturalMode() {
-    if (rollNaturalMode === "none") _setNaturalMode("nat20");
-    else if (rollNaturalMode === "nat20") _setNaturalMode("nat1");
-    else _setNaturalMode("none");
-}
-
-function _isUpNavigationKey(evt) {
-    const key = String(evt?.key || "");
-    const code = String(evt?.code || "");
-    return key === "8" || key === "ArrowUp" || code === "Numpad8";
-}
-
-function _isDownNavigationKey(evt) {
-    const key = String(evt?.key || "");
-    const code = String(evt?.code || "");
-    return key === "2" || key === "ArrowDown" || code === "Numpad2";
-}
-
-function _renderNaturalControls(prompt) {
-    const visible = _isNaturalRollPrompt(prompt);
-    if (!rollNaturalControls) return;
-    if (!visible) {
-        rollNaturalControls.classList.add("hidden");
-        return;
-    }
-    rollNaturalControls.classList.remove("hidden");
-    if (natModeHint) {
-        natModeHint.textContent = "* : brak -> nat20 -> nat1";
-    }
-    _setNaturalMode(rollNaturalMode);
-}
-
-if (nat20Toggle) {
-    nat20Toggle.addEventListener("click", () => {
-        _setNaturalMode(rollNaturalMode === "nat20" ? "none" : "nat20");
-    });
-}
-if (nat1Toggle) {
-    nat1Toggle.addEventListener("click", () => {
-        _setNaturalMode(rollNaturalMode === "nat1" ? "none" : "nat1");
-    });
-}
-
-function setIllustration(imageUrl) {
-    const src = imageUrl || PLACEHOLDER_IMAGE;
-    if (src) {
-        actionIllustration.style.backgroundImage = `url(${src})`;
-        actionIllustration.style.backgroundSize = "cover";
-        actionIllustration.style.backgroundPosition = "center";
-    } else {
-        actionIllustration.style.backgroundImage = "";
-    }
-}
-
-function _renderFileImagePicker() {
-    fileImagePayload = null;
-    actionChoices.innerHTML = "";
-    actionDesc.classList.remove("hidden");
-    actionDesc.textContent = "Wybierz plik obrazu portretu, ustaw kadr (przeciągnij + zoom), potem Enter.";
-
-    const wrapper = document.createElement("div");
-    wrapper.className = "file-picker";
-
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/*,.jpg,.jpeg,.png,.webp,.svg";
-    input.className = "file-picker-input";
-
-    const hint = document.createElement("div");
-    hint.className = "file-picker-hint";
-    hint.textContent = "Obsługiwane formaty: JPG, PNG, WEBP, SVG. Przeciągnij obraz, aby przesunąć kadr.";
-
-    const cropWrap = document.createElement("div");
-    cropWrap.className = "file-cropper hidden";
-
-    const cropCanvas = document.createElement("canvas");
-    cropCanvas.className = "file-cropper-canvas";
-    cropCanvas.width = 320;
-    cropCanvas.height = 400;
-    cropCanvas.setAttribute("aria-label", "Edytor kadru portretu");
-
-    const zoomWrap = document.createElement("label");
-    zoomWrap.className = "file-cropper-zoom";
-    zoomWrap.textContent = "Zoom";
-
-    const zoomInput = document.createElement("input");
-    zoomInput.type = "range";
-    zoomInput.min = "100";
-    zoomInput.max = "300";
-    zoomInput.step = "1";
-    zoomInput.value = "100";
-    zoomInput.disabled = true;
-
-    const zoomValue = document.createElement("span");
-    zoomValue.className = "file-cropper-zoom-value";
-    zoomValue.textContent = "100%";
-    zoomWrap.appendChild(zoomInput);
-    zoomWrap.appendChild(zoomValue);
-
-    const cropHint = document.createElement("div");
-    cropHint.className = "file-cropper-hint";
-    cropHint.textContent = "Przeciągnij obraz, aby ustawić pozycję w ramce.";
-
-    cropWrap.appendChild(cropCanvas);
-    cropWrap.appendChild(zoomWrap);
-    cropWrap.appendChild(cropHint);
-
-    const cropState = {
-        image: null,
-        imageWidth: 0,
-        imageHeight: 0,
-        zoom: 1,
-        minScale: 1,
-        scale: 1,
-        offsetX: 0,
-        offsetY: 0,
-        dragging: false,
-        dragLastX: 0,
-        dragLastY: 0,
-        outputMime: "image/jpeg",
-        filename: "",
-    };
-
-    const _clamp = (value, min, max) => Math.min(max, Math.max(min, value));
-
-    const _clampOffsets = () => {
-        const scaledWidth = cropState.imageWidth * cropState.scale;
-        const scaledHeight = cropState.imageHeight * cropState.scale;
-        const maxOffsetX = Math.max(0, (scaledWidth - cropCanvas.width) / 2);
-        const maxOffsetY = Math.max(0, (scaledHeight - cropCanvas.height) / 2);
-        cropState.offsetX = _clamp(cropState.offsetX, -maxOffsetX, maxOffsetX);
-        cropState.offsetY = _clamp(cropState.offsetY, -maxOffsetY, maxOffsetY);
-    };
-
-    const _exportCropPayload = () => {
-        if (!cropState.image) return null;
-        const scaledWidth = cropState.imageWidth * cropState.scale;
-        const scaledHeight = cropState.imageHeight * cropState.scale;
-        const drawX = (cropCanvas.width - scaledWidth) / 2 + cropState.offsetX;
-        const drawY = (cropCanvas.height - scaledHeight) / 2 + cropState.offsetY;
-        const sourceX = _clamp((0 - drawX) / cropState.scale, 0, cropState.imageWidth);
-        const sourceY = _clamp((0 - drawY) / cropState.scale, 0, cropState.imageHeight);
-        const sourceW = _clamp(cropCanvas.width / cropState.scale, 1, cropState.imageWidth - sourceX);
-        const sourceH = _clamp(cropCanvas.height / cropState.scale, 1, cropState.imageHeight - sourceY);
-
-        const outCanvas = document.createElement("canvas");
-        outCanvas.width = 640;
-        outCanvas.height = 800;
-        const outCtx = outCanvas.getContext("2d");
-        if (!outCtx) return null;
-        outCtx.drawImage(
-            cropState.image,
-            sourceX,
-            sourceY,
-            sourceW,
-            sourceH,
-            0,
-            0,
-            outCanvas.width,
-            outCanvas.height
-        );
-        const dataUrl =
-            cropState.outputMime === "image/jpeg"
-                ? outCanvas.toDataURL(cropState.outputMime, 0.92)
-                : outCanvas.toDataURL(cropState.outputMime);
-        return {
-            filename: cropState.filename || "portrait.jpg",
-            mime: cropState.outputMime,
-            data_url: dataUrl,
-        };
-    };
-
-    const _renderCrop = () => {
-        const ctx = cropCanvas.getContext("2d");
-        if (!ctx) return;
-        ctx.clearRect(0, 0, cropCanvas.width, cropCanvas.height);
-        if (!cropState.image) return;
-        cropState.scale = cropState.minScale * cropState.zoom;
-        _clampOffsets();
-        const drawWidth = cropState.imageWidth * cropState.scale;
-        const drawHeight = cropState.imageHeight * cropState.scale;
-        const drawX = (cropCanvas.width - drawWidth) / 2 + cropState.offsetX;
-        const drawY = (cropCanvas.height - drawHeight) / 2 + cropState.offsetY;
-        ctx.drawImage(cropState.image, drawX, drawY, drawWidth, drawHeight);
-        fileImagePayload = _exportCropPayload();
-    };
-
-    input.addEventListener("change", () => {
-        const file = input.files && input.files[0] ? input.files[0] : null;
-        if (!file) {
-            fileImagePayload = null;
-            cropWrap.classList.add("hidden");
-            zoomInput.disabled = true;
-            actionDesc.textContent = "Wybierz plik obrazu portretu, ustaw kadr (przeciągnij + zoom), potem Enter.";
-            return;
-        }
-        if (file.size > 5 * 1024 * 1024) {
-            fileImagePayload = null;
-            cropWrap.classList.add("hidden");
-            zoomInput.disabled = true;
-            actionDesc.textContent = "Plik jest za duży (limit: 5 MB).";
-            return;
-        }
-        const reader = new FileReader();
-        reader.onload = () => {
-            const dataUrl = String(reader.result || "");
-            const image = new Image();
-            image.onload = () => {
-                cropState.image = image;
-                cropState.imageWidth = Math.max(1, image.naturalWidth || image.width || 1);
-                cropState.imageHeight = Math.max(1, image.naturalHeight || image.height || 1);
-                cropState.zoom = 1;
-                cropState.offsetX = 0;
-                cropState.offsetY = 0;
-                cropState.filename = file.name || "portrait.jpg";
-                if (file.type === "image/png" || file.type === "image/webp") {
-                    cropState.outputMime = file.type;
-                } else {
-                    cropState.outputMime = "image/jpeg";
-                }
-                cropState.minScale = Math.max(
-                    cropCanvas.width / cropState.imageWidth,
-                    cropCanvas.height / cropState.imageHeight
-                );
-                zoomInput.value = "100";
-                zoomValue.textContent = "100%";
-                zoomInput.disabled = false;
-                cropWrap.classList.remove("hidden");
-                _renderCrop();
-                const kb = Math.max(1, Math.round(file.size / 1024));
-                actionDesc.textContent = `Wybrano: ${file.name} (${kb} KB). Przesuń/zoomuj i naciśnij Enter.`;
-            };
-            image.onerror = () => {
-                fileImagePayload = null;
-                cropWrap.classList.add("hidden");
-                zoomInput.disabled = true;
-                actionDesc.textContent = "Nie udało się odczytać obrazu.";
-            };
-            image.src = dataUrl;
-        };
-        reader.onerror = () => {
-            fileImagePayload = null;
-            cropWrap.classList.add("hidden");
-            zoomInput.disabled = true;
-            actionDesc.textContent = "Nie udało się odczytać pliku.";
-        };
-        reader.readAsDataURL(file);
-    });
-
-    zoomInput.addEventListener("input", () => {
-        const raw = Number.parseInt(String(zoomInput.value || "100"), 10);
-        const value = Number.isNaN(raw) ? 100 : Math.min(300, Math.max(100, raw));
-        cropState.zoom = value / 100;
-        zoomValue.textContent = `${value}%`;
-        _renderCrop();
-    });
-
-    cropCanvas.addEventListener("pointerdown", (event) => {
-        if (!cropState.image) return;
-        cropState.dragging = true;
-        cropState.dragLastX = event.clientX;
-        cropState.dragLastY = event.clientY;
-        cropCanvas.setPointerCapture(event.pointerId);
-    });
-
-    cropCanvas.addEventListener("pointermove", (event) => {
-        if (!cropState.dragging || !cropState.image) return;
-        const rect = cropCanvas.getBoundingClientRect();
-        const ratioX = rect.width > 0 ? cropCanvas.width / rect.width : 1;
-        const ratioY = rect.height > 0 ? cropCanvas.height / rect.height : 1;
-        const deltaX = (event.clientX - cropState.dragLastX) * ratioX;
-        const deltaY = (event.clientY - cropState.dragLastY) * ratioY;
-        cropState.dragLastX = event.clientX;
-        cropState.dragLastY = event.clientY;
-        cropState.offsetX += deltaX;
-        cropState.offsetY += deltaY;
-        _renderCrop();
-    });
-
-    const _endDrag = (event) => {
-        cropState.dragging = false;
-        try {
-            cropCanvas.releasePointerCapture(event.pointerId);
-        } catch (_err) {
-            // ignore
-        }
-    };
-
-    cropCanvas.addEventListener("pointerup", _endDrag);
-    cropCanvas.addEventListener("pointercancel", _endDrag);
-    cropCanvas.addEventListener("pointerleave", () => {
-        cropState.dragging = false;
-    });
-
-    wrapper.appendChild(input);
-    wrapper.appendChild(hint);
-    wrapper.appendChild(cropWrap);
-    actionChoices.appendChild(wrapper);
-    input.focus();
-}
-
-function clearMods() {
-    [modsPenCirc, modsBonCirc, modsPenStat, modsBonStat, modsPenItem, modsBonItem].forEach((el) => {
-        if (el) el.innerHTML = "";
-    });
-    modsBox.classList.add("hidden");
-}
-
-function renderMods(mods = {}) {
-    const { penCirc = [], bonCirc = [], penStat = [], bonStat = [], penItem = [], bonItem = [] } = mods;
-    const fill = (el, arr) => {
-        if (!el) return;
-        el.innerHTML = "";
-        arr.forEach((item, idx) => {
-            const li = document.createElement("li");
-            li.className = idx === 0 ? "top" : "";
-            const label = document.createElement("span");
-            label.textContent = item.label || item.tag || item.name || "mod";
-            const val = document.createElement("span");
-            val.className = "mods-value";
-            val.textContent = item.value != null ? item.value : "";
-            li.appendChild(label);
-            li.appendChild(val);
-            el.appendChild(li);
-        });
-    };
-    clearMods();
-    const hasAny =
-        penCirc.length || bonCirc.length || penStat.length || bonStat.length || penItem.length || bonItem.length;
-    if (!hasAny) return;
-    fill(modsPenCirc, penCirc);
-    fill(modsBonCirc, bonCirc);
-    fill(modsPenStat, penStat);
-    fill(modsBonStat, bonStat);
-    fill(modsPenItem, penItem);
-    fill(modsBonItem, bonItem);
-    modsBox.classList.remove("hidden");
-}
-
-function _toInt(value, fallback = 0) {
-    const parsed = Number.parseInt(String(value ?? ""), 10);
-    return Number.isNaN(parsed) ? fallback : parsed;
-}
-
-function _isRollStackPrompt(prompt) {
-    if (!prompt) return false;
-    const layout = String(prompt.layout || "").toLowerCase();
-    if (layout !== "test" && layout !== "damage") return false;
-    if (prompt.roll_stack && typeof prompt.roll_stack === "object") return true;
-    return !!(prompt.modifiers && typeof prompt.modifiers === "object");
-}
-
-function _modifierBucketTotal(mods, bonusKey, penaltyKey) {
-    const bonuses = Array.isArray(mods?.[bonusKey]) ? mods[bonusKey] : [];
-    const penalties = Array.isArray(mods?.[penaltyKey]) ? mods[penaltyKey] : [];
-    const plus = bonuses.reduce((acc, row) => acc + Math.abs(_toInt(row?.value, 0)), 0);
-    const minus = penalties.reduce((acc, row) => acc + Math.abs(_toInt(row?.value, 0)), 0);
-    return plus - minus;
-}
-
-function _buildRollStackSeed(prompt) {
-    const stack = prompt?.roll_stack && typeof prompt.roll_stack === "object" ? prompt.roll_stack : {};
-    const components = [];
-    const seedComponents = Array.isArray(stack.components) ? stack.components : [];
-
-    if (seedComponents.length) {
-        seedComponents.forEach((row, idx) => {
-            const value = _toInt(row?.value, 0);
-            components.push({
-                id: String(row?.id || `component_${idx + 1}`),
-                label: String(row?.label || `Składnik ${idx + 1}`),
-                value,
-                baseValue: value,
-                description: String(row?.description || row?.desc || ""),
-                editable: row?.editable !== false,
-                isDie: false,
-            });
-        });
-    } else {
-        const mods = prompt?.modifiers && typeof prompt.modifiers === "object" ? prompt.modifiers : null;
-        if (mods) {
-            const derived = [
-                {
-                    id: "circumstance",
-                    label: "Okoliczności",
-                    value: _modifierBucketTotal(mods, "bonCirc", "penCirc"),
-                    description: "Premie i kary circumstance.",
-                },
-                {
-                    id: "status",
-                    label: "Status",
-                    value: _modifierBucketTotal(mods, "bonStat", "penStat"),
-                    description: "Premie i kary status.",
-                },
-                {
-                    id: "item",
-                    label: "Przedmiot",
-                    value: _modifierBucketTotal(mods, "bonItem", "penItem"),
-                    description: "Premie i kary item.",
-                },
-            ];
-            derived.forEach((row) => {
-                if (!row.value) return;
-                components.push({
-                    ...row,
-                    baseValue: row.value,
-                    editable: true,
-                    isDie: false,
-                });
-            });
-        }
-    }
-
-    const componentsTotal = components.reduce((acc, row) => acc + _toInt(row.value, 0), 0);
-    const hasAutoTotal = stack.auto_total_modifier !== undefined && stack.auto_total_modifier !== null;
-    const autoTotal = hasAutoTotal ? _toInt(stack.auto_total_modifier, componentsTotal) : componentsTotal;
-
-    if (autoTotal !== componentsTotal) {
-        const diff = autoTotal - componentsTotal;
-        components.push({
-            id: "other_auto",
-            label: "Pozostałe",
-            value: diff,
-            baseValue: diff,
-            description: "Pozostały automatyczny modyfikator.",
-            editable: true,
-            isDie: false,
-        });
-    }
-
-    return {
-        defaultRoll: _toInt(stack.default_roll, 0),
-        components,
-    };
-}
-
-function _rollStackEditableIndices() {
-    if (!rollStackState) return [];
-    const list = [];
-    rollStackState.fields.forEach((field, idx) => {
-        if (field?.editable) list.push(idx);
-    });
-    return list;
-}
-
-function _rollStackEnsureFocus() {
-    if (!rollStackState) return;
-    const editable = _rollStackEditableIndices();
-    if (!editable.length) {
-        rollStackState.focusIndex = -1;
-        return;
-    }
-    if (!editable.includes(rollStackState.focusIndex)) {
-        rollStackState.focusIndex = editable[0];
-    }
-}
-
-function _rollStackTotal() {
-    if (!rollStackState) return 0;
-    return rollStackState.fields.reduce((acc, row) => acc + _toInt(row?.value, 0), 0);
-}
-
-function _rollStackModifierDelta() {
-    if (!rollStackState) return 0;
-    return rollStackState.fields
-        .filter((row) => !row?.isDie)
-        .reduce((acc, row) => acc + (_toInt(row?.value, 0) - _toInt(row?.baseValue, 0)), 0);
-}
-
-function _renderRollStack() {
-    if (!rollStackState) return;
-    _rollStackEnsureFocus();
-    actionChoices.innerHTML = "";
-    const wrapper = document.createElement("div");
-    wrapper.className = "roll-stack";
-    rollStackState.fields.forEach((field, idx) => {
-        const card = document.createElement("div");
-        card.className = "roll-field";
-        if (idx === rollStackState.focusIndex) card.classList.add("focused");
-        if (!field.editable) card.classList.add("readonly");
-
-        const label = document.createElement("div");
-        label.className = "roll-field-label";
-        label.textContent = field.label || field.id || "Pole";
-
-        const value = document.createElement("div");
-        value.className = "roll-field-value";
-        const numeric = _toInt(field.value, 0);
-        if (field.isDie) value.textContent = `${numeric}`;
-        else value.textContent = `${numeric >= 0 ? "+" : ""}${numeric}`;
-
-        const desc = document.createElement("div");
-        desc.className = "roll-field-desc";
-        desc.textContent = field.description || "";
-
-        card.appendChild(label);
-        card.appendChild(value);
-        card.appendChild(desc);
-        card.addEventListener("click", () => {
-            if (!rollStackState || !field.editable) return;
-            rollStackState.focusIndex = idx;
-            _renderRollStack();
-        });
-        wrapper.appendChild(card);
-    });
-
-    const total = document.createElement("div");
-    total.className = "roll-total";
-    const totalLabel = rollStackState.mode === "damage" ? "Suma obrażeń" : "Suma rzutu";
-    total.innerHTML = `<span>${totalLabel}</span><strong>${_rollStackTotal()}</strong>`;
-    wrapper.appendChild(total);
-    actionChoices.appendChild(wrapper);
-    actionDesc.classList.remove("hidden");
-    const baseHint = "4: poprzednie pole, 5/6: następne pole, 8: +1, 2: -1, Enter: zatwierdź.";
-    actionDesc.textContent = rollStackState.mode === "damage" ? baseHint : `${baseHint} *: nat20/nat1.`;
-}
-
-function _initRollStack(prompt) {
-    const mode = String(prompt?.layout || "test").toLowerCase() === "damage" ? "damage" : "test";
-    const seed = _buildRollStackSeed(prompt);
-    const fields = [
-        {
-            id: mode === "damage" ? "damage_roll" : "d20",
-            label: mode === "damage" ? "Rzut kości obrażeń" : "Rzut k20",
-            value: _toInt(seed.defaultRoll, 0),
-            baseValue: _toInt(seed.defaultRoll, 0),
-            description: mode === "damage" ? "Wpisz surowy wynik kości obrażeń." : "Wpisz surowy wynik kości d20.",
-            editable: true,
-            isDie: true,
-        },
-        ...seed.components,
-    ];
-    rollStackState = {
-        fields,
-        mode,
-        focusIndex: 0,
-    };
-    _renderRollStack();
-}
-
-function _moveRollStackFocus(step) {
-    if (!rollStackState) return;
-    const editable = _rollStackEditableIndices();
-    if (!editable.length) return;
-    const currentPos = Math.max(0, editable.indexOf(rollStackState.focusIndex));
-    const nextPos = (currentPos + step + editable.length) % editable.length;
-    rollStackState.focusIndex = editable[nextPos];
-    _renderRollStack();
-}
-
-function _adjustRollStackFocused(delta) {
-    if (!rollStackState) return;
-    const idx = rollStackState.focusIndex;
-    if (idx < 0 || idx >= rollStackState.fields.length) return;
-    const row = rollStackState.fields[idx];
-    if (!row?.editable) return;
-    row.value = _toInt(row.value, 0) + delta;
-    _renderRollStack();
-}
-
-function _rollStackAnswerPayload() {
-    if (!rollStackState) return null;
-    const dieRow = rollStackState.fields.find((row) => row?.isDie) || rollStackState.fields[0];
-    const rawRoll = _toInt(dieRow?.value, 0);
-    return {
-        roll: rawRoll,
-        raw_roll: rawRoll,
-        modifier_delta: _rollStackModifierDelta(),
-        computed_total: _rollStackTotal(),
-        natural_mode: rollNaturalMode,
-        roll_stack_values: rollStackState.fields.map((row) => ({
-            id: row.id,
-            value: _toInt(row.value, 0),
-            base_value: _toInt(row.baseValue, 0),
-        })),
-    };
-}
-
-function showMenu() {
-    screenMenu.classList.remove("hidden");
-    screenGame.classList.add("hidden");
-}
-
-function showGame() {
-    screenMenu.classList.add("hidden");
-    screenGame.classList.remove("hidden");
-}
-
-function resetLocalSessionState({ sessionId = null, reason = "", showMenuScreen = true } = {}) {
-    currentSessionId = sessionId || currentSessionId;
-    currentScenario = null;
-    heroes.clear();
-    promptQueue = [];
-    renderedPrompts.clear();
-    activePrompt = null;
-    currentChoices = [];
-    selectedChoiceIndex = -1;
-    choiceMeta = [];
-    confirmMode = false;
-    storedSelection = "";
-    layoutMode = "info";
-    rollNaturalMode = "none";
-    fileImagePayload = null;
-    rollStackState = null;
-    initiativeState = { order: [], activeId: null, round: 1 };
-    activeActorId = null;
-    lastLoggedRound = null;
-    lastLoggedActiveActorId = null;
-    creationPreviewHeroId = null;
-    selectedHeroId = null;
-    menuNumpadContext = null;
-    lastCommunicationKey = null;
-    pathState = clearPathPreview(refs, pathState, null);
-
-    actionForm.classList.add("hidden");
-    actionChoices.innerHTML = "";
-    actionDesc.textContent = "";
-    actionDesc.classList.remove("hidden");
-    actionPrompt.innerHTML = "";
-    actionPrompt.classList.add("hidden");
-    actionTitle.textContent = "Czekam na działania...";
-    actionText.innerHTML = "";
-    actionText.classList.remove("hidden");
-    resetActionCommunication();
-    actionAnswer.value = "";
-    actionAnswer.placeholder = "Wpisz odpowiedź lub wybierz kartę...";
-    actionAnswer.classList.remove("input-hidden");
-    clearMods();
-    _renderNaturalControls(null);
-    _resetMenuNumpadContext();
-    setIllustration(PLACEHOLDER_IMAGE);
-
-    if (eventFeed) {
-        eventFeed.innerHTML = '<li class="event-feed-empty">Brak zdarzeń.</li>';
-    }
-    if (logList) {
-        logList.innerHTML = "";
-    }
-    if (logLast) {
-        logLast.textContent = reason ? `Nowa sesja UI: ${reason}.` : "Logi będą tu widoczne.";
-    }
-    renderHeroes();
-    renderInitiative();
-    updateSessionSummary();
-    if (showMenuScreen) {
-        showMenu();
-    }
-}
-
-async function fetchSessionInfo() {
-    try {
-        const resp = await fetch("/api/session");
-        if (!resp.ok) return null;
-        const data = await resp.json();
-        const nextSessionId = String(data?.session?.id || "");
-        if (!nextSessionId) return null;
-        if (currentSessionId && currentSessionId !== nextSessionId) {
-            resetLocalSessionState({ sessionId: nextSessionId, reason: "odświeżenie sesji", showMenuScreen: true });
-        } else {
-            currentSessionId = nextSessionId;
-        }
-        return nextSessionId;
-    } catch (err) {
-        console.warn("Nie udało się pobrać sesji UI:", err);
-        return null;
-    }
-}
-
-async function resetUiSession(reason = "manual") {
-    try {
-        const resp = await fetch("/api/session/reset", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ reason }),
-        });
-        const data = await resp.json();
-        if (!resp.ok || !data?.ok) {
-            throw new Error(data?.error || "Nie udało się zresetować sesji UI.");
-        }
-        resetLocalSessionState({
-            sessionId: String(data?.session?.id || ""),
-            reason: reason === "manual" ? "ręczny reset" : reason,
-            showMenuScreen: true,
-        });
-    } catch (err) {
-        console.warn("Reset sesji UI nie powiódł się:", err);
-        resetLocalSessionState({ sessionId: currentSessionId, reason: "lokalny reset", showMenuScreen: true });
-    }
-}
-
-function str(value, fallback = "-") {
-    if (value === null || value === undefined || value === "") return fallback;
-    return String(value);
-}
-
-function _appendInlineMarkdown(target, text) {
-    const raw = String(text || "");
-    const tokenRe = /(\*\*[^*]+\*\*|`[^`]+`|\*[^*\n]+\*)/g;
-    let cursor = 0;
-    let match = null;
-    while ((match = tokenRe.exec(raw)) !== null) {
-        if (match.index > cursor) {
-            target.appendChild(document.createTextNode(raw.slice(cursor, match.index)));
-        }
-        const token = match[0];
-        if (token.startsWith("**") && token.endsWith("**")) {
-            const strong = document.createElement("strong");
-            strong.textContent = token.slice(2, -2);
-            target.appendChild(strong);
-        } else if (token.startsWith("`") && token.endsWith("`")) {
-            const code = document.createElement("code");
-            code.className = "md-inline-code";
-            code.textContent = token.slice(1, -1);
-            target.appendChild(code);
-        } else if (token.startsWith("*") && token.endsWith("*")) {
-            const em = document.createElement("em");
-            em.textContent = token.slice(1, -1);
-            target.appendChild(em);
-        } else {
-            target.appendChild(document.createTextNode(token));
-        }
-        cursor = match.index + token.length;
-    }
-    if (cursor < raw.length) {
-        target.appendChild(document.createTextNode(raw.slice(cursor)));
-    }
-}
-
-function renderMarkdownBlock(markdown, className = "") {
-    const wrapper = document.createElement("div");
-    if (className) wrapper.className = className;
-    const raw = String(markdown || "").replace(/\r\n/g, "\n").trim();
-    if (!raw) return wrapper;
-    const lines = raw.split("\n");
+function markdownish(text) {
+    const lines = String(text || "").replace(/\r/g, "").split("\n");
+    const blocks = [];
     let paragraph = [];
-    let listEl = null;
+    let list = [];
 
     const flushParagraph = () => {
         if (!paragraph.length) return;
-        const p = document.createElement("p");
-        paragraph.forEach((line, idx) => {
-            if (idx > 0) p.appendChild(document.createElement("br"));
-            _appendInlineMarkdown(p, line);
-        });
-        wrapper.appendChild(p);
+        blocks.push(`<p>${inlineMarkdown(paragraph.join(" "))}</p>`);
         paragraph = [];
     };
 
     const flushList = () => {
-        if (!listEl) return;
-        wrapper.appendChild(listEl);
-        listEl = null;
+        if (!list.length) return;
+        blocks.push(`<ul>${list.map((item) => `<li>${inlineMarkdown(item)}</li>`).join("")}</ul>`);
+        list = [];
     };
 
     lines.forEach((line) => {
@@ -933,1935 +177,2024 @@ function renderMarkdownBlock(markdown, className = "") {
             flushList();
             return;
         }
-        const bullet = trimmed.match(/^[-*]\s+(.*)$/);
+        const heading = trimmed.match(/^#{1,3}\s+(.+)$/);
+        if (heading) {
+            flushParagraph();
+            flushList();
+            blocks.push(`<h3>${inlineMarkdown(heading[1])}</h3>`);
+            return;
+        }
+        const bullet = trimmed.match(/^[-*]\s+(.+)$/);
         if (bullet) {
             flushParagraph();
-            if (!listEl) listEl = document.createElement("ul");
-            const li = document.createElement("li");
-            _appendInlineMarkdown(li, bullet[1]);
-            listEl.appendChild(li);
+            list.push(bullet[1]);
             return;
         }
         flushList();
         paragraph.push(trimmed);
     });
+
     flushParagraph();
     flushList();
-    return wrapper;
+    return blocks.join("");
 }
 
-function setMarkdownContent(element, markdown, className = "") {
-    if (!element) return;
-    element.innerHTML = "";
-    const block = renderMarkdownBlock(markdown, className);
-    if (!block.childNodes.length) return;
-    while (block.firstChild) {
-        element.appendChild(block.firstChild);
-    }
+function normalizedText(text) {
+    return String(text || "").replace(/\s+/g, " ").trim();
 }
 
-function communicationOf(payload, fallbackType = "log") {
-    const raw =
-        payload && typeof payload === "object"
-            ? payload.communication && typeof payload.communication === "object"
-                ? payload.communication
-                : payload
-            : {};
-    const context = raw.context && typeof raw.context === "object" ? raw.context : {};
-    const progress = raw.progress && typeof raw.progress === "object" ? raw.progress : null;
-    return {
-        channel: String(raw.channel || (fallbackType === "prompt" ? "prompt" : "log")),
-        priority: String(raw.priority || "info"),
-        semanticType: String(raw.semantic_type || raw.semanticType || "status_update"),
-        title: String(raw.title || payload?.title || payload?.prompt || ""),
-        summary: String(raw.summary || payload?.message || payload?.prompt || ""),
-        bodyMarkdown: String(raw.body_markdown || raw.bodyMarkdown || payload?.prompt_long || payload?.message || ""),
-        detailsMarkdown: String(raw.details_markdown || raw.detailsMarkdown || ""),
-        cta: String(raw.cta || ""),
-        context,
-        dedupeKey: String(raw.dedupe_key || raw.dedupeKey || ""),
-        blocking: Boolean(raw.blocking),
-        debugOnly: Boolean(raw.debug_only || raw.debugOnly),
-        progress,
-    };
+function sameMeaning(a, b) {
+    const left = normalizedText(a);
+    const right = normalizedText(b);
+    return Boolean(left) && left === right;
 }
 
-function resetActionCommunication() {
-    if (actionNow) actionNow.textContent = "Czekam na działania gracza lub systemu.";
-    if (actionNext) actionNext.textContent = "Kolejny krok pojawi się automatycznie.";
-    if (actionContinue) actionContinue.textContent = "Enter lub wybór z panelu.";
-    if (actionProgress) actionProgress.classList.add("hidden");
-    if (actionProgressLabel) actionProgressLabel.textContent = "Postęp";
-    if (actionProgressValue) actionProgressValue.textContent = "0/0";
-    if (actionProgressBar) actionProgressBar.style.width = "0%";
-    if (actionDetailsBody) actionDetailsBody.innerHTML = "";
-    if (actionDetails) {
-        actionDetails.classList.add("hidden");
-        actionDetails.open = false;
-    }
+function firstMeaningfulLine(value) {
+    return String(value || "")
+        .split(/\n+/)
+        .map((line) => line.trim())
+        .find(Boolean) || "";
 }
 
-function applyActionCommunication(comm) {
-    const current = comm || communicationOf({}, "prompt");
-    if (actionNow) actionNow.textContent = current.summary || current.title || "Czekam na działania.";
-    if (actionNext) actionNext.textContent = String(current.context?.next || "Kolejny krok pojawi się automatycznie.");
-    if (actionContinue) actionContinue.textContent = current.cta || String(current.context?.continue || "Enter lub wybór z panelu.");
-    if (actionProgress && current.progress && current.progress.total) {
-        const currentStep = Number(current.progress.current || 0);
-        const total = Math.max(1, Number(current.progress.total || 1));
-        const pct = Math.max(0, Math.min(100, Math.round((currentStep / total) * 100)));
-        actionProgress.classList.remove("hidden");
-        if (actionProgressLabel) actionProgressLabel.textContent = current.progress.label || "Postęp";
-        if (actionProgressValue) actionProgressValue.textContent = `${currentStep}/${total}`;
-        if (actionProgressBar) actionProgressBar.style.width = `${pct}%`;
-    } else if (actionProgress) {
-        actionProgress.classList.add("hidden");
-    }
-    if (actionDetails && actionDetailsBody) {
-        const details = current.detailsMarkdown || "";
-        actionDetails.classList.toggle("hidden", !details);
-        actionDetails.open = false;
-        setMarkdownContent(actionDetailsBody, details, "action-details-md");
-    }
+function isGenericPromptTitle(value) {
+    const text = normalizedText(value).toLowerCase();
+    return ["mistrz gry", "prompt", "karta", "komunikat"].includes(text);
 }
 
-function _isStickyPassiveCommunication(comm) {
-    const semantic = String(comm?.semanticType || "").toLowerCase();
-    const priority = String(comm?.priority || "").toLowerCase();
-    return semantic === "result" || priority === "result" || semantic === "status_update";
+function isGenericPromptSummary(value) {
+    const text = normalizedText(value).toLowerCase();
+    return ["co się dzieje", "co sie dzieje", "co robić teraz", "co robic teraz"].includes(text);
 }
 
-function showPassiveCommunication(payload, fallbackTitle = "Mistrz gry") {
-    const comm = communicationOf(payload, "log");
-    pendingPassiveCommunication = null;
-    passiveCommunicationState = {
-        payload,
-        sticky: _isStickyPassiveCommunication(comm),
-        dedupeKey: comm.dedupeKey || "",
-    };
-    actionTitle.textContent = comm.title || payload?.title || fallbackTitle;
-    setMarkdownContent(actionText, payload?.subtitle || comm.summary || "", "action-text-md");
-    const body = comm.bodyMarkdown || payload?.prompt_long || payload?.message || "";
-    setMarkdownContent(actionPrompt, body, "action-prompt-md");
-    actionPrompt.classList.toggle("hidden", !body);
-    applyActionCommunication(comm);
-    actionText.classList.remove("hidden");
-    actionForm.classList.add("hidden");
-    actionChoices.innerHTML = "";
-    actionDesc.textContent = "";
-    clearMods();
-    actionKind.textContent = comm.semanticType || "";
-    actionKind.classList.toggle("hidden", !comm.semanticType);
-    actionSource.textContent = comm.priority || "";
-    actionSource.classList.toggle("hidden", !comm.priority);
-    setIllustration(payload?.image || activeHeroImage() || PLACEHOLDER_IMAGE);
+function focusCardTitleCandidate(focusCard) {
+    if (!focusCard) return "";
+    const candidates = [
+        focusCard.title,
+        focusCard.summary,
+        focusCard.body_markdown,
+    ].map(firstMeaningfulLine).filter(Boolean);
+    return candidates.find((candidate) => !isGenericPromptTitle(candidate) && !isGenericPromptSummary(candidate)) || "";
 }
 
-function clearPassiveCommunicationState() {
-    passiveCommunicationState = null;
+function normalizedAssetKey(value) {
+    return String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "");
 }
 
-function flushPendingPassiveCommunication() {
-    if (activePrompt || !pendingPassiveCommunication) return false;
-    const next = pendingPassiveCommunication;
-    pendingPassiveCommunication = null;
-    showPassiveCommunication(next.payload, next.fallbackTitle || "Mistrz gry");
-    return true;
-}
-
-function actorNameById(id) {
-    if (!id) return "-";
-    const fromInit = initiativeState.order.find((entry) => String(entry.id) === String(id));
-    if (fromInit && fromInit.name) return fromInit.name;
-    const fromHero = heroes.get(id);
-    if (fromHero && fromHero.name) return fromHero.name;
-    return String(id);
-}
-
-function activeHeroImage() {
-    if (!activeActorId) return null;
-    const hero = heroes.get(activeActorId);
-    if (!hero) return null;
-    return hero.image || null;
-}
-
-function creationPreviewImage() {
-    const allHeroes = Array.from(heroes.values());
-    const previewHero =
-        (creationPreviewHeroId && heroes.get(creationPreviewHeroId)) ||
-        allHeroes.find((item) => Boolean(item?.creationInProgress)) ||
-        null;
-    return previewHero?.image || null;
-}
-
-function refreshLeftIllustration() {
-    const creationImage =
-        String(activePrompt?.source || "").toLowerCase() === "character_creation" ? creationPreviewImage() : null;
-    if (activePrompt) {
-        setIllustration(activePrompt.image || creationImage || activeHeroImage() || PLACEHOLDER_IMAGE);
-        return;
-    }
-    setIllustration(creationImage || activeHeroImage() || PLACEHOLDER_IMAGE);
-}
-
-function currentPromptLabel() {
-    if (!activePrompt) return "Brak";
-    const kind = str(activePrompt.kind || activePrompt.layout || layoutMode || "prompt");
-    const choicesCount = Array.isArray(activePrompt.choices) ? activePrompt.choices.length : currentChoices.length;
-    return choicesCount ? `${kind} (${choicesCount})` : kind;
-}
-
-function initiativePointers() {
-    const order = Array.isArray(initiativeState.order) ? initiativeState.order : [];
-    if (!order.length) {
-        return { active: "-", next: "-" };
-    }
-    const activeIdx = order.findIndex((entry) => String(entry.id) === String(initiativeState.activeId));
-    if (activeIdx === -1) {
-        return { active: "-", next: order[0]?.name || "-" };
-    }
-    const active = order[activeIdx]?.name || "-";
-    const next = order.length > 1 ? order[(activeIdx + 1) % order.length]?.name || "-" : "-";
-    return { active, next };
-}
-
-function updateSessionSummary() {
-    const pointers = initiativePointers();
-    const activeLabel = activeActorId ? actorNameById(activeActorId) : pointers.active;
-    if (statusScenario) statusScenario.textContent = str(currentScenario);
-    if (statusActor) statusActor.textContent = str(activeLabel);
-    if (statusNext) statusNext.textContent = str(pointers.next);
-    if (statusRound) statusRound.textContent = str(initiativeState.round);
-    if (statusPrompt) statusPrompt.textContent = currentPromptLabel();
-}
-
-function appendTag(container, tag) {
-    if (!container || !tag) return;
-    const tagEl = document.createElement("span");
-    tagEl.className = "tag";
-    tagEl.textContent = tag;
-    container.appendChild(tagEl);
-}
-
-function addEventFeedEntry(text, meta, variant = "", tag = "", options = {}) {
-    const comm = communicationOf(options.communication || {}, "log");
-    if (options.skipFeed || comm.debugOnly) return;
-    if (!eventFeed) return;
-    const empty = eventFeed.querySelector(".event-feed-empty");
-    if (empty) empty.remove();
-    const item = document.createElement("li");
-    item.className = "event-item" + (variant ? ` ${variant}` : "");
-
-    const main = document.createElement("div");
-    main.className = "event-main";
-    appendTag(main, tag);
-    const textEl = document.createElement("div");
-    textEl.className = "event-md";
-    setMarkdownContent(textEl, comm.summary || str(text, ""), "event-md");
-    main.appendChild(textEl);
-
-    const metaEl = document.createElement("div");
-    metaEl.className = "event-meta";
-    metaEl.textContent = str(meta, "");
-
-    item.appendChild(main);
-    item.appendChild(metaEl);
-    if (comm.detailsMarkdown) {
-        const details = document.createElement("details");
-        details.className = "event-details";
-        const summary = document.createElement("summary");
-        summary.textContent = "Szczegóły";
-        const body = document.createElement("div");
-        body.className = "event-details-body";
-        setMarkdownContent(body, comm.detailsMarkdown, "event-md");
-        details.appendChild(summary);
-        details.appendChild(body);
-        item.appendChild(details);
-    }
-    eventFeed.prepend(item);
-
-    while (eventFeed.children.length > 8) {
-        eventFeed.removeChild(eventFeed.lastChild);
-    }
-}
-
-function addLogEntry(text, meta, variant = "", tag = "", image = "", options = {}) {
-    const comm = communicationOf(options.communication || {}, "log");
-    const dedupeKey = comm.dedupeKey || "";
-    if (dedupeKey && dedupeKey === lastCommunicationKey && options.allowDuplicate !== true) return;
-    if (dedupeKey) lastCommunicationKey = dedupeKey;
-    const item = document.createElement("li");
-    item.className = "log-item" + (variant ? ` ${variant}` : "");
-
-    if (image) {
-        const thumbWrap = document.createElement("div");
-        thumbWrap.className = "log-thumb-wrap";
-        const thumb = document.createElement("img");
-        thumb.className = "log-thumb";
-        thumb.src = image;
-        thumb.alt = "";
-        thumbWrap.appendChild(thumb);
-        item.appendChild(thumbWrap);
-    }
-
-    const body = document.createElement("div");
-    body.className = "log-body";
-    const logText = document.createElement("div");
-    logText.className = "log-text";
-    const main = document.createElement("div");
-    main.className = "log-main";
-    appendTag(main, tag);
-    const textEl = document.createElement("div");
-    textEl.className = "log-md";
-    setMarkdownContent(textEl, comm.summary || str(text, ""), "log-md");
-    main.appendChild(textEl);
-    logText.appendChild(main);
-    const metaEl = document.createElement("div");
-    metaEl.className = "meta";
-    metaEl.textContent = str(meta, "");
-    body.appendChild(logText);
-    body.appendChild(metaEl);
-    if (comm.detailsMarkdown) {
-        const details = document.createElement("details");
-        details.className = "log-details";
-        const summaryEl = document.createElement("summary");
-        summaryEl.textContent = "Szczegóły";
-        const detailsBody = document.createElement("div");
-        detailsBody.className = "log-details-body";
-        setMarkdownContent(detailsBody, comm.detailsMarkdown, "log-md");
-        details.appendChild(summaryEl);
-        details.appendChild(detailsBody);
-        body.appendChild(details);
-    }
-    item.appendChild(body);
-
-    logList.prepend(item);
-    if (logLast) {
-        logLast.innerHTML = "";
-        appendTag(logLast, tag);
-        const lastText = document.createElement("span");
-        lastText.textContent = comm.summary || str(text, "");
-        logLast.appendChild(lastText);
-    }
-    addEventFeedEntry(text, meta, variant, tag, options);
-    // limit log length
-    while (logList.children.length > 60) {
-        logList.removeChild(logList.lastChild);
-    }
-}
-
-function renderPrompt(prompt) {
-    ensureCreationPreviewFallbackFromPrompt(prompt);
-    if (renderedPrompts.has(prompt.id)) return;
-    renderedPrompts.add(prompt.id);
-    const comm = communicationOf(prompt, "prompt");
-    if (!comm.debugOnly) {
-        addLogEntry(
-            comm.summary || prompt.title || prompt.prompt || "Prompt",
-            comm.progress?.label || `Prompt · ${str(prompt.source || prompt.kind || "info", "")}`,
-            comm.priority === "warning" ? "warning" : "info",
-            comm.blocking ? "Teraz" : "Info",
-            "",
-            { communication: comm, skipFeed: comm.debugOnly }
-        );
-    }
-    promptQueue.push(prompt);
-    processPromptQueue();
-}
-
-function samePos(a, b) {
-    if (!Array.isArray(a) || !Array.isArray(b)) return false;
-    if (a.length < 2 || b.length < 2) return false;
-    return Number(a[0]) === Number(b[0]) && Number(a[1]) === Number(b[1]);
-}
-
-function formatPos(pos) {
-    if (!Array.isArray(pos) || pos.length < 2) return "-";
-    return `(${pos[0]}, ${pos[1]})`;
-}
-
-function arrayDiff(previous, next) {
-    const prevSet = new Set((previous || []).map((item) => String(item)));
-    const nextSet = new Set((next || []).map((item) => String(item)));
-    const added = [...nextSet].filter((item) => !prevSet.has(item));
-    const removed = [...prevSet].filter((item) => !nextSet.has(item));
-    return { added, removed };
-}
-
-function spellSlotLabel(tier) {
-    const raw = String(tier || "").toLowerCase().trim();
+function resolveAssetUrl(path) {
+    const raw = String(path || "").trim();
     if (!raw) return "";
-    if (raw === "cantrip") return "Cantripy";
-    if (raw.startsWith("rank_")) return `R${raw.slice(5)}`;
-    return raw.replace(/_/g, " ");
+    if (/^(https?:|data:|blob:)/i.test(raw) || raw.startsWith("/")) return raw;
+    const base = String(state.assetManifest?.base_path || "/assets/ui_v2/bandit_cave/").replace(/\/?$/, "/");
+    return `${base}${raw.replace(/^\/+/, "")}`;
 }
 
-function spellcastingCounterSummary(spellcasting) {
-    if (!spellcasting || typeof spellcasting !== "object") return [];
-    const rows = [];
-    const focusPoints = Number(spellcasting.focusPoints ?? spellcasting.focus_points);
-    const focusPoolMax = Number(spellcasting.focusPoolMax ?? spellcasting.focus_pool_max);
-    if (!Number.isNaN(focusPoolMax) && focusPoolMax > 0) {
-        rows.push(`Punkty Focus ${Number.isNaN(focusPoints) ? 0 : focusPoints}/${focusPoolMax}`);
+function assetSection(sectionName) {
+    const section = state.assetManifest?.[sectionName];
+    return section && typeof section === "object" ? section : {};
+}
+
+function findAssetEntry(sectionName, idOrLabel) {
+    const key = normalizedAssetKey(idOrLabel);
+    if (!key) return null;
+    const section = assetSection(sectionName);
+    if (section[key]) return section[key];
+    for (const entry of Object.values(section)) {
+        if (!entry || typeof entry !== "object") continue;
+        if (normalizedAssetKey(entry.id) === key || normalizedAssetKey(entry.label) === key) return entry;
     }
-    const slotTotal = spellcasting.slotTotal ?? spellcasting.slot_total;
-    const slotRemaining = spellcasting.slotRemaining ?? spellcasting.slot_remaining;
-    const totalDict = slotTotal && typeof slotTotal === "object" ? slotTotal : {};
-    const remainingDict = slotRemaining && typeof slotRemaining === "object" ? slotRemaining : {};
-    Object.keys(totalDict)
-        .sort()
-        .forEach((tier) => {
-            const total = Number(totalDict[tier]);
-            if (Number.isNaN(total) || total <= 0 || tier === "cantrip") return;
-            const remaining = Number(remainingDict[tier]);
-            rows.push(`${spellSlotLabel(tier)} ${Number.isNaN(remaining) ? total : remaining}/${total}`);
-        });
-    return rows;
+    return null;
 }
 
-function buildHeroUpdateLog(previous, current) {
-    if (!previous) {
+function fallbackAssetImage(kind) {
+    const fallbacks = state.assetManifest?.fallbacks || {};
+    const entry = fallbacks[kind] || fallbacks.choice || {};
+    return resolveAssetUrl(entry.image || "/static/placeholder.png");
+}
+
+function audioEntrySource(entry) {
+    if (!entry) return "";
+    if (typeof entry === "string") return resolveAssetUrl(entry);
+    if (typeof entry === "object") return resolveAssetUrl(entry.audio || entry.src || entry.path || "");
+    return "";
+}
+
+function scenarioAudioCue(key) {
+    const scenarioCue = scenarioConfig()?.audio_cues?.[key];
+    if (scenarioCue) return scenarioCue;
+    return findAssetEntry("narration", key) || findAssetEntry("music", key) || findAssetEntry("sfx", key);
+}
+
+function resolveChoiceImage(choice) {
+    const explicit = choice.image || choice.thumbnail;
+    if (explicit) return resolveAssetUrl(explicit);
+
+    const candidates = [choice.asset_id, choice.spell_id, choice.raw, choice.id, choice.label].filter(Boolean);
+    for (const candidate of candidates) {
+        const spell = findAssetEntry("spells", candidate);
+        if (spell?.image) return resolveAssetUrl(spell.image);
+    }
+    if (choice.spell_tier) {
+        const spellFallback = findAssetEntry("spells", choice.spell_tier);
+        if (spellFallback?.image) return resolveAssetUrl(spellFallback.image);
+    }
+    for (const candidate of candidates) {
+        const action = findAssetEntry("actions", candidate);
+        if (action?.image) return resolveAssetUrl(action.image);
+    }
+    const category = normalizedAssetKey(choice.category);
+    if (["movement", "combat", "generic", "utility", "turn"].includes(category)) {
+        return fallbackAssetImage("action");
+    }
+    if (category === "class" || choice.spell_id || choice.spell_tier) {
+        return fallbackAssetImage("spell");
+    }
+    return fallbackAssetImage("choice");
+}
+
+function resolveActorImage(actor) {
+    if (!actor) return fallbackAssetImage("actor");
+    const explicit = actor.image || actor.portrait || actor.portrait_image;
+    if (explicit) return resolveAssetUrl(explicit);
+    const id = String(actor.id || actor.asset_id || "").trim();
+    if (id && state.heroes.has(id)) {
+        const hero = state.heroes.get(id);
+        if (hero?.image) return resolveAssetUrl(hero.image);
+    }
+    const candidates = [actor.asset_id, actor.id, actor.name].filter(Boolean);
+    const kind = normalizedAssetKey(actor.kind);
+    for (const candidate of candidates) {
+        const sectionName = kind === "enemy" ? "enemies" : "characters";
+        const entry = findAssetEntry(sectionName, candidate) || findAssetEntry("enemies", candidate) || findAssetEntry("characters", candidate);
+        if (entry?.image) return resolveAssetUrl(entry.image);
+    }
+    return fallbackAssetImage(kind === "enemy" ? "enemy" : "actor");
+}
+
+function _isUpNavigationKey(event) {
+    const key = String(event?.key || "");
+    const code = String(event?.code || "");
+    return key === "8" || key === "ArrowUp" || code === "Numpad8";
+}
+
+function _isDownNavigationKey(event) {
+    const key = String(event?.key || "");
+    const code = String(event?.code || "");
+    return key === "2" || key === "ArrowDown" || code === "Numpad2";
+}
+
+function dedupeCardText(title, summaryCandidate, bodyCandidate) {
+    const normalizedTitle = String(title || "").trim();
+    const normalizedSummary = String(summaryCandidate || "").trim();
+    const normalizedBody = String(bodyCandidate || "").trim();
+    return {
+        title,
+        summary: normalizedSummary && normalizedSummary !== normalizedTitle ? summaryCandidate : "",
+        body:
+            normalizedBody && normalizedBody !== normalizedTitle && normalizedBody !== normalizedSummary
+                ? bodyCandidate
+                : "",
+    };
+}
+
+function signedNumber(value) {
+    const numeric = Number(value || 0);
+    return numeric >= 0 ? `+${numeric}` : String(numeric);
+}
+
+function humanizeActionId(actionId) {
+    const text = String(actionId || "").replaceAll("_", " ").trim();
+    if (!text) return "Wynik akcji";
+    return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function actionResultCard(payload) {
+    const actionId = String(payload.action_id || "");
+    const actor = payload.actor?.name || "Aktor";
+    const target = payload.target?.name || "cel";
+    const damage = Number(payload.damage || 0);
+    const summary = String(payload.summary || payload.message || "").trim();
+
+    if (!actionId || actionId.endsWith("_pre")) return null;
+
+    if (actionId === "damage_applied" && damage > 0) {
         return {
-            message: `${current.name} dołącza do sceny na ${formatPos(current.pos)}.`,
-            variant: "info",
+            title: "Obrażenia",
+            body: `${actor} zadaje ${damage} obrażeń celowi ${target}.`,
+            communication: {
+                channel: "action",
+                priority: "result",
+                semantic_type: "result",
+                title: "Obrażenia",
+                body_markdown: `${actor} zadaje **${damage}** obrażeń celowi ${target}.`,
+            },
         };
     }
-    const changes = [];
-    let variant = "info";
 
-    if (previous.wounds !== current.wounds) {
-        changes.push(`Rany: ${str(previous.wounds)} -> ${str(current.wounds)}`);
-        const before = Number(previous.wounds);
-        const after = Number(current.wounds);
-        if (!Number.isNaN(before) && !Number.isNaN(after)) {
-            if (after > before) variant = "warning";
-            else if (after < before && variant !== "warning") variant = "success";
-        }
+    if (actionId.endsWith("_concealed_miss")) {
+        return {
+            title: "Pudło",
+            body: `${actor} chybia cel ${target} przez concealed.`,
+            communication: {
+                channel: "action",
+                priority: "result",
+                semantic_type: "result",
+                title: "Pudło",
+                body_markdown: `${actor} chybia cel **${target}** przez concealed.`,
+            },
+        };
     }
-    if (!samePos(previous.pos, current.pos) && (previous.pos || current.pos)) {
-        changes.push(`Pozycja: ${formatPos(previous.pos)} -> ${formatPos(current.pos)}`);
+
+    if (actionId.endsWith("_wrong_square")) {
+        return {
+            title: "Chybiony strzał",
+            body: `${actor} oddaje strzał, ale wskazuje błędne pole.`,
+            communication: {
+                channel: "action",
+                priority: "result",
+                semantic_type: "result",
+                title: "Chybiony strzał",
+                body_markdown: `${actor} oddaje strzał, ale wskazuje błędne pole.`,
+            },
+        };
     }
-    if (previous.initiative !== current.initiative) {
-        changes.push(`Inicjatywa: ${str(previous.initiative)} -> ${str(current.initiative)}`);
+
+    if (actionId.endsWith("_miss")) {
+        const ac = payload.target_ac != null ? ` przeciw AC ${payload.target_ac}` : "";
+        return {
+            title: "Pudło",
+            body: `${actor} nie trafia celu ${target}${ac}.`,
+            communication: {
+                channel: "action",
+                priority: "result",
+                semantic_type: "result",
+                title: "Pudło",
+                body_markdown: `${actor} nie trafia celu **${target}**${ac}.`,
+            },
+        };
     }
-    const previousAc = resolveArmorClass(previous);
-    const currentAc = resolveArmorClass(current);
-    if (previousAc !== currentAc && currentAc != null) {
-        changes.push(`AC: ${str(previousAc)} -> ${str(currentAc)}`);
-        if (variant !== "warning") variant = "success";
+
+    if (typeof payload.critical === "boolean" || typeof payload.damage === "number") {
+        const title = payload.critical ? "Trafienie krytyczne" : "Trafienie";
+        const damageLine = damage > 0 ? ` Zadaje ${damage} obrażeń.` : "";
+        return {
+            title,
+            body: `${actor} trafia cel ${target}.${damageLine}`.trim(),
+            communication: {
+                channel: "action",
+                priority: "result",
+                semantic_type: "result",
+                title,
+                body_markdown: `${actor} trafia cel **${target}**.${damageLine}`.trim(),
+            },
+        };
     }
-    if (previous.baseSpeedFeet !== current.baseSpeedFeet && current.baseSpeedFeet != null) {
-        changes.push(`Speed: ${str(previous.baseSpeedFeet)} -> ${str(current.baseSpeedFeet)} ft`);
-        if (variant !== "warning") variant = "success";
+
+    if (summary) {
+        return {
+            title: humanizeActionId(actionId),
+            body: summary,
+            communication: {
+                channel: "action",
+                priority: "result",
+                semantic_type: "result",
+                title: humanizeActionId(actionId),
+                body_markdown: summary,
+            },
+        };
     }
-    const previousSpellRows = spellcastingCounterSummary(previous.spellcasting || {});
-    const currentSpellRows = spellcastingCounterSummary(current.spellcasting || {});
-    if (previousSpellRows.join(" | ") !== currentSpellRows.join(" | ") && currentSpellRows.length) {
-        changes.push(`Magia: ${currentSpellRows.join(" · ")}`);
-        if (variant !== "warning") variant = "success";
-    }
-    const statusesDiff = arrayDiff(previous.statuses, current.statuses);
-    if (statusesDiff.added.length) {
-        changes.push(`+ status: ${statusesDiff.added.join(", ")}`);
-        if (variant !== "warning") variant = "success";
-    }
-    if (statusesDiff.removed.length) {
-        changes.push(`- status: ${statusesDiff.removed.join(", ")}`);
-    }
-    if (!changes.length && previous.note !== current.note && current.note) {
-        changes.push(`Notatka: ${current.note}`);
-    }
-    if (!changes.length) return null;
-    return { message: `${current.name}: ${changes.join(" · ")}`, variant };
+
+    return null;
 }
 
-function ensureCreationPreviewFallbackFromPrompt(promptPayload = {}) {
-    const source = String(promptPayload?.source || "").toLowerCase();
-    if (source !== "character_creation") return;
-    const hasRealCreationHero = Array.from(heroes.values()).some(
-        (hero) => Boolean(hero?.creationInProgress) && String(hero?.id || "") !== CREATION_PREVIEW_FALLBACK_ID
-    );
-    if (hasRealCreationHero) return;
+function setScreen(name) {
+    const previousScreen = state.screen;
+    if (previousScreen && previousScreen !== name) {
+        audioManager.stopVoiceovers();
+    }
+    state.screen = name;
+    document.body.dataset.screen = name;
+    if (refs.mastheadShell) refs.mastheadShell.open = name !== "game";
+    Object.entries(screens).forEach(([key, node]) => {
+        if (!node) return;
+        node.classList.toggle("screen-active", key === name);
+    });
+    updateScenarioAudio();
+}
 
-    const previous = heroes.get(CREATION_PREVIEW_FALLBACK_ID) || {};
-    const defaults = _cloneCreationAbilityDefaults();
-    const previousScores = previous.abilityScores && typeof previous.abilityScores === "object" ? previous.abilityScores : null;
-    const previousMods = previous.abilityModifiers && typeof previous.abilityModifiers === "object" ? previous.abilityModifiers : null;
-    const promptTitle = String(promptPayload?.prompt || promptPayload?.title || "").trim();
-    const fallback = {
-        id: CREATION_PREVIEW_FALLBACK_ID,
-        name: String(previous.name || "Tworzona postać"),
-        statuses: Array.isArray(previous.statuses) ? previous.statuses : [],
-        note: promptTitle || previous.note || "Kreator postaci",
-        wounds: previous.wounds ?? 0,
-        pos: previous.pos ?? null,
-        initiative: previous.initiative ?? null,
-        image: promptPayload?.image || previous.image || PLACEHOLDER_IMAGE,
-        characterId: previous.characterId || null,
-        classId: previous.classId || null,
-        ancestryId: previous.ancestryId || null,
-        heritageId: previous.heritageId || null,
-        ac: previous.ac ?? null,
-        acBase: previous.acBase ?? previous.ac ?? null,
-        acModifier: previous.acModifier ?? 0,
-        maxHp: previous.maxHp ?? null,
-        baseSpeedFeet: previous.baseSpeedFeet ?? null,
-        abilityScores: previousScores && Object.keys(previousScores).length ? previousScores : defaults.abilityScores,
-        abilityModifiers: previousMods && Object.keys(previousMods).length ? previousMods : defaults.abilityModifiers,
-        skillRanks: previous.skillRanks || {},
-        saveRanks: previous.saveRanks || {},
-        perceptionRank: previous.perceptionRank || null,
-        trainedSkills: previous.trainedSkills || [],
-        loreSkills: previous.loreSkills || [],
-        backgroundLabel: previous.backgroundLabel || null,
-        backgroundFeatId: previous.backgroundFeatId || null,
-        backgroundAbilityBoostsUi: previous.backgroundAbilityBoostsUi || null,
-        backgroundSkillTrainingUi: previous.backgroundSkillTrainingUi || null,
-        previewBarbarianInstinctId: previous.previewBarbarianInstinctId || null,
-        creationInProgress: true,
-        handSlots: previous.handSlots || null,
-        coinPouch: previous.coinPouch || null,
-        moneyText: previous.moneyText || null,
-        bulkSummary: previous.bulkSummary || null,
-        inventoryItems: previous.inventoryItems || [],
+async function fetchJson(url, options = {}) {
+    const response = await fetch(url, {
+        headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+        ...options,
+    });
+    const payload = await response.json();
+    if (!response.ok || payload.ok === false) {
+        throw new Error(payload.error || `Request failed: ${url}`);
+    }
+    return payload;
+}
+
+const audioManager = (() => {
+    const loops = { music: null, ambience: null };
+    const voiceovers = new Set();
+    let enabled = false;
+    let volume = state.audioVolume;
+
+    function applyVolume(audio, multiplier = 1) {
+        if (!audio) return;
+        audio.volume = Math.max(0, Math.min(1, volume * multiplier));
+    }
+
+    function stopLoop(slot) {
+        const current = loops[slot];
+        if (current) {
+            current.pause();
+            current.src = "";
+        }
+        loops[slot] = null;
+    }
+
+    function stopVoiceovers() {
+        voiceovers.forEach((audio) => {
+            try {
+                audio.pause();
+                audio.src = "";
+            } catch (_error) {
+                // ignore stale audio handles
+            }
+        });
+        voiceovers.clear();
+    }
+
+    function playLoop(slot, src, multiplier = 0.55) {
+        const resolved = resolveAssetUrl(src);
+        if (!enabled || !resolved) {
+            stopLoop(slot);
+            return;
+        }
+        if (loops[slot] && loops[slot]._assetSrc === resolved) {
+            applyVolume(loops[slot], multiplier);
+            return;
+        }
+        stopLoop(slot);
+        const audio = new Audio(resolved);
+        audio.loop = true;
+        audio.preload = "auto";
+        audio._assetSrc = resolved;
+        applyVolume(audio, multiplier);
+        loops[slot] = audio;
+        audio.play().catch(() => {});
+    }
+
+    function playOneShot(src, multiplier = 0.75, { voiceover = false } = {}) {
+        const resolved = resolveAssetUrl(src);
+        if (!enabled || !resolved) return;
+        if (voiceover) stopVoiceovers();
+        const audio = new Audio(resolved);
+        audio.preload = "auto";
+        applyVolume(audio, multiplier);
+        if (voiceover) {
+            voiceovers.add(audio);
+            const cleanup = () => voiceovers.delete(audio);
+            audio.addEventListener("ended", cleanup, { once: true });
+            audio.addEventListener("error", cleanup, { once: true });
+        }
+        audio.play().catch(() => {});
+    }
+
+    return {
+        setEnabled(next) {
+            enabled = Boolean(next);
+            if (!enabled) {
+                stopLoop("music");
+                stopLoop("ambience");
+                stopVoiceovers();
+            }
+        },
+        setVolume(next) {
+            volume = Math.max(0, Math.min(1, Number(next) || 0));
+            applyVolume(loops.music, 0.55);
+            applyVolume(loops.ambience, 0.5);
+        },
+        playLoop,
+        playVoice(src) {
+            playOneShot(src, 0.88, { voiceover: true });
+        },
+        playSfx(src) {
+            playOneShot(src, 0.7);
+        },
+        stopVoiceovers,
     };
-    heroes.set(CREATION_PREVIEW_FALLBACK_ID, fallback);
-    creationPreviewHeroId = CREATION_PREVIEW_FALLBACK_ID;
+})();
+
+function scenarioConfig() {
+    return state.catalog.scenarios[0] || null;
+}
+
+function playAudioCueOnce(key) {
+    if (!state.audioEnabled || state.playedAudioCues.has(key)) return;
+    const src = audioEntrySource(scenarioAudioCue(key));
+    if (!src) return;
+    state.playedAudioCues.add(key);
+    audioManager.playVoice(src);
+}
+
+function playPromptAudioOnce(prompt) {
+    if (!prompt || !prompt.audio) return;
+    const key = `prompt:${prompt.id}:audio`;
+    if (!state.audioEnabled || state.playedAudioCues.has(key)) return;
+    const src = audioEntrySource(prompt.audio);
+    if (!src) return;
+    state.playedAudioCues.add(key);
+    audioManager.playVoice(src);
+}
+
+function enableAudioFromGesture() {
+    if (state.audioEnabled || state.audioPreferenceLocked) return;
+    state.audioEnabled = true;
+}
+
+function updateAudioControls() {
+    if (!refs.audioToggle || !refs.audioStatus) return;
+    refs.audioToggle.textContent = state.audioEnabled ? "Audio on" : "Audio off";
+    refs.audioStatus.textContent = state.audioEnabled ? "Audio" : "Muted";
+    refs.audioStatus.className = "badge";
+    refs.audioStatus.classList.add(state.audioEnabled ? "badge-running" : "badge-idle");
+    if (refs.audioVolume) refs.audioVolume.value = String(Math.round(state.audioVolume * 100));
+}
+
+function updateScenarioAudio() {
+    audioManager.setEnabled(state.audioEnabled);
+    audioManager.setVolume(state.audioVolume);
+    if (!state.audioEnabled) {
+        updateAudioControls();
+        return;
+    }
+    const musicSrc = audioEntrySource(scenarioAudioCue("music_default") || findAssetEntry("music", "default"));
+    if (musicSrc) audioManager.playLoop("music", musicSrc, 0.5);
+    if (state.screen === "assembly") playAudioCueOnce("party_assembly");
+    if (state.screen === "briefing") playAudioCueOnce("briefing_intro");
+
+    const ambienceKey = state.currentMapId ? `ambience_${state.currentMapId}` : "";
+    if (ambienceKey && ambienceKey !== state.currentAmbienceKey) {
+        state.currentAmbienceKey = ambienceKey;
+        const ambienceSrc = audioEntrySource(scenarioAudioCue(ambienceKey) || findAssetEntry("music", state.currentMapId));
+        if (ambienceSrc) audioManager.playLoop("ambience", ambienceSrc, 0.45);
+    }
+    updateAudioControls();
+}
+
+function objectiveOrder() {
+    const scenario = scenarioConfig();
+    if (!scenario) return [];
+    return [...(scenario.primary_objectives || []), ...(scenario.optional_objectives || [])];
+}
+
+function activeObjective() {
+    const scenario = scenarioConfig();
+    if (!scenario) return null;
+    for (const objective of scenario.primary_objectives || []) {
+        if (!state.completedObjectives.has(objective.id)) return objective;
+    }
+    for (const objective of scenario.optional_objectives || []) {
+        if (!state.completedObjectives.has(objective.id)) return objective;
+    }
+    return null;
+}
+
+function mapChapterById(mapId) {
+    const scenario = scenarioConfig();
+    if (!scenario) return null;
+    return (scenario.chapters || []).find((item) => item.map_id === mapId) || null;
+}
+
+function mapChapterByLabel(label) {
+    const scenario = scenarioConfig();
+    if (!scenario) return null;
+    return (scenario.chapters || []).find((item) => item.label === label) || null;
+}
+
+function updateHeroSelection(heroId) {
+    const current = new Set(state.selectedHeroIds);
+    if (current.has(heroId)) current.delete(heroId);
+    else if (current.size < 4) current.add(heroId);
+    state.selectedHeroIds = Array.from(current);
+    renderAssembly();
+}
+
+function renderAssembly() {
+    refs.partyGrid.innerHTML = "";
+    if (!state.catalog.heroes.length) {
+        refs.partyGrid.innerHTML = `<div class="empty-state">Brak zapisanych bohaterów w <code>data/heroes</code>.</div>`;
+        refs.btnAssemblyNext.disabled = true;
+        refs.selectionSummary.textContent = "Brak dostępnych postaci.";
+        return;
+    }
+    state.catalog.heroes.forEach((hero) => {
+        const selected = state.selectedHeroIds.includes(hero.id);
+        const card = document.createElement("article");
+        card.className = `party-card${selected ? " selected" : ""}`;
+        const skills = Array.isArray(hero.trained_skills) && hero.trained_skills.length
+            ? hero.trained_skills.slice(0, 3).join(", ")
+            : "Brak danych";
+        const traits = Array.isArray(hero.key_traits) && hero.key_traits.length
+            ? hero.key_traits.slice(0, 4).join(", ")
+            : "Brak wyróżnionych cech";
+        card.innerHTML = `
+            <div class="portrait" style="background-image:url('${hero.portrait || "/static/placeholder.png"}')"></div>
+            <div>
+                <div class="party-name">${escapeHtml(hero.name)}</div>
+                <div class="party-subtitle">${escapeHtml((hero.class_id || "-").replaceAll("_", " "))} · ${escapeHtml((hero.ancestry_id || "-").replaceAll("_", " "))}</div>
+            </div>
+            <div class="party-meta">
+                <span>HP ${hero.hp ?? "-"}</span>
+                <span>AC ${hero.ac ?? "-"}</span>
+                <span>Speed ${hero.speed ?? "-"}</span>
+            </div>
+            <div class="party-summary">${escapeHtml(hero.summary || "")}</div>
+            <div class="party-summary"><strong>Skills:</strong> ${escapeHtml(skills)}</div>
+            <div class="party-summary"><strong>Cechy:</strong> ${escapeHtml(traits)}</div>
+        `;
+        card.addEventListener("click", () => updateHeroSelection(hero.id));
+        refs.partyGrid.appendChild(card);
+    });
+    refs.btnAssemblyNext.disabled = state.selectedHeroIds.length === 0;
+    refs.selectionSummary.textContent =
+        state.selectedHeroIds.length > 0
+            ? `Wybrano ${state.selectedHeroIds.length} bohaterów.`
+            : "Wybierz od 1 do 4 bohaterów.";
+}
+
+function renderBriefing() {
+    const scenario = scenarioConfig();
+    if (!scenario) return;
+    refs.briefingTitle.textContent = scenario.briefing_title || scenario.title || "Misja";
+    refs.briefingIntro.textContent = scenario.briefing_intro || "";
+    refs.briefingStakes.textContent = scenario.stakes || "";
+    refs.briefingPoints.innerHTML = "";
+    (scenario.briefing_points || []).forEach((line) => {
+        const li = document.createElement("li");
+        li.textContent = line;
+        refs.briefingPoints.appendChild(li);
+    });
+    refs.briefingObjectives.innerHTML = "";
+    objectiveOrder().forEach((objective) => {
+        const li = document.createElement("li");
+        li.textContent = `${objective.label}: ${objective.description}`;
+        refs.briefingObjectives.appendChild(li);
+    });
+}
+
+function renderRuntimeBadge() {
+    const runtimeState = String(state.runtimeStatus.state || "idle");
+    const boardBackend = String(state.runtimeStatus.board_backend || "").trim().toLowerCase();
+    refs.runtimeBadge.textContent = runtimeState;
+    refs.runtimeBadge.className = "badge";
+    if (runtimeState === "running" || runtimeState === "starting") refs.runtimeBadge.classList.add("badge-running");
+    else if (runtimeState === "error") refs.runtimeBadge.classList.add("badge-error");
+    else refs.runtimeBadge.classList.add("badge-idle");
+
+    refs.boardBadge.className = "badge";
+    if (boardBackend === "hardware") {
+        refs.boardBadge.textContent = "Board: Hardware";
+        refs.boardBadge.classList.add("badge-hardware");
+    } else if (boardBackend === "simulator") {
+        refs.boardBadge.textContent = "Board: Simulator";
+        refs.boardBadge.classList.add("badge-simulator");
+    } else {
+        refs.boardBadge.textContent = "Board: -";
+        refs.boardBadge.classList.add("badge-idle");
+    }
+    refs.sessionChip.textContent = `Session: ${state.sessionId || "-"}`;
+    if (refs.mastheadSummaryStatus) {
+        const audio = state.audioEnabled ? "audio on" : "audio off";
+        const board = boardBackend ? boardBackend : "board -";
+        refs.mastheadSummaryStatus.textContent = `${runtimeState} · ${board} · ${audio}`;
+    }
+}
+
+function currentRuntimeErrorKey() {
+    const error = String(state.runtimeStatus.error || "").trim();
+    const status = String(state.runtimeStatus.state || "");
+    if (!error || status !== "error") return null;
+    return [
+        status,
+        error,
+        state.runtimeStatus.scenario_id || "",
+        state.runtimeStatus.started_at || "",
+        state.runtimeStatus.stopped_at || "",
+    ].join("|");
+}
+
+function formatRuntimeError() {
+    const raw = String(state.runtimeStatus.error || "").trim();
+    const boardBackend = String(state.runtimeStatus.board_backend || "").trim().toLowerCase();
+    if (/timed out/i.test(raw) && (/wled/i.test(raw) || /json\/info/i.test(raw) || boardBackend === "hardware")) {
+        return {
+            title: "Połączenie z LED-ami nie odpowiada",
+            body:
+                "Runtime nie mógł połączyć się z kontrolerem WLED. Sprawdź zasilanie, adres IP i sieć planszy, a potem użyj „Ponów połączenie”. "
+                + "Restart uruchomi ponownie ten sam scenariusz z ostatnią konfiguracją drużyny.",
+        };
+    }
+    return {
+        title: "Runtime zatrzymał się z błędem",
+        body: raw || "Proces gry zakończył się błędem. Spróbuj ponowić uruchomienie.",
+    };
+}
+
+function renderRuntimeErrorModal() {
+    const errorKey = currentRuntimeErrorKey();
+    const shouldShow = Boolean(errorKey) && state.dismissedRuntimeErrorKey !== errorKey;
+    refs.runtimeErrorModal.classList.toggle("hidden", !shouldShow);
+    if (!shouldShow) return;
+    const details = formatRuntimeError();
+    refs.runtimeErrorTitle.textContent = details.title;
+    refs.runtimeErrorBody.textContent = details.body;
+}
+
+function normalizePrompt(prompt) {
+    if (!prompt) return null;
+    return {
+        id: String(prompt.id),
+        prompt_key: String(prompt.prompt_key || prompt.communication?.context?.prompt_key || ""),
+        kind: String(prompt.kind || "info"),
+        title: prompt.title || prompt.prompt || "Prompt",
+        prompt: prompt.prompt || prompt.title || "",
+        subtitle: prompt.subtitle || prompt.summary || "",
+        prompt_long: prompt.prompt_long || prompt.body_markdown || "",
+        choices: Array.isArray(prompt.choices) ? prompt.choices : [],
+        choice_meta: Array.isArray(prompt.choice_meta) ? prompt.choice_meta : [],
+        communication: prompt.communication || {},
+        layout: prompt.layout || "info",
+        source: prompt.source || "",
+        status: prompt.status || "pending",
+        answer_placeholder: prompt.answer_placeholder || "",
+        modifiers: prompt.modifiers || null,
+        roll_stack: prompt.roll_stack || null,
+        audio: prompt.audio || prompt.voiceover || "",
+        action_desc: prompt.action_desc || "",
+        desc: prompt.desc || "",
+        details_markdown: prompt.details_markdown || "",
+        summary: prompt.summary || "",
+        scope_key: prompt.scope_key || "",
+    };
+}
+
+function normalizeCard(card) {
+    if (!card) return null;
+    return {
+        id: String(card.id || ""),
+        prompt_key: String(card.prompt_key || card.communication?.context?.prompt_key || ""),
+        seq: Number(card.seq || 0),
+        kind: String(card.kind || "narration"),
+        title: card.title || "Karta",
+        summary: card.summary || "",
+        body_markdown: card.body_markdown || "",
+        details_markdown: card.details_markdown || "",
+        priority: card.priority || "info",
+        scope_key: card.scope_key || "system",
+        dedupe_key: card.dedupe_key || "",
+        communication: card.communication || {},
+    };
+}
+
+function promptDisplayId(item) {
+    if (!item) return "";
+    const stable = String(item.prompt_key || item.communication?.context?.prompt_key || "").trim();
+    const instanceId = String(item.id || "").trim();
+    if (stable && instanceId) return `ID: ${stable} · #${instanceId}`;
+    if (stable) return `ID: ${stable}`;
+    if (instanceId) return `#${instanceId}`;
+    return "";
+}
+
+function syncViewState(viewState) {
+    const previousPromptId = state.view.activePrompt?.id || null;
+    state.view = {
+        sessionId: viewState?.session_id || null,
+        revision: Number(viewState?.revision || 0),
+        activePrompt: normalizePrompt(viewState?.active_prompt),
+        focusCard: normalizeCard(viewState?.focus_card),
+        idleState: normalizeCard(viewState?.idle_state),
+        journal: Array.isArray(viewState?.journal) ? viewState.journal.map(normalizeCard).filter(Boolean) : [],
+        debugFeed: Array.isArray(viewState?.debug_feed) ? viewState.debug_feed.map(normalizeCard).filter(Boolean) : [],
+    };
+    if (state.view.sessionId) {
+        state.sessionId = state.view.sessionId;
+    }
+    const nextPromptId = state.view.activePrompt?.id || null;
+    if (previousPromptId !== nextPromptId) {
+        state.selectedChoiceIndex = -1;
+        playPromptAudioOnce(state.view.activePrompt);
+    }
+    state.completedObjectives = new Set();
+    state.scenarioFinished = false;
+    state.view.journal.forEach((entry) => {
+        inferScenarioStateFromText([entry.title, entry.summary, entry.body_markdown].filter(Boolean).join("\n"));
+    });
+}
+
+function inferScenarioStateFromText(text) {
+    const normalized = String(text || "").toLowerCase();
+    if (!normalized) return;
+    if (normalized.includes("sekretne przejście") || normalized.includes("sekretne przejscie")) {
+        state.completedObjectives.add("find_secret_passage");
+    }
+    if (normalized.includes("podziemnych doków") || normalized.includes("podziemnych dokow") || normalized.includes("smuggler docks")) {
+        state.completedObjectives.add("reach_smuggler_docks");
+    }
+    if (normalized.includes("ostatni strażnicy doków") || normalized.includes("ostatni straznicy dokow") || normalized.includes("statek przemytników stoi bez załogi") || normalized.includes("statek przemytnikow stoi bez zalogi")) {
+        state.completedObjectives.add("clear_smuggler_docks");
+    }
+    if (normalized.includes("odbijasz od brzegu") || normalized.includes("scenariusz zakończony") || normalized.includes("scenariusz zakonczony")) {
+        state.completedObjectives.add("escape_on_ship");
+        state.scenarioFinished = true;
+    }
+}
+
+function handleMapEntry(label) {
+    const chapter = mapChapterByLabel(label);
+    if (!chapter) return;
+    state.currentMapId = chapter.map_id;
+    state.currentMapLabel = chapter.label;
 }
 
 function handleEvent(event) {
-    const type = event.type;
     const payload = event.payload || {};
-    const eventSessionId = String(event.session_id || "");
-    const timestamp = new Date(event.ts * 1000 || Date.now());
-    const meta = timestamp.toLocaleTimeString();
-
-    if (eventSessionId && currentSessionId && eventSessionId !== currentSessionId) {
-        resetLocalSessionState({
-            sessionId: eventSessionId,
-            reason: "przełączenie sesji",
-            showMenuScreen: false,
-        });
-    } else if (eventSessionId && !currentSessionId) {
-        currentSessionId = eventSessionId;
-    }
-
-    if (type === "session_reset") {
-        resetLocalSessionState({
-            sessionId: eventSessionId || currentSessionId,
-            reason: payload.reason || "reset",
-            showMenuScreen: true,
+    if (event.type === "session_reset") {
+        state.heroes.clear();
+        syncViewState(null);
+        state.initiative = { round: null, order: [], active_id: null };
+        state.activeActor = null;
+        state.promptDrafts.clear();
+        state.lastRenderedPromptId = null;
+        state.currentMapId = null;
+        state.currentMapLabel = null;
+        state.completedObjectives = new Set();
+        state.scenarioFinished = false;
+        state.sessionId = event.session_id || state.sessionId;
+        renderAll();
+        queueMicrotask(() => {
+            refreshViewState().catch(() => {});
         });
         return;
     }
 
-    // gdy docierają zdarzenia, przełącz na ekran gry (jeśli jeszcze nie)
-    showGame();
+    if (event.type === "view_state") {
+        syncViewState(payload);
+        renderAll();
+        return;
+    }
 
-    if (type === "prompt") {
-        ensureCreationPreviewFallbackFromPrompt(payload);
-        if (String(payload?.source || "").toLowerCase() !== "character_creation") {
-            heroes.delete(CREATION_PREVIEW_FALLBACK_ID);
-            if (String(creationPreviewHeroId || "") === CREATION_PREVIEW_FALLBACK_ID) {
-                creationPreviewHeroId = null;
-            }
-        }
-        renderPrompt(payload);
-        updateSessionSummary();
+    if (event.type === "hero_snapshot") {
+        state.heroes.set(String(payload.id || payload.name || Math.random()), payload);
+        renderAll();
         return;
     }
-    if (type === "special_preview") {
-        const title = payload.name || payload.slug || "Zdolność specjalna";
-        actionTitle.textContent = title;
-        actionText.textContent = payload.desc || "";
-        setIllustration(payload.image);
-        addLogEntry(`Zdolność: ${title}`, meta, "info", "Specjalne");
-        updateSessionSummary();
-        return;
-    }
-    if (type === "info") {
-        const infoText = payload.text || payload.message || "Informacja";
-        const scenarioMatch = String(infoText).match(/Start scenariusza:\s*(.+)\s*$/i);
-        if (scenarioMatch && scenarioMatch[1]) {
-            currentScenario = String(scenarioMatch[1]).trim();
-        }
-        renderPrompt({
-            id: `info-${Date.now()}`,
-            prompt: infoText,
-            kind: "info",
-            choices: [],
-            source: payload.source || "",
-            image: payload.image || null,
-        });
-        addLogEntry(infoText, meta, "info", payload.source || "Informacja");
-        updateSessionSummary();
-        return;
-    }
-    if (type === "idle_hint") {
-        const stickyVisible = Boolean(passiveCommunicationState?.sticky);
-        if (!activePrompt && !stickyVisible) {
-            actionTitle.textContent = payload.title || "Czekam na działania...";
-            setMarkdownContent(actionText, payload.text || "", "action-text-md");
-            resetActionCommunication();
-            clearPassiveCommunicationState();
-        }
-        return;
-    }
-    if (type === "prompt_answered") {
-        addLogEntry(`Odpowiedź (${payload.prompt || ""}): ${payload.answer}`, meta, "success", "Pytanie");
-        if (activePrompt && String(activePrompt.id) === String(payload.id)) {
-            closePrompt();
-        }
-        updateSessionSummary();
-        return;
-    }
-    if (type === "hero_snapshot" || type === "hero") {
-        const id = payload.id || payload.object_id || payload.name || "hero";
-        const previous = heroes.get(id);
-        const current = {
-            id,
-            name: payload.name || id,
-            statuses: payload.statuses || [],
-            note: payload.note,
-            wounds: payload.wounds,
-            pos: payload.pos,
-            initiative: payload.initiative,
-            image: payload.image,
-            characterId: payload.character_id || null,
-            classId: payload.class_id || null,
-            ancestryId: payload.ancestry_id || null,
-            heritageId: payload.heritage_id || null,
-            ac: payload.ac,
-            acBase: payload.ac_base ?? payload.ac,
-            acModifier: payload.ac_modifier ?? 0,
-            maxHp: payload.max_hp,
-            baseSpeedFeet: payload.speed_feet ?? payload.base_speed_feet,
-            abilityScores: payload.ability_scores || {},
-            abilityModifiers: payload.ability_modifiers || {},
-            skillRanks: payload.skill_ranks || {},
-            saveRanks: payload.save_ranks || {},
-            perceptionRank: payload.perception_rank || null,
-            trainedSkills: payload.trained_skills || [],
-            loreSkills: payload.lore_skills || [],
-            backgroundLabel: payload.background_label || null,
-            backgroundFeatId: payload.background_feat_id || null,
-            backgroundAbilityBoostsUi: payload.background_ability_boosts_ui || null,
-            backgroundSkillTrainingUi: payload.background_skill_training_ui || null,
-            previewBarbarianInstinctId: payload.preview_barbarian_instinct_id || null,
-            creationInProgress: Boolean(payload.creation_in_progress),
-            handSlots: payload.hand_slots || null,
-            coinPouch: payload.coin_pouch || null,
-            moneyText: payload.money_text || null,
-            bulkSummary: payload.bulk_summary || null,
-            inventoryItems: payload.inventory_items || [],
-            spellcasting: payload.spellcasting || null,
-            isCompanion: Boolean(payload.is_companion),
-            ownerId: payload.owner_id || null,
-            ownerName: payload.owner_name || null,
-            companionType: payload.companion_type || null,
-        };
-        if (current.creationInProgress) {
-            creationPreviewHeroId = id;
-            if (String(id) !== CREATION_PREVIEW_FALLBACK_ID) {
-                heroes.delete(CREATION_PREVIEW_FALLBACK_ID);
-            }
-        } else if (String(creationPreviewHeroId || "") === String(id)) {
-            creationPreviewHeroId = null;
-        }
-        heroes.set(id, current);
-        renderHeroes();
-        if (!activePrompt && String(id) === String(activeActorId || "")) {
-            refreshLeftIllustration();
-        }
-        const heroLog = buildHeroUpdateLog(previous, current);
-        if (heroLog) {
-            addLogEntry(heroLog.message, meta, heroLog.variant, "Bohater");
-        }
-        updateSessionSummary();
-        return;
-    }
-    if (type === "active_actor_changed") {
-        const prev = activeActorId;
-        activeActorId = payload.id || null;
-        renderHeroes();
-        if (!activePrompt) {
-            refreshLeftIllustration();
-        }
-        if (String(prev) !== String(activeActorId)) {
-            if (activeActorId) {
-                const actorLabel = payload.name || actorNameById(activeActorId);
-                addLogEntry(`Aktywna tura: ${actorLabel}`, meta, "info", "Tura");
-            } else {
-                addLogEntry("Brak aktywnego aktora.", meta, "info", "Tura");
-            }
-            lastLoggedActiveActorId = activeActorId;
-        }
-        updateSessionSummary();
-        return;
-    }
-    if (type === "narration") {
-        const comm = communicationOf(payload, "log");
-        const variant =
-            comm.priority === "warning" ? "warning" : comm.priority === "error" ? "error" : "info";
-        addLogEntry(payload.message || comm.summary || "Narrator", meta, variant, comm.title || "Narrator", payload.image || "", {
-            communication: payload.communication || null,
-        });
-        if (!activePrompt) {
-            showPassiveCommunication(payload, comm.title || "Mistrz gry");
-        } else {
-            pendingPassiveCommunication = {
-                payload,
-                fallbackTitle: comm.title || "Mistrz gry",
-            };
-        }
-        return;
-    }
-    if (type === "action") {
-        if (!activePrompt) {
-            clearPassiveCommunicationState();
-            const actor = payload.actor?.name || payload.actor?.id || "Aktor";
-            const actionId = str(payload.action_id || "akcja", "akcja").replace(/_/g, " ");
-            const target = payload.target?.name || payload.target?.id;
-            actionTitle.textContent = actor;
-            setMarkdownContent(actionText, target ? `${actionId} -> ${target}` : actionId, "action-text-md");
-        }
-        return;
-    }
-    if (type === "path_preview") {
-        pathState = showPathPreview(refs, payload, pathState);
-        addEventFeedEntry(
-            `${payload.actor_name || "Ruch"} -> ${payload.target ? formatPos(payload.target) : "cel"}`,
-            meta,
-            payload.trimmed ? "warning" : "info",
-            "Ruch",
-        );
-        return;
-    }
-    if (type === "path_clear") {
-        pathState = clearPathPreview(refs, pathState, payload && payload.id);
-        return;
-    }
-    if (type === "initiative") {
-        initiativeState = {
-            order: payload.order || [],
-            activeId: payload.active_id || payload.activeId || null,
+
+    if (event.type === "initiative") {
+        state.initiative = {
             round: payload.round ?? null,
+            order: Array.isArray(payload.order) ? payload.order : [],
+            active_id: payload.active_id ?? null,
         };
-        activeActorId = initiativeState.activeId || null;
-        if (initiativeState.round && initiativeState.round !== lastLoggedRound) {
-            addLogEntry(`Runda ${initiativeState.round} start`, meta, "info", "Runda");
-            lastLoggedRound = initiativeState.round;
-        }
-        if (initiativeState.activeId && String(lastLoggedActiveActorId) !== String(initiativeState.activeId)) {
-            addLogEntry(`Aktywna tura: ${actorNameById(initiativeState.activeId)}`, meta, "info", "Tura");
-            lastLoggedActiveActorId = initiativeState.activeId;
-        }
-        if (!initiativeState.activeId) {
-            lastLoggedActiveActorId = null;
-        }
-        renderInitiative();
-        updateSessionSummary();
+        renderAll();
         return;
     }
-    // domyślnie traktujemy jako log
-    const level = (payload.level || "").toLowerCase();
-    let variant = "";
-    if (level === "error") variant = "error";
-    else if (level === "warn" || level === "warning") variant = "warning";
-    addLogEntry(payload.message || type, meta, variant, payload.tag || "", payload.image || "", {
-        communication: payload.communication || null,
-        skipFeed: Boolean(payload.communication?.debug_only),
-    });
+
+    if (event.type === "active_actor_changed") {
+        const previousId = String(state.activeActor?.id || "");
+        state.activeActor = payload;
+        if (state.audioEnabled && String(payload.id || "") && String(payload.id || "") !== previousId) {
+            audioManager.playSfx(audioEntrySource(scenarioAudioCue("active_actor")));
+        }
+        renderAll();
+        return;
+    }
+
+    if (event.type === "dice_roll") {
+        state.diceRoll = { ...payload, nonce: Date.now() };
+        if (state.diceRollTimer) window.clearTimeout(state.diceRollTimer);
+        renderDiceOverlay();
+        state.diceRollTimer = window.setTimeout(() => {
+            state.diceRoll = null;
+            renderDiceOverlay();
+        }, 3200);
+        return;
+    }
+
+    if (["log", "info", "narration", "idle_hint"].includes(event.type)) {
+        if (payload.audio) {
+            audioManager.playVoice(audioEntrySource(payload.audio));
+        }
+        const mapMatch = String(payload.message || payload.text || "").match(/Wejście na mapę:\s*(.+?)\.?$/i);
+        if (mapMatch && mapMatch[1]) handleMapEntry(mapMatch[1].trim());
+        inferScenarioStateFromText(String(payload.message || payload.text || ""));
+        if (/szczek|pies|dog/i.test(String(payload.message || payload.text || payload.summary || ""))) {
+            playAudioCueOnce("hint_dog_barking");
+        }
+        updateScenarioAudio();
+    }
 }
 
 function connectStream() {
-    if (eventSource) {
-        eventSource.close();
-    }
-    eventSource = new EventSource("/stream");
-    eventSource.onmessage = (evt) => {
+    if (state.eventSource) state.eventSource.close();
+    const source = new EventSource("/stream");
+    source.onmessage = (message) => {
         try {
-            const data = JSON.parse(evt.data);
-            handleEvent(data);
-        } catch (err) {
-            console.error("Błąd parsowania zdarzenia", err);
+            const event = JSON.parse(message.data);
+            handleEvent(event);
+        } catch (_error) {
+            // ignore malformed chunks
         }
     };
-    eventSource.onerror = (err) => {
-        console.warn("Stream error, ponawiam za chwilę", err);
-        setTimeout(connectStream, 1200);
-    };
+    state.eventSource = source;
 }
 
-async function fetchPendingPrompts() {
-    try {
-        const resp = await fetch("/api/prompts");
-        if (!resp.ok) return;
-        const data = await resp.json();
-        const listedSessionId = String(data?.session?.id || "");
-        if (listedSessionId && currentSessionId && listedSessionId !== currentSessionId) {
-            resetLocalSessionState({
-                sessionId: listedSessionId,
-                reason: "synchronizacja promptów",
-                showMenuScreen: false,
-            });
-        } else if (listedSessionId && !currentSessionId) {
-            currentSessionId = listedSessionId;
+async function loadInitialState() {
+    const [viewPayload, catalogPayload, runtimePayload] = await Promise.all([
+        fetchJson("/api/view-state"),
+        fetchJson("/api/catalog"),
+        fetchJson("/api/runtime/status"),
+    ]);
+    state.sessionId = viewPayload.session?.id || null;
+    state.catalog = catalogPayload.catalog || { heroes: [], scenarios: [] };
+    state.scenario = state.catalog.scenarios[0] || null;
+    state.assetManifestUrl = String(state.scenario?.asset_manifest || "").trim();
+    if (state.assetManifestUrl) {
+        try {
+            state.assetManifest = await fetchJson(state.assetManifestUrl);
+        } catch (_error) {
+            state.assetManifest = null;
         }
-        if (!data.prompts) return;
-        const pending = data.prompts.filter((p) => p.status === "pending");
-        if (pending.length) {
-            showGame();
-            pending.forEach((p) => renderPrompt(p));
-        }
-    } catch (err) {
-        console.warn("Nie udało się pobrać promptów:", err);
     }
+    syncViewState(viewPayload.view_state || null);
+    state.runtimeStatus = runtimePayload.runtime_status || state.runtimeStatus;
+    if (state.scenario) refs.startTagline.textContent = state.scenario.tagline || refs.startTagline.textContent;
+    renderAll();
+    updateScenarioAudio();
 }
 
-// --- UI actions ---
-
-document.getElementById("btn-new-game").addEventListener("click", () => {
-    resetUiSession("manual");
-});
-document.getElementById("btn-quit").addEventListener("click", () => {
-    window.close();
-});
-
-document.querySelectorAll(".scenario-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-        currentScenario = btn.dataset.scenario;
-        addLogEntry(`Uruchomiono scenariusz: ${currentScenario}`, new Date().toLocaleTimeString());
-        showGame();
-        updateSessionSummary();
-    });
-});
-const scenarioButtons = Array.from(document.querySelectorAll(".scenario-btn"));
-let scenarioIndex = 0;
-function highlightScenario(idx) {
-    scenarioButtons.forEach((b, i) => {
-        if (i === idx) b.classList.add("selected");
-        else b.classList.remove("selected");
-    });
-}
-if (scenarioButtons.length) {
-    highlightScenario(scenarioIndex);
+async function refreshViewState() {
+    const payload = await fetchJson("/api/view-state");
+    state.sessionId = payload.session?.id || state.sessionId;
+    syncViewState(payload.view_state || null);
+    renderAll();
 }
 
-if (logFab && logModal) {
-    logFab.addEventListener("click", () => {
-        logModal.classList.toggle("hidden");
-    });
-}
-if (logClose && logModal) {
-    logClose.addEventListener("click", () => {
-        logModal.classList.add("hidden");
-    });
-}
-if (logModal) {
-    logModal.addEventListener("click", (evt) => {
-        if (evt.target === logModal) {
-            logModal.classList.add("hidden");
+function activeCardData() {
+    if (state.view.activePrompt) {
+        const prompt = state.view.activePrompt;
+        const communication = prompt.communication || {};
+        const rawTitle = communication.title || prompt.title || prompt.prompt || "Prompt";
+        const rawSummary = communication.summary || prompt.summary || prompt.subtitle || "";
+        const focusCard = state.view.focusCard;
+        const focusTitle = focusCardTitleCandidate(focusCard);
+        const bodyCandidate = communication.body_markdown || prompt.prompt_long || "";
+        const title = isGenericPromptTitle(rawTitle)
+            ? (focusTitle || firstMeaningfulLine(bodyCandidate) || rawTitle)
+            : rawTitle;
+        const summaryCandidate = isGenericPromptSummary(rawSummary) || sameMeaning(rawSummary, title)
+            ? ""
+            : rawSummary;
+        const deduped = dedupeCardText(title, summaryCandidate, bodyCandidate);
+        let details = communication.details_markdown || prompt.details_markdown || "";
+        if (!details && focusCard && !sameMeaning(focusTitle, deduped.title)) {
+            details = [focusCard.title, focusCard.body_markdown || focusCard.details_markdown || ""].filter(Boolean).join("\n\n");
         }
-    });
-}
-
-if (topbarToggle && topbar) {
-    topbarToggle.addEventListener("click", () => {
-        topbar.classList.toggle("collapsed");
-        topbarToggle.textContent = topbar.classList.contains("collapsed") ? "▼" : "▲";
-    });
-}
-
-async function initUi() {
-    showMenu();
-    updateSessionSummary();
-    await fetchSessionInfo();
-    connectStream();
-    await fetchPendingPrompts();
-    setInterval(fetchPendingPrompts, 2000);
-}
-
-initUi();
-
-// --- Prompt panel logic ---
-
-actionForm.addEventListener("submit", async (evt) => {
-    evt.preventDefault();
-    if (!activePrompt) return;
-    if (activePrompt.kind === "info") {
-        const infoId = String(activePrompt.id || "");
-        if (infoId.startsWith("info-")) {
-            closePrompt();
-            return;
-        }
-        await sendPromptAnswer("ok");
-        return;
-    }
-    if (layoutMode === "file_image") {
-        if (!fileImagePayload) {
-            actionDesc.classList.remove("hidden");
-            actionDesc.textContent = "Najpierw wybierz plik obrazu portretu.";
-            return;
-        }
-        await sendPromptAnswer(fileImagePayload);
-        return;
-    }
-    if (rollStackState) {
-        const payload = _rollStackAnswerPayload();
-        if (!payload) return;
-        await sendPromptAnswer(payload);
-        return;
-    }
-
-    // specjalny flow dla wyboru akcji z potwierdzeniem
-    if (layoutMode === "action_select" && !confirmMode) {
-        storedSelection = actionAnswer.value.trim();
-        if (!storedSelection) return;
-        // przejście do potwierdzenia
-        confirmMode = true;
-        actionTitle.textContent = storedSelection;
-        actionText.textContent = activePrompt.action_desc || activePrompt.desc || "Potwierdź tę akcję.";
-        actionAnswer.classList.add("input-hidden");
-        actionChoices.innerHTML = "";
-        const confirmChoices = normalizeChoices({
-            choices: ["Accept", "Decline"],
-            choice_meta: [
-                { raw: "Accept", label: "Potwierdź", desc: "Zatwierdź i wykonaj akcję.", key: "+" },
-                { raw: "Decline", label: "Wróć", desc: "Wróć do wyboru akcji.", key: "-" },
-            ],
-        });
-        currentChoices = confirmChoices.map((c) => c.raw);
-        choiceMeta = confirmChoices;
-        selectedChoiceIndex = 0;
-        confirmChoices.forEach((c, idx) => {
-            const pill = document.createElement("div");
-            pill.className = "choice-pill";
-            const displayKey = /^[0-9]+$/.test(String(c.key || "")) ? "" : (c.key || "");
-            pill.innerHTML =
-                '<div class="label"><span class="key">' +
-                displayKey +
-                "</span>" +
-                (c.label || "") +
-                "</div>";
-            pill.addEventListener("click", () => selectChoice(idx));
-            actionChoices.appendChild(pill);
-        });
-        updateChoiceHighlight();
-        updateChoiceDesc();
-        return;
-    }
-
-    if (layoutMode === "action_select" && confirmMode) {
-        const choice = currentChoices[selectedChoiceIndex] || "Decline";
-        if (choice.toLowerCase().startsWith("decline")) {
-            // reset do wyboru akcji, czysty filtr
-            confirmMode = false;
-            storedSelection = "";
-            actionChoices.innerHTML = "";
-            actionDesc.textContent = "";
-            actionAnswer.value = "";
-            actionAnswer.classList.remove("input-hidden");
-            actionAnswer.placeholder = "Nazwa akcji...";
-            currentChoices = [];
-            choiceMeta = [];
-            selectedChoiceIndex = -1;
-            return;
-        }
-        // Accept - zwracamy wpisaną akcję
-        await sendPromptAnswer(storedSelection);
-        return;
-    }
-
-    let answer = actionAnswer.value.trim();
-    if (!answer && currentChoices.length > 0 && selectedChoiceIndex >= 0) {
-        answer = currentChoices[selectedChoiceIndex];
-    }
-    if (!answer) return;
-    await sendPromptAnswer(answer);
-});
-
-async function sendPromptAnswer(answer) {
-    try {
-        let finalAnswer = answer;
-        if (_isNaturalRollPrompt(activePrompt)) {
-            if (answer && typeof answer === "object" && !Array.isArray(answer)) {
-                finalAnswer = { ...answer };
-            } else {
-                const parsed = Number.parseInt(String(answer).trim(), 10);
-                if (!Number.isNaN(parsed)) {
-                    finalAnswer = {
-                        roll: parsed,
-                        raw_roll: parsed,
-                    };
-                }
-            }
-            if (finalAnswer && typeof finalAnswer === "object" && !Array.isArray(finalAnswer)) {
-                if (!finalAnswer.natural_mode) {
-                    finalAnswer.natural_mode = rollNaturalMode;
-                }
-            }
-        }
-        await fetch(`/api/prompts/${activePrompt.id}/response`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ answer: finalAnswer }),
-        });
-        actionAnswer.value = "";
-        closePrompt();
-    } catch (err) {
-        console.error(err);
-    }
-}
-
-function requestDebugUndo() {
-    if (!activePrompt) {
-        addLogEntry("Debug cofnij: brak aktywnego promptu.", new Date().toLocaleTimeString(), "warning", "Debug");
-        return;
-    }
-    sendPromptAnswer(DEBUG_UNDO_COMMAND);
-}
-
-if (debugUndoBtn) {
-    debugUndoBtn.addEventListener("click", () => {
-        requestDebugUndo();
-    });
-}
-
-document.addEventListener("keydown", (evt) => {
-    if (evt.key === "Escape" && logModal && !logModal.classList.contains("hidden")) {
-        logModal.classList.add("hidden");
-        return;
-    }
-    // scenario wybór w menu
-    if (!screenMenu.classList.contains("hidden") && screenGame.classList.contains("hidden")) {
-        if (_isDownNavigationKey(evt)) {
-            evt.preventDefault();
-            if (scenarioButtons.length) {
-                scenarioIndex = (scenarioIndex + 1) % scenarioButtons.length;
-                highlightScenario(scenarioIndex);
-            }
-        }
-        if (_isUpNavigationKey(evt)) {
-            evt.preventDefault();
-            if (scenarioButtons.length) {
-                scenarioIndex = (scenarioIndex - 1 + scenarioButtons.length) % scenarioButtons.length;
-                highlightScenario(scenarioIndex);
-            }
-        }
-        if (evt.key === "Enter" && scenarioButtons.length) {
-            evt.preventDefault();
-            scenarioButtons[scenarioIndex].click();
-        }
-    }
-
-    if (!activePrompt) return;
-    if ((evt.ctrlKey || evt.metaKey) && String(evt.key || "").toLowerCase() === "z") {
-        evt.preventDefault();
-        requestDebugUndo();
-        return;
-    }
-    if (layoutMode === "file_image" && evt.key === "Enter") {
-        evt.preventDefault();
-        actionForm.dispatchEvent(new Event("submit", { cancelable: true }));
-        return;
-    }
-    if (_isNaturalRollPrompt(activePrompt) && evt.key === "*") {
-        evt.preventDefault();
-        _cycleNaturalMode();
-        _renderNaturalControls(activePrompt);
-        return;
-    }
-    if (rollStackState) {
-        if (evt.key === "4" || evt.key === "ArrowLeft") {
-            evt.preventDefault();
-            _moveRollStackFocus(-1);
-            return;
-        }
-        if (evt.key === "5" || evt.key === "6" || evt.key === "ArrowRight") {
-            evt.preventDefault();
-            _moveRollStackFocus(1);
-            return;
-        }
-        if (evt.key === "8" || evt.key === "ArrowUp") {
-            evt.preventDefault();
-            _adjustRollStackFocused(1);
-            return;
-        }
-        if (evt.key === "2" || evt.key === "ArrowDown") {
-            evt.preventDefault();
-            _adjustRollStackFocused(-1);
-            return;
-        }
-        if (evt.key === "Enter") {
-            evt.preventDefault();
-            actionForm.dispatchEvent(new Event("submit", { cancelable: true }));
-            return;
-        }
-    }
-    if (layoutMode === "equip_nav") {
-        const key = evt.key;
-        const map = {
-            ArrowUp: "up",
-            ArrowDown: "down",
-            ArrowRight: "section_next",
-            ArrowLeft: "section_prev",
-            "8": "up",
-            "2": "down",
-            "6": "section_next",
-            "4": "section_prev",
-            "7": "hand_left",
-            "9": "hand_right",
-            "5": "toggle",
-            Enter: "toggle",
-            "0": "exit",
-            Escape: "exit",
+        return {
+            title: deduped.title,
+            summary: deduped.summary,
+            body: deduped.body,
+            details,
+            communication,
+            prompt,
         };
-        const cmd = map[key];
-        if (cmd) {
-            evt.preventDefault();
-            sendPromptAnswer(cmd);
-            return;
-        }
     }
-    if (layoutMode === "menu_numpad" && currentChoices.length > 0) {
-        const groupedMenu = _isGroupedMenuNumpad();
-        const selectedRaw =
-            selectedChoiceIndex >= 0 && selectedChoiceIndex < currentChoices.length
-                ? String(currentChoices[selectedChoiceIndex] || "")
-                : "";
-        const isEquipPrompt = String(activePrompt?.source || "").toLowerCase() === "equip";
-        if (groupedMenu && (evt.key === "4" || evt.key === "ArrowLeft")) {
-            evt.preventDefault();
-            _setGroupedMenuActive("filters");
-            return;
-        }
-        if (groupedMenu && (evt.key === "6" || evt.key === "ArrowRight")) {
-            evt.preventDefault();
-            _setGroupedMenuActive("list");
-            return;
-        }
-        if (_isUpNavigationKey(evt)) {
-            evt.preventDefault();
-            if (!_moveGroupedMenuSelection(-1)) {
-                const prev = (selectedChoiceIndex - 1 + currentChoices.length) % currentChoices.length;
-                selectChoice(prev);
-            }
-            return;
-        }
-        if (_isDownNavigationKey(evt)) {
-            evt.preventDefault();
-            if (!_moveGroupedMenuSelection(1)) {
-                const next = (selectedChoiceIndex + 1) % currentChoices.length;
-                selectChoice(next);
-            }
-            return;
-        }
-        if (evt.key === "*") {
-            if (isEquipPrompt && selectedRaw) {
-                evt.preventDefault();
-                sendPromptAnswer({ cmd: "transfer", selected: selectedRaw });
-                return;
-            }
-            const idx = choiceMeta.findIndex((c) => String(c.key || "") === "*");
-            if (idx >= 0) {
-                evt.preventDefault();
-                selectChoice(idx);
-                actionForm.dispatchEvent(new Event("submit", { cancelable: true }));
-                return;
-            }
-        }
-        if (isEquipPrompt && (evt.key === "4" || evt.key === "ArrowLeft") && selectedRaw) {
-            evt.preventDefault();
-            sendPromptAnswer({ cmd: "section_prev", selected: selectedRaw });
-            return;
-        }
-        if (isEquipPrompt && (evt.key === "6" || evt.key === "ArrowRight") && selectedRaw) {
-            evt.preventDefault();
-            sendPromptAnswer({ cmd: "section_next", selected: selectedRaw });
-            return;
-        }
-        if (isEquipPrompt && evt.key === "7" && selectedRaw) {
-            evt.preventDefault();
-            sendPromptAnswer({ cmd: "hand_left", selected: selectedRaw });
-            return;
-        }
-        if (isEquipPrompt && evt.key === "9" && selectedRaw) {
-            evt.preventDefault();
-            sendPromptAnswer({ cmd: "hand_right", selected: selectedRaw });
-            return;
-        }
-        if (isEquipPrompt && evt.key === "/" && selectedRaw) {
-            evt.preventDefault();
-            sendPromptAnswer({ cmd: "drop", selected: selectedRaw });
-            return;
-        }
-        if (evt.key === "Enter") {
-            evt.preventDefault();
-            actionForm.dispatchEvent(new Event("submit", { cancelable: true }));
-            return;
-        }
-    }
-    if (layoutMode === "action_select" && confirmMode && evt.key === "Escape") {
-        evt.preventDefault();
-        // manual decline -> reset filtra
-        confirmMode = false;
-        storedSelection = "";
-        actionChoices.innerHTML = "";
-        actionDesc.textContent = "";
-        actionAnswer.value = "";
-        actionAnswer.classList.remove("input-hidden");
-        actionAnswer.placeholder = "Nazwa akcji...";
-        currentChoices = [];
-        choiceMeta = [];
-        selectedChoiceIndex = -1;
-        return;
-    }
-    if (activePrompt.kind === "info") {
-        if (evt.key === "Enter") {
-            evt.preventDefault();
-            const infoId = String(activePrompt.id || "");
-            if (infoId.startsWith("info-")) {
-                closePrompt();
-            } else {
-                actionForm.dispatchEvent(new Event("submit", { cancelable: true }));
-            }
-        }
-        return;
-    }
-    if (currentChoices.length > 0) {
-        if (_isDownNavigationKey(evt)) {
-            evt.preventDefault();
-            const next = (selectedChoiceIndex + 1) % currentChoices.length;
-            selectChoice(next);
-        }
-        if (_isUpNavigationKey(evt)) {
-            evt.preventDefault();
-            const prev = (selectedChoiceIndex - 1 + currentChoices.length) % currentChoices.length;
-            selectChoice(prev);
-        }
-        if (evt.key === "Enter") {
-            evt.preventDefault();
-            actionForm.dispatchEvent(new Event("submit", { cancelable: true }));
-        }
-    }
-});
-
-function openPrompt(prompt) {
-    pendingPassiveCommunication = null;
-    clearPassiveCommunicationState();
-    activePrompt = prompt;
-    renderedPrompts.add(prompt.id);
-    layoutMode = prompt.layout || prompt.kind || "info";
-    confirmMode = false;
-    storedSelection = "";
-    rollNaturalMode = "none";
-    rollStackState = null;
-    const comm = communicationOf(prompt, "prompt");
-    actionTitle.textContent = comm.title || prompt.title || prompt.prompt || "Akcja";
-    setMarkdownContent(actionText, prompt.subtitle || comm.summary || "", "action-text-md");
-    const promptBody = comm.bodyMarkdown || prompt.prompt_long || (layoutMode === "dialog" ? prompt.prompt : "");
-    setMarkdownContent(actionPrompt, promptBody || "", "action-prompt-md");
-    actionPrompt.classList.toggle("hidden", !promptBody);
-    applyActionCommunication(comm);
-    const creationImage =
-        String(prompt?.source || "").toLowerCase() === "character_creation" ? creationPreviewImage() : null;
-    setIllustration(prompt.image || creationImage || activeHeroImage() || PLACEHOLDER_IMAGE);
-    actionKind.textContent = comm.semanticType || "";
-    actionKind.classList.toggle("hidden", !comm.semanticType);
-    actionSource.textContent = comm.priority || "";
-    actionSource.classList.toggle("hidden", !comm.priority);
-    actionChoices.innerHTML = "";
-    _resetMenuNumpadContext();
-    actionDesc.textContent = "";
-    clearMods();
-
-    const normalized = normalizeChoices(prompt);
-    currentChoices = normalized.map((c) => c.raw);
-    choiceMeta = normalized.map((c, i) => ({ ...c, expanded: i === 0 }));
-    const preferredIndex = Number.parseInt(String(prompt.preselected_index ?? ""), 10);
-    if (normalized.length) {
-        if (Number.isInteger(preferredIndex) && preferredIndex >= 0 && preferredIndex < normalized.length) {
-            selectedChoiceIndex = preferredIndex;
-        } else {
-            selectedChoiceIndex = 0;
-        }
-    } else {
-        selectedChoiceIndex = -1;
-    }
-    choiceMeta = normalized.map((c, i) => ({ ...c, expanded: i === selectedChoiceIndex }));
-
-    const createChoicePill = (c, idx) => {
-            const pill = document.createElement("div");
-            pill.className = "choice-pill";
-            if (c.category) pill.classList.add(`pill-cat-${c.category}`);
-            pill.dataset.choiceIndex = String(idx);
-            const displayKey = /^[0-9]+$/.test(String(c.key || "")) ? "" : (c.key || "");
-            const labelRow = document.createElement("div");
-            labelRow.className = "label";
-            if (c.icon) {
-                const iconEl = document.createElement("span");
-                iconEl.className = "pill-icon";
-                iconEl.textContent = c.icon;
-                labelRow.appendChild(iconEl);
-            }
-            const keyEl = document.createElement("span");
-            keyEl.className = "key";
-            keyEl.textContent = displayKey;
-            const labelText = document.createElement("span");
-            labelText.textContent = c.label || "";
-            labelRow.appendChild(keyEl);
-            labelRow.appendChild(labelText);
-            pill.appendChild(labelRow);
-            const desc = document.createElement("div");
-            desc.className = "desc";
-            desc.appendChild(renderChoiceDescription(c.desc || ""));
-            pill.appendChild(desc);
-            pill.addEventListener("click", () => {
-                selectChoice(idx);
-            });
-            return pill;
-    };
-
-    const _SECTION_LABELS = {
-        movement: "Ruch i Eksploracja",
-        combat: "Walka",
-        generic: "Akcje Ogólne",
-        heritage: "Dziedzictwo / Pochodzenie",
-        class: "Akcje Klasowe",
-        utility: "Zarządzanie",
-        turn: "Tura",
-    };
-    const ensureChoiceList = (list) => {
-        let lastCategory = null;
-        list.forEach((c, idx) => {
-            const cat = c.category || "";
-            if (cat && cat !== "general" && cat !== lastCategory) {
-                const header = document.createElement("div");
-                header.className = `choice-section-head cat-${cat}`;
-                header.textContent = _SECTION_LABELS[cat] || cat;
-                actionChoices.appendChild(header);
-                lastCategory = cat;
-            }
-            actionChoices.appendChild(createChoicePill(c, idx));
-        });
-    };
-
-    const renderCharacterCreationShopColumns = (list) => {
-        if (layoutMode !== "menu_numpad") return false;
-        if (String(prompt?.source || "").toLowerCase() !== "character_creation") return false;
-        const filterIndices = [];
-        const listIndices = [];
-        const indexToGroup = {};
-
-        list.forEach((row, idx) => {
-            const raw = String(row.raw || "").trim().toLowerCase();
-            if (raw.startsWith("__filter:")) {
-                filterIndices.push(idx);
-                indexToGroup[idx] = "filters";
-            } else {
-                listIndices.push(idx);
-                indexToGroup[idx] = "list";
-            }
-        });
-        if (!filterIndices.length || !listIndices.length) return false;
-
-        actionChoices.classList.add("choice-columns-mode");
-        const columns = document.createElement("div");
-        columns.className = "choice-columns";
-
-        const filterCol = document.createElement("div");
-        filterCol.className = "choice-column";
-        filterCol.dataset.group = "filters";
-        const filterHead = document.createElement("div");
-        filterHead.className = "choice-column-head";
-        filterHead.textContent = "Filtry";
-        const filterHint = document.createElement("div");
-        filterHint.className = "choice-column-hint";
-        filterHint.textContent = "4/6: panel | 8/2: nawigacja";
-        const filterList = document.createElement("div");
-        filterList.className = "choice-column-list";
-        filterIndices.forEach((idx) => {
-            filterList.appendChild(createChoicePill(list[idx], idx));
-        });
-        filterCol.appendChild(filterHead);
-        filterCol.appendChild(filterHint);
-        filterCol.appendChild(filterList);
-
-        const itemsCol = document.createElement("div");
-        itemsCol.className = "choice-column";
-        itemsCol.dataset.group = "list";
-        const itemsHead = document.createElement("div");
-        itemsHead.className = "choice-column-head";
-        itemsHead.textContent = "Lista";
-        const itemsHint = document.createElement("div");
-        itemsHint.className = "choice-column-hint";
-        itemsHint.textContent = "Enter: wybór";
-        const itemsList = document.createElement("div");
-        itemsList.className = "choice-column-list";
-        listIndices.forEach((idx) => {
-            itemsList.appendChild(createChoicePill(list[idx], idx));
-        });
-        itemsCol.appendChild(itemsHead);
-        itemsCol.appendChild(itemsHint);
-        itemsCol.appendChild(itemsList);
-
-        columns.appendChild(filterCol);
-        columns.appendChild(itemsCol);
-        actionChoices.appendChild(columns);
-
-        const selectedGroup = indexToGroup[selectedChoiceIndex] || "list";
-        menuNumpadContext = {
-            enabled: true,
-            groups: { filters: filterIndices, list: listIndices },
-            indexToGroup,
-            activeGroup: selectedGroup,
+    if (state.view.focusCard) {
+        const card = state.view.focusCard;
+        const deduped = dedupeCardText(
+            card.title,
+            card.summary || "",
+            card.body_markdown || "",
+        );
+        return {
+            title: deduped.title,
+            summary: deduped.summary,
+            body: deduped.body,
+            details: card.details_markdown || "",
+            communication: card.communication || {},
+            prompt: null,
         };
-        return true;
+    }
+    if (state.view.idleState) {
+        const idle = state.view.idleState;
+        return {
+            title: idle.title,
+            summary: idle.summary || "",
+            body: idle.body_markdown || "",
+            details: idle.details_markdown || "",
+            communication: idle.communication || {},
+            prompt: null,
+        };
+    }
+    return {
+        title: "Czekam na wydarzenia",
+        summary: "Po uruchomieniu scenariusza centralna karta pokaże bieżące instrukcje dla gracza.",
+        body: "",
+        details: "",
+        communication: { channel: "ready", priority: "info" },
+        prompt: null,
     };
+}
 
-    if (layoutMode === "dialog" || layoutMode === "interact") {
-        if (normalized.length > 0) {
-            ensureChoiceList(normalized);
-            actionAnswer.value = selectedChoiceIndex >= 0 ? currentChoices[selectedChoiceIndex] || "" : "";
-            actionAnswer.classList.add("input-hidden");
-            actionAnswer.required = false;
-            updateChoiceHighlight();
-            updateChoiceDesc();
-            actionText.classList.add("hidden");
-            actionPrompt.classList.add("hidden");
-            actionDesc.classList.add("hidden");
-        } else {
-            // dialog bez opcji = zwykły prompt tekstowy (np. imię postaci)
-            actionAnswer.value = "";
-            actionAnswer.placeholder = prompt.answer_placeholder || "Wpisz tekst...";
-            actionAnswer.required = false;
-            actionAnswer.classList.remove("input-hidden");
-            actionText.classList.remove("hidden");
-            actionPrompt.classList.toggle("hidden", !promptBody);
-            actionDesc.classList.add("hidden");
+function derivedInstructionText(card) {
+    const prompt = card.prompt;
+    const communication = card.communication || {};
+    const cta = String(communication.cta || "").trim();
+    if (cta) return cta;
+    const continueHint = String(communication.context?.continue || "").trim();
+    if (continueHint) return continueHint;
+    if (!prompt) {
+        if (String(communication.semantic_type || "").toLowerCase() === "result") {
+            return "Zapoznaj się z wynikiem bieżącej akcji.";
         }
-    } else if (layoutMode === "file_image") {
-        actionTitle.textContent = prompt.title || "Wybór portretu";
-        actionText.textContent = prompt.subtitle || "Wybierz plik obrazu portretu i potwierdź Enterem.";
-        actionAnswer.value = "";
-        actionAnswer.required = false;
-        actionAnswer.classList.add("input-hidden");
-        actionPrompt.classList.toggle("hidden", !promptBody);
-        actionText.classList.remove("hidden");
-        _renderFileImagePicker();
-    } else if (layoutMode === "action_select") {
-        // pierwszy krok: wpisz nazwę akcji
-        actionTitle.textContent = prompt.title || "Wybierz akcję";
-        actionText.textContent = prompt.subtitle || "Wpisz nazwę akcji i potwierdź Enterem.";
-        actionAnswer.placeholder = "Nazwa akcji...";
-        actionAnswer.value = "";
-        actionAnswer.required = true;
-        actionAnswer.classList.remove("input-hidden");
-    } else if (layoutMode === "test" || layoutMode === "damage") {
-        const useRollStack = _isRollStackPrompt(prompt);
-        if (useRollStack) {
-            actionAnswer.value = "";
-            actionAnswer.required = false;
-            actionAnswer.classList.add("input-hidden");
-            _initRollStack(prompt);
-        } else {
-            actionAnswer.placeholder = prompt.answer_placeholder || "Podaj wynik (liczba)...";
-            actionAnswer.value = "";
-            actionAnswer.required = true;
-            actionAnswer.classList.remove("input-hidden");
-        }
-        if (prompt.modifiers) {
-            renderMods(prompt.modifiers);
-        }
-    } else if (prompt.kind === "info" && _isStatsPrompt(prompt)) {
-        actionAnswer.value = "";
-        actionAnswer.placeholder = "Enter aby zamknąć";
-        actionAnswer.required = false;
-        actionAnswer.classList.add("input-hidden");
-        actionPrompt.classList.add("hidden");
-        _renderStatsPanel(prompt.prompt_long || "");
-    } else if (prompt.kind === "info") {
-        actionAnswer.value = "";
-        actionAnswer.placeholder = "Enter aby zamknąć";
-        actionAnswer.required = false;
-        actionAnswer.classList.add("input-hidden");
-    } else if (normalized.length > 0) {
-        if (!renderCharacterCreationShopColumns(normalized)) {
-            ensureChoiceList(normalized);
-        }
-        actionAnswer.value = selectedChoiceIndex >= 0 ? currentChoices[selectedChoiceIndex] || "" : "";
-        actionAnswer.classList.add("input-hidden");
-        actionAnswer.required = false;
-        updateChoiceHighlight();
-        updateChoiceDesc();
-        actionDesc.classList.add("hidden");
-    } else {
-        actionAnswer.placeholder = "Twoja odpowiedź...";
-        actionAnswer.required = true;
-        actionAnswer.classList.remove("input-hidden");
-        actionDesc.classList.remove("hidden");
+        return "";
     }
-    _renderNaturalControls(prompt);
-    actionForm.classList.remove("hidden");
-    renderHeroes();
-    updateSessionSummary();
-    if (rollStackState) {
-        _renderRollStack();
-    } else {
-        actionAnswer.focus();
+    if (prompt.kind === "choice") {
+        return promptChoices(prompt).length
+            ? "Wybierz jedną z dostępnych opcji."
+            : "Wpisz odpowiedź i zatwierdź ją, aby kontynuować.";
     }
+    if (prompt.kind === "roll") {
+        return "Wpisz wynik rzutu i zatwierdź go, aby rozliczyć akcję.";
+    }
+    if (prompt.kind === "info") {
+        return "Przeczytaj komunikat i potwierdź, aby przejść dalej.";
+    }
+    return "Wpisz odpowiedź i zatwierdź ją, aby kontynuować.";
 }
 
-function closePrompt() {
-    activePrompt = null;
-    confirmMode = false;
-    storedSelection = "";
-    layoutMode = "info";
-    rollNaturalMode = "none";
-    fileImagePayload = null;
-    rollStackState = null;
-    _resetMenuNumpadContext();
-    actionForm.classList.add("hidden");
-    actionChoices.innerHTML = "";
-    actionDesc.textContent = "";
-    actionDesc.classList.remove("hidden");
-    actionPrompt.innerHTML = "";
-    actionPrompt.classList.add("hidden");
-    actionTitle.textContent = "Czekam na działania...";
-    actionText.innerHTML = "";
-    actionText.classList.remove("hidden");
-    resetActionCommunication();
-    clearMods();
-    _renderNaturalControls(null);
-    refreshLeftIllustration();
-    renderHeroes();
-    updateSessionSummary();
-    processPromptQueue();
-    flushPendingPassiveCommunication();
-}
-
-function processPromptQueue() {
-    if (activePrompt) return;
-    const next = promptQueue.shift();
-    if (!next) return;
-    openPrompt(next);
-}
-
-function selectChoice(idx) {
-    if (idx < 0 || idx >= currentChoices.length) return;
-    selectedChoiceIndex = idx;
-    if (_isGroupedMenuNumpad()) {
-        const group = menuNumpadContext.indexToGroup?.[idx];
-        if (group === "filters" || group === "list") {
-            menuNumpadContext.activeGroup = group;
+function promptCommandLines(prompt) {
+    if (!prompt) return [];
+    if (prompt.kind === "choice" && promptChoices(prompt).length) {
+        const lines = [
+            "**`8` / `2` albo strzałki** zmieniają zaznaczenie.",
+            "**`Enter`** zatwierdza aktualną opcję.",
+            "**Kliknięcie opcji** pokazuje jej opis.",
+            "**Przycisk Potwierdź** wysyła zaznaczoną opcję.",
+        ];
+        if (promptCancelChoice(prompt)) {
+            lines.push("**`Esc`** anuluje bieżący wybór.");
         }
+        return lines;
     }
-    choiceMeta = choiceMeta.map((c, i) => ({ ...c, expanded: i === idx }));
-    actionAnswer.value = currentChoices[idx];
-    updateChoiceHighlight();
-    updateChoiceDesc();
-    renderHeroes();
+    if (prompt.kind === "roll") {
+        return [
+            "**Wpisz wynik rzutu** w polu odpowiedzi.",
+            "**`Enter`** wysyła wynik do gry.",
+            "**`Nat 20`** i **`Nat 1`** oznaczają wynik naturalny.",
+        ];
+    }
+    if (prompt.kind === "info") {
+        return ["**`Enter`** potwierdza komunikat i przechodzi do kolejnego kroku."];
+    }
+    return [
+        "**Wpisz odpowiedź** w polu tekstowym.",
+        "**`Enter`** zatwierdza odpowiedź.",
+    ];
 }
 
-function updateChoiceHighlight() {
-    const pills = actionChoices.querySelectorAll(".choice-pill");
-    pills.forEach((pill, fallbackIndex) => {
-        const dataIndex = Number.parseInt(String(pill.dataset.choiceIndex || ""), 10);
-        const idx = Number.isInteger(dataIndex) ? dataIndex : fallbackIndex;
-        const isSelected = idx === selectedChoiceIndex;
-        const isExpanded = choiceMeta[idx]?.expanded;
-        pill.classList.toggle("selected", isSelected);
-        pill.classList.toggle("expanded", isExpanded);
-        if (isSelected) {
-            pill.scrollIntoView({ block: "nearest", inline: "nearest" });
-        }
-    });
-    const columns = actionChoices.querySelectorAll(".choice-column");
-    columns.forEach((column) => {
-        if (!_isGroupedMenuNumpad()) {
-            column.classList.remove("active");
-            return;
-        }
-        const group = String(column.dataset.group || "");
-        column.classList.toggle("active", group === menuNumpadContext.activeGroup);
-    });
+function promptCommandSummary(prompt) {
+    if (!prompt) return "";
+    if (prompt.kind === "choice" && promptChoices(prompt).length) {
+        const hasCancel = Boolean(promptCancelChoice(prompt));
+        return hasCancel
+            ? "8/2 lub strzałki: wybór · Enter/przycisk: zatwierdź · Esc: anuluj"
+            : "8/2 lub strzałki: wybór · Enter/przycisk: zatwierdź";
+    }
+    if (prompt.kind === "roll") {
+        return "Wpisz wynik · Enter: wyślij · Nat 20/Nat 1: wynik naturalny";
+    }
+    if (prompt.kind === "info") {
+        return "Enter: dalej";
+    }
+    return "Enter: zatwierdź";
 }
 
-function updateChoiceDesc() {
-    if (actionDesc.classList.contains("hidden")) {
-        return;
-    }
-    if (selectedChoiceIndex < 0 || selectedChoiceIndex >= choiceMeta.length) {
-        actionDesc.textContent = "";
-        return;
-    }
-    actionDesc.textContent = choiceMeta[selectedChoiceIndex]?.desc || "";
-}
-
-function _isStatsPrompt(prompt) {
+function isRollLikePrompt(prompt) {
     if (!prompt) return false;
-    const source = String(prompt.source || "").toLowerCase();
-    const title = String(prompt.title || prompt.prompt || "").toLowerCase();
-    return source === "stats" || title.includes("statystyk");
+    const layout = String(prompt.layout || "").toLowerCase();
+    return prompt.kind === "roll" || layout === "test" || layout === "damage";
 }
 
-function _renderStatsPanel(rawText) {
-    actionChoices.innerHTML = "";
-    const panel = document.createElement("div");
-    panel.className = "stats-panel";
-
-    const lines = String(rawText || "")
-        .split("\n")
-        .map((line) => String(line || "").trim())
-        .filter((line) => line.length > 0);
-
-    let section = document.createElement("div");
-    section.className = "stats-section";
-    const defaultHeader = document.createElement("div");
-    defaultHeader.className = "stats-section-title";
-    defaultHeader.textContent = "Postać";
-    section.appendChild(defaultHeader);
-    panel.appendChild(section);
-
-    const appendRow = (label, value, kind = "kv") => {
-        const row = document.createElement("div");
-        row.className = `stats-row ${kind}`;
-        if (label) {
-            const key = document.createElement("span");
-            key.className = "stats-key";
-            key.textContent = label;
-            row.appendChild(key);
-        }
-        const val = document.createElement("span");
-        val.className = "stats-value";
-        val.textContent = value || "";
-        row.appendChild(val);
-        section.appendChild(row);
-    };
-
-    lines.forEach((line) => {
-        if (line.endsWith(":") && !line.startsWith("- ")) {
-            section = document.createElement("div");
-            section.className = "stats-section";
-            const header = document.createElement("div");
-            header.className = "stats-section-title";
-            header.textContent = line.slice(0, -1).trim();
-            section.appendChild(header);
-            panel.appendChild(section);
-            return;
-        }
-        if (line.startsWith("- ")) {
-            appendRow("•", line.slice(2).trim(), "bullet");
-            return;
-        }
-        const sep = line.indexOf(":");
-        if (sep > 0) {
-            const key = line.slice(0, sep).trim();
-            const value = line.slice(sep + 1).trim();
-            appendRow(key, value, "kv");
-            return;
-        }
-        appendRow("", line, "plain");
-    });
-
-    actionChoices.appendChild(panel);
-    actionDesc.classList.remove("hidden");
-    actionDesc.textContent = "Enter: zamknij panel statystyk.";
+function shouldShowCommandHelp(card, details, nextLines) {
+    const prompt = card.prompt;
+    if (!prompt) return false;
+    return Boolean(details || nextLines.length || promptCommandLines(prompt).length);
 }
 
-function normalizeChoices(prompt) {
-    const ensureStructuredChoiceDesc = (label, rawDesc) => {
-        const sectionValue = (line) => {
-            const idx = String(line || "").indexOf(":");
-            if (idx < 0) return "";
-            return String(line).slice(idx + 1).trim();
-        };
-        const normalizeBulletLine = (line) => String(line || "").replace(/^[\-\u2022]\s*/, "").trim();
-        const splitEffectParts = (raw) => {
-            const text = String(raw || "").trim();
-            if (!text) return [];
-            return text
-                .split(/\r?\n/)
-                .map((item) => normalizeBulletLine(item))
-                .filter(Boolean)
-                .flatMap((item) => item.split(/\s*\|\s*/))
-                .map((item) => String(item || "").trim())
-                .filter(Boolean);
-        };
-        const formatStructured = (fluff, when, effect) => {
-            const whenText = String(when || "").trim() || "Po wybraniu tej opcji.";
-            const effectParts = splitEffectParts(effect);
-            if (!effectParts.length) effectParts.push("Brak dodatkowego opisu mechaniki.");
-            const lines = [`Fluff: ${String(fluff || "").trim() || "Opcja wyboru."}`, "Mechanika:", `- Kiedy: ${whenText}`];
-            if (effectParts.length === 1) {
-                lines.push(`- Efekt: ${effectParts[0]}`);
-            } else {
-                lines.push("- Efekt:");
-                effectParts.forEach((item) => lines.push(`  - ${item}`));
-            }
-            return lines.join("\n");
-        };
-        const desc = String(rawDesc || "").trim();
-        if (!desc) {
-            return formatStructured("Opcja wyboru.", "Po wybraniu tej opcji.", "Brak dodatkowego opisu mechaniki.");
-        }
-        const alreadyStructured =
-            !desc.includes("|") &&
-            /^\s*Fluff\s*:/im.test(desc) &&
-            /^\s*Mechanika\s*:\s*$/im.test(desc) &&
-            /^\s*-\s*Kiedy\s*:/im.test(desc) &&
-            /^\s*-\s*Efekt\s*:/im.test(desc);
-        if (alreadyStructured) return desc;
-        let fluff = "";
-        let when = "";
-        let effect = "";
-        let mechanics = "";
+function buildActionHelp(card) {
+    const blocks = [];
+    const details = String(card.details || "").trim();
+    if (details) blocks.push(details);
+    return blocks.join("\n\n").trim();
+}
 
-        const lines = desc.split(/\r?\n/).map((line) => String(line || "").trim()).filter(Boolean);
-        if (/^\s*(NAZWA\s*:|Fluff\s*:|Mechanika\s*:|Kiedy\s*:|Efekt\s*:)/i.test(desc)) {
-            lines.forEach((line) => {
-                const normalized = normalizeBulletLine(line);
-                if (/^Fluff\s*:/i.test(normalized)) fluff = sectionValue(normalized) || fluff;
-                else if (/^Mechanika\s*:/i.test(normalized)) mechanics = sectionValue(normalized) || mechanics;
-                else if (/^Kiedy\s*:/i.test(normalized)) when = sectionValue(normalized) || when;
-                else if (/^Efekt\s*:/i.test(normalized)) effect = sectionValue(normalized) || effect;
-            });
-        } else {
-            const compact = desc.replace(/\s+/g, " ").trim();
-            const dotIdx = compact.indexOf(".");
-            fluff = dotIdx > 0 && dotIdx < 180 ? compact.slice(0, dotIdx + 1).trim() : compact;
-            mechanics = desc;
-        }
+function compactChoicePromptText(text) {
+    const raw = String(text || "").trim();
+    if (!raw) return { preview: "", full: "" };
 
-        if (!fluff) {
-            const compact = desc.replace(/\s+/g, " ").trim();
-            const dotIdx = compact.indexOf(".");
-            fluff = dotIdx > 0 && dotIdx < 180 ? compact.slice(0, dotIdx + 1).trim() : compact || "Opcja wyboru.";
+    const maxLines = 6;
+    const maxChars = 520;
+    const lines = raw.split("\n");
+    const kept = [];
+    let charCount = 0;
+    let truncated = false;
+
+    for (const line of lines) {
+        const nextCharCount = charCount + line.length + 1;
+        if (kept.length >= maxLines || nextCharCount > maxChars) {
+            truncated = true;
+            break;
         }
-        const mechanicsSource = mechanics || desc;
-        if (!when) {
-            const whenMatch = mechanicsSource.match(/Kiedy:\s*(.*?)(?:\s*(?:\||;)\s*Efekt:|\s+Efekt:|$)/i);
-            when = whenMatch && whenMatch[1] ? String(whenMatch[1]).trim() : "Po wybraniu tej opcji.";
-        }
-        if (!effect) {
-            const effectMatch = mechanicsSource.match(/Efekt:\s*(.*)$/i);
-            effect = effectMatch && effectMatch[1] ? String(effectMatch[1]).trim() : mechanicsSource;
-        }
-        if (!effect) effect = "Brak dodatkowego opisu mechaniki.";
-        return formatStructured(fluff, when, effect);
-    };
-    // prefer structured choice_meta if provided
-    if (Array.isArray(prompt.choice_meta) && prompt.choice_meta.length) {
-        return prompt.choice_meta.map((c) => ({
-            raw: c.raw || c.label || "",
-            label: c.label || c.raw || "",
-            desc: ensureStructuredChoiceDesc(c.label || c.raw || "", c.desc || ""),
-            key: c.key || "",
-            category: c.category || "",
-            icon: c.icon || "",
-            heroPreview:
-                c && typeof c.hero_preview === "object" && c.hero_preview
-                    ? c.hero_preview
-                    : c && typeof c.heroPreview === "object" && c.heroPreview
-                    ? c.heroPreview
-                    : null,
+        kept.push(line);
+        charCount = nextCharCount;
+    }
+
+    if (!truncated) return { preview: raw, full: "" };
+    const preview = kept.length ? kept.join("\n").trim() : raw.slice(0, maxChars).trim();
+    return { preview: `${preview}\n\n...`, full: raw };
+}
+
+function buildActionSections(card) {
+    const summary = String(card.summary || "").trim();
+    let body = String(card.body || "").trim();
+    const prompt = card.prompt;
+
+    if (isRollLikePrompt(prompt)) {
+        return {
+            scene: summary,
+            help: String(card.details || "").trim(),
+            disclosureTitle: "Szczegóły rzutu",
+            disclosureBody: body && !sameMeaning(body, summary) ? body : "",
+        };
+    }
+
+    if (prompt?.kind === "choice" && promptChoices(prompt).length) {
+        const fullScene = [
+            summary,
+            body && !sameMeaning(summary, body) ? body : "",
+        ].filter(Boolean).join("\n\n");
+        const compacted = compactChoicePromptText(fullScene);
+        return {
+            scene: compacted.preview,
+            help: buildActionHelp(card),
+            disclosureTitle: "Pełny opis",
+            disclosureBody: compacted.full,
+        };
+    }
+
+    let scene = summary;
+    if (!scene) {
+        scene = body;
+        body = "";
+    } else if (body && !sameMeaning(summary, body)) {
+        scene = `${summary}\n\n${body}`;
+        body = "";
+    }
+
+    const help = buildActionHelp(card);
+    return { scene, help, disclosureTitle: "", disclosureBody: "" };
+}
+
+function activeActorEntry() {
+    if (state.activeActor?.id) return state.activeActor;
+    if (state.initiative.active_id && Array.isArray(state.initiative.order)) {
+        return state.initiative.order.find((entry) => String(entry.id || "") === String(state.initiative.active_id || "")) || null;
+    }
+    return null;
+}
+
+function renderActiveActorFocus() {
+    if (!refs.activeActorPanel) return;
+    const actor = activeActorEntry();
+    if (!actor?.id) {
+        refs.activeActorPanel.classList.add("hidden");
+        refs.activeActorName.textContent = "-";
+        refs.activeActorMeta.textContent = "";
+        refs.activeActorPortrait.style.backgroundImage = "";
+        return;
+    }
+    const image = resolveActorImage(actor);
+    const kind = String(actor.kind || "").trim().toLowerCase();
+    const meta = [];
+    if (kind) meta.push(kind === "hero" ? "Bohater" : kind === "enemy" ? "Przeciwnik" : kind);
+    if (actor.current ?? actor.effective_initiative ?? actor.initiative) {
+        meta.push(`Init ${actor.current ?? actor.effective_initiative ?? actor.initiative}`);
+    }
+    refs.activeActorName.textContent = actor.name || actor.id || "Aktor";
+    refs.activeActorMeta.textContent = meta.join(" · ");
+    refs.activeActorPortrait.style.backgroundImage = image ? `url("${image}")` : "";
+    refs.activeActorPanel.classList.remove("hidden");
+}
+
+function toggleAdventureDrawer() {
+    if (!refs.adventureDrawer) return;
+    const nextOpen = !refs.adventureDrawer.open;
+    if (nextOpen && refs.mastheadShell) refs.mastheadShell.open = true;
+    refs.adventureDrawer.open = nextOpen;
+}
+
+function renderActionCard() {
+    const card = activeCardData();
+    const communication = card.communication || {};
+    const sections = buildActionSections(card);
+    const prompt = card.prompt || null;
+    refs.actionCard?.classList.toggle("prompt-roll-card", isRollLikePrompt(prompt));
+    renderActiveActorFocus();
+    refs.actionChannel.textContent = String(communication.channel || "ready");
+    refs.actionTitle.textContent = card.title || "Czekam na wydarzenia";
+    refs.actionPriority.textContent = String(communication.priority || "info");
+    refs.actionPriority.className = "badge";
+    if (communication.priority === "action") refs.actionPriority.classList.add("badge-action");
+    else if (communication.priority === "result") refs.actionPriority.classList.add("badge-result");
+    else if (communication.priority === "debug") refs.actionPriority.classList.add("badge-debug");
+    else refs.actionPriority.classList.add("badge-idle");
+    const disclosureHtml = sections.disclosureBody
+        ? `<details class="prompt-disclosure"><summary>${escapeHtml(sections.disclosureTitle || "Szczegóły")}</summary><div class="prose compact">${markdownish(sections.disclosureBody)}</div></details>`
+        : "";
+    const sceneHtml = [
+        sections.scene ? markdownish(sections.scene) : "",
+        disclosureHtml,
+    ].filter(Boolean).join("");
+    refs.actionSceneBody.innerHTML = sceneHtml;
+    refs.actionScene.classList.toggle("hidden", !sceneHtml);
+    const helpHtml = sections.help ? markdownish(sections.help) : "";
+    refs.actionHelpBody.innerHTML = helpHtml;
+    refs.actionHelp.classList.toggle("hidden", !helpHtml);
+
+    const progress = communication.progress || null;
+    const current = Number(progress?.current ?? 0);
+    const total = Number(progress?.total ?? 0);
+    const percentage = total > 0 ? Math.max(0, Math.min(100, Math.round((current / total) * 100))) : 0;
+    refs.actionProgress.classList.toggle("hidden", !progress || total <= 0);
+    refs.actionProgressLabel.textContent = progress?.label || "Postęp";
+    refs.actionProgressValue.textContent = total > 0 ? `${current}/${total}` : "0/0";
+    refs.actionProgressBar.style.width = `${percentage}%`;
+
+    const metaParts = [];
+    const displayId = promptDisplayId(card.prompt || card);
+    if (displayId) metaParts.push(displayId);
+    const commandSummary = promptCommandSummary(card.prompt);
+    if (commandSummary) metaParts.push(commandSummary);
+    refs.promptMeta.textContent = metaParts.filter(Boolean).join(" · ");
+
+    renderPrompt(prompt);
+}
+
+function promptChoices(prompt) {
+    if (!prompt) return [];
+    if (prompt.choice_meta.length) {
+        return prompt.choice_meta.map((item, index) => ({
+            id: item.raw || String(index),
+            label: item.label || item.raw || `Opcja ${index + 1}`,
+            desc: item.desc_short || item.short_desc || item.desc || "",
+            detail: item.desc || item.details_markdown || item.description || item.desc_short || item.short_desc || "",
+            raw: item.raw || item.label || String(index),
+            category: item.category || "",
+            icon: item.icon || "",
+            image: item.image || item.thumbnail || "",
+            thumbnail: item.thumbnail || item.image || "",
+            asset_id: item.asset_id || "",
+            spell_id: item.spell_id || "",
+            spell_tier: item.spell_tier || item.tier || "",
+            key: item.key || "",
         }));
     }
-    const rawChoices = Array.isArray(prompt.choices) ? prompt.choices : [];
-    const cardMap = {
-        accept: "+",
-        decline: "-",
-        move: "1",
-        interact: "2",
-        seek: "3",
-        stealth: "4",
-        test_attack: "5",
-        special: "6",
-        delay: "7",
-        end: "8",
-    };
-    return rawChoices.map((raw) => {
-        const norm = String(raw).trim();
-        const lowerNorm = norm.toLowerCase();
-        let key = "";
-        let head = norm;
-        // prefiks przed ":" traktuj jako key (np. "1: Otwórz")
-        if (norm.includes(":")) {
-            const [pref, ...rest] = norm.split(":");
-            if (pref.trim().length === 1) {
-                key = pref.trim();
-                head = rest.join(":").trim();
-            }
-        }
-        const parts = head.split("—");
-        const title = parts[0].trim();
-        const desc = parts.slice(1).join("—").trim();
-        const mapped =
-            cardMap[title.toLowerCase()] ||
-            cardMap[lowerNorm] ||
-            (key ? cardMap[key.toLowerCase()] : undefined) ||
-            key;
-        const showMapped = mapped && !/^[0-9]+$/.test(String(mapped));
-        const label = showMapped ? `${mapped} · ${title}` : title;
-        const effectiveKey = mapped || key || (title.length === 1 ? title : "");
-        return { raw: norm, label, desc: ensureStructuredChoiceDesc(label, desc), key: effectiveKey };
-    });
+    return prompt.choices.map((item, index) => ({
+        id: String(index),
+        label: String(item),
+        desc: "",
+        detail: "",
+        raw: String(item),
+        category: "",
+        icon: "",
+        image: "",
+        thumbnail: "",
+        asset_id: "",
+        spell_id: "",
+        spell_tier: "",
+        key: "",
+    }));
 }
 
-function renderChoiceDescription(rawDesc) {
-    const container = document.createElement("div");
-    container.className = "desc-structured";
-
-    const appendLabelValue = (parent, label, text, lineClass = "") => {
-        const row = document.createElement("div");
-        row.className = lineClass ? `desc-line ${lineClass}` : "desc-line";
-        if (label) {
-            const labelEl = document.createElement("span");
-            labelEl.className = "desc-label";
-            labelEl.textContent = `${label}:`;
-            row.appendChild(labelEl);
-        }
-        if (text) {
-            const textEl = document.createElement("span");
-            textEl.className = "desc-text";
-            textEl.textContent = text;
-            row.appendChild(textEl);
-        }
-        parent.appendChild(row);
-        return row;
-    };
-
-    const appendBullet = (text, nested = false) => {
-        const row = document.createElement("div");
-        row.className = nested ? "desc-bullet desc-bullet-nested" : "desc-bullet";
-        const marker = document.createElement("span");
-        marker.className = "desc-bullet-marker";
-        marker.textContent = "•";
-        row.appendChild(marker);
-
-        const body = document.createElement("span");
-        body.className = "desc-bullet-body";
-        const trimmed = String(text || "").trim();
-        const sep = trimmed.indexOf(":");
-        if (sep > 0 && sep < 42) {
-            const labelEl = document.createElement("span");
-            labelEl.className = "desc-label";
-            labelEl.textContent = `${trimmed.slice(0, sep).trim()}:`;
-            body.appendChild(labelEl);
-            const value = trimmed.slice(sep + 1).trim();
-            if (value) {
-                const valueEl = document.createElement("span");
-                valueEl.className = "desc-text";
-                valueEl.textContent = ` ${value}`;
-                body.appendChild(valueEl);
-            }
-        } else {
-            body.textContent = trimmed;
-        }
-        row.appendChild(body);
-        container.appendChild(row);
-    };
-
-    const desc = String(rawDesc || "").trim();
-    if (!desc) return container;
-
-    const lines = desc.split(/\r?\n/).filter((line) => String(line || "").trim());
-    lines.forEach((line) => {
-        const raw = String(line || "");
-        const trimmed = raw.trim();
-        if (!trimmed) return;
-
-        if (/^Fluff\s*:/i.test(trimmed)) {
-            appendLabelValue(container, "Fluff", trimmed.split(":", 2)[1]?.trim() || "", "desc-fluff");
-            return;
-        }
-        if (/^Mechanika\s*:\s*$/i.test(trimmed)) {
-            const header = document.createElement("div");
-            header.className = "desc-section-title";
-            header.textContent = "Mechanika";
-            container.appendChild(header);
-            return;
-        }
-        if (/^-\s*(Kiedy|Efekt)\s*:/i.test(trimmed)) {
-            const match = trimmed.match(/^-\s*([^:]+):\s*(.*)$/);
-            const label = match?.[1]?.trim() || "";
-            const value = match?.[2]?.trim() || "";
-            appendLabelValue(container, label, value, "desc-topline");
-            return;
-        }
-        if (/^\s+-\s+/.test(raw)) {
-            appendBullet(raw.replace(/^\s+-\s+/, ""), true);
-            return;
-        }
-        if (/^-\s+/.test(trimmed)) {
-            appendBullet(trimmed.replace(/^-\s+/, ""), false);
-            return;
-        }
-
-        const plain = document.createElement("div");
-        plain.className = "desc-line desc-plain";
-        plain.textContent = trimmed;
-        container.appendChild(plain);
-    });
-
-    return container;
+function promptCancelChoice(prompt) {
+    const choices = promptChoices(prompt);
+    return choices.find((choice) => {
+        const raw = String(choice.raw || "").trim().toLowerCase();
+        const label = String(choice.label || "").trim().toLowerCase();
+        return raw.includes("cancel") || raw.includes("anuluj") || label.includes("anuluj");
+    }) || null;
 }
 
-function _coerceHeroPreview(rawPreview, fallbackLabel = "") {
-    return coerceHeroPreview(rawPreview, fallbackLabel, PLACEHOLDER_IMAGE);
+function _modifierBucketTotal(modifiers, bonusKey, penaltyKey) {
+    const bonuses = Array.isArray(modifiers?.[bonusKey]) ? modifiers[bonusKey] : [];
+    const penalties = Array.isArray(modifiers?.[penaltyKey]) ? modifiers[penaltyKey] : [];
+    const plus = bonuses.reduce((acc, row) => acc + Math.abs(Number(row?.value || 0)), 0);
+    const minus = penalties.reduce((acc, row) => acc + Math.abs(Number(row?.value || 0)), 0);
+    return plus - minus;
 }
 
-function _currentHeroSelectPreview() {
-    if (!activePrompt) return null;
-    const source = String(activePrompt.source || "").toLowerCase();
-    if (source !== "hero_select") return null;
-    if (!Array.isArray(choiceMeta) || selectedChoiceIndex < 0 || selectedChoiceIndex >= choiceMeta.length) {
-        return null;
-    }
-    const entry = choiceMeta[selectedChoiceIndex] || {};
-    return _coerceHeroPreview(entry.heroPreview || entry.hero_preview, entry.label || "Bohater");
-}
+function buildRollBreakdown(prompt) {
+    if (!prompt) return null;
+    const layout = String(prompt.layout || "").toLowerCase();
+    if (!isRollLikePrompt(prompt)) return null;
 
-// --- Heroes rendering ---
+    const stack = prompt.roll_stack && typeof prompt.roll_stack === "object" ? prompt.roll_stack : {};
+    const components = [];
+    const seeded = Array.isArray(stack.components) ? stack.components : [];
 
-function renderHeroes() {
-    const result = renderHeroesPanel({
-        refs,
-        heroesMap: heroes,
-        activeActorId,
-        activePromptSource: String(activePrompt?.source || "").toLowerCase(),
-        creationPreviewHeroId,
-        selectedHeroId,
-        heroSelectPreview: _currentHeroSelectPreview(),
-        placeholderImage: PLACEHOLDER_IMAGE,
-        onSelectHero: (heroId) => {
-            selectedHeroId = heroId;
-            renderHeroes();
-        },
-        cloneCreationAbilityDefaults: _cloneCreationAbilityDefaults,
-    });
-    const nextSelectedHeroId = result?.selectedHeroId || null;
-    if (nextSelectedHeroId !== selectedHeroId) {
-        selectedHeroId = nextSelectedHeroId;
-        renderHeroesPanel({
-            refs,
-            heroesMap: heroes,
-            activeActorId,
-            activePromptSource: String(activePrompt?.source || "").toLowerCase(),
-            creationPreviewHeroId,
-            selectedHeroId,
-            heroSelectPreview: _currentHeroSelectPreview(),
-            placeholderImage: PLACEHOLDER_IMAGE,
-            onSelectHero: (heroId) => {
-                selectedHeroId = heroId;
-                renderHeroes();
-            },
-            cloneCreationAbilityDefaults: _cloneCreationAbilityDefaults,
+    if (seeded.length) {
+        seeded.forEach((row, index) => {
+            components.push({
+                id: String(row?.id || `component_${index + 1}`),
+                label: String(row?.label || `Składnik ${index + 1}`),
+                value: Number(row?.value || 0),
+                description: String(row?.description || row?.desc || ""),
+            });
+        });
+    } else if (prompt.modifiers && typeof prompt.modifiers === "object") {
+        [
+            ["circumstance", "Okoliczności", "Premie i kary circumstance.", "bonCirc", "penCirc"],
+            ["status", "Status", "Premie i kary status.", "bonStat", "penStat"],
+            ["item", "Przedmiot", "Premie i kary item.", "bonItem", "penItem"],
+        ].forEach(([id, label, description, bonusKey, penaltyKey]) => {
+            const value = _modifierBucketTotal(prompt.modifiers, bonusKey, penaltyKey);
+            if (!value) return;
+            components.push({ id, label, value, description });
         });
     }
+
+    const componentsTotal = components.reduce((acc, row) => acc + Number(row.value || 0), 0);
+    const autoTotal = stack.auto_total_modifier == null ? componentsTotal : Number(stack.auto_total_modifier || 0);
+    if (autoTotal !== componentsTotal) {
+        components.push({
+            id: "other_auto",
+            label: "Pozostałe",
+            value: autoTotal - componentsTotal,
+            description: "Pozostały automatyczny modyfikator z mechaniki gry.",
+        });
+    }
+    const total = components.reduce((acc, row) => acc + Number(row.value || 0), 0);
+    if (!components.length) return null;
+    const targetDc = [
+        stack.target_dc,
+        stack.dc,
+        stack.target_ac,
+        prompt.communication?.context?.target_dc,
+        prompt.communication?.context?.dc,
+        prompt.communication?.context?.target_ac,
+    ].map((value) => Number(value)).find((value) => Number.isFinite(value) && value > 0) || null;
+    return {
+        title: layout === "damage" ? "Składniki obrażeń" : "Składniki modyfikatora",
+        total,
+        components,
+        targetDc: layout === "damage" ? null : targetDc,
+    };
+}
+
+function renderRollBreakdown(prompt) {
+    const breakdown = buildRollBreakdown(prompt);
+    if (!breakdown) {
+        refs.rollBreakdown.innerHTML = "";
+        refs.rollBreakdown.classList.add("hidden");
+        return;
+    }
+    refs.rollBreakdown.innerHTML = `
+        <div class="roll-breakdown-head">
+            <span>${escapeHtml(breakdown.title)}</span>
+            <strong>${escapeHtml(signedNumber(breakdown.total))}</strong>
+        </div>
+        <div class="roll-breakdown-list">
+            ${breakdown.components.map((row) => `
+                <article class="roll-breakdown-item">
+                    <div class="roll-breakdown-row">
+                        <strong>${escapeHtml(row.label)}</strong>
+                        <span>${escapeHtml(signedNumber(row.value))}</span>
+                    </div>
+                    <div class="roll-breakdown-note">${escapeHtml(row.description || "")}</div>
+                </article>
+            `).join("")}
+        </div>
+        ${breakdown.targetDc ? `
+            <div class="roll-breakdown-note">
+                DC/AC ${escapeHtml(breakdown.targetDc)}: sukces od ${escapeHtml(breakdown.targetDc)}, krytyczny sukces od ${escapeHtml(breakdown.targetDc + 10)}, krytyczna porażka przy ${escapeHtml(breakdown.targetDc - 10)} lub mniej.
+            </div>
+        ` : ""}
+    `;
+    refs.rollBreakdown.classList.remove("hidden");
+}
+
+function renderDiceOverlay() {
+    if (!refs.diceOverlay) return;
+    const roll = state.diceRoll;
+    if (!roll) {
+        refs.diceOverlay.classList.add("hidden");
+        refs.diceOverlay.innerHTML = "";
+        return;
+    }
+    const rolls = Array.isArray(roll.rolls) ? roll.rolls.map((item) => Number(item || 0)).filter((item) => Number.isFinite(item)) : [];
+    const faces = rolls.length ? rolls : [Number(roll.total || 0)];
+    refs.diceOverlay.innerHTML = `
+        <div class="dice-copy">
+            <span>${escapeHtml(roll.label || "Rzut przeciwnika")}</span>
+            <strong>${escapeHtml(roll.actor_name || "Przeciwnik")}${roll.target_name ? ` -> ${escapeHtml(roll.target_name)}` : ""}</strong>
+            <small>${escapeHtml(roll.formula || roll.roll_type || "k20")}</small>
+        </div>
+        <div class="dice-faces">
+            ${faces.map((face) => `<span class="die-face">${escapeHtml(face)}</span>`).join("")}
+        </div>
+        <div class="dice-total">${escapeHtml(roll.total ?? "")}</div>
+    `;
+    refs.diceOverlay.classList.remove("hidden");
+}
+
+function ensureSelectedChoiceIndex(choices) {
+    if (!choices.length) {
+        state.selectedChoiceIndex = -1;
+        return;
+    }
+    if (state.selectedChoiceIndex < 0 || state.selectedChoiceIndex >= choices.length) {
+        state.selectedChoiceIndex = 0;
+    }
+}
+
+function updateChoiceSelectionUI() {
+    const buttons = refs.choiceList.querySelectorAll(".choice-btn");
+    buttons.forEach((button, index) => {
+        const selected = index === state.selectedChoiceIndex;
+        button.classList.toggle("selected", selected);
+        if (selected) {
+            button.scrollIntoView({ block: "nearest", inline: "nearest" });
+        }
+    });
+    renderSelectedChoiceDetail();
+}
+
+function moveSelectedChoice(delta) {
+    const choices = promptChoices(state.view.activePrompt);
+    if (!choices.length) return;
+    ensureSelectedChoiceIndex(choices);
+    const length = choices.length;
+    state.selectedChoiceIndex = (state.selectedChoiceIndex + delta + length) % length;
+    updateChoiceSelectionUI();
+}
+
+function submitSelectedChoice() {
+    const choices = promptChoices(state.view.activePrompt);
+    if (!choices.length) return;
+    ensureSelectedChoiceIndex(choices);
+    const choice = choices[state.selectedChoiceIndex];
+    if (!choice) return;
+    audioManager.playSfx(audioEntrySource(scenarioAudioCue("choice_confirm")));
+    answerPrompt(choice.raw).catch((error) => window.alert(error.message));
+}
+
+function orderedChoiceSections(choices) {
+    const buckets = new Map();
+    choices.forEach((choice) => {
+        const category = String(choice.category || "").trim().toLowerCase() || "uncategorized";
+        if (!buckets.has(category)) buckets.set(category, []);
+        buckets.get(category).push(choice);
+    });
+    const ordered = [];
+    CHOICE_SECTION_ORDER.forEach((category) => {
+        if (buckets.has(category)) {
+            ordered.push([category, buckets.get(category)]);
+            buckets.delete(category);
+        }
+    });
+    Array.from(buckets.keys()).sort().forEach((category) => {
+        ordered.push([category, buckets.get(category)]);
+    });
+    return ordered;
+}
+
+function createChoiceButton(choice) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "choice-btn";
+    const category = String(choice.category || "").trim().toLowerCase();
+    if (category) button.classList.add(`choice-cat-${category}`);
+    const key = choice.key ? `<span class="choice-key">${escapeHtml(choice.key)}</span>` : "";
+    const icon = choice.icon ? `<span class="choice-icon">${escapeHtml(choice.icon)}</span>` : "";
+    const image = resolveChoiceImage(choice);
+    const thumb = image ? `<img class="choice-thumb" src="${escapeHtml(image)}" alt="" loading="lazy">` : "";
+    const desc = choice.desc ? `<span>${escapeHtml(choice.desc)}</span>` : "";
+    button.innerHTML = `
+        <div class="choice-btn-head">
+            <div class="choice-btn-title">${thumb}${icon}<strong>${escapeHtml(choice.label)}</strong></div>
+            ${key}
+        </div>
+        ${desc}
+    `;
+    button.addEventListener("click", () => {
+        const choices = promptChoices(state.view.activePrompt);
+        const nextIndex = choices.findIndex((entry) => entry.raw === choice.raw);
+        if (nextIndex >= 0) {
+            state.selectedChoiceIndex = nextIndex;
+            updateChoiceSelectionUI();
+        }
+    });
+    button.addEventListener("dblclick", () => {
+        const choices = promptChoices(state.view.activePrompt);
+        const nextIndex = choices.findIndex((entry) => entry.raw === choice.raw);
+        if (nextIndex >= 0) {
+            state.selectedChoiceIndex = nextIndex;
+            updateChoiceSelectionUI();
+        }
+        audioManager.playSfx(audioEntrySource(scenarioAudioCue("choice_confirm")));
+        answerPrompt(choice.raw).catch((error) => window.alert(error.message));
+    });
+    return button;
+}
+
+function renderSelectedChoiceDetail() {
+    const choices = promptChoices(state.view.activePrompt);
+    if (!choices.length) {
+        refs.choiceDetail.classList.add("hidden");
+        refs.choiceDetailTitle.textContent = "";
+        refs.choiceDetailBody.innerHTML = "";
+        return;
+    }
+    ensureSelectedChoiceIndex(choices);
+    const choice = choices[state.selectedChoiceIndex];
+    if (!choice) {
+        refs.choiceDetail.classList.add("hidden");
+        refs.choiceDetailTitle.textContent = "";
+        refs.choiceDetailBody.innerHTML = "";
+        return;
+    }
+    refs.choiceDetailTitle.textContent = choice.label || "Opcja";
+    refs.choiceDetailBody.innerHTML = markdownish(choice.detail || choice.desc || "Brak dodatkowego opisu tej opcji.");
+    refs.choiceDetail.classList.remove("hidden");
+}
+
+async function answerPrompt(answer) {
+    const promptId = state.view.activePrompt?.id;
+    if (!promptId) return;
+    audioManager.stopVoiceovers();
+    await fetchJson(`/api/prompts/${promptId}/response`, {
+        method: "POST",
+        body: JSON.stringify({ answer }),
+    });
+    state.promptDrafts.delete(promptId);
+    const refreshed = await fetchJson("/api/view-state");
+    syncViewState(refreshed.view_state || null);
+    state.naturalMode = "none";
+    state.selectedChoiceIndex = -1;
+    renderAll();
+}
+
+function submitCancelChoice() {
+    const cancelChoice = promptCancelChoice(state.view.activePrompt);
+    if (!cancelChoice) return false;
+    answerPrompt(cancelChoice.raw).catch((error) => window.alert(error.message));
+    return true;
+}
+
+function renderPrompt(prompt) {
+    refs.choiceList.innerHTML = "";
+    refs.choiceDetail.classList.add("hidden");
+    refs.choiceDetailTitle.textContent = "";
+    refs.choiceDetailBody.innerHTML = "";
+    refs.rollBreakdown.innerHTML = "";
+    refs.rollBreakdown.classList.add("hidden");
+    refs.promptForm.classList.add("hidden");
+    refs.naturalControls.classList.add("hidden");
+    refs.promptInput.classList.remove("hidden");
+    refs.promptSubmit.textContent = "Potwierdź";
+    if (!prompt) {
+        refs.promptInput.value = "";
+        state.lastRenderedPromptId = null;
+        return;
+    }
+
+    const promptChanged = state.lastRenderedPromptId !== prompt.id;
+    const savedDraft = state.promptDrafts.get(prompt.id) || "";
+    if (refs.promptInput.value !== savedDraft) {
+        refs.promptInput.value = savedDraft;
+    }
+    state.lastRenderedPromptId = prompt.id;
+
+    const choices = promptChoices(prompt);
+    if (choices.length) {
+        ensureSelectedChoiceIndex(choices);
+        const hasCategories = choices.some((choice) => String(choice.category || "").trim());
+        let renderedIndex = 0;
+        if (hasCategories) {
+            orderedChoiceSections(choices).forEach(([category, sectionChoices]) => {
+                if (category !== "uncategorized") {
+                    const header = document.createElement("div");
+                    header.className = `choice-section-head cat-${category}`;
+                    header.textContent = CHOICE_SECTION_LABELS[category] || category;
+                    refs.choiceList.appendChild(header);
+                }
+                sectionChoices.forEach((choice) => {
+                    const button = createChoiceButton(choice);
+                    button.dataset.choiceIndex = String(renderedIndex);
+                    refs.choiceList.appendChild(button);
+                    renderedIndex += 1;
+                });
+            });
+        } else {
+            choices.forEach((choice) => {
+                const button = createChoiceButton(choice);
+                button.dataset.choiceIndex = String(renderedIndex);
+                refs.choiceList.appendChild(button);
+                renderedIndex += 1;
+            });
+        }
+        updateChoiceSelectionUI();
+    } else {
+        state.selectedChoiceIndex = -1;
+    }
+
+    const needsChoiceConfirm = choices.length > 0;
+    const needsInput = prompt.kind === "roll" || (!choices.length && prompt.kind !== "info");
+    const isConfirmOnly = prompt.kind === "info" && !choices.length;
+    if (needsChoiceConfirm || needsInput || isConfirmOnly) {
+        refs.promptForm.classList.remove("hidden");
+        refs.promptInput.classList.toggle("hidden", isConfirmOnly || needsChoiceConfirm);
+        refs.promptInput.placeholder = prompt.kind === "roll"
+            ? (prompt.answer_placeholder || "Wpisz wynik rzutu...")
+            : "Wpisz odpowiedź...";
+        refs.naturalControls.classList.toggle("hidden", prompt.kind !== "roll");
+        refs.promptSubmit.textContent = needsChoiceConfirm
+            ? "Potwierdź wybór (Enter)"
+            : isConfirmOnly
+            ? "Potwierdź (Enter)"
+            : "Potwierdź";
+        if (promptChanged) {
+            queueMicrotask(() => {
+                if (isConfirmOnly || needsChoiceConfirm) refs.promptSubmit.focus();
+                else refs.promptInput.focus();
+            });
+        }
+    }
+    renderRollBreakdown(prompt);
+}
+
+function renderObjectives() {
+    const items = objectiveOrder();
+    if (!items.length) {
+        refs.objectiveList.innerHTML = `<div class="empty-state">Brak danych o celach.</div>`;
+        return;
+    }
+    const active = activeObjective();
+    refs.objectiveList.innerHTML = items.map((objective) => {
+        const done = state.completedObjectives.has(objective.id);
+        const activeClass = active && active.id === objective.id ? " active" : "";
+        const title = done ? `✓ ${objective.label}` : objective.label;
+        return `
+            <article class="objective-item${activeClass}">
+                <strong>${escapeHtml(title)}</strong>
+                <p>${escapeHtml(objective.description || "")}</p>
+            </article>
+        `;
+    }).join("");
+}
+
+function currentTeamEntries() {
+    return Array.from(state.heroes.values()).sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "pl"));
+}
+
+function renderTeam() {
+    const entries = currentTeamEntries();
+    const activeActor = actorInfoEntry();
+    if (!entries.length) {
+        refs.teamList.innerHTML = `<div class="empty-state">Brak danych o drużynie.</div>`;
+        return;
+    }
+    refs.teamList.innerHTML = entries.map((hero) => {
+        const active = String(hero.id || "") === String(activeActor?.id || "");
+        const hp = hero.max_hp && hero.wounds != null ? Math.max(0, Number(hero.max_hp) - Number(hero.wounds || 0)) : hero.max_hp;
+        const tags = Array.isArray(hero.statuses) ? hero.statuses.slice(0, 4).join(", ") : "";
+        const image = resolveActorImage(hero);
+        return `
+            <article class="team-card${active ? " active" : ""}">
+                <img class="team-avatar" src="${escapeHtml(image)}" alt="" loading="lazy">
+                <div class="team-copy">
+                    <strong>${escapeHtml(hero.name || hero.id || "Hero")}</strong>
+                    <div class="team-meta">
+                        <span>${escapeHtml((hero.class_id || "-").replaceAll("_", " "))}</span>
+                        <span>HP ${hp ?? "-"}</span>
+                        <span>AC ${hero.ac ?? "-"}</span>
+                        <span>Speed ${hero.speed_feet ?? hero.base_speed_feet ?? "-"}</span>
+                    </div>
+                    <div class="team-note">${escapeHtml(tags || hero.note || "")}</div>
+                </div>
+            </article>
+        `;
+    }).join("");
 }
 
 function renderInitiative() {
-    renderInitiativePanel(refs, initiativeState);
+    const hasInitiative = Array.isArray(state.initiative.order) && state.initiative.order.length;
+    refs.teamList.classList.toggle("hidden", Boolean(hasInitiative));
+    refs.initiativeList.classList.toggle("hidden", !hasInitiative);
+    if (refs.actorRailLabel) {
+        refs.actorRailLabel.textContent = hasInitiative
+            ? `Inicjatywa${state.initiative.round ? ` · Runda ${state.initiative.round}` : ""}`
+            : "Drużyna";
+    }
+    if (!hasInitiative) {
+        refs.initiativeList.innerHTML = `<div class="empty-state">Brak aktywnej inicjatywy.</div>`;
+        return;
+    }
+    refs.initiativeList.innerHTML = state.initiative.order.map((entry, index) => {
+        const active = String(entry.id || "") === String(state.initiative.active_id || "");
+        const label = entry.name || entry.id || `Actor ${index + 1}`;
+        const current = entry.current ?? entry.effective_initiative ?? entry.initiative ?? null;
+        const base = entry.base ?? entry.initiative ?? null;
+        const delta = Number.isFinite(entry.delta) ? Number(entry.delta) : null;
+        const score = current ?? base ?? "-";
+        const modifier = delta === null || delta === 0 ? "" : ` (${delta > 0 ? "+" : ""}${delta})`;
+        const wounds = Number.isFinite(Number(entry.wounds)) ? Number(entry.wounds) : null;
+        const maxHp = Number.isFinite(Number(entry.max_hp)) ? Number(entry.max_hp) : null;
+        const woundLine = wounds === null ? "" : `Rany ${escapeHtml(maxHp ? `${wounds}/${maxHp}` : String(wounds))}`;
+        const statuses = Array.isArray(entry.statuses)
+            ? entry.statuses.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 4)
+            : [];
+        const statusLine = statuses.length ? statuses.join(", ") : "";
+        const image = resolveActorImage(entry);
+        return `
+            <article class="initiative-entry${active ? " active" : ""}">
+                <img class="initiative-avatar" src="${escapeHtml(image)}" alt="" loading="lazy">
+                <div class="initiative-copy">
+                    <strong class="initiative-order">${index + 1}. ${escapeHtml(label)}</strong>
+                    <div class="initiative-line">Init ${escapeHtml(score)}${escapeHtml(modifier)}</div>
+                    ${woundLine ? `<div class="initiative-line">${woundLine}</div>` : ""}
+                    ${statusLine ? `<div class="initiative-line">${escapeHtml(statusLine)}</div>` : ""}
+                </div>
+            </article>
+        `;
+    }).join("");
 }
+
+function actorInfoEntry() {
+    const active = activeActorEntry();
+    if (active?.id) return active;
+    const heroes = currentTeamEntries();
+    return heroes.length ? heroes[0] : null;
+}
+
+function actorInfoRows(actor) {
+    if (!actor) return [];
+    const rows = [];
+    const kind = String(actor.kind || "").trim().toLowerCase();
+    if (kind) rows.push(["Typ", kind === "hero" ? "Bohater" : kind === "enemy" ? "Przeciwnik" : kind]);
+    const hp = actor.max_hp && actor.wounds != null ? Math.max(0, Number(actor.max_hp) - Number(actor.wounds || 0)) : actor.hp;
+    if (hp != null || actor.max_hp != null) rows.push(["HP", actor.max_hp != null ? `${hp ?? "-"} / ${actor.max_hp}` : String(hp)]);
+    if (actor.ac != null) rows.push(["AC", actor.ac]);
+    const speed = actor.speed_feet ?? actor.base_speed_feet ?? actor.speed;
+    if (speed != null) rows.push(["Speed", speed]);
+    const initiative = actor.current ?? actor.effective_initiative ?? actor.initiative;
+    if (initiative != null) rows.push(["Inicjatywa", initiative]);
+    const position = actor.position || actor.pos;
+    if (Array.isArray(position) && position.length >= 2) rows.push(["Pole", `(${position[0]}, ${position[1]})`]);
+    if (actor.class_id) rows.push(["Klasa", String(actor.class_id).replaceAll("_", " ")]);
+    if (actor.ancestry_id) rows.push(["Pochodzenie", String(actor.ancestry_id).replaceAll("_", " ")]);
+    return rows;
+}
+
+function renderActorInfo() {
+    if (!refs.actorInfoBody) return;
+    const actor = actorInfoEntry();
+    if (!actor) {
+        refs.actorInfoBody.innerHTML = `<div class="empty-state">Brak aktywnego bohatera.</div>`;
+        return;
+    }
+    const image = resolveActorImage(actor);
+    const rows = actorInfoRows(actor);
+    const statuses = Array.isArray(actor.statuses)
+        ? actor.statuses.map((item) => String(item || "").trim()).filter(Boolean)
+        : [];
+    refs.actorInfoBody.innerHTML = `
+        <div class="actor-info-card">
+            <img class="actor-info-portrait" src="${escapeHtml(image)}" alt="" loading="lazy">
+            <div>
+                <div class="panel-kicker">Aktywny uczestnik</div>
+                <h3>${escapeHtml(actor.name || actor.id || "Aktor")}</h3>
+                <div class="actor-info-grid">
+                    ${rows.map(([label, value]) => `
+                        <div>
+                            <span>${escapeHtml(label)}</span>
+                            <strong>${escapeHtml(value)}</strong>
+                        </div>
+                    `).join("")}
+                </div>
+            </div>
+        </div>
+        ${statuses.length ? `
+            <div class="actor-info-statuses">
+                ${statuses.slice(0, 18).map((status) => `<span>${escapeHtml(status)}</span>`).join("")}
+            </div>
+        ` : `<div class="empty-state">Brak statusów do pokazania.</div>`}
+    `;
+}
+
+function renderTransitions() {
+    const scenario = scenarioConfig();
+    if (!scenario || !state.currentMapId) {
+        refs.transitionList.innerHTML = `<div class="empty-state">Brak danych o przejściach.</div>`;
+        return;
+    }
+    const transitions = (scenario.transitions || {})[state.currentMapId] || [];
+    if (!transitions.length) {
+        refs.transitionList.innerHTML = `<div class="empty-state">Brak jawnych przejść dla tej mapy.</div>`;
+        return;
+    }
+    refs.transitionList.innerHTML = transitions.map((line) => `<div class="transition-item">${escapeHtml(line)}</div>`).join("");
+}
+
+function renderJournal() {
+    if (!state.view.journal.length) {
+        refs.journalList.innerHTML = `<div class="empty-state">Brak wpisów.</div>`;
+    } else {
+        refs.journalList.innerHTML = state.view.journal.map((entry) => `
+            <article class="journal-entry">
+                <div class="journal-entry-head">
+                    <strong>${escapeHtml(entry.title)}</strong>
+                    <small>${escapeHtml(entry.kind)}</small>
+                </div>
+                ${promptDisplayId(entry) ? `<div class="journal-entry-id">${escapeHtml(promptDisplayId(entry))}</div>` : ""}
+                ${entry.summary ? `<div class="journal-entry-summary">${escapeHtml(entry.summary)}</div>` : ""}
+                ${entry.body_markdown ? `<div class="journal-entry-body">${markdownish(entry.body_markdown || "")}</div>` : ""}
+            </article>
+        `).join("");
+    }
+    if (!state.view.debugFeed.length) {
+        refs.debugList.innerHTML = `<div class="empty-state">Brak wpisów debug.</div>`;
+    } else {
+        refs.debugList.innerHTML = state.view.debugFeed.map((entry) => `
+            <article class="debug-entry">
+                <strong>${escapeHtml(entry.title)}</strong>
+                <small>${escapeHtml(entry.kind)}</small>
+                ${promptDisplayId(entry) ? `<div class="journal-entry-id">${escapeHtml(promptDisplayId(entry))}</div>` : ""}
+                <div>${markdownish(entry.body_markdown || "")}</div>
+            </article>
+        `).join("");
+    }
+    refs.debugList.classList.toggle("hidden", !state.debugOpen);
+    refs.btnToggleDebug.textContent = state.debugOpen ? "Ukryj" : "Pokaż";
+}
+
+function renderTopbar() {
+    const scenario = scenarioConfig();
+    const chapter = state.currentMapId ? mapChapterById(state.currentMapId) : null;
+    const objective = activeObjective();
+    refs.topScenario.textContent = scenario?.title || "Bandit Cave";
+    refs.topMap.textContent = state.currentMapLabel || "-";
+    refs.topChapter.textContent = chapter?.chapter_title || "-";
+    refs.topObjective.textContent = objective?.label || (state.scenarioFinished ? "Scenariusz zakończony" : "-");
+    if (refs.adventureDrawerStatus) {
+        refs.adventureDrawerStatus.textContent = objective?.label
+            ? `Cel: ${objective.label}`
+            : state.scenarioFinished
+            ? "Scenariusz zakończony"
+            : "Dziennik przygody";
+    }
+}
+
+function renderResult() {
+    const scenario = scenarioConfig();
+    refs.resultTitle.textContent = scenario?.result_title || "Scenariusz zakończony";
+    refs.resultSummary.textContent = scenario?.result_summary || "Drużyna zakończyła scenariusz.";
+    refs.resultObjectives.innerHTML = objectiveOrder().map((objective) => {
+        const done = state.completedObjectives.has(objective.id);
+        return `<div class="objective-item${done ? " active" : ""}"><strong>${done ? "✓" : "•"} ${escapeHtml(objective.label)}</strong><p>${escapeHtml(objective.description || "")}</p></div>`;
+    }).join("");
+}
+
+function renderAll() {
+    renderRuntimeBadge();
+    renderRuntimeErrorModal();
+    updateAudioControls();
+    renderAssembly();
+    renderBriefing();
+    renderTopbar();
+    renderActionCard();
+    renderTeam();
+    renderInitiative();
+    renderActorInfo();
+    renderObjectives();
+    renderTransitions();
+    renderJournal();
+    renderDiceOverlay();
+    renderResult();
+}
+
+async function startRuntime() {
+    refs.btnStartRuntime.disabled = true;
+    try {
+        audioManager.stopVoiceovers();
+        state.dismissedRuntimeErrorKey = null;
+        const payload = await fetchJson("/api/runtime/start", {
+            method: "POST",
+            body: JSON.stringify({
+                scenario_id: "bandit_cave",
+                hero_ids: state.selectedHeroIds,
+            }),
+        });
+        state.sessionId = payload.session_id;
+        state.runtimeStatus = payload.runtime_status || state.runtimeStatus;
+        setScreen("game");
+        renderAll();
+    } finally {
+        refs.btnStartRuntime.disabled = false;
+    }
+}
+
+async function stopRuntime() {
+    audioManager.stopVoiceovers();
+    const payload = await fetchJson("/api/runtime/stop", { method: "POST", body: JSON.stringify({}) });
+    state.runtimeStatus = payload.runtime_status || state.runtimeStatus;
+    renderAll();
+}
+
+async function retryRuntime() {
+    refs.btnRuntimeRetry.disabled = true;
+    try {
+        audioManager.stopVoiceovers();
+        state.dismissedRuntimeErrorKey = null;
+        const payload = await fetchJson("/api/runtime/retry", { method: "POST", body: JSON.stringify({}) });
+        state.sessionId = payload.session_id || state.sessionId;
+        state.runtimeStatus = payload.runtime_status || state.runtimeStatus;
+        setScreen("game");
+        renderAll();
+    } finally {
+        refs.btnRuntimeRetry.disabled = false;
+    }
+}
+
+async function pollRuntimeStatus() {
+    try {
+        const payload = await fetchJson("/api/runtime/status");
+        state.runtimeStatus = payload.runtime_status || state.runtimeStatus;
+        if (state.runtimeStatus.session_id) state.sessionId = state.runtimeStatus.session_id;
+        if ((state.runtimeStatus.state === "running" || state.runtimeStatus.state === "starting") && state.screen !== "game" && !state.scenarioFinished) {
+            setScreen("game");
+        }
+        if (state.runtimeStatus.state === "stopped" && state.scenarioFinished) {
+            setScreen("result");
+        }
+        renderAll();
+    } catch (_error) {
+        // keep previous state
+    }
+}
+
+refs.btnBegin.addEventListener("click", () => {
+    enableAudioFromGesture();
+    setScreen("assembly");
+});
+refs.audioToggle.addEventListener("click", () => {
+    state.audioPreferenceLocked = true;
+    state.audioEnabled = !state.audioEnabled;
+    updateScenarioAudio();
+});
+refs.audioVolume.addEventListener("input", () => {
+    state.audioVolume = Math.max(0, Math.min(1, Number(refs.audioVolume.value || 0) / 100));
+    updateScenarioAudio();
+});
+refs.btnAssemblyBack.addEventListener("click", () => setScreen("start"));
+refs.btnAssemblyNext.addEventListener("click", () => {
+    if (!state.selectedHeroIds.length) return;
+    enableAudioFromGesture();
+    setScreen("briefing");
+});
+refs.btnBriefingBack.addEventListener("click", () => setScreen("assembly"));
+refs.btnStartRuntime.addEventListener("click", () => startRuntime().catch((error) => window.alert(error.message)));
+refs.btnStopRuntime.addEventListener("click", () => stopRuntime().catch((error) => window.alert(error.message)));
+refs.btnRuntimeRetry.addEventListener("click", () => retryRuntime().catch((error) => window.alert(error.message)));
+refs.btnRuntimeDismiss.addEventListener("click", () => {
+    state.dismissedRuntimeErrorKey = currentRuntimeErrorKey();
+    renderAll();
+});
+refs.btnToggleDebug.addEventListener("click", () => {
+    state.debugOpen = !state.debugOpen;
+    renderJournal();
+});
+refs.btnResultRestart.addEventListener("click", async () => {
+    await stopRuntime().catch(() => null);
+    setScreen("assembly");
+});
+refs.btnResultBack.addEventListener("click", async () => {
+    await stopRuntime().catch(() => null);
+    setScreen("start");
+});
+
+refs.promptForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (!state.view.activePrompt) return;
+    if (promptChoices(state.view.activePrompt).length) {
+        submitSelectedChoice();
+        return;
+    }
+    if (state.view.activePrompt.kind === "info" && !state.view.activePrompt.choices.length) {
+        answerPrompt("ok").catch((error) => window.alert(error.message));
+        return;
+    }
+    const raw = refs.promptInput.value.trim();
+    if (!raw && state.view.activePrompt.kind !== "roll") return;
+    if (state.view.activePrompt.kind === "roll") {
+        if (!raw) {
+            refs.promptInput.focus();
+            return;
+        }
+        const parsed = Number.parseInt(raw, 10);
+        if (Number.isNaN(parsed)) return;
+        answerPrompt({ roll: parsed, raw_roll: parsed, natural_mode: state.naturalMode }).catch((error) => window.alert(error.message));
+        return;
+    }
+    answerPrompt(raw).catch((error) => window.alert(error.message));
+});
+
+refs.promptInput.addEventListener("input", () => {
+    const promptId = state.view.activePrompt?.id;
+    if (!promptId) return;
+    state.promptDrafts.set(promptId, refs.promptInput.value);
+});
+
+document.addEventListener("keydown", (event) => {
+    if (state.screen !== "game") return;
+    if (event.key === "*") {
+        const target = event.target;
+        const isTypingTarget = target instanceof HTMLInputElement && !target.classList.contains("hidden");
+        if (!isTypingTarget) {
+            event.preventDefault();
+            toggleAdventureDrawer();
+        }
+        return;
+    }
+    if (!state.view.activePrompt) return;
+    if (_isUpNavigationKey(event)) {
+        const target = event.target;
+        const isTypingTarget = target instanceof HTMLInputElement && !target.classList.contains("hidden");
+        if (!isTypingTarget && promptChoices(state.view.activePrompt).length) {
+            event.preventDefault();
+            moveSelectedChoice(-1);
+        }
+        return;
+    }
+    if (_isDownNavigationKey(event)) {
+        const target = event.target;
+        const isTypingTarget = target instanceof HTMLInputElement && !target.classList.contains("hidden");
+        if (!isTypingTarget && promptChoices(state.view.activePrompt).length) {
+            event.preventDefault();
+            moveSelectedChoice(1);
+        }
+        return;
+    }
+    if (event.key === "Escape") {
+        if (submitCancelChoice()) {
+            event.preventDefault();
+        }
+        return;
+    }
+    if (event.key !== "Enter") return;
+    const target = event.target;
+    if (target instanceof HTMLTextAreaElement) return;
+    if (state.view.activePrompt.kind === "info" && !state.view.activePrompt.choices.length) {
+        event.preventDefault();
+        answerPrompt("ok").catch((error) => window.alert(error.message));
+        return;
+    }
+    const isTypingTarget = target instanceof HTMLInputElement && !target.classList.contains("hidden");
+    if (!isTypingTarget && promptChoices(state.view.activePrompt).length) {
+        event.preventDefault();
+        submitSelectedChoice();
+    }
+});
+
+refs.naturalControls.querySelectorAll("button").forEach((button) => {
+    button.addEventListener("click", () => {
+        const next = button.dataset.natural || "none";
+        state.naturalMode = state.naturalMode === next ? "none" : next;
+        refs.naturalControls.querySelectorAll("button").forEach((node) => {
+            node.classList.toggle("active", node.dataset.natural === state.naturalMode);
+        });
+    });
+});
+
+await loadInitialState();
+connectStream();
+state.runtimePoll = window.setInterval(() => {
+    pollRuntimeStatus();
+}, 2000);

@@ -1,13 +1,13 @@
-# UI v2 Bandit Cave - lista elementow do audio
+# Player UI Bandit Cave - lista elementow do audio
 
-Plik zbiera elementy graficzne i tekstowe z `future/player_ui_v2` oraz `assets/ui_v2/bandit_cave`, ktore warto przerobic na audio dla scenariusza `bandit_cave`.
+Plik zbiera elementy graficzne i tekstowe z `player_ui` oraz `assets/ui_v2/bandit_cave`, ktore warto przerobic na audio dla scenariusza `bandit_cave`.
 
 Zalozenia dla wszystkich promptow:
 - docelowy format w projekcie: `.mp3`,
 - nazwy plikow ponizej pasuja do katalogu `assets/ui_v2/bandit_cave/audio/`,
 - jezyk voiceoverow: polski,
 - klimat: fantasy PF2e, bandycka jaskinia, kontrabanda, podziemne doki,
-- UI v2 ma byc czytelne przy stole, wiec audio powinno byc krotkie i funkcjonalne,
+- Player UI ma byc czytelne przy stole, wiec audio powinno byc krotkie i funkcjonalne,
 - bez muzyki z rozpoznawalnych utworow i bez nazw marek poza nazwami z gry,
 - exportuj normalizowany plik bez dlugiej ciszy na poczatku i koncu.
 
@@ -21,7 +21,7 @@ Workflow ElevenLabs:
 ## Priorytet MVP - pliki juz wskazane przez manifest
 
 ### 1. Lektor: intro scenariusza
-- Zrodlo tekstu: `future/player_ui_v2/content/bandit_cave.json` -> `briefing_intro`
+- Zrodlo tekstu: `player_ui/content/bandit_cave.json` -> `briefing_intro`
 - Docelowy plik: `audio/voiceover/intro_001.mp3`
 - Typ: voiceover
 - Wykonanie: spokojne tempo, wyrazne pauzy po stawce misji i po opisie ukrytych przejsc. Narastajace napiecie bez patosu.
@@ -61,7 +61,7 @@ Odlegle szczekniecie psa w kamiennym tunelu, bardzo cichy poglos jaskini, bez ju
 - Prompt do ElevenLabs:
 
 ```text
-Stworz petle muzyczna do fantasy UI v2, scenariusz Bandit Cave. Dlugosc 45-60 sekund, seamless loop. Klimat: skradanie w jaskini bandytow, kontrabanda, niepewnosc przed walka. Instrumentarium: niskie drony, pojedyncze uderzenia bebna ramowego, szorstkie smyczki lub lira korbowa bardzo subtelnie. Tempo wolne, bez melodii wpadajacej w ucho, bez epickiego refrenu. Mix ma zostawiac miejsce na dialog lektora i dzwieki UI.
+Stworz petle muzyczna do Player UI, scenariusz Bandit Cave. Dlugosc 45-60 sekund, seamless loop. Klimat: skradanie w jaskini bandytow, kontrabanda, niepewnosc przed walka. Instrumentarium: niskie drony, pojedyncze uderzenia bebna ramowego, szorstkie smyczki lub lira korbowa bardzo subtelnie. Tempo wolne, bez melodii wpadajacej w ucho, bez epickiego refrenu. Mix ma zostawiac miejsce na dialog lektora i dzwieki UI.
 ```
 
 ### 4. Ambience: wejscie do jaskini
@@ -71,17 +71,17 @@ Stworz petle muzyczna do fantasy UI v2, scenariusz Bandit Cave. Dlugosc 45-60 se
 - Prompt do ElevenLabs:
 
 ```text
-Stworz ambientowa petle tla dla Player UI v2, mapa Cave Entrance w scenariuszu Bandit Cave. Dlugosc 45-60 sekund, seamless loop. Brzmienie: krople wody, cichy przeciag w kamiennym tunelu, odlegle skrzypniecia drewna, pojedyncze stlumione odglosy bandytow daleko w glebi. Bez wyraznej muzyki, bez glosnych jumpscare, bez rozpoznawalnych slow. Ma dzialac pod narracja i kliknieciami UI.
+Stworz ambientowa petle tla dla Player UI, mapa Cave Entrance w scenariuszu Bandit Cave. Dlugosc 45-60 sekund, seamless loop. Brzmienie: krople wody, cichy przeciag w kamiennym tunelu, odlegle skrzypniecia drewna, pojedyncze stlumione odglosy bandytow daleko w glebi. Bez wyraznej muzyki, bez glosnych jumpscare, bez rozpoznawalnych slow. Ma dzialac pod narracja i kliknieciami UI.
 ```
 
 ### 5. SFX UI: potwierdzenie wyboru
-- Zrodlo graficzne/UI: `images/placeholders/default_choice.svg`, przyciski wyboru w `future/player_ui_v2/static/app.js`
+- Zrodlo graficzne/UI: `images/placeholders/default_choice.svg`, przyciski wyboru w `player_ui/static/app.js`
 - Docelowy plik: `audio/sfx/choice_confirm.mp3`
 - Typ: SFX UI
 - Prompt do ElevenLabs:
 
 ```text
-Wygeneruj krotki dzwiek UI dla Player UI v2, scenariusz Bandit Cave: potwierdzenie wyboru opcji. Czas: 0.25-0.5 sekundy. Brzmienie: cichy klik drewnianego znacznika na stole plus lekki metaliczny akcent, jak moneta lub nit przy skorzanym pasku. Ma byc czytelny, ale nie agresywny. Bez melodii.
+Wygeneruj krotki dzwiek UI dla Player UI, scenariusz Bandit Cave: potwierdzenie wyboru opcji. Czas: 0.25-0.5 sekundy. Brzmienie: cichy klik drewnianego znacznika na stole plus lekki metaliczny akcent, jak moneta lub nit przy skorzanym pasku. Ma byc czytelny, ale nie agresywny. Bez melodii.
 ```
 
 ### 6. SFX UI: aktywny aktor
@@ -91,7 +91,7 @@ Wygeneruj krotki dzwiek UI dla Player UI v2, scenariusz Bandit Cave: potwierdzen
 - Prompt do ElevenLabs:
 
 ```text
-Wygeneruj krotki dzwiek UI dla Player UI v2 oznaczajacy zmiane aktywnego aktora w inicjatywie. Czas: 0.35-0.7 sekundy. Klimat Bandit Cave: szybki niski puls, przesuniecie pionka po drewnie, delikatny poglos jaskini. Dzwiek ma informowac, ze teraz czyjas tura jest aktywna. Bez alarmu i bez triumfalnej melodii.
+Wygeneruj krotki dzwiek UI dla Player UI oznaczajacy zmiane aktywnego aktora w inicjatywie. Czas: 0.35-0.7 sekundy. Klimat Bandit Cave: szybki niski puls, przesuniecie pionka po drewnie, delikatny poglos jaskini. Dzwiek ma informowac, ze teraz czyjas tura jest aktywna. Bez alarmu i bez triumfalnej melodii.
 ```
 
 ## Teksty scenariusza do voiceoverow
@@ -175,7 +175,7 @@ Załoga nie zdążyła odpłynąć. Łódź jest bez nadzoru, kontrabanda nadal 
 ```
 
 ### 13. Final: ucieczka statkiem
-- Zrodlo tekstu: `scenario_flows/bandit_cave.json` -> `escape_by_ship`, `future/player_ui_v2/content/bandit_cave.json` -> `result_summary`
+- Zrodlo tekstu: `scenario_flows/bandit_cave.json` -> `escape_by_ship`, `player_ui/content/bandit_cave.json` -> `result_summary`
 - Proponowany plik: `audio/voiceover/escape_ship_ending_001.mp3`
 - Wykonanie: zamkniecie przygody, spokojna satysfakcja. Pauza przed podsumowaniem skutkow.
 - Tekst do TTS:
@@ -188,10 +188,10 @@ Drużyna przejęła łódź przemytników, zatrzymała transport i zabezpieczył
 Scenariusz zakończony. Szlak kontrabandy został przerwany.
 ```
 
-## Teksty ekranu UI v2 do krotkich komunikatow
+## Teksty ekranu Player UI do krotkich komunikatow
 
 ### 14. Start Hall
-- Zrodlo tekstu: `future/player_ui_v2/templates/index.html`
+- Zrodlo tekstu: `player_ui/templates/index.html`
 - Proponowany plik: `audio/voiceover/ui_start_hall_001.mp3`
 - Wykonanie: jasny komunikat startowy, bez teatralnego przeciagania.
 - Tekst do TTS:
@@ -201,7 +201,7 @@ Szlak kontrabandy zaczyna się tutaj. Gdy drużyna jest gotowa, rozpocznij nową
 ```
 
 ### 15. Party Assembly
-- Zrodlo tekstu: `future/player_ui_v2/templates/index.html` -> `Zbierz drużynę`
+- Zrodlo tekstu: `player_ui/templates/index.html` -> `Zbierz drużynę`
 - Proponowany plik: `audio/voiceover/ui_party_assembly_001.mp3`
 - Wykonanie: funkcjonalne tempo, wyrazny zakres liczby bohaterow.
 - Tekst do TTS:
@@ -211,7 +211,7 @@ Zbierz drużynę. Wybierz od jednego do czterech bohaterów, zanim rozpocznie si
 ```
 
 ### 16. Mission Briefing
-- Zrodlo tekstu: `future/player_ui_v2/content/bandit_cave.json` -> `briefing_title`, `stakes`
+- Zrodlo tekstu: `player_ui/content/bandit_cave.json` -> `briefing_title`, `stakes`
 - Proponowany plik: `audio/voiceover/ui_mission_briefing_001.mp3`
 - Wykonanie: konkretnie, z naciskiem na stawke.
 - Tekst do TTS:
@@ -225,7 +225,7 @@ Oczyść trasę, znajdź to, co ukryte, i przejmij łódź zanim przemytnicy uci
 ```
 
 ### 17. Czekam na wydarzenia
-- Zrodlo tekstu: `future/player_ui_v2/templates/index.html` i `future/player_ui_v2/static/app.js`
+- Zrodlo tekstu: `player_ui/templates/index.html` i `player_ui/static/app.js`
 - Proponowany plik: `audio/voiceover/ui_waiting_for_events_001.mp3`
 - Wykonanie: neutralnie, bez napiecia.
 - Tekst do TTS:
@@ -235,7 +235,7 @@ Czekam na wydarzenia.
 ```
 
 ### 18. Runtime error
-- Zrodlo tekstu: `future/player_ui_v2/templates/index.html` -> `Błąd połączenia`
+- Zrodlo tekstu: `player_ui/templates/index.html` -> `Błąd połączenia`
 - Proponowany plik: `audio/voiceover/ui_runtime_error_001.mp3`
 - Wykonanie: spokojny komunikat techniczny, bez paniki.
 - Tekst do TTS:
@@ -251,7 +251,7 @@ Bardzo krotki, niski i nienachalny dzwiek ostrzegawczy UI, bez alarmu i bez melo
 ```
 
 ### 19. Scenariusz zakonczony
-- Zrodlo tekstu: `future/player_ui_v2/static/app.js` -> fallback result
+- Zrodlo tekstu: `player_ui/static/app.js` -> fallback result
 - Proponowany plik: `audio/voiceover/ui_scenario_finished_001.mp3`
 - Wykonanie: finalnie, spokojnie.
 - Tekst do TTS:
@@ -268,7 +268,7 @@ Scenariusz zakończony.
 - Prompt do ElevenLabs:
 
 ```text
-Wygeneruj SFX dla ikony akcji "Ruch / Stride" w Player UI v2, Bandit Cave. Czas: 0.4-0.8 sekundy. Brzmienie: dwa szybkie kroki po wilgotnym kamieniu, lekki poglos jaskini. Dzwiek ma byc subtelny i pasowac do klikniecia akcji, bez glosu.
+Wygeneruj SFX dla ikony akcji "Ruch / Stride" w Player UI, Bandit Cave. Czas: 0.4-0.8 sekundy. Brzmienie: dwa szybkie kroki po wilgotnym kamieniu, lekki poglos jaskini. Dzwiek ma byc subtelny i pasowac do klikniecia akcji, bez glosu.
 ```
 
 ### 21. Akcja: Strike / Attack
@@ -277,7 +277,7 @@ Wygeneruj SFX dla ikony akcji "Ruch / Stride" w Player UI v2, Bandit Cave. Czas:
 - Prompt do ElevenLabs:
 
 ```text
-Wygeneruj SFX dla ikony akcji "Strike / Attack" w Player UI v2, Bandit Cave. Czas: 0.35-0.7 sekundy. Brzmienie: krotkie swisniecie ostrza i stlumione uderzenie w skore lub drewno, bez krzyku i bez gore. Ma byc czytelny jako akcja bojowa.
+Wygeneruj SFX dla ikony akcji "Strike / Attack" w Player UI, Bandit Cave. Czas: 0.35-0.7 sekundy. Brzmienie: krotkie swisniecie ostrza i stlumione uderzenie w skore lub drewno, bez krzyku i bez gore. Ma byc czytelny jako akcja bojowa.
 ```
 
 ### 22. Akcja: Interact
@@ -286,7 +286,7 @@ Wygeneruj SFX dla ikony akcji "Strike / Attack" w Player UI v2, Bandit Cave. Cza
 - Prompt do ElevenLabs:
 
 ```text
-Wygeneruj SFX dla ikony "Interact" w Player UI v2, Bandit Cave. Czas: 0.35-0.7 sekundy. Brzmienie: dlon dotykajaca starej skrzyni, drobne skrzypniecie zawiasu, lekki metaliczny detal. Bez glosu.
+Wygeneruj SFX dla ikony "Interact" w Player UI, Bandit Cave. Czas: 0.35-0.7 sekundy. Brzmienie: dlon dotykajaca starej skrzyni, drobne skrzypniecie zawiasu, lekki metaliczny detal. Bez glosu.
 ```
 
 ### 23. Akcja: Seek
@@ -295,7 +295,7 @@ Wygeneruj SFX dla ikony "Interact" w Player UI v2, Bandit Cave. Czas: 0.35-0.7 s
 - Prompt do ElevenLabs:
 
 ```text
-Wygeneruj SFX dla ikony "Seek" w Player UI v2, Bandit Cave. Czas: 0.5-0.9 sekundy. Brzmienie: ciche przesuniecie kamyka, skupiony niski ton, delikatne odkrycie szczegolu. Ma sugerowac przeszukiwanie jaskini, nie magie.
+Wygeneruj SFX dla ikony "Seek" w Player UI, Bandit Cave. Czas: 0.5-0.9 sekundy. Brzmienie: ciche przesuniecie kamyka, skupiony niski ton, delikatne odkrycie szczegolu. Ma sugerowac przeszukiwanie jaskini, nie magie.
 ```
 
 ### 24. Akcja: End Turn
@@ -304,7 +304,7 @@ Wygeneruj SFX dla ikony "Seek" w Player UI v2, Bandit Cave. Czas: 0.5-0.9 sekund
 - Prompt do ElevenLabs:
 
 ```text
-Wygeneruj SFX dla ikony "End Turn" w Player UI v2. Czas: 0.35-0.6 sekundy. Brzmienie: pionek odstawiany na plansze i krotki niski klik. Neutralne, bez poczucia porazki ani sukcesu.
+Wygeneruj SFX dla ikony "End Turn" w Player UI. Czas: 0.35-0.6 sekundy. Brzmienie: pionek odstawiany na plansze i krotki niski klik. Neutralne, bez poczucia porazki ani sukcesu.
 ```
 
 ### 25. Akcja: Raise Shield / Defend
@@ -313,7 +313,7 @@ Wygeneruj SFX dla ikony "End Turn" w Player UI v2. Czas: 0.35-0.6 sekundy. Brzmi
 - Prompt do ElevenLabs:
 
 ```text
-Wygeneruj SFX dla ikony "Raise Shield / Defend" w Player UI v2, Bandit Cave. Czas: 0.45-0.8 sekundy. Brzmienie: tarcza podnoszona na przedramieniu, skora napieta na pasku, delikatny metaliczny rezonans. Ma byc obronne, zwarte, bez dlugiego wybrzmienia.
+Wygeneruj SFX dla ikony "Raise Shield / Defend" w Player UI, Bandit Cave. Czas: 0.45-0.8 sekundy. Brzmienie: tarcza podnoszona na przedramieniu, skora napieta na pasku, delikatny metaliczny rezonans. Ma byc obronne, zwarte, bez dlugiego wybrzmienia.
 ```
 
 ### 26. Przeciwnik: Bandit
@@ -322,7 +322,7 @@ Wygeneruj SFX dla ikony "Raise Shield / Defend" w Player UI v2, Bandit Cave. Cza
 - Prompt do ElevenLabs:
 
 ```text
-Wygeneruj krotki earcon dla pojawienia sie lub tury przeciwnika "Bandit" w Player UI v2, Bandit Cave. Czas: 0.8-1.2 sekundy. Brzmienie: krok po kamieniu, skorzany pas, krotki nieartykulowany pomruk daleko w poglosie. Bez slow, bez przesady.
+Wygeneruj krotki earcon dla pojawienia sie lub tury przeciwnika "Bandit" w Player UI, Bandit Cave. Czas: 0.8-1.2 sekundy. Brzmienie: krok po kamieniu, skorzany pas, krotki nieartykulowany pomruk daleko w poglosie. Bez slow, bez przesady.
 ```
 
 ### 27. Przeciwnik: Bandit Sharpshot
@@ -331,7 +331,7 @@ Wygeneruj krotki earcon dla pojawienia sie lub tury przeciwnika "Bandit" w Playe
 - Prompt do ElevenLabs:
 
 ```text
-Wygeneruj earcon dla przeciwnika "Bandit Sharpshot" w Player UI v2, Bandit Cave. Czas: 0.8-1.3 sekundy. Brzmienie: napinana cieciwa lub kusza, delikatny klik mechanizmu, cichy oddech w jaskini. Bez wystrzalu jako glosnego efektu, bo to tylko identyfikacja przeciwnika.
+Wygeneruj earcon dla przeciwnika "Bandit Sharpshot" w Player UI, Bandit Cave. Czas: 0.8-1.3 sekundy. Brzmienie: napinana cieciwa lub kusza, delikatny klik mechanizmu, cichy oddech w jaskini. Bez wystrzalu jako glosnego efektu, bo to tylko identyfikacja przeciwnika.
 ```
 
 ### 28. Przeciwnik: Guard Dog / Cave Hound / Dock Hound
@@ -340,7 +340,7 @@ Wygeneruj earcon dla przeciwnika "Bandit Sharpshot" w Player UI v2, Bandit Cave.
 - Prompt do ElevenLabs:
 
 ```text
-Wygeneruj earcon dla psa strazniczego w Player UI v2, Bandit Cave. Czas: 0.8-1.2 sekundy. Brzmienie: niski warkot i szybkie pazury na kamieniu, z poglosem jaskini. Bez glosnego szczekania, aby nie meczylo przy powtarzaniu tur.
+Wygeneruj earcon dla psa strazniczego w Player UI, Bandit Cave. Czas: 0.8-1.2 sekundy. Brzmienie: niski warkot i szybkie pazury na kamieniu, z poglosem jaskini. Bez glosnego szczekania, aby nie meczylo przy powtarzaniu tur.
 ```
 
 ### 29. Narrator / Mistrz gry
@@ -349,7 +349,7 @@ Wygeneruj earcon dla psa strazniczego w Player UI v2, Bandit Cave. Czas: 0.8-1.2
 - Prompt do ElevenLabs:
 
 ```text
-Wygeneruj krotki earcon dla komunikatu narratora w Player UI v2, Bandit Cave. Czas: 0.5-0.9 sekundy. Brzmienie: niski, cieply ton jak otwarcie ksiegi plus delikatny poglos kamiennej sali. Ma sygnalizowac, ze zaraz pojawi sie tekst mistrza gry.
+Wygeneruj krotki earcon dla komunikatu narratora w Player UI, Bandit Cave. Czas: 0.5-0.9 sekundy. Brzmienie: niski, cieply ton jak otwarcie ksiegi plus delikatny poglos kamiennej sali. Ma sygnalizowac, ze zaraz pojawi sie tekst mistrza gry.
 ```
 
 ## Czary jako krotkie SFX
@@ -360,7 +360,7 @@ Wygeneruj krotki earcon dla komunikatu narratora w Player UI v2, Bandit Cave. Cz
 - Prompt do ElevenLabs:
 
 ```text
-Wygeneruj SFX dla czaru "Acid Splash" w Player UI v2, Bandit Cave. Czas: 0.8-1.4 sekundy. Brzmienie: kwas syczy na kamieniu, lepki rozprysk, lekki magiczny impuls na poczatku. Bez krzyku, bez dlugiego ogona.
+Wygeneruj SFX dla czaru "Acid Splash" w Player UI, Bandit Cave. Czas: 0.8-1.4 sekundy. Brzmienie: kwas syczy na kamieniu, lepki rozprysk, lekki magiczny impuls na poczatku. Bez krzyku, bez dlugiego ogona.
 ```
 
 ### 31. Electric Arc
@@ -369,7 +369,7 @@ Wygeneruj SFX dla czaru "Acid Splash" w Player UI v2, Bandit Cave. Czas: 0.8-1.4
 - Prompt do ElevenLabs:
 
 ```text
-Wygeneruj SFX dla czaru "Electric Arc" w Player UI v2, Bandit Cave. Czas: 0.7-1.2 sekundy. Brzmienie: krotki luk elektryczny odbijajacy sie od wilgotnego kamienia, ostre trzaski, ale bez bardzo wysokiej glosnosci. Ma byc dynamiczne i czytelne.
+Wygeneruj SFX dla czaru "Electric Arc" w Player UI, Bandit Cave. Czas: 0.7-1.2 sekundy. Brzmienie: krotki luk elektryczny odbijajacy sie od wilgotnego kamienia, ostre trzaski, ale bez bardzo wysokiej glosnosci. Ma byc dynamiczne i czytelne.
 ```
 
 ### 32. Heal
@@ -378,7 +378,7 @@ Wygeneruj SFX dla czaru "Electric Arc" w Player UI v2, Bandit Cave. Czas: 0.7-1.
 - Prompt do ElevenLabs:
 
 ```text
-Wygeneruj SFX dla czaru "Heal" w Player UI v2, Bandit Cave. Czas: 0.9-1.5 sekundy. Brzmienie: cieple swiatlo, delikatny choralny oddech bez slow, subtelny blysk. Ma odrozniac sie od ciemnego ambience jaskini, ale nie byc cukierkowe.
+Wygeneruj SFX dla czaru "Heal" w Player UI, Bandit Cave. Czas: 0.9-1.5 sekundy. Brzmienie: cieple swiatlo, delikatny choralny oddech bez slow, subtelny blysk. Ma odrozniac sie od ciemnego ambience jaskini, ale nie byc cukierkowe.
 ```
 
 ### 33. Magic Missile
@@ -387,7 +387,7 @@ Wygeneruj SFX dla czaru "Heal" w Player UI v2, Bandit Cave. Czas: 0.9-1.5 sekund
 - Prompt do ElevenLabs:
 
 ```text
-Wygeneruj SFX dla czaru "Magic Missile" w Player UI v2, Bandit Cave. Czas: 0.8-1.3 sekundy. Brzmienie: trzy szybkie magiczne pociski, kazdy z krotkim swistem i lekkim uderzeniem energii. Bez eksplozji, bez sci-fi laserow.
+Wygeneruj SFX dla czaru "Magic Missile" w Player UI, Bandit Cave. Czas: 0.8-1.3 sekundy. Brzmienie: trzy szybkie magiczne pociski, kazdy z krotkim swistem i lekkim uderzeniem energii. Bez eksplozji, bez sci-fi laserow.
 ```
 
 ### 34. Cantrip / Focus / Rank 1 fallback
@@ -396,7 +396,7 @@ Wygeneruj SFX dla czaru "Magic Missile" w Player UI v2, Bandit Cave. Czas: 0.8-1
 - Prompt do ElevenLabs:
 
 ```text
-Wygeneruj neutralny SFX dla ogolnej ikony czaru w Player UI v2, Bandit Cave. Czas: 0.45-0.8 sekundy. Brzmienie: delikatne magiczne rozswietlenie, krotki niski ton i lekki szelest pergaminu. Ma pasowac do cantrip, focus i czaru rangi 1, bez sugerowania konkretnego zywiolu.
+Wygeneruj neutralny SFX dla ogolnej ikony czaru w Player UI, Bandit Cave. Czas: 0.45-0.8 sekundy. Brzmienie: delikatne magiczne rozswietlenie, krotki niski ton i lekki szelest pergaminu. Ma pasowac do cantrip, focus i czaru rangi 1, bez sugerowania konkretnego zywiolu.
 ```
 
 ## Mapy, obiekty i interakcje jako ambience/SFX
@@ -407,7 +407,7 @@ Wygeneruj neutralny SFX dla ogolnej ikony czaru w Player UI v2, Bandit Cave. Cza
 - Prompt do ElevenLabs:
 
 ```text
-Stworz seamless loop ambience dla mapy Treasure Room w Player UI v2, Bandit Cave. Dlugosc 35-50 sekund. Brzmienie: mniejsza kamienna komora, skrzynie, stary papier, delikatne pobrzmiewanie monet, prawie nieslyszalny mechanizm pulapki. Bez muzyki, bez glosow, tlo pod narracje.
+Stworz seamless loop ambience dla mapy Treasure Room w Player UI, Bandit Cave. Dlugosc 35-50 sekund. Brzmienie: mniejsza kamienna komora, skrzynie, stary papier, delikatne pobrzmiewanie monet, prawie nieslyszalny mechanizm pulapki. Bez muzyki, bez glosow, tlo pod narracje.
 ```
 
 ### 36. Smuggler Docks ambience
@@ -416,7 +416,7 @@ Stworz seamless loop ambience dla mapy Treasure Room w Player UI v2, Bandit Cave
 - Prompt do ElevenLabs:
 
 ```text
-Stworz seamless loop ambience dla mapy Smuggler Docks w Player UI v2, Bandit Cave. Dlugosc 45-60 sekund. Brzmienie: podziemna przystan, woda o pale, skrzypiace deski, liny, odlegly przeciag w duzej grocie. Niski poziom glosnosci, bez melodii i bez rozpoznawalnych slow.
+Stworz seamless loop ambience dla mapy Smuggler Docks w Player UI, Bandit Cave. Dlugosc 45-60 sekund. Brzmienie: podziemna przystan, woda o pale, skrzypiace deski, liny, odlegly przeciag w duzej grocie. Niski poziom glosnosci, bez melodii i bez rozpoznawalnych slow.
 ```
 
 ### 37. Pulapka: plyta naciskowa
@@ -425,7 +425,7 @@ Stworz seamless loop ambience dla mapy Smuggler Docks w Player UI v2, Bandit Cav
 - Prompt do ElevenLabs:
 
 ```text
-Wygeneruj SFX pulapki do Player UI v2, Bandit Cave: skarbcowa plyta naciskowa. Czas: 1.0-1.6 sekundy. Brzmienie: kamienna plyta opada o kilka milimetrow, ukryta igla wyskakuje, metaliczny alarmowy trzask. Bez krzyku postaci, bez gore.
+Wygeneruj SFX pulapki do Player UI, Bandit Cave: skarbcowa plyta naciskowa. Czas: 1.0-1.6 sekundy. Brzmienie: kamienna plyta opada o kilka milimetrow, ukryta igla wyskakuje, metaliczny alarmowy trzask. Bez krzyku postaci, bez gore.
 ```
 
 ### 38. Pulapka: iglowa skrytka
@@ -434,7 +434,7 @@ Wygeneruj SFX pulapki do Player UI v2, Bandit Cave: skarbcowa plyta naciskowa. C
 - Prompt do ElevenLabs:
 
 ```text
-Wygeneruj SFX dla ukrytej iglowej pulapki w skrytce, Player UI v2, Bandit Cave. Czas: 0.8-1.3 sekundy. Brzmienie: szybki sprzeg mechanizmu, syk malej igly, krotki metaliczny trzask alarmu w kamiennej komorze. Bez glosu i bez krwi.
+Wygeneruj SFX dla ukrytej iglowej pulapki w skrytce, Player UI, Bandit Cave. Czas: 0.8-1.3 sekundy. Brzmienie: szybki sprzeg mechanizmu, syk malej igly, krotki metaliczny trzask alarmu w kamiennej komorze. Bez glosu i bez krwi.
 ```
 
 ### 39. Ukryta skrytka odkryta
@@ -443,7 +443,7 @@ Wygeneruj SFX dla ukrytej iglowej pulapki w skrytce, Player UI v2, Bandit Cave. 
 - Prompt do ElevenLabs:
 
 ```text
-Wygeneruj SFX odkrycia ukrytej skrytki w Player UI v2, Bandit Cave. Czas: 0.8-1.4 sekundy. Brzmienie: falszywa deska odsuwa sie, cichy szelest papierow i monet, delikatny ton odkrycia. Bez fanfary, bardziej skradankowo niz zwyciesko.
+Wygeneruj SFX odkrycia ukrytej skrytki w Player UI, Bandit Cave. Czas: 0.8-1.4 sekundy. Brzmienie: falszywa deska odsuwa sie, cichy szelest papierow i monet, delikatny ton odkrycia. Bez fanfary, bardziej skradankowo niz zwyciesko.
 ```
 
 ### 40. Statek przemytnikow
@@ -452,7 +452,7 @@ Wygeneruj SFX odkrycia ukrytej skrytki w Player UI v2, Bandit Cave. Czas: 0.8-1.
 - Prompt do ElevenLabs:
 
 ```text
-Wygeneruj SFX interakcji ze statkiem przemytnikow w Player UI v2, Bandit Cave. Czas: 1.0-1.8 sekundy. Brzmienie: lina odpinana od pala, drewno lodzi skrzypi, woda chlupie przy burcie. Ma sugerowac gotowosc do ucieczki z podziemnych dokow.
+Wygeneruj SFX interakcji ze statkiem przemytnikow w Player UI, Bandit Cave. Czas: 1.0-1.8 sekundy. Brzmienie: lina odpinana od pala, drewno lodzi skrzypi, woda chlupie przy burcie. Ma sugerowac gotowosc do ucieczki z podziemnych dokow.
 ```
 
 ### 41. Marek "Lina" Voss - NPC zwiazany przemytnik
@@ -694,7 +694,7 @@ Kończysz rozmowę z Markiem.
 
 ## Elementy tekstowe z topbaru i paneli - opcjonalne accessibility audio
 
-Te nagrania sa przydatne, jesli UI v2 ma miec tryb bardziej dostepny lub prowadzic graczy bez patrzenia w ekran.
+Te nagrania sa przydatne, jesli Player UI ma miec tryb bardziej dostepny lub prowadzic graczy bez patrzenia w ekran.
 
 ### 43. Status: audio wlaczone/wylaczone
 - Zrodlo UI: `Audio on`, `Audio off`, `Muted`
@@ -808,4 +808,4 @@ assets/ui_v2/bandit_cave/audio/
     npc_marek_conversation_end_001.mp3
 ```
 
-Po dodaniu plikow audio warto rozszerzyc `assets/ui_v2/bandit_cave/manifest.json` o brakujace wpisy `sfx`, `music` i `narration`, a potem podpiac je w `future/player_ui_v2/static/app.js` tylko tam, gdzie nie beda odtwarzane zbyt czesto.
+Po dodaniu plikow audio warto rozszerzyc `assets/ui_v2/bandit_cave/manifest.json` o brakujace wpisy `sfx`, `music` i `narration`, a potem podpiac je w `player_ui/static/app.js` tylko tam, gdzie nie beda odtwarzane zbyt czesto.
