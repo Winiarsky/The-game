@@ -454,7 +454,7 @@ class EnemyStrikeEvent(ActionCostEvent):
                     source="enemy_strike_ranged_legend",
                     blocking=False,
                     semantic_type="explanation",
-                    emit_log=True,
+                    emit_log=False,
                 )
                 if bool(analysis.get("blocked", False)):
                     return EventResult.cancelled(message="Strike: linia strzału jest zablokowana.")
@@ -486,10 +486,35 @@ class EnemyStrikeEvent(ActionCostEvent):
                     extra_mod = 0
 
             map_penalty = _map_penalty(ctx, actor, weapon)
-            natural_roll = random.randint(1, 20)
-            total_attack = natural_roll + attack_bonus + extra_mod - map_penalty - range_penalty
             cover_bonus = _EnemyRangeAnalyzer.COVER_AC.get(cover_type, 0) if ranged else 0
             target_ac = int(effective_ac(target) or 10) + int(cover_bonus or 0)
+            enemy_prompt_step(
+                ctx.game,
+                f"Atak przeciwnika: {getattr(actor, 'name', 'Wróg')}",
+                prompt_long=(
+                    f"{getattr(actor, 'name', 'Wróg')} przygotowuje Strike "
+                    f"{getattr(weapon, 'name', 'bronią')} przeciw {getattr(target, 'name', 'celowi')}.\n\n"
+                    f"Cel: {getattr(target, 'name', 'cel')} na polu {target_pos}\n"
+                    f"Pozycja przeciwnika: {actor_pos}\n"
+                    f"MAP: -{int(map_penalty or 0)}\n"
+                    f"Kara za zasięg: -{int(range_penalty or 0)}\n"
+                    f"Osłona: {cover_type} (+{int(cover_bonus or 0)} AC)\n"
+                    f"Próg obrony: AC {target_ac}\n\n"
+                    "Enter rozstrzyga rzut ataku i dopiero wtedy zobaczysz animację oraz wynik."
+                ),
+                source="enemy_strike_prepare",
+                blocking=True,
+                semantic_type="required_action",
+                dedupe_key=(
+                    f"enemy_attack_prepare:{getattr(actor, 'object_id', getattr(actor, 'name', 'enemy'))}:"
+                    f"{getattr(target, 'object_id', getattr(target, 'name', 'target'))}:{weapon_id}:{map_penalty}"
+                ),
+                next_hint="Po Enterze system wykona rzut ataku.",
+                continue_hint="Enter: rzut ataku.",
+                emit_log=False,
+            )
+            natural_roll = random.randint(1, 20)
+            total_attack = natural_roll + attack_bonus + extra_mod - map_penalty - range_penalty
             outcome = resolve_outcome(total_attack, target_ac, natural_shift=natural_shift_from_roll(natural_roll))
             if ranged:
                 _play_enemy_projectile_animation(ctx.game, actor_pos, target_pos)

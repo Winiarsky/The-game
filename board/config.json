@@ -15,7 +15,8 @@
         "stop_command": "STOP",
         "probe_timeout_s": 6.0,
         "line_timeout_s": 0.25,
-        "write_timeout_s": 0.5
+        "write_timeout_s": 0.5,
+        "scan_recovery_timeout_s": 10.0
     },
     "wled": {
         "base_url": "http://192.168.0.165",

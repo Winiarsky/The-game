@@ -619,13 +619,21 @@ class Game:
                 pass
 
     def ui_active_actor(self, actor: Any | None) -> None:
+        payload = build_active_actor_payload(
+            actor,
+            heroes=getattr(self, "heroes", []),
+            enemies=getattr(self, "enemies", []),
+        )
+        state = getattr(self, "state", None)
+        action_payload = getattr(state, "_actor_actions_payload", None)
+        if callable(action_payload):
+            try:
+                payload.update(action_payload(actor))
+            except Exception:
+                pass
         self.ui_event(
             "active_actor_changed",
-            build_active_actor_payload(
-                actor,
-                heroes=getattr(self, "heroes", []),
-                enemies=getattr(self, "enemies", []),
-            ),
+            payload,
         )
 
     def ui_idle_hint(self, title: str, text: str | None = None) -> None:

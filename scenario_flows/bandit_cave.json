@@ -86,6 +86,7 @@
             "actions": [
                 {
                     "type": "show_prompt",
+                    "audio": "audio/voiceover/cave_intro_001.mp3",
                     "message": "Stoisz przed wejściem do jaskini bandytów. Głębiej słyszysz ruch i szczekanie psa."
                 }
             ]
@@ -109,6 +110,7 @@
                 },
                 {
                     "type": "show_prompt",
+                    "audio": "audio/voiceover/secret_passage_found_001.mp3",
                     "message": "Sekretne przejście do skarbca zostało odkryte. Bandyci najwyraźniej ukrywali tam coś cennego."
                 },
                 {
@@ -132,6 +134,7 @@
             "actions": [
                 {
                     "type": "show_log",
+                    "audio": "audio/voiceover/cave_cleared_001.mp3",
                     "message": "Główna sala jaskini została oczyszczona. Możesz bezpieczniej przeszukać ukryte zakamarki albo zejść do doków."
                 },
                 {
@@ -154,6 +157,7 @@
                 },
                 {
                     "type": "show_prompt",
+                    "audio": "audio/voiceover/treasure_intro_001.mp3",
                     "message": "W skarbcu stoją skrzynie, zapasy kontrabandy i księgi rachunkowe. Coś tu wygląda na zabezpieczone pułapką."
                 },
                 {
@@ -185,6 +189,7 @@
             "actions": [
                 {
                     "type": "show_prompt",
+                    "audio": "audio/voiceover/docks_intro_001.mp3",
                     "message": "Schodzisz do podziemnych doków. Przy nabrzeżu stoi łódź gotowa do odpłynięcia z kontrabandą."
                 }
             ]
@@ -213,6 +218,7 @@
                 },
                 {
                     "type": "show_prompt",
+                    "audio": "audio/voiceover/docks_cleared_001.mp3",
                     "message": "Ostatni strażnicy doków padli. Statek przemytników stoi bez załogi i można go przejąć."
                 },
                 {
@@ -242,6 +248,7 @@
                 },
                 {
                     "type": "show_prompt",
+                    "audio": "audio/voiceover/escape_ship_ending_001.mp3",
                     "message": "Dok jest oczyszczony. Odbijasz od brzegu statkiem przemytników i kończysz scenariusz."
                 },
                 {

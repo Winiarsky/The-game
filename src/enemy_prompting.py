@@ -28,6 +28,7 @@ def enemy_prompt_step(
     continue_hint: str | None = None,
     communication: dict[str, Any] | None = None,
     emit_log: bool | None = None,
+    scope_key: str = "enemy_turn",
 ) -> None:
     """Pokaż blokujący prompt dla akcji przeciwnika, a log traktuj wtórnie."""
     text = emphasize_numbers(str(prompt_long or "").strip())
@@ -60,7 +61,7 @@ def enemy_prompt_step(
                 source=source,
                 summary=str(envelope.get("summary") or title or "Przeciwnik"),
                 details_markdown=str(envelope.get("details_markdown") or "").strip() or None,
-                scope_key="enemy_turn",
+                scope_key=scope_key,
                 dedupe_key=str(dedupe_key or source or title or "enemy"),
                 priority=str(envelope.get("priority") or "action"),
                 semantic_type=str(envelope.get("semantic_type") or effective_semantic),

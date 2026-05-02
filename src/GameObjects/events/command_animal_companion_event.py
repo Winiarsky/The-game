@@ -499,7 +499,39 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
         except Exception:
             pass
         try:
-            target = ctx.game.conn.scan_board(None)
+            ctx.game.ui_idle_hint(
+                "Ruch zwierzęcego towarzysza",
+                "Kliknij pole docelowe ruchu towarzysza na planszy. Po wybraniu celu gra pokaże ścieżkę do potwierdzenia.",
+            )
+        except Exception:
+            pass
+        try:
+            ctx.game.ui_event(
+                "board_scan_wait",
+                {
+                    "kind": "animal_companion_stride_target",
+                    "companion_id": _actor_id(companion),
+                },
+            )
+        except Exception:
+            pass
+        try:
+            timeout_s = getattr(consts, "TARGET_SELECTION_SCAN_TIMEOUT_S", None)
+            try:
+                target = ctx.game.conn.scan_board(None, timeout_s=timeout_s)
+            except TypeError:
+                target = ctx.game.conn.scan_board(None)
+            try:
+                ctx.game.ui_event(
+                    "board_scan_result",
+                    {
+                        "kind": "animal_companion_stride_target",
+                        "companion_id": _actor_id(companion),
+                        "position": list(target) if target is not None else None,
+                    },
+                )
+            except Exception:
+                pass
         except Exception:
             target = None
         finally:
@@ -531,15 +563,67 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
         dest = trimmed[-1]
         path_leds = [start] + trimmed[1:]
         path_colors = [consts.MOVE_START_RGB] + [consts.MOVE_FIELD_RGB] * (len(trimmed) - 2) + [consts.MOVE_TARGET_RGB]
+        path_id = f"companion-path-{time.time_ns()}"
+        try:
+            ctx.game.ui_event(
+                "path_preview",
+                {
+                    "id": path_id,
+                    "steps": max(0, len(trimmed) - 1),
+                    "feet": max(0, (len(trimmed) - 1) * 5),
+                    "actor_name": getattr(companion, "name", None),
+                    "path_type": "animal_companion",
+                    "target": dest,
+                    "requested_target": target,
+                    "trimmed": dest != target,
+                    "budget_feet": move_budget,
+                },
+            )
+            ctx.game.ui_idle_hint(
+                "Potwierdź ruch towarzysza",
+                "Kliknij ostatnie podświetlone pole, aby wykonać ruch towarzysza, albo inne pole, aby anulować tę ścieżkę.",
+            )
+        except Exception:
+            pass
         try:
             ctx.game.conn.set_leds(path_leds, path_colors)
         except Exception:
             pass
         try:
-            confirm = ctx.game.conn.scan_board(None)
+            ctx.game.ui_event(
+                "board_scan_wait",
+                {
+                    "kind": "animal_companion_stride_confirm",
+                    "companion_id": _actor_id(companion),
+                    "target": list(dest),
+                },
+            )
+        except Exception:
+            pass
+        try:
+            timeout_s = getattr(consts, "TARGET_SELECTION_SCAN_TIMEOUT_S", None)
+            try:
+                confirm = ctx.game.conn.scan_board(None, timeout_s=timeout_s)
+            except TypeError:
+                confirm = ctx.game.conn.scan_board(None)
+            try:
+                ctx.game.ui_event(
+                    "board_scan_result",
+                    {
+                        "kind": "animal_companion_stride_confirm",
+                        "companion_id": _actor_id(companion),
+                        "position": list(confirm) if confirm is not None else None,
+                    },
+                )
+            except Exception:
+                pass
         except Exception:
             confirm = None
         if confirm != dest:
+            try:
+                ctx.game.ui_event("path_clear", {"id": path_id})
+            except Exception:
+                pass
             try:
                 ctx.game.conn.leds_off()
             except Exception:
@@ -554,6 +638,10 @@ class CommandAnimalCompanionEvent(ActionCostEvent):
                 step_delay=0.1,
             )
         finally:
+            try:
+                ctx.game.ui_event("path_clear", {"id": path_id})
+            except Exception:
+                pass
             try:
                 fading = [list(map(int, c)) for c in path_colors]
                 for idx in range(len(path_leds)):

@@ -77,12 +77,17 @@ class _GameStub:
         self.board = _BoardStub()
         self.logs: list[str] = []
         self.hints: list[tuple[str, str | None]] = []
+        self.events: list[tuple[str, dict[str, object]]] = []
         self.snapshots: list[tuple[object, str | None]] = []
         self.preselected_character_ids = []
         self.preselected_hero_count = 0
         self.ui = None
 
-    def ui_log(self, message: str) -> None:
+    def ui_event(self, event_type: str, payload: dict[str, object]) -> bool:
+        self.events.append((str(event_type), dict(payload)))
+        return True
+
+    def ui_log(self, message: str, **_kwargs) -> None:
         self.logs.append(str(message))
 
     def ui_idle_hint(self, title: str, text: str | None = None) -> None:
@@ -352,6 +357,10 @@ def test_start_setup_retries_when_board_selection_is_cancelled():
     assert isinstance(result, HeroesTurn)
     assert hero.position == (2, 2)
     assert any("Nie wybrano pola startowego" in msg for msg in game.logs)
+    assert any(title == "Ponawiam skan planszy" for title, _text in game.hints)
+    scan_results = [payload for event_type, payload in game.events if event_type == "board_scan_result"]
+    assert scan_results[0]["position"] is None
+    assert scan_results[-1]["position"] == [2, 2]
 
 
 def test_start_setup_waits_on_board_without_timeout_or_ui_fallback():
@@ -414,3 +423,26 @@ def test_wall_setup_uses_two_endpoint_colors_and_explains_them():
         [0, 160, 0],
     ]
     assert any("zielony" in msg and "pomarańczowy" in msg for msg in game.logs)
+
+
+def test_setup_batch_uses_per_position_colors_for_mixed_markers():
+    game = _GameStub()
+
+    run_setup_batches(
+        game,
+        [
+            {
+                "kind": "scenario_exit",
+                "positions": [(1, 10), (12, 8)],
+                "colors": [[235, 125, 20], [0, 0, 100]],
+                "prompt": "Wskaż przejścia według kolorów LED.",
+                "confirmation_mode": "confirm_only",
+                "color": [145, 95, 30],
+            }
+        ],
+    )
+
+    assert game.conn.led_payloads
+    positions, colors = game.conn.led_payloads[0]
+    assert list(positions) == [(1, 10), (12, 8)]
+    assert colors == [[235, 125, 20], [0, 0, 100]]

@@ -130,16 +130,61 @@ def test_catalog_exposes_bandit_cave_asset_manifest_and_audio_cues(ui_client):
     assert ui_client.get(dog_hint).status_code == 200
 
 
-def test_asset_route_serves_manifest_and_draft_svg(ui_client):
+def test_asset_route_serves_manifest_and_spell_png(ui_client):
     manifest = ui_client.get("/assets/ui_v2/bandit_cave/manifest.json")
     assert manifest.status_code == 200
     payload = manifest.get_json()
     assert payload["scenario_id"] == "bandit_cave"
-    assert payload["spells"]["acid_splash"]["image"].endswith("acid_splash.svg")
+    assert payload["spells"]["acid_splash"]["image"].endswith("acid_splash.png")
 
-    image = ui_client.get("/assets/ui_v2/bandit_cave/images/spells/acid_splash.svg")
+    image = ui_client.get("/assets/ui_v2/bandit_cave/images/spells/acid_splash.png")
     assert image.status_code == 200
-    assert image.data.startswith(b"<svg")
+    assert image.data.startswith(b"\x89PNG")
+
+
+def test_bandit_cave_asset_package_contract(ui_client):
+    scenario_response = ui_client.get("/api/catalog")
+    assert scenario_response.status_code == 200
+    scenario = scenario_response.get_json()["catalog"]["scenarios"][0]
+
+    manifest_response = ui_client.get(scenario["asset_manifest"])
+    assert manifest_response.status_code == 200
+    manifest = manifest_response.get_json()
+
+    image_paths = []
+    audio_paths = []
+
+    def collect_assets(value):
+        if isinstance(value, dict):
+            if value.get("image"):
+                image_paths.append(str(value["image"]))
+            if value.get("audio"):
+                audio_paths.append(str(value["audio"]))
+            for child in value.values():
+                collect_assets(child)
+        elif isinstance(value, list):
+            for child in value:
+                collect_assets(child)
+
+    collect_assets(manifest)
+    collect_assets(scenario.get("audio_cues") or {})
+
+    assert image_paths
+    assert audio_paths
+
+    base_path = manifest["base_path"].rstrip("/") + "/"
+    for path in sorted(set(image_paths)):
+        assert path.endswith(".png")
+        url = path if path.startswith("/") else base_path + path
+        response = ui_client.get(url)
+        assert response.status_code == 200, url
+        assert response.data.startswith(b"\x89PNG"), url
+
+    for path in sorted(set(audio_paths)):
+        url = path if path.startswith("/") else base_path + path
+        response = ui_client.get(url)
+        assert response.status_code == 200, url
+        assert response.data, url
 
 
 def test_choice_meta_can_carry_image_and_spell_asset_hints(ui_client):
@@ -156,7 +201,7 @@ def test_choice_meta_can_carry_image_and_spell_asset_hints(ui_client):
                     "label": "Acid Splash",
                     "spell_id": "acid_splash",
                     "spell_tier": "cantrip",
-                    "image": "/assets/ui_v2/bandit_cave/images/spells/acid_splash.svg",
+                    "image": "/assets/ui_v2/bandit_cave/images/spells/acid_splash.png",
                 }
             ],
         },
@@ -169,7 +214,7 @@ def test_choice_meta_can_carry_image_and_spell_asset_hints(ui_client):
     meta = fetched.get_json()["choice_meta"][0]
     assert meta["spell_id"] == "acid_splash"
     assert meta["spell_tier"] == "cantrip"
-    assert meta["image"].endswith("acid_splash.svg")
+    assert meta["image"].endswith("acid_splash.png")
 
 
 def test_player_card_and_ack_prompt_expose_prompt_key(ui_client):
@@ -289,6 +334,42 @@ def test_view_state_separates_active_prompt_from_journal_cards(ui_client):
     assert payload["focus_card"]["title"] == "Wynik akcji"
     assert payload["focus_card"]["kind"] == "result"
     assert payload["journal"][0]["title"] == "Wynik akcji"
+
+
+def test_board_scan_events_are_visible_in_view_state(ui_client):
+    wait = ui_client.post(
+        "/api/events",
+        json={
+            "type": "board_scan_wait",
+            "session_id": "ui-session-1",
+            "payload": {
+                "kind": "hero_start_position",
+                "hero_name": "Cedric",
+                "attempt": 2,
+            },
+        },
+    )
+    assert wait.status_code == 200
+
+    result = ui_client.post(
+        "/api/events",
+        json={
+            "type": "board_scan_result",
+            "session_id": "ui-session-1",
+            "payload": {
+                "kind": "hero_start_position",
+                "hero_name": "Cedric",
+                "attempt": 2,
+                "position": None,
+            },
+        },
+    )
+    assert result.status_code == 200
+
+    view_state = ui_client.get("/api/view-state").get_json()["view_state"]
+    assert view_state["focus_card"]["title"] == "Skan planszy bez wyboru"
+    assert "Cedric" in view_state["focus_card"]["body_markdown"]
+    assert "Próba 2" in view_state["focus_card"]["body_markdown"]
 
 
 def test_prompt_supersedes_previous_prompt_in_same_scope(ui_client):

@@ -26,6 +26,7 @@ const refs = {
     btnAssemblyNext: document.getElementById("btn-assembly-next"),
     btnBriefingBack: document.getElementById("btn-briefing-back"),
     btnStartRuntime: document.getElementById("btn-start-runtime"),
+    btnBoardReset: document.getElementById("btn-board-reset"),
     btnStopRuntime: document.getElementById("btn-stop-runtime"),
     btnToggleDebug: document.getElementById("btn-toggle-debug"),
     btnResultRestart: document.getElementById("btn-result-restart"),
@@ -35,6 +36,7 @@ const refs = {
     briefingTitle: document.getElementById("briefing-title"),
     briefingIntro: document.getElementById("briefing-intro"),
     briefingStakes: document.getElementById("briefing-stakes"),
+    briefingSceneArt: document.getElementById("briefing-scene-art"),
     briefingPoints: document.getElementById("briefing-points"),
     briefingObjectives: document.getElementById("briefing-objectives"),
     topScenario: document.getElementById("top-scenario"),
@@ -55,6 +57,7 @@ const refs = {
     actionCard: document.querySelector(".action-card"),
     actionTitle: document.getElementById("action-title"),
     actionPriority: document.getElementById("action-priority"),
+    currentSceneArt: document.getElementById("current-scene-art"),
     activeActorPanel: document.getElementById("active-actor-panel"),
     activeActorPortrait: document.getElementById("active-actor-portrait"),
     activeActorName: document.getElementById("active-actor-name"),
@@ -677,6 +680,20 @@ function mapChapterByLabel(label) {
     return (scenario.chapters || []).find((item) => item.label === label) || null;
 }
 
+function sceneImageForMap(mapId) {
+    const key = normalizedAssetKey(mapId);
+    if (!key) return "";
+    const scene = findAssetEntry("scenes", key);
+    return scene?.image ? resolveAssetUrl(scene.image) : "";
+}
+
+function renderSceneArt(element, mapId) {
+    if (!element) return;
+    const image = sceneImageForMap(mapId);
+    element.classList.toggle("hidden", !image);
+    element.style.backgroundImage = image ? `url("${image}")` : "";
+}
+
 function updateHeroSelection(heroId) {
     const current = new Set(state.selectedHeroIds);
     if (current.has(heroId)) current.delete(heroId);
@@ -734,6 +751,8 @@ function renderBriefing() {
     refs.briefingTitle.textContent = scenario.briefing_title || scenario.title || "Misja";
     refs.briefingIntro.textContent = scenario.briefing_intro || "";
     refs.briefingStakes.textContent = scenario.stakes || "";
+    const firstChapter = Array.isArray(scenario.chapters) ? scenario.chapters[0] : null;
+    renderSceneArt(refs.briefingSceneArt, firstChapter?.map_id || "");
     refs.briefingPoints.innerHTML = "";
     (scenario.briefing_points || []).forEach((line) => {
         const li = document.createElement("li");
@@ -773,6 +792,13 @@ function renderRuntimeBadge() {
         const audio = state.audioEnabled ? "audio on" : "audio off";
         const board = boardBackend ? boardBackend : "board -";
         refs.mastheadSummaryStatus.textContent = `${runtimeState} · ${board} · ${audio}`;
+    }
+    if (refs.btnBoardReset) {
+        refs.btnBoardReset.disabled =
+            !(runtimeState === "running" || runtimeState === "starting") ||
+            !state.runtimeStatus.scenario_id ||
+            !Array.isArray(state.runtimeStatus.hero_ids) ||
+            !state.runtimeStatus.hero_ids.length;
     }
 }
 
@@ -1280,6 +1306,19 @@ function activeActorEntry() {
     return null;
 }
 
+function actorActionsLabel(actor) {
+    const total = Number(actor?.actions_total);
+    const used = Number(actor?.actions_used);
+    const remaining = Number(actor?.actions_remaining);
+    if (!Number.isFinite(total) || total <= 0) return "";
+    const safeUsed = Number.isFinite(used)
+        ? Math.max(0, Math.min(total, used))
+        : Number.isFinite(remaining)
+        ? Math.max(0, Math.min(total, total - remaining))
+        : 0;
+    return `Akcje ${safeUsed}/${total}`;
+}
+
 function renderActiveActorFocus() {
     if (!refs.activeActorPanel) return;
     const actor = activeActorEntry();
@@ -1297,6 +1336,8 @@ function renderActiveActorFocus() {
     if (actor.current ?? actor.effective_initiative ?? actor.initiative) {
         meta.push(`Init ${actor.current ?? actor.effective_initiative ?? actor.initiative}`);
     }
+    const actions = actorActionsLabel(actor);
+    if (actions) meta.push(actions);
     refs.activeActorName.textContent = actor.name || actor.id || "Aktor";
     refs.activeActorMeta.textContent = meta.join(" · ");
     refs.activeActorPortrait.style.backgroundImage = image ? `url("${image}")` : "";
@@ -1325,6 +1366,7 @@ function renderActionCard() {
     else if (communication.priority === "result") refs.actionPriority.classList.add("badge-result");
     else if (communication.priority === "debug") refs.actionPriority.classList.add("badge-debug");
     else refs.actionPriority.classList.add("badge-idle");
+    renderSceneArt(refs.currentSceneArt, state.currentMapId || "");
     const disclosureHtml = sections.disclosureBody
         ? `<details class="prompt-disclosure"><summary>${escapeHtml(sections.disclosureTitle || "Szczegóły")}</summary><div class="prose compact">${markdownish(sections.disclosureBody)}</div></details>`
         : "";
@@ -1828,6 +1870,7 @@ function renderInitiative() {
         const wounds = Number.isFinite(Number(entry.wounds)) ? Number(entry.wounds) : null;
         const maxHp = Number.isFinite(Number(entry.max_hp)) ? Number(entry.max_hp) : null;
         const woundLine = wounds === null ? "" : `Rany ${escapeHtml(maxHp ? `${wounds}/${maxHp}` : String(wounds))}`;
+        const actionLine = actorActionsLabel(entry);
         const statuses = Array.isArray(entry.statuses)
             ? entry.statuses.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 4)
             : [];
@@ -1839,6 +1882,7 @@ function renderInitiative() {
                 <div class="initiative-copy">
                     <strong class="initiative-order">${index + 1}. ${escapeHtml(label)}</strong>
                     <div class="initiative-line">Init ${escapeHtml(score)}${escapeHtml(modifier)}</div>
+                    ${actionLine ? `<div class="initiative-line">${escapeHtml(actionLine)}</div>` : ""}
                     ${woundLine ? `<div class="initiative-line">${woundLine}</div>` : ""}
                     ${statusLine ? `<div class="initiative-line">${escapeHtml(statusLine)}</div>` : ""}
                 </div>
@@ -2043,6 +2087,25 @@ async function retryRuntime() {
     }
 }
 
+async function resetBoardRuntime() {
+    if (!window.confirm("Zresetować połączenie z planszą bez restartu scenariusza?")) {
+        return;
+    }
+    refs.btnBoardReset.disabled = true;
+    try {
+        audioManager.stopVoiceovers();
+        state.dismissedRuntimeErrorKey = null;
+        const payload = await fetchJson("/api/runtime/board-reset", { method: "POST", body: JSON.stringify({}) });
+        state.sessionId = payload.session_id || state.sessionId;
+        state.runtimeStatus = payload.runtime_status || state.runtimeStatus;
+        setScreen("game");
+        renderAll();
+    } finally {
+        refs.btnBoardReset.disabled = false;
+        renderRuntimeBadge();
+    }
+}
+
 async function pollRuntimeStatus() {
     try {
         const payload = await fetchJson("/api/runtime/status");
@@ -2081,6 +2144,7 @@ refs.btnAssemblyNext.addEventListener("click", () => {
 });
 refs.btnBriefingBack.addEventListener("click", () => setScreen("assembly"));
 refs.btnStartRuntime.addEventListener("click", () => startRuntime().catch((error) => window.alert(error.message)));
+refs.btnBoardReset.addEventListener("click", () => resetBoardRuntime().catch((error) => window.alert(error.message)));
 refs.btnStopRuntime.addEventListener("click", () => stopRuntime().catch((error) => window.alert(error.message)));
 refs.btnRuntimeRetry.addEventListener("click", () => retryRuntime().catch((error) => window.alert(error.message)));
 refs.btnRuntimeDismiss.addEventListener("click", () => {

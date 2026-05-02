@@ -1,5 +1,6 @@
 from pathlib import Path
 import sys
+import time
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -47,6 +48,9 @@ class _FakeHardwareBackend:
 
     def cancel_scan(self):
         self.cancelled = True
+
+    def reset_connection(self):
+        self.reset = True
 
     def close(self):
         self.closed = True
@@ -158,6 +162,15 @@ def test_connection_forwards_cancel_scan_to_hardware_backend(monkeypatch):
     assert getattr(conn._backend, "cancelled", False) is True
 
 
+def test_connection_forwards_reset_connection_to_backend(monkeypatch):
+    monkeypatch.setattr("board.connection._HardwareBackend", _FakeHardwareBackend)
+
+    conn = Connection(backend="hardware")
+    conn.reset_connection()
+
+    assert getattr(conn._backend, "reset", False) is True
+
+
 def test_hardware_backend_stops_previous_scan_before_new_scan():
     backend = _HardwareBackend.__new__(_HardwareBackend)
     fake_serial = _FakeSerial()
@@ -190,6 +203,30 @@ def test_hardware_backend_stops_scan_after_rejected_press():
         ]
     )
     backend._read_protocol_payload = lambda *, timeout_s=None: next(payloads)  # noqa: ARG005
+
+    result = backend.scan_board([(2, 2)])
+
+    assert result == (2, 2)
+    assert fake_serial.writes == ["SCAN", "STOP", "SCAN"]
+
+
+def test_hardware_backend_recovers_idle_scan_with_soft_reset():
+    class _IdleSerial(_FakeSerial):
+        def readline(self):
+            if self.writes.count("SCAN") < 2:
+                time.sleep(0.002)
+                return b""
+            return b'{"protocol":"board_scan_usb_v1","event":"press","col":2,"row":2}\n'
+
+    backend = _HardwareBackend.__new__(_HardwareBackend)
+    fake_serial = _IdleSerial()
+    backend.ser = fake_serial
+    backend.protocol_name = "board_scan_usb_v1"
+    backend.scan_command = "SCAN"
+    backend.stop_command = "STOP"
+    backend.stop_before_scan = False
+    backend.pre_scan_delay_s = 0.0
+    backend.scan_recovery_timeout_s = 0.001
 
     result = backend.scan_board([(2, 2)])
 

@@ -103,31 +103,64 @@ class Start(State):
             if not available_positions:
                 self.game.ui_log("Brak wolnych pól startowych dla kolejnego bohatera.")
                 return "failed"
+            scan_attempt = 0
+
+            def _scan_start_position():
+                nonlocal scan_attempt
+                scan_attempt += 1
+                try:
+                    self.game.ui_event(
+                        "board_scan_wait",
+                        {
+                            "kind": "hero_start_position",
+                            "hero_name": hero_name,
+                            "attempt": scan_attempt,
+                            "positions": [list(pos) for pos in available_positions],
+                        },
+                    )
+                except Exception:
+                    pass
+                try:
+                    selected = self.game.conn.scan_board(available_positions)
+                except TypeError:
+                    selected = self.game.conn.scan_board(available_positions)
+                try:
+                    self.game.ui_event(
+                        "board_scan_result",
+                        {
+                            "kind": "hero_start_position",
+                            "hero_name": hero_name,
+                            "attempt": scan_attempt,
+                            "position": list(selected) if selected is not None else None,
+                        },
+                    )
+                except Exception:
+                    pass
+                return selected
+
             self.game.conn.set_leds(available_positions, consts.MOVE_FIELD_RGB)
             time.sleep(0.12)
             logger.info("Odczytuje wybrane pole startowe...")
-
-            def _scan_start_position():
-                try:
-                    return self.game.conn.scan_board(available_positions)
-                except TypeError:
-                    return self.game.conn.scan_board(available_positions)
 
             try:
                 pos = _scan_start_position()
             finally:
                 self.game.conn.leds_off()
             if pos is None:
-                self.game.ui_log(
-                    str(
-                        prompt_value(
-                            "setup.hero_setup_retry_position",
-                            "body_markdown",
-                            "Nie wybrano pola startowego. Spróbuj ponownie.",
-                            hero_name=hero_name,
-                        )
+                retry_text = str(
+                    prompt_value(
+                        "setup.hero_setup_retry_position",
+                        "body_markdown",
+                        "Nie wybrano pola startowego. Spróbuj ponownie.",
+                        hero_name=hero_name,
                     )
                 )
+                self.game.ui_log(retry_text, level="warning")
+                if callable(ui_idle_hint):
+                    ui_idle_hint(
+                        "Ponawiam skan planszy",
+                        f"{retry_text} Próba {scan_attempt + 1}.",
+                    )
                 return "cancelled"
             prompt = str(
                 prompt_value(

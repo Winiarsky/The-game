@@ -116,7 +116,7 @@ def _place(board: BoardGrid, actors: list[object]) -> None:
             board.place(actor, pos)
 
 
-def test_combat_enemy_turn_prompts_start_and_thinking(monkeypatch):
+def test_combat_enemy_turn_blocks_on_start_and_skips_thinking_noise(monkeypatch):
     board = BoardGrid(rows=5, cols=5)
     ui = PromptUI()
     hero = DummyHero(position=(3, 3))
@@ -138,10 +138,15 @@ def test_combat_enemy_turn_prompts_start_and_thinking(monkeypatch):
     combat.choose_action()
 
     titles = [call["title"] for call in ui.info_calls]
-    assert "Tura przeciwnika: Bandit Bruiser" not in titles
-    assert any("Tura przeciwnika: Bandit Bruiser" in msg for msg in game.logs)
+    assert "Tura przeciwnika: Bandit Bruiser" in titles
     assert "Bandit Bruiser myśli..." not in titles
-    assert any("Bandit Bruiser myśli..." in msg for msg in game.logs)
+    assert not any("Bandit Bruiser myśli..." in msg for msg in game.logs)
+    cancel_events = [event for event in game.ui_events if event["type"] == "prompt_scope_cancel"]
+    assert {event["payload"]["scope_key"] for event in cancel_events} >= {
+        "hero_turn:intent",
+        "hero_turn:targeting",
+        "hero_turn:resolution",
+    }
 
 
 def test_enemy_move_emits_prompt_before_and_after_move(monkeypatch):
@@ -193,8 +198,11 @@ def test_enemy_strike_emits_roll_breakdown_and_result_prompts(monkeypatch):
 
     assert result.success is True
     titles = [call["title"] for call in ui.info_calls]
+    assert "Atak przeciwnika: Bandit Bruiser" in titles
     assert "Wynik ataku: Bandit Bruiser" in titles
     assert "Rzut ataku: Bandit Bruiser" not in titles
+    prepare_text = next(call["prompt_long"] for call in ui.info_calls if call["title"] == "Atak przeciwnika: Bandit Bruiser")
+    assert "Enter rozstrzyga rzut ataku" in str(prepare_text or "")
     assert any("Bandit Bruiser atakuje Cedric" in msg for msg in game.logs)
     dice_events = [event for event in game.ui_events if event["type"] == "dice_roll"]
     assert [event["payload"]["roll_type"] for event in dice_events] == ["attack", "damage"]

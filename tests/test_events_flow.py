@@ -338,6 +338,7 @@ def test_initiative_event_payload_excludes_removed_dead_enemy():
     combat.base_initiative[dead_enemy] = 11
     combat.base_initiative[alive_enemy] = 10
     combat.base_initiative[overkilled_enemy] = 9
+    combat.actions_used[hero] = 1
 
     combat._send_initiative_event()
 
@@ -354,7 +355,68 @@ def test_initiative_event_payload_excludes_removed_dead_enemy():
     assert hero_entry["statuses"] == []
     assert hero_entry["image"] == "/static/portraits/custom/hero-test.jpg"
     assert hero_entry["asset_id"] == "hero-1"
+    assert hero_entry["actions_used"] == 1
+    assert hero_entry["actions_total"] == 3
+    assert hero_entry["actions_remaining"] == 2
     assert alive_enemy_entry["wounds"] == 2
     assert alive_enemy_entry["max_hp"] == 12
     assert alive_enemy_entry["image"].endswith("bandit.svg")
     assert alive_enemy_entry["asset_id"] == "enemy-alive"
+
+
+def test_combat_end_clears_companion_initiative_from_ui():
+    from states.combat import Combat
+    from states.heroes_turns import HeroesTurn
+
+    class Hero:
+        def __init__(self):
+            self.name = "Hero"
+            self.object_id = "hero-1"
+            self.position = (0, 0)
+            self.initiative = 15
+            self.statuses = []
+
+        def __hash__(self):
+            return id(self)
+
+    class Companion:
+        def __init__(self):
+            self.name = "Wolf"
+            self.object_id = "companion-1"
+            self.position = (1, 0)
+            self.initiative = 14
+            self.hp = 10
+            self.max_hp = 10
+            self.statuses = []
+
+        def __hash__(self):
+            return id(self)
+
+    captured = []
+    active_changes = []
+    hero = Hero()
+    companion = Companion()
+    game = FakeGame()
+    game.heroes = [hero]
+    game.enemies = []
+    game.ui = object()
+    game.ui_event = lambda event_type, payload: captured.append((event_type, payload))
+    game.ui_active_actor = lambda actor: active_changes.append(actor)
+
+    combat = Combat(game)
+    game.state = combat
+    combat.base_order = [hero, companion]
+    combat.round_queue = [companion]
+    combat.initiative_order = [companion, hero]
+    combat.base_initiative[hero] = 15
+    combat.base_initiative[companion] = 14
+    combat.animal_companions[hero.object_id] = companion
+
+    next_state = combat._end_combat_if_no_enemies()
+
+    assert isinstance(next_state, HeroesTurn)
+    assert combat.animal_companions == {}
+    assert combat.base_order == []
+    assert combat.round_queue == []
+    assert captured[-1] == ("initiative", {"round": None, "order": [], "active_id": None})
+    assert active_changes[-1] is None

@@ -29,6 +29,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "probe_timeout_s": 6.0,
         "line_timeout_s": 0.25,
         "write_timeout_s": 0.5,
+        "scan_recovery_timeout_s": 10.0,
     },
     "wled": {
         "base_url": "http://wled.local",
@@ -98,6 +99,8 @@ def _apply_env_overrides(config: dict[str, Any]) -> dict[str, Any]:
         hardware_cfg["stop_before_scan"] = raw not in {"0", "false", "no", "off"}
     if os.environ.get("BOARD_PRE_SCAN_STOP_S"):
         hardware_cfg["pre_scan_stop_s"] = float(os.environ["BOARD_PRE_SCAN_STOP_S"])
+    if os.environ.get("BOARD_SCAN_RECOVERY_TIMEOUT_S"):
+        hardware_cfg["scan_recovery_timeout_s"] = float(os.environ["BOARD_SCAN_RECOVERY_TIMEOUT_S"])
     if os.environ.get("WLED_URL"):
         wled_cfg["base_url"] = str(os.environ["WLED_URL"]).strip()
     if os.environ.get("WLED_SEGMENT_ID"):

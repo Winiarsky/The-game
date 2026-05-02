@@ -79,6 +79,19 @@ def test_bandit_cave_flow_loads_and_validates_logic_refs():
     assert "from_cave_docks" in payload["map_logic_index"]["smuggler_docks"]["anchors"]
 
 
+def test_bandit_cave_flow_declares_voiceover_assets_on_story_events():
+    payload = load_scenario_flow("bandit_cave")
+    story_actions = [
+        action
+        for event in payload["events"]
+        for action in event["actions"]
+        if action["type"] in {"show_prompt", "show_log"}
+    ]
+
+    assert story_actions
+    assert all(str(action.get("audio") or "").startswith("audio/voiceover/") for action in story_actions)
+
+
 def test_flow_validator_rejects_missing_transition_exit():
     payload = load_scenario_flow("bandit_cave")
     broken = copy.deepcopy(payload)

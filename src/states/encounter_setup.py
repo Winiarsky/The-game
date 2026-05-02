@@ -22,13 +22,14 @@ def run_setup_batches(game, batches) -> None:
         mode = str(batch.get("confirmation_mode") or "confirm_only")
         positions = EncounterSetupState._unique_positions(tuple(pos) for pos in list(batch.get("positions") or []))
         color = batch.get("color") or consts.MOVE_FIELD_RGB
+        colors = list(batch.get("colors") or [])
         edges = list(batch.get("edges") or [])
         progress = {
             "current": idx,
             "total": total_steps,
             "label": f"Krok {idx}/{total_steps}",
         }
-        led_colors = color
+        led_colors = _led_colors_for_positions(positions, colors, color)
         if kind == "wall" and positions:
             led_colors = _wall_endpoint_colors(positions)
             prompt = (
@@ -43,6 +44,8 @@ def run_setup_batches(game, batches) -> None:
                 pending_colors = led_colors
                 if kind == "wall":
                     pending_colors = _wall_endpoint_colors(pending)
+                elif colors:
+                    pending_colors = _led_colors_for_positions(pending, colors, color, all_positions=positions)
                 game.conn.set_leds(pending, pending_colors)
                 clicked = game.conn.scan_board(pending)
                 game.conn.leds_off()
@@ -175,3 +178,35 @@ def _wall_endpoint_colors(positions: list[tuple[int, int]] | tuple[tuple[int, in
         else:
             colors.append(list(consts.WALL_ENDPOINT_B_RGB))
     return colors
+
+
+def _normalize_color(color) -> list[int] | None:
+    if not isinstance(color, (list, tuple)) or len(color) < 3:
+        return None
+    try:
+        return [int(color[0]), int(color[1]), int(color[2])]
+    except Exception:
+        return None
+
+
+def _led_colors_for_positions(
+    positions: list[tuple[int, int]],
+    colors: list[object],
+    fallback,
+    *,
+    all_positions: list[tuple[int, int]] | None = None,
+) -> list[int] | list[list[int]]:
+    fallback_color = _normalize_color(fallback) or list(consts.MOVE_FIELD_RGB)
+    if not colors:
+        return fallback_color
+    reference = list(all_positions or positions)
+    color_by_position: dict[tuple[int, int], list[int]] = {}
+    for idx, pos in enumerate(reference):
+        if idx >= len(colors):
+            break
+        color = _normalize_color(colors[idx])
+        if color is not None:
+            color_by_position[tuple(pos)] = color
+    if not color_by_position:
+        return fallback_color
+    return [color_by_position.get(tuple(pos), fallback_color) for pos in positions]

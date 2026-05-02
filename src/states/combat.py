@@ -428,9 +428,41 @@ class Combat(State):
                 )
         except Exception:
             pass
+        selected = None
         try:
             self.game.conn.set_leds(spawn_options, consts.HERO_HIGHLIGHT_RGB)
-            selected = self.game.conn.scan_board(spawn_options)
+            try:
+                self.game.ui_event(
+                    "board_scan_wait",
+                    {
+                        "kind": "animal_companion_spawn",
+                        "owner_id": owner_id,
+                        "positions": [list(pos) for pos in spawn_options],
+                    },
+                )
+            except Exception:
+                pass
+            timeout_s = float(getattr(consts, "HERO_SELECTION_SCAN_TIMEOUT_S", None) or 45.0)
+            try:
+                try:
+                    selected = self.game.conn.scan_board(spawn_options, timeout_s=timeout_s)
+                except TypeError:
+                    selected = self.game.conn.scan_board(spawn_options)
+                except Exception:
+                    logger.debug("Skan pola dla zwierzęcego towarzysza nie zwrócił wyniku.", exc_info=True)
+                    selected = None
+            finally:
+                try:
+                    self.game.ui_event(
+                        "board_scan_result",
+                        {
+                            "kind": "animal_companion_spawn",
+                            "owner_id": owner_id,
+                            "position": list(selected) if selected is not None else None,
+                        },
+                    )
+                except Exception:
+                    pass
         finally:
             try:
                 self.game.conn.leds_off()
@@ -724,6 +756,24 @@ class Combat(State):
         self.base_order.clear()
         self.round_queue.clear()
         self.animal_companions.clear()
+        try:
+            self.initiative_order.clear()
+        except Exception:
+            self.initiative_order = []
+
+    def _clear_combat_ui(self) -> None:
+        self._clear_initiatives()
+        if getattr(self.game, "ui", None):
+            try:
+                self.game.ui_event("initiative", {"round": None, "order": [], "active_id": None})
+            except Exception:
+                logger.debug("Nie udało się wyczyścić inicjatywy w UI po walce.", exc_info=True)
+        ui_active_actor = getattr(self.game, "ui_active_actor", None)
+        if callable(ui_active_actor):
+            try:
+                ui_active_actor(None)
+            except Exception:
+                logger.debug("Nie udało się wyczyścić aktywnego aktora w UI po walce.", exc_info=True)
 
     # --- Turn helpers ---
     def _cleanup_removed(self) -> bool:
@@ -1343,6 +1393,7 @@ class Combat(State):
             return None
         logger.info("Brak wrogów na planszy – koniec walki.")
         self._offer_collect_remaining_loot()
+        self._clear_combat_ui()
         if getattr(self.game, "is_generated_encounter", None) and self.game.is_generated_encounter():
             return EncounterFinished(self.game)
         return HeroesTurn(self.game)
@@ -1498,6 +1549,7 @@ class Combat(State):
                     "kind": "hero" if obj in self.game.heroes else "enemy",
                     "image": getattr(obj, "image", None) or getattr(obj, "portrait_image", None),
                     "asset_id": str(getattr(obj, "object_id", None) or getattr(obj, "name", "") or self._actor_id(obj)),
+                    **self._actor_actions_payload(obj),
                     "base": base,
                     "current": eff,
                     "delta": delta,
@@ -1518,6 +1570,25 @@ class Combat(State):
         ui_active_actor = getattr(self.game, "ui_active_actor", None)
         if callable(ui_active_actor):
             ui_active_actor(active)
+
+    def _actor_actions_payload(self, actor: Any | None) -> dict[str, int]:
+        if actor is None:
+            return {}
+        try:
+            total = int(self._action_limit(actor))
+        except Exception:
+            total = 3
+        try:
+            used = int(self.actions_used.get(actor, 0) or 0)
+        except Exception:
+            used = 0
+        total = max(0, total)
+        used = max(0, min(total, used))
+        return {
+            "actions_used": used,
+            "actions_total": total,
+            "actions_remaining": max(0, total - used),
+        }
 
     @staticmethod
     def _weapon_note(actor) -> str:
@@ -1568,6 +1639,23 @@ class Combat(State):
             self.game.ui_hero(actor, note=self._hero_ui_note(actor))
         except Exception:
             logger.debug("Nie udało się odświeżyć snapshotu UI bohatera %s", actor, exc_info=True)
+
+    def _cancel_prompt_scopes(self, *scope_keys: str) -> None:
+        player_prompt = getattr(self.game, "player_prompt", None)
+        for scope_key in scope_keys:
+            scope = str(scope_key or "").strip()
+            if not scope:
+                continue
+            if player_prompt is not None and hasattr(player_prompt, "cancel_scope"):
+                try:
+                    if player_prompt.cancel_scope(scope):
+                        continue
+                except Exception:
+                    pass
+            try:
+                self.game.ui_event("prompt_scope_cancel", {"scope_key": scope})
+            except Exception:
+                pass
 
     def apply_initiative_penalty(self, actor, penalty: int) -> None:
         """Obniż inicjatywę aktora i przestaw w kolejce (używane np. przez deafened)."""
@@ -1766,22 +1854,6 @@ class Combat(State):
         behavior_fn = get_behavior(getattr(enemy, "behavior_id", None))
         try:
             while used < limit:
-                enemy_prompt_step(
-                    self.game,
-                    f"{getattr(enemy, 'name', 'Enemy')} myśli...",
-                    prompt_long=(
-                        f"Przeciwnik analizuje sytuację.\n"
-                        f"Akcje wykorzystane: {used}/{limit}.\n"
-                        "System zaraz wybierze następną akcję przeciwnika."
-                    ),
-                    source="enemy_turn_thinking",
-                    blocking=False,
-                    semantic_type="status_update",
-                    dedupe_key=f"enemy_turn_thinking:{getattr(enemy, 'object_id', getattr(enemy, 'name', 'enemy'))}:{used}",
-                    next_hint="Za chwilę zobaczysz decyzję przeciwnika.",
-                    continue_hint="Nie musisz nic potwierdzać.",
-                    emit_log=True,
-                )
                 try:
                     spent = behavior_fn(enemy, self.game, self, actions_left=limit - used)
                 except Exception as exc:
@@ -1817,6 +1889,7 @@ class Combat(State):
             ui_active_actor(actor)
 
         if actor in self.game.enemies:
+            self._cancel_prompt_scopes("hero_turn:intent", "hero_turn:targeting", "hero_turn:resolution")
             limit = self._action_limit(actor)
             remaining = limit - self.actions_used.get(actor, 0)
             logger.info("Tura przeciwnika: %s (akcje pozostałe: %s/%s)", getattr(actor, "name", "Enemy"), remaining, limit)
@@ -1832,16 +1905,17 @@ class Combat(State):
                     "Potwierdź Enterem, aby obserwować kolejne kroki przeciwnika."
                 ),
                 source="enemy_turn_start",
-                blocking=False,
-                semantic_type="status_update",
+                blocking=True,
+                semantic_type="required_action",
                 dedupe_key=f"enemy_turn_start:{getattr(actor, 'object_id', getattr(actor, 'name', 'enemy'))}:{remaining}/{limit}",
                 next_hint="Przeciwnik zacznie wykonywać akcje.",
-                continue_hint="Nie musisz nic potwierdzać.",
-                emit_log=True,
+                continue_hint="Enter rozpoczyna turę przeciwnika.",
+                emit_log=False,
             )
             return self._process_enemy_turn(actor)
 
         # Hero turn
+        self._cancel_prompt_scopes("enemy_turn")
         try:
             ensure_actor_spell_state(actor, game=self.game)
         except Exception:

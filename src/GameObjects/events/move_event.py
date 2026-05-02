@@ -90,7 +90,18 @@ class MoveEvent(GameEvent):
     def _wait_for_destination(self, ctx: EventContext, board) -> Tuple[int, int] | None:
         """Czeka na kliknięcie pola na planszy, odrzuca wybory poza planszą."""
         while True:
+            try:
+                ctx.game.ui_event("board_scan_wait", {"kind": "move_destination"})
+            except Exception:
+                pass
             target = ctx.game.conn.scan_board(None)
+            try:
+                ctx.game.ui_event(
+                    "board_scan_result",
+                    {"kind": "move_destination", "position": list(target) if target is not None else None},
+                )
+            except Exception:
+                pass
             if target is None:
                 return None
             if board.in_bounds(target):

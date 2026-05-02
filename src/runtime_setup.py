@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any
 
+from board import consts
 from GameObjects.Enemies.basic_enemy import BasicEnemy
 from GameObjects.Interactables.entry_anchor import EntryAnchor
 from GameObjects.Interactables.scenario_exit import ScenarioExit
@@ -16,6 +17,13 @@ DEFAULT_TERRAIN_PROMPTS: dict[str, str] = {
     "bushes": "Ustaw trudny teren na podświetlonych polach.",
     "rumble": "Ustaw rumowiska na podświetlonych polach.",
 }
+
+SCENARIO_EXIT_SETUP_PALETTE: tuple[tuple[str, list[int]], ...] = (
+    ("pomarańczowy", list(consts.SEEK_EXIT_RGB)),
+    ("niebieski", list(consts.HERO_HIGHLIGHT_RGB)),
+    ("zielony", list(consts.MOVE_TARGET_RGB)),
+    ("fioletowy", list(consts.HIDDEN_REVEAL_RGB)),
+)
 
 
 def build_runtime_setup_plan(
@@ -163,18 +171,32 @@ def build_runtime_setup_plan(
 
     if scenario_exit_markers:
         markers = _unique_scenario_exit_markers(scenario_exit_markers)
+        colored_markers = []
+        for idx, item in enumerate(markers):
+            color_label, color = SCENARIO_EXIT_SETUP_PALETTE[idx % len(SCENARIO_EXIT_SETUP_PALETTE)]
+            colored_markers.append({**item, "color_label": color_label, "color": list(color)})
         marker_lines = [
-            f"- {item['label']}: pole {tuple(item['position'])}"
-            for item in markers
+            f"- {item['label']}: LED {item['color_label']}, pole {tuple(item['position'])}"
+            for item in colored_markers
         ]
         steps.append(
             {
                 "kind": "scenario_exit",
                 "label": "Scenario exits",
                 "color": list(DEFAULT_SETUP_COLORS["door"]),
-                "positions": [list(item["position"]) for item in markers],
+                "colors": [list(item["color"]) for item in colored_markers],
+                "legend": [
+                    {
+                        "label": str(item["label"]),
+                        "position": list(item["position"]),
+                        "color_label": str(item["color_label"]),
+                        "color": list(item["color"]),
+                    }
+                    for item in colored_markers
+                ],
+                "positions": [list(item["position"]) for item in colored_markers],
                 "edges": [],
-                "prompt": "Wskaż na planszy jawne przejścia scenariusza:\n" + "\n".join(marker_lines),
+                "prompt": "Wskaż na planszy jawne przejścia scenariusza według kolorów LED:\n" + "\n".join(marker_lines),
                 "confirmation_mode": "confirm_only",
             }
         )

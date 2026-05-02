@@ -33,6 +33,18 @@ logger = logging.getLogger(__name__)
 PORT_HINTS = ("esp32", "silabs", "cp210", "wch", "ch340", "usb", "uart")
 
 
+class _BoardScanIdleTimeout(TimeoutError):
+    pass
+
+
+class _BoardScanResponseTimeout(TimeoutError):
+    pass
+
+
+class _BoardSerialError(RuntimeError):
+    pass
+
+
 @dataclass(slots=True)
 class PortProbeResult:
     port: str
@@ -225,6 +237,9 @@ class _SimulatorBackend:
     def cancel_scan(self) -> None:
         requests.post(f"{self.base_url}/simulate/cancel_scan", timeout=5.0).raise_for_status()
 
+    def reset_connection(self) -> None:
+        self.cancel_scan()
+
 
 class _WledClient:
     def __init__(self, cfg: dict[str, Any]) -> None:
@@ -348,6 +363,7 @@ class _HardwareBackend:
         self.stop_before_scan = bool(self.scan_cfg.get("stop_before_scan", True))
         self.pre_scan_stop_s = max(0.0, float(self.scan_cfg.get("pre_scan_stop_s", 0.08)))
         self.pre_scan_delay_s = max(0.0, float(self.scan_cfg.get("pre_scan_delay_s") or 0.12))
+        self.scan_recovery_timeout_s = max(0.0, float(self.scan_cfg.get("scan_recovery_timeout_s") or 0.0))
         self.port_result = _open_serial_probe(self.scan_cfg)
         self.ser = self.port_result.serial_handle
         self.wled = _WledClient(wled_cfg)
@@ -387,16 +403,47 @@ class _HardwareBackend:
         except Exception:
             logger.debug("Nie udało się wysłać komendy zatrzymania skanu.", exc_info=True)
 
+    def reset_connection(self, *, reopen: bool = False) -> None:
+        try:
+            self.cancel_scan()
+            self._reset_input_buffer()
+            try:
+                self.ser.reset_output_buffer()
+            except Exception:
+                pass
+            if not reopen:
+                return
+        except Exception:
+            logger.debug("Miękki reset połączenia planszy nie powiódł się.", exc_info=True)
+        try:
+            self.ser.close()
+        except Exception:
+            pass
+        self.port_result = _open_serial_probe(self.scan_cfg)
+        self.ser = self.port_result.serial_handle
+        self.serial_port = self.port_result.port
+
     def _read_protocol_payload(self, *, timeout_s: float | None = None) -> dict[str, Any]:
         deadline = None if timeout_s is None else (time.monotonic() + timeout_s)
+        idle_deadline = None
+        if timeout_s is None and self.scan_recovery_timeout_s > 0:
+            idle_deadline = time.monotonic() + self.scan_recovery_timeout_s
         while deadline is None or time.monotonic() < deadline:
-            raw = self.ser.readline().decode("utf-8", errors="replace").strip()
+            now = time.monotonic()
+            if idle_deadline is not None and now >= idle_deadline:
+                raise _BoardScanIdleTimeout("Brak odpowiedzi z planszy podczas aktywnego skanu.")
+            try:
+                raw = self.ser.readline().decode("utf-8", errors="replace").strip()
+            except Exception as exc:
+                raise _BoardSerialError(f"Błąd odczytu z portu planszy: {exc}") from exc
             if not raw:
                 continue
+            if idle_deadline is not None:
+                idle_deadline = time.monotonic() + self.scan_recovery_timeout_s
             payload = _parse_json_line(raw)
             if payload and payload.get("protocol") == self.protocol_name:
                 return payload
-        raise RuntimeError(f"Timeout oczekiwania na odpowiedź protokołu {self.protocol_name}.")
+        raise _BoardScanResponseTimeout(f"Timeout oczekiwania na odpowiedź protokołu {self.protocol_name}.")
 
     def scan_board(
         self,
@@ -409,14 +456,30 @@ class _HardwareBackend:
             remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
             if remaining is not None and remaining <= 0:
                 raise TimeoutError("Timeout oczekiwania na wybór pola na planszy.")
-            self._send_scan_command()
+            try:
+                self._send_scan_command()
+            except Exception as exc:
+                logger.warning("Błąd wysłania komendy skanu planszy, ponawiam po reconnect: %s", exc)
+                self.reset_connection(reopen=True)
+                continue
             while True:
                 remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
                 if remaining is not None and remaining <= 0:
                     raise TimeoutError("Timeout oczekiwania na wybór pola na planszy.")
                 try:
                     payload = self._read_protocol_payload(timeout_s=remaining)
-                except RuntimeError as exc:
+                except _BoardScanIdleTimeout:
+                    logger.warning(
+                        "Skan planszy nie zwrócił żadnych danych przez %.1fs; resetuję skan i ponawiam.",
+                        self.scan_recovery_timeout_s,
+                    )
+                    self.reset_connection()
+                    break
+                except _BoardSerialError as exc:
+                    logger.warning("Połączenie z planszą przerwane podczas skanu, próbuję reconnect: %s", exc)
+                    self.reset_connection(reopen=True)
+                    break
+                except _BoardScanResponseTimeout as exc:
                     if remaining is not None:
                         raise TimeoutError("Timeout oczekiwania na wybór pola na planszy.") from exc
                     raise
@@ -528,6 +591,13 @@ class Connection:
         canceller = getattr(self._backend, "cancel_scan", None)
         if callable(canceller):
             canceller()
+
+    def reset_connection(self) -> None:
+        resetter = getattr(self._backend, "reset_connection", None)
+        if callable(resetter):
+            resetter()
+            return
+        self.cancel_scan()
 
     def close(self) -> None:
         closer = getattr(self._backend, "close", None)

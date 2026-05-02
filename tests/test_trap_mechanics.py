@@ -57,6 +57,19 @@ class HiddenThing:
             self.revealed = True
 
 
+class VisibleActor:
+    def __init__(self, name, object_id, position=None, *, npc=False):
+        self.name = name
+        self.object_id = object_id
+        self.position = position
+        self.hp = 10
+        if npc:
+            self.npc_id = object_id
+
+    def set_position(self, position):
+        self.position = position
+
+
 class DummyEvents:
     def safe_emit_action(self, **_kwargs):
         return None
@@ -82,6 +95,18 @@ class DummyUI:
         if self.answers:
             return self.answers.pop(0)
         return "confirm"
+
+    def prompt_info(self, title, *, prompt_long=None, **kwargs):
+        return "ok"
+
+
+class DummyPlayerPrompt:
+    def __init__(self):
+        self.info_calls = []
+
+    def info(self, title, **kwargs):
+        self.info_calls.append({"title": title, "kwargs": dict(kwargs)})
+        return "ok"
 
 
 @dataclass
@@ -283,4 +308,58 @@ def test_seek_preview_lists_visible_objects_and_allows_cancel(monkeypatch):
     color_map = {tuple(pos): list(color) for pos, color in zip(highlighted_positions, highlighted_colors)}
     assert color_map[(1, 0)] == SeekEvent._seek_object_preview_rgb(consts.SEEK_LOOT_RGB)
     assert color_map[(2, 0)] == SeekEvent._seek_object_preview_rgb(consts.SEEK_EXIT_RGB)
+    assert color_map[(3, 0)] == SeekEvent._seek_area_preview_rgb()
+
+
+def test_seek_no_candidates_uses_confirmable_result_prompt(monkeypatch):
+    board = BoardGrid(rows=1, cols=2)
+    board.apply_rooms([{"id": "hall", "positions": [[0, 0], [1, 0]]}])
+    hero = Hero(position=(0, 0))
+    board.place(hero, hero.position)
+    conn = DummyConn()
+    ui = DummyUI(answers=["confirm"])
+    game = _build_game(board, hero, conn, ui=ui)
+    player_prompt = DummyPlayerPrompt()
+    game.player_prompt = player_prompt
+
+    monkeypatch.setattr(
+        "GameObjects.events.seek_event.check_resolver.resolve_skill_check_with_sources",
+        lambda **_k: SimpleNamespace(outcome="success", roll=14, total=23),
+    )
+
+    result = SeekEvent().run(EventContext(game=game, actor=hero))
+
+    assert result.success is True
+    assert player_prompt.info_calls
+    info = player_prompt.info_calls[-1]
+    assert info["title"] == "Seek: nic do odkrycia"
+    assert info["kwargs"]["prompt_id"] == "interaction.seek_result"
+    assert info["kwargs"]["scope_key"] == "seek:result"
+
+
+def test_seek_preview_lists_enemies_and_npcs_with_distinct_colors(monkeypatch):
+    board = BoardGrid(rows=1, cols=4)
+    board.apply_rooms([{"id": "hall", "positions": [[0, 0], [1, 0], [2, 0], [3, 0]]}])
+    hero = Hero(position=(0, 0))
+    enemy = VisibleActor("Bandit Lookout", "enemy-1", (1, 0))
+    npc = VisibleActor("Marek", "npc-1", (2, 0), npc=True)
+    board.place(hero, hero.position)
+    board.place(enemy, enemy.position)
+    board.place(npc, npc.position)
+
+    conn = DummyConn()
+    ui = DummyUI(answers=["cancel"])
+    game = _build_game(board, hero, conn, ui=ui)
+    game.enemies = [enemy]
+
+    result = SeekEvent().run(EventContext(game=game, actor=hero))
+
+    assert result.success is False
+    body = str(ui.choice_calls[0]["prompt_long"] or "")
+    assert "Bandit Lookout" in body
+    assert "Marek" in body
+    highlighted_positions, highlighted_colors = conn.led_calls[0]
+    color_map = {tuple(pos): list(color) for pos, color in zip(highlighted_positions, highlighted_colors)}
+    assert color_map[(1, 0)] == SeekEvent._seek_object_preview_rgb(consts.ENEMY_START_RGB)
+    assert color_map[(2, 0)] != color_map[(1, 0)]
     assert color_map[(3, 0)] == SeekEvent._seek_area_preview_rgb()

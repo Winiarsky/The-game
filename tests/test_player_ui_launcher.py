@@ -15,6 +15,7 @@ import player_ui.app as player_ui_app_module  # noqa: E402
 
 class _ProcStub:
     def __init__(self):
+        self.pid = 4242
         self.terminated = False
         self.killed = False
         self._poll = None
@@ -146,6 +147,17 @@ def test_runtime_start_requires_at_least_one_hero(ui_client):
     assert "hero_id" in response.get_json()["error"].lower()
 
 
+def test_runtime_start_rejects_unknown_scenario(ui_client):
+    response = ui_client.post(
+        "/api/runtime/start",
+        json={"scenario_id": "missing_scenario", "hero_ids": ["cedric"]},
+        base_url="http://127.0.0.1:5200",
+    )
+
+    assert response.status_code == 400
+    assert "unknown scenario_id" in response.get_json()["error"].lower()
+
+
 def test_runtime_stop_terminates_running_process(ui_client, monkeypatch):
     proc = _ProcStub()
     monkeypatch.setattr(
@@ -225,3 +237,58 @@ def test_runtime_retry_reuses_previous_configuration(ui_client, monkeypatch):
     assert "cedric" in cmd
     assert "--board-backend" in cmd
     assert "hardware" in cmd
+
+
+def test_runtime_board_reset_signals_running_process(ui_client, monkeypatch):
+    proc = _ProcStub()
+    popen_calls = []
+    kill_calls = []
+
+    def _fake_popen(cmd, cwd=None, env=None):  # noqa: ARG001
+        popen_calls.append({"cmd": cmd, "cwd": cwd, "env": env})
+        return proc
+
+    def _fake_kill(pid, sig):
+        kill_calls.append((pid, sig))
+
+    monkeypatch.setattr(player_ui_app_module.subprocess, "Popen", _fake_popen)
+    monkeypatch.setattr(player_ui_app_module.os, "kill", _fake_kill)
+    monkeypatch.setattr(
+        player_ui_app_module,
+        "_resolve_runtime_board_settings",
+        lambda: {
+            "backend": "hardware",
+            "board_url": None,
+            "serial_port": "/dev/ttyUSB0",
+            "wled_url": "http://192.168.0.165",
+        },
+    )
+    monkeypatch.setattr(
+        player_ui_app_module,
+        "runtime_state",
+        {
+            "process": proc,
+            "state": "running",
+            "scenario_id": "bandit_cave",
+            "hero_ids": ["cedric"],
+            "session_id": "ui-session-1",
+            "started_at": 1.0,
+            "stopped_at": None,
+            "returncode": None,
+            "command": ["python", "main.py"],
+            "base_url": "http://127.0.0.1:5200",
+            "error": None,
+            "board_backend": "hardware",
+            "board_url": None,
+        },
+    )
+
+    response = ui_client.post("/api/runtime/board-reset", json={}, base_url="http://127.0.0.1:5200")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["runtime_status"]["scenario_id"] == "bandit_cave"
+    assert payload["runtime_status"]["hero_ids"] == ["cedric"]
+    assert popen_calls == []
+    assert kill_calls == [(4242, player_ui_app_module.signal.SIGUSR1)]

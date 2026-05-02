@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import signal
 import socket
 import subprocess
 import sys
@@ -35,6 +36,23 @@ from src.ui_payloads import build_active_actor_payload, build_hero_snapshot
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
+
+
+def install_board_reset_signal_handler(conn: Connection) -> None:
+    reset_signal = getattr(signal, "SIGUSR1", None)
+    if reset_signal is None:
+        return
+
+    def _handle_board_reset(_signum, _frame) -> None:
+        logger.info("Otrzymano żądanie resetu połączenia z planszą.")
+        try:
+            conn.reset_connection()
+        except Exception as exc:
+            logger.warning("Reset połączenia z planszą nie powiódł się: %s", exc)
+            return
+        logger.info("Reset połączenia z planszą wykonany.")
+
+    signal.signal(reset_signal, _handle_board_reset)
 
 
 def list_runtime_scenario_names(scenarios_dir: Path) -> list[str]:
@@ -525,6 +543,7 @@ def main(argv: list[str] | None = None) -> int:
         serial_port=args.board_serial_port,
         wled_url=args.wled_url,
     )
+    install_board_reset_signal_handler(conn)
     runtime = None
     if scenario_payload is not None:
         runtime = Game(

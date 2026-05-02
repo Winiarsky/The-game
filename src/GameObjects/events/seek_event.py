@@ -30,6 +30,10 @@ def _scaled_rgb(value, factor: float) -> list[int]:
     return [max(0, min(255, int(round(channel * factor)))) for channel in base]
 
 
+SEEK_NPC_RGB = [155, 80, 220]
+SEEK_ALLY_RGB = [35, 105, 225]
+
+
 @register_event
 class SeekEvent(GameEvent):
     name = "seek"
@@ -258,6 +262,61 @@ class SeekEvent(GameEvent):
             "priority": 10,
         }
 
+    @staticmethod
+    def _seek_actor_preview_descriptor(obj, kind: str) -> dict[str, object]:
+        normalized = str(kind or "").strip().lower()
+        label = str(getattr(obj, "name", "") or getattr(obj, "object_id", "") or obj.__class__.__name__).strip()
+        if normalized == "enemy":
+            return {
+                "label": label,
+                "legend": label,
+                "color": list(consts.ENEMY_START_RGB),
+                "color_name": "czerwone",
+                "priority": 90,
+            }
+        if normalized == "npc":
+            return {
+                "label": label,
+                "legend": label,
+                "color": list(SEEK_NPC_RGB),
+                "color_name": "fioletowe",
+                "priority": 80,
+            }
+        return {
+            "label": label,
+            "legend": label,
+            "color": list(SEEK_ALLY_RGB),
+            "color_name": "niebieskie",
+            "priority": 70,
+        }
+
+    @staticmethod
+    def _actor_preview_kind(obj, actor, game) -> str | None:
+        if obj is None or obj is actor:
+            return None
+        if obj in list(getattr(game, "enemies", []) or []):
+            try:
+                if int(getattr(obj, "hp", 1) or 0) <= 0:
+                    return None
+            except Exception:
+                pass
+            return "enemy"
+        if obj in list(getattr(game, "heroes", []) or []):
+            return "ally"
+        try:
+            from GameObjects.NPC.base_npc import BaseNPC
+
+            if isinstance(obj, BaseNPC):
+                return "npc"
+        except Exception:
+            pass
+        category = str(getattr(getattr(obj, "meta", None), "category", "") or getattr(obj, "category", "") or "").strip().lower()
+        if category == "npc":
+            return "npc"
+        if hasattr(obj, "npc_id"):
+            return "npc"
+        return None
+
     @classmethod
     def _preview_interactables(
         cls,
@@ -268,9 +327,21 @@ class SeekEvent(GameEvent):
     ) -> tuple[dict[tuple[int, int], dict[str, object]], list[dict[str, object]]]:
         preview_by_pos: dict[tuple[int, int], dict[str, object]] = {}
         preview_items: list[dict[str, object]] = []
-        seen_labels: set[tuple[str, tuple[int, int, int]]] = set()
 
         for pos in sorted(set(search_positions or set()), key=lambda item: (int(item[1]), int(item[0]))):
+            try:
+                occupant = board.occupant_at(pos)
+            except Exception:
+                occupant = None
+            actor_kind = cls._actor_preview_kind(occupant, actor, game)
+            if actor_kind:
+                descriptor = cls._seek_actor_preview_descriptor(occupant, actor_kind)
+                descriptor["position"] = pos
+                preview_items.append(descriptor)
+                current = preview_by_pos.get(pos)
+                if current is None or int(descriptor.get("priority", 0) or 0) >= int(current.get("priority", 0) or 0):
+                    preview_by_pos[pos] = descriptor
+
             for obj in list(board.interactables_at(pos) or []):
                 if not cls._is_seek_preview_visible(obj):
                     continue
@@ -287,30 +358,15 @@ class SeekEvent(GameEvent):
                 current = preview_by_pos.get(pos)
                 if current is None or int(descriptor.get("priority", 0) or 0) >= int(current.get("priority", 0) or 0):
                     preview_by_pos[pos] = descriptor
-                legend_key = (str(descriptor.get("legend", "")).strip().lower(), _color_tuple(descriptor.get("color")))
-                seen_labels.add(legend_key)
 
-        legend_entries: list[dict[str, object]] = []
-        for legend, color in sorted(seen_labels, key=lambda item: (item[0], item[1])):
-            match = next(
-                (
-                    item for item in preview_items
-                    if str(item.get("legend", "")).strip().lower() == legend
-                    and _color_tuple(item.get("color")) == color
-                ),
-                None,
+        preview_items.sort(
+            key=lambda item: (
+                str(item.get("color_name") or ""),
+                str(item.get("label") or item.get("legend") or ""),
+                tuple(item.get("position") or (999, 999)),
             )
-            if match is None:
-                continue
-            legend_entries.append(
-                {
-                    "legend": str(match.get("legend") or "").strip(),
-                    "color_name": str(match.get("color_name") or "").strip() or "szare",
-                    "color": list(match.get("color") or consts.SEEK_OBJECT_RGB),
-                }
-            )
-        legend_entries.sort(key=lambda item: (str(item.get("color_name") or ""), str(item.get("legend") or "")))
-        return preview_by_pos, legend_entries
+        )
+        return preview_by_pos, preview_items
 
     @staticmethod
     def _seek_preview_legend_markdown(legend_entries: list[dict[str, object]]) -> str:
@@ -319,8 +375,12 @@ class SeekEvent(GameEvent):
         lines = []
         for entry in legend_entries:
             color_name = str(entry.get("color_name") or "").strip() or "szare"
-            legend = str(entry.get("legend") or "").strip() or "obiekt"
-            lines.append(f"- **{color_name.capitalize()}**: {legend}")
+            legend = str(entry.get("label") or entry.get("legend") or "").strip() or "obiekt"
+            pos = entry.get("position")
+            pos_text = ""
+            if isinstance(pos, tuple) and len(pos) >= 2:
+                pos_text = f", pole ({pos[0]}, {pos[1]})"
+            lines.append(f"- **{color_name.capitalize()}**: {legend}{pos_text}")
         return "\n".join(lines)
 
     @classmethod
@@ -417,10 +477,74 @@ class SeekEvent(GameEvent):
                 continue
             colors.append(SeekEvent._seek_area_preview_rgb())
         try:
+            game.ui_event(
+                "seek_area_preview",
+                {
+                    "origin": list(hero_pos),
+                    "positions": [list(pos) for pos in positions],
+                    "colors": colors,
+                },
+            )
+        except Exception:
+            pass
+        try:
+            game.ui_idle_hint(
+                "Zasięg Seek",
+                "Podświetlone pola pokazują obszar przeszukiwania. Potwierdź, aby wykonać rzut Perception.",
+            )
+        except Exception:
+            pass
+        try:
             game.conn.set_leds(positions, colors)
             return True
         except Exception:
+            logger.debug("Nie udało się podświetlić zasięgu Seek.", exc_info=True)
             return False
+
+    @staticmethod
+    def _prompt_seek_result(
+        game,
+        title: str,
+        body_markdown: str,
+        *,
+        dedupe_key: str,
+        details_markdown: str | None = None,
+        scope_key: str = "seek:result",
+        prompt_id: str = "interaction.seek_result",
+    ) -> bool:
+        prompted = False
+        player_prompt = getattr(game, "player_prompt", None)
+        if player_prompt is not None and hasattr(player_prompt, "info"):
+            try:
+                prompted = player_prompt.info(
+                    title,
+                    body_markdown=body_markdown,
+                    source="seek",
+                    summary="Wynik akcji Seek.",
+                    details_markdown=details_markdown,
+                    scope_key=scope_key,
+                    dedupe_key=dedupe_key,
+                    priority="result",
+                    semantic_type="result",
+                    prompt_id=prompt_id,
+                ) is not None
+            except Exception:
+                prompted = False
+        if prompted:
+            return True
+        ui = get_ui_client()
+        if getattr(ui, "enabled", False):
+            try:
+                prompted = ui.prompt_info(
+                    title,
+                    prompt_long=body_markdown,
+                    source="seek",
+                    details_markdown=details_markdown,
+                    prompt_id=prompt_id,
+                ) is not None
+            except Exception:
+                pass
+        return prompted
 
     def execute(self, ctx: EventContext) -> EventResult:
         game = ctx.game
@@ -498,6 +622,12 @@ class SeekEvent(GameEvent):
                     game.conn.leds_off()
                 except Exception:
                     pass
+            self._prompt_seek_result(
+                game,
+                "Seek: krytyczna porażka",
+                "Krytyczna porażka. Dalsze przeszukiwanie tych pokoi jest zablokowane.",
+                dedupe_key=f"seek_result:critical_failure:{hero_pos}",
+            )
             return EventResult.noop(message="Krytyczna porażka – pokoje zablokowane.")
 
         newly_revealed_positions: set[tuple[int, int]] = set()
@@ -603,6 +733,12 @@ class SeekEvent(GameEvent):
                     game.conn.leds_off()
                 except Exception:
                     pass
+            self._prompt_seek_result(
+                game,
+                "Seek: nic do odkrycia",
+                "W przeszukiwanym obszarze nie ma ukrytych elementów ani pułapek.",
+                dedupe_key=f"seek_result:no_candidates:{hero_pos}",
+            )
             return EventResult.noop(message="Brak ukrytych elementów ani pułapek.")
         if not newly_revealed_positions and not detected_trap_positions:
             logger.info("Przeszukiwanie niczego nie ujawnia.")
@@ -618,6 +754,12 @@ class SeekEvent(GameEvent):
                     game.conn.leds_off()
                 except Exception:
                     pass
+            self._prompt_seek_result(
+                game,
+                "Seek: nic nie znaleziono",
+                "Nie znajdujesz niczego nowego w przeszukiwanym obszarze.",
+                dedupe_key=f"seek_result:nothing:{hero_pos}",
+            )
             return EventResult.noop(message="Nic nie znaleziono.")
 
         logger.info(
@@ -652,30 +794,16 @@ class SeekEvent(GameEvent):
             "LED w kolorze odkrycia wskazuje dokładne pole. "
             "Po potwierdzeniu możesz podejść do tego miejsca i użyć Interakcji, jeśli obiekt tego wymaga."
         )
-        prompted = False
-        player_prompt = getattr(game, "player_prompt", None)
-        if player_prompt is not None and hasattr(player_prompt, "info"):
-            try:
-                prompted = player_prompt.info(
-                    title,
-                    body_markdown=info_text,
-                    source="seek",
-                    summary="Seek ujawnia ukryty element.",
-                    details_markdown=details,
-                    scope_key="seek:reveal",
-                    dedupe_key=f"seek_reveal:{','.join(str(pos) for pos in reveal_positions)}",
-                    priority="result",
-                    semantic_type="result",
-                    prompt_id="interaction.seek_reveal",
-                ) is not None
-            except Exception:
-                prompted = False
-        ui = get_ui_client()
-        if prompted:
-            pass
-        elif ui.enabled:
-            ui.prompt_info(title, prompt_long=info_text, source="seek")
-        else:
+        prompted = self._prompt_seek_result(
+            game,
+            title,
+            info_text,
+            dedupe_key=f"seek_reveal:{','.join(str(pos) for pos in reveal_positions)}",
+            details_markdown=details,
+            scope_key="seek:reveal",
+            prompt_id="interaction.seek_reveal",
+        )
+        if not prompted:
             time_to_show = getattr(consts, "SEEK_REVEAL_SECONDS", 3)
             try:
                 import time

@@ -57,6 +57,29 @@ def test_runtime_setup_plan_builds_from_bandit_cave_runtime_board():
     assert (18, 9) in exit_positions
     assert (10, 7) not in exit_positions
     assert "Tunnel to Docks" in str(exit_step["prompt"] or "")
+    assert "LED" in str(exit_step["prompt"] or "")
+    assert len(exit_step["colors"]) == len(exit_step["positions"])
+    assert exit_step["legend"][0]["label"] == "Tunnel to Docks"
+
+
+def test_runtime_setup_distinguishes_multiple_visible_exits_by_color():
+    payload = _load_runtime_payload("bandit_cave_smuggler_docks")
+    game = Game(
+        conn=DummyConnection(),
+        scenario_payload=payload,
+        scenario_label="bandit_cave:smuggler_docks",
+    )
+
+    plan = build_runtime_setup_plan(game)
+    exit_step = next(step for step in plan if step["kind"] == "scenario_exit")
+
+    assert len(exit_step["positions"]) >= 2
+    assert len({tuple(color) for color in exit_step["colors"]}) >= 2
+    prompt = str(exit_step["prompt"] or "")
+    assert "Smuggler Ship" in prompt
+    assert "Back to Cave" in prompt
+    assert "pomarańczowy" in prompt
+    assert "niebieski" in prompt
 
 
 def test_runtime_setup_plan_skips_defeated_enemies():

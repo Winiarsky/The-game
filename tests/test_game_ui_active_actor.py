@@ -38,3 +38,24 @@ def test_ui_active_actor_marks_creation_hero_as_hero_kind():
     assert payload.get("kind") == "hero"
     assert payload.get("image") == "/static/portraits/custom/test.jpg"
     assert payload.get("asset_id")
+
+
+def test_ui_active_actor_includes_combat_action_counts():
+    class _State:
+        def _actor_actions_payload(self, actor):
+            assert actor is not None
+            return {"actions_used": 1, "actions_total": 3, "actions_remaining": 2}
+
+    carrier = _UiCarrier()
+    carrier.state = _State()
+    actor = Hero()
+    actor.name = "Cedric"
+    actor.object_id = "hero-1"
+    carrier.heroes = [actor]
+
+    Game.ui_active_actor(carrier, actor)
+
+    _event_type, payload = carrier.events[-1]
+    assert payload["actions_used"] == 1
+    assert payload["actions_total"] == 3
+    assert payload["actions_remaining"] == 2

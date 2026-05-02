@@ -381,6 +381,10 @@ button:hover,
     border-color: rgba(155, 75, 57, 0.6);
 }
 
+.warning {
+    border-color: rgba(198, 161, 90, 0.58);
+}
+
 .screen-head {
     display: flex;
     justify-content: space-between;
@@ -454,6 +458,25 @@ button:hover,
     gap: 18px;
 }
 
+.briefing-scene-art,
+.current-scene-art {
+    min-height: 190px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background-position: center;
+    background-size: cover;
+    box-shadow: inset 0 -70px 80px rgba(0, 0, 0, 0.28);
+}
+
+.briefing-scene-art {
+    margin-bottom: 18px;
+}
+
+.current-scene-art {
+    min-height: 140px;
+    margin-bottom: 12px;
+}
+
 .panel-card,
 .action-card {
     padding: 16px;
@@ -466,7 +489,7 @@ button:hover,
 
 .game-topbar {
     display: grid;
-    grid-template-columns: minmax(210px, 0.9fr) minmax(170px, 0.7fr) minmax(260px, 1fr) auto auto;
+    grid-template-columns: minmax(210px, 0.9fr) minmax(170px, 0.7fr) minmax(260px, 1fr) auto auto auto;
     gap: 10px;
     align-items: start;
 }
@@ -624,11 +647,16 @@ button:hover,
 
 .initiative-copy {
     min-width: 0;
+    overflow: hidden;
 }
 
 .initiative-order {
+    display: block;
+    min-width: 0;
+    max-width: 100%;
     font-family: var(--font-title);
     color: var(--text);
+    line-height: 1.2;
 }
 
 .actor-rail {

@@ -4,6 +4,7 @@ import atexit
 import itertools
 import json
 import os
+import signal
 import subprocess
 import sys
 import threading
@@ -26,6 +27,7 @@ from board.settings import connection_backend, hardware_scan_config, load_board_
 from character_creation.repository import CharacterRepository
 from communication import normalize_communication
 from player_prompting import PromptDirector, SESSION_RESET_COMMAND
+from scenario_flow import scenario_flow_path
 
 APP_ROOT = Path(__file__).resolve().parent
 CONTENT_ROOT = APP_ROOT / "content"
@@ -176,6 +178,43 @@ def _validate_request_session_id(data: dict[str, Any]) -> tuple[bool, Response |
     return True, None
 
 
+def _board_scan_status_payload(event_type: str, payload: dict[str, Any]) -> dict[str, Any] | None:
+    kind = str(payload.get("kind") or "board").strip().replace("_", " ")
+    attempt = payload.get("attempt")
+    attempt_text = ""
+    try:
+        attempt_num = int(attempt)
+        if attempt_num > 0:
+            attempt_text = f" Próba {attempt_num}."
+    except Exception:
+        attempt_text = ""
+    hero_name = str(payload.get("hero_name") or "").strip()
+    subject = f" dla {hero_name}" if hero_name else ""
+    if event_type == "board_scan_wait":
+        return {
+            "title": "Czekam na planszę",
+            "message": f"Skan planszy: {kind}{subject}.{attempt_text}",
+            "source": "board_scan",
+            "level": "info",
+        }
+    if event_type == "board_scan_result":
+        position = payload.get("position")
+        if position is None:
+            return {
+                "title": "Skan planszy bez wyboru",
+                "message": f"Plansza nie zwróciła pola: {kind}{subject}.{attempt_text}",
+                "source": "board_scan",
+                "level": "warning",
+            }
+        return {
+            "title": "Skan planszy",
+            "message": f"Plansza zwróciła pole {position}: {kind}{subject}.{attempt_text}",
+            "source": "board_scan",
+            "level": "info",
+        }
+    return None
+
+
 
 def _normalize_skill_ranks(snapshot: dict[str, Any]) -> list[str]:
     ranks = dict(snapshot.get("skill_ranks") or {})
@@ -251,20 +290,12 @@ def _load_content_manifest(name: str) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
-def build_catalog() -> dict[str, Any]:
-    repo = CharacterRepository(PROJECT_ROOT / "data" / "heroes")
-    heroes: list[dict[str, Any]] = []
-    for item in repo.list_characters():
-        snapshot = repo.load_character(str(item.get("character_id") or ""))
-        if not snapshot:
-            continue
-        heroes.append(_hero_catalog_entry(snapshot))
-    heroes.sort(key=lambda item: str(item.get("name") or "").lower())
-
-    scenario = _load_content_manifest("bandit_cave")
-    scenario_card = {
-        "id": str(scenario.get("scenario_id") or "bandit_cave"),
-        "title": str(scenario.get("title") or "Bandit Cave"),
+def _scenario_catalog_entry(scenario: dict[str, Any], *, fallback_id: str) -> dict[str, Any]:
+    scenario_id = str(scenario.get("scenario_id") or fallback_id).strip().lower()
+    title = str(scenario.get("title") or scenario_id.replace("_", " ").title())
+    return {
+        "id": scenario_id,
+        "title": title,
         "tagline": str(scenario.get("tagline") or ""),
         "briefing_title": str(scenario.get("briefing_title") or ""),
         "briefing_intro": str(scenario.get("briefing_intro") or ""),
@@ -279,7 +310,26 @@ def build_catalog() -> dict[str, Any]:
         "result_title": str(scenario.get("result_title") or ""),
         "result_summary": str(scenario.get("result_summary") or ""),
     }
-    return {"heroes": heroes, "scenarios": [scenario_card]}
+
+
+def build_catalog() -> dict[str, Any]:
+    repo = CharacterRepository(PROJECT_ROOT / "data" / "heroes")
+    heroes: list[dict[str, Any]] = []
+    for item in repo.list_characters():
+        snapshot = repo.load_character(str(item.get("character_id") or ""))
+        if not snapshot:
+            continue
+        heroes.append(_hero_catalog_entry(snapshot))
+    heroes.sort(key=lambda item: str(item.get("name") or "").lower())
+
+    scenarios: list[dict[str, Any]] = []
+    for path in sorted(CONTENT_ROOT.glob("*.json")):
+        scenario = _load_content_manifest(path.stem)
+        if not scenario:
+            continue
+        scenarios.append(_scenario_catalog_entry(scenario, fallback_id=path.stem))
+    scenarios.sort(key=lambda item: (item["id"] != "bandit_cave", str(item.get("title") or "").lower()))
+    return {"heroes": heroes, "scenarios": scenarios}
 
 
 def _public_base_url() -> str:
@@ -460,8 +510,9 @@ def stop_runtime_process(*, reason: str = "manual") -> dict[str, Any]:
 
 
 def start_runtime_process(*, scenario_id: str, hero_ids: list[str], base_url: str) -> dict[str, Any]:
-    if scenario_id != "bandit_cave":
-        raise ValueError("Only 'bandit_cave' is supported by the player UI launcher.")
+    scenario_id = str(scenario_id or "").strip().lower()
+    if not scenario_id or not scenario_flow_path(scenario_id).exists():
+        raise ValueError(f"Unknown scenario_id '{scenario_id}'.")
     stop_runtime_process(reason="restart")
     reset_session_state(reason="runtime_start")
     board_settings = _resolve_runtime_board_settings()
@@ -525,6 +576,37 @@ def retry_runtime_process(*, base_url: str) -> dict[str, Any]:
     if not scenario_id or not hero_ids:
         raise ValueError("No previous runtime configuration to retry.")
     return start_runtime_process(scenario_id=scenario_id, hero_ids=hero_ids, base_url=base_url)
+
+
+def reset_board_runtime_process() -> dict[str, Any]:
+    with runtime_lock:
+        _refresh_runtime_state_unlocked()
+        process = runtime_state.get("process")
+        if process is None:
+            raise ValueError("No running runtime process to reset.")
+        pid = int(getattr(process, "pid", 0) or 0)
+        if pid <= 0:
+            raise RuntimeError("Running runtime process has no PID.")
+        reset_signal = getattr(signal, "SIGUSR1", None)
+        if reset_signal is None:
+            raise RuntimeError("Runtime board reset signal is not available on this platform.")
+        try:
+            os.kill(pid, reset_signal)
+        except Exception as exc:
+            raise RuntimeError(f"Could not signal runtime board reset: {exc}") from exc
+        return {
+            "state": runtime_state.get("state"),
+            "scenario_id": runtime_state.get("scenario_id"),
+            "hero_ids": list(runtime_state.get("hero_ids") or []),
+            "session_id": runtime_state.get("session_id"),
+            "started_at": runtime_state.get("started_at"),
+            "stopped_at": runtime_state.get("stopped_at"),
+            "returncode": runtime_state.get("returncode"),
+            "error": runtime_state.get("error"),
+            "command": list(runtime_state.get("command") or []),
+            "board_backend": runtime_state.get("board_backend"),
+            "board_url": runtime_state.get("board_url"),
+        }
 
 
 @app.get("/")
@@ -609,7 +691,11 @@ def api_events():
         )
         body = normalized_body
     event = _publish(str(event_type), body)
-    if str(event_type) in {"log", "info", "narration", "idle_hint", "player_card"}:
+    if str(event_type) in {"board_scan_wait", "board_scan_result"}:
+        scan_status = _board_scan_status_payload(str(event_type), body if isinstance(body, dict) else {})
+        if scan_status:
+            prompt_director.ingest_event("idle_hint", scan_status, runtime_status=_runtime_status_payload())
+    elif str(event_type) in {"log", "info", "narration", "idle_hint", "player_card"}:
         prompt_director.ingest_event(str(event_type), body, runtime_status=_runtime_status_payload())
     elif str(event_type) == "prompt_scope_cancel":
         prompt_director.cancel_scope(str(body.get("scope_key") or ""), runtime_status=_runtime_status_payload())
@@ -756,6 +842,16 @@ def api_runtime_retry():
         status = retry_runtime_process(base_url=_public_base_url())
     except ValueError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
+    return jsonify({"ok": True, "session_id": current_session_id, "runtime_status": status})
+
+
+@app.post("/api/runtime/board-reset")
+def api_runtime_board_reset():
+    try:
+        status = reset_board_runtime_process()
+    except (ValueError, RuntimeError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    _publish("info", {"message": "Wysłano reset połączenia z planszą.", "source": "runtime"})
     return jsonify({"ok": True, "session_id": current_session_id, "runtime_status": status})
 
 

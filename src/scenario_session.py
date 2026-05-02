@@ -235,12 +235,14 @@ class ScenarioSession:
                 message = str(action.get("message") or action.get("text") or "").strip()
                 if not message:
                     continue
-                audio = self._flow_voiceover_for(
-                    trigger=trigger,
-                    map_id=map_id,
-                    target_id=target_id,
-                    message=message,
-                )
+                audio = str(action.get("audio") or action.get("voiceover") or "").strip()
+                if not audio:
+                    audio = self._flow_voiceover_for(
+                        trigger=trigger,
+                        map_id=map_id,
+                        target_id=target_id,
+                        message=message,
+                    )
                 if self.current_game is not None:
                     if kind == "show_prompt":
                         prompt_sent = False
