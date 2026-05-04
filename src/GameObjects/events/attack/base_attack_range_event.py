@@ -35,7 +35,15 @@ logger = logging.getLogger(__name__)
 CoverType = str
 
 
-def _ranged_prompt_info(game, title: str, text: str, *, source: str, blocking: bool = True) -> None:
+def _ranged_prompt_info(
+    game,
+    title: str,
+    text: str,
+    *,
+    source: str,
+    blocking: bool = True,
+    scope_key: str = "hero_turn:targeting",
+) -> None:
     if not blocking:
         idle_hint = getattr(game, "ui_idle_hint", None)
         if callable(idle_hint):
@@ -51,7 +59,7 @@ def _ranged_prompt_info(game, title: str, text: str, *, source: str, blocking: b
                 title,
                 body_markdown=text,
                 source=source,
-                scope_key="hero_turn:targeting",
+                scope_key=scope_key,
                 dedupe_key=f"{source}:{title}",
             ) is not None:
                 return
@@ -69,6 +77,41 @@ def _ranged_prompt_info(game, title: str, text: str, *, source: str, blocking: b
             game.ui_log(text)
     except Exception:
         return
+
+
+def _ranged_miss_prompt(
+    game,
+    hero,
+    target,
+    message: str,
+    *,
+    roll: int | None = None,
+    total_roll: int | None = None,
+    target_ac: int | None = None,
+    cover: str | None = None,
+    range_penalty: int | None = None,
+    source: str = "ranged_attack_miss",
+) -> None:
+    actor_name = str(getattr(hero, "name", None) or "Bohater")
+    target_name = str(getattr(target, "name", None) or "cel")
+    lines = [f"{actor_name} nie trafia celu {target_name}.", str(message or "Strzał chybia.")]
+    if roll is not None:
+        lines.append(f"Rzut k20: **{int(roll)}**.")
+    if total_roll is not None and target_ac is not None:
+        lines.append(f"Wynik ataku: **{int(total_roll)}** vs AC **{int(target_ac)}**.")
+    elif target_ac is not None:
+        lines.append(f"Próg obrony: AC **{int(target_ac)}**.")
+    if cover:
+        lines.append(f"Osłona: **{cover}**.")
+    if range_penalty not in (None, 0):
+        lines.append(f"Kara za zasięg: **{int(range_penalty)}**.")
+    _ranged_prompt_info(
+        game,
+        f"Wynik ataku: {actor_name}",
+        "\n".join(lines),
+        source=source,
+        scope_key="hero_turn:resolution",
+    )
 
 
 def _ranged_prompt_choice(
@@ -532,6 +575,13 @@ class BaseRangeAttackEvent(AttackEventBase):
                             miss_message = "Strzał chybia: błędnie wskazane pole."
                             if exacting_strike_press:
                                 miss_message = "Exacting Strike: pudło na błędnym polu (MAP bez zmian)."
+                            _ranged_miss_prompt(
+                                game,
+                                hero,
+                                None,
+                                miss_message,
+                                source=f"{self.action_id_base}_wrong_square",
+                            )
                             return EventResult(
                                 success=True,
                                 consumed_action=self.consumes_action,
@@ -987,6 +1037,18 @@ class BaseRangeAttackEvent(AttackEventBase):
                     miss_message = "Exacting Strike: pudło (MAP bez zmian)."
                 self._apply_concealing_trait(hero, tags)
                 self._mark_weapon_need_reload(selected_weapon)
+                _ranged_miss_prompt(
+                    game,
+                    hero,
+                    enemy,
+                    miss_message,
+                    roll=roll,
+                    total_roll=total_roll,
+                    target_ac=target_ac,
+                    cover=cover_type,
+                    range_penalty=range_penalty,
+                    source=f"{self.action_id_base}_miss",
+                )
                 return EventResult(
                     success=True,
                     consumed_action=self.consumes_action,

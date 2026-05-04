@@ -435,6 +435,55 @@ class UIClient:
             return None
         return "ok"
 
+    def create_prompt(
+        self,
+        title: str,
+        *,
+        kind: str = "info",
+        source: str | None = None,
+        choices: list[str] | None = None,
+        **extra,
+    ) -> Optional[str]:
+        """Utwórz prompt bez czekania na odpowiedź."""
+        if not self.enabled:
+            return None
+        return self._create_prompt(title, kind=kind, source=source, choices=choices, title=title, **extra)
+
+    def update_prompt(self, prompt_id: str, **updates) -> bool:
+        """Zaktualizuj aktywny prompt bez zamykania go."""
+        if not self.enabled or not prompt_id:
+            return False
+        payload = _json_safe(dict(updates or {}))
+        session_id = self._ensure_session_id()
+        if session_id:
+            payload["session_id"] = session_id
+        try:
+            resp = requests.patch(
+                f"{self.base_url}/api/prompts/{prompt_id}",
+                json=payload,
+                timeout=self.request_timeout,
+            )
+            if resp.status_code == 409:
+                refreshed = self._refresh_session_id_from_response(resp)
+                if refreshed:
+                    payload["session_id"] = refreshed
+                    resp = requests.patch(
+                        f"{self.base_url}/api/prompts/{prompt_id}",
+                        json=payload,
+                        timeout=self.request_timeout,
+                    )
+            resp.raise_for_status()
+            return True
+        except Exception as exc:
+            logger.warning("Nie udało się zaktualizować promptu w UI: %s", exc)
+            return False
+
+    def wait_for_prompt(self, prompt_id: str, *, max_wait: Optional[float] = None) -> Any:
+        """Poczekaj na odpowiedź dla wcześniej utworzonego promptu."""
+        if not self.enabled or not prompt_id:
+            return None
+        return self._wait_for_answer(prompt_id, max_wait=self.max_wait if max_wait is None else max_wait)
+
     # --- Helpers ---
 
     def _create_prompt(

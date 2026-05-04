@@ -28,6 +28,9 @@ class _FakeSimulatorBackend:
     def cancel_scan(self):
         self.cancelled = True
 
+    def rearm_scan(self):
+        self.rearmed = True
+
 
 class _FakeHardwareBackend:
     def __init__(self, scan_cfg, wled_cfg):
@@ -51,6 +54,9 @@ class _FakeHardwareBackend:
 
     def reset_connection(self):
         self.reset = True
+
+    def rearm_scan(self):
+        self.rearmed = True
 
     def close(self):
         self.closed = True
@@ -162,6 +168,15 @@ def test_connection_forwards_cancel_scan_to_hardware_backend(monkeypatch):
     assert getattr(conn._backend, "cancelled", False) is True
 
 
+def test_connection_forwards_rearm_scan_to_backend(monkeypatch):
+    monkeypatch.setattr("board.connection._HardwareBackend", _FakeHardwareBackend)
+
+    conn = Connection(backend="hardware")
+    conn.rearm_scan()
+
+    assert getattr(conn._backend, "rearmed", False) is True
+
+
 def test_connection_forwards_reset_connection_to_backend(monkeypatch):
     monkeypatch.setattr("board.connection._HardwareBackend", _FakeHardwareBackend)
 
@@ -182,6 +197,22 @@ def test_hardware_backend_stops_previous_scan_before_new_scan():
     backend.pre_scan_delay_s = 0.0
 
     backend._send_scan_command()
+
+    assert fake_serial.writes == ["STOP", "SCAN"]
+    assert fake_serial.reset_input_calls == 1
+
+
+def test_hardware_backend_rearm_scan_sends_stop_then_scan():
+    backend = _HardwareBackend.__new__(_HardwareBackend)
+    fake_serial = _FakeSerial()
+    backend.ser = fake_serial
+    backend.scan_command = "SCAN"
+    backend.stop_command = "STOP"
+    backend.stop_before_scan = True
+    backend.pre_scan_stop_s = 0.0
+    backend.pre_scan_delay_s = 0.0
+
+    backend.rearm_scan()
 
     assert fake_serial.writes == ["STOP", "SCAN"]
     assert fake_serial.reset_input_calls == 1

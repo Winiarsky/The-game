@@ -90,6 +90,24 @@ class MoveEvent(GameEvent):
     def _wait_for_destination(self, ctx: EventContext, board) -> Tuple[int, int] | None:
         """Czeka na kliknięcie pola na planszy, odrzuca wybory poza planszą."""
         while True:
+            player_prompt = getattr(ctx.game, "player_prompt", None)
+            if player_prompt is not None and hasattr(player_prompt, "create"):
+                try:
+                    player_prompt.create(
+                        "Wybierz ścieżkę",
+                        kind="info",
+                        source="move_destination",
+                        body_markdown="Wybierz ścieżkę klikając pole na planszy. Backspace anuluje ruch.",
+                        summary="Kliknij pole docelowe na planszy.",
+                        scope_key="hero_turn:targeting",
+                        dedupe_key="move:destination",
+                        input_mode="board_click",
+                        cancel_enabled=True,
+                        confirm_enabled=False,
+                        prompt_id="move.destination",
+                    )
+                except Exception:
+                    pass
             try:
                 ctx.game.ui_event("board_scan_wait", {"kind": "move_destination"})
             except Exception:
@@ -361,6 +379,14 @@ class MoveEvent(GameEvent):
                     if target is None or moving_hero.position is None:
                         if active_path_id:
                             game.ui_event("path_clear", {"id": active_path_id})
+                        try:
+                            game.conn.cancel_scan()
+                        except Exception:
+                            pass
+                        try:
+                            game.conn.leds_off()
+                        except Exception:
+                            pass
                         return EventResult.noop(message="Anulowano ruch.")
                     if target == moving_hero.position:
                         logger.info("Kliknięto bieżące pole – kończę akcję ruchu.")
@@ -440,8 +466,8 @@ class MoveEvent(GameEvent):
                         )
                         if was_trimmed:
                             hint_text = (
-                                f"{hint_text} Budżet ruchu: {move_budget_feet} stóp "
-                                f"(pełna ścieżka do celu kosztuje {full_feet} stóp)."
+                                f"{hint_text} Ścieżka przycięta względem maksymalnego ruchu bohatera "
+                                f"(wybrana ścieżka = {full_feet} ft, max ruch bohatera = {move_budget_feet} ft)."
                             )
                         if difficult_in_path:
                             hint_text = (
@@ -452,6 +478,21 @@ class MoveEvent(GameEvent):
                             "Potwierdź ruch",
                             hint_text,
                         )
+                        player_prompt = getattr(game, "player_prompt", None)
+                        if player_prompt is not None and hasattr(player_prompt, "create"):
+                            player_prompt.create(
+                                "Ścieżka wybrana",
+                                kind="info",
+                                source="move_confirm",
+                                body_markdown=hint_text,
+                                summary="Potwierdź ruch klikając docelowe pole.",
+                                scope_key="hero_turn:targeting",
+                                dedupe_key=f"move:confirm:{path_id}",
+                                input_mode="board_confirm",
+                                cancel_enabled=True,
+                                confirm_enabled=False,
+                                prompt_id="move.confirm",
+                            )
                     except Exception:
                         pass
                     logger.info(preview_msg)
@@ -478,6 +519,10 @@ class MoveEvent(GameEvent):
                             game.conn.leds_off()
                         except Exception:
                             pass
+                        try:
+                            game.conn.cancel_scan()
+                        except Exception:
+                            pass
                         logger.info("Ruch anulowany przed potwierdzeniem.")
                         return EventResult.noop(message="Anulowano ruch.")
 
@@ -502,6 +547,12 @@ class MoveEvent(GameEvent):
                         pending_target = target
                         continue
 
+                    player_prompt = getattr(game, "player_prompt", None)
+                    if player_prompt is not None and hasattr(player_prompt, "cancel_scope"):
+                        try:
+                            player_prompt.cancel_scope("hero_turn:targeting")
+                        except Exception:
+                            pass
                     fade_on_exit = True
                     completed, stop_pos, reason = follow_path(
                         ctx,

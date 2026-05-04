@@ -237,6 +237,9 @@ class _SimulatorBackend:
     def cancel_scan(self) -> None:
         requests.post(f"{self.base_url}/simulate/cancel_scan", timeout=5.0).raise_for_status()
 
+    def rearm_scan(self) -> None:
+        self.cancel_scan()
+
     def reset_connection(self) -> None:
         self.cancel_scan()
 
@@ -402,6 +405,12 @@ class _HardwareBackend:
             self._send_stop_command()
         except Exception:
             logger.debug("Nie udało się wysłać komendy zatrzymania skanu.", exc_info=True)
+
+    def rearm_scan(self) -> None:
+        try:
+            self._send_scan_command()
+        except Exception:
+            logger.debug("Nie udało się ponownie uzbroić skanu planszy.", exc_info=True)
 
     def reset_connection(self, *, reopen: bool = False) -> None:
         try:
@@ -591,6 +600,13 @@ class Connection:
         canceller = getattr(self._backend, "cancel_scan", None)
         if callable(canceller):
             canceller()
+
+    def rearm_scan(self) -> None:
+        rearmer = getattr(self._backend, "rearm_scan", None)
+        if callable(rearmer):
+            rearmer()
+            return
+        self.cancel_scan()
 
     def reset_connection(self) -> None:
         resetter = getattr(self._backend, "reset_connection", None)

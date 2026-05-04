@@ -292,3 +292,41 @@ def test_runtime_board_reset_signals_running_process(ui_client, monkeypatch):
     assert payload["runtime_status"]["hero_ids"] == ["cedric"]
     assert popen_calls == []
     assert kill_calls == [(4242, player_ui_app_module.signal.SIGUSR1)]
+
+
+def test_runtime_cancel_scan_signals_running_hardware_process(ui_client, monkeypatch):
+    proc = _ProcStub()
+    kill_calls = []
+
+    def _fake_kill(pid, sig):
+        kill_calls.append((pid, sig))
+
+    monkeypatch.setattr(player_ui_app_module.os, "kill", _fake_kill)
+    monkeypatch.setattr(
+        player_ui_app_module,
+        "runtime_state",
+        {
+            "process": proc,
+            "state": "running",
+            "scenario_id": "bandit_cave",
+            "hero_ids": ["cedric"],
+            "session_id": "ui-session-1",
+            "started_at": 1.0,
+            "stopped_at": None,
+            "returncode": None,
+            "command": ["python", "main.py"],
+            "base_url": "http://127.0.0.1:5200",
+            "error": None,
+            "board_backend": "hardware",
+            "board_url": None,
+        },
+    )
+
+    response = ui_client.post("/api/runtime/cancel-scan", json={"reason": "test"}, base_url="http://127.0.0.1:5200")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["scan_cancelled"] is True
+    assert payload["runtime_status"]["scenario_id"] == "bandit_cave"
+    assert kill_calls == [(4242, player_ui_app_module.signal.SIGUSR2)]

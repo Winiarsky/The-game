@@ -1364,6 +1364,27 @@ class BasicMeleeAttackEvent(AttackEventBase):
             return candidates[0]
         positions = [pos for _, pos in candidates]
         while True:
+            player_prompt = getattr(ctx.game, "player_prompt", None)
+            if player_prompt is not None and hasattr(player_prompt, "create"):
+                try:
+                    player_prompt.create(
+                        "Atak wręcz: wybór celu",
+                        kind="info",
+                        source=f"{self.action_id_base}_targeting",
+                        body_markdown=(
+                            f"Wybierz cel ataku {self.weapon_label}, klikając podświetlone pole na planszy. "
+                            "Backspace anuluje atak."
+                        ),
+                        summary="Kliknij cel na planszy.",
+                        scope_key="hero_turn:targeting",
+                        dedupe_key=f"{self.action_id_base}:targeting",
+                        input_mode="board_click",
+                        cancel_enabled=True,
+                        confirm_enabled=False,
+                        prompt_id=f"{self.action_id_base}.targeting",
+                    )
+                except Exception:
+                    pass
             try:
                 ctx.game.conn.set_leds(positions, consts.INTERACT_FIELD_RGB)
                 choice = ctx.game.conn.scan_board(positions)
@@ -1372,8 +1393,20 @@ class BasicMeleeAttackEvent(AttackEventBase):
                     ctx.game.conn.leds_off()
                 except Exception:
                     pass
+            if choice is None:
+                try:
+                    ctx.game.conn.cancel_scan()
+                except Exception:
+                    pass
+                return None, None
             for enemy, pos in candidates:
                 if pos == choice:
+                    player_prompt = getattr(ctx.game, "player_prompt", None)
+                    if player_prompt is not None and hasattr(player_prompt, "cancel_scope"):
+                        try:
+                            player_prompt.cancel_scope("hero_turn:targeting")
+                        except Exception:
+                            pass
                     return enemy, pos
             logger.info("Nie wybrano poprawnego celu – spróbuj ponownie.")
             ctx.game.ui_log("Nie wybrano poprawnego celu – spróbuj ponownie.")

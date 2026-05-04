@@ -126,6 +126,9 @@ def pick_target_or_guess_square(
         source="targeting:pick_target_or_guess",
         dedupe_key="targeting:pick_target_or_guess:start",
         next_hint="Kliknij wybrany cel albo pole do zgadniecia na planszy.",
+        input_mode="board_click",
+        cancel_enabled=True,
+        confirm_enabled=False,
     )
 
     visible: list[tuple[object, tuple[int, int], str]] = []
@@ -187,14 +190,36 @@ def pick_target_or_guess_square(
             pass
 
     if choice is None or choice == source_pos:
+        try:
+            ctx.game.conn.cancel_scan()
+        except Exception:
+            pass
         return {"kind": "cancel"}
 
     for obj, pos, _kind in visible:
         if tuple(pos) == tuple(choice):
+            player_prompt = getattr(ctx.game, "player_prompt", None)
+            if player_prompt is not None and hasattr(player_prompt, "cancel_scope"):
+                try:
+                    player_prompt.cancel_scope("hero_turn:targeting")
+                except Exception:
+                    pass
             return {"kind": "target", "target": obj, "pos": tuple(pos), "guessed": False}
     for obj, pos, _kind in undetected:
         if tuple(pos) == tuple(choice):
+            player_prompt = getattr(ctx.game, "player_prompt", None)
+            if player_prompt is not None and hasattr(player_prompt, "cancel_scope"):
+                try:
+                    player_prompt.cancel_scope("hero_turn:targeting")
+                except Exception:
+                    pass
             return {"kind": "target", "target": obj, "pos": tuple(pos), "guessed": True}
     if tuple(choice) in seen_guess:
+        player_prompt = getattr(ctx.game, "player_prompt", None)
+        if player_prompt is not None and hasattr(player_prompt, "cancel_scope"):
+            try:
+                player_prompt.cancel_scope("hero_turn:targeting")
+            except Exception:
+                pass
         return {"kind": "miss", "pos": tuple(choice), "guessed": True}
     return {"kind": "cancel"}

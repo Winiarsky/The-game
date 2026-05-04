@@ -117,6 +117,69 @@ def test_prompt_api_returns_normalized_communication_envelope(ui_client):
     assert comm["context"]["prompt_key"] == "enemy.turn.start"
 
 
+def test_prompt_contract_exposes_board_cancel_and_disabled_confirm(ui_client):
+    create = ui_client.post(
+        "/api/prompts",
+        json={
+            "prompt": "Wybierz ścieżkę",
+            "kind": "info",
+            "prompt_long": "Wybierz ścieżkę klikając pole na planszy.",
+            "source": "move_destination",
+            "input_mode": "board_click",
+            "confirm_enabled": False,
+            "cancel_enabled": True,
+            "cancel_answer": "cancel",
+            "session_id": "ui-session-1",
+        },
+    )
+    assert create.status_code == 200
+    payload = create.get_json()
+    assert payload["input_mode"] == "board_click"
+    assert payload["confirm_enabled"] is False
+    assert payload["cancel_enabled"] is True
+    assert payload["cancel_answer"] == "cancel"
+
+    prompt = ui_client.get(f"/api/prompts/{payload['id']}").get_json()
+    assert prompt["input_mode"] == "board_click"
+    assert prompt["confirm_enabled"] is False
+    assert prompt["cancel_enabled"] is True
+
+
+def test_prompt_can_be_updated_before_confirmation(ui_client):
+    create = ui_client.post(
+        "/api/prompts",
+        json={
+            "prompt": "Tura przeciwnika - Bandit",
+            "kind": "info",
+            "prompt_long": "Przeciwnik planuje swoją akcję...",
+            "source": "enemy_turn_plan",
+            "confirm_enabled": False,
+            "session_id": "ui-session-1",
+        },
+    )
+    assert create.status_code == 200
+    prompt_id = create.get_json()["id"]
+
+    update = ui_client.patch(
+        f"/api/prompts/{prompt_id}",
+        json={
+            "body_markdown": "Przeciwnik podjął decyzję.",
+            "summary": "Decyzja gotowa",
+            "confirm_enabled": True,
+            "session_id": "ui-session-1",
+        },
+    )
+    assert update.status_code == 200
+    updated = update.get_json()
+    assert updated["body_markdown"] == "Przeciwnik podjął decyzję."
+    assert updated["summary"] == "Decyzja gotowa"
+    assert updated["confirm_enabled"] is True
+
+    answered = ui_client.post(f"/api/prompts/{prompt_id}/answer", json={"answer": "ok"})
+    assert answered.status_code == 200
+    assert answered.get_json()["status"] == "answered"
+
+
 def test_catalog_exposes_bandit_cave_asset_manifest_and_audio_cues(ui_client):
     response = ui_client.get("/api/catalog")
 
@@ -483,6 +546,64 @@ def test_cards_require_enter_before_next_transition(ui_client):
 
     next_view = ui_client.get("/api/view-state").get_json()["view_state"]
     assert next_view["active_prompt"]["body_markdown"] == "Krok drugi."
+
+
+def test_blocking_runtime_prompt_retires_stale_ack_queue(ui_client):
+    first = ui_client.post(
+        "/api/events",
+        json={
+            "type": "narration",
+            "session_id": "ui-session-1",
+            "payload": {
+                "message": "Stary opis przejściowy.",
+                "source": "scenario_flow",
+            },
+        },
+    )
+    second = ui_client.post(
+        "/api/events",
+        json={
+            "type": "narration",
+            "session_id": "ui-session-1",
+            "payload": {
+                "message": "Drugi stary opis.",
+                "source": "scenario_flow",
+            },
+        },
+    )
+    assert first.status_code == 200
+    assert second.status_code == 200
+
+    stale_view = ui_client.get("/api/view-state").get_json()["view_state"]
+    stale_prompt_id = stale_view["active_prompt"]["id"]
+
+    runtime_prompt = ui_client.post(
+        "/api/prompts",
+        json={
+            "prompt": "Atak przeciwnika: Bandit Sharpshot",
+            "kind": "info",
+            "prompt_long": "Enter rozstrzyga rzut ataku.",
+            "source": "enemy_strike_prepare",
+            "scope_key": "enemy_turn",
+            "dedupe_key": "enemy_attack_prepare:obj-9",
+            "session_id": "ui-session-1",
+        },
+    )
+    assert runtime_prompt.status_code == 200
+    runtime_prompt_id = runtime_prompt.get_json()["id"]
+
+    view_state = ui_client.get("/api/view-state").get_json()["view_state"]
+    assert view_state["active_prompt"]["id"] == runtime_prompt_id
+
+    stale_prompt = ui_client.get(f"/api/prompts/{stale_prompt_id}").get_json()
+    assert stale_prompt["status"] == "superseded"
+
+    answered = ui_client.post(f"/api/prompts/{runtime_prompt_id}/answer", json={"answer": "ok"})
+    assert answered.status_code == 200
+
+    after = ui_client.get("/api/view-state").get_json()["view_state"]
+    assert after["active_prompt"] is None
+    assert after["focus_card"] is None
 
 
 def test_plain_logs_do_not_create_player_facing_prompt(ui_client):

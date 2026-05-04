@@ -9,7 +9,7 @@ for path in (PROJECT_ROOT, SRC_ROOT):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from states.intent_menu import build_intent_options, group_events
+from states.intent_menu import build_intent_options, choose_event_from_bucket, group_events
 
 
 class _Actor:
@@ -34,6 +34,17 @@ def _grouped_with_stealth() -> dict:
 
 def _event_cls(module: str, tags: list[str]):
     return type("DummyEvent", (), {"__module__": module, "default_tags": tags, "available_in_combat": True, "available_in_exploration": True})
+
+
+class _UI:
+    def __init__(self, answer):
+        self.answer = answer
+        self.calls = []
+
+    def prompt_choice(self, *args, choices=None, choice_meta=None, **kwargs):
+        title = args[0] if args else kwargs.get("title")
+        self.calls.append({"title": title, "choices": list(choices or []), "choice_meta": list(choice_meta or []), "kwargs": dict(kwargs)})
+        return self.answer
 
 
 def test_intent_uses_stealth_entry_when_actor_not_hidden():
@@ -64,6 +75,25 @@ def test_seek_intent_describes_grid_range_and_wall_blocking():
     assert "30 ft" in seek["desc"]
     assert "gridowo" in seek["desc"]
     assert "sciany" in seek["desc"]
+
+
+def test_alchemy_bucket_exposes_cancel_option():
+    events = {"smokestick": _event_cls("GameObjects.events.elixirs.smokestick_event", ["alchemical", "tool"])}
+    game = type("_Game", (), {"ui": _UI("cancel")})()
+
+    answer = choose_event_from_bucket(
+        game,
+        bucket_id="alchemy",
+        available_events=events,
+        event_names=["smokestick"],
+        source="intent:alchemy",
+        actor=_Actor([]),
+    )
+
+    assert answer == "cancel"
+    meta = game.ui.calls[0]["choice_meta"]
+    assert meta[0]["raw"] == "cancel"
+    assert meta[0]["label"] == "Anuluj"
 
 
 def test_group_events_splits_special_actions_by_source():

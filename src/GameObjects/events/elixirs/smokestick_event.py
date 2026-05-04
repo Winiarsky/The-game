@@ -59,6 +59,62 @@ class SmokestickEvent(BaseElixirEvent):
         # Smokestick tworzy dym przy użytkowniku.
         return ctx.actor, actor_pos
 
+    def _cloud_positions(self, ctx, actor_pos: tuple[int, int] | None, radius: int) -> list[tuple[int, int]]:
+        board = getattr(ctx.game, "board", None)
+        if board is None or actor_pos is None:
+            return []
+        positions = [tuple(actor_pos)]
+        if radius >= 1:
+            try:
+                positions.extend([tuple(pos) for pos in board.get_neighbors(actor_pos, include_position=False, diagonal=True)])
+            except Exception:
+                pass
+        seen: set[tuple[int, int]] = set()
+        result: list[tuple[int, int]] = []
+        for pos in positions:
+            if pos in seen:
+                continue
+            seen.add(pos)
+            result.append(pos)
+        return result
+
+    def _confirm_use(self, ctx, target, target_pos: tuple[int, int], tier: str, tier_data: dict[str, object]) -> bool:
+        actor = getattr(ctx, "actor", None)
+        actor_pos = getattr(actor, "position", None)
+        duration = max(1, int(tier_data.get("duration_rounds", _minutes(1)) or _minutes(1)))
+        radius = max(0, int(tier_data.get("radius_cells", 1) or 1))
+        cloud_positions = self._cloud_positions(ctx, actor_pos, radius)
+        conn = getattr(ctx.game, "conn", None)
+        highlighted = False
+        try:
+            if conn is not None and cloud_positions:
+                palette = list(getattr(consts, "SMOKE_CLOUD_PALETTE", []) or [])
+                conn.set_leds(cloud_positions, palette[1] if len(palette) > 1 else consts.INTERACT_FIELD_RGB)
+                highlighted = True
+        except Exception:
+            highlighted = False
+        try:
+            ui = getattr(ctx.game, "ui", None)
+            if ui is not None and hasattr(ui, "prompt_info"):
+                ui.prompt_info(
+                    "Dymna fiolka",
+                    prompt_long=(
+                        "Lesser Smokestick: użycie za 1 akcję Interact.\n"
+                        "Tworzy dym o promieniu 5 ft przy twojej pozycji na 1 minutę.\n"
+                        "Istoty w dymie są concealed, a istoty poza dymem są concealed dla istot w dymie.\n\n"
+                        f"W silniku zostanie podświetlony obszar {len(cloud_positions)} pól i aktywowany na {duration} rund. "
+                        "Naciśnij Enter, aby zużyć przedmiot i zastosować efekt."
+                    ),
+                    source=self.name,
+                )
+        finally:
+            if highlighted:
+                try:
+                    conn.leds_off()
+                except Exception:
+                    pass
+        return True
+
     def _apply_elixir(self, ctx, target, tier: str, tier_data: dict[str, object]) -> None:
         actor = getattr(ctx, "actor", None)
         actor_pos = getattr(actor, "position", None)
@@ -68,16 +124,9 @@ class SmokestickEvent(BaseElixirEvent):
 
         affected = 0
         seen: set[object] = set()
-        cloud_positions: list[tuple[int, int]] = []
+        cloud_positions: list[tuple[int, int]] = self._cloud_positions(ctx, actor_pos, radius)
         if board is not None and actor_pos is not None:
-            positions = [actor_pos]
-            if radius >= 1:
-                try:
-                    positions.extend(list(board.get_neighbors(actor_pos, include_position=False, diagonal=True)))
-                except Exception:
-                    pass
-            cloud_positions = [tuple(pos) for pos in positions]
-            for pos in positions:
+            for pos in cloud_positions:
                 try:
                     occ = board.occupant_at(pos)
                 except Exception:
@@ -90,6 +139,30 @@ class SmokestickEvent(BaseElixirEvent):
 
         if affected == 0 and _apply_concealed_from_smoke(target, duration_rounds=duration):
             affected = 1
+
+        try:
+            clouds = getattr(ctx.game, "_smoke_clouds", None)
+            if not isinstance(clouds, list):
+                clouds = []
+                setattr(ctx.game, "_smoke_clouds", clouds)
+            round_index = getattr(getattr(ctx.game, "state", None), "round_index", None)
+            expires_round = None
+            try:
+                if round_index is not None:
+                    expires_round = int(round_index) + duration
+            except Exception:
+                expires_round = None
+            clouds.append(
+                {
+                    "source": self.name,
+                    "origin": tuple(actor_pos) if actor_pos is not None else None,
+                    "positions": list(cloud_positions),
+                    "duration_rounds": duration,
+                    "expires_round": expires_round,
+                }
+            )
+        except Exception:
+            pass
 
         try:
             animate_area_wave(
@@ -108,20 +181,6 @@ class SmokestickEvent(BaseElixirEvent):
             )
         except Exception:
             pass
-        ui = getattr(ctx.game, "ui", None)
-        if ui is not None and hasattr(ui, "prompt_info"):
-            try:
-                ui.prompt_info(
-                    "Dymna fiolka",
-                    prompt_long=(
-                        f"Przy tobie powstaje zasłona dymna w obszarze 3x3 na {duration} rund.\n"
-                        "W tej implementacji istoty stojące w chmurze dostają status Concealed. "
-                        "Ataki przeciw takim celom wymagają flat checku przeciw concealment."
-                    ),
-                    source=self.name,
-                )
-            except Exception:
-                pass
         try:
             ctx.game.events.safe_emit_action(
                 actor=actor,

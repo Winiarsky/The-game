@@ -898,6 +898,12 @@ function promptDisplayId(item) {
     return "";
 }
 
+function promptCompactDisplayId(item) {
+    if (!item) return "";
+    const instanceId = String(item.id || "").trim();
+    return instanceId ? `Slajd #${instanceId}` : promptDisplayId(item);
+}
+
 function syncViewState(viewState) {
     const previousPromptId = state.view.activePrompt?.id || null;
     state.view = {
@@ -1218,6 +1224,16 @@ function isRollLikePrompt(prompt) {
     return prompt.kind === "roll" || layout === "test" || layout === "damage";
 }
 
+function isCompactPromptCard(card, sections) {
+    const prompt = card?.prompt;
+    if (!prompt || isRollLikePrompt(prompt) || promptChoices(prompt).length) return false;
+    const mode = String(prompt.input_mode || "").trim().toLowerCase();
+    if (mode && mode !== "confirm") return false;
+    if (String(sections?.help || "").trim()) return false;
+    if (String(sections?.disclosureBody || "").trim()) return false;
+    return prompt.kind === "info" && String(sections?.scene || "").trim().length <= 900;
+}
+
 function shouldShowCommandHelp(card, details, nextLines) {
     const prompt = card.prompt;
     if (!prompt) return false;
@@ -1356,7 +1372,9 @@ function renderActionCard() {
     const communication = card.communication || {};
     const sections = buildActionSections(card);
     const prompt = card.prompt || null;
+    const compactPrompt = isCompactPromptCard(card, sections);
     refs.actionCard?.classList.toggle("prompt-roll-card", isRollLikePrompt(prompt));
+    refs.actionCard?.classList.toggle("prompt-compact-card", compactPrompt);
     renderActiveActorFocus();
     refs.actionChannel.textContent = String(communication.channel || "ready");
     refs.actionTitle.textContent = card.title || "Czekam na wydarzenia";
@@ -1390,10 +1408,10 @@ function renderActionCard() {
     refs.actionProgressBar.style.width = `${percentage}%`;
 
     const metaParts = [];
-    const displayId = promptDisplayId(card.prompt || card);
+    const displayId = compactPrompt ? promptCompactDisplayId(card.prompt || card) : promptDisplayId(card.prompt || card);
     if (displayId) metaParts.push(displayId);
     const commandSummary = promptCommandSummary(card.prompt);
-    if (commandSummary) metaParts.push(commandSummary);
+    if (commandSummary && !compactPrompt) metaParts.push(commandSummary);
     refs.promptMeta.textContent = metaParts.filter(Boolean).join(" · ");
 
     renderPrompt(prompt);
@@ -1436,12 +1454,24 @@ function promptChoices(prompt) {
 }
 
 function promptCancelChoice(prompt) {
+    if (prompt?.cancel_enabled) {
+        const answer = String(prompt.cancel_answer || "cancel");
+        const choices = promptChoices(prompt);
+        return choices.find((choice) => String(choice.raw || "").trim().toLowerCase() === answer.trim().toLowerCase()) || {
+            raw: answer,
+            label: "Anuluj",
+        };
+    }
     const choices = promptChoices(prompt);
     return choices.find((choice) => {
         const raw = String(choice.raw || "").trim().toLowerCase();
         const label = String(choice.label || "").trim().toLowerCase();
         return raw.includes("cancel") || raw.includes("anuluj") || label.includes("anuluj");
     }) || null;
+}
+
+function promptConfirmEnabled(prompt) {
+    return !prompt || prompt.confirm_enabled !== false;
 }
 
 function _modifierBucketTotal(modifiers, bonusKey, penaltyKey) {
@@ -1598,6 +1628,7 @@ function moveSelectedChoice(delta) {
 }
 
 function submitSelectedChoice() {
+    if (!promptConfirmEnabled(state.view.activePrompt)) return;
     const choices = promptChoices(state.view.activePrompt);
     if (!choices.length) return;
     ensureSelectedChoiceIndex(choices);
@@ -1654,6 +1685,7 @@ function createChoiceButton(choice) {
         }
     });
     button.addEventListener("dblclick", () => {
+        if (!promptConfirmEnabled(state.view.activePrompt)) return;
         const choices = promptChoices(state.view.activePrompt);
         const nextIndex = choices.findIndex((entry) => entry.raw === choice.raw);
         if (nextIndex >= 0) {
@@ -1687,10 +1719,32 @@ function renderSelectedChoiceDetail() {
     refs.choiceDetail.classList.remove("hidden");
 }
 
+function clearActivePromptView(promptId) {
+    const activeId = state.view.activePrompt?.id || null;
+    if (promptId && activeId && String(activeId) !== String(promptId)) return;
+    state.view.activePrompt = null;
+    state.view.focusCard = null;
+    refs.promptForm.classList.add("hidden");
+    refs.promptInput.value = "";
+    refs.choiceList.innerHTML = "";
+    refs.choiceDetail.classList.add("hidden");
+    refs.choiceDetailTitle.textContent = "";
+    refs.choiceDetailBody.innerHTML = "";
+    refs.rollBreakdown.innerHTML = "";
+    refs.rollBreakdown.classList.add("hidden");
+    state.lastRenderedPromptId = null;
+    state.selectedChoiceIndex = -1;
+    renderAll();
+}
+
 async function answerPrompt(answer) {
     const promptId = state.view.activePrompt?.id;
     if (!promptId) return;
+    const cancelAnswer = String(state.view.activePrompt?.cancel_answer || "cancel").trim().toLowerCase();
+    const isCancelAnswer = String(answer || "").trim().toLowerCase() === cancelAnswer;
+    if (!promptConfirmEnabled(state.view.activePrompt) && !isCancelAnswer) return;
     audioManager.stopVoiceovers();
+    clearActivePromptView(promptId);
     await fetchJson(`/api/prompts/${promptId}/response`, {
         method: "POST",
         body: JSON.stringify({ answer }),
@@ -1707,7 +1761,15 @@ function submitCancelChoice() {
     const cancelChoice = promptCancelChoice(state.view.activePrompt);
     if (!cancelChoice) return false;
     answerPrompt(cancelChoice.raw).catch((error) => window.alert(error.message));
+    requestBoardScanCancel().catch(() => null);
     return true;
+}
+
+async function requestBoardScanCancel() {
+    await fetchJson("/api/runtime/cancel-scan", {
+        method: "POST",
+        body: JSON.stringify({ reason: "prompt_cancel" }),
+    });
 }
 
 function renderPrompt(prompt) {
@@ -1721,6 +1783,7 @@ function renderPrompt(prompt) {
     refs.naturalControls.classList.add("hidden");
     refs.promptInput.classList.remove("hidden");
     refs.promptSubmit.textContent = "Potwierdź";
+    refs.promptSubmit.disabled = false;
     if (!prompt) {
         refs.promptInput.value = "";
         state.lastRenderedPromptId = null;
@@ -1770,6 +1833,7 @@ function renderPrompt(prompt) {
     const needsChoiceConfirm = choices.length > 0;
     const needsInput = prompt.kind === "roll" || (!choices.length && prompt.kind !== "info");
     const isConfirmOnly = prompt.kind === "info" && !choices.length;
+    const confirmEnabled = promptConfirmEnabled(prompt);
     if (needsChoiceConfirm || needsInput || isConfirmOnly) {
         refs.promptForm.classList.remove("hidden");
         refs.promptInput.classList.toggle("hidden", isConfirmOnly || needsChoiceConfirm);
@@ -1782,6 +1846,7 @@ function renderPrompt(prompt) {
             : isConfirmOnly
             ? "Potwierdź (Enter)"
             : "Potwierdź";
+        refs.promptSubmit.disabled = !confirmEnabled;
         if (promptChanged) {
             queueMicrotask(() => {
                 if (isConfirmOnly || needsChoiceConfirm) refs.promptSubmit.focus();
@@ -2167,6 +2232,7 @@ refs.btnResultBack.addEventListener("click", async () => {
 refs.promptForm.addEventListener("submit", (event) => {
     event.preventDefault();
     if (!state.view.activePrompt) return;
+    if (!promptConfirmEnabled(state.view.activePrompt)) return;
     if (promptChoices(state.view.activePrompt).length) {
         submitSelectedChoice();
         return;
@@ -2226,7 +2292,10 @@ document.addEventListener("keydown", (event) => {
         }
         return;
     }
-    if (event.key === "Escape") {
+    if (event.key === "Backspace" || event.key === "Escape") {
+        const target = event.target;
+        const isTypingTarget = target instanceof HTMLInputElement && !target.classList.contains("hidden");
+        if (event.key === "Backspace" && isTypingTarget) return;
         if (submitCancelChoice()) {
             event.preventDefault();
         }
@@ -2235,6 +2304,10 @@ document.addEventListener("keydown", (event) => {
     if (event.key !== "Enter") return;
     const target = event.target;
     if (target instanceof HTMLTextAreaElement) return;
+    if (!promptConfirmEnabled(state.view.activePrompt)) {
+        event.preventDefault();
+        return;
+    }
     if (state.view.activePrompt.kind === "info" && !state.view.activePrompt.choices.length) {
         event.preventDefault();
         answerPrompt("ok").catch((error) => window.alert(error.message));

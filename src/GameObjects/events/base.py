@@ -131,6 +131,9 @@ def emit_prompt_narration(
     next_hint: str | None = None,
     blocking: bool = True,
     channel: str | None = None,
+    input_mode: str | None = None,
+    cancel_enabled: bool = False,
+    confirm_enabled: bool = True,
 ) -> bool:
     text = str(message or "").strip()
     if not text:
@@ -144,16 +147,42 @@ def emit_prompt_narration(
                 "system"
             )
             if blocking:
-                player_prompt.info(
-                    summary or "Co robić teraz",
-                    body_markdown=text,
-                    summary=summary,
-                    source=source,
-                    priority=priority,
-                    semantic_type=semantic_type or "required_action",
-                    dedupe_key=dedupe_key,
-                    scope_key=scope_key,
-                )
+                if input_mode in {"board_click", "board_confirm"} and hasattr(player_prompt, "create"):
+                    player_prompt.create(
+                        summary or "Co robić teraz",
+                        kind="info",
+                        body_markdown=text,
+                        summary=summary,
+                        source=source,
+                        dedupe_key=dedupe_key,
+                        scope_key=scope_key,
+                        input_mode=input_mode,
+                        cancel_enabled=cancel_enabled,
+                        confirm_enabled=confirm_enabled,
+                    )
+                else:
+                    player_prompt.info(
+                        summary or "Co robić teraz",
+                        body_markdown=text,
+                        summary=summary,
+                        source=source,
+                        priority=priority,
+                        semantic_type=semantic_type or "required_action",
+                        dedupe_key=dedupe_key,
+                        scope_key=scope_key,
+                        answer_placeholder=None,
+                    )
+                    meta = getattr(player_prompt, "update", None)
+                    last_meta = getattr(getattr(game, "ui", None), "_last_created_prompt_meta", None)
+                    prompt_id = str((last_meta or {}).get("id") or "")
+                    if callable(meta) and prompt_id and (input_mode or cancel_enabled or not confirm_enabled):
+                        meta(
+                            prompt_id,
+                            input_mode=input_mode,
+                            cancel_enabled=cancel_enabled,
+                            cancel_answer="cancel",
+                            confirm_enabled=confirm_enabled,
+                        )
             else:
                 player_prompt.card(
                     kind="narration",

@@ -365,27 +365,47 @@ class EnemyMoveEvent(GameEvent):
             except Exception:
                 action_limit = 3
         action_number = min(action_limit, used_actions + 1)
-        enemy_prompt_step(
-            game,
-            f"Ruch przeciwnika: {getattr(enemy, 'name', 'Enemy')}",
-            prompt_long=(
-                f"Przeciwnik wykonuje ruch.\n"
-                f"Akcja przeciwnika: {action_number}/{action_limit}\n"
-                f"Pozycja startowa: {enemy.position}\n"
-                f"Pole docelowe: {dest}\n"
-                f"Budżet ruchu: {move_budget_feet} ft\n"
-                f"Wykorzystany ruch: {used_feet} ft\n"
-                "Przesuń figurkę przeciwnika na pole docelowe i potwierdź klikając docelowe pole."
-            ),
-            source=self.name,
-            log_message=f"{getattr(enemy, 'name', 'Enemy')} przemieszcza się z {enemy.position} na {dest}.",
-            blocking=True,
-            semantic_type="required_action",
-            dedupe_key=f"enemy_move:{getattr(enemy, 'object_id', getattr(enemy, 'name', 'enemy'))}:{enemy.position}->{dest}",
-            next_hint="Po potwierdzeniu ruch zostanie zastosowany na planszy.",
-            continue_hint="Kliknij pole docelowe po przesunięciu figurki.",
-            emit_log=False,
+        move_prompt_body = (
+            f"Przeciwnik się porusza.\n"
+            f"Akcja przeciwnika: {action_number}/{action_limit}\n"
+            f"Pozycja startowa: {enemy.position}\n"
+            f"Pole docelowe / ostatnie podświetlone pole: {dest}\n"
+            f"Budżet ruchu: {move_budget_feet} ft\n"
+            f"Wykorzystany ruch: {used_feet} ft\n"
+            "Przestaw jego figurkę na ostatnie podświetlone pole i potwierdź kliknięciem."
         )
+        player_prompt = getattr(game, "player_prompt", None)
+        move_prompt_id = None
+        if player_prompt is not None and hasattr(player_prompt, "create"):
+            try:
+                move_prompt_id = player_prompt.create(
+                    f"Ruch przeciwnika: {getattr(enemy, 'name', 'Enemy')}",
+                    kind="info",
+                    source=self.name,
+                    body_markdown=move_prompt_body,
+                    summary="Przeciwnik się porusza.",
+                    scope_key="enemy_turn",
+                    dedupe_key=f"enemy_move:{getattr(enemy, 'object_id', getattr(enemy, 'name', 'enemy'))}:{enemy.position}->{dest}",
+                    input_mode="board_confirm",
+                    confirm_enabled=False,
+                    prompt_id="enemy.move.confirm",
+                )
+            except Exception:
+                move_prompt_id = None
+        if not move_prompt_id:
+            enemy_prompt_step(
+                game,
+                f"Ruch przeciwnika: {getattr(enemy, 'name', 'Enemy')}",
+                prompt_long=move_prompt_body,
+                source=self.name,
+                log_message=f"{getattr(enemy, 'name', 'Enemy')} przemieszcza się z {enemy.position} na {dest}.",
+                blocking=True,
+                semantic_type="required_action",
+                dedupe_key=f"enemy_move:{getattr(enemy, 'object_id', getattr(enemy, 'name', 'enemy'))}:{enemy.position}->{dest}",
+                next_hint="Po potwierdzeniu ruch zostanie zastosowany na planszy.",
+                continue_hint="Kliknij pole docelowe po przesunięciu figurki.",
+                emit_log=False,
+            )
 
         path_id = f"enemy-path-{time.time_ns()}"
         game.ui_event(
@@ -408,7 +428,16 @@ class EnemyMoveEvent(GameEvent):
             game.conn.set_leds(start_and_path, colors)
             confirm = game.conn.scan_board([dest])
             if confirm != dest:
+                try:
+                    game.conn.cancel_scan()
+                except Exception:
+                    pass
                 return EventResult(success=False, consumed_action=False, message="Ruch wroga anulowany (zły skan).")
+            if move_prompt_id and player_prompt is not None and hasattr(player_prompt, "answer"):
+                try:
+                    player_prompt.answer(move_prompt_id, {"kind": "board_click", "position": list(dest)})
+                except Exception:
+                    pass
 
             _dispatch_move_reactions(game, enemy, enemy.position, dest)
             game.board.move(enemy.position, dest)

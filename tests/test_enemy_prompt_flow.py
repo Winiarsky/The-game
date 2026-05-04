@@ -138,7 +138,7 @@ def test_combat_enemy_turn_blocks_on_start_and_skips_thinking_noise(monkeypatch)
     combat.choose_action()
 
     titles = [call["title"] for call in ui.info_calls]
-    assert "Tura przeciwnika: Bandit Bruiser" in titles
+    assert "Tura przeciwnika - Bandit Bruiser" in titles
     assert "Bandit Bruiser myśli..." not in titles
     assert not any("Bandit Bruiser myśli..." in msg for msg in game.logs)
     cancel_events = [event for event in game.ui_events if event["type"] == "prompt_scope_cancel"]

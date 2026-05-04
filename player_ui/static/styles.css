@@ -824,8 +824,8 @@ button:hover,
 }
 
 .action-card {
-    height: min(980px, calc(100vh - 174px));
-    min-height: min(560px, calc(100vh - 174px));
+    height: auto;
+    min-height: 0;
     max-height: calc(100vh - 174px);
     display: flex;
     flex-direction: column;
@@ -834,9 +834,34 @@ button:hover,
 }
 
 .action-card.prompt-roll-card {
-    height: min(1000px, calc(100vh - 154px));
-    min-height: min(620px, calc(100vh - 154px));
+    height: auto;
+    min-height: 0;
     max-height: calc(100vh - 154px);
+}
+
+.action-card.prompt-compact-card {
+    padding: 16px;
+    gap: 8px;
+}
+
+.prompt-compact-card .action-head {
+    display: none;
+}
+
+.prompt-compact-card .prompt-scroll {
+    flex: 0 1 auto;
+    gap: 8px;
+    overflow-y: visible;
+    padding-right: 0;
+}
+
+.prompt-compact-card .action-block {
+    margin: 0;
+}
+
+.prompt-compact-card .prompt-form {
+    padding-top: 8px;
+    background: transparent;
 }
 
 .action-head {
@@ -932,7 +957,7 @@ button:hover,
 }
 
 .prompt-roll-card .prompt-scroll {
-    min-height: 360px;
+    min-height: 0;
 }
 
 .prompt-scroll::-webkit-scrollbar {
@@ -1468,12 +1493,13 @@ button:hover,
 
 @media (max-width: 1240px) {
     .action-card {
-        height: min(860px, calc(100vh - 184px));
+        height: auto;
+        min-height: 0;
         max-height: calc(100vh - 184px);
     }
     .action-card.prompt-roll-card {
-        height: min(900px, calc(100vh - 164px));
-        min-height: min(580px, calc(100vh - 164px));
+        height: auto;
+        min-height: 0;
         max-height: calc(100vh - 164px);
     }
     .game-topbar {
@@ -1535,13 +1561,13 @@ button:hover,
         width: 74px;
     }
     .action-card {
-        height: calc(100vh - 252px);
-        min-height: min(430px, calc(100vh - 252px));
+        height: auto;
+        min-height: 0;
         max-height: calc(100vh - 252px);
     }
     .action-card.prompt-roll-card {
-        height: calc(100vh - 232px);
-        min-height: min(500px, calc(100vh - 232px));
+        height: auto;
+        min-height: 0;
         max-height: calc(100vh - 232px);
     }
     .prompt-roll-card .active-actor-panel {
@@ -1552,7 +1578,7 @@ button:hover,
         width: 52px;
     }
     .prompt-roll-card .prompt-scroll {
-        min-height: 300px;
+        min-height: 0;
     }
     .prompt-scroll {
         padding-right: 0;

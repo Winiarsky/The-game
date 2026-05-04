@@ -311,6 +311,106 @@ def test_seek_preview_lists_visible_objects_and_allows_cancel(monkeypatch):
     assert color_map[(3, 0)] == SeekEvent._seek_area_preview_rgb()
 
 
+def test_seek_preview_lists_visible_objects_outside_search_radius(monkeypatch):
+    class VisibleThing:
+        def __init__(self, label, color, color_name):
+            self.hidden = False
+            self.revealed = True
+            self.seekable = False
+            self.seek_label = label
+            self.seek_color = list(color)
+            self.seek_color_name = color_name
+            self.position = None
+
+        def set_position(self, position):
+            self.position = position
+
+        def can_interact(self, actor, game):
+            return True
+
+    board = BoardGrid(rows=1, cols=8)
+    board.apply_rooms([{"id": "hall", "positions": [[x, 0] for x in range(8)]}])
+    hero = Hero(position=(0, 0))
+    board.place(hero, hero.position)
+    exit_obj = VisibleThing("dalekie przejście", consts.SEEK_EXIT_RGB, "pomarańczowe")
+    board.add_interactable(exit_obj, (7, 0))
+
+    conn = DummyConn()
+    ui = DummyUI(answers=["cancel"])
+    game = _build_game(board, hero, conn, ui=ui)
+
+    result = SeekEvent().run(EventContext(game=game, actor=hero))
+
+    assert result.success is False
+    body = str(ui.choice_calls[0]["prompt_long"] or "")
+    assert "dalekie przejście" in body
+    highlighted_positions, highlighted_colors = conn.led_calls[0]
+    color_map = {tuple(pos): list(color) for pos, color in zip(highlighted_positions, highlighted_colors)}
+    assert color_map[(7, 0)] == SeekEvent._seek_object_preview_rgb(consts.SEEK_EXIT_RGB)
+
+
+def test_seek_preview_highlights_active_smoke_cloud(monkeypatch):
+    board = BoardGrid(rows=1, cols=8)
+    board.apply_rooms([{"id": "hall", "positions": [[x, 0] for x in range(8)]}])
+    hero = Hero(position=(0, 0))
+    board.place(hero, hero.position)
+
+    conn = DummyConn()
+    ui = DummyUI(answers=["cancel"])
+    game = _build_game(board, hero, conn, ui=ui)
+    game._smoke_clouds = [{"positions": [(6, 0), (7, 0)], "expires_round": 5}]
+    game.state.round_index = 1
+
+    result = SeekEvent().run(EventContext(game=game, actor=hero))
+
+    assert result.success is False
+    assert ui.choice_calls
+    body = str(ui.choice_calls[0]["prompt_long"] or "")
+    assert "aktywny obszar dymu" in body
+    highlighted_positions, highlighted_colors = conn.led_calls[0]
+    color_map = {tuple(pos): list(color) for pos, color in zip(highlighted_positions, highlighted_colors)}
+    assert color_map[(6, 0)] == SeekEvent._seek_smoke_preview_rgb()
+    assert color_map[(7, 0)] == SeekEvent._seek_smoke_preview_rgb()
+
+
+def test_seek_preview_keeps_visible_object_color_when_smoke_overlaps(monkeypatch):
+    class VisibleThing:
+        hidden = False
+        revealed = True
+        seekable = False
+        seek_label = "przejście"
+        seek_color = list(consts.SEEK_EXIT_RGB)
+        seek_color_name = "pomarańczowe"
+
+        def set_position(self, position):
+            self.position = position
+
+        def can_interact(self, actor, game):
+            return True
+
+    board = BoardGrid(rows=1, cols=4)
+    board.apply_rooms([{"id": "hall", "positions": [[0, 0], [1, 0], [2, 0], [3, 0]]}])
+    hero = Hero(position=(0, 0))
+    board.place(hero, hero.position)
+    board.add_interactable(VisibleThing(), (2, 0))
+
+    conn = DummyConn()
+    ui = DummyUI(answers=["cancel"])
+    game = _build_game(board, hero, conn, ui=ui)
+    game._smoke_clouds = [{"positions": [(2, 0)], "expires_round": 5}]
+    game.state.round_index = 1
+
+    result = SeekEvent().run(EventContext(game=game, actor=hero))
+
+    assert result.success is False
+    body = str(ui.choice_calls[0]["prompt_long"] or "")
+    assert "przejście" in body
+    assert "aktywny obszar dymu" in body
+    highlighted_positions, highlighted_colors = conn.led_calls[0]
+    color_map = {tuple(pos): list(color) for pos, color in zip(highlighted_positions, highlighted_colors)}
+    assert color_map[(2, 0)] == SeekEvent._seek_object_preview_rgb(consts.SEEK_EXIT_RGB)
+
+
 def test_seek_no_candidates_uses_confirmable_result_prompt(monkeypatch):
     board = BoardGrid(rows=1, cols=2)
     board.apply_rooms([{"id": "hall", "positions": [[0, 0], [1, 0]]}])

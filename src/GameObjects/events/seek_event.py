@@ -51,6 +51,13 @@ class SeekEvent(GameEvent):
         return _scaled_rgb(color or consts.SEEK_OBJECT_RGB, factor)
 
     @staticmethod
+    def _seek_smoke_preview_rgb() -> list[int]:
+        palette = list(getattr(consts, "SMOKE_CLOUD_PALETTE", []) or [])
+        if len(palette) > 1:
+            return list(palette[1])
+        return [88, 98, 108]
+
+    @staticmethod
     def _seek_radius_feet(actor) -> int:
         base_radius = 30
         if actor is None:
@@ -212,6 +219,14 @@ class SeekEvent(GameEvent):
         return search_positions
 
     @staticmethod
+    def _board_positions(board) -> set[tuple[int, int]]:
+        rows = int(getattr(board, "rows", 0) or 0)
+        cols = int(getattr(board, "cols", 0) or 0)
+        if rows <= 0 or cols <= 0:
+            return set()
+        return {(col, row) for row in range(rows) for col in range(cols)}
+
+    @staticmethod
     def _is_trap_like(obj) -> bool:
         return bool(
             hasattr(obj, "trap_armed")
@@ -369,6 +384,37 @@ class SeekEvent(GameEvent):
         return preview_by_pos, preview_items
 
     @staticmethod
+    def _active_smoke_positions(game) -> set[tuple[int, int]]:
+        clouds = getattr(game, "_smoke_clouds", None)
+        if not isinstance(clouds, list) or not clouds:
+            return set()
+        state = getattr(game, "state", None)
+        current_round = getattr(state, "round_index", None)
+        active_clouds: list[object] = []
+        positions: set[tuple[int, int]] = set()
+        for cloud in list(clouds):
+            if not isinstance(cloud, dict):
+                continue
+            expires_round = cloud.get("expires_round")
+            if expires_round is not None and current_round is not None:
+                try:
+                    if int(current_round) > int(expires_round):
+                        continue
+                except Exception:
+                    pass
+            cloud_positions = {tuple(pos) for pos in list(cloud.get("positions") or []) if pos is not None}
+            if not cloud_positions:
+                continue
+            active_clouds.append(cloud)
+            positions.update(cloud_positions)
+        if len(active_clouds) != len(clouds):
+            try:
+                setattr(game, "_smoke_clouds", active_clouds)
+            except Exception:
+                pass
+        return positions
+
+    @staticmethod
     def _seek_preview_legend_markdown(legend_entries: list[dict[str, object]]) -> str:
         if not legend_entries:
             return "- Brak jawnych obiektów interaktywnych w zasięgu."
@@ -463,9 +509,14 @@ class SeekEvent(GameEvent):
         hero_pos: tuple[int, int],
         search_positions: set[tuple[int, int]],
         preview_by_pos: dict[tuple[int, int], dict[str, object]] | None = None,
+        smoke_positions: set[tuple[int, int]] | None = None,
     ) -> bool:
-        positions = sorted(set(search_positions or {hero_pos}), key=lambda pos: (int(pos[1]), int(pos[0])))
+        smoke_positions = set(smoke_positions or set())
         preview_by_pos = dict(preview_by_pos or {})
+        positions = sorted(
+            set(search_positions or {hero_pos}) | set(preview_by_pos.keys()) | smoke_positions,
+            key=lambda pos: (int(pos[1]), int(pos[0])),
+        )
         colors = []
         for pos in positions:
             if pos == hero_pos:
@@ -474,6 +525,9 @@ class SeekEvent(GameEvent):
             preview = preview_by_pos.get(pos)
             if preview is not None:
                 colors.append(SeekEvent._seek_object_preview_rgb(preview.get("color") or consts.SEEK_OBJECT_RGB))
+                continue
+            if pos in smoke_positions:
+                colors.append(SeekEvent._seek_smoke_preview_rgb())
                 continue
             colors.append(SeekEvent._seek_area_preview_rgb())
         try:
@@ -589,8 +643,19 @@ class SeekEvent(GameEvent):
 
         seek_radius = self._seek_radius_feet(actor)
         search_positions = self._build_seek_positions(board, hero_pos, allowed_rooms, seek_radius)
-        preview_by_pos, legend_entries = self._preview_interactables(board, actor, game, search_positions)
-        seek_area_lit = self._show_seek_area(game, hero_pos, search_positions, preview_by_pos)
+        visible_preview_positions = self._board_positions(board) or set(search_positions)
+        preview_by_pos, legend_entries = self._preview_interactables(board, actor, game, visible_preview_positions)
+        smoke_positions = self._active_smoke_positions(game)
+        if smoke_positions:
+            legend_entries = list(legend_entries) + [
+                {
+                    "label": "aktywny obszar dymu",
+                    "legend": "aktywny obszar dymu",
+                    "color_name": "szare",
+                    "position": None,
+                }
+            ]
+        seek_area_lit = self._show_seek_area(game, hero_pos, search_positions, preview_by_pos, smoke_positions)
         if not self._confirm_seek_preview(game, legend_entries):
             if seek_area_lit:
                 try:

@@ -163,6 +163,32 @@ def test_longbow_hits_without_cover(monkeypatch):
     assert any(getattr(s, "id", s) == "range_attacker" for s in hero.statuses)
 
 
+def test_longbow_miss_shows_blocking_result_prompt(monkeypatch):
+    hero = Hero((0, 0))
+    hero.name = "Cedric"
+    enemy = Enemy((2, 0), hp=8, ac=20)
+    enemy.name = "Bandit Bruiser"
+    game = FakeGame()
+    game.ui = FakeUI()
+    game.heroes = [hero]
+    game.enemies = [enemy]
+    game.board.occupants = {hero.position: hero, enemy.position: enemy}
+    game.conn.choice = enemy.position
+
+    monkeypatch.setattr(base_attack_range_event, "prompt_for_roll", lambda *_, **__: 2)
+
+    result = dispatch_event("longbow", _ctx(game, hero))
+
+    assert result.success
+    assert result.data["hit"] is False
+    assert enemy.hp == 8
+    assert game.ui.info_calls
+    prompt = game.ui.info_calls[-1]
+    assert prompt["title"] == "Wynik ataku: Cedric"
+    assert "Cedric nie trafia celu Bandit Bruiser" in prompt["prompt_long"]
+    assert "Wynik ataku" in prompt["prompt_long"]
+
+
 def test_longbow_blocked_by_wall(monkeypatch):
     hero = Hero((0, 0))
     enemy = Enemy((2, 0))

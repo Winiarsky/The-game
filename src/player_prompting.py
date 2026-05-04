@@ -180,6 +180,9 @@ class PlayerPrompt:
     choice_meta: list[dict[str, Any]] = field(default_factory=list)
     input_mode: str | None = None
     answer_placeholder: str | None = None
+    confirm_enabled: bool = True
+    cancel_enabled: bool = False
+    cancel_answer: str = "cancel"
     roll_stack: dict[str, Any] | None = None
     modifiers: dict[str, Any] | None = None
     priority: str = "action"
@@ -344,6 +347,47 @@ class PromptDirector:
             self.active_prompt_id = prompt.id
             return
 
+    @staticmethod
+    def _is_ack_prompt(prompt: PlayerPrompt | None) -> bool:
+        if prompt is None:
+            return False
+        scope = _text(prompt.scope_key)
+        if scope.startswith("ack:"):
+            return True
+        context = dict((prompt.communication or {}).get("context") or {})
+        return bool(_text(context.get("card_id"))) or _text(prompt.dedupe_key).endswith(":ack")
+
+    def _retire_pending_ack_prompts(
+        self,
+        *,
+        session_id: str,
+        replacement_id: str,
+    ) -> None:
+        for prompt_id in list(self.prompt_order):
+            existing = self.prompts.get(prompt_id)
+            if existing is None or existing.id == replacement_id:
+                continue
+            if existing.session_id != session_id:
+                continue
+            if existing.status != "pending":
+                continue
+            if not self._is_ack_prompt(existing):
+                continue
+            existing.status = "superseded"
+            existing.revision = self._bump_revision()
+            self._publish(
+                "prompt_closed",
+                {
+                    "id": existing.id,
+                    "prompt_key": existing.prompt_key,
+                    "status": existing.status,
+                    "replaced_by": replacement_id,
+                    "scope_key": existing.scope_key,
+                    "session_id": existing.session_id,
+                    "revision": existing.revision,
+                },
+            )
+
     def _register_prompt(
         self,
         prompt: PlayerPrompt,
@@ -358,6 +402,8 @@ class PromptDirector:
         self.prompt_order.append(prompt.id)
         if len(self.prompt_order) > self.prompt_limit:
             self.prompt_order = self.prompt_order[-self.prompt_limit :]
+        if prompt.blocking and not self._is_ack_prompt(prompt):
+            self._retire_pending_ack_prompts(session_id=prompt.session_id, replacement_id=prompt.id)
         self._supersede_prompt(prompt)
         if activate or self._current_prompt() is None:
             self.active_prompt_id = prompt.id
@@ -630,6 +676,17 @@ class PromptDirector:
         raw_modifiers = data.get("modifiers")
         roll_stack = dict(raw_roll_stack) if isinstance(raw_roll_stack, dict) and raw_roll_stack else None
         modifiers = dict(raw_modifiers) if isinstance(raw_modifiers, dict) and raw_modifiers else None
+        confirm_enabled_raw = data.get("confirm_enabled", True)
+        if isinstance(confirm_enabled_raw, str):
+            confirm_enabled = confirm_enabled_raw.strip().lower() not in {"0", "false", "no", "nie", "off", "disabled"}
+        else:
+            confirm_enabled = bool(confirm_enabled_raw)
+        cancel_enabled_raw = data.get("cancel_enabled", False)
+        if isinstance(cancel_enabled_raw, str):
+            cancel_enabled = cancel_enabled_raw.strip().lower() in {"1", "true", "yes", "tak", "on", "enabled"}
+        else:
+            cancel_enabled = bool(cancel_enabled_raw)
+        cancel_answer = _text(data.get("cancel_answer")) or "cancel"
         envelope = make_communication(
             channel="prompt",
             priority=_text(data.get("priority") or communication.get("priority") or "action"),
@@ -680,6 +737,9 @@ class PromptDirector:
             choice_meta=choice_meta,
             input_mode=input_mode,
             answer_placeholder=_text(data.get("answer_placeholder")) or None,
+            confirm_enabled=confirm_enabled,
+            cancel_enabled=cancel_enabled,
+            cancel_answer=cancel_answer,
             roll_stack=roll_stack,
             modifiers=modifiers,
             priority=_text(data.get("priority") or communication.get("priority") or "action"),
@@ -751,6 +811,78 @@ class PromptDirector:
             return None
         return prompt.to_dict()
 
+    def update_prompt(
+        self,
+        prompt_id: str,
+        updates: dict[str, Any],
+        *,
+        current_session_id: str,
+        runtime_status: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        prompt = self.prompts.get(_text(prompt_id))
+        if prompt is None:
+            return None
+        if prompt.session_id != _text(current_session_id):
+            return None
+        if prompt.status != "pending":
+            return prompt.to_dict()
+
+        allowed = {
+            "title",
+            "summary",
+            "body_markdown",
+            "details_markdown",
+            "choices",
+            "choice_meta",
+            "input_mode",
+            "answer_placeholder",
+            "confirm_enabled",
+            "cancel_enabled",
+            "cancel_answer",
+            "roll_stack",
+            "modifiers",
+            "priority",
+            "layout",
+            "image",
+            "audio",
+            "action_desc",
+            "desc",
+        }
+        changed = False
+        for key in allowed:
+            if key not in updates:
+                continue
+            value = updates.get(key)
+            if key in {"confirm_enabled", "cancel_enabled"}:
+                if isinstance(value, str):
+                    value = value.strip().lower() in {"1", "true", "yes", "tak", "on", "enabled"}
+                else:
+                    value = bool(value)
+            elif key in {"choices", "choice_meta"}:
+                value = list(value or []) if isinstance(value, list) else []
+            elif key in {"roll_stack", "modifiers"}:
+                value = dict(value or {}) or None if isinstance(value, dict) else None
+            elif key in {"body_markdown", "details_markdown", "summary"}:
+                value = _markdown(value)
+            elif key == "cancel_answer":
+                value = _text(value) or "cancel"
+            elif key in {"title", "input_mode", "answer_placeholder", "priority", "layout", "image", "audio", "action_desc", "desc"}:
+                value = _text(value) or None
+            setattr(prompt, key, value)
+            changed = True
+
+        if isinstance(updates.get("communication"), dict):
+            merged = dict(prompt.communication or {})
+            merged.update(dict(updates.get("communication") or {}))
+            prompt.communication = merged
+            changed = True
+
+        if changed:
+            prompt.revision = self._bump_revision()
+            self._publish("prompt_updated", prompt.to_dict())
+            self._publish("view_state", self._view_state_payload(runtime_status=runtime_status))
+        return prompt.to_dict()
+
     def answer_prompt(
         self,
         prompt_id: str,
@@ -777,6 +909,8 @@ class PromptDirector:
         if prompt.session_id == _text(current_session_id) and self.active_prompt_id == prompt.id:
             self.active_prompt_id = None
             self._sync_active_prompt()
+            if self.active_prompt_id is None:
+                self.focus_card_id = None
         payload = {
             "id": prompt.id,
             "prompt_key": prompt.prompt_key,
@@ -1127,6 +1261,66 @@ class GamePromptFacade:
             layout="dialog",
             prompt_id=prompt_id,
         )
+
+    def create(
+        self,
+        title: str,
+        *,
+        kind: str = "info",
+        source: str,
+        choices: list[str] | None = None,
+        body_markdown: str | None = None,
+        summary: str | None = None,
+        scope_key: str | None = None,
+        dedupe_key: str | None = None,
+        confirm_enabled: bool = True,
+        cancel_enabled: bool = False,
+        cancel_answer: str = "cancel",
+        input_mode: str | None = None,
+        prompt_id: str | None = None,
+    ) -> str | None:
+        ui = self._ui
+        creator = getattr(ui, "create_prompt", None)
+        if ui is None or not getattr(ui, "enabled", False) or not callable(creator):
+            return None
+        communication = self._prompt_communication(
+            title=title,
+            summary=summary,
+            body_markdown=body_markdown,
+            dedupe_key=dedupe_key,
+            scope_key=scope_key,
+            prompt_key=prompt_id,
+        )
+        return creator(
+            title,
+            kind=kind,
+            source=source,
+            choices=list(choices or []),
+            prompt_long=body_markdown,
+            summary=summary,
+            scope_key=scope_key,
+            dedupe_key=dedupe_key,
+            confirm_enabled=confirm_enabled,
+            cancel_enabled=cancel_enabled,
+            cancel_answer=cancel_answer,
+            input_mode=input_mode,
+            prompt_id=prompt_id,
+            communication=communication,
+        )
+
+    def update(self, prompt_id: str, **updates) -> bool:
+        ui = self._ui
+        updater = getattr(ui, "update_prompt", None)
+        if ui is None or not getattr(ui, "enabled", False) or not callable(updater):
+            return False
+        return bool(updater(prompt_id, **updates))
+
+    def wait(self, prompt_id: str) -> Any:
+        ui = self._ui
+        waiter = getattr(ui, "wait_for_prompt", None)
+        if ui is None or not getattr(ui, "enabled", False) or not callable(waiter):
+            return None
+        return waiter(prompt_id)
 
     def card(
         self,

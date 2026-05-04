@@ -40,19 +40,34 @@ logger = logging.getLogger(__name__)
 
 def install_board_reset_signal_handler(conn: Connection) -> None:
     reset_signal = getattr(signal, "SIGUSR1", None)
-    if reset_signal is None:
-        return
+    cancel_signal = getattr(signal, "SIGUSR2", None)
 
     def _handle_board_reset(_signum, _frame) -> None:
-        logger.info("Otrzymano żądanie resetu połączenia z planszą.")
+        logger.info("Otrzymano żądanie ponownego uzbrojenia skanu planszy.")
         try:
-            conn.reset_connection()
+            rearmer = getattr(conn, "rearm_scan", None)
+            if callable(rearmer):
+                rearmer()
+            else:
+                conn.cancel_scan()
         except Exception as exc:
-            logger.warning("Reset połączenia z planszą nie powiódł się: %s", exc)
+            logger.warning("Ponowne uzbrojenie skanu planszy nie powiodło się: %s", exc)
             return
-        logger.info("Reset połączenia z planszą wykonany.")
+        logger.info("Skan planszy uzbrojony ponownie.")
 
-    signal.signal(reset_signal, _handle_board_reset)
+    def _handle_board_cancel(_signum, _frame) -> None:
+        logger.info("Otrzymano żądanie anulowania aktywnego skanu planszy.")
+        try:
+            conn.cancel_scan()
+        except Exception as exc:
+            logger.warning("Anulowanie aktywnego skanu planszy nie powiodło się: %s", exc)
+            return
+        logger.info("Aktywny skan planszy anulowany.")
+
+    if reset_signal is not None:
+        signal.signal(reset_signal, _handle_board_reset)
+    if cancel_signal is not None:
+        signal.signal(cancel_signal, _handle_board_cancel)
 
 
 def list_runtime_scenario_names(scenarios_dir: Path) -> list[str]:

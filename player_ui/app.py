@@ -578,22 +578,22 @@ def retry_runtime_process(*, base_url: str) -> dict[str, Any]:
     return start_runtime_process(scenario_id=scenario_id, hero_ids=hero_ids, base_url=base_url)
 
 
-def reset_board_runtime_process() -> dict[str, Any]:
+def _signal_runtime_board_control(signal_name: str, unavailable_message: str, failure_prefix: str) -> dict[str, Any]:
     with runtime_lock:
         _refresh_runtime_state_unlocked()
         process = runtime_state.get("process")
         if process is None:
-            raise ValueError("No running runtime process to reset.")
+            raise ValueError("No running runtime process.")
         pid = int(getattr(process, "pid", 0) or 0)
         if pid <= 0:
             raise RuntimeError("Running runtime process has no PID.")
-        reset_signal = getattr(signal, "SIGUSR1", None)
-        if reset_signal is None:
-            raise RuntimeError("Runtime board reset signal is not available on this platform.")
+        control_signal = getattr(signal, signal_name, None)
+        if control_signal is None:
+            raise RuntimeError(unavailable_message)
         try:
-            os.kill(pid, reset_signal)
+            os.kill(pid, control_signal)
         except Exception as exc:
-            raise RuntimeError(f"Could not signal runtime board reset: {exc}") from exc
+            raise RuntimeError(f"{failure_prefix}: {exc}") from exc
         return {
             "state": runtime_state.get("state"),
             "scenario_id": runtime_state.get("scenario_id"),
@@ -607,6 +607,44 @@ def reset_board_runtime_process() -> dict[str, Any]:
             "board_backend": runtime_state.get("board_backend"),
             "board_url": runtime_state.get("board_url"),
         }
+
+
+def reset_board_runtime_process() -> dict[str, Any]:
+    return _signal_runtime_board_control(
+        "SIGUSR1",
+        "Runtime board rearm signal is not available on this platform.",
+        "Could not signal runtime board rearm",
+    )
+
+
+def cancel_runtime_board_scan() -> tuple[dict[str, Any] | None, bool, str | None]:
+    board_url = ""
+    with runtime_lock:
+        board_url = str(runtime_state.get("board_url") or "").strip().rstrip("/")
+    if board_url:
+        try:
+            requests.post(f"{board_url}/simulate/cancel_scan", timeout=2.0).raise_for_status()
+            return _runtime_status_payload(), True, None
+        except Exception as exc:
+            direct_error = str(exc)
+            try:
+                status = _signal_runtime_board_control(
+                    "SIGUSR2",
+                    "Runtime board cancel signal is not available on this platform.",
+                    "Could not signal runtime board scan cancel",
+                )
+                return status, True, direct_error
+            except Exception:
+                return None, False, direct_error
+    try:
+        status = _signal_runtime_board_control(
+            "SIGUSR2",
+            "Runtime board cancel signal is not available on this platform.",
+            "Could not signal runtime board scan cancel",
+        )
+        return status, True, None
+    except Exception as exc:
+        return None, False, str(exc)
 
 
 @app.get("/")
@@ -733,6 +771,10 @@ def create_prompt():
             "prompt": prompt_text,
             "session_id": current_session_id,
             "communication": prompt.get("communication"),
+            "confirm_enabled": prompt.get("confirm_enabled"),
+            "input_mode": prompt.get("input_mode"),
+            "cancel_enabled": prompt.get("cancel_enabled"),
+            "cancel_answer": prompt.get("cancel_answer"),
         }
     )
 
@@ -751,6 +793,23 @@ def list_prompts():
 @app.get("/api/prompts/<prompt_id>")
 def get_prompt(prompt_id: str):
     entry = prompt_director.get_prompt(prompt_id)
+    if not entry:
+        return jsonify({"ok": False, "error": "prompt not found"}), 404
+    return jsonify({"ok": True, **entry})
+
+
+@app.patch("/api/prompts/<prompt_id>")
+def update_prompt(prompt_id: str):
+    data = request.get_json(force=True, silent=True) or {}
+    is_valid, error_response = _validate_request_session_id(data)
+    if not is_valid:
+        return error_response, 409
+    entry = prompt_director.update_prompt(
+        prompt_id,
+        dict(data),
+        current_session_id=current_session_id,
+        runtime_status=_runtime_status_payload(),
+    )
     if not entry:
         return jsonify({"ok": False, "error": "prompt not found"}), 404
     return jsonify({"ok": True, **entry})
@@ -851,8 +910,25 @@ def api_runtime_board_reset():
         status = reset_board_runtime_process()
     except (ValueError, RuntimeError) as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
-    _publish("info", {"message": "Wysłano reset połączenia z planszą.", "source": "runtime"})
+    _publish("info", {"message": "Wysłano anulowanie i ponowne uzbrojenie skanu planszy.", "source": "runtime"})
     return jsonify({"ok": True, "session_id": current_session_id, "runtime_status": status})
+
+
+@app.post("/api/runtime/cancel-scan")
+def api_runtime_cancel_scan():
+    data = request.get_json(force=True, silent=True) or {}
+    reason = str(data.get("reason") or "prompt_cancel").strip()
+    status, cancelled, error = cancel_runtime_board_scan()
+    _publish(
+        "prompt_scope_cancel",
+        {
+            "scope_key": "hero_turn:targeting",
+            "reason": reason,
+            "scan_cancelled": cancelled,
+            "error": error,
+        },
+    )
+    return jsonify({"ok": True, "scan_cancelled": cancelled, "error": error, "runtime_status": status})
 
 
 if __name__ == "__main__":

@@ -108,12 +108,18 @@ class BaseElixirEvent(ActionCostEvent):
         if target is None or target_pos is None:
             return EventResult.cancelled(message="Brak celu w zasięgu.")
 
+        if not self._confirm_use(ctx, target, target_pos, tier, tier_data):
+            return EventResult.cancelled(message=f"Anulowano użycie {self._event_label()}.")
+
         if not consume_ready_alchemical_item(actor, self.name):
             return EventResult.cancelled(message=missing_alchemical_item_reason(actor, self.name))
 
         self._apply_elixir(ctx, target, tier, tier_data)
         self._record_mutagen_consumption(target, tier)
         return EventResult(success=True, consumed_action=self.consumes_action, message=f"Użyto eliksiru ({tier}).")
+
+    def _confirm_use(self, ctx: EventContext, target, target_pos: tuple[int, int], tier: str, tier_data: dict[str, object]) -> bool:
+        return True
 
     def _prompt_level(self) -> str | None:
         from ui_client import get_ui_client

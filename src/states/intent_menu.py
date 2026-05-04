@@ -1547,6 +1547,16 @@ def choose_event_from_bucket(
         unique_event_names.append(raw_event_name)
 
     options: list[dict[str, str]] = []
+    if bucket_id in {"attack", "magic", "alchemy", "special"}:
+        options.append(
+            {
+                "id": "cancel",
+                "label": "Anuluj",
+                "desc": "Wróć do głównego wyboru akcji.",
+                "category": "utility",
+                "icon": "↩",
+            }
+        )
     for event_name in unique_event_names:
         cls = available_events.get(event_name)
         label = _labelize(event_name)

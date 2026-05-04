@@ -28,15 +28,16 @@ logger = logging.getLogger(__name__)
 def check_concealed(ctx, target) -> bool:
     if target is None:
         return True
+    attacker = getattr(ctx, "actor", None)
+    smoke_dc = _smoke_flat_check_dc(ctx, attacker, target)
     try:
         from GameObjects.events.magic.lighting_effects import is_position_illuminated
 
-        if is_position_illuminated(ctx.game, getattr(target, "position", None)):
+        if smoke_dc <= 0 and is_position_illuminated(ctx.game, getattr(target, "position", None)):
             return True
     except Exception:
         pass
-    attacker = getattr(ctx, "actor", None)
-    if _has_status(attacker, DARKVISION_STATUS):
+    if smoke_dc <= 0 and _has_status(attacker, DARKVISION_STATUS):
         return True
     if (_has_status(attacker, DIM_LIGHT_VISION_STATUS) or _has_status(attacker, LOW_LIGHT_VISION_STATUS)) and _has_status(
         target, IN_DIM_LIGHT_STATUS
@@ -60,6 +61,7 @@ def check_concealed(ctx, target) -> bool:
                 ignore_target_concealed = False
                 break
     dc = visibility_flat_check_dc(attacker, target, ignore_target_concealed=ignore_target_concealed)
+    dc = max(int(dc or 0), int(smoke_dc or 0))
     if _has_status(attacker, "keen_eyes"):
         concealed_dc = 3
         hidden_dc = 9
@@ -100,6 +102,45 @@ def check_concealed(ctx, target) -> bool:
     except Exception:
         pass
     return False
+
+
+def _smoke_flat_check_dc(ctx, attacker, target) -> int:
+    game = getattr(ctx, "game", None)
+    clouds = getattr(game, "_smoke_clouds", None)
+    if not isinstance(clouds, list) or not clouds:
+        return 0
+    attacker_pos = getattr(attacker, "position", None)
+    target_pos = getattr(target, "position", None)
+    if attacker_pos is None and target_pos is None:
+        return 0
+    state = getattr(game, "state", None)
+    current_round = getattr(state, "round_index", None)
+    active_clouds: list[object] = []
+    applies = False
+    for cloud in list(clouds):
+        if not isinstance(cloud, dict):
+            continue
+        expires_round = cloud.get("expires_round")
+        if expires_round is not None and current_round is not None:
+            try:
+                if int(current_round) > int(expires_round):
+                    continue
+            except Exception:
+                pass
+        positions = {tuple(pos) for pos in list(cloud.get("positions") or []) if pos is not None}
+        if not positions:
+            continue
+        active_clouds.append(cloud)
+        attacker_in_smoke = attacker_pos is not None and tuple(attacker_pos) in positions
+        target_in_smoke = target_pos is not None and tuple(target_pos) in positions
+        if attacker_in_smoke or target_in_smoke:
+            applies = True
+    if len(active_clouds) != len(clouds):
+        try:
+            setattr(game, "_smoke_clouds", active_clouds)
+        except Exception:
+            pass
+    return 5 if applies else 0
 
 
 def _has_status(obj, status) -> bool:

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
+import random
 import sys
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, List, Optional
 from GameObjects.interactions_mixin import prompt_for_roll
@@ -39,6 +40,14 @@ from prompt_copy import prompt_value
 from prompt_text_catalog import render_prompt_text
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(slots=True)
+class EnemyActionPlan:
+    action_id: str
+    label: str
+    target_name: str | None = None
+    target_pos: tuple[int, int] | None = None
 
 
 def _format_hp_summary(actor: Any) -> str:
@@ -662,6 +671,26 @@ class Combat(State):
             positions = [h.position for h in pending if h.position is not None]
             if not positions:
                 break
+            player_prompt = getattr(self.game, "player_prompt", None)
+            if player_prompt is not None and hasattr(player_prompt, "create"):
+                try:
+                    player_prompt.create(
+                        "O Bogowie, walka!",
+                        kind="info",
+                        source="combat_initiative_hero_pick",
+                        body_markdown=(
+                            "Wybierz bohatera, który ma dokonać rzutu na inicjatywę (Percepcja). "
+                            "Kliknij jego podświetlone pole na planszy."
+                        ),
+                        summary="Kliknij bohatera do testu inicjatywy.",
+                        scope_key="combat:initiative",
+                        dedupe_key=f"combat:initiative:hero_pick:{len(pending)}",
+                        input_mode="board_click",
+                        confirm_enabled=False,
+                        prompt_id="combat.initiative.hero_pick",
+                    )
+                except Exception:
+                    pass
             self.game.conn.leds_off()
             self.game.conn.set_leds(positions, consts.HERO_HIGHLIGHT_RGB)
             pos = self.game.conn.scan_board(positions)
@@ -682,11 +711,102 @@ class Combat(State):
                     logger.error("Nie udalo sie ustawic zwierzecego towarzysza dla %s: %s", getattr(hero, "name", hero), exc)
             pending = [h for h in heroes if getattr(h, "initiative", None) is None]
 
+    @staticmethod
+    def _enemy_initiative_components(enemy: Any) -> tuple[int, int, int, int]:
+        natural = random.randint(1, 20)
+        try:
+            bonus = int(getattr(enemy, "initiative_bonus", 0) or 0)
+        except Exception:
+            bonus = 0
+        extra_mod = 0
+        compute_modifier = getattr(enemy, "compute_modifier", None)
+        if callable(compute_modifier):
+            try:
+                extra_mod = int(compute_modifier("initiative") or 0)
+            except Exception:
+                extra_mod = 0
+        deafened_penalty = 2 if getattr(enemy, "has_status", lambda _s: False)("deafened") else 0
+        total = natural + bonus + extra_mod - deafened_penalty
+        if deafened_penalty:
+            try:
+                from statuses import mark_deafened_initiative_applied
+
+                mark_deafened_initiative_applied(enemy)
+            except Exception:
+                pass
+        return natural, bonus, extra_mod - deafened_penalty, total
+
     def _roll_enemy_initiatives(self) -> None:
         for enemy in self.game.enemies:
             try:
                 current = getattr(enemy, "initiative", None)
-                val = int(current) if current is not None else int(enemy.roll_initiative())
+                if current is not None:
+                    val = int(current)
+                else:
+                    natural, bonus, extra_mod, val = self._enemy_initiative_components(enemy)
+                    enemy.initiative = val
+                    title = f"Przeciwnik {getattr(enemy, 'name', 'Enemy')} - test inicjatywy (Percepcja)"
+                    body = (
+                        f"Rzut k20: {natural}\n"
+                        f"Percepcja / inicjatywa: {bonus:+d}\n"
+                        f"Modyfikatory: {extra_mod:+d}\n"
+                        f"Wynik końcowy: {val}\n\n"
+                        "Potwierdź Enterem, aby przejść do kolejnego przeciwnika."
+                    )
+                    try:
+                        self.game.ui_event(
+                            "dice_roll",
+                            {
+                                "actor_name": getattr(enemy, "name", "Enemy"),
+                                "roll_type": "initiative",
+                                "formula": "k20",
+                                "rolls": [natural],
+                                "total": val,
+                                "label": title,
+                            },
+                        )
+                    except Exception:
+                        pass
+                    player_prompt = getattr(self.game, "player_prompt", None)
+                    prompt_id = None
+                    if player_prompt is not None and hasattr(player_prompt, "create"):
+                        try:
+                            prompt_id = player_prompt.create(
+                                title,
+                                kind="info",
+                                source="enemy_initiative",
+                                body_markdown="Animacja rzutu k20...",
+                                summary="Przeciwnik wykonuje test inicjatywy.",
+                                scope_key="combat:initiative",
+                                dedupe_key=f"enemy_initiative:{getattr(enemy, 'object_id', getattr(enemy, 'name', 'enemy'))}",
+                                input_mode="confirm",
+                                confirm_enabled=False,
+                                prompt_id="combat.initiative.enemy",
+                            )
+                            if prompt_id and hasattr(player_prompt, "update"):
+                                player_prompt.update(
+                                    prompt_id,
+                                    body_markdown=body,
+                                    summary=f"Wynik inicjatywy: {val}",
+                                    confirm_enabled=True,
+                                )
+                            if prompt_id and hasattr(player_prompt, "wait"):
+                                player_prompt.wait(prompt_id)
+                        except Exception:
+                            prompt_id = None
+                    if not prompt_id:
+                        enemy_prompt_step(
+                            self.game,
+                            title,
+                            prompt_long=body,
+                            source="enemy_initiative",
+                            blocking=True,
+                            semantic_type="required_action",
+                            dedupe_key=f"enemy_initiative:{getattr(enemy, 'object_id', getattr(enemy, 'name', 'enemy'))}",
+                            continue_hint="Enter: kolejny przeciwnik.",
+                            emit_log=False,
+                            scope_key="combat:initiative",
+                        )
                 self.base_initiative[enemy] = val
             except Exception as exc:
                 logger.error("Rzut inicjatywy wroga nie powiódł się: %s", exc)
@@ -1847,6 +1967,100 @@ class Combat(State):
         self._advance_turn()
         return self
 
+    def _plan_enemy_action(self, enemy, *, actions_left: int) -> EnemyActionPlan:
+        board = getattr(self.game, "board", None)
+        enemy_pos = getattr(enemy, "position", None)
+        if board is None or enemy_pos is None or actions_left <= 0:
+            return EnemyActionPlan("end", "Przeciwnik kończy turę.")
+        targets = []
+        try:
+            from combat.hero_side_targets import hero_side_targets
+
+            targets = list(hero_side_targets(self.game, only_living=True))
+        except Exception:
+            targets = list(getattr(self.game, "heroes", []) or [])
+        adjacent = []
+        for target in targets:
+            pos = getattr(target, "position", None)
+            if pos is None:
+                continue
+            if max(abs(enemy_pos[0] - pos[0]), abs(enemy_pos[1] - pos[1])) <= max(1, int(getattr(enemy, "reach", 1) or 1)):
+                adjacent.append((target, pos))
+        if adjacent:
+            target, pos = adjacent[0]
+            return EnemyActionPlan("attack", "Przeciwnik planuje atak.", getattr(target, "name", "cel"), pos)
+        nearest = None
+        nearest_dist = 999999
+        for target in targets:
+            pos = getattr(target, "position", None)
+            if pos is None:
+                continue
+            dist = abs(enemy_pos[0] - pos[0]) + abs(enemy_pos[1] - pos[1])
+            if dist < nearest_dist:
+                nearest = (target, pos)
+                nearest_dist = dist
+        if nearest is not None:
+            target, pos = nearest
+            return EnemyActionPlan("move", "Przeciwnik planuje ruch.", getattr(target, "name", "cel"), pos)
+        return EnemyActionPlan("end", "Przeciwnik nie widzi celu i kończy działanie.")
+
+    def _confirm_enemy_plan(self, enemy, plan: EnemyActionPlan, *, remaining: int, limit: int) -> None:
+        title = f"Tura przeciwnika - {getattr(enemy, 'name', 'Enemy')}"
+        planning_body = (
+            "Przeciwnik planuje swoją akcję...\n"
+            f"Akcje pozostałe: {remaining}/{limit}."
+        )
+        decided_body = (
+            "Przeciwnik podjął decyzję.\n"
+            f"Plan: {plan.label}\n"
+            f"Akcje pozostałe: {remaining}/{limit}"
+        )
+        if plan.target_name:
+            decided_body += f"\nCel/odniesienie: {plan.target_name}"
+        if plan.target_pos is not None:
+            decided_body += f" na polu {plan.target_pos}"
+        decided_body += "\n\nPotwierdź Enterem, aby wykonać ten krok przeciwnika."
+        player_prompt = getattr(self.game, "player_prompt", None)
+        prompt_id = None
+        if player_prompt is not None and hasattr(player_prompt, "create"):
+            try:
+                prompt_id = player_prompt.create(
+                    title,
+                    kind="info",
+                    source="enemy_turn_plan",
+                    body_markdown=planning_body,
+                    summary="Przeciwnik planuje swoją akcję...",
+                    scope_key="enemy_turn",
+                    dedupe_key=f"enemy_turn_plan:{self.round_index}:{self._actor_id(enemy)}:{remaining}",
+                    input_mode="confirm",
+                    confirm_enabled=False,
+                    prompt_id="enemy.turn.plan",
+                )
+                if prompt_id and hasattr(player_prompt, "update"):
+                    player_prompt.update(
+                        prompt_id,
+                        body_markdown=decided_body,
+                        summary="Przeciwnik podjął decyzję.",
+                        confirm_enabled=True,
+                    )
+                if prompt_id and hasattr(player_prompt, "wait"):
+                    player_prompt.wait(prompt_id)
+            except Exception:
+                prompt_id = None
+        if prompt_id:
+            return
+        enemy_prompt_step(
+            self.game,
+            title,
+            prompt_long=decided_body,
+            source="enemy_turn_plan",
+            blocking=True,
+            semantic_type="required_action",
+            dedupe_key=f"enemy_turn_plan:{self.round_index}:{self._actor_id(enemy)}:{remaining}",
+            continue_hint="Enter wykonuje krok przeciwnika.",
+            emit_log=False,
+        )
+
     def _process_enemy_turn(self, enemy) -> State:
         logger.info("Tura przeciwnika: %s", getattr(enemy, "name", "Enemy"))
         used = self.actions_used.get(enemy, 0)
@@ -1854,8 +2068,11 @@ class Combat(State):
         behavior_fn = get_behavior(getattr(enemy, "behavior_id", None))
         try:
             while used < limit:
+                remaining = limit - used
+                plan = self._plan_enemy_action(enemy, actions_left=remaining)
+                self._confirm_enemy_plan(enemy, plan, remaining=remaining, limit=limit)
                 try:
-                    spent = behavior_fn(enemy, self.game, self, actions_left=limit - used)
+                    spent = behavior_fn(enemy, self.game, self, actions_left=1)
                 except Exception as exc:
                     logger.error("AI przeciwnika (%s) nie powiodło się: %s", behavior_fn.__name__, exc)
                     self.game.ui_log(f"AI przeciwnika nie powiodło się: {exc}")
@@ -1896,22 +2113,6 @@ class Combat(State):
             actor_pos = getattr(actor, "position", None)
             if actor_pos is not None:
                 enemy_highlight(self.game, [actor_pos], [consts.ENEMY_START_RGB])
-            enemy_prompt_step(
-                self.game,
-                f"Tura przeciwnika: {getattr(actor, 'name', 'Enemy')}",
-                prompt_long=(
-                    f"Przeciwnik rozpoczyna turę.\n"
-                    f"Akcje pozostałe: {remaining}/{limit}.\n"
-                    "Potwierdź Enterem, aby obserwować kolejne kroki przeciwnika."
-                ),
-                source="enemy_turn_start",
-                blocking=True,
-                semantic_type="required_action",
-                dedupe_key=f"enemy_turn_start:{getattr(actor, 'object_id', getattr(actor, 'name', 'enemy'))}:{remaining}/{limit}",
-                next_hint="Przeciwnik zacznie wykonywać akcje.",
-                continue_hint="Enter rozpoczyna turę przeciwnika.",
-                emit_log=False,
-            )
             return self._process_enemy_turn(actor)
 
         # Hero turn
@@ -2041,6 +2242,8 @@ class Combat(State):
                         source=f"intent:{intent}",
                         actor=actor,
                     )
+                    if raw_choice == "cancel":
+                        return self.choose_action()
                     if not raw_choice:
                         self.game.ui_log("Nie wybrano akcji ataku.")
                         return self
@@ -2053,6 +2256,8 @@ class Combat(State):
                     source=f"intent:{intent}",
                     actor=actor,
                 )
+                if raw_choice == "cancel":
+                    return self.choose_action()
                 if not raw_choice:
                     self.game.ui_log(f"Nie wybrano akcji z kategorii '{intent}'.")
                     return self

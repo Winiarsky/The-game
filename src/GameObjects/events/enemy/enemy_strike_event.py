@@ -631,7 +631,7 @@ class EnemyStrikeEvent(ActionCostEvent):
                     summary = f"{summary} Cel łapie goblin pox."
             elif ranged and cover_bonus:
                 summary = f"{summary} Osłona celu: +{cover_bonus} AC."
-            result_blocks = bool(is_hit(outcome) and hp_dealt > 0)
+            result_blocks = True
             try:
                 enemy_prompt_step(
                     ctx.game,

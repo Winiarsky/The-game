@@ -74,6 +74,27 @@ class HeroesTurn(State):
                     )
                 ),
             )
+        player_prompt = getattr(self.game, "player_prompt", None)
+        if player_prompt is not None and hasattr(player_prompt, "create"):
+            try:
+                player_prompt.create(
+                    "Aktywuj bohatera",
+                    kind="info",
+                    source="active_hero_board_scan",
+                    body_markdown=(
+                        "Kliknij w podświetlone pole, na którym stoi figurka bohatera, "
+                        "w celu aktywacji."
+                    ),
+                    summary="Kliknij figurkę bohatera na planszy.",
+                    scope_key="hero_turn:activation",
+                    dedupe_key="turns:active_hero_board_scan",
+                    input_mode="board_click",
+                    cancel_enabled=False,
+                    confirm_enabled=False,
+                    prompt_id="turns.active_hero_board_scan",
+                )
+            except Exception:
+                pass
         self.game.conn.set_leds(heroes_positions, consts.HERO_HIGHLIGHT_RGB)
         try:
             try:
@@ -233,6 +254,8 @@ class HeroesTurn(State):
                         source=f"intent:{choice}",
                         actor=hero,
                     )
+                    if event_name == "cancel":
+                        return self.choose_action()
                     if not event_name:
                         self.game.ui_log("Nie wybrano akcji ataku.")
                         return self
@@ -245,6 +268,8 @@ class HeroesTurn(State):
                     source=f"intent:{choice}",
                     actor=hero,
                 )
+                if event_name == "cancel":
+                    return self.choose_action()
                 if not event_name:
                     self.game.ui_log(f"Nie wybrano akcji z kategorii '{choice}'.")
                     return self
