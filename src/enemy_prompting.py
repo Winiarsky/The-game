@@ -65,6 +65,8 @@ def enemy_prompt_step(
                 dedupe_key=str(dedupe_key or source or title or "enemy"),
                 priority=str(envelope.get("priority") or "action"),
                 semantic_type=str(envelope.get("semantic_type") or effective_semantic),
+                cta=str(envelope.get("cta") or continue_hint or "").strip() or None,
+                next_hint=next_hint,
             ) is not None
         except Exception:
             prompt_sent = False

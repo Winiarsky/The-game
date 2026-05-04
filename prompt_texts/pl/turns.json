@@ -1,7 +1,10 @@
 {
   "turns.active_hero_board_scan": {
     "title": "Wybór bohatera",
-    "body_markdown": "Gra czeka teraz na klik figurki bohatera na planszy."
+    "summary": "Kliknij figurkę bohatera, który ma teraz działać.",
+    "body_markdown": "**Teraz:** kliknij figurkę aktywnego bohatera na planszy.\n\n**Po wyborze:** zobaczysz dostępne akcje tej postaci.",
+    "cta": "Kliknij figurkę aktywnego bohatera.",
+    "next_hint": "Po wyborze bohatera pojawi się menu akcji."
   },
   "turns.no_heroes_on_board": {
     "title": "Brak bohaterów",
@@ -22,49 +25,52 @@
   },
   "turns.intent_menu": {
     "title": "Akcje",
-    "subtitle": "8/2 nawigacja, Enter potwierdzenie."
+    "subtitle": "Wybierz, co zrobi aktywny bohater.",
+    "details_markdown": "**Sterowanie**\n- **8/2**: zmiana opcji\n- **Enter**: potwierdzenie\n\n**Po wyborze** gra pokaże kolejny krok tej akcji.",
+    "cta": "Wybierz akcję i potwierdź.",
+    "next_hint": "Po wyborze akcji pojawi się wybór celu, pola, rzutu albo wynik."
   },
   "turns.intent_options": {
     "options": {
       "move": {
         "label": "Ruch",
-        "desc": "Ruch po planszy."
+        "desc": "Wybierz pole docelowe i przesuń bohatera."
       },
       "interact": {
         "label": "Interakcja",
-        "desc": "Interakcja z obiektem na planszy."
+        "desc": "Wskaż obiekt lub postać w zasięgu i wybierz dostępną czynność."
       },
       "seek": {
         "label": "Szukaj",
-        "desc": "Przeszukaj obszar do 30 ft gridowo; UI podświetla pola objęte akcją i nie przechodzi przez sciany."
+        "desc": "Podświetl obszar do 30 ft i wykonaj rzut, aby wykryć ukryte rzeczy."
       },
       "attack": {
         "label": "Atak",
-        "desc": "Wybierz akcję ataku."
+        "desc": "Wybierz broń lub atak, potem wskaż cel."
       },
       "magic": {
         "label": "Magia",
-        "desc": "Wybierz czar lub akcję magiczną."
+        "desc": "Wybierz czar, sprawdź koszt i wskaż cel lub obszar."
       },
       "alchemy": {
         "label": "Alchemia",
-        "desc": "Wybierz akcję alchemiczną."
+        "desc": "Wybierz bombę, eliksir albo inną akcję alchemiczną."
       },
       "equipment": {
         "label": "Ekwipunek",
-        "desc": "Ekwipunek i interakcje z przedmiotami."
+        "desc": "Dobierz, załóż, przeładuj lub użyj przedmiotu."
       },
       "stats": {
         "label": "Statystyki",
-        "desc": "Pełne statystyki aktywnego bohatera."
+        "desc": "Podejrzyj pełne statystyki aktywnego bohatera."
       },
       "delay": {
         "label": "Opóźnij",
-        "desc": "Obniż inicjatywę i zagraj później."
+        "desc": "Przesuń turę bohatera na później w inicjatywie."
       },
       "end": {
         "label": "Koniec",
-        "desc": "Zakończ turę."
+        "desc": "Zakończ turę tego bohatera."
       }
     }
   },
@@ -99,7 +105,10 @@
   },
   "ui.choice.intent": {
     "title": "Akcje",
-    "subtitle": "8/2 nawigacja, Enter potwierdzenie."
+    "subtitle": "Wybierz, co zrobi aktywny bohater.",
+    "details_markdown": "**Sterowanie**\n- **8/2**: zmiana opcji\n- **Enter**: potwierdzenie\n\n**Po wyborze** gra pokaże kolejny krok tej akcji.",
+    "cta": "Wybierz akcję i potwierdź.",
+    "next_hint": "Po wyborze akcji pojawi się wybór celu, pola, rzutu albo wynik."
   },
   "ui.choice.heroes_missing": {
     "title": "Brak bohaterów",

@@ -237,6 +237,9 @@ class UIClient:
                 extra["subtitle"] = prompt_copy.get("subtitle")
             if prompt_copy.get("prompt_long") not in (None, ""):
                 extra["prompt_long"] = prompt_copy.get("prompt_long")
+            for key in ("details_markdown", "cta", "next_hint"):
+                if prompt_copy.get(key) not in (None, ""):
+                    extra[key] = prompt_copy.get(key)
         except Exception:
             pass
         if self.enabled:
@@ -284,6 +287,9 @@ class UIClient:
             extra["title"] = prompt
             extra["subtitle"] = prompt_copy.get("subtitle")
             extra["prompt_long"] = prompt_copy.get("prompt_long")
+            for key in ("details_markdown", "cta", "next_hint"):
+                if prompt_copy.get(key) not in (None, ""):
+                    extra[key] = prompt_copy.get(key)
             if prompt_copy.get("choice_meta") is not None:
                 extra["choice_meta"] = prompt_copy.get("choice_meta")
         except Exception:
@@ -400,6 +406,9 @@ class UIClient:
             prompt_long = prompt_copy.get("prompt_long")
             if prompt_copy.get("subtitle") not in (None, ""):
                 extra["subtitle"] = prompt_copy.get("subtitle")
+            for key in ("details_markdown", "cta", "next_hint"):
+                if prompt_copy.get(key) not in (None, ""):
+                    extra[key] = prompt_copy.get(key)
         except Exception:
             pass
         if self.enabled:

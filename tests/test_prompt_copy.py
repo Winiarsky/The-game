@@ -23,7 +23,7 @@ def test_merge_menu_prompt_overrides_title_subtitle_and_options():
     )
 
     assert title == "Setup bohaterów"
-    assert "Enter: graj" in subtitle
+    assert "Rozpocznij grę" in subtitle
     assert options[0]["label"] == "Graj"
     assert "Rozpocznij grę" in options[0]["desc"]
 
@@ -38,4 +38,22 @@ def test_resolve_ui_prompt_copy_uses_source_based_prompt_id():
 
     assert resolved["prompt_id"] == "ui.choice.intent"
     assert resolved["title"] == "Akcje"
-    assert "8/2 nawigacja" in str(resolved["subtitle"] or "")
+    assert "aktywny bohater" in str(resolved["subtitle"] or "")
+    assert resolved["cta"] == "Wybierz akcję i potwierdź."
+    assert "Po wyborze akcji" in str(resolved["next_hint"] or "")
+    assert "Sterowanie" in str(resolved["details_markdown"] or "")
+
+
+def test_resolve_ui_prompt_copy_provides_roll_guidance():
+    resolved = resolve_ui_prompt_copy(
+        kind="roll",
+        source="game",
+        title="Atak: podaj wynik",
+        prompt_long="Rzuć d20 i dodaj modyfikatory.",
+    )
+
+    assert resolved["prompt_id"] == "ui.roll.game"
+    assert resolved["title"] == "Atak: podaj wynik"
+    assert "modyfikatorach" in str(resolved["details_markdown"] or "")
+    assert resolved["cta"] == "Wpisz wynik rzutu i potwierdź."
+    assert "rozliczy wynik" in str(resolved["next_hint"] or "")

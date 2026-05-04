@@ -21,14 +21,18 @@ def spell_formula_prompt(
     subject_text = str(subject or "").strip() or "wartosc"
     formula_text = str(formula or "").strip()
 
-    prompt = f"{spell_text} - podaj {subject_text}"
+    prompt = f"{spell_text}: podaj {subject_text}"
     if formula_text:
         prompt += f" ({formula_text})"
     prompt += ":"
 
     details = None
     if formula_text:
-        details = f"Rozlicz bazowa wartosc czaru: **{formula_text}**."
+        details = (
+            f"**Teraz:** wpisz {subject_text} dla czaru **{spell_text}**.\n\n"
+            f"**Wzór:** {formula_text}\n\n"
+            "**Po potwierdzeniu:** gra rozliczy efekt czaru."
+        )
 
     placeholder = answer_placeholder
     if placeholder is None and formula_text:

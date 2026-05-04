@@ -4,17 +4,48 @@
     "summary": "{actor_name} otrzymuje {hp_damage} ran.",
     "body_markdown": "{actor_name} otrzymuje **{hp_damage}** ran.\n\nZapisz **{hp_damage}** ran na karcie postaci i potwierdź.",
     "details_markdown": "{total_wounds_line}\n{damage_type_line}",
-    "cta": "Zapisz rany na karcie postaci i potwierdź."
+    "cta": "Zapisz rany na karcie postaci i potwierdź.",
+    "next_hint": "Po potwierdzeniu gra rozliczy dalszy efekt albo przejdzie do kolejnej akcji."
   },
   "combat.hero_incapacitated": {
     "summary": "{state_summary}",
     "body_markdown": "{recovery_message_block}**Aktualny stan**\n- HP: {hp_summary}\n- Dying: {dying_line}\n- Wounded: {wounded_line}\n- Unconscious: {unconscious_line}\n- Stable: {stable_line}\n- Śmierć nastąpi przy Dying {threshold}.",
-    "details_markdown": "**Co to oznacza**\n- Ta postać nie wykonuje akcji, dopóki jest nieprzytomna.\n- Leczenie powyżej 0 HP usuwa Dying i Unconscious.\n- Stabilizacja usuwa Dying, ale bohater zostaje Unconscious i Stable przy 0 HP.\n- Jeśli postać nadal ma Dying i nie jest Stable, na początku swojej tury wykona kolejny Recovery Check.\n\n**Jak wyjść z tego stanu**\n- Użyj leczenia od sojusznika albo efektu przywracającego HP.\n- Użyj efektu stabilizacji, jeśli nie możesz jej od razu podnieść.\n- Jeśli nic nie zrobisz, liczysz na kolejne Recovery Checki."
+    "details_markdown": "**Co to oznacza**\n- Ta postać nie wykonuje akcji, dopóki jest nieprzytomna.\n- Leczenie powyżej 0 HP usuwa Dying i Unconscious.\n- Stabilizacja usuwa Dying, ale bohater zostaje Unconscious i Stable przy 0 HP.\n- Jeśli postać nadal ma Dying i nie jest Stable, na początku swojej tury wykona kolejny Recovery Check.\n\n**Jak wyjść z tego stanu**\n- Użyj leczenia od sojusznika albo efektu przywracającego HP.\n- Użyj efektu stabilizacji, jeśli nie możesz jej od razu podnieść.\n- Jeśli nic nie zrobisz, liczysz na kolejne Recovery Checki.",
+    "cta": "Zastosuj stan na karcie postaci i potwierdź.",
+    "next_hint": "Po potwierdzeniu gra przejdzie do dalszego przebiegu tury."
   },
   "combat.damage_applied_summary": {
     "title": "Efekt akcji",
     "summary": "{actor_name} zadaje {damage_total} obrażeń celowi {target_name}.",
     "body_markdown": "Zadałeś **{damage_total}** obrażeń celowi **{target_name}** za pomocą **{source_label}**.{status_line}",
-    "details_markdown": "**Rozliczenie obrażeń**\n- Cel: **{target_name}**\n- Suma obrażeń: **{damage_total}**\n- Źródło: **{source_label}**\n- Rozpiska: {damage_breakdown}"
+    "details_markdown": "**Rozliczenie obrażeń**\n- Cel: **{target_name}**\n- Suma obrażeń: **{damage_total}**\n- Źródło: **{source_label}**\n- Rozpiska: {damage_breakdown}",
+    "cta": "Zastosuj obrażenia i potwierdź.",
+    "next_hint": "Po potwierdzeniu gra sprawdzi dalsze efekty akcji."
+  },
+  "ui.roll.game": {
+    "title": "{title}",
+    "body_markdown": "{prompt_long}",
+    "details_markdown": "**Rzut**\n- wpisz całkowity wynik po modyfikatorach\n- jeśli UI pokazuje rozbicie rzutu, sprawdź bonusy i kary przed zatwierdzeniem",
+    "cta": "Wpisz wynik rzutu i potwierdź.",
+    "next_hint": "Po potwierdzeniu gra rozliczy wynik rzutu."
+  },
+  "ui.choice.attack": {
+    "title": "Wybór ataku",
+    "subtitle": "Wybierz broń albo wariant ataku.",
+    "details_markdown": "**Po wyborze** gra poprosi o cel albo rzut ataku.\n\n**Uwaga**\n- sprawdź zasięg i ewentualny MAP przed potwierdzeniem",
+    "cta": "Wybierz atak i potwierdź.",
+    "next_hint": "Po wyborze wskażesz cel albo wykonasz rzut ataku."
+  },
+  "ui.info.reaction:opportunity_attack_enemy": {
+    "title": "Reakcja przeciwnika",
+    "details_markdown": "**Reakcja**\n- przeciwnik zużywa reakcję\n- wynik może przerwać akcję typu manipulate przy trafieniu krytycznym",
+    "cta": "Obserwuj wynik reakcji.",
+    "next_hint": "Za chwilę zobaczysz końcowy wynik reakcji."
+  },
+  "ui.info.reaction:opportunity_attack_enemy_result": {
+    "title": "Wynik reakcji",
+    "details_markdown": "**Po zastosowaniu** gra wróci do przerwanej sekwencji.",
+    "cta": "Zastosuj wynik reakcji i potwierdź.",
+    "next_hint": "Po potwierdzeniu gra wróci do przerwanej akcji."
   }
 }

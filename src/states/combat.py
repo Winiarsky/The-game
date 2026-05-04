@@ -1534,8 +1534,8 @@ class Combat(State):
                 summary = summary_fn() if callable(summary_fn) else ""
             except Exception:
                 summary = ""
-            rows.append(f"- pole {position}: {summary or 'loot'}")
-        return "\n".join(rows) if rows else "- brak lootu"
+            rows.append(f"- pole {position}: {summary or 'łup'}")
+        return "\n".join(rows) if rows else "- brak łupu"
 
     def _offer_collect_remaining_loot(self) -> None:
         if bool(getattr(self, "_combat_end_loot_prompt_done", False)):
@@ -1555,7 +1555,7 @@ class Combat(State):
         loot_list = self._remaining_loot_summary(piles)
         prompt_text = render_prompt_text("interaction.combat_end_loot_all", loot_list=loot_list)
         body_markdown = (
-            "**Na planszy został loot**\n"
+            "**Na planszy został łup**\n"
             f"{loot_list}\n\n"
             "Możesz zebrać wszystko do **Party Stash** albo przejrzeć stosy przed zapisaniem."
         )
@@ -1575,21 +1575,23 @@ class Combat(State):
             {
                 "raw": "leave",
                 "label": "Zostaw na planszy",
-                "desc": "Loot zostaje tam, gdzie leży. Można go zebrać ręcznie później.",
+                "desc": "Łup zostaje tam, gdzie leży. Można go zebrać ręcznie później.",
                 "key": "Esc",
             },
         ]
         try:
             answer = player_prompt.choice(
-                str(prompt_text.get("title") or "Loot po walce"),
+                str(prompt_text.get("title") or "Łup po walce"),
                 choices=[entry["label"] for entry in choice_meta],
                 source="combat_end_loot",
-                subtitle=str(prompt_text.get("summary") or "Na planszy został loot."),
+                subtitle=str(prompt_text.get("summary") or "Na planszy został łup."),
                 body_markdown=body_markdown,
                 details_markdown=str(prompt_text.get("details_markdown") or ""),
                 choice_meta=choice_meta,
                 scope_key="combat:end:loot",
                 dedupe_key="combat_end_loot_all",
+                cta=str(prompt_text.get("cta") or "").strip() or None,
+                next_hint=str(prompt_text.get("next_hint") or "").strip() or None,
                 prompt_id="interaction.combat_end_loot_all",
             )
         except Exception:

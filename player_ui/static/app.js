@@ -1240,8 +1240,19 @@ function shouldShowCommandHelp(card, details, nextLines) {
     return Boolean(details || nextLines.length || promptCommandLines(prompt).length);
 }
 
+function nextInstructionText(card) {
+    const communication = card.communication || {};
+    const next = String(communication.context?.next || "").trim();
+    if (!next) return "";
+    const cta = String(communication.cta || "").trim();
+    if (cta && sameMeaning(next, cta)) return "";
+    return `**Dalej:** ${next}`;
+}
+
 function buildActionHelp(card) {
     const blocks = [];
+    const next = nextInstructionText(card);
+    if (next) blocks.push(next);
     const details = String(card.details || "").trim();
     if (details) blocks.push(details);
     return blocks.join("\n\n").trim();

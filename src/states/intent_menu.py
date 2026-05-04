@@ -1404,6 +1404,10 @@ def _prompt_with_ui(
         options=options,
         source=source,
     )
+    rendered_copy = render_prompt_copy(prompt_id, source=source, title=title, subtitle=subtitle) if prompt_id else {}
+    details_markdown = str(rendered_copy.get("details_markdown") or "").strip() or None
+    cta = str(rendered_copy.get("cta") or "").strip() or None
+    next_hint = str(rendered_copy.get("next_hint") or "").strip() or None
     ui = getattr(game, "ui", None)
     choice_meta = []
     for idx, option in enumerate(options, start=1):
@@ -1425,10 +1429,13 @@ def _prompt_with_ui(
                 choices=[entry["raw"] for entry in choice_meta],
                 source=source,
                 subtitle=_with_numpad_hint(subtitle),
+                details_markdown=details_markdown,
                 choice_meta=choice_meta,
                 scope_key="hero_turn:intent",
                 dedupe_key=f"intent_menu:{source}",
                 layout="dialog",
+                cta=cta,
+                next_hint=next_hint,
                 prompt_id=prompt_id,
             )
             raw = str(answer or "").strip()

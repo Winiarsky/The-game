@@ -117,6 +117,34 @@ def test_prompt_api_returns_normalized_communication_envelope(ui_client):
     assert comm["context"]["prompt_key"] == "enemy.turn.start"
 
 
+def test_prompt_api_maps_next_hint_into_communication_context(ui_client):
+    create = ui_client.post(
+        "/api/prompts",
+        json={
+            "prompt": "Akcje",
+            "kind": "choice",
+            "source": "intent",
+            "choices": ["Ruch", "Atak"],
+            "next_hint": "Po wyborze akcji pojawi się kolejny krok.",
+            "prompt_id": "ui.choice.intent",
+        },
+    )
+    assert create.status_code == 200
+
+    prompt_id = create.get_json()["id"]
+    payload = ui_client.get(f"/api/prompts/{prompt_id}").get_json()
+
+    assert payload["communication"]["context"]["next"] == "Po wyborze akcji pojawi się kolejny krok."
+
+
+def test_player_ui_has_visible_next_hint_copy():
+    app_js = (PROJECT_ROOT / "player_ui" / "static" / "app.js").read_text(encoding="utf-8")
+
+    assert "function nextInstructionText" in app_js
+    assert "**Dalej:**" in app_js
+    assert "sameMeaning(next, cta)" in app_js
+
+
 def test_prompt_contract_exposes_board_cancel_and_disabled_confirm(ui_client):
     create = ui_client.post(
         "/api/prompts",

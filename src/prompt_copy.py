@@ -82,6 +82,9 @@ def resolve_ui_prompt_copy(
     resolved_body = rendered.get("body_markdown")
     if resolved_body in (None, ""):
         resolved_body = prompt_long
+    resolved_details = rendered.get("details_markdown")
+    resolved_cta = rendered.get("cta")
+    resolved_next_hint = rendered.get("next_hint")
     resolved_choice_meta = choice_meta
     rendered_options = rendered.get("options")
     if isinstance(choice_meta, list) and isinstance(rendered_options, dict):
@@ -104,6 +107,9 @@ def resolve_ui_prompt_copy(
         "title": resolved_title,
         "subtitle": resolved_subtitle,
         "prompt_long": resolved_body,
+        "details_markdown": resolved_details,
+        "cta": resolved_cta,
+        "next_hint": resolved_next_hint,
         "choice_meta": resolved_choice_meta,
         "copy": rendered,
     }

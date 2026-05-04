@@ -1,36 +1,42 @@
 {
   "interaction.loot_drop": {
-    "title": "Loot po {enemy_name}",
-    "summary": "Na polu {position_text} zostaje loot.",
-    "body_markdown": "**{enemy_name}** zostawia loot na polu **{position_text}**.\n\nDostępny łup: {loot_summary}.",
-    "details_markdown": "**Jak zebrać loot**\n- ustaw bohatera na polu lootu\n- użyj akcji **Interakcja**\n- wybierz **Podnieś loot**",
-    "cta": "Stań na polu lootu i użyj Interakcji."
+    "title": "Łup po {enemy_name}",
+    "summary": "Na polu {position_text} zostaje łup.",
+    "body_markdown": "**{enemy_name}** zostawia łup na polu **{position_text}**.\n\nDostępny łup: {loot_summary}.",
+    "details_markdown": "**Jak zebrać łup**\n- ustaw bohatera na polu łupu\n- użyj akcji **Interakcja**\n- wybierz **Podnieś łup**",
+    "cta": "Stań na polu łupu i użyj Interakcji."
   },
   "interaction.loot_pickup_action": {
     "description": "Zabierz z pola: {loot_summary}."
   },
   "interaction.loot_pickup_prompt": {
-    "title": "Loot na polu",
+    "title": "Łup na polu",
     "summary": "Pole {position_text}: {loot_summary}.",
-    "body_markdown": "**Loot na polu {position_text}**\n{loot_list}",
-    "details_markdown": "**Po potwierdzeniu**\n- niewybrane przedmioty trafią do **Party Stash**\n- wybrane przedmioty trafią do ekwipunku aktywnego bohatera\n- monety trafią do sakiewki drużyny\n- stos lootu zniknie z planszy"
+    "body_markdown": "**Łup na polu {position_text}**\n{loot_list}\n\n**Teraz:** wybierz, które przedmioty od razu trafiają do aktywnego bohatera.",
+    "details_markdown": "**Po potwierdzeniu**\n- niewybrane przedmioty trafią do **Party Stash**\n- wybrane przedmioty trafią do ekwipunku aktywnego bohatera\n- monety trafią do sakiewki drużyny\n- stos łupu zniknie z planszy",
+    "cta": "Wybierz przedmioty i potwierdź.",
+    "next_hint": "Po potwierdzeniu łup zniknie z planszy."
   },
   "interaction.loot_pickup_result": {
-    "title": "Loot podniesiony",
+    "title": "Łup podniesiony",
     "summary": "{actor_name} podnosi: {loot_summary}.",
-    "body_markdown": "**{actor_name}** podnosi loot z pola **{position_text}**.\n\n**Trafia do:**\n{destination_list}",
-    "details_markdown": "Ten loot został już przeniesiony do ekwipunku i nie powinien być dalej widoczny na planszy."
+    "body_markdown": "**{actor_name}** podnosi łup z pola **{position_text}**.\n\n**Trafia do:**\n{destination_list}",
+    "details_markdown": "Ten łup został już przeniesiony do ekwipunku i nie powinien być dalej widoczny na planszy."
   },
   "interaction.loot_pickup_assign": {
-    "title": "Loot zdobyty",
+    "title": "Łup zdobyty",
     "summary": "Wybierz rzeczy do ekwipunku albo zapisz resztę w Party Stash.",
-    "body_markdown": "{prompt_long}"
+    "body_markdown": "{prompt_long}",
+    "cta": "Zatwierdź przydział łupu.",
+    "next_hint": "Po zatwierdzeniu niewybrane rzeczy zostaną zapisane w Party Stash."
   },
   "interaction.combat_end_loot_all": {
-    "title": "Loot po walce",
-    "summary": "Na planszy zostały stosy lootu.",
+    "title": "Łup po walce",
+    "summary": "Na planszy zostały stosy łupu.",
     "body_markdown": "{prompt_long}",
-    "details_markdown": "**Party Stash** jest dostępny po walce przez akcję **Ekwipunek**. W trakcie walki przedmioty ze stashu nie są dostępne do użycia."
+    "details_markdown": "**Party Stash** jest dostępny po walce przez akcję **Ekwipunek**. W trakcie walki przedmioty ze stashu nie są dostępne do użycia.",
+    "cta": "Zbierz łup albo potwierdź, jeśli zostaje na planszy.",
+    "next_hint": "Po potwierdzeniu gra przejdzie do kolejnego kroku scenariusza."
   },
   "interaction.enemy_defeated_loot": {
     "title": "Przeciwnik pokonany",
@@ -39,9 +45,11 @@
     "details_markdown": "{defeat_details}"
   },
   "interaction.seek_preview": {
-    "title": "Seek",
+    "title": "Szukaj",
     "summary": "Rozejrzyj się po zasięgu akcji.",
-    "body_markdown": "**Widzisz w zasięgu Seek**\n{legend_block}\n\n**Ukryte obiekty** nie są jeszcze pokazane. Rzut **Seek** spróbuje je wykryć.",
-    "details_markdown": "**Komendy**\n- **Enter**: wykonaj **Seek**\n- **Esc**: **Anuluj**\n\n**Kolory na planszy**\n- podświetlone pole bohatera to źródło akcji\n- turkusowe pola pokazują cały zasięg **Seek**\n- kolory obiektów pokazują jawne rzeczy, z którymi możesz wejść w interakcję"
+    "body_markdown": "**Widzisz w zasięgu Szukaj**\n{legend_block}\n\n**Ukryte obiekty** nie są jeszcze pokazane. Rzut **Szukaj** spróbuje je wykryć.",
+    "details_markdown": "**Komendy**\n- **Enter**: wykonaj **Szukaj**\n- **Esc**: **Anuluj**\n\n**Kolory na planszy**\n- podświetlone pole bohatera to źródło akcji\n- turkusowe pola pokazują cały zasięg **Szukaj**\n- kolory obiektów pokazują jawne rzeczy, z którymi możesz wejść w interakcję",
+    "cta": "Potwierdź, aby wykonać Szukaj.",
+    "next_hint": "Po rzucie zobaczysz wykryte obiekty albo informację o braku znalezisk."
   }
 }

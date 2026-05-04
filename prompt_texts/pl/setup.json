@@ -1,19 +1,25 @@
 {
   "setup.welcome": {
-    "body_markdown": "Witamy w grze planszowej!"
+    "body_markdown": "Przygotuj planszę i wybierz bohaterów do scenariusza.",
+    "cta": "Rozpocznij setup."
   },
   "setup.hero_setup_select_position": {
     "title": "Wskaż miejsce dla figurki: {hero_name}",
-    "body_markdown": "Wybierz puste pole startowe dla bohatera {hero_name}, klikając jedno z podświetlonych pól."
+    "summary": "Kliknij podświetlone pole startowe dla bohatera {hero_name}.",
+    "body_markdown": "**Teraz:** wybierz puste pole startowe dla bohatera **{hero_name}**, klikając jedno z podświetlonych pól.\n\n**Po wyborze:** gra poprosi o ustawienie figurki na tym polu.",
+    "cta": "Kliknij pole startowe dla bohatera {hero_name}.",
+    "next_hint": "Po wyborze pola ustawisz figurkę na planszy."
   },
   "setup.hero_setup_retry_position": {
-    "body_markdown": "Nie wybrano pola startowego dla {hero_name}. Spróbuj ponownie."
+    "body_markdown": "Nie wybrano pola startowego dla **{hero_name}**.\n\nWybierz jedno z podświetlonych pustych pól.",
+    "cta": "Kliknij pole startowe."
   },
   "setup.hero_setup_place_figure": {
     "title": "Ustaw figurkę: {hero_name}",
-    "summary": "Co robić teraz",
-    "body_markdown": "Ustaw figurkę bohatera {hero_name} na polu startowym {position}.",
-    "cta": "Po ustawieniu figurki wybierz kolejny krok w setupie."
+    "summary": "Ustaw figurkę bohatera {hero_name} na polu {position}.",
+    "body_markdown": "**Teraz:** ustaw figurkę bohatera **{hero_name}** na polu startowym **{position}**.\n\n**Po potwierdzeniu:** wybierzesz kolejnego bohatera albo rozpoczniesz grę.",
+    "cta": "Ustaw figurkę i potwierdź.",
+    "next_hint": "Po potwierdzeniu wybierzesz kolejny krok setupu."
   },
   "setup.hero_setup_retry_preselected": {
     "body_markdown": "Ponów ustawienie figurki dla wybranego bohatera {hero_name}."
@@ -23,7 +29,9 @@
   },
   "setup.hero_setup_next": {
     "title": "Setup bohaterów",
-    "subtitle": "Enter: graj, *: dodaj bohatera",
+    "subtitle": "Rozpocznij grę albo dodaj kolejną postać.",
+    "details_markdown": "**Sterowanie**\n- **Enter**: rozpocznij grę\n- **`*`**: dodaj bohatera",
+    "cta": "Wybierz dalszy krok setupu.",
     "options": {
       "__start_game__": {
         "label": "Graj",
@@ -36,12 +44,14 @@
     }
   },
   "setup.hero_select_menu": {
-    "title": "Wybór Bohatera",
-    "subtitle": "8 góra, 2 dół, Enter potwierdzenie, * nowy bohater",
+    "title": "Wybór bohatera",
+    "subtitle": "Wybierz postać do ustawienia na planszy.",
+    "details_markdown": "**Sterowanie**\n- **8/2**: zmiana postaci\n- **Enter**: potwierdzenie\n- **`*`**: nowy bohater",
+    "cta": "Wybierz bohatera i potwierdź.",
     "options": {
       "__create_new__": {
         "label": "Stwórz nowego bohatera",
-        "desc": "Uruchamia pełny pipeline tworzenia postaci."
+        "desc": "Przejdź przez pełne tworzenie nowej postaci."
       }
     }
   },

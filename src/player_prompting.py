@@ -687,6 +687,19 @@ class PromptDirector:
         else:
             cancel_enabled = bool(cancel_enabled_raw)
         cancel_answer = _text(data.get("cancel_answer")) or "cancel"
+        context = {
+            **dict(communication.get("context") or {}),
+            "scope_key": scope_key,
+            "prompt_key": _derive_prompt_key(
+                explicit=data.get("prompt_key") or data.get("prompt_id"),
+                source=source,
+                prompt_type=prompt_type,
+                communication=communication,
+            ),
+        }
+        next_hint = _text(data.get("next_hint"))
+        if next_hint and not _text(context.get("next")):
+            context["next"] = next_hint
         envelope = make_communication(
             channel="prompt",
             priority=_text(data.get("priority") or communication.get("priority") or "action"),
@@ -700,16 +713,7 @@ class PromptDirector:
             blocking=True,
             ack_required=_optional_bool(communication.get("ack_required")) if "ack_required" in communication else None,
             pause_policy=_text(communication.get("pause_policy")) or None,
-            context={
-                **dict(communication.get("context") or {}),
-                "scope_key": scope_key,
-                "prompt_key": _derive_prompt_key(
-                    explicit=data.get("prompt_key") or data.get("prompt_id"),
-                    source=source,
-                    prompt_type=prompt_type,
-                    communication=communication,
-                ),
-            },
+            context=context,
             progress=dict(communication.get("progress") or {}) or None,
         )
         passthrough_keys = {"cta"}
@@ -1079,6 +1083,8 @@ class GamePromptFacade:
         summary: str | None,
         body_markdown: str | None,
         details_markdown: str | None = None,
+        cta: str | None = None,
+        next_hint: str | None = None,
         priority: str = "action",
         semantic_type: str = "required_action",
         dedupe_key: str | None = None,
@@ -1095,6 +1101,8 @@ class GamePromptFacade:
             extra_context["scope_key"] = scope_key
         if prompt_key:
             extra_context["prompt_key"] = _text(prompt_key)
+        if next_hint and not _text(extra_context.get("next")):
+            extra_context["next"] = _text(next_hint)
         return make_communication(
             channel="prompt" if blocking else "timeline",
             priority=priority,
@@ -1103,6 +1111,7 @@ class GamePromptFacade:
             summary=summary,
             body_markdown=body_markdown,
             details_markdown=details_markdown,
+            cta=cta,
             dedupe_key=dedupe_key,
             blocking=blocking,
             context=extra_context or None,
@@ -1123,6 +1132,8 @@ class GamePromptFacade:
         dedupe_key: str | None = None,
         priority: str = "action",
         semantic_type: str = "required_action",
+        cta: str | None = None,
+        next_hint: str | None = None,
         image: str | None = None,
         progress: dict[str, Any] | None = None,
         answer_placeholder: str | None = None,
@@ -1137,6 +1148,8 @@ class GamePromptFacade:
             summary=summary,
             body_markdown=body_markdown,
             details_markdown=details_markdown,
+            cta=cta,
+            next_hint=next_hint,
             priority=priority,
             semantic_type=semantic_type,
             dedupe_key=dedupe_key,
@@ -1156,6 +1169,8 @@ class GamePromptFacade:
             priority=priority,
             summary=summary,
             details_markdown=details_markdown,
+            cta=cta,
+            next_hint=next_hint,
             answer_placeholder=answer_placeholder,
             prompt_id=prompt_id,
             audio=audio,
@@ -1176,6 +1191,8 @@ class GamePromptFacade:
         layout: str = "dialog",
         priority: str = "action",
         semantic_type: str = "required_action",
+        cta: str | None = None,
+        next_hint: str | None = None,
         prompt_id: str | None = None,
     ) -> Any:
         ui = self._ui
@@ -1187,6 +1204,8 @@ class GamePromptFacade:
             summary=subtitle,
             body_markdown=body,
             details_markdown=details_markdown,
+            cta=cta,
+            next_hint=next_hint,
             priority=priority,
             semantic_type=semantic_type,
             dedupe_key=dedupe_key,
@@ -1204,6 +1223,8 @@ class GamePromptFacade:
             layout=layout,
             choice_meta=list(choice_meta or []),
             communication=communication,
+            cta=cta,
+            next_hint=next_hint,
             scope_key=scope_key,
             dedupe_key=dedupe_key,
             priority=priority,

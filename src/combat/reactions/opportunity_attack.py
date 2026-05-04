@@ -141,7 +141,7 @@ class OpportunityAttack(Reaction):
                 f"Przeciwnik wykonuje atak okazyjny przeciw {getattr(target, 'name', 'celowi')}.\n"
                 f"Wynik testu: {total}\n"
                 f"Próg obrony: AC {target_ac}\n"
-                f"Outcome: {'hit' if hit else 'miss'}{' (critical)' if crit else ''}\n"
+                f"Wynik: {'trafienie' if hit else 'pudło'}{' (krytyczne)' if crit else ''}\n"
                 "Potwierdź Enterem, aby rozstrzygnąć reakcję."
             ),
             source="reaction:opportunity_attack_enemy",
