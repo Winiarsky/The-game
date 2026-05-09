@@ -9,6 +9,8 @@ class EnemyType(str, Enum):
     HUMAN = "human"
     ORC = "orc"
     GOBLIN = "goblin"
+    UNDEAD = "undead"
+    SPIRIT = "spirit"
 
 
 __all__ = ["EnemyType"]

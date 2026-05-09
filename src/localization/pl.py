@@ -209,8 +209,13 @@ _LABELS_PL: dict[str, str] = {
     "weapon_proficiency": "Biegłość w broni",
     # common action/event labels
     "move": "Ruch",
+    "move_start": "przygotowanie ruchu",
     "interaction": "Interakcja",
+    "interaction_end": "koniec interakcji",
     "interact": "Interakcja",
+    "talk": "Rozmowa",
+    "leave": "Zakończenie rozmowy",
+    "attempt": "Próba",
     "seek": "Szukaj",
     "stealth": "Skradanie",
     "attack": "Atak",

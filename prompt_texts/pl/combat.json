@@ -25,7 +25,7 @@
   "ui.roll.game": {
     "title": "{title}",
     "body_markdown": "{prompt_long}",
-    "details_markdown": "**Rzut**\n- wpisz całkowity wynik po modyfikatorach\n- jeśli UI pokazuje rozbicie rzutu, sprawdź bonusy i kary przed zatwierdzeniem",
+    "details_markdown": "**Rzut**\n- wpisz surowy wynik z kości d20, bez premii i kar\n- UI doliczy pokazany modyfikator automatycznie",
     "cta": "Wpisz wynik rzutu i potwierdź.",
     "next_hint": "Po potwierdzeniu gra rozliczy wynik rzutu."
   },

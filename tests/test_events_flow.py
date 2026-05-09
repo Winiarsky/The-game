@@ -27,11 +27,13 @@ class FakeEvents:
 class FakeConn:
     def __init__(self, scan_return=None):
         self.scan_return = scan_return
+        self.scan_args = []
 
     def set_leds(self, *a, **k):
         return None
 
     def scan_board(self, *a, **k):
+        self.scan_args.append((a, k))
         return self.scan_return
 
     def leds_off(self):
@@ -98,6 +100,24 @@ class FakeGame:
         self.enemies = []
         self.board = board
         self.state = None
+        self.ui = None
+        self.player_prompt = types.SimpleNamespace(create=lambda *a, **k: None)
+
+
+class FakeUi:
+    enabled = True
+
+    def __init__(self):
+        self.info_calls = []
+
+    def prompt_info(self, title, *, prompt_long=None, source=None, **extra):
+        self.info_calls.append(
+            {"title": title, "prompt_long": prompt_long, "source": source, "extra": dict(extra)}
+        )
+        return "ok"
+
+    def prompt_choice(self, _prompt, choices=None, **_kwargs):
+        return list(choices or ["talk"])[0]
 
 
 def test_move_event_emits_action_and_uses_tags(monkeypatch):
@@ -120,6 +140,64 @@ def test_move_event_emits_action_and_uses_tags(monkeypatch):
     # ruch mógł zostać anulowany, ale tagi powinny być ustawione kiedy emitowane
     if event:
         assert set(event.get("action_tags", [])) >= {"move", "custom"}
+
+
+def test_interaction_event_explains_when_no_targets_are_available():
+    hero = types.SimpleNamespace(name="Hero", position=(0, 0))
+    board = FakeBoard(hero.position)
+    game = FakeGame(conn=FakeConn(), board=board)
+    game.heroes = [hero]
+    game.ui = FakeUi()
+
+    ctx = EventContext(game=game, actor=hero)
+    result = dispatch_event("interaction", ctx)
+
+    assert not result.consumed_action
+    assert "Brak interakcji w zasięgu" in result.message
+    assert game.ui.info_calls
+    assert game.ui.info_calls[0]["source"] == "interaction_no_targets"
+
+
+def test_interaction_event_scans_only_available_targets():
+    hero = types.SimpleNamespace(name="Hero", position=(0, 0))
+    target_pos = (1, 0)
+
+    class Interactable:
+        name = "Nila"
+        hidden = False
+        revealed = False
+        require_same_cell_interact = False
+        actions = {"talk": types.SimpleNamespace(tags=["interaction"], end_interaction=True)}
+
+        def can_interact(self, _actor, _game):
+            return True
+
+        def available_actions(self):
+            return [types.SimpleNamespace(id="talk", label="Porozmawiaj", description="Rozpocznij rozmowę.")]
+
+        def interact(self, _actor, _game, action_id=None):
+            return "Rozmowa."
+
+    obj = Interactable()
+
+    class InteractionBoard(FakeBoard):
+        def get_interactables_in_range(self, *_args, **_kwargs):
+            return [(target_pos, [obj])]
+
+        def interactables_at(self, pos):
+            return [obj] if pos == target_pos else []
+
+    conn = FakeConn(scan_return=target_pos)
+    game = FakeGame(conn=conn, board=InteractionBoard(hero.position))
+    game.heroes = [hero]
+    game.ui = FakeUi()
+
+    ctx = EventContext(game=game, actor=hero)
+    result = dispatch_event("interaction", ctx)
+
+    assert result.success
+    assert conn.scan_args
+    assert conn.scan_args[0][0][0] == [target_pos]
 
 
 def test_stealth_event_respects_hide_status(monkeypatch):

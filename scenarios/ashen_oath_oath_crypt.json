@@ -1,0 +1,561 @@
+{
+    "name": "Ashen Oath - Oath Crypt",
+    "description": "Finalowa krypta z relikwiarzem, duchem Serai i wyborem miedzy odnowieniem przysiegi a ukladem z Odranem.",
+    "starting_positions": [
+        [
+            2,
+            9
+        ],
+        [
+            3,
+            9
+        ],
+        [
+            4,
+            9
+        ],
+        [
+            2,
+            10
+        ],
+        [
+            3,
+            10
+        ],
+        [
+            4,
+            10
+        ]
+    ],
+    "rooms": [
+        {
+            "id": "oath_crypt",
+            "name": "Oath Crypt",
+            "color": "#5f6470",
+            "positions": [
+                [
+                    2,
+                    5
+                ],
+                [
+                    3,
+                    5
+                ],
+                [
+                    4,
+                    5
+                ],
+                [
+                    5,
+                    5
+                ],
+                [
+                    6,
+                    5
+                ],
+                [
+                    7,
+                    5
+                ],
+                [
+                    8,
+                    5
+                ],
+                [
+                    9,
+                    5
+                ],
+                [
+                    10,
+                    5
+                ],
+                [
+                    11,
+                    5
+                ],
+                [
+                    2,
+                    6
+                ],
+                [
+                    3,
+                    6
+                ],
+                [
+                    4,
+                    6
+                ],
+                [
+                    5,
+                    6
+                ],
+                [
+                    6,
+                    6
+                ],
+                [
+                    7,
+                    6
+                ],
+                [
+                    8,
+                    6
+                ],
+                [
+                    9,
+                    6
+                ],
+                [
+                    10,
+                    6
+                ],
+                [
+                    11,
+                    6
+                ],
+                [
+                    2,
+                    7
+                ],
+                [
+                    3,
+                    7
+                ],
+                [
+                    4,
+                    7
+                ],
+                [
+                    5,
+                    7
+                ],
+                [
+                    6,
+                    7
+                ],
+                [
+                    7,
+                    7
+                ],
+                [
+                    8,
+                    7
+                ],
+                [
+                    9,
+                    7
+                ],
+                [
+                    10,
+                    7
+                ],
+                [
+                    11,
+                    7
+                ],
+                [
+                    2,
+                    8
+                ],
+                [
+                    3,
+                    8
+                ],
+                [
+                    4,
+                    8
+                ],
+                [
+                    5,
+                    8
+                ],
+                [
+                    6,
+                    8
+                ],
+                [
+                    7,
+                    8
+                ],
+                [
+                    8,
+                    8
+                ],
+                [
+                    9,
+                    8
+                ],
+                [
+                    10,
+                    8
+                ],
+                [
+                    11,
+                    8
+                ],
+                [
+                    2,
+                    9
+                ],
+                [
+                    3,
+                    9
+                ],
+                [
+                    4,
+                    9
+                ],
+                [
+                    5,
+                    9
+                ],
+                [
+                    6,
+                    9
+                ],
+                [
+                    7,
+                    9
+                ],
+                [
+                    8,
+                    9
+                ],
+                [
+                    9,
+                    9
+                ],
+                [
+                    10,
+                    9
+                ],
+                [
+                    11,
+                    9
+                ],
+                [
+                    2,
+                    10
+                ],
+                [
+                    3,
+                    10
+                ],
+                [
+                    4,
+                    10
+                ],
+                [
+                    5,
+                    10
+                ],
+                [
+                    6,
+                    10
+                ],
+                [
+                    7,
+                    10
+                ],
+                [
+                    8,
+                    10
+                ],
+                [
+                    9,
+                    10
+                ],
+                [
+                    10,
+                    10
+                ],
+                [
+                    11,
+                    10
+                ]
+            ]
+        }
+    ],
+    "objects": [
+        {
+            "category": "Enemies",
+            "object_id": "odrans_champion",
+            "placement": "cell",
+            "instances": [
+                {
+                    "position": [
+                        9,
+                        7
+                    ],
+                    "config": {
+                        "name": "Odran's Champion"
+                    }
+                }
+            ]
+        },
+        {
+            "category": "Enemies",
+            "object_id": "ashen_knight",
+            "placement": "cell",
+            "instances": [
+                {
+                    "position": [
+                        10,
+                        9
+                    ],
+                    "config": {
+                        "name": "Oathbound Knight"
+                    }
+                }
+            ]
+        },
+        {
+            "category": "Enemies",
+            "object_id": "ashen_watcher",
+            "placement": "cell",
+            "instances": [
+                {
+                    "position": [
+                        10,
+                        6
+                    ],
+                    "config": {
+                        "name": "Oathbound Ash"
+                    }
+                },
+                {
+                    "position": [
+                        8,
+                        5
+                    ],
+                    "config": {
+                        "name": "Oathbound Ash Echo"
+                    }
+                }
+            ]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "priest_npc",
+            "placement": "cell",
+            "instances": [
+                {
+                    "position": [
+                        7,
+                        6
+                    ],
+                    "config": {
+                        "name": "Serai, Warden of the Oath",
+                        "npc_id": "warden_serai",
+                        "enable_trade": false,
+                        "enable_pickpocket": false,
+                        "enable_diplomacy": false,
+                        "dialog": {
+                            "start": {
+                                "title": "Serai, Warden of the Oath",
+                                "text": "Serai jest bardziej wspomnieniem niz osoba. Jej glos brzmi spod kamienia: 'Przysiega nie chroni relikwiarza. Relikwiarz przypomina, komu przysiega sluzy.'",
+                                "options": [
+                                    {
+                                        "id": "ask_oath",
+                                        "label": "Zapytaj, co trzeba odnowic.",
+                                        "text": "Serai odpowiada, ze trzeba nazwac prawde przy relikwiarzu: kto go wyniosl, kto zostal obwiniony i czy wioska ma dalej skladac przysiege strachowi."
+                                    },
+                                    {
+                                        "id": "present_truth",
+                                        "label": "Przedstaw dowody przeciw Odranowi.",
+                                        "conditions": {
+                                            "any_flags": [
+                                                "mira_truth_learned",
+                                                "mira_memory_stabilized",
+                                                "odran_seal_seen",
+                                                "chapel_tracks_read"
+                                            ]
+                                        },
+                                        "text": "Krypta cichnie. Serai przyjmuje dowody i pozwala wam mowic przy relikwiarzu bez gniewu duchow.",
+                                        "effects": [
+                                            {
+                                                "type": "set_flag",
+                                                "flag": "serai_accepts_truth"
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "id": "leave",
+                                        "label": "Zakoncz rozmowe."
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                {
+                    "position": [
+                        8,
+                        8
+                    ],
+                    "config": {
+                        "name": "Castellan Odran Vale",
+                        "npc_id": "odran_vale",
+                        "enable_trade": false,
+                        "enable_pickpocket": false,
+                        "enable_diplomacy": false,
+                        "dialog": {
+                            "start": {
+                                "title": "Castellan Odran Vale",
+                                "text": "Odran nie udaje juz troski. 'Wioska potrzebuje pana, nie martwej przysiegi. Wezcie zloto i pozwolcie mi wyprowadzic relikwiarz.'",
+                                "options": [
+                                    {
+                                        "id": "reject_bargain",
+                                        "label": "Odmow i nazwij jego klamstwo.",
+                                        "skill_check": {
+                                            "skill_id": "diplomacy",
+                                            "skill_label": "Diplomacy",
+                                            "dc": 16,
+                                            "tags": [
+                                                "odran",
+                                                "oath",
+                                                "finale",
+                                                "dialog"
+                                            ],
+                                            "outcomes": {
+                                                "critical_success": {
+                                                    "text": "Odran cofa sie, gdy nawet jego ludzie slysza, ze oferta jest przyznaniem winy.",
+                                                    "effects": [
+                                                        {
+                                                            "type": "set_flag",
+                                                            "flag": "odran_bargain_broken"
+                                                        }
+                                                    ]
+                                                },
+                                                "success": {
+                                                    "text": "Odran traci pewnosc. Jego oferta zostaje wypowiedziana na glos i staje sie dowodem.",
+                                                    "effects": [
+                                                        {
+                                                            "type": "set_flag",
+                                                            "flag": "odran_bargain_exposed"
+                                                        }
+                                                    ]
+                                                },
+                                                "failure": {
+                                                    "text": "Odran usmiecha sie chlodno. 'Bez dowodu to tylko gniew przybyszow.'"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "id": "leave",
+                                        "label": "Nie odpowiadaj na oferte."
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "entry_anchor",
+            "placement": "cell",
+            "instances": [
+                {
+                    "position": [
+                        3,
+                        9
+                    ],
+                    "config": {
+                        "entry_anchor_id": "from_ruins",
+                        "label": "From Hill Ruins"
+                    }
+                }
+            ]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "skill_challenge",
+            "placement": "cell",
+            "instances": [
+                {
+                    "position": [
+                        6,
+                        7
+                    ],
+                    "config": {
+                        "challenge_id": "serai_liturgy_recited",
+                        "label": "Przywolaj slowa przysiegi",
+                        "skill_id": "religion",
+                        "dc": 15,
+                        "tags": [
+                            "oath",
+                            "serai",
+                            "relic"
+                        ],
+                        "intro": "Kamienne slowa przysiegi sa starte. Jesli wypowiecie je poprawnie, Serai odzyska glos; jesli zrobicie z nich tylko formule, krypta odpowie echem bez sensu.",
+                        "success_flag": "serai_liturgy_recited",
+                        "success_message": "Slowa przysiegi porzadkuja echo krypty i wzmacniaja argument za ocaleniem wioski.",
+                        "failure_message": "Echo krypty rozbija formule, zanim da sie ja domknac.",
+                        "outcome_messages": {
+                            "critical_success": "Wypowiadasz slowa tak, jak byly skladane: jako obietnice wobec ludzi, nie wobec wladzy. Serai odzyskuje pelny glos.",
+                            "success": "Slowa przysiegi porzadkuja echo krypty i wzmacniaja argument za ocaleniem wioski.",
+                            "failure": "Echo krypty rozbija formule, zanim da sie ja domknac.",
+                            "critical_failure": "Krypta odpowiada gniewem dawnych straznikow, ktorzy slysza w slowach tylko pusty rytual."
+                        },
+                        "outcome_flags": {
+                            "critical_success": [
+                                "serai_liturgy_recited",
+                                "serai_voice_restored"
+                            ],
+                            "success": [
+                                "serai_liturgy_recited"
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "scenario_exit",
+            "placement": "cell",
+            "instances": [
+                {
+                    "position": [
+                        2,
+                        9
+                    ],
+                    "config": {
+                        "exit_id": "return_to_ruins_from_crypt",
+                        "label": "Return to Ruins",
+                        "interaction_mode": "on_enter"
+                    }
+                },
+                {
+                    "position": [
+                        7,
+                        7
+                    ],
+                    "config": {
+                        "exit_id": "restore_oath",
+                        "label": "Restore the Oath",
+                        "interaction_mode": "interact"
+                    }
+                },
+                {
+                    "position": [
+                        10,
+                        8
+                    ],
+                    "config": {
+                        "exit_id": "bargain_with_odran",
+                        "label": "Let Odran Leave",
+                        "interaction_mode": "interact"
+                    }
+                }
+            ]
+        }
+    ],
+    "blocked_fields": [],
+    "obstacles": [],
+    "walls": [],
+    "setup_corner_markers": true
+}

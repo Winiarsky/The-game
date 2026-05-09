@@ -1,0 +1,607 @@
+{
+    "name": "Ashen Oath - Hill Ruins",
+    "description": "Ruiny na wzgorzu z Mira Ashwane, popielnym kregiem wspomnien i zejsciem do Krypty Przysiegi.",
+    "starting_positions": [
+        [
+            2,
+            9
+        ],
+        [
+            3,
+            9
+        ],
+        [
+            4,
+            9
+        ],
+        [
+            2,
+            10
+        ],
+        [
+            3,
+            10
+        ],
+        [
+            4,
+            10
+        ]
+    ],
+    "rooms": [
+        {
+            "id": "hill_ruins",
+            "name": "Hill Ruins",
+            "color": "#787c70",
+            "positions": [
+                [
+                    2,
+                    5
+                ],
+                [
+                    3,
+                    5
+                ],
+                [
+                    4,
+                    5
+                ],
+                [
+                    5,
+                    5
+                ],
+                [
+                    6,
+                    5
+                ],
+                [
+                    7,
+                    5
+                ],
+                [
+                    8,
+                    5
+                ],
+                [
+                    9,
+                    5
+                ],
+                [
+                    10,
+                    5
+                ],
+                [
+                    11,
+                    5
+                ],
+                [
+                    12,
+                    5
+                ],
+                [
+                    2,
+                    6
+                ],
+                [
+                    3,
+                    6
+                ],
+                [
+                    4,
+                    6
+                ],
+                [
+                    5,
+                    6
+                ],
+                [
+                    6,
+                    6
+                ],
+                [
+                    7,
+                    6
+                ],
+                [
+                    8,
+                    6
+                ],
+                [
+                    9,
+                    6
+                ],
+                [
+                    10,
+                    6
+                ],
+                [
+                    11,
+                    6
+                ],
+                [
+                    12,
+                    6
+                ],
+                [
+                    2,
+                    7
+                ],
+                [
+                    3,
+                    7
+                ],
+                [
+                    4,
+                    7
+                ],
+                [
+                    5,
+                    7
+                ],
+                [
+                    6,
+                    7
+                ],
+                [
+                    7,
+                    7
+                ],
+                [
+                    8,
+                    7
+                ],
+                [
+                    9,
+                    7
+                ],
+                [
+                    10,
+                    7
+                ],
+                [
+                    11,
+                    7
+                ],
+                [
+                    12,
+                    7
+                ],
+                [
+                    2,
+                    8
+                ],
+                [
+                    3,
+                    8
+                ],
+                [
+                    4,
+                    8
+                ],
+                [
+                    5,
+                    8
+                ],
+                [
+                    6,
+                    8
+                ],
+                [
+                    7,
+                    8
+                ],
+                [
+                    8,
+                    8
+                ],
+                [
+                    9,
+                    8
+                ],
+                [
+                    10,
+                    8
+                ],
+                [
+                    11,
+                    8
+                ],
+                [
+                    12,
+                    8
+                ],
+                [
+                    2,
+                    9
+                ],
+                [
+                    3,
+                    9
+                ],
+                [
+                    4,
+                    9
+                ],
+                [
+                    5,
+                    9
+                ],
+                [
+                    6,
+                    9
+                ],
+                [
+                    7,
+                    9
+                ],
+                [
+                    8,
+                    9
+                ],
+                [
+                    9,
+                    9
+                ],
+                [
+                    10,
+                    9
+                ],
+                [
+                    11,
+                    9
+                ],
+                [
+                    12,
+                    9
+                ],
+                [
+                    2,
+                    10
+                ],
+                [
+                    3,
+                    10
+                ],
+                [
+                    4,
+                    10
+                ],
+                [
+                    5,
+                    10
+                ],
+                [
+                    6,
+                    10
+                ],
+                [
+                    7,
+                    10
+                ],
+                [
+                    8,
+                    10
+                ],
+                [
+                    9,
+                    10
+                ],
+                [
+                    10,
+                    10
+                ],
+                [
+                    11,
+                    10
+                ],
+                [
+                    12,
+                    10
+                ]
+            ]
+        }
+    ],
+    "objects": [
+        {
+            "category": "Terrains",
+            "object_id": "rumble_field",
+            "placement": "cell",
+            "positions": [
+                [
+                    6,
+                    6
+                ],
+                [
+                    7,
+                    6
+                ],
+                [
+                    8,
+                    6
+                ],
+                [
+                    7,
+                    7
+                ]
+            ]
+        },
+        {
+            "category": "Enemies",
+            "object_id": "ashen_knight",
+            "placement": "cell",
+            "instances": [
+                {
+                    "position": [
+                        10,
+                        6
+                    ],
+                    "config": {
+                        "name": "Ashen Knight"
+                    }
+                }
+            ]
+        },
+        {
+            "category": "Enemies",
+            "object_id": "ashen_watcher",
+            "placement": "cell",
+            "instances": [
+                {
+                    "position": [
+                        9,
+                        8
+                    ],
+                    "config": {
+                        "name": "Ashen Memory"
+                    }
+                },
+                {
+                    "position": [
+                        11,
+                        8
+                    ],
+                    "config": {
+                        "name": "Ashen Memory Echo"
+                    }
+                }
+            ]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "mage_npc",
+            "placement": "cell",
+            "instances": [
+                {
+                    "position": [
+                        7,
+                        7
+                    ],
+                    "config": {
+                        "name": "Mira Ashwane",
+                        "npc_id": "mira_ashwane",
+                        "enable_trade": false,
+                        "enable_pickpocket": false,
+                        "enable_diplomacy": false,
+                        "dialog": {
+                            "start": {
+                                "title": "Mira Ashwane",
+                                "text": "Mira stoi w popielnym kregu, ale nie wyglada jak ktos, kto rzuca klatwe. Trzyma rytual w ryzach resztkami glosu. 'Jesli przerwiecie krag mieczem, wspomnienie rozpadnie sie razem z prawda.'",
+                                "options": [
+                                    {
+                                        "id": "ask_ritual",
+                                        "label": "Zapytaj, co robi rytual.",
+                                        "text": "Mira tlumaczy, ze popiol pamieta dotyk sprawcy. Kreg nie wskrzesza zmarlych; utrzymuje moment kradziezy relikwiarza, zanim duchy straza go rozerwa."
+                                    },
+                                    {
+                                        "id": "ask_odran",
+                                        "label": "Zapytaj o Odrana.",
+                                        "conditions": {
+                                            "any_flags": [
+                                                "odran_relic_story_inconsistent",
+                                                "chapel_tracks_read",
+                                                "villager_mill_hint"
+                                            ]
+                                        },
+                                        "text": "Mira mowi, ze Odran potrzebowal relikwiarza, zeby przejac stara przysiege Serai. Jesli udowodnicie kradziez, duch krypty moze jeszcze posluchac zywych.",
+                                        "effects": [
+                                            {
+                                                "type": "set_flag",
+                                                "flag": "mira_names_odran"
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "id": "stabilize",
+                                        "label": "Pomoz jej utrzymac wspomnienie.",
+                                        "skill_check": {
+                                            "skill_id": "occultism",
+                                            "skill_label": "Occultism",
+                                            "dc": 15,
+                                            "tags": [
+                                                "mira",
+                                                "ash",
+                                                "memory",
+                                                "dialog"
+                                            ],
+                                            "outcomes": {
+                                                "critical_success": {
+                                                    "text": "Dostrajasz szept do kregu. W popiele widac Odranowska pieczec na sakwie jednego z ludzi.",
+                                                    "effects": [
+                                                        {
+                                                            "type": "set_flag",
+                                                            "flag": "mira_memory_stabilized"
+                                                        },
+                                                        {
+                                                            "type": "set_flag",
+                                                            "flag": "odran_seal_seen"
+                                                        }
+                                                    ]
+                                                },
+                                                "success": {
+                                                    "text": "Kreg przestaje drzec. Mira ma czas dopowiedziec, gdzie szukac wejscia do krypty.",
+                                                    "effects": [
+                                                        {
+                                                            "type": "set_flag",
+                                                            "flag": "mira_memory_stabilized"
+                                                        }
+                                                    ]
+                                                },
+                                                "failure": {
+                                                    "text": "Popiol wiruje zbyt szybko. Mira utrzymuje rytual sama, ale traci czas i sile."
+                                                }
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "id": "leave",
+                                        "label": "Daj jej skupic sie na rytuale."
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "entry_anchor",
+            "placement": "cell",
+            "instances": [
+                {
+                    "position": [
+                        3,
+                        10
+                    ],
+                    "config": {
+                        "entry_anchor_id": "from_square",
+                        "label": "From Brindleford"
+                    }
+                },
+                {
+                    "position": [
+                        5,
+                        10
+                    ],
+                    "config": {
+                        "entry_anchor_id": "from_mill_track",
+                        "label": "From Mill Track"
+                    }
+                },
+                {
+                    "position": [
+                        10,
+                        9
+                    ],
+                    "config": {
+                        "entry_anchor_id": "from_crypt",
+                        "label": "From Oath Crypt"
+                    }
+                }
+            ]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "scenario_exit",
+            "placement": "cell",
+            "instances": [
+                {
+                    "position": [
+                        2,
+                        10
+                    ],
+                    "config": {
+                        "exit_id": "return_to_square_from_ruins",
+                        "label": "Return to Brindleford",
+                        "interaction_mode": "on_enter"
+                    }
+                },
+                {
+                    "position": [
+                        12,
+                        6
+                    ],
+                    "config": {
+                        "exit_id": "to_oath_crypt",
+                        "label": "Stair to Oath Crypt",
+                        "interaction_mode": "on_enter"
+                    }
+                }
+            ]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "skill_challenge",
+            "placement": "cell",
+            "instances": [
+                {
+                    "position": [
+                        8,
+                        7
+                    ],
+                    "config": {
+                        "challenge_id": "ash_ritual_interpreted",
+                        "label": "Zinterpretuj popielny rytual",
+                        "skill_id": "occultism",
+                        "dc": 15,
+                        "tags": [
+                            "ritual",
+                            "ash",
+                            "memory"
+                        ],
+                        "intro": "Popielny krag nie atakuje sam z siebie. To zapis wspomnienia: mozna go odczytac jak rytual, albo zniszczyc i stracic dowod.",
+                        "success_flag": "ash_ritual_interpreted",
+                        "success_message": "Rytual Miry nie jest klatwa; stabilizuje wspomnienie, zanim duchy je rozerwa.",
+                        "failure_message": "Popielne symbole drza zbyt szybko, by odczytac ich logike.",
+                        "outcome_messages": {
+                            "critical_success": "Rozumiesz rytual i jego granice: Mira utrzymuje prawde, a nie klatwe. Mozecie uzyc kregu jako dowodu w krypcie.",
+                            "success": "Rytual Miry nie jest klatwa; stabilizuje wspomnienie, zanim duchy je rozerwa.",
+                            "failure": "Popielne symbole drza zbyt szybko, by odczytac ich logike.",
+                            "critical_failure": "Dotykasz zlego znaku i wspomnienie szarpie sie, jakby chcialo wyrwac sie z kregu."
+                        },
+                        "outcome_flags": {
+                            "critical_success": [
+                                "ash_ritual_interpreted",
+                                "mira_memory_stabilized"
+                            ],
+                            "success": [
+                                "ash_ritual_interpreted"
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "hidden_cache",
+            "placement": "cell",
+            "instances": [
+                {
+                    "position": [
+                        7,
+                        7
+                    ],
+                    "config": {
+                        "cache_id": "ash_memory_circle",
+                        "hidden": true,
+                        "allow_hidden_interaction": false,
+                        "reveal_dc": 16,
+                        "reveal_tags": [
+                            "ritual",
+                            "ash",
+                            "memory"
+                        ],
+                        "description_on_reveal": "Popiol uklada sie we wspomnienie kradziezy relikwiarza.",
+                        "loot": [
+                            "ash memory"
+                        ]
+                    }
+                }
+            ]
+        }
+    ],
+    "blocked_fields": [],
+    "obstacles": [],
+    "walls": [],
+    "setup_corner_markers": true
+}

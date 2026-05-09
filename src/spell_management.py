@@ -1278,6 +1278,7 @@ def _pick_spells(
     if not callable(chooser):
         return _auto_pick(normalized_choices, count, allow_duplicates=allow_duplicates)
 
+    display_title = _spell_prepare_title(game, title)
     selected: list[str] = []
     while len(selected) < count:
         selectable = list(normalized_choices) if allow_duplicates else [item for item in normalized_choices if item not in selected]
@@ -1288,16 +1289,18 @@ def _pick_spells(
             done_entry: dict[str, str] = {"raw": "Done", "label": "Gotowe ✓", "desc": ""}
             choice_meta = spell_meta + [done_entry]
             display_choices = [entry["label"] for entry in spell_meta] + ["Done"]
+            _mark_spell_prepare_prompt_shown(game)
             answer = chooser(
-                f"{title} ({len(selected) + 1}/{count})",
+                f"{display_title} ({len(selected) + 1}/{count})",
                 choices=display_choices,
                 source=source,
                 choice_meta=choice_meta,
             )
         else:
             display_choices = [_labelize(item) for item in selectable] + ["Done"]
+            _mark_spell_prepare_prompt_shown(game)
             answer = chooser(
-                f"{title} ({len(selected) + 1}/{count})",
+                f"{display_title} ({len(selected) + 1}/{count})",
                 choices=display_choices,
                 source=source,
             )
@@ -1332,7 +1335,8 @@ def _menu_pick(
     display_labels = [str(item.get("label") or "").strip() for item in choices]
     display_labels.append("Done")
     try:
-        answer = chooser(title, choices=display_labels, source=source)
+        _mark_spell_prepare_prompt_shown(game)
+        answer = chooser(_spell_prepare_title(game, title), choices=display_labels, source=source)
     except Exception:
         return None
     raw = str(answer or "").strip()
@@ -1352,6 +1356,26 @@ def _menu_pick(
         if low == _normalize(item_id) or low == _normalize(label):
             return item_id or None
     return None
+
+
+def _spell_prepare_title(game, title: str) -> str:
+    actor_name = str(getattr(game, "spell_prepare_actor_name", "") or "").strip()
+    if not actor_name:
+        return str(title)
+    prefix = f"Przygotowanie postaci: {actor_name}"
+    text = str(title)
+    return text if text.startswith(prefix) else f"{prefix} — {text}"
+
+
+def _mark_spell_prepare_prompt_shown(game) -> None:
+    try:
+        current = int(getattr(game, "spell_prepare_prompt_count", 0) or 0)
+    except Exception:
+        current = 0
+    try:
+        setattr(game, "spell_prepare_prompt_count", current + 1)
+    except Exception:
+        pass
 
 
 def _wizard_apply_spell_blending(

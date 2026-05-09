@@ -11,6 +11,8 @@ const refs = {
     boardBadge: document.getElementById("board-badge"),
     sessionChip: document.getElementById("session-chip"),
     mastheadShell: document.getElementById("masthead-shell"),
+    mastheadTitle: document.getElementById("masthead-title"),
+    mastheadEyebrow: document.getElementById("masthead-eyebrow"),
     mastheadSummaryStatus: document.getElementById("masthead-summary-status"),
     audioToggle: document.getElementById("audio-toggle"),
     audioVolume: document.getElementById("audio-volume"),
@@ -20,9 +22,12 @@ const refs = {
     runtimeErrorBody: document.getElementById("runtime-error-body"),
     btnRuntimeRetry: document.getElementById("btn-runtime-retry"),
     btnRuntimeDismiss: document.getElementById("btn-runtime-dismiss"),
+    startTitle: document.getElementById("start-title"),
     startTagline: document.getElementById("start-tagline"),
+    startAside: document.getElementById("start-aside"),
     btnBegin: document.getElementById("btn-begin"),
     btnAssemblyBack: document.getElementById("btn-assembly-back"),
+    btnDefaultParty: document.getElementById("btn-default-party"),
     btnAssemblyNext: document.getElementById("btn-assembly-next"),
     btnBriefingBack: document.getElementById("btn-briefing-back"),
     btnStartRuntime: document.getElementById("btn-start-runtime"),
@@ -594,7 +599,12 @@ const audioManager = (() => {
 })();
 
 function scenarioConfig() {
-    return state.catalog.scenarios[0] || null;
+    return state.scenario || state.catalog.scenarios[0] || null;
+}
+
+function runtimeScenarioIsActive() {
+    const runtimeState = String(state.runtimeStatus?.state || "").trim().toLowerCase();
+    return ["starting", "running"].includes(runtimeState);
 }
 
 function playAudioCueOnce(key) {
@@ -697,9 +707,33 @@ function renderSceneArt(element, mapId) {
 function updateHeroSelection(heroId) {
     const current = new Set(state.selectedHeroIds);
     if (current.has(heroId)) current.delete(heroId);
-    else if (current.size < 4) current.add(heroId);
+    else if (current.size < 6) current.add(heroId);
     state.selectedHeroIds = Array.from(current);
     renderAssembly();
+}
+
+function scenarioDefaultPartyIds() {
+    const ids = Array.isArray(scenarioConfig()?.default_party_ids)
+        ? scenarioConfig().default_party_ids
+        : [];
+    return ids.map((item) => String(item || "").trim().toLowerCase()).filter(Boolean);
+}
+
+function selectedPartyMatchesDefault() {
+    const defaults = scenarioDefaultPartyIds();
+    if (!defaults.length || defaults.length !== state.selectedHeroIds.length) return false;
+    return defaults.every((heroId, index) => heroId === state.selectedHeroIds[index]);
+}
+
+function selectDefaultPartyForCurrentScenario() {
+    const defaults = scenarioDefaultPartyIds();
+    if (!defaults.length) return false;
+    const available = new Set(state.catalog.heroes.map((hero) => String(hero.id || "").trim().toLowerCase()));
+    const selected = defaults.filter((heroId) => available.has(heroId));
+    if (!selected.length) return false;
+    state.selectedHeroIds = selected.slice(0, 6);
+    renderAssembly();
+    return true;
 }
 
 function renderAssembly() {
@@ -709,6 +743,12 @@ function renderAssembly() {
         refs.btnAssemblyNext.disabled = true;
         refs.selectionSummary.textContent = "Brak dostępnych postaci.";
         return;
+    }
+    const defaults = scenarioDefaultPartyIds();
+    if (refs.btnDefaultParty) {
+        refs.btnDefaultParty.hidden = defaults.length === 0;
+        const available = new Set(state.catalog.heroes.map((hero) => String(hero.id || "").trim().toLowerCase()));
+        refs.btnDefaultParty.disabled = !defaults.some((heroId) => available.has(heroId));
     }
     state.catalog.heroes.forEach((hero) => {
         const selected = state.selectedHeroIds.includes(hero.id);
@@ -740,9 +780,11 @@ function renderAssembly() {
     });
     refs.btnAssemblyNext.disabled = state.selectedHeroIds.length === 0;
     refs.selectionSummary.textContent =
-        state.selectedHeroIds.length > 0
+        selectedPartyMatchesDefault()
+            ? `Wybrano domyślną drużynę ${scenarioConfig()?.title || "kampanii"} (${state.selectedHeroIds.length} bohaterów).`
+            : state.selectedHeroIds.length > 0
             ? `Wybrano ${state.selectedHeroIds.length} bohaterów.`
-            : "Wybierz od 1 do 4 bohaterów.";
+            : "Wybierz od 1 do 6 bohaterów.";
 }
 
 function renderBriefing() {
@@ -765,6 +807,20 @@ function renderBriefing() {
         li.textContent = `${objective.label}: ${objective.description}`;
         refs.briefingObjectives.appendChild(li);
     });
+}
+
+function renderScenarioChrome() {
+    const scenario = scenarioConfig();
+    const title = scenario?.title || "The Game";
+    const tagline = scenario?.tagline || "Wybierz scenariusz i rozpocznij grę.";
+    if (refs.mastheadTitle) refs.mastheadTitle.textContent = `The Game · ${title}`;
+    if (refs.mastheadEyebrow) refs.mastheadEyebrow.textContent = `The Game · ${title}`;
+    if (refs.startTitle) refs.startTitle.textContent = title;
+    if (refs.startTagline) refs.startTagline.textContent = tagline;
+    if (refs.startAside) {
+        const objective = Array.isArray(scenario?.primary_objectives) ? scenario.primary_objectives[0] : null;
+        refs.startAside.textContent = objective?.description || scenario?.briefing_intro || tagline;
+    }
 }
 
 function renderRuntimeBadge() {
@@ -1055,7 +1111,18 @@ async function loadInitialState() {
     ]);
     state.sessionId = viewPayload.session?.id || null;
     state.catalog = catalogPayload.catalog || { heroes: [], scenarios: [] };
-    state.scenario = state.catalog.scenarios[0] || null;
+    state.runtimeStatus = runtimePayload.runtime_status || state.runtimeStatus;
+    const activeRuntimeScenarioId = runtimeScenarioIsActive() ? state.runtimeStatus.scenario_id : "";
+    const preferredScenarioId = String(
+        activeRuntimeScenarioId || state.catalog.initial_scenario_id || "",
+    ).trim();
+    state.scenario =
+        state.catalog.scenarios.find((scenario) => scenario.id === preferredScenarioId) ||
+        state.catalog.scenarios[0] ||
+        null;
+    if (!state.selectedHeroIds.length) {
+        selectDefaultPartyForCurrentScenario();
+    }
     state.assetManifestUrl = String(state.scenario?.asset_manifest || "").trim();
     if (state.assetManifestUrl) {
         try {
@@ -1065,8 +1132,6 @@ async function loadInitialState() {
         }
     }
     syncViewState(viewPayload.view_state || null);
-    state.runtimeStatus = runtimePayload.runtime_status || state.runtimeStatus;
-    if (state.scenario) refs.startTagline.textContent = state.scenario.tagline || refs.startTagline.textContent;
     renderAll();
     updateScenarioAudio();
 }
@@ -2079,7 +2144,7 @@ function renderTopbar() {
     const scenario = scenarioConfig();
     const chapter = state.currentMapId ? mapChapterById(state.currentMapId) : null;
     const objective = activeObjective();
-    refs.topScenario.textContent = scenario?.title || "Bandit Cave";
+    refs.topScenario.textContent = scenario?.title || "Scenariusz";
     refs.topMap.textContent = state.currentMapLabel || "-";
     refs.topChapter.textContent = chapter?.chapter_title || "-";
     refs.topObjective.textContent = objective?.label || (state.scenarioFinished ? "Scenariusz zakończony" : "-");
@@ -2103,6 +2168,7 @@ function renderResult() {
 }
 
 function renderAll() {
+    renderScenarioChrome();
     renderRuntimeBadge();
     renderRuntimeErrorModal();
     updateAudioControls();
@@ -2128,7 +2194,7 @@ async function startRuntime() {
         const payload = await fetchJson("/api/runtime/start", {
             method: "POST",
             body: JSON.stringify({
-                scenario_id: "bandit_cave",
+                scenario_id: scenarioConfig()?.id || "bandit_cave",
                 hero_ids: state.selectedHeroIds,
             }),
         });
@@ -2213,6 +2279,9 @@ refs.audioVolume.addEventListener("input", () => {
     updateScenarioAudio();
 });
 refs.btnAssemblyBack.addEventListener("click", () => setScreen("start"));
+refs.btnDefaultParty?.addEventListener("click", () => {
+    selectDefaultPartyForCurrentScenario();
+});
 refs.btnAssemblyNext.addEventListener("click", () => {
     if (!state.selectedHeroIds.length) return;
     enableAudioFromGesture();

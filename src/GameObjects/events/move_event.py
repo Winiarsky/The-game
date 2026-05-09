@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
+from heapq import heappop, heappush
 from typing import Tuple
 
 from board import consts
@@ -87,8 +88,22 @@ class MoveEvent(GameEvent):
     def _is_adjacent(self, board, source: Tuple[int, int], target: Tuple[int, int]) -> bool:
         return target in board.get_neighbors(source, include_position=False, diagonal=True)
 
+    def _prompt_move_info(self, game, title: str, text: str, *, source: str) -> None:
+        ui = getattr(game, "ui", None)
+        if ui is not None and getattr(ui, "enabled", False) and hasattr(ui, "prompt_info"):
+            try:
+                ui.prompt_info(title, prompt_long=text, source=source)
+                return
+            except Exception:
+                logger.debug("Nie udało się pokazać promptu ruchu.", exc_info=True)
+        try:
+            game.ui_log(text)
+        except Exception:
+            pass
+
     def _wait_for_destination(self, ctx: EventContext, board) -> Tuple[int, int] | None:
         """Czeka na kliknięcie pola na planszy, odrzuca wybory poza planszą."""
+        missed_scans = 0
         while True:
             player_prompt = getattr(ctx.game, "player_prompt", None)
             if player_prompt is not None and hasattr(player_prompt, "create"):
@@ -121,12 +136,44 @@ class MoveEvent(GameEvent):
             except Exception:
                 pass
             if target is None:
-                return None
+                missed_scans += 1
+                if missed_scans >= 2:
+                    return None
+                self._prompt_move_info(
+                    ctx.game,
+                    "Nie odczytano pola ruchu",
+                    "Plansza nie zwróciła pola. Kliknij pole docelowe jeszcze raz albo anuluj ruch w UI.",
+                    source="move_destination:miss",
+                )
+                continue
             if board.in_bounds(target):
                 return target
             logger.info("Wybrane pole %s jest poza planszą.", target)
             ctx.game.ui_log("Wybrane pole jest poza planszą.")
             ctx.game.conn.leds_off()
+
+    def _reachable_destinations(self, board, actor, budget_feet: int) -> list[Tuple[int, int]]:
+        start = getattr(actor, "position", None)
+        if start is None or budget_feet <= 0:
+            return []
+        reachable: list[Tuple[int, int]] = []
+        best: dict[Tuple[int, int], int] = {start: 0}
+        queue: list[tuple[int, Tuple[int, int]]] = [(0, start)]
+        while queue:
+            cost, pos = heappop(queue)
+            if cost != best.get(pos):
+                continue
+            for neighbor in board.get_neighbors(pos, include_position=False, diagonal=True):
+                if not board.can_traverse(pos, neighbor, allow_occupied=False):
+                    continue
+                step_cost = 5 + max(0, int(terrain_move_bonus_feet(board, neighbor, actor) or 0))
+                new_cost = cost + step_cost
+                if new_cost > budget_feet or new_cost >= best.get(neighbor, 10**9):
+                    continue
+                best[neighbor] = new_cost
+                reachable.append(neighbor)
+                heappush(queue, (new_cost, neighbor))
+        return sorted(set(reachable), key=lambda p: (best.get(p, 0), p[1], p[0]))
 
     # --- main flow ---
     def execute(self, ctx: EventContext) -> EventResult:  # noqa: C901
@@ -226,9 +273,16 @@ class MoveEvent(GameEvent):
 
         try:
             fade_on_exit = False
-            # natychmiast podświetl pole startowe po wejściu w akcję ruchu
+            # Podświetl możliwe cele ruchu bez oznaczania aktualnego pola jako celu.
             try:
-                _set_leds([moving_hero.position], consts.MOVE_START_RGB)
+                budget = movement_budget_feet(moving_hero, default_feet=25)
+                reachable = self._reachable_destinations(board, moving_hero, budget)
+                if reachable:
+                    colors = [
+                        consts.DIFFICULT_FIELD_RGB if _is_difficult(pos) else consts.MOVE_FIELD_RGB
+                        for pos in reachable
+                    ]
+                    _set_leds(reachable, colors)
             except Exception:
                 pass
 
@@ -389,11 +443,21 @@ class MoveEvent(GameEvent):
                             pass
                         return EventResult.noop(message="Anulowano ruch.")
                     if target == moving_hero.position:
-                        logger.info("Kliknięto bieżące pole – kończę akcję ruchu.")
+                        message = (
+                            "Kliknięto aktualne pole bohatera, więc ruch nie został wykonany. "
+                            "Wybierz inne podświetlone pole, jeśli chcesz się poruszyć."
+                        )
+                        self._prompt_move_info(
+                            game,
+                            "Ruch bez zmian",
+                            message,
+                            source="move_current_field",
+                        )
+                        logger.info("Kliknięto bieżące pole – ruch bez zmian.")
                         if active_path_id:
                             game.ui_event("path_clear", {"id": active_path_id})
                         _trigger_room_enemy_combat_if_needed(game, moving_hero)
-                        return EventResult.noop(message="Ruch bez zmian.")
+                        return EventResult.noop(message=message)
 
                     if not board.can_enter(target, allow_occupied=False):
                         logger.info("Pole docelowe %s jest zablokowane lub zajęte.", target)
@@ -507,24 +571,41 @@ class MoveEvent(GameEvent):
                             color = consts.DIFFICULT_FIELD_RGB if is_difficult else consts.MOVE_FIELD_RGB
                         leds_colors.append(color)
                     _set_leds(leds_positions, leds_colors)
-                    confirm = game.conn.scan_board(None)
-
-                    if confirm is None:
-                        if active_path_id:
-                            game.ui_event("path_clear", {"id": active_path_id})
-                            active_path_id = None
-                        last_led_positions = None
-                        last_led_colors = None
+                    missed_confirms = 0
+                    while True:
+                        confirm = game.conn.scan_board(None)
+                        if confirm is not None:
+                            break
+                        missed_confirms += 1
+                        if missed_confirms >= 2:
+                            if active_path_id:
+                                game.ui_event("path_clear", {"id": active_path_id})
+                                active_path_id = None
+                            last_led_positions = None
+                            last_led_colors = None
+                            try:
+                                game.conn.leds_off()
+                            except Exception:
+                                pass
+                            try:
+                                game.conn.cancel_scan()
+                            except Exception:
+                                pass
+                            logger.info("Ruch anulowany przed potwierdzeniem po ponownym braku odczytu.")
+                            return EventResult.noop(message="Anulowano ruch po braku potwierdzenia.")
+                        self._prompt_move_info(
+                            game,
+                            "Potwierdź ruch",
+                            (
+                                "Nie odczytano potwierdzenia. Kliknij ostatnie podświetlone pole jeszcze raz, "
+                                "aby wykonać ruch, albo anuluj w UI."
+                            ),
+                            source="move_confirm:miss",
+                        )
                         try:
-                            game.conn.leds_off()
+                            _set_leds(leds_positions, leds_colors)
                         except Exception:
                             pass
-                        try:
-                            game.conn.cancel_scan()
-                        except Exception:
-                            pass
-                        logger.info("Ruch anulowany przed potwierdzeniem.")
-                        return EventResult.noop(message="Anulowano ruch.")
 
                     if confirm != confirm_target:
                         if active_path_id:
@@ -542,8 +623,18 @@ class MoveEvent(GameEvent):
                             logger.info("Kliknięto poza planszą – wybierz ponownie.")
                             continue
                         if target == moving_hero.position:
-                            logger.info("Kliknięto bieżące pole – kończę akcję ruchu.")
-                            return EventResult.noop(message="Ruch bez zmian.")
+                            message = (
+                                "Kliknięto aktualne pole bohatera. Ruch nie został wykonany; "
+                                "wybierz inne pole albo anuluj akcję."
+                            )
+                            self._prompt_move_info(
+                                game,
+                                "Ruch bez zmian",
+                                message,
+                                source="move_current_field",
+                            )
+                            logger.info("Kliknięto bieżące pole – ruch bez zmian.")
+                            return EventResult.noop(message=message)
                         pending_target = target
                         continue
 

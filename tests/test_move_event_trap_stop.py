@@ -157,3 +157,37 @@ def test_move_stops_on_trap_on_enter(monkeypatch):
     assert hero.position == trap_pos, "Bohater powinien zatrzymać się na polu pułapki."
     assert trap.triggered, "Pułapka powinna się aktywować w on_enter."
     assert result.message, "Powinien być komunikat o zatrzymaniu ruchu."
+
+
+def test_move_confirm_none_retries_without_clearing_path(monkeypatch):
+    start = (0, 0)
+    target = (0, 2)
+
+    conn = DummyConn(clicks=[target, None, target])
+    board = DummyBoard(trap_pos=(9, 9))
+    board.trap_obj = Trap()
+    hero = Hero(start)
+    ui_logs = []
+    events = []
+    game = types.SimpleNamespace(
+        board=board,
+        conn=conn,
+        heroes=[hero],
+        enemies=[],
+        events=DummyEvents(),
+        ui_log=lambda msg, *a, **k: ui_logs.append(str(msg)),
+        ui_event=lambda kind, payload=None: events.append((kind, payload or {})),
+        ui_idle_hint=lambda *a, **k: None,
+        state=types.SimpleNamespace(__class__=type("Exploration", (), {})),
+    )
+
+    ctx = EventContext(game=game, actor=hero)
+    result = MoveEvent().execute(ctx)
+
+    assert result.success is True
+    assert hero.position == target
+    assert any("Nie odczytano potwierdzenia" in msg for msg in ui_logs)
+    clear_events = [payload for kind, payload in events if kind == "path_clear"]
+    preview_events = [payload for kind, payload in events if kind == "path_preview"]
+    assert preview_events
+    assert len(clear_events) == 1

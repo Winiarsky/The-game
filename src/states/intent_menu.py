@@ -1426,7 +1426,7 @@ def _prompt_with_ui(
         try:
             answer = player_prompt.choice(
                 title,
-                choices=[entry["raw"] for entry in choice_meta],
+                choices=[entry["label"] for entry in choice_meta],
                 source=source,
                 subtitle=_with_numpad_hint(subtitle),
                 details_markdown=details_markdown,

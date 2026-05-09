@@ -1,0 +1,378 @@
+{
+    "format": "scenario_flow_v1",
+    "scenario_id": "ashen_oath",
+    "label": "Ashen Oath",
+    "description": "Klasyczna kampania fantasy o przekletej wiosce, spalonym relikwiarzu i kasztelanie, ktory sam zlamal przysiege.",
+    "entry_map_id": "brindleford_square",
+    "maps": [
+        {
+            "map_id": "brindleford_square",
+            "source_type": "runtime",
+            "source": "ashen_oath_brindleford_square",
+            "label": "Brindleford Square"
+        },
+        {
+            "map_id": "burned_chapel",
+            "source_type": "runtime",
+            "source": "ashen_oath_burned_chapel",
+            "label": "Burned Chapel"
+        },
+        {
+            "map_id": "old_mill",
+            "source_type": "runtime",
+            "source": "ashen_oath_old_mill",
+            "label": "Old Mill"
+        },
+        {
+            "map_id": "hill_ruins",
+            "source_type": "runtime",
+            "source": "ashen_oath_hill_ruins",
+            "label": "Hill Ruins"
+        },
+        {
+            "map_id": "oath_crypt",
+            "source_type": "runtime",
+            "source": "ashen_oath_oath_crypt",
+            "label": "Oath Crypt"
+        }
+    ],
+    "transitions": [
+        {
+            "id": "square_to_chapel",
+            "from_map_id": "brindleford_square",
+            "exit_id": "to_burned_chapel",
+            "to_map_id": "burned_chapel",
+            "target_entry_anchor_id": "from_square",
+            "conditions": []
+        },
+        {
+            "id": "chapel_to_square",
+            "from_map_id": "burned_chapel",
+            "exit_id": "return_to_square_from_chapel",
+            "to_map_id": "brindleford_square",
+            "target_entry_anchor_id": "from_chapel",
+            "conditions": []
+        },
+        {
+            "id": "square_to_mill",
+            "from_map_id": "brindleford_square",
+            "exit_id": "to_old_mill",
+            "to_map_id": "old_mill",
+            "target_entry_anchor_id": "from_square",
+            "conditions": []
+        },
+        {
+            "id": "mill_to_square",
+            "from_map_id": "old_mill",
+            "exit_id": "return_to_square_from_mill",
+            "to_map_id": "brindleford_square",
+            "target_entry_anchor_id": "from_mill",
+            "conditions": []
+        },
+        {
+            "id": "square_to_ruins",
+            "from_map_id": "brindleford_square",
+            "exit_id": "to_hill_ruins",
+            "to_map_id": "hill_ruins",
+            "target_entry_anchor_id": "from_square",
+            "conditions": []
+        },
+        {
+            "id": "mill_to_ruins",
+            "from_map_id": "old_mill",
+            "exit_id": "mill_hidden_track",
+            "to_map_id": "hill_ruins",
+            "target_entry_anchor_id": "from_mill_track",
+            "conditions": [
+                {"type": "flag", "flag": "hidden_mill_route_found", "value": true}
+            ]
+        },
+        {
+            "id": "ruins_to_square",
+            "from_map_id": "hill_ruins",
+            "exit_id": "return_to_square_from_ruins",
+            "to_map_id": "brindleford_square",
+            "target_entry_anchor_id": "from_ruins",
+            "conditions": []
+        },
+        {
+            "id": "ruins_to_crypt",
+            "from_map_id": "hill_ruins",
+            "exit_id": "to_oath_crypt",
+            "to_map_id": "oath_crypt",
+            "target_entry_anchor_id": "from_ruins",
+            "conditions": [
+                {"type": "flag", "flag": "mira_truth_learned", "value": true}
+            ]
+        },
+        {
+            "id": "crypt_to_ruins",
+            "from_map_id": "oath_crypt",
+            "exit_id": "return_to_ruins_from_crypt",
+            "to_map_id": "hill_ruins",
+            "target_entry_anchor_id": "from_crypt",
+            "conditions": []
+        }
+    ],
+    "global_flags": {
+        "chapel_investigated": false,
+        "relic_theft_discovered": false,
+        "castellan_trusted": false,
+        "castellan_doubted": false,
+        "castellan_exposed": false,
+        "castellan_escaped": false,
+        "elna_trusts_party": false,
+        "acolyte_lead_received": false,
+        "tovin_rescued": false,
+        "tovin_dead": false,
+        "false_ash_found": false,
+        "mill_alarm_raised": false,
+        "warden_medallion_recovered": false,
+        "warden_spirit_appeased": false,
+        "mira_hostile": false,
+        "mira_truth_learned": false,
+        "mira_allied": false,
+    "hidden_mill_route_found": false,
+    "chapel_tracks_read": false,
+    "vale_guards_shaken": false,
+    "mill_beam_moved": false,
+    "ash_ritual_interpreted": false,
+    "serai_liturgy_recited": false,
+    "relic_restored": false,
+        "relic_lost": false,
+        "village_saved": false,
+        "village_condemned": false
+    },
+    "events": [
+        {
+            "id": "square_intro",
+            "trigger": "map_start",
+            "map_id": "brindleford_square",
+            "once": true,
+            "conditions": [],
+            "actions": [
+                {
+                    "type": "show_prompt",
+                    "audio": "audio/voiceover/square_intro_001.mp3",
+                    "message": "Rynek Brindleford wyglada na opuszczony, ale zaslony poruszaja sie w oknach. Przy studni stoi patrol kasztelana, a na kamieniach lezy cienka warstwa szarego pylu."
+                }
+            ]
+        },
+        {
+            "id": "ashen_mark_revealed",
+            "trigger": "object_revealed",
+            "map_id": "brindleford_square",
+            "target_id": "ashen_oath_mark",
+            "once": true,
+            "conditions": [],
+            "actions": [
+                {"type": "set_flag", "flag": "castellan_doubted", "value": true},
+                {
+                    "type": "show_prompt",
+                    "audio": "audio/voiceover/ashen_mark_revealed_001.mp3",
+                    "message": "Pod warstwa popiolu przy studni widac znak wypalony w kamieniu: otwarta dlon nad plomieniem. To nie jest ostrzezenie przed klatwa. To znak straznikow."
+                },
+                {"type": "checkpoint", "reason": "ashen_mark_revealed"}
+            ]
+        },
+        {
+            "id": "chapel_intro",
+            "trigger": "map_start",
+            "map_id": "burned_chapel",
+            "once": true,
+            "conditions": [],
+            "actions": [
+                {
+                    "type": "show_prompt",
+                    "audio": "audio/voiceover/chapel_intro_001.mp3",
+                    "message": "Kaplica nie splonela jak budynek trafiony ogniem. Sciany sa cale, dach czesciowo stoi, ale wnetrze jest czarne, jakby plomien narodzil sie przy oltarzu i nie chcial wyjsc na zewnatrz."
+                }
+            ]
+        },
+        {
+            "id": "chapel_seal_found",
+            "trigger": "object_revealed",
+            "map_id": "burned_chapel",
+            "target_id": "broken_oath_seal",
+            "once": true,
+            "conditions": [],
+            "actions": [
+                {"type": "set_flag", "flag": "chapel_investigated", "value": true},
+                {"type": "set_flag", "flag": "relic_theft_discovered", "value": true},
+                {"type": "set_flag", "flag": "warden_medallion_recovered", "value": true},
+                {"type": "complete_objective", "objective_id": "recover_warden_medallion"},
+                {
+                    "type": "show_prompt",
+                    "audio": "audio/voiceover/chapel_seal_found_001.mp3",
+                    "message": "W krypcie pod oltarzem znajdujecie medalion Serai i fragment pieczeci z herbem Vale'a. Relikwiarz nie zostal spalony. Zostal wyniesiony."
+                },
+                {"type": "checkpoint", "reason": "chapel_seal_found"}
+            ]
+        },
+        {
+            "id": "mill_intro",
+            "trigger": "map_start",
+            "map_id": "old_mill",
+            "once": true,
+            "conditions": [],
+            "actions": [
+                {
+                    "type": "show_prompt",
+                    "audio": "audio/voiceover/mill_intro_001.mp3",
+                    "message": "Stary mlyn skrzypi bez wiatru. Kolo obraca sie powoli, a z jego mechanizmu dochodzi metaliczny stuk, zbyt rowny, by byl przypadkiem."
+                }
+            ]
+        },
+        {
+            "id": "mill_cleared_tovin_rescued",
+            "trigger": "combat_end",
+            "map_id": "old_mill",
+            "once": true,
+            "conditions": [
+                {"type": "map_enemies_cleared", "map_id": "old_mill", "value": true}
+            ],
+            "actions": [
+                {"type": "set_flag", "flag": "tovin_rescued", "value": true},
+                {"type": "set_flag", "flag": "false_ash_found", "value": true},
+                {"type": "complete_objective", "objective_id": "free_the_acolyte"},
+                {
+                    "type": "show_prompt",
+                    "audio": "audio/voiceover/tovin_rescued_001.mp3",
+                    "message": "Tovin wychodzi z zamknietej komory blady, ale zywy. Pokazuje worek falszywego popiolu i przysiega, ze widzial ludzi kasztelana przy kaplicy."
+                },
+                {"type": "checkpoint", "reason": "tovin_rescued"}
+            ]
+        },
+        {
+            "id": "mill_hidden_route_revealed",
+            "trigger": "object_revealed",
+            "map_id": "old_mill",
+            "target_id": "mill_hidden_route",
+            "once": true,
+            "conditions": [],
+            "actions": [
+                {"type": "set_flag", "flag": "hidden_mill_route_found", "value": true},
+                {
+                    "type": "show_log",
+                    "audio": "audio/voiceover/mill_hidden_route_001.mp3",
+                    "message": "Za workami maki znajduje sie waski trakt prowadzacy w strone ruin. Pozwala ominac straznikow na glownej drodze."
+                },
+                {"type": "checkpoint", "reason": "hidden_mill_route_found"}
+            ]
+        },
+        {
+            "id": "ruins_intro",
+            "trigger": "map_start",
+            "map_id": "hill_ruins",
+            "once": true,
+            "conditions": [],
+            "actions": [
+                {
+                    "type": "show_prompt",
+                    "audio": "audio/voiceover/ruins_intro_001.mp3",
+                    "message": "Ruiny na wzgorzu wystaja z mgly jak zeby starego olbrzyma. W srodku kamiennego kregu wiruje popiol, ukladajac sie na moment w sylwetki ludzi, ktorzy juz dawno powinni odpoczac."
+                }
+            ]
+        },
+        {
+            "id": "ash_memory_revealed",
+            "trigger": "object_revealed",
+            "map_id": "hill_ruins",
+            "target_id": "ash_memory_circle",
+            "once": true,
+            "conditions": [],
+            "actions": [
+                {"type": "set_flag", "flag": "mira_truth_learned", "value": true},
+                {"type": "set_flag", "flag": "mira_allied", "value": true},
+                {"type": "complete_objective", "objective_id": "clear_miras_name"},
+                {
+                    "type": "show_prompt",
+                    "audio": "audio/voiceover/plot_twist_001.mp3",
+                    "message": "W popielnym wspomnieniu widzicie kaplice jeszcze przed pozarem. Odran Vale stoi przy oltarzu. Jeden z jego ludzi trzyma relikwiarz, drugi wyciera krew z noza."
+                },
+                {"type": "checkpoint", "reason": "mira_truth_learned"}
+            ]
+        },
+        {
+            "id": "crypt_intro",
+            "trigger": "map_start",
+            "map_id": "oath_crypt",
+            "once": true,
+            "conditions": [],
+            "actions": [
+                {
+                    "type": "show_prompt",
+                    "audio": "audio/voiceover/crypt_intro_001.mp3",
+                    "message": "Krypta Przysiegi lezy pod wzgorzem glebiej, niz powinna. Kazdy krok odbija sie echem, a echo wraca z dodatkowym szeptem, jakby kamien powtarzal imiona tych, ktorzy zlamali slowo."
+                }
+            ]
+        },
+        {
+            "id": "restore_oath_ending",
+            "trigger": "exit_interact",
+            "map_id": "oath_crypt",
+            "target_id": "restore_oath",
+            "once": true,
+            "conditions": [
+                {"type": "flag", "flag": "mira_truth_learned", "value": true}
+            ],
+            "actions": [
+                {"type": "set_flag", "flag": "castellan_exposed", "value": true},
+                {"type": "set_flag", "flag": "relic_restored", "value": true},
+                {"type": "set_flag", "flag": "village_saved", "value": true},
+                {"type": "complete_objective", "objective_id": "uncover_ashen_oath"},
+                {
+                    "type": "show_prompt",
+                    "audio": "audio/voiceover/ending_good_001.mp3",
+                    "message": "Gdy relikwiarz wraca na miejsce, plomienie w sarkofagach gasna jeden po drugim. Nad ranem Brindleford wciaz pachnie popiolem, ale po raz pierwszy od trzech nocy z kominow unosi sie zwykly dym."
+                },
+                {"type": "finish_scenario"}
+            ]
+        },
+        {
+            "id": "bargain_ending",
+            "trigger": "exit_interact",
+            "map_id": "oath_crypt",
+            "target_id": "bargain_with_odran",
+            "once": true,
+            "conditions": [],
+            "actions": [
+                {"type": "set_flag", "flag": "castellan_escaped", "value": true},
+                {"type": "set_flag", "flag": "relic_lost", "value": true},
+                {"type": "set_flag", "flag": "village_condemned", "value": true},
+                {"type": "complete_objective", "objective_id": "uncover_ashen_oath"},
+                {
+                    "type": "show_prompt",
+                    "audio": "audio/voiceover/ending_costly_001.mp3",
+                    "message": "Relikwiarz znika za brama krypty. Popielni straznicy nie ruszaja za nim od razu. To gorsze. Daja Brindleford czas, by zrozumialo, ze wyrok nie zostal cofniety, tylko odlozony."
+                },
+                {"type": "finish_scenario"}
+            ]
+        }
+    ],
+    "objectives": [
+        {
+            "id": "uncover_ashen_oath",
+            "label": "Odkryj prawde o Popielnej Przysiedze",
+            "description": "Zbadaj Brindleford, odkryj los relikwiarza i rozstrzygnij final w Krypcie Przysiegi."
+        },
+        {
+            "id": "free_the_acolyte",
+            "label": "Uwolnij akolite z mlyna",
+            "description": "Odnajdz Tovina w starym mlynie i zabezpiecz jego zeznania."
+        },
+        {
+            "id": "recover_warden_medallion",
+            "label": "Odzyskaj medalion strazniczki",
+            "description": "Zbadaj spalona kaplice i odnajdz znak ostatniej strazniczki przysiegi."
+        },
+        {
+            "id": "clear_miras_name",
+            "label": "Oczysc Mire z zarzutow",
+            "description": "Sprawdz popielne wspomnienia w ruinach i odkryj prawdziwego sprawce."
+        }
+    ],
+    "checkpoint_policy": {
+        "transition": "auto"
+    }
+}

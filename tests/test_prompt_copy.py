@@ -54,6 +54,7 @@ def test_resolve_ui_prompt_copy_provides_roll_guidance():
 
     assert resolved["prompt_id"] == "ui.roll.game"
     assert resolved["title"] == "Atak: podaj wynik"
-    assert "modyfikatorach" in str(resolved["details_markdown"] or "")
+    assert "surowy wynik z kości d20" in str(resolved["details_markdown"] or "")
+    assert "doliczy pokazany modyfikator automatycznie" in str(resolved["details_markdown"] or "")
     assert resolved["cta"] == "Wpisz wynik rzutu i potwierdź."
     assert "rozliczy wynik" in str(resolved["next_hint"] or "")

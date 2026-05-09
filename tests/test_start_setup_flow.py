@@ -11,8 +11,9 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 from src.states.heroes_turns import HeroesTurn
-from src.states.encounter_setup import run_setup_batches
+from src.states.encounter_setup import EncounterSetupState, run_setup_batches
 from src.states.start import Start
+from spell_management import _pick_spells
 
 
 class _ConnStub:
@@ -99,6 +100,7 @@ class _GameStub:
 
 class _ChoiceUiStub:
     def __init__(self, answer: str):
+        self.enabled = True
         self.answer = answer
         self.calls: list[dict[str, object]] = []
 
@@ -112,6 +114,17 @@ class _ChoiceUiStub:
             }
         )
         return self.answer
+
+    def prompt_info(self, title, *, prompt_long=None, source=None, **extra):
+        self.calls.append(
+            {
+                "prompt": title,
+                "prompt_long": prompt_long,
+                "source": source,
+                "extra": dict(extra),
+            }
+        )
+        return "ok"
 
 
 def test_start_setup_selects_hero_before_board_scan_and_shows_place_hint():
@@ -305,6 +318,142 @@ def test_start_setup_filters_out_already_occupied_start_positions():
     assert [hero.position for hero in game.heroes] == [(1, 1), (2, 2)]
 
 
+def test_start_setup_waits_for_hero_placement_ack_before_next_scan():
+    game = _GameStub()
+    game.ui = _ChoiceUiStub("ok")
+    start = Start(game)  # type: ignore[arg-type]
+
+    first_hero = _HeroStub("Cedric")
+    second_hero = _HeroStub("Freya")
+    picks = iter([first_hero, second_hero])
+    scan_choices = iter([(1, 1), (2, 2)])
+
+    def _pick(_used):
+        return next(picks)
+
+    def _scan(_choices):
+        game.timeline.append(f"scan_for:{len(game.board.placed) + 1}")
+        return next(scan_choices)
+
+    def _prompt_menu_choice(**_kwargs):
+        return "__add_hero__" if len(game.heroes) == 1 else "__start_game__"
+
+    def _prompt_info(title, **kwargs):
+        game.timeline.append(f"ack:{title}")
+        return "ok"
+
+    game.ui.prompt_info = _prompt_info  # type: ignore[method-assign]
+    game.conn.scan_board = _scan  # type: ignore[method-assign]
+    start._pick_or_create_hero = _pick  # type: ignore[method-assign]
+    start._maybe_prompt_chameleon_gnome = lambda *_a, **_k: None  # type: ignore[method-assign]
+    start._maybe_prompt_familiar_owner = lambda *_a, **_k: None  # type: ignore[method-assign]
+    start._maybe_prompt_advanced_alchemy = lambda *_a, **_k: None  # type: ignore[method-assign]
+    start._maybe_prepare_spells = lambda *_a, **_k: None  # type: ignore[method-assign]
+    start._prompt_menu_choice = _prompt_menu_choice  # type: ignore[method-assign]
+
+    result = start.set_heroes_starting_positions()
+
+    assert isinstance(result, HeroesTurn)
+    first_scan = game.timeline.index("scan_for:1")
+    first_ack = next(idx for idx, item in enumerate(game.timeline) if item.startswith("ack:Ustaw figurkę: Cedric"))
+    second_scan = game.timeline.index("scan_for:2")
+    assert first_scan < first_ack < second_scan
+
+
+def test_encounter_setup_prepares_preselected_spells_before_map_and_hero_setup():
+    game = _GameStub()
+    state = EncounterSetupState(game)  # type: ignore[arg-type]
+    calls: list[str] = []
+
+    state.preload_preselected_heroes_for_setup = lambda: calls.append("spell_prep") or []  # type: ignore[method-assign]
+    state._setup_batches = lambda: calls.append("map_setup")  # type: ignore[method-assign]
+    state.set_heroes_starting_positions = lambda: calls.append("hero_setup") or HeroesTurn(game)  # type: ignore[method-assign]
+
+    state.run_encounter_setup()
+
+    assert calls == ["spell_prep", "map_setup", "hero_setup"]
+
+
+def test_spell_prepare_prompt_title_names_current_actor():
+    class Ui:
+        enabled = True
+
+        def __init__(self):
+            self.prompts: list[str] = []
+
+        def prompt_choice(self, prompt, choices=None, **_kwargs):
+            self.prompts.append(str(prompt))
+            return list(choices or ["Done"])[0]
+
+    game = _GameStub()
+    game.ui = Ui()
+    game.spell_prepare_actor_name = "Lorielen"
+
+    picked = _pick_spells(
+        game,
+        title="Kleryk — Przygotuj cantrip (slot)",
+        source="spell_prepare",
+        choices=["guidance"],
+        count=1,
+        allow_duplicates=False,
+        prompt=True,
+    )
+
+    assert picked == ["guidance"]
+    assert game.ui.prompts
+    assert game.ui.prompts[0].startswith("Przygotowanie postaci: Lorielen")
+    assert game.spell_prepare_prompt_count == 1
+
+
+def test_spell_prepare_complete_prompt_is_skipped_without_real_choices(monkeypatch):
+    import src.states.start as start_module
+
+    game = _GameStub()
+    game.ui = _ChoiceUiStub("ok")
+    hero = _HeroStub("Seren")
+    start = Start(game)  # type: ignore[arg-type]
+
+    def _fake_initialize(_game, _hero, *, prompt=True, enforce=True):  # noqa: ARG001
+        return {
+            "enabled": True,
+            "known": {
+                "cantrip": ["inspire_courage"],
+                "rank_1": [],
+                "focus": [],
+            },
+        }
+
+    monkeypatch.setattr(start_module, "initialize_actor_spell_management", _fake_initialize)
+
+    start._maybe_prepare_spells(hero)
+
+    assert not any(call["source"] == "spell_prepare_complete" for call in game.ui.calls)
+
+
+def test_opening_scene_prompt_is_blocking_after_hero_setup():
+    game = _GameStub()
+    game.ui = _ChoiceUiStub("ok")
+    game.scenario["opening_scene_prompt"] = {
+        "title": "Brindleford Square",
+        "body_markdown": "Rynek jest gotowy do eksploracji.",
+    }
+    start = Start(game)  # type: ignore[arg-type]
+
+    hero = _HeroStub("Cedric")
+    start._pick_or_create_hero = lambda _used: hero  # type: ignore[method-assign]
+    start._maybe_prompt_chameleon_gnome = lambda *_a, **_k: None  # type: ignore[method-assign]
+    start._maybe_prompt_familiar_owner = lambda *_a, **_k: None  # type: ignore[method-assign]
+    start._maybe_prompt_advanced_alchemy = lambda *_a, **_k: None  # type: ignore[method-assign]
+    start._maybe_prepare_spells = lambda *_a, **_k: None  # type: ignore[method-assign]
+    start._prompt_menu_choice = lambda **_kwargs: "__start_game__"  # type: ignore[method-assign]
+
+    result = start.set_heroes_starting_positions()
+
+    assert isinstance(result, HeroesTurn)
+    assert any(call["source"] == "scenario_opening" for call in game.ui.calls)
+    assert game.scenario["_opening_scene_prompt_shown"] is True
+
+
 def test_heroes_turn_stays_on_board_selection_when_cancelled():
     game = _GameStub()
     cedric = _HeroStub("Cedric")
@@ -392,8 +541,49 @@ def test_start_setup_waits_on_board_without_timeout_or_ui_fallback():
     assert hero.position == (2, 2)
     assert scan_kwargs == [{}]
     assert game.conn.cancel_calls == 0
-    assert game.ui.calls == []
+    assert any(call["source"] == "hero_setup_place" for call in game.ui.calls)
     assert not any("Plansza nie zwróciła pola startowego" in msg for msg in game.logs)
+
+
+def test_start_setup_place_prompt_passes_format_context_to_ui():
+    game = _GameStub()
+    game.ui = _ChoiceUiStub("ok")
+    start = Start(game)  # type: ignore[arg-type]
+
+    hero = _HeroStub("Cedric")
+
+    start._pick_or_create_hero = lambda _used: hero  # type: ignore[method-assign]
+    start._maybe_prompt_chameleon_gnome = lambda *_a, **_k: None  # type: ignore[method-assign]
+    start._maybe_prompt_advanced_alchemy = lambda *_a, **_k: None  # type: ignore[method-assign]
+    start._maybe_prepare_spells = lambda *_a, **_k: None  # type: ignore[method-assign]
+    start._prompt_menu_choice = lambda **_kwargs: "__start_game__"  # type: ignore[method-assign]
+
+    result = start.set_heroes_starting_positions()
+
+    assert isinstance(result, HeroesTurn)
+    place_calls = [call for call in game.ui.calls if call["source"] == "hero_setup_place"]
+    assert place_calls
+    assert place_calls[0]["extra"]["hero_name"] == "Cedric"
+    assert place_calls[0]["extra"]["position"] == (1, 1)
+
+
+def test_start_setup_does_not_duplicate_preloaded_heroes():
+    game = _GameStub()
+    hero = _HeroStub("Cedric")
+    hero.character_id = "cedric"
+    game.heroes = [hero]
+    game.preselected_hero_count = 1
+    start = Start(game)  # type: ignore[arg-type]
+
+    start._maybe_prompt_chameleon_gnome = lambda *_a, **_k: None  # type: ignore[method-assign]
+    start._maybe_prompt_advanced_alchemy = lambda *_a, **_k: None  # type: ignore[method-assign]
+    start._maybe_prepare_spells = lambda *_a, **_k: None  # type: ignore[method-assign]
+
+    result = start.set_heroes_starting_positions()
+
+    assert isinstance(result, HeroesTurn)
+    assert game.heroes == [hero]
+    assert hero.position == (1, 1)
 
 
 def test_wall_setup_uses_two_endpoint_colors_and_explains_them():

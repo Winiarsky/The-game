@@ -166,6 +166,7 @@ class EncounterSetupState(Start):
     def run_encounter_setup(self):
         logger.info("Start setupu proceduralnego encounteru.")
         self.game.ui_log("Start setupu proceduralnego encounteru.")
+        self.preload_preselected_heroes_for_setup()
         self._setup_batches()
         return self.set_heroes_starting_positions()
 

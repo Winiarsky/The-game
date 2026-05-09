@@ -35,6 +35,11 @@ ENEMY_LEVELS = {
     "goblin_warrior": 0,
     "goblin_dog": 1,
     "goblin_commando": 2,
+    "ashen_watcher": -1,
+    "vale_guard": 0,
+    "mill_enforcer": 1,
+    "ashen_knight": 1,
+    "odrans_champion": 2,
 }
 
 ENEMY_XP_BY_DELTA = {
@@ -53,6 +58,11 @@ ENEMY_LABELS = {
     "goblin_warrior": "Goblin Warrior",
     "goblin_dog": "Goblin Dog",
     "goblin_commando": "Goblin Commando",
+    "ashen_watcher": "Ashen Watcher",
+    "vale_guard": "Vale Guard",
+    "mill_enforcer": "Mill Enforcer",
+    "ashen_knight": "Ashen Knight",
+    "odrans_champion": "Odran's Champion",
 }
 
 SUPPORTED_LAYOUTS = ("open_field", "split_lanes", "chokepoints")

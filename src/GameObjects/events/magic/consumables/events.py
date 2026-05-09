@@ -391,6 +391,45 @@ class MinorHealingPotionEvent(ActionCostEvent):
         )
 
 
+@register_event
+class BrindlefordHealingHerbEvent(ActionCostEvent):
+    name = "brindleford_healing_herb"
+    actions_cost = 1
+    consumes_action = True
+    default_tags = ["consumable", "healing", "herbal", "manipulate"]
+    required_inventory_event_name = "brindleford_healing_herb"
+    prompt_description = "Ziele uzdrawiajace z Brindleford: jednorazowo leczy dokladnie 1 HP."
+
+    def pre(self, ctx: EventContext) -> EventResult:
+        actor = ctx.actor
+        if actor is None:
+            return EventResult.cancelled(message="Brak bohatera do uzycia ziela.")
+        if not has_ready_event_item(actor, self.required_inventory_event_name):
+            return EventResult.cancelled(message=missing_event_item_reason(actor, self.required_inventory_event_name))
+        return super().pre(ctx)
+
+    def execute(self, ctx: EventContext) -> EventResult:
+        actor = ctx.actor
+        if actor is None:
+            return EventResult.cancelled(message="Brak bohatera do uzycia ziela.")
+        if not consume_ready_event_item(actor, self.required_inventory_event_name):
+            return EventResult.cancelled(message=missing_event_item_reason(actor, self.required_inventory_event_name))
+
+        healer = getattr(actor, "heal", None)
+        if callable(healer):
+            try:
+                healer(1)
+            except Exception:
+                pass
+        return EventResult(
+            success=True,
+            consumed_action=self.consumes_action,
+            actions_spent=self.actions_cost,
+            message="Uzyto ziela uzdrawiajacego: +1 HP.",
+            data={"healed": 1},
+        )
+
+
 def _scroll_rank1_spell_choices() -> list[str]:
     preferred = [
         "magic_missile",

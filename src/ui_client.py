@@ -393,6 +393,11 @@ class UIClient:
         try:
             from prompt_copy import resolve_ui_prompt_copy
 
+            prompt_context = {
+                key: value
+                for key, value in dict(extra).items()
+                if key not in {"subtitle", "prompt_id"}
+            }
             prompt_copy = resolve_ui_prompt_copy(
                 kind="info",
                 source=source,
@@ -400,6 +405,7 @@ class UIClient:
                 subtitle=extra.get("subtitle"),
                 prompt_long=prompt_long,
                 prompt_id=extra.get("prompt_id"),
+                **prompt_context,
             )
             extra = dict(extra)
             title = str(prompt_copy.get("title") or title or "")

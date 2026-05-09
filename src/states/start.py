@@ -51,6 +51,7 @@ class Start(State):
 
         def _finish_setup() -> State:
             self.game.heroes = heroes
+            self._prompt_opening_scene_if_needed()
             if getattr(self.game, "is_generated_encounter", None) and self.game.is_generated_encounter():
                 from .combat import Combat
 
@@ -185,11 +186,24 @@ class Start(State):
                     ),
                     prompt,
                 )
-            ui_narration = getattr(self.game, "ui_narration", None)
-            if callable(ui_narration):
+            ui = getattr(self.game, "ui", None)
+            if ui is not None and getattr(ui, "enabled", False) and hasattr(ui, "prompt_info"):
                 try:
-                    ui_narration(
-                        prompt,
+                    ui.prompt_info(
+                        str(
+                            prompt_value(
+                                "setup.hero_setup_place_figure",
+                                "title",
+                                f"Ustaw figurkę: {hero_name}",
+                                hero_name=hero_name,
+                                position=pos,
+                            )
+                        ),
+                        prompt_long=prompt,
+                        source="hero_setup_place",
+                        prompt_id="setup.hero_setup_place_figure",
+                        hero_name=hero_name,
+                        position=pos,
                         summary=str(
                             prompt_value(
                                 "setup.hero_setup_place_figure",
@@ -199,14 +213,11 @@ class Start(State):
                                 position=pos,
                             )
                         ),
-                        source="hero_setup_place",
-                        channel="timeline",
-                        blocking=False,
-                        next_hint=str(
+                        cta=str(
                             prompt_value(
                                 "setup.hero_setup_place_figure",
                                 "cta",
-                                "Po ustawieniu figurki wybierz kolejny krok w setupie.",
+                                "Enter, aby przejść do kolejnego kroku.",
                                 hero_name=hero_name,
                                 position=pos,
                             )
@@ -219,7 +230,8 @@ class Start(State):
             except ValueError as exc:
                 logger.error("Nie można ustawić bohatera: %s", exc)
                 return "failed"
-            heroes.append(hero)
+            if hero not in heroes:
+                heroes.append(hero)
             char_id = str(getattr(hero, "character_id", "") or "").strip().lower()
             if char_id:
                 used_character_ids.add(char_id)
@@ -228,14 +240,27 @@ class Start(State):
             )
             self._maybe_prompt_chameleon_gnome(hero)
             self._maybe_prompt_advanced_alchemy(hero)
-            self._maybe_prepare_spells(hero)
+            self._maybe_prepare_spells_once(hero)
             self.game.ui_hero(hero, note=f"Ustawiony na polu startowym {pos}")
             self.game.ui_log(f"Bohater ustawiony na pozycji {pos}.")
             return "placed"
 
         pending_preselected_hero: Hero | None = None
-        while pending_preselected_hero is not None or getattr(self.game, "preselected_character_ids", None):
-            hero = pending_preselected_hero or self._consume_preselected_hero(used_character_ids)
+        pending_loaded_heroes = [
+            hero
+            for hero in list(heroes)
+            if getattr(hero, "position", None) is None
+        ]
+        for hero in pending_loaded_heroes:
+            char_id = str(getattr(hero, "character_id", "") or "").strip().lower()
+            if char_id:
+                used_character_ids.add(char_id)
+        while pending_preselected_hero is not None or pending_loaded_heroes or getattr(self.game, "preselected_character_ids", None):
+            hero = pending_preselected_hero
+            if hero is None and pending_loaded_heroes:
+                hero = pending_loaded_heroes.pop(0)
+            if hero is None:
+                hero = self._consume_preselected_hero(used_character_ids)
             if hero is None:
                 pending_preselected_hero = None
                 continue
@@ -370,6 +395,29 @@ class Start(State):
         self.game.ui_log(f"Wczytano bohatera: {getattr(hero, 'name', picked)}.")
         return hero
 
+    def preload_preselected_heroes_for_setup(self) -> list[Hero]:
+        """Wczytaj wybrane postacie przed fizycznym setupem, bez ustawiania ich na planszy."""
+        heroes = list(getattr(self.game, "heroes", []) or [])
+        used_character_ids = {
+            str(getattr(hero, "character_id", "") or "").strip().lower()
+            for hero in heroes
+            if str(getattr(hero, "character_id", "") or "").strip()
+        }
+        loaded: list[Hero] = []
+        while getattr(self.game, "preselected_character_ids", None):
+            hero = self._consume_preselected_hero(used_character_ids)
+            if hero is None:
+                break
+            char_id = str(getattr(hero, "character_id", "") or "").strip().lower()
+            if char_id:
+                used_character_ids.add(char_id)
+            heroes.append(hero)
+            loaded.append(hero)
+            self._maybe_prepare_spells_once(hero)
+        if loaded:
+            self.game.heroes = heroes
+        return loaded
+
     def _consume_preselected_hero(self, used_character_ids: set[str]) -> Hero | None:
         queue = getattr(self.game, "preselected_character_ids", None)
         if queue is None:
@@ -386,6 +434,53 @@ class Start(State):
             hero = hero_from_snapshot(snapshot)
             self.game.ui_log(f"Wczytano bohatera: {getattr(hero, 'name', picked)}.")
             return hero
+        return None
+
+    def _maybe_prepare_spells_once(self, hero: Hero) -> None:
+        if bool(getattr(hero, "_runtime_spell_prepare_done", False)):
+            return
+        try:
+            setattr(self.game, "spell_prepare_actor_name", str(getattr(hero, "name", "Bohater") or "Bohater"))
+            self._maybe_prepare_spells(hero)
+        finally:
+            try:
+                delattr(self.game, "spell_prepare_actor_name")
+            except Exception:
+                pass
+            setattr(hero, "_runtime_spell_prepare_done", True)
+
+    def _prompt_opening_scene_if_needed(self) -> None:
+        scenario = getattr(self.game, "scenario", None)
+        if not isinstance(scenario, dict) or bool(scenario.get("_opening_scene_prompt_shown")):
+            return
+        prompt = scenario.get("opening_scene_prompt")
+        if not isinstance(prompt, dict):
+            metadata = scenario.get("metadata")
+            prompt = metadata.get("opening_scene_prompt") if isinstance(metadata, dict) else None
+        if not isinstance(prompt, dict):
+            return
+        title = str(prompt.get("title") or "Początek sceny").strip()
+        body = str(prompt.get("body_markdown") or prompt.get("text") or "").strip()
+        if not body:
+            return
+        scenario["_opening_scene_prompt_shown"] = True
+        ui = getattr(self.game, "ui", None)
+        if ui is not None and getattr(ui, "enabled", False) and hasattr(ui, "prompt_info"):
+            try:
+                ui.prompt_info(
+                    title,
+                    prompt_long=body,
+                    source="scenario_opening",
+                    prompt_id="scenario.opening_scene",
+                    summary=str(prompt.get("summary") or title),
+                )
+                return
+            except Exception:
+                pass
+        try:
+            self.game.ui_narration(body, summary=title, source="scenario_opening", blocking=True)
+        except Exception:
+            self.game.ui_log(body)
         return None
 
     def _prompt_menu_choice(
@@ -1007,6 +1102,10 @@ class Start(State):
 
     def _maybe_prepare_spells(self, hero: Hero) -> None:
         try:
+            prompt_count_before = int(getattr(self.game, "spell_prepare_prompt_count", 0) or 0)
+        except Exception:
+            prompt_count_before = 0
+        try:
             state = initialize_actor_spell_management(
                 self.game,
                 hero,
@@ -1026,3 +1125,22 @@ class Start(State):
             ]
         )
         self.game.ui_log(f"{getattr(hero, 'name', 'Bohater')}: spell management aktywny ({summary}).")
+        try:
+            prompt_count_after = int(getattr(self.game, "spell_prepare_prompt_count", 0) or 0)
+        except Exception:
+            prompt_count_after = prompt_count_before
+        if prompt_count_after <= prompt_count_before:
+            return
+        ui = getattr(self.game, "ui", None)
+        if ui is not None and getattr(ui, "enabled", False) and hasattr(ui, "prompt_info"):
+            hero_name = str(getattr(hero, "name", "Bohater") or "Bohater")
+            try:
+                ui.prompt_info(
+                    f"Przygotowanie postaci zakończone: {hero_name}",
+                    prompt_long=f"{hero_name}: przygotowanie czarów zakończone.",
+                    source="spell_prepare_complete",
+                    prompt_id="spell_prepare.complete",
+                    summary="Przygotowanie postaci zakończone",
+                )
+            except Exception:
+                pass

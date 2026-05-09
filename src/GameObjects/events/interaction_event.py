@@ -20,6 +20,31 @@ class InteractionEvent(GameEvent):
     default_tags = ["interaction", "manipulate"]
     consumes_action = True
 
+    @staticmethod
+    def _display_name(obj) -> str:
+        for attr in (
+            "interaction_label",
+            "challenge_label",
+            "name",
+            "label",
+            "seek_label",
+            "scenario_object_label",
+            "object_label",
+        ):
+            value = getattr(obj, attr, None)
+            if callable(value):
+                try:
+                    value = value()
+                except Exception:
+                    value = None
+            text = str(value or "").strip()
+            if text:
+                return text
+        object_id = str(getattr(obj, "object_id", "") or getattr(obj, "scenario_object_id", "") or "").strip()
+        if object_id and object_id != obj.__class__.__name__:
+            return object_id.replace("_", " ").strip().title()
+        return obj.__class__.__name__
+
     def execute(self, ctx: EventContext) -> EventResult:
         game = ctx.game
         actor = ctx.actor
@@ -39,23 +64,86 @@ class InteractionEvent(GameEvent):
         hero_pos = actor.position
         board = game.board
 
+        def _visible_and_available(obj) -> bool:
+            if getattr(obj, "hidden", False) and not getattr(obj, "revealed", False):
+                return False
+            checker = getattr(obj, "can_interact", None)
+            if not callable(checker):
+                return True
+            try:
+                return bool(checker(actor, game))
+            except Exception:
+                return False
+
         # wybór celu
         candidates = board.get_interactables_in_range(
             hero_pos, include_position=True, diagonal=True, include_hidden=True
         )
-        positions_all = [pos for pos, _objs in candidates]
         positions_visible = [
             pos
             for pos, objs in candidates
-            if any(not getattr(obj, "hidden", False) or getattr(obj, "revealed", False) for obj in objs)
+            if any(_visible_and_available(obj) for obj in objs)
         ]
+        if not positions_visible:
+            message = (
+                "Brak interakcji w zasięgu. Podejdź bliżej do NPC albo podświetlonego obiektu "
+                "i wybierz Interakcję ponownie."
+            )
+            ui = getattr(game, "ui", None)
+            if ui is not None and getattr(ui, "enabled", False) and hasattr(ui, "prompt_info"):
+                try:
+                    ui.prompt_info(
+                        "Brak interakcji w zasięgu",
+                        prompt_long=message,
+                        source="interaction_no_targets",
+                        prompt_id="interaction.no_targets",
+                    )
+                except Exception:
+                    game.ui_log(message)
+            else:
+                game.ui_log(message)
+            return EventResult.noop(message="Brak interakcji w zasięgu.")
         if positions_visible:
             game.conn.set_leds(positions_visible, consts.INTERACT_FIELD_RGB)
-        target = game.conn.scan_board(None)  # None pozwala na anulowanie
+        ui = getattr(game, "ui", None)
+        if ui is not None and getattr(ui, "enabled", False) and hasattr(ui, "prompt_info"):
+            labels = []
+            for idx, pos in enumerate(positions_visible, start=1):
+                names = [
+                    self._display_name(obj)
+                    for obj in board.interactables_at(pos)
+                    if _visible_and_available(obj)
+                ]
+                if names:
+                    labels.append(f"{idx}. {', '.join(names)}: pole {pos}")
+            body = (
+                "Wybierz cel interakcji, klikając jedno z podświetlonych pól.\n\n"
+                + "\n".join(labels)
+            )
+            try:
+                game.player_prompt.create(
+                    "Wybierz cel interakcji",
+                    kind="info",
+                    source="interaction_target",
+                    body_markdown=body,
+                    summary="Kliknij podświetlone pole NPC lub obiektu.",
+                    scope_key="hero_turn:targeting",
+                    dedupe_key="interaction:target",
+                    input_mode="board_click",
+                    cancel_enabled=True,
+                    confirm_enabled=False,
+                    prompt_id="interaction.target",
+                )
+            except Exception:
+                pass
+        target = game.conn.scan_board(positions_visible)
         game.conn.leds_off()
-        if target not in positions_all:
-            logger.info("Nie ma tu nic ciekawego.")
-            return EventResult.noop(message="Brak interakcji.")
+        if target is None:
+            logger.info("Anulowano wybór celu interakcji.")
+            return EventResult.noop(message="Anulowano interakcję.")
+        if target not in positions_visible:
+            logger.info("Nie ma tu dostępnej interakcji.")
+            return EventResult.noop(message="Brak dostępnej interakcji.")
 
         interactables = [
             i
@@ -69,6 +157,10 @@ class InteractionEvent(GameEvent):
         if not interactables:
             logger.info("Wybrane pole nie ma obiektu do interakcji.")
             return EventResult.noop(message="Brak obiektu do interakcji.")
+        interactables = [i for i in interactables if _visible_and_available(i)]
+        if not interactables:
+            logger.info("Wybrane pole nie ma teraz dostępnej interakcji.")
+            return EventResult.noop(message="Brak dostępnej interakcji.")
 
         interactable = interactables[0]
         if getattr(interactable, "hidden", False) and not getattr(interactable, "revealed", False):
@@ -94,10 +186,6 @@ class InteractionEvent(GameEvent):
         if getattr(interactable, "require_same_cell_interact", False) and target != hero_pos:
             logger.info("Musisz stanąć na tym polu, aby wejść w interakcję.")
             return EventResult.noop(message="Musisz stanąć na tym polu.")
-        if not interactable.can_interact(actor, game):
-            logger.info("Nie możesz teraz wejść w interakcję z tym obiektem.")
-            return EventResult.noop(message="Brak możliwości interakcji.")
-
         action_id = self._choose_action(interactable, game, actor=actor)
         while True:
             interaction = interactable.actions.get(action_id) if action_id else None
@@ -174,7 +262,9 @@ class InteractionEvent(GameEvent):
             return None
         ui = getattr(game, "ui", None)
         if ui and ui.enabled:
-            title = self._prompt_value(interactable, "interaction_prompt_title", actor, game) or "Wybierz akcję"
+            display_name = self._display_name(interactable)
+            default_title = f"{display_name}: wybierz akcję" if display_name else "Wybierz akcję"
+            title = self._prompt_value(interactable, "interaction_prompt_title", actor, game) or default_title
             subtitle = self._prompt_value(interactable, "interaction_prompt_summary", actor, game)
             body = self._prompt_value(interactable, "interaction_prompt_body", actor, game)
             details = self._prompt_value(interactable, "interaction_prompt_details", actor, game)

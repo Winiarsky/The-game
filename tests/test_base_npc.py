@@ -8,8 +8,11 @@ if str(PROJECT_ROOT / "src") not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from GameObjects.NPC.base_npc import BaseNPC  # noqa: E402
+from GameObjects.events.base import EventResult  # noqa: E402
 from GameObjects.interactions_mixin.base_interaction import Interaction  # noqa: E402
 from GameObjects.interactions_mixin import TradeItem  # noqa: E402
+from GameObjects.items.inventory import ensure_actor_inventory  # noqa: E402
+from economy import set_actor_total_cp  # noqa: E402
 
 
 def test_flags_disable_actions():
@@ -65,3 +68,88 @@ def test_extra_actions_hook():
 
     npc = CustomNPC(enable_trade=False, enable_pickpocket=False)
     assert "wave" in npc.actions
+
+
+class FakeDialogUI:
+    enabled = True
+    allow_cli_fallback = False
+
+    def __init__(self, choices=None):
+        self.choices = list(choices or [])
+        self.info_calls = []
+        self.choice_calls = []
+
+    def prompt_choice(self, *args, **kwargs):
+        self.choice_calls.append({"args": args, **kwargs})
+        if self.choices:
+            return self.choices.pop(0)
+        return None
+
+    def prompt_info(self, *args, **kwargs):
+        self.info_calls.append({"args": args, **kwargs})
+        return "ok"
+
+
+def test_dialog_tree_uses_blocking_prompts_and_sets_flags(monkeypatch):
+    def fake_dispatch(_name, ctx):
+        return EventResult(success=True, data={"outcome": "critical_success", "total": 25})
+
+    monkeypatch.setattr("GameObjects.NPC.base_npc.dispatch_event", fake_dispatch)
+
+    actor = type("Actor", (), {"statuses": [], "inventory": [], "coin_pouch": {"cp": 0, "sp": 0, "gp": 0, "pp": 0}})()
+    session = type("Session", (), {"global_flags": {}})()
+    ui = FakeDialogUI(choices=["Ask"])
+    game = type("Game", (), {"ui": ui, "scenario_session": session})()
+    npc = BaseNPC(
+        name="Witness",
+        npc_id="witness",
+        enable_trade=False,
+        enable_pickpocket=False,
+        enable_diplomacy=False,
+        dialog={
+            "start": {
+                "text": "Opening",
+                "options": [
+                    {
+                        "id": "ask",
+                        "label": "Ask",
+                        "skill_check": {
+                            "skill_id": "diplomacy",
+                            "dc": 15,
+                            "outcomes": {
+                                "critical_success": {
+                                    "text": "Truth.",
+                                    "effects": [{"type": "set_flag", "flag": "truth_known"}],
+                                }
+                            },
+                        },
+                    }
+                ],
+            }
+        },
+    )
+
+    message = npc.action_talk(actor, game)
+
+    assert "Truth" in message
+    assert session.global_flags["truth_known"] is True
+    assert len(ui.choice_calls) == 1
+    assert len(ui.info_calls) == 1
+
+
+def test_dialog_offer_purchase_adds_selected_items():
+    actor = type("Actor", (), {"statuses": [], "inventory": [], "coin_pouch": {"cp": 0, "sp": 0, "gp": 0, "pp": 0}})()
+    set_actor_total_cp(actor, 500)
+    ui = FakeDialogUI(choices=["Kup 2"])
+    game = type("Game", (), {"ui": ui, "scenario_session": type("Session", (), {"global_flags": {}})()})()
+    npc = BaseNPC(name="Herbalist", enable_trade=False, enable_pickpocket=False, enable_diplomacy=False)
+
+    message = npc._dialog_offer_purchase(
+        actor,
+        game,
+        {"item_id": "brindleford_healing_herb", "quantity": 5, "price_cp": 100},
+    )
+
+    inventory_ids = [str(getattr(item, "item_id", "")) for item in ensure_actor_inventory(actor)]
+    assert message.startswith("Kupiono: 2")
+    assert inventory_ids.count("brindleford_healing_herb") == 2

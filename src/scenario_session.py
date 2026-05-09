@@ -16,6 +16,7 @@ from skills import Skill
 from states.combat import Combat
 from states.encounter_setup import run_setup_batches
 from states.heroes_turns import HeroesTurn
+from states.start import Start
 
 from game import Game
 from runtime_setup import build_runtime_setup_plan
@@ -87,6 +88,10 @@ class ScenarioSession:
         self._load_map(self.current_map_id, entry_anchor_id=None, initial_load=True)
         if self.current_game is None:
             raise RuntimeError("Nie udało się uruchomić pierwszej mapy scenariusza.")
+        try:
+            Start(self.current_game).preload_preselected_heroes_for_setup()
+        except Exception:
+            pass
         self._run_map_setup(initial_load=True)
 
         initial_action = getattr(self.current_game.state, "initial_action_name", None) or "set_heroes_starting_positions"

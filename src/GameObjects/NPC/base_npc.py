@@ -2,7 +2,7 @@ import json
 import logging
 import math
 from pathlib import Path
-from typing import Optional, Callable, Iterable
+from typing import Any, Optional, Callable, Iterable
 
 from GameObjects.base import GameObjectMeta
 from GameObjects.items.alchemical_item import (
@@ -60,6 +60,7 @@ class BaseNPC(SocialMixin, TradeMixin, PickpocketMixin, InteractableMixin):
         self,
         *,
         name: str = "NPC",
+        npc_id: str | None = None,
         dialog: Optional[dict | str] = None,
         dialog_path: Optional[str] = None,
         allow_same_cell_interact: bool = True,
@@ -92,6 +93,7 @@ class BaseNPC(SocialMixin, TradeMixin, PickpocketMixin, InteractableMixin):
             require_same_cell_interact=require_same_cell_interact,
         )
 
+        self.npc_id = str(npc_id or getattr(self, "npc_id", "") or "").strip()
         self.attitude = attitude
         raw_inventory = inventory or []
         self.inventory = [
@@ -182,13 +184,300 @@ class BaseNPC(SocialMixin, TradeMixin, PickpocketMixin, InteractableMixin):
         """Minimalny dialog, podmieniany w klasach pochodnych."""
         return {"start": {"text": f"{self.name} nie ma nic do powiedzenia.", "options": []}}
 
-    def _run_dialog(self) -> str:
-        """Przykładowa implementacja – klasy potomne mogą ją rozszerzyć."""
-        node = self.dialog.get("start", {})
-        return node.get("text", "...")
+    def _dialog_ui(self, game):
+        ui = getattr(game, "ui", None)
+        if ui is not None and getattr(ui, "enabled", False):
+            return ui
+        return None
+
+    def _dialog_flags(self, game) -> dict:
+        session = getattr(game, "scenario_session", None)
+        flags = getattr(session, "global_flags", None)
+        if isinstance(flags, dict):
+            return flags
+        flags = getattr(game, "global_flags", None)
+        if isinstance(flags, dict):
+            return flags
+        return {}
+
+    def _dialog_set_flag(self, game, flag: object, value: bool = True) -> None:
+        key = str(flag or "").strip()
+        if not key:
+            return
+        flags = self._dialog_flags(game)
+        if flags is not None:
+            flags[key] = bool(value)
+
+    def _dialog_outcome_label(self, outcome: object) -> str:
+        return {
+            "critical_success": "krytyczny sukces",
+            "success": "sukces",
+            "failure": "porażka",
+            "critical_failure": "krytyczna porażka",
+        }.get(str(outcome or "").strip().lower(), str(outcome or "wynik"))
+
+    def _dialog_conditions_pass(self, game, conditions: object) -> bool:
+        if not isinstance(conditions, dict):
+            return True
+        flags = self._dialog_flags(game)
+        for flag in list(conditions.get("flags") or conditions.get("all_flags") or []):
+            if not bool(flags.get(str(flag))):
+                return False
+        for flag in list(conditions.get("not_flags") or []):
+            if bool(flags.get(str(flag))):
+                return False
+        any_flags = [str(flag) for flag in list(conditions.get("any_flags") or []) if str(flag).strip()]
+        if any_flags and not any(bool(flags.get(flag)) for flag in any_flags):
+            return False
+        return True
+
+    def _dialog_option_label(self, option: dict[str, Any]) -> str:
+        return str(option.get("label") or option.get("id") or "Dalej").strip()
+
+    def _parse_dialog_choice(self, answer: object, options: list[dict[str, Any]]) -> dict[str, Any] | None:
+        if not options:
+            return None
+        if answer is None:
+            return options[0]
+        if isinstance(answer, dict):
+            for key in ("selected", "value", "id", "choice", "answer", "raw"):
+                if key in answer:
+                    parsed = self._parse_dialog_choice(answer.get(key), options)
+                    if parsed is not None:
+                        return parsed
+            return None
+        raw = str(answer).strip()
+        if not raw:
+            return options[0]
+        if raw.isdigit():
+            idx = int(raw) - 1
+            if 0 <= idx < len(options):
+                return options[idx]
+        lowered = raw.lower()
+        for option in options:
+            candidates = {
+                str(option.get("id") or "").strip().lower(),
+                str(option.get("raw") or "").strip().lower(),
+                self._dialog_option_label(option).lower(),
+            }
+            if lowered in candidates:
+                return option
+        if ":" in lowered:
+            prefix = lowered.split(":", 1)[0].strip()
+            if prefix.isdigit():
+                idx = int(prefix) - 1
+                if 0 <= idx < len(options):
+                    return options[idx]
+        return None
+
+    def _dialog_prompt_info(self, game, title: str, text: str, *, source_suffix: str = "info") -> None:
+        ui = self._dialog_ui(game)
+        if ui is None or not hasattr(ui, "prompt_info"):
+            return
+        try:
+            ui.prompt_info(
+                title,
+                prompt_long=text,
+                source=f"dialog:{self.npc_id or self.name}:{source_suffix}",
+            )
+        except Exception:
+            logger.debug("Nie udało się pokazać prompt_info dialogu.", exc_info=True)
+
+    def _dialog_prompt_choice(self, game, node_id: str, node: dict[str, Any], options: list[dict[str, Any]]) -> dict[str, Any] | None:
+        ui = self._dialog_ui(game)
+        if ui is None or not hasattr(ui, "prompt_choice"):
+            return options[0] if options else None
+        labels = [self._dialog_option_label(option) for option in options]
+        try:
+            answer = ui.prompt_choice(
+                str(node.get("title") or self.name),
+                choices=labels,
+                source=f"dialog:{self.npc_id or self.name}",
+                subtitle=str(node.get("subtitle") or ""),
+                prompt_long=str(node.get("text") or ""),
+                layout="dialog",
+                choice_meta=[
+                    {
+                        "raw": str(option.get("id") or idx + 1),
+                        "label": self._dialog_option_label(option),
+                        "desc": str(option.get("description") or option.get("desc") or ""),
+                        "key": str(idx + 1),
+                    }
+                    for idx, option in enumerate(options)
+                ],
+                prompt_id=f"dialog.{self.npc_id or self.name}.{node_id}",
+            )
+        except Exception:
+            logger.debug("Nie udało się pokazać wyboru dialogowego.", exc_info=True)
+            answer = None
+        return self._parse_dialog_choice(answer, options)
+
+    def _dialog_skill_check(self, actor, game, spec: dict[str, Any]):
+        skill_id = str(spec.get("skill_id") or spec.get("skill") or Skill.DIPLOMACY.value).strip().lower()
+        dc = int(spec.get("dc") or 15)
+        tags = [skill_id, "dialog", *(str(tag).strip().lower() for tag in list(spec.get("tags") or []) if str(tag).strip())]
+        result = dispatch_event(
+            "skill_check",
+            EventContext(
+                game=game,
+                actor=actor,
+                tags=tags,
+                metadata={
+                    "dc": dc,
+                    "skill_id": skill_id,
+                    "skill_label": str(spec.get("skill_label") or skill_id.title()),
+                    "target": self,
+                    "apply_modifiers": True,
+                },
+            ),
+        )
+        outcome = result.data.get("outcome") if result.data else None
+        return str(outcome or "failure"), result
+
+    def _dialog_add_items(self, actor, item_id: str, quantity: int) -> int:
+        count = max(0, int(quantity or 0))
+        added = 0
+        for _ in range(count):
+            item = create_equipment(item_id)
+            if item is None:
+                continue
+            add_item(actor, item)
+            added += 1
+        return added
+
+    def _dialog_offer_purchase(self, actor, game, effect: dict[str, Any]) -> str:
+        item_id = str(effect.get("item_id") or "").strip().lower()
+        quantity = max(1, int(effect.get("quantity") or 1))
+        price_cp = max(0, int(effect.get("price_cp") or effect.get("price") or 0))
+        if not item_id:
+            return "Oferta nie ma poprawnego przedmiotu."
+        max_affordable = quantity
+        if price_cp > 0:
+            max_affordable = 0
+            for count in range(1, quantity + 1):
+                if can_actor_afford_cp(actor, price_cp * count):
+                    max_affordable = count
+        if max_affordable <= 0:
+            return f"Nie masz środków na zakup. Cena: {format_cp_value(price_cp)} za sztukę."
+
+        chosen_qty = 1
+        ui = self._dialog_ui(game)
+        if ui is not None and hasattr(ui, "prompt_choice"):
+            choices = [f"Kup {idx}" for idx in range(1, max_affordable + 1)] + ["Odmów"]
+            try:
+                answer = ui.prompt_choice(
+                    "Oferta",
+                    choices=choices,
+                    source=f"dialog:{self.npc_id or self.name}:offer",
+                    prompt_long=(
+                        f"{self.name} może sprzedać {quantity} szt. za {format_cp_value(price_cp)} za sztukę.\n"
+                        f"Twoje środki: {format_actor_money(actor)}."
+                    ),
+                    layout="dialog",
+                )
+            except Exception:
+                answer = None
+            raw = str(answer or "").strip().lower()
+            if "odm" in raw or raw == "0":
+                return "Rezygnujesz z zakupu."
+            digits = "".join(ch for ch in raw if ch.isdigit())
+            if digits:
+                chosen_qty = max(1, min(max_affordable, int(digits)))
+        total = price_cp * chosen_qty
+        if total > 0 and not spend_actor_cp(actor, total):
+            return f"Nie udało się zapłacić {format_cp_value(total)}."
+        added = self._dialog_add_items(actor, item_id, chosen_qty)
+        if added <= 0:
+            if total > 0:
+                add_actor_cp(actor, total)
+            return "Nie udało się dodać przedmiotu do ekwipunku."
+        return f"Kupiono: {added} szt. za {format_cp_value(total)}."
+
+    def _dialog_apply_effects(self, actor, game, effects: object) -> list[str]:
+        if isinstance(effects, dict):
+            items = [effects]
+        elif isinstance(effects, list):
+            items = [item for item in effects if isinstance(item, dict)]
+        else:
+            items = []
+        messages: list[str] = []
+        for effect in items:
+            kind = str(effect.get("type") or effect.get("kind") or "").strip().lower()
+            if kind == "set_flag":
+                self._dialog_set_flag(game, effect.get("flag"), bool(effect.get("value", True)))
+            elif kind == "add_items":
+                item_id = str(effect.get("item_id") or "").strip().lower()
+                quantity = max(1, int(effect.get("quantity") or 1))
+                added = self._dialog_add_items(actor, item_id, quantity)
+                if added:
+                    messages.append(str(effect.get("message") or f"Dodano do ekwipunku: {added} szt."))
+            elif kind == "offer_purchase":
+                messages.append(self._dialog_offer_purchase(actor, game, effect))
+        return [msg for msg in messages if str(msg).strip()]
+
+    def _run_dialog(self, actor=None, game=None) -> str:
+        if not isinstance(self.dialog, dict):
+            return "..."
+        node_id = "start"
+        last_text = ""
+        visited = 0
+        while visited < 12:
+            visited += 1
+            node = self.dialog.get(node_id, {})
+            if not isinstance(node, dict):
+                break
+            text = str(node.get("text") or "...").strip()
+            last_text = text
+            options = [
+                dict(option)
+                for option in list(node.get("options") or [])
+                if isinstance(option, dict) and (game is None or self._dialog_conditions_pass(game, option.get("conditions")))
+            ]
+            if not options:
+                if game is not None:
+                    self._dialog_prompt_info(game, str(node.get("title") or self.name), text, source_suffix=node_id)
+                return text
+
+            choice = self._dialog_prompt_choice(game, node_id, node, options) if game is not None else options[0]
+            if choice is None:
+                return text
+
+            result_text = str(choice.get("text") or choice.get("result_text") or "").strip()
+            next_node = str(choice.get("to") or "").strip()
+            skill_spec = choice.get("skill_check")
+            if isinstance(skill_spec, dict) and actor is not None and game is not None:
+                outcome, result = self._dialog_skill_check(actor, game, skill_spec)
+                outcome_spec = dict((skill_spec.get("outcomes") or {}).get(outcome) or {})
+                if not outcome_spec and outcome == "critical_success":
+                    outcome_spec = dict((skill_spec.get("outcomes") or {}).get("success") or {})
+                if not outcome_spec:
+                    outcome_spec = dict((skill_spec.get("outcomes") or {}).get("failure") or {})
+                result_text = str(outcome_spec.get("text") or result_text or result.message or "").strip()
+                effect_messages = self._dialog_apply_effects(actor, game, outcome_spec.get("effects"))
+                next_node = str(outcome_spec.get("to") or next_node or "").strip()
+                if effect_messages:
+                    result_text = "\n".join([part for part in [result_text, *effect_messages] if part])
+                if result_text:
+                    total = getattr(result, "data", {}).get("total", "?") if getattr(result, "data", None) else "?"
+                    result_text = f"{result_text}\n\nWynik: {self._dialog_outcome_label(outcome)}, suma: {total}"
+            else:
+                effect_messages = self._dialog_apply_effects(actor, game, choice.get("effects")) if actor is not None and game is not None else []
+                if effect_messages:
+                    result_text = "\n".join([part for part in [result_text, *effect_messages] if part])
+
+            if result_text and game is not None:
+                self._dialog_prompt_info(game, str(choice.get("title") or self.name), result_text, source_suffix=str(choice.get("id") or node_id))
+                last_text = result_text
+            if str(choice.get("id") or "").strip().lower() in {"leave", "exit", "end"}:
+                return last_text
+            if next_node:
+                node_id = next_node
+                continue
+            return last_text
+        return last_text or "..."
 
     def action_talk(self, _actor, _game, _payload=None) -> str:
-        return self._run_dialog()
+        return self._run_dialog(_actor, _game)
 
     # --- Handel ---
     @staticmethod

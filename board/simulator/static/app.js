@@ -29,6 +29,7 @@ const simulatorResetButton = document.getElementById("simulator-reset");
 const runtimeStopButton = document.getElementById("runtime-stop");
 const runtimeStatus = document.getElementById("runtime-status");
 const heroesListElement = document.getElementById("heroes-list");
+const heroesDefaultPartyButton = document.getElementById("heroes-default-party");
 const heroesReloadButton = document.getElementById("heroes-reload");
 const dims = window.BOARD_DIMENSIONS || { rows: 30, cols: 20 };
 const posKey = (row, col) => `${row},${col}`;
@@ -59,6 +60,9 @@ let selectedFigureId = null;
 let latestBoardState = [];
 let availableHeroes = [];
 const selectedHeroIds = new Set();
+const DEFAULT_PARTY_BY_SCENARIO = {
+    ashen_oath: ["cedric", "freya", "kord", "christopher", "lorielen", "jimi"],
+};
 
 const OBJECT_SHORT_CODES = {
     blocked_field: "BL",
@@ -631,6 +635,10 @@ async function refreshScenarioFlowList(selectName) {
         if (scenarioFlowStatus) {
             scenarioFlowStatus.textContent = `Wybrany flow: ${scenarioFlowSelect.value || flows[0]}`;
         }
+        if (!selectedHeroIds.size) {
+            selectDefaultPartyForScenario(scenarioFlowSelect.value || flows[0]);
+        }
+        updateDefaultPartyButton();
     } catch (error) {
         console.error("Nie udało się pobrać listy flow scenariuszy", error);
     }
@@ -791,6 +799,28 @@ function renderHeroesList() {
     });
 }
 
+function defaultPartyForScenario(scenarioName) {
+    return DEFAULT_PARTY_BY_SCENARIO[String(scenarioName || "").trim().toLowerCase()] || [];
+}
+
+function selectDefaultPartyForScenario(scenarioName) {
+    const defaults = defaultPartyForScenario(scenarioName);
+    if (!defaults.length) return false;
+    const availableIds = new Set(availableHeroes.map((hero) => String(hero.character_id || "").trim().toLowerCase()));
+    const selected = defaults.filter((heroId) => availableIds.has(heroId));
+    if (!selected.length) return false;
+    selectedHeroIds.clear();
+    selected.forEach((heroId) => selectedHeroIds.add(heroId));
+    renderHeroesList();
+    return true;
+}
+
+function updateDefaultPartyButton() {
+    if (!heroesDefaultPartyButton) return;
+    const defaults = defaultPartyForScenario(scenarioFlowSelect?.value || "");
+    heroesDefaultPartyButton.disabled = !defaults.length;
+}
+
 async function refreshHeroesList() {
     if (!heroesListElement) return;
     try {
@@ -807,9 +837,10 @@ async function refreshHeroesList() {
                 selectedHeroIds.delete(characterId);
             }
         });
-        if (!selectedHeroIds.size) {
-            heroes.slice(0, 4).forEach((hero) => selectedHeroIds.add(hero.character_id));
+        if (!selectedHeroIds.size && !selectDefaultPartyForScenario(scenarioFlowSelect?.value || "")) {
+            heroes.slice(0, 6).forEach((hero) => selectedHeroIds.add(hero.character_id));
         }
+        updateDefaultPartyButton();
         renderHeroesList();
     } catch (error) {
         heroesListElement.innerHTML = "";
@@ -1131,11 +1162,23 @@ scenarioToggleButton?.addEventListener("click", async () => {
     toggleScenarioVisibility();
 });
 scenarioFlowReloadButton?.addEventListener("click", () => refreshScenarioFlowList(scenarioFlowSelect?.value));
+scenarioFlowSelect?.addEventListener("change", () => {
+    updateDefaultPartyButton();
+    if (!selectDefaultPartyForScenario(scenarioFlowSelect.value) && !selectedHeroIds.size) {
+        availableHeroes.slice(0, 6).forEach((hero) => selectedHeroIds.add(hero.character_id));
+        renderHeroesList();
+    }
+});
 scenarioFlowStartButton?.addEventListener("click", startScenarioFlowRuntime);
 encounterGenerateButton?.addEventListener("click", generateEncounter);
 encounterStartButton?.addEventListener("click", startEncounterRuntime);
 simulatorResetButton?.addEventListener("click", resetSimulator);
 runtimeStopButton?.addEventListener("click", stopEncounterRuntime);
+heroesDefaultPartyButton?.addEventListener("click", () => {
+    if (!selectDefaultPartyForScenario(scenarioFlowSelect?.value || "")) {
+        showToast("Ten scenariusz nie ma skonfigurowanej domyślnej drużyny.");
+    }
+});
 heroesReloadButton?.addEventListener("click", refreshHeroesList);
 
 renderFiguresList();

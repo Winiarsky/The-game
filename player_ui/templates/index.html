@@ -25,12 +25,12 @@
 
         <details id="masthead-shell" class="masthead-shell" open>
             <summary class="masthead-summary">
-                <span>The Game · Bandit Cave</span>
+                <span id="masthead-title">The Game</span>
                 <span id="masthead-summary-status">System</span>
             </summary>
             <header class="masthead">
                 <div>
-                    <div class="eyebrow">The Game · Bandit Cave</div>
+                    <div id="masthead-eyebrow" class="eyebrow">The Game</div>
                     <h1>Player UI</h1>
                 </div>
                 <div class="masthead-status">
@@ -93,7 +93,7 @@
                 <div class="hero-panel">
                     <div class="hero-copy">
                         <div class="panel-kicker">Start Hall</div>
-                        <h2>Szlak kontrabandy zaczyna się tutaj.</h2>
+                        <h2 id="start-title">Wybierz kampanię i zbierz drużynę.</h2>
                         <p id="start-tagline">Nowy companion UI do scenariusza bandytów.</p>
                         <div class="cta-row">
                             <button id="btn-begin" class="btn-primary">Nowa gra</button>
@@ -102,7 +102,7 @@
                     <div class="hero-aside">
                         <div class="lore-card">
                             <div class="lore-label">V1</div>
-                            <p>Launcher, briefing i grywalny shell dla `bandit_cave`, z finałem w `smuggler_docks`.</p>
+                            <p id="start-aside">Launcher, briefing i grywalny shell kampanii.</p>
                         </div>
                     </div>
                 </div>
@@ -116,10 +116,11 @@
                     </div>
                     <div class="screen-actions">
                         <button id="btn-assembly-back" class="btn-ghost">Powrót</button>
+                        <button id="btn-default-party" class="btn-ghost" type="button">Domyślna drużyna</button>
                         <button id="btn-assembly-next" class="btn-primary">Do briefingu</button>
                     </div>
                 </div>
-                <div id="selection-summary" class="selection-summary">Wybierz od 1 do 4 bohaterów.</div>
+                <div id="selection-summary" class="selection-summary">Wybierz od 1 do 6 bohaterów.</div>
                 <div id="party-grid" class="party-grid"></div>
             </section>
 

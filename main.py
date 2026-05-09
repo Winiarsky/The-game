@@ -396,12 +396,19 @@ def _find_free_port(host: str, preferred: int, attempts: int = 10) -> int:
     return preferred
 
 
-def start_ui_server(host: str = "127.0.0.1", port: int = 5200) -> tuple[subprocess.Popen, int]:
+def start_ui_server(
+    host: str = "127.0.0.1",
+    port: int = 5200,
+    *,
+    scenario_id: str | None = None,
+) -> tuple[subprocess.Popen, int]:
     """Uruchom Flask UI w tle."""
     env = os.environ.copy()
     env["PLAYER_UI_HOST"] = host
     env["PLAYER_UI_PORT"] = str(port)
     env["PLAYER_UI_URL"] = f"http://{host}:{port}"
+    if scenario_id:
+        env["PLAYER_UI_SCENARIO_ID"] = str(scenario_id).strip()
     # gdy uruchamiamy z main.py nie otwieraj automatycznie przeglądarki
     env["PLAYER_UI_NO_BROWSER"] = "1"
     # wyłącz debug/reloader żeby nie podnosić dwóch procesów
@@ -476,7 +483,7 @@ def main(argv: list[str] | None = None) -> int:
         ui_port = _find_free_port(args.ui_host, args.ui_port)
         ui_base = f"http://{args.ui_host}:{ui_port}"
         logger.info("Uruchamiam UI gracza na %s...", ui_base)
-        ui_proc, ui_port = start_ui_server(host=args.ui_host, port=ui_port)
+        ui_proc, ui_port = start_ui_server(host=args.ui_host, port=ui_port, scenario_id=args.scenario)
         if wait_for_ui(ui_base):
             logger.info("UI dostępne pod %s", ui_base)
         else:

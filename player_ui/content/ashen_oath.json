@@ -1,0 +1,200 @@
+{
+  "scenario_id": "ashen_oath",
+  "title": "Ashen Oath",
+  "tagline": "Klasyczna wyprawa do przekletej wioski, w ktorej zleceniodawca ukrywa prawdziwa zbrodnie.",
+  "tone": "heroic fantasy mystery with an oathbound ghost story",
+  "default_party_ids": ["cedric", "freya", "kord", "christopher", "lorielen", "jimi"],
+  "asset_manifest": "/assets/ui_v2/ashen_oath/manifest.json",
+  "audio_cues": {
+    "party_assembly": {
+      "audio": "/assets/ui_v2/ashen_oath/audio/voiceover/ui_party_assembly_001.mp3",
+      "kind": "voiceover"
+    },
+    "briefing_intro": {
+      "audio": "/assets/ui_v2/ashen_oath/audio/voiceover/briefing_intro_001.mp3",
+      "kind": "voiceover"
+    },
+    "music_default": {
+      "audio": "/assets/ui_v2/ashen_oath/audio/music/village_ash_loop.mp3",
+      "kind": "music"
+    },
+    "ambience_square": {
+      "audio": "/assets/ui_v2/ashen_oath/audio/ambience/brindleford_square.mp3",
+      "kind": "ambience"
+    },
+    "ambience_crypt": {
+      "audio": "/assets/ui_v2/ashen_oath/audio/ambience/oath_crypt.mp3",
+      "kind": "ambience"
+    }
+  },
+  "briefing_title": "Misja: Popielna Przysiega",
+  "briefing_intro": "Brindleford od trzech nocy nie wysyla dostaw, a po wiosce kraza popielne zjawy dawnych straznikow. Kasztelan Odran Vale oskarza Mire Ashwane z ruin na wzgorzu, lecz slady w kaplicy, mlynie i krypcie wskazuja, ze prawdziwa zdrada zaczela sie znacznie blizej wladzy.",
+  "stakes": "Jesli relikwiarz nie wroci do Krypty Przysiegi, zjawy uznaja cala wioske za wspolwinna zlamania dawnej przysiegi.",
+  "briefing_points": [
+    "Rozpocznij na rynku Brindleford, gdzie kasztelan daje oficjalne zlecenie, a mieszkancy boja sie mowic.",
+    "Zbadaj spalona kaplice, stary mlyn i ruiny na wzgorzu, aby oddzielic falszywy trop od prawdziwych dowodow.",
+    "W finale zdecyduj, czy odnowic przysiege, ujawnic Odrana, czy pozwolic mu uciec z relikwiarzem."
+  ],
+  "chapters": [
+    {
+      "map_id": "brindleford_square",
+      "label": "Brindleford Square",
+      "chapter_title": "Rozdzial I - Wioska pod Popiolem",
+      "chapter_subtitle": "Oficjalne zlecenie, milczacy swiadkowie i pierwszy znak przysiegi."
+    },
+    {
+      "map_id": "burned_chapel",
+      "label": "Burned Chapel",
+      "chapter_title": "Rozdzial II - Kaplica bez Ognia",
+      "chapter_subtitle": "Rozbita pieczec, medalion Serai i dowod, ze relikwiarz zostal skradziony."
+    },
+    {
+      "map_id": "old_mill",
+      "label": "Old Mill",
+      "chapter_title": "Rozdzial III - Zakladnik w Mlynie",
+      "chapter_subtitle": "Tovin, falszywy popiol i skrot do ruin."
+    },
+    {
+      "map_id": "hill_ruins",
+      "label": "Hill Ruins",
+      "chapter_title": "Rozdzial IV - Falszywa Nekromantka",
+      "chapter_subtitle": "Mira Ashwane i popielne wspomnienie ujawniajace zdrade."
+    },
+    {
+      "map_id": "oath_crypt",
+      "label": "Oath Crypt",
+      "chapter_title": "Rozdzial V - Sad Przysiegi",
+      "chapter_subtitle": "Serai, relikwiarz i finalny wybor losu Brindleford."
+    }
+  ],
+  "primary_objectives": [
+    {
+      "id": "uncover_ashen_oath",
+      "label": "Odkryj prawde o Popielnej Przysiedze",
+      "description": "Zbadaj tropy, ujawnij prawdziwego sprawce i rozstrzygnij los relikwiarza."
+    }
+  ],
+  "optional_objectives": [
+    {
+      "id": "free_the_acolyte",
+      "label": "Uwolnij akolite z mlyna",
+      "description": "Odnajdz Tovina i zabezpiecz jego zeznania przeciw ludziom kasztelana."
+    },
+    {
+      "id": "recover_warden_medallion",
+      "label": "Odzyskaj medalion strazniczki",
+      "description": "Zbadaj krypta pod kaplica i zdobadz znak Serai."
+    },
+    {
+      "id": "clear_miras_name",
+      "label": "Oczysc Mire z zarzutow",
+      "description": "Odczytaj popielne wspomnienie i dowiedz sie, kto naprawde wyniosl relikwiarz."
+    }
+  ],
+  "dialogues": [
+    {
+      "dialogue_id": "odran_initial_briefing",
+      "npc_id": "odran_vale",
+      "map_id": "brindleford_square",
+      "opening": "Dobrze, ze przybyliscie. Brindleford jest przestraszone, a przestraszeni ludzie sluchaja pierwszej klamliwej historii, ktora obieca im spokoj.",
+      "choices": [
+        {
+          "label": "Czemu jestes pewien, ze winna jest czarodziejka?",
+          "response": "Bo tam prowadza slady, a ja ufam sladowi bardziej niz plotkom. Mira Ashwane mieszkala przy ruinach, zanim zaczely chodzic zjawy."
+        },
+        {
+          "label": "Pokaz nam kaplice, zanim pojdziemy do ruin.",
+          "response": "Kaplica jest niestabilna. Jesli musicie tracic czas na kamienie i sadze, wezcie odpowiedzialnosc za kazda godzine zwloki."
+        },
+        {
+          "label": "Twoi ludzie uciszaja mieszkancow. Dlaczego?",
+          "response": "Bo panika zabija szybciej niz miecz. Kiedy wiejska plotka robi sie prawem, plona nie winni, tylko najblizsi."
+        }
+      ]
+    },
+    {
+      "dialogue_id": "elna_private_warning",
+      "npc_id": "elna_barrow",
+      "map_id": "brindleford_square",
+      "opening": "Jesli naprawde chcecie pomoc, mowcie ciszej. W tej wiosce nawet deski w scianach powtarzaja slowa kasztelanowi.",
+      "choices": [
+        {
+          "label": "Kogo zabrano?",
+          "response": "Tovina. Mojego bratanka. Byl przy kaplicy, gdy przyszli ludzie Vale'a. Od tamtej pory trzymaja go w mlynie."
+        },
+        {
+          "label": "Daj nam dowod, nie strach.",
+          "response": "Dowod nosil Tovin. Kawalek pieczeci, ktory nie powinien byc w rekach kasztelana."
+        },
+        {
+          "label": "Mozemy cie ochronic, jesli powiesz to publicznie.",
+          "response": "Publicznie? Tu? Przy jego ludziach? Bohaterstwo jest latwiejsze, kiedy nie zostawia sie dzieci pod tym samym dachem."
+        }
+      ]
+    },
+    {
+      "dialogue_id": "mira_ritual_confrontation",
+      "npc_id": "mira_ashwane",
+      "map_id": "hill_ruins",
+      "opening": "Nie robcie kroku dalej. Krag ledwo trzyma ich wspomnienia w ziemi. Jesli przerwiecie rytual mieczem, uslyszy was cala krypta.",
+      "choices": [
+        {
+          "label": "Odran twierdzi, ze to twoja klatwa.",
+          "response": "Odran twierdzi wiele rzeczy, kiedy nie ma przy nim martwych, ktorzy mogliby odpowiedziec. Zapytajcie popiolu, czyje buty staly przy oltarzu."
+        },
+        {
+          "label": "Pokaz nam wspomnienie kaplicy.",
+          "response": "To zaboli. Nie ciala, tylko pewnosci. Wspomnienia zmarlych nie prosza, zeby im wierzyc. One po prostu zostaja."
+        },
+        {
+          "label": "Mamy medalion strazniczki.",
+          "response": "Serai... Wiec ktos jednak odnalazl jej imie pod popiolem. Polozcie go w kregu."
+        }
+      ]
+    },
+    {
+      "dialogue_id": "serai_final_judgement",
+      "npc_id": "warden_serai",
+      "map_id": "oath_crypt",
+      "opening": "Przysiega zostala zlamana. Nie przez glodnych, nie przez dzieci, nie przez tych, ktorzy bali sie mowic. Kto niesie wine?",
+      "choices": [
+        {
+          "label": "Odran Vale ukradl relikwiarz. Mamy dowody.",
+          "response": "Dowod jest kotwica dla prawdy. Bez niego prawda tonie w krzyku zywych."
+        },
+        {
+          "label": "Wioska nie jest winna.",
+          "response": "Strach nie jest niewinnoscia. Ale czasem jest kajdanem. Pokazcie mi, kto zalozyl go pierwszy."
+        },
+        {
+          "label": "Odnawiamy przysiege.",
+          "response": "Wtedy dolina bedzie pamietac. A pamiec jest ciezsza od zlota, dlatego zlodzieje jej nie chca."
+        }
+      ]
+    }
+  ],
+  "transitions": {
+    "brindleford_square": [
+      "Burned Chapel",
+      "Old Mill",
+      "Hill Ruins"
+    ],
+    "burned_chapel": [
+      "Return to Brindleford Square"
+    ],
+    "old_mill": [
+      "Return to Brindleford Square",
+      "Hidden track to Hill Ruins after discovery"
+    ],
+    "hill_ruins": [
+      "Return to Brindleford Square",
+      "Oath Crypt after ash memory is revealed"
+    ],
+    "oath_crypt": [
+      "Restore the oath",
+      "Let Odran leave"
+    ]
+  },
+  "result_title": "Wyrok Popielnej Przysiegi",
+  "result_summary": "Los Brindleford zalezy od tego, czy druzyna ujawni Odrana, odnowi przysiege i zwroci relikwiarz do krypty."
+}

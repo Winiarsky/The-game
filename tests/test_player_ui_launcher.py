@@ -137,6 +137,35 @@ def test_runtime_board_settings_fall_back_to_simulator_when_hardware_has_no_seri
     assert resolved["board_url"] == "http://127.0.0.1:5000"
 
 
+def test_initial_scenario_id_uses_env_when_available(monkeypatch):
+    monkeypatch.setenv("PLAYER_UI_SCENARIO_ID", "ashen_oath")
+
+    selected = player_ui_app_module._initial_scenario_id(
+        [{"id": "bandit_cave"}, {"id": "ashen_oath"}]
+    )
+
+    assert selected == "ashen_oath"
+
+
+def test_initial_scenario_id_ignores_unknown_env(monkeypatch):
+    monkeypatch.setenv("PLAYER_UI_SCENARIO_ID", "missing")
+
+    selected = player_ui_app_module._initial_scenario_id(
+        [{"id": "bandit_cave"}, {"id": "ashen_oath"}]
+    )
+
+    assert selected is None
+
+
+def test_scenario_catalog_entry_exposes_default_party_ids():
+    entry = player_ui_app_module._scenario_catalog_entry(
+        {"scenario_id": "ashen_oath", "default_party_ids": ["Cedric", " freya ", ""]},
+        fallback_id="missing",
+    )
+
+    assert entry["default_party_ids"] == ["cedric", "freya"]
+
+
 def test_runtime_start_requires_at_least_one_hero(ui_client):
     response = ui_client.post(
         "/api/runtime/start",
@@ -145,6 +174,35 @@ def test_runtime_start_requires_at_least_one_hero(ui_client):
     )
     assert response.status_code == 400
     assert "hero_id" in response.get_json()["error"].lower()
+
+
+def test_runtime_start_uses_env_default_scenario_when_payload_omits_it(ui_client, monkeypatch):
+    proc = _ProcStub()
+    popen_calls = []
+
+    def _fake_popen(cmd, cwd=None, env=None):  # noqa: ARG001
+        popen_calls.append(cmd)
+        return proc
+
+    monkeypatch.setenv("PLAYER_UI_SCENARIO_ID", "ashen_oath")
+    monkeypatch.setattr(player_ui_app_module.subprocess, "Popen", _fake_popen)
+    monkeypatch.setattr(
+        player_ui_app_module,
+        "_resolve_runtime_board_settings",
+        lambda: {"backend": "hardware", "board_url": None, "serial_port": None, "wled_url": None},
+    )
+
+    response = ui_client.post(
+        "/api/runtime/start",
+        json={"hero_ids": ["cedric", "freya"]},
+        base_url="http://127.0.0.1:5200",
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["runtime_status"]["scenario_id"] == "ashen_oath"
+    assert "--scenario" in popen_calls[0]
+    assert "ashen_oath" in popen_calls[0]
 
 
 def test_runtime_start_rejects_unknown_scenario(ui_client):

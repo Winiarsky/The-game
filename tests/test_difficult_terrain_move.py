@@ -37,8 +37,10 @@ MoveEvent = move_event.MoveEvent
 class DummyConn:
     def __init__(self, clicks):
         self.clicks = list(clicks)
+        self.led_calls = []
 
-    def set_leds(self, *_args, **_kwargs):
+    def set_leds(self, positions, colors, **_kwargs):
+        self.led_calls.append((list(positions), colors))
         return None
 
     def scan_board(self, *_args, **_kwargs):
@@ -98,6 +100,34 @@ def test_path_cost_feet_includes_difficult_bonus():
     board.set_field((1, 0), RumbleTerrain())
     path = [(0, 0), (1, 0), (2, 0)]
     assert move_utils.path_cost_feet(path, board) == 15
+
+
+def test_move_initial_leds_exclude_current_field_as_destination():
+    board = BoardGrid(rows=3, cols=3)
+    start = (1, 1)
+    hero = DummyHero(start)
+    board.place(hero, start)
+
+    target = (2, 1)
+    conn = DummyConn(clicks=[target, target])
+    ui = DummyUI()
+    game = types.SimpleNamespace(
+        board=board,
+        conn=conn,
+        heroes=[hero],
+        enemies=[],
+        events=DummyEvents(),
+        ui=ui,
+        ui_log=lambda *_a, **_k: None,
+        ui_event=lambda *_a, **_k: None,
+        state=types.SimpleNamespace(__class__=type("Exploration", (), {})),
+    )
+
+    MoveEvent().execute(EventContext(game=game, actor=hero))
+
+    first_positions, _colors = conn.led_calls[0]
+    assert start not in first_positions
+    assert target in first_positions
 
 
 def test_trim_path_to_feet_respects_difficult_bonus():

@@ -1,0 +1,320 @@
+{
+  "scenario_id": "ashen_oath",
+  "version": 1,
+  "base_path": "/assets/ui_v2/ashen_oath/",
+  "fallbacks": {
+    "actor": {
+      "id": "default_actor",
+      "label": "Default actor",
+      "image": "images/placeholders/default_actor.png",
+      "alt": "Sylwetka postaci"
+    },
+    "choice": {
+      "id": "default_choice",
+      "label": "Default choice",
+      "image": "images/placeholders/default_choice.png",
+      "alt": "Symbol wyboru"
+    },
+    "spell": {
+      "id": "default_spell",
+      "label": "Default spell",
+      "image": "images/spells/default_spell.png",
+      "alt": "Symbol czaru"
+    },
+    "action": {
+      "id": "default_action",
+      "label": "Default action",
+      "image": "images/actions/default_action.png",
+      "alt": "Symbol akcji"
+    },
+    "enemy": {
+      "id": "default_enemy",
+      "label": "Default enemy",
+      "image": "images/enemies/default_enemy.png",
+      "alt": "Sylwetka przeciwnika"
+    }
+  },
+  "characters": {
+    "narrator": {
+      "id": "narrator",
+      "label": "Mistrz gry",
+      "image": "images/characters/narrator.png",
+      "alt": "Narrator scenariusza",
+      "category": "narration"
+    },
+    "odran_vale": {
+      "id": "odran_vale",
+      "label": "Castellan Odran Vale",
+      "image": "images/characters/odran_vale.png",
+      "alt": "Kasztelan Odran Vale",
+      "category": "npc"
+    },
+    "elna_barrow": {
+      "id": "elna_barrow",
+      "label": "Elna Barrow",
+      "image": "images/characters/elna_barrow.png",
+      "alt": "Soltyska Elna Barrow",
+      "category": "npc"
+    },
+    "tovin_barrow": {
+      "id": "tovin_barrow",
+      "label": "Tovin Barrow",
+      "image": "images/characters/tovin_barrow.png",
+      "alt": "Mlody akolita Tovin",
+      "category": "npc"
+    },
+    "tomas_reed": {
+      "id": "tomas_reed",
+      "label": "Tomas Reed",
+      "image": "images/characters/tomas_reed.png",
+      "alt": "Parobek mlynarski Tomas Reed",
+      "category": "npc"
+    },
+    "mara_fen": {
+      "id": "mara_fen",
+      "label": "Mara Fen",
+      "image": "images/characters/mara_fen.png",
+      "alt": "Zielarka Mara Fen",
+      "category": "npc"
+    },
+    "old_brann": {
+      "id": "old_brann",
+      "label": "Old Brann",
+      "image": "images/characters/old_brann.png",
+      "alt": "Stary gawedziarz Brann",
+      "category": "npc"
+    },
+    "nila_ashwick": {
+      "id": "nila_ashwick",
+      "label": "Nila Ashwick",
+      "image": "images/characters/nila_ashwick.png",
+      "alt": "Dziecko-swiadek Nila Ashwick",
+      "category": "npc"
+    },
+    "bren_cale": {
+      "id": "bren_cale",
+      "label": "Bren Cale",
+      "image": "images/characters/bren_cale.png",
+      "alt": "Chory tkacz Bren Cale",
+      "category": "npc"
+    },
+    "mira_ashwane": {
+      "id": "mira_ashwane",
+      "label": "Mira Ashwane",
+      "image": "images/characters/mira_ashwane.png",
+      "alt": "Czarodziejka Mira Ashwane",
+      "category": "npc"
+    },
+    "warden_serai": {
+      "id": "warden_serai",
+      "label": "Serai",
+      "image": "images/characters/warden_serai.png",
+      "alt": "Duch strazniczki Serai",
+      "category": "npc"
+    }
+  },
+  "enemies": {
+    "vale_guard": {
+      "id": "vale_guard",
+      "label": "Vale Guard",
+      "image": "images/enemies/vale_guard.png",
+      "alt": "Straznik kasztelana",
+      "category": "enemy"
+    },
+    "mill_enforcer": {
+      "id": "mill_enforcer",
+      "label": "Mill Enforcer",
+      "image": "images/enemies/mill_enforcer.png",
+      "alt": "Ochroniarz starego mlyna",
+      "category": "enemy"
+    },
+    "ashen_watcher": {
+      "id": "ashen_watcher",
+      "label": "Ashen Watcher",
+      "image": "images/enemies/ashen_watcher.png",
+      "alt": "Popielna zjawa",
+      "category": "enemy"
+    },
+    "ashen_knight": {
+      "id": "ashen_knight",
+      "label": "Ashen Knight",
+      "image": "images/enemies/ashen_knight.png",
+      "alt": "Popielny rycerz",
+      "category": "enemy"
+    },
+    "odrans_champion": {
+      "id": "odrans_champion",
+      "label": "Odran's Champion",
+      "image": "images/enemies/odrans_champion.png",
+      "alt": "Czempion Odrana Vale'a",
+      "category": "enemy"
+    }
+  },
+  "actions": {
+    "interact": {
+      "id": "interact",
+      "label": "Interact",
+      "image": "images/actions/interact.png",
+      "alt": "Dlon przy obiekcie",
+      "category": "generic"
+    },
+    "seek": {
+      "id": "seek",
+      "label": "Seek",
+      "image": "images/actions/seek.png",
+      "alt": "Oko zwiadowcy",
+      "category": "generic"
+    },
+    "strike": {
+      "id": "strike",
+      "label": "Strike",
+      "image": "images/actions/strike.png",
+      "alt": "Ciecie bronia",
+      "category": "combat"
+    }
+  },
+  "spells": {
+    "default_spell": {
+      "id": "default_spell",
+      "label": "Default spell",
+      "image": "images/spells/default_spell.png",
+      "alt": "Symbol magii",
+      "category": "fallback"
+    }
+  },
+  "scenes": {
+    "brindleford_square": {
+      "id": "brindleford_square",
+      "label": "Brindleford Square",
+      "image": "images/scenes/brindleford_square.png",
+      "alt": "Rynek wioski pod popiolem",
+      "category": "scene"
+    },
+    "burned_chapel": {
+      "id": "burned_chapel",
+      "label": "Burned Chapel",
+      "image": "images/scenes/burned_chapel.png",
+      "alt": "Spalona kaplica",
+      "category": "scene"
+    },
+    "old_mill": {
+      "id": "old_mill",
+      "label": "Old Mill",
+      "image": "images/scenes/old_mill.png",
+      "alt": "Stary mlyn",
+      "category": "scene"
+    },
+    "hill_ruins": {
+      "id": "hill_ruins",
+      "label": "Hill Ruins",
+      "image": "images/scenes/hill_ruins.png",
+      "alt": "Ruiny na wzgorzu",
+      "category": "scene"
+    },
+    "oath_crypt": {
+      "id": "oath_crypt",
+      "label": "Oath Crypt",
+      "image": "images/scenes/oath_crypt.png",
+      "alt": "Krypta Przysiegi",
+      "category": "scene"
+    }
+  },
+  "interactables": {
+    "ashen_oath_mark": {
+      "id": "ashen_oath_mark",
+      "label": "Ashen Oath Mark",
+      "image": "images/interactables/ashen_oath_mark.png",
+      "alt": "Znak przysiegi przy studni",
+      "category": "secret"
+    },
+    "broken_oath_seal": {
+      "id": "broken_oath_seal",
+      "label": "Broken Oath Seal",
+      "image": "images/interactables/broken_oath_seal.png",
+      "alt": "Rozbita pieczec",
+      "category": "clue"
+    },
+    "warden_medallion": {
+      "id": "warden_medallion",
+      "label": "Warden Medallion",
+      "image": "images/interactables/warden_medallion.png",
+      "alt": "Medalion Serai",
+      "category": "clue"
+    },
+    "mill_hidden_route": {
+      "id": "mill_hidden_route",
+      "label": "Hidden Mill Route",
+      "image": "images/interactables/mill_hidden_route.png",
+      "alt": "Ukryty trakt za workami maki",
+      "category": "secret"
+    },
+    "ash_memory_circle": {
+      "id": "ash_memory_circle",
+      "label": "Ash Memory Circle",
+      "image": "images/interactables/ash_memory_circle.png",
+      "alt": "Popielny krag wspomnien",
+      "category": "ritual"
+    },
+    "oath_reliquary": {
+      "id": "oath_reliquary",
+      "label": "Oath Reliquary",
+      "image": "images/interactables/oath_reliquary.png",
+      "alt": "Relikwiarz Przysiegi",
+      "category": "final"
+    }
+  },
+  "music": {
+    "village_ash_loop": {
+      "id": "village_ash_loop",
+      "label": "Village Ash Loop",
+      "audio": "audio/music/village_ash_loop.mp3",
+      "category": "music"
+    },
+    "crypt_judgement_loop": {
+      "id": "crypt_judgement_loop",
+      "label": "Crypt Judgement Loop",
+      "audio": "audio/music/crypt_judgement_loop.mp3",
+      "category": "music"
+    }
+  },
+  "ambience": {
+    "brindleford_square": {
+      "id": "brindleford_square",
+      "label": "Brindleford Square Ambience",
+      "audio": "audio/ambience/brindleford_square.mp3",
+      "category": "ambience"
+    },
+    "oath_crypt": {
+      "id": "oath_crypt",
+      "label": "Oath Crypt Ambience",
+      "audio": "audio/ambience/oath_crypt.mp3",
+      "category": "ambience"
+    }
+  },
+  "narration": {
+    "briefing_intro": {
+      "id": "briefing_intro",
+      "label": "Briefing Intro",
+      "audio": "audio/voiceover/briefing_intro_001.mp3",
+      "category": "voiceover"
+    },
+    "plot_twist": {
+      "id": "plot_twist",
+      "label": "Plot Twist",
+      "audio": "audio/voiceover/plot_twist_001.mp3",
+      "category": "voiceover"
+    },
+    "ending_good": {
+      "id": "ending_good",
+      "label": "Good Ending",
+      "audio": "audio/voiceover/ending_good_001.mp3",
+      "category": "voiceover"
+    },
+    "ending_costly": {
+      "id": "ending_costly",
+      "label": "Costly Ending",
+      "audio": "audio/voiceover/ending_costly_001.mp3",
+      "category": "voiceover"
+    }
+  }
+}

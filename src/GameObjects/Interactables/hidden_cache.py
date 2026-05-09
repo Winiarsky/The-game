@@ -49,6 +49,7 @@ class HiddenCache(HiddenMixin, InteractableMixin):
         self.trap_name = str(trap_name or "Pułapka w skrytce")
         self.trap_triggered = False
         self.revealed_by_seek = False
+        self._scenario_reveal_dispatched = False
         self.magical = magical
         self.magical_description = magical_description
         self.auto_reveal_on_enter = auto_reveal_on_enter
@@ -122,7 +123,11 @@ class HiddenCache(HiddenMixin, InteractableMixin):
             game=game,
             apply_modifiers=True,
         )
+        was_revealed = bool(self.revealed)
         outcome, msg = self.try_reveal(result.total)
+        extra = self.on_reveal(game, source_actor=actor) if not was_revealed and self.revealed else None
+        if extra:
+            return f"{msg} {extra} (wynik: {outcome})"
         return f"{msg} (wynik: {outcome})"
 
     def try_reveal(self, roll: int) -> tuple[str, str]:
@@ -151,6 +156,7 @@ class HiddenCache(HiddenMixin, InteractableMixin):
         # trudniej bez kontekstu
         if roll >= self.reveal_dc + 2:
             self.revealed = True
+            self.on_reveal(game, source_actor=actor)
             return "Udaje się namacać ukryty mechanizm."
         return "Macasz na ślepo, nic nie znajdujesz."
 
@@ -195,11 +201,37 @@ class HiddenCache(HiddenMixin, InteractableMixin):
             )
             outcome, msg = self.try_reveal(result.total)
             messages.append(f"{msg} (wynik: {outcome})")
+            if self.revealed:
+                extra = self.on_reveal(game, source_actor=actor)
+                if extra:
+                    messages.append(str(extra))
         if self.auto_trigger_on_enter and self.trap_effect and self.hidden:
             # ukryty czujnik – odpala nawet jeśli nie odkryto
             messages.append(f"Wyzwalasz ukryty efekt: {self.trap_effect}")
             self.auto_trigger_on_enter = False
         return " ".join(messages) if messages else None
+
+    def on_reveal(self, game, *, source_actor=None) -> str | None:
+        """Notify scenario flows when this cache becomes visible."""
+        if self._scenario_reveal_dispatched:
+            return None
+        if not self.revealed:
+            return None
+        session = getattr(game, "scenario_session", None)
+        if session is None:
+            return None
+        target_id = str(self.cache_id or "").strip()
+        if not target_id:
+            return None
+        self._scenario_reveal_dispatched = True
+        session.dispatch_trigger(
+            "object_revealed",
+            map_id=getattr(session, "current_map_id", None),
+            target_id=target_id,
+            actor=source_actor,
+            source_object=self,
+        )
+        return self.description_on_reveal
 
 
 META = GameObjectMeta(

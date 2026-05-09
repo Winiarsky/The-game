@@ -1,0 +1,154 @@
+@page {
+  size: A4;
+  margin: 10mm;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #ece7dc;
+  color: #241f1b;
+  font-family: "Inter", "Segoe UI", Arial, sans-serif;
+  line-height: 1.3;
+}
+
+.sheet {
+  min-height: 277mm;
+  border: 1px solid #4b4036;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.78), rgba(255,255,255,0.92)),
+    #f7f1e6;
+  padding: 12mm;
+  position: relative;
+}
+
+.top-art {
+  height: 44mm;
+  background-size: cover;
+  background-position: center 42%;
+  border: 1px solid #473b31;
+  margin-bottom: 6mm;
+}
+
+.identity {
+  display: grid;
+  grid-template-columns: 36mm 1fr;
+  gap: 6mm;
+  align-items: stretch;
+  margin-bottom: 5mm;
+}
+
+.portrait {
+  width: 36mm;
+  height: 46mm;
+  object-fit: cover;
+  border: 1px solid #473b31;
+  background: #2c2724;
+}
+
+h1 {
+  font-size: 24pt;
+  letter-spacing: 0;
+  margin: 0 0 1mm;
+}
+
+.subtitle {
+  font-size: 9.5pt;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b4f38;
+  font-weight: 700;
+  margin-bottom: 3mm;
+}
+
+.hook {
+  border-left: 3px solid #8f5f31;
+  padding: 2mm 0 2mm 3mm;
+  font-size: 10.5pt;
+  background: rgba(143, 95, 49, 0.08);
+}
+
+.chips {
+  display: flex;
+  gap: 2mm;
+  flex-wrap: wrap;
+  margin-top: 3mm;
+}
+
+.chip {
+  border: 1px solid #b19772;
+  background: #fff9ed;
+  padding: 1.2mm 2mm;
+  font-size: 8.5pt;
+  font-weight: 700;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4mm;
+}
+
+.box {
+  border: 1px solid #c5ad87;
+  background: rgba(255, 252, 244, 0.82);
+  padding: 3mm;
+  break-inside: avoid;
+}
+
+.box.wide {
+  grid-column: 1 / -1;
+}
+
+h2 {
+  font-size: 10.5pt;
+  margin: 0 0 2mm;
+  color: #5a3720;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid #c9b48f;
+  padding-bottom: 1mm;
+}
+
+ul {
+  margin: 0;
+  padding-left: 4mm;
+}
+
+li {
+  margin: 0 0 1.2mm;
+  font-size: 9.2pt;
+}
+
+.small li {
+  font-size: 8.8pt;
+}
+
+.callout {
+  margin-top: 4mm;
+  padding: 3mm;
+  background: #2f2a26;
+  color: #f8eddb;
+  border: 1px solid #15110e;
+  font-size: 9.4pt;
+}
+
+.footer {
+  position: absolute;
+  bottom: 6mm;
+  left: 12mm;
+  right: 12mm;
+  display: flex;
+  justify-content: space-between;
+  color: #7a6b58;
+  font-size: 8pt;
+  border-top: 1px solid #d3c1a5;
+  padding-top: 2mm;
+}
+
+strong {
+  color: #3c2a1f;
+}

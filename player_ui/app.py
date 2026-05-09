@@ -305,11 +305,29 @@ def _scenario_catalog_entry(scenario: dict[str, Any], *, fallback_id: str) -> di
         "primary_objectives": list(scenario.get("primary_objectives") or []),
         "optional_objectives": list(scenario.get("optional_objectives") or []),
         "transitions": dict(scenario.get("transitions") or {}),
+        "default_party_ids": [
+            str(item or "").strip().lower()
+            for item in list(scenario.get("default_party_ids") or [])
+            if str(item or "").strip()
+        ],
         "asset_manifest": str(scenario.get("asset_manifest") or ""),
         "audio_cues": dict(scenario.get("audio_cues") or {}),
         "result_title": str(scenario.get("result_title") or ""),
         "result_summary": str(scenario.get("result_summary") or ""),
     }
+
+
+def _initial_scenario_id(scenarios: list[dict[str, Any]]) -> str | None:
+    requested = str(os.environ.get("PLAYER_UI_SCENARIO_ID") or "").strip().lower()
+    if not requested:
+        return None
+    available = {str(item.get("id") or "").strip().lower() for item in scenarios}
+    return requested if requested in available else None
+
+
+def _default_runtime_scenario_id() -> str:
+    catalog = build_catalog()
+    return str(catalog.get("initial_scenario_id") or "bandit_cave").strip().lower() or "bandit_cave"
 
 
 def build_catalog() -> dict[str, Any]:
@@ -329,7 +347,11 @@ def build_catalog() -> dict[str, Any]:
             continue
         scenarios.append(_scenario_catalog_entry(scenario, fallback_id=path.stem))
     scenarios.sort(key=lambda item: (item["id"] != "bandit_cave", str(item.get("title") or "").lower()))
-    return {"heroes": heroes, "scenarios": scenarios}
+    return {
+        "heroes": heroes,
+        "scenarios": scenarios,
+        "initial_scenario_id": _initial_scenario_id(scenarios),
+    }
 
 
 def _public_base_url() -> str:
@@ -871,7 +893,7 @@ def api_runtime_status():
 @app.post("/api/runtime/start")
 def api_runtime_start():
     data = request.get_json(force=True, silent=True) or {}
-    scenario_id = str(data.get("scenario_id") or "").strip().lower() or "bandit_cave"
+    scenario_id = str(data.get("scenario_id") or "").strip().lower() or _default_runtime_scenario_id()
     hero_ids = [
         str(item or "").strip().lower()
         for item in list(data.get("hero_ids") or [])
@@ -879,8 +901,8 @@ def api_runtime_start():
     ]
     if not hero_ids:
         return jsonify({"ok": False, "error": "At least one hero_id is required."}), 400
-    if len(hero_ids) > 4:
-        return jsonify({"ok": False, "error": "At most 4 hero_ids are supported."}), 400
+    if len(hero_ids) > 6:
+        return jsonify({"ok": False, "error": "At most 6 hero_ids are supported."}), 400
     base_url = _public_base_url()
     try:
         status = start_runtime_process(scenario_id=scenario_id, hero_ids=hero_ids, base_url=base_url)

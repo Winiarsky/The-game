@@ -1,0 +1,416 @@
+{
+    "name": "Ashen Oath - Burned Chapel",
+    "description": "Spalona od srodka kaplica z rozbita pieczecia, medalionem strazniczki i pierwszym twardym dowodem kradziezy relikwiarza.",
+    "starting_positions": [
+        [
+            2,
+            9
+        ],
+        [
+            3,
+            9
+        ],
+        [
+            4,
+            9
+        ],
+        [
+            2,
+            10
+        ],
+        [
+            3,
+            10
+        ],
+        [
+            4,
+            10
+        ]
+    ],
+    "rooms": [
+        {
+            "id": "burned_chapel",
+            "name": "Burned Chapel",
+            "color": "#6f665f",
+            "positions": [
+                [
+                    2,
+                    5
+                ],
+                [
+                    3,
+                    5
+                ],
+                [
+                    4,
+                    5
+                ],
+                [
+                    5,
+                    5
+                ],
+                [
+                    6,
+                    5
+                ],
+                [
+                    7,
+                    5
+                ],
+                [
+                    8,
+                    5
+                ],
+                [
+                    9,
+                    5
+                ],
+                [
+                    10,
+                    5
+                ],
+                [
+                    2,
+                    6
+                ],
+                [
+                    3,
+                    6
+                ],
+                [
+                    4,
+                    6
+                ],
+                [
+                    5,
+                    6
+                ],
+                [
+                    6,
+                    6
+                ],
+                [
+                    7,
+                    6
+                ],
+                [
+                    8,
+                    6
+                ],
+                [
+                    9,
+                    6
+                ],
+                [
+                    10,
+                    6
+                ],
+                [
+                    2,
+                    7
+                ],
+                [
+                    3,
+                    7
+                ],
+                [
+                    4,
+                    7
+                ],
+                [
+                    5,
+                    7
+                ],
+                [
+                    6,
+                    7
+                ],
+                [
+                    7,
+                    7
+                ],
+                [
+                    8,
+                    7
+                ],
+                [
+                    9,
+                    7
+                ],
+                [
+                    10,
+                    7
+                ],
+                [
+                    2,
+                    8
+                ],
+                [
+                    3,
+                    8
+                ],
+                [
+                    4,
+                    8
+                ],
+                [
+                    5,
+                    8
+                ],
+                [
+                    6,
+                    8
+                ],
+                [
+                    7,
+                    8
+                ],
+                [
+                    8,
+                    8
+                ],
+                [
+                    9,
+                    8
+                ],
+                [
+                    10,
+                    8
+                ],
+                [
+                    2,
+                    9
+                ],
+                [
+                    3,
+                    9
+                ],
+                [
+                    4,
+                    9
+                ],
+                [
+                    5,
+                    9
+                ],
+                [
+                    6,
+                    9
+                ],
+                [
+                    7,
+                    9
+                ],
+                [
+                    8,
+                    9
+                ],
+                [
+                    9,
+                    9
+                ],
+                [
+                    10,
+                    9
+                ],
+                [
+                    2,
+                    10
+                ],
+                [
+                    3,
+                    10
+                ],
+                [
+                    4,
+                    10
+                ],
+                [
+                    5,
+                    10
+                ],
+                [
+                    6,
+                    10
+                ],
+                [
+                    7,
+                    10
+                ],
+                [
+                    8,
+                    10
+                ],
+                [
+                    9,
+                    10
+                ],
+                [
+                    10,
+                    10
+                ]
+            ]
+        }
+    ],
+    "objects": [
+        {
+            "category": "Terrains",
+            "object_id": "rumble_field",
+            "placement": "cell",
+            "positions": [
+                [
+                    5,
+                    7
+                ],
+                [
+                    6,
+                    7
+                ],
+                [
+                    7,
+                    8
+                ],
+                [
+                    8,
+                    8
+                ]
+            ]
+        },
+        {
+            "category": "Enemies",
+            "object_id": "ashen_watcher",
+            "placement": "cell",
+            "instances": [
+                {
+                    "position": [
+                        8,
+                        6
+                    ],
+                    "config": {
+                        "name": "Ashen Watcher"
+                    }
+                },
+                {
+                    "position": [
+                        9,
+                        8
+                    ],
+                    "config": {
+                        "name": "Ashen Watcher Echo"
+                    }
+                }
+            ]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "entry_anchor",
+            "placement": "cell",
+            "instances": [
+                {
+                    "position": [
+                        3,
+                        10
+                    ],
+                    "config": {
+                        "entry_anchor_id": "from_square",
+                        "label": "From Brindleford"
+                    }
+                }
+            ]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "scenario_exit",
+            "placement": "cell",
+            "instances": [
+                {
+                    "position": [
+                        2,
+                        10
+                    ],
+                    "config": {
+                        "exit_id": "return_to_square_from_chapel",
+                        "label": "Return to Brindleford",
+                        "interaction_mode": "on_enter"
+                    }
+                }
+            ]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "skill_challenge",
+            "placement": "cell",
+            "instances": [
+                {
+                    "position": [
+                        4,
+                        8
+                    ],
+                    "config": {
+                        "challenge_id": "chapel_tracks_read",
+                        "label": "Odczytaj trop wyniesionego relikwiarza",
+                        "skill_id": "survival",
+                        "dc": 14,
+                        "tags": [
+                            "tracking",
+                            "chapel",
+                            "relic"
+                        ],
+                        "intro": "Przy progu kaplicy popiol lezy warstwami. To nie wyglada jak zwykly pozar: ktos przeszedl tedy po fakcie, niosac cos ciezkiego i probujac zasypac slad.",
+                        "success_flag": "chapel_tracks_read",
+                        "success_message": "Slady przy progu ukladaja sie w trase ludzi niosacych ciezki relikwiarz, nie w ucieczke przed ogniem.",
+                        "failure_message": "Popiol miesza tropy i nie daje pewnego kierunku.",
+                        "outcome_messages": {
+                            "critical_success": "Odczytujesz dwie warstwy: najpierw wyniesiono relikwiarz, potem rozsypano popiol, zeby wygladalo na rytual Miry.",
+                            "success": "Slady przy progu ukladaja sie w trase ludzi niosacych ciezki relikwiarz, nie w ucieczke przed ogniem.",
+                            "failure": "Popiol miesza tropy i nie daje pewnego kierunku.",
+                            "critical_failure": "Zacieracie czesc drobnych sladow, zanim rozumiecie ich uklad."
+                        },
+                        "outcome_flags": {
+                            "critical_success": [
+                                "chapel_tracks_read",
+                                "false_ash_hint"
+                            ],
+                            "success": [
+                                "chapel_tracks_read"
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "hidden_cache",
+            "placement": "cell",
+            "instances": [
+                {
+                    "position": [
+                        7,
+                        6
+                    ],
+                    "config": {
+                        "cache_id": "broken_oath_seal",
+                        "hidden": true,
+                        "allow_hidden_interaction": false,
+                        "reveal_dc": 15,
+                        "reveal_tags": [
+                            "chapel",
+                            "seal",
+                            "relic"
+                        ],
+                        "description_on_reveal": "Pod rozbita plyta krypty lezy medalion Serai i kawalek pieczeci z herbem Vale'a.",
+                        "loot": [
+                            "warden medallion",
+                            "broken oath seal"
+                        ]
+                    }
+                }
+            ]
+        }
+    ],
+    "blocked_fields": [],
+    "obstacles": [],
+    "walls": [],
+    "setup_corner_markers": true
+}
