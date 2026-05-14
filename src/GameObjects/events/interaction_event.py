@@ -136,8 +136,36 @@ class InteractionEvent(GameEvent):
                 )
             except Exception:
                 pass
-        target = game.conn.scan_board(positions_visible)
-        game.conn.leds_off()
+        try:
+            game.ui_event(
+                "board_scan_wait",
+                {
+                    "kind": "interaction_target",
+                    "positions": [list(pos) for pos in positions_visible],
+                },
+            )
+        except Exception:
+            pass
+        try:
+            target = game.conn.scan_board(positions_visible)
+        finally:
+            game.conn.leds_off()
+            player_prompt = getattr(game, "player_prompt", None)
+            if player_prompt is not None and hasattr(player_prompt, "cancel_scope"):
+                try:
+                    player_prompt.cancel_scope("hero_turn:targeting")
+                except Exception:
+                    pass
+        try:
+            game.ui_event(
+                "board_scan_result",
+                {
+                    "kind": "interaction_target",
+                    "position": list(target) if target is not None else None,
+                },
+            )
+        except Exception:
+            pass
         if target is None:
             logger.info("Anulowano wybór celu interakcji.")
             return EventResult.noop(message="Anulowano interakcję.")
@@ -209,19 +237,21 @@ class InteractionEvent(GameEvent):
             message = interactable.interact(actor, game, action_id=action_id)
             if message:
                 logger.info(message)
-                game.ui_log(message)
-                payload = {"text": message}
-                audio_getter = getattr(interactable, "interaction_result_audio", None)
-                if callable(audio_getter):
-                    try:
-                        audio = audio_getter(action_id, message)
-                    except TypeError:
-                        audio = audio_getter(message)
-                    except Exception:
-                        audio = None
-                    if audio:
-                        payload["audio"] = str(audio)
-                game.ui_event("info", payload)
+                is_dialog = bool(interaction and "dialog" in list(getattr(interaction, "tags", []) or []))
+                if not is_dialog:
+                    game.ui_log(message)
+                    payload = {"text": message}
+                    audio_getter = getattr(interactable, "interaction_result_audio", None)
+                    if callable(audio_getter):
+                        try:
+                            audio = audio_getter(action_id, message)
+                        except TypeError:
+                            audio = audio_getter(message)
+                        except Exception:
+                            audio = None
+                        if audio:
+                            payload["audio"] = str(audio)
+                    game.ui_event("info", payload)
 
             interaction = interactable.actions.get(action_id) if action_id else None
             if interaction is None or getattr(interaction, "end_interaction", False):
@@ -257,7 +287,11 @@ class InteractionEvent(GameEvent):
         return text or None
 
     def _choose_action(self, interactable, game, actor=None):
-        actions = getattr(interactable, "available_actions", lambda: [])()
+        available_actions = getattr(interactable, "available_actions", lambda: [])
+        try:
+            actions = available_actions(actor, game)
+        except TypeError:
+            actions = available_actions()
         if not actions:
             return None
         ui = getattr(game, "ui", None)

@@ -11,7 +11,7 @@ from GameObjects.Enemies.enemy_types import EnemyType
 class AshenKnight(BasicEnemy):
     """Level 1 spirit soldier guarding the ruins before the crypt."""
 
-    name: str = "Ashen Knight"
+    name: str = "Popielny Rycerz"
     level: int = 1
     hp: int = 21
     max_hp: int | None = 21
@@ -58,14 +58,14 @@ class AshenKnight(BasicEnemy):
 
 META = GameObjectMeta(
     object_id="ashen_knight",
-    label="Ashen Knight",
+    label="Popielny Rycerz",
     color="#706f68",
     category="Enemies",
     placement="cell",
-    description="Level 1 oathbound undead soldier; moderate solo pressure without becoming a boss.",
+    description="Nieumarły żołnierz przysięgi poziomu 1; umiarkowana presja bez roli bossa.",
     logic_cls=AshenKnight,
     default_config={
-        "name": "Ashen Knight",
+        "name": "Popielny Rycerz",
         "level": 1,
         "hp": 21,
         "max_hp": 21,

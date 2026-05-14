@@ -1,302 +1,41 @@
 {
-    "name": "Ashen Oath - Hill Ruins",
-    "description": "Ruiny na wzgorzu z Mira Ashwane, popielnym kregiem wspomnien i zejsciem do Krypty Przysiegi.",
-    "starting_positions": [
-        [
-            2,
-            9
-        ],
-        [
-            3,
-            9
-        ],
-        [
-            4,
-            9
-        ],
-        [
-            2,
-            10
-        ],
-        [
-            3,
-            10
-        ],
-        [
-            4,
-            10
-        ]
+    "name": "Ashen Oath - Ruiny na wzgórzu",
+    "description": "Ruiny na wzgórzu jako ritual defense i rekonstrukcja prawdy: Mira utrzymuje popielne wspomnienie, a drużyna stabilizuje anchory, odsłania fałszywy popiół i otwiera zejście do Krypty Przysięgi.",
+    "setup_plan": [
+        {
+            "kind": "briefing",
+            "label": "Cel mapy",
+            "positions": [[9, 8], [4, 5], [14, 5], [5, 12], [15, 12], [17, 5], [13, 11], [8, 6]],
+            "colors": [[190, 220, 255], [35, 65, 110], [35, 65, 110], [35, 65, 110], [35, 65, 110], [15, 20, 15], [150, 150, 145], [205, 205, 210]],
+            "prompt": "Ruiny na wzgórzu są mapą rytuału pod presją. Ustaw Mirę i popielny krąg na zimnym białym LED-zie. Cztery niebieskie LED-y to fizyczne obeliski/anchory rytuału. Szary LED to wir popiołu jako ruchomy token/strefa. Szary punkt przy południowo-wschodniej stronie to fałszywy popiół na wietrze. Zgaszony punkt na północnym wschodzie to zasypane zejście do Krypty Przysięgi; ma zostać zakryte fizycznym elementem, dopóki rytuał nie odtworzy prawdy.",
+            "confirmation_mode": "confirm_only"
+        },
+        {
+            "kind": "terrain",
+            "label": "Hazardy i zmienny teren",
+            "positions": [[7, 7], [8, 7], [10, 9], [11, 9], [14, 8], [15, 8], [12, 5], [6, 13]],
+            "colors": [[160, 50, 140], [160, 50, 140], [160, 50, 140], [160, 50, 140], [160, 50, 140], [160, 50, 140], [120, 90, 55], [45, 220, 95]],
+            "prompt": "Fioletowo-czarne LED-y to popielne uskoki i Ashen Grasp zones: hazardy kontrolujące ruch. Brązowy LED to zawalony łuk, który można podeprzeć albo wykorzystać taktycznie. Zielony punkt na dole to wejście z traktu młyna; jeśli gracze odkryli ukryty trakt, startują z flanki bliżej południowych anchorów.",
+            "confirmation_mode": "confirm_only"
+        }
     ],
+    "starting_positions": [[2, 12], [3, 12], [4, 12], [2, 13], [3, 13], [4, 13]],
     "rooms": [
         {
             "id": "hill_ruins",
-            "name": "Hill Ruins",
+            "name": "Ruiny na wzgórzu",
             "color": "#787c70",
             "positions": [
-                [
-                    2,
-                    5
-                ],
-                [
-                    3,
-                    5
-                ],
-                [
-                    4,
-                    5
-                ],
-                [
-                    5,
-                    5
-                ],
-                [
-                    6,
-                    5
-                ],
-                [
-                    7,
-                    5
-                ],
-                [
-                    8,
-                    5
-                ],
-                [
-                    9,
-                    5
-                ],
-                [
-                    10,
-                    5
-                ],
-                [
-                    11,
-                    5
-                ],
-                [
-                    12,
-                    5
-                ],
-                [
-                    2,
-                    6
-                ],
-                [
-                    3,
-                    6
-                ],
-                [
-                    4,
-                    6
-                ],
-                [
-                    5,
-                    6
-                ],
-                [
-                    6,
-                    6
-                ],
-                [
-                    7,
-                    6
-                ],
-                [
-                    8,
-                    6
-                ],
-                [
-                    9,
-                    6
-                ],
-                [
-                    10,
-                    6
-                ],
-                [
-                    11,
-                    6
-                ],
-                [
-                    12,
-                    6
-                ],
-                [
-                    2,
-                    7
-                ],
-                [
-                    3,
-                    7
-                ],
-                [
-                    4,
-                    7
-                ],
-                [
-                    5,
-                    7
-                ],
-                [
-                    6,
-                    7
-                ],
-                [
-                    7,
-                    7
-                ],
-                [
-                    8,
-                    7
-                ],
-                [
-                    9,
-                    7
-                ],
-                [
-                    10,
-                    7
-                ],
-                [
-                    11,
-                    7
-                ],
-                [
-                    12,
-                    7
-                ],
-                [
-                    2,
-                    8
-                ],
-                [
-                    3,
-                    8
-                ],
-                [
-                    4,
-                    8
-                ],
-                [
-                    5,
-                    8
-                ],
-                [
-                    6,
-                    8
-                ],
-                [
-                    7,
-                    8
-                ],
-                [
-                    8,
-                    8
-                ],
-                [
-                    9,
-                    8
-                ],
-                [
-                    10,
-                    8
-                ],
-                [
-                    11,
-                    8
-                ],
-                [
-                    12,
-                    8
-                ],
-                [
-                    2,
-                    9
-                ],
-                [
-                    3,
-                    9
-                ],
-                [
-                    4,
-                    9
-                ],
-                [
-                    5,
-                    9
-                ],
-                [
-                    6,
-                    9
-                ],
-                [
-                    7,
-                    9
-                ],
-                [
-                    8,
-                    9
-                ],
-                [
-                    9,
-                    9
-                ],
-                [
-                    10,
-                    9
-                ],
-                [
-                    11,
-                    9
-                ],
-                [
-                    12,
-                    9
-                ],
-                [
-                    2,
-                    10
-                ],
-                [
-                    3,
-                    10
-                ],
-                [
-                    4,
-                    10
-                ],
-                [
-                    5,
-                    10
-                ],
-                [
-                    6,
-                    10
-                ],
-                [
-                    7,
-                    10
-                ],
-                [
-                    8,
-                    10
-                ],
-                [
-                    9,
-                    10
-                ],
-                [
-                    10,
-                    10
-                ],
-                [
-                    11,
-                    10
-                ],
-                [
-                    12,
-                    10
-                ]
+                [2, 4], [3, 4], [4, 4], [5, 4], [6, 4], [7, 4], [8, 4], [9, 4], [10, 4], [11, 4], [12, 4], [13, 4], [14, 4], [15, 4], [16, 4], [17, 4],
+                [2, 5], [3, 5], [4, 5], [5, 5], [6, 5], [7, 5], [8, 5], [9, 5], [10, 5], [11, 5], [12, 5], [13, 5], [14, 5], [15, 5], [16, 5], [17, 5],
+                [2, 6], [3, 6], [4, 6], [5, 6], [6, 6], [7, 6], [8, 6], [9, 6], [10, 6], [11, 6], [12, 6], [13, 6], [14, 6], [15, 6], [16, 6], [17, 6],
+                [2, 7], [3, 7], [4, 7], [5, 7], [6, 7], [7, 7], [8, 7], [9, 7], [10, 7], [11, 7], [12, 7], [13, 7], [14, 7], [15, 7], [16, 7], [17, 7],
+                [2, 8], [3, 8], [4, 8], [5, 8], [6, 8], [7, 8], [8, 8], [9, 8], [10, 8], [11, 8], [12, 8], [13, 8], [14, 8], [15, 8], [16, 8], [17, 8],
+                [2, 9], [3, 9], [4, 9], [5, 9], [6, 9], [7, 9], [8, 9], [9, 9], [10, 9], [11, 9], [12, 9], [13, 9], [14, 9], [15, 9], [16, 9], [17, 9],
+                [2, 10], [3, 10], [4, 10], [5, 10], [6, 10], [7, 10], [8, 10], [9, 10], [10, 10], [11, 10], [12, 10], [13, 10], [14, 10], [15, 10], [16, 10], [17, 10],
+                [2, 11], [3, 11], [4, 11], [5, 11], [6, 11], [7, 11], [8, 11], [9, 11], [10, 11], [11, 11], [12, 11], [13, 11], [14, 11], [15, 11], [16, 11], [17, 11],
+                [2, 12], [3, 12], [4, 12], [5, 12], [6, 12], [7, 12], [8, 12], [9, 12], [10, 12], [11, 12], [12, 12], [13, 12], [14, 12], [15, 12], [16, 12], [17, 12],
+                [2, 13], [3, 13], [4, 13], [5, 13], [6, 13], [7, 13], [8, 13], [9, 13], [10, 13], [11, 13], [12, 13], [13, 13], [14, 13], [15, 13], [16, 13], [17, 13]
             ]
         }
     ],
@@ -305,24 +44,7 @@
             "category": "Terrains",
             "object_id": "rumble_field",
             "placement": "cell",
-            "positions": [
-                [
-                    6,
-                    6
-                ],
-                [
-                    7,
-                    6
-                ],
-                [
-                    8,
-                    6
-                ],
-                [
-                    7,
-                    7
-                ]
-            ]
+            "positions": [[6, 6], [7, 6], [8, 6], [11, 5], [12, 5], [13, 5], [5, 10], [6, 10], [12, 12], [13, 12]]
         },
         {
             "category": "Enemies",
@@ -330,12 +52,10 @@
             "placement": "cell",
             "instances": [
                 {
-                    "position": [
-                        10,
-                        6
-                    ],
+                    "position": [12, 7],
                     "config": {
-                        "name": "Ashen Knight"
+                        "name": "Popielny Rycerz",
+                        "ai_profile": {"role": "ritual_anchor_guardian", "blocks_active_anchor": true, "protects": "hill_ruins_crypt_descent"}
                     }
                 }
             ]
@@ -346,21 +66,17 @@
             "placement": "cell",
             "instances": [
                 {
-                    "position": [
-                        9,
-                        8
-                    ],
+                    "position": [8, 9],
                     "config": {
-                        "name": "Ashen Memory"
+                        "name": "Popielne Wspomnienie",
+                        "ai_profile": {"role": "ritual_disruptor", "target": "mira_ashwane"}
                     }
                 },
                 {
-                    "position": [
-                        11,
-                        8
-                    ],
+                    "position": [14, 9],
                     "config": {
-                        "name": "Ashen Memory Echo"
+                        "name": "Echo Popielnego Wspomnienia",
+                        "ai_profile": {"role": "ritual_disruptor", "target": "active_anchor"}
                     }
                 }
             ]
@@ -371,10 +87,7 @@
             "placement": "cell",
             "instances": [
                 {
-                    "position": [
-                        7,
-                        7
-                    ],
+                    "position": [9, 8],
                     "config": {
                         "name": "Mira Ashwane",
                         "npc_id": "mira_ashwane",
@@ -384,77 +97,44 @@
                         "dialog": {
                             "start": {
                                 "title": "Mira Ashwane",
-                                "text": "Mira stoi w popielnym kregu, ale nie wyglada jak ktos, kto rzuca klatwe. Trzyma rytual w ryzach resztkami glosu. 'Jesli przerwiecie krag mieczem, wspomnienie rozpadnie sie razem z prawda.'",
+                                "text": "Mira stoi w popielnym kręgu, ale nie wygląda jak ktoś, kto rzuca klątwę. Trzyma rytuał resztkami głosu. 'Jeśli przerwiecie krąg mieczem, wspomnienie rozpadnie się razem z prawdą.'",
                                 "options": [
                                     {
                                         "id": "ask_ritual",
-                                        "label": "Zapytaj, co robi rytual.",
-                                        "text": "Mira tlumaczy, ze popiol pamieta dotyk sprawcy. Kreg nie wskrzesza zmarlych; utrzymuje moment kradziezy relikwiarza, zanim duchy straza go rozerwa."
+                                        "label": "Zapytaj, co robi rytuał.",
+                                        "text": "Mira tłumaczy, że popiół pamięta dotyk sprawcy. Krąg nie wskrzesza zmarłych; utrzymuje moment kradzieży relikwiarza, zanim duchy straży go rozerwą."
                                     },
                                     {
                                         "id": "ask_odran",
                                         "label": "Zapytaj o Odrana.",
-                                        "conditions": {
-                                            "any_flags": [
-                                                "odran_relic_story_inconsistent",
-                                                "chapel_tracks_read",
-                                                "villager_mill_hint"
-                                            ]
-                                        },
-                                        "text": "Mira mowi, ze Odran potrzebowal relikwiarza, zeby przejac stara przysiege Serai. Jesli udowodnicie kradziez, duch krypty moze jeszcze posluchac zywych.",
-                                        "effects": [
-                                            {
-                                                "type": "set_flag",
-                                                "flag": "mira_names_odran"
-                                            }
-                                        ]
+                                        "conditions": {"any_flags": ["relic_theft_discovered", "chapel_tracks_read", "mill_ledger_secured", "tovin_rescued"]},
+                                        "text": "Mira mówi, że Odran potrzebował relikwiarza, żeby przejąć starą przysięgę Serai. Dowody z kaplicy i młyna mogą zmusić kryptę, by wysłuchała żywych.",
+                                        "effects": [{"type": "set_flag", "flag": "mira_names_odran"}]
                                     },
                                     {
                                         "id": "stabilize",
-                                        "label": "Pomoz jej utrzymac wspomnienie.",
+                                        "label": "Pomóż jej utrzymać wspomnienie.",
                                         "skill_check": {
                                             "skill_id": "occultism",
                                             "skill_label": "Occultism",
                                             "dc": 15,
-                                            "tags": [
-                                                "mira",
-                                                "ash",
-                                                "memory",
-                                                "dialog"
-                                            ],
+                                            "tags": ["mira", "ash", "memory", "dialog"],
                                             "outcomes": {
                                                 "critical_success": {
-                                                    "text": "Dostrajasz szept do kregu. W popiele widac Odranowska pieczec na sakwie jednego z ludzi.",
-                                                    "effects": [
-                                                        {
-                                                            "type": "set_flag",
-                                                            "flag": "mira_memory_stabilized"
-                                                        },
-                                                        {
-                                                            "type": "set_flag",
-                                                            "flag": "odran_seal_seen"
-                                                        }
-                                                    ]
+                                                    "text": "Dostrajasz szept do kręgu. W popiele widać pieczęć Odrana na sakwie jednego z ludzi.",
+                                                    "effects": [{"type": "set_flag", "flag": "mira_memory_stabilized"}, {"type": "set_flag", "flag": "odran_seal_seen"}]
                                                 },
                                                 "success": {
-                                                    "text": "Kreg przestaje drzec. Mira ma czas dopowiedziec, gdzie szukac wejscia do krypty.",
-                                                    "effects": [
-                                                        {
-                                                            "type": "set_flag",
-                                                            "flag": "mira_memory_stabilized"
-                                                        }
-                                                    ]
+                                                    "text": "Krąg przestaje drżeć. Mira ma czas dopowiedzieć, gdzie szukać wejścia do krypty.",
+                                                    "effects": [{"type": "set_flag", "flag": "mira_memory_stabilized"}]
                                                 },
                                                 "failure": {
-                                                    "text": "Popiol wiruje zbyt szybko. Mira utrzymuje rytual sama, ale traci czas i sile."
+                                                    "text": "Popiół wiruje zbyt szybko. Mira utrzymuje rytuał sama, ale traci czas i siłę."
                                                 }
                                             }
                                         }
                                     },
-                                    {
-                                        "id": "leave",
-                                        "label": "Daj jej skupic sie na rytuale."
-                                    }
+                                    {"id": "leave", "label": "Daj jej skupić się na rytuale."}
                                 ]
                             }
                         }
@@ -464,39 +144,72 @@
         },
         {
             "category": "Interactables",
+            "object_id": "hill_ruins_overview",
+            "placement": "cell",
+            "instances": [{"position": [3, 12], "config": {"overview_id": "hill_ruins_overview"}}]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "hill_ruins_anchor",
+            "placement": "cell",
+            "instances": [
+                {"position": [4, 5], "config": {"anchor_id": "oath", "dc": 15}},
+                {"position": [14, 5], "config": {"anchor_id": "ash", "dc": 15}},
+                {"position": [5, 12], "config": {"anchor_id": "blood", "dc": 15}},
+                {"position": [15, 12], "config": {"anchor_id": "relic", "dc": 15}}
+            ]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "hill_ruins_echo",
+            "placement": "cell",
+            "instances": [{"position": [5, 6], "config": {"dc": 15}}]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "hill_ruins_false_ash",
+            "placement": "cell",
+            "instances": [{"position": [13, 11], "config": {"dc": 14}}]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "hill_ruins_ash_storm",
+            "placement": "cell",
+            "instances": [{"position": [8, 6], "config": {"dc": 15}}]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "hill_ruins_crypt_descent",
+            "placement": "cell",
+            "instances": [{"position": [17, 5], "config": {}}]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "hill_ruins_fallen_arch",
+            "placement": "cell",
+            "instances": [{"position": [12, 5], "config": {"dc": 15}}]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "trap_tile",
+            "placement": "cell",
+            "instances": [
+                {"position": [7, 7], "config": {"trap_name": "Popielny uskok", "trap_detection_dc": 14, "trap_disable_dc": 15, "trap_identify_dc": 14, "trap_effect": "Pęknięta płyta parzy cieniem i spowalnia ruch.", "trap_damage_prompt": "1k4", "trap_damage_type": "shadow"}},
+                {"position": [8, 7], "config": {"trap_name": "Popielny uskok", "trap_detection_dc": 14, "trap_disable_dc": 15, "trap_identify_dc": 14, "trap_effect": "Pęknięta płyta parzy cieniem i spowalnia ruch.", "trap_damage_prompt": "1k4", "trap_damage_type": "shadow"}},
+                {"position": [10, 9], "config": {"trap_name": "Popielny chwyt", "trap_detection_dc": 15, "trap_disable_dc": 15, "trap_identify_dc": 15, "trap_effect": "Dłonie z popiołu próbują zatrzymać bohatera przy kręgu.", "trap_damage_prompt": "1", "trap_damage_type": "shadow"}},
+                {"position": [11, 9], "config": {"trap_name": "Popielny chwyt", "trap_detection_dc": 15, "trap_disable_dc": 15, "trap_identify_dc": 15, "trap_effect": "Dłonie z popiołu próbują zatrzymać bohatera przy kręgu.", "trap_damage_prompt": "1", "trap_damage_type": "shadow"}},
+                {"position": [14, 8], "config": {"trap_name": "Popielny uskok", "trap_detection_dc": 14, "trap_disable_dc": 15, "trap_identify_dc": 14, "trap_effect": "Pęknięta płyta parzy cieniem i spowalnia ruch.", "trap_damage_prompt": "1k4", "trap_damage_type": "shadow"}},
+                {"position": [15, 8], "config": {"trap_name": "Popielny uskok", "trap_detection_dc": 14, "trap_disable_dc": 15, "trap_identify_dc": 14, "trap_effect": "Pęknięta płyta parzy cieniem i spowalnia ruch.", "trap_damage_prompt": "1k4", "trap_damage_type": "shadow"}}
+            ]
+        },
+        {
+            "category": "Interactables",
             "object_id": "entry_anchor",
             "placement": "cell",
             "instances": [
-                {
-                    "position": [
-                        3,
-                        10
-                    ],
-                    "config": {
-                        "entry_anchor_id": "from_square",
-                        "label": "From Brindleford"
-                    }
-                },
-                {
-                    "position": [
-                        5,
-                        10
-                    ],
-                    "config": {
-                        "entry_anchor_id": "from_mill_track",
-                        "label": "From Mill Track"
-                    }
-                },
-                {
-                    "position": [
-                        10,
-                        9
-                    ],
-                    "config": {
-                        "entry_anchor_id": "from_crypt",
-                        "label": "From Oath Crypt"
-                    }
-                }
+                {"position": [3, 13], "config": {"entry_anchor_id": "from_square", "label": "Z Brindleford"}},
+                {"position": [6, 13], "config": {"entry_anchor_id": "from_mill_track", "label": "Z traktu młyna"}},
+                {"position": [16, 6], "config": {"entry_anchor_id": "from_crypt", "label": "Z Krypty Przysięgi"}}
             ]
         },
         {
@@ -504,28 +217,8 @@
             "object_id": "scenario_exit",
             "placement": "cell",
             "instances": [
-                {
-                    "position": [
-                        2,
-                        10
-                    ],
-                    "config": {
-                        "exit_id": "return_to_square_from_ruins",
-                        "label": "Return to Brindleford",
-                        "interaction_mode": "on_enter"
-                    }
-                },
-                {
-                    "position": [
-                        12,
-                        6
-                    ],
-                    "config": {
-                        "exit_id": "to_oath_crypt",
-                        "label": "Stair to Oath Crypt",
-                        "interaction_mode": "on_enter"
-                    }
-                }
+                {"position": [2, 13], "config": {"exit_id": "return_to_square_from_ruins", "label": "Powrót do Brindleford", "interaction_mode": "on_enter"}},
+                {"position": [17, 5], "config": {"exit_id": "to_oath_crypt", "label": "Zejście do Krypty Przysięgi", "interaction_mode": "manual", "hidden": true, "allow_hidden_interaction": false, "reveal_dc": 18, "reveal_tags": ["crypt", "oath", "truth"], "reveal_message": "Zejście do Krypty Przysięgi otwiera się zimnym światłem."}}
             ]
         },
         {
@@ -534,38 +227,26 @@
             "placement": "cell",
             "instances": [
                 {
-                    "position": [
-                        8,
-                        7
-                    ],
+                    "position": [8, 8],
                     "config": {
                         "challenge_id": "ash_ritual_interpreted",
-                        "label": "Zinterpretuj popielny rytual",
+                        "label": "Zinterpretuj popielny rytuał",
                         "skill_id": "occultism",
                         "dc": 15,
-                        "tags": [
-                            "ritual",
-                            "ash",
-                            "memory"
-                        ],
-                        "intro": "Popielny krag nie atakuje sam z siebie. To zapis wspomnienia: mozna go odczytac jak rytual, albo zniszczyc i stracic dowod.",
+                        "tags": ["ritual", "ash", "memory"],
+                        "intro": "Popielny krąg nie atakuje sam z siebie. To zapis wspomnienia: można go odczytać jak rytuał albo zniszczyć i stracić dowód.",
                         "success_flag": "ash_ritual_interpreted",
-                        "success_message": "Rytual Miry nie jest klatwa; stabilizuje wspomnienie, zanim duchy je rozerwa.",
-                        "failure_message": "Popielne symbole drza zbyt szybko, by odczytac ich logike.",
+                        "success_message": "Rytuał Miry nie jest klątwą; stabilizuje wspomnienie, zanim duchy je rozerwą.",
+                        "failure_message": "Popielne symbole drżą zbyt szybko, by odczytać ich logikę.",
                         "outcome_messages": {
-                            "critical_success": "Rozumiesz rytual i jego granice: Mira utrzymuje prawde, a nie klatwe. Mozecie uzyc kregu jako dowodu w krypcie.",
-                            "success": "Rytual Miry nie jest klatwa; stabilizuje wspomnienie, zanim duchy je rozerwa.",
-                            "failure": "Popielne symbole drza zbyt szybko, by odczytac ich logike.",
-                            "critical_failure": "Dotykasz zlego znaku i wspomnienie szarpie sie, jakby chcialo wyrwac sie z kregu."
+                            "critical_success": "Rozumiesz rytuał i jego granice: Mira utrzymuje prawdę, a nie klątwę. Możecie użyć kręgu jako dowodu w krypcie.",
+                            "success": "Rytuał Miry nie jest klątwą; stabilizuje wspomnienie, zanim duchy je rozerwą.",
+                            "failure": "Popielne symbole drżą zbyt szybko, by odczytać ich logikę.",
+                            "critical_failure": "Dotykasz złego znaku i wspomnienie szarpie się, jakby chciało wyrwać się z kręgu."
                         },
                         "outcome_flags": {
-                            "critical_success": [
-                                "ash_ritual_interpreted",
-                                "mira_memory_stabilized"
-                            ],
-                            "success": [
-                                "ash_ritual_interpreted"
-                            ]
+                            "critical_success": ["ash_ritual_interpreted", "mira_memory_stabilized"],
+                            "success": ["ash_ritual_interpreted"]
                         }
                     }
                 }
@@ -577,24 +258,15 @@
             "placement": "cell",
             "instances": [
                 {
-                    "position": [
-                        7,
-                        7
-                    ],
+                    "position": [9, 8],
                     "config": {
                         "cache_id": "ash_memory_circle",
                         "hidden": true,
                         "allow_hidden_interaction": false,
                         "reveal_dc": 16,
-                        "reveal_tags": [
-                            "ritual",
-                            "ash",
-                            "memory"
-                        ],
-                        "description_on_reveal": "Popiol uklada sie we wspomnienie kradziezy relikwiarza.",
-                        "loot": [
-                            "ash memory"
-                        ]
+                        "reveal_tags": ["ritual", "ash", "memory"],
+                        "description_on_reveal": "Popiół układa się we wspomnienie kradzieży relikwiarza.",
+                        "loot": ["popielne wspomnienie"]
                     }
                 }
             ]

@@ -5,31 +5,31 @@
   "fallbacks": {
     "actor": {
       "id": "default_actor",
-      "label": "Default actor",
+      "label": "Domyślna postać",
       "image": "images/placeholders/default_actor.png",
       "alt": "Sylwetka postaci"
     },
     "choice": {
       "id": "default_choice",
-      "label": "Default choice",
+      "label": "Domyślny wybór",
       "image": "images/placeholders/default_choice.png",
       "alt": "Symbol wyboru"
     },
     "spell": {
       "id": "default_spell",
-      "label": "Default spell",
+      "label": "Domyślny czar",
       "image": "images/spells/default_spell.png",
       "alt": "Symbol czaru"
     },
     "action": {
       "id": "default_action",
-      "label": "Default action",
+      "label": "Domyślna akcja",
       "image": "images/actions/default_action.png",
       "alt": "Symbol akcji"
     },
     "enemy": {
       "id": "default_enemy",
-      "label": "Default enemy",
+      "label": "Domyślny przeciwnik",
       "image": "images/enemies/default_enemy.png",
       "alt": "Sylwetka przeciwnika"
     }
@@ -44,7 +44,7 @@
     },
     "odran_vale": {
       "id": "odran_vale",
-      "label": "Castellan Odran Vale",
+      "label": "Kasztelan Odran Vale",
       "image": "images/characters/odran_vale.png",
       "alt": "Kasztelan Odran Vale",
       "category": "npc"
@@ -53,21 +53,21 @@
       "id": "elna_barrow",
       "label": "Elna Barrow",
       "image": "images/characters/elna_barrow.png",
-      "alt": "Soltyska Elna Barrow",
+      "alt": "Sołtyska Elna Barrow",
       "category": "npc"
     },
     "tovin_barrow": {
       "id": "tovin_barrow",
       "label": "Tovin Barrow",
       "image": "images/characters/tovin_barrow.png",
-      "alt": "Mlody akolita Tovin",
+      "alt": "Młody akolita Tovin",
       "category": "npc"
     },
     "tomas_reed": {
       "id": "tomas_reed",
       "label": "Tomas Reed",
       "image": "images/characters/tomas_reed.png",
-      "alt": "Parobek mlynarski Tomas Reed",
+      "alt": "Parobek młynarski Tomas Reed",
       "category": "npc"
     },
     "mara_fen": {
@@ -81,14 +81,14 @@
       "id": "old_brann",
       "label": "Old Brann",
       "image": "images/characters/old_brann.png",
-      "alt": "Stary gawedziarz Brann",
+      "alt": "Stary gawędziarz Brann",
       "category": "npc"
     },
     "nila_ashwick": {
       "id": "nila_ashwick",
       "label": "Nila Ashwick",
       "image": "images/characters/nila_ashwick.png",
-      "alt": "Dziecko-swiadek Nila Ashwick",
+      "alt": "Dziecko-świadek Nila Ashwick",
       "category": "npc"
     },
     "bren_cale": {
@@ -109,42 +109,56 @@
       "id": "warden_serai",
       "label": "Serai",
       "image": "images/characters/warden_serai.png",
-      "alt": "Duch strazniczki Serai",
+      "alt": "Duch strażniczki Serai",
       "category": "npc"
     }
   },
   "enemies": {
     "vale_guard": {
       "id": "vale_guard",
-      "label": "Vale Guard",
+      "label": "Strażnik Vale'a",
       "image": "images/enemies/vale_guard.png",
-      "alt": "Straznik kasztelana",
+      "alt": "Strażnik kasztelana",
       "category": "enemy"
     },
     "mill_enforcer": {
       "id": "mill_enforcer",
-      "label": "Mill Enforcer",
+      "label": "Egzekutor z młyna",
       "image": "images/enemies/mill_enforcer.png",
-      "alt": "Ochroniarz starego mlyna",
+      "alt": "Ochroniarz starego młyna",
       "category": "enemy"
     },
     "ashen_watcher": {
       "id": "ashen_watcher",
-      "label": "Ashen Watcher",
+      "label": "Popielne Echo",
       "image": "images/enemies/ashen_watcher.png",
       "alt": "Popielna zjawa",
       "category": "enemy"
     },
     "ashen_knight": {
       "id": "ashen_knight",
-      "label": "Ashen Knight",
+      "label": "Popielny Rycerz",
       "image": "images/enemies/ashen_knight.png",
       "alt": "Popielny rycerz",
       "category": "enemy"
     },
+    "charred_deacon": {
+      "id": "charred_deacon",
+      "label": "Spalony Diakon",
+      "image": "images/enemies/charred_deacon.png",
+      "alt": "Spalony duchowny przywiązany do ołtarza",
+      "category": "boss"
+    },
+    "ash_cinder": {
+      "id": "ash_cinder",
+      "label": "Popielna Iskra",
+      "image": "images/enemies/ash_cinder.png",
+      "alt": "Mały cień z popiołu",
+      "category": "enemy"
+    },
     "odrans_champion": {
       "id": "odrans_champion",
-      "label": "Odran's Champion",
+      "label": "Champion Odrana",
       "image": "images/enemies/odrans_champion.png",
       "alt": "Czempion Odrana Vale'a",
       "category": "enemy"
@@ -153,30 +167,30 @@
   "actions": {
     "interact": {
       "id": "interact",
-      "label": "Interact",
+      "label": "Interakcja",
       "image": "images/actions/interact.png",
-      "alt": "Dlon przy obiekcie",
+      "alt": "Dłoń przy obiekcie",
       "category": "generic"
     },
     "seek": {
       "id": "seek",
-      "label": "Seek",
+      "label": "Szukaj",
       "image": "images/actions/seek.png",
       "alt": "Oko zwiadowcy",
       "category": "generic"
     },
     "strike": {
       "id": "strike",
-      "label": "Strike",
+      "label": "Atak",
       "image": "images/actions/strike.png",
-      "alt": "Ciecie bronia",
+      "alt": "Cięcie bronią",
       "category": "combat"
     }
   },
   "spells": {
     "default_spell": {
       "id": "default_spell",
-      "label": "Default spell",
+      "label": "Domyślny czar",
       "image": "images/spells/default_spell.png",
       "alt": "Symbol magii",
       "category": "fallback"
@@ -185,134 +199,167 @@
   "scenes": {
     "brindleford_square": {
       "id": "brindleford_square",
-      "label": "Brindleford Square",
+      "label": "Rynek Brindleford",
       "image": "images/scenes/brindleford_square.png",
-      "alt": "Rynek wioski pod popiolem",
+      "alt": "Rynek wioski pod popiołem",
       "category": "scene"
     },
     "burned_chapel": {
       "id": "burned_chapel",
-      "label": "Burned Chapel",
+      "label": "Spalona Kaplica",
       "image": "images/scenes/burned_chapel.png",
       "alt": "Spalona kaplica",
       "category": "scene"
     },
     "old_mill": {
       "id": "old_mill",
-      "label": "Old Mill",
+      "label": "Stary Młyn",
       "image": "images/scenes/old_mill.png",
-      "alt": "Stary mlyn",
+      "alt": "Stary młyn",
       "category": "scene"
     },
     "hill_ruins": {
       "id": "hill_ruins",
-      "label": "Hill Ruins",
+      "label": "Ruiny na wzgórzu",
       "image": "images/scenes/hill_ruins.png",
-      "alt": "Ruiny na wzgorzu",
+      "alt": "Ruiny na wzgórzu",
       "category": "scene"
     },
     "oath_crypt": {
       "id": "oath_crypt",
-      "label": "Oath Crypt",
+      "label": "Krypta Przysięgi",
       "image": "images/scenes/oath_crypt.png",
-      "alt": "Krypta Przysiegi",
+      "alt": "Krypta Przysięgi",
       "category": "scene"
     }
   },
   "interactables": {
     "ashen_oath_mark": {
       "id": "ashen_oath_mark",
-      "label": "Ashen Oath Mark",
+      "label": "Znak Popielnej Przysięgi",
       "image": "images/interactables/ashen_oath_mark.png",
-      "alt": "Znak przysiegi przy studni",
+      "alt": "Znak przysięgi przy studni",
       "category": "secret"
     },
     "broken_oath_seal": {
       "id": "broken_oath_seal",
-      "label": "Broken Oath Seal",
+      "label": "Pęknięta Pieczęć Przysięgi",
       "image": "images/interactables/broken_oath_seal.png",
-      "alt": "Rozbita pieczec",
+      "alt": "Rozbita pieczęć",
       "category": "clue"
     },
     "warden_medallion": {
       "id": "warden_medallion",
-      "label": "Warden Medallion",
+      "label": "Medalion Strażniczki",
       "image": "images/interactables/warden_medallion.png",
       "alt": "Medalion Serai",
       "category": "clue"
     },
     "mill_hidden_route": {
       "id": "mill_hidden_route",
-      "label": "Hidden Mill Route",
+      "label": "Ukryty trakt młyna",
       "image": "images/interactables/mill_hidden_route.png",
-      "alt": "Ukryty trakt za workami maki",
+      "alt": "Ukryty trakt za workami mąki",
       "category": "secret"
     },
     "ash_memory_circle": {
       "id": "ash_memory_circle",
-      "label": "Ash Memory Circle",
+      "label": "Popielny Krąg Wspomnienia",
       "image": "images/interactables/ash_memory_circle.png",
-      "alt": "Popielny krag wspomnien",
+      "alt": "Popielny krąg wspomnień",
       "category": "ritual"
     },
     "oath_reliquary": {
       "id": "oath_reliquary",
-      "label": "Oath Reliquary",
+      "label": "Relikwiarz Przysięgi",
       "image": "images/interactables/oath_reliquary.png",
-      "alt": "Relikwiarz Przysiegi",
+      "alt": "Relikwiarz Przysięgi",
       "category": "final"
+    },
+    "charred_altar": {
+      "id": "charred_altar",
+      "label": "Spalony Ołtarz",
+      "image": "images/interactables/charred_altar.png",
+      "alt": "Spalony ołtarz z czerwonym żarem",
+      "category": "ritual"
+    },
+    "chapel_statues": {
+      "id": "chapel_statues",
+      "label": "Posągi kaplicy",
+      "image": "images/interactables/chapel_statues.png",
+      "alt": "Cztery posągi scen rytuału",
+      "category": "ritual"
+    },
+    "hallowed_ash_vial": {
+      "id": "hallowed_ash_vial",
+      "label": "Fiolka uświęconego popiołu",
+      "image": "images/interactables/hallowed_ash_vial.png",
+      "alt": "Fiolka jasnego popiołu",
+      "category": "reward"
     }
   },
   "music": {
     "village_ash_loop": {
       "id": "village_ash_loop",
-      "label": "Village Ash Loop",
+      "label": "Motyw popielnej wioski",
       "audio": "audio/music/village_ash_loop.mp3",
       "category": "music"
     },
     "crypt_judgement_loop": {
       "id": "crypt_judgement_loop",
-      "label": "Crypt Judgement Loop",
+      "label": "Motyw sądu krypty",
       "audio": "audio/music/crypt_judgement_loop.mp3",
+      "category": "music"
+    },
+    "charred_deacon_loop": {
+      "id": "charred_deacon_loop",
+      "label": "Motyw Spalonego Diakona",
+      "audio": "audio/music/charred_deacon_loop.mp3",
       "category": "music"
     }
   },
   "ambience": {
     "brindleford_square": {
       "id": "brindleford_square",
-      "label": "Brindleford Square Ambience",
+      "label": "Ambient rynku Brindleford",
       "audio": "audio/ambience/brindleford_square.mp3",
       "category": "ambience"
     },
     "oath_crypt": {
       "id": "oath_crypt",
-      "label": "Oath Crypt Ambience",
+      "label": "Ambient Krypty Przysięgi",
       "audio": "audio/ambience/oath_crypt.mp3",
+      "category": "ambience"
+    },
+    "burned_chapel": {
+      "id": "burned_chapel",
+      "label": "Ambient Spalonej Kaplicy",
+      "audio": "audio/ambience/burned_chapel.mp3",
       "category": "ambience"
     }
   },
   "narration": {
     "briefing_intro": {
       "id": "briefing_intro",
-      "label": "Briefing Intro",
+      "label": "Wprowadzenie",
       "audio": "audio/voiceover/briefing_intro_001.mp3",
       "category": "voiceover"
     },
     "plot_twist": {
       "id": "plot_twist",
-      "label": "Plot Twist",
+      "label": "Zwrot fabularny",
       "audio": "audio/voiceover/plot_twist_001.mp3",
       "category": "voiceover"
     },
     "ending_good": {
       "id": "ending_good",
-      "label": "Good Ending",
+      "label": "Dobre zakończenie",
       "audio": "audio/voiceover/ending_good_001.mp3",
       "category": "voiceover"
     },
     "ending_costly": {
       "id": "ending_costly",
-      "label": "Costly Ending",
+      "label": "Kosztowne zakończenie",
       "audio": "audio/voiceover/ending_costly_001.mp3",
       "category": "voiceover"
     }

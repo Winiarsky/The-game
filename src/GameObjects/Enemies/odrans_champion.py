@@ -11,7 +11,7 @@ from GameObjects.Enemies.enemy_types import EnemyType
 class OdransChampion(BasicEnemy):
     """Level 2 finale boss for a level 1 party."""
 
-    name: str = "Odran's Champion"
+    name: str = "Champion Odrana"
     level: int = 2
     hp: int = 36
     max_hp: int | None = 36
@@ -58,14 +58,14 @@ class OdransChampion(BasicEnemy):
 
 META = GameObjectMeta(
     object_id="odrans_champion",
-    label="Odran's Champion",
+    label="Champion Odrana",
     color="#4f3941",
     category="Enemies",
     placement="cell",
-    description="Level 2 finale boss for Ashen Oath; reach control and high Fortitude.",
+    description="Finałowy champion Odrana poziomu 2; kontrola zasięgiem i wysoka Wytrwałość.",
     logic_cls=OdransChampion,
     default_config={
-        "name": "Odran's Champion",
+        "name": "Champion Odrana",
         "level": 2,
         "hp": 36,
         "max_hp": 36,

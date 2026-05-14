@@ -1,6 +1,6 @@
 {
-    "name": "Ashen Oath - Brindleford Square",
-    "description": "Rynek przestraszonej wioski z popiolem przy studni, kasztelanem i tropami do kaplicy, mlyna oraz ruin.",
+    "name": "Ashen Oath - Rynek Brindleford",
+    "description": "Rozległy rynek przestraszonej wioski z popiołem przy studni, bocznymi zaułkami, chorym tkaczem i tropami do kaplicy, młyna oraz ruin.",
     "starting_positions": [
         [
             2,
@@ -30,11 +30,155 @@
     "rooms": [
         {
             "id": "brindleford_square",
-            "name": "Brindleford Square",
+            "name": "Rynek Brindleford",
             "color": "#9a8f7a",
             "positions": [
                 [
                     1,
+                    5
+                ],
+                [
+                    2,
+                    5
+                ],
+                [
+                    3,
+                    5
+                ],
+                [
+                    4,
+                    5
+                ],
+                [
+                    5,
+                    5
+                ],
+                [
+                    6,
+                    5
+                ],
+                [
+                    7,
+                    5
+                ],
+                [
+                    8,
+                    5
+                ],
+                [
+                    9,
+                    5
+                ],
+                [
+                    10,
+                    5
+                ],
+                [
+                    11,
+                    5
+                ],
+                [
+                    12,
+                    5
+                ],
+                [
+                    13,
+                    5
+                ],
+                [
+                    14,
+                    5
+                ],
+                [
+                    15,
+                    5
+                ],
+                [
+                    16,
+                    5
+                ],
+                [
+                    17,
+                    5
+                ],
+                [
+                    18,
+                    5
+                ],
+                [
+                    1,
+                    6
+                ],
+                [
+                    2,
+                    6
+                ],
+                [
+                    3,
+                    6
+                ],
+                [
+                    4,
+                    6
+                ],
+                [
+                    5,
+                    6
+                ],
+                [
+                    6,
+                    6
+                ],
+                [
+                    7,
+                    6
+                ],
+                [
+                    8,
+                    6
+                ],
+                [
+                    9,
+                    6
+                ],
+                [
+                    10,
+                    6
+                ],
+                [
+                    11,
+                    6
+                ],
+                [
+                    12,
+                    6
+                ],
+                [
+                    13,
+                    6
+                ],
+                [
+                    14,
+                    6
+                ],
+                [
+                    15,
+                    6
+                ],
+                [
+                    16,
+                    6
+                ],
+                [
+                    17,
+                    6
+                ],
+                [
+                    18,
+                    6
+                ],
+                [
+                    1,
                     7
                 ],
                 [
@@ -83,6 +227,26 @@
                 ],
                 [
                     13,
+                    7
+                ],
+                [
+                    14,
+                    7
+                ],
+                [
+                    15,
+                    7
+                ],
+                [
+                    16,
+                    7
+                ],
+                [
+                    17,
+                    7
+                ],
+                [
+                    18,
                     7
                 ],
                 [
@@ -138,6 +302,26 @@
                     8
                 ],
                 [
+                    14,
+                    8
+                ],
+                [
+                    15,
+                    8
+                ],
+                [
+                    16,
+                    8
+                ],
+                [
+                    17,
+                    8
+                ],
+                [
+                    18,
+                    8
+                ],
+                [
                     1,
                     9
                 ],
@@ -190,6 +374,26 @@
                     9
                 ],
                 [
+                    14,
+                    9
+                ],
+                [
+                    15,
+                    9
+                ],
+                [
+                    16,
+                    9
+                ],
+                [
+                    17,
+                    9
+                ],
+                [
+                    18,
+                    9
+                ],
+                [
                     1,
                     10
                 ],
@@ -242,6 +446,26 @@
                     10
                 ],
                 [
+                    14,
+                    10
+                ],
+                [
+                    15,
+                    10
+                ],
+                [
+                    16,
+                    10
+                ],
+                [
+                    17,
+                    10
+                ],
+                [
+                    18,
+                    10
+                ],
+                [
                     1,
                     11
                 ],
@@ -294,6 +518,26 @@
                     11
                 ],
                 [
+                    14,
+                    11
+                ],
+                [
+                    15,
+                    11
+                ],
+                [
+                    16,
+                    11
+                ],
+                [
+                    17,
+                    11
+                ],
+                [
+                    18,
+                    11
+                ],
+                [
                     1,
                     12
                 ],
@@ -344,6 +588,458 @@
                 [
                     13,
                     12
+                ],
+                [
+                    14,
+                    12
+                ],
+                [
+                    15,
+                    12
+                ],
+                [
+                    16,
+                    12
+                ],
+                [
+                    17,
+                    12
+                ],
+                [
+                    18,
+                    12
+                ],
+                [
+                    1,
+                    13
+                ],
+                [
+                    2,
+                    13
+                ],
+                [
+                    3,
+                    13
+                ],
+                [
+                    4,
+                    13
+                ],
+                [
+                    5,
+                    13
+                ],
+                [
+                    6,
+                    13
+                ],
+                [
+                    7,
+                    13
+                ],
+                [
+                    8,
+                    13
+                ],
+                [
+                    9,
+                    13
+                ],
+                [
+                    10,
+                    13
+                ],
+                [
+                    11,
+                    13
+                ],
+                [
+                    12,
+                    13
+                ],
+                [
+                    13,
+                    13
+                ],
+                [
+                    14,
+                    13
+                ],
+                [
+                    15,
+                    13
+                ],
+                [
+                    16,
+                    13
+                ],
+                [
+                    17,
+                    13
+                ],
+                [
+                    18,
+                    13
+                ],
+                [
+                    1,
+                    14
+                ],
+                [
+                    2,
+                    14
+                ],
+                [
+                    3,
+                    14
+                ],
+                [
+                    4,
+                    14
+                ],
+                [
+                    5,
+                    14
+                ],
+                [
+                    6,
+                    14
+                ],
+                [
+                    7,
+                    14
+                ],
+                [
+                    8,
+                    14
+                ],
+                [
+                    9,
+                    14
+                ],
+                [
+                    10,
+                    14
+                ],
+                [
+                    11,
+                    14
+                ],
+                [
+                    12,
+                    14
+                ],
+                [
+                    13,
+                    14
+                ],
+                [
+                    14,
+                    14
+                ],
+                [
+                    15,
+                    14
+                ],
+                [
+                    16,
+                    14
+                ],
+                [
+                    17,
+                    14
+                ],
+                [
+                    18,
+                    14
+                ],
+                [
+                    1,
+                    15
+                ],
+                [
+                    2,
+                    15
+                ],
+                [
+                    3,
+                    15
+                ],
+                [
+                    4,
+                    15
+                ],
+                [
+                    5,
+                    15
+                ],
+                [
+                    6,
+                    15
+                ],
+                [
+                    7,
+                    15
+                ],
+                [
+                    8,
+                    15
+                ],
+                [
+                    9,
+                    15
+                ],
+                [
+                    10,
+                    15
+                ],
+                [
+                    11,
+                    15
+                ],
+                [
+                    12,
+                    15
+                ],
+                [
+                    13,
+                    15
+                ],
+                [
+                    14,
+                    15
+                ],
+                [
+                    15,
+                    15
+                ],
+                [
+                    16,
+                    15
+                ],
+                [
+                    17,
+                    15
+                ],
+                [
+                    18,
+                    15
+                ],
+                [
+                    1,
+                    16
+                ],
+                [
+                    2,
+                    16
+                ],
+                [
+                    3,
+                    16
+                ],
+                [
+                    4,
+                    16
+                ],
+                [
+                    5,
+                    16
+                ],
+                [
+                    6,
+                    16
+                ],
+                [
+                    7,
+                    16
+                ],
+                [
+                    8,
+                    16
+                ],
+                [
+                    9,
+                    16
+                ],
+                [
+                    10,
+                    16
+                ],
+                [
+                    11,
+                    16
+                ],
+                [
+                    12,
+                    16
+                ],
+                [
+                    13,
+                    16
+                ],
+                [
+                    14,
+                    16
+                ],
+                [
+                    15,
+                    16
+                ],
+                [
+                    16,
+                    16
+                ],
+                [
+                    17,
+                    16
+                ],
+                [
+                    18,
+                    16
+                ],
+                [
+                    1,
+                    17
+                ],
+                [
+                    2,
+                    17
+                ],
+                [
+                    3,
+                    17
+                ],
+                [
+                    4,
+                    17
+                ],
+                [
+                    5,
+                    17
+                ],
+                [
+                    6,
+                    17
+                ],
+                [
+                    7,
+                    17
+                ],
+                [
+                    8,
+                    17
+                ],
+                [
+                    9,
+                    17
+                ],
+                [
+                    10,
+                    17
+                ],
+                [
+                    11,
+                    17
+                ],
+                [
+                    12,
+                    17
+                ],
+                [
+                    13,
+                    17
+                ],
+                [
+                    14,
+                    17
+                ],
+                [
+                    15,
+                    17
+                ],
+                [
+                    16,
+                    17
+                ],
+                [
+                    17,
+                    17
+                ],
+                [
+                    18,
+                    17
+                ],
+                [
+                    1,
+                    18
+                ],
+                [
+                    2,
+                    18
+                ],
+                [
+                    3,
+                    18
+                ],
+                [
+                    4,
+                    18
+                ],
+                [
+                    5,
+                    18
+                ],
+                [
+                    6,
+                    18
+                ],
+                [
+                    7,
+                    18
+                ],
+                [
+                    8,
+                    18
+                ],
+                [
+                    9,
+                    18
+                ],
+                [
+                    10,
+                    18
+                ],
+                [
+                    11,
+                    18
+                ],
+                [
+                    12,
+                    18
+                ],
+                [
+                    13,
+                    18
+                ],
+                [
+                    14,
+                    18
+                ],
+                [
+                    15,
+                    18
+                ],
+                [
+                    16,
+                    18
+                ],
+                [
+                    17,
+                    18
+                ],
+                [
+                    18,
+                    18
                 ]
             ]
         }
@@ -365,6 +1061,26 @@
                 [
                     9,
                     10
+                ],
+                [
+                    5,
+                    15
+                ],
+                [
+                    6,
+                    15
+                ],
+                [
+                    12,
+                    13
+                ],
+                [
+                    13,
+                    13
+                ],
+                [
+                    15,
+                    10
                 ]
             ]
         },
@@ -379,19 +1095,19 @@
                         8
                     ],
                     "config": {
-                        "name": "Castellan Odran Vale",
+                        "name": "Kasztelan Odran Vale",
                         "npc_id": "odran_vale",
                         "enable_trade": false,
                         "enable_pickpocket": false,
                         "enable_diplomacy": false,
                         "dialog": {
                             "start": {
-                                "title": "Castellan Odran Vale",
-                                "text": "Odran stoi przy studni jak ktos, kto zdazyl juz oglosic wyrok. Wskazuje na czarny popiol i powtarza, ze Mira sprowadzila klatwe na Brindleford, ale jego ludzie zaslaniaja swiadkow zanim ci zdaza cos dodac.",
+                                "title": "Kasztelan Odran Vale",
+                                "text": "Odran stoi przy studni jak ktoś, kto zdążył już ogłosić wyrok. Wskazuje na czarny popiół i powtarza, że Mira sprowadziła klątwę na Brindleford, ale jego ludzie zasłaniają świadków, zanim ci zdążą coś dodać.",
                                 "options": [
                                     {
                                         "id": "press_witnesses",
-                                        "label": "Zapytaj, czemu swiadkowie milcza.",
+                                        "label": "Zapytaj, czemu świadkowie milczą.",
                                         "skill_check": {
                                             "skill_id": "diplomacy",
                                             "skill_label": "Diplomacy",
@@ -403,7 +1119,7 @@
                                             ],
                                             "outcomes": {
                                                 "critical_success": {
-                                                    "text": "Odran traci spokoj, gdy prosisz, zeby mieszkancy mowili bez przerwania. Kilka glow podnosi sie nad progiem karczmy.",
+                                                    "text": "Odran traci spokój, gdy prosisz, żeby mieszkańcy mówili bez przerwania. Kilka głów podnosi się nad progiem karczmy.",
                                                     "effects": [
                                                         {
                                                             "type": "set_flag",
@@ -416,7 +1132,7 @@
                                                     ]
                                                 },
                                                 "success": {
-                                                    "text": "Odran cedzi, ze nikt nie ma zakazu mowienia. To wystarcza, by mieszkancy zaczeli odpowiadac ostrozniej, ale szczerzej.",
+                                                    "text": "Odran cedzi, że nikt nie ma zakazu mówienia. To wystarcza, by mieszkańcy zaczęli odpowiadać ostrożniej, ale szczerzej.",
                                                     "effects": [
                                                         {
                                                             "type": "set_flag",
@@ -425,10 +1141,10 @@
                                                     ]
                                                 },
                                                 "failure": {
-                                                    "text": "Odran odcina rozmowe: najpierw porzadek, potem pytania. Patrol staje blizej studni."
+                                                    "text": "Odran odcina rozmowę: najpierw porządek, potem pytania. Patrol staje bliżej studni."
                                                 },
                                                 "critical_failure": {
-                                                    "text": "Odran bierze pytanie za prowokacje. Jego ludzie zapamietuja twarze druzyny.",
+                                                    "text": "Odran bierze pytanie za prowokację. Jego ludzie zapamiętują twarze drużyny.",
                                                     "effects": [
                                                         {
                                                             "type": "set_flag",
@@ -452,7 +1168,7 @@
                                     },
                                     {
                                         "id": "leave",
-                                        "label": "Zakoncz rozmowe."
+                                        "label": "Zakończ rozmowę."
                                     }
                                 ]
                             }
@@ -473,11 +1189,11 @@
                         "dialog": {
                             "start": {
                                 "title": "Elna Barrow",
-                                "text": "Elna sciska chuste w dloniach. Patrzy najpierw na patrol, potem na droge do starego mlyna. Widac, ze wie wiecej, niz chce powiedziec przy ludziach Odrana.",
+                                "text": "Elna ściska chustę w dłoniach. Patrzy najpierw na patrol, potem na drogę do starego młyna. Widać, że wie więcej, niż chce powiedzieć przy ludziach Odrana.",
                                 "options": [
                                     {
                                         "id": "gentle_question",
-                                        "label": "Zapewnij ja, ze nie musi mowic przy patrolu.",
+                                        "label": "Zapewnij ją, że nie musi mówić przy patrolu.",
                                         "conditions": {
                                             "any_flags": [
                                                 "vale_guards_shaken",
@@ -485,7 +1201,7 @@
                                                 "odran_pressure_noted"
                                             ]
                                         },
-                                        "text": "Elna szepcze, ze jej brat Tovin zniknal po tym, jak zobaczyl ludzi Odrana niosacych cos ciezkiego w strone mlyna. Jesli go znajdziecie, moze wskazac trakt do ruin.",
+                                        "text": "Elna szepcze, że jej brat Tovin zniknął po tym, jak zobaczył ludzi Odrana niosących coś ciężkiego w stronę młyna. Jeśli go znajdziecie, może wskazać trakt do ruin.",
                                         "effects": [
                                             {
                                                 "type": "set_flag",
@@ -516,7 +1232,7 @@
                                                     ]
                                                 },
                                                 "success": {
-                                                    "text": "Jej wzrok co chwile ucieka ku drodze do mlyna.",
+                                                    "text": "Jej wzrok co chwile ucieka ku drodze do młyna.",
                                                     "effects": [
                                                         {
                                                             "type": "set_flag",
@@ -557,11 +1273,11 @@
                         "dialog": {
                             "start": {
                                 "title": "Tomas Reed",
-                                "text": "Tomas, mlynarski parobek, udaje, ze poprawia rzemien przy wiadrze. Na butach ma make, a pod nia ciemny popiol nie z rynku.",
+                                "text": "Tomas, młynarski parobek, udaje, ze poprawia rzemien przy wiadrze. Na butach ma make, a pod nia ciemny popiół nie z rynku.",
                                 "options": [
                                     {
                                         "id": "ask_tracks",
-                                        "label": "Zapytaj o popiol na butach.",
+                                        "label": "Zapytaj o popiół na butach.",
                                         "skill_check": {
                                             "skill_id": "diplomacy",
                                             "skill_label": "Diplomacy",
@@ -573,7 +1289,7 @@
                                             ],
                                             "outcomes": {
                                                 "critical_success": {
-                                                    "text": "Tomas przyznaje, ze widzial ludzi Odrana przy starym mlynie. Jeden niosl metalowa skrzynie, a drugi rozsypywal popiol z worka, jakby chcial zrobic falszywy trop.",
+                                                    "text": "Tomas przyznaje, że widział ludzi Odrana przy starym młynie. Jeden niósł metalową skrzynię, a drugi rozsypywał popiół z worka, jakby chciał zrobić fałszywy trop.",
                                                     "effects": [
                                                         {
                                                             "type": "set_flag",
@@ -586,7 +1302,7 @@
                                                     ]
                                                 },
                                                 "success": {
-                                                    "text": "Tomas wskazuje droge do mlyna. Mowi tylko: 'Tam zaczal sie ten popiol, nie przy kaplicy.'",
+                                                    "text": "Tomas wskazuje drogę do młyna. Mówi tylko: 'Tam zaczął się ten popiół, nie przy kaplicy.'",
                                                     "effects": [
                                                         {
                                                             "type": "set_flag",
@@ -595,7 +1311,7 @@
                                                     ]
                                                 },
                                                 "failure": {
-                                                    "text": "Tomas spuszcza glowe. 'Ja tylko nosze worki. Nic nie widzialem.'"
+                                                    "text": "Tomas spuszcza głowę. 'Ja tylko nosze worki. Nic nie widzialem.'"
                                                 }
                                             }
                                         }
@@ -636,7 +1352,7 @@
                                             ],
                                             "outcomes": {
                                                 "critical_success": {
-                                                    "text": "Mara uznaje, ze naprawde probujecie pomoc wiosce. Wsuwa wam piec malych zawiniatek z zielem.",
+                                                    "text": "Mara uznaje, że naprawdę próbujecie pomóc wiosce. Wsuwa wam pięć małych zawiniątek z zielem.",
                                                     "effects": [
                                                         {
                                                             "type": "add_items",
@@ -666,10 +1382,10 @@
                                                     ]
                                                 },
                                                 "failure": {
-                                                    "text": "Mara zaciska dlon na koszyku. 'Nie mam nic dla ludzi, ktorzy moga sciagnac patrol na moj prog.'"
+                                                    "text": "Mara zaciska dłoń na koszyku. 'Nie mam nic dla ludzi, ktorzy moga sciagnac patrol na moj prog.'"
                                                 },
                                                 "critical_failure": {
-                                                    "text": "Mara uznaje pytanie za probe wymuszenia i odchodzi pod sciane karczmy."
+                                                    "text": "Mara uznaje pytanie za próbę wymuszenia i odchodzi pod ścianę karczmy."
                                                 }
                                             }
                                         }
@@ -694,16 +1410,16 @@
                         "dialog": {
                             "start": {
                                 "title": "Old Brann",
-                                "text": "Brann opowiada, ze popiol spadl z nieba, studnia spiewala, a Mira ma oczy jak noc. Po chwili sam gubi kolejnosc zdarzen.",
+                                "text": "Brann opowiada, ze popiół spadl z nieba, studnia spiewala, a Mira ma oczy jak noc. Po chwili sam gubi kolejnosc zdarzen.",
                                 "options": [
                                     {
                                         "id": "rumor",
-                                        "label": "Wysluchaj plotki.",
-                                        "text": "Z calej opowiesci zostaje tylko jedno: Brann slyszal metaliczny stuk od strony kaplicy, zanim ktokolwiek zobaczyl ogien."
+                                        "label": "Wysłuchaj plotki.",
+                                        "text": "Z całej opowieści zostaje tylko jedno: Brann słyszał metaliczny stuk od strony kaplicy, zanim ktokolwiek zobaczył ogień."
                                     },
                                     {
                                         "id": "leave",
-                                        "label": "Odejdz."
+                                        "label": "Odejdź."
                                     }
                                 ]
                             }
@@ -716,17 +1432,17 @@
                         8
                     ],
                     "config": {
-                        "name": "Nila Ashwick, dziecko-swiadek",
+                        "name": "Nila Ashwick, dziecko-świadek",
                         "npc_id": "nila_ashwick",
                         "blocks_movement": false,
                         "dialog": {
                             "start": {
                                 "title": "Nila Ashwick",
-                                "text": "Nila siedzi przy przewroconym koszu i liczy kamyki, jakby od tego zalezalo, czy patrol jej nie zauwazy. Gdy straznik odwraca glowe, dziewczynka zerka w strone studni.",
+                                "text": "Nila siedzi przy przewroconym koszu i liczy kamyki, jakby od tego zależało, czy patrol jej nie zauważy. Gdy strażnik odwraca głowę, dziewczynka zerka w stronę studni.",
                                 "options": [
                                     {
                                         "id": "ask_after_patrol_distracted",
-                                        "label": "Zapytaj ja, gdy patrol patrzy w inna strone.",
+                                        "label": "Zapytaj ją, gdy patrol patrzy w inna stronę.",
                                         "conditions": {
                                             "any_flags": [
                                                 "vale_guards_shaken",
@@ -734,7 +1450,7 @@
                                                 "odran_pressure_noted"
                                             ]
                                         },
-                                        "text": "Nila szepcze, ze nie widziala Miry przy ogniu. Widziala za to czlowieka Odrana, ktory przed switem wsypal cos czarnego do wiadra przy studni, a potem zgubil kawalek czerwonego sznura.",
+                                        "text": "Nila szepcze, że nie widziała Miry przy ogniu. Widziała za to człowieka Odrana, który przed świtem wsypal cos czarnego do wiadra przy studni, a potem zgubil kawałek czerwonego sznura.",
                                         "effects": [
                                             {
                                                 "type": "set_flag",
@@ -748,7 +1464,7 @@
                                     },
                                     {
                                         "id": "gentle_questions",
-                                        "label": "Ukleknij i zapytaj lagodnie, co widziala.",
+                                        "label": "Uklęknij i zapytaj łagodnie, co widziała.",
                                         "skill_check": {
                                             "skill_id": "diplomacy",
                                             "skill_label": "Diplomacy",
@@ -761,7 +1477,7 @@
                                             ],
                                             "outcomes": {
                                                 "critical_success": {
-                                                    "text": "Nila nabiera odwagi. Mowi, ze przy studni stal straznik z czerwonym sznurem przy rekojesci, a popiol wysypal sie z worka, nie z nieba. Wskazuje miejsce, gdzie trzeba szukac sladu.",
+                                                    "text": "Nila nabiera odwagi. Mówi, że przy studni stał strażnik z czerwonym sznurem przy rękojeści, a popiół wysypał się z worka, nie z nieba. Wskazuje miejsce, gdzie trzeba szukać śladu.",
                                                     "effects": [
                                                         {
                                                             "type": "set_flag",
@@ -778,7 +1494,7 @@
                                                     ]
                                                 },
                                                 "success": {
-                                                    "text": "Nila nie poda nazwiska, ale pokazuje na studnie. Powtarza tylko: \"To nie byla pani Mira. To byl pan z czerwonym sznurem.\"",
+                                                    "text": "Nila nie poda nazwiska, ale pokazuje na studnię. Powtarza tylko: \"To nie była pani Mira. To był pan z czerwonym sznurem.\"",
                                                     "effects": [
                                                         {
                                                             "type": "set_flag",
@@ -791,10 +1507,10 @@
                                                     ]
                                                 },
                                                 "failure": {
-                                                    "text": "Dziewczynka chowa kamyki do kieszeni i milknie. Jej wzrok mowi jednak jasno: dopoki patrol stoi tak blisko, nie bedzie mowic."
+                                                    "text": "Dziewczynka chowa kamyki do kieszeni i milknie. Jej wzrok mówi jednak jasno: dopóki patrol stoi tak blisko, nie będzie mówić."
                                                 },
                                                 "critical_failure": {
-                                                    "text": "Nila zaczyna plakac. Jeden ze straznikow natychmiast patrzy w wasza strone i zapamietuje twarze.",
+                                                    "text": "Nila zaczyna płakać. Jeden ze strażników natychmiast patrzy w waszą stronę i zapamiętuje twarze.",
                                                     "effects": [
                                                         {
                                                             "type": "set_flag",
@@ -807,7 +1523,7 @@
                                     },
                                     {
                                         "id": "leave",
-                                        "label": "Pozwol jej odetchnac."
+                                        "label": "Pozwól jej odetchnąć."
                                     }
                                 ]
                             }
@@ -826,7 +1542,7 @@
                         "dialog": {
                             "start": {
                                 "title": "Bren Cale",
-                                "text": "Bren siedzi pod sciana z mokra chusta na ustach. Kaszle czarnym pylem, ale to nie wyglada jak zwykly dym po pozarze. Mara co chwile patrzy w jego strone, pilnowana wzrokiem patrolu.",
+                                "text": "Bren siedzi pod sciana z mokra chusta na ustach. Kaszle czarnym pylem, ale to nie wyglada jak zwykly dym po pożarze. Mara co chwile patrzy w jego stronę, pilnowana wzrokiem patrolu.",
                                 "options": [
                                     {
                                         "id": "check_breath",
@@ -843,7 +1559,7 @@
                                             ],
                                             "outcomes": {
                                                 "critical_success": {
-                                                    "text": "Udaje sie oczyscic mu gardlo i odroznic pyl od sadzy. Bren lapie oddech i mowi, ze popiol przyniesiono w workach od strony mlyna, zanim kaplica zaczela dymic.",
+                                                    "text": "Udaje sie oczyscic mu gardlo i odroznic pyl od sadzy. Bren lapie oddech i mowi, ze popiół przyniesiono w workach od strony młyna, zanim kaplica zaczela dymic.",
                                                     "effects": [
                                                         {
                                                             "type": "set_flag",
@@ -860,7 +1576,7 @@
                                                     ]
                                                 },
                                                 "success": {
-                                                    "text": "Bren uspokaja oddech na tyle, by wyszeptac: \"To nie byl popiol z kaplicy. Pachnial mokrym zbozem... mlynem.\"",
+                                                    "text": "Bren uspokaja oddech na tyle, by wyszeptac: \"To nie byl popiół z kaplicy. Pachnial mokrym zbozem... mlynem.\"",
                                                     "effects": [
                                                         {
                                                             "type": "set_flag",
@@ -873,10 +1589,10 @@
                                                     ]
                                                 },
                                                 "failure": {
-                                                    "text": "Nie pogarszasz jego stanu, ale Bren nie jest w stanie mowic. Mara szepcze, ze bez ciszy i ziela niewiele da sie zrobic."
+                                                    "text": "Nie pogarszasz jego stanu, ale Bren nie jest w stanie mówić. Mara szepcze, że bez ciszy i ziela niewiele da się zrobić."
                                                 },
                                                 "critical_failure": {
-                                                    "text": "Bren dostaje ataku kaszlu, a tlum cofa sie nerwowo. Patrol wykorzystuje zamieszanie, by uciszyc swiadkow.",
+                                                    "text": "Bren dostaje ataku kaszlu, a tłum cofa się nerwowo. Patrol wykorzystuje zamieszanie, by uciszyć świadków.",
                                                     "effects": [
                                                         {
                                                             "type": "set_flag",
@@ -886,6 +1602,31 @@
                                                 }
                                             }
                                         }
+                                    },
+                                    {
+                                        "id": "give_clean_water",
+                                        "label": "Podaj Brenowi czystą wodę z głównej drogi.",
+                                        "conditions": {
+                                            "any_flags": [
+                                                "clean_water_found",
+                                                "bren_clean_water"
+                                            ]
+                                        },
+                                        "text": "Woda spłukuje czarny pył z gardła Brena. Tkacz łapie długi oddech i bez rzutu wskazuje na przewrócony wóz: tam rozsypał się worek, zanim patrol kazał wszystkim wrócić do domów.",
+                                        "effects": [
+                                            {
+                                                "type": "set_flag",
+                                                "flag": "sick_man_stabilized"
+                                            },
+                                            {
+                                                "type": "set_flag",
+                                                "flag": "mara_trusts_party"
+                                            },
+                                            {
+                                                "type": "set_flag",
+                                                "flag": "ash_sack_trace"
+                                            }
+                                        ]
                                     },
                                     {
                                         "id": "ask_mara_help",
@@ -928,41 +1669,41 @@
                 {
                     "position": [
                         3,
-                        11
+                        18
                     ],
                     "config": {
                         "entry_anchor_id": "front_road",
-                        "label": "Front Road"
+                        "label": "Główna droga do rynku"
                     }
                 },
                 {
                     "position": [
                         2,
-                        8
+                        6
                     ],
                     "config": {
                         "entry_anchor_id": "from_chapel",
-                        "label": "From Chapel"
+                        "label": "Od strony spalonej kaplicy"
                     }
                 },
                 {
                     "position": [
-                        12,
-                        11
+                        17,
+                        12
                     ],
                     "config": {
                         "entry_anchor_id": "from_mill",
-                        "label": "From Mill"
+                        "label": "Od strony starego młyna"
                     }
                 },
                 {
                     "position": [
-                        12,
-                        8
+                        17,
+                        6
                     ],
                     "config": {
                         "entry_anchor_id": "from_ruins",
-                        "label": "From Ruins"
+                        "label": "Od strony leśnego traktu"
                     }
                 }
             ]
@@ -975,33 +1716,33 @@
                 {
                     "position": [
                         1,
-                        8
+                        6
                     ],
                     "config": {
                         "exit_id": "to_burned_chapel",
-                        "label": "Road to Burned Chapel",
+                        "label": "Droga do spalonej kaplicy",
                         "interaction_mode": "on_enter"
                     }
                 },
                 {
                     "position": [
-                        13,
-                        11
+                        18,
+                        12
                     ],
                     "config": {
                         "exit_id": "to_old_mill",
-                        "label": "Road to Old Mill",
+                        "label": "Droga do starego młyna",
                         "interaction_mode": "on_enter"
                     }
                 },
                 {
                     "position": [
-                        13,
-                        8
+                        18,
+                        6
                     ],
                     "config": {
                         "exit_id": "to_hill_ruins",
-                        "label": "Forest Track to Hill Ruins",
+                        "label": "Leśny trakt do ruin",
                         "interaction_mode": "on_enter"
                     }
                 }
@@ -1019,7 +1760,7 @@
                     ],
                     "config": {
                         "challenge_id": "vale_guards_shaken",
-                        "label": "Odciagnij uwage patrolu",
+                        "label": "Odciągnij uwagę patrolu",
                         "skill_id": "diplomacy",
                         "dc": 15,
                         "tags": [
@@ -1027,15 +1768,15 @@
                             "odran",
                             "witnesses"
                         ],
-                        "intro": "Patrol Odrana stoi miedzy druzyna a mieszkancami. Celem nie jest upokorzenie straznikow, tylko stworzenie chwili, w ktorej swiadkowie beda mogli mowic bez strachu. Mozecie odwolac sie do porzadku, do dobra wioski albo do prawa do zadawania pytan.",
+                        "intro": "Patrol Odrana stoi między drużyną a mieszkańcami. Celem nie jest upokorzenie strażników, tylko stworzenie chwili, w której świadkowie będą mogli mówić bez strachu. Możecie odwołać się do porządku, do dobra wioski albo do prawa do zadawania pytań.",
                         "success_flag": "vale_guards_shaken",
-                        "success_message": "Patrol cofa sie o krok. Mieszkancy widza, ze mozna mowic przybyszom prawde.",
-                        "failure_message": "Patrol zbija rozmowe krotkimi rozkazami i mieszkancy nadal milcza.",
+                        "success_message": "Patrol cofa się o krok. Mieszkańcy widzą, że można mówić przybyszom prawdę.",
+                        "failure_message": "Patrol zbija rozmówę krótkimi rozkazami i mieszkańcy nadal milczą.",
                         "outcome_messages": {
-                            "critical_success": "Argument trafia idealnie: patrol nie chce wygladac jak oprawcy na oczach calego rynku. Mieszkancy zaczynaja mowic pierwsi.",
-                            "success": "Patrol odpuszcza na tyle, by kilka osob moglo odpowiedziec szeptem.",
-                            "failure": "Straznicy zaslaniaja studnie i odpowiadaja za mieszkancow.",
-                            "critical_failure": "Patrol uznaje rozmowe za probe podburzania tlumu. Odran bedzie bardziej czujny."
+                            "critical_success": "Argument trafia idealnie: patrol nie chce wyglądać jak oprawcy na oczach całego rynku. Mieszkańcy zaczynają mówić pierwsi.",
+                            "success": "Patrol odpuszcza na tyle, by kilka osób mogło odpowiedzieć szeptem.",
+                            "failure": "Strażnicy zasłaniają studnię i odpowiadają za mieszkańców.",
+                            "critical_failure": "Patrol uznaje rozmówę za próbę podburzania tłumu. Odran będzie bardziej czujny."
                         },
                         "outcome_flags": {
                             "critical_success": [
@@ -1058,7 +1799,7 @@
                     ],
                     "config": {
                         "challenge_id": "well_echo_read",
-                        "label": "Wysluchaj echa studni",
+                        "label": "Wysłuchaj echa studni",
                         "skill_id": "occultism",
                         "dc": 15,
                         "tags": [
@@ -1067,15 +1808,15 @@
                             "ash",
                             "oath"
                         ],
-                        "intro": "Studnia oddaje glosy z nienaturalnym opoznieniem. Mozecie potraktowac to jak zwykla plotke albo skupic sie na rytmie echa i sprawdzic, czy popiol nie niesie fragmentu przysiegi.",
+                        "intro": "Studnia oddaje głosy z nienaturalnym opóźnieniem. Możecie potraktować to jak zwykłą plotkę albo skupić się na rytmie echa. Ślady z obrzeży rynku i kapliczka przy zaułku mogą pomóc oddzielić prawdziwą przysięgę od fałszywego popiołu.",
                         "success_flag": "well_echo_read",
-                        "success_message": "Echo uklada sie w sensowny trop: ktos przy studni powtarzal slowa przysiegi, zanim podlozono falszywy popiol.",
+                        "success_message": "Echo układa się w sensowny trop: ktoś przy studni powtarzał słowa przysięgi, zanim podłożono fałszywy popiół.",
                         "failure_message": "Echo rozbija slowa na szmer. Na razie studnia daje tylko niepokoj, nie dowod.",
                         "outcome_messages": {
-                            "critical_success": "Slyszycie pelna fraze: \"Popiol ma wskazac Mire, lecz dlon Vale'a trzyma worek.\" To mocny trop przeciw wersji Odrana.",
-                            "success": "Echo powtarza urwane slowa o worku, studni i czerwonym sznurze. Warto sprawdzic popiol przy cembrowinie.",
-                            "failure": "Studnia milczy po kilku pustych odbiciach glosu. Mieszkancy patrza na was z mieszanina nadziei i strachu.",
-                            "critical_failure": "Z dna uderza zimny podmuch. Przez chwile kazdy szept brzmi jak oskarzenie, a tlum robi sie bardziej podatny na strach."
+                            "critical_success": "Słyszycie pełną fraze: \"Popiół ma wskazać Mire, lecz dłoń Vale'a trzyma worek.\" To mocny trop przeciw wersji Odrana.",
+                            "success": "Echo powtarza urwane słowa o worku, studni i czerwonym sznurze. Warto sprawdzić popiół przy cembrowinie.",
+                            "failure": "Studnia milczy po kilku pustych odbiciach głosu. Mieszkańcy patrzą na was z mieszaniną nadziei i strachu.",
+                            "critical_failure": "Z dna uderza zimny podmuch. Przez chwilę każdy szept brzmi jak oskarzenie, a tłum robi się bardziej podatny na strach."
                         },
                         "outcome_flags": {
                             "critical_success": [
@@ -1091,7 +1832,19 @@
                                 "ash_chill_debuff",
                                 "crowd_intimidated"
                             ]
-                        }
+                        },
+                        "flag_modifiers": [
+                            {
+                                "flag": "ash_sack_trace",
+                                "value": 1,
+                                "note": "ślad worka z popiołem"
+                            },
+                            {
+                                "flag": "wayside_shrine_echo",
+                                "value": 1,
+                                "note": "echo z kapliczki"
+                            }
+                        ]
                     }
                 },
                 {
@@ -1101,7 +1854,7 @@
                     ],
                     "config": {
                         "challenge_id": "public_square_address",
-                        "label": "Przemow do rynku",
+                        "label": "Przemów do rynku",
                         "skill_id": "performance",
                         "dc": 16,
                         "tags": [
@@ -1110,15 +1863,15 @@
                             "risk",
                             "odran"
                         ],
-                        "intro": "Mozecie przemowic do calego rynku i poprosic ludzi, by nie oddawali prawdy patrolowi. To ryzykowne: sukces doda odwagi swiadkom, ale porazka pozwoli Odranowi przedstawic was jako wichrzycieli.",
+                        "intro": "Środek rynku jest jak pusta scena, na którą nikt z mieszkańców nie chce wejść pierwszy. Widzicie twarze za okiennicami, spuszczone oczy przy piecu i ludzi, którzy chcieliby mówić, ale boją się, że patrol zapamięta ich nazwiska. Możecie przemówić do całego rynku i spróbować nazwać ten strach na głos. To trudne zadanie: jeśli tłum nie poczuje, że ma oparcie, cisza wygra, a Odran przedstawi was jako wichrzycieli. Wcześniejsze rozmowy z mieszkańcami, zabezpieczenie punktu przy piecu, odczytanie rytmu patrolu, ślady przy studni albo echo kapliczki mogą sprawić, że ktoś odpowie, zamiast tylko patrzeć w ziemię.",
                         "success_flag": "public_square_heartened",
-                        "success_message": "Kilka osob prostuje plecy. Nawet ci, ktorzy milcza, zaczynaja wskazywac wam osoby warte rozmowy.",
+                        "success_message": "Kilka osób prostuje plecy. Nawet ci, którzy milczą, zaczynają wskazywać wam osoby warte rozmowy.",
                         "failure_message": "Rynek nie odpowiada. Odran wykorzystuje cisze, by przypomniec ludziom, kto tu wydaje rozkazy.",
                         "outcome_messages": {
-                            "critical_success": "Przemowa trafia w sedno. Mieszkancy zaczynaja poprawiac wersje patrolu na glos, a Odran musi udawac, ze pozwala na pytania.",
-                            "success": "Nie ma owacji, ale strach peka. Swiadkowie beda bardziej rozmowni, jesli podejdziecie do nich osobno.",
-                            "failure": "Slowa odbijaja sie od zamknietych okiennic. Tlum wciaz chce pomoc, lecz nie teraz i nie przy patrolu.",
-                            "critical_failure": "Odran przejmuje wasze slowa i obraca je przeciwko wam. Straznicy staja blizej, a ludzie spuszczaja wzrok."
+                            "critical_success": "Przemowa trafia w sedno. Mieszkańcy zaczynają poprawiać wersję patrolu na głos, a Odran musi udawać, że pozwala na pytania.",
+                            "success": "Nie ma owacji, ale strach pęka. Swiadkowie będą bardziej rozmówni, jeśli podejdziecie do nich osobno.",
+                            "failure": "Słowa odbijaja sie od zamknietych okiennic. Tłum wciąż chce pomoc, lecz nie teraz i nie przy patrolu.",
+                            "critical_failure": "Odran przejmuje wasze słowa i obraca je przeciwko wam. Strażnicy stają bliżej, a ludzie spuszczaja wzrok."
                         },
                         "outcome_flags": {
                             "critical_success": [
@@ -1135,6 +1888,227 @@
                             ],
                             "critical_failure": [
                                 "odran_alerted",
+                                "crowd_intimidated"
+                            ]
+                        },
+                        "flag_modifiers": [
+                            {
+                                "flag": "speech_crowd_anchor",
+                                "value": 1,
+                                "note": "przygotowany punkt przy mieszkańcach"
+                            },
+                            {
+                                "flag": "speech_patrol_angle",
+                                "value": 1,
+                                "note": "rozpoznany kąt patrolu"
+                            },
+                            {
+                                "flag": "wayside_shrine_echo",
+                                "value": 1,
+                                "note": "motyw przysięgi z kapliczki"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "position": [
+                        3,
+                        16
+                    ],
+                    "config": {
+                        "challenge_id": "market_speech_crowd_anchor",
+                        "label": "Ustaw punkt przy mieszkańcach",
+                        "skill_id": "society",
+                        "dc": 14,
+                        "tags": [
+                            "social",
+                            "crowd",
+                            "speech",
+                            "setup"
+                        ],
+                        "intro": "Przy piecu chlebowym stoi kilku mieszkańców, którzy słyszą rynek, ale nie są na oczach Odrana. Jeśli ustawicie tu rozmowę spokojnie, późniejsze publiczne przemówienie nie zacznie się od pustej ciszy.",
+                        "success_flag": "speech_crowd_anchor",
+                        "success_message": "Wyznaczacie bezpieczny punkt rozmowy. Gdy padną pierwsze słowa przemówienia, ktoś z tej grupy może odpowiedzieć zamiast milczeć.",
+                        "failure_message": "Ludzie odsuwają się od pieca i udają, że poprawiają kosze. Punkt nie da oparcia przemówieniu.",
+                        "outcome_messages": {
+                            "critical_success": "Mieszkańcy sami wybierają dwie osoby, które potwierdzą wasze słowa, jeśli przemówienie nie zabrzmi jak prowokacja.",
+                            "success": "Kilka osób kiwa głową. Nie wyjdą przed szereg, ale mogą podtrzymać rozmowę.",
+                            "failure": "Nie znajdujecie nikogo, kto chce stać w tym miejscu, gdy patrol patrzy w stronę rynku.",
+                            "critical_failure": "Ktoś zbyt głośno prosi was, żebyście odeszli. Patrol zauważa, że próbujecie ustawiać tłum."
+                        },
+                        "outcome_flags": {
+                            "critical_success": [
+                                "speech_crowd_anchor",
+                                "villagers_willing_to_talk"
+                            ],
+                            "success": [
+                                "speech_crowd_anchor"
+                            ],
+                            "critical_failure": [
+                                "odran_alerted"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "position": [
+                        16,
+                        8
+                    ],
+                    "config": {
+                        "challenge_id": "market_speech_patrol_angle",
+                        "label": "Rozpoznaj kąt patrolu",
+                        "skill_id": "stealth",
+                        "dc": 14,
+                        "tags": [
+                            "social",
+                            "patrol",
+                            "speech",
+                            "positioning"
+                        ],
+                        "intro": "Boczny zaułek pozwala obserwować strażników bez wchodzenia im pod halabardy. Dobry odczyt ich rytmu pokaże, kiedy Odran nie zdąży przerwać publicznej wypowiedzi.",
+                        "success_flag": "speech_patrol_angle",
+                        "success_message": "Zauważacie moment, w którym patrol zmienia ustawienie. To krótka luka, ale wystarczy, by zacząć przemówienie albo odciągnąć uwagę straży.",
+                        "failure_message": "Patrol stoi zbyt ciasno. Próba odczytu nie daje pewnego momentu do działania.",
+                        "outcome_messages": {
+                            "critical_success": "Widzicie nie tylko rytm patrolu, ale też strażnika z czerwonym sznurem przy rękojeści. To pasuje do słów Nili.",
+                            "success": "Macie wyczucie krótkiej luki w ustawieniu straży.",
+                            "failure": "Strażnicy zmieniają szyk, zanim zdążycie wyciągnąć wnioski.",
+                            "critical_failure": "Jeden ze strażników łapie wasze spojrzenie i ostrzega Odrana krótkim gestem."
+                        },
+                        "outcome_flags": {
+                            "critical_success": [
+                                "speech_patrol_angle",
+                                "well_mark_hint"
+                            ],
+                            "success": [
+                                "speech_patrol_angle"
+                            ],
+                            "critical_failure": [
+                                "odran_alerted"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "position": [
+                        4,
+                        18
+                    ],
+                    "config": {
+                        "challenge_id": "clean_water_spigot",
+                        "label": "Znajdź czystą wodę dla Brena",
+                        "skill_id": "survival",
+                        "dc": 13,
+                        "tags": [
+                            "healing",
+                            "water",
+                            "villager",
+                            "bren"
+                        ],
+                        "intro": "Przy głównej drodze stoi mały odpływ z wodą, której popiół nie zdążył jeszcze zabrudzić. Jeśli napełnicie bukłak bez wzbudzania paniki, Bren może odzyskać oddech przed badaniem.",
+                        "success_flag": "clean_water_found",
+                        "success_message": "Napełniacie bukłak czystą wodą. Mara od razu zrozumie, że można jej użyć przy Brenie.",
+                        "failure_message": "Woda jest mętna albo ludzie blokują dostęp. Nie macie nic, co pomogłoby Brenowi od razu.",
+                        "outcome_messages": {
+                            "critical_success": "Znajdujecie czystą wodę i kawałek płótna bez popiołu. To wystarczy, by naprawdę ulżyć Brenowi.",
+                            "success": "Macie czystą wodę w bukłaku.",
+                            "failure": "Woda przy odpływie miesza się z pyłem z rynku.",
+                            "critical_failure": "Przewracacie popielaty osad do odpływu. Ktoś krzyczy, że zatruwacie studnię."
+                        },
+                        "outcome_flags": {
+                            "critical_success": [
+                                "clean_water_found",
+                                "bren_clean_water",
+                                "mara_trusts_party"
+                            ],
+                            "success": [
+                                "clean_water_found"
+                            ],
+                            "critical_failure": [
+                                "crowd_intimidated"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "position": [
+                        16,
+                        13
+                    ],
+                    "config": {
+                        "challenge_id": "ash_sack_trace",
+                        "label": "Sprawdź ślad worka z popiołem",
+                        "skill_id": "survival",
+                        "dc": 15,
+                        "tags": [
+                            "investigation",
+                            "ash",
+                            "mill",
+                            "tracks"
+                        ],
+                        "intro": "Przy przewróconym wozie leży smugowy ślad, jak po ciężkim worku przeciągniętym po kamieniach. Jeśli to nie popiół z kaplicy, powinien prowadzić do miejsca, z którego go przyniesiono.",
+                        "success_flag": "ash_sack_trace",
+                        "success_message": "Ślad worka prowadzi od strony młyna, nie od kaplicy. To podważa opowieść Odrana.",
+                        "failure_message": "Popiół jest zbyt rozdeptany. Nie da się jeszcze powiedzieć, skąd go przyniesiono.",
+                        "outcome_messages": {
+                            "critical_success": "W popiele znajdujecie resztki mokrego zboża i włókna jutowego worka z młyna. To bardzo mocny trop.",
+                            "success": "Widzicie kierunek: worek przeciągnięto od strony młyna.",
+                            "failure": "Wóz i ślady butów niszczą trop.",
+                            "critical_failure": "Wchodzicie w ślad i rozcieracie najczytelniejszy fragment. Odran wykorzysta to jako zarzut niekompetencji."
+                        },
+                        "outcome_flags": {
+                            "critical_success": [
+                                "ash_sack_trace",
+                                "false_ash_hint",
+                                "villager_mill_hint"
+                            ],
+                            "success": [
+                                "ash_sack_trace",
+                                "villager_mill_hint"
+                            ],
+                            "critical_failure": [
+                                "odran_alerted"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "position": [
+                        16,
+                        17
+                    ],
+                    "config": {
+                        "challenge_id": "wayside_shrine_echo",
+                        "label": "Odczytaj echo kapliczki",
+                        "skill_id": "religion",
+                        "dc": 14,
+                        "tags": [
+                            "oath",
+                            "shrine",
+                            "mystery",
+                            "speech"
+                        ],
+                        "intro": "Mała kapliczka przy bocznej uliczce nie została spalona, ale jej świeca kopci szarym płomieniem. Szept przy kamieniu wraca z podobnym opóźnieniem jak echo studni.",
+                        "success_flag": "wayside_shrine_echo",
+                        "success_message": "Rozpoznajecie fragment starej przysięgi o prawdzie wypowiedzianej publicznie. Może pomóc przy studni albo podczas przemówienia.",
+                        "failure_message": "Kapliczka odpowiada tylko trzaskiem sadzy. Nie macie pewnego sensu tego znaku.",
+                        "outcome_messages": {
+                            "critical_success": "Echo układa się w ostrzeżenie: przysięga karze tego, kto każe tłumowi skłamać. To idealny motyw do publicznego wystąpienia.",
+                            "success": "Słyszycie słowa o prawdzie powiedzianej wobec wspólnoty.",
+                            "failure": "Nie da się oddzielić religijnego sensu od zwykłego strachu.",
+                            "critical_failure": "Płomień gaśnie, a chłód spod kapliczki przechodzi po rynku. Ludzie biorą to za zły znak."
+                        },
+                        "outcome_flags": {
+                            "critical_success": [
+                                "wayside_shrine_echo",
+                                "public_square_heartened"
+                            ],
+                            "success": [
+                                "wayside_shrine_echo"
+                            ],
+                            "critical_failure": [
+                                "ash_chill_debuff",
                                 "crowd_intimidated"
                             ]
                         }
@@ -1162,7 +2136,7 @@
                             "ash",
                             "well"
                         ],
-                        "description_on_reveal": "Pod popiolem przy studni widac znak Popielnej Przysiegi.",
+                        "description_on_reveal": "Pod popiółem przy studni widać znak Popielnej Przysiegi.",
                         "loot": [
                             "oath mark rubbing"
                         ]
@@ -1184,13 +2158,33 @@
         [
             9,
             10
+        ],
+        [
+            5,
+            15
+        ],
+        [
+            6,
+            15
+        ],
+        [
+            12,
+            13
+        ],
+        [
+            13,
+            13
+        ],
+        [
+            15,
+            10
         ]
     ],
     "walls": [],
     "setup_corner_markers": true,
     "opening_scene_prompt": {
-        "title": "Brindleford Square",
+        "title": "Rynek Brindleford",
         "summary": "Rynek Brindleford jest gotowy do eksploracji.",
-        "body_markdown": "Rynek Brindleford jest cichy, ale nie pusty. Patrol Odrana pilnuje rozmow, mieszkancy patrza spod okiennic, a popiol przy studni nie wyglada jak zwykly slad po pozarze.\n\nMozecie zaczac od rozmowy z patrolem lub mieszkancami, zbadac studnie, pomoc choremu Brenowi, sprobowac publicznego przemowienia albo ruszyc jednym z wyjsc do kaplicy, starego mlyna lub ruin."
+        "body_markdown": "Rynek Brindleford jest cichy, ale nie pusty. Patrol Odrana pilnuje rozmów przy studni, mieszkańcy patrzą spod okiennic, a popiół nie wygląda jak zwykły ślad po pożarze. Ludzie są przygnębieni i boją się mówić przy strażnikach; część zna prawdę, ale nie chce być pierwsza. Publiczne przemówienie może przełamać ten strach, tylko że bez przygotowania łatwo skończy się ciszą albo reakcją Odrana.\n\nMożecie zacząć od patrolu lub mieszkańców, zbadać studnię, pomóc choremu Brenowi, przygotować publiczne przemówienie przez punkty na obrzeżach, znaleźć bezpieczne miejsce przy piecu, rozpoznać rytm straży albo ruszyć wyjściami do kaplicy, starego młyna lub ruin."
     }
 }

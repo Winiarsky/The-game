@@ -1,294 +1,55 @@
 {
-    "name": "Ashen Oath - Oath Crypt",
-    "description": "Finalowa krypta z relikwiarzem, duchem Serai i wyborem miedzy odnowieniem przysiegi a ukladem z Odranem.",
-    "starting_positions": [
-        [
-            2,
-            9
-        ],
-        [
-            3,
-            9
-        ],
-        [
-            4,
-            9
-        ],
-        [
-            2,
-            10
-        ],
-        [
-            3,
-            10
-        ],
-        [
-            4,
-            10
-        ]
+    "name": "Ashen Oath - Krypta Przysięgi",
+    "description": "Finałowa mapa jako sąd prawdy, przywrócenie przysięgi i konfrontacja z Odranem. Gracze muszą użyć dowodów z kaplicy, młyna i ruin, zanim relikwiarz pozwoli domknąć dobre zakończenie.",
+    "metadata": {
+        "encounter_controller": "oath_crypt_encounter",
+        "board_goal": "full_20x30",
+        "proof_required": 4
+    },
+    "setup_plan": [
+        {
+            "kind": "briefing",
+            "label": "Cel finału",
+            "positions": [[10, 15], [5, 15], [16, 15], [18, 15], [4, 5], [15, 5], [4, 24], [15, 24]],
+            "colors": [[55, 55, 70], [190, 220, 255], [120, 15, 20], [80, 10, 10], [45, 55, 95], [45, 55, 95], [45, 55, 95], [45, 55, 95]],
+            "prompt": "Krypta Przysięgi używa całej planszy 20x30. Ustaw relikwiarz w centrum na przygaszonym białym LED-zie. Serai stoi po zachodniej stronie w zimnym świetle, Odran po wschodniej w czerwonym cieniu, a Brama Odrana dalej na wschód. Cztery niebieskie filary w ćwiartkach planszy to dowody: Przysięga, Popiół, Księga i Świadek. Relikwiarz odblokuje się dopiero po przyjęciu czterech dowodów.",
+            "confirmation_mode": "confirm_only"
+        },
+        {
+            "kind": "terrain",
+            "label": "Hazardy, łańcuchy i sarkofagi",
+            "positions": [[8, 10], [9, 10], [11, 20], [12, 20], [2, 14], [17, 14], [9, 13], [11, 13], [9, 17], [11, 17], [6, 8], [13, 8], [6, 22], [13, 22]],
+            "colors": [[150, 45, 40], [150, 45, 40], [150, 45, 40], [150, 45, 40], [150, 45, 40], [150, 45, 40], [120, 120, 135], [120, 120, 135], [120, 120, 135], [120, 120, 135], [90, 90, 100], [90, 90, 100], [90, 90, 100], [90, 90, 100]],
+            "prompt": "Czerwone LED-y oznaczają pęknięcia popiołu i fałszywe lustra przysięgi: wejście albo koniec tury może powodować mały dark/fire damage, slowed albo wzrost presji Odrana. Szare LED-y przy relikwiarzu to łańcuchy przysięgi; po każdym zaakceptowanym dowodzie kolejny łańcuch gaśnie. Ciemnoszare punkty to sarkofagi strażników i trudny teren.",
+            "confirmation_mode": "confirm_only"
+        }
     ],
+    "starting_positions": [[8, 28], [9, 28], [10, 28], [11, 28], [9, 29], [10, 29]],
     "rooms": [
         {
             "id": "oath_crypt",
-            "name": "Oath Crypt",
+            "name": "Krypta Przysięgi",
             "color": "#5f6470",
-            "positions": [
-                [
-                    2,
-                    5
-                ],
-                [
-                    3,
-                    5
-                ],
-                [
-                    4,
-                    5
-                ],
-                [
-                    5,
-                    5
-                ],
-                [
-                    6,
-                    5
-                ],
-                [
-                    7,
-                    5
-                ],
-                [
-                    8,
-                    5
-                ],
-                [
-                    9,
-                    5
-                ],
-                [
-                    10,
-                    5
-                ],
-                [
-                    11,
-                    5
-                ],
-                [
-                    2,
-                    6
-                ],
-                [
-                    3,
-                    6
-                ],
-                [
-                    4,
-                    6
-                ],
-                [
-                    5,
-                    6
-                ],
-                [
-                    6,
-                    6
-                ],
-                [
-                    7,
-                    6
-                ],
-                [
-                    8,
-                    6
-                ],
-                [
-                    9,
-                    6
-                ],
-                [
-                    10,
-                    6
-                ],
-                [
-                    11,
-                    6
-                ],
-                [
-                    2,
-                    7
-                ],
-                [
-                    3,
-                    7
-                ],
-                [
-                    4,
-                    7
-                ],
-                [
-                    5,
-                    7
-                ],
-                [
-                    6,
-                    7
-                ],
-                [
-                    7,
-                    7
-                ],
-                [
-                    8,
-                    7
-                ],
-                [
-                    9,
-                    7
-                ],
-                [
-                    10,
-                    7
-                ],
-                [
-                    11,
-                    7
-                ],
-                [
-                    2,
-                    8
-                ],
-                [
-                    3,
-                    8
-                ],
-                [
-                    4,
-                    8
-                ],
-                [
-                    5,
-                    8
-                ],
-                [
-                    6,
-                    8
-                ],
-                [
-                    7,
-                    8
-                ],
-                [
-                    8,
-                    8
-                ],
-                [
-                    9,
-                    8
-                ],
-                [
-                    10,
-                    8
-                ],
-                [
-                    11,
-                    8
-                ],
-                [
-                    2,
-                    9
-                ],
-                [
-                    3,
-                    9
-                ],
-                [
-                    4,
-                    9
-                ],
-                [
-                    5,
-                    9
-                ],
-                [
-                    6,
-                    9
-                ],
-                [
-                    7,
-                    9
-                ],
-                [
-                    8,
-                    9
-                ],
-                [
-                    9,
-                    9
-                ],
-                [
-                    10,
-                    9
-                ],
-                [
-                    11,
-                    9
-                ],
-                [
-                    2,
-                    10
-                ],
-                [
-                    3,
-                    10
-                ],
-                [
-                    4,
-                    10
-                ],
-                [
-                    5,
-                    10
-                ],
-                [
-                    6,
-                    10
-                ],
-                [
-                    7,
-                    10
-                ],
-                [
-                    8,
-                    10
-                ],
-                [
-                    9,
-                    10
-                ],
-                [
-                    10,
-                    10
-                ],
-                [
-                    11,
-                    10
-                ]
-            ]
+            "full_board": true
         }
     ],
     "objects": [
+        {
+            "category": "Terrains",
+            "object_id": "rumble_field",
+            "placement": "cell",
+            "positions": [[6, 8], [7, 8], [12, 8], [13, 8], [6, 22], [7, 22], [12, 22], [13, 22], [9, 13], [11, 13], [9, 17], [11, 17]]
+        },
         {
             "category": "Enemies",
             "object_id": "odrans_champion",
             "placement": "cell",
             "instances": [
                 {
-                    "position": [
-                        9,
-                        7
-                    ],
+                    "position": [14, 24],
                     "config": {
-                        "name": "Odran's Champion"
+                        "name": "Champion Odrana",
+                        "ai_profile": {"role": "odran_bodyguard", "protects": "oath_crypt_proof_ledger", "fallback_protects": "odran_vale", "blocks": "active_proof_pillar"}
                     }
                 }
             ]
@@ -299,12 +60,10 @@
             "placement": "cell",
             "instances": [
                 {
-                    "position": [
-                        10,
-                        9
-                    ],
+                    "position": [5, 6],
                     "config": {
-                        "name": "Oathbound Knight"
+                        "name": "Rycerz Przysięgi",
+                        "ai_profile": {"role": "proof_guardian", "protects": "oath_crypt_proof_oath", "fallback_protects": "oath_crypt_reliquary"}
                     }
                 }
             ]
@@ -315,21 +74,17 @@
             "placement": "cell",
             "instances": [
                 {
-                    "position": [
-                        10,
-                        6
-                    ],
+                    "position": [14, 6],
                     "config": {
-                        "name": "Oathbound Ash"
+                        "name": "Popielne Echo Przysięgi",
+                        "ai_profile": {"role": "proof_disruptor", "protects": "oath_crypt_proof_ash", "target": "active_proof_pillar"}
                     }
                 },
                 {
-                    "position": [
-                        8,
-                        5
-                    ],
+                    "position": [16, 23],
                     "config": {
-                        "name": "Oathbound Ash Echo"
+                        "name": "Popielne Echo Krzywoprzysięstwa",
+                        "ai_profile": {"role": "witness_silencer", "protects": "oath_crypt_proof_witness", "target": "active_proof_pillar"}
                     }
                 }
             ]
@@ -340,48 +95,43 @@
             "placement": "cell",
             "instances": [
                 {
-                    "position": [
-                        7,
-                        6
-                    ],
+                    "position": [5, 15],
                     "config": {
-                        "name": "Serai, Warden of the Oath",
+                        "name": "Serai, Strażniczka Przysięgi",
                         "npc_id": "warden_serai",
                         "enable_trade": false,
                         "enable_pickpocket": false,
                         "enable_diplomacy": false,
                         "dialog": {
                             "start": {
-                                "title": "Serai, Warden of the Oath",
-                                "text": "Serai jest bardziej wspomnieniem niz osoba. Jej glos brzmi spod kamienia: 'Przysiega nie chroni relikwiarza. Relikwiarz przypomina, komu przysiega sluzy.'",
+                                "title": "Serai, Strażniczka Przysięgi",
+                                "text": "Serai stoi w kręgu zimnego światła. 'Przysięga nie pyta, kto wygrał walkę. Pyta, czy prawda została wypowiedziana do końca.'",
                                 "options": [
                                     {
                                         "id": "ask_oath",
-                                        "label": "Zapytaj, co trzeba odnowic.",
-                                        "text": "Serai odpowiada, ze trzeba nazwac prawde przy relikwiarzu: kto go wyniosl, kto zostal obwiniony i czy wioska ma dalej skladac przysiege strachowi."
+                                        "label": "Zapytaj, czego wymaga krypta.",
+                                        "text": "Serai wskazuje cztery filary: przysięgę, popiół, księgę i świadka. Każdy musi przyjąć jeden dowód, zanim relikwiarz pozwoli odnowić słowo."
                                     },
                                     {
                                         "id": "present_truth",
-                                        "label": "Przedstaw dowody przeciw Odranowi.",
+                                        "label": "Przedstaw prawdę z ruin.",
                                         "conditions": {
                                             "any_flags": [
                                                 "mira_truth_learned",
                                                 "mira_memory_stabilized",
                                                 "odran_seal_seen",
-                                                "chapel_tracks_read"
+                                                "odran_relic_theft_proven"
                                             ]
                                         },
-                                        "text": "Krypta cichnie. Serai przyjmuje dowody i pozwala wam mowic przy relikwiarzu bez gniewu duchow.",
+                                        "text": "Serai przyjmuje, że Mira nie była źródłem klątwy. To otwiera sąd przysięgi, ale nie zastępuje dowodów przy czterech filarach.",
                                         "effects": [
-                                            {
-                                                "type": "set_flag",
-                                                "flag": "serai_accepts_truth"
-                                            }
+                                            {"type": "set_flag", "flag": "serai_accepts_truth"},
+                                            {"type": "set_flag", "flag": "oath_trial_started"}
                                         ]
                                     },
                                     {
                                         "id": "leave",
-                                        "label": "Zakoncz rozmowe."
+                                        "label": "Zakończ rozmowę."
                                     }
                                 ]
                             }
@@ -389,62 +139,52 @@
                     }
                 },
                 {
-                    "position": [
-                        8,
-                        8
-                    ],
+                    "position": [16, 15],
                     "config": {
-                        "name": "Castellan Odran Vale",
+                        "name": "Kasztelan Odran Vale",
                         "npc_id": "odran_vale",
                         "enable_trade": false,
                         "enable_pickpocket": false,
                         "enable_diplomacy": false,
                         "dialog": {
                             "start": {
-                                "title": "Castellan Odran Vale",
-                                "text": "Odran nie udaje juz troski. 'Wioska potrzebuje pana, nie martwej przysiegi. Wezcie zloto i pozwolcie mi wyprowadzic relikwiarz.'",
+                                "title": "Kasztelan Odran Vale",
+                                "text": "Odran trzyma się blisko czerwonej bramy. 'Wioska potrzebuje pana, nie martwej przysięgi. Pozwólcie mi wyprowadzić relikwiarz, a Brindleford przeżyje jeszcze jedną noc.'",
                                 "options": [
                                     {
                                         "id": "reject_bargain",
-                                        "label": "Odmow i nazwij jego klamstwo.",
+                                        "label": "Odmów i nazwij jego układ.",
                                         "skill_check": {
                                             "skill_id": "diplomacy",
                                             "skill_label": "Diplomacy",
                                             "dc": 16,
-                                            "tags": [
-                                                "odran",
-                                                "oath",
-                                                "finale",
-                                                "dialog"
-                                            ],
+                                            "tags": ["odran", "oath", "finale", "dialog"],
                                             "outcomes": {
                                                 "critical_success": {
-                                                    "text": "Odran cofa sie, gdy nawet jego ludzie slysza, ze oferta jest przyznaniem winy.",
+                                                    "text": "Odran cofa się, gdy nawet jego champion słyszy w ofercie przyznanie winy. Brama układu staje się świadomym finałowym wyborem, nie pułapką.",
                                                     "effects": [
-                                                        {
-                                                            "type": "set_flag",
-                                                            "flag": "odran_bargain_broken"
-                                                        }
+                                                        {"type": "set_flag", "flag": "odran_bargain_broken"},
+                                                        {"type": "set_flag", "flag": "odran_confronted"},
+                                                        {"type": "set_flag", "flag": "bargain_unlocked"}
                                                     ]
                                                 },
                                                 "success": {
-                                                    "text": "Odran traci pewnosc. Jego oferta zostaje wypowiedziana na glos i staje sie dowodem.",
+                                                    "text": "Odran traci pewność. Jego oferta zostaje wypowiedziana na głos i staje się dowodem presji, którą wywierał na wioskę.",
                                                     "effects": [
-                                                        {
-                                                            "type": "set_flag",
-                                                            "flag": "odran_bargain_exposed"
-                                                        }
+                                                        {"type": "set_flag", "flag": "odran_bargain_exposed"},
+                                                        {"type": "set_flag", "flag": "odran_confronted"},
+                                                        {"type": "set_flag", "flag": "bargain_unlocked"}
                                                     ]
                                                 },
                                                 "failure": {
-                                                    "text": "Odran usmiecha sie chlodno. 'Bez dowodu to tylko gniew przybyszow.'"
+                                                    "text": "Odran uśmiecha się chłodno. 'Bez dowodu to tylko gniew przybyszów.'"
                                                 }
                                             }
                                         }
                                     },
                                     {
                                         "id": "leave",
-                                        "label": "Nie odpowiadaj na oferte."
+                                        "label": "Nie odpowiadaj na ofertę."
                                     }
                                 ]
                             }
@@ -458,16 +198,55 @@
             "object_id": "entry_anchor",
             "placement": "cell",
             "instances": [
-                {
-                    "position": [
-                        3,
-                        9
-                    ],
-                    "config": {
-                        "entry_anchor_id": "from_ruins",
-                        "label": "From Hill Ruins"
-                    }
-                }
+                {"position": [10, 29], "config": {"entry_anchor_id": "from_ruins", "label": "Z Ruin na wzgórzu"}}
+            ]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "oath_crypt_overview",
+            "placement": "cell",
+            "instances": [
+                {"position": [10, 27], "config": {"overview_id": "oath_crypt_overview"}}
+            ]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "oath_crypt_reliquary",
+            "placement": "cell",
+            "instances": [
+                {"position": [10, 15], "config": {}}
+            ]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "oath_crypt_odran_gate",
+            "placement": "cell",
+            "instances": [
+                {"position": [18, 15], "config": {}}
+            ]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "oath_crypt_proof_pillar",
+            "placement": "cell",
+            "instances": [
+                {"position": [4, 5], "config": {"proof_id": "oath", "dc": 16}},
+                {"position": [15, 5], "config": {"proof_id": "ash", "dc": 16}},
+                {"position": [4, 24], "config": {"proof_id": "ledger", "dc": 16}},
+                {"position": [15, 24], "config": {"proof_id": "witness", "dc": 16}}
+            ]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "oath_crypt_hazard",
+            "placement": "cell",
+            "instances": [
+                {"position": [8, 10], "config": {"hazard_id": "ash_fissure_north", "label": "Pęknięcie Popiołu"}},
+                {"position": [11, 20], "config": {"hazard_id": "ash_fissure_south", "label": "Pęknięcie Popiołu"}},
+                {"position": [2, 14], "config": {"hazard_id": "false_oath_mirror_west", "label": "Złamane Lustro Przysięgi"}},
+                {"position": [17, 14], "config": {"hazard_id": "false_oath_mirror_east", "label": "Złamane Lustro Przysięgi"}},
+                {"position": [9, 13], "config": {"hazard_id": "oath_chain_north", "label": "Łańcuch Przysięgi"}},
+                {"position": [11, 17], "config": {"hazard_id": "oath_chain_south", "label": "Łańcuch Przysięgi"}}
             ]
         },
         {
@@ -476,38 +255,26 @@
             "placement": "cell",
             "instances": [
                 {
-                    "position": [
-                        6,
-                        7
-                    ],
+                    "position": [6, 16],
                     "config": {
                         "challenge_id": "serai_liturgy_recited",
-                        "label": "Przywolaj slowa przysiegi",
+                        "label": "Przywołaj słowa przysięgi",
                         "skill_id": "religion",
                         "dc": 15,
-                        "tags": [
-                            "oath",
-                            "serai",
-                            "relic"
-                        ],
-                        "intro": "Kamienne slowa przysiegi sa starte. Jesli wypowiecie je poprawnie, Serai odzyska glos; jesli zrobicie z nich tylko formule, krypta odpowie echem bez sensu.",
+                        "tags": ["oath", "serai", "relic"],
+                        "intro": "Kamienne słowa przysięgi są starte. Jeśli wypowiecie je poprawnie, Serai odzyska głos; jeśli zrobicie z nich tylko formułę, krypta odpowie echem bez sensu.",
                         "success_flag": "serai_liturgy_recited",
-                        "success_message": "Slowa przysiegi porzadkuja echo krypty i wzmacniaja argument za ocaleniem wioski.",
-                        "failure_message": "Echo krypty rozbija formule, zanim da sie ja domknac.",
+                        "success_message": "Słowa przysięgi porządkują echo krypty i wzmacniają argument za ocaleniem wioski.",
+                        "failure_message": "Echo krypty rozbija formułę, zanim da się ją domknąć.",
                         "outcome_messages": {
-                            "critical_success": "Wypowiadasz slowa tak, jak byly skladane: jako obietnice wobec ludzi, nie wobec wladzy. Serai odzyskuje pelny glos.",
-                            "success": "Slowa przysiegi porzadkuja echo krypty i wzmacniaja argument za ocaleniem wioski.",
-                            "failure": "Echo krypty rozbija formule, zanim da sie ja domknac.",
-                            "critical_failure": "Krypta odpowiada gniewem dawnych straznikow, ktorzy slysza w slowach tylko pusty rytual."
+                            "critical_success": "Wypowiadasz słowa tak, jak były składane: jako obietnicę wobec ludzi, nie wobec władzy. Serai odzyskuje pełny głos.",
+                            "success": "Słowa przysięgi porządkują echo krypty i wzmacniają argument za ocaleniem wioski.",
+                            "failure": "Echo krypty rozbija formułę, zanim da się ją domknąć.",
+                            "critical_failure": "Krypta odpowiada gniewem dawnych strażników, którzy słyszą w słowach tylko pusty rytuał."
                         },
                         "outcome_flags": {
-                            "critical_success": [
-                                "serai_liturgy_recited",
-                                "serai_voice_restored"
-                            ],
-                            "success": [
-                                "serai_liturgy_recited"
-                            ]
+                            "critical_success": ["serai_liturgy_recited", "serai_voice_restored"],
+                            "success": ["serai_liturgy_recited"]
                         }
                     }
                 }
@@ -519,36 +286,29 @@
             "placement": "cell",
             "instances": [
                 {
-                    "position": [
-                        2,
-                        9
-                    ],
+                    "position": [9, 29],
                     "config": {
                         "exit_id": "return_to_ruins_from_crypt",
-                        "label": "Return to Ruins",
+                        "label": "Powrót do Ruin na wzgórzu",
                         "interaction_mode": "on_enter"
                     }
                 },
                 {
-                    "position": [
-                        7,
-                        7
-                    ],
+                    "position": [10, 15],
                     "config": {
                         "exit_id": "restore_oath",
-                        "label": "Restore the Oath",
-                        "interaction_mode": "interact"
+                        "label": "Przywróć Przysięgę",
+                        "interaction_mode": "interact",
+                        "requires_confirmation": true
                     }
                 },
                 {
-                    "position": [
-                        10,
-                        8
-                    ],
+                    "position": [18, 15],
                     "config": {
                         "exit_id": "bargain_with_odran",
-                        "label": "Let Odran Leave",
-                        "interaction_mode": "interact"
+                        "label": "Pozwól Odranowi odejść",
+                        "interaction_mode": "interact",
+                        "requires_confirmation": true
                     }
                 }
             ]

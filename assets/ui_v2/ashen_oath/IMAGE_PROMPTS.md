@@ -84,6 +84,14 @@ Transparent-background token art of a thin ash ghost, human silhouette made of g
 
 Transparent-background token art of a spectral knight made of ash and blue-gray flame, broken sword, oathbound guardian, strong silhouette.
 
+### `images/enemies/charred_deacon.png`
+
+Transparent-background token art of a burned chapel deacon, undead spirit in scorched vestments, ash-black face, red ember cracks through the robes, holding a charred crozier, solemn hostile pose, strong readable boss silhouette.
+
+### `images/enemies/ash_cinder.png`
+
+Transparent-background token art of a tiny ash shadow minion, body made of gray soot and one dim ember core, fragile 1 HP creature, crouched blocking pose, readable at small tabletop token size.
+
 ### `images/enemies/odrans_champion.png`
 
 Transparent-background token art of a grim human champion in dark breastplate with a halberd, Vale colors on a torn sash, oathbreaker motif, ash-lit crypt glow, imposing final boss silhouette.
@@ -112,7 +120,103 @@ Transparent-background icon of a ritual stone circle with swirling ash forming a
 
 ### `images/interactables/oath_reliquary.png`
 
-Transparent-background icon of a compact ancient reliquary, silver and dark wood, flame-hand symbol, sacred but portable.
+Transparent-background token art of an ancient oath reliquary in a stone crypt, silver and dark wood, flame-hand symbol, white-gold light leaking through cracks, readable top-down tabletop token.
+
+### `images/interactables/oath_proof_pillars.png`
+
+Transparent-background asset set of four cracked stone proof pillars with distinct symbols: oath hand, ash spiral, ledger page, witness flame, cold white-blue crypt glow, readable as physical board tokens.
+
+### `images/interactables/crypt_oath_chains.png`
+
+Transparent-background icon of broken oath chains around a stone reliquary, cold white light in the links, final ritual obstacle token.
+
+### `images/interactables/false_oath_mirrors.png`
+
+Transparent-background token art of cracked crypt mirrors showing red false reflections, ominous but readable as a hazard marker.
+
+### `images/interactables/charred_altar.png`
+
+Transparent-background icon of a blackened stone chapel altar, red ember veins in cracked stone, ash gathered around the base, sacred object corrupted into a ritual anchor.
+
+### `images/interactables/chapel_statues.png`
+
+Transparent-background asset showing four small chapel statue tokens as a matching set: Watcher, Bellbearer, Flamekeeper, Ash Saint, each readable as a separate miniature scene, pale stone stained by soot.
+
+### `images/interactables/hallowed_ash_vial.png`
+
+Transparent-background icon of a small glass vial filled with pale blessed ash, cool white-blue glow, bronze cap with oath hand-and-flame motif, reward item readable at UI size.
+
+### `images/interactables/chapel_confessional.png`
+
+Transparent-background token art of an intact wooden chapel confessional surrounded by black ash, cold white light leaking through the lattice, soot-stained but untouched by fire, solemn mystery object, readable as a board interactable.
+
+### `images/interactables/chapel_bell_rope.png`
+
+Transparent-background icon of a frayed chapel bell rope hanging from a cracked beam, small tarnished bell fragment above it, ash dust on the fibers, subtle cold highlight, readable as a tactical interactable.
+
+### `images/interactables/chapel_fallen_beam.png`
+
+Transparent-background top-down token of a charred fallen chapel beam across broken stone tiles, ember-dark cracks, ash and splinters around it, readable obstacle that can be moved on a physical board.
+
+### `images/interactables/old_mill_bound_tovin.png`
+
+Transparent-background token art of a frightened young acolyte bound near mill sacks, simple chapel clothes, rope around wrists, flour and gray ash on the floor, non-graphic hostage rescue marker, readable at UI and tabletop token size.
+
+### `images/interactables/old_mill_gear_lever.png`
+
+Transparent-background icon of a heavy iron-and-wood mill gear lever mounted beside turning cogs, yellow lantern light, worn handle, grease and flour dust, mechanical hazard control object.
+
+### `images/interactables/old_mill_sacks.png`
+
+Transparent-background icon of torn flour sacks mixed with suspicious gray-black ash, one sack spilling a darker powder trail, small evidence tag feeling without modern labels, readable clue asset.
+
+### `images/interactables/old_mill_ledger.png`
+
+Transparent-background icon of an old mill ledger page on rough wood, wax smudge, coin mark, ash fingerprints, no readable text, strong evidence object tied to payments and false records.
+
+### `images/interactables/old_mill_rope_hoist.png`
+
+Transparent-background token art of a pulley rope hoist with hanging flour sacks, worn wooden beam, taut rope, warm mill lantern light, tactical interactable for dropping or shifting weight.
+
+### `images/interactables/old_mill_back_track.png`
+
+Transparent-background icon of a hidden back track behind warped mill boards and pushed-aside sacks, greenish outdoor light at the far end, narrow escape route, readable secret passage token.
+
+### `images/interactables/hill_ruins_anchor.png`
+
+Transparent-background asset set of four cracked ritual obelisks for hill ruins anchors, distinct symbols for oath, ash, blood, and relic, cold blue-white runes, weathered stone, readable as separate board tokens.
+
+### `images/interactables/hill_ruins_echo.png`
+
+Transparent-background icon of a broken stone echo marker with a pale spectral hand-and-flame reflection hovering above ash, memory-trial clue object, quiet white-blue light.
+
+### `images/interactables/hill_ruins_false_ash.png`
+
+Transparent-background token of gray ash caught in wind over ruined stone, with a darker artificial powder streak visibly separate from natural ritual ash, investigative comparison clue, no text.
+
+### `images/interactables/hill_ruins_ash_storm.png`
+
+Transparent-background area token of a swirling ash storm, gray and white particles in a circular vortex, faint ghost silhouettes inside, readable moving hazard zone for tabletop use.
+
+### `images/interactables/hill_ruins_crypt_descent.png`
+
+Transparent-background token art of a sealed stone stairway descending under hill ruins, half-buried by ash and rubble, cold green-white light under the blocked slab, final route marker.
+
+### `images/interactables/hill_ruins_fallen_arch.png`
+
+Transparent-background top-down token of a collapsed stone arch or bridge fragment, weathered blocks, ash in cracks, one supported beam point, readable terrain interactable that can be propped or collapsed.
+
+### `images/interactables/oath_crypt_odran_gate.png`
+
+Transparent-background token art of a dark stone bargain gate in the oath crypt, red-green light bleeding through narrow cracks, Vale crest shadow, ominous exit object tied to Odran's escape.
+
+### `images/interactables/oath_crypt_hazard.png`
+
+Transparent-background asset set of oath crypt hazard markers: ash fissures, false oath mirror shards, and red-lit cracked stone, dark/fire danger readable as small tabletop tokens, no gore.
+
+### `images/interactables/oath_crypt_reliquary.png`
+
+Transparent-background icon variant of the oath reliquary for interaction prompts, central ancient reliquary on a low stone pedestal, four broken oath chains around it, white-gold light beginning to wake, readable UI object.
 
 ## Fallbacks and actions
 

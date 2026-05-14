@@ -421,7 +421,7 @@ class Combat(State):
             return
         try:
             self.game.ui_log(
-                f"Ustaw figurke zwierzecego towarzysza dla {getattr(owner, 'name', 'bohatera')}."
+                f"Ustaw figurkę zwierzęcego towarzysza dla {getattr(owner, 'name', 'bohatera')}."
             )
         except Exception:
             pass
@@ -437,6 +437,32 @@ class Combat(State):
                 )
         except Exception:
             pass
+        player_prompt = getattr(self.game, "player_prompt", None)
+        if player_prompt is not None and hasattr(player_prompt, "create"):
+            try:
+                if hasattr(player_prompt, "cancel_scope"):
+                    player_prompt.cancel_scope("hero_turn:activation")
+            except Exception:
+                pass
+            try:
+                player_prompt.create(
+                    "Ustaw figurkę towarzysza",
+                    kind="info",
+                    source="animal_companion_spawn",
+                    body_markdown=(
+                        f"Gra czeka na klik pola dla zwierzęcego towarzysza bohatera "
+                        f"{getattr(owner, 'name', 'Bohater')}. Kliknij jedno z podświetlonych pól obok właściciela."
+                    ),
+                    summary="Kliknij podświetlone pole obok właściciela.",
+                    scope_key="combat:companion_setup",
+                    dedupe_key=f"animal_companion_spawn:{owner_id}",
+                    input_mode="board_click",
+                    cancel_enabled=False,
+                    confirm_enabled=False,
+                    prompt_id=f"animal_companion.spawn.{owner_id}",
+                )
+            except Exception:
+                pass
         selected = None
         try:
             self.game.conn.set_leds(spawn_options, consts.HERO_HIGHLIGHT_RGB)
@@ -473,6 +499,11 @@ class Combat(State):
                 except Exception:
                     pass
         finally:
+            if player_prompt is not None and hasattr(player_prompt, "cancel_scope"):
+                try:
+                    player_prompt.cancel_scope("combat:companion_setup")
+                except Exception:
+                    pass
             try:
                 self.game.conn.leds_off()
             except Exception:
@@ -566,7 +597,7 @@ class Combat(State):
                     pass
             owner_name = getattr(companion, "owner_name", owner_id)
             companion_name = getattr(companion, "name", "Zwierzecy towarzysz")
-            prompt = f"Koniec walki: zabierz figurke {companion_name} (owner: {owner_name})."
+            prompt = f"Koniec walki: zabierz figurkę {companion_name} (właściciel: {owner_name})."
             cleanup_lines.append(f"- {companion_name} ({owner_name})")
             self.game.ui_log(prompt)
         self.animal_companions.clear()
@@ -643,7 +674,7 @@ class Combat(State):
                         summary=f"{companion_name} wypada z walki.",
                         body_markdown=(
                             f"**{companion_name}** ({owner_name}) zostal pokonany i znika z planszy.\n\n"
-                            "Zdejmij figurke z pola, na ktorym stal towarzysz. "
+                            "Zdejmij figurkę z pola, na którym stał towarzysz. "
                             "Dalsze skutki dla towarzysza rozlicz po walce zgodnie z zasadami scenariusza."
                         ),
                         priority="result",
@@ -1293,6 +1324,12 @@ class Combat(State):
                 clear_turn_reaction_policies(actor)
             except Exception:
                 pass
+            start_hook = getattr(actor, "on_combat_turn_start", None)
+            if callable(start_hook):
+                try:
+                    start_hook(self.game, self)
+                except Exception:
+                    logger.debug("Nie udało się wykonać hooka początku tury dla %s", actor, exc_info=True)
         return actor
 
     def _advance_turn(self):

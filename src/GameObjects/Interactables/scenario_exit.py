@@ -170,7 +170,7 @@ class ScenarioExit(HiddenMixin, InteractableMixin):
 
 META = GameObjectMeta(
     object_id="scenario_exit",
-    label="Scenario Exit",
+    label="Przejście scenariusza",
     color="#f59e0b",
     category="Interactables",
     placement="cell",

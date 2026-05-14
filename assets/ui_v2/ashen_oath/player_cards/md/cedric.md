@@ -4,6 +4,13 @@
 **Styl:** Ranger, half-elf human.  
 **Glowne zadanie:** oddzielac prawdziwe slady od falszywych tropow Odrana.
 
+## Statystyki
+
+- **Atrybuty:** STR +1, DEX +4, CON +2, INT +0, WIS +2, CHA +0.
+- **Bieglosci:** Perception trained; Fortitude expert, Reflex expert, Will trained.
+- **Bronie/pancerz:** simple, martial, unarmed trained; unarmored, light, medium trained.
+- **Skille trained:** Acrobatics, Athletics, Crafting, Nature, Occultism, Stealth, Survival.
+
 ## Skille do pamietania
 
 - `Survival` - tropienie, slady przy kaplicy, droga do ruin, ukryty trakt z mlyna.

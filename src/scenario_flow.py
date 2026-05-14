@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from layered_scenarios import compile_layered_scenario, load_layered_scenario
+from scenario_room_utils import expand_room_positions
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -167,8 +168,7 @@ def resolve_map_payload(map_ref: ScenarioMapRef | dict[str, Any]) -> dict[str, A
 
     if not source_path.exists():
         source_path = DEFAULT_SCENARIOS_DIR / f"{map_ref.source}.json"
-    payload = json.loads(source_path.read_text(encoding="utf-8"))
-    payload = copy.deepcopy(payload)
+    payload = expand_room_positions(copy.deepcopy(json.loads(source_path.read_text(encoding="utf-8"))))
     payload.setdefault("metadata", {})
     payload["metadata"] = {
         **dict(payload.get("metadata") or {}),

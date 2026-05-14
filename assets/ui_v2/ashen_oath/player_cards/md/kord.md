@@ -4,6 +4,13 @@
 **Styl:** Barbarian, half-orc human.  
 **Glowne zadanie:** dawac druzynie bezpieczna przestrzen i zatrzymywac ludzi Odrana.
 
+## Statystyki
+
+- **Atrybuty:** STR +3, DEX +1, CON +4, INT +0, WIS +1, CHA +0.
+- **Bieglosci:** Perception trained; Fortitude expert, Reflex trained, Will expert.
+- **Bronie/pancerz:** simple, martial, unarmed trained; unarmored, light, medium trained.
+- **Skille trained:** Acrobatics, Athletics, Intimidation, Nature, Survival.
+
 ## Skille do pamietania
 
 - `Athletics` - wywazanie, przesuwanie przeszkod, zatrzymanie przeciwnika.

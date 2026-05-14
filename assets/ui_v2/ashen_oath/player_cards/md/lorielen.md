@@ -13,6 +13,10 @@
 - `Speed`: 30 ft, ale snapshot ma statusy encumbered/speed_penalty.
 - `Bron`: scimitar.
 - `Pancerz / tarcza`: hide armor, wooden shield.
+- `Atrybuty`: STR +0, DEX +2, CON +0, INT +1, WIS +2, CHA +4.
+- `Bieglosci`: Perception trained; Fortitude trained, Reflex trained, Will expert.
+- `Bronie/pancerz`: simple, unarmed trained; unarmored trained.
+- `Skille trained`: Arcana, Diplomacy, Medicine, Occultism, Religion, Society.
 
 ## Skille do pamietania
 

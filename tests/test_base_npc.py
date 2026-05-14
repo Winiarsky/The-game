@@ -21,6 +21,7 @@ def test_flags_disable_actions():
     assert "trade" not in actions
     assert "pickpocket" not in actions
     assert "talk" in actions
+    assert "dialog" in actions["talk"].tags
     assert "leave" in actions
 
 
@@ -135,6 +136,38 @@ def test_dialog_tree_uses_blocking_prompts_and_sets_flags(monkeypatch):
     assert session.global_flags["truth_known"] is True
     assert len(ui.choice_calls) == 1
     assert len(ui.info_calls) == 1
+    assert ui.info_calls[0]["scope_key"] == "dialog:witness"
+    assert ui.info_calls[0]["prompt_id"] == "dialog.witness.ask"
+    assert ui.info_calls[0]["image"].endswith("/default_actor.png")
+
+
+def test_dialog_plain_option_result_uses_blocking_prompt():
+    actor = type("Actor", (), {"statuses": [], "inventory": [], "coin_pouch": {"cp": 0, "sp": 0, "gp": 0, "pp": 0}})()
+    session = type("Session", (), {"global_flags": {}})()
+    ui = FakeDialogUI(choices=["Ask"])
+    game = type("Game", (), {"ui": ui, "scenario_session": session})()
+    npc = BaseNPC(
+        name="Nila",
+        npc_id="nila",
+        enable_trade=False,
+        enable_pickpocket=False,
+        enable_diplomacy=False,
+        dialog={
+            "start": {
+                "text": "Nila patrzy na patrol.",
+                "options": [{"id": "ask", "label": "Ask", "text": "Nila szepcze wskazówkę."}],
+            }
+        },
+    )
+
+    message = npc.action_talk(actor, game)
+
+    assert message == "Nila szepcze wskazówkę."
+    assert len(ui.choice_calls) == 1
+    assert len(ui.info_calls) == 1
+    assert ui.info_calls[0]["args"][0] == "Nila"
+    assert ui.info_calls[0]["prompt_long"] == "Nila szepcze wskazówkę."
+    assert ui.choice_calls[0]["image"].endswith("/default_actor.png")
 
 
 def test_dialog_offer_purchase_adds_selected_items():

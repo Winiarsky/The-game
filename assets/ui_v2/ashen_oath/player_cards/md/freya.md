@@ -4,6 +4,13 @@
 **Styl:** Sorcerer, half-elf human.  
 **Glowne zadanie:** rozpoznac, czy zjawy sa prawdziwym zlem, czy mechanizmem przysiegi.
 
+## Statystyki
+
+- **Atrybuty:** STR +0, DEX +1, CON +2, INT +1, WIS +1, CHA +4.
+- **Bieglosci:** Perception trained; Fortitude trained, Reflex trained, Will expert.
+- **Bronie/pancerz:** simple, unarmed trained; unarmored trained.
+- **Skille trained:** Arcana, Deception, Intimidation, Nature, Occultism, Stealth.
+
 ## Skille do pamietania
 
 - `Occultism` - znaki, popielne wspomnienia, nietypowa magia.

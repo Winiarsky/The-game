@@ -106,6 +106,8 @@ class ScenarioSession:
             before_state = self.current_game.state.__class__.__name__
             self.current_game.run_action("choose_action")
             self.heroes = list(getattr(self.current_game, "heroes", []) or self.heroes)
+            if self._maybe_restore_map_after_tpk():
+                continue
             after_state = self.current_game.state.__class__.__name__
             if before_state == "Combat" and after_state != "Combat":
                 self.dispatch_trigger("combat_end", map_id=self.current_map_id)
@@ -240,6 +242,10 @@ class ScenarioSession:
                 message = str(action.get("message") or action.get("text") or "").strip()
                 if not message:
                     continue
+                title = str(action.get("title") or NARRATOR_TITLE).strip() or NARRATOR_TITLE
+                summary = str(action.get("summary") or "Co się dzieje").strip() or "Co się dzieje"
+                details_markdown = str(action.get("details_markdown") or "").strip() or None
+                prompt_id = str(action.get("prompt_id") or "").strip() or None
                 audio = str(action.get("audio") or action.get("voiceover") or "").strip()
                 if not audio:
                     audio = self._flow_voiceover_for(
@@ -253,13 +259,15 @@ class ScenarioSession:
                         prompt_sent = False
                         try:
                             prompt_sent = self.current_game.player_prompt.info(
-                                NARRATOR_TITLE,
+                                title,
                                 body_markdown=message,
-                                summary="Co się dzieje",
+                                summary=summary,
+                                details_markdown=details_markdown,
                                 source="scenario_flow",
                                 scope_key="scenario_transition",
                                 dedupe_key=f"scenario_prompt:{_safe_id(trigger)}:{_safe_id(map_id)}:{_safe_id(target_id)}:{_safe_id(message)}",
                                 semantic_type="required_action",
+                                prompt_id=prompt_id,
                                 audio=audio,
                             ) is not None
                         except Exception:
@@ -267,7 +275,7 @@ class ScenarioSession:
                         if not prompt_sent:
                             self.current_game.ui_narration(
                                 message,
-                                summary="Co się dzieje",
+                                summary=summary,
                                 source="scenario_flow",
                                 audio=audio,
                             )
@@ -468,6 +476,158 @@ class ScenarioSession:
         }
         self.checkpoints.append(checkpoint)
 
+    def apply_between_map_short_rest(self, *, reason: str = "map_transition") -> None:
+        """Lekki odpoczynek kampanijny: HP do pełna i czyszczenie efektów tymczasowych."""
+        heroes = list(self.heroes or [])
+        if not heroes and self.current_game is not None:
+            heroes = list(getattr(self.current_game, "heroes", []) or [])
+        for hero in heroes:
+            max_hp = getattr(hero, "max_hp", None)
+            if max_hp is None:
+                max_hp = getattr(hero, "hp_max", None)
+            try:
+                max_hp_int = int(max_hp)
+            except Exception:
+                max_hp_int = 0
+            if max_hp_int > 0:
+                try:
+                    setattr(hero, "hp", max_hp_int)
+                except Exception:
+                    pass
+            self._clear_short_rest_statuses(hero)
+        if self.current_game is not None:
+            try:
+                self.current_game.ui_log(f"Krótki odpoczynek: HP do pełna, tymczasowe debuffy usunięte ({reason}).")
+            except Exception:
+                pass
+
+    def _clear_short_rest_statuses(self, actor: Any) -> None:
+        remover = getattr(actor, "remove_status", None)
+        for status_id in ("dead", "dying", "dying_1", "dying_2", "dying_3", "dying_4", "unconscious", "stable"):
+            if callable(remover):
+                try:
+                    remover(status_id)
+                except Exception:
+                    pass
+        statuses = getattr(actor, "statuses", None)
+        if not isinstance(statuses, list):
+            return
+        kept = []
+        for status in list(statuses):
+            data = getattr(status, "data", None) or {}
+            duration = getattr(status, "duration", None)
+            if bool(data.get("expire_on_short_rest") or data.get("expire_on_map_transition") or data.get("expire_on_combat_end")):
+                continue
+            if duration is not None and str(getattr(status, "id", "") or "") in {
+                "clumsy",
+                "dazzled",
+                "deafened",
+                "enfeebled",
+                "frightened",
+                "immobilized",
+                "off_guard",
+                "slowed",
+                "stupefied",
+                "stunned",
+            }:
+                continue
+            kept.append(status)
+        actor.statuses = kept
+
+    def _maybe_restore_map_after_tpk(self) -> bool:
+        current_map = str(self.current_map_id or "").strip()
+        checkpoint_by_map = {
+            "old_mill": ("old_mill_entered", "TPK w Starym Młynie"),
+            "oath_crypt": ("oath_crypt_entered", "TPK w Krypcie Przysięgi"),
+        }
+        if current_map not in checkpoint_by_map:
+            return False
+        if not self._party_defeated():
+            return False
+        checkpoint, reason = checkpoint_by_map[current_map]
+        restored = self.restore_checkpoint(checkpoint, reason=reason)
+        return bool(restored)
+
+    def _party_defeated(self) -> bool:
+        heroes = list(self.heroes or [])
+        if not heroes and self.current_game is not None:
+            heroes = list(getattr(self.current_game, "heroes", []) or [])
+        active = [hero for hero in heroes if getattr(hero, "position", None) is not None]
+        if not active:
+            active = heroes
+        if not active:
+            return False
+        try:
+            from statuses import is_dead, is_unconscious, dying_value
+        except Exception:
+            is_dead = is_unconscious = dying_value = None  # type: ignore[assignment]
+        defeated = 0
+        for hero in active:
+            if callable(is_dead):
+                try:
+                    if bool(is_dead(hero)):
+                        defeated += 1
+                        continue
+                except Exception:
+                    pass
+            if callable(is_unconscious):
+                try:
+                    if bool(is_unconscious(hero)):
+                        defeated += 1
+                        continue
+                except Exception:
+                    pass
+            if callable(dying_value):
+                try:
+                    if int(dying_value(hero) or 0) > 0:
+                        defeated += 1
+                        continue
+                except Exception:
+                    pass
+            try:
+                if int(getattr(hero, "hp", 1) or 0) <= 0:
+                    defeated += 1
+            except Exception:
+                pass
+        return defeated >= len(active)
+
+    def restore_checkpoint(self, reason_name: str, *, reason: str = "restore_checkpoint") -> bool:
+        target_reason = str(reason_name or "").strip()
+        checkpoint = None
+        for item in reversed(self.checkpoints):
+            if str(item.get("reason") or "").strip() == target_reason:
+                checkpoint = item
+                break
+        if checkpoint is None:
+            return False
+        target_map_id = str(checkpoint.get("current_map_id") or "").strip()
+        if not target_map_id:
+            return False
+        self.global_flags = copy.deepcopy(checkpoint.get("global_flags") or {})
+        self.completed_objectives = set(checkpoint.get("completed_objectives") or [])
+        self.visited_maps = set(checkpoint.get("visited_maps") or [])
+        self.current_map_id = target_map_id
+        self.pending_transition = None
+        self.map_snapshots.pop(target_map_id, None)
+        self.object_state_overrides.pop(target_map_id, None)
+        self.apply_between_map_short_rest(reason=reason)
+        self._load_map(target_map_id, entry_anchor_id=None, initial_load=False, place_party=True)
+        self._run_map_setup(initial_load=False)
+        if self.current_game is not None:
+            self.current_game.finished = False
+            self.current_game.state = HeroesTurn(self.current_game)
+            self.current_game._rebuild_object_registry_after_undo()
+            map_label = {
+                "old_mill_entered": "Starym Młynie",
+                "oath_crypt_entered": "Krypcie Przysięgi",
+            }.get(target_reason, "tej mapie")
+            self._show_scenario_info(
+                "Restart mapy",
+                f"Drużyna pada w {map_label}. To nie kończy scenariusza: wracacie do checkpointu wejścia na tę mapę. Zużyte consumable i flagi fabularne nie odnawiają się poza stanem zapisanym w checkpoincie.",
+                dedupe_key=f"restore_checkpoint:{target_reason}:{len(self.checkpoints)}",
+            )
+        return True
+
     def _apply_pending_transition(self) -> None:
         if self.pending_transition is None:
             return
@@ -483,11 +643,13 @@ class ScenarioSession:
             return
         if transition_def is not None:
             self._maybe_run_docks_stealth_challenge(transition_def)
+        self._cancel_transition_stale_turn_prompts()
         self._snapshot_current_map()
         from_map_id = str(self.current_map_id or "")
         self.visited_maps.add(from_map_id)
         target_map_id = str(transition.get("to_map_id") or "").strip()
         anchor_id = str(transition.get("entry_anchor_id") or "").strip() or None
+        self.apply_between_map_short_rest(reason=f"transition:{from_map_id}->{target_map_id}")
         if str(self.checkpoint_policy.get("transition") or "auto").strip().lower() != "off":
             self.save_checkpoint(reason=f"transition:{from_map_id}->{target_map_id}")
         self.current_map_id = target_map_id
@@ -505,6 +667,19 @@ class ScenarioSession:
             payload={"from_map_id": from_map_id},
         )
         self._after_transition_applied(dict(transition), from_map_id=from_map_id, target_map_id=target_map_id)
+
+    def _cancel_transition_stale_turn_prompts(self) -> None:
+        if self.current_game is None:
+            return
+        player_prompt = getattr(self.current_game, "player_prompt", None)
+        cancel_scope = getattr(player_prompt, "cancel_scope", None)
+        if not callable(cancel_scope):
+            return
+        for scope_key in ("hero_turn:activation", "hero_turn:intent", "hero_turn:resolution"):
+            try:
+                cancel_scope(scope_key)
+            except Exception:
+                logger.debug("Nie udało się zamknąć promptów zakresu %s przed zmianą mapy.", scope_key, exc_info=True)
 
     def _map_label(self, map_id: str | None) -> str:
         key = str(map_id or "").strip()
@@ -769,6 +944,10 @@ class ScenarioSession:
             "scenario_flow_id": self.scenario_id,
             "scenario_map_id": map_id,
         }
+        # ScenarioSession already runs a dynamic physical setup for every map.
+        # Static setup_plan entries remain useful for direct map playtests, but
+        # should not run a second time inside the campaign flow.
+        runtime_payload.pop("setup_plan", None)
         game = Game(
             conn=self.conn,
             scenario=map_id,

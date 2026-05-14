@@ -174,7 +174,10 @@ def narrate_action_result(*, actor: Any, action_id: str, result: Any) -> str:
     if action_id == "step":
         return f"{actor_name} wykonuje ostrożny krok i zmienia pozycję."
     if action_id == "interaction":
-        return f"{actor_name} kończy interakcję z otoczeniem."
+        return (
+            f"{actor_name} kończy interakcję z otoczeniem. "
+            "Możesz wybrać kolejną akcję tego bohatera albo użyć akcji Koniec, żeby oddać turę następnej postaci."
+        )
     if action_id == "seek":
         return f"{actor_name} rozgląda się uważnie za ukrytymi zagrożeniami lub śladami."
     if action_id == "raise_shield":

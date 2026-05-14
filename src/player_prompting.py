@@ -314,6 +314,8 @@ class PromptDirector:
         current_prompt = self._current_prompt()
         focus_card = self._card_by_id(self.focus_card_id)
         idle_card = self._card_by_id(self.idle_card_id)
+        if current_prompt is not None and _text(current_prompt.input_mode) not in {"board_click", "board_confirm"}:
+            idle_card = None
         payload = PlayerViewState(
             session_id=self.session_id,
             revision=self.revision,
@@ -409,6 +411,7 @@ class PromptDirector:
             self.active_prompt_id = prompt.id
         else:
             self._sync_active_prompt()
+        self.idle_card_id = None
         payload = prompt.to_dict()
         self._publish("prompt_created", payload)
         self._publish("view_state", self._view_state_payload(runtime_status=runtime_status))
@@ -965,6 +968,22 @@ class PromptDirector:
         if changed:
             self._publish("view_state", self._view_state_payload(runtime_status=runtime_status))
         return changed
+
+    def clear_journal(
+        self,
+        *,
+        runtime_status: dict[str, Any] | None = None,
+        keep_debug: bool = True,
+    ) -> dict[str, Any]:
+        self.journal = []
+        self.focus_card_id = None
+        self.idle_card_id = None
+        if not keep_debug:
+            self.debug_feed = []
+        self._bump_revision()
+        payload = self._view_state_payload(runtime_status=runtime_status)
+        self._publish("view_state", payload)
+        return payload
 
     def rotate_session(
         self,

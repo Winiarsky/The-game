@@ -51,6 +51,16 @@ class Start(State):
 
         def _finish_setup() -> State:
             self.game.heroes = heroes
+            try:
+                self.game.ui_event(
+                    "journal_clear",
+                    {
+                        "reason": "hero_setup_complete",
+                        "message": "Setup zakończony. Dziennik gry zaczyna się od sceny otwarcia.",
+                    },
+                )
+            except Exception:
+                pass
             self._prompt_opening_scene_if_needed()
             if getattr(self.game, "is_generated_encounter", None) and self.game.is_generated_encounter():
                 from .combat import Combat
@@ -66,27 +76,6 @@ class Start(State):
 
             hero_name = str(getattr(hero, "name", "Bohater") or "Bohater")
             logger.info("Wybierz pole startowe dla bohatera %s.", hero_name)
-            selection_prompt = str(
-                prompt_value(
-                    "setup.hero_setup_select_position",
-                    "body_markdown",
-                    f"Wybierz puste pole startowe dla bohatera {hero_name}, klikając jedno z podświetlonych pól.",
-                    hero_name=hero_name,
-                )
-            )
-            self.game.ui_log(selection_prompt)
-            if callable(ui_idle_hint):
-                ui_idle_hint(
-                    str(
-                        prompt_value(
-                            "setup.hero_setup_select_position",
-                            "title",
-                            f"Wskaż miejsce dla figurki: {hero_name}",
-                            hero_name=hero_name,
-                        )
-                    ),
-                    selection_prompt,
-                )
             board_occupant_at = getattr(self.game.board, "occupant_at", None)
             occupied_positions = {
                 tuple(getattr(existing, "position", None))
@@ -104,6 +93,54 @@ class Start(State):
             if not available_positions:
                 self.game.ui_log("Brak wolnych pól startowych dla kolejnego bohatera.")
                 return "failed"
+            fields_text = ", ".join(str(pos) for pos in available_positions)
+            selection_prompt = str(
+                prompt_value(
+                    "setup.hero_setup_select_position",
+                    "body_markdown",
+                    f"Wybierz puste pole startowe dla bohatera {hero_name}, klikając jedno z podświetlonych pól.",
+                    hero_name=hero_name,
+                )
+            )
+            selection_prompt = f"{selection_prompt}\n\nDostępne pola startowe: {fields_text}."
+            self.game.ui_log(selection_prompt)
+            if callable(ui_idle_hint):
+                ui_idle_hint(
+                    str(
+                        prompt_value(
+                            "setup.hero_setup_select_position",
+                            "title",
+                            f"Wskaż miejsce dla figurki: {hero_name}",
+                            hero_name=hero_name,
+                        )
+                    ),
+                    selection_prompt,
+                )
+            player_prompt = getattr(self.game, "player_prompt", None)
+            if player_prompt is not None and hasattr(player_prompt, "create"):
+                try:
+                    player_prompt.create(
+                        str(
+                            prompt_value(
+                                "setup.hero_setup_select_position",
+                                "title",
+                                f"Wskaż miejsce dla figurki: {hero_name}",
+                                hero_name=hero_name,
+                            )
+                        ),
+                        kind="info",
+                        source="hero_setup_select_position",
+                        body_markdown=selection_prompt,
+                        summary=f"Wskaż pole startowe bohatera {hero_name}.",
+                        scope_key="hero_setup:placement",
+                        dedupe_key=f"hero_setup:select_position:{hero_name}",
+                        input_mode="board_click",
+                        cancel_enabled=True,
+                        confirm_enabled=False,
+                        prompt_id="setup.hero_setup_select_position",
+                    )
+                except Exception:
+                    pass
             scan_attempt = 0
 
             def _scan_start_position():
@@ -147,6 +184,11 @@ class Start(State):
                 pos = _scan_start_position()
             finally:
                 self.game.conn.leds_off()
+                if player_prompt is not None and hasattr(player_prompt, "cancel_scope"):
+                    try:
+                        player_prompt.cancel_scope("hero_setup:placement")
+                    except Exception:
+                        pass
             if pos is None:
                 retry_text = str(
                     prompt_value(

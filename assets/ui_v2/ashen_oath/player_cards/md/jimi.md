@@ -13,6 +13,10 @@
 - `Speed`: 25 ft.
 - `Bronie`: whip, rapier, shortsword.
 - `Pancerz`: leather armor.
+- `Atrybuty`: STR -1, DEX +4, CON +1, INT +1, WIS +2, CHA +1.
+- `Bieglosci`: Perception trained; Fortitude trained, Reflex expert, Will trained.
+- `Bronie/pancerz`: simple, martial, unarmed trained; unarmored, light trained.
+- `Skille trained`: Acrobatics, Deception, Diplomacy, Intimidation, Medicine, Occultism, Performance, Society, Stealth, Survival, Thievery.
 
 ## Skille do pamietania
 

@@ -215,6 +215,55 @@ def _board_scan_status_payload(event_type: str, payload: dict[str, Any]) -> dict
     return None
 
 
+def _board_scan_scope(payload: dict[str, Any]) -> str:
+    kind = str(payload.get("kind") or "board").strip().lower().replace(" ", "_") or "board"
+    hero_name = str(payload.get("hero_name") or "").strip().lower().replace(" ", "_")
+    if hero_name:
+        return f"board_scan:{kind}:{hero_name}"
+    return f"board_scan:{kind}"
+
+
+def _ensure_board_scan_prompt(payload: dict[str, Any]) -> None:
+    current = prompt_director._current_prompt()
+    if current is not None and str(current.input_mode or "") in {"board_click", "board_confirm"}:
+        return
+
+    status = _board_scan_status_payload("board_scan_wait", payload)
+    if not status:
+        return
+    positions = payload.get("positions")
+    body = str(status.get("message") or "Skan planszy.")
+    if isinstance(positions, list) and positions:
+        formatted = []
+        for pos in positions[:24]:
+            if isinstance(pos, (list, tuple)) and len(pos) >= 2:
+                formatted.append(f"({pos[0]}, {pos[1]})")
+        if formatted:
+            body = f"{body}\n\nDostępne pola: {', '.join(formatted)}"
+            if len(positions) > len(formatted):
+                body += f" i {len(positions) - len(formatted)} więcej."
+
+    scope_key = _board_scan_scope(payload)
+    prompt_director.create_prompt_from_api(
+        {
+            "prompt": str(status.get("title") or "Czekam na planszę"),
+            "kind": "info",
+            "source": "board_scan",
+            "prompt_long": body,
+            "summary": "Kliknij odpowiednie podświetlone pole na planszy.",
+            "scope_key": scope_key,
+            "dedupe_key": scope_key,
+            "input_mode": "board_click",
+            "confirm_enabled": False,
+            "cancel_enabled": True,
+            "cancel_answer": "cancel",
+            "prompt_id": scope_key,
+        },
+        session_id=current_session_id,
+        runtime_status=_runtime_status_payload(),
+    )
+
+
 
 def _normalize_skill_ranks(snapshot: dict[str, Any]) -> list[str]:
     ranks = dict(snapshot.get("skill_ranks") or {})
@@ -255,6 +304,25 @@ def _hero_catalog_entry(snapshot: dict[str, Any]) -> dict[str, Any]:
     speed = int(snapshot.get("speed_feet") or snapshot.get("base_speed_feet") or 0) or None
     key_statuses = [str(item).replace("_", " ").title() for item in list(snapshot.get("status_ids") or [])[:6]]
     trained_skills = _normalize_skill_ranks(snapshot)[:4]
+    ability_modifiers = dict(snapshot.get("ability_modifiers") or {})
+    ability_summary = ", ".join(
+        f"{label} {int(ability_modifiers.get(key, 0) or 0):+d}"
+        for key, label in (
+            ("strength", "STR"),
+            ("dexterity", "DEX"),
+            ("constitution", "CON"),
+            ("intelligence", "INT"),
+            ("wisdom", "WIS"),
+            ("charisma", "CHA"),
+        )
+        if key in ability_modifiers
+    )
+    save_ranks = dict(snapshot.get("save_ranks") or {})
+    proficiency_summary = ", ".join(
+        f"{label}: {str(save_ranks.get(key) or '-').title()}"
+        for key, label in (("fortitude", "Fort"), ("reflex", "Ref"), ("will", "Will"))
+        if key in save_ranks
+    )
     summary_parts = []
     if class_id:
         summary_parts.append(class_id.replace("_", " ").title())
@@ -273,6 +341,8 @@ def _hero_catalog_entry(snapshot: dict[str, Any]) -> dict[str, Any]:
         "speed": speed,
         "summary": " · ".join(part for part in summary_parts if part),
         "trained_skills": trained_skills,
+        "ability_summary": ability_summary,
+        "proficiency_summary": proficiency_summary,
         "key_traits": key_statuses,
         "level": int(snapshot.get("level") or 1),
         "background_id": str(snapshot.get("background_id") or "").strip(),
@@ -755,6 +825,12 @@ def api_events():
         scan_status = _board_scan_status_payload(str(event_type), body if isinstance(body, dict) else {})
         if scan_status:
             prompt_director.ingest_event("idle_hint", scan_status, runtime_status=_runtime_status_payload())
+        if str(event_type) == "board_scan_wait" and isinstance(body, dict):
+            _ensure_board_scan_prompt(body)
+        elif str(event_type) == "board_scan_result" and isinstance(body, dict):
+            prompt_director.cancel_scope(_board_scan_scope(body), runtime_status=_runtime_status_payload())
+    elif str(event_type) == "journal_clear":
+        prompt_director.clear_journal(runtime_status=_runtime_status_payload())
     elif str(event_type) in {"log", "info", "narration", "idle_hint", "player_card"}:
         prompt_director.ingest_event(str(event_type), body, runtime_status=_runtime_status_payload())
     elif str(event_type) == "prompt_scope_cancel":

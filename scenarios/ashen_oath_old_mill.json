@@ -1,258 +1,36 @@
 {
-    "name": "Ashen Oath - Old Mill",
-    "description": "Opcjonalna mapa z zakladnikiem, straznikami kasztelana, falszywym popiolem i ukrytym traktem do ruin.",
-    "starting_positions": [
-        [
-            2,
-            9
-        ],
-        [
-            3,
-            9
-        ],
-        [
-            4,
-            9
-        ],
-        [
-            2,
-            10
-        ],
-        [
-            3,
-            10
-        ],
-        [
-            4,
-            10
-        ]
+    "name": "Ashen Oath - Stary Młyn",
+    "description": "Mapa ratunku zakładnika, zabezpieczenia dowodów fałszywego popiołu i odkrycia ukrytego traktu do ruin.",
+    "setup_plan": [
+        {
+            "kind": "briefing",
+            "label": "Cel mapy",
+            "positions": [[5, 8], [7, 9], [10, 7], [11, 8], [12, 7], [8, 7], [10, 8], [11, 9]],
+            "colors": [[130, 190, 255], [255, 185, 30], [180, 180, 165], [120, 95, 55], [20, 80, 30], [255, 40, 30], [255, 40, 30], [255, 40, 30]],
+            "prompt": "Stary Młyn jest encounterem ratunkowo-śledczym. Ustaw Tovina na zimnym niebieskim LED-zie, mechanizm młyna na żółtym pulsie, worki fałszywego popiołu na szarym LED-zie, księgę młyna na brązowym LED-zie i trzech przeciwników na czerwonych LED-ach. Zielone wyjście do ruin pozostaje zakryte fizycznym elementem planszy, dopóki gracze nie odkryją tylnego traktu.",
+            "confirmation_mode": "confirm_only"
+        },
+        {
+            "kind": "terrain",
+            "label": "Teren, pułapki i rekwizyty",
+            "positions": [[6, 8], [7, 8], [9, 9], [6, 9], [8, 6], [7, 9]],
+            "colors": [[90, 80, 70], [90, 80, 70], [90, 80, 70], [130, 82, 35], [255, 210, 80], [255, 120, 20]],
+            "prompt": "Szare LED-y to zablokowane lub trudne przejścia między workami i gruzem. Brązowy LED to zakleszczona belka, którą można fizycznie oznaczyć na planszy i przesunąć po udanym teście. Żółty LED przy wciągarce to jednorazowa interakcja taktyczna. Pomarańczowy LED przy mechanizmie oznacza niebezpieczną pułapkę.",
+            "confirmation_mode": "confirm_only"
+        }
     ],
+    "starting_positions": [[2, 9], [3, 9], [4, 9], [2, 10], [3, 10], [4, 10]],
     "rooms": [
         {
             "id": "old_mill",
-            "name": "Old Mill",
+            "name": "Stary Młyn",
             "color": "#8a735c",
             "positions": [
-                [
-                    2,
-                    6
-                ],
-                [
-                    3,
-                    6
-                ],
-                [
-                    4,
-                    6
-                ],
-                [
-                    5,
-                    6
-                ],
-                [
-                    6,
-                    6
-                ],
-                [
-                    7,
-                    6
-                ],
-                [
-                    8,
-                    6
-                ],
-                [
-                    9,
-                    6
-                ],
-                [
-                    10,
-                    6
-                ],
-                [
-                    11,
-                    6
-                ],
-                [
-                    12,
-                    6
-                ],
-                [
-                    2,
-                    7
-                ],
-                [
-                    3,
-                    7
-                ],
-                [
-                    4,
-                    7
-                ],
-                [
-                    5,
-                    7
-                ],
-                [
-                    6,
-                    7
-                ],
-                [
-                    7,
-                    7
-                ],
-                [
-                    8,
-                    7
-                ],
-                [
-                    9,
-                    7
-                ],
-                [
-                    10,
-                    7
-                ],
-                [
-                    11,
-                    7
-                ],
-                [
-                    12,
-                    7
-                ],
-                [
-                    2,
-                    8
-                ],
-                [
-                    3,
-                    8
-                ],
-                [
-                    4,
-                    8
-                ],
-                [
-                    5,
-                    8
-                ],
-                [
-                    6,
-                    8
-                ],
-                [
-                    7,
-                    8
-                ],
-                [
-                    8,
-                    8
-                ],
-                [
-                    9,
-                    8
-                ],
-                [
-                    10,
-                    8
-                ],
-                [
-                    11,
-                    8
-                ],
-                [
-                    12,
-                    8
-                ],
-                [
-                    2,
-                    9
-                ],
-                [
-                    3,
-                    9
-                ],
-                [
-                    4,
-                    9
-                ],
-                [
-                    5,
-                    9
-                ],
-                [
-                    6,
-                    9
-                ],
-                [
-                    7,
-                    9
-                ],
-                [
-                    8,
-                    9
-                ],
-                [
-                    9,
-                    9
-                ],
-                [
-                    10,
-                    9
-                ],
-                [
-                    11,
-                    9
-                ],
-                [
-                    12,
-                    9
-                ],
-                [
-                    2,
-                    10
-                ],
-                [
-                    3,
-                    10
-                ],
-                [
-                    4,
-                    10
-                ],
-                [
-                    5,
-                    10
-                ],
-                [
-                    6,
-                    10
-                ],
-                [
-                    7,
-                    10
-                ],
-                [
-                    8,
-                    10
-                ],
-                [
-                    9,
-                    10
-                ],
-                [
-                    10,
-                    10
-                ],
-                [
-                    11,
-                    10
-                ],
-                [
-                    12,
-                    10
-                ]
+                [2, 6], [3, 6], [4, 6], [5, 6], [6, 6], [7, 6], [8, 6], [9, 6], [10, 6], [11, 6], [12, 6],
+                [2, 7], [3, 7], [4, 7], [5, 7], [6, 7], [7, 7], [8, 7], [9, 7], [10, 7], [11, 7], [12, 7],
+                [2, 8], [3, 8], [4, 8], [5, 8], [6, 8], [7, 8], [8, 8], [9, 8], [10, 8], [11, 8], [12, 8],
+                [2, 9], [3, 9], [4, 9], [5, 9], [6, 9], [7, 9], [8, 9], [9, 9], [10, 9], [11, 9], [12, 9],
+                [2, 10], [3, 10], [4, 10], [5, 10], [6, 10], [7, 10], [8, 10], [9, 10], [10, 10], [11, 10], [12, 10]
             ]
         }
     ],
@@ -261,20 +39,7 @@
             "category": "Obstacles",
             "object_id": "simple_obstacle",
             "placement": "cell",
-            "positions": [
-                [
-                    6,
-                    8
-                ],
-                [
-                    7,
-                    8
-                ],
-                [
-                    9,
-                    9
-                ]
-            ]
+            "positions": [[6, 8], [7, 8], [9, 9]]
         },
         {
             "category": "Enemies",
@@ -282,21 +47,17 @@
             "placement": "cell",
             "instances": [
                 {
-                    "position": [
-                        8,
-                        7
-                    ],
+                    "position": [8, 7],
                     "config": {
-                        "name": "Vale Guard"
+                        "name": "Strażnik Vale'a",
+                        "ai_profile": {"role": "hostage_guard", "protects": "tovin_barrow", "blocks_route_to": [5, 8]}
                     }
                 },
                 {
-                    "position": [
-                        11,
-                        9
-                    ],
+                    "position": [11, 9],
                     "config": {
-                        "name": "Vale Guard Rearwatch"
+                        "name": "Tylny strażnik Vale'a",
+                        "ai_profile": {"role": "rearwatch", "alarm_2_goal": "destroy_evidence", "alarm_4_goal": "warn_odran"}
                     }
                 }
             ]
@@ -307,110 +68,68 @@
             "placement": "cell",
             "instances": [
                 {
-                    "position": [
-                        10,
-                        8
-                    ],
+                    "position": [10, 8],
                     "config": {
-                        "name": "Mill Enforcer"
+                        "name": "Egzekutor z młyna",
+                        "ai_profile": {"role": "brute_controller", "push_toward": "old_mill_gear_lever", "protects": "tovin_barrow"}
                     }
                 }
             ]
         },
         {
-            "category": "NPC",
-            "object_id": "bound_smuggler_npc",
+            "category": "Interactables",
+            "object_id": "old_mill_overview",
             "placement": "cell",
             "instances": [
-                {
-                    "position": [
-                        5,
-                        8
-                    ],
-                    "config": {
-                        "name": "Tovin Barrow",
-                        "npc_id": "tovin_barrow",
-                        "cache_map_id": "old_mill",
-                        "cache_id": "mill_hidden_route",
-                        "dialog": {
-                            "start": {
-                                "title": "Tovin Barrow",
-                                "text": "Tovin siedzi zwiazany za workami maki. Jest blady, ale przytomny; zanim krzyknie z ulgi, przykłada palec do ust i nasluchuje krokow straznikow.",
-                                "options": [
-                                    {
-                                        "id": "ask_what_happened",
-                                        "label": "Zapytaj, co widzial w mlynie.",
-                                        "text": "Tovin mowi, ze ludzie Odrana przyniesli worki z czarnym pylem jeszcze przed pozarem kaplicy. Jeden z nich kazal mu milczec, bo \"Mira ma pasowac do historii\".",
-                                        "effects": [
-                                            {
-                                                "type": "set_flag",
-                                                "flag": "tovin_saw_false_ash"
-                                            },
-                                            {
-                                                "type": "set_flag",
-                                                "flag": "false_ash_hint"
-                                            }
-                                        ]
-                                    },
-                                    {
-                                        "id": "calm_him",
-                                        "label": "Uspokoj go i ustal droge ucieczki.",
-                                        "skill_check": {
-                                            "skill_id": "diplomacy",
-                                            "skill_label": "Diplomacy",
-                                            "dc": 14,
-                                            "tags": [
-                                                "hostage",
-                                                "mill",
-                                                "dialog"
-                                            ],
-                                            "outcomes": {
-                                                "critical_success": {
-                                                    "text": "Tovin przestaje drzec. Wskazuje ciche przejscie za belka i obiecuje zeznac przeciw Odranowi, jesli przezyje noc.",
-                                                    "effects": [
-                                                        {
-                                                            "type": "set_flag",
-                                                            "flag": "tovin_ready_to_testify"
-                                                        },
-                                                        {
-                                                            "type": "set_flag",
-                                                            "flag": "mill_hidden_route_hint"
-                                                        }
-                                                    ]
-                                                },
-                                                "success": {
-                                                    "text": "Tovin bierze oddech i pokazuje, ktoredy najlatwiej wyprowadzic go z mlyna bez alarmu.",
-                                                    "effects": [
-                                                        {
-                                                            "type": "set_flag",
-                                                            "flag": "mill_hidden_route_hint"
-                                                        }
-                                                    ]
-                                                },
-                                                "failure": {
-                                                    "text": "Tovin kiwa glowa, ale strach miesza mu slowa. Na razie trzeba go po prostu uwolnic."
-                                                },
-                                                "critical_failure": {
-                                                    "text": "Tovin wpada w panike i szarpie wiezy. Gdzies za sciana ktos przestaje chodzic i zaczyna sluchac.",
-                                                    "effects": [
-                                                        {
-                                                            "type": "set_flag",
-                                                            "flag": "mill_guards_alerted"
-                                                        }
-                                                    ]
-                                                }
-                                            }
-                                        }
-                                    },
-                                    {
-                                        "id": "leave",
-                                        "label": "Powiedz mu, zeby czekal cicho."
-                                    }
-                                ]
-                            }
-                        }
-                    }
-                }
+                {"position": [3, 9], "config": {"label": "Rozejrzyj się po młynie"}}
+            ]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "old_mill_bound_tovin",
+            "placement": "cell",
+            "instances": [
+                {"position": [5, 8], "config": {"label": "Związany Tovin", "dc": 14}}
+            ]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "old_mill_gear_lever",
+            "placement": "cell",
+            "instances": [
+                {"position": [7, 9], "config": {"label": "Dźwignia mechanizmu młyna", "dc": 15}}
+            ]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "old_mill_sacks",
+            "placement": "cell",
+            "instances": [
+                {"position": [10, 7], "config": {"label": "Worki mąki i fałszywego popiołu", "dc": 14}}
+            ]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "old_mill_ledger",
+            "placement": "cell",
+            "instances": [
+                {"position": [11, 8], "config": {"label": "Księga młyna", "dc": 15}}
+            ]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "old_mill_rope_hoist",
+            "placement": "cell",
+            "instances": [
+                {"position": [8, 6], "config": {"label": "Wciągarka worków"}}
+            ]
+        },
+        {
+            "category": "Interactables",
+            "object_id": "old_mill_back_track",
+            "placement": "cell",
+            "instances": [
+                {"position": [12, 7], "config": {"label": "Tylne deski", "dc": 15}}
             ]
         },
         {
@@ -418,16 +137,7 @@
             "object_id": "entry_anchor",
             "placement": "cell",
             "instances": [
-                {
-                    "position": [
-                        3,
-                        10
-                    ],
-                    "config": {
-                        "entry_anchor_id": "from_square",
-                        "label": "From Brindleford"
-                    }
-                }
+                {"position": [3, 10], "config": {"entry_anchor_id": "from_square", "label": "Z Brindleford"}}
             ]
         },
         {
@@ -436,25 +146,24 @@
             "placement": "cell",
             "instances": [
                 {
-                    "position": [
-                        2,
-                        10
-                    ],
+                    "position": [2, 10],
                     "config": {
                         "exit_id": "return_to_square_from_mill",
-                        "label": "Return to Brindleford",
+                        "label": "Powrót do Brindleford",
                         "interaction_mode": "on_enter"
                     }
                 },
                 {
-                    "position": [
-                        12,
-                        7
-                    ],
+                    "position": [12, 7],
                     "config": {
                         "exit_id": "mill_hidden_track",
-                        "label": "Hidden Track to Ruins",
-                        "interaction_mode": "on_enter"
+                        "label": "Ukryty trakt do ruin",
+                        "interaction_mode": "manual",
+                        "hidden": true,
+                        "allow_hidden_interaction": false,
+                        "reveal_dc": 15,
+                        "reveal_tags": ["mill", "hidden_route", "flour"],
+                        "reveal_message": "Za tylnymi deskami otwiera się wąski trakt prowadzący do ruin."
                     }
                 }
             ]
@@ -465,17 +174,15 @@
             "placement": "cell",
             "instances": [
                 {
-                    "position": [
-                        7,
-                        9
-                    ],
+                    "position": [7, 9],
                     "config": {
-                        "trap_name": "Unstable Mill Gear",
+                        "trap_name": "Niestabilny mechanizm młyna",
                         "trap_detection_dc": 14,
                         "trap_disable_dc": 15,
                         "trap_identify_dc": 14,
-                        "trap_effect": "Mechanizm mlyna szarpie lancuchem i moze odciac droge do zakladnika.",
-                        "trap_damage_prompt": "1k6"
+                        "trap_effect": "Mechanizm młyna szarpie łańcuchem i może odciąć drogę do zakładnika.",
+                        "trap_damage_prompt": "1k6",
+                        "trap_damage_type": "bludgeoning"
                     }
                 }
             ]
@@ -486,41 +193,28 @@
             "placement": "cell",
             "instances": [
                 {
-                    "position": [
-                        6,
-                        9
-                    ],
+                    "position": [6, 9],
                     "config": {
                         "challenge_id": "mill_beam_moved",
-                        "label": "Odblokuj zakleszczona belke",
+                        "label": "Przesuń zakleszczoną belkę",
                         "skill_id": "athletics",
                         "dc": 15,
-                        "tags": [
-                            "mill",
-                            "mechanism",
-                            "hostage"
-                        ],
-                        "intro": "Belka klinuje boczne przejscie. Jesli pusci cicho, Tovin bedzie mial droge ucieczki; jesli narobicie halasu, straz przy mlynie szybciej zrozumie, co robicie.",
+                        "tags": ["mill", "mechanism", "hostage"],
+                        "intro": "Belka klinuje boczne przejście. Po udanym teście przesuń fizyczny element na planszy; LED przy belce gaśnie albo zmienia kolor na neutralny.",
                         "success_flag": "mill_beam_moved",
-                        "success_message": "Belka puszcza z trzaskiem i droga do Tovina robi sie szersza.",
-                        "failure_message": "Belka ani drgnie, a mechanizm mlyna zaczyna pracowac glosniej.",
+                        "success_message": "Belka puszcza z trzaskiem i droga do Tovina robi się szersza.",
+                        "failure_message": "Belka ani drgnie, a mechanizm młyna zaczyna pracować głośniej.",
                         "outcome_messages": {
-                            "critical_success": "Belka schodzi z cichym skrzypnieciem. Tovin moze przejsc, a straznicy nie od razu orientuja sie w zmianie.",
-                            "success": "Belka puszcza z trzaskiem i droga do Tovina robi sie szersza.",
-                            "failure": "Belka ani drgnie, a mechanizm mlyna zaczyna pracowac glosniej.",
-                            "critical_failure": "Belka uderza o kolo mlyna. Huk niesie sie po calym budynku."
+                            "critical_success": "Belka schodzi z cichym skrzypnięciem. Tovin ma krótszą drogę ucieczki, a strażnicy nie od razu orientują się w zmianie.",
+                            "success": "Belka puszcza z trzaskiem i droga do Tovina robi się szersza.",
+                            "failure": "Belka ani drgnie, a mechanizm młyna zaczyna pracować głośniej.",
+                            "critical_failure": "Belka uderza o koło młyna. Huk niesie się po całym budynku."
                         },
                         "outcome_flags": {
-                            "critical_success": [
-                                "mill_beam_moved",
-                                "mill_quiet_entry"
-                            ],
-                            "success": [
-                                "mill_beam_moved"
-                            ],
-                            "critical_failure": [
-                                "mill_noise_raised"
-                            ]
+                            "critical_success": ["mill_beam_moved", "mill_quiet_entry"],
+                            "success": ["mill_beam_moved"],
+                            "failure": ["mill_noise_raised"],
+                            "critical_failure": ["mill_noise_raised", "mill_alarm_raised"]
                         }
                     }
                 }
@@ -532,45 +226,22 @@
             "placement": "cell",
             "instances": [
                 {
-                    "position": [
-                        11,
-                        7
-                    ],
+                    "position": [11, 7],
                     "config": {
                         "cache_id": "mill_hidden_route",
                         "hidden": true,
                         "allow_hidden_interaction": false,
                         "reveal_dc": 15,
-                        "reveal_tags": [
-                            "mill",
-                            "hidden_route",
-                            "flour"
-                        ],
-                        "description_on_reveal": "Za workami maki widac waski trakt prowadzacy do ruin.",
-                        "loot": [
-                            "guard pay pouch",
-                            "false ash sample"
-                        ]
+                        "reveal_tags": ["mill", "hidden_route", "flour"],
+                        "description_on_reveal": "Za workami mąki widać wąski trakt prowadzący do ruin.",
+                        "loot": ["Próbka fałszywego popiołu", "Strona ledgeru młyna", "Żeton płatniczy Vale'a"]
                     }
                 }
             ]
         }
     ],
     "blocked_fields": [],
-    "obstacles": [
-        [
-            6,
-            8
-        ],
-        [
-            7,
-            8
-        ],
-        [
-            9,
-            9
-        ]
-    ],
+    "obstacles": [[6, 8], [7, 8], [9, 9]],
     "walls": [],
     "setup_corner_markers": true
 }

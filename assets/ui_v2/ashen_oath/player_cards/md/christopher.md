@@ -13,6 +13,10 @@
 - `Speed`: 25 ft.
 - `Bron`: longsword.
 - `Pancerz / tarcza`: scale mail, tower shield.
+- `Atrybuty`: STR +3, DEX +2, CON +3, INT +0, WIS +0, CHA +1.
+- `Bieglosci`: Perception trained; Fortitude expert, Reflex trained, Will expert.
+- `Bronie/pancerz`: simple, martial, unarmed trained; unarmored, light, medium, heavy trained.
+- `Skille trained`: Diplomacy, Intimidation, Medicine, Occultism, Religion.
 
 ## Skille do pamietania
 

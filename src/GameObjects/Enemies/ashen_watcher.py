@@ -11,7 +11,7 @@ from GameObjects.Enemies.enemy_types import EnemyType
 class AshenWatcher(BasicEnemy):
     """Level -1 oath spirit tuned as a fragile early haunt-like enemy."""
 
-    name: str = "Ashen Watcher"
+    name: str = "Popielne Echo"
     level: int = -1
     hp: int = 7
     max_hp: int | None = 7
@@ -58,14 +58,14 @@ class AshenWatcher(BasicEnemy):
 
 META = GameObjectMeta(
     object_id="ashen_watcher",
-    label="Ashen Watcher",
+    label="Popielne Echo",
     color="#9a8f86",
     category="Enemies",
     placement="cell",
-    description="Level -1 oath spirit; a fragile clue encounter in the burned chapel.",
+    description="Kruchy duch przysięgi poziomu -1.",
     logic_cls=AshenWatcher,
     default_config={
-        "name": "Ashen Watcher",
+        "name": "Popielne Echo",
         "level": -1,
         "hp": 7,
         "max_hp": 7,

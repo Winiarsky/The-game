@@ -704,6 +704,15 @@ function renderSceneArt(element, mapId) {
     element.style.backgroundImage = image ? `url("${image}")` : "";
 }
 
+function renderActionArt(element, card, mapId) {
+    if (!element) return;
+    const promptImage = card?.prompt?.image || card?.image || "";
+    const image = promptImage ? resolveAssetUrl(promptImage) : sceneImageForMap(mapId);
+    element.classList.toggle("hidden", !image);
+    element.classList.toggle("portrait-art", Boolean(promptImage));
+    element.style.backgroundImage = image ? `url("${image}")` : "";
+}
+
 function updateHeroSelection(heroId) {
     const current = new Set(state.selectedHeroIds);
     if (current.has(heroId)) current.delete(heroId);
@@ -760,6 +769,8 @@ function renderAssembly() {
         const traits = Array.isArray(hero.key_traits) && hero.key_traits.length
             ? hero.key_traits.slice(0, 4).join(", ")
             : "Brak wyróżnionych cech";
+        const abilities = hero.ability_summary || "Brak danych";
+        const proficiencies = hero.proficiency_summary || "Brak danych";
         card.innerHTML = `
             <div class="portrait" style="background-image:url('${hero.portrait || "/static/placeholder.png"}')"></div>
             <div>
@@ -772,6 +783,8 @@ function renderAssembly() {
                 <span>Speed ${hero.speed ?? "-"}</span>
             </div>
             <div class="party-summary">${escapeHtml(hero.summary || "")}</div>
+            <div class="party-summary"><strong>Atrybuty:</strong> ${escapeHtml(abilities)}</div>
+            <div class="party-summary"><strong>Save:</strong> ${escapeHtml(proficiencies)}</div>
             <div class="party-summary"><strong>Skills:</strong> ${escapeHtml(skills)}</div>
             <div class="party-summary"><strong>Cechy:</strong> ${escapeHtml(traits)}</div>
         `;
@@ -918,6 +931,7 @@ function normalizePrompt(prompt) {
         modifiers: prompt.modifiers || null,
         roll_stack: prompt.roll_stack || null,
         audio: prompt.audio || prompt.voiceover || "",
+        image: prompt.image || "",
         action_desc: prompt.action_desc || "",
         desc: prompt.desc || "",
         details_markdown: prompt.details_markdown || "",
@@ -1168,6 +1182,7 @@ function activeCardData() {
             summary: deduped.summary,
             body: deduped.body,
             details,
+            image: prompt.image || "",
             communication,
             prompt,
         };
@@ -1451,6 +1466,7 @@ function renderActionCard() {
     const compactPrompt = isCompactPromptCard(card, sections);
     refs.actionCard?.classList.toggle("prompt-roll-card", isRollLikePrompt(prompt));
     refs.actionCard?.classList.toggle("prompt-compact-card", compactPrompt);
+    refs.actionCard?.classList.toggle("prompt-art-card", Boolean(prompt?.image));
     renderActiveActorFocus();
     refs.actionChannel.textContent = String(communication.channel || "ready");
     refs.actionTitle.textContent = card.title || "Czekam na wydarzenia";
@@ -1460,7 +1476,7 @@ function renderActionCard() {
     else if (communication.priority === "result") refs.actionPriority.classList.add("badge-result");
     else if (communication.priority === "debug") refs.actionPriority.classList.add("badge-debug");
     else refs.actionPriority.classList.add("badge-idle");
-    renderSceneArt(refs.currentSceneArt, state.currentMapId || "");
+    renderActionArt(refs.currentSceneArt, card, state.currentMapId || "");
     const disclosureHtml = sections.disclosureBody
         ? `<details class="prompt-disclosure"><summary>${escapeHtml(sections.disclosureTitle || "Szczegóły")}</summary><div class="prose compact">${markdownish(sections.disclosureBody)}</div></details>`
         : "";
@@ -1745,12 +1761,15 @@ function createChoiceButton(choice) {
     const image = resolveChoiceImage(choice);
     const thumb = image ? `<img class="choice-thumb" src="${escapeHtml(image)}" alt="" loading="lazy">` : "";
     const desc = choice.desc ? `<span>${escapeHtml(choice.desc)}</span>` : "";
+    const detail = choice.detail || choice.desc;
+    const expanded = detail ? `<div class="choice-btn-detail prose compact">${markdownish(detail)}</div>` : "";
     button.innerHTML = `
         <div class="choice-btn-head">
             <div class="choice-btn-title">${thumb}${icon}<strong>${escapeHtml(choice.label)}</strong></div>
             ${key}
         </div>
         ${desc}
+        ${expanded}
     `;
     button.addEventListener("click", () => {
         const choices = promptChoices(state.view.activePrompt);
@@ -1777,6 +1796,12 @@ function createChoiceButton(choice) {
 function renderSelectedChoiceDetail() {
     const choices = promptChoices(state.view.activePrompt);
     if (!choices.length) {
+        refs.choiceDetail.classList.add("hidden");
+        refs.choiceDetailTitle.textContent = "";
+        refs.choiceDetailBody.innerHTML = "";
+        return;
+    }
+    if (choices.some((choice) => choice.spell_id || choice.spell_tier || normalizedAssetKey(choice.category) === "class")) {
         refs.choiceDetail.classList.add("hidden");
         refs.choiceDetailTitle.textContent = "";
         refs.choiceDetailBody.innerHTML = "";
@@ -1870,6 +1895,12 @@ function renderPrompt(prompt) {
     const savedDraft = state.promptDrafts.get(prompt.id) || "";
     if (refs.promptInput.value !== savedDraft) {
         refs.promptInput.value = savedDraft;
+    }
+    if (promptChanged) {
+        const promptScroll = document.querySelector(".prompt-scroll");
+        if (refs.actionCard) refs.actionCard.scrollTop = 0;
+        if (refs.choiceDetail) refs.choiceDetail.scrollTop = 0;
+        if (promptScroll) promptScroll.scrollTop = 0;
     }
     state.lastRenderedPromptId = prompt.id;
 

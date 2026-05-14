@@ -227,9 +227,9 @@ def test_brindleford_social_scene_has_contextual_patrol_and_villagers():
 
     assert {"tomas_reed", "mara_fen", "old_brann", "nila_ashwick", "bren_cale"} <= set(npcs)
     patrol = next(challenge for challenge in challenges if getattr(challenge, "challenge_id", "") == "vale_guards_shaken")
-    assert patrol.challenge_label == "Odciagnij uwage patrolu"
-    assert patrol.name == "Odciagnij uwage patrolu"
-    assert patrol.interaction_label == "Odciagnij uwage patrolu"
+    assert patrol.challenge_label == "Odciągnij uwagę patrolu"
+    assert patrol.name == "Odciągnij uwagę patrolu"
+    assert patrol.interaction_label == "Odciągnij uwagę patrolu"
     assert "Celem nie jest upokorzenie" in patrol.intro
     mara_dialog = npcs["mara_fen"].dialog["start"]["options"][0]["skill_check"]["outcomes"]
     assert mara_dialog["critical_success"]["effects"][0]["item_id"] == "brindleford_healing_herb"
@@ -248,14 +248,27 @@ def test_brindleford_has_extra_social_side_beats():
         if obj.__class__.__name__ == "SkillChallenge"
     }
 
-    assert {"well_echo_read", "public_square_address"} <= set(challenges)
+    assert {
+        "well_echo_read",
+        "public_square_address",
+        "market_speech_crowd_anchor",
+        "market_speech_patrol_angle",
+        "clean_water_spigot",
+        "ash_sack_trace",
+        "wayside_shrine_echo",
+    } <= set(challenges)
     well = challenges["well_echo_read"]
     assert well.skill_id == "occultism"
     assert "well_mark_hint" in well.outcome_flags["success"]
+    assert any(item["flag"] == "ash_sack_trace" for item in well.flag_modifiers)
     speech = challenges["public_square_address"]
     assert speech.skill_id == "performance"
     assert "villagers_willing_to_talk" in speech.outcome_flags["success"]
     assert "crowd_intimidated" in speech.outcome_flags["critical_failure"]
+    assert any(item["flag"] == "speech_crowd_anchor" for item in speech.flag_modifiers)
+    clean_water = challenges["clean_water_spigot"]
+    assert clean_water.skill_id == "survival"
+    assert "clean_water_found" in clean_water.outcome_flags["success"]
 
 
 def test_skill_challenge_outcome_flags_and_prompt(monkeypatch):
@@ -271,21 +284,34 @@ def test_skill_challenge_outcome_flags_and_prompt(monkeypatch):
         ui = FakeUI()
         scenario_session = type("Session", (), {"global_flags": {}})()
 
+    captured = {}
+
+    def _fake_resolve(**kwargs):
+        captured.update(kwargs)
+        return type("Resolution", (), {"outcome": "critical_success", "total": 25})()
+
     monkeypatch.setattr(
         "GameObjects.Interactables.skill_challenge.resolve_skill_check_with_sources",
-        lambda **_kwargs: type("Resolution", (), {"outcome": "critical_success", "total": 25})(),
+        _fake_resolve,
     )
+    FakeGame.scenario_session.global_flags["speech_crowd_anchor"] = True
     challenge = SkillChallenge(
         challenge_id="patrol",
-        label="Odciagnij uwage patrolu",
+        label="Odciągnij uwagę patrolu",
         intro="Kontekst.",
         outcome_messages={"critical_success": "Patrol ustepuje."},
         outcome_flags={"critical_success": ["patrol_shifted"]},
+        flag_modifiers=[
+            {"flag": "speech_crowd_anchor", "value": 1, "note": "punkt przy mieszkańcach"},
+            {"flag": "missing_flag", "value": 5, "note": "nieaktywne"},
+        ],
     )
 
     message = challenge.action_attempt(actor=object(), game=FakeGame())
 
     assert "Patrol ustepuje" in message
+    assert "punkt przy mieszkańcach +1" in message
+    assert captured["base_modifier"] == 1
     assert FakeGame.scenario_session.global_flags["patrol_shifted"] is True
     assert len(FakeGame.ui.info_calls) == 2
 
@@ -347,6 +373,11 @@ def test_ashen_oath_maps_include_role_skill_moments():
             "vale_guards_shaken": "diplomacy",
             "well_echo_read": "occultism",
             "public_square_address": "performance",
+            "market_speech_crowd_anchor": "society",
+            "market_speech_patrol_angle": "stealth",
+            "clean_water_spigot": "survival",
+            "ash_sack_trace": "survival",
+            "wayside_shrine_echo": "religion",
         },
         "burned_chapel": {"chapel_tracks_read": "survival"},
         "old_mill": {"mill_beam_moved": "athletics"},

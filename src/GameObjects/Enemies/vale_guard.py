@@ -11,7 +11,7 @@ from GameObjects.Enemies.enemy_types import EnemyType
 class ValeGuard(BasicEnemy):
     """Level 0 guard built as a PF2e low-threat human soldier."""
 
-    name: str = "Vale Guard"
+    name: str = "Strażnik Vale'a"
     level: int = 0
     hp: int = 16
     max_hp: int | None = 16
@@ -58,14 +58,14 @@ class ValeGuard(BasicEnemy):
 
 META = GameObjectMeta(
     object_id="vale_guard",
-    label="Vale Guard",
+    label="Strażnik Vale'a",
     color="#6c4a32",
     category="Enemies",
     placement="cell",
-    description="Level 0 human guard for Ashen Oath; defensive spear line, PF2e low-threat numbers.",
+    description="Strażnik Vale'a poziomu 0; defensywna linia z włócznią.",
     logic_cls=ValeGuard,
     default_config={
-        "name": "Vale Guard",
+        "name": "Strażnik Vale'a",
         "level": 0,
         "hp": 16,
         "max_hp": 16,

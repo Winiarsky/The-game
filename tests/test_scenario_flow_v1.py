@@ -44,7 +44,7 @@ class RecordingUI:
         return True
 
     def prompt_info(self, *_args, **_kwargs):
-        self.events.append(("prompt_info", {"title": _args[0] if _args else ""}))
+        self.events.append(("prompt_info", {"title": _args[0] if _args else "", **dict(_kwargs)}))
         return "ok"
 
 
@@ -90,6 +90,27 @@ def test_bandit_cave_flow_declares_voiceover_assets_on_story_events():
 
     assert story_actions
     assert all(str(action.get("audio") or "").startswith("audio/voiceover/") for action in story_actions)
+
+
+def test_ashen_oath_map_start_events_are_post_setup_voiceover_briefings():
+    payload = load_scenario_flow("ashen_oath")
+    expected_map_ids = {item["map_id"] for item in payload["maps"]}
+    map_start_events = {
+        event["map_id"]: event
+        for event in payload["events"]
+        if event["trigger"] == "map_start" and event.get("map_id") in expected_map_ids
+    }
+
+    assert set(map_start_events) == expected_map_ids
+    for map_id, event in map_start_events.items():
+        prompts = [action for action in event["actions"] if action["type"] == "show_prompt"]
+        assert len(prompts) == 1, map_id
+        prompt = prompts[0]
+        assert str(prompt.get("title") or "").startswith("Briefing mapy:"), map_id
+        assert str(prompt.get("summary") or "").startswith("Cel:"), map_id
+        assert str(prompt.get("prompt_id") or "").startswith("ashen_oath.map_briefing."), map_id
+        assert str(prompt.get("audio") or "").startswith("audio/voiceover/"), map_id
+        assert len(str(prompt.get("message") or "")) > 240, map_id
 
 
 def test_flow_validator_rejects_missing_transition_exit():
@@ -452,6 +473,29 @@ def test_initial_scenario_intro_waits_until_after_hero_setup(monkeypatch):
 
     assert setup_idx < start_idx
     assert setup_idx < map_entry_idx
+
+
+def test_transition_cancels_stale_hero_turn_prompts():
+    original_ui = ui_client.get_ui_client()
+    recording_ui = RecordingUI()
+    ui_client.set_default_ui_client(recording_ui)
+
+    try:
+        session = ScenarioSession(conn=DummyConnection(), scenario="bandit_cave")
+        session._load_map("cave_entrance", entry_anchor_id=None, initial_load=True)  # noqa: SLF001
+        session._cancel_transition_stale_turn_prompts()  # noqa: SLF001
+    finally:
+        ui_client.set_default_ui_client(original_ui)
+
+    cancelled_scopes = [
+        str(payload.get("scope_key") or "")
+        for event_type, payload in recording_ui.events
+        if event_type == "prompt_scope_cancel"
+    ]
+
+    assert "hero_turn:activation" in cancelled_scopes
+    assert "hero_turn:intent" in cancelled_scopes
+    assert "hero_turn:resolution" in cancelled_scopes
 
 
 def test_opening_exploration_state_clears_observable_from_starting_heroes():

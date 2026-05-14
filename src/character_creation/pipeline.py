@@ -2021,7 +2021,7 @@ def _run_starting_equipment_step(
                         fluff=str(section.get("desc") or "Sekcja sklepu startowego."),
                         mechanics=(
                             f"Dostepne po filtrach: {len(active)} z {len(section_base)}. "
-                            "Wejdz Enter, aby przegladac i kupowac przedmioty."
+                            "Wejdź Enter, aby przeglądać i kupować przedmioty."
                         ),
                     ),
                 }

@@ -24,6 +24,7 @@ class SkillChallenge(InteractableMixin):
         failure_message: str = "Nie udaje się uzyskać przewagi.",
         outcome_messages: dict[str, str] | None = None,
         outcome_flags: dict[str, list[str] | str] | None = None,
+        flag_modifiers: list[dict[str, Any]] | None = None,
         allow_same_cell_interact: bool = True,
         require_same_cell_interact: bool = False,
         blocks_movement: bool = False,
@@ -49,6 +50,7 @@ class SkillChallenge(InteractableMixin):
         self.failure_message = str(failure_message or "Nie udaje się uzyskać przewagi.").strip()
         self.outcome_messages = dict(outcome_messages or {})
         self.outcome_flags = dict(outcome_flags or {})
+        self.flag_modifiers = self._normalize_flag_modifiers(flag_modifiers)
         self.completed = False
         self.register_default_actions()
 
@@ -74,6 +76,7 @@ class SkillChallenge(InteractableMixin):
     def action_attempt(self, actor, game, _payload: dict[str, Any] | None = None) -> str:
         if self.intro:
             self._prompt_info(game, self.challenge_label, self.intro, source_suffix="intro")
+        base_modifier, modifier_notes = self._active_flag_modifier_bonus(game)
         result = resolve_skill_check_with_sources(
             skill_id=self.skill_id,
             dc=self.dc,
@@ -81,6 +84,7 @@ class SkillChallenge(InteractableMixin):
             target=self,
             tags=[self.skill_id, "scenario_skill_challenge", *self.tags],
             game=game,
+            base_modifier=base_modifier,
             apply_modifiers=True,
         )
         outcome = str(result.outcome or "")
@@ -95,6 +99,8 @@ class SkillChallenge(InteractableMixin):
             message = self.failure_message
         for flag in self._flags_for_outcome(outcome):
             self._set_flag(game, flag)
+        if modifier_notes:
+            message = f"{message} Premie z przygotowania: {', '.join(modifier_notes)}."
         final = f"{message} (wynik: {self._outcome_label(outcome)}, suma: {result.total})"
         self._prompt_info(game, self.challenge_label, final, source_suffix=outcome)
         return final
@@ -118,6 +124,50 @@ class SkillChallenge(InteractableMixin):
         if isinstance(raw, list):
             return [str(item) for item in raw if str(item).strip()]
         return []
+
+    def _normalize_flag_modifiers(self, raw: list[dict[str, Any]] | None) -> tuple[dict[str, Any], ...]:
+        modifiers: list[dict[str, Any]] = []
+        for item in list(raw or []):
+            if not isinstance(item, dict):
+                continue
+            flag = str(item.get("flag") or "").strip()
+            if not flag:
+                continue
+            try:
+                value = int(item.get("value", 0) or 0)
+            except Exception:
+                value = 0
+            if value == 0:
+                continue
+            note = str(item.get("note") or flag).strip()
+            modifiers.append({"flag": flag, "value": value, "note": note})
+        return tuple(modifiers)
+
+    def _active_flag_modifier_bonus(self, game) -> tuple[int, list[str]]:
+        total = 0
+        notes: list[str] = []
+        for item in self.flag_modifiers:
+            if not self._flag_enabled(game, str(item.get("flag") or "")):
+                continue
+            value = int(item.get("value", 0) or 0)
+            total += value
+            note = str(item.get("note") or item.get("flag") or "").strip()
+            if note:
+                notes.append(f"{note} {value:+d}")
+        return total, notes
+
+    def _flag_enabled(self, game, flag: str) -> bool:
+        key = str(flag or "").strip()
+        if not key:
+            return False
+        session = getattr(game, "scenario_session", None)
+        flags = getattr(session, "global_flags", None)
+        if isinstance(flags, dict):
+            return bool(flags.get(key))
+        flags = getattr(game, "global_flags", None)
+        if isinstance(flags, dict):
+            return bool(flags.get(key))
+        return False
 
     def _set_flag(self, game, flag: str) -> None:
         key = str(flag or "").strip()
@@ -166,6 +216,7 @@ META = GameObjectMeta(
         "failure_message": "Nie udaje się uzyskać przewagi.",
         "outcome_messages": {},
         "outcome_flags": {},
+        "flag_modifiers": [],
         "allow_same_cell_interact": True,
         "require_same_cell_interact": False,
         "blocks_movement": False,

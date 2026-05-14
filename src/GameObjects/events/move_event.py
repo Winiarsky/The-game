@@ -445,7 +445,7 @@ class MoveEvent(GameEvent):
                     if target == moving_hero.position:
                         message = (
                             "Kliknięto aktualne pole bohatera, więc ruch nie został wykonany. "
-                            "Wybierz inne podświetlone pole, jeśli chcesz się poruszyć."
+                            "Wybierz inne podświetlone pole, jeśli chcesz się poruszyć, albo anuluj ruch w UI."
                         )
                         self._prompt_move_info(
                             game,
@@ -454,10 +454,7 @@ class MoveEvent(GameEvent):
                             source="move_current_field",
                         )
                         logger.info("Kliknięto bieżące pole – ruch bez zmian.")
-                        if active_path_id:
-                            game.ui_event("path_clear", {"id": active_path_id})
-                        _trigger_room_enemy_combat_if_needed(game, moving_hero)
-                        return EventResult.noop(message=message)
+                        continue
 
                     if not board.can_enter(target, allow_occupied=False):
                         logger.info("Pole docelowe %s jest zablokowane lub zajęte.", target)
@@ -634,7 +631,7 @@ class MoveEvent(GameEvent):
                                 source="move_current_field",
                             )
                             logger.info("Kliknięto bieżące pole – ruch bez zmian.")
-                            return EventResult.noop(message=message)
+                            continue
                         pending_target = target
                         continue
 

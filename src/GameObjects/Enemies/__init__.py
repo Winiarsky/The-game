@@ -14,6 +14,8 @@ _LAZY_EXPORTS = {
     "MillEnforcer": (".mill_enforcer", "MillEnforcer"),
     "AshenWatcher": (".ashen_watcher", "AshenWatcher"),
     "AshenKnight": (".ashen_knight", "AshenKnight"),
+    "AshCinder": (".ash_cinder", "AshCinder"),
+    "CharredDeacon": (".charred_deacon", "CharredDeacon"),
     "OdransChampion": (".odrans_champion", "OdransChampion"),
 }
 
@@ -40,6 +42,8 @@ __all__ = [
     "MillEnforcer",
     "AshenWatcher",
     "AshenKnight",
+    "AshCinder",
+    "CharredDeacon",
     "OdransChampion",
     "META",
     "EnemyType",

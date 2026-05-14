@@ -477,6 +477,14 @@ button:hover,
     margin-bottom: 12px;
 }
 
+.current-scene-art.portrait-art {
+    min-height: 190px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-color: rgba(12, 17, 18, 0.72);
+    box-shadow: inset 0 -42px 70px rgba(0, 0, 0, 0.22);
+}
+
 .panel-card,
 .action-card {
     padding: 16px;
@@ -839,6 +847,40 @@ button:hover,
     max-height: calc(100vh - 154px);
 }
 
+.action-card.prompt-art-card {
+    display: grid;
+    grid-template-columns: minmax(170px, 260px) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    align-items: stretch;
+    column-gap: 14px;
+}
+
+.prompt-art-card .action-head {
+    grid-column: 1 / -1;
+}
+
+.prompt-art-card .current-scene-art.portrait-art {
+    grid-column: 1;
+    grid-row: 2 / 4;
+    min-height: 0;
+    height: 100%;
+    margin-bottom: 0;
+    background-size: contain;
+    background-position: center top;
+}
+
+.prompt-art-card .prompt-scroll {
+    grid-column: 2;
+    grid-row: 2;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.prompt-art-card .prompt-form {
+    grid-column: 2;
+    grid-row: 3;
+}
+
 .action-card.prompt-compact-card {
     padding: 16px;
     gap: 8px;
@@ -1023,6 +1065,14 @@ button:hover,
 .action-block-scene {
     background: linear-gradient(180deg, rgba(79, 124, 116, 0.12), rgba(255, 255, 255, 0.03));
     border-color: rgba(79, 124, 116, 0.28);
+}
+
+.prompt-art-card .action-block-scene {
+    padding: 14px 16px;
+}
+
+.prompt-art-card .action-block-scene .prose {
+    font-size: 15px;
 }
 
 .action-block-help {
@@ -1259,6 +1309,7 @@ button:hover,
     text-align: left;
     display: grid;
     align-content: start;
+    gap: 4px;
     min-height: 82px;
     padding: 9px 10px;
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.03));
@@ -1334,6 +1385,20 @@ button:hover,
     -webkit-line-clamp: 2;
     font-size: 12px;
     line-height: 1.32;
+}
+
+.choice-btn-detail {
+    display: none;
+    margin-top: 8px;
+    padding: 9px 10px;
+    border-top: 1px solid rgba(255, 213, 124, 0.28);
+    color: rgba(255, 246, 220, 0.9);
+    font-size: 12px;
+    line-height: 1.38;
+}
+
+.choice-btn.selected .choice-btn-detail {
+    display: block;
 }
 
 .choice-icon {
@@ -1502,6 +1567,10 @@ button:hover,
         min-height: 0;
         max-height: calc(100vh - 164px);
     }
+    .action-card.prompt-art-card {
+        grid-template-columns: minmax(130px, 190px) minmax(0, 1fr);
+        column-gap: 10px;
+    }
     .game-topbar {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
@@ -1569,6 +1638,17 @@ button:hover,
         height: auto;
         min-height: 0;
         max-height: calc(100vh - 232px);
+    }
+    .action-card.prompt-art-card {
+        display: flex;
+    }
+    .prompt-art-card .current-scene-art.portrait-art {
+        min-height: 150px;
+        height: auto;
+        margin-bottom: 8px;
+    }
+    .prompt-art-card .prompt-scroll {
+        overflow-y: auto;
     }
     .prompt-roll-card .active-actor-panel {
         grid-template-columns: 52px minmax(0, 1fr);

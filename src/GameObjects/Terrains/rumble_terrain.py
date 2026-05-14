@@ -5,7 +5,7 @@ from GameObjects.base import GameObjectMeta
 class RumbleTerrain(BasicTerrain):
     """Trudny teren – spowalnia ruch (dodatkowe 5 stóp za pole)."""
 
-    name = "rumble"
+    name = "gruz"
     terrain_tags = ("rumble",)
 
     def __init__(self, **kwargs):
@@ -15,7 +15,7 @@ class RumbleTerrain(BasicTerrain):
 
 META = GameObjectMeta(
     object_id="rumble_field",
-    label="Rumble",
+    label="Gruz",
     color="#8d6e63",
     category="Terrains",
     placement="cell",

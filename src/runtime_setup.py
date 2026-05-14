@@ -18,20 +18,11 @@ DEFAULT_TERRAIN_PROMPTS: dict[str, str] = {
     "rumble": "Ustaw rumowiska na podświetlonych polach.",
 }
 
-SCENARIO_EXIT_SETUP_PALETTE: tuple[tuple[str, list[int]], ...] = (
-    ("pomarańczowy", list(consts.SEEK_EXIT_RGB)),
-    ("niebieski", list(consts.HERO_HIGHLIGHT_RGB)),
+SETUP_BATCH_PALETTE: tuple[tuple[str, list[int]], ...] = (
+    ("czerwony", [255, 30, 30]),
     ("zielony", list(consts.MOVE_TARGET_RGB)),
-    ("fioletowy", list(consts.HIDDEN_REVEAL_RGB)),
-)
-
-INTERACTABLE_SETUP_PALETTE: tuple[tuple[str, list[int]], ...] = (
-    ("fioletowy", [168, 85, 247]),
-    ("turkusowy", [20, 184, 166]),
-    ("żółty", [234, 179, 8]),
-    ("różowy", [236, 72, 153]),
-    ("limonkowy", [132, 204, 22]),
-    ("błękitny", [56, 189, 248]),
+    ("niebieski", list(consts.HERO_HIGHLIGHT_RGB)),
+    ("żółty", [255, 210, 0]),
 )
 
 MAP_ORIENTATION_MARKERS: tuple[tuple[str, tuple[int, int], list[int]], ...] = (
@@ -146,17 +137,24 @@ def build_runtime_setup_plan(
             edge_interactable_endpoints.append(tuple(pos))
 
     for terrain_key, positions in sorted(terrain_groups.items(), key=lambda item: item[0]):
+        unique_terrain_positions = _unique_positions(positions)
+        terrain_prompt = DEFAULT_TERRAIN_PROMPTS.get(
+            terrain_key,
+            "Ustaw elementy terenu na podświetlonych polach.",
+        )
+        terrain_prompt = (
+            f"{terrain_prompt.rstrip('.')} ({len(unique_terrain_positions)}): "
+            + ", ".join(str(tuple(pos)) for pos in unique_terrain_positions)
+            + "."
+        )
         steps.append(
             {
                 "kind": "terrain",
                 "label": terrain_key,
                 "color": list(DEFAULT_SETUP_COLORS["object"]),
-                "positions": [list(pos) for pos in _unique_positions(positions)],
+                "positions": [list(pos) for pos in unique_terrain_positions],
                 "edges": [],
-                "prompt": DEFAULT_TERRAIN_PROMPTS.get(
-                    terrain_key,
-                    "Ustaw elementy terenu na podświetlonych polach.",
-                ),
+                "prompt": terrain_prompt,
                 "confirmation_mode": "confirm_only",
             }
         )
@@ -182,88 +180,48 @@ def build_runtime_setup_plan(
     interactable_markers = _unique_setup_markers(interactable_markers)
     edge_interactable_endpoints = _unique_positions(edge_interactable_endpoints)
     if interactable_markers or edge_interactable_endpoints:
-        colored_markers = []
-        for idx, item in enumerate(interactable_markers):
-            color_label, color = INTERACTABLE_SETUP_PALETTE[idx % len(INTERACTABLE_SETUP_PALETTE)]
-            colored_markers.append({**item, "color_label": color_label, "color": list(color)})
+        markers = list(interactable_markers)
         for edge_pos in edge_interactable_endpoints:
-            idx = len(colored_markers)
-            color_label, color = INTERACTABLE_SETUP_PALETTE[idx % len(INTERACTABLE_SETUP_PALETTE)]
-            colored_markers.append(
+            markers.append(
                 {
                     "position": edge_pos,
                     "label": "Edge interactable",
-                    "color_label": color_label,
-                    "color": list(color),
                 }
             )
-        marker_lines = [
-            f"{idx}. {item['label']}: LED {item['color_label']}, pole {tuple(item['position'])}"
-            for idx, item in enumerate(colored_markers, start=1)
-        ]
-        steps.append(
-            {
-                "kind": "interactable",
-                "label": "Interactables",
-                "color": list(DEFAULT_SETUP_COLORS["door"]),
-                "colors": [list(item["color"]) for item in colored_markers],
-                "legend": [
-                    {
-                        "label": str(item["label"]),
-                        "position": list(item["position"]),
-                        "color_label": str(item["color_label"]),
-                        "color": list(item["color"]),
-                    }
-                    for item in colored_markers
-                ],
-                "positions": [list(item["position"]) for item in colored_markers],
-                "edges": [],
-                "prompt": "Ustaw widoczne elementy interaktywne mapy według kolorów LED:\n" + "\n".join(marker_lines),
-                "confirmation_mode": "confirm_only",
-            }
+        steps.extend(
+            _build_marker_setup_steps(
+                kind="interactable",
+                label="Interactables",
+                markers=markers,
+                prompt_prefix="Ustaw widoczne elementy interaktywne mapy według kolorów LED",
+            )
         )
 
     if scenario_exit_markers:
         markers = _unique_scenario_exit_markers(scenario_exit_markers)
-        colored_markers = []
-        for idx, item in enumerate(markers):
-            color_label, color = SCENARIO_EXIT_SETUP_PALETTE[idx % len(SCENARIO_EXIT_SETUP_PALETTE)]
-            colored_markers.append({**item, "color_label": color_label, "color": list(color)})
-        marker_lines = [
-            f"{idx}. {item['label']}: LED {item['color_label']}, pole {tuple(item['position'])}"
-            for idx, item in enumerate(colored_markers, start=1)
-        ]
-        steps.append(
-            {
-                "kind": "scenario_exit",
-                "label": "Scenario exits",
-                "color": list(DEFAULT_SETUP_COLORS["door"]),
-                "colors": [list(item["color"]) for item in colored_markers],
-                "legend": [
-                    {
-                        "label": str(item["label"]),
-                        "position": list(item["position"]),
-                        "color_label": str(item["color_label"]),
-                        "color": list(item["color"]),
-                    }
-                    for item in colored_markers
-                ],
-                "positions": [list(item["position"]) for item in colored_markers],
-                "edges": [],
-                "prompt": "Wskaż na planszy jawne przejścia scenariusza według kolorów LED:\n" + "\n".join(marker_lines),
-                "confirmation_mode": "confirm_only",
-            }
+        steps.extend(
+            _build_marker_setup_steps(
+                kind="scenario_exit",
+                label="Scenario exits",
+                markers=markers,
+                prompt_prefix="Wskaż na planszy jawne przejścia scenariusza według kolorów LED",
+            )
         )
 
     if enemy_positions:
+        unique_enemy_positions = _unique_positions(enemy_positions)
         steps.append(
             {
                 "kind": "enemy",
                 "label": "Enemy spawns",
                 "color": list(DEFAULT_SETUP_COLORS["enemy"]),
-                "positions": [list(pos) for pos in _unique_positions(enemy_positions)],
+                "positions": [list(pos) for pos in unique_enemy_positions],
                 "edges": [],
-                "prompt": "Ustaw figurki przeciwników na podświetlonych polach.",
+                "prompt": (
+                    f"Ustaw figurki przeciwników na podświetlonych polach ({len(unique_enemy_positions)}): "
+                    + ", ".join(str(tuple(pos)) for pos in unique_enemy_positions)
+                    + "."
+                ),
                 "confirmation_mode": "confirm_only",
             }
         )
@@ -343,6 +301,73 @@ def _build_room_steps(board, *, corner_marker_setup: bool = False) -> list[dict[
                 "edges": [],
                 "prompt": f"Przygotuj obszar mapy: {room_name}.",
                 "confirmation_mode": "confirm_only",
+            }
+        )
+    return steps
+
+
+def _build_marker_setup_steps(
+    *,
+    kind: str,
+    label: str,
+    markers: list[dict[str, Any]],
+    prompt_prefix: str,
+    batch_size: int = 4,
+) -> list[dict[str, Any]]:
+    if not markers:
+        return []
+    effective_batch_size = max(1, int(batch_size or 1))
+    batches = [markers[idx : idx + effective_batch_size] for idx in range(0, len(markers), effective_batch_size)]
+    total_batches = len(batches)
+    total_markers = len(markers)
+    steps: list[dict[str, Any]] = []
+    for batch_index, batch in enumerate(batches, start=1):
+        colored_markers: list[dict[str, Any]] = []
+        batch_start = (batch_index - 1) * effective_batch_size
+        for local_idx, item in enumerate(batch):
+            color_label, color = SETUP_BATCH_PALETTE[local_idx % len(SETUP_BATCH_PALETTE)]
+            colored_markers.append(
+                {
+                    **item,
+                    "setup_index": batch_start + local_idx + 1,
+                    "color_label": color_label,
+                    "color": list(color),
+                }
+            )
+        marker_lines = [
+            f"{item['setup_index']}. {item['label']}: LED {item['color_label']}, pole {tuple(item['position'])}"
+            for item in colored_markers
+        ]
+        batch_suffix = (
+            f" - paczka {batch_index}/{total_batches} "
+            f"(elementy {batch_start + 1}-{batch_start + len(batch)} z {total_markers})"
+            if total_batches > 1
+            else ""
+        )
+        steps.append(
+            {
+                "kind": kind,
+                "label": label if total_batches == 1 else f"{label} {batch_index}/{total_batches}",
+                "color": list(DEFAULT_SETUP_COLORS["door"]),
+                "colors": [list(item["color"]) for item in colored_markers],
+                "legend": [
+                    {
+                        "label": str(item["label"]),
+                        "position": list(item["position"]),
+                        "color_label": str(item["color_label"]),
+                        "color": list(item["color"]),
+                        "setup_index": int(item["setup_index"]),
+                        "batch_index": batch_index,
+                        "batch_total": total_batches,
+                    }
+                    for item in colored_markers
+                ],
+                "positions": [list(item["position"]) for item in colored_markers],
+                "edges": [],
+                "prompt": f"{prompt_prefix}{batch_suffix}:\n" + "\n".join(marker_lines),
+                "confirmation_mode": "confirm_only",
+                "batch_index": batch_index,
+                "batch_total": total_batches,
             }
         )
     return steps

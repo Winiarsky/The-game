@@ -11,7 +11,7 @@ from GameObjects.Enemies.enemy_types import EnemyType
 class MillEnforcer(BasicEnemy):
     """Level 1 brute used as the old mill's main physical threat."""
 
-    name: str = "Mill Enforcer"
+    name: str = "Egzekutor z młyna"
     level: int = 1
     hp: int = 25
     max_hp: int | None = 25
@@ -58,14 +58,14 @@ class MillEnforcer(BasicEnemy):
 
 META = GameObjectMeta(
     object_id="mill_enforcer",
-    label="Mill Enforcer",
+    label="Egzekutor z młyna",
     color="#7f4b2b",
     category="Enemies",
     placement="cell",
-    description="Level 1 human brute for Ashen Oath; Trip and Demoralize pressure near the hostage.",
+    description="Brutalny ochroniarz młyna poziomu 1; presja przy zakładniku.",
     logic_cls=MillEnforcer,
     default_config={
-        "name": "Mill Enforcer",
+        "name": "Egzekutor z młyna",
         "level": 1,
         "hp": 25,
         "max_hp": 25,

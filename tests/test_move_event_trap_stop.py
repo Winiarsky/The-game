@@ -191,3 +191,32 @@ def test_move_confirm_none_retries_without_clearing_path(monkeypatch):
     preview_events = [payload for kind, payload in events if kind == "path_preview"]
     assert preview_events
     assert len(clear_events) == 1
+
+
+def test_move_current_field_click_retries_destination_without_spending_action(monkeypatch):
+    start = (0, 0)
+    target = (0, 2)
+
+    conn = DummyConn(clicks=[start, target, target])
+    board = DummyBoard(trap_pos=(9, 9))
+    board.trap_obj = Trap()
+    hero = Hero(start)
+    ui_logs = []
+    game = types.SimpleNamespace(
+        board=board,
+        conn=conn,
+        heroes=[hero],
+        enemies=[],
+        events=DummyEvents(),
+        ui_log=lambda msg, *a, **k: ui_logs.append(str(msg)),
+        ui_event=lambda *a, **k: None,
+        ui_idle_hint=lambda *a, **k: None,
+        state=types.SimpleNamespace(__class__=type("Exploration", (), {})),
+    )
+
+    ctx = EventContext(game=game, actor=hero)
+    result = MoveEvent().execute(ctx)
+
+    assert result.success is True
+    assert hero.position == target
+    assert any("Kliknięto aktualne pole bohatera" in msg for msg in ui_logs)

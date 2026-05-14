@@ -36,11 +36,11 @@ class MapSpec:
 
 
 MAPS = (
-    MapSpec("brindleford_square", "ashen_oath_brindleford_square.json", "brindleford_square_bg.png", "Brindleford Square"),
-    MapSpec("burned_chapel", "ashen_oath_burned_chapel.json", "burned_chapel_bg.png", "Burned Chapel"),
-    MapSpec("old_mill", "ashen_oath_old_mill.json", "old_mill_bg.png", "Old Mill"),
-    MapSpec("hill_ruins", "ashen_oath_hill_ruins.json", "hill_ruins_bg.png", "Hill Ruins"),
-    MapSpec("oath_crypt", "ashen_oath_oath_crypt.json", "oath_crypt_bg.png", "Oath Crypt"),
+    MapSpec("brindleford_square", "ashen_oath_brindleford_square.json", "brindleford_square_bg.png", "Rynek Brindleford"),
+    MapSpec("burned_chapel", "ashen_oath_burned_chapel.json", "burned_chapel_bg.png", "Spalona Kaplica"),
+    MapSpec("old_mill", "ashen_oath_old_mill.json", "old_mill_bg.png", "Stary Młyn"),
+    MapSpec("hill_ruins", "ashen_oath_hill_ruins.json", "hill_ruins_bg.png", "Ruiny na wzgórzu"),
+    MapSpec("oath_crypt", "ashen_oath_oath_crypt.json", "oath_crypt_bg.png", "Krypta Przysięgi"),
 )
 
 

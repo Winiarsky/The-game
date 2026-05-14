@@ -638,6 +638,27 @@ def remove_defeated_enemy(
     source: str = "damage",
 ) -> dict[str, Any]:
     """Usuń pokonanego przeciwnika z planszy/listy i opcjonalnie zostaw loot."""
+    handler = getattr(enemy, "before_defeated_cleanup", None)
+    if callable(handler):
+        try:
+            handled = bool(handler(game, source=source))
+        except TypeError:
+            try:
+                handled = bool(handler(game))
+            except Exception:
+                handled = False
+        except Exception:
+            handled = False
+        if handled:
+            _refresh_combat_ui_after_enemy_removed(game)
+            return {
+                "removed_from_board": False,
+                "removed_from_list": False,
+                "loot_dropped": 0,
+                "source": str(source),
+                "handled_by_enemy": True,
+            }
+
     pos = position if isinstance(position, tuple) else getattr(enemy, "position", None)
     loot = _extract_enemy_loot(enemy) if drop_loot else []
     removed_from_board = False

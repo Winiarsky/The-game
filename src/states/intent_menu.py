@@ -1353,7 +1353,7 @@ def build_intent_options(
             _push(
                 "stealth",
                 "Skradanie",
-                "Wejdz w ukrycie i poruszaj sie skrycie.",
+                "Wejdź w ukrycie i poruszaj się skrycie.",
                 category="movement",
                 icon="◈",
             )

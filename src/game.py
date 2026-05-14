@@ -28,6 +28,7 @@ from GameObjects.Terrains.basic_terrain import BasicTerrain
 from GameObjects.Walls.basic_wall import Wall, Mur
 from board_grid import BoardGrid
 from object_registry import OBJECT_REGISTRY, get_object
+from scenario_room_utils import expand_room_positions
 from ui_client import UndoRequested, get_ui_client
 from debug_trace import DebugTrace
 from player_prompting import GamePromptFacade
@@ -50,7 +51,7 @@ def _load_runtime_scenario_payload(scenario_name: str) -> dict[str, Any]:
     scenario_path = PROJECT_ROOT / "scenarios" / f"{scenario_name}.json"
     if not scenario_path.exists():
         raise FileNotFoundError(f"Nie znaleziono scenariusza runtime: {scenario_name}")
-    return json.loads(scenario_path.read_text(encoding="utf-8"))
+    return expand_room_positions(json.loads(scenario_path.read_text(encoding="utf-8")))
 
 class Game:
     def __init__(
@@ -68,7 +69,7 @@ class Game:
 
         self.scenario_id = str(scenario_label or scenario or "scenario_1")
         if scenario_payload is not None:
-            self.scenario = copy.deepcopy(dict(scenario_payload))
+            self.scenario = expand_room_positions(copy.deepcopy(dict(scenario_payload)))
         else:
             self.scenario = _load_runtime_scenario_payload(str(scenario))
             self.scenario_id = str(scenario or self.scenario.get("name") or "scenario_1")

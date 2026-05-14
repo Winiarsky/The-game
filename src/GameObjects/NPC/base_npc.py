@@ -44,6 +44,18 @@ logger = logging.getLogger(__name__)
 
 DIALOGS_DIR = Path(__file__).resolve().parents[1] / "dialogs"
 _MERCHANT_TIER_ORDER: tuple[str, ...] = ("novice", "adept", "master")
+_ASHEN_OATH_NPC_IDS: set[str] = {
+    "odran_vale",
+    "elna_barrow",
+    "tovin_barrow",
+    "tomas_reed",
+    "mara_fen",
+    "old_brann",
+    "nila_ashwick",
+    "bren_cale",
+    "mira_ashwane",
+    "warden_serai",
+}
 _MERCHANT_TIER_SPELL_MAX_RANK: dict[str, int] = {
     "novice": 1,
     "adept": 3,
@@ -63,6 +75,8 @@ class BaseNPC(SocialMixin, TradeMixin, PickpocketMixin, InteractableMixin):
         npc_id: str | None = None,
         dialog: Optional[dict | str] = None,
         dialog_path: Optional[str] = None,
+        portrait_image: Optional[str] = None,
+        image: Optional[str] = None,
         allow_same_cell_interact: bool = True,
         require_same_cell_interact: bool = False,
         blocks_movement: bool = True,
@@ -94,6 +108,14 @@ class BaseNPC(SocialMixin, TradeMixin, PickpocketMixin, InteractableMixin):
         )
 
         self.npc_id = str(npc_id or getattr(self, "npc_id", "") or "").strip()
+        self.portrait_image = str(
+            portrait_image
+            or image
+            or getattr(self, "portrait_image", "")
+            or getattr(self, "image", "")
+            or self._default_portrait_image()
+        ).strip()
+        self.image = self.portrait_image
         self.attitude = attitude
         raw_inventory = inventory or []
         self.inventory = [
@@ -183,6 +205,12 @@ class BaseNPC(SocialMixin, TradeMixin, PickpocketMixin, InteractableMixin):
     def _default_dialog(self) -> dict:
         """Minimalny dialog, podmieniany w klasach pochodnych."""
         return {"start": {"text": f"{self.name} nie ma nic do powiedzenia.", "options": []}}
+
+    def _default_portrait_image(self) -> str:
+        identity = str(self.npc_id or "").strip().lower().replace(" ", "_")
+        if identity in _ASHEN_OATH_NPC_IDS:
+            return f"/assets/ui_v2/ashen_oath/images/characters/{identity}.png"
+        return "/assets/ui_v2/ashen_oath/images/placeholders/default_actor.png"
 
     def _dialog_ui(self, game):
         ui = getattr(game, "ui", None)
@@ -274,11 +302,17 @@ class BaseNPC(SocialMixin, TradeMixin, PickpocketMixin, InteractableMixin):
         ui = self._dialog_ui(game)
         if ui is None or not hasattr(ui, "prompt_info"):
             return
+        identity = str(self.npc_id or self.name or "npc").strip().replace(" ", "_")
+        source_key = str(source_suffix or "info").strip().replace(" ", "_")
         try:
             ui.prompt_info(
                 title,
                 prompt_long=text,
                 source=f"dialog:{self.npc_id or self.name}:{source_suffix}",
+                image=self.portrait_image,
+                scope_key=f"dialog:{identity}",
+                dedupe_key=f"dialog:{identity}:{source_key}",
+                prompt_id=f"dialog.{identity}.{source_key}",
             )
         except Exception:
             logger.debug("Nie udało się pokazać prompt_info dialogu.", exc_info=True)
@@ -295,6 +329,7 @@ class BaseNPC(SocialMixin, TradeMixin, PickpocketMixin, InteractableMixin):
                 source=f"dialog:{self.npc_id or self.name}",
                 subtitle=str(node.get("subtitle") or ""),
                 prompt_long=str(node.get("text") or ""),
+                image=self.portrait_image,
                 layout="dialog",
                 choice_meta=[
                     {
@@ -1022,6 +1057,7 @@ class BaseNPC(SocialMixin, TradeMixin, PickpocketMixin, InteractableMixin):
                     description="Rozmowa.",
                     handler=type(self).action_talk,
                     end_interaction=False,
+                    tags=["dialog"],
                 )
             )
         if self.enable_diplomacy:

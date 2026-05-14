@@ -441,6 +441,10 @@ def test_board_scan_events_are_visible_in_view_state(ui_client):
         },
     )
     assert wait.status_code == 200
+    waiting_view = ui_client.get("/api/view-state").get_json()["view_state"]
+    assert waiting_view["active_prompt"]["source"] == "board_scan"
+    assert waiting_view["active_prompt"]["input_mode"] == "board_click"
+    assert "Cedric" in waiting_view["active_prompt"]["body_markdown"]
 
     result = ui_client.post(
         "/api/events",
@@ -461,6 +465,101 @@ def test_board_scan_events_are_visible_in_view_state(ui_client):
     assert view_state["focus_card"]["title"] == "Skan planszy bez wyboru"
     assert "Cedric" in view_state["focus_card"]["body_markdown"]
     assert "Próba 2" in view_state["focus_card"]["body_markdown"]
+    assert view_state["active_prompt"] is None
+
+
+def test_board_scan_wait_does_not_replace_existing_board_click_prompt(ui_client):
+    created = ui_client.post(
+        "/api/prompts",
+        json={
+            "prompt": "Wybierz cel interakcji",
+            "kind": "info",
+            "source": "interaction_target",
+            "input_mode": "board_click",
+            "scope_key": "hero_turn:targeting",
+            "session_id": "ui-session-1",
+        },
+    )
+    assert created.status_code == 200
+    original_id = created.get_json()["id"]
+
+    wait = ui_client.post(
+        "/api/events",
+        json={
+            "type": "board_scan_wait",
+            "session_id": "ui-session-1",
+            "payload": {"kind": "interaction_target", "positions": [[5, 8], [6, 8]]},
+        },
+    )
+    assert wait.status_code == 200
+
+    view_state = ui_client.get("/api/view-state").get_json()["view_state"]
+    assert view_state["active_prompt"]["id"] == original_id
+
+
+def test_non_board_prompt_hides_stale_idle_state(ui_client):
+    ui_client.post(
+        "/api/events",
+        json={
+            "type": "board_scan_result",
+            "session_id": "ui-session-1",
+            "payload": {"kind": "move_destination", "position": [5, 8]},
+        },
+    )
+    before = ui_client.get("/api/view-state").get_json()["view_state"]
+    assert before["idle_state"]["title"] == "Skan planszy"
+
+    created = ui_client.post(
+        "/api/prompts",
+        json={
+            "prompt": "Akcje",
+            "kind": "choice",
+            "choices": ["Ruch", "Interakcja"],
+            "input_mode": "choice",
+            "session_id": "ui-session-1",
+        },
+    )
+    assert created.status_code == 200
+
+    after = ui_client.get("/api/view-state").get_json()["view_state"]
+    assert after["active_prompt"]["title"] == "Akcje"
+    assert after["idle_state"] is None
+
+
+def test_journal_clear_event_clears_setup_cards_without_resetting_debug(ui_client):
+    ui_client.post(
+        "/api/events",
+        json={
+            "type": "player_card",
+            "session_id": "ui-session-1",
+            "payload": {"title": "Ustaw figurkę", "message": "Setup."},
+        },
+    )
+    ui_client.post(
+        "/api/events",
+        json={
+            "type": "board_scan_result",
+            "session_id": "ui-session-1",
+            "payload": {"kind": "hero_start_position", "position": [2, 11]},
+        },
+    )
+    before = ui_client.get("/api/view-state").get_json()["view_state"]
+    assert before["journal"]
+
+    cleared = ui_client.post(
+        "/api/events",
+        json={
+            "type": "journal_clear",
+            "session_id": "ui-session-1",
+            "payload": {"reason": "hero_setup_complete"},
+        },
+    )
+    assert cleared.status_code == 200
+
+    after = ui_client.get("/api/view-state").get_json()["view_state"]
+    assert after["journal"] == []
+    assert after["focus_card"] is None
+    assert after["idle_state"] is None
 
 
 def test_prompt_supersedes_previous_prompt_in_same_scope(ui_client):

@@ -39,6 +39,42 @@ _CLERIC_DEFAULT_RANK1_SLOTS_L1 = 2
 _DRUID_DEFAULT_TRADITION = "primal"
 _DRUID_DEFAULT_CANTRIP_PREPARED_L1 = 5
 _DRUID_DEFAULT_RANK1_SLOTS_L1 = 2
+_ASHEN_OATH_SPELL_SHORTLISTS: dict[str, dict[str, tuple[str, ...]]] = {
+    "freya": {
+        "cantrip": (
+            "detect_magic",
+            "shield_cantrip",
+            "telekinetic_projectile",
+            "daze",
+            "message",
+            "light",
+        ),
+        "rank_1": (
+            "magic_missile",
+            "fear",
+            "grease",
+            "hydraulic_push",
+            "true_strike",
+        ),
+    },
+    "lorielen": {
+        "cantrip": (
+            "guidance",
+            "detect_magic",
+            "light",
+            "stabilize",
+            "daze",
+            "divine_lance",
+        ),
+        "rank_1": (
+            "heal",
+            "bless",
+            "protection",
+            "command",
+            "fear",
+        ),
+    },
+}
 
 
 def _actor_level(actor) -> int:
@@ -116,6 +152,22 @@ def _append_many(container: list[str], values: object) -> None:
         return
     for value in values:
         _append_unique(container, str(value))
+
+
+def _actor_spell_shortlist(actor, tier: str, pool: list[str]) -> list[str] | None:
+    identity = _normalize(getattr(actor, "character_id", "") or getattr(actor, "name", ""))
+    if not identity:
+        return None
+    configured = _ASHEN_OATH_SPELL_SHORTLISTS.get(identity, {}).get(_normalize(tier))
+    if not configured:
+        return None
+    pool_set = {_normalize_spell_id(item) for item in list(pool or [])}
+    selected = [
+        spell_id
+        for spell_id in (_normalize_spell_id(item) for item in configured)
+        if spell_id and spell_id in pool_set
+    ]
+    return selected or None
 
 
 def _normalize_tier(value: object) -> str:
@@ -1071,6 +1123,7 @@ def _ensure_bard_baseline_known(actor, known: dict[str, list[str]]) -> None:
             break
 
     cantrip_pool = _collect_spells_for_tier_and_tradition(tier="cantrip", traditions={tradition})
+    cantrip_pool = _actor_spell_shortlist(actor, "cantrip", cantrip_pool) or cantrip_pool
     rank1_pool = _collect_spells_for_tier_and_tradition(tier="rank_1", traditions={tradition})
 
     for spell_id in cantrip_pool:
@@ -1137,6 +1190,7 @@ def _ensure_sorcerer_baseline_known(actor, known: dict[str, list[str]]) -> None:
         if granted_spell:
             _append_unique(tier_known, granted_spell)
         tier_pool = _collect_spells_for_tier_and_tradition(tier=tier, traditions={tradition})
+        tier_pool = _actor_spell_shortlist(actor, tier, tier_pool) or tier_pool
         for spell_id in tier_pool:
             if len(tier_known) >= target_known:
                 break
@@ -1147,6 +1201,7 @@ def _ensure_sorcerer_baseline_known(actor, known: dict[str, list[str]]) -> None:
 def _ensure_cleric_baseline_known(actor, known: dict[str, list[str]]) -> None:
     tradition = _cleric_tradition(actor)
     cantrip_pool = _collect_spells_for_tier_and_tradition(tier="cantrip", traditions={tradition})
+    cantrip_pool = _actor_spell_shortlist(actor, "cantrip", cantrip_pool) or cantrip_pool
     cantrips = list(known.get("cantrip", []) or [])
     for spell_id in cantrip_pool:
         _append_unique(cantrips, spell_id)
@@ -1154,6 +1209,7 @@ def _ensure_cleric_baseline_known(actor, known: dict[str, list[str]]) -> None:
     for rank in range(1, 11):
         tier = _tier_for_rank(rank)
         pool = _collect_spells_for_tier_and_tradition(tier=tier, traditions={tradition})
+        pool = _actor_spell_shortlist(actor, tier, pool) or pool
         tier_known = list(known.get(tier, []) or [])
         for spell_id in pool:
             _append_unique(tier_known, spell_id)

@@ -86,6 +86,29 @@ h1 {
   font-weight: 700;
 }
 
+.stat-block {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2mm;
+  margin: 3mm 0 5mm;
+}
+
+.stat-line {
+  border: 1px solid #d4c09e;
+  background: rgba(255, 249, 237, 0.76);
+  padding: 1.5mm 2mm;
+  font-size: 8.1pt;
+}
+
+.stat-line strong {
+  display: block;
+  margin-bottom: 0.5mm;
+  font-size: 7.5pt;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b4f38;
+}
+
 .grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

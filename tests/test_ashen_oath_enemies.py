@@ -38,9 +38,11 @@ def test_ashen_oath_enemy_definitions_are_registered_with_pf2e_levels():
 
     expected_levels = {
         "ashen_watcher": -1,
+        "ash_cinder": -1,
         "vale_guard": 0,
         "mill_enforcer": 1,
         "ashen_knight": 1,
+        "charred_deacon": 2,
         "odrans_champion": 2,
     }
     for object_id, level in expected_levels.items():
@@ -51,7 +53,6 @@ def test_ashen_oath_enemy_definitions_are_registered_with_pf2e_levels():
 
 def test_ashen_oath_maps_load_campaign_specific_enemy_classes():
     expected_by_map = {
-        "ashen_oath_burned_chapel": {"AshenWatcher"},
         "ashen_oath_old_mill": {"ValeGuard", "MillEnforcer"},
         "ashen_oath_hill_ruins": {"AshenKnight"},
         "ashen_oath_oath_crypt": {"OdransChampion", "AshenWatcher"},
@@ -63,10 +64,21 @@ def test_ashen_oath_maps_load_campaign_specific_enemy_classes():
         assert expected_classes <= class_names
 
 
+def test_burned_chapel_spawns_charred_deacon_from_altar_trigger():
+    from burned_chapel_encounter import trigger_altar
+
+    game = Game(conn=DummyConnection(), scenario="ashen_oath_burned_chapel")
+    assert game.enemies == []
+
+    trigger_altar(game)
+
+    assert {enemy.__class__.__name__ for enemy in game.enemies} == {"CharredDeacon"}
+
+
 def test_ashen_oath_enemy_numbers_follow_level_one_party_budget():
     definitions = _enemy_defs_by_id()
     encounter_xp_by_map = {
-        "burned_chapel": ["ashen_watcher", "ashen_watcher"],
+        "burned_chapel": ["charred_deacon"],
         "old_mill": ["vale_guard", "vale_guard", "mill_enforcer"],
         "hill_ruins": ["ashen_knight", "ashen_watcher", "ashen_watcher"],
         "oath_crypt": ["odrans_champion", "ashen_knight", "ashen_watcher", "ashen_watcher"],
@@ -82,7 +94,7 @@ def test_ashen_oath_enemy_numbers_follow_level_one_party_budget():
         totals[map_id] = total
 
     assert totals == {
-        "burned_chapel": 40,
+        "burned_chapel": 60,
         "old_mill": 100,
         "hill_ruins": 80,
         "oath_crypt": 140,
