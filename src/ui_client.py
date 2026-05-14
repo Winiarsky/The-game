@@ -220,6 +220,20 @@ class UIClient:
     def prompt_roll(self, prompt: str, source: str | None = None, **extra) -> Optional[Any]:
         """Wyślij prompt na rzut; fallback CLI tylko w trybie debug."""
         return_meta = bool(extra.pop("return_meta", False))
+        if not extra.get("audio"):
+            try:
+                from prompt_audio import default_roll_audio
+
+                audio = default_roll_audio(
+                    prompt,
+                    layout=extra.get("layout"),
+                    prompt_id=extra.get("prompt_id") or extra.get("prompt_key"),
+                )
+                if audio:
+                    extra = dict(extra)
+                    extra["audio"] = audio
+            except Exception:
+                pass
         try:
             from prompt_copy import resolve_ui_prompt_copy
 

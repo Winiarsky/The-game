@@ -233,19 +233,19 @@ Bren siedzi pod sciana z mokra chusta na ustach. Kaszle czarnym pylem, ale to ni
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_bren_cale_start_check_breath_critical_success_001.mp3`
 
-Udaje sie oczyscic mu gardlo i odroznic pyl od sadzy. Bren lapie oddech i mowi, ze popiół przyniesiono w workach od strony młyna, zanim kaplica zaczela dymic.
+Udaje sie oczyscic mu gardlo i odroznic pyl od sadzy. Bren lapie oddech i mowi, ze popiół przyniesiono w workach od strony młyna, zanim kaplica zaczela dymic. Prosi też, żeby szukać czystej wody w południowo-wschodniej części miasta, przy odpływie głównej drogi.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_bren_cale_start_check_breath_success_001.mp3`
 
-Bren uspokaja oddech na tyle, by wyszeptac: "To nie byl popiół z kaplicy. Pachnial mokrym zbozem... mlynem."
+Bren uspokaja oddech na tyle, by wyszeptac: "To nie byl popiół z kaplicy. Pachnial mokrym zbozem... mlynem." Po chwili wskazuje drżącą ręką południowo-wschodnią część miasta i prosi o czystą wodę z odpływu przy głównej drodze.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_bren_cale_start_check_breath_failure_001.mp3`
 
-Nie pogarszasz jego stanu, ale Bren nie jest w stanie mowic. Mara szepcze, ze bez ciszy i ziela niewiele da sie zrobic.
+Nie pogarszasz jego stanu, ale Bren nie jest w stanie mowic. Mara szepcze, ze bez ciszy, ziela i czystej wody niewiele da sie zrobic. Wskazuje południowo-wschodnią część miasta, gdzie przy głównej drodze może być jeszcze niezabrudzony odpływ.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_bren_cale_start_check_breath_critical_failure_001.mp3`
 
-Bren dostaje ataku kaszlu, a tlum cofa się nerwowo. Patrol wykorzystuje zamieszanie, by uciszyc swiadkow.
+Bren dostaje ataku kaszlu, a tlum cofa się nerwowo. Patrol wykorzystuje zamieszanie, by uciszyc swiadkow, ale Mara zdąży szepnąć, że czystej wody trzeba szukać przy odpływie w południowo-wschodniej części miasta.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_bren_cale_start_give_clean_water_text_001.mp3`
 
@@ -668,6 +668,128 @@ Belka ani drgnie, a mechanizm mlyna zaczyna pracowac glosniej.
 Belka uderza o kolo mlyna. Huk niesie sie po calym budynku.
 
 <!-- END GENERATED RUNTIME DIALOGUE VOICEOVER PROMPTS -->
+
+## Runtime Generic Roll Voiceovers
+
+### `audio/voiceover/runtime_prompts/roll_acrobatics_prompt_001.mp3`
+
+Wykonaj test Akrobatyki i podaj wynik rzutu.
+
+### `audio/voiceover/runtime_prompts/roll_arcana_prompt_001.mp3`
+
+Wykonaj test Wiedzy Tajemnej i podaj wynik rzutu.
+
+### `audio/voiceover/runtime_prompts/roll_athletics_prompt_001.mp3`
+
+Wykonaj test Atletyki i podaj wynik rzutu.
+
+### `audio/voiceover/runtime_prompts/roll_crafting_prompt_001.mp3`
+
+Wykonaj test Rzemiosła i podaj wynik rzutu.
+
+### `audio/voiceover/runtime_prompts/roll_deception_prompt_001.mp3`
+
+Wykonaj test Oszustwa i podaj wynik rzutu.
+
+### `audio/voiceover/runtime_prompts/roll_diplomacy_prompt_001.mp3`
+
+Wykonaj test Dyplomacji i podaj wynik rzutu.
+
+### `audio/voiceover/runtime_prompts/roll_intimidation_prompt_001.mp3`
+
+Wykonaj test Zastraszania i podaj wynik rzutu.
+
+### `audio/voiceover/runtime_prompts/roll_lore_prompt_001.mp3`
+
+Wykonaj test Wiedzy i podaj wynik rzutu.
+
+### `audio/voiceover/runtime_prompts/roll_medicine_prompt_001.mp3`
+
+Wykonaj test Medycyny i podaj wynik rzutu.
+
+### `audio/voiceover/runtime_prompts/roll_nature_prompt_001.mp3`
+
+Wykonaj test Natury i podaj wynik rzutu.
+
+### `audio/voiceover/runtime_prompts/roll_occultism_prompt_001.mp3`
+
+Wykonaj test Okultyzmu i podaj wynik rzutu.
+
+### `audio/voiceover/runtime_prompts/roll_performance_prompt_001.mp3`
+
+Wykonaj test Występu i podaj wynik rzutu.
+
+### `audio/voiceover/runtime_prompts/roll_religion_prompt_001.mp3`
+
+Wykonaj test Religii i podaj wynik rzutu.
+
+### `audio/voiceover/runtime_prompts/roll_society_prompt_001.mp3`
+
+Wykonaj test Społeczeństwa i podaj wynik rzutu.
+
+### `audio/voiceover/runtime_prompts/roll_stealth_prompt_001.mp3`
+
+Wykonaj test Skradania i podaj wynik rzutu.
+
+### `audio/voiceover/runtime_prompts/roll_survival_prompt_001.mp3`
+
+Wykonaj test Przetrwania i podaj wynik rzutu.
+
+### `audio/voiceover/runtime_prompts/roll_thievery_prompt_001.mp3`
+
+Wykonaj test Złodziejstwa i podaj wynik rzutu.
+
+### `audio/voiceover/runtime_prompts/roll_perception_prompt_001.mp3`
+
+Wykonaj test Percepcji i podaj wynik rzutu.
+
+### `audio/voiceover/runtime_prompts/roll_fortitude_prompt_001.mp3`
+
+Wykonaj rzut obronny Fortitude i podaj wynik rzutu.
+
+### `audio/voiceover/runtime_prompts/roll_reflex_prompt_001.mp3`
+
+Wykonaj rzut obronny Reflex i podaj wynik rzutu.
+
+### `audio/voiceover/runtime_prompts/roll_will_prompt_001.mp3`
+
+Wykonaj rzut obronny Will i podaj wynik rzutu.
+
+### `audio/voiceover/runtime_prompts/roll_attack_prompt_001.mp3`
+
+Wykonaj rzut ataku i podaj wynik rzutu.
+
+### `audio/voiceover/runtime_prompts/roll_melee_attack_prompt_001.mp3`
+
+Wykonaj rzut ataku wręcz i podaj wynik rzutu.
+
+### `audio/voiceover/runtime_prompts/roll_ranged_attack_prompt_001.mp3`
+
+Wykonaj rzut ataku dystansowego i podaj wynik rzutu.
+
+### `audio/voiceover/runtime_prompts/roll_spell_attack_prompt_001.mp3`
+
+Wykonaj rzut ataku zaklęciem i podaj wynik rzutu.
+
+### `audio/voiceover/runtime_prompts/roll_flat_check_prompt_001.mp3`
+
+Wykonaj flat check i podaj wynik rzutu.
+
+### `audio/voiceover/runtime_prompts/roll_recovery_check_prompt_001.mp3`
+
+Wykonaj recovery check i podaj wynik rzutu.
+
+### `audio/voiceover/runtime_prompts/roll_counteract_prompt_001.mp3`
+
+Wykonaj rzut counteract i podaj wynik rzutu.
+
+### `audio/voiceover/runtime_prompts/roll_check_prompt_001.mp3`
+
+Wykonaj test i podaj wynik rzutu.
+
+### `audio/voiceover/runtime_prompts/roll_damage_prompt_001.mp3`
+
+Rzuć obrażenia i podaj wynik.
 
 ## Oath Crypt Finale Audio
 

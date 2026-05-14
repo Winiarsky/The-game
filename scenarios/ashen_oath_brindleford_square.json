@@ -1460,6 +1460,19 @@
                                                 "type": "set_flag",
                                                 "flag": "well_mark_hint"
                                             }
+                                        ],
+                                        "board_highlights": [
+                                            {
+                                                "position": [
+                                                    7,
+                                                    10
+                                                ],
+                                                "color": [
+                                                    80,
+                                                    170,
+                                                    255
+                                                ]
+                                            }
                                         ]
                                     },
                                     {
@@ -1491,6 +1504,19 @@
                                                             "type": "set_flag",
                                                             "flag": "villagers_willing_to_talk"
                                                         }
+                                                    ],
+                                                    "board_highlights": [
+                                                        {
+                                                            "position": [
+                                                                7,
+                                                                10
+                                                            ],
+                                                            "color": [
+                                                                80,
+                                                                170,
+                                                                255
+                                                            ]
+                                                        }
                                                     ]
                                                 },
                                                 "success": {
@@ -1503,6 +1529,19 @@
                                                         {
                                                             "type": "set_flag",
                                                             "flag": "well_mark_hint"
+                                                        }
+                                                    ],
+                                                    "board_highlights": [
+                                                        {
+                                                            "position": [
+                                                                7,
+                                                                10
+                                                            ],
+                                                            "color": [
+                                                                80,
+                                                                170,
+                                                                255
+                                                            ]
                                                         }
                                                     ]
                                                 },
@@ -1559,8 +1598,12 @@
                                             ],
                                             "outcomes": {
                                                 "critical_success": {
-                                                    "text": "Udaje sie oczyscic mu gardlo i odroznic pyl od sadzy. Bren lapie oddech i mowi, ze popiół przyniesiono w workach od strony młyna, zanim kaplica zaczela dymic.",
+                                                    "text": "Udaje sie oczyscic mu gardlo i odroznic pyl od sadzy. Bren lapie oddech i mowi, ze popiół przyniesiono w workach od strony młyna, zanim kaplica zaczela dymic. Prosi też, żeby szukać czystej wody w południowo-wschodniej części miasta, przy odpływie głównej drogi.",
                                                     "effects": [
+                                                        {
+                                                            "type": "set_flag",
+                                                            "flag": "bren_examined"
+                                                        },
                                                         {
                                                             "type": "set_flag",
                                                             "flag": "sick_man_stabilized"
@@ -1576,8 +1619,12 @@
                                                     ]
                                                 },
                                                 "success": {
-                                                    "text": "Bren uspokaja oddech na tyle, by wyszeptac: \"To nie byl popiół z kaplicy. Pachnial mokrym zbozem... mlynem.\"",
+                                                    "text": "Bren uspokaja oddech na tyle, by wyszeptac: \"To nie byl popiół z kaplicy. Pachnial mokrym zbozem... mlynem.\" Po chwili wskazuje drżącą ręką południowo-wschodnią część miasta i prosi o czystą wodę z odpływu przy głównej drodze.",
                                                     "effects": [
+                                                        {
+                                                            "type": "set_flag",
+                                                            "flag": "bren_examined"
+                                                        },
                                                         {
                                                             "type": "set_flag",
                                                             "flag": "sick_man_stabilized"
@@ -1589,11 +1636,21 @@
                                                     ]
                                                 },
                                                 "failure": {
-                                                    "text": "Nie pogarszasz jego stanu, ale Bren nie jest w stanie mówić. Mara szepcze, że bez ciszy i ziela niewiele da się zrobić."
+                                                    "text": "Nie pogarszasz jego stanu, ale Bren nie jest w stanie mówić. Mara szepcze, że bez ciszy, ziela i czystej wody niewiele da się zrobić. Wskazuje południowo-wschodnią część miasta, gdzie przy głównej drodze może być jeszcze niezabrudzony odpływ.",
+                                                    "effects": [
+                                                        {
+                                                            "type": "set_flag",
+                                                            "flag": "bren_examined"
+                                                        }
+                                                    ]
                                                 },
                                                 "critical_failure": {
-                                                    "text": "Bren dostaje ataku kaszlu, a tłum cofa się nerwowo. Patrol wykorzystuje zamieszanie, by uciszyć świadków.",
+                                                    "text": "Bren dostaje ataku kaszlu, a tłum cofa się nerwowo. Patrol wykorzystuje zamieszanie, by uciszyć świadków, ale Mara zdąży szepnąć, że czystej wody trzeba szukać przy odpływie w południowo-wschodniej części miasta.",
                                                     "effects": [
+                                                        {
+                                                            "type": "set_flag",
+                                                            "flag": "bren_examined"
+                                                        },
                                                         {
                                                             "type": "set_flag",
                                                             "flag": "crowd_intimidated"
@@ -2006,6 +2063,21 @@
                             "villager",
                             "bren"
                         ],
+                        "conditions": {
+                            "all_flags": [
+                                "bren_examined"
+                            ]
+                        },
+                        "hidden": true,
+                        "allow_hidden_interaction": false,
+                        "reveal_dc": 14,
+                        "reveal_tags": [
+                            "water",
+                            "bren",
+                            "south_east",
+                            "search"
+                        ],
+                        "description_on_reveal": "Odnajdujecie mały odpływ z wodą w południowo-wschodniej części miasta. Teraz możecie spróbować napełnić bukłak dla Brena.",
                         "intro": "Przy głównej drodze stoi mały odpływ z wodą, której popiół nie zdążył jeszcze zabrudzić. Jeśli napełnicie bukłak bez wzbudzania paniki, Bren może odzyskać oddech przed badaniem.",
                         "success_flag": "clean_water_found",
                         "success_message": "Napełniacie bukłak czystą wodą. Mara od razu zrozumie, że można jej użyć przy Brenie.",

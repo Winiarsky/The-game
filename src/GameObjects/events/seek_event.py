@@ -735,6 +735,13 @@ class SeekEvent(GameEvent):
                     continue
                 if not getattr(obj, "seekable", True):
                     continue
+                checker = getattr(obj, "can_interact", None)
+                if callable(checker):
+                    try:
+                        if not bool(checker(actor, game)):
+                            continue
+                    except Exception:
+                        continue
                 hidden_candidates += 1
                 was_revealed = getattr(obj, "revealed", False)
                 obj_tags = list(getattr(obj, "reveal_tags", ()) or ())

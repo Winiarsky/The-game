@@ -27,7 +27,7 @@ def _skill_feat_status(
                         value=2,
                         tag=skill_id,
                         source=f"status:{feat_id}",
-                        label=f"{feat_id} +2",
+                        label=f"{label} +2",
                     )
                     for skill_id in skill_list
                 ],

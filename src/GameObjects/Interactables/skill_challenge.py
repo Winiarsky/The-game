@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from GameObjects.base import GameObjectMeta
@@ -25,6 +26,14 @@ class SkillChallenge(InteractableMixin):
         outcome_messages: dict[str, str] | None = None,
         outcome_flags: dict[str, list[str] | str] | None = None,
         flag_modifiers: list[dict[str, Any]] | None = None,
+        conditions: dict[str, Any] | None = None,
+        required_flags: list[str] | None = None,
+        hidden: bool = False,
+        allow_hidden_interaction: bool = False,
+        reveal_dc: int = 15,
+        seekable: bool = True,
+        reveal_tags: list[str] | None = None,
+        description_on_reveal: str | None = None,
         allow_same_cell_interact: bool = True,
         require_same_cell_interact: bool = False,
         blocks_movement: bool = False,
@@ -51,6 +60,19 @@ class SkillChallenge(InteractableMixin):
         self.outcome_messages = dict(outcome_messages or {})
         self.outcome_flags = dict(outcome_flags or {})
         self.flag_modifiers = self._normalize_flag_modifiers(flag_modifiers)
+        self.conditions = dict(conditions or {})
+        if required_flags:
+            merged = list(self.conditions.get("all_flags") or self.conditions.get("flags") or [])
+            merged.extend(str(flag) for flag in required_flags if str(flag).strip())
+            self.conditions["all_flags"] = merged
+        self.hidden = bool(hidden)
+        self.revealed = not self.hidden
+        self.allow_hidden_interaction = bool(allow_hidden_interaction)
+        self.reveal_dc = int(reveal_dc or 15)
+        self.seekable = bool(seekable)
+        self.reveal_tags = tuple(str(tag).strip().lower() for tag in (reveal_tags or []) if str(tag).strip())
+        self.description_on_reveal = str(description_on_reveal or "").strip()
+        self.revealed_by_seek = False
         self.completed = False
         self.register_default_actions()
 
@@ -73,7 +95,33 @@ class SkillChallenge(InteractableMixin):
             )
         )
 
+    def can_interact(self, actor, game) -> bool:
+        return self._conditions_pass(game)
+
+    def try_reveal(self, roll: int) -> tuple[str, str]:
+        total = int(roll or 0)
+        if self.revealed:
+            return "success", f"{self.challenge_label} jest już odkryte."
+        if total >= self.reveal_dc + 10:
+            self.revealed = True
+            self.revealed_by_seek = True
+            return "critical_success", self.description_on_reveal or f"Odkrywacie {self.challenge_label}."
+        if total >= self.reveal_dc:
+            self.revealed = True
+            self.revealed_by_seek = True
+            return "success", self.description_on_reveal or f"Odkrywacie {self.challenge_label}."
+        if total <= self.reveal_dc - 10:
+            return "critical_failure", "Nie znajdujecie właściwego miejsca."
+        return "failure", "Nie znajdujecie właściwego miejsca."
+
+    def on_reveal(self, game, *, source_actor=None) -> str | None:
+        return self.description_on_reveal or None
+
     def action_attempt(self, actor, game, _payload: dict[str, Any] | None = None) -> str:
+        if not self.can_interact(actor, game):
+            return "Ta interakcja nie jest jeszcze dostępna."
+        if self.hidden and not self.revealed:
+            return "Najpierw trzeba odkryć to miejsce."
         if self.intro:
             self._prompt_info(game, self.challenge_label, self.intro, source_suffix="intro")
         base_modifier, modifier_notes = self._active_flag_modifier_bonus(game)
@@ -169,6 +217,21 @@ class SkillChallenge(InteractableMixin):
             return bool(flags.get(key))
         return False
 
+    def _conditions_pass(self, game) -> bool:
+        conditions = self.conditions
+        if not isinstance(conditions, dict) or not conditions:
+            return True
+        for flag in list(conditions.get("flags") or conditions.get("all_flags") or []):
+            if not self._flag_enabled(game, str(flag)):
+                return False
+        for flag in list(conditions.get("not_flags") or []):
+            if self._flag_enabled(game, str(flag)):
+                return False
+        any_flags = [str(flag) for flag in list(conditions.get("any_flags") or []) if str(flag).strip()]
+        if any_flags and not any(self._flag_enabled(game, flag) for flag in any_flags):
+            return False
+        return True
+
     def _set_flag(self, game, flag: str) -> None:
         key = str(flag or "").strip()
         if not key:
@@ -182,15 +245,44 @@ class SkillChallenge(InteractableMixin):
         if isinstance(flags, dict):
             flags[key] = True
 
+    def _map_id(self, game) -> str:
+        session = getattr(game, "scenario_session", None)
+        raw = getattr(session, "current_map_id", "") or getattr(game, "current_map_id", "")
+        return str(raw or "scenario").strip() or "scenario"
+
+    def _voiceover_path(self, game, source_suffix: str) -> str | None:
+        challenge = str(self.challenge_id or self.challenge_label or "skill_challenge").strip()
+        suffix = str(source_suffix or "info").strip()
+        slug = "_".join(
+            part
+            for part in (
+                self._map_id(game),
+                challenge,
+                suffix,
+            )
+            if part
+        )
+        slug = re.sub(r"[^a-zA-Z0-9_]+", "_", slug).strip("_").lower()
+        return f"audio/voiceover/runtime_dialogue/{slug}_001.mp3" if slug else None
+
     def _prompt_info(self, game, title: str, text: str, *, source_suffix: str) -> None:
         ui = getattr(game, "ui", None)
         if ui is None or not getattr(ui, "enabled", False) or not hasattr(ui, "prompt_info"):
             return
+        challenge = str(self.challenge_id or self.challenge_label or "skill_challenge").strip()
         try:
             ui.prompt_info(
                 title,
                 prompt_long=text,
                 source=f"skill_challenge:{self.challenge_id or self.challenge_label}:{source_suffix}",
+                prompt_id=f"skill_challenge.{challenge}.{source_suffix}",
+                audio=self._voiceover_path(game, source_suffix),
+                communication={
+                    "context": {
+                        "challenge_id": self.challenge_id,
+                        "asset_id": self.challenge_id,
+                    }
+                },
             )
         except Exception:
             return
@@ -217,6 +309,14 @@ META = GameObjectMeta(
         "outcome_messages": {},
         "outcome_flags": {},
         "flag_modifiers": [],
+        "conditions": {},
+        "required_flags": [],
+        "hidden": False,
+        "allow_hidden_interaction": False,
+        "reveal_dc": 15,
+        "seekable": True,
+        "reveal_tags": [],
+        "description_on_reveal": "",
         "allow_same_cell_interact": True,
         "require_same_cell_interact": False,
         "blocks_movement": False,

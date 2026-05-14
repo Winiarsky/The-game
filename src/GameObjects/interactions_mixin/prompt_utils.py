@@ -93,6 +93,38 @@ def _sum_modifier_bucket(modifiers: dict, key: str, *, is_penalty: bool = False)
     return int(total)
 
 
+def _modifier_components_from_grid(modifiers: dict) -> list[dict[str, object]]:
+    components: list[dict[str, object]] = []
+    counts: dict[str, int] = {}
+    for key, modifier_type, fallback_label, sign in (
+        ("bonItem", "item", "Przedmiot", 1),
+        ("penItem", "item", "Przedmiot", -1),
+        ("bonStat", "status", "Status", 1),
+        ("penStat", "status", "Status", -1),
+        ("bonCirc", "circumstance", "Okoliczności", 1),
+        ("penCirc", "circumstance", "Okoliczności", -1),
+    ):
+        for row in list(modifiers.get(key, []) or []):
+            if not isinstance(row, dict):
+                continue
+            raw_value = _int_or_default(row.get("value", 0), 0)
+            if raw_value == 0:
+                continue
+            counts[modifier_type] = counts.get(modifier_type, 0) + 1
+            component_id = modifier_type if counts[modifier_type] == 1 else f"{modifier_type}_{counts[modifier_type]}"
+            components.append(
+                {
+                    "id": component_id,
+                    "label": str(row.get("label") or row.get("source") or fallback_label),
+                    "value": int(abs(raw_value) * sign),
+                    "description": f"{modifier_type} {'bonus' if sign > 0 else 'penalty'}",
+                    "type": modifier_type,
+                    "editable": True,
+                }
+            )
+    return components
+
+
 def _prepare_roll_stack_payload(
     *,
     roll_stack: dict | None,
@@ -117,31 +149,7 @@ def _prepare_roll_stack_payload(
                 }
             )
     elif isinstance(modifiers, dict):
-        circumstance_total = _sum_modifier_bucket(modifiers, "bonCirc") + _sum_modifier_bucket(
-            modifiers, "penCirc", is_penalty=True
-        )
-        status_total = _sum_modifier_bucket(modifiers, "bonStat") + _sum_modifier_bucket(
-            modifiers, "penStat", is_penalty=True
-        )
-        item_total = _sum_modifier_bucket(modifiers, "bonItem") + _sum_modifier_bucket(
-            modifiers, "penItem", is_penalty=True
-        )
-        for cid, label, value, description in (
-            ("circumstance", "Okoliczności", circumstance_total, "Premie i kary circumstance."),
-            ("status", "Status", status_total, "Premie i kary status."),
-            ("item", "Przedmiot", item_total, "Premie i kary item."),
-        ):
-            if int(value) == 0:
-                continue
-            components.append(
-                {
-                    "id": cid,
-                    "label": label,
-                    "value": int(value),
-                    "description": description,
-                    "editable": True,
-                }
-            )
+        components.extend(_modifier_components_from_grid(modifiers))
 
     components_total = sum(_int_or_default(item.get("value", 0), 0) for item in components)
     auto_total = auto_total_modifier
@@ -412,6 +420,19 @@ def prompt_for_roll(prompt: str, *, return_details: bool = False, infer_natural_
             ui_kwargs["layout"] = "test"
             layout = "test"
         ui_kwargs.setdefault("answer_placeholder", "Podaj wynik rzutu")
+        if not ui_kwargs.get("audio"):
+            try:
+                from prompt_audio import default_roll_audio
+
+                audio = default_roll_audio(
+                    prompt,
+                    layout=ui_kwargs.get("layout", layout),
+                    prompt_id=ui_kwargs.get("prompt_id") or ui_kwargs.get("prompt_key"),
+                )
+                if audio:
+                    ui_kwargs["audio"] = audio
+            except Exception:
+                pass
         ui_answer = ui_client.prompt_roll(
             prompt,
             source="game",

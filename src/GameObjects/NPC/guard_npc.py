@@ -51,6 +51,7 @@ class GuardNPC(BaseNPC, WatchfulMixin):
             base_price_modifier=base_price_modifier,
             pickpocket_dc=pickpocket_dc,
             pickpocket_loot=pickpocket_loot,
+            enable_diplomacy=enable_diplomacy,
             **kwargs,
         )
         WatchfulMixin.__init__(

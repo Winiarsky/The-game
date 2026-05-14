@@ -1,6 +1,7 @@
 import json
 import logging
 import math
+import re
 from pathlib import Path
 from typing import Any, Optional, Callable, Iterable
 
@@ -244,6 +245,68 @@ class BaseNPC(SocialMixin, TradeMixin, PickpocketMixin, InteractableMixin):
             "critical_failure": "krytyczna porażka",
         }.get(str(outcome or "").strip().lower(), str(outcome or "wynik"))
 
+    def _dialog_map_id(self, game) -> str:
+        session = getattr(game, "scenario_session", None)
+        return str(getattr(session, "current_map_id", "") or getattr(game, "scenario_session_map_id", "") or "").strip().lower()
+
+    def _dialog_voiceover_path(self, game, *parts: object) -> str | None:
+        raw_parts = [
+            self._dialog_map_id(game),
+            str(self.npc_id or self.name or "").strip().lower(),
+            *(str(part or "").strip().lower() for part in parts),
+        ]
+        slug = "_".join(part for part in raw_parts if part)
+        slug = re.sub(r"[^a-z0-9]+", "_", slug).strip("_")
+        return f"audio/voiceover/runtime_dialogue/{slug}_001.mp3" if slug else None
+
+    @staticmethod
+    def _apply_prompt_board_highlights(game, highlights: object) -> bool:
+        rows = list(highlights or []) if isinstance(highlights, list) else []
+        positions: list[tuple[int, int]] = []
+        colors: list[list[int]] = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            raw_pos = row.get("position") or row.get("pos")
+            if not isinstance(raw_pos, (list, tuple)) or len(raw_pos) != 2:
+                continue
+            try:
+                pos = (int(raw_pos[0]), int(raw_pos[1]))
+            except Exception:
+                continue
+            raw_color = row.get("color") or row.get("rgb") or [80, 170, 255]
+            if not isinstance(raw_color, (list, tuple)) or len(raw_color) != 3:
+                raw_color = [80, 170, 255]
+            try:
+                color = [max(0, min(255, int(raw_color[0]))), max(0, min(255, int(raw_color[1]))), max(0, min(255, int(raw_color[2])))]
+            except Exception:
+                color = [80, 170, 255]
+            positions.append(pos)
+            colors.append(color)
+        if not positions:
+            return False
+        conn = getattr(game, "conn", None)
+        setter = getattr(conn, "set_leds", None)
+        if not callable(setter):
+            return False
+        try:
+            setter(positions, colors)
+            return True
+        except Exception:
+            return False
+
+    @staticmethod
+    def _clear_prompt_board_highlights(game, active: bool) -> None:
+        if not active:
+            return
+        conn = getattr(game, "conn", None)
+        clearer = getattr(conn, "leds_off", None)
+        if callable(clearer):
+            try:
+                clearer()
+            except Exception:
+                pass
+
     def _dialog_conditions_pass(self, game, conditions: object) -> bool:
         if not isinstance(conditions, dict):
             return True
@@ -298,12 +361,27 @@ class BaseNPC(SocialMixin, TradeMixin, PickpocketMixin, InteractableMixin):
                     return options[idx]
         return None
 
-    def _dialog_prompt_info(self, game, title: str, text: str, *, source_suffix: str = "info") -> None:
+    def _dialog_prompt_info(
+        self,
+        game,
+        title: str,
+        text: str,
+        *,
+        source_suffix: str = "info",
+        audio_suffix: str | None = None,
+        board_highlights: list[dict[str, Any]] | None = None,
+    ) -> None:
         ui = self._dialog_ui(game)
         if ui is None or not hasattr(ui, "prompt_info"):
             return
         identity = str(self.npc_id or self.name or "npc").strip().replace(" ", "_")
         source_key = str(source_suffix or "info").strip().replace(" ", "_")
+        context = {
+            "npc_id": self.npc_id,
+            "asset_id": self.npc_id,
+            **({"board_highlights": list(board_highlights)} if board_highlights else {}),
+        }
+        led_active = self._apply_prompt_board_highlights(game, board_highlights)
         try:
             ui.prompt_info(
                 title,
@@ -313,9 +391,13 @@ class BaseNPC(SocialMixin, TradeMixin, PickpocketMixin, InteractableMixin):
                 scope_key=f"dialog:{identity}",
                 dedupe_key=f"dialog:{identity}:{source_key}",
                 prompt_id=f"dialog.{identity}.{source_key}",
+                audio=self._dialog_voiceover_path(game, audio_suffix or source_key),
+                communication={"context": context},
             )
         except Exception:
             logger.debug("Nie udało się pokazać prompt_info dialogu.", exc_info=True)
+        finally:
+            self._clear_prompt_board_highlights(game, led_active)
 
     def _dialog_prompt_choice(self, game, node_id: str, node: dict[str, Any], options: list[dict[str, Any]]) -> dict[str, Any] | None:
         ui = self._dialog_ui(game)
@@ -330,6 +412,7 @@ class BaseNPC(SocialMixin, TradeMixin, PickpocketMixin, InteractableMixin):
                 subtitle=str(node.get("subtitle") or ""),
                 prompt_long=str(node.get("text") or ""),
                 image=self.portrait_image,
+                audio=self._dialog_voiceover_path(game, node_id, "opening"),
                 layout="dialog",
                 choice_meta=[
                     {
@@ -341,6 +424,12 @@ class BaseNPC(SocialMixin, TradeMixin, PickpocketMixin, InteractableMixin):
                     for idx, option in enumerate(options)
                 ],
                 prompt_id=f"dialog.{self.npc_id or self.name}.{node_id}",
+                communication={
+                    "context": {
+                        "npc_id": self.npc_id,
+                        "asset_id": self.npc_id,
+                    }
+                },
             )
         except Exception:
             logger.debug("Nie udało się pokazać wyboru dialogowego.", exc_info=True)
@@ -470,7 +559,13 @@ class BaseNPC(SocialMixin, TradeMixin, PickpocketMixin, InteractableMixin):
             ]
             if not options:
                 if game is not None:
-                    self._dialog_prompt_info(game, str(node.get("title") or self.name), text, source_suffix=node_id)
+                    self._dialog_prompt_info(
+                        game,
+                        str(node.get("title") or self.name),
+                        text,
+                        source_suffix=node_id,
+                        audio_suffix=f"{node_id}_opening",
+                    )
                 return text
 
             choice = self._dialog_prompt_choice(game, node_id, node, options) if game is not None else options[0]
@@ -495,13 +590,24 @@ class BaseNPC(SocialMixin, TradeMixin, PickpocketMixin, InteractableMixin):
                 if result_text:
                     total = getattr(result, "data", {}).get("total", "?") if getattr(result, "data", None) else "?"
                     result_text = f"{result_text}\n\nWynik: {self._dialog_outcome_label(outcome)}, suma: {total}"
+                result_audio_suffix = f"{node_id}_{choice.get('id') or node_id}_{outcome}"
+                result_board_highlights = list(outcome_spec.get("board_highlights") or [])
             else:
                 effect_messages = self._dialog_apply_effects(actor, game, choice.get("effects")) if actor is not None and game is not None else []
                 if effect_messages:
                     result_text = "\n".join([part for part in [result_text, *effect_messages] if part])
+                result_audio_suffix = f"{node_id}_{choice.get('id') or node_id}_text"
+                result_board_highlights = list(choice.get("board_highlights") or [])
 
             if result_text and game is not None:
-                self._dialog_prompt_info(game, str(choice.get("title") or self.name), result_text, source_suffix=str(choice.get("id") or node_id))
+                self._dialog_prompt_info(
+                    game,
+                    str(choice.get("title") or self.name),
+                    result_text,
+                    source_suffix=str(choice.get("id") or node_id),
+                    audio_suffix=result_audio_suffix,
+                    board_highlights=result_board_highlights,
+                )
                 last_text = result_text
             if str(choice.get("id") or "").strip().lower() in {"leave", "exit", "end"}:
                 return last_text

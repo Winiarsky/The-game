@@ -703,6 +703,18 @@ class PromptDirector:
         next_hint = _text(data.get("next_hint"))
         if next_hint and not _text(context.get("next")):
             context["next"] = next_hint
+        audio = _text(data.get("audio") or data.get("voiceover")) or None
+        if audio is None and prompt_type == "roll":
+            try:
+                from prompt_audio import default_roll_audio
+
+                audio = default_roll_audio(
+                    title,
+                    layout=data.get("layout"),
+                    prompt_id=data.get("prompt_id") or data.get("prompt_key"),
+                )
+            except Exception:
+                audio = None
         envelope = make_communication(
             channel="prompt",
             priority=_text(data.get("priority") or communication.get("priority") or "action"),
@@ -757,7 +769,7 @@ class PromptDirector:
             status="pending",
             layout=_text(data.get("layout")) or None,
             image=_text(data.get("image")) or None,
-            audio=_text(data.get("audio") or data.get("voiceover")) or None,
+            audio=audio,
             action_desc=_text(data.get("action_desc")) or None,
             desc=_text(data.get("desc")) or None,
             communication=envelope,
@@ -1095,6 +1107,51 @@ class GamePromptFacade:
     def _ui(self) -> Any:
         return getattr(self.game, "ui", None)
 
+    def _apply_board_highlights(self, highlights: Any) -> bool:
+        positions: list[tuple[int, int]] = []
+        colors: list[list[int]] = []
+        for item in list(highlights or []) if isinstance(highlights, list) else []:
+            if not isinstance(item, dict):
+                continue
+            raw_pos = item.get("position") or item.get("pos")
+            if not isinstance(raw_pos, (list, tuple)) or len(raw_pos) != 2:
+                continue
+            try:
+                pos = (int(raw_pos[0]), int(raw_pos[1]))
+            except Exception:
+                continue
+            raw_color = item.get("color") or item.get("rgb") or [80, 170, 255]
+            if not isinstance(raw_color, (list, tuple)) or len(raw_color) != 3:
+                raw_color = [80, 170, 255]
+            try:
+                color = [max(0, min(255, int(raw_color[0]))), max(0, min(255, int(raw_color[1]))), max(0, min(255, int(raw_color[2])))]
+            except Exception:
+                color = [80, 170, 255]
+            positions.append(pos)
+            colors.append(color)
+        if not positions:
+            return False
+        conn = getattr(self.game, "conn", None)
+        setter = getattr(conn, "set_leds", None)
+        if not callable(setter):
+            return False
+        try:
+            setter(positions, colors)
+            return True
+        except Exception:
+            return False
+
+    def _clear_board_highlights(self, active: bool) -> None:
+        if not active:
+            return
+        conn = getattr(self.game, "conn", None)
+        clearer = getattr(conn, "leds_off", None)
+        if callable(clearer):
+            try:
+                clearer()
+            except Exception:
+                pass
+
     def _prompt_communication(
         self,
         *,
@@ -1158,6 +1215,8 @@ class GamePromptFacade:
         answer_placeholder: str | None = None,
         prompt_id: str | None = None,
         audio: str | None = None,
+        context: dict[str, Any] | None = None,
+        board_highlights: list[dict[str, Any]] | None = None,
     ) -> Any:
         ui = self._ui
         if ui is None or not getattr(ui, "enabled", False) or not hasattr(ui, "prompt_info"):
@@ -1176,24 +1235,32 @@ class GamePromptFacade:
             blocking=True,
             progress=progress,
             prompt_key=prompt_id,
+            context={
+                **dict(context or {}),
+                **({"board_highlights": list(board_highlights)} if board_highlights else {}),
+            },
         )
-        return ui.prompt_info(
-            title,
-            prompt_long=body_markdown,
-            source=source,
-            image=image,
-            communication=communication,
-            scope_key=scope_key,
-            dedupe_key=dedupe_key,
-            priority=priority,
-            summary=summary,
-            details_markdown=details_markdown,
-            cta=cta,
-            next_hint=next_hint,
-            answer_placeholder=answer_placeholder,
-            prompt_id=prompt_id,
-            audio=audio,
-        )
+        led_active = self._apply_board_highlights(dict(communication.get("context") or {}).get("board_highlights"))
+        try:
+            return ui.prompt_info(
+                title,
+                prompt_long=body_markdown,
+                source=source,
+                image=image,
+                communication=communication,
+                scope_key=scope_key,
+                dedupe_key=dedupe_key,
+                priority=priority,
+                summary=summary,
+                details_markdown=details_markdown,
+                cta=cta,
+                next_hint=next_hint,
+                answer_placeholder=answer_placeholder,
+                prompt_id=prompt_id,
+                audio=audio,
+            )
+        finally:
+            self._clear_board_highlights(led_active)
 
     def choice(
         self,
@@ -1213,6 +1280,10 @@ class GamePromptFacade:
         cta: str | None = None,
         next_hint: str | None = None,
         prompt_id: str | None = None,
+        image: str | None = None,
+        audio: str | None = None,
+        context: dict[str, Any] | None = None,
+        board_highlights: list[dict[str, Any]] | None = None,
     ) -> Any:
         ui = self._ui
         if ui is None or not getattr(ui, "enabled", False) or not hasattr(ui, "prompt_choice"):
@@ -1230,25 +1301,35 @@ class GamePromptFacade:
             dedupe_key=dedupe_key,
             scope_key=scope_key,
             prompt_key=prompt_id,
+            context={
+                **dict(context or {}),
+                **({"board_highlights": list(board_highlights)} if board_highlights else {}),
+            },
         )
-        return ui.prompt_choice(
-            title,
-            choices=list(choices or []),
-            source=source,
-            subtitle=subtitle,
-            title=title,
-            prompt_long=body,
-            details_markdown=details_markdown,
-            layout=layout,
-            choice_meta=list(choice_meta or []),
-            communication=communication,
-            cta=cta,
-            next_hint=next_hint,
-            scope_key=scope_key,
-            dedupe_key=dedupe_key,
-            priority=priority,
-            prompt_id=prompt_id,
-        )
+        led_active = self._apply_board_highlights(dict(communication.get("context") or {}).get("board_highlights"))
+        try:
+            return ui.prompt_choice(
+                title,
+                choices=list(choices or []),
+                source=source,
+                subtitle=subtitle,
+                title=title,
+                prompt_long=body,
+                details_markdown=details_markdown,
+                layout=layout,
+                choice_meta=list(choice_meta or []),
+                communication=communication,
+                cta=cta,
+                next_hint=next_hint,
+                scope_key=scope_key,
+                dedupe_key=dedupe_key,
+                priority=priority,
+                prompt_id=prompt_id,
+                image=image,
+                audio=audio,
+            )
+        finally:
+            self._clear_board_highlights(led_active)
 
     def roll(
         self,

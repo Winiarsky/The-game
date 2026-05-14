@@ -125,6 +125,38 @@ SKILL_TO_ABILITY = {
     "will": "wisdom",
 }
 
+ROLL_AUDIO_BY_SKILL = {
+    "acrobatics": "audio/voiceover/runtime_prompts/roll_acrobatics_prompt_001.mp3",
+    "arcana": "audio/voiceover/runtime_prompts/roll_arcana_prompt_001.mp3",
+    "athletics": "audio/voiceover/runtime_prompts/roll_athletics_prompt_001.mp3",
+    "crafting": "audio/voiceover/runtime_prompts/roll_crafting_prompt_001.mp3",
+    "deception": "audio/voiceover/runtime_prompts/roll_deception_prompt_001.mp3",
+    "diplomacy": "audio/voiceover/runtime_prompts/roll_diplomacy_prompt_001.mp3",
+    "intimidation": "audio/voiceover/runtime_prompts/roll_intimidation_prompt_001.mp3",
+    "lore": "audio/voiceover/runtime_prompts/roll_lore_prompt_001.mp3",
+    "medicine": "audio/voiceover/runtime_prompts/roll_medicine_prompt_001.mp3",
+    "nature": "audio/voiceover/runtime_prompts/roll_nature_prompt_001.mp3",
+    "occultism": "audio/voiceover/runtime_prompts/roll_occultism_prompt_001.mp3",
+    "performance": "audio/voiceover/runtime_prompts/roll_performance_prompt_001.mp3",
+    "religion": "audio/voiceover/runtime_prompts/roll_religion_prompt_001.mp3",
+    "society": "audio/voiceover/runtime_prompts/roll_society_prompt_001.mp3",
+    "stealth": "audio/voiceover/runtime_prompts/roll_stealth_prompt_001.mp3",
+    "survival": "audio/voiceover/runtime_prompts/roll_survival_prompt_001.mp3",
+    "thievery": "audio/voiceover/runtime_prompts/roll_thievery_prompt_001.mp3",
+    "perception": "audio/voiceover/runtime_prompts/roll_perception_prompt_001.mp3",
+    "fortitude": "audio/voiceover/runtime_prompts/roll_fortitude_prompt_001.mp3",
+    "reflex": "audio/voiceover/runtime_prompts/roll_reflex_prompt_001.mp3",
+    "will": "audio/voiceover/runtime_prompts/roll_will_prompt_001.mp3",
+}
+
+
+def _roll_prompt_audio(prompt: object) -> str | None:
+    raw = str(prompt or "").strip().lower()
+    if not raw.startswith("test "):
+        return None
+    skill = raw.split(" ", 2)[1].strip(" .():")
+    return ROLL_AUDIO_BY_SKILL.get(skill)
+
 
 def _actor_has_status_id(actor, status_id: str) -> bool:
     if actor is None:
@@ -330,42 +362,67 @@ def _skill_roll_stack_payload(
     modifiers_grid: dict,
     total_modifier: int,
 ) -> dict[str, object]:
-    circumstance_total = _sum_modifier_bucket(modifiers_grid, "bonCirc") + _sum_modifier_bucket(
-        modifiers_grid, "penCirc", is_penalty=True
-    )
-    status_total = _sum_modifier_bucket(modifiers_grid, "bonStat") + _sum_modifier_bucket(
-        modifiers_grid, "penStat", is_penalty=True
-    )
-    item_total = _sum_modifier_bucket(modifiers_grid, "bonItem") + _sum_modifier_bucket(
-        modifiers_grid, "penItem", is_penalty=True
-    )
-    components = list(base_components) + [
-        {
-            "id": "item",
-            "label": "Item",
-            "value": int(item_total),
-            "description": "Premie/kary z przedmiotów i run.",
-            "editable": True,
-        },
-        {
-            "id": "status",
-            "label": "Status",
-            "value": int(status_total),
-            "description": "Premie/kary status.",
-            "editable": True,
-        },
-        {
-            "id": "circumstance",
-            "label": "Circumstance",
-            "value": int(circumstance_total),
-            "description": "Premie/kary okolicznościowe.",
-            "editable": True,
-        },
-    ]
+    components = list(base_components) + _modifier_components_from_grid(modifiers_grid, include_empty=True)
     return {
         "components": components,
         "auto_total_modifier": int(total_modifier),
     }
+
+
+def _modifier_components_from_grid(modifiers: dict, *, include_empty: bool = False) -> list[dict[str, object]]:
+    components: list[dict[str, object]] = []
+    buckets = (
+        ("bonItem", "item", "Przedmiot", 1),
+        ("penItem", "item", "Przedmiot", -1),
+        ("bonStat", "status", "Status", 1),
+        ("penStat", "status", "Status", -1),
+        ("bonCirc", "circumstance", "Okoliczności", 1),
+        ("penCirc", "circumstance", "Okoliczności", -1),
+    )
+    counts: dict[str, int] = {}
+    for key, modifier_type, fallback_label, sign in buckets:
+        for idx, row in enumerate(list(modifiers.get(key, []) or [])):
+            if not isinstance(row, dict):
+                continue
+            raw_value = _int_or_default(row.get("value", 0), 0)
+            if raw_value == 0:
+                continue
+            label = str(row.get("label") or fallback_label).strip() or fallback_label
+            value = abs(raw_value) * int(sign)
+            counts[modifier_type] = counts.get(modifier_type, 0) + 1
+            component_id = modifier_type if counts[modifier_type] == 1 else f"{modifier_type}_{counts[modifier_type]}"
+            components.append(
+                {
+                    "id": component_id,
+                    "label": label,
+                    "value": int(value),
+                    "description": f"{modifier_type} {'bonus' if sign > 0 else 'penalty'}",
+                    "type": modifier_type,
+                    "editable": True,
+                }
+            )
+    if include_empty:
+        labels = {"item": "Przedmiot", "status": "Status", "circumstance": "Okoliczności"}
+        descriptions = {
+            "item": "Premie/kary z przedmiotów i run.",
+            "status": "Premie/kary status.",
+            "circumstance": "Premie/kary okolicznościowe.",
+        }
+        existing = {str(item.get("id")) for item in components}
+        for modifier_type in ("item", "status", "circumstance"):
+            if modifier_type in existing:
+                continue
+            components.append(
+                {
+                    "id": modifier_type,
+                    "label": labels[modifier_type],
+                    "value": 0,
+                    "description": descriptions[modifier_type],
+                    "type": modifier_type,
+                    "editable": True,
+                }
+            )
+    return components
 
 
 def _sum_modifier_bucket(modifiers: dict, key: str, *, is_penalty: bool = False) -> int:
@@ -400,31 +457,7 @@ def _prepare_roll_stack_payload(
                 }
             )
     elif isinstance(modifiers, dict):
-        circumstance_total = _sum_modifier_bucket(modifiers, "bonCirc") + _sum_modifier_bucket(
-            modifiers, "penCirc", is_penalty=True
-        )
-        status_total = _sum_modifier_bucket(modifiers, "bonStat") + _sum_modifier_bucket(
-            modifiers, "penStat", is_penalty=True
-        )
-        item_total = _sum_modifier_bucket(modifiers, "bonItem") + _sum_modifier_bucket(
-            modifiers, "penItem", is_penalty=True
-        )
-        for cid, label, value, description in (
-            ("circumstance", "Okoliczności", circumstance_total, "Premie i kary circumstance."),
-            ("status", "Status", status_total, "Premie i kary status."),
-            ("item", "Przedmiot", item_total, "Premie i kary item."),
-        ):
-            if int(value) == 0:
-                continue
-            components.append(
-                {
-                    "id": cid,
-                    "label": label,
-                    "value": int(value),
-                    "description": description,
-                    "editable": True,
-                }
-            )
+        components.extend(_modifier_components_from_grid(modifiers))
 
     components_total = sum(_int_or_default(item.get("value", 0), 0) for item in components)
     auto_total = auto_total_modifier
@@ -470,6 +503,7 @@ def prompt_for_roll(prompt: str, *, return_details: bool = False, infer_natural_
         if "layout" not in ui_kwargs:
             ui_kwargs["layout"] = "test"
         ui_kwargs.setdefault("answer_placeholder", "Podaj wynik rzutu")
+        ui_kwargs.setdefault("audio", _roll_prompt_audio(prompt))
         ui_kwargs.setdefault("source", "game")
         ui_answer = ui_client.prompt_roll(prompt, return_meta=bool(return_details), **ui_kwargs)
         details = _parse_roll_details(ui_answer, infer_natural_from_roll=infer_natural_from_roll)

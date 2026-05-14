@@ -226,6 +226,7 @@ def test_brindleford_social_scene_has_contextual_patrol_and_villagers():
     ]
 
     assert {"tomas_reed", "mara_fen", "old_brann", "nila_ashwick", "bren_cale"} <= set(npcs)
+    assert "diplomacy" not in {action.id for action in npcs["elna_barrow"].available_actions()}
     patrol = next(challenge for challenge in challenges if getattr(challenge, "challenge_id", "") == "vale_guards_shaken")
     assert patrol.challenge_label == "Odciągnij uwagę patrolu"
     assert patrol.name == "Odciągnij uwagę patrolu"
@@ -268,6 +269,10 @@ def test_brindleford_has_extra_social_side_beats():
     assert any(item["flag"] == "speech_crowd_anchor" for item in speech.flag_modifiers)
     clean_water = challenges["clean_water_spigot"]
     assert clean_water.skill_id == "survival"
+    assert clean_water.conditions["all_flags"] == ["bren_examined"]
+    assert clean_water.hidden is True
+    assert clean_water.allow_hidden_interaction is False
+    assert clean_water.reveal_dc == 14
     assert "clean_water_found" in clean_water.outcome_flags["success"]
 
 

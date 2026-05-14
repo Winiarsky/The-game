@@ -342,6 +342,26 @@ function resolveActorImage(actor) {
     return fallbackAssetImage(kind === "enemy" ? "enemy" : "actor");
 }
 
+function resolvePromptActorImage(prompt) {
+    if (!prompt) return "";
+    const explicit = prompt.image || prompt.communication?.context?.image || prompt.communication?.context?.portrait || "";
+    if (explicit) return resolveAssetUrl(explicit);
+    const context = prompt.communication?.context || {};
+    const candidates = [
+        context.asset_id,
+        context.npc_id,
+        context.actor_id,
+        context.character_id,
+        String(prompt.source || "").startsWith("dialog:") ? String(prompt.source || "").split(":")[1] : "",
+        String(prompt.prompt_key || "").startsWith("dialog.") ? String(prompt.prompt_key || "").split(".")[1] : "",
+    ].filter(Boolean);
+    for (const candidate of candidates) {
+        const entry = findAssetEntry("characters", candidate) || findAssetEntry("enemies", candidate);
+        if (entry?.image) return resolveAssetUrl(entry.image);
+    }
+    return "";
+}
+
 function _isUpNavigationKey(event) {
     const key = String(event?.key || "");
     const code = String(event?.code || "");
@@ -357,13 +377,37 @@ function _isDownNavigationKey(event) {
 function dedupeCardText(title, summaryCandidate, bodyCandidate) {
     const normalizedTitle = String(title || "").trim();
     const normalizedSummary = String(summaryCandidate || "").trim();
-    const normalizedBody = String(bodyCandidate || "").trim();
+    let normalizedBody = String(bodyCandidate || "").trim();
+    if (normalizedBody && normalizedSummary) {
+        const bodyBlocks = normalizedBody.split(/\n{2,}/);
+        if (bodyBlocks.length && sameMeaning(bodyBlocks[0], normalizedSummary)) {
+            normalizedBody = bodyBlocks.slice(1).join("\n\n").trim();
+        } else {
+            const bodyLines = normalizedBody.split("\n");
+            const firstLineIndex = bodyLines.findIndex((line) => String(line || "").trim());
+            if (firstLineIndex >= 0 && sameMeaning(bodyLines[firstLineIndex], normalizedSummary)) {
+                bodyLines.splice(firstLineIndex, 1);
+                normalizedBody = bodyLines.join("\n").trim();
+            }
+        }
+    }
+    if (normalizedBody) {
+        const dedupedBlocks = [];
+        normalizedBody.split(/\n{2,}/).forEach((block) => {
+            const text = String(block || "").trim();
+            if (!text) return;
+            const previous = dedupedBlocks[dedupedBlocks.length - 1] || "";
+            if (sameMeaning(previous, text)) return;
+            dedupedBlocks.push(text);
+        });
+        normalizedBody = dedupedBlocks.join("\n\n");
+    }
     return {
         title,
-        summary: normalizedSummary && normalizedSummary !== normalizedTitle ? summaryCandidate : "",
+        summary: normalizedSummary && !sameMeaning(normalizedSummary, normalizedTitle) ? summaryCandidate : "",
         body:
-            normalizedBody && normalizedBody !== normalizedTitle && normalizedBody !== normalizedSummary
-                ? bodyCandidate
+            normalizedBody && !sameMeaning(normalizedBody, normalizedTitle) && !sameMeaning(normalizedBody, normalizedSummary)
+                ? normalizedBody
                 : "",
     };
 }
@@ -706,7 +750,7 @@ function renderSceneArt(element, mapId) {
 
 function renderActionArt(element, card, mapId) {
     if (!element) return;
-    const promptImage = card?.prompt?.image || card?.image || "";
+    const promptImage = card?.image || card?.prompt?.image || "";
     const image = promptImage ? resolveAssetUrl(promptImage) : sceneImageForMap(mapId);
     element.classList.toggle("hidden", !image);
     element.classList.toggle("portrait-art", Boolean(promptImage));
@@ -1182,7 +1226,7 @@ function activeCardData() {
             summary: deduped.summary,
             body: deduped.body,
             details,
-            image: prompt.image || "",
+            image: resolvePromptActorImage(prompt),
             communication,
             prompt,
         };
@@ -1269,7 +1313,6 @@ function promptCommandLines(prompt) {
         return [
             "**Wpisz wynik rzutu** w polu odpowiedzi.",
             "**`Enter`** wysyła wynik do gry.",
-            "**`Nat 20`** i **`Nat 1`** oznaczają wynik naturalny.",
         ];
     }
     if (prompt.kind === "info") {
@@ -1283,19 +1326,7 @@ function promptCommandLines(prompt) {
 
 function promptCommandSummary(prompt) {
     if (!prompt) return "";
-    if (prompt.kind === "choice" && promptChoices(prompt).length) {
-        const hasCancel = Boolean(promptCancelChoice(prompt));
-        return hasCancel
-            ? "8/2 lub strzałki: wybór · Enter/przycisk: zatwierdź · Esc: anuluj"
-            : "8/2 lub strzałki: wybór · Enter/przycisk: zatwierdź";
-    }
-    if (prompt.kind === "roll") {
-        return "Wpisz wynik · Enter: wyślij · Nat 20/Nat 1: wynik naturalny";
-    }
-    if (prompt.kind === "info") {
-        return "Enter: dalej";
-    }
-    return "Enter: zatwierdź";
+    return "";
 }
 
 function isRollLikePrompt(prompt) {
@@ -1371,8 +1402,8 @@ function buildActionSections(card) {
 
     if (isRollLikePrompt(prompt)) {
         return {
-            scene: summary,
-            help: String(card.details || "").trim(),
+            scene: "",
+            help: "",
             disclosureTitle: "Szczegóły rzutu",
             disclosureBody: body && !sameMeaning(body, summary) ? body : "",
         };
@@ -1386,7 +1417,7 @@ function buildActionSections(card) {
         const compacted = compactChoicePromptText(fullScene);
         return {
             scene: compacted.preview,
-            help: buildActionHelp(card),
+            help: "",
             disclosureTitle: "Pełny opis",
             disclosureBody: compacted.full,
         };
@@ -1401,7 +1432,7 @@ function buildActionSections(card) {
         body = "";
     }
 
-    const help = buildActionHelp(card);
+    const help = prompt ? "" : buildActionHelp(card);
     return { scene, help, disclosureTitle: "", disclosureBody: "" };
 }
 
@@ -1574,6 +1605,22 @@ function _modifierBucketTotal(modifiers, bonusKey, penaltyKey) {
     return plus - minus;
 }
 
+function modifierRowsFromBucket(modifiers, key, typeLabel, sign) {
+    const rows = Array.isArray(modifiers?.[key]) ? modifiers[key] : [];
+    return rows.map((row, index) => {
+        const rawValue = Number(row?.value || 0);
+        if (!Number.isFinite(rawValue) || rawValue === 0) return null;
+        const type = String(typeLabel || "").trim();
+        const label = String(row?.label || row?.source || type || `Modyfikator ${index + 1}`).trim();
+        return {
+            id: `${type || key}_${index + 1}`,
+            label,
+            value: Math.abs(rawValue) * sign,
+            description: type,
+        };
+    }).filter(Boolean);
+}
+
 function buildRollBreakdown(prompt) {
     if (!prompt) return null;
     const layout = String(prompt.layout || "").toLowerCase();
@@ -1585,23 +1632,24 @@ function buildRollBreakdown(prompt) {
 
     if (seeded.length) {
         seeded.forEach((row, index) => {
+            const value = Number(row?.value || 0);
+            if (!value) return;
             components.push({
                 id: String(row?.id || `component_${index + 1}`),
                 label: String(row?.label || `Składnik ${index + 1}`),
-                value: Number(row?.value || 0),
+                value,
                 description: String(row?.description || row?.desc || ""),
             });
         });
     } else if (prompt.modifiers && typeof prompt.modifiers === "object") {
-        [
-            ["circumstance", "Okoliczności", "Premie i kary circumstance.", "bonCirc", "penCirc"],
-            ["status", "Status", "Premie i kary status.", "bonStat", "penStat"],
-            ["item", "Przedmiot", "Premie i kary item.", "bonItem", "penItem"],
-        ].forEach(([id, label, description, bonusKey, penaltyKey]) => {
-            const value = _modifierBucketTotal(prompt.modifiers, bonusKey, penaltyKey);
-            if (!value) return;
-            components.push({ id, label, value, description });
-        });
+        components.push(
+            ...modifierRowsFromBucket(prompt.modifiers, "bonItem", "item", 1),
+            ...modifierRowsFromBucket(prompt.modifiers, "penItem", "item", -1),
+            ...modifierRowsFromBucket(prompt.modifiers, "bonStat", "status", 1),
+            ...modifierRowsFromBucket(prompt.modifiers, "penStat", "status", -1),
+            ...modifierRowsFromBucket(prompt.modifiers, "bonCirc", "circumstance", 1),
+            ...modifierRowsFromBucket(prompt.modifiers, "penCirc", "circumstance", -1),
+        );
     }
 
     const componentsTotal = components.reduce((acc, row) => acc + Number(row.value || 0), 0);
@@ -1883,6 +1931,7 @@ function renderPrompt(prompt) {
     refs.promptForm.classList.add("hidden");
     refs.naturalControls.classList.add("hidden");
     refs.promptInput.classList.remove("hidden");
+    refs.promptSubmit.classList.add("hidden");
     refs.promptSubmit.textContent = "Potwierdź";
     refs.promptSubmit.disabled = false;
     if (!prompt) {
@@ -1937,27 +1986,23 @@ function renderPrompt(prompt) {
         state.selectedChoiceIndex = -1;
     }
 
-    const needsChoiceConfirm = choices.length > 0;
+    const needsChoiceConfirm = false;
     const needsInput = prompt.kind === "roll" || (!choices.length && prompt.kind !== "info");
     const isConfirmOnly = prompt.kind === "info" && !choices.length;
     const confirmEnabled = promptConfirmEnabled(prompt);
-    if (needsChoiceConfirm || needsInput || isConfirmOnly) {
+    if (needsInput) {
         refs.promptForm.classList.remove("hidden");
-        refs.promptInput.classList.toggle("hidden", isConfirmOnly || needsChoiceConfirm);
+        refs.promptInput.classList.remove("hidden");
         refs.promptInput.placeholder = prompt.kind === "roll"
             ? (prompt.answer_placeholder || "Wpisz wynik rzutu...")
             : "Wpisz odpowiedź...";
-        refs.naturalControls.classList.toggle("hidden", prompt.kind !== "roll");
-        refs.promptSubmit.textContent = needsChoiceConfirm
-            ? "Potwierdź wybór (Enter)"
-            : isConfirmOnly
-            ? "Potwierdź (Enter)"
-            : "Potwierdź";
+        refs.naturalControls.classList.add("hidden");
+        refs.promptSubmit.classList.add("hidden");
+        refs.promptSubmit.textContent = "Potwierdź";
         refs.promptSubmit.disabled = !confirmEnabled;
         if (promptChanged) {
             queueMicrotask(() => {
-                if (isConfirmOnly || needsChoiceConfirm) refs.promptSubmit.focus();
-                else refs.promptInput.focus();
+                refs.promptInput.focus();
             });
         }
     }
@@ -2361,7 +2406,7 @@ refs.promptForm.addEventListener("submit", (event) => {
         }
         const parsed = Number.parseInt(raw, 10);
         if (Number.isNaN(parsed)) return;
-        answerPrompt({ roll: parsed, raw_roll: parsed, natural_mode: state.naturalMode }).catch((error) => window.alert(error.message));
+        answerPrompt({ roll: parsed, raw_roll: parsed, natural_mode: "none" }).catch((error) => window.alert(error.message));
         return;
     }
     answerPrompt(raw).catch((error) => window.alert(error.message));
