@@ -50,9 +50,9 @@ Kryterium zakończenia:
 - wiadomo, jak testować,
 - wiadomo, jak dokumentować decyzje zasad.
 
-## Etap 1: Czysty Rdzeń Planszy I Ruchu
+## Etap 1: Rdzeń Planszy, Ruchu, Aktorów I Pierwszy Feedback LED
 
-Cel: stworzyć deterministyczny, testowalny model planszy i ruchu bez UI oraz hardware.
+Cel: stworzyć deterministyczny, testowalny model planszy i ruchu oraz pierwszy adapter feedbacku LED bez mieszania hardware z logiką zasad.
 
 Zakres:
 
@@ -66,10 +66,13 @@ Zakres:
 - drzwi otwarte/zamknięte,
 - zajęte pola,
 - podstawowe rozróżnienie sojusznik/przeciwnik/neutralny,
+- podstawowy model `Actor`,
 - koszt ruchu,
 - zasięg ruchu,
 - wyznaczanie ścieżki,
-- zakaz przechodzenia po skosie przez zablokowany róg.
+- zakaz przechodzenia po skosie przez zablokowany róg,
+- logiczne dane feedbacku LED dla zasięgu ruchu i ścieżki,
+- adapter LED wywołujący `board.Connection` przez warstwę `hardware`.
 
 Testy:
 
@@ -77,13 +80,15 @@ Testy:
 - unit testy dla sąsiadów,
 - unit testy dla kosztów ruchu,
 - unit testy dla ścian i przeszkód,
-- unit testy dla pathfindingu.
+- unit testy dla pathfindingu,
+- unit testy dla feedbacku LED z fake connection.
 
 Kryterium zakończenia:
 
 - dla aktora ze `Speed = 30 feet` system potrafi wyznaczyć osiągalne pola,
 - wynik jest deterministyczny,
 - logika nie importuje `board`,
+- feedback LED jest generowany poza silnikiem zasad,
 - testy przechodzą przez `scripts/safe_pytest.sh`.
 
 ## Etap 2: Rzuty Kośćmi I Podstawowe Reguły D&D 5e

@@ -56,12 +56,12 @@ Testy:
 
 ## Ruch Po Planszy
 
-Status: planned
+Status: partial
 
 Źródło:
 
 - `GAME_DESIGN.md`
-- TODO: zweryfikować względem SRD / zasad ruchu na siatce.
+- TODO: zweryfikować względem SRD / zasad ruchu na siatce przed rozbudową o reakcje, rozmiary istot i ruch wymuszony.
 
 Implementacja MVP:
 
@@ -93,8 +93,12 @@ Odstępstwa / decyzje planszowe:
 
 Testy:
 
-- TODO: `tests/unit/test_grid.py`
-- TODO: `tests/unit/test_movement.py`
+- `tests/unit/test_coordinates.py`
+- `tests/unit/test_neighbors.py`
+- `tests/unit/test_movement_cost.py`
+- `tests/unit/test_movement_blocking.py`
+- `tests/unit/test_pathfinding.py`
+- `tests/unit/test_led_feedback.py`
 
 ## Rzuty Kośćmi
 

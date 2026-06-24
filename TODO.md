@@ -11,22 +11,22 @@
 
 ## Next Engineering Tasks
 
-- [ ] Add `.gitignore` entries for local manual test runs and session observations.
+- [x] Add `.gitignore` entries for local manual test runs and session observations.
 - [ ] Implement session observation writer for local JSONL metadata.
 - [ ] Define first debug runtime command shape.
 - [ ] Keep `docs/RULES_DECISIONS.md` updated when implementing each D&D mechanic.
-- [ ] Define `Coordinate`, board dimensions, and grid primitives.
-- [ ] Implement pure neighbor lookup and bounds checks.
-- [ ] Implement pathfinding with terrain/passability callbacks.
-- [ ] Add unit tests for grid and pathfinding.
+- [x] Define `Coordinate`, board dimensions, and grid primitives.
+- [x] Implement pure neighbor lookup and bounds checks.
+- [x] Implement pathfinding with terrain/passability callbacks.
+- [x] Add unit tests for grid and pathfinding.
 - [ ] Define D&D 5e dice primitives: d20 roll, advantage, disadvantage.
-- [ ] Define basic actor state: AC, HP, speed, ability scores, position.
+- [x] Define basic actor state: AC, HP, speed, ability scores, position.
 - [ ] Implement initiative order.
 - [ ] Implement basic melee/ranged attack resolution.
-- [ ] Implement hardware adapter interface around `board.Connection`.
-- [ ] Add LED frame generation for selected path and movement range.
+- [x] Implement hardware adapter interface around `board.Connection`.
+- [x] Add LED frame generation for selected path and movement range.
 - [ ] Decide first UI/runtime surface.
-- [ ] Add manual board checklist coverage for the first movement demo.
+- [x] Add manual board checklist coverage for the first movement demo.
 
 ## Content Tasks
 
@@ -39,4 +39,4 @@
 - [ ] UI framework.
 - [ ] Content licensing/source strategy for D&D 5e data.
 - [ ] Save file format and state versioning.
-- [ ] Whether diagonal movement follows 5e optional grid rules or simplified board rules.
+- [x] Whether diagonal movement follows 5e optional grid rules or simplified board rules.
