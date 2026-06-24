@@ -6,9 +6,15 @@
 - [x] Keep low-level board communication in root `board/`.
 - [x] Add rebuild documentation and Codex working rules.
 - [x] Add package structure for the new D&D 5e application.
+- [x] Add local rules decision document for implemented D&D mechanics.
+- [x] Add project roadmap with implementation milestones.
 
 ## Next Engineering Tasks
 
+- [ ] Add `.gitignore` entries for local manual test runs and session observations.
+- [ ] Implement session observation writer for local JSONL metadata.
+- [ ] Define first debug runtime command shape.
+- [ ] Keep `docs/RULES_DECISIONS.md` updated when implementing each D&D mechanic.
 - [ ] Define `Coordinate`, board dimensions, and grid primitives.
 - [ ] Implement pure neighbor lookup and bounds checks.
 - [ ] Implement pathfinding with terrain/passability callbacks.
@@ -20,6 +26,7 @@
 - [ ] Implement hardware adapter interface around `board.Connection`.
 - [ ] Add LED frame generation for selected path and movement range.
 - [ ] Decide first UI/runtime surface.
+- [ ] Add manual board checklist coverage for the first movement demo.
 
 ## Content Tasks
 

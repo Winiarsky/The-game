@@ -66,6 +66,8 @@ instance/
 .webassets-cache
 data/debug_sessions/*.jsonl
 legacy/previous_app/data/debug_sessions/
+data/manual_test_runs/
+data/session_observations/
 
 # Local/generated audio assets
 *.mp3

@@ -10,6 +10,7 @@ The previous application has been archived under `legacy/previous_app/`. It is r
 - `GAME_DESIGN.md` - gameplay scope and first mechanics.
 - `ARCHITECTURE.md` - target module layout and dependency rules.
 - `TODO.md` - next small implementation tasks.
+- `ROADMAP.md` - long-term milestones from core mechanics to a short campaign.
 - `PROMPT_TEMPLATE.md` - recommended prompt shape for Codex work.
 - `legacy/LEGACY_DESCRIPTION.md` - useful technical lessons from the previous app.
 

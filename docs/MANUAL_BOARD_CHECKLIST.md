@@ -1,0 +1,100 @@
+# Manualna Checklista Planszy
+
+Ten dokument opisuje ręczne testy na symulatorze albo fizycznej planszy.
+
+Każdy punkt powinien mieć wynik:
+
+- `PASS`
+- `FAIL`
+- `BLOCKED`
+- `NOT TESTED`
+
+## Przygotowanie
+
+- [ ] Plansza ma zasilanie.
+- [ ] Kontroler LED odpowiada.
+- [ ] Skanowanie pól działa.
+- [ ] `board.Connection` uruchamia się bez błędów.
+- [ ] Jeśli używany jest symulator, strona symulatora działa.
+- [ ] Testowy scenariusz ma znane pozycje aktorów i przeszkód.
+
+## Test Mapowania LED
+
+- [ ] Pole `(0, 0)` zapala oczekiwany LED.
+- [ ] Pole `(0, 29)` zapala oczekiwany LED.
+- [ ] Pole `(1, 29)` zapala oczekiwany LED.
+- [ ] Pole `(1, 0)` zapala oczekiwany LED.
+- [ ] Kilka pól w środku planszy zapala poprawne fizyczne pozycje.
+- [ ] `leds_off()` gasi wszystkie testowane LED-y.
+
+## Test Skanowania Pola
+
+- [ ] Kliknięcie/wciśnięcie jednego pola zwraca poprawne `(col, row)`.
+- [ ] Kilka pól w rogach zwraca poprawne koordynaty.
+- [ ] Kilka pól w środku zwraca poprawne koordynaty.
+- [ ] Anulowanie skanu działa.
+- [ ] Ponowne uzbrojenie skanu działa po anulowaniu.
+
+## Test Ruchu
+
+Stan testowy:
+
+- aktywny aktor na znanym polu,
+- speed `30 feet`,
+- kilka przeszkód,
+- przynajmniej jedno pole trudnego terenu.
+
+Checklist:
+
+- [ ] Plansza pokazuje aktywnego aktora.
+- [ ] LED-y pokazują pełny zasięg ruchu.
+- [ ] Zasięg ortogonalny odpowiada 6 polom normalnego terenu.
+- [ ] Ruch diagonalny kosztuje 5 feet.
+- [ ] Trudny teren kosztuje 10 feet.
+- [ ] Ściany blokują przejście.
+- [ ] Blokujące przeszkody blokują wejście na pole.
+- [ ] Nie da się zakończyć ruchu na zajętym polu.
+- [ ] Po wyborze celu LED-y pokazują wybraną ścieżkę.
+- [ ] Po zatwierdzeniu ruchu aktor ma nową pozycję.
+
+## Test Ataku
+
+Stan testowy:
+
+- aktywny aktor ma cel w zasięgu ataku,
+- cel ma znane AC i HP.
+
+Checklist:
+
+- [ ] LED-y pokazują legalne cele ataku.
+- [ ] Aplikacja prosi o naturalny wynik `d20`.
+- [ ] Aplikacja dolicza modyfikator ataku.
+- [ ] Trafienie/pudło jest rozstrzygnięte poprawnie.
+- [ ] Naturalne `20` daje krytyczne trafienie.
+- [ ] Naturalne `1` daje automatyczne pudło.
+- [ ] Przy trafieniu aplikacja prosi o wynik obrażeń.
+- [ ] HP celu zmienia się poprawnie.
+- [ ] LED-y pokazują wynik ataku.
+
+## Test Obserwacji Sesji
+
+- [ ] Każdy ruch zapisuje metadane: aktor, start, cel, koszt, ścieżka.
+- [ ] Każdy rzut zapisuje metadane: typ, naturalny wynik, modyfikator, wynik końcowy.
+- [ ] Każdy atak zapisuje metadane: atakujący, cel, wynik, obrażenia.
+- [ ] Każdy błąd zapisuje krótki opis i aktualny stan.
+- [ ] Plik obserwacji można otworzyć i odczytać bez aplikacji.
+
+## Notatki Z Testu
+
+```text
+Data:
+Backend: simulator / hardware
+Scenariusz:
+Tester:
+
+Wynik:
+
+Problemy:
+
+Następne poprawki:
+```
