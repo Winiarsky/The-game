@@ -18,7 +18,7 @@ Po ustawieniu figurek widzicie Rynek Brindleford: pozornie pusty, ale nie martwy
 
 ### `audio/voiceover/ashen_mark_revealed_001.mp3`
 
-Pod warstwa popiółu przy studni widać znak wypalony w kamieniu: otwarta dłoń nad plomieniem. To nie jest ostrzezenie przed klatwa. To znak strażnikow.
+Pod warstwą popiółu przy studni widać znak wypalony w kamieniu: otwarta dłoń nad płomieniem. To nie jest ostrzeżenie przed klątwą. To znak strażników.
 
 ### `audio/voiceover/chapel_intro_001.mp3`
 
@@ -26,27 +26,27 @@ Kaplica nie spłonęła jak budynek trafiony ogniem. Ściany stoją, dach częś
 
 ### `audio/voiceover/chapel_confessional_001.mp3`
 
-Konfesjonal stoi nietkniety, choc wszystko wokol niego jest czarne. Z jego wnetrza pada jedno pytanie: wyznajcie, co spalilo ten dom.
+Konfesjonal stoi nietknięty, choć wszystko wokół niego jest czarne. Z jego wnętrza pada jedno pytanie: wyznajcie, co spaliło ten dom.
 
 ### `audio/voiceover/charred_deacon_start_001.mp3`
 
-Popiol przy oltarzu unosi sie w ksztalt spalonego duchownego. Pastoral uderza o kamien, a czerwony zar rozlewa sie po posadzce.
+Popiół przy ołtarzu unosi się w kształt spalonego duchownego. Pastoral uderza o kamień, a czerwony żar rozlewa się po posadzce.
 
 ### `audio/voiceover/charred_deacon_sustained_001.mp3`
 
-Deacon rozpada sie na popiol, lecz oltarz rozblyskuje czerwienia. Cos pod kamieniem sciaga go z powrotem. Nie da sie go zniszczyc, dopoki oltarz plonie.
+Deacon rozpada się na popiół, lecz ołtarz rozbłyskuje czerwienią. Coś pod kamieniem ściąga go z powrotem. Nie da się go zniszczyć, dopóki ołtarz płonie.
 
 ### `audio/voiceover/chapel_altar_sealed_001.mp3`
 
-Czerwony zar pod oltarzem peka i gasnie. Zostaje zimne swiatlo, a ze Spalonego Diakona odpada sila, ktora trzymala go przy zyciu.
+Czerwony żar pod ołtarzem pęka i gaśnie. Zostaje zimne światło, a ze Spalonego Diakona odpada siła, która trzymała go przy życiu.
 
 ### `audio/voiceover/charred_deacon_defeated_001.mp3`
 
-Spalony Diakon rozpada sie bez powrotu. Jego ostatni szept nie oskarza Miry. Powtarza tylko jedno slowo: milczenie.
+Spalony Diakon rozpada się bez powrotu. Jego ostatni szept nie oskarza Miry. Powtarza tylko jedno słowo: milczenie.
 
 ### `audio/voiceover/chapel_seal_found_001.mp3`
 
-W krypcie pod oltarzem znajdujecie medalion Serai i fragment pieczeci z herbem Vale'a. Relikwiarz nie zostal spalony. Zostal wyniesiony.
+W krypcie pod ołtarzem znajdujecie medalion Serai i fragment pieczęci z herbem Vale'a. Relikwiarz nie został spalony. Został wyniesiony.
 
 ### `audio/voiceover/mill_intro_001.mp3`
 
@@ -54,11 +54,11 @@ Stary Młyn skrzypi bez wiatru. Koło obraca się powoli, mechanizm stuka zbyt r
 
 ### `audio/voiceover/tovin_rescued_001.mp3`
 
-Tovin wychodzi z zamknietej komory blady, ale zywy. Pokazuje worek falszywego popiółu i przysiega, ze widzial ludzi kasztelana przy kaplicy.
+Tovin wychodzi z zamkniętej komory blady, ale żywy. Pokazuje worek fałszywego popiółu i przysięga, że widział ludzi kasztelana przy kaplicy.
 
 ### `audio/voiceover/mill_hidden_route_001.mp3`
 
-Za workami maki znajduje sie waski trakt prowadzacy w stronę ruin. Pozwala ominac strażnikow na glownej drodze.
+Za workami mąki znajduje się wąski trakt prowadzący w stronę ruin. Pozwala ominąć strażników na głównej drodze.
 
 ### `audio/voiceover/ruins_intro_001.mp3`
 
@@ -66,7 +66,7 @@ Ruiny na wzgórzu stoją szeroko pod ciężkim niebem. Po ustawieniu planszy wid
 
 ### `audio/voiceover/plot_twist_001.mp3`
 
-W popielnym wspomnieniu widzicie kaplice jeszcze przed pozarem. Odran Vale stoi przy oltarzu. Jeden z jego ludzi trzyma relikwiarz, drugi wyciera krew z noza.
+W popielnym wspomnieniu widzicie kaplicę jeszcze przed pożarem. Odran Vale stoi przy ołtarzu. Jeden z jego ludzi trzyma relikwiarz, drugi wyciera krew z noża.
 
 ### `audio/voiceover/crypt_intro_001.mp3`
 
@@ -74,11 +74,11 @@ Krypta Przysięgi leży pod wzgórzem głębiej, niż powinna. Po setupie cała 
 
 ### `audio/voiceover/ending_good_001.mp3`
 
-Gdy relikwiarz wraca na miejsce, plomienie w sarkofagach gasna jeden po drugim. Nad ranem Brindleford wciaz pachnie popiółem, ale z kominow unosi sie zwykly dym.
+Gdy relikwiarz wraca na miejsce, płomienie w sarkofagach gasną jeden po drugim. Nad ranem Brindleford wciąż pachnie popiółem, ale z kominów unosi się zwykły dym.
 
 ### `audio/voiceover/ending_costly_001.mp3`
 
-Relikwiarz znika za brama krypty. Popielni straznicy nie ruszaja za nim od razu. Daja Brindleford czas, by zrozumialo, ze wyrok zostal tylko odlozony.
+Relikwiarz znika za bramą krypty. Popielni strażnicy nie ruszają za nim od razu. Daje Brindleford czas, by zrozumiało, że wyrok został tylko odłożony.
 
 ## Music
 
@@ -92,7 +92,7 @@ Loopable underground judgement music, low choir pad, stone resonance, restrained
 
 ### `audio/music/charred_deacon_loop.mp3`
 
-Zapetlona muzyka walki z bossem w spalonej kaplicy: niskie choralne drony, suche trzaski zaru, powolna perkusja rytualna, napiecie bez zagluszania rozmow przy stole.
+Zapętlona muzyka walki z bossem w spalonej kaplicy: niskie choralne drony, suche trzaski żaru, powolna perkusja rytualna, napięcie bez zagłuszania rozmów przy stole.
 
 ## Ambience
 
@@ -129,75 +129,75 @@ Odran cedzi, że nikt nie ma zakazu mówienia. To wystarcza, by mieszkańcy zacz
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_odran_vale_start_press_witnesses_failure_001.mp3`
 
-Odran odcina rozmówe: najpierw porzadek, potem pytania. Patrol staje blizej studni.
+Odran odcina rozmowę: najpierw porządek, potem pytania. Patrol staje bliżej studni.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_odran_vale_start_press_witnesses_critical_failure_001.mp3`
 
-Odran bierze pytanie za prowokacje. Jego ludzie zapamietuja twarze druzyny.
+Odran bierze pytanie za prowokację. Jego ludzie zapamiętują twarze drużyny.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_odran_vale_start_ask_relic_text_001.mp3`
 
-Odran odpowiada za szybko: relikwiarz splonal, Mira uciekla, a kaplica jest niebezpieczna. Slowo 'splonal' nie pasuje do zamknietego relikwiarza z brazu.
+Odran odpowiada za szybko: relikwiarz spłonął, Mira uciekła, a kaplica jest niebezpieczna. Słowo 'spłonął' nie pasuje do zamkniętego relikwiarza z brązu.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_elna_barrow_start_opening_001.mp3`
 
-Elna sciska chuste w dłońiach. Patrzy najpierw na patrol, potem na droge do starego młyna. Widac, ze wie wiecej, niz chce powiedziec przy ludziach Odrana.
+Elna ściska chustę w dłoniach. Patrzy najpierw na patrol, potem na drogę do starego młyna. Widać, że wie więcej, niż chce powiedzieć przy ludziach Odrana.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_elna_barrow_start_gentle_question_text_001.mp3`
 
-Elna szepcze, ze jej brat Tovin zniknal po tym, jak zobaczyl ludzi Odrana niosacych cos ciezkiego w stronę młyna. Jesli go znajdziecie, moze wskazac trakt do ruin.
+Elna szepcze, że jej brat Tovin zniknął po tym, jak zobaczył ludzi Odrana niosących coś ciężkiego w stronę młyna. Jeśli go znajdziecie, może wskazać trakt do ruin.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_elna_barrow_start_read_fear_critical_success_001.mp3`
 
-Widzisz, ze Elna nie boi sie Miry. Boi sie, ze patrol uslyszy imie Tovina.
+Widzisz, że Elna nie boi się Miry. Boi się, że patrol usłyszy imię Tovina.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_elna_barrow_start_read_fear_success_001.mp3`
 
-Jej wzrok co chwile ucieka ku drodze do młyna.
+Jej wzrok co chwilę ucieka ku drodze do młyna.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_elna_barrow_start_read_fear_failure_001.mp3`
 
-Strach Elny miesza sie ze zmeczeniem. Nie da sie odczytac nic pewnego.
+Strach Elny miesza się ze zmęczeniem. Nie da się odczytać nic pewnego.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_tomas_reed_start_opening_001.mp3`
 
-Tomas, młynarski parobek, udaje, ze poprawia rzemien przy wiadrze. Na butach ma make, a pod nia ciemny popiół nie z rynku.
+Tomas, młynarski parobek, udaje, że poprawia rzemień przy wiadrze. Na butach ma mąkę, a pod nią ciemny popiół nie z rynku.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_tomas_reed_start_ask_tracks_critical_success_001.mp3`
 
-Tomas przyznaje, ze widzial ludzi Odrana przy starym mlynie. Jeden niosl metalowa skrzynie, a drugi rozsypywal popiół z worka, jakby chcial zrobic falszywy trop.
+Tomas przyznaje, że widział ludzi Odrana przy starym młynie. Jeden niósł metalową skrzynię, a drugi rozsypywał popiół z worka, jakby chciał zrobić fałszywy trop.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_tomas_reed_start_ask_tracks_success_001.mp3`
 
-Tomas wskazuje droge do młyna. Mówi tylko: 'Tam zaczal sie ten popiół, nie przy kaplicy.'
+Tomas wskazuje drogę do młyna. Mówi tylko: 'Tam zaczął się ten popiół, nie przy kaplicy.'
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_tomas_reed_start_ask_tracks_failure_001.mp3`
 
-Tomas spuszcza głowę. 'Ja tylko nosze worki. Nic nie widzialem.'
+Tomas spuszcza głowę. 'Ja tylko noszę worki. Nic nie widziałem.'
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_mara_fen_start_opening_001.mp3`
 
-Mara trzyma koszyk przykryty plocienna szmata. Czuc spod niej ostre ziola i spirytus. Nie ufa obcym, ale jej wzrok mieknie, gdy widzi rannych.
+Mara trzyma koszyk przykryty płócienną szmatą. Czuć spod niej ostre zioła i spirytus. Nie ufa obcym, ale jej wzrok mięknie, gdy widzi rannych.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_mara_fen_start_ask_herbs_critical_success_001.mp3`
 
-Mara uznaje, ze naprawde probujecie pomoc wiosce. Wsuwa wam piec malych zawiniatek z zielem.
+Mara uznaje, że naprawdę próbujecie pomóc wiosce. Wsuwa wam pięć małych zawiniątek z zielem.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_mara_fen_start_ask_herbs_success_001.mp3`
 
-Mara nie odda zapasow za darmo, ale moze sprzedac do pieciu porcji po 1 gp za sztuke.
+Mara nie odda zapasów za darmo, ale może sprzedać do pięciu porcji po 1 gp za sztukę.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_mara_fen_start_ask_herbs_failure_001.mp3`
 
-Mara zaciska dłoń na koszyku. 'Nie mam nic dla ludzi, ktorzy moga sciagnac patrol na moj prog.'
+Mara zaciska dłoń na koszyku. 'Nie mam nic dla ludzi, którzy mogą ściągnąć patrol na mój próg.'
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_mara_fen_start_ask_herbs_critical_failure_001.mp3`
 
-Mara uznaje pytanie za probe wymuszenia i odchodzi pod sciane karczmy.
+Mara uznaje pytanie za próbę wymuszenia i odchodzi pod ścianę karczmy.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_old_brann_start_opening_001.mp3`
 
-Brann opowiada, ze popiół spadl z nieba, studnia spiewala, a Mira ma oczy jak noc. Po chwili sam gubi kolejnosc zdarzen.
+Brann opowiada, że popiół spadł z nieba, studnia śpiewała, a Mira ma oczy jak noc. Po chwili sam gubi kolejność zdarzeń.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_old_brann_start_rumor_text_001.mp3`
 
@@ -209,43 +209,43 @@ Nila siedzi przy przewroconym koszu i liczy kamyki, jakby od tego zależało, cz
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_nila_ashwick_start_ask_after_patrol_distracted_text_001.mp3`
 
-Nila szepcze, że nie widziała Miry przy ogniu. Widziała za to człowieka Odrana, który przed świtem wsypal cos czarnego do wiadra przy studni, a potem zgubil kawałek czerwonego sznura.
+Nila szepcze, że nie widziała Miry przy ogniu. Widziała za to człowieka Odrana, który przed świtem wsypał coś czarnego do wiadra przy studni, a potem zgubił kawałek czerwonego sznura.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_nila_ashwick_start_gentle_questions_critical_success_001.mp3`
 
-Nila nabiera odwagi. Mówi, ze przy studni stal strażnik z czerwonym sznurem przy rękojeści, a popiół wysypal sie z worka, nie z nieba. Wskazuje miejsce, gdzie trzeba szukać śladu.
+Nila nabiera odwagi. Mówi, że przy studni stał strażnik z czerwonym sznurem przy rękojeści, a popiół wysypał się z worka, nie z nieba. Wskazuje miejsce, gdzie trzeba szukać śladu.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_nila_ashwick_start_gentle_questions_success_001.mp3`
 
-Nila nie poda nazwiska, ale pokazuje na studnie. Powtarza tylko: "To nie byla pani Mira. To byl pan z czerwonym sznurem."
+Nila nie poda nazwiska, ale pokazuje na studnię. Powtarza tylko: "To nie była pani Mira. To był pan z czerwonym sznurem."
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_nila_ashwick_start_gentle_questions_failure_001.mp3`
 
-Dziewczynka chowa kamyki do kieszeni i milknie. Jej wzrok mowi jednak jasno: dopoki patrol stoi tak blisko, nie będzie mowic.
+Dziewczynka chowa kamyki do kieszeni i milknie. Jej wzrok mówi jednak jasno: dopóki patrol stoi tak blisko, nie będzie mówić.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_nila_ashwick_start_gentle_questions_critical_failure_001.mp3`
 
-Nila zaczyna plakac. Jeden ze strażnikow natychmiast patrzy w wasza stronę i zapamietuje twarze.
+Nila zaczyna płakać. Jeden ze strażników natychmiast patrzy w waszą stronę i zapamiętuje twarze.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_bren_cale_start_opening_001.mp3`
 
-Bren siedzi pod sciana z mokra chusta na ustach. Kaszle czarnym pylem, ale to nie wyglada jak zwykly dym po pożarze. Mara co chwile patrzy w jego stronę, pilnowana wzrokiem patrolu.
+Bren siedzi pod ścianą z mokrą chustą na ustach. Kaszle czarnym pylem, ale to nie wygląda jak zwykły dym po pożarze. Mara co chwilę patrzy w jego stronę, pilnowana wzrokiem patrolu.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_bren_cale_start_check_breath_critical_success_001.mp3`
 
-Udaje sie oczyscic mu gardlo i odroznic pyl od sadzy. Bren lapie oddech i mowi, ze popiół przyniesiono w workach od strony młyna, zanim kaplica zaczela dymic. Prosi też, żeby szukać czystej wody w południowo-wschodniej części miasta, przy odpływie głównej drogi.
+Udaje się oczyścić mu gardło i odróżnić pył od sadzy. Bren łapie oddech i mówi, że popiół przyniesiono w workach od strony młyna, zanim kaplica zaczęła dymić. Prosi też, żeby szukać czystej wody w południowo-wschodniej części miasta, przy odpływie głównej drogi.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_bren_cale_start_check_breath_success_001.mp3`
 
-Bren uspokaja oddech na tyle, by wyszeptac: "To nie byl popiół z kaplicy. Pachnial mokrym zbozem... mlynem." Po chwili wskazuje drżącą ręką południowo-wschodnią część miasta i prosi o czystą wodę z odpływu przy głównej drodze.
+Bren uspokaja oddech na tyle, by wyszeptać: "To nie był popiół z kaplicy. Pachniał mokrym zbożem... młynem." Po chwili wskazuje drżącą ręką południowo-wschodnią część miasta i prosi o czystą wodę z odpływu przy głównej drodze.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_bren_cale_start_check_breath_failure_001.mp3`
 
-Nie pogarszasz jego stanu, ale Bren nie jest w stanie mowic. Mara szepcze, ze bez ciszy, ziela i czystej wody niewiele da sie zrobic. Wskazuje południowo-wschodnią część miasta, gdzie przy głównej drodze może być jeszcze niezabrudzony odpływ.
+Nie pogarszasz jego stanu, ale Bren nie jest w stanie mówić. Mara szepcze, że bez ciszy, ziela i czystej wody niewiele da się zrobić. Wskazuje południowo-wschodnią część miasta, gdzie przy głównej drodze może być jeszcze niezabrudzony odpływ.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_bren_cale_start_check_breath_critical_failure_001.mp3`
 
-Bren dostaje ataku kaszlu, a tlum cofa się nerwowo. Patrol wykorzystuje zamieszanie, by uciszyc swiadkow, ale Mara zdąży szepnąć, że czystej wody trzeba szukać przy odpływie w południowo-wschodniej części miasta.
+Bren dostaje ataku kaszlu, a tłum cofa się nerwowo. Patrol wykorzystuje zamieszanie, by uciszyć świadków, ale Mara zdąży szepnąć, że czystej wody trzeba szukać przy odpływie w południowo-wschodniej części miasta.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_bren_cale_start_give_clean_water_text_001.mp3`
 
@@ -253,19 +253,19 @@ Woda spłukuje czarny pył z gardła Brena. Tkacz łapie długi oddech i bez rzu
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_bren_cale_start_ask_mara_help_text_001.mp3`
 
-Mara podaje Brenowi krople gorzkiego naparu. Nie jest to cud, ale mezczyzna przestaje dlawic sie pylem. Zielarka kiwa wam glowa z ostrozna wdziecznoscia.
+Mara podaje Brenowi krople gorzkiego naparu. Nie jest to cud, ale mężczyzna przestaje dławić się pylem. Zielarka kiwa wam głową z ostrożną wdzięcznością.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_vale_guards_shaken_intro_001.mp3`
 
-Patrol Odrana stoi między drużyną a mieszkańcami. Celem nie jest upokorzenie strażnikow, tylko stworzenie chwili, w ktorej świadkowie będą mogli mówić bez strachu. Możecie odwołać sie do porządku, do dobra wioski albo do prawa do zadawania pytan.
+Patrol Odrana stoi między drużyną a mieszkańcami. Celem nie jest upokorzenie strażników, tylko stworzenie chwili, w której świadkowie będą mogli mówić bez strachu. Możecie odwołać się do porządku, do dobra wioski albo do prawa do zadawania pytań.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_vale_guards_shaken_success_message_001.mp3`
 
-Patrol cofa się o krok. Mieszkańcy widzą, ze można mówić przybyszom prawde.
+Patrol cofa się o krok. Mieszkańcy widzą, że można mówić przybyszom prawdę.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_vale_guards_shaken_failure_message_001.mp3`
 
-Patrol zbija rozmówę krótkimi rozkazami i mieszkańcy nadal milczą.
+Patrol zbija rozmowę krótkimi rozkazami i mieszkańcy nadal milczą.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_vale_guards_shaken_critical_success_001.mp3`
 
@@ -273,7 +273,7 @@ Argument trafia idealnie: patrol nie chce wyglądać jak oprawcy na oczach całe
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_vale_guards_shaken_success_001.mp3`
 
-Patrol odpuszcza na tyle, by kilka osób mogło odpowiedziec szeptem.
+Patrol odpuszcza na tyle, by kilka osób mogło odpowiedzieć szeptem.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_vale_guards_shaken_failure_001.mp3`
 
@@ -281,7 +281,7 @@ Strażnicy zasłaniają studnię i odpowiadają za mieszkańców.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_vale_guards_shaken_critical_failure_001.mp3`
 
-Patrol uznaje rozmówę za próbę podburzania tłumu. Odran będzie bardziej czujny.
+Patrol uznaje rozmowę za próbę podburzania tłumu. Odran będzie bardziej czujny.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_well_echo_read_intro_001.mp3`
 
@@ -289,15 +289,15 @@ Studnia oddaje głosy z nienaturalnym opóźnieniem. Możecie potraktować to ja
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_well_echo_read_success_message_001.mp3`
 
-Echo układa się w sensowny trop: ktoś przy studni powtarzal słowa przysięgi, zanim podłożono fałszywy popiół.
+Echo układa się w sensowny trop: ktoś przy studni powtarzał słowa przysięgi, zanim podłożono fałszywy popiół.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_well_echo_read_failure_message_001.mp3`
 
-Echo rozbija slowa na szmer. Na razie studnia daje tylko niepokoj, nie dowod.
+Echo rozbija słowa na szmer. Na razie studnia daje tylko niepokój, nie dowód.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_well_echo_read_critical_success_001.mp3`
 
-Słyszycie pełną fraze: "Popiół ma wskazać Mire, lecz dłoń Vale'a trzyma worek." To mocny trop przeciw wersji Odrana.
+Słyszycie pełną frazę: "Popiół ma wskazać Mirę, lecz dłoń Vale'a trzyma worek." To mocny trop przeciw wersji Odrana.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_well_echo_read_success_001.mp3`
 
@@ -321,23 +321,23 @@ Kilka osób prostuje plecy. Nawet ci, którzy milczą, zaczynają wskazywać wam
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_public_square_address_failure_message_001.mp3`
 
-Rynek nie odpowiada. Odran wykorzystuje cisze, by przypomniec ludziom, kto tu wydaje rozkazy.
+Rynek nie odpowiada. Odran wykorzystuje ciszę, by przypomnieć ludziom, kto tu wydaje rozkazy.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_public_square_address_critical_success_001.mp3`
 
-Przemówa trafia w sedno. Mieszkańcy zaczynają poprawiać wersje patrolu na głos, a Odran musi udawać, że pozwala na pytania.
+Przemowa trafia w sedno. Mieszkańcy zaczynają poprawiać wersję patrolu na głos, a Odran musi udawać, że pozwala na pytania.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_public_square_address_success_001.mp3`
 
-Nie ma owacji, ale strach pęka. Swiadkowie będą bardziej rozmówni, jeśli podejdziecie do nich osobno.
+Nie ma owacji, ale strach pęka. Świadkowie będą bardziej rozmówni, jeśli podejdziecie do nich osobno.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_public_square_address_failure_001.mp3`
 
-Słowa odbijaja sie od zamknietych okiennic. Tłum wciąż chce pomoc, lecz nie teraz i nie przy patrolu.
+Słowa odbijają się od zamkniętych okiennic. Tłum wciąż chce pomóc, lecz nie teraz i nie przy patrolu.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_public_square_address_critical_failure_001.mp3`
 
-Odran przejmuje wasze słowa i obraca je przeciwko wam. Strażnicy stają bliżej, a ludzie spuszczaja wzrok.
+Odran przejmuje wasze słowa i obraca je przeciwko wam. Strażnicy stają bliżej, a ludzie spuszczają wzrok.
 
 ### `audio/voiceover/runtime_dialogue/brindleford_square_market_speech_crowd_anchor_intro_001.mp3`
 
@@ -481,191 +481,191 @@ Płomień gaśnie, a chłód spod kapliczki przechodzi po rynku. Ludzie biorą t
 
 ### `audio/voiceover/runtime_dialogue/burned_chapel_chapel_tracks_read_intro_001.mp3`
 
-Przy progu kaplicy popiol lezy warstwami. To nie wyglada jak zwykly pozar: ktos przeszedl tedy po fakcie, niosac cos ciezkiego i probujac zasypac slad.
+Przy progu kaplicy popiół leży warstwami. To nie wygląda jak zwykły pożar: ktoś przeszedł tędy po fakcie, niosąc coś ciężkiego i próbując zasypać ślad.
 
 ### `audio/voiceover/runtime_dialogue/burned_chapel_chapel_tracks_read_success_message_001.mp3`
 
-Slady przy progu ukladaja sie w trase ludzi niosacych ciezki relikwiarz, nie w ucieczke przed ogniem.
+Ślady przy progu układają się w trasę ludzi niosących ciężki relikwiarz, nie w ucieczkę przed ogniem.
 
 ### `audio/voiceover/runtime_dialogue/burned_chapel_chapel_tracks_read_failure_message_001.mp3`
 
-Popiol miesza tropy i nie daje pewnego kierunku.
+Popiół miesza tropy i nie daje pewnego kierunku.
 
 ### `audio/voiceover/runtime_dialogue/burned_chapel_chapel_tracks_read_critical_success_001.mp3`
 
-Odczytujesz dwie warstwy: najpierw wyniesiono relikwiarz, potem rozsypano popiol, zeby wygladalo na rytual Miry.
+Odczytujesz dwie warstwy: najpierw wyniesiono relikwiarz, potem rozsypano popiół, żeby wyglądało na rytuał Miry.
 
 ### `audio/voiceover/runtime_dialogue/burned_chapel_chapel_tracks_read_success_001.mp3`
 
-Slady przy progu ukladaja sie w trase ludzi niosacych ciezki relikwiarz, nie w ucieczke przed ogniem.
+Ślady przy progu układają się w trasę ludzi niosących ciężki relikwiarz, nie w ucieczkę przed ogniem.
 
 ### `audio/voiceover/runtime_dialogue/burned_chapel_chapel_tracks_read_failure_001.mp3`
 
-Popiol miesza tropy i nie daje pewnego kierunku.
+Popiół miesza tropy i nie daje pewnego kierunku.
 
 ### `audio/voiceover/runtime_dialogue/burned_chapel_chapel_tracks_read_critical_failure_001.mp3`
 
-Zacieracie czesc drobnych sladow, zanim rozumiecie ich uklad.
+Zacieracie część drobnych śladów, zanim rozumiecie ich układ.
 
 ### `audio/voiceover/runtime_dialogue/hill_ruins_mira_ashwane_start_opening_001.mp3`
 
-Mira stoi w popielnym kregu, ale nie wyglada jak ktos, kto rzuca klatwe. Trzyma rytual w ryzach resztkami glosu. 'Jesli przerwiecie krag mieczem, wspomnienie rozpadnie sie razem z prawda.'
+Mira stoi w popielnym kręgu, ale nie wygląda jak ktoś, kto rzuca klątwę. Trzyma rytuał w ryzach resztkami głosu. 'Jeśli przerwiecie krąg mieczem, wspomnienie rozpadnie się razem z prawdą.'
 
 ### `audio/voiceover/runtime_dialogue/hill_ruins_mira_ashwane_start_ask_ritual_text_001.mp3`
 
-Mira tlumaczy, ze popiol pamieta dotyk sprawcy. Kreg nie wskrzesza zmarlych; utrzymuje moment kradziezy relikwiarza, zanim duchy straza go rozerwa.
+Mira tłumaczy, że popiół pamięta dotyk sprawcy. Krąg nie wskrzesza zmarłych; utrzymuje moment kradzieży relikwiarza, zanim duchy straży go rozerwą.
 
 ### `audio/voiceover/runtime_dialogue/hill_ruins_mira_ashwane_start_ask_odran_text_001.mp3`
 
-Mira mowi, ze Odran potrzebowal relikwiarza, zeby przejac stara przysiege Serai. Jesli udowodnicie kradziez, duch krypty moze jeszcze posluchac zywych.
+Mira mówi, że Odran potrzebował relikwiarza, żeby przejąć starą przysięgę Serai. Jeśli udowodnicie kradzież, duch krypty może jeszcze posłuchać żywych.
 
 ### `audio/voiceover/runtime_dialogue/hill_ruins_mira_ashwane_start_stabilize_critical_success_001.mp3`
 
-Dostrajasz szept do kregu. W popiele widac Odranowska pieczec na sakwie jednego z ludzi.
+Dostrajasz szept do kręgu. W popiele widać odranowską pieczęć na sakwie jednego z ludzi.
 
 ### `audio/voiceover/runtime_dialogue/hill_ruins_mira_ashwane_start_stabilize_success_001.mp3`
 
-Kreg przestaje drzec. Mira ma czas dopowiedziec, gdzie szukac wejscia do krypty.
+Krąg przestaje drżeć. Mira ma czas dopowiedzieć, gdzie szukać wejścia do krypty.
 
 ### `audio/voiceover/runtime_dialogue/hill_ruins_mira_ashwane_start_stabilize_failure_001.mp3`
 
-Popiol wiruje zbyt szybko. Mira utrzymuje rytual sama, ale traci czas i sile.
+Popiół wiruje zbyt szybko. Mira utrzymuje rytuał sama, ale traci czas i siłę.
 
 ### `audio/voiceover/runtime_dialogue/hill_ruins_ash_ritual_interpreted_intro_001.mp3`
 
-Popielny krag nie atakuje sam z siebie. To zapis wspomnienia: mozna go odczytac jak rytual, albo zniszczyc i stracic dowod.
+Popielny krąg nie atakuje sam z siebie. To zapis wspomnienia: można go odczytać jak rytuał, albo zniszczyć i stracić dowód.
 
 ### `audio/voiceover/runtime_dialogue/hill_ruins_ash_ritual_interpreted_success_message_001.mp3`
 
-Rytual Miry nie jest klatwa; stabilizuje wspomnienie, zanim duchy je rozerwa.
+Rytuał Miry nie jest klątwą; stabilizuje wspomnienie, zanim duchy je rozerwą.
 
 ### `audio/voiceover/runtime_dialogue/hill_ruins_ash_ritual_interpreted_failure_message_001.mp3`
 
-Popielne symbole drza zbyt szybko, by odczytac ich logike.
+Popielne symbole drżą zbyt szybko, by odczytać ich logikę.
 
 ### `audio/voiceover/runtime_dialogue/hill_ruins_ash_ritual_interpreted_critical_success_001.mp3`
 
-Rozumiesz rytual i jego granice: Mira utrzymuje prawde, a nie klatwe. Mozecie uzyc kregu jako dowodu w krypcie.
+Rozumiesz rytuał i jego granice: Mira utrzymuje prawdę, a nie klątwę. Możecie użyć kręgu jako dowodu w krypcie.
 
 ### `audio/voiceover/runtime_dialogue/hill_ruins_ash_ritual_interpreted_success_001.mp3`
 
-Rytual Miry nie jest klatwa; stabilizuje wspomnienie, zanim duchy je rozerwa.
+Rytuał Miry nie jest klątwą; stabilizuje wspomnienie, zanim duchy je rozerwą.
 
 ### `audio/voiceover/runtime_dialogue/hill_ruins_ash_ritual_interpreted_failure_001.mp3`
 
-Popielne symbole drza zbyt szybko, by odczytac ich logike.
+Popielne symbole drżą zbyt szybko, by odczytać ich logikę.
 
 ### `audio/voiceover/runtime_dialogue/hill_ruins_ash_ritual_interpreted_critical_failure_001.mp3`
 
-Dotykasz zlego znaku i wspomnienie szarpie sie, jakby chcialo wyrwac sie z kregu.
+Dotykasz złego znaku i wspomnienie szarpie się, jakby chciało wyrwać się z kręgu.
 
 ### `audio/voiceover/runtime_dialogue/oath_crypt_warden_serai_start_opening_001.mp3`
 
-Serai jest bardziej wspomnieniem niz osoba. Jej glos brzmi spod kamienia: 'Przysiega nie chroni relikwiarza. Relikwiarz przypomina, komu przysiega sluzy.'
+Serai jest bardziej wspomnieniem niż osoba. Jej głos brzmi spod kamienia: 'Przysięga nie chroni relikwiarza. Relikwiarz przypomina, komu przysięga służy.'
 
 ### `audio/voiceover/runtime_dialogue/oath_crypt_warden_serai_start_ask_oath_text_001.mp3`
 
-Serai odpowiada, ze trzeba nazwac prawde przy relikwiarzu: kto go wyniosl, kto zostal obwiniony i czy wioska ma dalej skladac przysiege strachowi.
+Serai odpowiada, że trzeba nazwać prawdę przy relikwiarzu: kto go wyniósł, kto został obwiniony i czy wioska ma dalej składać przysięgę strachowi.
 
 ### `audio/voiceover/runtime_dialogue/oath_crypt_warden_serai_start_present_truth_text_001.mp3`
 
-Krypta cichnie. Serai przyjmuje dowody i pozwala wam mowic przy relikwiarzu bez gniewu duchow.
+Krypta cichnie. Serai przyjmuje dowody i pozwala wam mówić przy relikwiarzu bez gniewu duchów.
 
 ### `audio/voiceover/runtime_dialogue/oath_crypt_odran_vale_start_opening_001.mp3`
 
-Odran nie udaje juz troski. 'Wioska potrzebuje pana, nie martwej przysiegi. Wezcie zloto i pozwolcie mi wyprowadzic relikwiarz.'
+Odran nie udaje już troski. 'Wioska potrzebuje pana, nie martwej przysięgi. Weźcie złoto i pozwolcie mi wyprowadzić relikwiarz.'
 
 ### `audio/voiceover/runtime_dialogue/oath_crypt_odran_vale_start_reject_bargain_critical_success_001.mp3`
 
-Odran cofa sie, gdy nawet jego ludzie slysza, ze oferta jest przyznaniem winy.
+Odran cofa się, gdy nawet jego ludzie słyszą, że oferta jest przyznaniem winy.
 
 ### `audio/voiceover/runtime_dialogue/oath_crypt_odran_vale_start_reject_bargain_success_001.mp3`
 
-Odran traci pewnosc. Jego oferta zostaje wypowiedziana na glos i staje sie dowodem.
+Odran traci pewność. Jego oferta zostaje wypowiedziana na głos i staje się dowodem.
 
 ### `audio/voiceover/runtime_dialogue/oath_crypt_odran_vale_start_reject_bargain_failure_001.mp3`
 
-Odran usmiecha sie chlodno. 'Bez dowodu to tylko gniew przybyszow.'
+Odran uśmiecha się chłodno. 'Bez dowodu to tylko gniew przybyszów.'
 
 ### `audio/voiceover/runtime_dialogue/oath_crypt_serai_liturgy_recited_intro_001.mp3`
 
-Kamienne slowa przysiegi sa starte. Jesli wypowiecie je poprawnie, Serai odzyska glos; jesli zrobicie z nich tylko formule, krypta odpowie echem bez sensu.
+Kamienne słowa przysięgi są starte. Jeśli wypowiecie je poprawnie, Serai odzyska głos; jeśli zrobicie z nich tylko formułę, krypta odpowie echem bez sensu.
 
 ### `audio/voiceover/runtime_dialogue/oath_crypt_serai_liturgy_recited_success_message_001.mp3`
 
-Slowa przysiegi porzadkuja echo krypty i wzmacniaja argument za ocaleniem wioski.
+Słowa przysięgi porządkują echo krypty i wzmacniają argument za ocaleniem wioski.
 
 ### `audio/voiceover/runtime_dialogue/oath_crypt_serai_liturgy_recited_failure_message_001.mp3`
 
-Echo krypty rozbija formule, zanim da sie ja domknac.
+Echo krypty rozbija formułę, zanim da się ją domknąć.
 
 ### `audio/voiceover/runtime_dialogue/oath_crypt_serai_liturgy_recited_critical_success_001.mp3`
 
-Wypowiadasz slowa tak, jak byly skladane: jako obietnice wobec ludzi, nie wobec wladzy. Serai odzyskuje pelny glos.
+Wypowiadasz słowa tak, jak były składane: jako obietnice wobec ludzi, nie wobec władzy. Serai odzyskuje pełny głos.
 
 ### `audio/voiceover/runtime_dialogue/oath_crypt_serai_liturgy_recited_success_001.mp3`
 
-Slowa przysiegi porzadkuja echo krypty i wzmacniaja argument za ocaleniem wioski.
+Słowa przysięgi porządkują echo krypty i wzmacniają argument za ocaleniem wioski.
 
 ### `audio/voiceover/runtime_dialogue/oath_crypt_serai_liturgy_recited_failure_001.mp3`
 
-Echo krypty rozbija formule, zanim da sie ja domknac.
+Echo krypty rozbija formułę, zanim da się ją domknąć.
 
 ### `audio/voiceover/runtime_dialogue/oath_crypt_serai_liturgy_recited_critical_failure_001.mp3`
 
-Krypta odpowiada gniewem dawnych straznikow, ktorzy slysza w slowach tylko pusty rytual.
+Krypta odpowiada gniewem dawnych strażników, którzy słyszą w słowach tylko pusty rytuał.
 
 ### `audio/voiceover/runtime_dialogue/old_mill_tovin_barrow_start_opening_001.mp3`
 
-Tovin siedzi zwiazany za workami maki. Jest blady, ale przytomny; zanim krzyknie z ulgi, przykłada palec do ust i nasluchuje krokow straznikow.
+Tovin siedzi związany za workami mąki. Jest blady, ale przytomny; zanim krzyknie z ulgi, przykłada palec do ust i nasłuchuje kroków strażników.
 
 ### `audio/voiceover/runtime_dialogue/old_mill_tovin_barrow_start_ask_what_happened_text_001.mp3`
 
-Tovin mowi, ze ludzie Odrana przyniesli worki z czarnym pylem jeszcze przed pozarem kaplicy. Jeden z nich kazal mu milczec, bo "Mira ma pasowac do historii".
+Tovin mówi, że ludzie Odrana przynieśli worki z czarnym pyłem jeszcze przed pożarem kaplicy. Jeden z nich kazał mu milczeć, bo "Mira ma pasować do historii".
 
 ### `audio/voiceover/runtime_dialogue/old_mill_tovin_barrow_start_calm_him_critical_success_001.mp3`
 
-Tovin przestaje drzec. Wskazuje ciche przejscie za belka i obiecuje zeznac przeciw Odranowi, jesli przezyje noc.
+Tovin przestaje drżeć. Wskazuje ciche przejście za belką i obiecuje zeznać przeciw Odranowi, jeśli przeżyje noc.
 
 ### `audio/voiceover/runtime_dialogue/old_mill_tovin_barrow_start_calm_him_success_001.mp3`
 
-Tovin bierze oddech i pokazuje, ktoredy najlatwiej wyprowadzic go z mlyna bez alarmu.
+Tovin bierze oddech i pokazuje, którędy najłatwiej wyprowadzić go z młyna bez alarmu.
 
 ### `audio/voiceover/runtime_dialogue/old_mill_tovin_barrow_start_calm_him_failure_001.mp3`
 
-Tovin kiwa glowa, ale strach miesza mu slowa. Na razie trzeba go po prostu uwolnic.
+Tovin kiwa głową, ale strach miesza mu słowa. Na razie trzeba go po prostu uwolnić.
 
 ### `audio/voiceover/runtime_dialogue/old_mill_tovin_barrow_start_calm_him_critical_failure_001.mp3`
 
-Tovin wpada w panike i szarpie wiezy. Gdzies za sciana ktos przestaje chodzic i zaczyna sluchac.
+Tovin wpada w panikę i szarpie więzy. Gdzieś za ścianą ktoś przestaje chodzić i zaczyna słuchać.
 
 ### `audio/voiceover/runtime_dialogue/old_mill_mill_beam_moved_intro_001.mp3`
 
-Belka klinuje boczne przejscie. Jesli pusci cicho, Tovin bedzie mial droge ucieczki; jesli narobicie halasu, straz przy mlynie szybciej zrozumie, co robicie.
+Belka klinuje boczne przejście. Jeśli puści cicho, Tovin będzie miał drogę ucieczki; jeśli narobicie hałasu, straż przy młynie szybciej zrozumie, co robicie.
 
 ### `audio/voiceover/runtime_dialogue/old_mill_mill_beam_moved_success_message_001.mp3`
 
-Belka puszcza z trzaskiem i droga do Tovina robi sie szersza.
+Belka puszcza z trzaskiem i droga do Tovina robi się szersza.
 
 ### `audio/voiceover/runtime_dialogue/old_mill_mill_beam_moved_failure_message_001.mp3`
 
-Belka ani drgnie, a mechanizm mlyna zaczyna pracowac glosniej.
+Belka ani drgnie, a mechanizm młyna zaczyna pracować głośniej.
 
 ### `audio/voiceover/runtime_dialogue/old_mill_mill_beam_moved_critical_success_001.mp3`
 
-Belka schodzi z cichym skrzypnieciem. Tovin moze przejsc, a straznicy nie od razu orientuja sie w zmianie.
+Belka schodzi z cichym skrzypnięciem. Tovin może przejść, a strażnicy nie od razu orientują się w zmianie.
 
 ### `audio/voiceover/runtime_dialogue/old_mill_mill_beam_moved_success_001.mp3`
 
-Belka puszcza z trzaskiem i droga do Tovina robi sie szersza.
+Belka puszcza z trzaskiem i droga do Tovina robi się szersza.
 
 ### `audio/voiceover/runtime_dialogue/old_mill_mill_beam_moved_failure_001.mp3`
 
-Belka ani drgnie, a mechanizm mlyna zaczyna pracowac glosniej.
+Belka ani drgnie, a mechanizm młyna zaczyna pracować głośniej.
 
 ### `audio/voiceover/runtime_dialogue/old_mill_mill_beam_moved_critical_failure_001.mp3`
 
-Belka uderza o kolo mlyna. Huk niesie sie po calym budynku.
+Belka uderza o koło młyna. Huk niesie się po całym budynku.
 
 <!-- END GENERATED RUNTIME DIALOGUE VOICEOVER PROMPTS -->
 
@@ -803,7 +803,7 @@ Powolne chóralne drony, pojedynczy bęben i narastające napięcie sądu przysi
 
 ### `audio/music/music_odran_confrontation.mp3`
 
-Ciemne smyczki, metaliczne uderzenia i presja finałowej decyzji przy czerwonej bramie Odrana.
+Ciemne smyczki, metaliczne uderzenia i presją finałowej decyzji przy czerwonej bramie Odrana.
 
 ### `audio/music/music_oath_restored.mp3`
 

@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dnd-board-game"
+version = "0.1.0"
+description = "Board-assisted Dungeons & Dragons 5e encounter runtime."
+requires-python = ">=3.12"
+dependencies = [
+  "Flask",
+  "pyserial",
+  "requests",
+]
+
+[tool.setuptools.packages.find]
+where = ["src", "."]
+include = ["dnd_board_game*", "board*"]
+exclude = ["legacy*", "tests*", "future*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "."]
+testpaths = ["tests"]
