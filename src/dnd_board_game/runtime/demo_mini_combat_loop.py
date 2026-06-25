@@ -108,9 +108,10 @@ def run_demo(
             adapter.clear()
 
         if actor.faction == Faction.ALLY:
-            state, turn_messages, sent = _run_hero_turn(args, encounter.board, state, actor, encounter.hero_attack_source, adapter, observer)
+            source = encounter.attack_sources_by_actor[actor.id]
+            state, turn_messages, sent = _run_hero_turn(args, encounter.board, state, actor, source, adapter, observer)
         else:
-            enemy_source = encounter.enemy_attack_sources[actor.id]
+            enemy_source = encounter.attack_sources_by_actor[actor.id]
             state, turn_messages, sent = _run_enemy_turn(encounter.board, state, actor, enemy_source, rng, adapter, observer, args)
         messages.extend(turn_messages)
         feedback_events += sent
@@ -143,12 +144,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-show-leds", dest="show_leds", action="store_false")
     parser.add_argument("--wait-for-enter", action="store_true", default=False)
     parser.add_argument("--step-delay", type=float, default=1.5)
-    parser.add_argument("--target-id", default="goblin")
+    parser.add_argument("--target-id", default="auto")
+    parser.add_argument("--target-id-by-actor", action="append", default=[])
     parser.add_argument("--target-position", default=None)
     parser.add_argument("--scan-timeout", type=float, default=30.0)
     parser.add_argument("--hero-attack-roll", type=int, default=14)
     parser.add_argument("--hero-damage", type=int, default=6)
-    parser.add_argument("--hero-damage-type", choices=[item.value for item in DamageType], default=DamageType.SLASHING.value)
+    parser.add_argument("--ally-attack-roll", action="append", default=[])
+    parser.add_argument("--ally-damage", action="append", default=[])
+    parser.add_argument("--hero-damage-type", choices=[item.value for item in DamageType], default=None)
     parser.add_argument("--enemy-seed", type=int, default=7)
     parser.add_argument("--max-rounds", type=int, default=3)
     parser.add_argument("--scenario", default="content/scenarios/goblin_ambush.json")
@@ -179,6 +183,11 @@ def _run_hero_turn(
 ) -> tuple[CombatState, tuple[str, ...], int]:
     messages: list[str] = []
     feedback_events = 0
+    actor_id = str(actor.id)
+    target_id_overrides = _parse_actor_value_overrides(args.target_id_by_actor, str)
+    attack_roll_overrides = _parse_actor_value_overrides(args.ally_attack_roll, int)
+    damage_overrides = _parse_actor_value_overrides(args.ally_damage, int)
+    original_target_id = args.target_id
     action_message = f"{actor.name} wybiera akcję: Atak."
     print(action_message)
     messages.append(action_message)
@@ -190,6 +199,7 @@ def _run_hero_turn(
         observer.record("attack_rejected", {"reason": "no_legal_targets", "attacker_id": str(actor.id)})
         return use_turn_action(state).state, tuple(messages), feedback_events
 
+    args.target_id = _target_id_for_actor(actor_id, args.target_id, target_id_overrides, attack_state.legal_targets)
     target_message = "Wybierz cel ataku. Legalne cele: " + ", ".join(target.name for target in attack_state.legal_targets) + "."
     print(target_message)
     messages.append(target_message)
@@ -198,10 +208,17 @@ def _run_hero_turn(
         feedback_events += 1
         observer.record("led_feedback_sent", {"phase": "legal_attack_targets"})
 
-    attack_state = _select_target(args, attack_state, adapter, observer)
+    try:
+        attack_state = _select_target(args, attack_state, adapter, observer)
+    finally:
+        args.target_id = original_target_id
     if adapter is not None:
         adapter.clear()
     declaration = attack_declaration_from_state(attack_state)
+    observer.record(
+        "target_selected",
+        {"actor_id": str(actor.id), "target_id": declaration.target.id, "target_position": list(declaration.target.position.as_tuple())},
+    )
     observer.record(
         "attack_declared",
         {"attacker_id": str(actor.id), "target_id": declaration.target.id, "source": declaration.source.name},
@@ -217,8 +234,8 @@ def _run_hero_turn(
         observer.record("led_feedback_sent", {"phase": "selected_attack_target", "target_id": declaration.target.id})
     natural_attack_roll = _read_int_or_default(
         args,
-        f"Wpisz naturalny wynik ataku d20 albo naciśnij Enter dla wartości z CLI ({args.hero_attack_roll}): ",
-        args.hero_attack_roll,
+        f"Wpisz naturalny wynik ataku d20 albo naciśnij Enter dla wartości z CLI ({attack_roll_overrides.get(actor_id, args.hero_attack_roll)}): ",
+        attack_roll_overrides.get(actor_id, args.hero_attack_roll),
     )
     if adapter is not None:
         adapter.clear()
@@ -251,12 +268,14 @@ def _run_hero_turn(
         adapter.clear()
 
     if resolution.hit:
-        damage = resolve_damage((DamageComponentInput(args.hero_damage, DamageType(args.hero_damage_type), source.name),))
+        damage_amount = damage_overrides.get(actor_id, args.hero_damage)
+        damage_type = args.hero_damage_type or source.damage_type
+        damage = resolve_damage((DamageComponentInput(damage_amount, DamageType(damage_type), source.name),))
         target_actor = _actor_by_string_id(state, declaration.target.id)
         updated_target = apply_damage(target_actor, damage)
         state = replace_actor(state, updated_target)
         damage_message = (
-            f"Obrażenia: {damage.total_applied} {args.hero_damage_type}. "
+            f"Obrażenia: {damage.total_applied} {damage_type}. "
             f"{target_actor.name}: HP {target_actor.hp} -> {updated_target.hp}."
         )
         print(damage_message)
@@ -283,6 +302,10 @@ def _run_enemy_turn(
     feedback_events = 0
 
     if result.target is not None:
+        observer.record(
+            "target_selected",
+            {"actor_id": str(actor.id), "target_id": result.target.id, "target_position": list(result.target.position.as_tuple())},
+        )
         target_message = f"{actor.name} wybiera cel: {result.target.name}."
         print(target_message)
         messages.append(target_message)
@@ -348,6 +371,26 @@ def _actor_by_string_id(state: CombatState, actor_id: str) -> Actor:
         if str(actor.id) == actor_id:
             return actor
     raise ValueError(f"Unknown actor: {actor_id}.")
+
+
+def _target_id_for_actor(actor_id: str, default_target_id: str, overrides: dict[str, object], legal_targets) -> str:
+    target_id = str(overrides.get(actor_id, default_target_id))
+    if target_id == "auto":
+        return legal_targets[0].id
+    return target_id
+
+
+def _parse_actor_value_overrides(values: Sequence[str], parser) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for value in values:
+        if "=" not in value:
+            raise ValueError(f"Expected actor=value override, got: {value!r}.")
+        actor_id, raw = value.split("=", maxsplit=1)
+        actor_id = actor_id.strip()
+        if not actor_id:
+            raise ValueError(f"Missing actor id in override: {value!r}.")
+        result[actor_id] = parser(raw.strip())
+    return result
 
 
 def _record_damage(observer: SessionObserver, before: Actor, after: Actor, damage) -> None:

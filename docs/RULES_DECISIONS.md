@@ -225,6 +225,9 @@ Implementacja MVP:
 - Runtime może zatrzymać demo po limicie rund bez rozstrzygania zwycięzcy.
 - Statystyki demo mogą pochodzić z lokalnego contentu JSON w `content/`.
 - Lokalny content MVP nie jest pełnym SRD ani pełną bazą D&D 5e.
+- Multi-actor MVP obsługuje wielu bohaterów i wielu przeciwników w jednej kolejce tur.
+- Wszyscy aktorzy używają pierwszego ataku z contentu jako domyślnej akcji.
+- Przeciwnicy wybierają najbliższy legalny cel; remis rozstrzyga pozycja i `id`.
 
 Poza zakresem MVP:
 
@@ -236,6 +239,7 @@ Poza zakresem MVP:
 - pełne death saving throws,
 - destrukcja obiektów i przeszkód.
 - pełne AI ruchu przeciwników,
+- ruch w turze podczas multi-actor MVP,
 - bonus action, reaction i multiattack.
 
 Odstępstwa / decyzje planszowe:

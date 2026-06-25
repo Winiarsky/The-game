@@ -71,8 +71,7 @@ class LoadedEncounter:
     scenario_name: str
     board: BoardState
     actors: tuple[Actor, ...]
-    hero_attack_source: AttackSource
-    enemy_attack_sources: dict[ActorId, AttackSource]
+    attack_sources_by_actor: dict[ActorId, AttackSource]
     environment: tuple[EnvironmentSetupEntry, ...]
 
 
@@ -88,12 +87,9 @@ def build_encounter_from_scenario(loaded: LoadedScenario) -> LoadedEncounter:
     definition = loaded.definition
     board = BoardState(dimensions=definition.board_dimensions)
     actors = tuple(_actor_from_definition(actor) for actor in definition.actors)
-    hero_definition = next(actor for actor in definition.actors if actor.faction == Faction.ALLY)
-    hero_attack_source = _attack_source_from_definition(hero_definition.attacks[0], "attack_hero")
-    enemy_attack_sources = {
+    attack_sources_by_actor = {
         ActorId(actor.id): _attack_source_from_definition(actor.attacks[0], f"attack_{actor.id}")
         for actor in definition.actors
-        if actor.faction == Faction.ENEMY
     }
     environment = tuple(
         EnvironmentSetupEntry(
@@ -111,8 +107,7 @@ def build_encounter_from_scenario(loaded: LoadedScenario) -> LoadedEncounter:
         scenario_name=definition.name,
         board=board,
         actors=actors,
-        hero_attack_source=hero_attack_source,
-        enemy_attack_sources=enemy_attack_sources,
+        attack_sources_by_actor=attack_sources_by_actor,
         environment=environment,
     )
 

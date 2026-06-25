@@ -97,3 +97,57 @@ def test_demo_mini_combat_loop_fake_led_sequence_and_scan_selection(tmp_path):
     event_types = [event["event_type"] for event in _events(result.observation_path)]
     assert "led_feedback_sent" in event_types
     assert "combat_finished" in event_types
+
+
+def test_demo_mini_combat_loop_multi_actor_scenario_runs_more_than_two_actors(tmp_path):
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--scenario",
+            "content/scenarios/multi_actor_skirmish.json",
+            "--ally-attack-roll",
+            "hero=14",
+            "--ally-attack-roll",
+            "rogue=13",
+            "--ally-damage",
+            "hero=10",
+            "--ally-damage",
+            "rogue=10",
+            "--enemy-seed",
+            "7",
+            "--max-rounds",
+            "5",
+        )
+    )
+
+    assert any("Scenariusz: Potyczka przy rozbitych skrzyniach." in message for message in result.messages)
+    assert any("Tura: Bohater" in message for message in result.messages)
+    assert any("Tura: Łotrzyca" in message for message in result.messages)
+    assert any("Tura: Goblin C" in message for message in result.messages)
+    event_types = [event["event_type"] for event in _events(result.observation_path)]
+    assert "target_selected" in event_types
+    assert "damage_applied" in event_types
+
+
+def test_demo_mini_combat_loop_per_actor_roll_override_is_used(tmp_path):
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--scenario",
+            "content/scenarios/multi_actor_skirmish.json",
+            "--ally-attack-roll",
+            "hero=2",
+            "--ally-attack-roll",
+            "rogue=13",
+            "--ally-damage",
+            "rogue=10",
+            "--max-rounds",
+            "1",
+        )
+    )
+
+    attack_events = [event for event in _events(result.observation_path) if event["event_type"] == "attack_resolved"]
+    hero_attack = next(event for event in attack_events if event["payload"]["attacker_id"] == "hero")
+    rogue_attack = next(event for event in attack_events if event["payload"]["attacker_id"] == "rogue")
+    assert hero_attack["payload"]["natural_roll"] == 2
+    assert rogue_attack["payload"]["natural_roll"] == 13

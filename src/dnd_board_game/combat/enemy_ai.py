@@ -48,7 +48,7 @@ def resolve_enemy_auto_attack(
             action_used=True,
         )
 
-    target = targets[0]
+    target = _select_enemy_target(enemy, targets)
     attack_roll = resolve_d20_roll(D20RollInput(source.attack_roll_request, rng.randint(1, 20)))
     declaration = AttackDeclaration(attacker=enemy, target=target, source=source)
     resolution = resolve_attack(declaration, attack_roll, ActionUse.ACTION_AVAILABLE)
@@ -92,3 +92,15 @@ def _actor_for_target(state: CombatState, target: CombatTarget) -> Actor:
         if str(actor.id) == target.id:
             return actor
     raise ValueError(f"Unknown target actor: {target.id}.")
+
+
+def _select_enemy_target(enemy: Actor, targets: tuple[CombatTarget, ...]) -> CombatTarget:
+    return min(
+        targets,
+        key=lambda target: (
+            max(abs(enemy.position.col - target.position.col), abs(enemy.position.row - target.position.row)),
+            target.position.col,
+            target.position.row,
+            target.id,
+        ),
+    )

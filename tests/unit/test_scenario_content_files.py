@@ -40,3 +40,24 @@ def test_default_scenario_positions_are_in_bounds():
     for entry in loaded.definition.environment:
         for position in entry.positions:
             assert dimensions.in_bounds(position)
+
+
+def test_multi_actor_scenario_file_exists_and_loads():
+    scenario_path = Path("content/scenarios/multi_actor_skirmish.json")
+
+    loaded = load_scenario(scenario_path)
+
+    assert scenario_path.exists()
+    assert loaded.definition.id == "multi_actor_skirmish"
+    assert len(loaded.definition.actors) == 5
+
+
+def test_multi_actor_scenario_references_existing_content_files():
+    text = Path("content/scenarios/multi_actor_skirmish.json").read_text(encoding="utf-8")
+
+    assert Path("content/monsters/goblin.json").exists()
+    assert Path("content/items/longsword.json").exists()
+    assert Path("content/items/dagger.json").exists()
+    assert text.count('"source_ref": "goblin"') == 3
+    assert '"longsword"' in text
+    assert '"dagger"' in text

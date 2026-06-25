@@ -92,6 +92,7 @@ Każde zdarzenie powinno zawierać:
 - `turn_started`
 - `action_used`
 - `enemy_action_selected`
+- `target_selected`
 - `attack_rejected`
 - `attack_declared`
 - `attack_resolved`

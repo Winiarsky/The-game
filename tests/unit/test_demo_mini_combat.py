@@ -1,6 +1,6 @@
 import json
 
-from dnd_board_game.runtime.demo_mini_combat import build_parser, run_demo
+from dnd_board_game.runtime.demo_mini_combat import _attack_result_message, build_parser, run_demo
 
 
 class FakeConnection:
@@ -78,9 +78,18 @@ def test_demo_mini_combat_miss_does_not_apply_damage(tmp_path):
 
     assert result.attack_hit is False
     assert result.target_hp == 10
+    assert any("nie trafia celu" in message for message in result.messages)
     event_types = [event["event_type"] for event in _events(result.observation_path)]
     assert "attack_resolved" in event_types
     assert "damage_applied" not in event_types
+
+
+def test_attack_result_message_explains_miss_and_critical_miss():
+    assert _attack_result_message("miss", "Goblin", 9) == "Pudło przeciwko Goblin. Wynik ataku 9 nie trafia celu."
+    assert (
+        _attack_result_message("critical_miss", "Goblin", 6)
+        == "Krytyczne pudło przeciwko Goblin. Naturalna 1: nie trafiasz celu."
+    )
 
 
 def test_demo_mini_combat_fake_board_synchronizes_leds_and_scan_selection(tmp_path):

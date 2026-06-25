@@ -48,3 +48,16 @@ def test_wall_blocks_orthogonal_melee_target():
     targets = legal_melee_targets(board, hero, (hero, goblin))
 
     assert targets == ()
+
+
+def test_multiple_legal_targets_are_deterministic_and_skip_allies():
+    board = BoardState()
+    hero = _actor("hero", Faction.ALLY, Coordinate(0, 0))
+    ally = _actor("ally", Faction.ALLY, Coordinate(0, 1))
+    goblin_b = _actor("goblin_b", Faction.ENEMY, Coordinate(1, 1))
+    goblin_a = _actor("goblin_a", Faction.ENEMY, Coordinate(1, 0))
+    defeated = _actor("goblin_dead", Faction.ENEMY, Coordinate(0, 1), hp=0)
+
+    targets = legal_melee_targets(board, hero, (hero, ally, goblin_b, goblin_a, defeated))
+
+    assert [target.id for target in targets] == ["goblin_a", "goblin_b"]

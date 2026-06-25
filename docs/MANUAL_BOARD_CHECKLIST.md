@@ -174,6 +174,23 @@ PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat_loop --scenario
 - [ ] Walka kończy się po pokonaniu jednej strony albo zatrzymuje po `--max-rounds`.
 - [ ] Plik obserwacji zawiera `turn_started`, `action_used`, `turn_finished`, `enemy_action_selected` i `combat_finished` albo `combat_stopped`.
 
+### Runtime `demo_mini_combat_loop` Multi-Actor
+
+Terminal 2:
+
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat_loop --scenario content/scenarios/multi_actor_skirmish.json --board-backend simulator --board-url http://127.0.0.1:5000 --show-leds --wait-for-enter --scan-timeout 30 --enemy-seed 7 --max-rounds 5 --session-id multi_actor_simulator_demo
+```
+
+- [ ] Terminal pokazuje scenariusz `Potyczka przy rozbitych skrzyniach`.
+- [ ] Tury przechodzą przez 2 bohaterów i 3 przeciwników.
+- [ ] Przy wyborze celu świecą wszystkie legalne cele aktualnego bohatera.
+- [ ] Kliknięcie legalnego celu wybiera właściwego przeciwnika.
+- [ ] Wynik ataku świeci tylko na wybranym celu.
+- [ ] Pokonani aktorzy nie wykonują kolejnych tur.
+- [ ] Walka kończy się dopiero po pokonaniu całej strony.
+- [ ] Plik obserwacji zawiera `target_selected`.
+
 ## Test Obserwacji Sesji
 
 - [ ] Każdy ruch zapisuje metadane: aktor, start, cel, koszt, ścieżka.

@@ -29,17 +29,37 @@ def test_load_scenario_builds_actors_and_attack_sources():
     assert goblin.faction == Faction.ENEMY
     assert goblin.position == Coordinate(1, 0)
 
-    assert encounter.hero_attack_source.name == "Miecz"
-    assert encounter.hero_attack_source.source_type == AttackSourceType.WEAPON
-    assert encounter.hero_attack_source.attack_roll_request.modifiers[0].value == 5
-    assert encounter.hero_attack_source.damage_die_sides == 6
-    assert encounter.hero_attack_source.damage_type == DamageType.SLASHING.value
+    hero_source = encounter.attack_sources_by_actor[hero.id]
+    assert hero_source.name == "Miecz"
+    assert hero_source.source_type == AttackSourceType.WEAPON
+    assert hero_source.attack_roll_request.modifiers[0].value == 5
+    assert hero_source.damage_die_sides == 6
+    assert hero_source.damage_type == DamageType.SLASHING.value
 
-    goblin_source = encounter.enemy_attack_sources[goblin.id]
+    goblin_source = encounter.attack_sources_by_actor[goblin.id]
     assert goblin_source.name == "Szabla"
     assert goblin_source.attack_roll_request.modifiers[0].value == 4
     assert goblin_source.damage_die_sides == 6
     assert goblin_source.damage_modifier == 2
+
+
+def test_load_multi_actor_scenario_builds_separate_actors_and_sources():
+    encounter = build_encounter_from_scenario(load_scenario("content/scenarios/multi_actor_skirmish.json"))
+
+    assert encounter.scenario_id == "multi_actor_skirmish"
+    assert len(encounter.actors) == 5
+    ids = {str(actor.id) for actor in encounter.actors}
+    assert ids == {"hero", "rogue", "goblin_a", "goblin_b", "goblin_c"}
+    assert set(str(actor_id) for actor_id in encounter.attack_sources_by_actor) == ids
+
+    goblin_a = next(actor for actor in encounter.actors if actor.id == "goblin_a")
+    goblin_b = next(actor for actor in encounter.actors if actor.id == "goblin_b")
+    rogue = next(actor for actor in encounter.actors if actor.id == "rogue")
+    assert goblin_a.name == "Goblin A"
+    assert goblin_b.name == "Goblin B"
+    assert goblin_a.position == Coordinate(1, 0)
+    assert goblin_b.position == Coordinate(1, 1)
+    assert encounter.attack_sources_by_actor[rogue.id].name == "Sztylet"
 
 
 def test_load_scenario_builds_environment_entries():

@@ -339,13 +339,15 @@ def _read_int_or_default(args: argparse.Namespace, prompt: str, default: int) ->
 
 
 def _attack_result_message(outcome: str, target_name: str, total: int) -> str:
-    labels = {
-        "critical_hit": "Trafienie krytyczne",
-        "hit": "Trafienie",
-        "miss": "Pudło",
-        "critical_miss": "Krytyczne pudło",
-    }
-    return f"{labels[outcome]} przeciwko {target_name}. Wynik ataku: {total}."
+    if outcome == "critical_hit":
+        return f"Trafienie krytyczne przeciwko {target_name}. Wynik ataku: {total}."
+    if outcome == "hit":
+        return f"Trafienie przeciwko {target_name}. Wynik ataku: {total}."
+    if outcome == "critical_miss":
+        return f"Krytyczne pudło przeciwko {target_name}. Naturalna 1: nie trafiasz celu."
+    if outcome == "miss":
+        return f"Pudło przeciwko {target_name}. Wynik ataku {total} nie trafia celu."
+    raise ValueError(f"Unknown attack outcome: {outcome}.")
 
 
 if __name__ == "__main__":

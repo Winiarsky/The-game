@@ -221,6 +221,24 @@ Przydatne argumenty:
 - `--wait-for-enter`
 - `--scenario content/scenarios/goblin_ambush.json`
 
+Wariant multi-actor bez planszy:
+
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat_loop --scenario content/scenarios/multi_actor_skirmish.json --board-backend none --ally-attack-roll hero=14 --ally-attack-roll rogue=13 --ally-damage hero=6 --ally-damage rogue=5 --enemy-seed 7 --max-rounds 5 --session-id multi_actor_demo --step-delay 0
+```
+
+Wariant multi-actor w symulatorze:
+
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat_loop --scenario content/scenarios/multi_actor_skirmish.json --board-backend simulator --board-url http://127.0.0.1:5000 --show-leds --wait-for-enter --scan-timeout 30 --enemy-seed 7 --max-rounds 5 --session-id multi_actor_simulator_demo
+```
+
+W multi-actor runtime dodatkowo obsługuje:
+
+- `--target-id-by-actor hero=goblin_a`
+- `--ally-attack-roll rogue=13`
+- `--ally-damage rogue=5`
+
 ## Zasada Testowania Funkcji
 
 Każda większa funkcja powinna przejść przez trzy poziomy:

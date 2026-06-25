@@ -1,0 +1,78 @@
+{
+  "id": "multi_actor_skirmish",
+  "name": "Potyczka przy rozbitych skrzyniach",
+  "board": {
+    "cols": 20,
+    "rows": 30
+  },
+  "actors": [
+    {
+      "id": "hero",
+      "name": "Bohater",
+      "kind": "player_character",
+      "faction": "ally",
+      "ac": 14,
+      "hp": 20,
+      "temp_hp": 0,
+      "speed_feet": 30,
+      "position": [0, 0],
+      "ability_scores": {
+        "strength": 16,
+        "dexterity": 14,
+        "constitution": 12,
+        "intelligence": 10,
+        "wisdom": 10,
+        "charisma": 10
+      },
+      "item_refs": ["longsword"]
+    },
+    {
+      "id": "rogue",
+      "name": "Łotrzyca",
+      "kind": "player_character",
+      "faction": "ally",
+      "ac": 15,
+      "hp": 16,
+      "temp_hp": 0,
+      "speed_feet": 30,
+      "position": [0, 1],
+      "ability_scores": {
+        "strength": 10,
+        "dexterity": 16,
+        "constitution": 12,
+        "intelligence": 12,
+        "wisdom": 10,
+        "charisma": 12
+      },
+      "item_refs": ["dagger"]
+    },
+    {
+      "id": "goblin_a",
+      "name": "Goblin A",
+      "source_ref": "goblin",
+      "position": [1, 0]
+    },
+    {
+      "id": "goblin_b",
+      "name": "Goblin B",
+      "source_ref": "goblin",
+      "position": [1, 1]
+    },
+    {
+      "id": "goblin_c",
+      "name": "Goblin C",
+      "source_ref": "goblin",
+      "position": [1, 2]
+    }
+  ],
+  "environment": [
+    {
+      "id": "broken_crates",
+      "name": "Rozbite skrzynie",
+      "type": "container",
+      "positions": [[3, 1], [3, 2]],
+      "visibility": "visible",
+      "description": "Jawny element sceny do testowania setupu wieloaktorowego."
+    }
+  ]
+}

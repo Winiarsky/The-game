@@ -91,6 +91,18 @@ def test_enemy_auto_attack_ignores_defeated_targets():
     assert result.target is None
 
 
+def test_enemy_auto_attack_tie_breaks_targets_by_position_and_id():
+    enemy = _actor("goblin", Faction.ENEMY, Coordinate(1, 0))
+    hero_b = _actor("hero_b", Faction.ALLY, Coordinate(0, 1), hp=20)
+    hero_a = _actor("hero_a", Faction.ALLY, Coordinate(0, 0), hp=20)
+    state = start_combat((enemy, hero_b, hero_a), _order(enemy, hero_b))
+
+    result = resolve_enemy_auto_attack(BoardState(), state, enemy, _source(), random.Random(7))
+
+    assert result.target is not None
+    assert result.target.id == "hero_a"
+
+
 def test_enemy_auto_attack_action_is_not_available_twice_in_turn():
     enemy = _actor("goblin", Faction.ENEMY, Coordinate(1, 0))
     hero = _actor("hero", Faction.ALLY, Coordinate(0, 0), hp=20)
