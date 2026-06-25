@@ -95,8 +95,8 @@ def test_demo_mini_combat_fake_board_synchronizes_leds_and_scan_selection(tmp_pa
     assert ("leds_off",) in connection.events
     assert connection.events[0][0] == "set_leds"
     assert any(event[0] == "set_leds" and event[1] == [(1, 0)] for event in connection.events)
-    assert ("scan_board", []) in connection.events
-    assert connection.events.index(("scan_board", [])) < connection.events.index(("leds_off",))
+    assert ("scan_board", [(1, 0)]) in connection.events
+    assert connection.events.index(("scan_board", [(1, 0)])) < connection.events.index(("leds_off",))
 
 
 def test_demo_mini_combat_illegal_scan_position_falls_back_to_target_id(tmp_path):

@@ -186,6 +186,39 @@ Przydatne argumenty:
 - `--target-position 1,0`
 - `--scan-timeout 30`
 
+## Runtime Debugowy Pętli Mini-Combatu
+
+Pętlę walki 1v1 można uruchomić bez planszy:
+
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat_loop --board-backend none --hero-attack-roll 14 --hero-damage 6 --hero-damage-type slashing --enemy-seed 7 --max-rounds 3 --session-id mini_combat_loop_demo
+```
+
+W symulatorze:
+
+```bash
+python -m board.simulator.app
+```
+
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat_loop --board-backend simulator --board-url http://127.0.0.1:5000 --show-leds --wait-for-enter --scan-timeout 30 --hero-attack-roll 14 --hero-damage 6 --hero-damage-type slashing --enemy-seed 7 --max-rounds 3 --session-id mini_combat_loop_simulator_demo
+```
+
+Runtime pokazuje:
+
+- kolejne tury bohatera i goblina,
+- zużycie akcji w turze,
+- automatyczny atak przeciwnika,
+- zmianę HP po trafieniach,
+- zakończenie walki po pokonaniu jednej strony albo kontrolowane zatrzymanie po `--max-rounds`,
+- eventy `turn_started`, `action_used`, `turn_finished`, `enemy_action_selected`, `combat_finished` albo `combat_stopped`.
+
+Przydatne argumenty:
+
+- `--enemy-seed 7`
+- `--max-rounds 3`
+- `--wait-for-enter`
+
 ## Zasada Testowania Funkcji
 
 Każda większa funkcja powinna przejść przez trzy poziomy:

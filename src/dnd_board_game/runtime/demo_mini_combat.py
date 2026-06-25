@@ -270,7 +270,7 @@ def _select_target(
             print("Kliknij pole celu w symulatorze albo na planszy. Jeśli skan nie zwróci pola, użyję fallbacku --target-id.")
             observer.record("board_scan_requested", {"acceptable_positions": [list(position) for position in acceptable]})
             try:
-                selected = scan_board(timeout_s=args.scan_timeout)
+                selected = scan_board(acceptable, timeout_s=args.scan_timeout)
             except Exception as exc:
                 observer.record("board_scan_error", {"error": str(exc), "fallback_target_id": args.target_id})
                 print(f"Skan celu nie powiódł się, używam fallbacku: {args.target_id}.")
@@ -285,8 +285,9 @@ def _select_target(
                             {"position": list(selected), "fallback_target_id": args.target_id},
                         )
                         print(f"Wybrane pole {tuple(selected)} nie jest legalnym celem, używam fallbacku: {args.target_id}.")
-                observer.record("board_scan_cancelled", {"fallback_target_id": args.target_id})
-                print(f"Nie wybrano celu na planszy, używam fallbacku: {args.target_id}.")
+                else:
+                    observer.record("board_scan_cancelled", {"fallback_target_id": args.target_id})
+                    print(f"Nie wybrano celu na planszy, używam fallbacku: {args.target_id}.")
     if args.target_position is not None:
         return select_attack_target(state, position=_parse_coordinate(args.target_position))
     return select_attack_target(state, target_id=args.target_id)

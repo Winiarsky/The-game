@@ -218,6 +218,11 @@ Implementacja MVP:
 - Stan pokonania/śmierci jest uproszczony w MVP.
 - `hp > 0` nie oznacza automatycznie, że obiekt jest legalnym celem ataku.
 - Cel ataku musi być `attackable=True` i `visible`.
+- Mini-pętla walki obsługuje start tury, zużycie akcji, koniec tury, przejście inicjatywy i zakończenie walki.
+- W runtime demo przeciwnik wykonuje automatyczny melee attack przez wstrzyknięty RNG.
+- Domyślny przeciwnik demo używa ataku `Szabla`, modyfikatora `+4` i obrażeń `1d6 + 2 slashing`.
+- Walka kończy się, gdy żywa zostaje tylko strona bohaterów albo tylko strona przeciwników.
+- Runtime może zatrzymać demo po limicie rund bez rozstrzygania zwycięzcy.
 
 Poza zakresem MVP:
 
@@ -228,6 +233,8 @@ Poza zakresem MVP:
 - odporności i podatności,
 - pełne death saving throws,
 - destrukcja obiektów i przeszkód.
+- pełne AI ruchu przeciwników,
+- bonus action, reaction i multiattack.
 
 Odstępstwa / decyzje planszowe:
 
@@ -244,3 +251,6 @@ Testy:
 - `tests/unit/test_damage.py`
 - `tests/unit/test_attack_led_feedback.py`
 - `tests/unit/test_demo_mini_combat.py`
+- `tests/unit/test_combat_session.py`
+- `tests/unit/test_enemy_auto_attack.py`
+- `tests/unit/test_demo_mini_combat_loop.py`

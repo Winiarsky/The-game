@@ -90,11 +90,15 @@ Każde zdarzenie powinno zawierać:
 - `enemy_initiative_rolled`
 - `initiative_set`
 - `turn_started`
+- `action_used`
+- `enemy_action_selected`
 - `attack_rejected`
 - `attack_declared`
 - `attack_resolved`
 - `damage_applied`
 - `turn_finished`
+- `combat_finished`
+- `combat_stopped`
 
 ## Przykład Zdarzeń Ruchu
 

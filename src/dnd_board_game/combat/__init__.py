@@ -17,6 +17,7 @@ from .attack_flow import (
 )
 from .attack_led import attack_result_led_feedback, attack_targets_led_feedback, selected_attack_target_led_feedback
 from .damage import DamageComponentInput, DamageResult, DamageType, apply_damage, resolve_damage
+from .enemy_ai import EnemyAutoAttackResult, resolve_enemy_auto_attack
 from .initiative import (
     InitiativeEntry,
     InitiativeOrder,
@@ -48,6 +49,21 @@ from .setup import (
     build_setup_steps,
     setup_led_feedback,
 )
+from .session import (
+    CombatState,
+    CombatStatus,
+    TurnActionState,
+    TurnActionUseResult,
+    actor_by_id,
+    combat_is_finished,
+    combat_winner,
+    current_actor,
+    finish_turn,
+    replace_actor,
+    start_combat,
+    stop_combat,
+    use_turn_action,
+)
 
 __all__ = [
     "ActorSetupEntry",
@@ -61,9 +77,12 @@ __all__ = [
     "CombatTarget",
     "CombatTargetType",
     "CombatTargetVisibility",
+    "CombatState",
+    "CombatStatus",
     "DamageComponentInput",
     "DamageResult",
     "DamageType",
+    "EnemyAutoAttackResult",
     "EncounterSetup",
     "EnvironmentSetupEntry",
     "EnvironmentSetupType",
@@ -73,8 +92,11 @@ __all__ = [
     "SetupStep",
     "SetupStepKind",
     "SetupVisibility",
+    "TurnActionState",
+    "TurnActionUseResult",
     "active_actor_led_feedback",
     "actor_as_combat_target",
+    "actor_by_id",
     "apply_damage",
     "attack_declaration_from_state",
     "attack_result_led_feedback",
@@ -85,16 +107,25 @@ __all__ = [
     "build_setup_instructions",
     "build_setup_steps",
     "cancel_attack_action",
+    "combat_is_finished",
+    "combat_winner",
     "consume_action",
+    "current_actor",
+    "finish_turn",
     "initiative_prompt_led_feedback",
     "is_public_attack_target",
     "legal_melee_targets",
+    "replace_actor",
     "resolve_attack",
     "resolve_damage",
+    "resolve_enemy_auto_attack",
     "roll_enemy_initiative",
     "select_attack_target",
     "selected_attack_target_led_feedback",
     "setup_led_feedback",
+    "start_combat",
     "start_attack_action",
+    "stop_combat",
     "target_is_defeated",
+    "use_turn_action",
 ]

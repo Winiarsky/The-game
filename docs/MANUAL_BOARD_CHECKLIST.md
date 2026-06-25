@@ -148,11 +148,37 @@ PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat --board-backend
 - [ ] Przy trafieniu HP celu spada.
 - [ ] Plik obserwacji zawiera `attack_declared`, `attack_resolved` i `damage_applied`.
 
+### Runtime `demo_mini_combat_loop`
+
+Terminal 1:
+
+```bash
+python -m board.simulator.app
+```
+
+Terminal 2:
+
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat_loop --board-backend simulator --board-url http://127.0.0.1:5000 --show-leds --wait-for-enter --scan-timeout 30 --hero-attack-roll 14 --hero-damage 6 --hero-damage-type slashing --enemy-seed 7 --max-rounds 3 --session-id mini_combat_loop_simulator_demo
+```
+
+- [ ] Na początku każdej tury świeci aktywny aktor.
+- [ ] Po potwierdzeniu aktywnego aktora LED gaśnie albo przechodzi do następnego kroku.
+- [ ] Bohater widzi legalne cele ataku na niebiesko.
+- [ ] Po wyborze świeci tylko wybrany cel.
+- [ ] Wynik ataku bohatera świeci odpowiednim kolorem.
+- [ ] Goblin wykonuje auto-atak bez wpisywania rzutu przez gracza.
+- [ ] Podczas auto-ataku goblina LED-y pokazują jego cel i wynik.
+- [ ] HP aktorów zmienia się w terminalu po trafieniach.
+- [ ] Walka kończy się po pokonaniu jednej strony albo zatrzymuje po `--max-rounds`.
+- [ ] Plik obserwacji zawiera `turn_started`, `action_used`, `turn_finished`, `enemy_action_selected` i `combat_finished` albo `combat_stopped`.
+
 ## Test Obserwacji Sesji
 
 - [ ] Każdy ruch zapisuje metadane: aktor, start, cel, koszt, ścieżka.
 - [ ] Każdy rzut zapisuje metadane: typ, naturalny wynik, modyfikator, wynik końcowy.
 - [ ] Każdy atak zapisuje metadane: atakujący, cel, wynik, obrażenia.
+- [ ] Każda tura zapisuje metadane: aktywny aktor, numer rundy, zużycie akcji i koniec tury.
 - [ ] Każdy błąd zapisuje krótki opis i aktualny stan.
 - [ ] Plik obserwacji można otworzyć i odczytać bez aplikacji.
 

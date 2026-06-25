@@ -23,6 +23,7 @@
 - [x] Define basic actor state: AC, HP, speed, ability scores, position.
 - [x] Implement initiative order.
 - [x] Implement basic melee/ranged attack resolution.
+- [x] Implement first mini-combat turn loop.
 - [x] Implement hardware adapter interface around `board.Connection`.
 - [x] Add LED frame generation for selected path and movement range.
 - [x] Decide first UI/runtime surface.
