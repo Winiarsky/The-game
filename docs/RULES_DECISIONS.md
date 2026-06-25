@@ -102,7 +102,7 @@ Testy:
 
 ## Rzuty Kośćmi
 
-Status: planned
+Status: implemented
 
 Źródło:
 
@@ -112,11 +112,17 @@ Status: planned
 Implementacja MVP:
 
 - Gracze i Mistrz Gry rzucają fizycznymi kośćmi.
-- Aplikacja pyta o naturalny wynik rzutu.
-- Aplikacja dodaje modyfikatory i rozstrzyga wynik.
-- Dla przewagi i utrudnienia aplikacja przyjmuje dwa naturalne wyniki `d20`.
-- Dla przewagi wybierany jest wyższy wynik.
-- Dla utrudnienia wybierany jest niższy wynik.
+- Przed rzutem aplikacja pokazuje warunki rzutu: normalny rzut, przewagę albo utrudnienie.
+- Przed rzutem aplikacja pokazuje aktywne bonusy i minusy, odrzucone duplikaty oraz końcowy modyfikator.
+- Aplikacja pyta o jeden naturalny wynik rzutu.
+- Dla przewagi aplikacja instruuje gracza, aby rzucił `2d20` i wpisał wyższy wynik.
+- Dla utrudnienia aplikacja instruuje gracza, aby rzucił `2d20` i wpisał niższy wynik.
+- Aplikacja dodaje tylko aktywne modyfikatory i rozstrzyga wynik.
+- Modyfikatory bez `stacking_key` sumują się.
+- Modyfikatory z tym samym `stacking_key` traktujemy jako ten sam efekt, więc nie stackują się.
+- Z duplikatów dodatnich wybierany jest najwyższy bonus.
+- Z duplikatów ujemnych wybierana jest najsilniejsza kara.
+- Odrzucone duplikaty pozostają widoczne w breakdown, ale nie liczą się do końcowego wyniku.
 - Naturalne `20` przy rzucie ataku oznacza trafienie krytyczne.
 - Naturalne `1` przy rzucie ataku oznacza automatyczne pudło.
 - Naturalne `20` i `1` przy testach cech nie oznaczają automatycznego sukcesu/porażki w MVP.
@@ -125,15 +131,20 @@ Poza zakresem MVP:
 
 - obowiązkowy cyfrowy roller kości,
 - automatyczne rozpoznawanie rzutów kamerą,
+- automatyczne wyliczanie wszystkich bonusów z pełnej karty postaci, klas, czarów i ekwipunku,
 - szczegółowe rozbijanie wszystkich kości obrażeń w UI.
 
 Odstępstwa / decyzje planszowe:
 
 - Domyślnym modelem są fizyczne kości, nie cyfrowy roller.
+- Przewaga i utrudnienie nie są bonusami liczbowymi i nie trafiają do listy modyfikatorów.
+- Obrażenia, typy obrażeń i kości obrażeń są osobnym modelem późniejszego etapu.
 
 Testy:
 
-- TODO: `tests/unit/test_rolls.py`
+- `tests/unit/test_dice.py`
+- `tests/unit/test_checks.py`
+- `tests/unit/test_attack_rolls.py`
 
 ## Atak I Obrażenia
 

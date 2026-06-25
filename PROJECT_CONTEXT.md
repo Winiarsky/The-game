@@ -8,6 +8,18 @@ Poprzednia aplikacja została zarchiwizowana w `legacy/previous_app/`. Używała
 
 Aplikacja ma działać jak cyfrowy prowadzący i silnik zasad dla planszowej gry D&D 5e, w której gracze nadal fizycznie używają planszy, figurek i kości.
 
+## Język Aplikacji
+
+Docelowy język aplikacji dla graczy i Mistrza Gry to polski.
+
+Zasady:
+
+- komunikaty widoczne dla graczy piszemy po polsku,
+- instrukcje wykonywania rzutów piszemy po polsku,
+- nazwy własne i rozpoznawalne terminy D&D można zostawić po angielsku, jeżeli tłumaczenie byłoby mniej czytelne,
+- nazwy techniczne w kodzie, API, enumach, testach i plikach mogą pozostać po angielsku,
+- dokumenty robocze mogą używać angielskich nazw mechanik, jeśli są nazwami własnymi albo ułatwiają mapowanie do D&D 5e.
+
 ## Typ Gry
 
 To nie ma być pełne VTT. Fizyczna plansza jest głównym medium między aplikacją a graczami, trochę jak kontroler lub planszowy interfejs wejścia/wyjścia.

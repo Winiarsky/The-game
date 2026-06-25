@@ -19,7 +19,7 @@
 - [x] Implement pure neighbor lookup and bounds checks.
 - [x] Implement pathfinding with terrain/passability callbacks.
 - [x] Add unit tests for grid and pathfinding.
-- [ ] Define D&D 5e dice primitives: d20 roll, advantage, disadvantage.
+- [x] Define D&D 5e dice primitives: d20 roll, advantage, disadvantage.
 - [x] Define basic actor state: AC, HP, speed, ability scores, position.
 - [ ] Implement initiative order.
 - [ ] Implement basic melee/ranged attack resolution.
