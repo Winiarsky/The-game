@@ -1,6 +1,7 @@
 """D&D 5e rules primitives."""
 
 from .attacks import AttackRollOutcome, AttackRollResult, resolve_attack_roll
+from .abilities import ability_modifier, dexterity_modifier
 from .checks import CheckResult, resolve_ability_check, resolve_saving_throw
 from .dice import (
     D20RollInput,
@@ -28,7 +29,9 @@ __all__ = [
     "RollModifier",
     "RollModifierBreakdown",
     "RollModifierType",
+    "ability_modifier",
     "build_modifier_breakdown",
+    "dexterity_modifier",
     "resolve_ability_check",
     "resolve_attack_roll",
     "resolve_d20_roll",

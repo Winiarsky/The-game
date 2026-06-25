@@ -78,9 +78,12 @@ class BoardLedAdapter:
     def __init__(self, connection: BoardConnectionLike) -> None:
         self.connection = connection
 
-    def show_movement(self, feedback: LedFeedback) -> None:
+    def show_feedback(self, feedback: LedFeedback) -> None:
         for frame in feedback.frames:
             self.connection.set_leds([position.as_tuple() for position in frame.positions], list(frame.color))
+
+    def show_movement(self, feedback: LedFeedback) -> None:
+        self.show_feedback(feedback)
 
     def clear(self) -> None:
         self.connection.leds_off()

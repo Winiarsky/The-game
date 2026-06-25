@@ -106,6 +106,48 @@ Legenda LED dla `demo_movement`:
 
 Ataki, rzuty kośćmi i pełny przebieg tury nie są jeszcze częścią tego runtime.
 
+## Runtime Debugowy Setupu I Inicjatywy
+
+Scenariusz setupu i inicjatywy można uruchomić bez planszy:
+
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_initiative_setup --board-backend none --session-id initiative_demo
+```
+
+W symulatorze:
+
+```bash
+python -m board.simulator.app
+```
+
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_initiative_setup --board-backend simulator --board-url http://127.0.0.1:5000 --show-leds --session-id initiative_simulator_demo
+```
+
+Domyślnie każdy krok LED zostaje widoczny przez `1.5` sekundy. Przy testach manualnych można wymusić potwierdzanie Enterem:
+
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_initiative_setup --board-backend simulator --board-url http://127.0.0.1:5000 --show-leds --wait-for-enter --session-id initiative_simulator_demo
+```
+
+Runtime pokazuje:
+
+- start walki,
+- setup bohaterów, jawnych przeciwników i jawnych elementów otoczenia,
+- zsynchronizowane LED-y dla aktualnego komunikatu,
+- wywołanie bohaterów do inicjatywy,
+- automatyczny rzut inicjatywy przeciwnika,
+- ustaloną kolejność inicjatywy,
+- aktywnego aktora pierwszej tury.
+
+Argumenty przydatne do testów:
+
+- `--hero-roll 12`
+- `--rogue-roll 8`
+- `--enemy-seed 7`
+- `--step-delay 1.5`
+- `--wait-for-enter`
+
 ## Zasada Testowania Funkcji
 
 Każda większa funkcja powinna przejść przez trzy poziomy:

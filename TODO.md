@@ -21,7 +21,7 @@
 - [x] Add unit tests for grid and pathfinding.
 - [x] Define D&D 5e dice primitives: d20 roll, advantage, disadvantage.
 - [x] Define basic actor state: AC, HP, speed, ability scores, position.
-- [ ] Implement initiative order.
+- [x] Implement initiative order.
 - [ ] Implement basic melee/ranged attack resolution.
 - [x] Implement hardware adapter interface around `board.Connection`.
 - [x] Add LED frame generation for selected path and movement range.

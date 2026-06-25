@@ -146,6 +146,53 @@ Testy:
 - `tests/unit/test_checks.py`
 - `tests/unit/test_attack_rolls.py`
 
+## Inicjatywa
+
+Status: implemented
+
+Źródło:
+
+- `GAME_DESIGN.md`
+- TODO: zweryfikować względem SRD przed dodaniem zaskoczenia, gotowych akcji i efektów zmieniających kolejkę.
+
+Implementacja MVP:
+
+- Rozpoczęcie walki poprzedza setup jawnych figurek i elementów otoczenia.
+- Komunikaty aplikacji i LED-y są zsynchronizowane: świeci tylko to, czego dotyczy aktualny krok.
+- Bohaterowie są wywoływani do rzutu inicjatywy po kolei.
+- Bohater rzuca fizycznie `1d20` i wpisuje jeden naturalny wynik.
+- Przed rzutem aplikacja pokazuje warunki rzutu i aktywne modyfikatory.
+- Przeciwnicy kontrolowani przez aplikację mają inicjatywę rzuconą automatycznie.
+- Automatyczny rzut przeciwnika używa wstrzykiwanego RNG, żeby testy były deterministyczne.
+- Kolejność inicjatywy sortuje po najwyższym wyniku końcowym.
+- Remis rozstrzyga wyższy modyfikator ze Zręczności.
+- Pełny remis zachowuje stabilną kolejność wejściową.
+- Po ostatnim aktorze kolejka wraca na początek i zwiększa rundę.
+- Pokonani aktorzy mogą pozostać w kolejce, ale przechodzenie tury może ich pomijać.
+
+Poza zakresem MVP:
+
+- zaskoczenie,
+- opóźnianie tury,
+- gotowe akcje,
+- reakcje,
+- efekty dynamicznie zmieniające inicjatywę,
+- skanowanie pól jako potwierdzenie setupu.
+
+Odstępstwa / decyzje planszowe:
+
+- Klikanie pionka nie jest wymagane do ustalenia, kto rzuca inicjatywę.
+- Jawne elementy setupu są podświetlane LED-ami, ukryte i warunkowe elementy nie są zdradzane graczom.
+
+Testy:
+
+- `tests/unit/test_ability_modifiers.py`
+- `tests/unit/test_encounter_setup.py`
+- `tests/unit/test_setup_led_feedback.py`
+- `tests/unit/test_initiative.py`
+- `tests/unit/test_initiative_led_feedback.py`
+- `tests/unit/test_demo_initiative_setup.py`
+
 ## Atak I Obrażenia
 
 Status: planned

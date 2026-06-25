@@ -85,6 +85,9 @@ Każde zdarzenie powinno zawierać:
 
 ### Walka
 
+- `setup_step_started`
+- `setup_step_finished`
+- `enemy_initiative_rolled`
 - `initiative_set`
 - `turn_started`
 - `attack_declared`

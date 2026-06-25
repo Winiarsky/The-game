@@ -126,6 +126,35 @@ Checklist:
 - [ ] Każdy błąd zapisuje krótki opis i aktualny stan.
 - [ ] Plik obserwacji można otworzyć i odczytać bez aplikacji.
 
+## Test Setupu I Inicjatywy
+
+Terminal 1:
+
+```bash
+python -m board.simulator.app
+```
+
+Terminal 2:
+
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_initiative_setup --board-backend simulator --board-url http://127.0.0.1:5000 --show-leds --session-id initiative_simulator_demo
+```
+
+Checklist:
+
+- [ ] Jeśli LED-y są zbyt szybkie, uruchom demo z `--wait-for-enter`.
+- [ ] Komunikat startu walki pojawia się przed setupem.
+- [ ] LED-y setupu odpowiadają aktualnemu komunikatowi.
+- [ ] Jawni bohaterowie są podświetleni podczas kroku ustawiania bohaterów.
+- [ ] Jawni przeciwnicy są podświetleni podczas kroku ustawiania przeciwników.
+- [ ] Jawne elementy otoczenia są podświetlane partiami zgodnymi z komunikatem.
+- [ ] Po zakończeniu każdego kroku poprzednie LED-y gasną.
+- [ ] Przy rzucie inicjatywy świeci tylko aktualnie wywołany aktor.
+- [ ] Po wpisaniu wyniku albo auto-rollu pole aktora gaśnie.
+- [ ] Ukryte i warunkowe elementy nie są zdradzane graczom.
+- [ ] Po ustaleniu kolejności świeci aktywny aktor pierwszej tury.
+- [ ] `data/session_observations/initiative_simulator_demo.jsonl` zawiera `setup_step_started`, `roll_requested`, `enemy_initiative_rolled`, `initiative_set` i `turn_started`.
+
 ## Notatki Z Testu
 
 ```text
