@@ -2,7 +2,7 @@
 
 Ten dokument opisuje docelowy sposób uruchamiania nowej aplikacji oraz testowania jej bez fizycznej planszy i z fizyczną planszą.
 
-Na obecnym etapie aplikacja nie ma jeszcze runtime. Ten dokument definiuje standard, do którego będziemy budować kolejne moduły.
+Na obecnym etapie aplikacja ma pierwszy runtime debugowy dla ruchu. Nie jest to jeszcze docelowe UI gry.
 
 ## Tryby Uruchamiania
 
@@ -38,13 +38,13 @@ Docelowy model:
 python -m board.simulator.app
 ```
 
-W drugim terminalu, gdy powstanie runtime:
+W drugim terminalu:
 
 ```bash
-python -m dnd_board_game.runtime --board-backend simulator --board-url http://127.0.0.1:5000
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_movement --board-backend simulator --board-url http://127.0.0.1:5000 --destination 3,3 --show-leds
 ```
 
-Runtime jeszcze nie istnieje. Pierwszy runtime powinien być prosty i debugowy, nawet jeśli później zastąpi go UI.
+Ten runtime pokazuje testowy zasięg ruchu i wybraną ścieżkę LED-ami.
 
 ### 3. Tryb Hardware
 
@@ -53,32 +53,58 @@ Służy do testów na fizycznej planszy.
 Docelowy model:
 
 ```bash
-python -m dnd_board_game.runtime --board-backend hardware
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_movement --board-backend hardware --destination 3,3 --show-leds
 ```
 
 Opcjonalnie:
 
 ```bash
-python -m dnd_board_game.runtime --board-backend hardware --board-serial-port /dev/ttyUSB0 --wled-url http://192.168.0.50
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_movement --board-backend hardware --board-serial-port /dev/ttyUSB0 --wled-url http://192.168.0.50 --destination 3,3 --show-leds
 ```
 
 Tryb hardware powinien być używany dopiero po przejściu testów jednostkowych i testów w symulatorze.
 
-## Minimalny Runtime Debugowy
+## Runtime Debugowy Ruchu
 
-Pierwszy runtime nie musi być pełnym UI.
+Pierwszy runtime jest terminalowym scenariuszem ruchu:
 
-Wystarczy terminalowy lub bardzo prosty webowy tryb debugowy, który pozwoli:
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_movement --board-backend none --destination 3,3 --session-id manual_demo
+```
+
+Argumenty:
+
+- `--board-backend none | simulator | hardware`
+- `--board-url http://127.0.0.1:5000`
+- `--board-serial-port /dev/ttyUSB0`
+- `--wled-url http://192.168.0.50`
+- `--destination COL,ROW`
+- `--session-id NAZWA_SESJI`
+- `--observation-dir data/session_observations`
+- `--show-leds` albo `--no-show-leds`
+
+Runtime pozwala:
 
 - załadować testową planszę,
-- ustawić jednego bohatera i jednego potwora,
+- ustawić aktywnego bohatera, sojusznika i przeciwnika,
 - wskazać aktywnego aktora,
 - pokazać zasięg ruchu LED-ami,
-- wybrać pole docelowe,
+- wybrać pole docelowe przez `--destination`,
 - pokazać ścieżkę,
-- wykonać prosty atak,
-- wpisać ręczny wynik rzutu,
 - zapisać metadane sesji.
+
+Legenda LED dla `demo_movement`:
+
+- biały: aktywny aktor,
+- niebieski: pole, na którym można zakończyć ruch,
+- żółty: wybrana ścieżka,
+- zielony: cel,
+- pomarańczowy: trudny teren,
+- czerwony: blokujące pole,
+- różowy: przeciwnik,
+- cyan: sojusznik.
+
+Ataki, rzuty kośćmi i pełny przebieg tury nie są jeszcze częścią tego runtime.
 
 ## Zasada Testowania Funkcji
 

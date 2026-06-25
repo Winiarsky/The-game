@@ -12,8 +12,8 @@
 ## Next Engineering Tasks
 
 - [x] Add `.gitignore` entries for local manual test runs and session observations.
-- [ ] Implement session observation writer for local JSONL metadata.
-- [ ] Define first debug runtime command shape.
+- [x] Implement session observation writer for local JSONL metadata.
+- [x] Define first debug runtime command shape.
 - [ ] Keep `docs/RULES_DECISIONS.md` updated when implementing each D&D mechanic.
 - [x] Define `Coordinate`, board dimensions, and grid primitives.
 - [x] Implement pure neighbor lookup and bounds checks.
@@ -25,7 +25,7 @@
 - [ ] Implement basic melee/ranged attack resolution.
 - [x] Implement hardware adapter interface around `board.Connection`.
 - [x] Add LED frame generation for selected path and movement range.
-- [ ] Decide first UI/runtime surface.
+- [x] Decide first UI/runtime surface.
 - [x] Add manual board checklist coverage for the first movement demo.
 
 ## Content Tasks

@@ -12,6 +12,10 @@ class LedRole(StrEnum):
     MOVEMENT_RANGE = "movement_range"
     SELECTED_PATH = "selected_path"
     DESTINATION = "destination"
+    DIFFICULT_TERRAIN = "difficult_terrain"
+    BLOCKING_TERRAIN = "blocking_terrain"
+    ALLY = "ally"
+    ENEMY = "enemy"
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,6 +41,10 @@ DEFAULT_COLORS: dict[LedRole, tuple[int, int, int]] = {
     LedRole.MOVEMENT_RANGE: (0, 80, 220),
     LedRole.SELECTED_PATH: (255, 210, 0),
     LedRole.DESTINATION: (0, 255, 120),
+    LedRole.DIFFICULT_TERRAIN: (255, 120, 0),
+    LedRole.BLOCKING_TERRAIN: (180, 0, 0),
+    LedRole.ALLY: (0, 220, 255),
+    LedRole.ENEMY: (255, 0, 80),
 }
 
 

@@ -57,6 +57,48 @@ Checklist:
 - [ ] Po wyborze celu LED-y pokazują wybraną ścieżkę.
 - [ ] Po zatwierdzeniu ruchu aktor ma nową pozycję.
 
+### Runtime `demo_movement`
+
+Test bez planszy:
+
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_movement --board-backend none --destination 3,3 --session-id manual_demo
+```
+
+- [ ] Terminal pokazuje origin, destination, reachable count, path i cost.
+- [ ] Powstaje `data/session_observations/manual_demo.jsonl`.
+- [ ] Plik zawiera `movement_path_selected` i `session_finished`.
+
+Test celu zablokowanego:
+
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_movement --board-backend none --destination 1,0 --session-id blocked_demo
+```
+
+- [ ] Terminal pokazuje `path_valid: False`.
+- [ ] Plik obserwacji zawiera `movement_rejected`.
+- [ ] Program kończy się bez stack trace.
+
+Test w symulatorze:
+
+```bash
+python -m board.simulator.app
+```
+
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_movement --board-backend simulator --board-url http://127.0.0.1:5000 --destination 3,3 --show-leds --session-id simulator_demo
+```
+
+- [ ] Aktywny aktor jest oznaczony LED.
+- [ ] Zasięg ruchu jest widoczny.
+- [ ] Trudny teren jest oznaczony pomarańczowo.
+- [ ] Blokujące pole jest oznaczone czerwono.
+- [ ] Przeciwnik jest oznaczony różowo.
+- [ ] Sojusznik jest oznaczony cyan.
+- [ ] Wybrana ścieżka jest pokazana LED.
+- [ ] Cel jest wyróżniony.
+- [ ] Plik obserwacji zawiera `led_feedback_sent`.
+
 ## Test Ataku
 
 Stan testowy:
