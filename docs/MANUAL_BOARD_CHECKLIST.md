@@ -118,6 +118,36 @@ Checklist:
 - [ ] HP celu zmienia się poprawnie.
 - [ ] LED-y pokazują wynik ataku.
 
+### Runtime `demo_mini_combat`
+
+Terminal 1:
+
+```bash
+python -m board.simulator.app
+```
+
+Terminal 2:
+
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat --board-backend simulator --board-url http://127.0.0.1:5000 --show-leds --wait-for-enter --hero-attack-roll 14 --hero-damage 6 --hero-damage-type slashing --session-id mini_combat_simulator_demo
+```
+
+- [ ] Aplikacja mówi, że aktywny aktor wybiera `Atak`.
+- [ ] Symulator jest w trybie `Plansza`, nie `Przesuwanie figurek`.
+- [ ] Legalne cele świecą na niebiesko.
+- [ ] Podczas komunikatu wyboru celu legalne cele nadal świecą na niebiesko.
+- [ ] Można kliknąć legalne pole celu w symulatorze zanim LED-y zgasną.
+- [ ] Kliknięcie nielegalnego pola nie zawiesza flow i przechodzi do fallbacku.
+- [ ] Jeśli skan celu nie zadziała, runtime używa fallbacku `--target-id`.
+- [ ] Po wyborze świeci tylko wybrany cel.
+- [ ] Komunikat pokazuje źródło ataku i aktywne modyfikatory.
+- [ ] Trafienie świeci zielono.
+- [ ] Pudło świeci czerwono.
+- [ ] Trafienie krytyczne świeci żółto.
+- [ ] Po potwierdzeniu LED gaśnie.
+- [ ] Przy trafieniu HP celu spada.
+- [ ] Plik obserwacji zawiera `attack_declared`, `attack_resolved` i `damage_applied`.
+
 ## Test Obserwacji Sesji
 
 - [ ] Każdy ruch zapisuje metadane: aktor, start, cel, koszt, ścieżka.

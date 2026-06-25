@@ -1,5 +1,22 @@
 """Initiative, turns, attacks, damage, healing, and conditions."""
 
+from .action_economy import ActionUse, consume_action
+from .attack_flow import (
+    AttackActionState,
+    AttackActionStatus,
+    AttackDeclaration,
+    AttackResolution,
+    AttackSource,
+    AttackSourceType,
+    attack_declaration_from_state,
+    cancel_attack_action,
+    legal_melee_targets,
+    resolve_attack,
+    select_attack_target,
+    start_attack_action,
+)
+from .attack_led import attack_result_led_feedback, attack_targets_led_feedback, selected_attack_target_led_feedback
+from .damage import DamageComponentInput, DamageResult, DamageType, apply_damage, resolve_damage
 from .initiative import (
     InitiativeEntry,
     InitiativeOrder,
@@ -10,6 +27,14 @@ from .initiative import (
     build_player_initiative_prompts,
     initiative_prompt_led_feedback,
     roll_enemy_initiative,
+)
+from .targets import (
+    CombatTarget,
+    CombatTargetType,
+    CombatTargetVisibility,
+    actor_as_combat_target,
+    is_public_attack_target,
+    target_is_defeated,
 )
 from .setup import (
     ActorSetupEntry,
@@ -26,6 +51,19 @@ from .setup import (
 
 __all__ = [
     "ActorSetupEntry",
+    "ActionUse",
+    "AttackActionState",
+    "AttackActionStatus",
+    "AttackDeclaration",
+    "AttackResolution",
+    "AttackSource",
+    "AttackSourceType",
+    "CombatTarget",
+    "CombatTargetType",
+    "CombatTargetVisibility",
+    "DamageComponentInput",
+    "DamageResult",
+    "DamageType",
     "EncounterSetup",
     "EnvironmentSetupEntry",
     "EnvironmentSetupType",
@@ -36,12 +74,27 @@ __all__ = [
     "SetupStepKind",
     "SetupVisibility",
     "active_actor_led_feedback",
+    "actor_as_combat_target",
+    "apply_damage",
+    "attack_declaration_from_state",
+    "attack_result_led_feedback",
+    "attack_targets_led_feedback",
     "build_enemy_initiative_prompt",
     "build_initiative_order",
     "build_player_initiative_prompts",
     "build_setup_instructions",
     "build_setup_steps",
+    "cancel_attack_action",
+    "consume_action",
     "initiative_prompt_led_feedback",
+    "is_public_attack_target",
+    "legal_melee_targets",
+    "resolve_attack",
+    "resolve_damage",
     "roll_enemy_initiative",
+    "select_attack_target",
+    "selected_attack_target_led_feedback",
     "setup_led_feedback",
+    "start_attack_action",
+    "target_is_defeated",
 ]

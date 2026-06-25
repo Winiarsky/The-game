@@ -90,6 +90,7 @@ Każde zdarzenie powinno zawierać:
 - `enemy_initiative_rolled`
 - `initiative_set`
 - `turn_started`
+- `attack_rejected`
 - `attack_declared`
 - `attack_resolved`
 - `damage_applied`

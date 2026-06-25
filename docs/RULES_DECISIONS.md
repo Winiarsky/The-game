@@ -195,7 +195,7 @@ Testy:
 
 ## Atak I Obrażenia
 
-Status: planned
+Status: partial
 
 Źródło:
 
@@ -204,27 +204,43 @@ Status: planned
 
 Implementacja MVP:
 
+- MVP obsługuje prosty melee weapon attack.
+- Aplikacja pokazuje legalne cele ataku LED-ami.
+- Gracz wybiera cel przez planszę albo fallback runtime.
 - Atak porównuje wynik ataku z AC celu.
 - Naturalne `20` przy ataku oznacza trafienie krytyczne.
 - Naturalne `1` przy ataku oznacza automatyczne pudło.
 - Przy trafieniu aplikacja prosi o wynik obrażeń.
 - W MVP gracz może wpisać końcowy wynik obrażeń krytycznych samodzielnie.
-- Obrażenia zmniejszają HP celu.
+- Obrażenia są wpisywane jako komponenty z typem obrażeń.
+- Obrażenia najpierw zmniejszają temporary HP, potem HP.
+- HP nie spada poniżej `0`.
 - Stan pokonania/śmierci jest uproszczony w MVP.
+- `hp > 0` nie oznacza automatycznie, że obiekt jest legalnym celem ataku.
+- Cel ataku musi być `attackable=True` i `visible`.
 
 Poza zakresem MVP:
 
 - reakcje,
 - ataki okazyjne,
+- pełne ranged attacks i osłony,
+- czary, area effects i złożone itemy,
 - odporności i podatności,
 - pełne death saving throws,
-- efekty wielu typów obrażeń w jednym ataku.
+- destrukcja obiektów i przeszkód.
 
 Odstępstwa / decyzje planszowe:
 
 - Szczegółowe zasady śmierci i umierania zostają odłożone, dopóki nie będą potrzebne w pierwszej scenie.
+- Obiekty atakowalne są przewidziane w modelu targetowania, ale pełny flow niszczenia obiektów zostaje później.
+- Komunikat aplikacji i LED-y muszą być zsynchronizowane: legalne cele, wybrany cel, wynik ataku.
 
 Testy:
 
-- TODO: `tests/unit/test_attack_resolution.py`
-- TODO: `tests/unit/test_damage.py`
+- `tests/unit/test_combat_targets.py`
+- `tests/unit/test_attack_targets.py`
+- `tests/unit/test_attack_flow.py`
+- `tests/unit/test_attack_resolution.py`
+- `tests/unit/test_damage.py`
+- `tests/unit/test_attack_led_feedback.py`
+- `tests/unit/test_demo_mini_combat.py`

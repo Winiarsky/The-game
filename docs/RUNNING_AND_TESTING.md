@@ -148,6 +148,44 @@ Argumenty przydatne do testów:
 - `--step-delay 1.5`
 - `--wait-for-enter`
 
+## Runtime Debugowy Mini-Combatu
+
+Pierwszy mini-combat można uruchomić bez planszy:
+
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat --board-backend none --target-id goblin --hero-attack-roll 14 --hero-damage 6 --hero-damage-type slashing --session-id mini_combat_demo
+```
+
+W symulatorze:
+
+```bash
+python -m board.simulator.app
+```
+
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat --board-backend simulator --board-url http://127.0.0.1:5000 --show-leds --wait-for-enter --hero-attack-roll 14 --hero-damage 6 --hero-damage-type slashing --session-id mini_combat_simulator_demo
+```
+
+Runtime pokazuje:
+
+- wybór akcji `Atak`,
+- legalne cele ataku na niebiesko,
+- wybrany cel na niebiesko,
+- komunikat z modyfikatorami attack roll,
+- wynik ataku LED-em,
+- obrażenia i zmianę HP przy trafieniu,
+- eventy `attack_declared`, `attack_resolved` i `damage_applied`.
+
+Przy backendzie `simulator` albo `hardware` runtime próbuje wybrać cel przez kliknięcie pola. Jeśli skan nie zwróci pola w czasie `--scan-timeout`, używa fallbacku `--target-id`.
+
+W symulatorze kliknięcie celu działa tylko w trybie `Plansza (klikanie wywołuje scan_board)`. Tryb `Przesuwanie figurek` nie wysyła kliknięć do runtime.
+
+Przydatne argumenty:
+
+- `--target-id goblin`
+- `--target-position 1,0`
+- `--scan-timeout 30`
+
 ## Zasada Testowania Funkcji
 
 Każda większa funkcja powinna przejść przez trzy poziomy:

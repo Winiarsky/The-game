@@ -22,7 +22,7 @@
 - [x] Define D&D 5e dice primitives: d20 roll, advantage, disadvantage.
 - [x] Define basic actor state: AC, HP, speed, ability scores, position.
 - [x] Implement initiative order.
-- [ ] Implement basic melee/ranged attack resolution.
+- [x] Implement basic melee/ranged attack resolution.
 - [x] Implement hardware adapter interface around `board.Connection`.
 - [x] Add LED frame generation for selected path and movement range.
 - [x] Decide first UI/runtime surface.
