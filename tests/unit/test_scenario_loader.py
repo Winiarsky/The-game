@@ -1,0 +1,166 @@
+import json
+
+import pytest
+
+from dnd_board_game.actors import Faction
+from dnd_board_game.combat import AttackSourceType, DamageType, EnvironmentSetupType, SetupVisibility
+from dnd_board_game.scenarios import build_encounter_from_scenario, load_scenario
+from dnd_board_game.world import Coordinate
+
+
+def test_load_scenario_builds_actors_and_attack_sources():
+    loaded = load_scenario("content/scenarios/goblin_ambush.json")
+    encounter = build_encounter_from_scenario(loaded)
+
+    assert encounter.scenario_id == "goblin_ambush"
+    assert encounter.scenario_name == "Zasadzka goblina"
+    assert encounter.board.dimensions.cols == 20
+    assert encounter.board.dimensions.rows == 30
+
+    hero = next(actor for actor in encounter.actors if actor.id == "hero")
+    goblin = next(actor for actor in encounter.actors if actor.id == "goblin")
+    assert hero.name == "Bohater"
+    assert hero.faction == Faction.ALLY
+    assert hero.ac == 14
+    assert hero.hp == 20
+    assert hero.position == Coordinate(0, 0)
+    assert hero.ability_scores.strength == 16
+    assert goblin.name == "Goblin"
+    assert goblin.faction == Faction.ENEMY
+    assert goblin.position == Coordinate(1, 0)
+
+    assert encounter.hero_attack_source.name == "Miecz"
+    assert encounter.hero_attack_source.source_type == AttackSourceType.WEAPON
+    assert encounter.hero_attack_source.attack_roll_request.modifiers[0].value == 5
+    assert encounter.hero_attack_source.damage_die_sides == 6
+    assert encounter.hero_attack_source.damage_type == DamageType.SLASHING.value
+
+    goblin_source = encounter.enemy_attack_sources[goblin.id]
+    assert goblin_source.name == "Szabla"
+    assert goblin_source.attack_roll_request.modifiers[0].value == 4
+    assert goblin_source.damage_die_sides == 6
+    assert goblin_source.damage_modifier == 2
+
+
+def test_load_scenario_builds_environment_entries():
+    encounter = build_encounter_from_scenario(load_scenario("content/scenarios/goblin_ambush.json"))
+
+    assert len(encounter.environment) == 1
+    entry = encounter.environment[0]
+    assert entry.id == "broken_crate"
+    assert entry.setup_type == EnvironmentSetupType.CONTAINER
+    assert entry.visibility == SetupVisibility.VISIBLE
+    assert entry.positions == (Coordinate(3, 1),)
+
+
+def test_missing_required_field_reports_field_name(tmp_path):
+    scenario_path = tmp_path / "broken.json"
+    scenario_path.write_text(json.dumps({"id": "broken", "board": {"cols": 20, "rows": 30}}), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="scenario.actors"):
+        load_scenario(scenario_path)
+
+
+def test_unknown_enum_value_reports_field_name(tmp_path):
+    root = tmp_path
+    (root / "scenarios").mkdir()
+    scenario_path = root / "scenarios" / "bad.json"
+    scenario_path.write_text(
+        json.dumps(
+            {
+                "id": "bad",
+                "name": "Bad",
+                "board": {"cols": 20, "rows": 30},
+                "actors": [
+                    {
+                        "id": "hero",
+                        "name": "Hero",
+                        "kind": "player_character",
+                        "faction": "unknown",
+                        "ac": 10,
+                        "hp": 10,
+                        "speed_feet": 30,
+                        "position": [0, 0],
+                        "ability_scores": {},
+                        "attacks": [
+                            {
+                                "id": "hit",
+                                "name": "Hit",
+                                "source_type": "weapon",
+                                "range_feet": 5,
+                                "attack_modifier": 1,
+                                "damage": {"dice": "1d4", "damage_type": "slashing"},
+                            }
+                        ],
+                    },
+                    {
+                        "id": "enemy",
+                        "name": "Enemy",
+                        "kind": "monster",
+                        "faction": "enemy",
+                        "ac": 10,
+                        "hp": 10,
+                        "speed_feet": 30,
+                        "position": [1, 0],
+                        "ability_scores": {},
+                        "attacks": [
+                            {
+                                "id": "hit",
+                                "name": "Hit",
+                                "source_type": "weapon",
+                                "range_feet": 5,
+                                "attack_modifier": 1,
+                                "damage": {"dice": "1d4", "damage_type": "slashing"},
+                            }
+                        ],
+                    },
+                ],
+                "environment": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="actor hero.faction"):
+        load_scenario(scenario_path)
+
+
+def test_scenario_requires_ally_and_enemy(tmp_path):
+    scenario_path = tmp_path / "only_ally.json"
+    scenario_path.write_text(
+        json.dumps(
+            {
+                "id": "only_ally",
+                "name": "Only Ally",
+                "board": {"cols": 20, "rows": 30},
+                "actors": [
+                    {
+                        "id": "hero",
+                        "name": "Hero",
+                        "kind": "player_character",
+                        "faction": "ally",
+                        "ac": 10,
+                        "hp": 10,
+                        "speed_feet": 30,
+                        "position": [0, 0],
+                        "ability_scores": {},
+                        "attacks": [
+                            {
+                                "id": "hit",
+                                "name": "Hit",
+                                "source_type": "weapon",
+                                "range_feet": 5,
+                                "attack_modifier": 1,
+                                "damage": {"dice": "1d4", "damage_type": "slashing"},
+                            }
+                        ],
+                    }
+                ],
+                "environment": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="at least one enemy"):
+        load_scenario(scenario_path)

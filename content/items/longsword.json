@@ -1,0 +1,19 @@
+{
+  "id": "longsword",
+  "name": "Miecz",
+  "kind": "weapon",
+  "attacks": [
+    {
+      "id": "longsword_slash",
+      "name": "Miecz",
+      "source_type": "weapon",
+      "range_feet": 5,
+      "attack_modifier": 5,
+      "damage": {
+        "dice": "1d6",
+        "modifier": 0,
+        "damage_type": "slashing"
+      }
+    }
+  ]
+}

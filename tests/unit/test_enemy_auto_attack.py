@@ -36,6 +36,9 @@ def _source() -> AttackSource:
         attack_roll_request=D20RollRequest(
             modifiers=(RollModifier("Premia ataku goblina", 4, RollModifierType.CUSTOM, stacking_key="goblin_attack"),)
         ),
+        damage_die_sides=6,
+        damage_modifier=2,
+        damage_type="slashing",
     )
 
 

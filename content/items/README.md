@@ -1,5 +1,14 @@
 # Items
 
-Item and equipment definitions for the new D&D 5e app will live here.
+Minimalne przedmioty i wyposażenie dla lokalnego contentu MVP.
 
-TODO: define a minimal weapon/armor/adventuring gear schema.
+Na tym etapie obsługujemy tylko broń potrzebną do mini-combatu:
+
+- `id`, `name`, `kind`,
+- `attacks`,
+- `source_type`,
+- `range_feet`,
+- `attack_modifier`,
+- `damage`.
+
+`damage` obsługuje MVP format `dice`, np. `1d6`, opcjonalny `modifier` i `damage_type`.

@@ -33,6 +33,10 @@ class AttackSource:
     range_feet: int
     attack_roll_request: D20RollRequest
     damage_hint: str = ""
+    damage_fixed: int | None = None
+    damage_die_sides: int | None = None
+    damage_modifier: int = 0
+    damage_type: str = "slashing"
 
 
 @dataclass(frozen=True, slots=True)

@@ -191,7 +191,7 @@ Przydatne argumenty:
 Pętlę walki 1v1 można uruchomić bez planszy:
 
 ```bash
-PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat_loop --board-backend none --hero-attack-roll 14 --hero-damage 6 --hero-damage-type slashing --enemy-seed 7 --max-rounds 3 --session-id mini_combat_loop_demo
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat_loop --scenario content/scenarios/goblin_ambush.json --board-backend none --hero-attack-roll 14 --hero-damage 6 --hero-damage-type slashing --enemy-seed 7 --max-rounds 3 --session-id mini_combat_loop_demo
 ```
 
 W symulatorze:
@@ -201,12 +201,13 @@ python -m board.simulator.app
 ```
 
 ```bash
-PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat_loop --board-backend simulator --board-url http://127.0.0.1:5000 --show-leds --wait-for-enter --scan-timeout 30 --hero-attack-roll 14 --hero-damage 6 --hero-damage-type slashing --enemy-seed 7 --max-rounds 3 --session-id mini_combat_loop_simulator_demo
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat_loop --scenario content/scenarios/goblin_ambush.json --board-backend simulator --board-url http://127.0.0.1:5000 --show-leds --wait-for-enter --scan-timeout 30 --hero-attack-roll 14 --hero-damage 6 --hero-damage-type slashing --enemy-seed 7 --max-rounds 3 --session-id mini_combat_loop_simulator_demo
 ```
 
 Runtime pokazuje:
 
 - kolejne tury bohatera i goblina,
+- dane aktorów, pozycji i ataków z `content/scenarios/goblin_ambush.json`,
 - zużycie akcji w turze,
 - automatyczny atak przeciwnika,
 - zmianę HP po trafieniach,
@@ -218,6 +219,7 @@ Przydatne argumenty:
 - `--enemy-seed 7`
 - `--max-rounds 3`
 - `--wait-for-enter`
+- `--scenario content/scenarios/goblin_ambush.json`
 
 ## Zasada Testowania Funkcji
 

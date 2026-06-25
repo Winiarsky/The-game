@@ -223,6 +223,8 @@ Implementacja MVP:
 - Domyślny przeciwnik demo używa ataku `Szabla`, modyfikatora `+4` i obrażeń `1d6 + 2 slashing`.
 - Walka kończy się, gdy żywa zostaje tylko strona bohaterów albo tylko strona przeciwników.
 - Runtime może zatrzymać demo po limicie rund bez rozstrzygania zwycięzcy.
+- Statystyki demo mogą pochodzić z lokalnego contentu JSON w `content/`.
+- Lokalny content MVP nie jest pełnym SRD ani pełną bazą D&D 5e.
 
 Poza zakresem MVP:
 
@@ -254,3 +256,5 @@ Testy:
 - `tests/unit/test_combat_session.py`
 - `tests/unit/test_enemy_auto_attack.py`
 - `tests/unit/test_demo_mini_combat_loop.py`
+- `tests/unit/test_scenario_loader.py`
+- `tests/unit/test_scenario_content_files.py`

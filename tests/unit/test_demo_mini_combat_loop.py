@@ -49,7 +49,9 @@ def test_demo_mini_combat_loop_none_backend_runs_hero_and_enemy_turns(tmp_path):
 
     assert any("Tura: Bohater" in message for message in result.messages)
     assert any("Tura: Goblin" in message for message in result.messages)
+    assert any("Scenariusz: Zasadzka goblina." in message for message in result.messages)
     event_types = [event["event_type"] for event in _events(result.observation_path)]
+    assert "scenario_loaded" in event_types
     assert "turn_started" in event_types
     assert "action_used" in event_types
     assert "enemy_action_selected" in event_types

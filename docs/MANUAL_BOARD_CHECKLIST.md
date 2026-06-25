@@ -159,10 +159,11 @@ python -m board.simulator.app
 Terminal 2:
 
 ```bash
-PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat_loop --board-backend simulator --board-url http://127.0.0.1:5000 --show-leds --wait-for-enter --scan-timeout 30 --hero-attack-roll 14 --hero-damage 6 --hero-damage-type slashing --enemy-seed 7 --max-rounds 3 --session-id mini_combat_loop_simulator_demo
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat_loop --scenario content/scenarios/goblin_ambush.json --board-backend simulator --board-url http://127.0.0.1:5000 --show-leds --wait-for-enter --scan-timeout 30 --hero-attack-roll 14 --hero-damage 6 --hero-damage-type slashing --enemy-seed 7 --max-rounds 3 --session-id mini_combat_loop_simulator_demo
 ```
 
 - [ ] Na początku każdej tury świeci aktywny aktor.
+- [ ] Terminal pokazuje nazwę scenariusza z pliku contentu.
 - [ ] Po potwierdzeniu aktywnego aktora LED gaśnie albo przechodzi do następnego kroku.
 - [ ] Bohater widzi legalne cele ataku na niebiesko.
 - [ ] Po wyborze świeci tylko wybrany cel.

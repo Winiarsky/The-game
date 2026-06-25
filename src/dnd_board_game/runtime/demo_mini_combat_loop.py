@@ -12,7 +12,6 @@ from dnd_board_game.actors import Actor, Faction
 from dnd_board_game.combat import (
     ActionUse,
     AttackSource,
-    AttackSourceType,
     CombatState,
     CombatStatus,
     DamageComponentInput,
@@ -38,7 +37,8 @@ from dnd_board_game.combat import (
     use_turn_action,
 )
 from dnd_board_game.hardware import BoardLedAdapter
-from dnd_board_game.rules import D20RollInput, D20RollRequest, RollModifier, RollModifierType, resolve_d20_roll, roll_instruction
+from dnd_board_game.rules import D20RollInput, D20RollRequest, resolve_d20_roll, roll_instruction
+from dnd_board_game.scenarios import LoadedEncounter, build_encounter_from_scenario, load_scenario
 
 from .demo_mini_combat import (
     ConnectionFactory,
@@ -47,7 +47,6 @@ from .demo_mini_combat import (
     _pause_for_led_step,
     _read_int_or_default,
     _select_target,
-    build_demo_combatants,
 )
 from .session_observer import SessionObserver
 
@@ -72,11 +71,16 @@ def run_demo(
         {"backend": args.board_backend, "board_url": args.board_url, "show_leds": args.show_leds},
     )
     adapter = _create_adapter(args, connection_factory) if args.show_leds and args.board_backend != "none" else None
-    board, hero, goblin, hero_source = build_demo_combatants()
-    enemy_source = _enemy_attack_source()
-    state = start_combat((hero, goblin), _fixed_demo_initiative(hero, goblin))
+    encounter = _load_encounter(args.scenario)
+    scenario_message = f"Scenariusz: {encounter.scenario_name}."
+    print(scenario_message)
+    observer.record(
+        "scenario_loaded",
+        {"scenario_id": encounter.scenario_id, "scenario_name": encounter.scenario_name, "path": args.scenario},
+    )
+    state = start_combat(encounter.actors, _fixed_demo_initiative(encounter.actors))
     rng = random.Random(args.enemy_seed)
-    messages: list[str] = []
+    messages: list[str] = [scenario_message]
     feedback_events = 0
 
     while state.status == CombatStatus.ACTIVE:
@@ -104,9 +108,10 @@ def run_demo(
             adapter.clear()
 
         if actor.faction == Faction.ALLY:
-            state, turn_messages, sent = _run_hero_turn(args, board, state, actor, hero_source, adapter, observer)
+            state, turn_messages, sent = _run_hero_turn(args, encounter.board, state, actor, encounter.hero_attack_source, adapter, observer)
         else:
-            state, turn_messages, sent = _run_enemy_turn(board, state, actor, enemy_source, rng, adapter, observer, args)
+            enemy_source = encounter.enemy_attack_sources[actor.id]
+            state, turn_messages, sent = _run_enemy_turn(encounter.board, state, actor, enemy_source, rng, adapter, observer, args)
         messages.extend(turn_messages)
         feedback_events += sent
 
@@ -146,6 +151,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--hero-damage-type", choices=[item.value for item in DamageType], default=DamageType.SLASHING.value)
     parser.add_argument("--enemy-seed", type=int, default=7)
     parser.add_argument("--max-rounds", type=int, default=3)
+    parser.add_argument("--scenario", default="content/scenarios/goblin_ambush.json")
     return parser
 
 
@@ -317,28 +323,24 @@ def _run_enemy_turn(
     return result.state, tuple(messages), feedback_events
 
 
-def _fixed_demo_initiative(hero: Actor, goblin: Actor) -> InitiativeOrder:
+def _load_encounter(path: str) -> LoadedEncounter:
+    return build_encounter_from_scenario(load_scenario(path))
+
+
+def _fixed_demo_initiative(actors: tuple[Actor, ...]) -> InitiativeOrder:
     empty_request = D20RollRequest()
-    hero_roll = resolve_d20_roll(D20RollInput(empty_request, 20))
-    goblin_roll = resolve_d20_roll(D20RollInput(empty_request, 10))
-    return InitiativeOrder(
-        (
-            InitiativeEntry(hero, hero_roll, 2, 0),
-            InitiativeEntry(goblin, goblin_roll, 2, 1),
+    entries: list[InitiativeEntry] = []
+    for index, actor in enumerate(actors):
+        natural_roll = max(1, 20 - (index * 10))
+        entries.append(
+            InitiativeEntry(
+                actor,
+                resolve_d20_roll(D20RollInput(empty_request, natural_roll)),
+                actor.ability_scores.dexterity,
+                index,
+            )
         )
-    )
-
-
-def _enemy_attack_source() -> AttackSource:
-    return AttackSource(
-        name="Szabla",
-        source_type=AttackSourceType.WEAPON,
-        range_feet=5,
-        attack_roll_request=D20RollRequest(
-            modifiers=(RollModifier("Premia ataku goblina", 4, RollModifierType.CUSTOM, stacking_key="goblin_attack"),)
-        ),
-        damage_hint="1d6 + 2 slashing",
-    )
+    return InitiativeOrder(tuple(entries))
 
 
 def _actor_by_string_id(state: CombatState, actor_id: str) -> Actor:

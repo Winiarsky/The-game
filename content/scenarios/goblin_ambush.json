@@ -1,0 +1,45 @@
+{
+  "id": "goblin_ambush",
+  "name": "Zasadzka goblina",
+  "board": {
+    "cols": 20,
+    "rows": 30
+  },
+  "actors": [
+    {
+      "id": "hero",
+      "name": "Bohater",
+      "kind": "player_character",
+      "faction": "ally",
+      "ac": 14,
+      "hp": 20,
+      "temp_hp": 0,
+      "speed_feet": 30,
+      "position": [0, 0],
+      "ability_scores": {
+        "strength": 16,
+        "dexterity": 14,
+        "constitution": 12,
+        "intelligence": 10,
+        "wisdom": 10,
+        "charisma": 10
+      },
+      "item_refs": ["longsword"]
+    },
+    {
+      "id": "goblin",
+      "source_ref": "goblin",
+      "position": [1, 0]
+    }
+  ],
+  "environment": [
+    {
+      "id": "broken_crate",
+      "name": "Rozbita skrzynia",
+      "type": "container",
+      "positions": [[3, 1]],
+      "visibility": "visible",
+      "description": "Prosty jawny obiekt do testowania contentu scenariusza."
+    }
+  ]
+}

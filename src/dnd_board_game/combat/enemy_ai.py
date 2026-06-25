@@ -57,14 +57,19 @@ def resolve_enemy_auto_attack(
     updated_target: Actor | None = None
 
     if resolution.hit:
-        damage_amount = rng.randint(1, 6) + 2
-        damage = resolve_damage((DamageComponentInput(damage_amount, DamageType.SLASHING, source.name),))
+        if source.damage_fixed is not None:
+            damage_amount = source.damage_fixed + source.damage_modifier
+        else:
+            die_sides = source.damage_die_sides or 6
+            damage_amount = rng.randint(1, die_sides) + source.damage_modifier
+        damage_type = DamageType(source.damage_type)
+        damage = resolve_damage((DamageComponentInput(damage_amount, damage_type, source.name),))
         target_actor = _actor_for_target(action_result.state, target)
         updated_target = apply_damage(target_actor, damage)
         updated_state = replace_actor(action_result.state, updated_target)
         message = (
             f"{enemy.name} trafia {target.name}. Wynik ataku: {attack_roll.total}. "
-            f"Obrażenia: {damage.total_applied} slashing."
+            f"Obrażenia: {damage.total_applied} {damage_type.value}."
         )
     else:
         message = f"{enemy.name} pudłuje przeciwko {target.name}. Wynik ataku: {attack_roll.total}."

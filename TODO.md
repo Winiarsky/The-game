@@ -31,9 +31,9 @@
 
 ## Content Tasks
 
-- [ ] Define first demo scenario placeholder.
-- [ ] Define minimal monster schema.
-- [ ] Define minimal item/equipment schema.
+- [x] Define first demo scenario placeholder.
+- [x] Define minimal monster schema.
+- [x] Define minimal item/equipment schema.
 
 ## Open Decisions
 
