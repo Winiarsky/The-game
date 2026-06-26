@@ -261,6 +261,27 @@ Board-first flow:
 - kliknięcie innego pola przed potwierdzeniem zmienia podgląd,
 - po ataku można jeszcze wykorzystać pozostały ruch.
 
+Wariant pierwszej grywalnej sceny bez planszy:
+
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat_loop --scenario content/scenarios/first_playable_scene.json --board-backend none --ally-turn-script hero=move:1,0,interact:ancient_crate,end --enemy-seed 7 --max-rounds 8 --session-id first_scene_demo --step-delay 0
+```
+
+Wariant pierwszej grywalnej sceny w symulatorze:
+
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat_loop --scenario content/scenarios/first_playable_scene.json --board-backend simulator --board-url http://127.0.0.1:5000 --show-leds --wait-for-enter --scan-timeout 30 --enemy-seed 7 --max-rounds 8 --session-id first_scene_simulator_demo
+```
+
+Pierwsza scena pokazuje:
+
+- setup pól startowych bohaterów potwierdzany kliknięciem w podświetlone pole,
+- krokowy setup jawnych przeciwników i elementów sceny w paczkach do 5 pól,
+- cel sceny,
+- jawny obiekt interaktywny,
+- przeciwników poza zasięgiem jako przygaszony czerwony/różowy,
+- zakończenie sceny po potwierdzonej interakcji z obiektem celu.
+
 ## Zasada Testowania Funkcji
 
 Każda większa funkcja powinna przejść przez trzy poziomy:

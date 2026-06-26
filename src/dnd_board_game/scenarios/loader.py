@@ -6,9 +6,18 @@ from pathlib import Path
 from typing import Any
 
 from dnd_board_game.actors import AbilityScores, Actor, ActorId, Faction
-from dnd_board_game.combat import AttackSource, AttackSourceType, EnvironmentSetupEntry, EnvironmentSetupType, SetupVisibility
+from dnd_board_game.combat import (
+    AttackSource,
+    AttackSourceType,
+    EnvironmentSetupEntry,
+    EnvironmentSetupType,
+    SceneObjective,
+    SceneObjectiveCondition,
+    SceneObject,
+    SetupVisibility,
+)
 from dnd_board_game.rules import D20RollRequest, RollModifier, RollModifierType
-from dnd_board_game.world import BoardDimensions, BoardState, Coordinate
+from dnd_board_game.world import BLOCKING_TERRAIN, DIFFICULT_TERRAIN, BoardDimensions, BoardState, Coordinate
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,6 +57,17 @@ class ScenarioEnvironmentDefinition:
     positions: tuple[Coordinate, ...]
     visibility: SetupVisibility
     description: str = ""
+    interaction_label: str | None = None
+    objective_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ScenarioObjectiveDefinition:
+    id: str
+    name: str
+    description: str
+    condition: SceneObjectiveCondition
+    target_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,6 +77,8 @@ class ScenarioDefinition:
     board_dimensions: BoardDimensions
     actors: tuple[ScenarioActorDefinition, ...]
     environment: tuple[ScenarioEnvironmentDefinition, ...]
+    player_start_zones: tuple[tuple[Coordinate, ...], ...] = ()
+    objectives: tuple[ScenarioObjectiveDefinition, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,6 +95,9 @@ class LoadedEncounter:
     actors: tuple[Actor, ...]
     attack_sources_by_actor: dict[ActorId, AttackSource]
     environment: tuple[EnvironmentSetupEntry, ...]
+    player_start_zones: tuple[tuple[Coordinate, ...], ...] = ()
+    objectives: tuple[SceneObjective, ...] = ()
+    scene_objects: tuple[SceneObject, ...] = ()
 
 
 def load_scenario(path: str | Path) -> LoadedScenario:
@@ -86,6 +111,7 @@ def load_scenario(path: str | Path) -> LoadedScenario:
 def build_encounter_from_scenario(loaded: LoadedScenario) -> LoadedEncounter:
     definition = loaded.definition
     board = BoardState(dimensions=definition.board_dimensions)
+    _apply_environment_to_board(board, definition.environment)
     actors = tuple(_actor_from_definition(actor) for actor in definition.actors)
     attack_sources_by_actor = {
         ActorId(actor.id): _attack_source_from_definition(actor.attacks[0], f"attack_{actor.id}")
@@ -102,6 +128,30 @@ def build_encounter_from_scenario(loaded: LoadedScenario) -> LoadedEncounter:
         )
         for entry in definition.environment
     )
+    scene_objects = tuple(
+        SceneObject(
+            id=entry.id,
+            name=entry.name,
+            positions=entry.positions,
+            interaction_label=entry.interaction_label or f"Wejdź w interakcję z {entry.name}",
+            visibility=entry.visibility,
+            objective_id=entry.objective_id,
+            description=entry.description,
+        )
+        for entry in definition.environment
+        if entry.setup_type in {EnvironmentSetupType.INTERACTABLE, EnvironmentSetupType.CONTAINER, EnvironmentSetupType.NPC}
+        and entry.interaction_label is not None
+    )
+    objectives = tuple(
+        SceneObjective(
+            id=objective.id,
+            name=objective.name,
+            description=objective.description,
+            condition=objective.condition,
+            target_id=objective.target_id,
+        )
+        for objective in definition.objectives
+    )
     return LoadedEncounter(
         scenario_id=definition.id,
         scenario_name=definition.name,
@@ -109,6 +159,9 @@ def build_encounter_from_scenario(loaded: LoadedScenario) -> LoadedEncounter:
         actors=actors,
         attack_sources_by_actor=attack_sources_by_actor,
         environment=environment,
+        player_start_zones=definition.player_start_zones,
+        objectives=objectives,
+        scene_objects=scene_objects,
     )
 
 
@@ -120,12 +173,20 @@ def _parse_scenario(data: dict[str, Any], scenario_path: Path) -> ScenarioDefini
     environment_data = data.get("environment", [])
     if not isinstance(environment_data, list):
         raise ValueError("scenario.environment must be a list.")
+    start_zones_data = data.get("player_start_zones", [])
+    if not isinstance(start_zones_data, list):
+        raise ValueError("scenario.player_start_zones must be a list.")
+    objectives_data = data.get("objectives", [])
+    if not isinstance(objectives_data, list):
+        raise ValueError("scenario.objectives must be a list.")
     return ScenarioDefinition(
         id=str(_required(data, "id", "scenario")),
         name=str(_required(data, "name", "scenario")),
         board_dimensions=BoardDimensions(cols=cols, rows=rows),
         actors=tuple(_parse_actor(actor_data, scenario_path) for actor_data in actors_data),
         environment=tuple(_parse_environment(entry) for entry in environment_data),
+        player_start_zones=tuple(_parse_start_zone(zone, "scenario.player_start_zones") for zone in start_zones_data),
+        objectives=tuple(_parse_objective(entry) for entry in objectives_data),
     )
 
 
@@ -212,6 +273,31 @@ def _parse_environment(data: dict[str, Any]) -> ScenarioEnvironmentDefinition:
             f"environment {entry_id}.visibility",
         ),
         description=str(data.get("description", "")),
+        interaction_label=str(data["interaction_label"]) if "interaction_label" in data else None,
+        objective_id=str(data["objective_id"]) if "objective_id" in data else None,
+    )
+
+
+def _parse_start_zone(data: Any, field: str) -> tuple[Coordinate, ...]:
+    if not isinstance(data, list):
+        raise ValueError(f"{field} entries must be lists.")
+    return tuple(_parse_coordinate(position, field) for position in data)
+
+
+def _parse_objective(data: dict[str, Any]) -> ScenarioObjectiveDefinition:
+    if not isinstance(data, dict):
+        raise ValueError("scenario.objectives entries must be objects.")
+    objective_id = str(_required(data, "id", "objective"))
+    return ScenarioObjectiveDefinition(
+        id=objective_id,
+        name=str(_required(data, "name", f"objective {objective_id}")),
+        description=str(data.get("description", "")),
+        condition=_enum_value(
+            SceneObjectiveCondition,
+            str(_required(data, "condition", f"objective {objective_id}")),
+            f"objective {objective_id}.condition",
+        ),
+        target_id=str(data["target_id"]) if "target_id" in data else None,
     )
 
 
@@ -269,6 +355,28 @@ def _validate_scenario(definition: ScenarioDefinition) -> None:
         for position in entry.positions:
             if not definition.board_dimensions.in_bounds(position):
                 raise ValueError(f"environment {entry.id}.positions contains out of bounds coordinate.")
+    for zone in definition.player_start_zones:
+        for position in zone:
+            if not definition.board_dimensions.in_bounds(position):
+                raise ValueError("scenario.player_start_zones contains out of bounds coordinate.")
+    environment_ids = {entry.id for entry in definition.environment}
+    objective_ids = {objective.id for objective in definition.objectives}
+    for entry in definition.environment:
+        if entry.objective_id is not None and entry.objective_id not in objective_ids:
+            raise ValueError(f"environment {entry.id}.objective_id references unknown objective.")
+    for objective in definition.objectives:
+        if objective.condition == SceneObjectiveCondition.INTERACT_WITH_OBJECT and objective.target_id not in environment_ids:
+            raise ValueError(f"objective {objective.id}.target_id references unknown environment entry.")
+
+
+def _apply_environment_to_board(board: BoardState, environment: tuple[ScenarioEnvironmentDefinition, ...]) -> None:
+    for entry in environment:
+        if entry.setup_type == EnvironmentSetupType.DIFFICULT_TERRAIN:
+            for position in entry.positions:
+                board.set_terrain(position, DIFFICULT_TERRAIN)
+        if entry.setup_type in {EnvironmentSetupType.BLOCKING_TERRAIN, EnvironmentSetupType.OBSTACLE}:
+            for position in entry.positions:
+                board.set_terrain(position, BLOCKING_TERRAIN)
 
 
 def _read_json(path: Path) -> dict[str, Any]:

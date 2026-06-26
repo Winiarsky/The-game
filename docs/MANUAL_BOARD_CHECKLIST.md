@@ -211,6 +211,28 @@ PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat_loop --scenario
 - [ ] Przeciwnik bez celu ataku podchodzi do najbliższej pozycji ataku.
 - [ ] Plik obserwacji zawiera `turn_intent_previewed`, `turn_intent_confirmed`, `movement_committed`, `attack_previewed` i `target_selected`.
 
+### Runtime `demo_mini_combat_loop` Pierwsza Grywalna Scena
+
+Terminal 2:
+
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat_loop --scenario content/scenarios/first_playable_scene.json --board-backend simulator --board-url http://127.0.0.1:5000 --show-leds --wait-for-enter --scan-timeout 30 --enemy-seed 7 --max-rounds 8 --session-id first_scene_simulator_demo
+```
+
+- [ ] Przed startem sceny aplikacja pokazuje komunikat setupu.
+- [ ] Pola startowe bohaterów świecą na biało/cyan.
+- [ ] Każdy bohater jest wywołany osobno do ustawienia figurki.
+- [ ] Kliknięcie jednego z podświetlonych pól startowych potwierdza ustawienie danego bohatera.
+- [ ] Jawni przeciwnicy i elementy sceny są ustawiane krokami, maksymalnie po 5 pól naraz.
+- [ ] Kliknięcie jednego z pól aktualnej grupy potwierdza ustawienie tej grupy.
+- [ ] Aplikacja pokazuje cel sceny.
+- [ ] Widoczni przeciwnicy poza zasięgiem świecą przygaszonym czerwonym/różowym, a nie wyglądają jak puste pola.
+- [ ] Obiekt interaktywny świeci na zielono.
+- [ ] Kliknięcie obiektu pokazuje komunikat interakcji.
+- [ ] Drugie kliknięcie tego samego obiektu potwierdza interakcję.
+- [ ] Po spełnieniu celu aplikacja kończy scenę.
+- [ ] Plik obserwacji zawiera `scene_setup_started`, `scene_setup_step_confirmed`, `scene_setup_confirmed`, `objective_started`, `interaction_confirmed`, `objective_completed` i `scene_finished`.
+
 ## Test Obserwacji Sesji
 
 - [ ] Każdy ruch zapisuje metadane: aktor, start, cel, koszt, ścieżka.

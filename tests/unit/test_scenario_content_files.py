@@ -61,3 +61,39 @@ def test_multi_actor_scenario_references_existing_content_files():
     assert text.count('"source_ref": "goblin"') == 3
     assert '"longsword"' in text
     assert '"dagger"' in text
+
+
+def test_first_playable_scene_file_exists_and_loads():
+    scenario_path = Path("content/scenarios/first_playable_scene.json")
+
+    loaded = load_scenario(scenario_path)
+
+    assert scenario_path.exists()
+    assert loaded.definition.id == "first_playable_scene"
+    assert len(loaded.definition.player_start_zones) == 1
+    assert len(loaded.definition.objectives) == 1
+
+
+def test_first_playable_scene_references_existing_content_files():
+    text = Path("content/scenarios/first_playable_scene.json").read_text(encoding="utf-8")
+
+    assert Path("content/monsters/goblin.json").exists()
+    assert Path("content/items/longsword.json").exists()
+    assert Path("content/items/dagger.json").exists()
+    assert text.count('"source_ref": "goblin"') == 3
+    assert '"longsword"' in text
+    assert '"dagger"' in text
+
+
+def test_first_playable_scene_positions_are_in_bounds():
+    loaded = load_scenario("content/scenarios/first_playable_scene.json")
+    dimensions = loaded.definition.board_dimensions
+
+    for actor in loaded.definition.actors:
+        assert dimensions.in_bounds(actor.position)
+    for zone in loaded.definition.player_start_zones:
+        for position in zone:
+            assert dimensions.in_bounds(position)
+    for entry in loaded.definition.environment:
+        for position in entry.positions:
+            assert dimensions.in_bounds(position)

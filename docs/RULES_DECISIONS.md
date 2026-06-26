@@ -256,6 +256,9 @@ Odstępstwa / decyzje planszowe:
 - Pierwsze kliknięcie pola pokazuje podgląd intencji, drugie kliknięcie tego samego pola potwierdza.
 - Kliknięcie innego legalnego pola przed potwierdzeniem zmienia podgląd.
 - Przeciwnicy w MVP mogą wykonać ruch w stronę najbliższego celu, a potem zaatakować, jeśli cel stał się legalny.
+- Pierwsza scena grywalna może zakończyć się przez spełnienie celu sceny, a nie tylko przez pokonanie wszystkich przeciwników.
+- Interakcja z jawnym obiektem jest akcją główną: kliknięcie obiektu pokazuje podgląd, drugie kliknięcie potwierdza i zużywa akcję.
+- Setup startowy pokazuje pola, na których gracze mogą ustawić figurki, ale MVP nie skanuje automatycznie poprawności ustawienia.
 
 Testy:
 
@@ -273,3 +276,7 @@ Testy:
 - `tests/unit/test_demo_mini_combat_loop.py`
 - `tests/unit/test_scenario_loader.py`
 - `tests/unit/test_scenario_content_files.py`
+- `tests/unit/test_scene_setup.py`
+- `tests/unit/test_scene_objectives.py`
+- `tests/unit/test_interaction_intent.py`
+- `tests/unit/test_turn_led_feedback.py`

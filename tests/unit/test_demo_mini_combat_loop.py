@@ -187,7 +187,7 @@ def test_demo_mini_combat_loop_turn_script_moves_attacks_moves_and_ends(tmp_path
 
 
 def test_demo_mini_combat_loop_second_click_on_different_tile_changes_preview(tmp_path):
-    connection = FakeConnection(scanned=[(1, 0), (1, 1), (1, 1)])
+    connection = FakeConnection(scanned=[(1, 0), (3, 1), (1, 0), (1, 1), (1, 1)])
     args = _args(
         tmp_path,
         "--scenario",
@@ -207,3 +207,80 @@ def test_demo_mini_combat_loop_second_click_on_different_tile_changes_preview(tm
 
     target_events = [event for event in _events(result.observation_path) if event["event_type"] == "target_selected"]
     assert target_events[0]["payload"]["target_id"] == "goblin_b"
+
+
+def test_demo_mini_combat_loop_first_playable_scene_setup_and_interaction(tmp_path):
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--scenario",
+            "content/scenarios/first_playable_scene.json",
+            "--ally-turn-script",
+            "hero=move:1,0,interact:ancient_crate,end",
+            "--max-rounds",
+            "8",
+            "--enemy-seed",
+            "7",
+        )
+    )
+
+    assert any("Setup sceny" in message for message in result.messages)
+    assert any("Cel sceny: Zabezpiecz starą skrzynię" in message for message in result.messages)
+    event_types = [event["event_type"] for event in _events(result.observation_path)]
+    assert "scene_started" in event_types
+    assert "scene_setup_started" in event_types
+    assert "scene_setup_confirmed" in event_types
+    assert "interaction_previewed" in event_types
+    assert "interaction_confirmed" in event_types
+    assert "objective_completed" in event_types
+    assert "scene_finished" in event_types
+
+
+def test_demo_mini_combat_loop_scene_setup_uses_board_clicks_for_hero_positions(tmp_path):
+    connection = FakeConnection(scanned=[(1, 0), (0, 1), (5, 0), (3, 1), (2, 2), (2, 0), None])
+    args = _args(
+        tmp_path,
+        "--scenario",
+        "content/scenarios/first_playable_scene.json",
+        "--board-backend",
+        "simulator",
+        "--show-leds",
+        "--max-rounds",
+        "1",
+    )
+
+    result = run_demo(args, connection_factory=lambda args: connection)
+
+    hero = next(actor for actor in result.final_state.actors if actor.id == "hero")
+    rogue = next(actor for actor in result.final_state.actors if actor.id == "rogue")
+    assert hero.position.as_tuple() == (1, 0)
+    assert rogue.position.as_tuple() == (0, 1)
+    assert any("Bohater: ustaw figurkę" in message for message in result.messages)
+    assert any("Łotrzyca: ustaw figurkę" in message for message in result.messages)
+    setup_events = [event for event in _events(result.observation_path) if event["event_type"] == "scene_setup_step_confirmed"]
+    assert any(event["payload"]["actor_id"] == "hero" and event["payload"]["selected_position"] == [1, 0] for event in setup_events)
+    assert any(event["payload"]["phase"] == "scene_setup_enemies" for event in setup_events)
+
+
+def test_demo_mini_combat_loop_invalid_interaction_does_not_request_confirmation_or_led_preview(tmp_path):
+    connection = FakeConnection(scanned=[(0, 0), (0, 1), (5, 0), (3, 1), (2, 2), (2, 0), (2, 0), None])
+    args = _args(
+        tmp_path,
+        "--scenario",
+        "content/scenarios/first_playable_scene.json",
+        "--board-backend",
+        "simulator",
+        "--show-leds",
+        "--max-rounds",
+        "1",
+    )
+
+    result = run_demo(args, connection_factory=lambda args: connection)
+
+    assert any("Stara skrzynia jest poza zasięgiem interakcji" in message for message in result.messages)
+    events = _events(result.observation_path)
+    assert not any(event["event_type"] == "turn_intent_confirmation_scan" for event in events)
+    assert not any(
+        event["event_type"] == "led_feedback_sent" and event["payload"].get("phase") == "invalid"
+        for event in events
+    )

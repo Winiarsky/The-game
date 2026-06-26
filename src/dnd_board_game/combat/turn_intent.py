@@ -8,7 +8,9 @@ from dnd_board_game.world import BoardState, Coordinate, MovementRangeResult, Pa
 
 from .action_economy import ActionUse
 from .attack_flow import AttackSource, legal_melee_targets
+from .scene import SceneObject, visible_scene_objects
 from .session import CombatState, TurnMovementUseResult, movement_remaining, use_movement
+from .session import use_turn_action
 from .targets import CombatTarget
 
 
@@ -31,6 +33,7 @@ class TurnIntentPreview:
     movement_path: PathResult | None = None
     attack_target: CombatTarget | None = None
     attack_source: AttackSource | None = None
+    interaction_object: SceneObject | None = None
     movement_remaining_feet: int = 0
     action_available: bool = False
 
@@ -44,6 +47,7 @@ class TurnIntentConfirmation:
     movement_result: TurnMovementUseResult | None = None
     attack_target: CombatTarget | None = None
     attack_source: AttackSource | None = None
+    interaction_object: SceneObject | None = None
 
 
 def preview_turn_intent(
@@ -52,6 +56,7 @@ def preview_turn_intent(
     actor: Actor,
     attack_source: AttackSource,
     clicked_position: Coordinate,
+    interactables: tuple[SceneObject, ...] = (),
 ) -> TurnIntentPreview:
     remaining = movement_remaining(state, actor)
     action_available = state.turn_action.action_use == ActionUse.ACTION_AVAILABLE
@@ -76,6 +81,30 @@ def preview_turn_intent(
                 movement_remaining_feet=remaining,
                 action_available=action_available,
             )
+
+    if action_available:
+        for scene_object in visible_scene_objects(interactables):
+            if clicked_position in scene_object.positions:
+                if not _is_adjacent(actor.position, scene_object.primary_position):
+                    return _invalid(
+                        actor,
+                        clicked_position,
+                        remaining,
+                        action_available,
+                        f"{scene_object.name} jest poza zasięgiem interakcji. Podejdź bliżej.",
+                    )
+                return TurnIntentPreview(
+                    mode=TurnPromptMode.INTERACTION_PREVIEW,
+                    actor=actor,
+                    clicked_position=clicked_position,
+                    message=(
+                        f"Wybrano obiekt: {scene_object.name}. Dostępna akcja: {scene_object.interaction_label}. "
+                        "Kliknij to pole ponownie, aby potwierdzić interakcję."
+                    ),
+                    interaction_object=scene_object,
+                    movement_remaining_feet=remaining,
+                    action_available=action_available,
+                )
 
     if remaining <= 0:
         return _invalid(actor, clicked_position, remaining, action_available, "Nie masz już ruchu w tej turze.")
@@ -130,6 +159,19 @@ def confirm_turn_intent(state: CombatState, preview: TurnIntentPreview) -> TurnI
             attack_target=preview.attack_target,
             attack_source=preview.attack_source,
         )
+    if preview.mode == TurnPromptMode.INTERACTION_PREVIEW and preview.interaction_object is not None:
+        action_result = use_turn_action(state)
+        return TurnIntentConfirmation(
+            state=action_result.state,
+            accepted=action_result.accepted,
+            mode=TurnPromptMode.RESOLVED if action_result.accepted else TurnPromptMode.INVALID,
+            message=(
+                f"Potwierdzono interakcję: {preview.interaction_object.interaction_label}."
+                if action_result.accepted
+                else action_result.message
+            ),
+            interaction_object=preview.interaction_object if action_result.accepted else None,
+        )
     return TurnIntentConfirmation(state, False, TurnPromptMode.INVALID, preview.message)
 
 
@@ -155,3 +197,9 @@ def _actor_from_state(state: CombatState, actor: Actor) -> Actor:
         if candidate.id == actor.id:
             return candidate
     raise ValueError(f"Unknown actor: {actor.id}.")
+
+
+def _is_adjacent(a: Coordinate, b: Coordinate) -> bool:
+    dc = abs(a.col - b.col)
+    dr = abs(a.row - b.row)
+    return max(dc, dr) == 1 and (dc != 0 or dr != 0)

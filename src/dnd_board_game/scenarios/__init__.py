@@ -7,6 +7,7 @@ from .loader import (
     ScenarioAttackDefinition,
     ScenarioDefinition,
     ScenarioEnvironmentDefinition,
+    ScenarioObjectiveDefinition,
     build_encounter_from_scenario,
     load_scenario,
 )
@@ -18,6 +19,7 @@ __all__ = [
     "ScenarioAttackDefinition",
     "ScenarioDefinition",
     "ScenarioEnvironmentDefinition",
+    "ScenarioObjectiveDefinition",
     "build_encounter_from_scenario",
     "load_scenario",
 ]

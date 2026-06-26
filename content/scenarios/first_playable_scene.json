@@ -1,0 +1,108 @@
+{
+  "id": "first_playable_scene",
+  "name": "Skrzynia na starym trakcie",
+  "board": {
+    "cols": 20,
+    "rows": 30
+  },
+  "player_start_zones": [
+    [[0, 0], [1, 0], [0, 1], [1, 1]]
+  ],
+  "objectives": [
+    {
+      "id": "secure_crate",
+      "name": "Zabezpiecz starą skrzynię",
+      "description": "Podejdźcie do starej skrzyni i potwierdźcie interakcję, zanim gobliny odzyskają kontrolę nad traktem.",
+      "condition": "interact_with_object",
+      "target_id": "ancient_crate"
+    }
+  ],
+  "actors": [
+    {
+      "id": "hero",
+      "name": "Bohater",
+      "kind": "player_character",
+      "faction": "ally",
+      "ac": 14,
+      "hp": 20,
+      "temp_hp": 0,
+      "speed_feet": 30,
+      "position": [0, 0],
+      "ability_scores": {
+        "strength": 16,
+        "dexterity": 14,
+        "constitution": 12,
+        "intelligence": 10,
+        "wisdom": 10,
+        "charisma": 10
+      },
+      "item_refs": ["longsword"]
+    },
+    {
+      "id": "rogue",
+      "name": "Łotrzyca",
+      "kind": "player_character",
+      "faction": "ally",
+      "ac": 15,
+      "hp": 16,
+      "temp_hp": 0,
+      "speed_feet": 30,
+      "position": [0, 1],
+      "ability_scores": {
+        "strength": 10,
+        "dexterity": 16,
+        "constitution": 12,
+        "intelligence": 12,
+        "wisdom": 10,
+        "charisma": 12
+      },
+      "item_refs": ["dagger"]
+    },
+    {
+      "id": "goblin_a",
+      "name": "Goblin A",
+      "source_ref": "goblin",
+      "position": [5, 0]
+    },
+    {
+      "id": "goblin_b",
+      "name": "Goblin B",
+      "source_ref": "goblin",
+      "position": [5, 1]
+    },
+    {
+      "id": "goblin_c",
+      "name": "Goblin C",
+      "source_ref": "goblin",
+      "position": [6, 0]
+    }
+  ],
+  "environment": [
+    {
+      "id": "ancient_crate",
+      "name": "Stara skrzynia",
+      "type": "interactable",
+      "positions": [[2, 0]],
+      "visibility": "visible",
+      "interaction_label": "Zabezpiecz skrzynię",
+      "objective_id": "secure_crate",
+      "description": "Jawny obiekt celu sceny."
+    },
+    {
+      "id": "fallen_cart",
+      "name": "Przewrócony wóz",
+      "type": "blocking_terrain",
+      "positions": [[3, 1]],
+      "visibility": "visible",
+      "description": "Blokująca przeszkoda na środku traktu."
+    },
+    {
+      "id": "loose_stones",
+      "name": "Luźne kamienie",
+      "type": "difficult_terrain",
+      "positions": [[2, 2], [3, 2]],
+      "visibility": "visible",
+      "description": "Trudny teren spowalniający ruch."
+    }
+  ]
+}

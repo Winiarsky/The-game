@@ -85,6 +85,14 @@ Każde zdarzenie powinno zawierać:
 
 ### Walka
 
+- `scene_started`
+- `scene_setup_started`
+- `scene_setup_step_started`
+- `scene_setup_step_confirmed`
+- `scene_setup_confirmed`
+- `objective_started`
+- `objective_completed`
+- `scene_finished`
 - `setup_step_started`
 - `setup_step_finished`
 - `enemy_initiative_rolled`
@@ -97,6 +105,8 @@ Każde zdarzenie powinno zawierać:
 - `enemy_action_selected`
 - `target_selected`
 - `attack_previewed`
+- `interaction_previewed`
+- `interaction_confirmed`
 - `attack_rejected`
 - `attack_declared`
 - `attack_resolved`
