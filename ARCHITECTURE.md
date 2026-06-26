@@ -74,6 +74,11 @@ Existing `board.Connection` provides:
 
 New code should wrap it in `src/dnd_board_game/hardware/` rather than calling it from rules modules.
 
+LED colors are centralized in `src/dnd_board_game/hardware/led_palette.py`.
+Runtime and combat code should use semantic names like `LedColor.LEGAL_ATTACK_TARGET`,
+`LedColor.INTERACTIVE_OBJECT` or `LedColor.ENEMY_MOVEMENT_PATH` instead of local RGB tuples.
+This keeps board communication consistent when one tile can represent multiple intentions.
+
 ## First Implementation Milestones
 
 1. Create core coordinate/grid primitives.

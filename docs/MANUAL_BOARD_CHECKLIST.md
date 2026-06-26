@@ -211,6 +211,8 @@ PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat_loop --scenario
 - [ ] Drugie kliknięcie pola aktywnego aktora kończy turę przed wykorzystaniem całego ruchu.
 - [ ] Po ataku można jeszcze ruszyć się pozostałym ruchem.
 - [ ] Przeciwnik bez celu ataku podchodzi do najbliższej pozycji ataku.
+- [ ] Ruch przeciwnika pokazuje ścieżkę na czerwono i docelowe pole na pomarańczowo.
+- [ ] Po fizycznym przestawieniu figurki przeciwnika kliknięcie pomarańczowego pola potwierdza ruch.
 - [ ] Plik obserwacji zawiera `turn_intent_previewed`, `turn_intent_confirmed`, `movement_committed`, `attack_previewed` i `target_selected`.
 
 ### Runtime `demo_mini_combat_loop` Pierwsza Grywalna Scena
@@ -218,7 +220,7 @@ PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat_loop --scenario
 Terminal 2:
 
 ```bash
-PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat_loop --scenario content/scenarios/first_playable_scene.json --board-backend simulator --board-url http://127.0.0.1:5000 --show-leds --wait-for-enter --scan-timeout 30 --enemy-seed 7 --max-rounds 8 --session-id first_scene_simulator_demo
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat_loop --scenario content/scenarios/first_playable_scene.json --board-backend simulator --board-url http://127.0.0.1:5000 --show-leds --wait-for-enter --scan-timeout 30 --initiative-mode rolled --enemy-seed 7 --max-rounds 8 --session-id first_scene_simulator_demo
 ```
 
 - [ ] Przed startem sceny aplikacja pokazuje komunikat setupu.
@@ -227,6 +229,12 @@ PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat_loop --scenario
 - [ ] Kliknięcie jednego z podświetlonych pól startowych potwierdza ustawienie danego bohatera.
 - [ ] Jawni przeciwnicy i elementy sceny są ustawiane krokami, maksymalnie po 5 pól naraz.
 - [ ] Kliknięcie jednego z pól aktualnej grupy potwierdza ustawienie tej grupy.
+- [ ] Po setupie aplikacja komunikuje rozpoczęcie inicjatywy.
+- [ ] Każdy bohater jest wywołany osobno do rzutu inicjatywy.
+- [ ] Przy rzucie inicjatywy świeci pole aktualnie wywołanego aktora.
+- [ ] Przeciwnicy mają inicjatywę rzuconą automatycznie i też są chwilowo podświetlani.
+- [ ] Aplikacja pokazuje finalną kolejność inicjatywy przed pierwszą turą.
+- [ ] Jeśli przeciwnik rusza się w swojej turze, ścieżka świeci na czerwono, docelowe pole na pomarańczowo, a ruch wymaga kliknięcia pola docelowego.
 - [ ] Aplikacja pokazuje cel sceny.
 - [ ] Widoczni przeciwnicy poza zasięgiem świecą przygaszonym czerwonym/różowym, a nie wyglądają jak puste pola.
 - [ ] Obiekt interaktywny świeci na zielono.
@@ -236,7 +244,7 @@ PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat_loop --scenario
 - [ ] Po wpisaniu naturalnego wyniku d20 aplikacja pokazuje sukces albo porażkę.
 - [ ] Sukces miga/świeci na zielono, porażka na czerwono.
 - [ ] Po spełnieniu celu aplikacja kończy scenę.
-- [ ] Plik obserwacji zawiera `scene_setup_started`, `scene_setup_step_confirmed`, `scene_setup_confirmed`, `objective_started`, `interaction_options_shown`, `ability_check_requested`, `ability_check_resolved`, `scene_flag_set`, `objective_completed` i `scene_finished`.
+- [ ] Plik obserwacji zawiera `scene_setup_started`, `scene_setup_step_confirmed`, `scene_setup_confirmed`, `roll_requested`, `roll_resolved`, `enemy_initiative_rolled`, `initiative_set`, `board_scan_requested`, `board_scan_received`, `objective_started`, `interaction_options_shown`, `ability_check_requested`, `ability_check_resolved`, `scene_flag_set`, `objective_completed` i `scene_finished`.
 
 ## Test Obserwacji Sesji
 

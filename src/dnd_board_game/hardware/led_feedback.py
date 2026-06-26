@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Protocol
 
+from dnd_board_game.hardware.led_palette import LedColor
 from dnd_board_game.world import Coordinate, MovementRangeResult, PathResult
 
 
@@ -37,14 +38,14 @@ class BoardConnectionLike(Protocol):
 
 
 DEFAULT_COLORS: dict[LedRole, tuple[int, int, int]] = {
-    LedRole.ACTIVE_ACTOR: (255, 255, 255),
-    LedRole.MOVEMENT_RANGE: (0, 80, 220),
-    LedRole.SELECTED_PATH: (255, 210, 0),
-    LedRole.DESTINATION: (0, 255, 120),
-    LedRole.DIFFICULT_TERRAIN: (255, 120, 0),
-    LedRole.BLOCKING_TERRAIN: (180, 0, 0),
-    LedRole.ALLY: (0, 220, 255),
-    LedRole.ENEMY: (255, 0, 80),
+    LedRole.ACTIVE_ACTOR: LedColor.ACTIVE_ACTOR,
+    LedRole.MOVEMENT_RANGE: LedColor.MOVEMENT_RANGE,
+    LedRole.SELECTED_PATH: LedColor.PLAYER_MOVEMENT_PATH,
+    LedRole.DESTINATION: LedColor.MOVEMENT_DESTINATION,
+    LedRole.DIFFICULT_TERRAIN: LedColor.DIFFICULT_TERRAIN,
+    LedRole.BLOCKING_TERRAIN: LedColor.BLOCKING_TERRAIN,
+    LedRole.ALLY: LedColor.ALLY,
+    LedRole.ENEMY: LedColor.ENEMY,
 }
 
 

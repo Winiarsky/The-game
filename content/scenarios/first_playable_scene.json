@@ -88,6 +88,9 @@
       "interaction_label": "Zbadaj skrzynię",
       "objective_id": "secure_crate",
       "description": "Jawny obiekt celu sceny.",
+      "blocks_movement": false,
+      "allow_interaction_when_occupied_by_enemy": true,
+      "cover_bonus": 2,
       "interactions": [
         {
           "id": "inspect_crate",

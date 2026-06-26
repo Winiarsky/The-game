@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Protocol
 
 from dnd_board_game.actors import Actor, ActorId, Faction
-from dnd_board_game.hardware import BoardLedAdapter, LedFeedback, LedFrame, LedRole
+from dnd_board_game.hardware import BoardLedAdapter, LedColor, LedFeedback, LedFrame, LedRole
 from dnd_board_game.world import (
     BLOCKING_TERRAIN,
     DIFFICULT_TERRAIN,
@@ -248,23 +248,23 @@ def demo_movement_led_feedback(
     frames: list[LedFrame] = []
     range_tiles = tuple(sorted(tile for tile in movement.reachable_tiles if tile != movement.origin))
     if range_tiles:
-        frames.append(LedFrame(range_tiles, (0, 80, 220), LedRole.MOVEMENT_RANGE))
+        frames.append(LedFrame(range_tiles, LedColor.MOVEMENT_RANGE, LedRole.MOVEMENT_RANGE))
     if difficult_tiles:
-        frames.append(LedFrame(difficult_tiles, (255, 120, 0), LedRole.DIFFICULT_TERRAIN))
+        frames.append(LedFrame(difficult_tiles, LedColor.DIFFICULT_TERRAIN, LedRole.DIFFICULT_TERRAIN))
     if blocking_tiles:
-        frames.append(LedFrame(blocking_tiles, (180, 0, 0), LedRole.BLOCKING_TERRAIN))
+        frames.append(LedFrame(blocking_tiles, LedColor.BLOCKING_TERRAIN, LedRole.BLOCKING_TERRAIN))
     if allies:
-        frames.append(LedFrame(allies, (0, 220, 255), LedRole.ALLY))
+        frames.append(LedFrame(allies, LedColor.ALLY, LedRole.ALLY))
     if enemies:
-        frames.append(LedFrame(enemies, (255, 0, 80), LedRole.ENEMY))
+        frames.append(LedFrame(enemies, LedColor.ENEMY, LedRole.ENEMY))
 
     if selected_path is not None and selected_path.valid and selected_path.path:
         path_without_origin = tuple(tile for tile in selected_path.path if tile != movement.origin)
         if path_without_origin:
-            frames.append(LedFrame(path_without_origin, (255, 210, 0), LedRole.SELECTED_PATH))
-        frames.append(LedFrame((selected_path.destination,), (0, 255, 120), LedRole.DESTINATION))
+            frames.append(LedFrame(path_without_origin, LedColor.PLAYER_MOVEMENT_PATH, LedRole.SELECTED_PATH))
+        frames.append(LedFrame((selected_path.destination,), LedColor.MOVEMENT_DESTINATION, LedRole.DESTINATION))
 
-    frames.append(LedFrame((movement.origin,), (255, 255, 255), LedRole.ACTIVE_ACTOR))
+    frames.append(LedFrame((movement.origin,), LedColor.ACTIVE_ACTOR, LedRole.ACTIVE_ACTOR))
     return LedFeedback(tuple(frames))
 
 

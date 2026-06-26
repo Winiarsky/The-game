@@ -39,6 +39,8 @@ def _args(tmp_path, *extra):
             "0",
             "--max-rounds",
             "2",
+            "--initiative-mode",
+            "fixed",
             *extra,
         ]
     )
@@ -79,6 +81,82 @@ def test_demo_mini_combat_loop_stops_at_max_rounds(tmp_path):
     assert "combat_stopped" in event_types
 
 
+def test_demo_mini_combat_loop_rolled_initiative_sets_order_from_roll_totals(tmp_path):
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--scenario",
+            "content/scenarios/first_playable_scene.json",
+            "--initiative-mode",
+            "rolled",
+            "--ally-initiative-roll",
+            "hero=14",
+            "--ally-initiative-roll",
+            "rogue=10",
+            "--ally-turn-script",
+            "hero=self",
+            "--enemy-seed",
+            "7",
+            "--max-rounds",
+            "1",
+        )
+    )
+
+    events = _events(result.observation_path)
+    initiative = next(event for event in events if event["event_type"] == "initiative_set")
+    assert initiative["payload"]["mode"] == "rolled"
+    assert initiative["payload"]["order"][0]["actor_id"] == "hero"
+    assert any("Rozpoczyna się inicjatywa" in message for message in result.messages)
+    assert any("Kolejność inicjatywy została ustalona" in message for message in result.messages)
+
+
+def test_demo_mini_combat_loop_ally_initiative_roll_override_is_used(tmp_path):
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--scenario",
+            "content/scenarios/first_playable_scene.json",
+            "--initiative-mode",
+            "rolled",
+            "--ally-initiative-roll",
+            "hero=1",
+            "--ally-initiative-roll",
+            "rogue=20",
+            "--enemy-seed",
+            "7",
+            "--max-rounds",
+            "0",
+        )
+    )
+
+    roll_events = [event for event in _events(result.observation_path) if event["event_type"] == "roll_resolved"]
+    hero_roll = next(event for event in roll_events if event["payload"]["actor_id"] == "hero")
+    rogue_roll = next(event for event in roll_events if event["payload"]["actor_id"] == "rogue")
+    assert hero_roll["payload"]["natural_roll"] == 1
+    assert rogue_roll["payload"]["natural_roll"] == 20
+
+
+def test_demo_mini_combat_loop_enemy_initiative_uses_enemy_seed(tmp_path):
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--initiative-mode",
+            "rolled",
+            "--default-initiative-roll",
+            "10",
+            "--enemy-seed",
+            "7",
+            "--max-rounds",
+            "0",
+        )
+    )
+
+    enemy_events = [event for event in _events(result.observation_path) if event["event_type"] == "enemy_initiative_rolled"]
+    assert enemy_events[0]["payload"]["actor_id"] == "goblin"
+    assert enemy_events[0]["payload"]["natural_roll"] == 11
+    assert enemy_events[0]["payload"]["total"] == 13
+
+
 def test_demo_mini_combat_loop_fake_led_sequence_and_scan_selection(tmp_path):
     connection = FakeConnection(scanned=(1, 0))
     args = _args(
@@ -102,6 +180,37 @@ def test_demo_mini_combat_loop_fake_led_sequence_and_scan_selection(tmp_path):
     event_types = [event["event_type"] for event in _events(result.observation_path)]
     assert "led_feedback_sent" in event_types
     assert "combat_finished" in event_types
+
+
+def test_demo_mini_combat_loop_rolled_initiative_sends_led_prompts(tmp_path):
+    connection = FakeConnection(scanned=[(1, 0), (3, 1)])
+    args = _args(
+        tmp_path,
+        "--board-backend",
+        "simulator",
+        "--show-leds",
+        "--initiative-mode",
+        "rolled",
+        "--default-initiative-roll",
+        "18",
+        "--enemy-seed",
+        "7",
+        "--max-rounds",
+        "0",
+    )
+
+    result = run_demo(args, connection_factory=lambda args: connection)
+
+    assert result.feedback_events >= 4
+    assert ("leds_off",) in connection.events
+    event_phases = [
+        event["payload"].get("phase")
+        for event in _events(result.observation_path)
+        if event["event_type"] == "led_feedback_sent"
+    ]
+    assert "initiative" in event_phases
+    assert "enemy_initiative" in event_phases
+    assert "initiative_active_actor" in event_phases
 
 
 def test_demo_mini_combat_loop_multi_actor_scenario_runs_more_than_two_actors(tmp_path):
@@ -204,6 +313,66 @@ def test_demo_mini_combat_loop_turn_script_self_click_ends_turn(tmp_path):
     event_types = [event["event_type"] for event in _events(result.observation_path)]
     assert any("Opcje aktora: Bohater" in message for message in result.messages)
     assert "turn_end_requested" in event_types
+
+
+def test_demo_mini_combat_loop_enemy_movement_requires_destination_scan(tmp_path):
+    connection = FakeConnection(scanned=[(2, 0), (0, 0), (1, 0)])
+    args = _args(
+        tmp_path,
+        "--scenario",
+        "content/scenarios/movement_skirmish.json",
+        "--board-backend",
+        "simulator",
+        "--show-leds",
+        "--ally-turn-script",
+        "hero=self",
+        "--enemy-seed",
+        "7",
+        "--max-rounds",
+        "1",
+    )
+
+    result = run_demo(args, connection_factory=lambda args: connection)
+
+    goblin = next(actor for actor in result.final_state.actors if actor.id == "goblin_a")
+    assert goblin.position.as_tuple() == (1, 0)
+    assert any(event[0] == "scan_board" and event[1] == [(1, 0)] for event in connection.events)
+    colors = [event[2] for event in connection.events if event[0] == "set_leds"]
+    assert [220, 0, 0] in colors
+    assert [255, 120, 0] in colors
+    events = _events(result.observation_path)
+    assert any(
+        event["event_type"] == "board_scan_requested"
+        and event["payload"].get("phase") == "enemy_movement_confirmation"
+        for event in events
+    )
+    assert any(event["event_type"] == "movement_committed" and event["payload"]["actor_id"] == "goblin_a" for event in events)
+
+
+def test_demo_mini_combat_loop_wrong_enemy_movement_scan_cancels_move(tmp_path):
+    connection = FakeConnection(scanned=[(2, 0), (0, 0), (0, 0), (0, 0)])
+    args = _args(
+        tmp_path,
+        "--scenario",
+        "content/scenarios/movement_skirmish.json",
+        "--board-backend",
+        "simulator",
+        "--show-leds",
+        "--ally-turn-script",
+        "hero=self",
+        "--enemy-seed",
+        "7",
+        "--max-rounds",
+        "1",
+    )
+
+    result = run_demo(args, connection_factory=lambda args: connection)
+
+    goblin = next(actor for actor in result.final_state.actors if actor.id == "goblin_a")
+    assert goblin.position.as_tuple() == (2, 0)
+    events = _events(result.observation_path)
+    assert any(event["event_type"] == "movement_rejected" and event["payload"]["actor_id"] == "goblin_a" for event in events)
+    assert not any(event["event_type"] == "movement_committed" and event["payload"]["actor_id"] == "goblin_a" for event in events)
 
 
 def test_demo_mini_combat_loop_second_click_on_different_tile_changes_preview(tmp_path):

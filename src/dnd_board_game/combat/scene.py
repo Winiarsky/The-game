@@ -4,7 +4,7 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 
 from dnd_board_game.actors import Faction
-from dnd_board_game.hardware import LedFeedback, LedFrame, LedRole
+from dnd_board_game.hardware import LedColor, LedFeedback, LedFrame, LedRole
 from dnd_board_game.rules import (
     D20RollInput,
     D20RollRequest,
@@ -89,6 +89,9 @@ class SceneObject:
     objective_id: str | None = None
     description: str = ""
     interactions: tuple[SceneInteraction, ...] = ()
+    blocks_movement: bool = False
+    allow_interaction_when_occupied_by_enemy: bool = False
+    cover_bonus: int = 0
 
     @property
     def primary_position(self) -> Coordinate:
@@ -109,7 +112,7 @@ def scene_setup_led_feedback(start_zones: tuple[tuple[Coordinate, ...], ...]) ->
     positions = tuple(sorted({position for zone in start_zones for position in zone}))
     if not positions:
         return LedFeedback()
-    return LedFeedback((LedFrame(positions, (0, 220, 255), LedRole.ALLY),))
+    return LedFeedback((LedFrame(positions, LedColor.PLAYER_START_ZONE, LedRole.ALLY),))
 
 
 def visible_scene_objects(objects: tuple[SceneObject, ...]) -> tuple[SceneObject, ...]:

@@ -62,6 +62,9 @@ class ScenarioEnvironmentDefinition:
     interaction_label: str | None = None
     objective_id: str | None = None
     interactions: tuple[SceneInteraction, ...] = ()
+    blocks_movement: bool | None = None
+    allow_interaction_when_occupied_by_enemy: bool = False
+    cover_bonus: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,6 +146,9 @@ def build_encounter_from_scenario(loaded: LoadedScenario) -> LoadedEncounter:
             objective_id=entry.objective_id,
             description=entry.description,
             interactions=entry.interactions,
+            blocks_movement=_environment_blocks_movement(entry),
+            allow_interaction_when_occupied_by_enemy=entry.allow_interaction_when_occupied_by_enemy,
+            cover_bonus=entry.cover_bonus,
         )
         for entry in definition.environment
         if entry.setup_type in {EnvironmentSetupType.INTERACTABLE, EnvironmentSetupType.CONTAINER, EnvironmentSetupType.NPC}
@@ -284,6 +290,9 @@ def _parse_environment(data: dict[str, Any]) -> ScenarioEnvironmentDefinition:
         interaction_label=str(data["interaction_label"]) if "interaction_label" in data else None,
         objective_id=str(data["objective_id"]) if "objective_id" in data else None,
         interactions=_parse_interactions(data.get("interactions", []), entry_id),
+        blocks_movement=bool(data["blocks_movement"]) if "blocks_movement" in data else None,
+        allow_interaction_when_occupied_by_enemy=bool(data.get("allow_interaction_when_occupied_by_enemy", False)),
+        cover_bonus=int(data.get("cover_bonus", data.get("cover", 0))),
     )
 
 
@@ -441,9 +450,15 @@ def _apply_environment_to_board(board: BoardState, environment: tuple[ScenarioEn
         if entry.setup_type == EnvironmentSetupType.DIFFICULT_TERRAIN:
             for position in entry.positions:
                 board.set_terrain(position, DIFFICULT_TERRAIN)
-        if entry.setup_type in {EnvironmentSetupType.BLOCKING_TERRAIN, EnvironmentSetupType.OBSTACLE}:
+        if _environment_blocks_movement(entry):
             for position in entry.positions:
                 board.set_terrain(position, BLOCKING_TERRAIN)
+
+
+def _environment_blocks_movement(entry: ScenarioEnvironmentDefinition) -> bool:
+    if entry.blocks_movement is not None:
+        return entry.blocks_movement
+    return entry.setup_type in {EnvironmentSetupType.BLOCKING_TERRAIN, EnvironmentSetupType.OBSTACLE}
 
 
 def _read_json(path: Path) -> dict[str, Any]:

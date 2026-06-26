@@ -1,5 +1,6 @@
 from dnd_board_game.actors import AbilityScores, Actor, ActorId, Faction
 from dnd_board_game.combat import AttackSource, AttackSourceType, InitiativeEntry, InitiativeOrder, SceneObject, start_combat
+from dnd_board_game.hardware import LedColor
 from dnd_board_game.runtime.demo_mini_combat_loop import _turn_options_led_feedback
 from dnd_board_game.rules import D20RollInput, D20RollRequest, resolve_d20_roll
 from dnd_board_game.world import BoardState, Coordinate
@@ -39,7 +40,7 @@ def test_turn_led_feedback_marks_visible_enemy_outside_attack_range():
 
     enemy_frames = [frame for frame in feedback.frames if Coordinate(3, 0) in frame.positions]
     assert enemy_frames
-    assert enemy_frames[-1].color == (120, 0, 45)
+    assert enemy_frames[-1].color == LedColor.VISIBLE_ENEMY_OUT_OF_RANGE
 
 
 def test_turn_led_feedback_distinguishes_legal_attack_target_from_enemy_outside_range():
@@ -52,8 +53,8 @@ def test_turn_led_feedback_distinguishes_legal_attack_target_from_enemy_outside_
 
     target_frame = next(frame for frame in feedback.frames if Coordinate(1, 0) in frame.positions)
     far_frame = next(frame for frame in feedback.frames if Coordinate(3, 0) in frame.positions)
-    assert target_frame.color == (0, 80, 220)
-    assert far_frame.color == (120, 0, 45)
+    assert target_frame.color == LedColor.LEGAL_ATTACK_TARGET
+    assert far_frame.color == LedColor.VISIBLE_ENEMY_OUT_OF_RANGE
 
 
 def test_turn_led_feedback_marks_interactive_object_green():
@@ -64,5 +65,23 @@ def test_turn_led_feedback_marks_interactive_object_green():
 
     feedback = _turn_options_led_feedback(BoardState(), state, hero, _source(), (scene_object,))
 
-    object_frame = next(frame for frame in feedback.frames if Coordinate(1, 0) in frame.positions and frame.color == (0, 255, 120))
+    object_frame = next(frame for frame in feedback.frames if Coordinate(1, 0) in frame.positions and frame.color == LedColor.INTERACTIVE_OBJECT)
     assert object_frame.positions == (Coordinate(1, 0),)
+
+
+def test_turn_led_feedback_marks_enemy_and_object_tile_as_multi_option_color():
+    hero = _actor("hero", Faction.ALLY, Coordinate(0, 0))
+    goblin = _actor("goblin", Faction.ENEMY, Coordinate(1, 0))
+    state = start_combat((hero, goblin), _order(hero, goblin))
+    scene_object = SceneObject(
+        "crate",
+        "Skrzynia",
+        (Coordinate(1, 0),),
+        "Zabezpiecz",
+        allow_interaction_when_occupied_by_enemy=True,
+    )
+
+    feedback = _turn_options_led_feedback(BoardState(), state, hero, _source(), (scene_object,))
+
+    multi_frame = next(frame for frame in feedback.frames if Coordinate(1, 0) in frame.positions)
+    assert multi_frame.color == LedColor.MULTI_OPTION_TILE

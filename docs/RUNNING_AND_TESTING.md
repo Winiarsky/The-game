@@ -266,19 +266,23 @@ Board-first flow:
 Wariant pierwszej grywalnej sceny bez planszy:
 
 ```bash
-PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat_loop --scenario content/scenarios/first_playable_scene.json --board-backend none --ally-turn-script hero=move:1,0,interact:ancient_crate,end --ally-check-roll hero=13 --enemy-seed 7 --max-rounds 8 --session-id first_scene_demo --step-delay 0
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat_loop --scenario content/scenarios/first_playable_scene.json --board-backend none --initiative-mode rolled --ally-initiative-roll hero=14 --ally-initiative-roll rogue=10 --ally-turn-script hero=move:1,0,interact:ancient_crate,end --ally-check-roll hero=13 --enemy-seed 7 --max-rounds 8 --session-id first_scene_demo --step-delay 0
 ```
 
 Wariant pierwszej grywalnej sceny w symulatorze:
 
 ```bash
-PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat_loop --scenario content/scenarios/first_playable_scene.json --board-backend simulator --board-url http://127.0.0.1:5000 --show-leds --wait-for-enter --scan-timeout 30 --enemy-seed 7 --max-rounds 8 --session-id first_scene_simulator_demo
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat_loop --scenario content/scenarios/first_playable_scene.json --board-backend simulator --board-url http://127.0.0.1:5000 --show-leds --wait-for-enter --scan-timeout 30 --initiative-mode rolled --enemy-seed 7 --max-rounds 8 --session-id first_scene_simulator_demo
 ```
 
 Pierwsza scena pokazuje:
 
 - setup pól startowych bohaterów potwierdzany kliknięciem w podświetlone pole,
 - krokowy setup jawnych przeciwników i elementów sceny w paczkach do 5 pól,
+- wywołanie bohaterów do rzutów inicjatywy po kolei,
+- automatyczny rzut inicjatywy przeciwników,
+- ustalenie kolejności inicjatywy przed pierwszą turą,
+- ruch przeciwnika z czerwoną ścieżką, pomarańczowym polem docelowym i potwierdzeniem kliknięciem docelowego pola,
 - cel sceny,
 - jawny obiekt interaktywny,
 - opcję interakcji z opisem,
@@ -286,6 +290,8 @@ Pierwsza scena pokazuje:
 - ustawienie flagi sceny po sukcesie albo porażce,
 - przeciwników poza zasięgiem jako przygaszony czerwony/różowy,
 - zakończenie sceny po spełnieniu objective zależnego od flagi.
+
+Do regresji można uruchomić starą deterministyczną kolejność tur przez `--initiative-mode fixed`.
 
 ## Zasada Testowania Funkcji
 

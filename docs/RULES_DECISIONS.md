@@ -172,6 +172,8 @@ Implementacja MVP:
 - Kolejność inicjatywy sortuje po najwyższym wyniku końcowym.
 - Remis rozstrzyga wyższy modyfikator ze Zręczności.
 - Pełny remis zachowuje stabilną kolejność wejściową.
+- Grywalna scena po setupie używa realnego flow inicjatywy przed pierwszą turą.
+- Runtime debugowy może użyć `--initiative-mode fixed` tylko jako trybu testowego.
 - Po ostatnim aktorze kolejka wraca na początek i zwiększa rundę.
 - Pokonani aktorzy mogą pozostać w kolejce, ale przechodzenie tury może ich pomijać.
 
@@ -225,6 +227,7 @@ Implementacja MVP:
 - Cel ataku musi być `attackable=True` i `visible`.
 - Mini-pętla walki obsługuje start tury, zużycie akcji, koniec tury, przejście inicjatywy i zakończenie walki.
 - W runtime demo przeciwnik wykonuje automatyczny melee attack przez wstrzyknięty RNG.
+- Jeśli przeciwnik musi się ruszyć przed atakiem, aplikacja pokazuje ścieżkę LED i wymaga kliknięcia pola docelowego po fizycznym przestawieniu figurki.
 - Domyślny przeciwnik demo używa ataku `Szabla`, modyfikatora `+4` i obrażeń `1d6 + 2 slashing`.
 - Walka kończy się, gdy żywa zostaje tylko strona bohaterów albo tylko strona przeciwników.
 - Runtime może zatrzymać demo po limicie rund bez rozstrzygania zwycięzcy.
@@ -236,9 +239,8 @@ Implementacja MVP:
 
 Poza zakresem MVP:
 
-- reakcje,
-- ataki okazyjne,
-- pełne ranged attacks i osłony,
+- pełne reakcje,
+- pełne ranged attacks,
 - czary, area effects i złożone itemy,
 - odporności i podatności,
 - pełne death saving throws,
@@ -258,6 +260,12 @@ Odstępstwa / decyzje planszowe:
 - Kliknięcie pola aktywnego aktora pokazuje podstawowe opcje aktora; w MVP obsługiwana jest opcja zakończenia tury.
 - Zakończenie tury przed wykorzystaniem całego ruchu jest legalne; niewykorzystany ruch przepada na końcu tury.
 - Przeciwnicy w MVP mogą wykonać ruch w stronę najbliższego celu, a potem zaatakować, jeśli cel stał się legalny.
+- Ruch przeciwnika jest wizualizowany jako czerwona ścieżka i pomarańczowe pole docelowe.
+- Pole może mieć wiele dostępnych intencji, np. przeciwnik stojący na obiekcie interaktywnym.
+- W takim przypadku plansza pokazuje kolor `multi-option`, kliknięcie tego samego pola przełącza opcję, a Enter potwierdza aktualną opcję.
+- Obiekty sceny mogą deklarować `blocks_movement`, `allow_interaction_when_occupied_by_enemy` i `cover_bonus`.
+- Jeśli cel ataku stoi na obiekcie z `cover_bonus`, runtime dodaje jawny modyfikator osłony do instrukcji rzutu ataku.
+- Interakcja przy przeciwniku może wywołać uproszczony atak okazyjny jako decyzję planszowego MVP.
 - Pierwsza scena grywalna może zakończyć się przez spełnienie celu sceny, a nie tylko przez pokonanie wszystkich przeciwników.
 - Interakcja z jawnym obiektem jest akcją główną: kliknięcie obiektu pokazuje podgląd, drugie kliknięcie potwierdza i zużywa akcję.
 - Interakcja może mieć test cechy `d20`; aplikacja pokazuje cechę, skill, ST, aktywne modyfikatory i końcowy modyfikator przed wpisaniem wyniku.

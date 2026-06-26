@@ -28,6 +28,9 @@
 - [x] Add enemy auto movement before melee attack.
 - [x] Implement first playable scene with setup, objective, and interaction.
 - [x] Implement exploration interactions with ability checks and scene flags.
+- [x] Integrate rolled initiative into the playable scene runtime.
+- [x] Add multi-option tile preview for overlapping attack and interaction choices.
+- [x] Add first scene-object flags for movement, interaction while occupied, and cover.
 - [x] Implement hardware adapter interface around `board.Connection`.
 - [x] Add LED frame generation for selected path and movement range.
 - [x] Decide first UI/runtime surface.

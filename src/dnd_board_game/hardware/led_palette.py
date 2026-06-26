@@ -1,0 +1,42 @@
+from __future__ import annotations
+
+RGBColor = tuple[int, int, int]
+
+
+class LedColor:
+    """Semantic LED palette for board feedback.
+
+    Keep game/rules code talking about intent instead of raw RGB values.
+    """
+
+    ACTIVE_ACTOR: RGBColor = (255, 255, 255)
+    PLAYER_START_ZONE: RGBColor = (0, 220, 255)
+    ALLY: RGBColor = (0, 220, 255)
+    VISIBLE_ALLY: RGBColor = (80, 180, 200)
+
+    LEGAL_MOVEMENT: RGBColor = (0, 110, 160)
+    MOVEMENT_RANGE: RGBColor = (0, 80, 220)
+    PLAYER_MOVEMENT_PATH: RGBColor = (255, 210, 0)
+    MOVEMENT_DESTINATION: RGBColor = (0, 255, 120)
+    MOVEMENT_COMMITTED: RGBColor = (0, 255, 120)
+
+    LEGAL_ATTACK_TARGET: RGBColor = (0, 80, 220)
+    SELECTED_ATTACK_TARGET: RGBColor = (0, 80, 220)
+    ATTACK_HIT: RGBColor = (0, 255, 120)
+    ATTACK_MISS: RGBColor = (255, 0, 0)
+    ATTACK_CRITICAL_HIT: RGBColor = (255, 210, 0)
+
+    ENEMY: RGBColor = (255, 0, 80)
+    VISIBLE_ENEMY_OUT_OF_RANGE: RGBColor = (120, 0, 45)
+    ENEMY_MOVEMENT_PATH: RGBColor = (220, 0, 0)
+    ENEMY_MOVEMENT_DESTINATION: RGBColor = (255, 120, 0)
+
+    INTERACTIVE_OBJECT: RGBColor = (0, 255, 120)
+    INTERACTION_SUCCESS: RGBColor = (0, 255, 120)
+    INTERACTION_FAILURE: RGBColor = (255, 0, 0)
+    MULTI_OPTION_TILE: RGBColor = (180, 120, 40)
+
+    DIFFICULT_TERRAIN: RGBColor = (255, 120, 0)
+    BLOCKING_TERRAIN: RGBColor = (180, 0, 0)
+    MARKER: RGBColor = (255, 210, 0)
+    INVALID_SELECTION: RGBColor = (255, 0, 0)

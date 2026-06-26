@@ -90,6 +90,9 @@ def test_load_first_playable_scene_builds_setup_objective_and_scene_object():
     scene_object = encounter.scene_objects[0]
     assert scene_object.id == "ancient_crate"
     assert scene_object.interaction_label == "Zbadaj skrzynię"
+    assert scene_object.blocks_movement is False
+    assert scene_object.allow_interaction_when_occupied_by_enemy is True
+    assert scene_object.cover_bonus == 2
     assert scene_object.interactions[0].id == "inspect_crate"
     assert scene_object.interactions[0].ability_check is not None
     assert scene_object.interactions[0].ability_check.dc == 12

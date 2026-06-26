@@ -91,6 +91,8 @@ from .session import (
     use_turn_action,
 )
 from .turn_intent import (
+    TileOption,
+    TileOptionKind,
     TurnIntentConfirmation,
     TurnIntentPreview,
     TurnPromptMode,
@@ -135,6 +137,8 @@ __all__ = [
     "SetupStep",
     "SetupStepKind",
     "SetupVisibility",
+    "TileOption",
+    "TileOptionKind",
     "TurnActionState",
     "TurnActionUseResult",
     "TurnIntentConfirmation",

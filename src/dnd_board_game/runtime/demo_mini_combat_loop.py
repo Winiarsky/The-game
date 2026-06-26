@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import queue
 import random
+import select
 import sys
+import threading
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
@@ -19,16 +22,21 @@ from dnd_board_game.combat import (
     InitiativeEntry,
     InitiativeOrder,
     SceneFlags,
+    TileOptionKind,
     active_actor_led_feedback,
     apply_damage,
     attack_declaration_from_state,
     attack_result_led_feedback,
     attack_targets_led_feedback,
     available_scene_interactions,
+    build_enemy_initiative_prompt,
+    build_initiative_order,
+    build_player_initiative_prompts,
     complete_interaction_objective,
     confirm_turn_intent,
     current_actor,
     finish_turn,
+    initiative_prompt_led_feedback,
     legal_melee_targets,
     movement_remaining,
     objective_status_after_combat,
@@ -49,10 +57,10 @@ from dnd_board_game.combat import (
     stop_combat,
     use_turn_action,
 )
-from dnd_board_game.hardware import BoardLedAdapter, LedFeedback, LedFrame, LedRole, movement_led_feedback
-from dnd_board_game.rules import D20RollInput, D20RollRequest, resolve_d20_roll, roll_instruction
+from dnd_board_game.hardware import BoardLedAdapter, LedColor, LedFeedback, LedFrame, LedRole, movement_led_feedback
+from dnd_board_game.rules import D20RollInput, D20RollRequest, RollModifier, RollModifierType, resolve_d20_roll, roll_instruction
 from dnd_board_game.scenarios import LoadedEncounter, build_encounter_from_scenario, load_scenario
-from dnd_board_game.world import Coordinate, find_path, movement_range
+from dnd_board_game.world import BoardState, Coordinate, find_path, movement_range
 
 from .demo_mini_combat import (
     ConnectionFactory,
@@ -96,10 +104,17 @@ def run_demo(
     objectives = encounter.objectives
     scene_flags = SceneFlags()
     setup_actors, setup_messages, setup_feedback = _run_scene_setup(args, encounter, adapter, observer)
-    state = start_combat(setup_actors, _fixed_demo_initiative(setup_actors))
     rng = random.Random(args.enemy_seed)
-    messages: list[str] = [scenario_message, *setup_messages]
-    feedback_events = setup_feedback
+    initiative_order, initiative_messages, initiative_feedback = _build_scene_initiative(
+        args,
+        setup_actors,
+        rng,
+        adapter,
+        observer,
+    )
+    state = start_combat(setup_actors, initiative_order)
+    messages: list[str] = [scenario_message, *setup_messages, *initiative_messages]
+    feedback_events = setup_feedback + initiative_feedback
     for objective in objectives:
         message = f"Cel sceny: {objective.name}. {objective.description}".strip()
         print(message)
@@ -153,6 +168,8 @@ def run_demo(
                 actor,
                 source,
                 encounter.scene_objects,
+                encounter.attack_sources_by_actor,
+                rng,
                 adapter,
                 observer,
             )
@@ -210,6 +227,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ally-attack-roll", action="append", default=[])
     parser.add_argument("--ally-damage", action="append", default=[])
     parser.add_argument("--ally-check-roll", action="append", default=[])
+    parser.add_argument("--initiative-mode", choices=("rolled", "fixed"), default="rolled")
+    parser.add_argument("--ally-initiative-roll", action="append", default=[])
+    parser.add_argument("--default-initiative-roll", type=int, default=10)
     parser.add_argument("--ally-turn-script", action="append", default=[])
     parser.add_argument("--hero-damage-type", choices=[item.value for item in DamageType], default=None)
     parser.add_argument("--enemy-seed", type=int, default=7)
@@ -275,7 +295,7 @@ def _run_scene_setup(
             adapter,
             observer,
             positions=available,
-            color=(0, 220, 255),
+            color=LedColor.PLAYER_START_ZONE,
             phase="scene_setup_hero",
             prompt=step_message,
             actor_id=str(actor.id),
@@ -296,7 +316,7 @@ def _run_scene_setup(
                 adapter,
                 observer,
                 positions=batch,
-                color=(255, 0, 80),
+                color=LedColor.ENEMY,
                 phase="scene_setup_enemies",
                 prompt=step_message,
             )
@@ -405,12 +425,12 @@ def _setup_type_label(setup_type) -> str:
 
 def _setup_type_color(setup_type) -> tuple[int, int, int]:
     if setup_type.value in {"blocking_terrain", "obstacle", "cover"}:
-        return (180, 0, 0)
+        return LedColor.BLOCKING_TERRAIN
     if setup_type.value == "difficult_terrain":
-        return (255, 120, 0)
+        return LedColor.DIFFICULT_TERRAIN
     if setup_type.value in {"interactable", "container", "npc"}:
-        return (0, 255, 120)
-    return (255, 210, 0)
+        return LedColor.INTERACTIVE_OBJECT
+    return LedColor.MARKER
 
 
 def _run_hero_turn(
@@ -422,6 +442,8 @@ def _run_hero_turn(
     actor: Actor,
     source: AttackSource,
     scene_objects,
+    attack_sources_by_actor,
+    rng: random.Random,
     adapter: BoardLedAdapter | None,
     observer: SessionObserver,
 ) -> tuple[CombatState, tuple, SceneFlags, tuple[str, ...], int]:
@@ -442,6 +464,7 @@ def _run_hero_turn(
     )
 
     pending_click: Coordinate | None = None
+    tile_option_indices: dict[Coordinate, int] = {}
     while state.status == CombatStatus.ACTIVE:
         actor = _actor_by_string_id(state, actor_id)
         if actor.is_defeated():
@@ -470,7 +493,15 @@ def _run_hero_turn(
                 adapter.clear()
             break
 
-        preview = preview_turn_intent(board, state, actor, source, clicked, scene_objects)
+        preview = preview_turn_intent(
+            board,
+            state,
+            actor,
+            source,
+            clicked,
+            scene_objects,
+            selected_tile_option_index=tile_option_indices.get(clicked, 0),
+        )
         print(preview.message)
         messages.append(preview.message)
         observer.record(
@@ -496,6 +527,26 @@ def _run_hero_turn(
             )
         if preview.mode.value == "attack_preview" and preview.attack_target is not None:
             observer.record("attack_previewed", {"actor_id": actor_id, "target_id": preview.attack_target.id})
+        if preview.mode.value == "tile_options_preview":
+            selected_option = preview.tile_options[preview.selected_tile_option_index]
+            observer.record(
+                "tile_options_shown",
+                {
+                    "actor_id": actor_id,
+                    "position": list(clicked.as_tuple()),
+                    "selected_index": preview.selected_tile_option_index,
+                    "options": [
+                        {"kind": option.kind.value, "label": option.label}
+                        for option in preview.tile_options
+                    ],
+                },
+            )
+            if selected_option.kind == TileOptionKind.ATTACK and selected_option.attack_target is not None:
+                observer.record("attack_previewed", {"actor_id": actor_id, "target_id": selected_option.attack_target.id})
+            if selected_option.kind == TileOptionKind.INTERACTION and selected_option.interaction_object is not None:
+                options_message = _interaction_options_message(selected_option.interaction_object)
+                print(options_message)
+                messages.append(options_message)
         if preview.mode.value == "interaction_preview" and preview.interaction_object is not None:
             interaction = _selected_interaction(preview.interaction_object)
             options_message = _interaction_options_message(preview.interaction_object)
@@ -524,18 +575,48 @@ def _run_hero_turn(
             continue
         if adapter is not None:
             adapter.clear()
-            adapter.show_feedback(_preview_led_feedback(preview))
+            adapter.show_feedback(_preview_led_feedback_for_turn(board, state, actor, source, scene_objects, preview))
             feedback_events += 1
             observer.record("led_feedback_sent", {"phase": preview.mode.value, "actor_id": actor_id})
 
-        confirmation_click = _confirm_preview_click(args, board, state, actor, source, scene_objects, preview, adapter, observer, script)
-        if confirmation_click is None:
-            continue
-        if confirmation_click != preview.clicked_position:
-            pending_click = confirmation_click
-            if adapter is not None:
-                adapter.clear()
-            continue
+        if preview.mode.value == "tile_options_preview":
+            option_click = _confirm_or_cycle_tile_option(args, board, state, actor, source, scene_objects, preview, adapter, observer, script)
+            if option_click == "timeout":
+                if adapter is not None:
+                    adapter.clear()
+                continue
+            if option_click == preview.clicked_position:
+                tile_option_indices[clicked] = preview.selected_tile_option_index + 1
+                observer.record(
+                    "tile_option_cycled",
+                    {
+                        "actor_id": actor_id,
+                        "position": list(clicked.as_tuple()),
+                        "next_index": tile_option_indices[clicked] % len(preview.tile_options),
+                    },
+                )
+                pending_click = clicked
+                if adapter is not None:
+                    adapter.clear()
+                continue
+            if option_click is not None and option_click != preview.clicked_position:
+                observer.record(
+                    "tile_option_cancelled",
+                    {"actor_id": actor_id, "position": list(clicked.as_tuple()), "new_position": list(option_click.as_tuple())},
+                )
+                pending_click = option_click
+                if adapter is not None:
+                    adapter.clear()
+                continue
+        else:
+            confirmation_click = _confirm_preview_click(args, board, state, actor, source, scene_objects, preview, adapter, observer, script)
+            if confirmation_click is None:
+                continue
+            if confirmation_click != preview.clicked_position:
+                pending_click = confirmation_click
+                if adapter is not None:
+                    adapter.clear()
+                continue
 
         confirmation = confirm_turn_intent(state, preview)
         observer.record(
@@ -548,6 +629,16 @@ def _run_hero_turn(
                 "clicked_position": list(clicked.as_tuple()),
             },
         )
+        if preview.mode.value == "tile_options_preview":
+            observer.record(
+                "tile_option_confirmed",
+                {
+                    "actor_id": actor_id,
+                    "position": list(clicked.as_tuple()),
+                    "selected_index": preview.selected_tile_option_index,
+                    "label": preview.tile_options[preview.selected_tile_option_index].label,
+                },
+            )
         if not confirmation.accepted:
             print(confirmation.message)
             messages.append(confirmation.message)
@@ -583,7 +674,7 @@ def _run_hero_turn(
             )
             if adapter is not None:
                 adapter.clear()
-                adapter.show_feedback(LedFeedback((LedFrame((clicked,), (0, 255, 120), LedRole.DESTINATION),)))
+                adapter.show_feedback(LedFeedback((LedFrame((clicked,), LedColor.MOVEMENT_COMMITTED, LedRole.DESTINATION),)))
                 feedback_events += 1
                 observer.record("led_feedback_sent", {"phase": "movement_committed", "actor_id": actor_id})
                 _pause_for_led_step(args, "Naciśnij Enter po potwierdzeniu ruchu.")
@@ -601,6 +692,8 @@ def _run_hero_turn(
                 scene_flags,
                 actor,
                 confirmation.interaction_object,
+                attack_sources_by_actor,
+                rng,
                 check_roll_overrides,
                 adapter,
                 observer,
@@ -623,6 +716,7 @@ def _run_hero_turn(
                 actor,
                 confirmation.attack_target,
                 confirmation.attack_source,
+                scene_objects,
                 attack_roll_overrides,
                 damage_overrides,
                 adapter,
@@ -642,6 +736,8 @@ def _resolve_confirmed_interaction(
     scene_flags: SceneFlags,
     actor: Actor,
     scene_object,
+    attack_sources_by_actor,
+    rng: random.Random,
     check_roll_overrides: dict[str, object],
     adapter: BoardLedAdapter | None,
     observer: SessionObserver,
@@ -654,6 +750,24 @@ def _resolve_confirmed_interaction(
         "interaction_confirmed",
         {"actor_id": actor_id, "object_id": scene_object.id, "interaction_id": interaction.id},
     )
+
+    state, opportunity_messages, sent = _resolve_interaction_opportunity_attack(
+        state,
+        actor,
+        scene_object,
+        attack_sources_by_actor,
+        rng,
+        adapter,
+        observer,
+    )
+    messages.extend(opportunity_messages)
+    feedback_events += sent
+    actor = _actor_by_string_id(state, actor_id)
+    if actor.is_defeated():
+        message = f"{actor.name} nie może dokończyć interakcji, bo został pokonany."
+        print(message)
+        messages.append(message)
+        return state, objectives, scene_flags, tuple(messages), feedback_events
 
     natural_roll: int | None = None
     if interaction.ability_check is not None:
@@ -716,7 +830,7 @@ def _resolve_confirmed_interaction(
 
     if adapter is not None:
         adapter.clear()
-        color = (0, 255, 120) if result.success else (255, 0, 0)
+        color = LedColor.INTERACTION_SUCCESS if result.success else LedColor.INTERACTION_FAILURE
         adapter.show_feedback(LedFeedback((LedFrame(scene_object.positions, color, LedRole.DESTINATION),)))
         feedback_events += 1
         observer.record(
@@ -733,6 +847,7 @@ def _resolve_confirmed_hero_attack(
     actor: Actor,
     target,
     source: AttackSource,
+    scene_objects,
     attack_roll_overrides: dict[str, object],
     damage_overrides: dict[str, object],
     adapter: BoardLedAdapter | None,
@@ -741,6 +856,7 @@ def _resolve_confirmed_hero_attack(
     messages: list[str] = []
     feedback_events = 0
     actor = _actor_by_string_id(state, str(actor.id))
+    source = _attack_source_with_cover(source, target, scene_objects)
     attack_state = select_attack_target(start_attack_action(board, actor, state.actors, source), target_id=target.id)
     declaration = attack_declaration_from_state(attack_state)
     observer.record(
@@ -811,6 +927,119 @@ def _resolve_confirmed_hero_attack(
     return state, tuple(messages), feedback_events
 
 
+def _resolve_interaction_opportunity_attack(
+    state: CombatState,
+    actor: Actor,
+    scene_object,
+    attack_sources_by_actor,
+    rng: random.Random,
+    adapter: BoardLedAdapter | None,
+    observer: SessionObserver,
+) -> tuple[CombatState, tuple[str, ...], int]:
+    enemies = tuple(
+        candidate
+        for candidate in state.actors
+        if candidate.faction != actor.faction
+        and not candidate.is_defeated()
+        and _is_adjacent_or_same(candidate.position, scene_object.primary_position)
+        and _is_adjacent_or_same(candidate.position, actor.position)
+    )
+    if not enemies:
+        return state, (), 0
+
+    enemy = sorted(enemies, key=lambda candidate: (candidate.position.col, candidate.position.row, str(candidate.id)))[0]
+    source = attack_sources_by_actor.get(enemy.id)
+    if source is None:
+        return state, (), 0
+
+    messages: list[str] = []
+    feedback_events = 0
+    natural_roll = rng.randint(1, 20)
+    attack_roll = resolve_d20_roll(D20RollInput(source.attack_roll_request, natural_roll))
+    target = next(target for target in legal_melee_targets(BoardState(), enemy, state.actors) if target.id == str(actor.id))
+    declaration = attack_declaration_from_state(select_attack_target(start_attack_action(BoardState(), enemy, state.actors, source), target_id=target.id))
+    resolution = resolve_attack(declaration, attack_roll, ActionUse.ACTION_AVAILABLE)
+    observer.record(
+        "opportunity_attack_triggered",
+        {
+            "attacker_id": str(enemy.id),
+            "target_id": str(actor.id),
+            "object_id": scene_object.id,
+            "reason": "interaction_near_enemy",
+        },
+    )
+    if adapter is not None:
+        adapter.clear()
+        adapter.show_feedback(selected_attack_target_led_feedback(target))
+        feedback_events += 1
+        observer.record("led_feedback_sent", {"phase": "opportunity_attack_target", "target_id": target.id})
+
+    updated_state = state
+    if resolution.hit:
+        if source.damage_fixed is not None:
+            damage_amount = source.damage_fixed + source.damage_modifier
+        else:
+            damage_amount = rng.randint(1, source.damage_die_sides or 6) + source.damage_modifier
+        damage = resolve_damage((DamageComponentInput(damage_amount, DamageType(source.damage_type), source.name),))
+        updated_actor = apply_damage(actor, damage)
+        updated_state = replace_actor(state, updated_actor)
+        message = (
+            f"{enemy.name} wykonuje atak okazyjny podczas interakcji. Trafienie: {attack_roll.total}. "
+            f"Obrażenia: {damage.total_applied} {source.damage_type}."
+        )
+        _record_damage(observer, actor, updated_actor, damage)
+    else:
+        message = f"{enemy.name} wykonuje atak okazyjny podczas interakcji, ale pudłuje. Wynik ataku: {attack_roll.total}."
+    print(message)
+    messages.append(message)
+    observer.record(
+        "opportunity_attack_resolved",
+        {
+            "attacker_id": str(enemy.id),
+            "target_id": str(actor.id),
+            "natural_roll": attack_roll.natural_roll,
+            "modifier_total": attack_roll.breakdown.modifier_total,
+            "total": attack_roll.total,
+            "outcome": resolution.outcome.value,
+            "hit": resolution.hit,
+        },
+    )
+    if adapter is not None:
+        adapter.show_feedback(attack_result_led_feedback(target, resolution.outcome))
+        feedback_events += 1
+        observer.record("led_feedback_sent", {"phase": "opportunity_attack_result", "outcome": resolution.outcome.value})
+        adapter.clear()
+    return updated_state, tuple(messages), feedback_events
+
+
+def _attack_source_with_cover(source: AttackSource, target, scene_objects) -> AttackSource:
+    cover_objects = tuple(
+        scene_object
+        for scene_object in scene_objects
+        if scene_object.cover_bonus > 0 and target.position in scene_object.positions
+    )
+    if not cover_objects:
+        return source
+    cover_bonus = max(scene_object.cover_bonus for scene_object in cover_objects)
+    cover_names = ", ".join(scene_object.name for scene_object in cover_objects if scene_object.cover_bonus == cover_bonus)
+    modifiers = source.attack_roll_request.modifiers + (
+        RollModifier(
+            f"Osłona celu: {cover_names}",
+            -cover_bonus,
+            RollModifierType.COVER,
+            stacking_key=f"cover:{target.id}",
+        ),
+    )
+    return replace(
+        source,
+        attack_roll_request=D20RollRequest(mode=source.attack_roll_request.mode, modifiers=modifiers),
+    )
+
+
+def _is_adjacent_or_same(a: Coordinate, b: Coordinate) -> bool:
+    return max(abs(a.col - b.col), abs(a.row - b.row)) <= 1
+
+
 def _next_turn_click(
     args: argparse.Namespace,
     board,
@@ -821,7 +1050,7 @@ def _next_turn_click(
     adapter: BoardLedAdapter | None,
     observer: SessionObserver,
     script: list[str],
-) -> Coordinate | None:
+) -> Coordinate | str | None:
     if script:
         command = script.pop(0)
         return _coordinate_from_turn_command(command, state, actor, scene_objects)
@@ -878,6 +1107,83 @@ def _confirm_preview_click(
     return Coordinate(int(selected[0]), int(selected[1]))
 
 
+def _confirm_or_cycle_tile_option(
+    args: argparse.Namespace,
+    board,
+    state: CombatState,
+    actor: Actor,
+    source: AttackSource,
+    scene_objects,
+    preview,
+    adapter: BoardLedAdapter | None,
+    observer: SessionObserver,
+    script: list[str],
+) -> Coordinate | None:
+    if script or args.board_backend == "none" or adapter is None:
+        return None
+    scan_board = getattr(adapter.connection, "scan_board", None)
+    if not callable(scan_board):
+        _pause_for_led_step(args, "Naciśnij Enter, aby potwierdzić aktualnie wybraną opcję.")
+        return None
+    acceptable = [position.as_tuple() for position in _acceptable_turn_positions(board, state, actor, source, scene_objects)]
+    print(
+        "Naciśnij Enter, aby potwierdzić aktualnie wybraną opcję. "
+        "Kliknij to samo pole, aby przełączyć opcję, albo kliknij inne pole, aby zmienić podgląd."
+    )
+    event, position = _wait_for_scan_or_enter(adapter, acceptable, args.scan_timeout)
+    if event == "enter":
+        observer.record(
+            "tile_option_enter_confirmed",
+            {"position": list(preview.clicked_position.as_tuple()), "selected_index": preview.selected_tile_option_index},
+        )
+        return None
+    if event == "click" and position is not None:
+        observer.record(
+            "tile_option_scan_received",
+            {"position": list(position.as_tuple()), "selected_index": preview.selected_tile_option_index},
+        )
+        return position
+    observer.record("tile_option_confirmation_timeout", {"position": list(preview.clicked_position.as_tuple())})
+    return "timeout"
+
+
+def _wait_for_scan_or_enter(
+    adapter: BoardLedAdapter,
+    acceptable: list[tuple[int, int]],
+    timeout_s: float | None,
+) -> tuple[str, Coordinate | None]:
+    result_queue: queue.Queue[tuple[int, int] | None] = queue.Queue(maxsize=1)
+
+    def scan() -> None:
+        scan_board = getattr(adapter.connection, "scan_board")
+        result_queue.put(scan_board(acceptable, timeout_s=timeout_s))
+
+    thread = threading.Thread(target=scan, daemon=True)
+    thread.start()
+    while thread.is_alive():
+        readable, _, _ = select.select([sys.stdin], [], [], 0.1)
+        if readable:
+            sys.stdin.readline()
+            cancel_scan = getattr(adapter.connection, "cancel_scan", None)
+            if callable(cancel_scan):
+                cancel_scan()
+            return "enter", None
+        try:
+            selected = result_queue.get_nowait()
+        except queue.Empty:
+            continue
+        if selected is None:
+            return "timeout", None
+        return "click", Coordinate(int(selected[0]), int(selected[1]))
+    try:
+        selected = result_queue.get_nowait()
+    except queue.Empty:
+        return "timeout", None
+    if selected is None:
+        return "timeout", None
+    return "click", Coordinate(int(selected[0]), int(selected[1]))
+
+
 def _coordinate_from_turn_command(command: str, state: CombatState, actor: Actor, scene_objects) -> Coordinate | None:
     command = command.strip()
     if command == "end":
@@ -915,7 +1221,7 @@ def _acceptable_turn_positions(board, state: CombatState, actor: Actor, source: 
 
 
 def _turn_options_led_feedback(board, state: CombatState, actor: Actor, source: AttackSource, scene_objects=()) -> LedFeedback:
-    frames: list[LedFrame] = [LedFrame((actor.position,), (255, 255, 255), LedRole.ACTIVE_ACTOR)]
+    frames: list[LedFrame] = [LedFrame((actor.position,), LedColor.ACTIVE_ACTOR, LedRole.ACTIVE_ACTOR)]
     if movement_remaining(state, actor) > 0:
         movement_actor = replace(actor, speed_feet=movement_remaining(state, actor))
         reachable = tuple(
@@ -924,21 +1230,24 @@ def _turn_options_led_feedback(board, state: CombatState, actor: Actor, source: 
             if tile != actor.position
         )
         if reachable:
-            frames.append(LedFrame(reachable, (0, 110, 160), LedRole.MOVEMENT_RANGE))
+            frames.append(LedFrame(reachable, LedColor.LEGAL_MOVEMENT, LedRole.MOVEMENT_RANGE))
     if state.turn_action.action_use == ActionUse.ACTION_AVAILABLE:
-        targets = tuple(sorted(target.position for target in legal_melee_targets(board, actor, state.actors)))
+        target_positions = {target.position for target in legal_melee_targets(board, actor, state.actors)}
+        object_positions_set = {
+            position
+            for scene_object in scene_objects
+            if scene_object.visibility.value == "visible"
+            for position in scene_object.positions
+        }
+        multi_option_positions = tuple(sorted(target_positions & object_positions_set))
+        targets = tuple(sorted(target_positions - object_positions_set))
         if targets:
-            frames.append(LedFrame(targets, (0, 80, 220), LedRole.DESTINATION))
-        object_positions = tuple(
-            sorted(
-                position
-                for scene_object in scene_objects
-                if scene_object.visibility.value == "visible"
-                for position in scene_object.positions
-            )
-        )
+            frames.append(LedFrame(targets, LedColor.LEGAL_ATTACK_TARGET, LedRole.DESTINATION))
+        object_positions = tuple(sorted(object_positions_set - target_positions))
         if object_positions:
-            frames.append(LedFrame(object_positions, (0, 255, 120), LedRole.DESTINATION))
+            frames.append(LedFrame(object_positions, LedColor.INTERACTIVE_OBJECT, LedRole.DESTINATION))
+        if multi_option_positions:
+            frames.append(LedFrame(multi_option_positions, LedColor.MULTI_OPTION_TILE, LedRole.DESTINATION))
     legal_target_positions = {target.position for target in legal_melee_targets(board, actor, state.actors)}
     visible_enemy_positions = tuple(
         sorted(
@@ -951,7 +1260,7 @@ def _turn_options_led_feedback(board, state: CombatState, actor: Actor, source: 
         )
     )
     if visible_enemy_positions:
-        frames.append(LedFrame(visible_enemy_positions, (120, 0, 45), LedRole.ENEMY))
+        frames.append(LedFrame(visible_enemy_positions, LedColor.VISIBLE_ENEMY_OUT_OF_RANGE, LedRole.ENEMY))
     visible_ally_positions = tuple(
         sorted(
             other.position
@@ -962,20 +1271,110 @@ def _turn_options_led_feedback(board, state: CombatState, actor: Actor, source: 
         )
     )
     if visible_ally_positions:
-        frames.append(LedFrame(visible_ally_positions, (80, 180, 200), LedRole.ALLY))
+        frames.append(LedFrame(visible_ally_positions, LedColor.VISIBLE_ALLY, LedRole.ALLY))
     return LedFeedback(tuple(frames))
 
 
 def _preview_led_feedback(preview) -> LedFeedback:
     if preview.mode.value == "actor_options_preview":
-        return LedFeedback((LedFrame((preview.clicked_position,), (255, 255, 255), LedRole.ACTIVE_ACTOR),))
+        return LedFeedback((LedFrame((preview.clicked_position,), LedColor.ACTIVE_ACTOR, LedRole.ACTIVE_ACTOR),))
+    if preview.mode.value == "tile_options_preview":
+        option = preview.tile_options[preview.selected_tile_option_index]
+        if option.kind == TileOptionKind.ATTACK and option.attack_target is not None:
+            return LedFeedback((LedFrame((option.attack_target.position,), LedColor.SELECTED_ATTACK_TARGET, LedRole.DESTINATION),))
+        if option.kind == TileOptionKind.INTERACTION and option.interaction_object is not None:
+            return LedFeedback((LedFrame(option.interaction_object.positions, LedColor.INTERACTIVE_OBJECT, LedRole.DESTINATION),))
+        return LedFeedback((LedFrame((preview.clicked_position,), LedColor.MULTI_OPTION_TILE, LedRole.DESTINATION),))
     if preview.movement_range is not None:
         return movement_led_feedback(preview.movement_range, preview.movement_path)
     if preview.attack_target is not None:
         return selected_attack_target_led_feedback(preview.attack_target)
     if preview.interaction_object is not None:
-        return LedFeedback((LedFrame(preview.interaction_object.positions, (0, 255, 120), LedRole.DESTINATION),))
-    return LedFeedback((LedFrame((preview.clicked_position,), (255, 0, 0), LedRole.DESTINATION),))
+        return LedFeedback((LedFrame(preview.interaction_object.positions, LedColor.INTERACTIVE_OBJECT, LedRole.DESTINATION),))
+    return LedFeedback((LedFrame((preview.clicked_position,), LedColor.INVALID_SELECTION, LedRole.DESTINATION),))
+
+
+def _preview_led_feedback_for_turn(
+    board,
+    state: CombatState,
+    actor: Actor,
+    source: AttackSource,
+    scene_objects,
+    preview,
+) -> LedFeedback:
+    if preview.mode.value != "movement_preview" or preview.movement_path is None:
+        return _preview_led_feedback(preview)
+
+    base_frames = list(_turn_options_led_feedback(board, state, actor, source, scene_objects).frames)
+    path_positions = tuple(position for position in preview.movement_path.path if position != preview.movement_path.origin)
+    if path_positions:
+        base_frames.append(LedFrame(path_positions, LedColor.PLAYER_MOVEMENT_PATH, LedRole.SELECTED_PATH))
+    base_frames.append(LedFrame((preview.movement_path.destination,), LedColor.MOVEMENT_DESTINATION, LedRole.DESTINATION))
+    return LedFeedback(tuple(base_frames))
+
+
+def _enemy_movement_led_feedback(path) -> LedFeedback:
+    if path is None or not path.valid or not path.path:
+        return LedFeedback()
+    path_positions = tuple(position for position in path.path if position != path.origin)
+    frames: list[LedFrame] = []
+    if path_positions:
+        frames.append(LedFrame(path_positions, LedColor.ENEMY_MOVEMENT_PATH, LedRole.SELECTED_PATH))
+    frames.append(LedFrame((path.destination,), LedColor.ENEMY_MOVEMENT_DESTINATION, LedRole.DESTINATION))
+    return LedFeedback(tuple(frames))
+
+
+def _confirm_enemy_movement(
+    args: argparse.Namespace,
+    adapter: BoardLedAdapter,
+    observer: SessionObserver,
+    actor: Actor,
+    path,
+) -> bool:
+    destination = path.destination
+    acceptable = [destination.as_tuple()]
+    observer.record(
+        "board_scan_requested",
+        {
+            "phase": "enemy_movement_confirmation",
+            "actor_id": str(actor.id),
+            "acceptable_positions": [list(position) for position in acceptable],
+        },
+    )
+    print(
+        f"Przestaw figurkę przeciwnika {actor.name} po czerwonej ścieżce na pomarańczowe pole "
+        f"{destination.as_tuple()} i kliknij to pole, aby potwierdzić ruch."
+    )
+    scan_board = getattr(adapter.connection, "scan_board", None)
+    if not callable(scan_board):
+        _pause_for_led_step(args, "Naciśnij Enter po fizycznym przestawieniu przeciwnika.")
+        observer.record(
+            "board_scan_received",
+            {
+                "phase": "enemy_movement_confirmation",
+                "actor_id": str(actor.id),
+                "position": list(destination.as_tuple()),
+                "fallback": "enter",
+            },
+        )
+        return True
+    selected = scan_board(acceptable, timeout_s=args.scan_timeout)
+    if selected is None:
+        observer.record(
+            "board_scan_cancelled",
+            {"phase": "enemy_movement_confirmation", "actor_id": str(actor.id)},
+        )
+        return False
+    selected_tuple = (int(selected[0]), int(selected[1]))
+    observer.record(
+        "board_scan_received",
+        {
+            "phase": "enemy_movement_confirmation",
+            "actor_id": str(actor.id),
+            "position": list(selected_tuple),
+        },
+    )
+    return selected_tuple == destination.as_tuple()
 
 
 def _selected_interaction(scene_object):
@@ -1056,6 +1455,26 @@ def _run_enemy_turn(
     feedback_events = 0
 
     if result.movement_path is not None and result.movement_path.valid:
+        if adapter is not None:
+            adapter.show_feedback(_enemy_movement_led_feedback(result.movement_path))
+            feedback_events += 1
+            observer.record("led_feedback_sent", {"phase": "enemy_movement", "actor_id": str(actor.id)})
+            confirmed = _confirm_enemy_movement(args, adapter, observer, actor, result.movement_path)
+            adapter.clear()
+            if not confirmed:
+                action_result = use_turn_action(state)
+                message = f"Ruch przeciwnika {actor.name} anulowany: nie potwierdzono pola docelowego."
+                print(message)
+                messages.append(message)
+                observer.record(
+                    "movement_rejected",
+                    {
+                        "actor_id": str(actor.id),
+                        "destination": list(result.movement_path.destination.as_tuple()),
+                        "reason": "enemy_destination_not_confirmed",
+                    },
+                )
+                return action_result.state, tuple(messages), feedback_events
         observer.record(
             "movement_committed",
             {
@@ -1065,12 +1484,6 @@ def _run_enemy_turn(
                 "movement_remaining": 0,
             },
         )
-        if adapter is not None:
-            adapter.show_feedback(movement_led_feedback(movement_range(board, actor, state.actors), result.movement_path))
-            feedback_events += 1
-            observer.record("led_feedback_sent", {"phase": "enemy_movement", "actor_id": str(actor.id)})
-            _pause_for_led_step(args, "Naciśnij Enter po ruchu przeciwnika.")
-            adapter.clear()
 
     if result.target is not None:
         observer.record(
@@ -1121,6 +1534,128 @@ def _load_encounter(path: str) -> LoadedEncounter:
     return build_encounter_from_scenario(load_scenario(path))
 
 
+def _build_scene_initiative(
+    args: argparse.Namespace,
+    actors: tuple[Actor, ...],
+    rng: random.Random,
+    adapter: BoardLedAdapter | None,
+    observer: SessionObserver,
+) -> tuple[InitiativeOrder, tuple[str, ...], int]:
+    if args.initiative_mode == "fixed":
+        order = _fixed_demo_initiative(actors)
+        message = "Kolejność inicjatywy została ustawiona w trybie testowym: " + _initiative_order_names(order) + "."
+        print(message)
+        observer.record(
+            "initiative_set",
+            {
+                "mode": "fixed",
+                "order": _initiative_order_payload(order),
+                "active_id": str(order.current_actor.id),
+            },
+        )
+        return order, (message,), 0
+
+    messages: list[str] = []
+    feedback_events = 0
+    entries: list[InitiativeEntry] = []
+    stable_order = 0
+    roll_overrides = _parse_actor_value_overrides(args.ally_initiative_roll, int)
+    start_message = "Rozpoczyna się inicjatywa. Bohaterowie wykonują test inicjatywy po kolei."
+    print(start_message)
+    messages.append(start_message)
+    observer.record("initiative_started", {"mode": "rolled"})
+
+    for prompt in build_player_initiative_prompts(actors):
+        messages.append(prompt.message)
+        print(prompt.message)
+        observer.record(
+            "roll_requested",
+            {
+                "roll_type": "initiative",
+                "actor_id": str(prompt.actor.id),
+                "message": prompt.message,
+                "stable_order": stable_order,
+            },
+        )
+        if adapter is not None:
+            adapter.show_feedback(initiative_prompt_led_feedback(prompt))
+            feedback_events += 1
+            observer.record("led_feedback_sent", {"phase": "initiative", "actor_id": str(prompt.actor.id)})
+        natural_roll = int(roll_overrides.get(str(prompt.actor.id), args.default_initiative_roll))
+        natural_roll = _read_int_or_default(
+            args,
+            f"Wpisz naturalny wynik inicjatywy dla {prompt.actor.name} albo naciśnij Enter dla wartości z CLI ({natural_roll}): ",
+            natural_roll,
+        )
+        roll = resolve_d20_roll(D20RollInput(prompt.request, natural_roll))
+        entries.append(InitiativeEntry(prompt.actor, roll, prompt.dexterity_modifier, stable_order))
+        observer.record(
+            "roll_resolved",
+            {
+                "roll_type": "initiative",
+                "actor_id": str(prompt.actor.id),
+                "natural_roll": roll.natural_roll,
+                "modifier_total": roll.breakdown.modifier_total,
+                "total": roll.total,
+                "stable_order": stable_order,
+            },
+        )
+        stable_order += 1
+        if adapter is not None:
+            adapter.clear()
+
+    for actor in actors:
+        if actor.faction == Faction.ALLY or actor.is_defeated():
+            continue
+        prompt = build_enemy_initiative_prompt(actor)
+        if adapter is not None:
+            adapter.show_feedback(initiative_prompt_led_feedback(prompt))
+            feedback_events += 1
+            observer.record("led_feedback_sent", {"phase": "enemy_initiative", "actor_id": str(actor.id)})
+        natural_roll = rng.randint(1, 20)
+        roll = resolve_d20_roll(D20RollInput(prompt.request, natural_roll))
+        message = f"Inicjatywa przeciwnika {actor.name} została rzucona automatycznie: {roll.total}."
+        print(message)
+        messages.append(message)
+        entries.append(InitiativeEntry(actor, roll, prompt.dexterity_modifier, stable_order))
+        observer.record(
+            "enemy_initiative_rolled",
+            {
+                "actor_id": str(actor.id),
+                "natural_roll": roll.natural_roll,
+                "modifier_total": roll.breakdown.modifier_total,
+                "total": roll.total,
+                "stable_order": stable_order,
+            },
+        )
+        stable_order += 1
+        if adapter is not None:
+            _pause_for_led_step(args, "Naciśnij Enter, aby przejść dalej po auto-rzucie przeciwnika.")
+            adapter.clear()
+
+    order = build_initiative_order(entries)
+    order_message = "Kolejność inicjatywy została ustalona: " + _initiative_order_names(order) + "."
+    first_turn_message = f"Pierwsza tura: {order.current_actor.name}."
+    print(order_message)
+    print(first_turn_message)
+    messages.extend([order_message, first_turn_message])
+    observer.record(
+        "initiative_set",
+        {
+            "mode": "rolled",
+            "order": _initiative_order_payload(order),
+            "active_id": str(order.current_actor.id),
+        },
+    )
+    if adapter is not None:
+        adapter.show_feedback(active_actor_led_feedback(order))
+        feedback_events += 1
+        observer.record("led_feedback_sent", {"phase": "initiative_active_actor", "actor_id": str(order.current_actor.id)})
+        _pause_for_led_step(args, "Naciśnij Enter po obejrzeniu pierwszego aktora w kolejności inicjatywy.")
+        adapter.clear()
+    return order, tuple(messages), feedback_events
+
+
 def _fixed_demo_initiative(actors: tuple[Actor, ...]) -> InitiativeOrder:
     empty_request = D20RollRequest()
     entries: list[InitiativeEntry] = []
@@ -1135,6 +1670,25 @@ def _fixed_demo_initiative(actors: tuple[Actor, ...]) -> InitiativeOrder:
             )
         )
     return InitiativeOrder(tuple(entries))
+
+
+def _initiative_order_names(order: InitiativeOrder) -> str:
+    return ", ".join(entry.actor.name for entry in order.entries)
+
+
+def _initiative_order_payload(order: InitiativeOrder) -> list[dict[str, object]]:
+    return [
+        {
+            "actor_id": str(entry.actor.id),
+            "name": entry.actor.name,
+            "natural_roll": entry.roll.natural_roll,
+            "modifier_total": entry.roll.breakdown.modifier_total,
+            "total": entry.roll.total,
+            "dexterity_modifier": entry.dexterity_modifier,
+            "stable_order": entry.stable_order,
+        }
+        for entry in order.entries
+    ]
 
 
 def _actor_by_string_id(state: CombatState, actor_id: str) -> Actor:

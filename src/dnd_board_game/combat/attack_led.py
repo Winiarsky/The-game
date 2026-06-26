@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-from dnd_board_game.hardware import LedFeedback, LedFrame, LedRole
+from dnd_board_game.hardware import LedColor, LedFeedback, LedFrame, LedRole
 from dnd_board_game.rules import AttackRollOutcome
 
 from .targets import CombatTarget
 
-LEGAL_TARGET_COLOR = (0, 80, 220)
-SELECTED_TARGET_COLOR = (0, 80, 220)
-HIT_COLOR = (0, 255, 120)
-MISS_COLOR = (255, 0, 0)
-CRITICAL_HIT_COLOR = (255, 210, 0)
+LEGAL_TARGET_COLOR = LedColor.LEGAL_ATTACK_TARGET
+SELECTED_TARGET_COLOR = LedColor.SELECTED_ATTACK_TARGET
+HIT_COLOR = LedColor.ATTACK_HIT
+MISS_COLOR = LedColor.ATTACK_MISS
+CRITICAL_HIT_COLOR = LedColor.ATTACK_CRITICAL_HIT
 
 
 def attack_targets_led_feedback(targets: tuple[CombatTarget, ...]) -> LedFeedback:

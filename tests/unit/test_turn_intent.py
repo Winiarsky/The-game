@@ -4,6 +4,8 @@ from dnd_board_game.combat import (
     AttackSourceType,
     InitiativeEntry,
     InitiativeOrder,
+    SceneObject,
+    TileOptionKind,
     TurnPromptMode,
     confirm_turn_intent,
     preview_turn_intent,
@@ -103,3 +105,64 @@ def test_clicking_active_actor_tile_previews_end_turn_option():
     assert "zakończ turę" in preview.message
     assert confirmation.accepted is True
     assert confirmation.end_turn_requested is True
+
+
+def test_clicking_tile_with_enemy_and_interactable_creates_tile_options_preview():
+    hero = _actor("hero", Faction.ALLY, Coordinate(0, 0))
+    goblin = _actor("goblin", Faction.ENEMY, Coordinate(1, 0))
+    state = start_combat((hero, goblin), _order(hero, goblin))
+    scene_object = SceneObject(
+        "crate",
+        "Skrzynia",
+        (Coordinate(1, 0),),
+        "Zbadaj skrzynię",
+        allow_interaction_when_occupied_by_enemy=True,
+    )
+
+    preview = preview_turn_intent(BoardState(), state, hero, _source(), Coordinate(1, 0), (scene_object,))
+
+    assert preview.mode == TurnPromptMode.TILE_OPTIONS_PREVIEW
+    assert [option.kind for option in preview.tile_options] == [TileOptionKind.ATTACK, TileOptionKind.INTERACTION]
+    assert preview.attack_target is not None
+    assert preview.tile_options[1].interaction_object == scene_object
+
+
+def test_tile_options_preview_can_cycle_selected_option():
+    hero = _actor("hero", Faction.ALLY, Coordinate(0, 0))
+    goblin = _actor("goblin", Faction.ENEMY, Coordinate(1, 0))
+    state = start_combat((hero, goblin), _order(hero, goblin))
+    scene_object = SceneObject(
+        "crate",
+        "Skrzynia",
+        (Coordinate(1, 0),),
+        "Zbadaj skrzynię",
+        allow_interaction_when_occupied_by_enemy=True,
+    )
+
+    preview = preview_turn_intent(
+        BoardState(),
+        state,
+        hero,
+        _source(),
+        Coordinate(1, 0),
+        (scene_object,),
+        selected_tile_option_index=1,
+    )
+    confirmation = confirm_turn_intent(state, preview)
+
+    assert preview.mode == TurnPromptMode.TILE_OPTIONS_PREVIEW
+    assert preview.tile_options[preview.selected_tile_option_index].kind == TileOptionKind.INTERACTION
+    assert confirmation.accepted is True
+    assert confirmation.interaction_object == scene_object
+
+
+def test_enemy_on_interactable_blocks_interaction_when_object_flag_disallows_it():
+    hero = _actor("hero", Faction.ALLY, Coordinate(0, 0))
+    goblin = _actor("goblin", Faction.ENEMY, Coordinate(1, 0))
+    state = start_combat((hero, goblin), _order(hero, goblin))
+    scene_object = SceneObject("crate", "Skrzynia", (Coordinate(1, 0),), "Zbadaj skrzynię")
+
+    preview = preview_turn_intent(BoardState(), state, hero, _source(), Coordinate(1, 0), (scene_object,))
+
+    assert preview.mode == TurnPromptMode.ATTACK_PREVIEW
+    assert preview.interaction_object is None

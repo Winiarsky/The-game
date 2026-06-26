@@ -6,7 +6,7 @@ from enum import StrEnum
 from typing import Iterable
 
 from dnd_board_game.actors import Actor, Faction
-from dnd_board_game.hardware import LedFeedback, LedFrame, LedRole
+from dnd_board_game.hardware import LedColor, LedFeedback, LedFrame, LedRole
 from dnd_board_game.world import Coordinate
 
 
@@ -70,12 +70,12 @@ class SetupStep:
 
 
 SETUP_COLORS: dict[str, tuple[int, int, int]] = {
-    "heroes": (0, 220, 255),
-    "enemies": (255, 0, 80),
-    "blocking": (180, 0, 0),
-    "difficult": (255, 120, 0),
-    "interactive": (0, 255, 120),
-    "marker": (255, 210, 0),
+    "heroes": LedColor.PLAYER_START_ZONE,
+    "enemies": LedColor.ENEMY,
+    "blocking": LedColor.BLOCKING_TERRAIN,
+    "difficult": LedColor.DIFFICULT_TERRAIN,
+    "interactive": LedColor.INTERACTIVE_OBJECT,
+    "marker": LedColor.MARKER,
 }
 
 

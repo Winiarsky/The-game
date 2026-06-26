@@ -5,7 +5,7 @@ from dnd_board_game.combat import (
     attack_targets_led_feedback,
     selected_attack_target_led_feedback,
 )
-from dnd_board_game.hardware import BoardLedAdapter
+from dnd_board_game.hardware import BoardLedAdapter, LedColor
 from dnd_board_game.rules import AttackRollOutcome
 from dnd_board_game.world import Coordinate
 
@@ -36,9 +36,9 @@ def test_attack_target_feedback_colors_and_clear_sequence():
     adapter.clear()
 
     assert connection.events == [
-        ("set_leds", [(0, 1), (1, 0)], [0, 80, 220]),
+        ("set_leds", [(0, 1), (1, 0)], list(LedColor.LEGAL_ATTACK_TARGET)),
         ("leds_off",),
-        ("set_leds", [(1, 0)], [0, 80, 220]),
+        ("set_leds", [(1, 0)], list(LedColor.SELECTED_ATTACK_TARGET)),
         ("leds_off",),
     ]
 
@@ -46,6 +46,6 @@ def test_attack_target_feedback_colors_and_clear_sequence():
 def test_attack_result_feedback_uses_expected_colors():
     target = _target("goblin", Coordinate(1, 0))
 
-    assert attack_result_led_feedback(target, AttackRollOutcome.HIT).frames[0].color == (0, 255, 120)
-    assert attack_result_led_feedback(target, AttackRollOutcome.MISS).frames[0].color == (255, 0, 0)
-    assert attack_result_led_feedback(target, AttackRollOutcome.CRITICAL_HIT).frames[0].color == (255, 210, 0)
+    assert attack_result_led_feedback(target, AttackRollOutcome.HIT).frames[0].color == LedColor.ATTACK_HIT
+    assert attack_result_led_feedback(target, AttackRollOutcome.MISS).frames[0].color == LedColor.ATTACK_MISS
+    assert attack_result_led_feedback(target, AttackRollOutcome.CRITICAL_HIT).frames[0].color == LedColor.ATTACK_CRITICAL_HIT
