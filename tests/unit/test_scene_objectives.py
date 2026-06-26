@@ -10,6 +10,9 @@ from dnd_board_game.combat import (
     SceneObject,
     complete_interaction_objective,
     objective_status_after_combat,
+    objective_status_after_flags,
+    set_scene_flag,
+    SceneFlags,
     scene_is_finished,
     start_combat,
 )
@@ -67,3 +70,35 @@ def test_active_objective_does_not_finish_scene_by_itself():
     objective = SceneObjective("secure", "Zabezpiecz", "", SceneObjectiveCondition.INTERACT_WITH_OBJECT, target_id="crate")
 
     assert scene_is_finished(state, (objective,)) is False
+
+
+def test_flag_equals_objective_completes_after_matching_scene_flag():
+    objective = SceneObjective(
+        "secure",
+        "Zabezpiecz",
+        "",
+        SceneObjectiveCondition.FLAG_EQUALS,
+        flag_key="crate_secured",
+        flag_value=True,
+    )
+    flags = set_scene_flag(SceneFlags(), "crate_secured", True)
+
+    updated = objective_status_after_flags((objective,), flags)
+
+    assert updated[0].status == SceneObjectiveStatus.COMPLETED
+
+
+def test_flag_equals_objective_waits_for_matching_flag_value():
+    objective = SceneObjective(
+        "secure",
+        "Zabezpiecz",
+        "",
+        SceneObjectiveCondition.FLAG_EQUALS,
+        flag_key="crate_secured",
+        flag_value=True,
+    )
+    flags = set_scene_flag(SceneFlags(), "crate_secured", False)
+
+    updated = objective_status_after_flags((objective,), flags)
+
+    assert updated[0].status == SceneObjectiveStatus.ACTIVE

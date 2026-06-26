@@ -11,6 +11,8 @@ from dnd_board_game.combat import (
     AttackSourceType,
     EnvironmentSetupEntry,
     EnvironmentSetupType,
+    SceneAbilityCheck,
+    SceneInteraction,
     SceneObjective,
     SceneObjectiveCondition,
     SceneObject,
@@ -59,6 +61,7 @@ class ScenarioEnvironmentDefinition:
     description: str = ""
     interaction_label: str | None = None
     objective_id: str | None = None
+    interactions: tuple[SceneInteraction, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,6 +71,8 @@ class ScenarioObjectiveDefinition:
     description: str
     condition: SceneObjectiveCondition
     target_id: str | None = None
+    flag_key: str | None = None
+    flag_value: object = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,6 +142,7 @@ def build_encounter_from_scenario(loaded: LoadedScenario) -> LoadedEncounter:
             visibility=entry.visibility,
             objective_id=entry.objective_id,
             description=entry.description,
+            interactions=entry.interactions,
         )
         for entry in definition.environment
         if entry.setup_type in {EnvironmentSetupType.INTERACTABLE, EnvironmentSetupType.CONTAINER, EnvironmentSetupType.NPC}
@@ -149,6 +155,8 @@ def build_encounter_from_scenario(loaded: LoadedScenario) -> LoadedEncounter:
             description=objective.description,
             condition=objective.condition,
             target_id=objective.target_id,
+            flag_key=objective.flag_key,
+            flag_value=objective.flag_value,
         )
         for objective in definition.objectives
     )
@@ -275,6 +283,7 @@ def _parse_environment(data: dict[str, Any]) -> ScenarioEnvironmentDefinition:
         description=str(data.get("description", "")),
         interaction_label=str(data["interaction_label"]) if "interaction_label" in data else None,
         objective_id=str(data["objective_id"]) if "objective_id" in data else None,
+        interactions=_parse_interactions(data.get("interactions", []), entry_id),
     )
 
 
@@ -298,6 +307,62 @@ def _parse_objective(data: dict[str, Any]) -> ScenarioObjectiveDefinition:
             f"objective {objective_id}.condition",
         ),
         target_id=str(data["target_id"]) if "target_id" in data else None,
+        flag_key=str(data["flag_key"]) if "flag_key" in data else None,
+        flag_value=data.get("flag_value", True),
+    )
+
+
+def _parse_interactions(data: Any, environment_id: str) -> tuple[SceneInteraction, ...]:
+    if data is None:
+        return ()
+    if not isinstance(data, list):
+        raise ValueError(f"environment {environment_id}.interactions must be a list.")
+    return tuple(_parse_interaction(entry, environment_id) for entry in data)
+
+
+def _parse_interaction(data: Any, environment_id: str) -> SceneInteraction:
+    if not isinstance(data, dict):
+        raise ValueError(f"environment {environment_id}.interactions entries must be objects.")
+    interaction_id = str(_required(data, "id", f"environment {environment_id}.interaction"))
+    ability_check = data.get("ability_check")
+    return SceneInteraction(
+        id=interaction_id,
+        label=str(_required(data, "label", f"interaction {interaction_id}")),
+        description=str(data.get("description", "")),
+        ability_check=_parse_scene_ability_check(ability_check, interaction_id) if ability_check is not None else None,
+        success_flag=str(data["success_flag"]) if "success_flag" in data else None,
+        failure_flag=str(data["failure_flag"]) if "failure_flag" in data else None,
+        success_message=str(data.get("success_message", "")),
+        failure_message=str(data.get("failure_message", "")),
+    )
+
+
+def _parse_scene_ability_check(data: Any, interaction_id: str) -> SceneAbilityCheck:
+    if not isinstance(data, dict):
+        raise ValueError(f"interaction {interaction_id}.ability_check must be an object.")
+    modifiers_data = data.get("modifiers", [])
+    if not isinstance(modifiers_data, list):
+        raise ValueError(f"interaction {interaction_id}.ability_check.modifiers must be a list.")
+    return SceneAbilityCheck(
+        ability=str(_required(data, "ability", f"interaction {interaction_id}.ability_check")),
+        skill=str(data["skill"]) if "skill" in data else None,
+        dc=int(_required(data, "dc", f"interaction {interaction_id}.ability_check")),
+        modifiers=tuple(_parse_roll_modifier(entry, interaction_id) for entry in modifiers_data),
+    )
+
+
+def _parse_roll_modifier(data: Any, interaction_id: str) -> RollModifier:
+    if not isinstance(data, dict):
+        raise ValueError(f"interaction {interaction_id}.ability_check.modifiers entries must be objects.")
+    return RollModifier(
+        label=str(_required(data, "label", f"interaction {interaction_id}.modifier")),
+        value=int(_required(data, "value", f"interaction {interaction_id}.modifier")),
+        modifier_type=_enum_value(
+            RollModifierType,
+            str(_required(data, "modifier_type", f"interaction {interaction_id}.modifier")),
+            f"interaction {interaction_id}.modifier.modifier_type",
+        ),
+        stacking_key=str(data["stacking_key"]) if "stacking_key" in data else None,
     )
 
 
@@ -367,6 +432,8 @@ def _validate_scenario(definition: ScenarioDefinition) -> None:
     for objective in definition.objectives:
         if objective.condition == SceneObjectiveCondition.INTERACT_WITH_OBJECT and objective.target_id not in environment_ids:
             raise ValueError(f"objective {objective.id}.target_id references unknown environment entry.")
+        if objective.condition == SceneObjectiveCondition.FLAG_EQUALS and not objective.flag_key:
+            raise ValueError(f"objective {objective.id}.flag_key is required for flag_equals.")
 
 
 def _apply_environment_to_board(board: BoardState, environment: tuple[ScenarioEnvironmentDefinition, ...]) -> None:

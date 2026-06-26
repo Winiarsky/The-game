@@ -255,9 +255,14 @@ Odstępstwa / decyzje planszowe:
 - W board-first MVP gracz nie wybiera najpierw akcji z menu: klika pole na planszy, a aplikacja interpretuje intencję jako ruch albo atak.
 - Pierwsze kliknięcie pola pokazuje podgląd intencji, drugie kliknięcie tego samego pola potwierdza.
 - Kliknięcie innego legalnego pola przed potwierdzeniem zmienia podgląd.
+- Kliknięcie pola aktywnego aktora pokazuje podstawowe opcje aktora; w MVP obsługiwana jest opcja zakończenia tury.
+- Zakończenie tury przed wykorzystaniem całego ruchu jest legalne; niewykorzystany ruch przepada na końcu tury.
 - Przeciwnicy w MVP mogą wykonać ruch w stronę najbliższego celu, a potem zaatakować, jeśli cel stał się legalny.
 - Pierwsza scena grywalna może zakończyć się przez spełnienie celu sceny, a nie tylko przez pokonanie wszystkich przeciwników.
 - Interakcja z jawnym obiektem jest akcją główną: kliknięcie obiektu pokazuje podgląd, drugie kliknięcie potwierdza i zużywa akcję.
+- Interakcja może mieć test cechy `d20`; aplikacja pokazuje cechę, skill, ST, aktywne modyfikatory i końcowy modyfikator przed wpisaniem wyniku.
+- Wynik eksploracyjnej interakcji może ustawić flagę sceny, np. `crate_secured` albo `crate_trap_missed`.
+- Objective może używać warunku `flag_equals`, więc scena może zakończyć się dopiero po konkretnym skutku interakcji, a nie samym kliknięciu obiektu.
 - Setup startowy pokazuje pola, na których gracze mogą ustawić figurki, ale MVP nie skanuje automatycznie poprawności ustawienia.
 
 Testy:
@@ -278,5 +283,7 @@ Testy:
 - `tests/unit/test_scenario_content_files.py`
 - `tests/unit/test_scene_setup.py`
 - `tests/unit/test_scene_objectives.py`
+- `tests/unit/test_scene_flags.py`
+- `tests/unit/test_scene_interactions.py`
 - `tests/unit/test_interaction_intent.py`
 - `tests/unit/test_turn_led_feedback.py`

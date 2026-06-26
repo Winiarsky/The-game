@@ -8,7 +8,7 @@ from dnd_board_game.world import BoardState, Coordinate, MovementRangeResult, Pa
 
 from .action_economy import ActionUse
 from .attack_flow import AttackSource, legal_melee_targets
-from .scene import SceneObject, visible_scene_objects
+from .scene import SceneObject, available_scene_interactions, visible_scene_objects
 from .session import CombatState, TurnMovementUseResult, movement_remaining, use_movement
 from .session import use_turn_action
 from .targets import CombatTarget
@@ -16,6 +16,7 @@ from .targets import CombatTarget
 
 class TurnPromptMode(StrEnum):
     IDLE = "idle"
+    ACTOR_OPTIONS_PREVIEW = "actor_options_preview"
     MOVEMENT_PREVIEW = "movement_preview"
     ATTACK_PREVIEW = "attack_preview"
     INTERACTION_PREVIEW = "interaction_preview"
@@ -48,6 +49,7 @@ class TurnIntentConfirmation:
     attack_target: CombatTarget | None = None
     attack_source: AttackSource | None = None
     interaction_object: SceneObject | None = None
+    end_turn_requested: bool = False
 
 
 def preview_turn_intent(
@@ -64,6 +66,18 @@ def preview_turn_intent(
         return _invalid(actor, clicked_position, remaining, action_available, "Pokonany aktor nie może działać.")
     if not board.in_bounds(clicked_position):
         return _invalid(actor, clicked_position, remaining, action_available, "Kliknięte pole jest poza planszą.")
+    if clicked_position == actor.position:
+        return TurnIntentPreview(
+            mode=TurnPromptMode.ACTOR_OPTIONS_PREVIEW,
+            actor=actor,
+            clicked_position=clicked_position,
+            message=(
+                f"Opcje aktora: {actor.name}. Dostępna opcja: zakończ turę. "
+                "Kliknij to pole ponownie, aby zakończyć turę."
+            ),
+            movement_remaining_feet=remaining,
+            action_available=action_available,
+        )
 
     legal_targets = legal_melee_targets(board, actor, state.actors) if action_available else ()
     for target in legal_targets:
@@ -93,12 +107,14 @@ def preview_turn_intent(
                         action_available,
                         f"{scene_object.name} jest poza zasięgiem interakcji. Podejdź bliżej.",
                     )
+                interactions = available_scene_interactions(scene_object)
+                interaction_label = interactions[0].label if interactions else scene_object.interaction_label
                 return TurnIntentPreview(
                     mode=TurnPromptMode.INTERACTION_PREVIEW,
                     actor=actor,
                     clicked_position=clicked_position,
                     message=(
-                        f"Wybrano obiekt: {scene_object.name}. Dostępna akcja: {scene_object.interaction_label}. "
+                        f"Wybrano obiekt: {scene_object.name}. Dostępna akcja: {interaction_label}. "
                         "Kliknij to pole ponownie, aby potwierdzić interakcję."
                     ),
                     interaction_object=scene_object,
@@ -128,8 +144,6 @@ def preview_turn_intent(
             action_available=action_available,
         )
 
-    if clicked_position == actor.position:
-        return _invalid(actor, clicked_position, remaining, action_available, "To jest aktualne pole aktywnego aktora.")
     return _invalid(
         actor,
         clicked_position,
@@ -140,6 +154,14 @@ def preview_turn_intent(
 
 
 def confirm_turn_intent(state: CombatState, preview: TurnIntentPreview) -> TurnIntentConfirmation:
+    if preview.mode == TurnPromptMode.ACTOR_OPTIONS_PREVIEW:
+        return TurnIntentConfirmation(
+            state=state,
+            accepted=True,
+            mode=TurnPromptMode.RESOLVED,
+            message=f"{preview.actor.name} kończy turę.",
+            end_turn_requested=True,
+        )
     if preview.mode == TurnPromptMode.MOVEMENT_PREVIEW and preview.movement_path is not None:
         current = _actor_from_state(state, preview.actor)
         result = use_movement(state, current, preview.movement_path)

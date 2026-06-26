@@ -89,3 +89,17 @@ def test_illegal_click_is_rejected_with_reason():
 
     assert preview.mode == TurnPromptMode.INVALID
     assert "nie jest teraz legalnym celem" in preview.message
+
+
+def test_clicking_active_actor_tile_previews_end_turn_option():
+    hero = _actor("hero", Faction.ALLY, Coordinate(0, 0))
+    goblin = _actor("goblin", Faction.ENEMY, Coordinate(3, 0))
+    state = start_combat((hero, goblin), _order(hero, goblin))
+
+    preview = preview_turn_intent(BoardState(), state, hero, _source(), Coordinate(0, 0))
+    confirmation = confirm_turn_intent(state, preview)
+
+    assert preview.mode == TurnPromptMode.ACTOR_OPTIONS_PREVIEW
+    assert "zakończ turę" in preview.message
+    assert confirmation.accepted is True
+    assert confirmation.end_turn_requested is True

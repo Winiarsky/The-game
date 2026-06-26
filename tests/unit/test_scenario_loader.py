@@ -3,7 +3,7 @@ import json
 import pytest
 
 from dnd_board_game.actors import Faction
-from dnd_board_game.combat import AttackSourceType, DamageType, EnvironmentSetupType, SetupVisibility
+from dnd_board_game.combat import AttackSourceType, DamageType, EnvironmentSetupType, SceneObjectiveCondition, SetupVisibility
 from dnd_board_game.scenarios import build_encounter_from_scenario, load_scenario
 from dnd_board_game.world import Coordinate
 
@@ -83,10 +83,17 @@ def test_load_first_playable_scene_builds_setup_objective_and_scene_object():
     )
     assert len(encounter.objectives) == 1
     assert encounter.objectives[0].id == "secure_crate"
-    assert encounter.objectives[0].target_id == "ancient_crate"
+    assert encounter.objectives[0].condition == SceneObjectiveCondition.FLAG_EQUALS
+    assert encounter.objectives[0].flag_key == "crate_secured"
+    assert encounter.objectives[0].flag_value is True
     assert len(encounter.scene_objects) == 1
-    assert encounter.scene_objects[0].id == "ancient_crate"
-    assert encounter.scene_objects[0].interaction_label == "Zabezpiecz skrzynię"
+    scene_object = encounter.scene_objects[0]
+    assert scene_object.id == "ancient_crate"
+    assert scene_object.interaction_label == "Zbadaj skrzynię"
+    assert scene_object.interactions[0].id == "inspect_crate"
+    assert scene_object.interactions[0].ability_check is not None
+    assert scene_object.interactions[0].ability_check.dc == 12
+    assert scene_object.interactions[0].success_flag == "crate_secured"
     assert encounter.board.terrain_at(Coordinate(3, 1)).blocks_movement is True
     assert encounter.board.terrain_at(Coordinate(2, 2)).is_difficult is True
 

@@ -18,11 +18,13 @@ from dnd_board_game.combat import (
     DamageType,
     InitiativeEntry,
     InitiativeOrder,
+    SceneFlags,
     active_actor_led_feedback,
     apply_damage,
     attack_declaration_from_state,
     attack_result_led_feedback,
     attack_targets_led_feedback,
+    available_scene_interactions,
     complete_interaction_objective,
     confirm_turn_intent,
     current_actor,
@@ -30,13 +32,16 @@ from dnd_board_game.combat import (
     legal_melee_targets,
     movement_remaining,
     objective_status_after_combat,
+    objective_status_after_flags,
     preview_turn_intent,
     replace_actor,
     resolve_attack,
     resolve_damage,
     resolve_enemy_auto_turn,
+    resolve_scene_interaction,
     scene_is_finished,
     scene_result,
+    set_scene_flag,
     select_attack_target,
     selected_attack_target_led_feedback,
     start_attack_action,
@@ -89,6 +94,7 @@ def run_demo(
         {"scenario_id": encounter.scenario_id, "scenario_name": encounter.scenario_name, "path": args.scenario},
     )
     objectives = encounter.objectives
+    scene_flags = SceneFlags()
     setup_actors, setup_messages, setup_feedback = _run_scene_setup(args, encounter, adapter, observer)
     state = start_combat(setup_actors, _fixed_demo_initiative(setup_actors))
     rng = random.Random(args.enemy_seed)
@@ -105,6 +111,8 @@ def run_demo(
                 "name": objective.name,
                 "condition": objective.condition.value,
                 "target_id": objective.target_id,
+                "flag_key": objective.flag_key,
+                "flag_value": objective.flag_value,
             },
         )
 
@@ -136,11 +144,12 @@ def run_demo(
 
         if actor.faction == Faction.ALLY:
             source = encounter.attack_sources_by_actor[actor.id]
-            state, objectives, turn_messages, sent = _run_hero_turn(
+            state, objectives, scene_flags, turn_messages, sent = _run_hero_turn(
                 args,
                 encounter.board,
                 state,
                 objectives,
+                scene_flags,
                 actor,
                 source,
                 encounter.scene_objects,
@@ -151,6 +160,7 @@ def run_demo(
             enemy_source = encounter.attack_sources_by_actor[actor.id]
             state, turn_messages, sent = _run_enemy_turn(encounter.board, state, actor, enemy_source, rng, adapter, observer, args)
         objectives = objective_status_after_combat(state, objectives)
+        objectives = objective_status_after_flags(objectives, scene_flags)
         messages.extend(turn_messages)
         feedback_events += sent
 
@@ -199,6 +209,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--hero-damage", type=int, default=6)
     parser.add_argument("--ally-attack-roll", action="append", default=[])
     parser.add_argument("--ally-damage", action="append", default=[])
+    parser.add_argument("--ally-check-roll", action="append", default=[])
     parser.add_argument("--ally-turn-script", action="append", default=[])
     parser.add_argument("--hero-damage-type", choices=[item.value for item in DamageType], default=None)
     parser.add_argument("--enemy-seed", type=int, default=7)
@@ -407,17 +418,19 @@ def _run_hero_turn(
     board,
     state: CombatState,
     objectives,
+    scene_flags: SceneFlags,
     actor: Actor,
     source: AttackSource,
     scene_objects,
     adapter: BoardLedAdapter | None,
     observer: SessionObserver,
-) -> tuple[CombatState, tuple, tuple[str, ...], int]:
+) -> tuple[CombatState, tuple, SceneFlags, tuple[str, ...], int]:
     messages: list[str] = []
     feedback_events = 0
     actor_id = str(actor.id)
     attack_roll_overrides = _parse_actor_value_overrides(args.ally_attack_roll, int)
     damage_overrides = _parse_actor_value_overrides(args.ally_damage, int)
+    check_roll_overrides = _parse_actor_value_overrides(args.ally_check_roll, int)
     scripts = _parse_turn_scripts(args.ally_turn_script)
     script = list(scripts.get(actor_id, ()))
     prompt_message = f"Tura: {actor.name}. Kliknij pole ruchu, cel ataku albo zakończ turę w terminalu."
@@ -484,9 +497,28 @@ def _run_hero_turn(
         if preview.mode.value == "attack_preview" and preview.attack_target is not None:
             observer.record("attack_previewed", {"actor_id": actor_id, "target_id": preview.attack_target.id})
         if preview.mode.value == "interaction_preview" and preview.interaction_object is not None:
+            interaction = _selected_interaction(preview.interaction_object)
+            options_message = _interaction_options_message(preview.interaction_object)
+            print(options_message)
+            messages.append(options_message)
+            observer.record(
+                "interaction_options_shown",
+                {
+                    "actor_id": actor_id,
+                    "object_id": preview.interaction_object.id,
+                    "interactions": [
+                        {
+                            "id": available.id,
+                            "label": available.label,
+                            "has_ability_check": available.ability_check is not None,
+                        }
+                        for available in available_scene_interactions(preview.interaction_object)
+                    ],
+                },
+            )
             observer.record(
                 "interaction_previewed",
-                {"actor_id": actor_id, "object_id": preview.interaction_object.id},
+                {"actor_id": actor_id, "object_id": preview.interaction_object.id, "interaction_id": interaction.id},
             )
         if preview.mode.value == "invalid":
             continue
@@ -524,6 +556,20 @@ def _run_hero_turn(
         print(confirmation.message)
         messages.append(confirmation.message)
 
+        if confirmation.end_turn_requested:
+            observer.record(
+                "turn_end_requested",
+                {
+                    "actor_id": actor_id,
+                    "round_number": state.round_number,
+                    "movement_remaining": preview.movement_remaining_feet,
+                    "action_available": preview.action_available,
+                },
+            )
+            if adapter is not None:
+                adapter.clear()
+            break
+
         if confirmation.movement_result is not None:
             state = confirmation.state
             observer.record(
@@ -546,23 +592,23 @@ def _run_hero_turn(
 
         if confirmation.interaction_object is not None:
             state = confirmation.state
+            completed_before = _completed_objective_ids(objectives)
             objectives = complete_interaction_objective(objectives, confirmation.interaction_object)
-            observer.record(
-                "interaction_confirmed",
-                {
-                    "actor_id": actor_id,
-                    "object_id": confirmation.interaction_object.id,
-                    "objective_id": confirmation.interaction_object.objective_id,
-                },
+            state, objectives, scene_flags, interaction_messages, sent = _resolve_confirmed_interaction(
+                args,
+                state,
+                objectives,
+                scene_flags,
+                actor,
+                confirmation.interaction_object,
+                check_roll_overrides,
+                adapter,
+                observer,
             )
-            for objective in objectives:
-                if objective.status.value == "completed":
-                    observer.record("objective_completed", {"objective_id": objective.id, "name": objective.name})
+            messages.extend(interaction_messages)
+            feedback_events += sent
+            _record_new_objective_completions(observer, completed_before, objectives)
             if adapter is not None:
-                adapter.clear()
-                adapter.show_feedback(LedFeedback((LedFrame(confirmation.interaction_object.positions, (0, 255, 120), LedRole.DESTINATION),)))
-                feedback_events += 1
-                observer.record("led_feedback_sent", {"phase": "interaction_confirmed", "actor_id": actor_id})
                 _pause_for_led_step(args, "Naciśnij Enter po potwierdzeniu interakcji.")
                 adapter.clear()
             if scene_is_finished(state, objectives):
@@ -586,7 +632,98 @@ def _run_hero_turn(
             feedback_events += sent
             continue
 
-    return state, objectives, tuple(messages), feedback_events
+    return state, objectives, scene_flags, tuple(messages), feedback_events
+
+
+def _resolve_confirmed_interaction(
+    args: argparse.Namespace,
+    state: CombatState,
+    objectives,
+    scene_flags: SceneFlags,
+    actor: Actor,
+    scene_object,
+    check_roll_overrides: dict[str, object],
+    adapter: BoardLedAdapter | None,
+    observer: SessionObserver,
+) -> tuple[CombatState, tuple, SceneFlags, tuple[str, ...], int]:
+    messages: list[str] = []
+    feedback_events = 0
+    actor_id = str(actor.id)
+    interaction = _selected_interaction(scene_object)
+    observer.record(
+        "interaction_confirmed",
+        {"actor_id": actor_id, "object_id": scene_object.id, "interaction_id": interaction.id},
+    )
+
+    natural_roll: int | None = None
+    if interaction.ability_check is not None:
+        request = D20RollRequest(modifiers=interaction.ability_check.modifiers)
+        instruction = roll_instruction(request)
+        check_message = (
+            f"Test {_ability_check_label(interaction.ability_check.ability, interaction.ability_check.skill)}, "
+            f"ST {interaction.ability_check.dc}. {instruction.message}"
+        )
+        print(check_message)
+        messages.append(check_message)
+        observer.record(
+            "ability_check_requested",
+            {
+                "actor_id": actor_id,
+                "object_id": scene_object.id,
+                "interaction_id": interaction.id,
+                "ability": interaction.ability_check.ability,
+                "skill": interaction.ability_check.skill,
+                "dc": interaction.ability_check.dc,
+                "instruction": instruction.message,
+            },
+        )
+        default_roll = int(check_roll_overrides.get(actor_id, 10))
+        natural_roll = _read_int_or_default(
+            args,
+            f"Wpisz naturalny wynik testu d20 albo naciśnij Enter dla wartości z CLI ({default_roll}): ",
+            default_roll,
+        )
+
+    result = resolve_scene_interaction(interaction, natural_roll=natural_roll)
+    print(result.message)
+    messages.append(result.message)
+    if result.roll is not None:
+        observer.record(
+            "ability_check_resolved",
+            {
+                "actor_id": actor_id,
+                "object_id": scene_object.id,
+                "interaction_id": interaction.id,
+                "natural_roll": result.roll.natural_roll,
+                "modifier_total": result.roll.breakdown.modifier_total,
+                "total": result.roll.total,
+                "dc": result.dc,
+                "success": result.success,
+            },
+        )
+
+    if result.flag_key is not None:
+        scene_flags = set_scene_flag(scene_flags, result.flag_key, result.flag_value)
+        observer.record(
+            "scene_flag_set",
+            {"key": result.flag_key, "value": result.flag_value, "actor_id": actor_id, "interaction_id": interaction.id},
+        )
+        observer.record(
+            "scene_flag_checked",
+            {"key": result.flag_key, "value": result.flag_value, "actor_id": actor_id, "interaction_id": interaction.id},
+        )
+    objectives = objective_status_after_flags(objectives, scene_flags)
+
+    if adapter is not None:
+        adapter.clear()
+        color = (0, 255, 120) if result.success else (255, 0, 0)
+        adapter.show_feedback(LedFeedback((LedFrame(scene_object.positions, color, LedRole.DESTINATION),)))
+        feedback_events += 1
+        observer.record(
+            "led_feedback_sent",
+            {"phase": "interaction_success" if result.success else "interaction_failure", "actor_id": actor_id},
+        )
+    return state, objectives, scene_flags, tuple(messages), feedback_events
 
 
 def _resolve_confirmed_hero_attack(
@@ -745,6 +882,8 @@ def _coordinate_from_turn_command(command: str, state: CombatState, actor: Actor
     command = command.strip()
     if command == "end":
         return None
+    if command in {"self", "options"}:
+        return actor.position
     if command.startswith("move:"):
         return _parse_coordinate(command.removeprefix("move:"))
     if command.startswith("attack:"):
@@ -760,7 +899,7 @@ def _coordinate_from_turn_command(command: str, state: CombatState, actor: Actor
 
 
 def _acceptable_turn_positions(board, state: CombatState, actor: Actor, source: AttackSource, scene_objects=()) -> tuple[Coordinate, ...]:
-    positions: set[Coordinate] = set()
+    positions: set[Coordinate] = {actor.position}
     if movement_remaining(state, actor) > 0:
         movement_actor = replace(actor, speed_feet=movement_remaining(state, actor))
         positions.update(movement_range(board, movement_actor, state.actors).reachable_tiles)
@@ -772,7 +911,6 @@ def _acceptable_turn_positions(board, state: CombatState, actor: Actor, source: 
             for position in scene_object.positions
             if scene_object.visibility.value == "visible"
         )
-    positions.discard(actor.position)
     return tuple(sorted(positions))
 
 
@@ -829,6 +967,8 @@ def _turn_options_led_feedback(board, state: CombatState, actor: Actor, source: 
 
 
 def _preview_led_feedback(preview) -> LedFeedback:
+    if preview.mode.value == "actor_options_preview":
+        return LedFeedback((LedFrame((preview.clicked_position,), (255, 255, 255), LedRole.ACTIVE_ACTOR),))
     if preview.movement_range is not None:
         return movement_led_feedback(preview.movement_range, preview.movement_path)
     if preview.attack_target is not None:
@@ -838,8 +978,62 @@ def _preview_led_feedback(preview) -> LedFeedback:
     return LedFeedback((LedFrame((preview.clicked_position,), (255, 0, 0), LedRole.DESTINATION),))
 
 
+def _selected_interaction(scene_object):
+    return available_scene_interactions(scene_object)[0]
+
+
+def _interaction_options_message(scene_object) -> str:
+    interactions = available_scene_interactions(scene_object)
+    if len(interactions) == 1:
+        interaction = interactions[0]
+        description = f" {interaction.description}" if interaction.description else ""
+        return f"Opcja interakcji: {interaction.label}.{description}"
+    labels = ", ".join(interaction.label for interaction in interactions)
+    return f"Dostępne interakcje dla {scene_object.name}: {labels}. W MVP wybrana zostanie pierwsza opcja."
+
+
+def _ability_check_label(ability: str, skill: str | None) -> str:
+    ability_label = {
+        "strength": "Siły",
+        "dexterity": "Zręczności",
+        "constitution": "Kondycji",
+        "intelligence": "Inteligencji",
+        "wisdom": "Mądrości",
+        "charisma": "Charyzmy",
+    }.get(ability, ability)
+    if skill is None:
+        return ability_label
+    skill_label = {
+        "perception": "Percepcja",
+        "investigation": "Śledztwo",
+        "athletics": "Atletyka",
+        "acrobatics": "Akrobatyka",
+        "stealth": "Skradanie",
+        "persuasion": "Perswazja",
+        "deception": "Oszustwo",
+        "insight": "Intuicja",
+        "arcana": "Wiedza tajemna",
+        "history": "Historia",
+        "nature": "Natura",
+        "religion": "Religia",
+    }.get(skill, skill)
+    return f"{ability_label} ({skill_label})"
+
+
+def _completed_objective_ids(objectives) -> set[str]:
+    return {objective.id for objective in objectives if objective.status.value == "completed"}
+
+
+def _record_new_objective_completions(observer: SessionObserver, completed_before: set[str], objectives) -> None:
+    for objective in objectives:
+        if objective.status.value == "completed" and objective.id not in completed_before:
+            observer.record("objective_completed", {"objective_id": objective.id, "name": objective.name})
+
+
 def _turn_has_no_options(board, state: CombatState, actor: Actor, source: AttackSource, scene_objects=()) -> bool:
-    has_move = movement_remaining(state, actor) > 0 and bool(_acceptable_turn_positions(board, state, actor, source, ()))
+    has_move = movement_remaining(state, actor) > 0 and any(
+        position != actor.position for position in _acceptable_turn_positions(board, state, actor, source, ())
+    )
     has_attack = state.turn_action.action_use == ActionUse.ACTION_AVAILABLE and bool(legal_melee_targets(board, actor, state.actors))
     has_interaction = state.turn_action.action_use == ActionUse.ACTION_AVAILABLE and bool(scene_objects)
     return not has_move and not has_attack and not has_interaction

@@ -93,6 +93,13 @@ Każde zdarzenie powinno zawierać:
 - `objective_started`
 - `objective_completed`
 - `scene_finished`
+- `interaction_options_shown`
+- `interaction_previewed`
+- `interaction_confirmed`
+- `ability_check_requested`
+- `ability_check_resolved`
+- `scene_flag_set`
+- `scene_flag_checked`
 - `setup_step_started`
 - `setup_step_finished`
 - `enemy_initiative_rolled`
@@ -105,8 +112,6 @@ Każde zdarzenie powinno zawierać:
 - `enemy_action_selected`
 - `target_selected`
 - `attack_previewed`
-- `interaction_previewed`
-- `interaction_confirmed`
 - `attack_rejected`
 - `attack_declared`
 - `attack_resolved`

@@ -12,9 +12,10 @@
     {
       "id": "secure_crate",
       "name": "Zabezpiecz starą skrzynię",
-      "description": "Podejdźcie do starej skrzyni i potwierdźcie interakcję, zanim gobliny odzyskają kontrolę nad traktem.",
-      "condition": "interact_with_object",
-      "target_id": "ancient_crate"
+      "description": "Podejdźcie do starej skrzyni, zbadajcie ją i zabezpieczcie ukryty mechanizm, zanim gobliny odzyskają kontrolę nad traktem.",
+      "condition": "flag_equals",
+      "flag_key": "crate_secured",
+      "flag_value": true
     }
   ],
   "actors": [
@@ -84,9 +85,33 @@
       "type": "interactable",
       "positions": [[2, 0]],
       "visibility": "visible",
-      "interaction_label": "Zabezpiecz skrzynię",
+      "interaction_label": "Zbadaj skrzynię",
       "objective_id": "secure_crate",
-      "description": "Jawny obiekt celu sceny."
+      "description": "Jawny obiekt celu sceny.",
+      "interactions": [
+        {
+          "id": "inspect_crate",
+          "label": "Zbadaj skrzynię",
+          "description": "Sprawdź, czy skrzynia ma ukryty mechanizm albo pułapkę.",
+          "ability_check": {
+            "ability": "wisdom",
+            "skill": "perception",
+            "dc": 12,
+            "modifiers": [
+              {
+                "label": "Biegłość w Percepcji",
+                "value": 2,
+                "modifier_type": "proficiency",
+                "stacking_key": "proficiency"
+              }
+            ]
+          },
+          "success_flag": "crate_secured",
+          "failure_flag": "crate_trap_missed",
+          "success_message": "Zauważasz prosty mechanizm i zabezpieczasz skrzynię.",
+          "failure_message": "Nie dostrzegasz niczego podejrzanego."
+        }
+      ]
     },
     {
       "id": "fallen_cart",

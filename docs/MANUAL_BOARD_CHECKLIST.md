@@ -207,6 +207,8 @@ PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat_loop --scenario
 - [ ] Pierwsze kliknięcie legalnego celu pokazuje warunki ataku i prosi o ponowne kliknięcie.
 - [ ] Drugie kliknięcie tego samego celu potwierdza atak.
 - [ ] Kliknięcie innego legalnego pola przed potwierdzeniem zmienia podgląd bez wykonywania poprzedniej intencji.
+- [ ] Kliknięcie pola aktywnego aktora pokazuje opcję zakończenia tury.
+- [ ] Drugie kliknięcie pola aktywnego aktora kończy turę przed wykorzystaniem całego ruchu.
 - [ ] Po ataku można jeszcze ruszyć się pozostałym ruchem.
 - [ ] Przeciwnik bez celu ataku podchodzi do najbliższej pozycji ataku.
 - [ ] Plik obserwacji zawiera `turn_intent_previewed`, `turn_intent_confirmed`, `movement_committed`, `attack_previewed` i `target_selected`.
@@ -228,10 +230,13 @@ PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat_loop --scenario
 - [ ] Aplikacja pokazuje cel sceny.
 - [ ] Widoczni przeciwnicy poza zasięgiem świecą przygaszonym czerwonym/różowym, a nie wyglądają jak puste pola.
 - [ ] Obiekt interaktywny świeci na zielono.
-- [ ] Kliknięcie obiektu pokazuje komunikat interakcji.
+- [ ] Kliknięcie obiektu pokazuje opcję interakcji i opis.
 - [ ] Drugie kliknięcie tego samego obiektu potwierdza interakcję.
+- [ ] Aplikacja pokazuje warunki testu cechy: cecha/skill, ST, aktywne modyfikatory i końcowy modyfikator.
+- [ ] Po wpisaniu naturalnego wyniku d20 aplikacja pokazuje sukces albo porażkę.
+- [ ] Sukces miga/świeci na zielono, porażka na czerwono.
 - [ ] Po spełnieniu celu aplikacja kończy scenę.
-- [ ] Plik obserwacji zawiera `scene_setup_started`, `scene_setup_step_confirmed`, `scene_setup_confirmed`, `objective_started`, `interaction_confirmed`, `objective_completed` i `scene_finished`.
+- [ ] Plik obserwacji zawiera `scene_setup_started`, `scene_setup_step_confirmed`, `scene_setup_confirmed`, `objective_started`, `interaction_options_shown`, `ability_check_requested`, `ability_check_resolved`, `scene_flag_set`, `objective_completed` i `scene_finished`.
 
 ## Test Obserwacji Sesji
 

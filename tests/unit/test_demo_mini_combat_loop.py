@@ -186,6 +186,26 @@ def test_demo_mini_combat_loop_turn_script_moves_attacks_moves_and_ends(tmp_path
     assert "attack_previewed" in event_types
 
 
+def test_demo_mini_combat_loop_turn_script_self_click_ends_turn(tmp_path):
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--scenario",
+            "content/scenarios/movement_skirmish.json",
+            "--ally-turn-script",
+            "hero=self",
+            "--enemy-seed",
+            "7",
+            "--max-rounds",
+            "1",
+        )
+    )
+
+    event_types = [event["event_type"] for event in _events(result.observation_path)]
+    assert any("Opcje aktora: Bohater" in message for message in result.messages)
+    assert "turn_end_requested" in event_types
+
+
 def test_demo_mini_combat_loop_second_click_on_different_tile_changes_preview(tmp_path):
     connection = FakeConnection(scanned=[(1, 0), (3, 1), (1, 0), (1, 1), (1, 1)])
     args = _args(
@@ -217,6 +237,8 @@ def test_demo_mini_combat_loop_first_playable_scene_setup_and_interaction(tmp_pa
             "content/scenarios/first_playable_scene.json",
             "--ally-turn-script",
             "hero=move:1,0,interact:ancient_crate,end",
+            "--ally-check-roll",
+            "hero=13",
             "--max-rounds",
             "8",
             "--enemy-seed",
@@ -230,10 +252,41 @@ def test_demo_mini_combat_loop_first_playable_scene_setup_and_interaction(tmp_pa
     assert "scene_started" in event_types
     assert "scene_setup_started" in event_types
     assert "scene_setup_confirmed" in event_types
+    assert "interaction_options_shown" in event_types
     assert "interaction_previewed" in event_types
     assert "interaction_confirmed" in event_types
+    assert "ability_check_requested" in event_types
+    assert "ability_check_resolved" in event_types
+    assert "scene_flag_set" in event_types
     assert "objective_completed" in event_types
     assert "scene_finished" in event_types
+
+
+def test_demo_mini_combat_loop_failed_interaction_check_does_not_complete_flag_objective(tmp_path):
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--scenario",
+            "content/scenarios/first_playable_scene.json",
+            "--ally-turn-script",
+            "hero=move:1,0,interact:ancient_crate,end",
+            "--ally-check-roll",
+            "hero=1",
+            "--max-rounds",
+            "1",
+            "--enemy-seed",
+            "7",
+        )
+    )
+
+    events = _events(result.observation_path)
+    event_types = [event["event_type"] for event in events]
+    assert "ability_check_resolved" in event_types
+    resolved = next(event for event in events if event["event_type"] == "ability_check_resolved")
+    assert resolved["payload"]["success"] is False
+    flag_event = next(event for event in events if event["event_type"] == "scene_flag_set")
+    assert flag_event["payload"]["key"] == "crate_trap_missed"
+    assert "objective_completed" not in event_types
 
 
 def test_demo_mini_combat_loop_scene_setup_uses_board_clicks_for_hero_positions(tmp_path):
