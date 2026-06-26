@@ -24,6 +24,8 @@
 - [x] Implement initiative order.
 - [x] Implement basic melee/ranged attack resolution.
 - [x] Implement first mini-combat turn loop.
+- [x] Implement board-first turn intent flow with split movement.
+- [x] Add enemy auto movement before melee attack.
 - [x] Implement hardware adapter interface around `board.Connection`.
 - [x] Add LED frame generation for selected path and movement range.
 - [x] Decide first UI/runtime surface.

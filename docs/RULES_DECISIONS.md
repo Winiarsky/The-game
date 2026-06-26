@@ -75,6 +75,9 @@ Implementacja MVP:
 - Ściany i blokujące przeszkody blokują przejście.
 - Zamknięte drzwi blokują ruch, otwarte drzwi nie blokują ruchu.
 - Ruch po skosie przez całkowicie zablokowany róg jest niedozwolony.
+- W turze walki ruch jest pulą `speed_feet`, którą można dzielić przed i po ataku.
+- Atak zużywa akcję, ale nie kasuje pozostałego ruchu.
+- Koniec tury resetuje akcję i pulę ruchu.
 
 Poza zakresem MVP:
 
@@ -86,6 +89,8 @@ Poza zakresem MVP:
 - pływanie,
 - latanie,
 - ruch wymuszony.
+- Dash, Disengage, Dodge,
+- ataki okazyjne,
 
 Odstępstwa / decyzje planszowe:
 
@@ -247,6 +252,10 @@ Odstępstwa / decyzje planszowe:
 - Szczegółowe zasady śmierci i umierania zostają odłożone, dopóki nie będą potrzebne w pierwszej scenie.
 - Obiekty atakowalne są przewidziane w modelu targetowania, ale pełny flow niszczenia obiektów zostaje później.
 - Komunikat aplikacji i LED-y muszą być zsynchronizowane: legalne cele, wybrany cel, wynik ataku.
+- W board-first MVP gracz nie wybiera najpierw akcji z menu: klika pole na planszy, a aplikacja interpretuje intencję jako ruch albo atak.
+- Pierwsze kliknięcie pola pokazuje podgląd intencji, drugie kliknięcie tego samego pola potwierdza.
+- Kliknięcie innego legalnego pola przed potwierdzeniem zmienia podgląd.
+- Przeciwnicy w MVP mogą wykonać ruch w stronę najbliższego celu, a potem zaatakować, jeśli cel stał się legalny.
 
 Testy:
 
@@ -258,6 +267,8 @@ Testy:
 - `tests/unit/test_attack_led_feedback.py`
 - `tests/unit/test_demo_mini_combat.py`
 - `tests/unit/test_combat_session.py`
+- `tests/unit/test_turn_intent.py`
+- `tests/unit/test_enemy_auto_movement.py`
 - `tests/unit/test_enemy_auto_attack.py`
 - `tests/unit/test_demo_mini_combat_loop.py`
 - `tests/unit/test_scenario_loader.py`

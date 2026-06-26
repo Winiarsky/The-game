@@ -239,6 +239,28 @@ W multi-actor runtime dodatkowo obsługuje:
 - `--ally-attack-roll rogue=13`
 - `--ally-damage rogue=5`
 
+Wariant board-first ze skryptem ruchu bez planszy:
+
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat_loop --scenario content/scenarios/movement_skirmish.json --board-backend none --ally-turn-script hero=move:1,0,attack:goblin_a,move:0,1,end --hero-attack-roll 14 --hero-damage 6 --enemy-seed 7 --max-rounds 5 --session-id board_first_turn_demo --step-delay 0
+```
+
+Wariant board-first w symulatorze:
+
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat_loop --scenario content/scenarios/movement_skirmish.json --board-backend simulator --board-url http://127.0.0.1:5000 --show-leds --wait-for-enter --scan-timeout 30 --enemy-seed 7 --max-rounds 5 --session-id board_first_turn_simulator_demo
+```
+
+Board-first flow:
+
+- biały LED wskazuje aktywnego aktora,
+- przygaszony niebieski/cyan pokazuje legalne pola ruchu,
+- mocny niebieski pokazuje legalne cele ataku,
+- pierwsze kliknięcie pola pokazuje podgląd ruchu albo ataku,
+- drugie kliknięcie tego samego pola potwierdza,
+- kliknięcie innego pola przed potwierdzeniem zmienia podgląd,
+- po ataku można jeszcze wykorzystać pozostały ruch.
+
 ## Zasada Testowania Funkcji
 
 Każda większa funkcja powinna przejść przez trzy poziomy:

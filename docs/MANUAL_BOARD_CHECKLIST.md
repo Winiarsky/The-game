@@ -191,6 +191,26 @@ PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat_loop --scenario
 - [ ] Walka kończy się dopiero po pokonaniu całej strony.
 - [ ] Plik obserwacji zawiera `target_selected`.
 
+### Runtime `demo_mini_combat_loop` Board-First Turn
+
+Terminal 2:
+
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat_loop --scenario content/scenarios/movement_skirmish.json --board-backend simulator --board-url http://127.0.0.1:5000 --show-leds --wait-for-enter --scan-timeout 30 --enemy-seed 7 --max-rounds 5 --session-id board_first_turn_simulator_demo
+```
+
+- [ ] Na starcie tury aktywny bohater świeci na biało.
+- [ ] Legalne pola ruchu świecą przygaszonym niebieskim/cyan.
+- [ ] Legalne cele ataku świecą mocnym niebieskim.
+- [ ] Pierwsze kliknięcie pustego legalnego pola pokazuje ścieżkę ruchu na żółto i komunikat z kosztem.
+- [ ] Drugie kliknięcie tego samego pola potwierdza ruch i aktualizuje pozycję aktora.
+- [ ] Pierwsze kliknięcie legalnego celu pokazuje warunki ataku i prosi o ponowne kliknięcie.
+- [ ] Drugie kliknięcie tego samego celu potwierdza atak.
+- [ ] Kliknięcie innego legalnego pola przed potwierdzeniem zmienia podgląd bez wykonywania poprzedniej intencji.
+- [ ] Po ataku można jeszcze ruszyć się pozostałym ruchem.
+- [ ] Przeciwnik bez celu ataku podchodzi do najbliższej pozycji ataku.
+- [ ] Plik obserwacji zawiera `turn_intent_previewed`, `turn_intent_confirmed`, `movement_committed`, `attack_previewed` i `target_selected`.
+
 ## Test Obserwacji Sesji
 
 - [ ] Każdy ruch zapisuje metadane: aktor, start, cel, koszt, ścieżka.

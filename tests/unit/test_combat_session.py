@@ -7,12 +7,14 @@ from dnd_board_game.combat import (
     InitiativeOrder,
     current_actor,
     finish_turn,
+    movement_remaining,
     replace_actor,
     start_combat,
+    use_movement,
     use_turn_action,
 )
 from dnd_board_game.rules import D20RollInput, D20RollRequest, resolve_d20_roll
-from dnd_board_game.world import Coordinate
+from dnd_board_game.world import BoardState, Coordinate, find_path
 
 
 def _actor(actor_id: str, faction: Faction, col: int, hp: int = 10) -> Actor:
@@ -70,6 +72,41 @@ def test_finish_turn_advances_actor_and_resets_action():
 
     assert current_actor(state).id == goblin.id
     assert use_turn_action(state).accepted is True
+    assert movement_remaining(state, goblin) == goblin.speed_feet
+
+
+def test_movement_before_and_after_action_uses_shared_turn_pool():
+    hero = _actor("hero", Faction.ALLY, 0)
+    goblin = _actor("goblin", Faction.ENEMY, 5)
+    state = start_combat((hero, goblin), _order(hero, goblin))
+    board = BoardState()
+
+    first_move = use_movement(state, hero, find_path(board, hero, state.actors, Coordinate(1, 0)))
+    after_action = use_turn_action(first_move.state).state
+    moved_hero = next(actor for actor in after_action.actors if actor.id == hero.id)
+    second_move = use_movement(after_action, moved_hero, find_path(board, moved_hero, after_action.actors, Coordinate(2, 0)))
+
+    assert first_move.accepted is True
+    assert movement_remaining(first_move.state, moved_hero) == 25
+    assert second_move.accepted is True
+    assert movement_remaining(second_move.state, next(actor for actor in second_move.state.actors if actor.id == hero.id)) == 20
+
+
+def test_movement_cannot_exceed_remaining_speed():
+    hero = _actor("hero", Faction.ALLY, 0)
+    goblin = _actor("goblin", Faction.ENEMY, 10)
+    state = start_combat((hero, goblin), _order(hero, goblin))
+    board = BoardState()
+    long_path = find_path(board, hero, state.actors, Coordinate(6, 0))
+
+    result = use_movement(state, hero, long_path)
+
+    assert result.accepted is True
+    moved_hero = next(actor for actor in result.state.actors if actor.id == hero.id)
+    too_far = use_movement(result.state, moved_hero, find_path(board, moved_hero, result.state.actors, Coordinate(7, 0)))
+
+    assert too_far.accepted is False
+    assert "Za mało ruchu" in too_far.message
 
 
 def test_finish_turn_wraps_to_next_round():

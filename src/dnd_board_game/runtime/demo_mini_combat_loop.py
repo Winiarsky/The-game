@@ -5,7 +5,7 @@ import random
 import sys
 import uuid
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from dnd_board_game.actors import Actor, Faction
@@ -23,12 +23,16 @@ from dnd_board_game.combat import (
     attack_declaration_from_state,
     attack_result_led_feedback,
     attack_targets_led_feedback,
+    confirm_turn_intent,
     current_actor,
     finish_turn,
+    legal_melee_targets,
+    movement_remaining,
+    preview_turn_intent,
     replace_actor,
     resolve_attack,
     resolve_damage,
-    resolve_enemy_auto_attack,
+    resolve_enemy_auto_turn,
     select_attack_target,
     selected_attack_target_led_feedback,
     start_attack_action,
@@ -36,14 +40,16 @@ from dnd_board_game.combat import (
     stop_combat,
     use_turn_action,
 )
-from dnd_board_game.hardware import BoardLedAdapter
+from dnd_board_game.hardware import BoardLedAdapter, LedFeedback, LedFrame, LedRole, movement_led_feedback
 from dnd_board_game.rules import D20RollInput, D20RollRequest, resolve_d20_roll, roll_instruction
 from dnd_board_game.scenarios import LoadedEncounter, build_encounter_from_scenario, load_scenario
+from dnd_board_game.world import Coordinate, find_path, movement_range
 
 from .demo_mini_combat import (
     ConnectionFactory,
     _attack_result_message,
     _create_adapter,
+    _parse_coordinate,
     _pause_for_led_step,
     _read_int_or_default,
     _select_target,
@@ -152,6 +158,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--hero-damage", type=int, default=6)
     parser.add_argument("--ally-attack-roll", action="append", default=[])
     parser.add_argument("--ally-damage", action="append", default=[])
+    parser.add_argument("--ally-turn-script", action="append", default=[])
     parser.add_argument("--hero-damage-type", choices=[item.value for item in DamageType], default=None)
     parser.add_argument("--enemy-seed", type=int, default=7)
     parser.add_argument("--max-rounds", type=int, default=3)
@@ -184,36 +191,163 @@ def _run_hero_turn(
     messages: list[str] = []
     feedback_events = 0
     actor_id = str(actor.id)
-    target_id_overrides = _parse_actor_value_overrides(args.target_id_by_actor, str)
     attack_roll_overrides = _parse_actor_value_overrides(args.ally_attack_roll, int)
     damage_overrides = _parse_actor_value_overrides(args.ally_damage, int)
-    original_target_id = args.target_id
-    action_message = f"{actor.name} wybiera akcję: Atak."
-    print(action_message)
-    messages.append(action_message)
-    attack_state = start_attack_action(board, actor, state.actors, source)
-    if not attack_state.legal_targets:
-        message = "Brak legalnych celów ataku. Tura kończy się bez ataku."
-        print(message)
-        messages.append(message)
-        observer.record("attack_rejected", {"reason": "no_legal_targets", "attacker_id": str(actor.id)})
-        return use_turn_action(state).state, tuple(messages), feedback_events
+    scripts = _parse_turn_scripts(args.ally_turn_script)
+    script = list(scripts.get(actor_id, ()))
+    prompt_message = f"Tura: {actor.name}. Kliknij pole ruchu, cel ataku albo zakończ turę w terminalu."
+    print(prompt_message)
+    messages.append(prompt_message)
+    observer.record(
+        "turn_prompt_started",
+        {"actor_id": actor_id, "round_number": state.round_number, "movement_remaining": movement_remaining(state, actor)},
+    )
 
-    args.target_id = _target_id_for_actor(actor_id, args.target_id, target_id_overrides, attack_state.legal_targets)
-    target_message = "Wybierz cel ataku. Legalne cele: " + ", ".join(target.name for target in attack_state.legal_targets) + "."
-    print(target_message)
-    messages.append(target_message)
-    if adapter is not None:
-        adapter.show_feedback(attack_targets_led_feedback(attack_state.legal_targets))
-        feedback_events += 1
-        observer.record("led_feedback_sent", {"phase": "legal_attack_targets"})
+    pending_click: Coordinate | None = None
+    while state.status == CombatStatus.ACTIVE:
+        actor = _actor_by_string_id(state, actor_id)
+        if actor.is_defeated():
+            break
+        if _turn_has_no_options(board, state, actor, source):
+            message = f"{actor.name} nie ma już dostępnej akcji ani ruchu w tej turze."
+            print(message)
+            messages.append(message)
+            break
 
-    try:
-        attack_state = _select_target(args, attack_state, adapter, observer)
-    finally:
-        args.target_id = original_target_id
-    if adapter is not None:
-        adapter.clear()
+        if adapter is not None:
+            adapter.show_feedback(_turn_options_led_feedback(board, state, actor, source))
+            feedback_events += 1
+            observer.record("led_feedback_sent", {"phase": "turn_options", "actor_id": actor_id})
+
+        if pending_click is not None:
+            clicked = pending_click
+            pending_click = None
+        else:
+            clicked = _next_turn_click(args, board, state, actor, source, adapter, observer, script)
+        if clicked is None:
+            message = f"{actor.name} kończy turę."
+            print(message)
+            messages.append(message)
+            if adapter is not None:
+                adapter.clear()
+            break
+
+        preview = preview_turn_intent(board, state, actor, source, clicked)
+        print(preview.message)
+        messages.append(preview.message)
+        observer.record(
+            "turn_intent_previewed",
+            {
+                "actor_id": actor_id,
+                "round_number": state.round_number,
+                "mode": preview.mode.value,
+                "clicked_position": list(clicked.as_tuple()),
+                "movement_remaining": preview.movement_remaining_feet,
+                "action_available": preview.action_available,
+            },
+        )
+        if preview.mode.value == "movement_preview" and preview.movement_path is not None:
+            observer.record(
+                "movement_path_selected",
+                {
+                    "actor_id": actor_id,
+                    "destination": list(preview.movement_path.destination.as_tuple()),
+                    "cost_feet": preview.movement_path.cost_feet,
+                    "remaining_before": preview.movement_remaining_feet,
+                },
+            )
+        if preview.mode.value == "attack_preview" and preview.attack_target is not None:
+            observer.record("attack_previewed", {"actor_id": actor_id, "target_id": preview.attack_target.id})
+        if adapter is not None:
+            adapter.clear()
+            adapter.show_feedback(_preview_led_feedback(preview))
+            feedback_events += 1
+            observer.record("led_feedback_sent", {"phase": preview.mode.value, "actor_id": actor_id})
+
+        confirmation_click = _confirm_preview_click(args, board, state, actor, source, preview, adapter, observer, script)
+        if confirmation_click is None:
+            continue
+        if confirmation_click != preview.clicked_position:
+            pending_click = confirmation_click
+            if adapter is not None:
+                adapter.clear()
+            continue
+
+        confirmation = confirm_turn_intent(state, preview)
+        observer.record(
+            "turn_intent_confirmed",
+            {
+                "actor_id": actor_id,
+                "round_number": state.round_number,
+                "mode": preview.mode.value,
+                "accepted": confirmation.accepted,
+                "clicked_position": list(clicked.as_tuple()),
+            },
+        )
+        if not confirmation.accepted:
+            print(confirmation.message)
+            messages.append(confirmation.message)
+            observer.record("movement_rejected", {"actor_id": actor_id, "reason": confirmation.message})
+            continue
+        print(confirmation.message)
+        messages.append(confirmation.message)
+
+        if confirmation.movement_result is not None:
+            state = confirmation.state
+            observer.record(
+                "movement_committed",
+                {
+                    "actor_id": actor_id,
+                    "destination": list(clicked.as_tuple()),
+                    "cost_feet": preview.movement_path.cost_feet if preview.movement_path else 0,
+                    "movement_remaining": confirmation.movement_result.movement_remaining_feet,
+                },
+            )
+            if adapter is not None:
+                adapter.clear()
+                adapter.show_feedback(LedFeedback((LedFrame((clicked,), (0, 255, 120), LedRole.DESTINATION),)))
+                feedback_events += 1
+                observer.record("led_feedback_sent", {"phase": "movement_committed", "actor_id": actor_id})
+                _pause_for_led_step(args, "Naciśnij Enter po potwierdzeniu ruchu.")
+                adapter.clear()
+            continue
+
+        if confirmation.attack_target is not None and confirmation.attack_source is not None:
+            state, attack_messages, sent = _resolve_confirmed_hero_attack(
+                args,
+                board,
+                state,
+                actor,
+                confirmation.attack_target,
+                confirmation.attack_source,
+                attack_roll_overrides,
+                damage_overrides,
+                adapter,
+                observer,
+            )
+            messages.extend(attack_messages)
+            feedback_events += sent
+            continue
+
+    return state, tuple(messages), feedback_events
+
+
+def _resolve_confirmed_hero_attack(
+    args: argparse.Namespace,
+    board,
+    state: CombatState,
+    actor: Actor,
+    target,
+    source: AttackSource,
+    attack_roll_overrides: dict[str, object],
+    damage_overrides: dict[str, object],
+    adapter: BoardLedAdapter | None,
+    observer: SessionObserver,
+) -> tuple[CombatState, tuple[str, ...], int]:
+    messages: list[str] = []
+    feedback_events = 0
+    actor = _actor_by_string_id(state, str(actor.id))
+    attack_state = select_attack_target(start_attack_action(board, actor, state.actors, source), target_id=target.id)
     declaration = attack_declaration_from_state(attack_state)
     observer.record(
         "target_selected",
@@ -223,23 +357,23 @@ def _run_hero_turn(
         "attack_declared",
         {"attacker_id": str(actor.id), "target_id": declaration.target.id, "source": declaration.source.name},
     )
-
     instruction = roll_instruction(source.attack_roll_request)
     roll_message = f"Atakujesz {declaration.target.name} za pomocą {source.name}. {instruction.message}"
     print(roll_message)
     messages.append(roll_message)
     if adapter is not None:
+        adapter.clear()
         adapter.show_feedback(selected_attack_target_led_feedback(declaration.target))
         feedback_events += 1
         observer.record("led_feedback_sent", {"phase": "selected_attack_target", "target_id": declaration.target.id})
+    default_roll = int(attack_roll_overrides.get(str(actor.id), args.hero_attack_roll))
     natural_attack_roll = _read_int_or_default(
         args,
-        f"Wpisz naturalny wynik ataku d20 albo naciśnij Enter dla wartości z CLI ({attack_roll_overrides.get(actor_id, args.hero_attack_roll)}): ",
-        attack_roll_overrides.get(actor_id, args.hero_attack_roll),
+        f"Wpisz naturalny wynik ataku d20 albo naciśnij Enter dla wartości z CLI ({default_roll}): ",
+        default_roll,
     )
     if adapter is not None:
         adapter.clear()
-
     attack_roll = resolve_d20_roll(D20RollInput(source.attack_roll_request, natural_attack_roll))
     resolution = resolve_attack(declaration, attack_roll, ActionUse.ACTION_AVAILABLE)
     action_result = use_turn_action(state)
@@ -266,9 +400,8 @@ def _run_hero_turn(
         observer.record("led_feedback_sent", {"phase": "attack_result", "outcome": resolution.outcome.value})
         _pause_for_led_step(args, "Naciśnij Enter po wyniku ataku.")
         adapter.clear()
-
     if resolution.hit:
-        damage_amount = damage_overrides.get(actor_id, args.hero_damage)
+        damage_amount = int(damage_overrides.get(str(actor.id), args.hero_damage))
         damage_type = args.hero_damage_type or source.damage_type
         damage = resolve_damage((DamageComponentInput(damage_amount, DamageType(damage_type), source.name),))
         target_actor = _actor_by_string_id(state, declaration.target.id)
@@ -281,8 +414,127 @@ def _run_hero_turn(
         print(damage_message)
         messages.append(damage_message)
         _record_damage(observer, target_actor, updated_target, damage)
-
     return state, tuple(messages), feedback_events
+
+
+def _next_turn_click(
+    args: argparse.Namespace,
+    board,
+    state: CombatState,
+    actor: Actor,
+    source: AttackSource,
+    adapter: BoardLedAdapter | None,
+    observer: SessionObserver,
+    script: list[str],
+) -> Coordinate | None:
+    if script:
+        command = script.pop(0)
+        return _coordinate_from_turn_command(command, state, actor)
+    if args.board_backend == "none":
+        if state.turn_action.action_use == ActionUse.ACTION_AVAILABLE:
+            targets = legal_melee_targets(board, actor, state.actors)
+            if targets:
+                return targets[0].position
+        return None
+    if adapter is None:
+        return None
+    scan_board = getattr(adapter.connection, "scan_board", None)
+    if not callable(scan_board):
+        return None
+    acceptable = [position.as_tuple() for position in _acceptable_turn_positions(board, state, actor, source)]
+    observer.record("board_scan_requested", {"acceptable_positions": [list(position) for position in acceptable]})
+    print("Kliknij pole ruchu albo cel ataku. Kliknięcie tego samego pola drugi raz potwierdzi wybór.")
+    selected = scan_board(acceptable, timeout_s=args.scan_timeout)
+    if selected is None:
+        observer.record("board_scan_cancelled", {})
+        return None
+    observer.record("board_scan_received", {"position": list(selected)})
+    return Coordinate(int(selected[0]), int(selected[1]))
+
+
+def _confirm_preview_click(
+    args: argparse.Namespace,
+    board,
+    state: CombatState,
+    actor: Actor,
+    source: AttackSource,
+    preview,
+    adapter: BoardLedAdapter | None,
+    observer: SessionObserver,
+    script: list[str],
+) -> Coordinate | None:
+    if script or args.board_backend == "none":
+        return preview.clicked_position
+    if adapter is None:
+        return preview.clicked_position
+    scan_board = getattr(adapter.connection, "scan_board", None)
+    if not callable(scan_board):
+        return preview.clicked_position
+    expected = preview.clicked_position.as_tuple()
+    print("Kliknij to samo pole ponownie, aby potwierdzić. Kliknięcie innego pola zmieni podgląd.")
+    acceptable = [position.as_tuple() for position in _acceptable_turn_positions(board, state, actor, source)]
+    selected = scan_board(acceptable, timeout_s=args.scan_timeout)
+    if selected is None:
+        observer.record("turn_intent_confirmation_cancelled", {"expected_position": list(expected)})
+        return None
+    confirmed = tuple(selected) == expected
+    observer.record("turn_intent_confirmation_scan", {"position": list(selected), "confirmed": confirmed})
+    return Coordinate(int(selected[0]), int(selected[1]))
+
+
+def _coordinate_from_turn_command(command: str, state: CombatState, actor: Actor) -> Coordinate | None:
+    command = command.strip()
+    if command == "end":
+        return None
+    if command.startswith("move:"):
+        return _parse_coordinate(command.removeprefix("move:"))
+    if command.startswith("attack:"):
+        target_id = command.removeprefix("attack:")
+        return _actor_by_string_id(state, target_id).position
+    raise ValueError(f"Unknown turn script command for {actor.id}: {command!r}.")
+
+
+def _acceptable_turn_positions(board, state: CombatState, actor: Actor, source: AttackSource) -> tuple[Coordinate, ...]:
+    positions: set[Coordinate] = set()
+    if movement_remaining(state, actor) > 0:
+        movement_actor = replace(actor, speed_feet=movement_remaining(state, actor))
+        positions.update(movement_range(board, movement_actor, state.actors).reachable_tiles)
+    if state.turn_action.action_use == ActionUse.ACTION_AVAILABLE:
+        positions.update(target.position for target in legal_melee_targets(board, actor, state.actors))
+    positions.discard(actor.position)
+    return tuple(sorted(positions))
+
+
+def _turn_options_led_feedback(board, state: CombatState, actor: Actor, source: AttackSource) -> LedFeedback:
+    frames: list[LedFrame] = [LedFrame((actor.position,), (255, 255, 255), LedRole.ACTIVE_ACTOR)]
+    if movement_remaining(state, actor) > 0:
+        movement_actor = replace(actor, speed_feet=movement_remaining(state, actor))
+        reachable = tuple(
+            tile
+            for tile in sorted(movement_range(board, movement_actor, state.actors).reachable_tiles)
+            if tile != actor.position
+        )
+        if reachable:
+            frames.append(LedFrame(reachable, (0, 110, 160), LedRole.MOVEMENT_RANGE))
+    if state.turn_action.action_use == ActionUse.ACTION_AVAILABLE:
+        targets = tuple(sorted(target.position for target in legal_melee_targets(board, actor, state.actors)))
+        if targets:
+            frames.append(LedFrame(targets, (0, 80, 220), LedRole.DESTINATION))
+    return LedFeedback(tuple(frames))
+
+
+def _preview_led_feedback(preview) -> LedFeedback:
+    if preview.movement_range is not None:
+        return movement_led_feedback(preview.movement_range, preview.movement_path)
+    if preview.attack_target is not None:
+        return selected_attack_target_led_feedback(preview.attack_target)
+    return LedFeedback((LedFrame((preview.clicked_position,), (255, 0, 0), LedRole.DESTINATION),))
+
+
+def _turn_has_no_options(board, state: CombatState, actor: Actor, source: AttackSource) -> bool:
+    has_move = movement_remaining(state, actor) > 0 and bool(_acceptable_turn_positions(board, state, actor, source))
+    has_attack = state.turn_action.action_use == ActionUse.ACTION_AVAILABLE and bool(legal_melee_targets(board, actor, state.actors))
+    return not has_move and not has_attack
 
 
 def _run_enemy_turn(
@@ -295,11 +547,28 @@ def _run_enemy_turn(
     observer: SessionObserver,
     args: argparse.Namespace,
 ) -> tuple[CombatState, tuple[str, ...], int]:
-    result = resolve_enemy_auto_attack(board, state, actor, source, rng)
-    observer.record("enemy_action_selected", {"actor_id": str(actor.id), "action": "attack", "target_id": result.target.id if result.target else None})
+    result = resolve_enemy_auto_turn(board, state, actor, source, rng)
+    observer.record("enemy_action_selected", {"actor_id": str(actor.id), "action": "attack_or_move", "target_id": result.target.id if result.target else None})
     observer.record("action_used", {"actor_id": str(actor.id), "action": "attack", "accepted": result.action_used})
     messages: list[str] = []
     feedback_events = 0
+
+    if result.movement_path is not None and result.movement_path.valid:
+        observer.record(
+            "movement_committed",
+            {
+                "actor_id": str(actor.id),
+                "destination": list(result.movement_path.destination.as_tuple()),
+                "cost_feet": result.movement_path.cost_feet,
+                "movement_remaining": 0,
+            },
+        )
+        if adapter is not None:
+            adapter.show_feedback(movement_led_feedback(movement_range(board, actor, state.actors), result.movement_path))
+            feedback_events += 1
+            observer.record("led_feedback_sent", {"phase": "enemy_movement", "actor_id": str(actor.id)})
+            _pause_for_led_step(args, "Naciśnij Enter po ruchu przeciwnika.")
+            adapter.clear()
 
     if result.target is not None:
         observer.record(
@@ -390,6 +659,27 @@ def _parse_actor_value_overrides(values: Sequence[str], parser) -> dict[str, obj
         if not actor_id:
             raise ValueError(f"Missing actor id in override: {value!r}.")
         result[actor_id] = parser(raw.strip())
+    return result
+
+
+def _parse_turn_scripts(values: Sequence[str]) -> dict[str, tuple[str, ...]]:
+    result: dict[str, tuple[str, ...]] = {}
+    for value in values:
+        if "=" not in value:
+            raise ValueError(f"Expected actor=command,command override, got: {value!r}.")
+        actor_id, raw = value.split("=", maxsplit=1)
+        commands = tuple(command.strip() for command in raw.split(",") if command.strip())
+        expanded: list[str] = []
+        index = 0
+        while index < len(commands):
+            command = commands[index]
+            if command.startswith("move:") and index + 1 < len(commands):
+                expanded.append(f"{command},{commands[index + 1]}")
+                index += 2
+                continue
+            expanded.append(command)
+            index += 1
+        result[actor_id.strip()] = tuple(expanded)
     return result
 
 

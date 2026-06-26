@@ -17,7 +17,7 @@ from .attack_flow import (
 )
 from .attack_led import attack_result_led_feedback, attack_targets_led_feedback, selected_attack_target_led_feedback
 from .damage import DamageComponentInput, DamageResult, DamageType, apply_damage, resolve_damage
-from .enemy_ai import EnemyAutoAttackResult, resolve_enemy_auto_attack
+from .enemy_ai import EnemyAutoAttackResult, EnemyAutoTurnResult, resolve_enemy_auto_attack, resolve_enemy_auto_turn
 from .initiative import (
     InitiativeEntry,
     InitiativeOrder,
@@ -54,15 +54,25 @@ from .session import (
     CombatStatus,
     TurnActionState,
     TurnActionUseResult,
+    TurnMovementUseResult,
     actor_by_id,
     combat_is_finished,
     combat_winner,
     current_actor,
     finish_turn,
+    movement_remaining,
     replace_actor,
     start_combat,
     stop_combat,
+    use_movement,
     use_turn_action,
+)
+from .turn_intent import (
+    TurnIntentConfirmation,
+    TurnIntentPreview,
+    TurnPromptMode,
+    confirm_turn_intent,
+    preview_turn_intent,
 )
 
 __all__ = [
@@ -83,6 +93,7 @@ __all__ = [
     "DamageResult",
     "DamageType",
     "EnemyAutoAttackResult",
+    "EnemyAutoTurnResult",
     "EncounterSetup",
     "EnvironmentSetupEntry",
     "EnvironmentSetupType",
@@ -94,6 +105,10 @@ __all__ = [
     "SetupVisibility",
     "TurnActionState",
     "TurnActionUseResult",
+    "TurnIntentConfirmation",
+    "TurnIntentPreview",
+    "TurnMovementUseResult",
+    "TurnPromptMode",
     "active_actor_led_feedback",
     "actor_as_combat_target",
     "actor_by_id",
@@ -109,16 +124,20 @@ __all__ = [
     "cancel_attack_action",
     "combat_is_finished",
     "combat_winner",
+    "confirm_turn_intent",
     "consume_action",
     "current_actor",
     "finish_turn",
     "initiative_prompt_led_feedback",
     "is_public_attack_target",
     "legal_melee_targets",
+    "movement_remaining",
+    "preview_turn_intent",
     "replace_actor",
     "resolve_attack",
     "resolve_damage",
     "resolve_enemy_auto_attack",
+    "resolve_enemy_auto_turn",
     "roll_enemy_initiative",
     "select_attack_target",
     "selected_attack_target_led_feedback",
@@ -127,5 +146,6 @@ __all__ = [
     "start_attack_action",
     "stop_combat",
     "target_is_defeated",
+    "use_movement",
     "use_turn_action",
 ]

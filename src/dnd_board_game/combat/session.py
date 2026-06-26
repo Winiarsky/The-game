@@ -4,6 +4,7 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 
 from dnd_board_game.actors import Actor, ActorId, Faction
+from dnd_board_game.world import PathResult
 
 from .action_economy import ActionUse, consume_action
 from .initiative import InitiativeEntry, InitiativeOrder
@@ -18,6 +19,7 @@ class CombatStatus(StrEnum):
 @dataclass(frozen=True, slots=True)
 class TurnActionState:
     action_use: ActionUse = ActionUse.ACTION_AVAILABLE
+    movement_used_feet: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,6 +27,14 @@ class TurnActionUseResult:
     state: CombatState
     accepted: bool
     message: str
+
+
+@dataclass(frozen=True, slots=True)
+class TurnMovementUseResult:
+    state: CombatState
+    accepted: bool
+    message: str
+    movement_remaining_feet: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,9 +85,41 @@ def use_turn_action(state: CombatState) -> TurnActionUseResult:
     except ValueError:
         return TurnActionUseResult(state, False, "Akcja w tej turze została już zużyta.")
     return TurnActionUseResult(
-        replace(state, turn_action=TurnActionState(action_use)),
+        replace(state, turn_action=replace(state.turn_action, action_use=action_use)),
         True,
         "Akcja została zużyta.",
+    )
+
+
+def movement_remaining(state: CombatState, actor: Actor) -> int:
+    return max(0, actor.speed_feet - state.turn_action.movement_used_feet)
+
+
+def use_movement(state: CombatState, actor: Actor, path: PathResult) -> TurnMovementUseResult:
+    remaining = movement_remaining(state, actor)
+    if state.status != CombatStatus.ACTIVE:
+        return TurnMovementUseResult(state, False, "Walka nie jest aktywna.", remaining)
+    if actor.id != current_actor(state).id:
+        return TurnMovementUseResult(state, False, "To nie jest tura tego aktora.", remaining)
+    if not path.valid:
+        return TurnMovementUseResult(state, False, "Nie można wykonać ruchu na wybrane pole.", remaining)
+    if path.cost_feet > remaining:
+        return TurnMovementUseResult(
+            state,
+            False,
+            f"Za mało ruchu. Koszt: {path.cost_feet} feet, pozostało: {remaining} feet.",
+            remaining,
+        )
+    updated_actor = replace(actor, position=path.destination)
+    updated_state = replace_actor(state, updated_actor)
+    movement_used = state.turn_action.movement_used_feet + path.cost_feet
+    updated_state = replace(updated_state, turn_action=replace(updated_state.turn_action, movement_used_feet=movement_used))
+    updated_remaining = movement_remaining(updated_state, updated_actor)
+    return TurnMovementUseResult(
+        updated_state,
+        True,
+        f"Ruch wykonany na {path.destination.as_tuple()}. Pozostało ruchu: {updated_remaining} feet.",
+        updated_remaining,
     )
 
 

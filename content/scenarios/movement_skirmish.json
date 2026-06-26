@@ -1,0 +1,37 @@
+{
+  "id": "movement_skirmish",
+  "name": "Potyczka z ruchem w turze",
+  "board": {
+    "cols": 20,
+    "rows": 30
+  },
+  "actors": [
+    {
+      "id": "hero",
+      "name": "Bohater",
+      "kind": "player_character",
+      "faction": "ally",
+      "ac": 14,
+      "hp": 20,
+      "temp_hp": 0,
+      "speed_feet": 30,
+      "position": [0, 0],
+      "ability_scores": {
+        "strength": 16,
+        "dexterity": 14,
+        "constitution": 12,
+        "intelligence": 10,
+        "wisdom": 10,
+        "charisma": 10
+      },
+      "item_refs": ["longsword"]
+    },
+    {
+      "id": "goblin_a",
+      "source_ref": "goblin",
+      "name": "Goblin A",
+      "position": [2, 0]
+    }
+  ],
+  "environment": []
+}

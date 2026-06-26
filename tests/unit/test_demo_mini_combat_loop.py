@@ -18,6 +18,10 @@ class FakeConnection:
 
     def scan_board(self, acceptable_responses=None, *, timeout_s=None):
         self.events.append(("scan_board", list(acceptable_responses or [])))
+        if isinstance(self.scanned, list):
+            if not self.scanned:
+                return None
+            return self.scanned.pop(0)
         return self.scanned
 
 
@@ -92,7 +96,8 @@ def test_demo_mini_combat_loop_fake_led_sequence_and_scan_selection(tmp_path):
 
     assert result.feedback_events >= 4
     assert connection.events[0][0] == "set_leds"
-    assert ("scan_board", [(1, 0)]) in connection.events
+    scan_events = [event for event in connection.events if event[0] == "scan_board"]
+    assert any((1, 0) in event[1] for event in scan_events)
     assert ("leds_off",) in connection.events
     event_types = [event["event_type"] for event in _events(result.observation_path)]
     assert "led_feedback_sent" in event_types
@@ -151,3 +156,54 @@ def test_demo_mini_combat_loop_per_actor_roll_override_is_used(tmp_path):
     rogue_attack = next(event for event in attack_events if event["payload"]["attacker_id"] == "rogue")
     assert hero_attack["payload"]["natural_roll"] == 2
     assert rogue_attack["payload"]["natural_roll"] == 13
+
+
+def test_demo_mini_combat_loop_turn_script_moves_attacks_moves_and_ends(tmp_path):
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--scenario",
+            "content/scenarios/movement_skirmish.json",
+            "--ally-turn-script",
+            "hero=move:1,0,attack:goblin_a,move:0,1,end",
+            "--hero-attack-roll",
+            "14",
+            "--hero-damage",
+            "1",
+            "--enemy-seed",
+            "7",
+            "--max-rounds",
+            "1",
+        )
+    )
+
+    hero = next(actor for actor in result.final_state.actors if actor.id == "hero")
+    assert hero.position.as_tuple() == (0, 1)
+    event_types = [event["event_type"] for event in _events(result.observation_path)]
+    assert "turn_intent_previewed" in event_types
+    assert "turn_intent_confirmed" in event_types
+    assert "movement_committed" in event_types
+    assert "attack_previewed" in event_types
+
+
+def test_demo_mini_combat_loop_second_click_on_different_tile_changes_preview(tmp_path):
+    connection = FakeConnection(scanned=[(1, 0), (1, 1), (1, 1)])
+    args = _args(
+        tmp_path,
+        "--scenario",
+        "content/scenarios/multi_actor_skirmish.json",
+        "--board-backend",
+        "simulator",
+        "--show-leds",
+        "--hero-attack-roll",
+        "14",
+        "--hero-damage",
+        "10",
+        "--max-rounds",
+        "1",
+    )
+
+    result = run_demo(args, connection_factory=lambda args: connection)
+
+    target_events = [event for event in _events(result.observation_path) if event["event_type"] == "target_selected"]
+    assert target_events[0]["payload"]["target_id"] == "goblin_b"

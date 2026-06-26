@@ -90,9 +90,13 @@ Każde zdarzenie powinno zawierać:
 - `enemy_initiative_rolled`
 - `initiative_set`
 - `turn_started`
+- `turn_prompt_started`
+- `turn_intent_previewed`
+- `turn_intent_confirmed`
 - `action_used`
 - `enemy_action_selected`
 - `target_selected`
+- `attack_previewed`
 - `attack_rejected`
 - `attack_declared`
 - `attack_resolved`
