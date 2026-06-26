@@ -12,6 +12,7 @@ from .coordinates import Coordinate
 
 NORMAL_MOVE_COST_FEET = 5
 DIFFICULT_MOVE_COST_FEET = 10
+EXPENSIVE_DIAGONAL_MULTIPLIER = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,25 +82,42 @@ def movement_range(board: BoardState, actor: Actor, actors: Sequence[Actor]) -> 
     if not board.in_bounds(origin):
         raise ValueError(f"Actor position out of bounds: {origin}.")
 
+    start_state = (origin, 0)
+    costs_by_state: dict[tuple[Coordinate, int], int] = {start_state: 0}
+    paths_by_state: dict[tuple[Coordinate, int], tuple[Coordinate, ...]] = {start_state: (origin,)}
     costs: dict[Coordinate, int] = {origin: 0}
     paths: dict[Coordinate, tuple[Coordinate, ...]] = {origin: (origin,)}
-    queue: list[tuple[int, Coordinate]] = [(0, origin)]
+    queue: list[tuple[int, Coordinate, int]] = [(0, origin, 0)]
 
     while queue:
-        current_cost, current = heapq.heappop(queue)
-        if current_cost != costs[current]:
+        current_cost, current, diagonal_parity = heapq.heappop(queue)
+        current_state = (current, diagonal_parity)
+        if current_cost != costs_by_state[current_state]:
             continue
         for candidate in neighbors(board, current):
-            step_cost = _step_cost(board, actor, actors, current, candidate, allow_occupied_destination=True)
-            if step_cost is None:
+            step = _step_cost(
+                board,
+                actor,
+                actors,
+                current,
+                candidate,
+                allow_occupied_destination=True,
+                diagonal_parity=diagonal_parity,
+            )
+            if step is None:
                 continue
+            step_cost, next_diagonal_parity = step
+            next_state = (candidate, next_diagonal_parity)
             next_cost = current_cost + step_cost
             if next_cost > actor.speed_feet:
                 continue
-            if next_cost < costs.get(candidate, inf):
-                costs[candidate] = next_cost
-                paths[candidate] = (*paths[current], candidate)
-                heapq.heappush(queue, (next_cost, candidate))
+            if next_cost < costs_by_state.get(next_state, inf):
+                costs_by_state[next_state] = next_cost
+                paths_by_state[next_state] = (*paths_by_state[current_state], candidate)
+                if next_cost < costs.get(candidate, inf):
+                    costs[candidate] = next_cost
+                    paths[candidate] = paths_by_state[next_state]
+                heapq.heappush(queue, (next_cost, candidate, next_diagonal_parity))
 
     reachable = {
         tile
@@ -138,11 +156,12 @@ def _step_cost(
     destination: Coordinate,
     *,
     allow_occupied_destination: bool,
-) -> int | None:
+    diagonal_parity: int = 0,
+) -> tuple[int, int] | None:
     if not board.in_bounds(start) or not board.in_bounds(destination):
         return None
     if start == destination:
-        return 0
+        return (0, diagonal_parity)
     dc = abs(start.col - destination.col)
     dr = abs(start.row - destination.row)
     if max(dc, dr) != 1:
@@ -158,7 +177,10 @@ def _step_cost(
         return None
     if not allow_occupied_destination and _occupant_at(actors, destination, ignore_actor=actor) is not None:
         return None
-    return cost
+    if dc == 1 and dr == 1:
+        diagonal_cost = cost * (EXPENSIVE_DIAGONAL_MULTIPLIER if diagonal_parity else 1)
+        return (diagonal_cost, 1 - diagonal_parity)
+    return (cost, diagonal_parity)
 
 
 def _can_move_diagonal(

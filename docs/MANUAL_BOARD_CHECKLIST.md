@@ -49,7 +49,7 @@ Checklist:
 - [ ] Plansza pokazuje aktywnego aktora.
 - [ ] LED-y pokazują pełny zasięg ruchu.
 - [ ] Zasięg ortogonalny odpowiada 6 polom normalnego terenu.
-- [ ] Ruch diagonalny kosztuje 5 feet.
+- [ ] Ruch diagonalny kosztuje naprzemiennie 5/10/5/10 feet.
 - [ ] Trudny teren kosztuje 10 feet.
 - [ ] Ściany blokują przejście.
 - [ ] Blokujące przeszkody blokują wejście na pole.

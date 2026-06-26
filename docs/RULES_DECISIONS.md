@@ -67,8 +67,9 @@ Implementacja MVP:
 
 - Jedno pole planszy odpowiada 5 feet.
 - Ruch ortogonalny kosztuje 5 feet.
-- Ruch diagonalny jest dozwolony i kosztuje 5 feet.
+- Ruch diagonalny jest dozwolony i kosztuje naprzemiennie 5/10/5/10 feet w ramach ścieżki.
 - Trudny teren kosztuje 10 feet za wejście na pole.
+- Diagonalne wejście w trudny teren używa tego samego mnożnika: 10/20/10/20 feet.
 - Sojusznik zajmuje pole, przez które można przejść, ale traktujemy je jako trudny teren.
 - Przeciwnik blokuje przejście i zakończenie ruchu.
 - Aktor nie może zakończyć ruchu na polu zajętym przez inną istotę.
@@ -81,7 +82,6 @@ Implementacja MVP:
 
 Poza zakresem MVP:
 
-- wariant diagonalny 5/10,
 - rozmiary istot,
 - przeciskanie się,
 - skakanie,
@@ -94,7 +94,7 @@ Poza zakresem MVP:
 
 Odstępstwa / decyzje planszowe:
 
-- Diagonalny ruch kosztuje stale 5 feet, ponieważ jest prostszy do wizualizacji LED i płynniejszy na fizycznej planszy.
+- Licznik kosztu diagonalnego jest częścią pathfindingu i nie resetuje się po kroku ortogonalnym w tej samej ścieżce.
 
 Testy:
 

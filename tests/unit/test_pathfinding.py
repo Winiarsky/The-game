@@ -34,14 +34,54 @@ def test_speed_30_reaches_six_orthogonal_tiles_on_clear_board():
     assert Coordinate(10, 3) not in result.reachable_tiles
 
 
-def test_path_uses_diagonal_steps_costing_five_feet():
+def test_path_uses_diagonal_steps_costing_five_ten_five_feet():
     board = BoardState()
     actor = _actor("hero", Coordinate(0, 0), speed_feet=30)
     path = find_path(board, actor, [actor], Coordinate(3, 3))
 
     assert path.valid
-    assert path.cost_feet == 15
+    assert path.cost_feet == 20
     assert path.path == (Coordinate(0, 0), Coordinate(1, 1), Coordinate(2, 2), Coordinate(3, 3))
+
+
+def test_second_diagonal_step_costs_ten_feet():
+    board = BoardState()
+    actor = _actor("hero", Coordinate(0, 0), speed_feet=15)
+    path = find_path(board, actor, [actor], Coordinate(2, 2))
+
+    assert path.valid
+    assert path.cost_feet == 15
+
+
+def test_difficult_diagonal_uses_current_diagonal_cost_multiplier():
+    board = BoardState()
+    board.set_terrain(Coordinate(0, 1), BLOCKING_TERRAIN)
+    board.set_terrain(Coordinate(0, 2), BLOCKING_TERRAIN)
+    board.set_terrain(Coordinate(2, 0), BLOCKING_TERRAIN)
+    board.set_terrain(Coordinate(1, 2), BLOCKING_TERRAIN)
+    board.add_wall(Coordinate(1, 0), Coordinate(1, 1))
+    board.add_wall(Coordinate(2, 1), Coordinate(2, 2))
+    board.set_terrain(Coordinate(2, 2), DIFFICULT_TERRAIN)
+    actor = _actor("hero", Coordinate(0, 0), speed_feet=25)
+    path = find_path(board, actor, [actor], Coordinate(2, 2))
+
+    assert path.valid
+    assert path.cost_feet == 25
+
+
+def test_difficult_second_diagonal_can_exceed_remaining_speed():
+    board = BoardState()
+    board.set_terrain(Coordinate(0, 1), BLOCKING_TERRAIN)
+    board.set_terrain(Coordinate(0, 2), BLOCKING_TERRAIN)
+    board.set_terrain(Coordinate(2, 0), BLOCKING_TERRAIN)
+    board.set_terrain(Coordinate(1, 2), BLOCKING_TERRAIN)
+    board.add_wall(Coordinate(1, 0), Coordinate(1, 1))
+    board.add_wall(Coordinate(2, 1), Coordinate(2, 2))
+    board.set_terrain(Coordinate(2, 2), DIFFICULT_TERRAIN)
+    actor = _actor("hero", Coordinate(0, 0), speed_feet=20)
+    path = find_path(board, actor, [actor], Coordinate(2, 2))
+
+    assert not path.valid
 
 
 def test_path_omits_blocking_terrain():
