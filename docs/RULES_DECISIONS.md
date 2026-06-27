@@ -305,9 +305,14 @@ Implementacja MVP:
 - Eksploracja jest osobnym trybem sceny, niezależnym od encountera.
 - Nie ma inicjatywy, tur walki ani indywidualnego ruchu bohaterów.
 - Drużyna ma wspólny pionek i aktualną strefę.
-- Setup eksploracji prowadzi przez jawne strefy i jawne elementy; ukryte elementy nie są zdradzane.
+- Setup eksploracji pokazuje jawne strefy/lokacje bez wymuszania kliknięcia potwierdzającego.
+- Fizyczne jawne elementy sceny, np. NPC, obiekty albo markery, mogą wymagać rozstawienia przez `requires_setup`; wtedy są prowadzone batchami i potwierdzane kliknięciem.
+- Ukryte i warunkowe elementy nie są zdradzane w setupie.
 - Kliknięcie innej strefy tworzy podgląd przejścia, a drugie kliknięcie tej samej strefy potwierdza.
-- Kliknięcie aktualnej strefy pokazuje opcje strefy.
+- Domyślny widok eksploracji pokazuje tylko główne punkty dostępnych lokacji, nie całe strefy.
+- Kliknięcie aktualnego punktu głównego pokazuje wszystkie dostępne opcje jako kolorowe menu planszowe.
+- Kliknięcie pola menu wybiera konkretną opcję; `Wycofaj` zamyka menu.
+- `Rozejrzyj się po okolicy` dopiero wtedy podświetla całą strefę i pozwala klikać jej kafle.
 - `Zbadaj obszar` dotyczy aktualnej strefy, może być wykonane raz na strefę i bierze najwyższy wynik z testu drużyny.
 - Sukces badania może ujawnić ukryty punkt i ustawić flagę sceny.
 - Eksploracyjne przeszkody docelowo nie powinny być twardymi blokadami rzutu.
@@ -329,6 +334,8 @@ Poza zakresem MVP:
 Testy:
 
 - `tests/unit/test_exploration_setup.py`
+- `tests/unit/test_exploration_menu.py`
+- `tests/unit/test_exploration_led_feedback.py`
 - `tests/unit/test_exploration_zones.py`
 - `tests/unit/test_party_checks.py`
 - `tests/unit/test_demo_exploration_scene.py`

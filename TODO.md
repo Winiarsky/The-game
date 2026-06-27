@@ -36,6 +36,8 @@
 - [x] Replace binary exploration gates with progress-based `ExplorationChallenge` model.
 - [x] Add fail-forward outcomes and complications for exploration challenge options.
 - [x] Add MVP item/resource tags for exploration option bonuses.
+- [x] Replace exploration option cycling with board menu option slots.
+- [x] Show only exploration anchors by default and move full-zone LEDs to look-around mode.
 - [ ] Add full inventory/cantrip integration for exploration option bonuses.
 - [ ] Reserve future LLM adapter for classifying free-form exploration declarations into validated options.
 - [x] Implement hardware adapter interface around `board.Connection`.

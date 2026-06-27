@@ -16,6 +16,9 @@ from dnd_board_game.combat import SceneFlags, SetupVisibility, set_scene_flag
 from dnd_board_game.exploration import (
     ExplorationChallenge,
     ExplorationChallengeOption,
+    ExplorationMenu,
+    ExplorationMenuOption,
+    ExplorationMenuOptionKind,
     ExplorationOption,
     ExplorationOptionKind,
     ExplorationPoint,
@@ -26,13 +29,16 @@ from dnd_board_game.exploration import (
     SearchResult,
     available_challenge_options,
     available_exploration_zones,
+    build_exploration_menu,
     challenge_for_zone,
     challenge_state_for,
     exploration_setup_feedback,
+    exploration_menu_feedback,
     exploration_zone_feedback,
     grant_resource,
+    look_around_feedback,
     matching_resources,
-    option_feedback,
+    menu_option_for_position,
     party_position_feedback,
     resolve_challenge_option,
     resolve_party_check,
@@ -43,7 +49,7 @@ from dnd_board_game.exploration import (
     zone_for_position,
     zone_is_available,
 )
-from dnd_board_game.hardware import BoardLedAdapter, LedColor, LedFeedback, LedFrame, LedRole
+from dnd_board_game.hardware import BoardLedAdapter, LedColor, LedFeedback, LedFrame, LedRole, led_color_name_pl
 from dnd_board_game.rules import (
     D20RollInput,
     D20RollRequest,
@@ -106,11 +112,11 @@ def run_demo(
     messages.extend(setup_messages)
 
     scripts = list(args.exploration_script)
-    option_indices: dict[str, int] = {}
     steps = 0
     while steps < args.max_steps:
         steps += 1
         if adapter is not None:
+            adapter.clear()
             adapter.show_feedback(exploration_zone_feedback(state))
             feedback_events += 1
             observer.record("led_feedback_sent", {"phase": "exploration_map"})
@@ -154,7 +160,7 @@ def run_demo(
             )
             messages.append(message)
             continue
-        state, option_messages, sent = _handle_zone_options(args, exploration.actors, state, zone, option_indices, adapter, observer, scripts)
+        state, option_messages, sent = _handle_zone_options(args, exploration.actors, state, zone, adapter, observer, scripts)
         messages.extend(option_messages)
         feedback_events += sent
     else:
@@ -187,6 +193,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--challenge-roll", action="append", default=[])
     parser.add_argument("--resource-choice", action="append", default=[])
     parser.add_argument("--exploration-seed", type=int, default=7)
+    parser.add_argument("--look-around-clicks", type=int, default=3)
     parser.add_argument("--leader-id", default="hero")
     parser.add_argument("--helper-id", default=None)
     return parser
@@ -219,31 +226,45 @@ def _run_exploration_setup(
     messages.append(message)
     observer.record("exploration_setup_started", {"scenario_id": exploration.scenario_id})
 
-    for zone in available_exploration_zones(state):
-        step_message = f"Setup strefy: {zone.name}. Podświetlony obszar oznacza tę lokację. Kliknij dowolne podświetlone pole po ułożeniu mapy."
-        print(step_message)
-        messages.append(step_message)
-        feedback_events += _confirm_setup_step(
-            args,
-            adapter,
-            observer,
-            zone.positions,
-            zone.color,
-            f"exploration_setup_zone:{zone.id}",
-            step_message,
-            anchor_position=zone.marker_position,
+    available_zones = available_exploration_zones(state)
+    if available_zones:
+        zone_lines = ["Dostępne lokacje:"]
+        for zone in available_zones:
+            zone_lines.append(f"- {zone.name}: kolor {led_color_name_pl(zone.color)}")
+        zone_lines.append("Kliknij odpowiednią lokację, aby wejść w interakcję.")
+        zones_message = "\n".join(zone_lines)
+        print(zones_message)
+        messages.append(zones_message)
+        observer.record(
+            "exploration_setup_step_started",
+            {
+                "phase": "exploration_available_zones",
+                "zone_ids": [zone.id for zone in available_zones],
+            },
+        )
+        if adapter is not None:
+            adapter.clear()
+            adapter.show_feedback(exploration_zone_feedback(state))
+            feedback_events += 1
+            observer.record("led_feedback_sent", {"phase": "exploration_available_zones"})
+        observer.record(
+            "exploration_setup_step_confirmed",
+            {
+                "phase": "exploration_available_zones",
+                "selected_position": None,
+            },
         )
 
-    point_positions = tuple(position for point in visible_exploration_points(state.points) for position in point.positions)
-    for batch_index, batch in enumerate(_batched(point_positions, 5), start=1):
-        step_message = f"Setup jawnych elementów {batch_index}: kliknij jedno z podświetlonych pól po ustawieniu elementów."
+    setup_points = tuple(point for point in visible_exploration_points(state.points) if point.requires_setup)
+    setup_positions = tuple(position for point in setup_points for position in point.positions)
+    setup_names = ", ".join(point.name for point in setup_points)
+    for batch_index, batch in enumerate(_batched(setup_positions, 5), start=1):
+        label = f": {setup_names}" if setup_names else ""
+        step_message = f"Setup jawnych elementów {batch_index}{label}. Kliknij jedno z podświetlonych pól po ustawieniu elementów."
         print(step_message)
         messages.append(step_message)
         feedback_events += _confirm_setup_step(args, adapter, observer, batch, LedColor.INTERACTIVE_OBJECT, "exploration_setup_points", step_message)
 
-    party_message = "Kliknij podświetlony punkt centralny, aby wejść w interakcję z lokacją startową."
-    print(party_message)
-    messages.append(party_message)
     observer.record("party_position_set", {"zone_id": state.party_position.zone_id})
     observer.record("exploration_setup_confirmed", {"scenario_id": exploration.scenario_id})
     return tuple(messages), feedback_events
@@ -284,10 +305,9 @@ def _next_exploration_click(args: argparse.Namespace, state: ExplorationState, a
     scan_board = getattr(adapter.connection, "scan_board", None)
     if not callable(scan_board):
         return None
-    acceptable = [position.as_tuple() for zone in available_exploration_zones(state) for position in zone.positions]
+    acceptable = [zone.marker_position.as_tuple() for zone in available_exploration_zones(state)]
     acceptable.extend(position.as_tuple() for point in visible_exploration_points(state.points) for position in point.positions)
     observer.record("board_scan_requested", {"phase": "exploration_click", "acceptable_positions": [list(position) for position in acceptable]})
-    print("Kliknij strefę eksploracji albo puste pole planszy.")
     selected = scan_board(None, timeout_s=args.scan_timeout)
     if selected is None:
         observer.record("board_scan_cancelled", {"phase": "exploration_click"})
@@ -341,89 +361,60 @@ def _handle_zone_options(
     actors: tuple[Actor, ...],
     state: ExplorationState,
     zone: ExplorationZone,
-    option_indices: dict[str, int],
     adapter: BoardLedAdapter | None,
     observer: SessionObserver,
     scripts: list[str],
 ) -> tuple[ExplorationState, tuple[str, ...], int]:
-    challenge = challenge_for_zone(state, zone.id)
-    if challenge is not None and not challenge_state_for(state, challenge.id).completed:
-        return _handle_challenge_options(args, actors, state, zone, challenge, option_indices, adapter, observer, scripts)
-    if not zone.options:
-        message = f"{zone.name}: nie ma teraz dostępnych akcji."
+    menu = build_exploration_menu(state, zone)
+    if not menu.options:
+        message = f"{zone.name}: nie ma teraz dostępnych opcji."
         print(message)
         return state, (message,), 0
-    index = option_indices.get(zone.id, 0) % len(zone.options)
-    option = zone.options[index]
-    message = f"{zone.name}. Wybrano opcję: {option.label}. Kliknij strefę ponownie, aby przełączyć opcję. Naciśnij Enter, aby potwierdzić."
+    message = _menu_message(zone, menu)
     print(message)
-    observer.record("zone_option_previewed", {"zone_id": zone.id, "option_id": option.id, "index": index})
+    observer.record(
+        "exploration_menu_opened",
+        {
+            "zone_id": zone.id,
+            "options": [
+                {"id": option.id, "label": option.label, "kind": option.kind.value, "position": list(option.slot_position.as_tuple())}
+                for option in menu.options
+            ],
+        },
+    )
     feedback_events = 0
     if adapter is not None:
-        adapter.show_feedback(option_feedback(zone, option))
+        adapter.clear()
+        adapter.show_feedback(exploration_menu_feedback(menu))
         feedback_events += 1
-        observer.record("led_feedback_sent", {"phase": "zone_option_preview", "zone_id": zone.id, "option_id": option.id})
-    action = _confirm_or_cycle_option(args, state, zone, adapter, observer, scripts)
-    if action == "cycle":
-        option_indices[zone.id] = index + 1
-        observer.record("zone_option_cycled", {"zone_id": zone.id, "next_index": option_indices[zone.id] % len(zone.options)})
+        observer.record("led_feedback_sent", {"phase": "exploration_menu", "zone_id": zone.id})
+    selected = _select_menu_option(args, menu, adapter, observer, scripts)
+    if selected is None:
         return state, (message,), feedback_events
-    if action != "confirm":
-        return state, (message,), feedback_events
-    observer.record("zone_option_confirmed", {"zone_id": zone.id, "option_id": option.id})
-    if option.kind == ExplorationOptionKind.SEARCH:
-        new_state, search_messages = _resolve_search_option(args, actors, state, zone, adapter, observer)
-        return new_state, (message, *search_messages), feedback_events
-    if option.kind == ExplorationOptionKind.CHECK and option.ability_check is not None:
-        new_state, check_messages = _resolve_check_option(args, actors, state, option, observer)
-        return new_state, (message, *check_messages), feedback_events
-    option_message = option.message or option.description or f"Wykonano opcję: {option.label}."
-    print(option_message)
-    return state, (message, option_message), feedback_events
-
-
-def _handle_challenge_options(
-    args: argparse.Namespace,
-    actors: tuple[Actor, ...],
-    state: ExplorationState,
-    zone: ExplorationZone,
-    challenge: ExplorationChallenge,
-    option_indices: dict[str, int],
-    adapter: BoardLedAdapter | None,
-    observer: SessionObserver,
-    scripts: list[str],
-) -> tuple[ExplorationState, tuple[str, ...], int]:
-    challenge_options = available_challenge_options(state, challenge)
-    total_options = len(challenge_options) + len(zone.options)
-    if total_options == 0:
-        message = f"{challenge.name}: nie ma teraz dostępnych podejść."
-        print(message)
-        return state, (message,), 0
-    key = f"challenge:{challenge.id}"
-    index = option_indices.get(key, 0) % total_options
-    is_challenge_option = index < len(challenge_options)
-    current = challenge_state_for(state, challenge.id)
-    if not is_challenge_option:
-        option = zone.options[index - len(challenge_options)]
-        message = (
-            f"{challenge.name}. Postęp: {current.current_progress}/{challenge.progress_required}. "
-            f"Wybrano przygotowanie: {option.label}. {option.description} "
-            "Kliknij anchor bramy ponownie, aby przełączyć opcję. Naciśnij Enter, aby potwierdzić."
-        )
-        print(message)
-        observer.record("zone_option_previewed", {"zone_id": zone.id, "option_id": option.id, "index": index})
-        feedback_events = 0
-        if adapter is not None:
-            adapter.show_feedback(option_feedback(zone, option))
-            feedback_events += 1
-            observer.record("led_feedback_sent", {"phase": "zone_option_preview", "zone_id": zone.id, "option_id": option.id})
-        action = _confirm_or_cycle_option(args, state, zone, adapter, observer, scripts)
-        if action == "cycle":
-            option_indices[key] = index + 1
-            observer.record("zone_option_cycled", {"zone_id": zone.id, "next_index": option_indices[key] % total_options})
-            return state, (message,), feedback_events
-        if action != "confirm":
-            return state, (message,), feedback_events
+    if selected.kind == ExplorationMenuOptionKind.CANCEL:
+        cancel_message = "Wycofano wybór opcji."
+        print(cancel_message)
+        observer.record("exploration_menu_cancelled", {"zone_id": zone.id})
+        return state, (message, cancel_message), feedback_events
+    if selected.kind == ExplorationMenuOptionKind.LOOK_AROUND:
+        new_state, look_messages, sent = _handle_look_around(args, state, zone, adapter, observer, scripts)
+        return new_state, (message, *look_messages), feedback_events + sent
+    if selected.kind == ExplorationMenuOptionKind.CHALLENGE:
+        challenge = challenge_for_zone(state, zone.id)
+        if challenge is None:
+            error_message = f"{zone.name}: ta opcja wyzwania nie jest już dostępna."
+            print(error_message)
+            return state, (message, error_message), feedback_events
+        option = next(option for option in available_challenge_options(state, challenge) if option.id == selected.source_id)
+        resources = matching_resources(state, option)
+        observer.record("challenge_option_confirmed", {"challenge_id": challenge.id, "option_id": option.id})
+        resource = _select_resource(args, option, resources)
+        if resource is not None:
+            _activate_resource(args, challenge, option, resource, observer)
+        new_state, result_messages = _resolve_challenge_option(args, actors, state, challenge, option, resource, observer)
+        return new_state, (message, *result_messages), feedback_events
+    if selected.kind == ExplorationMenuOptionKind.ZONE_OPTION:
+        option = next(option for option in zone.options if option.id == selected.source_id)
         observer.record("zone_option_confirmed", {"zone_id": zone.id, "option_id": option.id})
         if option.kind == ExplorationOptionKind.SEARCH:
             new_state, search_messages = _resolve_search_option(args, actors, state, zone, adapter, observer)
@@ -434,46 +425,146 @@ def _handle_challenge_options(
         option_message = option.message or option.description or f"Wykonano opcję: {option.label}."
         print(option_message)
         return state, (message, option_message), feedback_events
+    return state, (message,), feedback_events
 
-    option = challenge_options[index]
-    resources = matching_resources(state, option)
-    resource_text = _resource_preview_text(resources)
-    message = (
-        f"{challenge.name}. Postęp: {current.current_progress}/{challenge.progress_required}. "
-        f"Wybrano podejście: {option.label}. {option.description} "
-        f"{resource_text} Kliknij anchor bramy ponownie, aby przełączyć opcję. Naciśnij Enter, aby potwierdzić."
-    )
-    print(message)
+
+def _menu_message(zone: ExplorationZone, menu: ExplorationMenu) -> str:
+    lines = [f"{zone.name}. Dostępne opcje:"]
+    for option in menu.options:
+        lines.append(f"- {option.label}: kolor {led_color_name_pl(option.color)}, pole {option.slot_position.as_tuple()}")
+    lines.append("Kliknij podświetlone pole opcji, aby ją wybrać.")
+    return "\n".join(lines)
+
+
+def _select_menu_option(
+    args: argparse.Namespace,
+    menu: ExplorationMenu,
+    adapter: BoardLedAdapter | None,
+    observer: SessionObserver,
+    scripts: list[str],
+) -> ExplorationMenuOption | None:
+    if scripts:
+        command = scripts.pop(0).strip()
+        if command.startswith("option:"):
+            option_id = command.removeprefix("option:")
+            selected = next((option for option in menu.options if option.id == option_id), None)
+            if selected is None:
+                raise ValueError(f"Unknown exploration menu option: {option_id}.")
+            observer.record("exploration_menu_option_selected", {"zone_id": menu.zone.id, "option_id": selected.id, "source": "script"})
+            return selected
+        if command == "confirm":
+            selected = next(option for option in menu.options if option.kind != ExplorationMenuOptionKind.CANCEL)
+            observer.record("exploration_menu_option_selected", {"zone_id": menu.zone.id, "option_id": selected.id, "source": "script_compat"})
+            return selected
+        if command == "cancel":
+            selected = next(option for option in menu.options if option.kind == ExplorationMenuOptionKind.CANCEL)
+            observer.record("exploration_menu_option_selected", {"zone_id": menu.zone.id, "option_id": selected.id, "source": "script"})
+            return selected
+        scripts.insert(0, command)
+        return None
+    if args.board_backend == "none" or adapter is None:
+        selected = next(option for option in menu.options if option.kind != ExplorationMenuOptionKind.CANCEL)
+        observer.record("exploration_menu_option_selected", {"zone_id": menu.zone.id, "option_id": selected.id, "source": "default"})
+        return selected
+    scan_board = getattr(adapter.connection, "scan_board", None)
+    if not callable(scan_board):
+        return None
+    acceptable = [option.slot_position.as_tuple() for option in menu.options]
+    observer.record("board_scan_requested", {"phase": "exploration_menu", "acceptable_positions": [list(position) for position in acceptable]})
+    print("Kliknij jedno z podświetlonych pól opcji.")
+    selected_position = scan_board(acceptable, timeout_s=args.scan_timeout)
+    if selected_position is None:
+        observer.record("board_scan_cancelled", {"phase": "exploration_menu"})
+        return None
+    coordinate = Coordinate(int(selected_position[0]), int(selected_position[1]))
+    selected = menu_option_for_position(menu, coordinate)
     observer.record(
-        "challenge_option_previewed",
+        "exploration_menu_option_selected",
         {
-            "challenge_id": challenge.id,
-            "option_id": option.id,
-            "index": index,
-            "progress": current.current_progress,
-            "progress_required": challenge.progress_required,
-            "matching_resource_ids": [resource.id for resource in resources],
+            "zone_id": menu.zone.id,
+            "option_id": selected.id if selected else None,
+            "position": list(coordinate.as_tuple()),
+            "source": "board",
         },
     )
+    return selected
+
+
+def _handle_look_around(
+    args: argparse.Namespace,
+    state: ExplorationState,
+    zone: ExplorationZone,
+    adapter: BoardLedAdapter | None,
+    observer: SessionObserver,
+    scripts: list[str],
+) -> tuple[ExplorationState, tuple[str, ...], int]:
+    message = (
+        f"Rozglądacie się po okolicy: {zone.name}. "
+        f"Możecie kliknąć do {args.look_around_clicks} pól tej strefy."
+    )
+    print(message)
+    observer.record("look_around_started", {"zone_id": zone.id, "limit": args.look_around_clicks})
     feedback_events = 0
     if adapter is not None:
-        adapter.show_feedback(_challenge_option_feedback(zone, option))
+        adapter.clear()
+        adapter.show_feedback(look_around_feedback(zone))
         feedback_events += 1
-        observer.record("led_feedback_sent", {"phase": "challenge_option_preview", "challenge_id": challenge.id, "option_id": option.id})
-    action = _confirm_or_cycle_option(args, state, zone, adapter, observer, scripts)
-    if action == "cycle":
-        option_indices[key] = index + 1
-        observer.record("challenge_option_cycled", {"challenge_id": challenge.id, "next_index": option_indices[key] % total_options})
-        return state, (message,), feedback_events
-    if action != "confirm":
-        return state, (message,), feedback_events
-    observer.record("zone_option_confirmed", {"zone_id": zone.id, "option_id": option.id})
-    observer.record("challenge_option_confirmed", {"challenge_id": challenge.id, "option_id": option.id})
-    resource = _select_resource(args, option, resources)
-    if resource is not None:
-        observer.record("resource_used", {"challenge_id": challenge.id, "option_id": option.id, "resource_id": resource.id})
-    new_state, result_messages = _resolve_challenge_option(args, actors, state, challenge, option, resource, observer)
-    return new_state, (message, *result_messages), feedback_events
+        observer.record("led_feedback_sent", {"phase": "look_around", "zone_id": zone.id})
+    messages = [message]
+    current_state = state
+    for index in range(args.look_around_clicks):
+        clicked = _next_look_around_click(args, current_state, zone, adapter, observer, scripts)
+        if clicked is None:
+            break
+        point = _visible_point_for_position(current_state, clicked)
+        if point is not None:
+            current_state, point_messages, sent = _handle_exploration_point(args, current_state, point, adapter, observer)
+            messages.extend(point_messages)
+            feedback_events += sent
+            continue
+        if clicked in zone.positions:
+            tile_message = f"Sprawdzacie fragment lokacji {zone.name} na polu {clicked.as_tuple()}. Nie ma tu nic oczywistego."
+            print(tile_message)
+            messages.append(tile_message)
+            observer.record(
+                "look_around_tile_checked",
+                {"zone_id": zone.id, "position": list(clicked.as_tuple()), "index": index},
+            )
+            continue
+        outside_message = "To pole nie należy do aktualnie oglądanej lokacji."
+        print(outside_message)
+        messages.append(outside_message)
+    observer.record("look_around_finished", {"zone_id": zone.id})
+    return current_state, tuple(messages), feedback_events
+
+
+def _next_look_around_click(
+    args: argparse.Namespace,
+    state: ExplorationState,
+    zone: ExplorationZone,
+    adapter: BoardLedAdapter | None,
+    observer: SessionObserver,
+    scripts: list[str],
+) -> Coordinate | None:
+    if scripts:
+        command = scripts.pop(0).strip()
+        if command in {"look_done", "cancel", "end"}:
+            return None
+        return _coordinate_from_script(command, state)
+    if args.board_backend == "none" or adapter is None:
+        return None
+    scan_board = getattr(adapter.connection, "scan_board", None)
+    if not callable(scan_board):
+        return None
+    acceptable = [position.as_tuple() for position in zone.positions]
+    acceptable.extend(position.as_tuple() for point in visible_exploration_points(state.points) for position in point.positions)
+    print("Kliknij pole w oglądanej strefie albo poczekaj, aby zakończyć rozejrzenie.")
+    selected = scan_board(acceptable, timeout_s=args.scan_timeout)
+    if selected is None:
+        observer.record("board_scan_cancelled", {"phase": "look_around"})
+        return None
+    observer.record("board_scan_received", {"phase": "look_around", "position": list(selected)})
+    return Coordinate(int(selected[0]), int(selected[1]))
 
 
 def _resolve_challenge_option(
@@ -545,31 +636,6 @@ def _confirm_zone_click(args: argparse.Namespace, state: ExplorationState, desti
     selected = scan_board([position.as_tuple() for position in destination.positions], timeout_s=args.scan_timeout)
     observer.record("board_scan_received", {"phase": "zone_travel_confirmation", "position": list(selected) if selected else None})
     return selected is not None
-
-
-def _confirm_or_cycle_option(args: argparse.Namespace, state: ExplorationState, zone: ExplorationZone, adapter: BoardLedAdapter | None, observer: SessionObserver, scripts: list[str]) -> str:
-    if scripts:
-        command = scripts.pop(0).strip()
-        if command == "cycle":
-            return "cycle"
-        if command == "confirm":
-            return "confirm"
-        scripts.insert(0, command)
-        return "cancel"
-    if args.board_backend == "none" or adapter is None:
-        return "confirm"
-    if not callable(getattr(adapter.connection, "scan_board", None)):
-        return "confirm"
-    print("Naciśnij Enter, aby potwierdzić opcję, albo kliknij tę strefę ponownie, aby przełączyć opcję.")
-    event, selected = _wait_for_scan_or_enter(adapter, [position.as_tuple() for position in zone.positions], args.scan_timeout)
-    if event == "click" and selected is not None:
-        observer.record("zone_option_cycled", {"zone_id": zone.id, "reason": "scan", "position": list(selected.as_tuple())})
-        return "cycle"
-    if event == "enter":
-        observer.record("zone_option_enter_confirmed", {"zone_id": zone.id})
-        return "confirm"
-    observer.record("zone_option_confirmation_timeout", {"zone_id": zone.id})
-    return "cancel"
 
 
 def _wait_for_scan_or_enter(
@@ -657,6 +723,33 @@ def _select_resource(
     return next((resource for resource in resources if resource.id == raw), None)
 
 
+def _activate_resource(
+    args: argparse.Namespace,
+    challenge: ExplorationChallenge,
+    option: ExplorationChallengeOption,
+    resource: ExplorationResource,
+    observer: SessionObserver,
+) -> None:
+    print(f"Aktywowano zasób: {resource.label}.")
+    print(f"Efekt zasobu dla podejścia `{option.label}`: {_resource_summary(resource)}.")
+    print("Za chwilę wykonacie test z uwzględnieniem tego bonusu.")
+    observer.record("resource_used", {"challenge_id": challenge.id, "option_id": option.id, "resource_id": resource.id})
+    observer.record(
+        "resource_activated",
+        {
+            "challenge_id": challenge.id,
+            "option_id": option.id,
+            "resource_id": resource.id,
+            "modifier": resource.modifier,
+            "advantage": resource.advantage,
+            "mitigates_noise": resource.mitigates_noise,
+            "mitigates_complications": list(resource.mitigates_complications),
+        },
+    )
+    if args.board_backend != "none" and sys.stdin.isatty():
+        input("Naciśnij Enter, aby przejść do testu. ")
+
+
 def _resource_roll_modifiers(resource: ExplorationResource | None) -> tuple[RollModifier, ...]:
     if resource is None or resource.modifier == 0:
         return ()
@@ -689,15 +782,6 @@ def _challenge_roll_for_option(args: argparse.Namespace, option_id: str) -> int 
     return overrides.get(option_id)
 
 
-def _challenge_option_feedback(zone: ExplorationZone, option: ExplorationChallengeOption) -> LedFeedback:
-    area_positions = tuple(position for position in zone.positions if position != zone.marker_position)
-    frames: list[LedFrame] = []
-    if area_positions:
-        frames.append(LedFrame(area_positions, LedColor.MARKER, LedRole.DESTINATION))
-    frames.append(LedFrame((zone.marker_position,), option.color, LedRole.DESTINATION))
-    return LedFeedback(tuple(frames))
-
-
 def _visible_point_for_position(state: ExplorationState, position: Coordinate) -> ExplorationPoint | None:
     for point in visible_exploration_points(state.points):
         if position in point.positions:
@@ -726,6 +810,7 @@ def _handle_exploration_point(
         messages = (message,)
     feedback_events = 0
     if adapter is not None:
+        adapter.clear()
         adapter.show_feedback(exploration_setup_feedback(point.positions, point.color))
         feedback_events += 1
         observer.record("led_feedback_sent", {"phase": "exploration_point", "point_id": point.id})
@@ -775,6 +860,7 @@ def _resolve_search_option(
             result = SearchResult(result_state, result.party_check, result.revealed_points, result.message)
         if adapter is not None and result.revealed_points:
             positions = tuple(position for point in result.revealed_points for position in point.positions)
+            adapter.clear()
             adapter.show_feedback(exploration_setup_feedback(positions, LedColor.INTERACTION_SUCCESS))
     else:
         observer.record("zone_search_exhausted", {"zone_id": zone.id})

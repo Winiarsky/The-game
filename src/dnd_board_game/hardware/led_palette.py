@@ -27,6 +27,7 @@ class LedColor:
     ATTACK_CRITICAL_HIT: RGBColor = (255, 210, 0)
 
     ENEMY: RGBColor = (255, 0, 80)
+    MENU_PINK: RGBColor = (255, 0, 180)
     VISIBLE_ENEMY_OUT_OF_RANGE: RGBColor = (120, 0, 45)
     ENEMY_MOVEMENT_PATH: RGBColor = (220, 0, 0)
     ENEMY_MOVEMENT_DESTINATION: RGBColor = (255, 120, 0)
@@ -35,8 +36,27 @@ class LedColor:
     INTERACTION_SUCCESS: RGBColor = (0, 255, 120)
     INTERACTION_FAILURE: RGBColor = (255, 0, 0)
     MULTI_OPTION_TILE: RGBColor = (180, 120, 40)
+    MENU_PURPLE: RGBColor = (180, 0, 255)
 
     DIFFICULT_TERRAIN: RGBColor = (255, 120, 0)
     BLOCKING_TERRAIN: RGBColor = (180, 0, 0)
     MARKER: RGBColor = (255, 210, 0)
     INVALID_SELECTION: RGBColor = (255, 0, 0)
+
+
+LED_COLOR_NAMES_PL: dict[RGBColor, str] = {
+    LedColor.ACTIVE_ACTOR: "biały",
+    LedColor.ATTACK_MISS: "czerwony",
+    LedColor.MOVEMENT_RANGE: "niebieski",
+    LedColor.INTERACTIVE_OBJECT: "zielony",
+    LedColor.MARKER: "żółty",
+    LedColor.ENEMY_MOVEMENT_DESTINATION: "pomarańczowy",
+    LedColor.MENU_PURPLE: "fioletowy",
+    LedColor.MENU_PINK: "różowy",
+    LedColor.PLAYER_START_ZONE: "turkusowy",
+    LedColor.MULTI_OPTION_TILE: "brązowy",
+}
+
+
+def led_color_name_pl(color: RGBColor) -> str:
+    return LED_COLOR_NAMES_PL.get(color, "kolor specjalny")

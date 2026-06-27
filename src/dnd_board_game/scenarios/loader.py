@@ -480,6 +480,7 @@ def _parse_exploration_point(data: Any) -> ExplorationPoint:
             f"exploration point {point_id}.visibility",
         ),
         description=str(data.get("description", "")),
+        requires_setup=bool(data.get("requires_setup", True)),
     )
 
 

@@ -120,6 +120,68 @@ def test_load_abandoned_watchtower_builds_exploration_scene():
     assert courtyard.search_reveals == ("hidden_cache",)
 
 
+def test_exploration_point_requires_setup_can_be_disabled(tmp_path):
+    scenario_path = tmp_path / "exploration_points.json"
+    scenario_path.write_text(
+        json.dumps(
+            {
+                "id": "exploration_points",
+                "name": "Exploration Points",
+                "scene_mode": "exploration",
+                "board": {"cols": 20, "rows": 30},
+                "actors": [
+                    {
+                        "id": "hero",
+                        "name": "Hero",
+                        "kind": "player_character",
+                        "faction": "ally",
+                        "ac": 10,
+                        "hp": 10,
+                        "speed_feet": 30,
+                        "position": [0, 0],
+                        "ability_scores": {},
+                        "attacks": [
+                            {
+                                "id": "hit",
+                                "name": "Hit",
+                                "source_type": "weapon",
+                                "range_feet": 5,
+                                "attack_modifier": 1,
+                                "damage": {"dice": "1d4", "damage_type": "slashing"},
+                            }
+                        ],
+                    }
+                ],
+                "exploration": {
+                    "party_start_zone": "square",
+                    "zones": [
+                        {
+                            "id": "square",
+                            "name": "Square",
+                            "positions": [[0, 0], [1, 0]],
+                            "anchor_position": [0, 0],
+                        }
+                    ],
+                    "points": [
+                        {
+                            "id": "notice",
+                            "name": "Notice Board",
+                            "zone_id": "square",
+                            "positions": [[1, 0]],
+                            "requires_setup": False,
+                        }
+                    ],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exploration = build_exploration_from_scenario(load_scenario(scenario_path))
+
+    assert exploration.points[0].requires_setup is False
+
+
 def test_missing_required_field_reports_field_name(tmp_path):
     scenario_path = tmp_path / "broken.json"
     scenario_path.write_text(json.dumps({"id": "broken", "board": {"cols": 20, "rows": 30}}), encoding="utf-8")

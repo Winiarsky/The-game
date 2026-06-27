@@ -21,6 +21,13 @@ class ExplorationOptionKind(StrEnum):
     CHECK = "check"
 
 
+class ExplorationMenuOptionKind(StrEnum):
+    CHALLENGE = "challenge"
+    ZONE_OPTION = "zone_option"
+    LOOK_AROUND = "look_around"
+    CANCEL = "cancel"
+
+
 @dataclass(frozen=True, slots=True)
 class ExplorationOption:
     id: str
@@ -76,6 +83,7 @@ class ExplorationPoint:
     color: tuple[int, int, int]
     visibility: SetupVisibility = SetupVisibility.VISIBLE
     description: str = ""
+    requires_setup: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -181,6 +189,22 @@ class ChallengeResult:
 
 
 @dataclass(frozen=True, slots=True)
+class ExplorationMenuOption:
+    id: str
+    label: str
+    color: tuple[int, int, int]
+    kind: ExplorationMenuOptionKind
+    slot_position: Coordinate
+    source_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ExplorationMenu:
+    zone: ExplorationZone
+    options: tuple[ExplorationMenuOption, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class ExplorationState:
     zones: tuple[ExplorationZone, ...]
     points: tuple[ExplorationPoint, ...]
@@ -235,6 +259,114 @@ def available_challenge_options(
             continue
         result.append(option)
     return tuple(result)
+
+
+def build_exploration_menu(
+    state: ExplorationState,
+    zone: ExplorationZone,
+) -> ExplorationMenu:
+    menu_items: list[tuple[str, str, tuple[int, int, int] | None, ExplorationMenuOptionKind, str | None]] = []
+    challenge = challenge_for_zone(state, zone.id)
+    if challenge is not None and not challenge_state_for(state, challenge.id).completed:
+        for option in available_challenge_options(state, challenge):
+            menu_items.append((option.id, option.label, None, ExplorationMenuOptionKind.CHALLENGE, option.id))
+    for option in zone.options:
+        if not _zone_option_available(state, zone, option):
+            continue
+        menu_items.append((option.id, option.label, None, ExplorationMenuOptionKind.ZONE_OPTION, option.id))
+    menu_items.append(("look_around", "Rozejrzyj się po okolicy", None, ExplorationMenuOptionKind.LOOK_AROUND, None))
+    menu_items.append(("cancel", "Wycofaj", LedColor.ACTIVE_ACTOR, ExplorationMenuOptionKind.CANCEL, None))
+    slots = _menu_slots_for_zone(zone, len(menu_items))
+    options = tuple(
+        ExplorationMenuOption(
+            id=item_id,
+            label=label,
+            color=color or _basic_menu_color(item_id),
+            kind=kind,
+            slot_position=slot,
+            source_id=source_id,
+        )
+        for (item_id, label, color, kind, source_id), slot in zip(menu_items, slots, strict=True)
+    )
+    return ExplorationMenu(zone, options)
+
+
+def menu_option_for_position(menu: ExplorationMenu, position: Coordinate) -> ExplorationMenuOption | None:
+    for option in menu.options:
+        if option.slot_position == position:
+            return option
+    return None
+
+
+def _menu_slots_for_zone(zone: ExplorationZone, count: int) -> tuple[Coordinate, ...]:
+    anchor = zone.marker_position
+    preferred_offsets = (
+        (0, -1),
+        (1, 0),
+        (0, 1),
+        (-1, 0),
+        (1, -1),
+        (1, 1),
+        (-1, 1),
+        (-1, -1),
+        (2, 0),
+        (-2, 0),
+        (0, 2),
+        (0, -2),
+    )
+    zone_positions = set(zone.positions)
+    slots: list[Coordinate] = []
+    for col_offset, row_offset in preferred_offsets:
+        candidate = Coordinate(anchor.col + col_offset, anchor.row + row_offset)
+        if candidate in zone_positions and candidate not in slots:
+            slots.append(candidate)
+        if len(slots) == count:
+            return tuple(slots)
+    fallback = sorted(
+        (position for position in zone.positions if position != anchor and position not in slots),
+        key=lambda position: (abs(position.col - anchor.col) + abs(position.row - anchor.row), position.row, position.col),
+    )
+    slots.extend(fallback[: max(0, count - len(slots))])
+    if len(slots) < count:
+        raise ValueError(f"Exploration zone {zone.id} does not have enough tiles for {count} menu options.")
+    return tuple(slots[:count])
+
+
+def _basic_menu_color(option_id: str) -> tuple[int, int, int]:
+    stable_colors = {
+        "force_gate": LedColor.ATTACK_MISS,
+        "vault_gate": LedColor.MOVEMENT_RANGE,
+        "lever_gate": LedColor.INTERACTIVE_OBJECT,
+        "find_way_around": LedColor.MARKER,
+        "break_picket": LedColor.ENEMY_MOVEMENT_DESTINATION,
+        "saw_picket": LedColor.MENU_PINK,
+        "inspect_gate_area": LedColor.MENU_PURPLE,
+        "look_around": LedColor.PLAYER_START_ZONE,
+    }
+    if option_id in stable_colors:
+        return stable_colors[option_id]
+    palette = (
+        LedColor.ATTACK_MISS,
+        LedColor.MOVEMENT_RANGE,
+        LedColor.INTERACTIVE_OBJECT,
+        LedColor.MARKER,
+        LedColor.ENEMY_MOVEMENT_DESTINATION,
+        LedColor.MENU_PURPLE,
+        LedColor.PLAYER_START_ZONE,
+        LedColor.MENU_PINK,
+    )
+    index = sum(ord(character) for character in option_id) % len(palette)
+    return palette[index]
+
+
+def _zone_option_available(state: ExplorationState, zone: ExplorationZone, option: ExplorationOption) -> bool:
+    if option.kind == ExplorationOptionKind.SEARCH and zone.id in state.exhausted_search_zones:
+        return False
+    if option.success_flag is not None and scene_flag(state.flags, option.success_flag, False):
+        return False
+    if option.failure_flag is not None and scene_flag(state.flags, option.failure_flag, False):
+        return False
+    return True
 
 
 def matching_resources(
@@ -476,13 +608,7 @@ def exploration_setup_feedback(
 def exploration_zone_feedback(state: ExplorationState) -> LedFeedback:
     frames: list[LedFrame] = []
     for zone in available_exploration_zones(state):
-        area_positions = tuple(position for position in zone.positions if position != zone.marker_position)
-        if area_positions:
-            frames.append(LedFrame(area_positions, dim_color(zone.color), LedRole.DESTINATION))
         frames.append(LedFrame((zone.marker_position,), zone.color, LedRole.DESTINATION))
-    current = next((zone for zone in state.zones if zone.id == state.party_position.zone_id), None)
-    if current is not None:
-        frames.append(LedFrame((current.marker_position,), LedColor.ACTIVE_ACTOR, LedRole.ACTIVE_ACTOR))
     for point in visible_exploration_points(state.points):
         frames.append(LedFrame(point.positions, point.color, LedRole.DESTINATION))
     return LedFeedback(tuple(frames))
@@ -501,4 +627,19 @@ def option_feedback(zone: ExplorationZone, option: ExplorationOption) -> LedFeed
     if area_positions:
         frames.append(LedFrame(area_positions, dim_color(zone.color), LedRole.DESTINATION))
     frames.append(LedFrame((zone.marker_position,), option.color, LedRole.DESTINATION))
+    return LedFeedback(tuple(frames))
+
+
+def exploration_menu_feedback(menu: ExplorationMenu) -> LedFeedback:
+    return LedFeedback(
+        tuple(LedFrame((option.slot_position,), option.color, LedRole.DESTINATION) for option in menu.options)
+    )
+
+
+def look_around_feedback(zone: ExplorationZone) -> LedFeedback:
+    area_positions = tuple(position for position in zone.positions if position != zone.marker_position)
+    frames: list[LedFrame] = []
+    if area_positions:
+        frames.append(LedFrame(area_positions, dim_color(zone.color), LedRole.DESTINATION))
+    frames.append(LedFrame((zone.marker_position,), zone.color, LedRole.DESTINATION))
     return LedFeedback(tuple(frames))

@@ -298,7 +298,7 @@ Do regresji można uruchomić starą deterministyczną kolejność tur przez `--
 Bez planszy:
 
 ```bash
-PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenario content/scenarios/abandoned_watchtower.json --board-backend none --exploration-script zone:courtyard --exploration-script zone:courtyard --exploration-script zone:courtyard --exploration-script confirm --party-check-roll hero=13 --party-check-roll rogue=7 --session-id abandoned_watchtower_demo --max-steps 6
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenario content/scenarios/abandoned_watchtower.json --board-backend none --exploration-script zone:gate --exploration-script option:force_gate --challenge-roll force_gate=12 --exploration-script zone:courtyard --exploration-script zone:courtyard --exploration-script zone:courtyard --exploration-script option:search_courtyard --party-check-roll hero=13 --party-check-roll rogue=7 --session-id abandoned_watchtower_demo --max-steps 6
 ```
 
 W symulatorze:
@@ -311,8 +311,11 @@ Tryb eksploracji:
 
 - nie używa inicjatywy ani tur walki,
 - używa wspólnego pionka drużyny,
-- pokazuje setup fizycznej mapki/stref i jawnych elementów,
-- kliknięcie aktualnej strefy pokazuje opcje,
+- pokazuje dostępne lokacje przez punkty główne bez dodatkowego potwierdzania setupu stref,
+- jawne elementy fizyczne z `requires_setup` są rozstawiane osobno i potwierdzane kliknięciem,
+- domyślnie świecą tylko główne punkty dostępnych lokacji,
+- kliknięcie aktualnej strefy pokazuje kolorowe menu opcji na polach wokół punktu głównego,
+- opcja `Rozejrzyj się po okolicy` dopiero wtedy podświetla całą strefę i pozwala klikać kafle,
 - kliknięcie innej strefy pyta o przejście,
 - `Zbadaj obszar` wykonuje drużynowy test i bierze najwyższy wynik.
 

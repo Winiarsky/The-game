@@ -301,17 +301,21 @@ PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenari
 Checklist:
 
 - [ ] Aplikacja prosi o położenie mapki eksploracji na planszy.
-- [ ] LED-y pokazują setup jawnych stref.
+- [ ] LED-y pokazują dostępne lokacje przez ich punkty główne, bez świecenia całych stref i bez dodatkowego potwierdzania setupu stref.
+- [ ] Jawne elementy fizyczne oznaczone `requires_setup` są rozstawiane osobno i potwierdzane kliknięciem.
 - [ ] Ukryta skrytka nie świeci podczas setupu.
-- [ ] Aplikacja prosi o ustawienie wspólnego pionka drużyny.
+- [ ] Domyślny widok eksploracji pokazuje tylko główne punkty dostępnych lokacji.
 - [ ] Kliknięcie innej strefy pokazuje pytanie o przejście.
 - [ ] Drugie kliknięcie tej samej strefy potwierdza przejście.
-- [ ] Kliknięcie aktualnej strefy pokazuje opcję tej strefy.
+- [ ] Kliknięcie aktualnego punktu głównego pokazuje wszystkie opcje jako kolorowe pola menu.
+- [ ] Kliknięcie pola opcji wybiera tę konkretną opcję.
+- [ ] Opcja `Wycofaj` zamyka menu i wraca do widoku punktów głównych.
+- [ ] Opcja `Rozejrzyj się po okolicy` podświetla całą strefę na 30% i pozwala kliknąć kafle strefy.
 - [ ] Opcja `Zbadaj obszar` prosi o rzuty całej drużyny.
 - [ ] Najwyższy wynik drużyny rozstrzyga test.
 - [ ] Sukces ujawnia ukrytą skrytkę LED-em.
 - [ ] Ponowne badanie tej samej strefy jest blokowane.
-- [ ] JSONL zawiera `exploration_started`, `exploration_setup_confirmed`, `party_zone_changed`, `party_check_resolved` i `zone_search_revealed`.
+- [ ] JSONL zawiera `exploration_started`, `exploration_setup_confirmed`, `exploration_menu_opened`, `exploration_menu_option_selected`, `party_check_resolved` i `zone_search_revealed`.
 
 ## Notatki Z Testu
 

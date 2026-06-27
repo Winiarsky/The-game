@@ -78,6 +78,8 @@ def test_demo_exploration_scene_runs_scripted_zone_travel_and_search(tmp_path):
     events = _events(result.observation_path)
     event_types = [event["event_type"] for event in events]
     assert result.final_state.party_position.zone_id == "courtyard"
+    assert any("kolor czerwony" in message for message in result.messages)
+    assert not any("RGB" in message for message in result.messages)
     assert "party_zone_changed" in event_types
     assert "party_check_resolved" in event_types
     assert "zone_search_revealed" in event_types
@@ -93,23 +95,7 @@ def test_demo_exploration_scene_partial_gate_progress_keeps_courtyard_locked(tmp
             "--exploration-script",
             "zone:gate",
             "--exploration-script",
-            "cycle",
-            "--exploration-script",
-            "zone:gate",
-            "--exploration-script",
-            "cycle",
-            "--exploration-script",
-            "zone:gate",
-            "--exploration-script",
-            "cycle",
-            "--exploration-script",
-            "zone:gate",
-            "--exploration-script",
-            "cycle",
-            "--exploration-script",
-            "zone:gate",
-            "--exploration-script",
-            "confirm",
+            "option:break_picket",
             "--challenge-roll",
             "break_picket=10",
         )
@@ -129,27 +115,7 @@ def test_demo_exploration_scene_search_can_reveal_saw_resource(tmp_path):
             "--exploration-script",
             "zone:gate",
             "--exploration-script",
-            "cycle",
-            "--exploration-script",
-            "zone:gate",
-            "--exploration-script",
-            "cycle",
-            "--exploration-script",
-            "zone:gate",
-            "--exploration-script",
-            "cycle",
-            "--exploration-script",
-            "zone:gate",
-            "--exploration-script",
-            "cycle",
-            "--exploration-script",
-            "zone:gate",
-            "--exploration-script",
-            "cycle",
-            "--exploration-script",
-            "zone:gate",
-            "--exploration-script",
-            "confirm",
+            "option:inspect_gate_area",
             "--exploration-script",
             "point:old_camp_tools",
             "--max-steps",
@@ -207,16 +173,63 @@ def test_demo_exploration_scene_inspects_non_anchor_tile_without_options(tmp_pat
 
 
 def test_demo_exploration_scene_setup_sends_leds_with_fake_connection(tmp_path):
-    connection = FakeConnection(scanned=[(1, 1), (1, 1), None])
+    connection = FakeConnection(scanned=[(9, 2), (8, 1)])
     args = _args(tmp_path, "--board-backend", "simulator", "--show-leds", "--max-steps", "1")
 
     result = run_demo(args, connection_factory=lambda args: connection)
 
     assert result.feedback_events > 0
     assert any(event[0] == "set_leds" for event in connection.events)
+    assert any("Dostępne lokacje" in message for message in result.messages)
+    assert sum(message.count("Kliknij odpowiednią lokację") for message in result.messages) == 1
     event_types = [event["event_type"] for event in _events(result.observation_path)]
     assert "exploration_setup_started" in event_types
     assert "party_position_set" in event_types
+
+
+def test_demo_exploration_menu_clears_anchor_before_showing_options(tmp_path):
+    connection = FakeConnection(scanned=[(9, 2), (8, 1)])
+    args = _args(tmp_path, "--board-backend", "simulator", "--show-leds", "--max-steps", "1")
+
+    run_demo(args, connection_factory=lambda args: connection)
+
+    menu_start_indexes = [
+        index
+        for index, event in enumerate(connection.events)
+        if event[0] == "set_leds" and event[1] == [(9, 1)]
+    ]
+    assert menu_start_indexes
+    menu_start = menu_start_indexes[-1]
+    assert connection.events[menu_start - 1] == ("leds_off",)
+    menu_events = [event for event in connection.events[menu_start:] if event[0] == "set_leds"]
+    assert all(event[1] != [(9, 2)] for event in menu_events)
+
+
+def test_demo_exploration_clears_revealed_point_before_next_map_state(tmp_path):
+    connection = FakeConnection(scanned=[(9, 2), (10, 3), (9, 2), (8, 1)])
+    args = _args(
+        tmp_path,
+        "--board-backend",
+        "simulator",
+        "--show-leds",
+        "--max-steps",
+        "2",
+        "--party-check-roll",
+        "hero=15",
+        "--party-check-roll",
+        "rogue=15",
+    )
+
+    run_demo(args, connection_factory=lambda args: connection)
+
+    revealed_indexes = [
+        index
+        for index, event in enumerate(connection.events)
+        if event[0] == "set_leds" and event[1] == [(11, 3)]
+    ]
+    assert revealed_indexes
+    revealed_index = revealed_indexes[-1]
+    assert ("leds_off",) in connection.events[revealed_index + 1 :]
 
 
 def test_wait_for_scan_or_enter_returns_click():
