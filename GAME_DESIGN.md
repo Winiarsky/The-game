@@ -377,6 +377,160 @@ Pathfinding musi być:
 
 ---
 
+## Eksploracja I Wyzwania
+
+Tryb eksploracji nie powinien działać jak walka bez przeciwników.
+
+W eksploracji drużyna porusza się wspólnie między strefami, a aplikacja prowadzi przez lokacje, punkty zainteresowania, decyzje i konsekwencje.
+
+### Brak Twardych Blokad Rzutem
+
+Domyślnie test eksploracyjny nie może być prostą blokadą typu:
+
+* porażka oznacza brak przejścia,
+* gracze powtarzają ten sam test aż do sukcesu,
+* cała scena stoi, dopóki nie wypadnie odpowiedni wynik.
+
+Takie zachowanie jest dopuszczalne tylko jako świadome odstępstwo opisane w contentcie albo w decyzjach reguł.
+
+Domyślnym modelem jest `fail-forward`:
+
+* rzut rozstrzyga jakość efektu,
+* porażka może dać postęp z kosztem,
+* sukces może dać postęp bez kosztu,
+* wysoki sukces może dać dodatkową korzyść,
+* poważna porażka może dodać komplikację.
+
+### Wyzwanie Z Postępem
+
+Eksploracyjne przeszkody powinny być modelowane jako wyzwania z postępem, a nie jako pojedyncze testy.
+
+Przykład:
+
+```text
+Wyzwanie: Zamknięta brama
+Cel: dostać się na dziedziniec
+Postęp wymagany: 3
+Postęp aktualny: 0
+Ryzyka: hałas, strata czasu, uszkodzenie sprzętu
+```
+
+Każda dostępna opcja opisuje:
+
+* wymagany test albo warunek,
+* postęp na sukcesie,
+* postęp na porażce,
+* konsekwencję sukcesu,
+* konsekwencję porażki,
+* możliwe komplikacje,
+* flagi sceny ustawiane po rozstrzygnięciu.
+
+Przykładowe opcje dla zamkniętej bramy:
+
+```text
+Wyważ bramę:
+- test: Siła / Atletyka
+- sukces: +3 postępu, brama otwarta, hałas
+- porażka: +1 postępu, hałas, zmęczenie albo uszkodzenie narzędzia
+```
+
+```text
+Przejdź górą:
+- test: Zręczność / Akrobatyka
+- sukces: +2 postępu, ciche przejście części drużyny
+- porażka: +1 postępu, ryzyko upadku albo utrata czasu
+```
+
+```text
+Podważ mechanizm:
+- test: Inteligencja / narzędzia albo rzemiosło
+- sukces: +3 postępu, ciche otwarcie
+- porażka: +1 postępu, narzędzie się zużywa albo mechanizm klinuje się częściowo
+```
+
+```text
+Wyłam sztachetę:
+- test: Siła albo Zręczność, zależnie od opisu
+- sukces: +1 postępu, tworzy małe przejście albo nową opcję
+- porażka: +1 postępu z komplikacją albo tylko informacja o stanie przeszkody
+```
+
+Opcje mogą mieć różne profile: szybkie, głośne, bezpieczne, ryzykowne, ciche, kosztowne albo wymagające zasobu.
+
+### Przygotowanie Do Testu
+
+Gracze powinni móc przygotować się do wyzwania przed głównym rozstrzygnięciem.
+
+Przygotowanie może:
+
+* dodać premię,
+* dać przewagę,
+* obniżyć ST,
+* usunąć albo złagodzić komplikację,
+* odblokować nową opcję,
+* ujawnić informację o ryzyku.
+
+Przykład:
+
+```text
+Zbadaj okolice bramy:
+- sukces: odkrywa słaby zawias; następne "Podważ mechanizm" ma przewagę
+- porażka: ujawnia tylko, że wyważenie będzie głośne
+```
+
+### Zasoby, Ekwipunek I Flagi
+
+Opcje wyzwania mogą mieć tagi wymagań albo tagi bonusów, np.:
+
+* `climbing`,
+* `lockpicking`,
+* `crowbar`,
+* `rope`,
+* `fire`,
+* `quiet`,
+* `heavy_force`.
+
+Przed wykonaniem opcji aplikacja może pozwolić graczom otworzyć ekwipunek i wybrać zasób, narzędzie albo czar.
+
+Jeżeli wybrany element ekwipunku ma pasującą flagę bonusu, może dodać efekt zdefiniowany po stronie itemu:
+
+* premia liczbowa,
+* przewaga,
+* redukcja ST,
+* dodatkowy postęp,
+* anulowanie konkretnej komplikacji,
+* zużycie zasobu.
+
+Przykład:
+
+```text
+Opcja: Przejdź górą
+Tag: climbing
+
+Item: Lina z hakiem
+Bonus tag: climbing
+Efekt: advantage albo +2 do testu
+```
+
+### Rola LLM W Przyszłości
+
+W pierwszej implementacji opcje eksploracyjne są predefiniowane w contentcie.
+
+W przyszłości LLM może zostać dodany jako warstwa interpretacji kreatywnych deklaracji graczy.
+
+LLM nie powinien być źródłem zasad ani samodzielnie zmieniać stanu gry.
+
+Docelowa rola LLM:
+
+* przetłumaczyć deklarację gracza na istniejące podejście,
+* zaproponować pasującą cechę, skill, ryzyko i tagi,
+* wskazać możliwy koszt albo komplikację,
+* zwrócić ustrukturyzowaną propozycję do walidacji przez silnik gry albo MG.
+
+Silnik gry nadal powinien walidować wynik i stosować tylko znane efekty.
+
+---
+
 ## Ruch Po Planszy
 
 Ruch po planszy powinien być zgodny z zasadami D&D 5e, ale jednocześnie prosty do wizualizacji na planszy LED.

@@ -18,6 +18,15 @@ from dnd_board_game.combat import (
     SceneObject,
     SetupVisibility,
 )
+from dnd_board_game.exploration import (
+    ExplorationOption,
+    ExplorationOptionKind,
+    ExplorationPoint,
+    ExplorationZone,
+    PartyPosition,
+    SceneMode,
+)
+from dnd_board_game.hardware import LedColor
 from dnd_board_game.rules import D20RollRequest, RollModifier, RollModifierType
 from dnd_board_game.world import BLOCKING_TERRAIN, DIFFICULT_TERRAIN, BoardDimensions, BoardState, Coordinate
 
@@ -85,8 +94,12 @@ class ScenarioDefinition:
     board_dimensions: BoardDimensions
     actors: tuple[ScenarioActorDefinition, ...]
     environment: tuple[ScenarioEnvironmentDefinition, ...]
+    scene_mode: SceneMode = SceneMode.ENCOUNTER
     player_start_zones: tuple[tuple[Coordinate, ...], ...] = ()
     objectives: tuple[ScenarioObjectiveDefinition, ...] = ()
+    exploration_zones: tuple[ExplorationZone, ...] = ()
+    exploration_points: tuple[ExplorationPoint, ...] = ()
+    party_start_zone_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,6 +119,18 @@ class LoadedEncounter:
     player_start_zones: tuple[tuple[Coordinate, ...], ...] = ()
     objectives: tuple[SceneObjective, ...] = ()
     scene_objects: tuple[SceneObject, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class LoadedExploration:
+    scenario_id: str
+    scenario_name: str
+    board: BoardState
+    actors: tuple[Actor, ...]
+    zones: tuple[ExplorationZone, ...]
+    points: tuple[ExplorationPoint, ...]
+    party_position: PartyPosition
+    objectives: tuple[SceneObjective, ...] = ()
 
 
 def load_scenario(path: str | Path) -> LoadedScenario:
@@ -179,6 +204,37 @@ def build_encounter_from_scenario(loaded: LoadedScenario) -> LoadedEncounter:
     )
 
 
+def build_exploration_from_scenario(loaded: LoadedScenario) -> LoadedExploration:
+    definition = loaded.definition
+    if definition.scene_mode != SceneMode.EXPLORATION:
+        raise ValueError(f"Scenario {definition.id} is not an exploration scenario.")
+    board = BoardState(dimensions=definition.board_dimensions)
+    actors = tuple(_actor_from_definition(actor) for actor in definition.actors)
+    start_zone = _zone_by_id(definition.exploration_zones, definition.party_start_zone_id)
+    objectives = tuple(
+        SceneObjective(
+            id=objective.id,
+            name=objective.name,
+            description=objective.description,
+            condition=objective.condition,
+            target_id=objective.target_id,
+            flag_key=objective.flag_key,
+            flag_value=objective.flag_value,
+        )
+        for objective in definition.objectives
+    )
+    return LoadedExploration(
+        scenario_id=definition.id,
+        scenario_name=definition.name,
+        board=board,
+        actors=actors,
+        zones=definition.exploration_zones,
+        points=definition.exploration_points,
+        party_position=PartyPosition(start_zone.id, start_zone.marker_position),
+        objectives=objectives,
+    )
+
+
 def _parse_scenario(data: dict[str, Any], scenario_path: Path) -> ScenarioDefinition:
     board_data = _required_mapping(data, "board", "scenario")
     cols = int(board_data.get("cols", 20))
@@ -193,14 +249,24 @@ def _parse_scenario(data: dict[str, Any], scenario_path: Path) -> ScenarioDefini
     objectives_data = data.get("objectives", [])
     if not isinstance(objectives_data, list):
         raise ValueError("scenario.objectives must be a list.")
+    exploration_data = data.get("exploration", {})
+    if exploration_data is None:
+        exploration_data = {}
+    if not isinstance(exploration_data, dict):
+        raise ValueError("scenario.exploration must be an object.")
+    scene_mode = _enum_value(SceneMode, str(data.get("scene_mode", SceneMode.ENCOUNTER.value)), "scenario.scene_mode")
     return ScenarioDefinition(
         id=str(_required(data, "id", "scenario")),
         name=str(_required(data, "name", "scenario")),
         board_dimensions=BoardDimensions(cols=cols, rows=rows),
+        scene_mode=scene_mode,
         actors=tuple(_parse_actor(actor_data, scenario_path) for actor_data in actors_data),
         environment=tuple(_parse_environment(entry) for entry in environment_data),
         player_start_zones=tuple(_parse_start_zone(zone, "scenario.player_start_zones") for zone in start_zones_data),
         objectives=tuple(_parse_objective(entry) for entry in objectives_data),
+        exploration_zones=tuple(_parse_exploration_zone(entry) for entry in exploration_data.get("zones", [])),
+        exploration_points=tuple(_parse_exploration_point(entry) for entry in exploration_data.get("points", [])),
+        party_start_zone_id=str(exploration_data["party_start_zone"]) if "party_start_zone" in exploration_data else None,
     )
 
 
@@ -321,6 +387,87 @@ def _parse_objective(data: dict[str, Any]) -> ScenarioObjectiveDefinition:
     )
 
 
+def _parse_exploration_zone(data: Any) -> ExplorationZone:
+    if not isinstance(data, dict):
+        raise ValueError("scenario.exploration.zones entries must be objects.")
+    zone_id = str(_required(data, "id", "exploration zone"))
+    positions_data = _required_list(data, "positions", f"exploration zone {zone_id}")
+    search_data = data.get("search", {})
+    if search_data is None:
+        search_data = {}
+    if not isinstance(search_data, dict):
+        raise ValueError(f"exploration zone {zone_id}.search must be an object.")
+    return ExplorationZone(
+        id=zone_id,
+        name=str(_required(data, "name", f"exploration zone {zone_id}")),
+        positions=tuple(_parse_coordinate(position, f"exploration zone {zone_id}.positions") for position in positions_data),
+        color=_parse_color(data.get("color", "marker"), f"exploration zone {zone_id}.color"),
+        anchor_position=_parse_coordinate(data["anchor_position"], f"exploration zone {zone_id}.anchor_position") if "anchor_position" in data else None,
+        description=str(data.get("description", "")),
+        visibility=_enum_value(
+            SetupVisibility,
+            str(data.get("visibility", SetupVisibility.VISIBLE.value)),
+            f"exploration zone {zone_id}.visibility",
+        ),
+        available_if_flag=str(data["available_if_flag"]) if "available_if_flag" in data else None,
+        available_if_value=data.get("available_if_value", True),
+        options=tuple(_parse_exploration_option(entry, zone_id) for entry in data.get("options", [])),
+        adjacent_zone_ids=tuple(str(item) for item in data.get("adjacent_zone_ids", [])),
+        search_dc=int(search_data["dc"]) if "dc" in search_data else None,
+        search_ability=str(search_data.get("ability", "wisdom")),
+        search_skill=str(search_data["skill"]) if "skill" in search_data else "perception",
+        search_reveals=tuple(str(item) for item in search_data.get("reveals", [])),
+        search_success_flag=str(search_data["success_flag"]) if "success_flag" in search_data else None,
+        search_failure_flag=str(search_data["failure_flag"]) if "failure_flag" in search_data else None,
+    )
+
+
+def _parse_exploration_option(data: Any, zone_id: str) -> ExplorationOption:
+    if not isinstance(data, dict):
+        raise ValueError(f"exploration zone {zone_id}.options entries must be objects.")
+    option_id = str(_required(data, "id", f"exploration zone {zone_id}.option"))
+    ability_check = data.get("ability_check")
+    return ExplorationOption(
+        id=option_id,
+        label=str(_required(data, "label", f"exploration option {option_id}")),
+        kind=_enum_value(
+            ExplorationOptionKind,
+            str(data.get("kind", ExplorationOptionKind.MESSAGE.value)),
+            f"exploration option {option_id}.kind",
+        ),
+        color=_parse_color(data.get("color", "interactive"), f"exploration option {option_id}.color"),
+        description=str(data.get("description", "")),
+        message=str(data.get("message", "")),
+        success_message=str(data.get("success_message", "")),
+        failure_message=str(data.get("failure_message", "")),
+        ability_check=_parse_scene_ability_check(ability_check, option_id) if ability_check is not None else None,
+        allow_help=bool(data.get("allow_help", False)),
+        success_flag=str(data["success_flag"]) if "success_flag" in data else None,
+        failure_flag=str(data["failure_flag"]) if "failure_flag" in data else None,
+        reveals=tuple(str(item) for item in data.get("reveals", [])),
+    )
+
+
+def _parse_exploration_point(data: Any) -> ExplorationPoint:
+    if not isinstance(data, dict):
+        raise ValueError("scenario.exploration.points entries must be objects.")
+    point_id = str(_required(data, "id", "exploration point"))
+    positions_data = _required_list(data, "positions", f"exploration point {point_id}")
+    return ExplorationPoint(
+        id=point_id,
+        name=str(_required(data, "name", f"exploration point {point_id}")),
+        zone_id=str(_required(data, "zone_id", f"exploration point {point_id}")),
+        positions=tuple(_parse_coordinate(position, f"exploration point {point_id}.positions") for position in positions_data),
+        color=_parse_color(data.get("color", "interactive"), f"exploration point {point_id}.color"),
+        visibility=_enum_value(
+            SetupVisibility,
+            str(data.get("visibility", SetupVisibility.VISIBLE.value)),
+            f"exploration point {point_id}.visibility",
+        ),
+        description=str(data.get("description", "")),
+    )
+
+
 def _parse_interactions(data: Any, environment_id: str) -> tuple[SceneInteraction, ...]:
     if data is None:
         return ()
@@ -415,7 +562,7 @@ def _attack_source_from_definition(definition: ScenarioAttackDefinition, stackin
 def _validate_scenario(definition: ScenarioDefinition) -> None:
     if not any(actor.faction == Faction.ALLY for actor in definition.actors):
         raise ValueError("scenario.actors must include at least one ally.")
-    if not any(actor.faction == Faction.ENEMY for actor in definition.actors):
+    if definition.scene_mode == SceneMode.ENCOUNTER and not any(actor.faction == Faction.ENEMY for actor in definition.actors):
         raise ValueError("scenario.actors must include at least one enemy.")
     for actor in definition.actors:
         if not definition.board_dimensions.in_bounds(actor.position):
@@ -443,6 +590,37 @@ def _validate_scenario(definition: ScenarioDefinition) -> None:
             raise ValueError(f"objective {objective.id}.target_id references unknown environment entry.")
         if objective.condition == SceneObjectiveCondition.FLAG_EQUALS and not objective.flag_key:
             raise ValueError(f"objective {objective.id}.flag_key is required for flag_equals.")
+    if definition.scene_mode == SceneMode.EXPLORATION:
+        _validate_exploration(definition)
+
+
+def _validate_exploration(definition: ScenarioDefinition) -> None:
+    if not definition.exploration_zones:
+        raise ValueError("exploration scenario requires at least one zone.")
+    zone_ids = {zone.id for zone in definition.exploration_zones}
+    if definition.party_start_zone_id not in zone_ids:
+        raise ValueError("exploration.party_start_zone references unknown zone.")
+    for zone in definition.exploration_zones:
+        for position in zone.positions:
+            if not definition.board_dimensions.in_bounds(position):
+                raise ValueError(f"exploration zone {zone.id}.positions contains out of bounds coordinate.")
+        if zone.anchor_position is not None:
+            if not definition.board_dimensions.in_bounds(zone.anchor_position):
+                raise ValueError(f"exploration zone {zone.id}.anchor_position is out of bounds.")
+            if zone.anchor_position not in zone.positions:
+                raise ValueError(f"exploration zone {zone.id}.anchor_position must be inside zone positions.")
+        for adjacent_id in zone.adjacent_zone_ids:
+            if adjacent_id not in zone_ids:
+                raise ValueError(f"exploration zone {zone.id}.adjacent_zone_ids references unknown zone.")
+        for point_id in zone.search_reveals:
+            if point_id not in {point.id for point in definition.exploration_points}:
+                raise ValueError(f"exploration zone {zone.id}.search.reveals references unknown point.")
+    for point in definition.exploration_points:
+        if point.zone_id not in zone_ids:
+            raise ValueError(f"exploration point {point.id}.zone_id references unknown zone.")
+        for position in point.positions:
+            if not definition.board_dimensions.in_bounds(position):
+                raise ValueError(f"exploration point {point.id}.positions contains out of bounds coordinate.")
 
 
 def _apply_environment_to_board(board: BoardState, environment: tuple[ScenarioEnvironmentDefinition, ...]) -> None:
@@ -459,6 +637,33 @@ def _environment_blocks_movement(entry: ScenarioEnvironmentDefinition) -> bool:
     if entry.blocks_movement is not None:
         return entry.blocks_movement
     return entry.setup_type in {EnvironmentSetupType.BLOCKING_TERRAIN, EnvironmentSetupType.OBSTACLE}
+
+
+def _zone_by_id(zones: tuple[ExplorationZone, ...], zone_id: str | None) -> ExplorationZone:
+    for zone in zones:
+        if zone.id == zone_id:
+            return zone
+    raise ValueError(f"Unknown exploration start zone: {zone_id}.")
+
+
+def _parse_color(value: Any, field: str) -> tuple[int, int, int]:
+    if isinstance(value, list | tuple) and len(value) == 3:
+        return (int(value[0]), int(value[1]), int(value[2]))
+    named = {
+        "active": LedColor.ACTIVE_ACTOR,
+        "ally": LedColor.ALLY,
+        "enemy": LedColor.ENEMY,
+        "interactive": LedColor.INTERACTIVE_OBJECT,
+        "marker": LedColor.MARKER,
+        "movement": LedColor.MOVEMENT_RANGE,
+        "multi": LedColor.MULTI_OPTION_TILE,
+        "success": LedColor.INTERACTION_SUCCESS,
+        "warning": LedColor.ENEMY_MOVEMENT_DESTINATION,
+        "danger": LedColor.ATTACK_MISS,
+    }
+    if str(value) in named:
+        return named[str(value)]
+    raise ValueError(f"Unknown color for {field}: {value}.")
 
 
 def _read_json(path: Path) -> dict[str, Any]:

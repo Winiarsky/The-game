@@ -127,6 +127,27 @@ Każde zdarzenie powinno zawierać:
 - `combat_finished`
 - `combat_stopped`
 
+### Eksploracja
+
+- `exploration_started`
+- `exploration_setup_started`
+- `exploration_setup_step_started`
+- `exploration_setup_step_confirmed`
+- `exploration_setup_confirmed`
+- `party_position_set`
+- `exploration_zone_clicked`
+- `zone_travel_previewed`
+- `zone_travel_confirmed`
+- `party_zone_changed`
+- `zone_option_previewed`
+- `zone_option_cycled`
+- `zone_option_confirmed`
+- `party_check_requested`
+- `party_check_resolved`
+- `zone_search_revealed`
+- `zone_search_exhausted`
+- `exploration_finished`
+
 ## Przykład Zdarzeń Ruchu
 
 ```jsonl

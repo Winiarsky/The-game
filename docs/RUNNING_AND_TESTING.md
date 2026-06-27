@@ -293,6 +293,29 @@ Pierwsza scena pokazuje:
 
 Do regresji można uruchomić starą deterministyczną kolejność tur przez `--initiative-mode fixed`.
 
+## Demo Eksploracji
+
+Bez planszy:
+
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenario content/scenarios/abandoned_watchtower.json --board-backend none --exploration-script zone:courtyard --exploration-script zone:courtyard --exploration-script zone:courtyard --exploration-script confirm --party-check-roll hero=13 --party-check-roll rogue=7 --session-id abandoned_watchtower_demo --max-steps 6
+```
+
+W symulatorze:
+
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenario content/scenarios/abandoned_watchtower.json --board-backend simulator --board-url http://127.0.0.1:5000 --show-leds --scan-timeout 30 --session-id abandoned_watchtower_simulator_demo
+```
+
+Tryb eksploracji:
+
+- nie używa inicjatywy ani tur walki,
+- używa wspólnego pionka drużyny,
+- pokazuje setup fizycznej mapki/stref i jawnych elementów,
+- kliknięcie aktualnej strefy pokazuje opcje,
+- kliknięcie innej strefy pyta o przejście,
+- `Zbadaj obszar` wykonuje drużynowy test i bierze najwyższy wynik.
+
 ## Zasada Testowania Funkcji
 
 Każda większa funkcja powinna przejść przez trzy poziomy:

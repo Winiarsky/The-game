@@ -295,3 +295,40 @@ Testy:
 - `tests/unit/test_scene_interactions.py`
 - `tests/unit/test_interaction_intent.py`
 - `tests/unit/test_turn_led_feedback.py`
+
+## Eksploracja
+
+Status: partial
+
+Implementacja MVP:
+
+- Eksploracja jest osobnym trybem sceny, niezależnym od encountera.
+- Nie ma inicjatywy, tur walki ani indywidualnego ruchu bohaterów.
+- Drużyna ma wspólny pionek i aktualną strefę.
+- Setup eksploracji prowadzi przez jawne strefy i jawne elementy; ukryte elementy nie są zdradzane.
+- Kliknięcie innej strefy tworzy podgląd przejścia, a drugie kliknięcie tej samej strefy potwierdza.
+- Kliknięcie aktualnej strefy pokazuje opcje strefy.
+- `Zbadaj obszar` dotyczy aktualnej strefy, może być wykonane raz na strefę i bierze najwyższy wynik z testu drużyny.
+- Sukces badania może ujawnić ukryty punkt i ustawić flagę sceny.
+- Eksploracyjne przeszkody docelowo nie powinny być twardymi blokadami rzutu.
+- Domyślny model eksploracyjnego testu to `fail-forward`: porażka zmienia koszt, ryzyko albo komplikację, ale nie powinna zatrzymywać całej sceny.
+- Wyzwania eksploracyjne powinny mieć model postępu, np. `progress_required`, `current_progress`, opcje działań, postęp na sukcesie, postęp na porażce i konsekwencje.
+- Opcje wyzwań mogą mieć tagi zasobów/narzędzi/czarów, np. `climbing`, `crowbar`, `quiet`; pasujące itemy mogą dawać premię, przewagę, redukcję ST albo dodatkowy postęp.
+- LLM może w przyszłości klasyfikować kreatywne deklaracje graczy do istniejących opcji/tagów, ale nie powinien samodzielnie zmieniać zasad ani stanu gry bez walidacji.
+
+Poza zakresem MVP:
+
+- pełny UI point-and-click,
+- losowe wydarzenia,
+- czas/ryzyko za ponawianie działań,
+- automatyczne przejście z eksploracji do encountera.
+- pełny silnik wyzwań z postępem i konsekwencjami,
+- integracja ekwipunku, zasobów i czarów z opcjami eksploracyjnymi,
+- interpretacja kreatywnych deklaracji przez LLM.
+
+Testy:
+
+- `tests/unit/test_exploration_setup.py`
+- `tests/unit/test_exploration_zones.py`
+- `tests/unit/test_party_checks.py`
+- `tests/unit/test_demo_exploration_scene.py`

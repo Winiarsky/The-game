@@ -97,3 +97,37 @@ def test_first_playable_scene_positions_are_in_bounds():
     for entry in loaded.definition.environment:
         for position in entry.positions:
             assert dimensions.in_bounds(position)
+
+
+def test_abandoned_watchtower_file_exists_and_loads():
+    scenario_path = Path("content/scenarios/abandoned_watchtower.json")
+
+    loaded = load_scenario(scenario_path)
+
+    assert scenario_path.exists()
+    assert loaded.definition.id == "abandoned_watchtower"
+    assert loaded.definition.scene_mode.value == "exploration"
+    assert len(loaded.definition.exploration_zones) == 4
+
+
+def test_abandoned_watchtower_references_existing_content_files():
+    text = Path("content/scenarios/abandoned_watchtower.json").read_text(encoding="utf-8")
+
+    assert Path("content/items/longsword.json").exists()
+    assert Path("content/items/dagger.json").exists()
+    assert '"longsword"' in text
+    assert '"dagger"' in text
+
+
+def test_abandoned_watchtower_positions_are_in_bounds():
+    loaded = load_scenario("content/scenarios/abandoned_watchtower.json")
+    dimensions = loaded.definition.board_dimensions
+
+    for actor in loaded.definition.actors:
+        assert dimensions.in_bounds(actor.position)
+    for zone in loaded.definition.exploration_zones:
+        for position in zone.positions:
+            assert dimensions.in_bounds(position)
+    for point in loaded.definition.exploration_points:
+        for position in point.positions:
+            assert dimensions.in_bounds(position)

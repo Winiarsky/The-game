@@ -4,7 +4,8 @@ import pytest
 
 from dnd_board_game.actors import Faction
 from dnd_board_game.combat import AttackSourceType, DamageType, EnvironmentSetupType, SceneObjectiveCondition, SetupVisibility
-from dnd_board_game.scenarios import build_encounter_from_scenario, load_scenario
+from dnd_board_game.exploration import SceneMode
+from dnd_board_game.scenarios import build_encounter_from_scenario, build_exploration_from_scenario, load_scenario
 from dnd_board_game.world import Coordinate
 
 
@@ -99,6 +100,20 @@ def test_load_first_playable_scene_builds_setup_objective_and_scene_object():
     assert scene_object.interactions[0].success_flag == "crate_secured"
     assert encounter.board.terrain_at(Coordinate(3, 1)).blocks_movement is True
     assert encounter.board.terrain_at(Coordinate(2, 2)).is_difficult is True
+
+
+def test_load_abandoned_watchtower_builds_exploration_scene():
+    loaded = load_scenario("content/scenarios/abandoned_watchtower.json")
+    exploration = build_exploration_from_scenario(loaded)
+
+    assert loaded.definition.scene_mode == SceneMode.EXPLORATION
+    assert exploration.scenario_id == "abandoned_watchtower"
+    assert exploration.party_position.zone_id == "gate"
+    assert len(exploration.actors) == 2
+    assert len(exploration.zones) == 4
+    courtyard = next(zone for zone in exploration.zones if zone.id == "courtyard")
+    assert courtyard.search_dc == 12
+    assert courtyard.search_reveals == ("hidden_cache",)
 
 
 def test_missing_required_field_reports_field_name(tmp_path):

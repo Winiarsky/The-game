@@ -284,6 +284,35 @@ Checklist:
 - [ ] Po ustaleniu kolejności świeci aktywny aktor pierwszej tury.
 - [ ] `data/session_observations/initiative_simulator_demo.jsonl` zawiera `setup_step_started`, `roll_requested`, `enemy_initiative_rolled`, `initiative_set` i `turn_started`.
 
+## Test Eksploracji
+
+Terminal 1:
+
+```bash
+python -m board.simulator.app
+```
+
+Terminal 2:
+
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenario content/scenarios/abandoned_watchtower.json --board-backend simulator --board-url http://127.0.0.1:5000 --show-leds --scan-timeout 30 --session-id abandoned_watchtower_simulator_demo
+```
+
+Checklist:
+
+- [ ] Aplikacja prosi o położenie mapki eksploracji na planszy.
+- [ ] LED-y pokazują setup jawnych stref.
+- [ ] Ukryta skrytka nie świeci podczas setupu.
+- [ ] Aplikacja prosi o ustawienie wspólnego pionka drużyny.
+- [ ] Kliknięcie innej strefy pokazuje pytanie o przejście.
+- [ ] Drugie kliknięcie tej samej strefy potwierdza przejście.
+- [ ] Kliknięcie aktualnej strefy pokazuje opcję tej strefy.
+- [ ] Opcja `Zbadaj obszar` prosi o rzuty całej drużyny.
+- [ ] Najwyższy wynik drużyny rozstrzyga test.
+- [ ] Sukces ujawnia ukrytą skrytkę LED-em.
+- [ ] Ponowne badanie tej samej strefy jest blokowane.
+- [ ] JSONL zawiera `exploration_started`, `exploration_setup_confirmed`, `party_zone_changed`, `party_check_resolved` i `zone_search_revealed`.
+
 ## Notatki Z Testu
 
 ```text

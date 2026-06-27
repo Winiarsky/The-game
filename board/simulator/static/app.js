@@ -5,6 +5,7 @@ const cancelScanButton = document.getElementById("cancel-scan");
 const backgroundInput = document.getElementById("background-input");
 const backgroundClearButton = document.getElementById("background-clear");
 const modeInputs = document.querySelectorAll('input[name="board-mode"]');
+const orientationInputs = document.querySelectorAll('input[name="board-orientation"]');
 const figuresListElement = document.getElementById("figures-list");
 const addFigureButton = document.getElementById("add-figure");
 const scenarioSelect = document.getElementById("scenario-select");
@@ -34,9 +35,14 @@ const heroesReloadButton = document.getElementById("heroes-reload");
 const dims = window.BOARD_DIMENSIONS || { rows: 30, cols: 20 };
 const posKey = (row, col) => `${row},${col}`;
 
-boardElement.style.gridTemplateColumns = `repeat(${dims.cols}, 32px)`;
+const ORIENTATION_LANDSCAPE = "landscape";
+const ORIENTATION_PORTRAIT = "portrait";
+let boardOrientation = localStorage.getItem("boardOrientation") || ORIENTATION_LANDSCAPE;
+if (![ORIENTATION_LANDSCAPE, ORIENTATION_PORTRAIT].includes(boardOrientation)) {
+    boardOrientation = ORIENTATION_LANDSCAPE;
+}
 
-const cells = Array.from({ length: dims.rows }, () => Array(dims.cols).fill(null));
+let cells = Array.from({ length: dims.rows }, () => Array(dims.cols).fill(null));
 let wallOverlay;
 const MODE_BOARD = "board";
 const MODE_MOVE = "move";
@@ -172,16 +178,53 @@ function createCell(row, col) {
     return cell;
 }
 
-for (let row = 0; row < dims.rows; row += 1) {
-    for (let col = 0; col < dims.cols; col += 1) {
-        const cell = createCell(row, col);
-        boardElement.appendChild(cell);
-        cells[row][col] = cell;
+function viewDimensions() {
+    if (boardOrientation === ORIENTATION_LANDSCAPE) {
+        return { rows: dims.cols, cols: dims.rows };
     }
+    return { rows: dims.rows, cols: dims.cols };
 }
-wallOverlay = document.createElement("div");
-wallOverlay.className = "wall-overlay";
-boardElement.appendChild(wallOverlay);
+
+function backendPositionForView(viewRow, viewCol) {
+    if (boardOrientation === ORIENTATION_LANDSCAPE) {
+        return { row: viewCol, col: viewRow };
+    }
+    return { row: viewRow, col: viewCol };
+}
+
+function rebuildBoardGrid() {
+    if (!boardElement) return;
+    const view = viewDimensions();
+    boardElement.innerHTML = "";
+    boardElement.style.gridTemplateColumns = `repeat(${view.cols}, 32px)`;
+    boardElement.classList.toggle("orientation-landscape", boardOrientation === ORIENTATION_LANDSCAPE);
+    boardElement.classList.toggle("orientation-portrait", boardOrientation === ORIENTATION_PORTRAIT);
+    cells = Array.from({ length: dims.rows }, () => Array(dims.cols).fill(null));
+    for (let viewRow = 0; viewRow < view.rows; viewRow += 1) {
+        for (let viewCol = 0; viewCol < view.cols; viewCol += 1) {
+            const { row, col } = backendPositionForView(viewRow, viewCol);
+            const cell = createCell(row, col);
+            boardElement.appendChild(cell);
+            cells[row][col] = cell;
+        }
+    }
+    wallOverlay = document.createElement("div");
+    wallOverlay.className = "wall-overlay";
+    boardElement.appendChild(wallOverlay);
+}
+
+function setBoardOrientation(orientation) {
+    boardOrientation = orientation === ORIENTATION_PORTRAIT ? ORIENTATION_PORTRAIT : ORIENTATION_LANDSCAPE;
+    localStorage.setItem("boardOrientation", boardOrientation);
+    orientationInputs.forEach((input) => {
+        input.checked = input.value === boardOrientation;
+    });
+    rebuildBoardGrid();
+    applyBoardState();
+    showToast(boardOrientation === ORIENTATION_LANDSCAPE ? "Widok planszy: poziomy." : "Widok planszy: pionowy.");
+}
+
+rebuildBoardGrid();
 
 async function handleCellClick(row, col) {
     if (currentMode === MODE_MOVE) {
@@ -1136,6 +1179,15 @@ modeInputs.forEach((input) => {
     input.addEventListener("change", (event) => {
         if (event.target.checked) {
             setMode(event.target.value === MODE_MOVE ? MODE_MOVE : MODE_BOARD);
+        }
+    });
+});
+
+orientationInputs.forEach((input) => {
+    input.checked = input.value === boardOrientation;
+    input.addEventListener("change", (event) => {
+        if (event.target.checked) {
+            setBoardOrientation(event.target.value);
         }
     });
 });
