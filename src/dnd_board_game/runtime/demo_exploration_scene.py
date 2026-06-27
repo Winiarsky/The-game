@@ -2,28 +2,39 @@ from __future__ import annotations
 
 import argparse
 import queue
+import random
 import select
 import sys
 import threading
 import uuid
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from dnd_board_game.actors import Actor
 from dnd_board_game.combat import SceneFlags, SetupVisibility, set_scene_flag
 from dnd_board_game.exploration import (
+    ExplorationChallenge,
+    ExplorationChallengeOption,
     ExplorationOption,
     ExplorationOptionKind,
+    ExplorationPoint,
+    ExplorationResource,
     ExplorationState,
     ExplorationZone,
     PartyCheckInput,
     SearchResult,
+    available_challenge_options,
     available_exploration_zones,
+    challenge_for_zone,
+    challenge_state_for,
     exploration_setup_feedback,
     exploration_zone_feedback,
+    grant_resource,
+    matching_resources,
     option_feedback,
     party_position_feedback,
+    resolve_challenge_option,
     resolve_party_check,
     resolve_zone_search,
     set_party_zone,
@@ -33,7 +44,16 @@ from dnd_board_game.exploration import (
     zone_is_available,
 )
 from dnd_board_game.hardware import BoardLedAdapter, LedColor, LedFeedback, LedFrame, LedRole
-from dnd_board_game.rules import D20RollRequest, RollMode, RollModifier, RollModifierType, ability_modifier, roll_instruction
+from dnd_board_game.rules import (
+    D20RollInput,
+    D20RollRequest,
+    RollMode,
+    RollModifier,
+    RollModifierType,
+    ability_modifier,
+    resolve_d20_roll,
+    roll_instruction,
+)
 from dnd_board_game.scenarios import LoadedExploration, build_exploration_from_scenario, load_scenario
 from dnd_board_game.world import Coordinate
 
@@ -71,7 +91,15 @@ def run_demo(
         "exploration_started",
         {"scenario_id": exploration.scenario_id, "scenario_name": exploration.scenario_name},
     )
-    state = ExplorationState(exploration.zones, exploration.points, exploration.party_position, SceneFlags())
+    state = ExplorationState(
+        exploration.zones,
+        exploration.points,
+        exploration.party_position,
+        SceneFlags(),
+        challenges=exploration.challenges,
+        resources=exploration.resources,
+        inventory_resource_ids=exploration.initial_resource_ids,
+    )
     messages: list[str] = [f"Scenariusz eksploracji: {exploration.scenario_name}."]
     print(messages[-1])
     setup_messages, feedback_events = _run_exploration_setup(args, exploration, state, adapter, observer)
@@ -93,6 +121,12 @@ def run_demo(
             messages.append(message)
             observer.record("exploration_finished", {"reason": "ended_by_user"})
             break
+        point = _visible_point_for_position(state, clicked)
+        if point is not None:
+            state, point_messages, sent = _handle_exploration_point(args, state, point, adapter, observer)
+            messages.extend(point_messages)
+            feedback_events += sent
+            continue
         zone = zone_for_position(state.zones, clicked)
         if zone is not None and not zone_is_available(state, zone):
             zone = None
@@ -150,6 +184,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-steps", type=int, default=12)
     parser.add_argument("--exploration-script", action="append", default=[])
     parser.add_argument("--party-check-roll", action="append", default=[])
+    parser.add_argument("--challenge-roll", action="append", default=[])
+    parser.add_argument("--resource-choice", action="append", default=[])
+    parser.add_argument("--exploration-seed", type=int, default=7)
     parser.add_argument("--leader-id", default="hero")
     parser.add_argument("--helper-id", default=None)
     return parser
@@ -248,6 +285,7 @@ def _next_exploration_click(args: argparse.Namespace, state: ExplorationState, a
     if not callable(scan_board):
         return None
     acceptable = [position.as_tuple() for zone in available_exploration_zones(state) for position in zone.positions]
+    acceptable.extend(position.as_tuple() for point in visible_exploration_points(state.points) for position in point.positions)
     observer.record("board_scan_requested", {"phase": "exploration_click", "acceptable_positions": [list(position) for position in acceptable]})
     print("Kliknij strefę eksploracji albo puste pole planszy.")
     selected = scan_board(None, timeout_s=args.scan_timeout)
@@ -308,6 +346,9 @@ def _handle_zone_options(
     observer: SessionObserver,
     scripts: list[str],
 ) -> tuple[ExplorationState, tuple[str, ...], int]:
+    challenge = challenge_for_zone(state, zone.id)
+    if challenge is not None and not challenge_state_for(state, challenge.id).completed:
+        return _handle_challenge_options(args, actors, state, zone, challenge, option_indices, adapter, observer, scripts)
     if not zone.options:
         message = f"{zone.name}: nie ma teraz dostępnych akcji."
         print(message)
@@ -339,6 +380,157 @@ def _handle_zone_options(
     option_message = option.message or option.description or f"Wykonano opcję: {option.label}."
     print(option_message)
     return state, (message, option_message), feedback_events
+
+
+def _handle_challenge_options(
+    args: argparse.Namespace,
+    actors: tuple[Actor, ...],
+    state: ExplorationState,
+    zone: ExplorationZone,
+    challenge: ExplorationChallenge,
+    option_indices: dict[str, int],
+    adapter: BoardLedAdapter | None,
+    observer: SessionObserver,
+    scripts: list[str],
+) -> tuple[ExplorationState, tuple[str, ...], int]:
+    challenge_options = available_challenge_options(state, challenge)
+    total_options = len(challenge_options) + len(zone.options)
+    if total_options == 0:
+        message = f"{challenge.name}: nie ma teraz dostępnych podejść."
+        print(message)
+        return state, (message,), 0
+    key = f"challenge:{challenge.id}"
+    index = option_indices.get(key, 0) % total_options
+    is_challenge_option = index < len(challenge_options)
+    current = challenge_state_for(state, challenge.id)
+    if not is_challenge_option:
+        option = zone.options[index - len(challenge_options)]
+        message = (
+            f"{challenge.name}. Postęp: {current.current_progress}/{challenge.progress_required}. "
+            f"Wybrano przygotowanie: {option.label}. {option.description} "
+            "Kliknij anchor bramy ponownie, aby przełączyć opcję. Naciśnij Enter, aby potwierdzić."
+        )
+        print(message)
+        observer.record("zone_option_previewed", {"zone_id": zone.id, "option_id": option.id, "index": index})
+        feedback_events = 0
+        if adapter is not None:
+            adapter.show_feedback(option_feedback(zone, option))
+            feedback_events += 1
+            observer.record("led_feedback_sent", {"phase": "zone_option_preview", "zone_id": zone.id, "option_id": option.id})
+        action = _confirm_or_cycle_option(args, state, zone, adapter, observer, scripts)
+        if action == "cycle":
+            option_indices[key] = index + 1
+            observer.record("zone_option_cycled", {"zone_id": zone.id, "next_index": option_indices[key] % total_options})
+            return state, (message,), feedback_events
+        if action != "confirm":
+            return state, (message,), feedback_events
+        observer.record("zone_option_confirmed", {"zone_id": zone.id, "option_id": option.id})
+        if option.kind == ExplorationOptionKind.SEARCH:
+            new_state, search_messages = _resolve_search_option(args, actors, state, zone, adapter, observer)
+            return new_state, (message, *search_messages), feedback_events
+        if option.kind == ExplorationOptionKind.CHECK and option.ability_check is not None:
+            new_state, check_messages = _resolve_check_option(args, actors, state, option, observer)
+            return new_state, (message, *check_messages), feedback_events
+        option_message = option.message or option.description or f"Wykonano opcję: {option.label}."
+        print(option_message)
+        return state, (message, option_message), feedback_events
+
+    option = challenge_options[index]
+    resources = matching_resources(state, option)
+    resource_text = _resource_preview_text(resources)
+    message = (
+        f"{challenge.name}. Postęp: {current.current_progress}/{challenge.progress_required}. "
+        f"Wybrano podejście: {option.label}. {option.description} "
+        f"{resource_text} Kliknij anchor bramy ponownie, aby przełączyć opcję. Naciśnij Enter, aby potwierdzić."
+    )
+    print(message)
+    observer.record(
+        "challenge_option_previewed",
+        {
+            "challenge_id": challenge.id,
+            "option_id": option.id,
+            "index": index,
+            "progress": current.current_progress,
+            "progress_required": challenge.progress_required,
+            "matching_resource_ids": [resource.id for resource in resources],
+        },
+    )
+    feedback_events = 0
+    if adapter is not None:
+        adapter.show_feedback(_challenge_option_feedback(zone, option))
+        feedback_events += 1
+        observer.record("led_feedback_sent", {"phase": "challenge_option_preview", "challenge_id": challenge.id, "option_id": option.id})
+    action = _confirm_or_cycle_option(args, state, zone, adapter, observer, scripts)
+    if action == "cycle":
+        option_indices[key] = index + 1
+        observer.record("challenge_option_cycled", {"challenge_id": challenge.id, "next_index": option_indices[key] % total_options})
+        return state, (message,), feedback_events
+    if action != "confirm":
+        return state, (message,), feedback_events
+    observer.record("zone_option_confirmed", {"zone_id": zone.id, "option_id": option.id})
+    observer.record("challenge_option_confirmed", {"challenge_id": challenge.id, "option_id": option.id})
+    resource = _select_resource(args, option, resources)
+    if resource is not None:
+        observer.record("resource_used", {"challenge_id": challenge.id, "option_id": option.id, "resource_id": resource.id})
+    new_state, result_messages = _resolve_challenge_option(args, actors, state, challenge, option, resource, observer)
+    return new_state, (message, *result_messages), feedback_events
+
+
+def _resolve_challenge_option(
+    args: argparse.Namespace,
+    actors: tuple[Actor, ...],
+    state: ExplorationState,
+    challenge: ExplorationChallenge,
+    option: ExplorationChallengeOption,
+    resource: ExplorationResource | None,
+    observer: SessionObserver,
+) -> tuple[ExplorationState, tuple[str, ...]]:
+    actor = next((candidate for candidate in actors if str(candidate.id) == args.leader_id), actors[0])
+    modifiers = (
+        *_ability_roll_modifiers(actor, option.ability_check.ability, option.ability_check.skill),
+        *option.ability_check.modifiers,
+        *_resource_roll_modifiers(resource),
+        *_support_roll_modifiers(state, option),
+    )
+    mode = RollMode.ADVANTAGE if resource is not None and resource.advantage else RollMode.NORMAL
+    request = D20RollRequest(mode=mode, modifiers=modifiers)
+    instruction = roll_instruction(request)
+    print(f"Test podejścia: {option.label}. ST {option.ability_check.dc}. {instruction.message}")
+    natural_roll = _challenge_roll_for_option(args, option.id)
+    if natural_roll is None:
+        natural_roll = _read_int_or_default(args, f"Wpisz naturalny wynik testu dla {actor.name}: ", 10)
+    else:
+        print(f"Używam wyniku testowego dla {option.label}: {natural_roll}.")
+    roll = resolve_d20_roll(D20RollInput(request, natural_roll))
+    result = resolve_challenge_option(state, challenge, option, roll, resource)
+    print(result.message)
+    observer.record(
+        "challenge_option_resolved",
+        {
+            "challenge_id": challenge.id,
+            "option_id": option.id,
+            "actor_id": str(actor.id),
+            "natural_roll": roll.natural_roll,
+            "total": roll.total,
+            "success": result.success,
+            "critical_failure": result.critical_failure,
+            "resource_id": resource.id if resource else None,
+        },
+    )
+    observer.record(
+        "challenge_progress_updated",
+        {
+            "challenge_id": challenge.id,
+            "progress_added": result.progress_added,
+            "current_progress": challenge_state_for(result.state, challenge.id).current_progress,
+            "progress_required": challenge.progress_required,
+            "noise_added": result.noise_added,
+            "complications_added": list(result.complications_added),
+        },
+    )
+    if result.completed:
+        observer.record("challenge_completed", {"challenge_id": challenge.id, "completed_flag": challenge.completed_flag})
+    return result.state, (result.message,)
 
 
 def _confirm_zone_click(args: argparse.Namespace, state: ExplorationState, destination: ExplorationZone, adapter: BoardLedAdapter | None, observer: SessionObserver, scripts: list[str]) -> bool:
@@ -423,6 +615,125 @@ def _wait_for_scan_or_enter(
     return event, selected
 
 
+def _resource_preview_text(resources: tuple[ExplorationResource, ...]) -> str:
+    if not resources:
+        return "Brak pasujących zasobów."
+    items = ", ".join(_resource_summary(resource) for resource in resources)
+    return f"Pasujące zasoby: {items}."
+
+
+def _resource_summary(resource: ExplorationResource) -> str:
+    parts = [resource.label]
+    if resource.modifier:
+        parts.append(_format_modifier(resource.modifier))
+    if resource.advantage:
+        parts.append("advantage")
+    if resource.mitigates_noise:
+        parts.append(f"-{resource.mitigates_noise} hałasu")
+    if resource.mitigates_complications:
+        parts.append(f"łagodzi: {', '.join(resource.mitigates_complications)}")
+    return " ".join(parts)
+
+
+def _select_resource(
+    args: argparse.Namespace,
+    option: ExplorationChallengeOption,
+    resources: tuple[ExplorationResource, ...],
+) -> ExplorationResource | None:
+    if not resources:
+        return None
+    overrides = _parse_actor_value_overrides(args.resource_choice, str)
+    selected_id = overrides.get(option.id)
+    if selected_id:
+        return next((resource for resource in resources if resource.id == selected_id), None)
+    if args.board_backend == "none":
+        return None
+    print("Możesz użyć jednego zasobu albo nacisnąć Enter bez zasobu:")
+    for resource in resources:
+        print(f"- {resource.id}: {_resource_summary(resource)}")
+    raw = input("Zasób: ").strip()
+    if not raw:
+        return None
+    return next((resource for resource in resources if resource.id == raw), None)
+
+
+def _resource_roll_modifiers(resource: ExplorationResource | None) -> tuple[RollModifier, ...]:
+    if resource is None or resource.modifier == 0:
+        return ()
+    return (
+        RollModifier(
+            f"Zasób: {resource.label}",
+            resource.modifier,
+            RollModifierType.ITEM,
+            stacking_key=f"resource:{resource.id}",
+        ),
+    )
+
+
+def _support_roll_modifiers(state: ExplorationState, option: ExplorationChallengeOption) -> tuple[RollModifier, ...]:
+    flag = f"gate_support:{option.id}"
+    if not bool(next((value for key, value in state.flags.values if key == flag), False)):
+        return ()
+    return (
+        RollModifier(
+            "Przygotowanie przy bramie",
+            2,
+            RollModifierType.SITUATIONAL,
+            stacking_key=flag,
+        ),
+    )
+
+
+def _challenge_roll_for_option(args: argparse.Namespace, option_id: str) -> int | None:
+    overrides = _parse_actor_value_overrides(args.challenge_roll, int)
+    return overrides.get(option_id)
+
+
+def _challenge_option_feedback(zone: ExplorationZone, option: ExplorationChallengeOption) -> LedFeedback:
+    area_positions = tuple(position for position in zone.positions if position != zone.marker_position)
+    frames: list[LedFrame] = []
+    if area_positions:
+        frames.append(LedFrame(area_positions, LedColor.MARKER, LedRole.DESTINATION))
+    frames.append(LedFrame((zone.marker_position,), option.color, LedRole.DESTINATION))
+    return LedFeedback(tuple(frames))
+
+
+def _visible_point_for_position(state: ExplorationState, position: Coordinate) -> ExplorationPoint | None:
+    for point in visible_exploration_points(state.points):
+        if position in point.positions:
+            return point
+    return None
+
+
+def _handle_exploration_point(
+    args: argparse.Namespace,
+    state: ExplorationState,
+    point,
+    adapter: BoardLedAdapter | None,
+    observer: SessionObserver,
+) -> tuple[ExplorationState, tuple[str, ...], int]:
+    message = point.description or f"Odnaleziono punkt: {point.name}."
+    print(message)
+    observer.record("exploration_point_clicked", {"point_id": point.id, "zone_id": point.zone_id})
+    new_state = state
+    if point.id == "old_camp_tools":
+        new_state = grant_resource(state, "saw")
+        found_message = "Drużyna zabiera starą piłę. Odblokowuje to nowe podejście przy bramie."
+        print(found_message)
+        observer.record("resource_found", {"point_id": point.id, "resource_id": "saw"})
+        messages = (message, found_message)
+    else:
+        messages = (message,)
+    feedback_events = 0
+    if adapter is not None:
+        adapter.show_feedback(exploration_setup_feedback(point.positions, point.color))
+        feedback_events += 1
+        observer.record("led_feedback_sent", {"phase": "exploration_point", "point_id": point.id})
+        if args.wait_for_enter:
+            _pause_for_led_step(args, message)
+    return new_state, messages, feedback_events
+
+
 def _resolve_search_option(
     args: argparse.Namespace,
     actors: tuple[Actor, ...],
@@ -459,12 +770,36 @@ def _resolve_search_option(
     )
     if result.party_check.success:
         observer.record("zone_search_revealed", {"zone_id": zone.id, "point_ids": [point.id for point in result.revealed_points]})
+        result_state = _apply_search_preparation_bonus(args, result.state, zone, observer)
+        if result_state is not result.state:
+            result = SearchResult(result_state, result.party_check, result.revealed_points, result.message)
         if adapter is not None and result.revealed_points:
             positions = tuple(position for point in result.revealed_points for position in point.positions)
             adapter.show_feedback(exploration_setup_feedback(positions, LedColor.INTERACTION_SUCCESS))
     else:
         observer.record("zone_search_exhausted", {"zone_id": zone.id})
     return result.state, (result.message,)
+
+
+def _apply_search_preparation_bonus(
+    args: argparse.Namespace,
+    state: ExplorationState,
+    zone: ExplorationZone,
+    observer: SessionObserver,
+) -> ExplorationState:
+    challenge = challenge_for_zone(state, zone.id)
+    if challenge is None or challenge_state_for(state, challenge.id).completed:
+        return state
+    options = available_challenge_options(state, challenge)
+    if not options:
+        return state
+    selected = random.Random(args.exploration_seed).choice(options)
+    flag_key = f"gate_support:{selected.id}"
+    new_state = replace(state, flags=set_scene_flag(state.flags, flag_key, True))
+    message = f"Przygotowanie pomaga przy podejściu: {selected.label} (+2)."
+    print(message)
+    observer.record("challenge_support_discovered", {"challenge_id": challenge.id, "option_id": selected.id, "flag_key": flag_key})
+    return new_state
 
 
 def _resolve_check_option(args: argparse.Namespace, actors: tuple[Actor, ...], state: ExplorationState, option: ExplorationOption, observer: SessionObserver) -> tuple[ExplorationState, tuple[str, ...]]:
@@ -491,7 +826,7 @@ def _resolve_check_option(args: argparse.Namespace, actors: tuple[Actor, ...], s
         message = option.failure_message or "Test zakończony porażką."
     print(message)
     observer.record("party_check_resolved", {"option_id": option.id, "success": result.success, "winner_id": str(actor.id), "winning_total": result.winning_roll.total})
-    return ExplorationState(state.zones, state.points, state.party_position, flags, state.exhausted_search_zones), (message,)
+    return replace(state, flags=flags), (message,)
 
 
 def _party_check_inputs(
@@ -565,6 +900,10 @@ def _coordinate_from_script(command: str, state: ExplorationState) -> Coordinate
         zone_id = command.removeprefix("tile:")
         zone = next(zone for zone in state.zones if zone.id == zone_id)
         return zone.positions[0]
+    if command.startswith("point:"):
+        point_id = command.removeprefix("point:")
+        point = next(point for point in state.points if point.id == point_id)
+        return point.positions[0]
     if command.startswith("pos:"):
         col, row = command.removeprefix("pos:").split(",", 1)
         return Coordinate(int(col), int(row))

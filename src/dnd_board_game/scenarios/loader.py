@@ -19,9 +19,12 @@ from dnd_board_game.combat import (
     SetupVisibility,
 )
 from dnd_board_game.exploration import (
+    ExplorationChallenge,
+    ExplorationChallengeOption,
     ExplorationOption,
     ExplorationOptionKind,
     ExplorationPoint,
+    ExplorationResource,
     ExplorationZone,
     PartyPosition,
     SceneMode,
@@ -99,6 +102,9 @@ class ScenarioDefinition:
     objectives: tuple[ScenarioObjectiveDefinition, ...] = ()
     exploration_zones: tuple[ExplorationZone, ...] = ()
     exploration_points: tuple[ExplorationPoint, ...] = ()
+    exploration_challenges: tuple[ExplorationChallenge, ...] = ()
+    exploration_resources: tuple[ExplorationResource, ...] = ()
+    exploration_initial_resources: tuple[str, ...] = ()
     party_start_zone_id: str | None = None
 
 
@@ -129,6 +135,9 @@ class LoadedExploration:
     actors: tuple[Actor, ...]
     zones: tuple[ExplorationZone, ...]
     points: tuple[ExplorationPoint, ...]
+    challenges: tuple[ExplorationChallenge, ...]
+    resources: tuple[ExplorationResource, ...]
+    initial_resource_ids: tuple[str, ...]
     party_position: PartyPosition
     objectives: tuple[SceneObjective, ...] = ()
 
@@ -230,6 +239,9 @@ def build_exploration_from_scenario(loaded: LoadedScenario) -> LoadedExploration
         actors=actors,
         zones=definition.exploration_zones,
         points=definition.exploration_points,
+        challenges=definition.exploration_challenges,
+        resources=definition.exploration_resources,
+        initial_resource_ids=definition.exploration_initial_resources,
         party_position=PartyPosition(start_zone.id, start_zone.marker_position),
         objectives=objectives,
     )
@@ -266,6 +278,9 @@ def _parse_scenario(data: dict[str, Any], scenario_path: Path) -> ScenarioDefini
         objectives=tuple(_parse_objective(entry) for entry in objectives_data),
         exploration_zones=tuple(_parse_exploration_zone(entry) for entry in exploration_data.get("zones", [])),
         exploration_points=tuple(_parse_exploration_point(entry) for entry in exploration_data.get("points", [])),
+        exploration_challenges=tuple(_parse_exploration_challenge(entry) for entry in exploration_data.get("challenges", [])),
+        exploration_resources=tuple(_parse_exploration_resource(entry) for entry in exploration_data.get("resources", [])),
+        exploration_initial_resources=tuple(str(item) for item in exploration_data.get("initial_resources", [])),
         party_start_zone_id=str(exploration_data["party_start_zone"]) if "party_start_zone" in exploration_data else None,
     )
 
@@ -468,6 +483,69 @@ def _parse_exploration_point(data: Any) -> ExplorationPoint:
     )
 
 
+def _parse_exploration_challenge(data: Any) -> ExplorationChallenge:
+    if not isinstance(data, dict):
+        raise ValueError("scenario.exploration.challenges entries must be objects.")
+    challenge_id = str(_required(data, "id", "exploration challenge"))
+    options_data = _required_list(data, "options", f"exploration challenge {challenge_id}")
+    return ExplorationChallenge(
+        id=challenge_id,
+        zone_id=str(_required(data, "zone_id", f"exploration challenge {challenge_id}")),
+        name=str(_required(data, "name", f"exploration challenge {challenge_id}")),
+        progress_required=int(data.get("progress_required", 3)),
+        completed_flag=str(_required(data, "completed_flag", f"exploration challenge {challenge_id}")),
+        options=tuple(_parse_exploration_challenge_option(entry, challenge_id) for entry in options_data),
+    )
+
+
+def _parse_exploration_challenge_option(data: Any, challenge_id: str) -> ExplorationChallengeOption:
+    if not isinstance(data, dict):
+        raise ValueError(f"exploration challenge {challenge_id}.options entries must be objects.")
+    option_id = str(_required(data, "id", f"exploration challenge {challenge_id}.option"))
+    return ExplorationChallengeOption(
+        id=option_id,
+        label=str(_required(data, "label", f"exploration challenge option {option_id}")),
+        ability_check=_parse_scene_ability_check(
+            _required_mapping(data, "ability_check", f"exploration challenge option {option_id}"),
+            option_id,
+        ),
+        progress_on_success=int(_required(data, "progress_on_success", f"exploration challenge option {option_id}")),
+        progress_on_failure=int(data.get("progress_on_failure", 0)),
+        color=_parse_color(data.get("color", "interactive"), f"exploration challenge option {option_id}.color"),
+        description=str(data.get("description", "")),
+        success_message=str(data.get("success_message", "")),
+        failure_message=str(data.get("failure_message", "")),
+        critical_failure_message=str(data.get("critical_failure_message", "")),
+        tags=tuple(str(item) for item in data.get("tags", [])),
+        unlocks_if_flag=str(data["unlocks_if_flag"]) if "unlocks_if_flag" in data else None,
+        unlocks_if_resource_id=str(data["unlocks_if_resource_id"]) if "unlocks_if_resource_id" in data else None,
+        success_noise=int(data.get("success_noise", 0)),
+        failure_noise=int(data.get("failure_noise", 0)),
+        critical_failure_noise=int(data.get("critical_failure_noise", 0)),
+        quiet_success_margin=int(data["quiet_success_margin"]) if "quiet_success_margin" in data else None,
+        quiet_on_natural_20=bool(data.get("quiet_on_natural_20", False)),
+        success_complication=str(data["success_complication"]) if "success_complication" in data else None,
+        failure_complication=str(data["failure_complication"]) if "failure_complication" in data else None,
+        critical_failure_complication=str(data["critical_failure_complication"]) if "critical_failure_complication" in data else None,
+    )
+
+
+def _parse_exploration_resource(data: Any) -> ExplorationResource:
+    if not isinstance(data, dict):
+        raise ValueError("scenario.exploration.resources entries must be objects.")
+    resource_id = str(_required(data, "id", "exploration resource"))
+    return ExplorationResource(
+        id=resource_id,
+        label=str(_required(data, "label", f"exploration resource {resource_id}")),
+        bonus_tags=tuple(str(item) for item in data.get("bonus_tags", [])),
+        modifier=int(data.get("modifier", 0)),
+        advantage=bool(data.get("advantage", False)),
+        mitigates_complications=tuple(str(item) for item in data.get("mitigates_complications", [])),
+        mitigates_noise=int(data.get("mitigates_noise", 0)),
+        unlocks_flags=tuple(str(item) for item in data.get("unlocks_flags", [])),
+    )
+
+
 def _parse_interactions(data: Any, environment_id: str) -> tuple[SceneInteraction, ...]:
     if data is None:
         return ()
@@ -598,8 +676,13 @@ def _validate_exploration(definition: ScenarioDefinition) -> None:
     if not definition.exploration_zones:
         raise ValueError("exploration scenario requires at least one zone.")
     zone_ids = {zone.id for zone in definition.exploration_zones}
+    point_ids = {point.id for point in definition.exploration_points}
+    resource_ids = {resource.id for resource in definition.exploration_resources}
     if definition.party_start_zone_id not in zone_ids:
         raise ValueError("exploration.party_start_zone references unknown zone.")
+    for resource_id in definition.exploration_initial_resources:
+        if resource_id not in resource_ids:
+            raise ValueError(f"exploration.initial_resources references unknown resource: {resource_id}.")
     for zone in definition.exploration_zones:
         for position in zone.positions:
             if not definition.board_dimensions.in_bounds(position):
@@ -613,7 +696,7 @@ def _validate_exploration(definition: ScenarioDefinition) -> None:
             if adjacent_id not in zone_ids:
                 raise ValueError(f"exploration zone {zone.id}.adjacent_zone_ids references unknown zone.")
         for point_id in zone.search_reveals:
-            if point_id not in {point.id for point in definition.exploration_points}:
+            if point_id not in point_ids:
                 raise ValueError(f"exploration zone {zone.id}.search.reveals references unknown point.")
     for point in definition.exploration_points:
         if point.zone_id not in zone_ids:
@@ -621,6 +704,22 @@ def _validate_exploration(definition: ScenarioDefinition) -> None:
         for position in point.positions:
             if not definition.board_dimensions.in_bounds(position):
                 raise ValueError(f"exploration point {point.id}.positions contains out of bounds coordinate.")
+    for challenge in definition.exploration_challenges:
+        if challenge.zone_id not in zone_ids:
+            raise ValueError(f"exploration challenge {challenge.id}.zone_id references unknown zone.")
+        if challenge.progress_required <= 0:
+            raise ValueError(f"exploration challenge {challenge.id}.progress_required must be positive.")
+        if not challenge.completed_flag:
+            raise ValueError(f"exploration challenge {challenge.id}.completed_flag cannot be empty.")
+        if not challenge.options:
+            raise ValueError(f"exploration challenge {challenge.id}.options must contain at least one option.")
+        for option in challenge.options:
+            if option.progress_on_success < 0 or option.progress_on_failure < 0:
+                raise ValueError(f"exploration challenge option {option.id}.progress values must be non-negative.")
+            if option.unlocks_if_resource_id is not None and option.unlocks_if_resource_id not in resource_ids:
+                raise ValueError(
+                    f"exploration challenge option {option.id}.unlocks_if_resource_id references unknown resource."
+                )
 
 
 def _apply_environment_to_board(board: BoardState, environment: tuple[ScenarioEnvironmentDefinition, ...]) -> None:

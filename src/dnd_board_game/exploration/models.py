@@ -85,15 +85,6 @@ class PartyPosition:
 
 
 @dataclass(frozen=True, slots=True)
-class ExplorationState:
-    zones: tuple[ExplorationZone, ...]
-    points: tuple[ExplorationPoint, ...]
-    party_position: PartyPosition
-    flags: SceneFlags = SceneFlags()
-    exhausted_search_zones: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
 class PartyCheckInput:
     actor: Actor
     natural_roll: int
@@ -117,6 +108,91 @@ class SearchResult:
     message: str
 
 
+@dataclass(frozen=True, slots=True)
+class ExplorationChallengeOption:
+    id: str
+    label: str
+    ability_check: SceneAbilityCheck
+    progress_on_success: int
+    progress_on_failure: int
+    color: tuple[int, int, int]
+    description: str = ""
+    success_message: str = ""
+    failure_message: str = ""
+    critical_failure_message: str = ""
+    tags: tuple[str, ...] = ()
+    unlocks_if_flag: str | None = None
+    unlocks_if_resource_id: str | None = None
+    success_noise: int = 0
+    failure_noise: int = 0
+    critical_failure_noise: int = 0
+    quiet_success_margin: int | None = None
+    quiet_on_natural_20: bool = False
+    success_complication: str | None = None
+    failure_complication: str | None = None
+    critical_failure_complication: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ExplorationChallenge:
+    id: str
+    zone_id: str
+    name: str
+    progress_required: int
+    completed_flag: str
+    options: tuple[ExplorationChallengeOption, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ExplorationChallengeState:
+    challenge_id: str
+    current_progress: int = 0
+    noise: int = 0
+    complications: tuple[str, ...] = ()
+    completed: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class ExplorationResource:
+    id: str
+    label: str
+    bonus_tags: tuple[str, ...]
+    modifier: int = 0
+    advantage: bool = False
+    mitigates_complications: tuple[str, ...] = ()
+    mitigates_noise: int = 0
+    unlocks_flags: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ChallengeResult:
+    state: ExplorationState
+    challenge: ExplorationChallenge
+    option: ExplorationChallengeOption
+    roll: D20RollResult
+    success: bool
+    critical_failure: bool
+    progress_added: int
+    noise_added: int
+    complications_added: tuple[str, ...]
+    completed: bool
+    message: str
+    resource_used: ExplorationResource | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ExplorationState:
+    zones: tuple[ExplorationZone, ...]
+    points: tuple[ExplorationPoint, ...]
+    party_position: PartyPosition
+    flags: SceneFlags = SceneFlags()
+    exhausted_search_zones: tuple[str, ...] = ()
+    challenges: tuple[ExplorationChallenge, ...] = ()
+    challenge_states: tuple[ExplorationChallengeState, ...] = ()
+    resources: tuple[ExplorationResource, ...] = ()
+    inventory_resource_ids: tuple[str, ...] = ()
+
+
 def visible_exploration_zones(zones: tuple[ExplorationZone, ...]) -> tuple[ExplorationZone, ...]:
     return tuple(zone for zone in zones if zone.visibility == SetupVisibility.VISIBLE and zone.positions)
 
@@ -129,6 +205,192 @@ def zone_is_available(state: ExplorationState, zone: ExplorationZone) -> bool:
     if zone.available_if_flag is None:
         return True
     return scene_flag(state.flags, zone.available_if_flag) == zone.available_if_value
+
+
+def challenge_for_zone(state: ExplorationState, zone_id: str) -> ExplorationChallenge | None:
+    for challenge in state.challenges:
+        if challenge.zone_id == zone_id:
+            return challenge
+    return None
+
+
+def challenge_state_for(state: ExplorationState, challenge_id: str) -> ExplorationChallengeState:
+    for challenge_state in state.challenge_states:
+        if challenge_state.challenge_id == challenge_id:
+            return challenge_state
+    return ExplorationChallengeState(challenge_id)
+
+
+def available_challenge_options(
+    state: ExplorationState,
+    challenge: ExplorationChallenge,
+) -> tuple[ExplorationChallengeOption, ...]:
+    if challenge_state_for(state, challenge.id).completed:
+        return ()
+    result: list[ExplorationChallengeOption] = []
+    for option in challenge.options:
+        if option.unlocks_if_flag is not None and not scene_flag(state.flags, option.unlocks_if_flag, False):
+            continue
+        if option.unlocks_if_resource_id is not None and option.unlocks_if_resource_id not in state.inventory_resource_ids:
+            continue
+        result.append(option)
+    return tuple(result)
+
+
+def matching_resources(
+    state: ExplorationState,
+    option: ExplorationChallengeOption,
+) -> tuple[ExplorationResource, ...]:
+    option_tags = set(option.tags)
+    owned = set(state.inventory_resource_ids)
+    return tuple(
+        resource
+        for resource in state.resources
+        if resource.id in owned
+        and (option_tags.intersection(resource.bonus_tags) or resource.id == option.unlocks_if_resource_id)
+    )
+
+
+def grant_resource(state: ExplorationState, resource_id: str) -> ExplorationState:
+    if resource_id in state.inventory_resource_ids:
+        return state
+    resource = next((candidate for candidate in state.resources if candidate.id == resource_id), None)
+    if resource is None:
+        raise ValueError(f"Unknown exploration resource: {resource_id}.")
+    flags = state.flags
+    for flag in resource.unlocks_flags:
+        flags = set_scene_flag(flags, flag, True)
+    return replace(state, flags=flags, inventory_resource_ids=tuple(sorted((*state.inventory_resource_ids, resource_id))))
+
+
+def resolve_challenge_option(
+    state: ExplorationState,
+    challenge: ExplorationChallenge,
+    option: ExplorationChallengeOption,
+    roll: D20RollResult,
+    resource: ExplorationResource | None = None,
+) -> ChallengeResult:
+    if option not in available_challenge_options(state, challenge):
+        raise ValueError(f"Challenge option {option.id} is not available.")
+    current = challenge_state_for(state, challenge.id)
+    if current.completed:
+        raise ValueError(f"Challenge {challenge.id} is already completed.")
+    check = resolve_ability_check(roll, option.ability_check.dc)
+    success = check.success
+    critical_failure = roll.is_natural_1 and not success
+    progress_added = option.progress_on_success if success else option.progress_on_failure
+    progress = min(challenge.progress_required, current.current_progress + progress_added)
+    completed = progress >= challenge.progress_required
+    noise_added = _challenge_noise(option, roll, success, critical_failure)
+    complications_added = _challenge_complications(option, success, critical_failure)
+    if resource is not None:
+        noise_added = max(0, noise_added - resource.mitigates_noise)
+        mitigated = set(resource.mitigates_complications)
+        complications_added = tuple(complication for complication in complications_added if complication not in mitigated)
+
+    complications = tuple(dict.fromkeys((*current.complications, *complications_added)))
+    flags = state.flags
+    if completed:
+        flags = set_scene_flag(flags, challenge.completed_flag, True)
+    if resource is not None:
+        for flag in resource.unlocks_flags:
+            flags = set_scene_flag(flags, flag, True)
+    updated = ExplorationChallengeState(
+        challenge_id=challenge.id,
+        current_progress=progress,
+        noise=current.noise + noise_added,
+        complications=complications,
+        completed=completed,
+    )
+    new_state = replace(state, flags=flags, challenge_states=_replace_challenge_state(state, updated))
+    message = _challenge_result_message(challenge, option, roll, success, critical_failure, progress_added, updated, resource)
+    return ChallengeResult(
+        state=new_state,
+        challenge=challenge,
+        option=option,
+        roll=roll,
+        success=success,
+        critical_failure=critical_failure,
+        progress_added=progress_added,
+        noise_added=noise_added,
+        complications_added=complications_added,
+        completed=completed,
+        message=message,
+        resource_used=resource,
+    )
+
+
+def _replace_challenge_state(
+    state: ExplorationState,
+    updated: ExplorationChallengeState,
+) -> tuple[ExplorationChallengeState, ...]:
+    replaced = False
+    result: list[ExplorationChallengeState] = []
+    for challenge_state in state.challenge_states:
+        if challenge_state.challenge_id == updated.challenge_id:
+            result.append(updated)
+            replaced = True
+        else:
+            result.append(challenge_state)
+    if not replaced:
+        result.append(updated)
+    return tuple(sorted(result, key=lambda item: item.challenge_id))
+
+
+def _challenge_noise(
+    option: ExplorationChallengeOption,
+    roll: D20RollResult,
+    success: bool,
+    critical_failure: bool,
+) -> int:
+    if success:
+        if option.quiet_on_natural_20 and roll.is_natural_20:
+            return 0
+        if option.quiet_success_margin is not None and roll.total >= option.ability_check.dc + option.quiet_success_margin:
+            return 0
+        return max(0, option.success_noise)
+    if critical_failure and option.critical_failure_noise:
+        return max(0, option.critical_failure_noise)
+    return max(0, option.failure_noise)
+
+
+def _challenge_complications(
+    option: ExplorationChallengeOption,
+    success: bool,
+    critical_failure: bool,
+) -> tuple[str, ...]:
+    if success:
+        return (option.success_complication,) if option.success_complication else ()
+    if critical_failure and option.critical_failure_complication:
+        return (option.critical_failure_complication,)
+    return (option.failure_complication,) if option.failure_complication else ()
+
+
+def _challenge_result_message(
+    challenge: ExplorationChallenge,
+    option: ExplorationChallengeOption,
+    roll: D20RollResult,
+    success: bool,
+    critical_failure: bool,
+    progress_added: int,
+    updated: ExplorationChallengeState,
+    resource: ExplorationResource | None,
+) -> str:
+    if critical_failure and option.critical_failure_message:
+        base = option.critical_failure_message
+    elif success:
+        base = option.success_message or "Podejście działa."
+    else:
+        base = option.failure_message or "Podejście nie wychodzi czysto, ale sytuacja idzie naprzód."
+    resource_text = f" Użyty zasób: {resource.label}." if resource is not None else ""
+    noise_text = f" Hałas: {updated.noise}." if updated.noise else " Bez dodatkowego hałasu."
+    complications_text = f" Komplikacje: {', '.join(updated.complications)}." if updated.complications else ""
+    completed_text = " Wyzwanie zakończone." if updated.completed else ""
+    return (
+        f"{base}{resource_text} Wynik testu: {roll.total}. "
+        f"Dodany postęp: {progress_added}. Postęp {challenge.name}: "
+        f"{updated.current_progress}/{challenge.progress_required}.{noise_text}{complications_text}{completed_text}"
+    )
 
 
 def visible_exploration_points(points: tuple[ExplorationPoint, ...]) -> tuple[ExplorationPoint, ...]:

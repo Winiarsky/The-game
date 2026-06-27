@@ -516,6 +516,8 @@ Efekt: advantage albo +2 do testu
 
 W pierwszej implementacji opcje eksploracyjne są predefiniowane w contentcie.
 
+Pierwszy zaimplementowany vertical slice tego modelu to brama w scenariuszu `Opuszczona strażnica`: wyzwanie ma postęp `3/3`, kilka podejść, hałas, komplikacje, przygotowanie przez badanie okolicy oraz minimalne zasoby drużyny.
+
 W przyszłości LLM może zostać dodany jako warstwa interpretacji kreatywnych deklaracji graczy.
 
 LLM nie powinien być źródłem zasad ani samodzielnie zmieniać stanu gry.

@@ -195,54 +195,6 @@
         ],
         "options": [
           {
-            "id": "force_gate",
-            "label": "Rozwal bramę",
-            "kind": "check",
-            "color": "danger",
-            "description": "Spróbujcie wyłamać spróchniałe rygle siłą.",
-            "ability_check": {
-              "ability": "strength",
-              "skill": "athletics",
-              "dc": 12
-            },
-            "success_flag": "gate_passed",
-            "failure_flag": "gate_force_failed",
-            "success_message": "Rygle pękają. Przejście przez bramę jest otwarte.",
-            "failure_message": "Brama trzyma. Potrzebujecie innego sposobu albo kolejnej decyzji MG."
-          },
-          {
-            "id": "vault_gate",
-            "label": "Przeskocz przez bramę",
-            "kind": "check",
-            "color": "warning",
-            "description": "Spróbujcie przedostać się górą przez zniszczone przęsła.",
-            "ability_check": {
-              "ability": "dexterity",
-              "skill": "acrobatics",
-              "dc": 13
-            },
-            "success_flag": "gate_passed",
-            "failure_flag": "gate_vault_failed",
-            "success_message": "Udaje się bezpiecznie przedostać za bramę.",
-            "failure_message": "Przęsła są śliskie i niestabilne. Nie udaje się przejść tędy bez ryzyka."
-          },
-          {
-            "id": "lever_gate",
-            "label": "Podważ bramę dźwignią",
-            "kind": "check",
-            "color": "interactive",
-            "description": "Zbudujcie prostą dźwignię z desek i kamieni, żeby podważyć skrzydło bramy.",
-            "ability_check": {
-              "ability": "intelligence",
-              "skill": "crafting",
-              "dc": 11
-            },
-            "success_flag": "gate_passed",
-            "failure_flag": "gate_lever_failed",
-            "success_message": "Dźwignia działa. Brama odchyla się na tyle, żeby drużyna mogła przejść.",
-            "failure_message": "Prowizoryczna dźwignia pęka, zanim brama ustąpi."
-          },
-          {
             "id": "inspect_gate_area",
             "label": "Zbadaj okolice bramy",
             "kind": "search",
@@ -258,7 +210,9 @@
           "dc": 10,
           "ability": "wisdom",
           "skill": "perception",
-          "reveals": [],
+          "reveals": [
+            "old_camp_tools"
+          ],
           "success_flag": "gate_area_checked",
           "failure_flag": "gate_area_unclear"
         }
@@ -1397,7 +1351,209 @@
         "available_if_value": true
       }
     ],
+    "resources": [
+      {
+        "id": "rope",
+        "label": "Lina z hakiem",
+        "bonus_tags": [
+          "climbing"
+        ],
+        "modifier": 2
+      },
+      {
+        "id": "wedge",
+        "label": "Drewniany klin",
+        "bonus_tags": [
+          "lever",
+          "quiet"
+        ],
+        "mitigates_complications": [
+          "jammed_gate"
+        ],
+        "mitigates_noise": 1
+      },
+      {
+        "id": "saw",
+        "label": "Stara piła",
+        "bonus_tags": [
+          "saw",
+          "picket"
+        ],
+        "modifier": 2,
+        "unlocks_flags": [
+          "saw_found"
+        ]
+      }
+    ],
+    "initial_resources": [
+      "rope",
+      "wedge"
+    ],
+    "challenges": [
+      {
+        "id": "closed_gate",
+        "zone_id": "gate",
+        "name": "Zamknięta brama",
+        "progress_required": 3,
+        "completed_flag": "gate_passed",
+        "options": [
+          {
+            "id": "force_gate",
+            "label": "Rozwal bramę",
+            "color": "danger",
+            "description": "Spróbujcie wyłamać spróchniałe rygle siłą.",
+            "ability_check": {
+              "ability": "strength",
+              "skill": "athletics",
+              "dc": 12
+            },
+            "progress_on_success": 3,
+            "progress_on_failure": 1,
+            "success_noise": 1,
+            "failure_noise": 2,
+            "critical_failure_noise": 3,
+            "quiet_success_margin": 10,
+            "quiet_on_natural_20": true,
+            "failure_complication": "narastający_hałas",
+            "critical_failure_complication": "alarm_w_strażnicy",
+            "tags": [
+              "heavy_force",
+              "noise"
+            ],
+            "success_message": "Rygle pękają i brama ustępuje.",
+            "failure_message": "Brama trzyma, ale drewno pracuje i część rygla puszcza.",
+            "critical_failure_message": "Uderzenie rozchodzi się echem po ruinach. Brama częściowo puszcza, ale robicie dużo hałasu."
+          },
+          {
+            "id": "vault_gate",
+            "label": "Przejdź górą",
+            "color": "warning",
+            "description": "Spróbujcie przedostać się górą przez zniszczone przęsła.",
+            "ability_check": {
+              "ability": "dexterity",
+              "skill": "acrobatics",
+              "dc": 13
+            },
+            "progress_on_success": 2,
+            "progress_on_failure": 1,
+            "failure_noise": 1,
+            "failure_complication": "ryzyko_upadku",
+            "critical_failure_complication": "bolesny_upadek",
+            "tags": [
+              "climbing",
+              "quiet"
+            ],
+            "success_message": "Znajdujecie bezpieczniejszą drogę po przęsłach.",
+            "failure_message": "Przęsła są śliskie, ale odkrywacie, którędy da się wejść wyżej.",
+            "critical_failure_message": "Przęsło pęka pod ciężarem. Robicie częściowy postęp, ale ktoś boleśnie ląduje przy bramie."
+          },
+          {
+            "id": "lever_gate",
+            "label": "Podważ mechanizm",
+            "color": "interactive",
+            "description": "Zbudujcie prostą dźwignię z desek i kamieni, żeby podważyć skrzydło bramy.",
+            "ability_check": {
+              "ability": "intelligence",
+              "skill": "crafting",
+              "dc": 11
+            },
+            "progress_on_success": 3,
+            "progress_on_failure": 1,
+            "failure_complication": "jammed_gate",
+            "critical_failure_complication": "uszkodzony_mechanizm",
+            "tags": [
+              "lever",
+              "quiet"
+            ],
+            "success_message": "Prowizoryczna dźwignia działa. Brama odchyla się dość szeroko.",
+            "failure_message": "Dźwignia się klinuje, ale mechanizm trochę puszcza.",
+            "critical_failure_message": "Mechanizm zgrzyta i blokuje się krzywo. Macie postęp, ale dalsza praca będzie trudniejsza."
+          },
+          {
+            "id": "find_way_around",
+            "label": "Poszukaj obejścia",
+            "color": "marker",
+            "description": "Sprawdźcie mur i zarośla, szukając bocznego wejścia.",
+            "ability_check": {
+              "ability": "wisdom",
+              "skill": "survival",
+              "dc": 12
+            },
+            "progress_on_success": 2,
+            "progress_on_failure": 1,
+            "failure_complication": "stracony_czas",
+            "critical_failure_complication": "ślepy_trop",
+            "tags": [
+              "scouting",
+              "quiet"
+            ],
+            "success_message": "Znajdujecie częściowo ukryte przejście przy murze.",
+            "failure_message": "Nie znajdujecie wejścia od razu, ale lepiej rozumiecie układ muru.",
+            "critical_failure_message": "Tropicie fałszywy ślad. Tracicie czas, ale nadal zawężacie możliwości."
+          },
+          {
+            "id": "break_picket",
+            "label": "Wyłam sztachetę",
+            "color": "warning",
+            "description": "Spróbujcie poszerzyć wąską szparę w bramie.",
+            "ability_check": {
+              "ability": "strength",
+              "skill": "athletics",
+              "dc": 10
+            },
+            "progress_on_success": 1,
+            "progress_on_failure": 1,
+            "failure_noise": 1,
+            "failure_complication": "drzazgi",
+            "critical_failure_complication": "zaklinowana_sztacheta",
+            "tags": [
+              "picket"
+            ],
+            "success_message": "Jedna ze sztachet ustępuje i przejście robi się szersze.",
+            "failure_message": "Sztacheta trzeszczy, ale szpara powoli się powiększa.",
+            "critical_failure_message": "Sztacheta pęka nierówno i kaleczy dłonie, ale daje minimalny postęp."
+          },
+          {
+            "id": "saw_picket",
+            "label": "Przetnij starą piłą",
+            "color": "interactive",
+            "description": "Użyjcie znalezionej piły, żeby cicho powiększyć szparę w bramie.",
+            "ability_check": {
+              "ability": "dexterity",
+              "skill": "crafting",
+              "dc": 10
+            },
+            "progress_on_success": 2,
+            "progress_on_failure": 1,
+            "failure_complication": "stracony_czas",
+            "tags": [
+              "saw",
+              "picket",
+              "quiet"
+            ],
+            "unlocks_if_resource_id": "saw",
+            "success_message": "Piła bierze stare drewno bez większego hałasu.",
+            "failure_message": "Piła zacina się w mokrym drewnie, ale nacięcie pomaga.",
+            "critical_failure_message": "Zęby piły łamią się częściowo, ale brama i tak puszcza odrobinę."
+          }
+        ]
+      }
+    ],
     "points": [
+      {
+        "id": "old_camp_tools",
+        "name": "Ślady dawnego obozowiska",
+        "zone_id": "gate",
+        "positions": [
+          [
+            11,
+            3
+          ]
+        ],
+        "color": "success",
+        "visibility": "hidden",
+        "description": "Pod zbutwiałą płachtą leży stara piła. Może pomóc przy drewnianej bramie."
+      },
       {
         "id": "hidden_cache",
         "name": "Ukryta skrytka",

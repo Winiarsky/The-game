@@ -312,8 +312,8 @@ Implementacja MVP:
 - Sukces badania może ujawnić ukryty punkt i ustawić flagę sceny.
 - Eksploracyjne przeszkody docelowo nie powinny być twardymi blokadami rzutu.
 - Domyślny model eksploracyjnego testu to `fail-forward`: porażka zmienia koszt, ryzyko albo komplikację, ale nie powinna zatrzymywać całej sceny.
-- Wyzwania eksploracyjne powinny mieć model postępu, np. `progress_required`, `current_progress`, opcje działań, postęp na sukcesie, postęp na porażce i konsekwencje.
-- Opcje wyzwań mogą mieć tagi zasobów/narzędzi/czarów, np. `climbing`, `crowbar`, `quiet`; pasujące itemy mogą dawać premię, przewagę, redukcję ST albo dodatkowy postęp.
+- Wyzwania eksploracyjne mają model postępu, np. `progress_required`, `current_progress`, opcje działań, postęp na sukcesie, postęp na porażce i konsekwencje. Pierwszy zaimplementowany slice to zamknięta brama w `abandoned_watchtower`.
+- Opcje wyzwań mogą mieć tagi zasobów/narzędzi/czarów, np. `climbing`, `crowbar`, `quiet`; pasujące itemy mogą dawać premię, przewagę albo łagodzić hałas/komplikacje. Pełny ekwipunek pozostaje poza MVP.
 - LLM może w przyszłości klasyfikować kreatywne deklaracje graczy do istniejących opcji/tagów, ale nie powinien samodzielnie zmieniać zasad ani stanu gry bez walidacji.
 
 Poza zakresem MVP:
@@ -322,8 +322,8 @@ Poza zakresem MVP:
 - losowe wydarzenia,
 - czas/ryzyko za ponawianie działań,
 - automatyczne przejście z eksploracji do encountera.
-- pełny silnik wyzwań z postępem i konsekwencjami,
-- integracja ekwipunku, zasobów i czarów z opcjami eksploracyjnymi,
+- pełny silnik wyzwań z wieloetapowymi konsekwencjami poza pierwszym challenge bramy,
+- integracja pełnego ekwipunku i czarów z opcjami eksploracyjnymi,
 - interpretacja kreatywnych deklaracji przez LLM.
 
 Testy:

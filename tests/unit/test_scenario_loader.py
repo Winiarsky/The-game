@@ -111,6 +111,10 @@ def test_load_abandoned_watchtower_builds_exploration_scene():
     assert exploration.party_position.zone_id == "gate"
     assert len(exploration.actors) == 2
     assert len(exploration.zones) == 4
+    assert len(exploration.challenges) == 1
+    assert exploration.challenges[0].completed_flag == "gate_passed"
+    assert {resource.id for resource in exploration.resources} == {"rope", "wedge", "saw"}
+    assert exploration.initial_resource_ids == ("rope", "wedge")
     courtyard = next(zone for zone in exploration.zones if zone.id == "courtyard")
     assert courtyard.search_dc == 12
     assert courtyard.search_reveals == ("hidden_cache",)

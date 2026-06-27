@@ -86,6 +86,87 @@ def test_demo_exploration_scene_runs_scripted_zone_travel_and_search(tmp_path):
     assert party_check["payload"]["winning_total"] == 12
 
 
+def test_demo_exploration_scene_partial_gate_progress_keeps_courtyard_locked(tmp_path):
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--exploration-script",
+            "zone:gate",
+            "--exploration-script",
+            "cycle",
+            "--exploration-script",
+            "zone:gate",
+            "--exploration-script",
+            "cycle",
+            "--exploration-script",
+            "zone:gate",
+            "--exploration-script",
+            "cycle",
+            "--exploration-script",
+            "zone:gate",
+            "--exploration-script",
+            "cycle",
+            "--exploration-script",
+            "zone:gate",
+            "--exploration-script",
+            "confirm",
+            "--challenge-roll",
+            "break_picket=10",
+        )
+    )
+
+    events = _events(result.observation_path)
+    event_types = [event["event_type"] for event in events]
+    assert result.final_state.party_position.zone_id == "gate"
+    assert "challenge_progress_updated" in event_types
+    assert [zone.id for zone in demo_exploration_scene.available_exploration_zones(result.final_state)] == ["gate"]
+
+
+def test_demo_exploration_scene_search_can_reveal_saw_resource(tmp_path):
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--exploration-script",
+            "zone:gate",
+            "--exploration-script",
+            "cycle",
+            "--exploration-script",
+            "zone:gate",
+            "--exploration-script",
+            "cycle",
+            "--exploration-script",
+            "zone:gate",
+            "--exploration-script",
+            "cycle",
+            "--exploration-script",
+            "zone:gate",
+            "--exploration-script",
+            "cycle",
+            "--exploration-script",
+            "zone:gate",
+            "--exploration-script",
+            "cycle",
+            "--exploration-script",
+            "zone:gate",
+            "--exploration-script",
+            "confirm",
+            "--exploration-script",
+            "point:old_camp_tools",
+            "--max-steps",
+            "8",
+            "--party-check-roll",
+            "hero=15",
+            "--party-check-roll",
+            "rogue=15",
+        )
+    )
+
+    events = _events(result.observation_path)
+    event_types = [event["event_type"] for event in events]
+    assert "resource_found" in event_types
+    assert "saw" in result.final_state.inventory_resource_ids
+
+
 def test_demo_exploration_scene_rejects_non_adjacent_zone_travel(tmp_path):
     result = run_demo(
         _args(

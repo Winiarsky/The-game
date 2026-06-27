@@ -33,9 +33,10 @@
 - [x] Add first scene-object flags for movement, interaction while occupied, and cover.
 - [x] Implement exploration mode MVP with zones and shared party position.
 - [x] Add abandoned watchtower exploration scenario.
-- [ ] Replace binary exploration gates with progress-based `ExplorationChallenge` model.
-- [ ] Add fail-forward outcomes and complications for exploration challenge options.
-- [ ] Add item/resource/cantrip tags for exploration option bonuses.
+- [x] Replace binary exploration gates with progress-based `ExplorationChallenge` model.
+- [x] Add fail-forward outcomes and complications for exploration challenge options.
+- [x] Add MVP item/resource tags for exploration option bonuses.
+- [ ] Add full inventory/cantrip integration for exploration option bonuses.
 - [ ] Reserve future LLM adapter for classifying free-form exploration declarations into validated options.
 - [x] Implement hardware adapter interface around `board.Connection`.
 - [x] Add LED frame generation for selected path and movement range.
