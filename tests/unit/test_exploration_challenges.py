@@ -38,6 +38,9 @@ def test_success_adds_progress_and_completes_gate_challenge():
     assert updated.current_progress == 3
     assert updated.completed is True
     assert scene_flag(result.state.flags, "gate_passed") is True
+    assert updated.attempts[-1].option_id == "force_gate"
+    assert updated.attempts[-1].progress_added == 3
+    assert updated.attempts[-1].success is True
 
 
 def test_failure_still_adds_fail_forward_progress_and_complication():
@@ -52,6 +55,23 @@ def test_failure_still_adds_fail_forward_progress_and_complication():
     assert result.progress_added == 1
     assert updated.current_progress == 1
     assert "ryzyko_upadku" in updated.complications
+    assert updated.attempts[-1].option_id == "vault_gate"
+    assert updated.attempts[-1].success is False
+    assert updated.attempts[-1].complications_added == ("ryzyko_upadku",)
+
+
+def test_repeated_challenge_attempts_keep_history_order():
+    state = _state()
+    challenge = state.challenges[0]
+    option = next(item for item in challenge.options if item.id == "break_picket")
+
+    first = resolve_challenge_option(state, challenge, option, _roll(2))
+    second = resolve_challenge_option(first.state, challenge, option, _roll(10))
+
+    updated = challenge_state_for(second.state, challenge.id)
+    assert [attempt.option_id for attempt in updated.attempts] == ["break_picket", "break_picket"]
+    assert [attempt.total for attempt in updated.attempts] == [2, 10]
+    assert updated.current_progress == 2
 
 
 def test_critical_failure_uses_critical_complication():

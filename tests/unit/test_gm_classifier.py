@@ -4,8 +4,12 @@ from pydantic import ValidationError
 from dnd_board_game.combat import SceneFlags
 from dnd_board_game.exploration import ExplorationState
 from dnd_board_game.llm import (
+    GeminiGmClassifierClient,
+    GmDeclarationAnalysis,
+    GmDeclarationAnalysisType,
     GmClassifierProposal,
     GmProposalValidationError,
+    GroqGmClassifierClient,
     build_gm_classifier_request,
     challenge_option_from_validated_proposal,
     validate_gm_classifier_proposal,
@@ -232,6 +236,143 @@ def test_gm_classifier_request_payload_contains_context_layers_and_dynamic_state
     assert "szybki podkop pod kamienną bramą bez odpowiednich narzędzi i czasu" in payload["challenge"]["context"]["impossible_approaches"]
     assert payload["dynamic_state"]["challenge_progress"]["current"] == 0
     assert payload["dynamic_state"]["inventory_resource_ids"] == ["rope", "wedge"]
+    assert payload["dynamic_state"]["attempt_history"] == []
+
+
+def test_gm_classifier_request_payload_contains_attempt_history_after_roll():
+    exploration, state = _state()
+    challenge = state.challenges[0]
+    option = next(item for item in challenge.options if item.id == "break_picket")
+    from dnd_board_game.exploration import resolve_challenge_option
+    from dnd_board_game.rules import D20RollInput, D20RollRequest, resolve_d20_roll
+
+    roll = resolve_d20_roll(D20RollInput(D20RollRequest(), 10))
+    result = resolve_challenge_option(state, challenge, option, roll)
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=result.state,
+        player_action="Próbujemy dalej podważać sztachety.",
+    )
+
+    history = request.to_prompt_payload()["dynamic_state"]["attempt_history"]
+    assert history[0]["option_id"] == "break_picket"
+    assert history[0]["progress_added"] == 1
+
+
+def test_gm_declaration_analysis_model_accepts_player_question():
+    analysis = GmDeclarationAnalysis.model_validate(
+        {
+            "analysis_type": "player_question",
+            "player_message": "Najciszej wygląda manipulowanie mechanizmem albo szukanie obejścia.",
+            "normalized_intent": "Pytanie o ciche podejście.",
+            "reason": "Gracz pyta o ryzyko, nie deklaruje działania.",
+            "confidence": 0.9,
+        }
+    )
+
+    assert analysis.analysis_type == GmDeclarationAnalysisType.PLAYER_QUESTION
+
+
+def test_groq_client_retries_429_then_parses_response(monkeypatch):
+    exploration, state = _state()
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Próbujemy wejść górą z liną.",
+    )
+    responses = [
+        _FakeHttpResponse(429, {"Retry-After": "0"}),
+        _FakeHttpResponse(
+            200,
+            {},
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "content": '{"analysis_type":"plausible","player_message":"","normalized_intent":"wspinaczka","reason":"","confidence":0.8}'
+                        }
+                    }
+                ]
+            },
+        ),
+    ]
+
+    monkeypatch.setattr("dnd_board_game.llm.gm_classifier.requests.post", lambda *args, **kwargs: responses.pop(0))
+    monkeypatch.setattr("dnd_board_game.llm.gm_classifier.time.sleep", lambda _seconds: None)
+
+    client = GroqGmClassifierClient(api_key="test", max_retries=1)
+
+    analysis = client.analyze(request)
+
+    assert analysis.analysis_type == GmDeclarationAnalysisType.PLAUSIBLE
+
+
+def test_gemini_client_retries_429_then_parses_response(monkeypatch):
+    exploration, state = _state()
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Próbujemy wejść górą z liną.",
+    )
+    responses = [
+        _FakeHttpResponse(429, {"Retry-After": "0"}),
+        _FakeHttpResponse(
+            200,
+            {},
+            {
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [
+                                {
+                                    "text": '{"analysis_type":"plausible","player_message":"","normalized_intent":"wspinaczka","reason":"","confidence":0.8}'
+                                }
+                            ]
+                        }
+                    }
+                ]
+            },
+        ),
+    ]
+    calls = []
+
+    def fake_post(*args, **kwargs):
+        calls.append((args, kwargs))
+        return responses.pop(0)
+
+    monkeypatch.setattr("dnd_board_game.llm.gm_classifier.requests.post", fake_post)
+    monkeypatch.setattr("dnd_board_game.llm.gm_classifier.time.sleep", lambda _seconds: None)
+
+    client = GeminiGmClassifierClient(api_key="test", model="gemini-test", max_retries=1)
+
+    analysis = client.analyze(request)
+
+    assert analysis.analysis_type == GmDeclarationAnalysisType.PLAUSIBLE
+    assert calls[0][0][0] == "https://generativelanguage.googleapis.com/v1beta/models/gemini-test:generateContent"
+    assert calls[0][1]["headers"]["x-goog-api-key"] == "test"
+    assert calls[0][1]["json"]["generation_config"]["response_mime_type"] == "application/json"
+
+
+class _FakeHttpResponse:
+    def __init__(self, status_code, headers=None, payload=None):
+        self.status_code = status_code
+        self.headers = headers or {}
+        self._payload = payload or {}
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            import requests
+
+            raise requests.HTTPError(f"{self.status_code} error", response=self)
+
+    def json(self):
+        return self._payload
 
 
 def test_gm_classifier_rejects_technical_use_of_forbidden_context():

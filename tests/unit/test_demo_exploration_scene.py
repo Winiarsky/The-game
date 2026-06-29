@@ -3,7 +3,7 @@ import sys
 import time
 
 from dnd_board_game.hardware import BoardLedAdapter
-from dnd_board_game.llm import GmClassifierProposal
+from dnd_board_game.llm import GmClassifierProposal, GmDeclarationAnalysis, GmDeclarationAnalysisType
 from dnd_board_game.runtime import demo_exploration_scene
 from dnd_board_game.runtime.demo_exploration_scene import build_parser, run_demo
 from dnd_board_game.world import Coordinate
@@ -30,12 +30,30 @@ class FakeConnection:
         self.events.append(("cancel_scan",))
 
 
+def _gm_analysis(analysis_type=GmDeclarationAnalysisType.PLAUSIBLE, message="", normalized_intent="Testowa interpretacja deklaracji."):
+    return GmDeclarationAnalysis(
+        analysis_type=analysis_type,
+        player_message=message,
+        normalized_intent=normalized_intent,
+        reason="Testowy analyzer.",
+        confidence=1.0,
+    )
+
+
 class FakeGmClient:
     model = "fake-gm"
 
-    def __init__(self, proposal):
+    def __init__(self, proposal, analysis=None):
         self.proposals = list(proposal if isinstance(proposal, list) else [proposal])
+        self.analyses = list(analysis if isinstance(analysis, list) else [analysis or _gm_analysis()])
         self.requests = []
+        self.analysis_requests = []
+
+    def analyze(self, request):
+        self.analysis_requests.append(request)
+        if len(self.analyses) > 1:
+            return self.analyses.pop(0)
+        return self.analyses[0]
 
     def classify(self, request):
         self.requests.append(request)
@@ -177,9 +195,31 @@ def test_demo_exploration_scene_gm_classifier_dry_run_does_not_change_progress(t
     event_types = [event["event_type"] for event in events]
     assert len(client.requests) == 1
     assert "gm_classifier_requested" in event_types
+    assert "gm_declaration_analyzed" in event_types
     assert "gm_classifier_proposal_validated" in event_types
     assert "challenge_progress_updated" not in event_types
     assert demo_exploration_scene.challenge_state_for(result.final_state, "closed_gate").current_progress == 0
+
+
+def test_demo_exploration_scene_freeform_defaults_to_gemini(tmp_path):
+    client = FakeGmClient(_gm_rope_proposal())
+
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--gm-dry-run",
+            "--freeform-action",
+            "Próbujemy wejść górą z liną.",
+            "--max-steps",
+            "2",
+        ),
+        gm_client=client,
+    )
+
+    events = _events(result.observation_path)
+    request_event = next(event for event in events if event["event_type"] == "gm_classifier_requested")
+    assert request_event["payload"]["provider"] == "gemini"
+    assert len(client.requests) == 1
 
 
 def test_demo_exploration_scene_gm_classifier_resolves_generated_option(tmp_path):
@@ -227,6 +267,8 @@ def test_demo_exploration_scene_gm_classifier_retries_after_rejection(tmp_path, 
             "Wsiadam na linę i przelatuję nad bramą.",
             "--challenge-roll",
             "gm_generated=14",
+            "--gm-accept",
+            "yes",
             "--max-steps",
             "1",
         ),
@@ -254,6 +296,8 @@ def test_demo_exploration_scene_interactive_gm_auto_selects_single_zone(tmp_path
             "--interactive-freeform",
             "--challenge-roll",
             "gm_generated=14",
+            "--gm-accept",
+            "yes",
             "--max-steps",
             "1",
         ),
@@ -263,9 +307,181 @@ def test_demo_exploration_scene_interactive_gm_auto_selects_single_zone(tmp_path
     events = _events(result.observation_path)
     event_types = [event["event_type"] for event in events]
     assert len(client.requests) == 1
+    assert len(client.analysis_requests) == 1
     assert "exploration_zone_auto_selected" in event_types
     assert "gm_classifier_option_resolved" in event_types
     assert any("przechodzę do niej automatycznie" in message for message in result.messages)
+
+
+def test_demo_exploration_scene_gm_accept_no_skips_roll_and_progress(tmp_path):
+    client = FakeGmClient(_gm_rope_proposal())
+
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--gm-classifier",
+            "groq",
+            "--freeform-action",
+            "Próbujemy wejść górą z liną.",
+            "--gm-accept",
+            "no",
+            "--challenge-roll",
+            "gm_generated=14",
+            "--max-steps",
+            "1",
+        ),
+        gm_client=client,
+    )
+
+    events = _events(result.observation_path)
+    event_types = [event["event_type"] for event in events]
+    assert "gm_interpretation_rejected" in event_types
+    assert "challenge_progress_updated" not in event_types
+    assert demo_exploration_scene.challenge_state_for(result.final_state, "closed_gate").current_progress == 0
+
+
+def test_demo_exploration_scene_player_question_does_not_classify_or_roll(tmp_path):
+    client = FakeGmClient(
+        _gm_rope_proposal(),
+        analysis=_gm_analysis(
+            GmDeclarationAnalysisType.PLAYER_QUESTION,
+            "Najciszej wygląda manipulowanie mechanizmem albo szukanie obejścia.",
+        ),
+    )
+
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--gm-classifier",
+            "groq",
+            "--freeform-action",
+            "Jak przejść bez hałasu?",
+            "--max-steps",
+            "1",
+        ),
+        gm_client=client,
+    )
+
+    events = _events(result.observation_path)
+    event_types = [event["event_type"] for event in events]
+    assert len(client.requests) == 0
+    assert "player_question_answered" in event_types
+    assert "challenge_progress_updated" not in event_types
+    assert any("Najciszej wygląda" in message for message in result.messages)
+
+
+def test_demo_exploration_scene_clarification_acceptance_uses_normalized_intent(tmp_path, monkeypatch):
+    client = FakeGmClient(
+        _gm_rope_proposal(),
+        analysis=_gm_analysis(
+            GmDeclarationAnalysisType.NEEDS_CLARIFICATION,
+            "Czy chcesz wyważyć bramę z całej siły?",
+            "Wyważenie bramy z rozbiegu.",
+        ),
+    )
+    answers = iter(["+"])
+    monkeypatch.setattr(demo_exploration_scene.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda _prompt: next(answers))
+
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--gm-classifier",
+            "groq",
+            "--interactive-freeform",
+            "--freeform-action",
+            "Biorę długi rozbieg.",
+            "--gm-accept",
+            "yes",
+            "--challenge-roll",
+            "gm_generated=14",
+            "--max-steps",
+            "1",
+        ),
+        gm_client=client,
+    )
+
+    events = _events(result.observation_path)
+    event_types = [event["event_type"] for event in events]
+    assert len(client.analysis_requests) == 1
+    assert len(client.requests) == 1
+    assert client.requests[0].player_action == "Wyważenie bramy z rozbiegu."
+    assert "gm_declaration_clarification_accepted" in event_types
+    assert "gm_classifier_option_resolved" in event_types
+
+
+def test_demo_exploration_scene_clarification_reprompts_unknown_terminal_command(tmp_path, monkeypatch):
+    client = FakeGmClient(
+        _gm_rope_proposal(),
+        analysis=_gm_analysis(
+            GmDeclarationAnalysisType.NEEDS_CLARIFICATION,
+            "Czy chcesz wyważyć bramę z całej siły?",
+            "Wyważenie bramy z rozbiegu.",
+        ),
+    )
+    answers = iter(["moze", "+"])
+    monkeypatch.setattr(demo_exploration_scene.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda _prompt: next(answers))
+
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--gm-classifier",
+            "groq",
+            "--interactive-freeform",
+            "--freeform-action",
+            "Biorę długi rozbieg.",
+            "--gm-accept",
+            "yes",
+            "--challenge-roll",
+            "gm_generated=14",
+            "--max-steps",
+            "1",
+        ),
+        gm_client=client,
+    )
+
+    events = _events(result.observation_path)
+    event_types = [event["event_type"] for event in events]
+    assert "gm_declaration_clarification_accepted" in event_types
+    assert "gm_classifier_option_resolved" in event_types
+
+
+def test_demo_exploration_scene_unsupported_analysis_retries_without_classifying(tmp_path):
+    client = FakeGmClient(
+        _gm_rope_proposal(),
+        analysis=[
+            _gm_analysis(
+                GmDeclarationAnalysisType.UNSUPPORTED,
+                "Laserowy pistolet nie pasuje do tej sceny fantasy.",
+            ),
+            _gm_analysis(),
+        ],
+    )
+
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--gm-classifier",
+            "groq",
+            "--interactive-freeform",
+            "--freeform-retries",
+            "2",
+            "--freeform-action",
+            "Strzelamy laserowym pistoletem.",
+            "--challenge-roll",
+            "gm_generated=14",
+            "--max-steps",
+            "1",
+        ),
+        gm_client=client,
+    )
+
+    events = _events(result.observation_path)
+    event_types = [event["event_type"] for event in events]
+    assert "gm_declaration_unsupported" in event_types
+    assert len(client.requests) == 0
+    assert demo_exploration_scene.challenge_state_for(result.final_state, "closed_gate").current_progress == 0
 
 
 def test_demo_exploration_scene_search_can_reveal_saw_resource(tmp_path):

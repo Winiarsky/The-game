@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import queue
 import random
 import select
@@ -82,6 +83,7 @@ def run_demo(
     connection_factory: ConnectionFactory | None = None,
     gm_client: object | None = None,
 ) -> DemoExplorationResult:
+    _resolve_gm_classifier_defaults(args)
     observer = SessionObserver(args.session_id, Path(args.observation_dir))
     observer.record("session_started", {"runtime": "demo_exploration_scene"})
     observer.record(
@@ -234,10 +236,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--look-around-clicks", type=int, default=3)
     parser.add_argument("--leader-id", default="hero")
     parser.add_argument("--helper-id", default=None)
-    parser.add_argument("--gm-classifier", choices=("none", "groq"), default="none")
+    parser.add_argument("--gm-classifier", choices=("auto", "none", "groq", "gemini"), default="auto")
     parser.add_argument("--freeform-action", default="")
     parser.add_argument("--groq-model", default=None)
+    parser.add_argument("--gemini-model", default=None)
     parser.add_argument("--gm-dry-run", action="store_true", default=False)
+    parser.add_argument("--gm-accept", choices=("ask", "yes", "no"), default="ask")
     parser.add_argument("--freeform-retries", type=int, default=1)
     parser.add_argument("--interactive-freeform", action="store_true", default=False)
     parser.add_argument("--legacy-option-menu", action="store_true", default=False)
@@ -376,6 +380,18 @@ def _should_auto_select_single_freeform_zone(args: argparse.Namespace, state: Ex
         return False
     zones = available_exploration_zones(state)
     return len(zones) == 1 and zones[0].id == state.party_position.zone_id
+
+
+def _resolve_gm_classifier_defaults(args: argparse.Namespace) -> None:
+    if args.gm_classifier != "auto":
+        return
+    if args.freeform_action.strip() or args.interactive_freeform:
+        provider = os.environ.get("GM_LLM_PROVIDER", "gemini").strip().lower()
+    else:
+        provider = "none"
+    if provider not in {"none", "groq", "gemini"}:
+        raise RuntimeError(f"Unsupported GM_LLM_PROVIDER: {provider}. Dozwolone: none, groq, gemini.")
+    args.gm_classifier = provider
 
 
 def _handle_zone_travel(
@@ -538,7 +554,7 @@ def _handle_challenge_freeform_prompt(
         new_state, freeform_messages, resolved = _handle_freeform_actions(args, exploration, state, observer, gm_client)
         return new_state, (message, *freeform_messages), resolved
     if args.board_backend != "none" and sys.stdin.isatty():
-        print("Wpisz deklarację przez `--gm-classifier groq --interactive-freeform`, albo uruchom stare menu opcją `--legacy-option-menu`.")
+        print("Wpisz deklarację przez `--gm-classifier groq --interactive-freeform` albo `--gm-classifier gemini --interactive-freeform`, albo uruchom stare menu opcją `--legacy-option-menu`.")
     else:
         print("Brak aktywnego klasyfikatora LLM. Użyj `--legacy-option-menu`, aby wybrać predefiniowaną opcję.")
     return state, (message,), False
@@ -619,7 +635,7 @@ def _handle_freeform_action_once(
     attempt: int,
 ) -> tuple[ExplorationState, tuple[str, ...], bool]:
     if args.gm_classifier == "none":
-        message = "Freeform action wymaga `--gm-classifier groq`."
+        message = "Freeform action wymaga `--gm-classifier groq` albo `--gm-classifier gemini`."
         print(message)
         observer.record("gm_classifier_proposal_rejected", {"reason": "classifier_disabled"})
         return state, (message,), False
@@ -627,6 +643,7 @@ def _handle_freeform_action_once(
         (
             build_gm_classifier_request,
             challenge_option_from_validated_proposal,
+            declaration_analysis_type,
             validate_gm_classifier_proposal,
         ) = _load_gm_classifier_tools()
         request = build_gm_classifier_request(
@@ -640,18 +657,54 @@ def _handle_freeform_action_once(
             "gm_classifier_requested",
             {
                 "provider": args.gm_classifier,
-                "model": args.groq_model or "llama-3.1-8b-instant",
+                "model": _gm_model_name(args),
                 "player_action": freeform_action,
                 "attempt": attempt,
                 "payload": request.to_prompt_payload(),
             },
         )
         client = gm_client or _create_gm_classifier_client(args)
+        analysis = _analyze_freeform_declaration(client, request)
+        observer.record(
+            "gm_declaration_analyzed",
+            {
+                "analysis_type": analysis.analysis_type.value,
+                "player_message": analysis.player_message,
+                "normalized_intent": analysis.normalized_intent,
+                "reason": analysis.reason,
+                "confidence": analysis.confidence,
+                "attempt": attempt,
+            },
+        )
+        if analysis.analysis_type == declaration_analysis_type.PLAYER_QUESTION:
+            message = analysis.player_message or "To jest pytanie o sytuację. Nie wykonuję rzutu ani nie zmieniam stanu sceny."
+            print(message)
+            observer.record("player_question_answered", {"message": message, "attempt": attempt})
+            return state, (message,), False
+        if analysis.analysis_type == declaration_analysis_type.NEEDS_CLARIFICATION:
+            message = analysis.player_message or "Doprecyzujcie, co dokładnie próbujecie zrobić."
+            print(message)
+            observer.record(
+                "gm_declaration_needs_clarification",
+                {
+                    "message": message,
+                    "normalized_intent": analysis.normalized_intent,
+                    "attempt": attempt,
+                },
+            )
+            if not analysis.normalized_intent or not _confirm_clarified_intent(args, analysis.normalized_intent, observer, attempt):
+                return state, (message,), False
+            request = replace(request, player_action=analysis.normalized_intent)
+        if analysis.analysis_type == declaration_analysis_type.UNSUPPORTED:
+            message = analysis.player_message or "Ta deklaracja nie pasuje do aktualnej sceny."
+            print(message)
+            observer.record("gm_declaration_unsupported", {"message": message, "attempt": attempt})
+            return state, (message,), False
         proposal = client.classify(request)
         observer.record(
             "gm_classifier_response_received",
             {
-                "model": getattr(client, "model", args.groq_model or "llama-3.1-8b-instant"),
+                "model": getattr(client, "model", _gm_model_name(args)),
                 "proposal": proposal.model_dump(mode="json"),
             },
         )
@@ -697,6 +750,21 @@ def _handle_freeform_action_once(
         summary = f"{summary} Zasób: {resource.label}."
     print(summary)
     messages.append(summary)
+    observer.record(
+        "gm_interpretation_proposed",
+        {
+            "challenge_id": validated.challenge.id,
+            "option_id": option.id,
+            "summary": summary,
+            "player_narration": proposal.player_narration,
+            "gm_notes": proposal.gm_notes,
+        },
+    )
+    if not _confirm_gm_interpretation(args, observer, validated.challenge.id, option.id):
+        message = "Odrzucono interpretację MG. Opiszcie podejście inaczej."
+        print(message)
+        messages.append(message)
+        return state, tuple(messages), False
     if args.gm_dry_run:
         observer.record("gm_classifier_dry_run_finished", {"challenge_id": validated.challenge.id, "option_id": option.id})
         return state, tuple(messages), True
@@ -721,6 +789,84 @@ def _read_next_freeform_action(args: argparse.Namespace, attempt: int) -> str:
     return input(f"Opisz kolejne podejście drużyny ({attempt}/{args.freeform_retries}): ").strip()
 
 
+def _analyze_freeform_declaration(client: object, request: object):
+    analyze = getattr(client, "analyze", None)
+    if callable(analyze):
+        return analyze(request)
+    from dnd_board_game.llm import GmDeclarationAnalysis, GmDeclarationAnalysisType
+
+    return GmDeclarationAnalysis(
+        analysis_type=GmDeclarationAnalysisType.PLAUSIBLE,
+        player_message="",
+        normalized_intent=request.player_action,
+        reason="Fake client without analyze(); defaulting to plausible for tests.",
+        confidence=1.0,
+    )
+
+
+def _confirm_gm_interpretation(
+    args: argparse.Namespace,
+    observer: SessionObserver,
+    challenge_id: str,
+    option_id: str,
+) -> bool:
+    if args.gm_accept == "yes":
+        accepted = True
+    elif args.gm_accept == "no":
+        accepted = False
+    elif not sys.stdin.isatty():
+        accepted = True
+    else:
+        print("Decyzja terminalowa: wpisz `+`, żeby przejść do rzutu, albo `-`, żeby opisać podejście inaczej.")
+        accepted = _read_terminal_decision("Komenda: ", accept_commands={"+", "akceptuj", "a", "tak", "t"}, reject_commands={"-", "odrzuc", "o", "nie", "n"})
+    observer.record(
+        "gm_interpretation_accepted" if accepted else "gm_interpretation_rejected",
+        {"challenge_id": challenge_id, "option_id": option_id},
+    )
+    return accepted
+
+
+def _confirm_clarified_intent(
+    args: argparse.Namespace,
+    normalized_intent: str,
+    observer: SessionObserver,
+    attempt: int,
+) -> bool:
+    if args.gm_accept == "yes":
+        accepted = True
+    elif args.gm_accept == "no":
+        accepted = False
+    elif not sys.stdin.isatty():
+        accepted = False
+    else:
+        print(f"Interpretacja do potwierdzenia: {normalized_intent}")
+        print("Decyzja terminalowa: wpisz `+`, żeby użyć tej interpretacji, albo `-`, żeby wrócić do deklaracji.")
+        accepted = _read_terminal_decision("Komenda: ", accept_commands={"+", "tak", "t", "akceptuj", "a"}, reject_commands={"-", "nie", "n", "odrzuc", "o"})
+    observer.record(
+        "gm_declaration_clarification_accepted" if accepted else "gm_declaration_clarification_rejected",
+        {"normalized_intent": normalized_intent, "attempt": attempt},
+    )
+    return accepted
+
+
+def _read_terminal_decision(
+    prompt: str,
+    *,
+    accept_commands: set[str],
+    reject_commands: set[str],
+) -> bool:
+    while True:
+        answer = input(prompt).strip().lower()
+        if answer in accept_commands:
+            return True
+        if answer in reject_commands:
+            return False
+        print(
+            "Nieznana komenda. Dostępne: "
+            f"{', '.join(sorted(accept_commands | reject_commands))}."
+        )
+
+
 def _create_gm_classifier_client(args: argparse.Namespace) -> object:
     if args.gm_classifier == "groq":
         try:
@@ -728,12 +874,27 @@ def _create_gm_classifier_client(args: argparse.Namespace) -> object:
         except ModuleNotFoundError as exc:
             raise RuntimeError("LLM classifier wymaga zależności `pydantic`. Uruchom `pip install -r requirements.txt`.") from exc
         return GroqGmClassifierClient(model=args.groq_model)
+    if args.gm_classifier == "gemini":
+        try:
+            from dnd_board_game.llm import GeminiGmClassifierClient
+        except ModuleNotFoundError as exc:
+            raise RuntimeError("LLM classifier wymaga zależności `pydantic`. Uruchom `pip install -r requirements.txt`.") from exc
+        return GeminiGmClassifierClient(model=args.gemini_model)
     raise RuntimeError(f"Unknown GM classifier: {args.gm_classifier}.")
+
+
+def _gm_model_name(args: argparse.Namespace) -> str:
+    if args.gm_classifier == "gemini":
+        return args.gemini_model or os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
+    if args.gm_classifier == "groq":
+        return args.groq_model or os.environ.get("GROQ_MODEL", "llama-3.1-8b-instant")
+    return "none"
 
 
 def _load_gm_classifier_tools():
     try:
         from dnd_board_game.llm import (
+            GmDeclarationAnalysisType,
             build_gm_classifier_request,
             challenge_option_from_validated_proposal,
             validate_gm_classifier_proposal,
@@ -743,6 +904,7 @@ def _load_gm_classifier_tools():
     return (
         build_gm_classifier_request,
         challenge_option_from_validated_proposal,
+        GmDeclarationAnalysisType,
         validate_gm_classifier_proposal,
     )
 

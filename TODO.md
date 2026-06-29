@@ -41,7 +41,9 @@
 - [x] Add first village exploration mini-scene with setup NPC/object points.
 - [x] Allow simple exploration message options to set scene flags and complete objectives.
 - [x] Add optional Groq LLM GM classifier MVP for free-form exploration declarations.
+- [x] Add optional Gemini LLM provider for free-form exploration declarations.
 - [x] Add LLM context layers and retry flow for rejected free-form declarations.
+- [x] Add LLM declaration analyzer, prompt registry, interpretation acceptance, and challenge attempt history.
 - [ ] Add full inventory/cantrip integration for exploration option bonuses.
 - [ ] Add voice input and richer UI for free-form exploration declarations.
 - [x] Implement hardware adapter interface around `board.Connection`.

@@ -341,16 +341,20 @@ Terminal 2:
 
 ```bash
 source .env
-PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenario content/scenarios/abandoned_watchtower.json --board-backend none --gm-classifier groq --freeform-action "Próbujemy wejść górą przez bramę, używając liny z hakiem." --challenge-roll gm_generated=14 --session-id gm_classifier_demo --max-steps 2
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenario content/scenarios/abandoned_watchtower.json --board-backend none --gm-classifier groq --gm-accept yes --freeform-action "Próbujemy wejść górą przez bramę, używając liny z hakiem." --challenge-roll gm_generated=14 --session-id gm_classifier_demo --max-steps 2
 ```
 
-- [ ] Brak `GROQ_API_KEY` daje czytelny błąd bez stack trace.
+- [ ] Freeform działa domyślnie na Gemini, jeśli w środowisku jest `GEMINI_API_KEY`; `--gm-classifier groq` nadal pozwala wymusić Groq.
+- [ ] Brak `GROQ_API_KEY` albo `GEMINI_API_KEY` daje czytelny błąd bez stack trace.
 - [ ] Aplikacja pokazuje narrację propozycji LLM.
 - [ ] Aplikacja pokazuje wybrany test, ST, progress i pasujący zasób.
+- [ ] Analyzer odrzuca deklaracje spoza fantasy/sceny, np. laserowy pistolet albo wyważanie dmuchnięciem.
+- [ ] `--gm-accept no` odrzuca interpretację bez rzutu i bez zmiany progressu.
+- [ ] Pytanie graczy, np. `Jak przejść bez hałasu?`, daje odpowiedź bez rzutu.
 - [ ] Zasób działa tylko wtedy, gdy jest w ekwipunku i ma pasujący tag.
 - [ ] Wynik rzutu aktualizuje challenge przez zwykły progress/fail-forward flow.
 - [ ] `--gm-dry-run` pokazuje propozycję bez rzutu i bez zmiany progressu.
-- [ ] JSONL zawiera `gm_classifier_requested`, `gm_classifier_response_received`, `gm_classifier_proposal_validated` i `gm_classifier_option_resolved`.
+- [ ] JSONL zawiera analizę deklaracji, propozycję, akceptację/odrzucenie i historię prób.
 - [ ] Deklaracja sprzeczna z kontekstem, np. lot na linie, jest odrzucana albo zamieniana na legalną alternatywę bez naciągania zasad.
 - [ ] `--interactive-freeform --freeform-retries 3` pozwala wpisać kolejną deklarację po odrzuceniu.
 - [ ] Payload JSONL zawiera `scenario_context`, `zone_context`, `challenge.context` i `dynamic_state`.

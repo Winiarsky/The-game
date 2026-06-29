@@ -174,12 +174,29 @@ class ExplorationChallenge:
 
 
 @dataclass(frozen=True, slots=True)
+class ExplorationChallengeAttempt:
+    challenge_id: str
+    option_id: str
+    approach_label: str
+    approach_tags: tuple[str, ...]
+    resource_id: str | None
+    natural_roll: int
+    total: int
+    success: bool
+    critical_failure: bool
+    progress_added: int
+    noise_added: int
+    complications_added: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class ExplorationChallengeState:
     challenge_id: str
     current_progress: int = 0
     noise: int = 0
     complications: tuple[str, ...] = ()
     completed: bool = False
+    attempts: tuple[ExplorationChallengeAttempt, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -455,6 +472,23 @@ def resolve_challenge_option(
         noise=current.noise + noise_added,
         complications=complications,
         completed=completed,
+        attempts=(
+            *current.attempts,
+            ExplorationChallengeAttempt(
+                challenge_id=challenge.id,
+                option_id=option.id,
+                approach_label=option.label,
+                approach_tags=option.tags,
+                resource_id=resource.id if resource is not None else None,
+                natural_roll=roll.natural_roll,
+                total=roll.total,
+                success=success,
+                critical_failure=critical_failure,
+                progress_added=progress_added,
+                noise_added=noise_added,
+                complications_added=complications_added,
+            ),
+        ),
     )
     new_state = replace(state, flags=flags, challenge_states=_replace_challenge_state(state, updated))
     message = _challenge_result_message(challenge, option, roll, success, critical_failure, progress_added, updated, resource)

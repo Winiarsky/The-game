@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -24,11 +25,20 @@ from dnd_board_game.exploration import (
 )
 from dnd_board_game.hardware import LedColor
 
+from .prompts import PromptId, load_prompt
+
 
 class GmIntentType(StrEnum):
     CHALLENGE_ATTEMPT = "challenge_attempt"
     ENVIRONMENT_SEARCH = "environment_search"
     UNSUPPORTED = "unsupported"
+
+
+class GmDeclarationAnalysisType(StrEnum):
+    PLAUSIBLE = "plausible"
+    NEEDS_CLARIFICATION = "needs_clarification"
+    UNSUPPORTED = "unsupported"
+    PLAYER_QUESTION = "player_question"
 
 
 class GmConsequenceTrigger(StrEnum):
@@ -156,6 +166,7 @@ class GmClassifierProposal(BaseModel):
     failure_message: str = ""
     critical_failure_message: str = ""
     player_narration: str = Field(default="", max_length=800)
+    gm_notes: str = Field(default="", max_length=1000)
 
     @field_validator("approach_tags")
     @classmethod
@@ -248,6 +259,9 @@ class GmProposalValidationError(ValueError):
 class GmClassifierClient(Protocol):
     model: str
 
+    def analyze(self, request: GmClassifierRequest) -> GmDeclarationAnalysis:
+        ...
+
     def classify(self, request: GmClassifierRequest) -> GmClassifierProposal:
         ...
 
@@ -258,45 +272,194 @@ class GroqGmClassifierClient:
         *,
         api_key: str | None = None,
         model: str | None = None,
-        prompt_path: Path | str = "content/prompts/gm_classifier_pl.md",
+        prompt_path: Path | str | None = None,
+        analyzer_prompt_path: Path | str | None = None,
         timeout_s: float = 30.0,
+        max_retries: int = 3,
+        retry_backoff_s: float = 1.0,
     ) -> None:
         self.api_key = api_key if api_key is not None else os.environ.get("GROQ_API_KEY", "")
         self.model = model or os.environ.get("GROQ_MODEL", "llama-3.1-8b-instant")
-        self.prompt_path = Path(prompt_path)
+        self.prompt_path = Path(prompt_path) if prompt_path is not None else None
+        self.analyzer_prompt_path = Path(analyzer_prompt_path) if analyzer_prompt_path is not None else None
         self.timeout_s = timeout_s
+        self.max_retries = max(0, max_retries)
+        self.retry_backoff_s = max(0.0, retry_backoff_s)
+
+    def analyze(self, request: GmClassifierRequest) -> GmDeclarationAnalysis:
+        system_prompt = (
+            self.analyzer_prompt_path.read_text(encoding="utf-8")
+            if self.analyzer_prompt_path is not None
+            else load_prompt(PromptId.GM_DECLARATION_ANALYZER)
+        )
+        content = self._complete(system_prompt, request)
+        try:
+            return GmDeclarationAnalysis.model_validate_json(content)
+        except ValidationError as exc:
+            raise GmProposalValidationError(f"LLM returned invalid declaration analysis: {exc}") from exc
 
     def classify(self, request: GmClassifierRequest) -> GmClassifierProposal:
-        if not self.api_key:
-            raise RuntimeError("Missing GROQ_API_KEY. Ustaw klucz w .env i uruchom `source .env`.")
-        system_prompt = self.prompt_path.read_text(encoding="utf-8")
-        response = requests.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": self.model,
-                "temperature": 0.2,
-                "response_format": {"type": "json_object"},
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {
-                        "role": "user",
-                        "content": json.dumps(request.to_prompt_payload(), ensure_ascii=False),
-                    },
-                ],
-            },
-            timeout=self.timeout_s,
+        system_prompt = (
+            self.prompt_path.read_text(encoding="utf-8")
+            if self.prompt_path is not None
+            else load_prompt(PromptId.GM_CHALLENGE_CLASSIFIER)
         )
-        response.raise_for_status()
-        data = response.json()
-        content = data["choices"][0]["message"]["content"]
+        content = self._complete(system_prompt, request)
         try:
             return GmClassifierProposal.model_validate_json(content)
         except ValidationError as exc:
             raise GmProposalValidationError(f"LLM returned invalid proposal: {exc}") from exc
+
+    def _complete(self, system_prompt: str, request: GmClassifierRequest) -> str:
+        if not self.api_key:
+            raise RuntimeError("Missing GROQ_API_KEY. Ustaw klucz w .env i uruchom `source .env`.")
+        payload = {
+            "model": self.model,
+            "temperature": 0.2,
+            "response_format": {"type": "json_object"},
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": json.dumps(request.to_prompt_payload(), ensure_ascii=False),
+                },
+            ],
+        }
+        response = None
+        for attempt in range(self.max_retries + 1):
+            response = requests.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+                timeout=self.timeout_s,
+            )
+            if response.status_code not in {429, 500, 502, 503, 504} or attempt >= self.max_retries:
+                break
+            time.sleep(_retry_delay(response, attempt, self.retry_backoff_s))
+        assert response is not None
+        try:
+            response.raise_for_status()
+        except requests.HTTPError as exc:
+            if response.status_code == 429:
+                raise RuntimeError(
+                    "Groq zwrócił limit zapytań 429 po ponowieniach. Odczekaj chwilę albo zmniejsz liczbę prób."
+                ) from exc
+            raise
+        data = response.json()
+        return str(data["choices"][0]["message"]["content"])
+
+
+class GeminiGmClassifierClient:
+    def __init__(
+        self,
+        *,
+        api_key: str | None = None,
+        model: str | None = None,
+        prompt_path: Path | str | None = None,
+        analyzer_prompt_path: Path | str | None = None,
+        timeout_s: float = 30.0,
+        max_retries: int = 3,
+        retry_backoff_s: float = 1.0,
+    ) -> None:
+        self.api_key = api_key if api_key is not None else os.environ.get("GEMINI_API_KEY", "")
+        self.model = model or os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
+        self.prompt_path = Path(prompt_path) if prompt_path is not None else None
+        self.analyzer_prompt_path = Path(analyzer_prompt_path) if analyzer_prompt_path is not None else None
+        self.timeout_s = timeout_s
+        self.max_retries = max(0, max_retries)
+        self.retry_backoff_s = max(0.0, retry_backoff_s)
+
+    def analyze(self, request: GmClassifierRequest) -> GmDeclarationAnalysis:
+        system_prompt = (
+            self.analyzer_prompt_path.read_text(encoding="utf-8")
+            if self.analyzer_prompt_path is not None
+            else load_prompt(PromptId.GM_DECLARATION_ANALYZER)
+        )
+        content = self._complete(system_prompt, request)
+        try:
+            return GmDeclarationAnalysis.model_validate_json(content)
+        except ValidationError as exc:
+            raise GmProposalValidationError(f"Gemini returned invalid declaration analysis: {exc}") from exc
+
+    def classify(self, request: GmClassifierRequest) -> GmClassifierProposal:
+        system_prompt = (
+            self.prompt_path.read_text(encoding="utf-8")
+            if self.prompt_path is not None
+            else load_prompt(PromptId.GM_CHALLENGE_CLASSIFIER)
+        )
+        content = self._complete(system_prompt, request)
+        try:
+            return GmClassifierProposal.model_validate_json(content)
+        except ValidationError as exc:
+            raise GmProposalValidationError(f"Gemini returned invalid proposal: {exc}") from exc
+
+    def _complete(self, system_prompt: str, request: GmClassifierRequest) -> str:
+        if not self.api_key:
+            raise RuntimeError("Missing GEMINI_API_KEY. Ustaw klucz w .env i uruchom `source .env`.")
+        payload = {
+            "system_instruction": {
+                "parts": [{"text": system_prompt}],
+            },
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [
+                        {
+                            "text": json.dumps(
+                                request.to_prompt_payload(),
+                                ensure_ascii=False,
+                            )
+                        }
+                    ],
+                }
+            ],
+            "generation_config": {
+                "temperature": 0.2,
+                "response_mime_type": "application/json",
+            },
+        }
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
+        response = None
+        for attempt in range(self.max_retries + 1):
+            response = requests.post(
+                url,
+                headers={
+                    "Content-Type": "application/json",
+                    "x-goog-api-key": self.api_key,
+                },
+                json=payload,
+                timeout=self.timeout_s,
+            )
+            if response.status_code not in {429, 500, 502, 503, 504} or attempt >= self.max_retries:
+                break
+            time.sleep(_retry_delay(response, attempt, self.retry_backoff_s))
+        assert response is not None
+        try:
+            response.raise_for_status()
+        except requests.HTTPError as exc:
+            if response.status_code == 429:
+                raise RuntimeError(
+                    "Gemini zwrócił limit zapytań 429 po ponowieniach. Odczekaj chwilę albo zmniejsz liczbę prób."
+                ) from exc
+            raise
+        data = response.json()
+        try:
+            return str(data["candidates"][0]["content"]["parts"][0]["text"])
+        except (KeyError, IndexError, TypeError) as exc:
+            raise GmProposalValidationError(f"Gemini returned unexpected response shape: {data}") from exc
+
+
+def _retry_delay(response: requests.Response, attempt: int, base_delay_s: float) -> float:
+    retry_after = response.headers.get("Retry-After")
+    if retry_after:
+        try:
+            return min(30.0, max(0.0, float(retry_after)))
+        except ValueError:
+            pass
+    return min(30.0, base_delay_s * (2**attempt))
 
 
 def build_gm_classifier_request(
@@ -529,7 +692,38 @@ def _dynamic_state_payload(state: ExplorationState, challenge: ExplorationChalle
         ],
         "inventory_resource_ids": list(state.inventory_resource_ids),
         "world_notes": _world_notes(state, challenge),
+        "attempt_history": _attempt_history_payload(challenge_state),
     }
+
+
+def _attempt_history_payload(challenge_state) -> list[dict[str, Any]]:
+    return [
+        {
+            "challenge_id": attempt.challenge_id,
+            "option_id": attempt.option_id,
+            "approach_label": attempt.approach_label,
+            "approach_tags": list(attempt.approach_tags),
+            "resource_id": attempt.resource_id,
+            "natural_roll": attempt.natural_roll,
+            "total": attempt.total,
+            "success": attempt.success,
+            "critical_failure": attempt.critical_failure,
+            "progress_added": attempt.progress_added,
+            "noise_added": attempt.noise_added,
+            "complications_added": list(attempt.complications_added),
+        }
+        for attempt in challenge_state.attempts
+    ]
+
+
+class GmDeclarationAnalysis(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    analysis_type: GmDeclarationAnalysisType
+    player_message: str = Field(default="", max_length=800)
+    normalized_intent: str = Field(default="", max_length=500)
+    reason: str = Field(default="", max_length=1000)
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
 
 
 def _world_notes(state: ExplorationState, challenge: ExplorationChallenge) -> list[str]:

@@ -3,6 +3,7 @@
 from .models import (
     ChallengeResult,
     ExplorationChallenge,
+    ExplorationChallengeAttempt,
     ExplorationChallengeOption,
     ExplorationChallengeState,
     ExplorationMenu,
@@ -47,6 +48,7 @@ from .models import (
 __all__ = [
     "ChallengeResult",
     "ExplorationChallenge",
+    "ExplorationChallengeAttempt",
     "ExplorationChallengeOption",
     "ExplorationChallengeState",
     "ExplorationMenu",

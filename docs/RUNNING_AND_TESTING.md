@@ -307,26 +307,32 @@ W symulatorze:
 PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenario content/scenarios/abandoned_watchtower.json --board-backend simulator --board-url http://127.0.0.1:5000 --show-leds --scan-timeout 30 --session-id abandoned_watchtower_simulator_demo
 ```
 
-LLM GM classifier przez Groq:
+LLM GM classifier przez Groq albo Gemini:
 
 ```bash
 source .env
 ```
 
 ```bash
-PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenario content/scenarios/abandoned_watchtower.json --board-backend none --gm-classifier groq --freeform-action "Próbujemy wejść górą przez bramę, używając liny z hakiem." --challenge-roll gm_generated=14 --session-id gm_classifier_demo --max-steps 2
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenario content/scenarios/abandoned_watchtower.json --board-backend none --gm-classifier groq --gm-accept yes --freeform-action "Próbujemy wejść górą przez bramę, używając liny z hakiem." --challenge-roll gm_generated=14 --session-id gm_classifier_demo --max-steps 2
+```
+
+Wariant Gemini jest domyślny dla `--freeform-action` i `--interactive-freeform`; używa `GEMINI_API_KEY` i opcjonalnie `GEMINI_MODEL` z `.env`:
+
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenario content/scenarios/abandoned_watchtower.json --board-backend none --gm-accept yes --freeform-action "Próbujemy wejść górą przez bramę, używając liny z hakiem." --challenge-roll gm_generated=14 --session-id gm_classifier_gemini_demo --max-steps 2
 ```
 
 Dry-run bez rzutu i bez zmiany stanu:
 
 ```bash
-PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenario content/scenarios/abandoned_watchtower.json --board-backend none --gm-classifier groq --gm-dry-run --freeform-action "Chcemy zrobić dźwignię z deski i kamienia, żeby podważyć mechanizm bramy." --session-id gm_classifier_dry_run --max-steps 2
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenario content/scenarios/abandoned_watchtower.json --board-backend none --gm-dry-run --freeform-action "Chcemy zrobić dźwignię z deski i kamienia, żeby podważyć mechanizm bramy." --session-id gm_classifier_dry_run --max-steps 2
 ```
 
 Interaktywny retry po odrzuceniu:
 
 ```bash
-PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenario content/scenarios/abandoned_watchtower.json --board-backend none --gm-classifier groq --interactive-freeform --freeform-retries 3 --session-id gm_context_retries_demo --max-steps 2
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenario content/scenarios/abandoned_watchtower.json --board-backend none --interactive-freeform --freeform-retries 3 --session-id gm_context_retries_demo --max-steps 2
 ```
 
 Pierwsza mini-scena wioski w symulatorze:
@@ -347,10 +353,14 @@ Tryb eksploracji:
 - opcja `Rozejrzyj się po okolicy` dopiero wtedy podświetla całą strefę i pozwala klikać kafle,
 - kliknięcie innej strefy pyta o przejście,
 - `Zbadaj obszar` wykonuje drużynowy test i bierze najwyższy wynik.
-- LLM classifier jest opcjonalny; działa tylko po `--gm-classifier groq` i wymaga `GROQ_API_KEY` w środowisku.
-- Odpowiedź LLM przechodzi najpierw przez Pydantic, a potem przez walidację stanu gry: aktywne wyzwanie, posiadane zasoby, tagi itemów i dozwolone konsekwencje.
-- Payload LLM zawiera warstwy kontekstu: scenariusz, lokacja, challenge i dynamiczny stan gry.
+- LLM classifier jest opcjonalny; w trybie freeform domyślnie używa Gemini, a `--gm-classifier groq|gemini|none` pozwala wymusić providera. Wymaga odpowiednio `GROQ_API_KEY` albo `GEMINI_API_KEY` w środowisku.
+- LLM działa w dwóch krokach: analyzer deklaracji sprawdza zgodność ze światem/sceną, a classifier dopiero potem proponuje mechanikę testu.
+- Odpowiedź LLM przechodzi przez Pydantic, walidację stanu gry i akceptację interpretacji przez `--gm-accept ask|yes|no`.
+- Payload LLM zawiera warstwy kontekstu: scenariusz, lokacja, challenge, dynamiczny stan gry i historię wcześniejszych prób.
 - Po odrzuceniu deklaracji tryb `--interactive-freeform` może poprosić o kolejną próbę bez restartowania runtime.
+- Błędy Groq/Gemini `429` i chwilowe `5xx` są ponawiane automatycznie z krótkim backoffem; `--freeform-retries` nadal oznacza liczbę prób deklaracji gracza, nie liczbę ponowień HTTP.
+- Jeśli analyzer prosi o doprecyzowanie i podaje znormalizowaną intencję, odpowiedź `tak` potwierdza tę interpretację bez wysyłania samego `tak` jako nowej deklaracji do LLM.
+- Decyzje terminalowe nie są deklaracjami fabularnymi: `+` akceptuje interpretację/decyzję, a `-` ją odrzuca.
 
 Manualne prompty do `--freeform-action`:
 
@@ -366,6 +376,9 @@ Manualne prompty do `--freeform-action`:
 - `Używamy starej piły, zanim ją znaleźliśmy.`
 - `Sypiemy piasek w mechanizm bramy, żeby ją odblokować.`
 - `Klinujemy bramę drewnianym klinem i próbujemy cicho podważyć mechanizm.`
+- `Przestrzeliwujemy zamek pistoletem laserowym.`
+- `Wyważamy bramę mocnym dmuchnięciem.`
+- `Jak przejść bez hałasu?`
 
 ## Zasada Testowania Funkcji
 

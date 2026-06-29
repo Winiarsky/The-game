@@ -524,6 +524,7 @@ LLM nie powinien być źródłem zasad ani samodzielnie zmieniać stanu gry.
 
 Rola LLM:
 
+* przeanalizować, czy deklaracja pasuje do świata fantasy, kontekstu sceny i aktywnego wyzwania,
 * przetłumaczyć deklarację gracza na istniejące podejście,
 * zaproponować pasującą cechę, skill, ryzyko i tagi,
 * wskazać możliwy koszt albo komplikację,
@@ -537,10 +538,13 @@ Minimalny kontrakt:
 * Silnik gry waliduje aktualny stan: aktywną strefę, wyzwanie, flagi, zasoby i tagi.
 * Item albo zasób daje efekt tylko wtedy, gdy drużyna go posiada i jego `bonus_tags` pasują do tagów podejścia.
 * Odpowiedź LLM może utworzyć tymczasową opcję challenge, ale rozstrzygnięcie nadal przechodzi przez deterministic engine.
+* Interpretacja LLM musi zostać zaakceptowana przed rzutem.
+* Historia prób challenge jest częścią stanu gry i trafia do dynamicznego kontekstu LLM.
 
 Warstwy kontekstu dla LLM:
 
-* system prompt opisuje rolę MG-klasyfikatora,
+* prompt analyzer opisuje rolę MG-analityka deklaracji,
+* prompt classifier opisuje rolę MG-klasyfikatora mechaniki,
 * scenario context opisuje klimat, dostępne materiały i zakazane założenia scenariusza,
 * zone context opisuje lokalne warunki,
 * challenge context opisuje sensowne i niemożliwe podejścia do konkretnej przeszkody,
