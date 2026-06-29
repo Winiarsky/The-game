@@ -80,6 +80,7 @@ def run_demo(
     args: argparse.Namespace,
     *,
     connection_factory: ConnectionFactory | None = None,
+    gm_client: object | None = None,
 ) -> DemoExplorationResult:
     observer = SessionObserver(args.session_id, Path(args.observation_dir))
     observer.record("session_started", {"runtime": "demo_exploration_scene"})
@@ -127,9 +128,23 @@ def run_demo(
         )
 
     scripts = list(args.exploration_script)
+    freeform_action = args.freeform_action.strip() if args.freeform_action else ""
+    freeform_consumed = False
     steps = 0
     while steps < args.max_steps:
         steps += 1
+        if freeform_action and not freeform_consumed:
+            freeform_consumed = True
+            state, freeform_messages, _freeform_resolved = _handle_freeform_actions(args, exploration, state, observer, gm_client)
+            objectives = _record_objectives_after_flags(objectives, state.flags, observer)
+            messages.extend(freeform_messages)
+            if _objectives_completed(objectives):
+                _finish_exploration_objectives(observer, messages)
+                break
+            if args.gm_dry_run:
+                observer.record("exploration_finished", {"reason": "gm_dry_run"})
+                break
+            continue
         if adapter is not None:
             adapter.clear()
             adapter.show_feedback(exploration_zone_feedback(state))
@@ -179,7 +194,7 @@ def run_demo(
             )
             messages.append(message)
             continue
-        state, option_messages, sent = _handle_zone_options(args, exploration.actors, state, zone, adapter, observer, scripts)
+        state, option_messages, sent = _handle_zone_options(args, exploration, state, zone, adapter, observer, scripts, gm_client)
         objectives = _record_objectives_after_flags(objectives, state.flags, observer)
         messages.extend(option_messages)
         feedback_events += sent
@@ -219,6 +234,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--look-around-clicks", type=int, default=3)
     parser.add_argument("--leader-id", default="hero")
     parser.add_argument("--helper-id", default=None)
+    parser.add_argument("--gm-classifier", choices=("none", "groq"), default="none")
+    parser.add_argument("--freeform-action", default="")
+    parser.add_argument("--groq-model", default=None)
+    parser.add_argument("--gm-dry-run", action="store_true", default=False)
+    parser.add_argument("--freeform-retries", type=int, default=1)
+    parser.add_argument("--interactive-freeform", action="store_true", default=False)
+    parser.add_argument("--legacy-option-menu", action="store_true", default=False)
     return parser
 
 
@@ -254,7 +276,10 @@ def _run_exploration_setup(
         zone_lines = ["Dostępne lokacje:"]
         for zone in available_zones:
             zone_lines.append(f"- {zone.name}: kolor {led_color_name_pl(zone.color)}")
-        zone_lines.append("Kliknij odpowiednią lokację, aby wejść w interakcję.")
+        if _should_auto_select_single_freeform_zone(args, state):
+            zone_lines.append("Jest jedna dostępna lokacja, więc przechodzę do niej automatycznie. Zaraz wpiszesz deklarację drużyny.")
+        else:
+            zone_lines.append("Kliknij odpowiednią lokację, aby wejść w interakcję.")
         zones_message = "\n".join(zone_lines)
         print(zones_message)
         messages.append(zones_message)
@@ -323,6 +348,13 @@ def _confirm_setup_step(
 def _next_exploration_click(args: argparse.Namespace, state: ExplorationState, adapter: BoardLedAdapter | None, observer: SessionObserver, scripts: list[str]) -> Coordinate | None:
     if scripts:
         return _coordinate_from_script(scripts.pop(0), state)
+    if _should_auto_select_single_freeform_zone(args, state):
+        zone = available_exploration_zones(state)[0]
+        observer.record(
+            "exploration_zone_auto_selected",
+            {"zone_id": zone.id, "position": list(zone.marker_position.as_tuple()), "reason": "single_freeform_zone"},
+        )
+        return zone.marker_position
     if args.board_backend == "none" or adapter is None:
         return None
     scan_board = getattr(adapter.connection, "scan_board", None)
@@ -337,6 +369,13 @@ def _next_exploration_click(args: argparse.Namespace, state: ExplorationState, a
         return None
     observer.record("board_scan_received", {"phase": "exploration_click", "position": list(selected)})
     return Coordinate(int(selected[0]), int(selected[1]))
+
+
+def _should_auto_select_single_freeform_zone(args: argparse.Namespace, state: ExplorationState) -> bool:
+    if args.gm_classifier == "none" or not args.interactive_freeform:
+        return False
+    zones = available_exploration_zones(state)
+    return len(zones) == 1 and zones[0].id == state.party_position.zone_id
 
 
 def _handle_zone_travel(
@@ -381,13 +420,28 @@ def _handle_zone_travel(
 
 def _handle_zone_options(
     args: argparse.Namespace,
-    actors: tuple[Actor, ...],
+    exploration: LoadedExploration,
     state: ExplorationState,
     zone: ExplorationZone,
     adapter: BoardLedAdapter | None,
     observer: SessionObserver,
     scripts: list[str],
+    gm_client: object | None,
 ) -> tuple[ExplorationState, tuple[str, ...], int]:
+    challenge = challenge_for_zone(state, zone.id)
+    if challenge is not None and available_challenge_options(state, challenge) and not args.legacy_option_menu and not scripts:
+        new_state, challenge_messages, resolved = _handle_challenge_freeform_prompt(
+            args,
+            exploration,
+            state,
+            zone,
+            challenge,
+            observer,
+            gm_client,
+        )
+        if resolved:
+            return new_state, challenge_messages, 0
+        return state, challenge_messages, 0
     menu = build_exploration_menu(state, zone)
     if not menu.options:
         message = f"{zone.name}: nie ma teraz dostępnych opcji."
@@ -434,22 +488,263 @@ def _handle_zone_options(
         resource = _select_resource(args, option, resources)
         if resource is not None:
             _activate_resource(args, challenge, option, resource, observer)
-        new_state, result_messages = _resolve_challenge_option(args, actors, state, challenge, option, resource, observer)
+        new_state, result_messages = _resolve_challenge_option(
+            args,
+            exploration.actors,
+            state,
+            challenge,
+            option,
+            resource,
+            observer,
+        )
         return new_state, (message, *result_messages), feedback_events
     if selected.kind == ExplorationMenuOptionKind.ZONE_OPTION:
         option = next(option for option in zone.options if option.id == selected.source_id)
         observer.record("zone_option_confirmed", {"zone_id": zone.id, "option_id": option.id})
         if option.kind == ExplorationOptionKind.SEARCH:
-            new_state, search_messages = _resolve_search_option(args, actors, state, zone, adapter, observer)
+            new_state, search_messages = _resolve_search_option(args, exploration.actors, state, zone, adapter, observer)
             return new_state, (message, *search_messages), feedback_events
         if option.kind == ExplorationOptionKind.CHECK and option.ability_check is not None:
-            new_state, check_messages = _resolve_check_option(args, actors, state, option, observer)
+            new_state, check_messages = _resolve_check_option(args, exploration.actors, state, option, observer)
             return new_state, (message, *check_messages), feedback_events
         new_state = _apply_message_option_flags(state, option, observer)
         option_message = option.message or option.description or f"Wykonano opcję: {option.label}."
         print(option_message)
         return new_state, (message, option_message), feedback_events
     return state, (message,), feedback_events
+
+
+def _handle_challenge_freeform_prompt(
+    args: argparse.Namespace,
+    exploration: LoadedExploration,
+    state: ExplorationState,
+    zone: ExplorationZone,
+    challenge: ExplorationChallenge,
+    observer: SessionObserver,
+    gm_client: object | None,
+) -> tuple[ExplorationState, tuple[str, ...], bool]:
+    message = _challenge_prompt_message(state, zone, challenge)
+    print(message)
+    observer.record(
+        "challenge_freeform_prompted",
+        {
+            "zone_id": zone.id,
+            "challenge_id": challenge.id,
+            "progress": challenge_state_for(state, challenge.id).current_progress,
+            "progress_required": challenge.progress_required,
+        },
+    )
+    if args.gm_classifier != "none":
+        new_state, freeform_messages, resolved = _handle_freeform_actions(args, exploration, state, observer, gm_client)
+        return new_state, (message, *freeform_messages), resolved
+    if args.board_backend != "none" and sys.stdin.isatty():
+        print("Wpisz deklarację przez `--gm-classifier groq --interactive-freeform`, albo uruchom stare menu opcją `--legacy-option-menu`.")
+    else:
+        print("Brak aktywnego klasyfikatora LLM. Użyj `--legacy-option-menu`, aby wybrać predefiniowaną opcję.")
+    return state, (message,), False
+
+
+def _challenge_prompt_message(
+    state: ExplorationState,
+    zone: ExplorationZone,
+    challenge: ExplorationChallenge,
+) -> str:
+    challenge_state = challenge_state_for(state, challenge.id)
+    lines = [
+        f"{zone.name}: {challenge.name}.",
+        zone.description or "Przed drużyną jest przeszkoda eksploracyjna.",
+    ]
+    if challenge.llm_context.summary:
+        lines.append(challenge.llm_context.summary)
+    lines.append(
+        f"Aby przejść dalej, musicie osiągnąć postęp {challenge.progress_required}. "
+        f"Aktualny postęp: {challenge_state.current_progress}/{challenge.progress_required}."
+    )
+    if challenge_state.noise:
+        lines.append(f"Dotychczasowy hałas: {challenge_state.noise}.")
+    if challenge_state.complications:
+        lines.append(f"Komplikacje: {', '.join(challenge_state.complications)}.")
+    if challenge.llm_context.reasonable_approaches:
+        lines.append("Sensowne podejścia: " + ", ".join(challenge.llm_context.reasonable_approaches) + ".")
+    if challenge.llm_context.risk_notes:
+        lines.append("Ryzyka: " + ", ".join(challenge.llm_context.risk_notes) + ".")
+    lines.append("Co robi drużyna?")
+    return "\n".join(lines)
+
+
+def _handle_freeform_actions(
+    args: argparse.Namespace,
+    exploration: LoadedExploration,
+    state: ExplorationState,
+    observer: SessionObserver,
+    gm_client: object | None,
+) -> tuple[ExplorationState, tuple[str, ...], bool]:
+    messages: list[str] = []
+    current_action = args.freeform_action.strip()
+    max_attempts = max(1, int(args.freeform_retries))
+    for attempt in range(1, max_attempts + 1):
+        if not current_action:
+            current_action = _read_next_freeform_action(args, attempt)
+        if not current_action:
+            message = "Nie podano kolejnej deklaracji freeform."
+            print(message)
+            messages.append(message)
+            observer.record("gm_classifier_retry_cancelled", {"attempt": attempt})
+            return state, tuple(messages), False
+        new_state, attempt_messages, resolved = _handle_freeform_action_once(
+            args,
+            exploration,
+            state,
+            observer,
+            gm_client,
+            current_action,
+            attempt,
+        )
+        messages.extend(attempt_messages)
+        if resolved:
+            return new_state, tuple(messages), True
+        current_action = ""
+        if not args.interactive_freeform:
+            return state, tuple(messages), False
+    return state, tuple(messages), False
+
+
+def _handle_freeform_action_once(
+    args: argparse.Namespace,
+    exploration: LoadedExploration,
+    state: ExplorationState,
+    observer: SessionObserver,
+    gm_client: object | None,
+    freeform_action: str,
+    attempt: int,
+) -> tuple[ExplorationState, tuple[str, ...], bool]:
+    if args.gm_classifier == "none":
+        message = "Freeform action wymaga `--gm-classifier groq`."
+        print(message)
+        observer.record("gm_classifier_proposal_rejected", {"reason": "classifier_disabled"})
+        return state, (message,), False
+    try:
+        (
+            build_gm_classifier_request,
+            challenge_option_from_validated_proposal,
+            validate_gm_classifier_proposal,
+        ) = _load_gm_classifier_tools()
+        request = build_gm_classifier_request(
+            scenario_id=exploration.scenario_id,
+            scenario_name=exploration.scenario_name,
+            scenario_context=exploration.llm_context,
+            state=state,
+            player_action=freeform_action,
+        )
+        observer.record(
+            "gm_classifier_requested",
+            {
+                "provider": args.gm_classifier,
+                "model": args.groq_model or "llama-3.1-8b-instant",
+                "player_action": freeform_action,
+                "attempt": attempt,
+                "payload": request.to_prompt_payload(),
+            },
+        )
+        client = gm_client or _create_gm_classifier_client(args)
+        proposal = client.classify(request)
+        observer.record(
+            "gm_classifier_response_received",
+            {
+                "model": getattr(client, "model", args.groq_model or "llama-3.1-8b-instant"),
+                "proposal": proposal.model_dump(mode="json"),
+            },
+        )
+        validated = validate_gm_classifier_proposal(proposal, request)
+        option = challenge_option_from_validated_proposal(validated)
+        resource = validated.resources[0] if validated.resources else None
+        observer.record(
+            "gm_classifier_proposal_validated",
+            {
+                "challenge_id": validated.challenge.id,
+                "option_id": option.id,
+                "label": option.label,
+                "ability": option.ability_check.ability,
+                "skill": option.ability_check.skill,
+                "dc": option.ability_check.dc,
+                "progress_on_success": option.progress_on_success,
+                "progress_on_failure": option.progress_on_failure,
+                "approach_tags": list(option.tags),
+                "resource_ids": [resource.id for resource in validated.resources],
+            },
+        )
+    except (RuntimeError, KeyError, ValueError) as exc:
+        message = f"Nie udało się użyć deklaracji freeform: {exc}"
+        print(message)
+        observer.record("gm_classifier_proposal_rejected", {"reason": str(exc), "attempt": attempt})
+        retry_message = "Możecie spróbować opisać inne podejście." if args.interactive_freeform else ""
+        if retry_message:
+            print(retry_message)
+            return state, (message, retry_message), False
+        return state, (message,), False
+
+    messages: list[str] = []
+    if proposal.player_narration:
+        print(proposal.player_narration)
+        messages.append(proposal.player_narration)
+    summary = (
+        f"Propozycja MG: {option.label}. Test: {option.ability_check.ability}"
+        f"{'/' + option.ability_check.skill if option.ability_check.skill else ''}, "
+        f"ST {option.ability_check.dc}, postęp przy sukcesie: +{option.progress_on_success}, "
+        f"postęp przy porażce: +{option.progress_on_failure}."
+    )
+    if resource is not None:
+        summary = f"{summary} Zasób: {resource.label}."
+    print(summary)
+    messages.append(summary)
+    if args.gm_dry_run:
+        observer.record("gm_classifier_dry_run_finished", {"challenge_id": validated.challenge.id, "option_id": option.id})
+        return state, tuple(messages), True
+    if resource is not None:
+        _activate_resource(args, validated.challenge, option, resource, observer)
+    temporary_challenge = replace(validated.challenge, options=(option, *validated.challenge.options))
+    new_state, result_messages = _resolve_challenge_option(args, exploration.actors, state, temporary_challenge, option, resource, observer)
+    observer.record(
+        "gm_classifier_option_resolved",
+        {
+            "challenge_id": validated.challenge.id,
+            "option_id": option.id,
+            "resource_id": resource.id if resource else None,
+        },
+    )
+    return new_state, (*messages, *result_messages), True
+
+
+def _read_next_freeform_action(args: argparse.Namespace, attempt: int) -> str:
+    if not args.interactive_freeform or not sys.stdin.isatty():
+        return ""
+    return input(f"Opisz kolejne podejście drużyny ({attempt}/{args.freeform_retries}): ").strip()
+
+
+def _create_gm_classifier_client(args: argparse.Namespace) -> object:
+    if args.gm_classifier == "groq":
+        try:
+            from dnd_board_game.llm import GroqGmClassifierClient
+        except ModuleNotFoundError as exc:
+            raise RuntimeError("LLM classifier wymaga zależności `pydantic`. Uruchom `pip install -r requirements.txt`.") from exc
+        return GroqGmClassifierClient(model=args.groq_model)
+    raise RuntimeError(f"Unknown GM classifier: {args.gm_classifier}.")
+
+
+def _load_gm_classifier_tools():
+    try:
+        from dnd_board_game.llm import (
+            build_gm_classifier_request,
+            challenge_option_from_validated_proposal,
+            validate_gm_classifier_proposal,
+        )
+    except ModuleNotFoundError as exc:
+        raise RuntimeError("LLM classifier wymaga zależności `pydantic`. Uruchom `pip install -r requirements.txt`.") from exc
+    return (
+        build_gm_classifier_request,
+        challenge_option_from_validated_proposal,
+        validate_gm_classifier_proposal,
+    )
 
 
 def _apply_message_option_flags(

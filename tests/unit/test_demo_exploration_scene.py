@@ -3,6 +3,7 @@ import sys
 import time
 
 from dnd_board_game.hardware import BoardLedAdapter
+from dnd_board_game.llm import GmClassifierProposal
 from dnd_board_game.runtime import demo_exploration_scene
 from dnd_board_game.runtime.demo_exploration_scene import build_parser, run_demo
 from dnd_board_game.world import Coordinate
@@ -27,6 +28,20 @@ class FakeConnection:
 
     def cancel_scan(self):
         self.events.append(("cancel_scan",))
+
+
+class FakeGmClient:
+    model = "fake-gm"
+
+    def __init__(self, proposal):
+        self.proposals = list(proposal if isinstance(proposal, list) else [proposal])
+        self.requests = []
+
+    def classify(self, request):
+        self.requests.append(request)
+        if len(self.proposals) > 1:
+            return self.proposals.pop(0)
+        return self.proposals[0]
 
 
 def _args(tmp_path, *extra):
@@ -54,6 +69,35 @@ def _scenario_args(tmp_path, scenario, *extra):
 
 def _events(path):
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+
+
+def _gm_rope_proposal():
+    return GmClassifierProposal.model_validate(
+        {
+            "intent_type": "challenge_attempt",
+            "target_challenge_id": "closed_gate",
+            "approach_label": "Przejście górą z liną",
+            "approach_tags": ["climbing", "quiet"],
+            "ability": "dexterity",
+            "skill": "acrobatics",
+            "dc": 13,
+            "progress_on_success": 2,
+            "progress_on_failure": 1,
+            "used_resource_ids": ["rope"],
+            "consequences": [{"trigger": "failure", "type": "add_noise", "value": 1}],
+            "player_narration": "Lina łapie o występ muru.",
+        }
+    )
+
+
+def _gm_unsupported_proposal():
+    return GmClassifierProposal.model_validate(
+        {
+            "intent_type": "unsupported",
+            "target_challenge_id": None,
+            "player_narration": "Lina nie pozwoli przelecieć nad bramą. Spróbujcie opisać realne podejście.",
+        }
+    )
 
 
 def test_demo_exploration_scene_runs_scripted_zone_travel_and_search(tmp_path):
@@ -110,6 +154,118 @@ def test_demo_exploration_scene_partial_gate_progress_keeps_courtyard_locked(tmp
     assert result.final_state.party_position.zone_id == "gate"
     assert "challenge_progress_updated" in event_types
     assert [zone.id for zone in demo_exploration_scene.available_exploration_zones(result.final_state)] == ["gate"]
+
+
+def test_demo_exploration_scene_gm_classifier_dry_run_does_not_change_progress(tmp_path):
+    client = FakeGmClient(_gm_rope_proposal())
+
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--gm-classifier",
+            "groq",
+            "--gm-dry-run",
+            "--freeform-action",
+            "Próbujemy wejść górą z liną.",
+            "--max-steps",
+            "2",
+        ),
+        gm_client=client,
+    )
+
+    events = _events(result.observation_path)
+    event_types = [event["event_type"] for event in events]
+    assert len(client.requests) == 1
+    assert "gm_classifier_requested" in event_types
+    assert "gm_classifier_proposal_validated" in event_types
+    assert "challenge_progress_updated" not in event_types
+    assert demo_exploration_scene.challenge_state_for(result.final_state, "closed_gate").current_progress == 0
+
+
+def test_demo_exploration_scene_gm_classifier_resolves_generated_option(tmp_path):
+    client = FakeGmClient(_gm_rope_proposal())
+
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--gm-classifier",
+            "groq",
+            "--freeform-action",
+            "Próbujemy wejść górą z liną.",
+            "--challenge-roll",
+            "gm_generated=14",
+            "--max-steps",
+            "2",
+        ),
+        gm_client=client,
+    )
+
+    events = _events(result.observation_path)
+    event_types = [event["event_type"] for event in events]
+    assert "resource_used" in event_types
+    assert "gm_classifier_option_resolved" in event_types
+    assert "challenge_progress_updated" in event_types
+    assert any("postęp przy sukcesie: +2, postęp przy porażce: +1" in message for message in result.messages)
+    assert demo_exploration_scene.challenge_state_for(result.final_state, "closed_gate").current_progress == 2
+
+
+def test_demo_exploration_scene_gm_classifier_retries_after_rejection(tmp_path, monkeypatch):
+    client = FakeGmClient([_gm_unsupported_proposal(), _gm_rope_proposal()])
+    answers = iter(["Próbujemy wejść górą z liną."])
+    monkeypatch.setattr(demo_exploration_scene.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda _prompt: next(answers))
+
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--gm-classifier",
+            "groq",
+            "--interactive-freeform",
+            "--freeform-retries",
+            "2",
+            "--freeform-action",
+            "Wsiadam na linę i przelatuję nad bramą.",
+            "--challenge-roll",
+            "gm_generated=14",
+            "--max-steps",
+            "1",
+        ),
+        gm_client=client,
+    )
+
+    events = _events(result.observation_path)
+    event_types = [event["event_type"] for event in events]
+    assert len(client.requests) == 2
+    assert "gm_classifier_proposal_rejected" in event_types
+    assert "gm_classifier_option_resolved" in event_types
+    assert demo_exploration_scene.challenge_state_for(result.final_state, "closed_gate").current_progress == 2
+
+
+def test_demo_exploration_scene_interactive_gm_auto_selects_single_zone(tmp_path, monkeypatch):
+    client = FakeGmClient(_gm_rope_proposal())
+    monkeypatch.setattr(demo_exploration_scene.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda _prompt: "Próbujemy wejść górą z liną.")
+
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--gm-classifier",
+            "groq",
+            "--interactive-freeform",
+            "--challenge-roll",
+            "gm_generated=14",
+            "--max-steps",
+            "1",
+        ),
+        gm_client=client,
+    )
+
+    events = _events(result.observation_path)
+    event_types = [event["event_type"] for event in events]
+    assert len(client.requests) == 1
+    assert "exploration_zone_auto_selected" in event_types
+    assert "gm_classifier_option_resolved" in event_types
+    assert any("przechodzę do niej automatycznie" in message for message in result.messages)
 
 
 def test_demo_exploration_scene_search_can_reveal_saw_resource(tmp_path):
@@ -214,6 +370,19 @@ def test_demo_exploration_scene_setup_sends_leds_with_fake_connection(tmp_path):
     assert "party_position_set" in event_types
 
 
+def test_demo_exploration_scene_gate_click_shows_challenge_prompt_by_default(tmp_path):
+    connection = FakeConnection(scanned=[(9, 2)])
+    args = _args(tmp_path, "--board-backend", "simulator", "--show-leds", "--max-steps", "1")
+
+    result = run_demo(args, connection_factory=lambda args: connection)
+
+    event_types = [event["event_type"] for event in _events(result.observation_path)]
+    assert "challenge_freeform_prompted" in event_types
+    assert "exploration_menu_opened" not in event_types
+    assert any("Aby przejść dalej" in message for message in result.messages)
+    assert any("Aktualny postęp: 0/3" in message for message in result.messages)
+
+
 def test_demo_exploration_scene_village_setup_confirms_visible_points_with_fake_connection(tmp_path):
     connection = FakeConnection(scanned=[(8, 5), (8, 4), (8, 1)])
     args = _scenario_args(
@@ -238,7 +407,15 @@ def test_demo_exploration_scene_village_setup_confirms_visible_points_with_fake_
 
 def test_demo_exploration_menu_clears_anchor_before_showing_options(tmp_path):
     connection = FakeConnection(scanned=[(9, 2), (8, 1)])
-    args = _args(tmp_path, "--board-backend", "simulator", "--show-leds", "--max-steps", "1")
+    args = _args(
+        tmp_path,
+        "--board-backend",
+        "simulator",
+        "--show-leds",
+        "--legacy-option-menu",
+        "--max-steps",
+        "1",
+    )
 
     run_demo(args, connection_factory=lambda args: connection)
 
@@ -261,6 +438,7 @@ def test_demo_exploration_clears_revealed_point_before_next_map_state(tmp_path):
         "--board-backend",
         "simulator",
         "--show-leds",
+        "--legacy-option-menu",
         "--max-steps",
         "2",
         "--party-check-roll",

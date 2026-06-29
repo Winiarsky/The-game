@@ -40,8 +40,10 @@
 - [x] Show only exploration anchors by default and move full-zone LEDs to look-around mode.
 - [x] Add first village exploration mini-scene with setup NPC/object points.
 - [x] Allow simple exploration message options to set scene flags and complete objectives.
+- [x] Add optional Groq LLM GM classifier MVP for free-form exploration declarations.
+- [x] Add LLM context layers and retry flow for rejected free-form declarations.
 - [ ] Add full inventory/cantrip integration for exploration option bonuses.
-- [ ] Reserve future LLM adapter for classifying free-form exploration declarations into validated options.
+- [ ] Add voice input and richer UI for free-form exploration declarations.
 - [x] Implement hardware adapter interface around `board.Connection`.
 - [x] Add LED frame generation for selected path and movement range.
 - [x] Decide first UI/runtime surface.

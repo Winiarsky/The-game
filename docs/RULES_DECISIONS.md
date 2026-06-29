@@ -321,7 +321,12 @@ Implementacja MVP:
 - Opcje wyzwań mogą mieć tagi zasobów/narzędzi/czarów, np. `climbing`, `crowbar`, `quiet`; pasujące itemy mogą dawać premię, przewagę albo łagodzić hałas/komplikacje. Pełny ekwipunek pozostaje poza MVP.
 - Proste opcje eksploracyjne typu `message` mogą ustawiać flagi sceny. Dzięki temu rozmowa, odczytanie tablicy albo obejrzenie punktu zainteresowania może domknąć objective bez sztucznego testu cechy.
 - `village_square_mvp` jest pierwszą mini-sceną eksploracji społecznej: kilka jawnych lokacji, setup jawnych NPC/obiektów, ukryty punkt i objective zależne od flagi.
-- LLM może w przyszłości klasyfikować kreatywne deklaracje graczy do istniejących opcji/tagów, ale nie powinien samodzielnie zmieniać zasad ani stanu gry bez walidacji.
+- LLM może klasyfikować kreatywne deklaracje graczy do ustrukturyzowanych propozycji challenge, ale nie może samodzielnie zmieniać zasad ani stanu gry.
+- LLM classifier MVP używa Groq opcjonalnie, waliduje odpowiedź przez Pydantic, a następnie przez silnik gry.
+- Prompt LLM składa się z warstw: stały system prompt, kontekst scenariusza, kontekst lokacji, kontekst challenge i dynamiczny stan gry.
+- `llm_context` może opisywać dostępne materiały, zakazane założenia, sensowne podejścia, niemożliwe podejścia i ryzyka.
+- Zasób zaproponowany przez LLM działa mechanicznie tylko wtedy, gdy drużyna go posiada i `bonus_tags` zasobu przecinają się z tagami podejścia.
+- Propozycja LLM może utworzyć tymczasową opcję `gm_generated`, która jest rozstrzygana przez zwykły deterministic `resolve_challenge_option`.
 
 Poza zakresem MVP:
 
@@ -331,7 +336,7 @@ Poza zakresem MVP:
 - automatyczne przejście z eksploracji do encountera.
 - pełny silnik wyzwań z wieloetapowymi konsekwencjami poza pierwszym challenge bramy,
 - integracja pełnego ekwipunku i czarów z opcjami eksploracyjnymi,
-- interpretacja kreatywnych deklaracji przez LLM.
+- głosowy interfejs kreatywnych deklaracji przez LLM.
 
 Testy:
 

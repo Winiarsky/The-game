@@ -113,6 +113,11 @@ def test_load_abandoned_watchtower_builds_exploration_scene():
     assert len(exploration.zones) == 4
     assert len(exploration.challenges) == 1
     assert exploration.challenges[0].completed_flag == "gate_passed"
+    assert "Opuszczona" in exploration.llm_context.summary
+    assert "brak działającego mechanizmu lotu" in exploration.llm_context.forbidden_assumptions
+    gate = next(zone for zone in exploration.zones if zone.id == "gate")
+    assert "lina nie pozwala latać" in gate.llm_context.forbidden_assumptions
+    assert "przelot na linie bez magii" in exploration.challenges[0].llm_context.impossible_approaches
     assert {resource.id for resource in exploration.resources} == {"rope", "wedge", "saw"}
     assert exploration.initial_resource_ids == ("rope", "wedge")
     courtyard = next(zone for zone in exploration.zones if zone.id == "courtyard")

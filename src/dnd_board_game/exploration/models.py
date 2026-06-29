@@ -29,6 +29,26 @@ class ExplorationMenuOptionKind(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class LlmContext:
+    summary: str = ""
+    available_materials: tuple[str, ...] = ()
+    forbidden_assumptions: tuple[str, ...] = ()
+    reasonable_approaches: tuple[str, ...] = ()
+    impossible_approaches: tuple[str, ...] = ()
+    risk_notes: tuple[str, ...] = ()
+
+    def as_payload(self) -> dict[str, object]:
+        return {
+            "summary": self.summary,
+            "available_materials": list(self.available_materials),
+            "forbidden_assumptions": list(self.forbidden_assumptions),
+            "reasonable_approaches": list(self.reasonable_approaches),
+            "impossible_approaches": list(self.impossible_approaches),
+            "risk_notes": list(self.risk_notes),
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class ExplorationOption:
     id: str
     label: str
@@ -64,6 +84,7 @@ class ExplorationZone:
     search_reveals: tuple[str, ...] = ()
     search_success_flag: str | None = None
     search_failure_flag: str | None = None
+    llm_context: LlmContext = LlmContext()
 
     @property
     def marker_position(self) -> Coordinate:
@@ -149,6 +170,7 @@ class ExplorationChallenge:
     progress_required: int
     completed_flag: str
     options: tuple[ExplorationChallengeOption, ...]
+    llm_context: LlmContext = LlmContext()
 
 
 @dataclass(frozen=True, slots=True)

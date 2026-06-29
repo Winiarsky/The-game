@@ -9,6 +9,7 @@ description = "Board-assisted Dungeons & Dragons 5e encounter runtime."
 requires-python = ">=3.12"
 dependencies = [
   "Flask",
+  "pydantic",
   "pyserial",
   "requests",
 ]

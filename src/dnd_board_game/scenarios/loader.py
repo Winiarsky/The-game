@@ -26,6 +26,7 @@ from dnd_board_game.exploration import (
     ExplorationPoint,
     ExplorationResource,
     ExplorationZone,
+    LlmContext,
     PartyPosition,
     SceneMode,
 )
@@ -106,6 +107,7 @@ class ScenarioDefinition:
     exploration_resources: tuple[ExplorationResource, ...] = ()
     exploration_initial_resources: tuple[str, ...] = ()
     party_start_zone_id: str | None = None
+    llm_context: LlmContext = LlmContext()
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,6 +141,7 @@ class LoadedExploration:
     resources: tuple[ExplorationResource, ...]
     initial_resource_ids: tuple[str, ...]
     party_position: PartyPosition
+    llm_context: LlmContext = LlmContext()
     objectives: tuple[SceneObjective, ...] = ()
 
 
@@ -243,6 +246,7 @@ def build_exploration_from_scenario(loaded: LoadedScenario) -> LoadedExploration
         resources=definition.exploration_resources,
         initial_resource_ids=definition.exploration_initial_resources,
         party_position=PartyPosition(start_zone.id, start_zone.marker_position),
+        llm_context=definition.llm_context,
         objectives=objectives,
     )
 
@@ -282,6 +286,7 @@ def _parse_scenario(data: dict[str, Any], scenario_path: Path) -> ScenarioDefini
         exploration_resources=tuple(_parse_exploration_resource(entry) for entry in exploration_data.get("resources", [])),
         exploration_initial_resources=tuple(str(item) for item in exploration_data.get("initial_resources", [])),
         party_start_zone_id=str(exploration_data["party_start_zone"]) if "party_start_zone" in exploration_data else None,
+        llm_context=_parse_llm_context(data.get("llm_context", {}), "scenario.llm_context"),
     )
 
 
@@ -434,6 +439,7 @@ def _parse_exploration_zone(data: Any) -> ExplorationZone:
         search_reveals=tuple(str(item) for item in search_data.get("reveals", [])),
         search_success_flag=str(search_data["success_flag"]) if "success_flag" in search_data else None,
         search_failure_flag=str(search_data["failure_flag"]) if "failure_flag" in search_data else None,
+        llm_context=_parse_llm_context(data.get("llm_context", {}), f"exploration zone {zone_id}.llm_context"),
     )
 
 
@@ -496,6 +502,7 @@ def _parse_exploration_challenge(data: Any) -> ExplorationChallenge:
         progress_required=int(data.get("progress_required", 3)),
         completed_flag=str(_required(data, "completed_flag", f"exploration challenge {challenge_id}")),
         options=tuple(_parse_exploration_challenge_option(entry, challenge_id) for entry in options_data),
+        llm_context=_parse_llm_context(data.get("llm_context", {}), f"exploration challenge {challenge_id}.llm_context"),
     )
 
 
@@ -545,6 +552,29 @@ def _parse_exploration_resource(data: Any) -> ExplorationResource:
         mitigates_noise=int(data.get("mitigates_noise", 0)),
         unlocks_flags=tuple(str(item) for item in data.get("unlocks_flags", [])),
     )
+
+
+def _parse_llm_context(data: Any, field: str) -> LlmContext:
+    if data is None:
+        return LlmContext()
+    if not isinstance(data, dict):
+        raise ValueError(f"{field} must be an object.")
+    return LlmContext(
+        summary=str(data.get("summary", "")),
+        available_materials=_parse_string_tuple(data.get("available_materials", []), f"{field}.available_materials"),
+        forbidden_assumptions=_parse_string_tuple(data.get("forbidden_assumptions", []), f"{field}.forbidden_assumptions"),
+        reasonable_approaches=_parse_string_tuple(data.get("reasonable_approaches", []), f"{field}.reasonable_approaches"),
+        impossible_approaches=_parse_string_tuple(data.get("impossible_approaches", []), f"{field}.impossible_approaches"),
+        risk_notes=_parse_string_tuple(data.get("risk_notes", []), f"{field}.risk_notes"),
+    )
+
+
+def _parse_string_tuple(data: Any, field: str) -> tuple[str, ...]:
+    if data is None:
+        return ()
+    if not isinstance(data, list):
+        raise ValueError(f"{field} must be a list.")
+    return tuple(str(item) for item in data)
 
 
 def _parse_interactions(data: Any, environment_id: str) -> tuple[SceneInteraction, ...]:

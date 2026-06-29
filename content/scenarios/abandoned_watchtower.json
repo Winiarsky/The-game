@@ -6,6 +6,25 @@
     "cols": 20,
     "rows": 30
   },
+  "llm_context": {
+    "summary": "Opuszczona, zarośnięta strażnica przy starym trakcie. Miejsce jest wilgotne, częściowo spróchniałe i dawno nieutrzymywane.",
+    "available_materials": [
+      "spróchniałe drewno",
+      "kamienie",
+      "zarośla",
+      "stare deski",
+      "rdzewiejące metalowe elementy"
+    ],
+    "forbidden_assumptions": [
+      "brak dużych świeżych drzew do ścięcia",
+      "brak działającego mechanizmu lotu",
+      "brak dostępnej magii środowiskowej znikąd"
+    ],
+    "risk_notes": [
+      "hałas może przyciągnąć uwagę",
+      "spróchniałe elementy mogą pękać pod ciężarem"
+    ]
+  },
   "objectives": [
     {
       "id": "find_hidden_cache",
@@ -190,6 +209,19 @@
         ],
         "color": "marker",
         "description": "Zarośnięta brama prowadząca na dziedziniec.",
+        "llm_context": {
+          "summary": "Przed drużyną stoi stara drewniana brama i niski fragment muru. Wokół są zarośla, kamienie i spróchniałe deski.",
+          "available_materials": [
+            "spróchniałe przęsła",
+            "kamienie",
+            "stare deski",
+            "zarośla"
+          ],
+          "forbidden_assumptions": [
+            "lina nie pozwala latać",
+            "nie ma tu wysokiego drzewa do ścięcia na taran"
+          ]
+        },
         "adjacent_zone_ids": [
           "courtyard"
         ],
@@ -1396,6 +1428,29 @@
         "name": "Zamknięta brama",
         "progress_required": 3,
         "completed_flag": "gate_passed",
+        "llm_context": {
+          "summary": "Zamknięta, stara brama blokuje wejście na dziedziniec. Da się ją uszkodzić, podważyć, przeciąć, obejść albo wspiąć się po uszkodzonych przęsłach.",
+          "reasonable_approaches": [
+            "wyważenie",
+            "wspinaczka",
+            "podważenie mechanizmu",
+            "przecięcie drewna",
+            "poszukanie obejścia",
+            "poszerzenie szpary"
+          ],
+          "impossible_approaches": [
+            "przelot na linie bez magii",
+            "zrobienie tarana ze świeżo ściętego drzewa",
+            "otwarcie nieistniejącym magicznym przełącznikiem",
+            "szybki podkop pod kamienną bramą bez odpowiednich narzędzi i czasu"
+          ],
+          "risk_notes": [
+            "wyważanie jest głośne",
+            "wspinaczka grozi upadkiem",
+            "podważanie może zaklinować mechanizm",
+            "podkop w tej scenie byłby zbyt wolny na szybkie sforsowanie bramy"
+          ]
+        },
         "options": [
           {
             "id": "force_gate",

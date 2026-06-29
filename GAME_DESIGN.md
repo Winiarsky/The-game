@@ -512,24 +512,41 @@ Bonus tag: climbing
 Efekt: advantage albo +2 do testu
 ```
 
-### Rola LLM W Przyszłości
+### Rola LLM W Eksploracji
 
 W pierwszej implementacji opcje eksploracyjne są predefiniowane w contentcie.
 
 Pierwszy zaimplementowany vertical slice tego modelu to brama w scenariuszu `Opuszczona strażnica`: wyzwanie ma postęp `3/3`, kilka podejść, hałas, komplikacje, przygotowanie przez badanie okolicy oraz minimalne zasoby drużyny.
 
-W przyszłości LLM może zostać dodany jako warstwa interpretacji kreatywnych deklaracji graczy.
+LLM może działać jako opcjonalna warstwa interpretacji kreatywnych deklaracji graczy.
 
 LLM nie powinien być źródłem zasad ani samodzielnie zmieniać stanu gry.
 
-Docelowa rola LLM:
+Rola LLM:
 
 * przetłumaczyć deklarację gracza na istniejące podejście,
 * zaproponować pasującą cechę, skill, ryzyko i tagi,
 * wskazać możliwy koszt albo komplikację,
 * zwrócić ustrukturyzowaną propozycję do walidacji przez silnik gry albo MG.
 
-Silnik gry nadal powinien walidować wynik i stosować tylko znane efekty.
+Silnik gry nadal waliduje wynik i stosuje tylko znane efekty.
+
+Minimalny kontrakt:
+
+* Pydantic waliduje kształt odpowiedzi LLM.
+* Silnik gry waliduje aktualny stan: aktywną strefę, wyzwanie, flagi, zasoby i tagi.
+* Item albo zasób daje efekt tylko wtedy, gdy drużyna go posiada i jego `bonus_tags` pasują do tagów podejścia.
+* Odpowiedź LLM może utworzyć tymczasową opcję challenge, ale rozstrzygnięcie nadal przechodzi przez deterministic engine.
+
+Warstwy kontekstu dla LLM:
+
+* system prompt opisuje rolę MG-klasyfikatora,
+* scenario context opisuje klimat, dostępne materiały i zakazane założenia scenariusza,
+* zone context opisuje lokalne warunki,
+* challenge context opisuje sensowne i niemożliwe podejścia do konkretnej przeszkody,
+* dynamic state opisuje fakty, które już zaszły w tej sesji.
+
+Po odrzuceniu deklaracji aplikacja powinna dać graczom możliwość wpisania kolejnego podejścia bez resetowania sceny.
 
 ---
 

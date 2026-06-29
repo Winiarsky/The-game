@@ -307,6 +307,28 @@ W symulatorze:
 PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenario content/scenarios/abandoned_watchtower.json --board-backend simulator --board-url http://127.0.0.1:5000 --show-leds --scan-timeout 30 --session-id abandoned_watchtower_simulator_demo
 ```
 
+LLM GM classifier przez Groq:
+
+```bash
+source .env
+```
+
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenario content/scenarios/abandoned_watchtower.json --board-backend none --gm-classifier groq --freeform-action "Próbujemy wejść górą przez bramę, używając liny z hakiem." --challenge-roll gm_generated=14 --session-id gm_classifier_demo --max-steps 2
+```
+
+Dry-run bez rzutu i bez zmiany stanu:
+
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenario content/scenarios/abandoned_watchtower.json --board-backend none --gm-classifier groq --gm-dry-run --freeform-action "Chcemy zrobić dźwignię z deski i kamienia, żeby podważyć mechanizm bramy." --session-id gm_classifier_dry_run --max-steps 2
+```
+
+Interaktywny retry po odrzuceniu:
+
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenario content/scenarios/abandoned_watchtower.json --board-backend none --gm-classifier groq --interactive-freeform --freeform-retries 3 --session-id gm_context_retries_demo --max-steps 2
+```
+
 Pierwsza mini-scena wioski w symulatorze:
 
 ```bash
@@ -325,6 +347,25 @@ Tryb eksploracji:
 - opcja `Rozejrzyj się po okolicy` dopiero wtedy podświetla całą strefę i pozwala klikać kafle,
 - kliknięcie innej strefy pyta o przejście,
 - `Zbadaj obszar` wykonuje drużynowy test i bierze najwyższy wynik.
+- LLM classifier jest opcjonalny; działa tylko po `--gm-classifier groq` i wymaga `GROQ_API_KEY` w środowisku.
+- Odpowiedź LLM przechodzi najpierw przez Pydantic, a potem przez walidację stanu gry: aktywne wyzwanie, posiadane zasoby, tagi itemów i dozwolone konsekwencje.
+- Payload LLM zawiera warstwy kontekstu: scenariusz, lokacja, challenge i dynamiczny stan gry.
+- Po odrzuceniu deklaracji tryb `--interactive-freeform` może poprosić o kolejną próbę bez restartowania runtime.
+
+Manualne prompty do `--freeform-action`:
+
+- `Próbujemy wejść górą przez bramę, używając liny z hakiem.`
+- `Chcemy znaleźć deskę i kamień, zrobić prostą dźwignię i podważyć mechanizm bramy.`
+- `Wojownik próbuje wyważyć bramę barkiem, zanim ktoś nas zauważy.`
+- `Rozglądamy się wzdłuż muru i szukamy cichego bocznego przejścia.`
+- `Używamy liny, żeby podważyć metalowy mechanizm bramy.`
+- `Chcemy zdjąć kilka spróchniałych desek po cichu i zrobić przejście tylko dla jednej osoby.`
+- `Chcemy teleportować się za bramę czarem, którego nikt z drużyny nie zna.`
+- `Wsiadam na linę i przelatuję nad bramą.`
+- `Ścinamy pobliskie wielkie drzewo i robimy taran.`
+- `Używamy starej piły, zanim ją znaleźliśmy.`
+- `Sypiemy piasek w mechanizm bramy, żeby ją odblokować.`
+- `Klinujemy bramę drewnianym klinem i próbujemy cicho podważyć mechanizm.`
 
 ## Zasada Testowania Funkcji
 
