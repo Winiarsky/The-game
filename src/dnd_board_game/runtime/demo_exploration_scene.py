@@ -12,7 +12,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from dnd_board_game.actors import Actor
-from dnd_board_game.combat import SceneFlags, SetupVisibility, set_scene_flag
+from dnd_board_game.combat import SceneFlags, SetupVisibility, objective_status_after_flags, set_scene_flag
 from dnd_board_game.exploration import (
     ExplorationChallenge,
     ExplorationChallengeOption,
@@ -97,6 +97,7 @@ def run_demo(
         "exploration_started",
         {"scenario_id": exploration.scenario_id, "scenario_name": exploration.scenario_name},
     )
+    objectives = exploration.objectives
     state = ExplorationState(
         exploration.zones,
         exploration.points,
@@ -110,6 +111,20 @@ def run_demo(
     print(messages[-1])
     setup_messages, feedback_events = _run_exploration_setup(args, exploration, state, adapter, observer)
     messages.extend(setup_messages)
+    for objective in objectives:
+        objective_message = f"Cel eksploracji: {objective.name}. {objective.description}".strip()
+        print(objective_message)
+        messages.append(objective_message)
+        observer.record(
+            "objective_started",
+            {
+                "objective_id": objective.id,
+                "name": objective.name,
+                "condition": objective.condition.value,
+                "flag_key": objective.flag_key,
+                "flag_value": objective.flag_value,
+            },
+        )
 
     scripts = list(args.exploration_script)
     steps = 0
@@ -130,8 +145,12 @@ def run_demo(
         point = _visible_point_for_position(state, clicked)
         if point is not None:
             state, point_messages, sent = _handle_exploration_point(args, state, point, adapter, observer)
+            objectives = _record_objectives_after_flags(objectives, state.flags, observer)
             messages.extend(point_messages)
             feedback_events += sent
+            if _objectives_completed(objectives):
+                _finish_exploration_objectives(observer, messages)
+                break
             continue
         zone = zone_for_position(state.zones, clicked)
         if zone is not None and not zone_is_available(state, zone):
@@ -161,8 +180,12 @@ def run_demo(
             messages.append(message)
             continue
         state, option_messages, sent = _handle_zone_options(args, exploration.actors, state, zone, adapter, observer, scripts)
+        objectives = _record_objectives_after_flags(objectives, state.flags, observer)
         messages.extend(option_messages)
         feedback_events += sent
+        if _objectives_completed(objectives):
+            _finish_exploration_objectives(observer, messages)
+            break
     else:
         message = f"Eksploracja zatrzymana po limicie kroków: {args.max_steps}."
         print(message)
@@ -422,10 +445,55 @@ def _handle_zone_options(
         if option.kind == ExplorationOptionKind.CHECK and option.ability_check is not None:
             new_state, check_messages = _resolve_check_option(args, actors, state, option, observer)
             return new_state, (message, *check_messages), feedback_events
+        new_state = _apply_message_option_flags(state, option, observer)
         option_message = option.message or option.description or f"Wykonano opcję: {option.label}."
         print(option_message)
-        return state, (message, option_message), feedback_events
+        return new_state, (message, option_message), feedback_events
     return state, (message,), feedback_events
+
+
+def _apply_message_option_flags(
+    state: ExplorationState,
+    option: ExplorationOption,
+    observer: SessionObserver,
+) -> ExplorationState:
+    flags = state.flags
+    changed: list[str] = []
+    if option.success_flag and not _scene_flag_bool(flags, option.success_flag):
+        flags = set_scene_flag(flags, option.success_flag, True)
+        changed.append(option.success_flag)
+    if option.failure_flag and not _scene_flag_bool(flags, option.failure_flag):
+        flags = set_scene_flag(flags, option.failure_flag, True)
+        changed.append(option.failure_flag)
+    for flag_key in changed:
+        observer.record("scene_flag_set", {"option_id": option.id, "flag_key": flag_key, "value": True})
+    if not changed:
+        return state
+    return replace(state, flags=flags)
+
+
+def _scene_flag_bool(flags: SceneFlags, key: str) -> bool:
+    return bool(next((value for flag_key, value in flags.values if flag_key == key), False))
+
+
+def _record_objectives_after_flags(objectives, flags: SceneFlags, observer: SessionObserver):
+    completed_before = {objective.id for objective in objectives if objective.status.value == "completed"}
+    updated = objective_status_after_flags(objectives, flags)
+    for objective in updated:
+        if objective.status.value == "completed" and objective.id not in completed_before:
+            observer.record("objective_completed", {"objective_id": objective.id, "name": objective.name})
+    return updated
+
+
+def _objectives_completed(objectives) -> bool:
+    return bool(objectives) and all(objective.status.value == "completed" for objective in objectives)
+
+
+def _finish_exploration_objectives(observer: SessionObserver, messages: list[str]) -> None:
+    message = "Cel eksploracji został osiągnięty. Scena zakończona."
+    print(message)
+    messages.append(message)
+    observer.record("exploration_finished", {"reason": "objectives_completed"})
 
 
 def _menu_message(zone: ExplorationZone, menu: ExplorationMenu) -> str:

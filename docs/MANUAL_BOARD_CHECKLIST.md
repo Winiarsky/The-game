@@ -317,6 +317,24 @@ Checklist:
 - [ ] Ponowne badanie tej samej strefy jest blokowane.
 - [ ] JSONL zawiera `exploration_started`, `exploration_setup_confirmed`, `exploration_menu_opened`, `exploration_menu_option_selected`, `party_check_resolved` i `zone_search_revealed`.
 
+### Runtime `demo_exploration_scene` Mini-Scena Wioski
+
+Terminal 2:
+
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenario content/scenarios/village_square_mvp.json --board-backend simulator --board-url http://127.0.0.1:5000 --show-leds --scan-timeout 30 --session-id village_square_demo
+```
+
+- [ ] Terminal pokazuje scenariusz `Wioska pod strażnicą`.
+- [ ] Dostępne lokacje są wypisane z nazwami i kolorami.
+- [ ] Setup jawnych elementów prowadzi przez fizyczne punkty: sołtys, tablica ogłoszeń i karczmarz.
+- [ ] Ukryta sakiewka nie świeci podczas setupu.
+- [ ] Kliknięcie głównego punktu `Rynek` pokazuje menu opcji wokół lokacji.
+- [ ] Opcje mają czytelne nazwy kolorów, bez wartości RGB.
+- [ ] Kliknięcie opcji `Porozmawiaj z sołtysem` ustawia flagę celu.
+- [ ] Po ustawieniu flagi aplikacja kończy scenę komunikatem o osiągniętym celu eksploracji.
+- [ ] JSONL zawiera `scene_flag_set`, `objective_completed` i `exploration_finished`.
+
 ## Notatki Z Testu
 
 ```text

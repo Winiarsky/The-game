@@ -307,12 +307,19 @@ W symulatorze:
 PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenario content/scenarios/abandoned_watchtower.json --board-backend simulator --board-url http://127.0.0.1:5000 --show-leds --scan-timeout 30 --session-id abandoned_watchtower_simulator_demo
 ```
 
+Pierwsza mini-scena wioski w symulatorze:
+
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenario content/scenarios/village_square_mvp.json --board-backend simulator --board-url http://127.0.0.1:5000 --show-leds --scan-timeout 30 --session-id village_square_demo
+```
+
 Tryb eksploracji:
 
 - nie używa inicjatywy ani tur walki,
 - używa wspólnego pionka drużyny,
 - pokazuje dostępne lokacje przez punkty główne bez dodatkowego potwierdzania setupu stref,
 - jawne elementy fizyczne z `requires_setup` są rozstawiane osobno i potwierdzane kliknięciem,
+- proste opcje informacyjne mogą ustawiać flagi sceny i kończyć objective, np. rozmowa z sołtysem w `village_square_mvp`,
 - domyślnie świecą tylko główne punkty dostępnych lokacji,
 - kliknięcie aktualnej strefy pokazuje kolorowe menu opcji na polach wokół punktu głównego,
 - opcja `Rozejrzyj się po okolicy` dopiero wtedy podświetla całą strefę i pozwala klikać kafle,

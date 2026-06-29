@@ -48,6 +48,10 @@ def _args(tmp_path, *extra):
     )
 
 
+def _scenario_args(tmp_path, scenario, *extra):
+    return _args(tmp_path, "--scenario", scenario, *extra)
+
+
 def _events(path):
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
 
@@ -133,6 +137,29 @@ def test_demo_exploration_scene_search_can_reveal_saw_resource(tmp_path):
     assert "saw" in result.final_state.inventory_resource_ids
 
 
+def test_demo_exploration_scene_village_message_option_sets_flag_and_completes_objective(tmp_path):
+    result = run_demo(
+        _scenario_args(
+            tmp_path,
+            "content/scenarios/village_square_mvp.json",
+            "--exploration-script",
+            "zone:market",
+            "--exploration-script",
+            "option:talk_to_elder",
+            "--max-steps",
+            "4",
+        )
+    )
+
+    events = _events(result.observation_path)
+    event_types = [event["event_type"] for event in events]
+    assert ("quest_hook_found", True) in result.final_state.flags.values
+    assert "scene_flag_set" in event_types
+    assert "objective_completed" in event_types
+    assert "exploration_finished" in event_types
+    assert any("Cel eksploracji" in message for message in result.messages)
+
+
 def test_demo_exploration_scene_rejects_non_adjacent_zone_travel(tmp_path):
     result = run_demo(
         _args(
@@ -185,6 +212,28 @@ def test_demo_exploration_scene_setup_sends_leds_with_fake_connection(tmp_path):
     event_types = [event["event_type"] for event in _events(result.observation_path)]
     assert "exploration_setup_started" in event_types
     assert "party_position_set" in event_types
+
+
+def test_demo_exploration_scene_village_setup_confirms_visible_points_with_fake_connection(tmp_path):
+    connection = FakeConnection(scanned=[(8, 5), (8, 4), (8, 1)])
+    args = _scenario_args(
+        tmp_path,
+        "content/scenarios/village_square_mvp.json",
+        "--board-backend",
+        "simulator",
+        "--show-leds",
+        "--max-steps",
+        "1",
+    )
+
+    result = run_demo(args, connection_factory=lambda args: connection)
+
+    scan_events = [event for event in connection.events if event[0] == "scan_board"]
+    assert scan_events[0][1] == [(8, 5), (7, 4), (3, 12)]
+    assert any("Setup jawnych elementów 1" in message for message in result.messages)
+    assert any("Dostępne lokacje" in message for message in result.messages)
+    event_types = [event["event_type"] for event in _events(result.observation_path)]
+    assert "exploration_setup_step_confirmed" in event_types
 
 
 def test_demo_exploration_menu_clears_anchor_before_showing_options(tmp_path):

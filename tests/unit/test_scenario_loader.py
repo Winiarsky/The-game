@@ -120,6 +120,30 @@ def test_load_abandoned_watchtower_builds_exploration_scene():
     assert courtyard.search_reveals == ("hidden_cache",)
 
 
+def test_load_village_square_mvp_builds_exploration_locations_setup_points_and_objective():
+    loaded = load_scenario("content/scenarios/village_square_mvp.json")
+    exploration = build_exploration_from_scenario(loaded)
+
+    assert loaded.definition.scene_mode == SceneMode.EXPLORATION
+    assert exploration.scenario_id == "village_square_mvp"
+    assert exploration.party_position.zone_id == "market"
+    assert {zone.id for zone in exploration.zones} == {"market", "tavern", "elder_house", "forest_road"}
+    assert len(exploration.objectives) == 1
+    assert exploration.objectives[0].condition == SceneObjectiveCondition.FLAG_EQUALS
+    assert exploration.objectives[0].flag_key == "quest_hook_found"
+
+    market = next(zone for zone in exploration.zones if zone.id == "market")
+    assert market.marker_position == Coordinate(8, 4)
+    assert {option.id for option in market.options} >= {"talk_to_elder", "read_notice_board", "ask_for_rumors"}
+    assert next(option for option in market.options if option.id == "talk_to_elder").success_flag == "quest_hook_found"
+
+    visible_setup_points = {point.id for point in exploration.points if point.visibility == SetupVisibility.VISIBLE and point.requires_setup}
+    assert visible_setup_points == {"elder_npc", "notice_board", "tavern_keeper"}
+    hidden_point = next(point for point in exploration.points if point.id == "lost_pouch")
+    assert hidden_point.visibility == SetupVisibility.HIDDEN
+    assert hidden_point.requires_setup is False
+
+
 def test_exploration_point_requires_setup_can_be_disabled(tmp_path):
     scenario_path = tmp_path / "exploration_points.json"
     scenario_path.write_text(

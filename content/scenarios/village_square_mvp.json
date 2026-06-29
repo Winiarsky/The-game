@@ -1,0 +1,254 @@
+{
+  "id": "village_square_mvp",
+  "name": "Wioska pod strażnicą",
+  "scene_mode": "exploration",
+  "board": {
+    "cols": 20,
+    "rows": 30
+  },
+  "objectives": [
+    {
+      "id": "find_watchtower_hook",
+      "name": "Dowiedzcie się o problemie przy strażnicy",
+      "description": "Zbierzcie pierwszy trop prowadzący do opuszczonej strażnicy.",
+      "condition": "flag_equals",
+      "flag_key": "quest_hook_found",
+      "flag_value": true
+    }
+  ],
+  "actors": [
+    {
+      "id": "hero",
+      "name": "Bohater",
+      "kind": "player_character",
+      "faction": "ally",
+      "ac": 14,
+      "hp": 20,
+      "temp_hp": 0,
+      "speed_feet": 30,
+      "position": [0, 0],
+      "ability_scores": {
+        "strength": 16,
+        "dexterity": 14,
+        "constitution": 12,
+        "intelligence": 10,
+        "wisdom": 12,
+        "charisma": 10
+      },
+      "item_refs": ["longsword"]
+    },
+    {
+      "id": "rogue",
+      "name": "Łotrzyca",
+      "kind": "player_character",
+      "faction": "ally",
+      "ac": 15,
+      "hp": 16,
+      "temp_hp": 0,
+      "speed_feet": 30,
+      "position": [0, 1],
+      "ability_scores": {
+        "strength": 10,
+        "dexterity": 16,
+        "constitution": 12,
+        "intelligence": 12,
+        "wisdom": 14,
+        "charisma": 12
+      },
+      "item_refs": ["dagger"]
+    }
+  ],
+  "exploration": {
+    "party_start_zone": "market",
+    "zones": [
+      {
+        "id": "market",
+        "name": "Rynek",
+        "positions": [[7, 3], [8, 3], [9, 3], [7, 4], [8, 4], [9, 4], [7, 5], [8, 5], [9, 5]],
+        "anchor_position": [8, 4],
+        "color": "marker",
+        "description": "Centralny plac wioski z tablicą ogłoszeń i kilkoma zaniepokojonymi mieszkańcami.",
+        "adjacent_zone_ids": ["tavern", "elder_house", "forest_road"],
+        "options": [
+          {
+            "id": "talk_to_elder",
+            "label": "Porozmawiaj z sołtysem",
+            "kind": "message",
+            "color": "interactive",
+            "message": "Sołtys opowiada o światłach widzianych nocą przy starej strażnicy.",
+            "success_flag": "quest_hook_found"
+          },
+          {
+            "id": "read_notice_board",
+            "label": "Sprawdź tablicę ogłoszeń",
+            "kind": "message",
+            "color": "marker",
+            "message": "Na tablicy wisi świeże ostrzeżenie: nie zbliżać się do opuszczonej strażnicy po zmroku.",
+            "success_flag": "notice_read"
+          },
+          {
+            "id": "ask_for_rumors",
+            "label": "Popytaj mieszkańców",
+            "kind": "check",
+            "color": "multi",
+            "description": "Spróbuj zebrać plotki od przechodniów.",
+            "ability_check": {
+              "ability": "charisma",
+              "skill": "persuasion",
+              "dc": 10,
+              "modifiers": []
+            },
+            "success_message": "Mieszkańcy wspominają o świeżych śladach prowadzących w stronę lasu.",
+            "failure_message": "Mieszkańcy są nieufni i nie mówią nic konkretnego.",
+            "success_flag": "rumors_collected",
+            "failure_flag": "rumors_dry"
+          }
+        ],
+        "search": {
+          "dc": 11,
+          "ability": "wisdom",
+          "skill": "perception",
+          "reveals": ["lost_pouch"],
+          "success_flag": "market_searched",
+          "failure_flag": "market_search_failed"
+        }
+      },
+      {
+        "id": "tavern",
+        "name": "Karczma",
+        "positions": [[2, 10], [3, 10], [4, 10], [2, 11], [3, 11], [4, 11], [2, 12], [3, 12], [4, 12]],
+        "anchor_position": [3, 11],
+        "color": "warning",
+        "description": "Głośna karczma, w której można odpocząć i posłuchać plotek.",
+        "adjacent_zone_ids": ["market"],
+        "options": [
+          {
+            "id": "listen_at_tavern",
+            "label": "Posłuchaj plotek",
+            "kind": "message",
+            "color": "warning",
+            "message": "Karczmarz mówi, że ktoś widział gobliny kręcące się przy starym trakcie.",
+            "success_flag": "tavern_rumor_heard"
+          },
+          {
+            "id": "rest_at_tavern",
+            "label": "Kup posiłek i odpocznij",
+            "kind": "message",
+            "color": "interactive",
+            "message": "Drużyna odpoczywa chwilę i porządkuje informacje."
+          },
+          {
+            "id": "dice_game_placeholder",
+            "label": "Zagraj w kości",
+            "kind": "message",
+            "color": "multi",
+            "message": "Hazardzista uśmiecha się szeroko. Pełna minigra w kości zostanie dodana później."
+          }
+        ]
+      },
+      {
+        "id": "elder_house",
+        "name": "Dom sołtysa",
+        "positions": [[13, 8], [14, 8], [15, 8], [13, 9], [14, 9], [15, 9], [13, 10], [14, 10], [15, 10]],
+        "anchor_position": [14, 9],
+        "color": "interactive",
+        "description": "Skromny dom sołtysa i miejsce rozmów o problemach wioski.",
+        "adjacent_zone_ids": ["market"],
+        "options": [
+          {
+            "id": "inspect_old_map",
+            "label": "Obejrzyj starą mapę",
+            "kind": "message",
+            "color": "movement",
+            "message": "Na starej mapie widać boczną ścieżkę do strażnicy.",
+            "success_flag": "old_map_seen"
+          },
+          {
+            "id": "ask_for_reward",
+            "label": "Zapytaj o nagrodę",
+            "kind": "message",
+            "color": "marker",
+            "message": "Sołtys obiecuje drobną zapłatę i wdzięczność mieszkańców."
+          }
+        ]
+      },
+      {
+        "id": "forest_road",
+        "name": "Droga do lasu",
+        "positions": [[16, 18], [17, 18], [18, 18], [16, 19], [17, 19], [18, 19], [16, 20], [17, 20], [18, 20]],
+        "anchor_position": [17, 19],
+        "color": "movement",
+        "description": "Droga prowadząca w stronę opuszczonej strażnicy.",
+        "adjacent_zone_ids": ["market"],
+        "options": [
+          {
+            "id": "check_tracks",
+            "label": "Zbadaj ślady",
+            "kind": "check",
+            "color": "interactive",
+            "description": "Sprawdź, kto ostatnio szedł w stronę lasu.",
+            "ability_check": {
+              "ability": "wisdom",
+              "skill": "survival",
+              "dc": 12,
+              "modifiers": []
+            },
+            "success_message": "Odnajdujecie świeże, małe ślady prowadzące ku strażnicy.",
+            "failure_message": "Ślady mieszają się w błocie i nie dają pewnej odpowiedzi.",
+            "success_flag": "forest_tracks_found",
+            "failure_flag": "forest_tracks_unclear"
+          },
+          {
+            "id": "leave_for_watchtower_placeholder",
+            "label": "Rusz do strażnicy",
+            "kind": "message",
+            "color": "movement",
+            "message": "To przejście do kolejnej sceny. Łączenie scen zostanie dodane w osobnym etapie."
+          }
+        ]
+      }
+    ],
+    "points": [
+      {
+        "id": "elder_npc",
+        "name": "Sołtys Bren",
+        "zone_id": "market",
+        "positions": [[8, 5]],
+        "color": "interactive",
+        "visibility": "visible",
+        "description": "Sołtys czeka przy rynku i nerwowo wypatruje pomocy.",
+        "requires_setup": true
+      },
+      {
+        "id": "notice_board",
+        "name": "Tablica ogłoszeń",
+        "zone_id": "market",
+        "positions": [[7, 4]],
+        "color": "marker",
+        "visibility": "visible",
+        "description": "Tablica z ostrzeżeniami i zleceniami dla podróżnych.",
+        "requires_setup": true
+      },
+      {
+        "id": "tavern_keeper",
+        "name": "Karczmarz",
+        "zone_id": "tavern",
+        "positions": [[3, 12]],
+        "color": "warning",
+        "visibility": "visible",
+        "description": "Karczmarz wyciera kufel i uważnie słucha rozmów.",
+        "requires_setup": true
+      },
+      {
+        "id": "lost_pouch",
+        "name": "Zgubiona sakiewka",
+        "zone_id": "market",
+        "positions": [[9, 5]],
+        "color": "success",
+        "visibility": "hidden",
+        "description": "Pod ławą leży mała sakiewka z inicjałami mieszkańca.",
+        "requires_setup": false
+      }
+    ]
+  }
+}
