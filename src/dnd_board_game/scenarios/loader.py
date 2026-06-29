@@ -26,6 +26,7 @@ from dnd_board_game.exploration import (
     ExplorationPoint,
     ExplorationResource,
     ExplorationZone,
+    LlmChallengePolicy,
     LlmContext,
     PartyPosition,
     SceneMode,
@@ -33,6 +34,20 @@ from dnd_board_game.exploration import (
 from dnd_board_game.hardware import LedColor
 from dnd_board_game.rules import D20RollRequest, RollModifier, RollModifierType
 from dnd_board_game.world import BLOCKING_TERRAIN, DIFFICULT_TERRAIN, BoardDimensions, BoardState, Coordinate
+
+
+KNOWN_LLM_CONSEQUENCE_TYPES = frozenset(
+    {
+        "add_noise",
+        "add_complication",
+        "reveal_point",
+        "set_flag",
+        "grant_resource",
+        "consume_resource",
+        "unlock_option",
+        "none",
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -503,6 +518,7 @@ def _parse_exploration_challenge(data: Any) -> ExplorationChallenge:
         completed_flag=str(_required(data, "completed_flag", f"exploration challenge {challenge_id}")),
         options=tuple(_parse_exploration_challenge_option(entry, challenge_id) for entry in options_data),
         llm_context=_parse_llm_context(data.get("llm_context", {}), f"exploration challenge {challenge_id}.llm_context"),
+        llm_policy=_parse_llm_challenge_policy(data.get("llm_policy", {}), f"exploration challenge {challenge_id}.llm_policy"),
     )
 
 
@@ -567,6 +583,49 @@ def _parse_llm_context(data: Any, field: str) -> LlmContext:
         impossible_approaches=_parse_string_tuple(data.get("impossible_approaches", []), f"{field}.impossible_approaches"),
         risk_notes=_parse_string_tuple(data.get("risk_notes", []), f"{field}.risk_notes"),
     )
+
+
+def _parse_llm_challenge_policy(data: Any, field: str) -> LlmChallengePolicy:
+    if data is None or data == {}:
+        return LlmChallengePolicy()
+    if not isinstance(data, dict):
+        raise ValueError(f"{field} must be an object.")
+    defaults = LlmChallengePolicy()
+    dc_min, dc_max = _parse_int_range(data.get("dc_range", [5, 25]), f"{field}.dc_range")
+    progress_success_min, progress_success_max = _parse_int_range(
+        data.get("progress_on_success_range", [1, 3]),
+        f"{field}.progress_on_success_range",
+    )
+    progress_failure_min, progress_failure_max = _parse_int_range(
+        data.get("progress_on_failure_range", [0, 1]),
+        f"{field}.progress_on_failure_range",
+    )
+    return LlmChallengePolicy(
+        allowed_local_skills=_parse_string_tuple(data.get("allowed_local_skills", ["crafting"]), f"{field}.allowed_local_skills"),
+        allowed_approach_tags=_parse_string_tuple(data.get("allowed_approach_tags", list(defaults.allowed_approach_tags)), f"{field}.allowed_approach_tags"),
+        allowed_complications=_parse_string_tuple(data.get("allowed_complications", list(defaults.allowed_complications)), f"{field}.allowed_complications"),
+        allowed_consequence_types=_parse_string_tuple(
+            data.get("allowed_consequence_types", list(defaults.allowed_consequence_types)),
+            f"{field}.allowed_consequence_types",
+        ),
+        max_resources_per_attempt=int(data.get("max_resources_per_attempt", 1)),
+        dc_min=dc_min,
+        dc_max=dc_max,
+        progress_success_min=progress_success_min,
+        progress_success_max=progress_success_max,
+        progress_failure_min=progress_failure_min,
+        progress_failure_max=progress_failure_max,
+    )
+
+
+def _parse_int_range(data: Any, field: str) -> tuple[int, int]:
+    if not isinstance(data, list) or len(data) != 2:
+        raise ValueError(f"{field} must be a two-item list.")
+    minimum = int(data[0])
+    maximum = int(data[1])
+    if minimum > maximum:
+        raise ValueError(f"{field} minimum cannot be greater than maximum.")
+    return minimum, maximum
 
 
 def _parse_string_tuple(data: Any, field: str) -> tuple[str, ...]:
@@ -744,6 +803,7 @@ def _validate_exploration(definition: ScenarioDefinition) -> None:
             raise ValueError(f"exploration challenge {challenge.id}.completed_flag cannot be empty.")
         if not challenge.options:
             raise ValueError(f"exploration challenge {challenge.id}.options must contain at least one option.")
+        _validate_llm_challenge_policy(challenge)
         for option in challenge.options:
             if option.progress_on_success < 0 or option.progress_on_failure < 0:
                 raise ValueError(f"exploration challenge option {option.id}.progress values must be non-negative.")
@@ -751,6 +811,29 @@ def _validate_exploration(definition: ScenarioDefinition) -> None:
                 raise ValueError(
                     f"exploration challenge option {option.id}.unlocks_if_resource_id references unknown resource."
                 )
+
+
+def _validate_llm_challenge_policy(challenge: ExplorationChallenge) -> None:
+    policy = challenge.llm_policy
+    if policy.max_resources_per_attempt < 0:
+        raise ValueError(f"exploration challenge {challenge.id}.llm_policy.max_resources_per_attempt must be non-negative.")
+    if policy.dc_min > policy.dc_max:
+        raise ValueError(f"exploration challenge {challenge.id}.llm_policy.dc_range minimum cannot exceed maximum.")
+    if policy.progress_success_min > policy.progress_success_max:
+        raise ValueError(
+            f"exploration challenge {challenge.id}.llm_policy.progress_on_success_range minimum cannot exceed maximum."
+        )
+    if policy.progress_failure_min > policy.progress_failure_max:
+        raise ValueError(
+            f"exploration challenge {challenge.id}.llm_policy.progress_on_failure_range minimum cannot exceed maximum."
+        )
+    unknown_consequence_types = set(policy.allowed_consequence_types) - KNOWN_LLM_CONSEQUENCE_TYPES
+    if unknown_consequence_types:
+        raise ValueError(
+            "exploration challenge "
+            f"{challenge.id}.llm_policy.allowed_consequence_types contains unknown values: "
+            f"{', '.join(sorted(unknown_consequence_types))}."
+        )
 
 
 def _apply_environment_to_board(board: BoardState, environment: tuple[ScenarioEnvironmentDefinition, ...]) -> None:

@@ -536,6 +536,8 @@ Minimalny kontrakt:
 
 * Pydantic waliduje kształt odpowiedzi LLM.
 * Silnik gry waliduje aktualny stan: aktywną strefę, wyzwanie, flagi, zasoby i tagi.
+* Każde wyzwanie może definiować `llm_policy`: lokalne skille, tagi podejść, komplikacje, dozwolone konsekwencje, zakres ST, zakres postępu i limit zasobów.
+* Jeśli challenge nie ma `llm_policy`, działa fallback MVP dla kompatybilności starszych scenariuszy.
 * Item albo zasób daje efekt tylko wtedy, gdy drużyna go posiada i jego `bonus_tags` pasują do tagów podejścia.
 * Odpowiedź LLM może utworzyć tymczasową opcję challenge, ale rozstrzygnięcie nadal przechodzi przez deterministic engine.
 * Interpretacja LLM musi zostać zaakceptowana przed rzutem.
@@ -548,6 +550,7 @@ Warstwy kontekstu dla LLM:
 * scenario context opisuje klimat, dostępne materiały i zakazane założenia scenariusza,
 * zone context opisuje lokalne warunki,
 * challenge context opisuje sensowne i niemożliwe podejścia do konkretnej przeszkody,
+* challenge policy opisuje lokalny słownik mechaniczny konkretnej przeszkody,
 * dynamic state opisuje fakty, które już zaszły w tej sesji.
 
 Po odrzuceniu deklaracji aplikacja powinna dać graczom możliwość wpisania kolejnego podejścia bez resetowania sceny.

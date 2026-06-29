@@ -49,6 +49,67 @@ class LlmContext:
 
 
 @dataclass(frozen=True, slots=True)
+class LlmChallengePolicy:
+    allowed_local_skills: tuple[str, ...] = ("crafting",)
+    allowed_approach_tags: tuple[str, ...] = (
+        "arcane",
+        "bribe",
+        "climbing",
+        "crafting",
+        "fire",
+        "heavy_force",
+        "lever",
+        "light",
+        "lockpicking",
+        "medicine",
+        "nature",
+        "noise",
+        "picket",
+        "quiet",
+        "religious",
+        "saw",
+        "scouting",
+        "social",
+    )
+    allowed_complications: tuple[str, ...] = (
+        "alarm_w_strażnicy",
+        "bolesny_upadek",
+        "drzazgi",
+        "guards_alerted",
+        "jammed_gate",
+        "lost_resource",
+        "minor_injury",
+        "narastający_hałas",
+        "ryzyko_upadku",
+        "stracony_czas",
+        "time_cost",
+        "uszkodzony_mechanizm",
+        "zaklinowana_sztacheta",
+        "ślepy_trop",
+    )
+    allowed_consequence_types: tuple[str, ...] = ("add_noise", "add_complication", "none")
+    max_resources_per_attempt: int = 1
+    dc_min: int = 5
+    dc_max: int = 25
+    progress_success_min: int = 1
+    progress_success_max: int = 3
+    progress_failure_min: int = 0
+    progress_failure_max: int = 1
+
+    def as_payload(self) -> dict[str, object]:
+        return {
+            "allowed_local_skills": list(self.allowed_local_skills),
+            "allowed_approach_tags": list(self.allowed_approach_tags),
+            "allowed_complications": list(self.allowed_complications),
+            "allowed_consequence_types": list(self.allowed_consequence_types),
+            "max_resources_per_attempt": self.max_resources_per_attempt,
+            "dc_range": [self.dc_min, self.dc_max],
+            "progress_on_success_range": [self.progress_success_min, self.progress_success_max],
+            "progress_on_failure_range": [self.progress_failure_min, self.progress_failure_max],
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class ExplorationOption:
     id: str
     label: str
@@ -171,6 +232,7 @@ class ExplorationChallenge:
     completed_flag: str
     options: tuple[ExplorationChallengeOption, ...]
     llm_context: LlmContext = LlmContext()
+    llm_policy: LlmChallengePolicy = LlmChallengePolicy()
 
 
 @dataclass(frozen=True, slots=True)

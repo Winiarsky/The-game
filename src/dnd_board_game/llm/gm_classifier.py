@@ -18,6 +18,7 @@ from dnd_board_game.exploration import (
     ExplorationResource,
     ExplorationState,
     ExplorationZone,
+    LlmChallengePolicy,
     LlmContext,
     available_challenge_options,
     challenge_state_for,
@@ -98,59 +99,7 @@ CORE_DND_5E_SKILLS = frozenset(
     }
 )
 
-# MVP content policy. These are not general D&D rules; they describe the
-# current exploration slices and should become scenario/challenge-level config.
-MVP_LOCAL_SKILLS = frozenset({"crafting"})
-MVP_APPROACH_TAGS = frozenset(
-    {
-        "arcane",
-        "bribe",
-        "climbing",
-        "crafting",
-        "fire",
-        "heavy_force",
-        "lever",
-        "light",
-        "lockpicking",
-        "medicine",
-        "nature",
-        "noise",
-        "picket",
-        "quiet",
-        "religious",
-        "saw",
-        "scouting",
-        "social",
-    }
-)
-MVP_COMPLICATION_IDS = frozenset(
-    {
-        "alarm_w_strażnicy",
-        "bolesny_upadek",
-        "drzazgi",
-        "guards_alerted",
-        "jammed_gate",
-        "lost_resource",
-        "minor_injury",
-        "narastający_hałas",
-        "ryzyko_upadku",
-        "stracony_czas",
-        "time_cost",
-        "uszkodzony_mechanizm",
-        "zaklinowana_sztacheta",
-        "ślepy_trop",
-    }
-)
-MVP_CONSEQUENCE_TYPES = (
-    GmConsequenceType.ADD_NOISE,
-    GmConsequenceType.ADD_COMPLICATION,
-    GmConsequenceType.NONE,
-)
-
-ALLOWED_ABILITIES = CORE_DND_5E_ABILITIES
-ALLOWED_SKILLS = CORE_DND_5E_SKILLS | MVP_LOCAL_SKILLS
-ALLOWED_TAGS = MVP_APPROACH_TAGS
-ALLOWED_COMPLICATIONS = MVP_COMPLICATION_IDS
+DEFAULT_MVP_LLM_POLICY = LlmChallengePolicy()
 
 
 class GmConsequence(BaseModel):
@@ -210,6 +159,7 @@ class GmClassifierRequest:
 
     def to_prompt_payload(self) -> dict[str, Any]:
         challenge_state = challenge_state_for(self.state, self.challenge.id)
+        policy = self.challenge.llm_policy
         resources = [
             _resource_payload(resource)
             for resource in self.state.resources
@@ -233,6 +183,7 @@ class GmClassifierRequest:
                 "noise": challenge_state.noise,
                 "complications": list(challenge_state.complications),
                 "context": self.challenge.llm_context.as_payload(),
+                "llm_policy": policy.as_payload(),
                 "available_options": [
                     {
                         "id": option.id,
@@ -249,11 +200,11 @@ class GmClassifierRequest:
             },
             "party_resources": resources,
             "dynamic_state": _dynamic_state_payload(self.state, self.challenge),
-            "allowed_abilities": sorted(ALLOWED_ABILITIES),
-            "allowed_skills": sorted(ALLOWED_SKILLS),
-            "allowed_tags": sorted(ALLOWED_TAGS),
-            "allowed_consequence_types": [item.value for item in MVP_CONSEQUENCE_TYPES],
-            "allowed_complications": sorted(ALLOWED_COMPLICATIONS),
+            "allowed_abilities": sorted(CORE_DND_5E_ABILITIES),
+            "allowed_skills": sorted(_allowed_skills(policy)),
+            "allowed_tags": sorted(policy.allowed_approach_tags),
+            "allowed_consequence_types": list(policy.allowed_consequence_types),
+            "allowed_complications": sorted(policy.allowed_complications),
             "player_action": self.player_action,
         }
 
@@ -494,6 +445,7 @@ def validate_gm_classifier_proposal(
     proposal: GmClassifierProposal,
     request: GmClassifierRequest,
 ) -> GmValidatedProposal:
+    policy = request.challenge.llm_policy
     # General guards: LLM may only propose an interpretation for the active
     # challenge; deterministic game code still owns state changes.
     if proposal.intent_type == GmIntentType.UNSUPPORTED:
@@ -511,27 +463,35 @@ def validate_gm_classifier_proposal(
         raise GmProposalValidationError("To wyzwanie jest już zakończone.")
     if not proposal.approach_label.strip():
         raise GmProposalValidationError("Propozycja LLM nie ma nazwy podejścia.")
-    if proposal.ability not in ALLOWED_ABILITIES:
+    if proposal.ability not in CORE_DND_5E_ABILITIES:
         raise GmProposalValidationError(f"Nieobsługiwana cecha testu: {proposal.ability}.")
-    if proposal.skill is not None and proposal.skill not in ALLOWED_SKILLS:
+    if proposal.skill is not None and proposal.skill not in _allowed_skills(policy):
         raise GmProposalValidationError(f"Nieobsługiwana umiejętność testu: {proposal.skill}.")
     if proposal.dc is None or proposal.progress_on_success is None or proposal.progress_on_failure is None:
         raise GmProposalValidationError("Propozycja LLM nie zawiera ST albo postępu.")
-    if proposal.progress_on_success < 1:
-        raise GmProposalValidationError("Podejście do wyzwania musi dawać co najmniej 1 punkt postępu przy sukcesie.")
-    if proposal.progress_on_failure < 0:
-        raise GmProposalValidationError("Postęp przy porażce nie może być ujemny.")
-    # MVP policy: tags, complications and resource count are currently global.
-    # Move them to scenario/challenge/interaction content when the format is
-    # mature enough to express per-scene vocabularies and limits.
-    unknown_tags = set(proposal.approach_tags) - ALLOWED_TAGS
+    if not policy.dc_min <= proposal.dc <= policy.dc_max:
+        raise GmProposalValidationError(f"ST {proposal.dc} jest poza zakresem policy: {policy.dc_min}-{policy.dc_max}.")
+    if not policy.progress_success_min <= proposal.progress_on_success <= policy.progress_success_max:
+        raise GmProposalValidationError(
+            "Postęp przy sukcesie jest poza zakresem policy: "
+            f"{policy.progress_success_min}-{policy.progress_success_max}."
+        )
+    if not policy.progress_failure_min <= proposal.progress_on_failure <= policy.progress_failure_max:
+        raise GmProposalValidationError(
+            "Postęp przy porażce jest poza zakresem policy: "
+            f"{policy.progress_failure_min}-{policy.progress_failure_max}."
+        )
+    unknown_tags = set(proposal.approach_tags) - set(policy.allowed_approach_tags)
     if unknown_tags:
         raise GmProposalValidationError(f"Nieobsługiwane tagi podejścia: {', '.join(sorted(unknown_tags))}.")
     _validate_context_constraints(proposal, request)
-    if len(proposal.used_resource_ids) > 1:
-        raise GmProposalValidationError("MVP obsługuje użycie maksymalnie jednego zasobu naraz.")
+    if len(proposal.used_resource_ids) > policy.max_resources_per_attempt:
+        raise GmProposalValidationError(
+            "Ta polityka wyzwania pozwala użyć maksymalnie "
+            f"{policy.max_resources_per_attempt} zasobów naraz."
+        )
     resources = _validate_resources(proposal, request.state)
-    _validate_consequences(proposal)
+    _validate_consequences(proposal, policy)
     _validate_narration_consistency(proposal)
     return GmValidatedProposal(proposal, request.challenge, resources)
 
@@ -587,9 +547,15 @@ def _validate_resources(
     return tuple(result)
 
 
-def _validate_consequences(proposal: GmClassifierProposal) -> None:
+def _allowed_skills(policy: LlmChallengePolicy) -> frozenset[str]:
+    return CORE_DND_5E_SKILLS | frozenset(policy.allowed_local_skills)
+
+
+def _validate_consequences(proposal: GmClassifierProposal, policy: LlmChallengePolicy) -> None:
     for consequence in proposal.consequences:
-        if consequence.type == GmConsequenceType.ADD_COMPLICATION and str(consequence.value) not in ALLOWED_COMPLICATIONS:
+        if consequence.type.value not in policy.allowed_consequence_types:
+            raise GmProposalValidationError(f"Konsekwencja {consequence.type.value} nie jest dozwolona w tym wyzwaniu.")
+        if consequence.type == GmConsequenceType.ADD_COMPLICATION and str(consequence.value) not in policy.allowed_complications:
             raise GmProposalValidationError(f"Nieobsługiwana komplikacja: {consequence.value}.")
         if consequence.type == GmConsequenceType.ADD_NOISE:
             if not isinstance(consequence.value, int) or consequence.value < 0 or consequence.value > 3:

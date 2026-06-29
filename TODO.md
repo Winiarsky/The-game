@@ -44,7 +44,8 @@
 - [x] Add optional Gemini LLM provider for free-form exploration declarations.
 - [x] Add LLM context layers and retry flow for rejected free-form declarations.
 - [x] Add LLM declaration analyzer, prompt registry, interpretation acceptance, and challenge attempt history.
-- [ ] Move LLM classifier MVP policy lists into scenario/challenge/interaction content.
+- [x] Move LLM classifier MVP policy lists into exploration challenge content.
+- [ ] Add interaction/object-level LLM policy when freeform interactions expand beyond challenges.
 - [ ] Add full inventory/cantrip integration for exploration option bonuses.
 - [ ] Add voice input and richer UI for free-form exploration declarations.
 - [x] Implement hardware adapter interface around `board.Connection`.

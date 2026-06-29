@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 
@@ -7,6 +8,22 @@ from dnd_board_game.combat import AttackSourceType, DamageType, EnvironmentSetup
 from dnd_board_game.exploration import SceneMode
 from dnd_board_game.scenarios import build_encounter_from_scenario, build_exploration_from_scenario, load_scenario
 from dnd_board_game.world import Coordinate
+
+
+def _abandoned_watchtower_data_without_refs():
+    data = json.loads(Path("content/scenarios/abandoned_watchtower.json").read_text(encoding="utf-8"))
+    attack = {
+        "id": "test_attack",
+        "name": "Test Attack",
+        "source_type": "weapon",
+        "range_feet": 5,
+        "attack_modifier": 1,
+        "damage": {"fixed": 1, "damage_type": "bludgeoning"},
+    }
+    for actor in data["actors"]:
+        actor.pop("item_refs", None)
+        actor["attacks"] = [attack]
+    return data
 
 
 def test_load_scenario_builds_actors_and_attack_sources():
@@ -112,17 +129,44 @@ def test_load_abandoned_watchtower_builds_exploration_scene():
     assert len(exploration.actors) == 2
     assert len(exploration.zones) == 4
     assert len(exploration.challenges) == 1
-    assert exploration.challenges[0].completed_flag == "gate_passed"
+    challenge = exploration.challenges[0]
+    assert challenge.completed_flag == "gate_passed"
+    assert challenge.llm_policy.allowed_local_skills == ("crafting",)
+    assert "heavy_force" in challenge.llm_policy.allowed_approach_tags
+    assert "bribe" not in challenge.llm_policy.allowed_approach_tags
+    assert challenge.llm_policy.dc_min == 8
+    assert challenge.llm_policy.dc_max == 18
+    assert challenge.llm_policy.max_resources_per_attempt == 1
     assert "Opuszczona" in exploration.llm_context.summary
     assert "brak działającego mechanizmu lotu" in exploration.llm_context.forbidden_assumptions
     gate = next(zone for zone in exploration.zones if zone.id == "gate")
     assert "lina nie pozwala latać" in gate.llm_context.forbidden_assumptions
-    assert "przelot na linie bez magii" in exploration.challenges[0].llm_context.impossible_approaches
+    assert "przelot na linie bez magii" in challenge.llm_context.impossible_approaches
     assert {resource.id for resource in exploration.resources} == {"rope", "wedge", "saw"}
     assert exploration.initial_resource_ids == ("rope", "wedge")
     courtyard = next(zone for zone in exploration.zones if zone.id == "courtyard")
     assert courtyard.search_dc == 12
     assert courtyard.search_reveals == ("hidden_cache",)
+
+
+def test_exploration_challenge_llm_policy_rejects_bad_range(tmp_path):
+    data = _abandoned_watchtower_data_without_refs()
+    data["exploration"]["challenges"][0]["llm_policy"]["dc_range"] = [18, 8]
+    scenario_path = tmp_path / "bad_policy_range.json"
+    scenario_path.write_text(json.dumps(data), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="dc_range"):
+        load_scenario(scenario_path)
+
+
+def test_exploration_challenge_llm_policy_rejects_unknown_consequence_type(tmp_path):
+    data = _abandoned_watchtower_data_without_refs()
+    data["exploration"]["challenges"][0]["llm_policy"]["allowed_consequence_types"] = ["add_noise", "summon_dragon"]
+    scenario_path = tmp_path / "bad_policy_consequence.json"
+    scenario_path.write_text(json.dumps(data), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="allowed_consequence_types"):
+        load_scenario(scenario_path)
 
 
 def test_load_village_square_mvp_builds_exploration_locations_setup_points_and_objective():

@@ -117,7 +117,52 @@ def test_gm_classifier_rejects_unknown_skill_and_bad_dc():
         validate_gm_classifier_proposal(proposal, request)
 
 
-def test_gm_classifier_ignores_extra_llm_fields_but_rejects_zero_success_progress():
+def test_gm_classifier_rejects_tag_outside_challenge_policy():
+    exploration, state = _state()
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Próbujemy przekupić bramę.",
+    )
+    proposal = _proposal(approach_tags=["bribe"], used_resource_ids=())
+
+    with pytest.raises(GmProposalValidationError, match="Nieobsługiwane tagi podejścia"):
+        validate_gm_classifier_proposal(proposal, request)
+
+
+def test_gm_classifier_rejects_dc_outside_challenge_policy():
+    exploration, state = _state()
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Próbujemy wejść górą.",
+    )
+    proposal = _proposal(dc=20, used_resource_ids=())
+
+    with pytest.raises(GmProposalValidationError, match="poza zakresem policy"):
+        validate_gm_classifier_proposal(proposal, request)
+
+
+def test_gm_classifier_rejects_too_many_resources_for_challenge_policy():
+    exploration, state = _state()
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Próbujemy wejść górą z liną i klinem.",
+    )
+    proposal = _proposal(approach_tags=["climbing", "lever"], used_resource_ids=["rope", "wedge"])
+
+    with pytest.raises(GmProposalValidationError, match="maksymalnie 1 zasobów"):
+        validate_gm_classifier_proposal(proposal, request)
+
+
+def test_gm_classifier_ignores_extra_llm_fields_but_rejects_success_progress_outside_policy():
     proposal = _proposal(messages=[], progress_on_success=0)
     exploration, state = _state()
     request = build_gm_classifier_request(
@@ -128,7 +173,7 @@ def test_gm_classifier_ignores_extra_llm_fields_but_rejects_zero_success_progres
         player_action="Chcemy zrobić podkop.",
     )
 
-    with pytest.raises(GmProposalValidationError, match="co najmniej 1 punkt postępu"):
+    with pytest.raises(GmProposalValidationError, match="Postęp przy sukcesie jest poza zakresem policy"):
         validate_gm_classifier_proposal(proposal, request)
 
 
@@ -143,7 +188,7 @@ def test_gm_classifier_rejects_unowned_declared_resource():
     )
     proposal = _proposal(
         approach_label="Podkop pod bramą",
-        approach_tags=["crafting"],
+        approach_tags=["lever"],
         ability="strength",
         skill="athletics",
         used_resource_ids=["shovel"],
@@ -234,6 +279,11 @@ def test_gm_classifier_request_payload_contains_context_layers_and_dynamic_state
     assert "lina nie pozwala latać" in payload["zone_context"]["forbidden_assumptions"]
     assert "przelot na linie bez magii" in payload["challenge"]["context"]["impossible_approaches"]
     assert "szybki podkop pod kamienną bramą bez odpowiednich narzędzi i czasu" in payload["challenge"]["context"]["impossible_approaches"]
+    assert payload["challenge"]["llm_policy"]["dc_range"] == [8, 18]
+    assert payload["challenge"]["llm_policy"]["max_resources_per_attempt"] == 1
+    assert "heavy_force" in payload["allowed_tags"]
+    assert "bribe" not in payload["allowed_tags"]
+    assert "crafting" in payload["allowed_skills"]
     assert payload["dynamic_state"]["challenge_progress"]["current"] == 0
     assert payload["dynamic_state"]["inventory_resource_ids"] == ["rope", "wedge"]
     assert payload["dynamic_state"]["attempt_history"] == []

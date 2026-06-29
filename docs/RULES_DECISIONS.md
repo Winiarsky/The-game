@@ -325,11 +325,12 @@ Implementacja MVP:
 - LLM MVP obsługuje opcjonalnych providerów Groq i Gemini oraz ma dwa kroki: analyzer deklaracji oraz classifier mechaniki challenge. Gemini jest domyślnym providerem dla trybu freeform, a zwykła eksploracja bez freeform nadal nie odpala LLM.
 - Prompt LLM składa się z centralnie ładowanych plików w `content/prompts/` oraz warstw kontekstu: scenariusz, lokacja, challenge, dynamiczny stan gry i historia prób.
 - `llm_context` może opisywać dostępne materiały, zakazane założenia, sensowne podejścia, niemożliwe podejścia i ryzyka.
+- `llm_policy` przy challenge definiuje lokalny słownik mechaniczny dla LLM: lokalne skille, tagi podejść, komplikacje, dozwolone konsekwencje, zakres ST, zakres postępu i limit zasobów.
 - Zasób zaproponowany przez LLM działa mechanicznie tylko wtedy, gdy drużyna go posiada i `bonus_tags` zasobu przecinają się z tagami podejścia.
 - Propozycja LLM może utworzyć tymczasową opcję `gm_generated`, która jest rozstrzygana przez zwykły deterministic `resolve_challenge_option`.
 - Propozycja LLM musi zostać zaakceptowana przed rzutem; odrzucenie interpretacji nie zmienia stanu gry.
 - Historia prób challenge jest częścią deterministycznego stanu eksploracji i trafia do payloadu LLM.
-- `gm_classifier.py` powinien zawierać mechanikę integracji, parsowania i walidacji, a nie content konkretnej sceny. Aktualne globalne listy tagów, lokalnych umiejętności i komplikacji są oznaczone jako polityka MVP; docelowo powinny przejść do definicji scenariusza, challenge albo obiektu interakcji.
+- `gm_classifier.py` zawiera mechanikę integracji, parsowania i walidacji. Content konkretnej przeszkody powinien pochodzić z `llm_policy` oraz `llm_context`; globalny fallback MVP zostaje tylko dla kompatybilności starszych scenariuszy.
 
 Poza zakresem MVP:
 
