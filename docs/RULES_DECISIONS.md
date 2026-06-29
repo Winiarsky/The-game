@@ -329,6 +329,7 @@ Implementacja MVP:
 - Propozycja LLM może utworzyć tymczasową opcję `gm_generated`, która jest rozstrzygana przez zwykły deterministic `resolve_challenge_option`.
 - Propozycja LLM musi zostać zaakceptowana przed rzutem; odrzucenie interpretacji nie zmienia stanu gry.
 - Historia prób challenge jest częścią deterministycznego stanu eksploracji i trafia do payloadu LLM.
+- `gm_classifier.py` powinien zawierać mechanikę integracji, parsowania i walidacji, a nie content konkretnej sceny. Aktualne globalne listy tagów, lokalnych umiejętności i komplikacji są oznaczone jako polityka MVP; docelowo powinny przejść do definicji scenariusza, challenge albo obiektu interakcji.
 
 Poza zakresem MVP:
 

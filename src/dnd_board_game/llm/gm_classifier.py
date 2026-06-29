@@ -28,6 +28,12 @@ from dnd_board_game.hardware import LedColor
 from .prompts import PromptId, load_prompt
 
 
+# This module should own LLM transport, response parsing and mechanical validation.
+# Scenario-specific content should live in content JSON and LlmContext. The MVP
+# policy constants below are intentionally marked so they can be moved into
+# scenario/challenge configuration in a later content-driven stage.
+
+
 class GmIntentType(StrEnum):
     CHALLENGE_ATTEMPT = "challenge_attempt"
     ENVIRONMENT_SEARCH = "environment_search"
@@ -59,7 +65,7 @@ class GmConsequenceType(StrEnum):
     NONE = "none"
 
 
-ALLOWED_ABILITIES = frozenset(
+CORE_DND_5E_ABILITIES = frozenset(
     {
         "strength",
         "dexterity",
@@ -69,7 +75,7 @@ ALLOWED_ABILITIES = frozenset(
         "charisma",
     }
 )
-ALLOWED_SKILLS = frozenset(
+CORE_DND_5E_SKILLS = frozenset(
     {
         "acrobatics",
         "animal_handling",
@@ -89,11 +95,13 @@ ALLOWED_SKILLS = frozenset(
         "sleight_of_hand",
         "stealth",
         "survival",
-        # Local MVP skill used by current exploration content.
-        "crafting",
     }
 )
-ALLOWED_TAGS = frozenset(
+
+# MVP content policy. These are not general D&D rules; they describe the
+# current exploration slices and should become scenario/challenge-level config.
+MVP_LOCAL_SKILLS = frozenset({"crafting"})
+MVP_APPROACH_TAGS = frozenset(
     {
         "arcane",
         "bribe",
@@ -115,7 +123,7 @@ ALLOWED_TAGS = frozenset(
         "social",
     }
 )
-ALLOWED_COMPLICATIONS = frozenset(
+MVP_COMPLICATION_IDS = frozenset(
     {
         "alarm_w_strażnicy",
         "bolesny_upadek",
@@ -138,6 +146,11 @@ MVP_CONSEQUENCE_TYPES = (
     GmConsequenceType.ADD_COMPLICATION,
     GmConsequenceType.NONE,
 )
+
+ALLOWED_ABILITIES = CORE_DND_5E_ABILITIES
+ALLOWED_SKILLS = CORE_DND_5E_SKILLS | MVP_LOCAL_SKILLS
+ALLOWED_TAGS = MVP_APPROACH_TAGS
+ALLOWED_COMPLICATIONS = MVP_COMPLICATION_IDS
 
 
 class GmConsequence(BaseModel):
@@ -481,6 +494,8 @@ def validate_gm_classifier_proposal(
     proposal: GmClassifierProposal,
     request: GmClassifierRequest,
 ) -> GmValidatedProposal:
+    # General guards: LLM may only propose an interpretation for the active
+    # challenge; deterministic game code still owns state changes.
     if proposal.intent_type == GmIntentType.UNSUPPORTED:
         raise GmProposalValidationError(proposal.player_narration or "Deklaracja nie jest obsługiwana w tym MVP.")
     if proposal.intent_type == GmIntentType.ENVIRONMENT_SEARCH:
@@ -506,6 +521,9 @@ def validate_gm_classifier_proposal(
         raise GmProposalValidationError("Podejście do wyzwania musi dawać co najmniej 1 punkt postępu przy sukcesie.")
     if proposal.progress_on_failure < 0:
         raise GmProposalValidationError("Postęp przy porażce nie może być ujemny.")
+    # MVP policy: tags, complications and resource count are currently global.
+    # Move them to scenario/challenge/interaction content when the format is
+    # mature enough to express per-scene vocabularies and limits.
     unknown_tags = set(proposal.approach_tags) - ALLOWED_TAGS
     if unknown_tags:
         raise GmProposalValidationError(f"Nieobsługiwane tagi podejścia: {', '.join(sorted(unknown_tags))}.")
