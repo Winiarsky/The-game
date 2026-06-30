@@ -363,7 +363,9 @@ Tryb eksploracji:
 - Dla `abandoned_watchtower` brama ma content-driven tiery: `easy=12`, `medium=15`, `hard=18`.
 - Analyzer LLM zwraca `action_flow`: `challenge_attempt`, `preparation`, `combined`, `player_question`, `unsupported` albo `needs_clarification`.
 - Zasoby są twardo walidowane: deklarowany przedmiot musi być w `party_resources` albo w materiałach sceny. Inaczej runtime zapisuje `declaration_fact_rejected` i nie wykonuje rzutu.
-- Przygotowanie zapisuje krótkotrwały efekt `modifier` albo `reduce_negative_effect`; działa tylko przy następnej pasującej próbie i po użyciu wygasa.
+- Przygotowanie zapisuje krótkotrwały efekt `modifier`, `reduce_negative_effect`, `advantage`, `disadvantage`, `effect_boost`, `grant_resource` albo `unlock_option`; działa tylko przy następnej pasującej próbie i po użyciu wygasa.
+- `grant_resource` i `unlock_option` działają tylko na id istniejące w contentcie i dozwolone przez `llm_policy`.
+- Przed akceptacją propozycji runtime pokazuje preview konsekwencji dla critical success / success / failure / critical failure. W trybie `--gm-accept ask` komenda `?` pokazuje to preview ponownie razem z notatkami MG.
 - Payload LLM zawiera lokalny `declaration_thread`, jeśli gracz wcześniej odrzucił deklarację, zadał pytanie albo doprecyzował podejście w ramach tego samego promptu freeform.
 - Po odrzuceniu deklaracji tryb `--interactive-freeform` może poprosić o kolejną próbę bez restartowania runtime.
 - Błędy Groq/Gemini `429` i chwilowe `5xx` są ponawiane automatycznie z krótkim backoffem; `--freeform-retries` nadal oznacza liczbę prób deklaracji gracza, nie liczbę ponowień HTTP.

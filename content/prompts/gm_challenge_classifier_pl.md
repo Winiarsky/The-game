@@ -58,7 +58,9 @@ Dla samego przygotowania zwróć:
     "target_tags": ["climbing"],
     "value": 2,
     "duration": "next_attempt",
-    "source": "freeform"
+    "source": "freeform",
+    "resource_id": null,
+    "option_id": null
   },
   "requires_roll_now": false,
   "consequences": [],
@@ -81,14 +83,23 @@ Zasady:
 - `progress_on_success` od 1 do 3.
 - `progress_on_failure` od 0 do 1.
 - Efekt przygotowania musi mieścić się w `challenge.llm_policy.allowed_preparation_effect_types`.
+- `preparation_effect.type` musi pochodzić z `challenge.llm_policy.allowed_preparation_effect_types`.
+- Obsługiwane typy efektów przygotowania to: `modifier`, `reduce_negative_effect`, `advantage`, `disadvantage`, `effect_boost`, `unlock_option`, `grant_resource`.
 - `preparation_effect.type=modifier` może mieć wartość tylko z `preparation_modifier_range`.
 - `preparation_effect.type=reduce_negative_effect` może mieć wartość tylko z `negative_effect_reduction_range`.
+- `preparation_effect.type=advantage` daje przewagę przy następnej pasującej próbie; używaj tylko, gdy przygotowanie realnie poprawia warunki.
+- `preparation_effect.type=disadvantage` daje utrudnienie przy następnej pasującej próbie; używaj tylko, gdy deklaracja pogarsza warunki albo niesie ryzyko.
+- `preparation_effect.type=effect_boost` może mieć wartość tylko z `effect_boost_range` i oznacza dodatkowy efekt przy sukcesie, np. +1 postępu.
+- `preparation_effect.type=grant_resource` wymaga `resource_id` z `challenge.llm_policy.allowed_grant_resource_ids`. Nie wpisuj zasobu spoza tej listy.
+- `preparation_effect.type=unlock_option` wymaga `option_id` z `challenge.llm_policy.allowed_unlock_option_ids`. Nie twórz nowych option_id.
 - `preparation_effect.target_tags` muszą pochodzić z `allowed_tags` i pasować do przyszłej próby.
+- Dla `grant_resource` i `unlock_option` też ustaw sensowne `target_tags`, które opisują, kiedy efekt może zadziałać.
 - Zasób z `used_resource_ids` może być wpisany tylko, jeśli jego tagi pasują do `approach_tags`.
 - Jeśli gracz wspomina item, którego nie ma w `party_resources`, nie wpisuj go w `used_resource_ids`.
 - Jeśli item jest fabularnie wspomniany, ale nie ma go w `party_resources`, nie opisuj go jako działającego elementu mechaniki. Poproś analyzer/flow o doprecyzowanie zamiast przyznawać bonus.
 - Jeśli item istnieje, ale tagi nie pasują, możesz go pominąć mechanicznie, ale nie dawaj mu bonusu.
 - Porażka powinna iść w duchu fail-forward: koszt, hałas, komplikacja albo mały postęp, a nie twarda blokada.
+- Jeśli gracz szuka narzędzia albo słabego miejsca, a policy pozwala na `grant_resource` albo `unlock_option`, możesz zwrócić `action_flow: "preparation"` i `requires_roll_now: false`. Mechanika dopiero później zdecyduje, czy efekt zadziała przy pasującej próbie.
 - `dynamic_state.attempt_history` opisuje wcześniejsze próby. Nie ignoruj go: jeśli metoda była już powtarzana, uwzględnij to w narracji, ryzyku i `gm_notes`.
 - `declaration_thread` może zawierać odrzucone interpretacje i prośby o reinterpretację. Jeśli poprzednia propozycja została odrzucona, nie zwracaj tej samej interpretacji bez zmiany uzasadnienia albo pól mechanicznych.
 - Jeśli gracz poprawia poprzednią interpretację, traktuj korektę jako ważniejszą niż wcześniejszą sugestię LLM.

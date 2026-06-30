@@ -50,7 +50,8 @@
 - [x] Add LLM interpretation explain/reject/reclassify controls before freeform challenge resolution.
 - [x] Add content-driven DC policy tiers for freeform challenge proposals.
 - [ ] Add interaction/object-level LLM policy when freeform interactions expand beyond challenges.
-- [ ] Extend preparation effects with advantage/disadvantage, effect boost, unlock option, and grant resource.
+- [x] Extend preparation effects with advantage/disadvantage, effect boost, unlock option, and grant resource.
+- [x] Show consequence preview before accepted freeform challenge rolls.
 - [ ] Add full inventory/cantrip integration for exploration option bonuses.
 - [ ] Add voice input and richer UI for free-form exploration declarations.
 - [x] Implement hardware adapter interface around `board.Connection`.

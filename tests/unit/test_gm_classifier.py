@@ -166,6 +166,219 @@ def test_gm_classifier_accepts_modifier_preparation_without_roll():
     assert validated.proposal.preparation_effect.value == 2
 
 
+def test_gm_classifier_accepts_advantage_preparation_for_allowed_tag():
+    exploration, state = _state()
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Mocujemy linę tak, żeby wejść pewniej.",
+    )
+    proposal = _proposal(
+        approach_label="Przygotowanie przewagi",
+        approach_tags=["climbing"],
+        ability=None,
+        skill=None,
+        dc=None,
+        progress_on_success=None,
+        progress_on_failure=None,
+        used_resource_ids=[],
+        action_flow="preparation",
+        requires_roll_now=False,
+        preparation_effect={
+            "type": "advantage",
+            "label": "Lina daje stabilne punkty podparcia",
+            "target_tags": ["climbing"],
+            "value": 1,
+            "duration": "next_attempt",
+            "source": "freeform",
+        },
+    )
+
+    validated = validate_gm_classifier_proposal(proposal, request)
+
+    assert validated.proposal.preparation_effect is not None
+    assert validated.proposal.preparation_effect.type.value == "advantage"
+
+
+def test_gm_classifier_rejects_preparation_with_tag_outside_policy():
+    exploration, state = _state()
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Przygotowujemy kosmiczny manewr.",
+    )
+    proposal = _proposal(
+        approach_label="Niepasujące przygotowanie",
+        approach_tags=["climbing"],
+        ability=None,
+        skill=None,
+        dc=None,
+        progress_on_success=None,
+        progress_on_failure=None,
+        used_resource_ids=[],
+        action_flow="preparation",
+        requires_roll_now=False,
+        preparation_effect={
+            "type": "advantage",
+            "label": "Kosmiczny bonus",
+            "target_tags": ["spaceflight"],
+            "value": 1,
+            "duration": "next_attempt",
+            "source": "freeform",
+        },
+    )
+
+    with pytest.raises(GmProposalValidationError, match="nieobsługiwane target_tags"):
+        validate_gm_classifier_proposal(proposal, request)
+
+
+def test_gm_classifier_accepts_grant_resource_from_policy():
+    exploration, state = _state()
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Szukamy narzędzia do przecięcia spróchniałych desek.",
+    )
+    proposal = _proposal(
+        approach_label="Znalezienie starej piły",
+        approach_tags=["scouting", "saw"],
+        ability=None,
+        skill=None,
+        dc=None,
+        progress_on_success=None,
+        progress_on_failure=None,
+        used_resource_ids=[],
+        action_flow="preparation",
+        requires_roll_now=False,
+        preparation_effect={
+            "type": "grant_resource",
+            "label": "Stare narzędzie w obozowisku",
+            "target_tags": ["saw", "picket"],
+            "value": 1,
+            "duration": "next_attempt",
+            "source": "freeform",
+            "resource_id": "saw",
+        },
+    )
+
+    validated = validate_gm_classifier_proposal(proposal, request)
+
+    assert validated.proposal.preparation_effect is not None
+    assert validated.proposal.preparation_effect.resource_id == "saw"
+
+
+def test_gm_classifier_rejects_grant_resource_outside_policy():
+    exploration, state = _state()
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Szukamy łomu.",
+    )
+    proposal = _proposal(
+        approach_label="Znalezienie łomu",
+        approach_tags=["lever"],
+        ability=None,
+        skill=None,
+        dc=None,
+        progress_on_success=None,
+        progress_on_failure=None,
+        used_resource_ids=[],
+        action_flow="preparation",
+        requires_roll_now=False,
+        preparation_effect={
+            "type": "grant_resource",
+            "label": "Łom",
+            "target_tags": ["lever"],
+            "value": 1,
+            "duration": "next_attempt",
+            "source": "freeform",
+            "resource_id": "crowbar",
+        },
+    )
+
+    with pytest.raises(GmProposalValidationError, match="nie może być przyznany"):
+        validate_gm_classifier_proposal(proposal, request)
+
+
+def test_gm_classifier_accepts_unlock_option_from_policy():
+    exploration, state = _state()
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Szukamy słabego miejsca w sztachetach.",
+    )
+    proposal = _proposal(
+        approach_label="Odkrycie nacięcia",
+        approach_tags=["scouting", "picket"],
+        ability=None,
+        skill=None,
+        dc=None,
+        progress_on_success=None,
+        progress_on_failure=None,
+        used_resource_ids=[],
+        action_flow="preparation",
+        requires_roll_now=False,
+        preparation_effect={
+            "type": "unlock_option",
+            "label": "Słabe miejsce w sztachetach",
+            "target_tags": ["picket"],
+            "value": 1,
+            "duration": "next_attempt",
+            "source": "freeform",
+            "option_id": "saw_picket",
+        },
+    )
+
+    validated = validate_gm_classifier_proposal(proposal, request)
+
+    assert validated.proposal.preparation_effect is not None
+    assert validated.proposal.preparation_effect.option_id == "saw_picket"
+
+
+def test_gm_classifier_rejects_effect_boost_outside_policy():
+    exploration, state = _state()
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Przygotowujemy duży efekt.",
+    )
+    proposal = _proposal(
+        approach_label="Przesadny boost",
+        approach_tags=["lever"],
+        ability=None,
+        skill=None,
+        dc=None,
+        progress_on_success=None,
+        progress_on_failure=None,
+        used_resource_ids=[],
+        action_flow="preparation",
+        requires_roll_now=False,
+        preparation_effect={
+            "type": "effect_boost",
+            "label": "Przesadna dźwignia",
+            "target_tags": ["lever"],
+            "value": 3,
+            "duration": "next_attempt",
+            "source": "freeform",
+        },
+    )
+
+    with pytest.raises(GmProposalValidationError, match="Wzmocnienie efektu jest poza zakresem policy"):
+        validate_gm_classifier_proposal(proposal, request)
+
+
 def test_gm_classifier_rejects_preparation_modifier_outside_policy():
     exploration, state = _state()
     request = build_gm_classifier_request(
@@ -439,6 +652,9 @@ def test_gm_classifier_request_payload_contains_context_layers_and_dynamic_state
     assert "przelot na linie bez magii" in payload["challenge"]["context"]["impossible_approaches"]
     assert "szybki podkop pod kamienną bramą bez odpowiednich narzędzi i czasu" in payload["challenge"]["context"]["impossible_approaches"]
     assert payload["challenge"]["llm_policy"]["dc_range"] == [8, 18]
+    assert payload["challenge"]["llm_policy"]["allowed_grant_resource_ids"] == ["saw"]
+    assert payload["challenge"]["llm_policy"]["allowed_unlock_option_ids"] == ["saw_picket"]
+    assert payload["challenge"]["llm_policy"]["effect_boost_range"] == [1, 1]
     assert payload["challenge"]["llm_policy"]["max_resources_per_attempt"] == 1
     assert "heavy_force" in payload["allowed_tags"]
     assert "bribe" not in payload["allowed_tags"]

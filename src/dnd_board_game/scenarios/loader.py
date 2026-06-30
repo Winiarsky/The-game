@@ -49,7 +49,17 @@ KNOWN_LLM_CONSEQUENCE_TYPES = frozenset(
         "none",
     }
 )
-KNOWN_LLM_PREPARATION_EFFECT_TYPES = frozenset({"modifier", "reduce_negative_effect"})
+KNOWN_LLM_PREPARATION_EFFECT_TYPES = frozenset(
+    {
+        "modifier",
+        "reduce_negative_effect",
+        "advantage",
+        "disadvantage",
+        "effect_boost",
+        "unlock_option",
+        "grant_resource",
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -610,6 +620,10 @@ def _parse_llm_challenge_policy(data: Any, field: str) -> LlmChallengePolicy:
         data.get("negative_effect_reduction_range", [1, 1]),
         f"{field}.negative_effect_reduction_range",
     )
+    effect_boost_min, effect_boost_max = _parse_int_range(
+        data.get("effect_boost_range", [1, 1]),
+        f"{field}.effect_boost_range",
+    )
     dc_tiers, allowed_difficulty_tiers, default_difficulty_tier, difficulty_guidance = _parse_dc_policy(
         data.get("dc_policy", {}),
         f"{field}.dc_policy",
@@ -626,6 +640,14 @@ def _parse_llm_challenge_policy(data: Any, field: str) -> LlmChallengePolicy:
             data.get("allowed_preparation_effect_types", list(defaults.allowed_preparation_effect_types)),
             f"{field}.allowed_preparation_effect_types",
         ),
+        allowed_grant_resource_ids=_parse_string_tuple(
+            data.get("allowed_grant_resource_ids", list(defaults.allowed_grant_resource_ids)),
+            f"{field}.allowed_grant_resource_ids",
+        ),
+        allowed_unlock_option_ids=_parse_string_tuple(
+            data.get("allowed_unlock_option_ids", list(defaults.allowed_unlock_option_ids)),
+            f"{field}.allowed_unlock_option_ids",
+        ),
         max_resources_per_attempt=int(data.get("max_resources_per_attempt", 1)),
         dc_min=dc_min,
         dc_max=dc_max,
@@ -637,6 +659,8 @@ def _parse_llm_challenge_policy(data: Any, field: str) -> LlmChallengePolicy:
         preparation_modifier_max=preparation_modifier_max,
         negative_effect_reduction_min=negative_effect_reduction_min,
         negative_effect_reduction_max=negative_effect_reduction_max,
+        effect_boost_min=effect_boost_min,
+        effect_boost_max=effect_boost_max,
         dc_tiers=dc_tiers,
         allowed_difficulty_tiers=allowed_difficulty_tiers,
         default_difficulty_tier=default_difficulty_tier,
@@ -861,7 +885,20 @@ def _validate_exploration(definition: ScenarioDefinition) -> None:
             raise ValueError(f"exploration challenge {challenge.id}.completed_flag cannot be empty.")
         if not challenge.options:
             raise ValueError(f"exploration challenge {challenge.id}.options must contain at least one option.")
-        _validate_llm_challenge_policy(challenge)
+        _validate_llm_challenge_policy(challenge, resource_ids)
+        option_ids = {option.id for option in challenge.options}
+        unknown_unlock_options = set(challenge.llm_policy.allowed_unlock_option_ids) - option_ids
+        if unknown_unlock_options:
+            raise ValueError(
+                f"exploration challenge {challenge.id}.llm_policy.allowed_unlock_option_ids references unknown options: "
+                f"{', '.join(sorted(unknown_unlock_options))}."
+            )
+        unknown_grant_resources = set(challenge.llm_policy.allowed_grant_resource_ids) - resource_ids
+        if unknown_grant_resources:
+            raise ValueError(
+                f"exploration challenge {challenge.id}.llm_policy.allowed_grant_resource_ids references unknown resources: "
+                f"{', '.join(sorted(unknown_grant_resources))}."
+            )
         for option in challenge.options:
             if option.progress_on_success < 0 or option.progress_on_failure < 0:
                 raise ValueError(f"exploration challenge option {option.id}.progress values must be non-negative.")
@@ -871,7 +908,7 @@ def _validate_exploration(definition: ScenarioDefinition) -> None:
                 )
 
 
-def _validate_llm_challenge_policy(challenge: ExplorationChallenge) -> None:
+def _validate_llm_challenge_policy(challenge: ExplorationChallenge, resource_ids: set[str]) -> None:
     policy = challenge.llm_policy
     if policy.max_resources_per_attempt < 0:
         raise ValueError(f"exploration challenge {challenge.id}.llm_policy.max_resources_per_attempt must be non-negative.")
@@ -893,6 +930,10 @@ def _validate_llm_challenge_policy(challenge: ExplorationChallenge) -> None:
         raise ValueError(
             f"exploration challenge {challenge.id}.llm_policy.negative_effect_reduction_range minimum cannot exceed maximum."
         )
+    if policy.effect_boost_min > policy.effect_boost_max:
+        raise ValueError(
+            f"exploration challenge {challenge.id}.llm_policy.effect_boost_range minimum cannot exceed maximum."
+        )
     unknown_consequence_types = set(policy.allowed_consequence_types) - KNOWN_LLM_CONSEQUENCE_TYPES
     if unknown_consequence_types:
         raise ValueError(
@@ -906,6 +947,12 @@ def _validate_llm_challenge_policy(challenge: ExplorationChallenge) -> None:
             "exploration challenge "
             f"{challenge.id}.llm_policy.allowed_preparation_effect_types contains unknown values: "
             f"{', '.join(sorted(unknown_preparation_types))}."
+        )
+    unknown_grant_resources = set(policy.allowed_grant_resource_ids) - resource_ids
+    if unknown_grant_resources:
+        raise ValueError(
+            f"exploration challenge {challenge.id}.llm_policy.allowed_grant_resource_ids references unknown resources: "
+            f"{', '.join(sorted(unknown_grant_resources))}."
         )
     tier_ids = [tier.id for tier in policy.dc_tiers]
     if len(tier_ids) != len(set(tier_ids)):

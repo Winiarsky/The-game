@@ -816,6 +816,12 @@ def _handle_freeform_action_once(
     if proposal.player_narration:
         print(proposal.player_narration)
         messages.append(proposal.player_narration)
+    applicable_preview_effects = _applicable_preparation_effects(active_preparation_effects, option)
+    if proposal.action_flow == gm_action_flow.COMBINED and proposal.preparation_effect is not None:
+        pending_effect = RuntimePreparationEffect(proposal.preparation_effect, option.id)
+        if set(option.tags).intersection(set(proposal.preparation_effect.target_tags)):
+            applicable_preview_effects = (*applicable_preview_effects, pending_effect)
+    preview = _challenge_consequence_preview(option, proposal, resource, applicable_preview_effects)
     summary = (
         f"Propozycja MG: {option.label}. Test: {option.ability_check.ability}"
         f"{'/' + option.ability_check.skill if option.ability_check.skill else ''}, "
@@ -829,7 +835,9 @@ def _handle_freeform_action_once(
     if resource is not None:
         summary = f"{summary} Zasób: {resource.label}."
     print(summary)
+    print(preview)
     messages.append(summary)
+    messages.append(preview)
     observer.record(
         "gm_interpretation_proposed",
         {
@@ -838,12 +846,20 @@ def _handle_freeform_action_once(
             "summary": summary,
             "player_narration": proposal.player_narration,
             "gm_notes": proposal.gm_notes,
+            "consequence_preview": preview,
             "action_flow": proposal.action_flow.value,
             "difficulty_tier": proposal.difficulty_tier,
             "difficulty_reason": proposal.difficulty_reason,
         },
     )
-    decision = _decide_gm_interpretation(args, observer, validated.challenge.id, option.id, summary, proposal.gm_notes)
+    decision = _decide_gm_interpretation(
+        args,
+        observer,
+        validated.challenge.id,
+        option.id,
+        summary,
+        _join_explanation(preview, proposal.gm_notes),
+    )
     if decision == GmInterpretationDecision.RECLASSIFY:
         if reclassification_count >= 2:
             message = "Osiągnięto limit reinterpretacji tej samej deklaracji. Wpiszcie korektę podejścia."
@@ -907,6 +923,15 @@ def _handle_freeform_action_once(
         resource,
         observer,
         preparation_effects=applicable_effects,
+    )
+    new_state = _apply_post_challenge_preparation_effects(
+        new_state,
+        result_messages,
+        applicable_effects,
+        observer,
+        validated.challenge.id,
+        option.id,
+        success=_last_challenge_success(new_state, validated.challenge.id),
     )
     _expire_preparation_effects(active_preparation_effects, applicable_effects, observer, validated.challenge.id, option.id)
     observer.record(
@@ -1348,7 +1373,7 @@ def _resolve_challenge_option(
         *_preparation_roll_modifiers(preparation_effects),
         *_support_roll_modifiers(state, option),
     )
-    mode = RollMode.ADVANTAGE if resource is not None and resource.advantage else RollMode.NORMAL
+    mode = _roll_mode_for_challenge(resource, preparation_effects)
     request = D20RollRequest(mode=mode, modifiers=modifiers)
     instruction = roll_instruction(request)
     if preparation_effects:
@@ -1367,6 +1392,7 @@ def _resolve_challenge_option(
         roll,
         resource,
         negative_effect_reduction=_preparation_negative_effect_reduction(preparation_effects),
+        progress_boost_on_success=_preparation_progress_boost(preparation_effects),
     )
     print(result.message)
     observer.record(
@@ -1579,6 +1605,8 @@ def _store_preparation_effect(
             "value": effect.value,
             "duration": effect.duration.value,
             "source": effect.source,
+            "resource_id": getattr(effect, "resource_id", None),
+            "option_id": getattr(effect, "option_id", None),
         },
     )
     return (message,)
@@ -1588,10 +1616,16 @@ def _preparation_proposal_summary(proposal) -> str:
     effect = proposal.preparation_effect
     if effect is None:
         return "Propozycja MG: przygotowanie bez opisanego efektu."
-    effect_kind = "modyfikator" if effect.type.value == "modifier" else "redukcja negatywnego efektu"
+    effect_kind = _preparation_effect_kind_pl(effect)
+    target = f", tagi: {', '.join(effect.target_tags)}" if effect.target_tags else ""
+    extra = ""
+    if getattr(effect, "resource_id", None):
+        extra = f", zasób: {effect.resource_id}"
+    if getattr(effect, "option_id", None):
+        extra = f", opcja: {effect.option_id}"
     return (
         f"Propozycja MG: przygotowanie `{effect.label}`. "
-        f"Efekt: {effect_kind} {effect.value}, tagi: {', '.join(effect.target_tags)}."
+        f"Efekt: {effect_kind} {effect.value}{target}{extra}."
     )
 
 
@@ -1624,6 +1658,8 @@ def _expire_preparation_effects(
                 "type": effect.effect.type.value,
                 "target_tags": list(effect.effect.target_tags),
                 "value": effect.effect.value,
+                "resource_id": getattr(effect.effect, "resource_id", None),
+                "option_id": getattr(effect.effect, "option_id", None),
             },
         )
         if effect in active_preparation_effects:
@@ -1673,11 +1709,162 @@ def _preparation_negative_effect_reduction(effects: tuple[RuntimePreparationEffe
     return sum(effect.effect.value for effect in effects if effect.effect.type.value == "reduce_negative_effect")
 
 
+def _preparation_progress_boost(effects: tuple[RuntimePreparationEffect, ...]) -> int:
+    return sum(effect.effect.value for effect in effects if effect.effect.type.value == "effect_boost")
+
+
+def _roll_mode_for_challenge(
+    resource: ExplorationResource | None,
+    effects: tuple[RuntimePreparationEffect, ...],
+) -> RollMode:
+    has_advantage = resource is not None and resource.advantage
+    has_disadvantage = False
+    for entry in effects:
+        if entry.effect.type.value == "advantage":
+            has_advantage = True
+        if entry.effect.type.value == "disadvantage":
+            has_disadvantage = True
+    if has_advantage and not has_disadvantage:
+        return RollMode.ADVANTAGE
+    if has_disadvantage and not has_advantage:
+        return RollMode.DISADVANTAGE
+    return RollMode.NORMAL
+
+
 def _preparation_summary(entry: RuntimePreparationEffect) -> str:
     effect = entry.effect
     if effect.type.value == "modifier":
         return f"{effect.label} +{effect.value}"
-    return f"{effect.label} -{effect.value} negatywnego efektu"
+    if effect.type.value == "reduce_negative_effect":
+        return f"{effect.label} -{effect.value} negatywnego efektu"
+    if effect.type.value == "advantage":
+        return f"{effect.label} przewaga"
+    if effect.type.value == "disadvantage":
+        return f"{effect.label} utrudnienie"
+    if effect.type.value == "effect_boost":
+        return f"{effect.label} +{effect.value} postępu przy sukcesie"
+    if effect.type.value == "grant_resource":
+        return f"{effect.label} może dać zasób {getattr(effect, 'resource_id', '')}"
+    if effect.type.value == "unlock_option":
+        return f"{effect.label} może odblokować opcję {getattr(effect, 'option_id', '')}"
+    return effect.label
+
+
+def _preparation_effect_kind_pl(effect) -> str:
+    names = {
+        "modifier": "modyfikator",
+        "reduce_negative_effect": "redukcja negatywnego efektu",
+        "advantage": "przewaga",
+        "disadvantage": "utrudnienie",
+        "effect_boost": "wzmocnienie efektu",
+        "grant_resource": "przyznanie zasobu",
+        "unlock_option": "odblokowanie opcji",
+    }
+    return names.get(effect.type.value, effect.type.value)
+
+
+def _apply_post_challenge_preparation_effects(
+    state: ExplorationState,
+    result_messages: tuple[str, ...],
+    effects: tuple[RuntimePreparationEffect, ...],
+    observer: SessionObserver,
+    challenge_id: str,
+    option_id: str,
+    *,
+    success: bool,
+) -> ExplorationState:
+    del result_messages
+    if not success:
+        return state
+    updated = state
+    for entry in effects:
+        effect = entry.effect
+        if effect.type.value == "grant_resource" and getattr(effect, "resource_id", None):
+            before = set(updated.inventory_resource_ids)
+            updated = grant_resource(updated, effect.resource_id)
+            if effect.resource_id not in before:
+                print(f"Zasób dodany do ekwipunku: {effect.resource_id}.")
+                observer.record(
+                    "resource_granted",
+                    {
+                        "challenge_id": challenge_id,
+                        "option_id": option_id,
+                        "resource_id": effect.resource_id,
+                        "source": effect.source,
+                    },
+                )
+        if effect.type.value == "unlock_option" and getattr(effect, "option_id", None):
+            flag = _llm_unlocked_option_flag(effect.option_id)
+            updated = replace(updated, flags=set_scene_flag(updated.flags, flag, True))
+            print(f"Odblokowano podejście: {effect.option_id}.")
+            observer.record(
+                "option_unlocked",
+                {
+                    "challenge_id": challenge_id,
+                    "option_id": option_id,
+                    "unlocked_option_id": effect.option_id,
+                    "flag": flag,
+                    "source": effect.source,
+                },
+            )
+    return updated
+
+
+def _last_challenge_success(state: ExplorationState, challenge_id: str) -> bool:
+    current = challenge_state_for(state, challenge_id)
+    if not current.attempts:
+        return False
+    return current.attempts[-1].success
+
+
+def _llm_unlocked_option_flag(option_id: str) -> str:
+    return f"llm_unlocked_option:{option_id}"
+
+
+def _challenge_consequence_preview(
+    option: ExplorationChallengeOption,
+    proposal,
+    resource: ExplorationResource | None,
+    preparation_effects: tuple[RuntimePreparationEffect, ...],
+) -> str:
+    boost = _preparation_progress_boost(preparation_effects)
+    reduction = _preparation_negative_effect_reduction(preparation_effects)
+    success_progress = option.progress_on_success + boost
+    failure_noise = max(0, option.failure_noise - reduction)
+    critical_noise = max(0, option.critical_failure_noise - reduction)
+    lines = [
+        "Preview konsekwencji:",
+        f"- Krytyczny sukces: {option.success_message or 'pełny sukces'}; postęp +{success_progress}.",
+        f"- Sukces: {option.success_message or 'sukces'}; postęp +{success_progress}.",
+        f"- Porażka: {option.failure_message or 'fail-forward'}; postęp +{option.progress_on_failure}; hałas +{failure_noise}.",
+        f"- Krytyczna porażka: {option.critical_failure_message or option.failure_message or 'poważniejsza komplikacja'}; "
+        f"postęp +{option.progress_on_failure}; hałas +{critical_noise}.",
+    ]
+    if proposal.difficulty_tier:
+        lines.insert(1, f"- Trudność: {proposal.difficulty_tier}, ST {option.ability_check.dc}.")
+    if resource is not None:
+        lines.append(f"- Zasób przy teście: {_resource_summary(resource)}.")
+    if preparation_effects:
+        lines.append("- Aktywne przygotowania: " + ", ".join(_preparation_summary(effect) for effect in preparation_effects) + ".")
+    complications = tuple(
+        item
+        for item in (
+            option.success_complication,
+            option.failure_complication,
+            option.critical_failure_complication,
+        )
+        if item
+    )
+    if complications:
+        lines.append("- Możliwe komplikacje: " + ", ".join(dict.fromkeys(complications)) + ".")
+    return "\n".join(lines)
+
+
+def _join_explanation(preview: str, gm_notes: str) -> str:
+    if gm_notes.strip():
+        return f"{preview}\nNotatki MG: {gm_notes.strip()}"
+    return preview
+
 
 
 def _support_roll_modifiers(state: ExplorationState, option: ExplorationChallengeOption) -> tuple[RollModifier, ...]:

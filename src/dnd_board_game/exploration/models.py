@@ -105,6 +105,8 @@ class LlmChallengePolicy:
     )
     allowed_consequence_types: tuple[str, ...] = ("add_noise", "add_complication", "none")
     allowed_preparation_effect_types: tuple[str, ...] = ("modifier", "reduce_negative_effect")
+    allowed_grant_resource_ids: tuple[str, ...] = ()
+    allowed_unlock_option_ids: tuple[str, ...] = ()
     max_resources_per_attempt: int = 1
     dc_min: int = 5
     dc_max: int = 25
@@ -116,6 +118,8 @@ class LlmChallengePolicy:
     preparation_modifier_max: int = 2
     negative_effect_reduction_min: int = 1
     negative_effect_reduction_max: int = 1
+    effect_boost_min: int = 1
+    effect_boost_max: int = 1
     dc_tiers: tuple[LlmDcTier, ...] = ()
     allowed_difficulty_tiers: tuple[str, ...] = ()
     default_difficulty_tier: str | None = None
@@ -128,12 +132,15 @@ class LlmChallengePolicy:
             "allowed_complications": list(self.allowed_complications),
             "allowed_consequence_types": list(self.allowed_consequence_types),
             "allowed_preparation_effect_types": list(self.allowed_preparation_effect_types),
+            "allowed_grant_resource_ids": list(self.allowed_grant_resource_ids),
+            "allowed_unlock_option_ids": list(self.allowed_unlock_option_ids),
             "max_resources_per_attempt": self.max_resources_per_attempt,
             "dc_range": [self.dc_min, self.dc_max],
             "progress_on_success_range": [self.progress_success_min, self.progress_success_max],
             "progress_on_failure_range": [self.progress_failure_min, self.progress_failure_max],
             "preparation_modifier_range": [self.preparation_modifier_min, self.preparation_modifier_max],
             "negative_effect_reduction_range": [self.negative_effect_reduction_min, self.negative_effect_reduction_max],
+            "effect_boost_range": [self.effect_boost_min, self.effect_boost_max],
             "dc_policy": {
                 "tiers": [tier.as_payload() for tier in self.dc_tiers],
                 "allowed_tiers": list(self.allowed_difficulty_tiers),
@@ -391,9 +398,14 @@ def available_challenge_options(
         return ()
     result: list[ExplorationChallengeOption] = []
     for option in challenge.options:
-        if option.unlocks_if_flag is not None and not scene_flag(state.flags, option.unlocks_if_flag, False):
+        llm_unlocked = scene_flag(state.flags, f"llm_unlocked_option:{option.id}", False)
+        if option.unlocks_if_flag is not None and not scene_flag(state.flags, option.unlocks_if_flag, False) and not llm_unlocked:
             continue
-        if option.unlocks_if_resource_id is not None and option.unlocks_if_resource_id not in state.inventory_resource_ids:
+        if (
+            option.unlocks_if_resource_id is not None
+            and option.unlocks_if_resource_id not in state.inventory_resource_ids
+            and not llm_unlocked
+        ):
             continue
         result.append(option)
     return tuple(result)
@@ -540,6 +552,7 @@ def resolve_challenge_option(
     roll: D20RollResult,
     resource: ExplorationResource | None = None,
     negative_effect_reduction: int = 0,
+    progress_boost_on_success: int = 0,
 ) -> ChallengeResult:
     if option not in available_challenge_options(state, challenge):
         raise ValueError(f"Challenge option {option.id} is not available.")
@@ -549,7 +562,8 @@ def resolve_challenge_option(
     check = resolve_ability_check(roll, option.ability_check.dc)
     success = check.success
     critical_failure = roll.is_natural_1 and not success
-    progress_added = option.progress_on_success if success else option.progress_on_failure
+    raw_progress_added = option.progress_on_success + max(0, progress_boost_on_success) if success else option.progress_on_failure
+    progress_added = min(challenge.progress_required - current.current_progress, raw_progress_added)
     progress = min(challenge.progress_required, current.current_progress + progress_added)
     completed = progress >= challenge.progress_required
     noise_added = _challenge_noise(option, roll, success, critical_failure)

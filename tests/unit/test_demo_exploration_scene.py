@@ -143,8 +143,137 @@ def _gm_preparation_proposal():
     )
 
 
+def _gm_advantage_preparation_proposal():
+    data = _gm_preparation_proposal().model_dump(mode="json")
+    data.update(
+        {
+            "preparation_effect": {
+                "type": "advantage",
+                "label": "Lina daje pewne oparcie",
+                "target_tags": ["climbing"],
+                "value": 1,
+                "duration": "next_attempt",
+                "source": "freeform",
+            }
+        }
+    )
+    return GmClassifierProposal.model_validate(data)
+
+
+def _gm_disadvantage_preparation_proposal():
+    data = _gm_preparation_proposal().model_dump(mode="json")
+    data.update(
+        {
+            "preparation_effect": {
+                "type": "disadvantage",
+                "label": "Śliskie przęsła utrudniają wejście",
+                "target_tags": ["climbing"],
+                "value": 1,
+                "duration": "next_attempt",
+                "source": "freeform",
+            }
+        }
+    )
+    return GmClassifierProposal.model_validate(data)
+
+
+def _gm_effect_boost_preparation_proposal():
+    data = _gm_preparation_proposal().model_dump(mode="json")
+    data.update(
+        {
+            "approach_label": "Przygotowanie mocniejszej dźwigni",
+            "approach_tags": ["lever"],
+            "preparation_effect": {
+                "type": "effect_boost",
+                "label": "Lepszy punkt podważenia",
+                "target_tags": ["lever"],
+                "value": 1,
+                "duration": "next_attempt",
+                "source": "freeform",
+            },
+        }
+    )
+    return GmClassifierProposal.model_validate(data)
+
+
+def _gm_grant_saw_preparation_proposal():
+    data = _gm_preparation_proposal().model_dump(mode="json")
+    data.update(
+        {
+            "approach_label": "Znalezienie starej piły",
+            "approach_tags": ["scouting", "saw"],
+            "preparation_effect": {
+                "type": "grant_resource",
+                "label": "Stara piła w obozowisku",
+                "target_tags": ["saw", "picket"],
+                "value": 1,
+                "duration": "next_attempt",
+                "source": "freeform",
+                "resource_id": "saw",
+            },
+        }
+    )
+    return GmClassifierProposal.model_validate(data)
+
+
+def _gm_unlock_saw_option_preparation_proposal():
+    data = _gm_preparation_proposal().model_dump(mode="json")
+    data.update(
+        {
+            "approach_label": "Odkrycie słabego miejsca",
+            "approach_tags": ["scouting", "picket"],
+            "preparation_effect": {
+                "type": "unlock_option",
+                "label": "Słabe miejsce w sztachetach",
+                "target_tags": ["picket"],
+                "value": 1,
+                "duration": "next_attempt",
+                "source": "freeform",
+                "option_id": "saw_picket",
+            },
+        }
+    )
+    return GmClassifierProposal.model_validate(data)
+
+
 def _gm_climb_without_resource_proposal():
     return _gm_rope_proposal().model_copy(update={"used_resource_ids": ()})
+
+
+def _gm_lever_without_resource_proposal():
+    return _gm_rope_proposal().model_copy(
+        update={
+            "approach_label": "Podważenie mechanizmu",
+            "approach_tags": ("lever", "quiet"),
+            "ability": "intelligence",
+            "skill": "crafting",
+            "difficulty_tier": "medium",
+            "difficulty_reason": "Precyzyjne podważanie wymaga pracy przy mechanizmie.",
+            "dc": 15,
+            "progress_on_success": 2,
+            "progress_on_failure": 1,
+            "used_resource_ids": (),
+            "player_narration": "Podważacie mechanizm spokojnie i metodycznie.",
+        }
+    )
+
+
+def _gm_picket_without_resource_proposal():
+    return _gm_rope_proposal().model_copy(
+        update={
+            "approach_label": "Praca przy sztachetach",
+            "approach_tags": ("picket",),
+            "ability": "strength",
+            "skill": "athletics",
+            "difficulty_tier": "medium",
+            "difficulty_reason": "Poszerzenie szpary wymaga siły i ostrożności.",
+            "dc": 15,
+            "progress_on_success": 2,
+            "progress_on_failure": 1,
+            "used_resource_ids": (),
+            "player_narration": "Pracujecie przy słabych sztachetach, próbując poszerzyć przejście.",
+        }
+    )
 
 
 def test_demo_exploration_scene_runs_scripted_zone_travel_and_search(tmp_path):
@@ -692,6 +821,187 @@ def test_demo_exploration_scene_preparation_then_attempt_applies_effect(tmp_path
     assert "preparation_effect_expired" in event_types
     assert "gm_classifier_option_resolved" in event_types
     assert demo_exploration_scene.challenge_state_for(result.final_state, "closed_gate").current_progress == 2
+
+
+def test_demo_exploration_scene_advantage_preparation_changes_roll_instruction(tmp_path, monkeypatch, capsys):
+    client = FakeGmClient(
+        [_gm_advantage_preparation_proposal(), _gm_climb_without_resource_proposal()],
+        analysis=[
+            _gm_analysis(normalized_intent="Przygotowanie liny."),
+            _gm_analysis(normalized_intent="Wejście górą."),
+        ],
+    )
+    answers = iter(["Wchodzimy górą po bramie."])
+    monkeypatch.setattr(demo_exploration_scene.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda _prompt: next(answers))
+
+    run_demo(
+        _args(
+            tmp_path,
+            "--gm-classifier",
+            "groq",
+            "--interactive-freeform",
+            "--freeform-retries",
+            "2",
+            "--freeform-action",
+            "Mocujemy linę pod wspinaczkę.",
+            "--gm-accept",
+            "yes",
+            "--challenge-roll",
+            "gm_generated=14",
+            "--max-steps",
+            "1",
+        ),
+        gm_client=client,
+    )
+
+    output = capsys.readouterr().out
+    assert "Rzuć 2d20 i wpisz wyższy wynik" in output
+
+
+def test_demo_exploration_scene_disadvantage_preparation_changes_roll_instruction(tmp_path, monkeypatch, capsys):
+    client = FakeGmClient(
+        [_gm_disadvantage_preparation_proposal(), _gm_climb_without_resource_proposal()],
+        analysis=[
+            _gm_analysis(normalized_intent="Śliskie przęsła."),
+            _gm_analysis(normalized_intent="Wejście górą."),
+        ],
+    )
+    answers = iter(["Wchodzimy górą po bramie."])
+    monkeypatch.setattr(demo_exploration_scene.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda _prompt: next(answers))
+
+    run_demo(
+        _args(
+            tmp_path,
+            "--gm-classifier",
+            "groq",
+            "--interactive-freeform",
+            "--freeform-retries",
+            "2",
+            "--freeform-action",
+            "Śliskie deski utrudniają wejście.",
+            "--gm-accept",
+            "yes",
+            "--challenge-roll",
+            "gm_generated=14",
+            "--max-steps",
+            "1",
+        ),
+        gm_client=client,
+    )
+
+    output = capsys.readouterr().out
+    assert "Rzuć 2d20 i wpisz niższy wynik" in output
+
+
+def test_demo_exploration_scene_effect_boost_increases_success_progress(tmp_path, monkeypatch):
+    client = FakeGmClient(
+        [_gm_effect_boost_preparation_proposal(), _gm_lever_without_resource_proposal()],
+        analysis=[
+            _gm_analysis(normalized_intent="Przygotowanie dźwigni."),
+            _gm_analysis(normalized_intent="Podważenie mechanizmu."),
+        ],
+    )
+    answers = iter(["Podważamy mechanizm."])
+    monkeypatch.setattr(demo_exploration_scene.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda _prompt: next(answers))
+
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--gm-classifier",
+            "groq",
+            "--interactive-freeform",
+            "--freeform-retries",
+            "2",
+            "--freeform-action",
+            "Ustawiamy lepszy punkt podważenia.",
+            "--gm-accept",
+            "yes",
+            "--challenge-roll",
+            "gm_generated=15",
+            "--max-steps",
+            "1",
+        ),
+        gm_client=client,
+    )
+
+    assert demo_exploration_scene.challenge_state_for(result.final_state, "closed_gate").current_progress == 3
+
+
+def test_demo_exploration_scene_grant_resource_effect_adds_resource_after_success(tmp_path, monkeypatch):
+    client = FakeGmClient(
+        [_gm_grant_saw_preparation_proposal(), _gm_picket_without_resource_proposal()],
+        analysis=[
+            _gm_analysis(normalized_intent="Szukamy piły."),
+            _gm_analysis(normalized_intent="Próbujemy użyć odkrytego narzędzia."),
+        ],
+    )
+    answers = iter(["Próbujemy użyć odkrytego narzędzia."])
+    monkeypatch.setattr(demo_exploration_scene.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda _prompt: next(answers))
+
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--gm-classifier",
+            "groq",
+            "--interactive-freeform",
+            "--freeform-retries",
+            "2",
+            "--freeform-action",
+            "Rozglądamy się za narzędziem.",
+            "--gm-accept",
+            "yes",
+            "--challenge-roll",
+            "gm_generated=15",
+            "--max-steps",
+            "1",
+        ),
+        gm_client=client,
+    )
+
+    event_types = [event["event_type"] for event in _events(result.observation_path)]
+    assert "saw" in result.final_state.inventory_resource_ids
+    assert "resource_granted" in event_types
+
+
+def test_demo_exploration_scene_unlock_option_effect_sets_unlock_flag_after_success(tmp_path, monkeypatch):
+    client = FakeGmClient(
+        [_gm_unlock_saw_option_preparation_proposal(), _gm_picket_without_resource_proposal()],
+        analysis=[
+            _gm_analysis(normalized_intent="Szukamy słabego miejsca."),
+            _gm_analysis(normalized_intent="Wykorzystujemy słabe miejsce."),
+        ],
+    )
+    answers = iter(["Wykorzystujemy słabe miejsce."])
+    monkeypatch.setattr(demo_exploration_scene.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda _prompt: next(answers))
+
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--gm-classifier",
+            "groq",
+            "--interactive-freeform",
+            "--freeform-retries",
+            "2",
+            "--freeform-action",
+            "Szukamy słabego miejsca w sztachetach.",
+            "--gm-accept",
+            "yes",
+            "--challenge-roll",
+            "gm_generated=15",
+            "--max-steps",
+            "1",
+        ),
+        gm_client=client,
+    )
+
+    event_types = [event["event_type"] for event in _events(result.observation_path)]
+    assert ("llm_unlocked_option:saw_picket", True) in result.final_state.flags.values
+    assert "option_unlocked" in event_types
 
 
 def test_demo_exploration_scene_declared_missing_resource_does_not_roll(tmp_path):

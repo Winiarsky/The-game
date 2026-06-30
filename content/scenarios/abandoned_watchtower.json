@@ -1462,7 +1462,18 @@
           ],
           "allowed_preparation_effect_types": [
             "modifier",
-            "reduce_negative_effect"
+            "reduce_negative_effect",
+            "advantage",
+            "disadvantage",
+            "effect_boost",
+            "unlock_option",
+            "grant_resource"
+          ],
+          "allowed_grant_resource_ids": [
+            "saw"
+          ],
+          "allowed_unlock_option_ids": [
+            "saw_picket"
           ],
           "max_resources_per_attempt": 1,
           "dc_range": [
@@ -1512,6 +1523,10 @@
             2
           ],
           "negative_effect_reduction_range": [
+            1,
+            1
+          ],
+          "effect_boost_range": [
             1,
             1
           ]

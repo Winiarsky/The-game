@@ -78,6 +78,11 @@ class GmConsequenceType(StrEnum):
 class PreparationEffectType(StrEnum):
     MODIFIER = "modifier"
     REDUCE_NEGATIVE_EFFECT = "reduce_negative_effect"
+    ADVANTAGE = "advantage"
+    DISADVANTAGE = "disadvantage"
+    EFFECT_BOOST = "effect_boost"
+    UNLOCK_OPTION = "unlock_option"
+    GRANT_RESOURCE = "grant_resource"
 
 
 class PreparationEffectDuration(StrEnum):
@@ -137,6 +142,8 @@ class GmPreparationEffect(BaseModel):
     value: int = Field(default=1, ge=0, le=5)
     duration: PreparationEffectDuration = PreparationEffectDuration.NEXT_ATTEMPT
     source: str = Field(default="preparation", max_length=80)
+    resource_id: str | None = Field(default=None, max_length=80)
+    option_id: str | None = Field(default=None, max_length=80)
 
     @field_validator("target_tags")
     @classmethod
@@ -559,7 +566,7 @@ def validate_gm_classifier_proposal(
     if not proposal.approach_label.strip():
         raise GmProposalValidationError("Propozycja LLM nie ma nazwy podejścia.")
     if proposal.preparation_effect is not None:
-        _validate_preparation_effect(proposal.preparation_effect, policy)
+        _validate_preparation_effect(proposal.preparation_effect, policy, request)
     if proposal.action_flow == GmActionFlow.PREPARATION:
         if proposal.preparation_effect is None:
             raise GmProposalValidationError("Przygotowanie wymaga preparation_effect.")
@@ -663,7 +670,11 @@ def _validate_resources(
     return tuple(result)
 
 
-def _validate_preparation_effect(effect: GmPreparationEffect, policy: LlmChallengePolicy) -> None:
+def _validate_preparation_effect(
+    effect: GmPreparationEffect,
+    policy: LlmChallengePolicy,
+    request: GmClassifierRequest,
+) -> None:
     if effect.type.value not in policy.allowed_preparation_effect_types:
         raise GmProposalValidationError(f"Efekt przygotowania {effect.type.value} nie jest dozwolony w tym wyzwaniu.")
     if effect.duration != PreparationEffectDuration.NEXT_ATTEMPT:
@@ -681,12 +692,37 @@ def _validate_preparation_effect(effect: GmPreparationEffect, policy: LlmChallen
                 "Modyfikator przygotowania jest poza zakresem policy: "
                 f"{policy.preparation_modifier_min}-{policy.preparation_modifier_max}."
             )
-    if effect.type == PreparationEffectType.REDUCE_NEGATIVE_EFFECT:
+    elif effect.type == PreparationEffectType.REDUCE_NEGATIVE_EFFECT:
         if not policy.negative_effect_reduction_min <= effect.value <= policy.negative_effect_reduction_max:
             raise GmProposalValidationError(
                 "Redukcja negatywnego efektu jest poza zakresem policy: "
                 f"{policy.negative_effect_reduction_min}-{policy.negative_effect_reduction_max}."
             )
+    elif effect.type in {PreparationEffectType.ADVANTAGE, PreparationEffectType.DISADVANTAGE}:
+        if effect.value not in {0, 1}:
+            raise GmProposalValidationError(f"Efekt {effect.type.value} musi mieć value 0 albo 1.")
+    elif effect.type == PreparationEffectType.EFFECT_BOOST:
+        if not policy.effect_boost_min <= effect.value <= policy.effect_boost_max:
+            raise GmProposalValidationError(
+                "Wzmocnienie efektu jest poza zakresem policy: "
+                f"{policy.effect_boost_min}-{policy.effect_boost_max}."
+            )
+    elif effect.type == PreparationEffectType.GRANT_RESOURCE:
+        if not effect.resource_id:
+            raise GmProposalValidationError("grant_resource wymaga resource_id.")
+        if effect.resource_id not in policy.allowed_grant_resource_ids:
+            raise GmProposalValidationError(f"Zasób {effect.resource_id} nie może być przyznany przez to wyzwanie.")
+        known_resource_ids = {resource.id for resource in request.state.resources}
+        if effect.resource_id not in known_resource_ids:
+            raise GmProposalValidationError(f"Nieznany zasób do przyznania: {effect.resource_id}.")
+    elif effect.type == PreparationEffectType.UNLOCK_OPTION:
+        if not effect.option_id:
+            raise GmProposalValidationError("unlock_option wymaga option_id.")
+        if effect.option_id not in policy.allowed_unlock_option_ids:
+            raise GmProposalValidationError(f"Opcja {effect.option_id} nie może być odblokowana przez to wyzwanie.")
+        known_option_ids = {option.id for option in request.challenge.options}
+        if effect.option_id not in known_option_ids:
+            raise GmProposalValidationError(f"Nieznana opcja do odblokowania: {effect.option_id}.")
 
 
 def _validate_difficulty_tier(proposal: GmClassifierProposal, policy: LlmChallengePolicy) -> None:
