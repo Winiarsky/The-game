@@ -484,6 +484,51 @@ def test_demo_exploration_scene_unsupported_analysis_retries_without_classifying
     assert demo_exploration_scene.challenge_state_for(result.final_state, "closed_gate").current_progress == 0
 
 
+def test_demo_exploration_scene_correction_attempt_gets_declaration_thread(tmp_path, monkeypatch):
+    client = FakeGmClient(
+        _gm_rope_proposal(),
+        analysis=[
+            _gm_analysis(
+                GmDeclarationAnalysisType.UNSUPPORTED,
+                "Drużyna nie ma skocznych butów.",
+            ),
+            _gm_analysis(),
+        ],
+    )
+    answers = iter(["Dobra, to bez butów, próbujemy przeskoczyć z rozbiegu."])
+    monkeypatch.setattr(demo_exploration_scene.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda _prompt: next(answers))
+
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--gm-classifier",
+            "groq",
+            "--interactive-freeform",
+            "--freeform-retries",
+            "2",
+            "--freeform-action",
+            "Przeskakujemy bramę w skocznych butach.",
+            "--gm-accept",
+            "yes",
+            "--challenge-roll",
+            "gm_generated=14",
+            "--max-steps",
+            "1",
+        ),
+        gm_client=client,
+    )
+
+    events = _events(result.observation_path)
+    event_types = [event["event_type"] for event in events]
+    assert len(client.analysis_requests) == 2
+    assert client.analysis_requests[1].declaration_thread[0].content == "Przeskakujemy bramę w skocznych butach."
+    assert "Drużyna nie ma skocznych butów" in client.analysis_requests[1].declaration_thread[0].outcome
+    assert client.analysis_requests[1].player_action == "Dobra, to bez butów, próbujemy przeskoczyć z rozbiegu."
+    assert "gm_declaration_thread_updated" in event_types
+    assert "gm_classifier_option_resolved" in event_types
+
+
 def test_demo_exploration_scene_search_can_reveal_saw_resource(tmp_path):
     result = run_demo(
         _args(

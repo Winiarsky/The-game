@@ -542,6 +542,7 @@ Minimalny kontrakt:
 * Odpowiedź LLM może utworzyć tymczasową opcję challenge, ale rozstrzygnięcie nadal przechodzi przez deterministic engine.
 * Interpretacja LLM musi zostać zaakceptowana przed rzutem.
 * Historia prób challenge jest częścią stanu gry i trafia do dynamicznego kontekstu LLM.
+* Lokalny wątek deklaracji przechowuje odrzucone deklaracje, pytania i korekty w ramach aktywnego challenge, żeby odpowiedzi typu "to bez butów" miały kontekst.
 
 Warstwy kontekstu dla LLM:
 
@@ -551,6 +552,7 @@ Warstwy kontekstu dla LLM:
 * zone context opisuje lokalne warunki,
 * challenge context opisuje sensowne i niemożliwe podejścia do konkretnej przeszkody,
 * challenge policy opisuje lokalny słownik mechaniczny konkretnej przeszkody,
+* declaration thread opisuje lokalną rozmowę/korekty dotyczące bieżącej przeszkody,
 * dynamic state opisuje fakty, które już zaszły w tej sesji.
 
 Po odrzuceniu deklaracji aplikacja powinna dać graczom możliwość wpisania kolejnego podejścia bez resetowania sceny.

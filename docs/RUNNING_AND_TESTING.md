@@ -358,6 +358,7 @@ Tryb eksploracji:
 - Odpowiedź LLM przechodzi przez Pydantic, walidację stanu gry i akceptację interpretacji przez `--gm-accept ask|yes|no`.
 - Payload LLM zawiera warstwy kontekstu: scenariusz, lokacja, challenge, dynamiczny stan gry i historię wcześniejszych prób.
 - Payload LLM zawiera też `llm_policy` aktywnego challenge, czyli lokalnie dozwolone tagi, komplikacje, consequence types, zakres ST i zakres postępu.
+- Payload LLM zawiera lokalny `declaration_thread`, jeśli gracz wcześniej odrzucił deklarację, zadał pytanie albo doprecyzował podejście w ramach tego samego promptu freeform.
 - Po odrzuceniu deklaracji tryb `--interactive-freeform` może poprosić o kolejną próbę bez restartowania runtime.
 - Błędy Groq/Gemini `429` i chwilowe `5xx` są ponawiane automatycznie z krótkim backoffem; `--freeform-retries` nadal oznacza liczbę prób deklaracji gracza, nie liczbę ponowień HTTP.
 - Jeśli analyzer prosi o doprecyzowanie i podaje znormalizowaną intencję, odpowiedź `tak` potwierdza tę interpretację bez wysyłania samego `tak` jako nowej deklaracji do LLM.

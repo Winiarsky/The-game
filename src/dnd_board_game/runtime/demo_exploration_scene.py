@@ -77,6 +77,13 @@ class DemoExplorationResult:
     feedback_events: int
 
 
+@dataclass(frozen=True, slots=True)
+class DeclarationThreadEntry:
+    role: str
+    content: str
+    outcome: str = ""
+
+
 def run_demo(
     args: argparse.Namespace,
     *,
@@ -598,6 +605,7 @@ def _handle_freeform_actions(
     messages: list[str] = []
     current_action = args.freeform_action.strip()
     max_attempts = max(1, int(args.freeform_retries))
+    declaration_thread: list[DeclarationThreadEntry] = []
     for attempt in range(1, max_attempts + 1):
         if not current_action:
             current_action = _read_next_freeform_action(args, attempt)
@@ -615,10 +623,21 @@ def _handle_freeform_actions(
             gm_client,
             current_action,
             attempt,
+            tuple(declaration_thread),
         )
         messages.extend(attempt_messages)
         if resolved:
             return new_state, tuple(messages), True
+        declaration_thread.append(DeclarationThreadEntry("player", current_action, _thread_outcome_from_messages(attempt_messages)))
+        if attempt_messages:
+            declaration_thread.append(DeclarationThreadEntry("system", attempt_messages[-1]))
+        observer.record(
+            "gm_declaration_thread_updated",
+            {
+                "attempt": attempt,
+                "entries": [_declaration_thread_entry_payload(entry) for entry in declaration_thread],
+            },
+        )
         current_action = ""
         if not args.interactive_freeform:
             return state, tuple(messages), False
@@ -633,6 +652,7 @@ def _handle_freeform_action_once(
     gm_client: object | None,
     freeform_action: str,
     attempt: int,
+    declaration_thread: tuple[DeclarationThreadEntry, ...] = (),
 ) -> tuple[ExplorationState, tuple[str, ...], bool]:
     if args.gm_classifier == "none":
         message = "Freeform action wymaga `--gm-classifier groq` albo `--gm-classifier gemini`."
@@ -652,6 +672,7 @@ def _handle_freeform_action_once(
             scenario_context=exploration.llm_context,
             state=state,
             player_action=freeform_action,
+            declaration_thread=_llm_declaration_thread(declaration_thread),
         )
         observer.record(
             "gm_classifier_requested",
@@ -761,7 +782,7 @@ def _handle_freeform_action_once(
         },
     )
     if not _confirm_gm_interpretation(args, observer, validated.challenge.id, option.id):
-        message = "Odrzucono interpretację MG. Opiszcie podejście inaczej."
+        message = "Odrzucono interpretację MG. Wpiszcie korektę albo doprecyzowanie podejścia."
         print(message)
         messages.append(message)
         return state, tuple(messages), False
@@ -787,6 +808,31 @@ def _read_next_freeform_action(args: argparse.Namespace, attempt: int) -> str:
     if not args.interactive_freeform or not sys.stdin.isatty():
         return ""
     return input(f"Opisz kolejne podejście drużyny ({attempt}/{args.freeform_retries}): ").strip()
+
+
+def _llm_declaration_thread(entries: tuple[DeclarationThreadEntry, ...]):
+    from dnd_board_game.llm import GmDeclarationThreadEntry
+
+    return tuple(GmDeclarationThreadEntry(entry.role, entry.content, entry.outcome) for entry in entries[-8:])
+
+
+def _declaration_thread_entry_payload(entry: DeclarationThreadEntry) -> dict[str, str]:
+    return {
+        "role": entry.role,
+        "content": entry.content,
+        "outcome": entry.outcome,
+    }
+
+
+def _thread_outcome_from_messages(messages: tuple[str, ...]) -> str:
+    if not messages:
+        return "Brak wyniku deklaracji."
+    for message in messages:
+        if message.startswith("Nie udało się użyć deklaracji freeform:"):
+            return message
+        if "Odrzucono interpretację MG" in message:
+            return message
+    return messages[-1]
 
 
 def _analyze_freeform_declaration(client: object, request: object):

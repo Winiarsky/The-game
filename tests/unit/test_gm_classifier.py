@@ -7,6 +7,7 @@ from dnd_board_game.llm import (
     GeminiGmClassifierClient,
     GmDeclarationAnalysis,
     GmDeclarationAnalysisType,
+    GmDeclarationThreadEntry,
     GmClassifierProposal,
     GmProposalValidationError,
     GroqGmClassifierClient,
@@ -287,6 +288,27 @@ def test_gm_classifier_request_payload_contains_context_layers_and_dynamic_state
     assert payload["dynamic_state"]["challenge_progress"]["current"] == 0
     assert payload["dynamic_state"]["inventory_resource_ids"] == ["rope", "wedge"]
     assert payload["dynamic_state"]["attempt_history"] == []
+
+
+def test_gm_classifier_request_payload_contains_declaration_thread():
+    exploration, state = _state()
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Dobra, to bez butów.",
+        declaration_thread=(
+            GmDeclarationThreadEntry("player", "Przeskakuję w skocznych butach.", "Odrzucono: brak takiego zasobu."),
+            GmDeclarationThreadEntry("system", "Drużyna nie ma skocznych butów."),
+        ),
+    )
+
+    payload = request.to_prompt_payload()
+
+    assert payload["declaration_thread"][0]["content"] == "Przeskakuję w skocznych butach."
+    assert payload["declaration_thread"][0]["outcome"] == "Odrzucono: brak takiego zasobu."
+    assert payload["player_action"] == "Dobra, to bez butów."
 
 
 def test_gm_classifier_request_payload_contains_attempt_history_after_roll():

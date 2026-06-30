@@ -148,6 +148,20 @@ class GmClassifierProposal(BaseModel):
 
 
 @dataclass(frozen=True, slots=True)
+class GmDeclarationThreadEntry:
+    role: str
+    content: str
+    outcome: str = ""
+
+    def as_payload(self) -> dict[str, str]:
+        return {
+            "role": self.role,
+            "content": self.content,
+            "outcome": self.outcome,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class GmClassifierRequest:
     scenario_id: str
     scenario_name: str
@@ -156,6 +170,7 @@ class GmClassifierRequest:
     challenge: ExplorationChallenge
     state: ExplorationState
     player_action: str
+    declaration_thread: tuple[GmDeclarationThreadEntry, ...] = ()
 
     def to_prompt_payload(self) -> dict[str, Any]:
         challenge_state = challenge_state_for(self.state, self.challenge.id)
@@ -205,6 +220,7 @@ class GmClassifierRequest:
             "allowed_tags": sorted(policy.allowed_approach_tags),
             "allowed_consequence_types": list(policy.allowed_consequence_types),
             "allowed_complications": sorted(policy.allowed_complications),
+            "declaration_thread": [entry.as_payload() for entry in self.declaration_thread],
             "player_action": self.player_action,
         }
 
@@ -433,12 +449,13 @@ def build_gm_classifier_request(
     scenario_context: LlmContext = LlmContext(),
     state: ExplorationState,
     player_action: str,
+    declaration_thread: tuple[GmDeclarationThreadEntry, ...] = (),
 ) -> GmClassifierRequest:
     zone = next(zone for zone in state.zones if zone.id == state.party_position.zone_id)
     challenge = next((challenge for challenge in state.challenges if challenge.zone_id == zone.id), None)
     if challenge is None:
         raise GmProposalValidationError(f"Strefa {zone.name} nie ma aktywnego wyzwania eksploracyjnego.")
-    return GmClassifierRequest(scenario_id, scenario_name, scenario_context, zone, challenge, state, player_action)
+    return GmClassifierRequest(scenario_id, scenario_name, scenario_context, zone, challenge, state, player_action, declaration_thread)
 
 
 def validate_gm_classifier_proposal(
