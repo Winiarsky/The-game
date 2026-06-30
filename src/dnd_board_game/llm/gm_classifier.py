@@ -153,6 +153,8 @@ class GmClassifierProposal(BaseModel):
     approach_tags: tuple[str, ...] = ()
     ability: str | None = None
     skill: str | None = None
+    difficulty_tier: str | None = Field(default=None, max_length=40)
+    difficulty_reason: str = Field(default="", max_length=800)
     dc: int | None = Field(default=None, ge=5, le=25)
     progress_on_success: int | None = Field(default=None, ge=0, le=3)
     progress_on_failure: int | None = Field(default=None, ge=0, le=1)
@@ -181,6 +183,11 @@ class GmClassifierProposal(BaseModel):
     @field_validator("ability", "skill")
     @classmethod
     def _lower_optional(cls, value: str | None) -> str | None:
+        return value.strip().lower() if value else None
+
+    @field_validator("difficulty_tier")
+    @classmethod
+    def _lower_tier(cls, value: str | None) -> str | None:
         return value.strip().lower() if value else None
 
 
@@ -574,6 +581,7 @@ def validate_gm_classifier_proposal(
         raise GmProposalValidationError(f"Nieobsługiwana umiejętność testu: {proposal.skill}.")
     if proposal.dc is None or proposal.progress_on_success is None or proposal.progress_on_failure is None:
         raise GmProposalValidationError("Propozycja LLM nie zawiera ST albo postępu.")
+    _validate_difficulty_tier(proposal, policy)
     if not policy.dc_min <= proposal.dc <= policy.dc_max:
         raise GmProposalValidationError(f"ST {proposal.dc} jest poza zakresem policy: {policy.dc_min}-{policy.dc_max}.")
     if not policy.progress_success_min <= proposal.progress_on_success <= policy.progress_success_max:
@@ -679,6 +687,27 @@ def _validate_preparation_effect(effect: GmPreparationEffect, policy: LlmChallen
                 "Redukcja negatywnego efektu jest poza zakresem policy: "
                 f"{policy.negative_effect_reduction_min}-{policy.negative_effect_reduction_max}."
             )
+
+
+def _validate_difficulty_tier(proposal: GmClassifierProposal, policy: LlmChallengePolicy) -> None:
+    if not policy.dc_tiers:
+        return
+    if not proposal.difficulty_tier:
+        raise GmProposalValidationError("Propozycja LLM musi zawierać difficulty_tier dla tego wyzwania.")
+    allowed_tiers = set(policy.allowed_difficulty_tiers or tuple(tier.id for tier in policy.dc_tiers))
+    if proposal.difficulty_tier not in allowed_tiers:
+        raise GmProposalValidationError(
+            f"Poziom trudności {proposal.difficulty_tier} nie jest dozwolony w tym wyzwaniu."
+        )
+    expected_dc = policy.dc_for_tier(proposal.difficulty_tier)
+    if expected_dc is None:
+        raise GmProposalValidationError(f"Nieznany poziom trudności: {proposal.difficulty_tier}.")
+    if proposal.dc != expected_dc:
+        raise GmProposalValidationError(
+            f"ST {proposal.dc} nie zgadza się z dc_policy dla poziomu {proposal.difficulty_tier}: {expected_dc}."
+        )
+    if not proposal.difficulty_reason.strip():
+        raise GmProposalValidationError("Propozycja LLM musi wyjaśnić wybór difficulty_tier.")
 
 
 def _validate_fact_grounding(proposal: GmClassifierProposal, request: GmClassifierRequest) -> None:

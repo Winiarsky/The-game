@@ -49,6 +49,22 @@ class LlmContext:
 
 
 @dataclass(frozen=True, slots=True)
+class LlmDcTier:
+    id: str
+    dc: int
+    label: str = ""
+    guidance: str = ""
+
+    def as_payload(self) -> dict[str, object]:
+        return {
+            "id": self.id,
+            "dc": self.dc,
+            "label": self.label,
+            "guidance": self.guidance,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class LlmChallengePolicy:
     allowed_local_skills: tuple[str, ...] = ("crafting",)
     allowed_approach_tags: tuple[str, ...] = (
@@ -100,6 +116,10 @@ class LlmChallengePolicy:
     preparation_modifier_max: int = 2
     negative_effect_reduction_min: int = 1
     negative_effect_reduction_max: int = 1
+    dc_tiers: tuple[LlmDcTier, ...] = ()
+    allowed_difficulty_tiers: tuple[str, ...] = ()
+    default_difficulty_tier: str | None = None
+    difficulty_guidance: tuple[str, ...] = ()
 
     def as_payload(self) -> dict[str, object]:
         return {
@@ -114,7 +134,16 @@ class LlmChallengePolicy:
             "progress_on_failure_range": [self.progress_failure_min, self.progress_failure_max],
             "preparation_modifier_range": [self.preparation_modifier_min, self.preparation_modifier_max],
             "negative_effect_reduction_range": [self.negative_effect_reduction_min, self.negative_effect_reduction_max],
+            "dc_policy": {
+                "tiers": [tier.as_payload() for tier in self.dc_tiers],
+                "allowed_tiers": list(self.allowed_difficulty_tiers),
+                "default_tier": self.default_difficulty_tier,
+                "guidance": list(self.difficulty_guidance),
+            },
         }
+
+    def dc_for_tier(self, tier_id: str) -> int | None:
+        return next((tier.dc for tier in self.dc_tiers if tier.id == tier_id), None)
 
 
 @dataclass(frozen=True, slots=True)

@@ -28,6 +28,7 @@ from dnd_board_game.exploration import (
     ExplorationZone,
     LlmChallengePolicy,
     LlmContext,
+    LlmDcTier,
     PartyPosition,
     SceneMode,
 )
@@ -609,6 +610,10 @@ def _parse_llm_challenge_policy(data: Any, field: str) -> LlmChallengePolicy:
         data.get("negative_effect_reduction_range", [1, 1]),
         f"{field}.negative_effect_reduction_range",
     )
+    dc_tiers, allowed_difficulty_tiers, default_difficulty_tier, difficulty_guidance = _parse_dc_policy(
+        data.get("dc_policy", {}),
+        f"{field}.dc_policy",
+    )
     return LlmChallengePolicy(
         allowed_local_skills=_parse_string_tuple(data.get("allowed_local_skills", ["crafting"]), f"{field}.allowed_local_skills"),
         allowed_approach_tags=_parse_string_tuple(data.get("allowed_approach_tags", list(defaults.allowed_approach_tags)), f"{field}.allowed_approach_tags"),
@@ -632,7 +637,43 @@ def _parse_llm_challenge_policy(data: Any, field: str) -> LlmChallengePolicy:
         preparation_modifier_max=preparation_modifier_max,
         negative_effect_reduction_min=negative_effect_reduction_min,
         negative_effect_reduction_max=negative_effect_reduction_max,
+        dc_tiers=dc_tiers,
+        allowed_difficulty_tiers=allowed_difficulty_tiers,
+        default_difficulty_tier=default_difficulty_tier,
+        difficulty_guidance=difficulty_guidance,
     )
+
+
+def _parse_dc_policy(data: Any, field: str) -> tuple[tuple[LlmDcTier, ...], tuple[str, ...], str | None, tuple[str, ...]]:
+    if data is None or data == {}:
+        return (), (), None, ()
+    if not isinstance(data, dict):
+        raise ValueError(f"{field} must be an object.")
+    raw_tiers = data.get("tiers", {})
+    if not isinstance(raw_tiers, dict):
+        raise ValueError(f"{field}.tiers must be an object.")
+    tiers: list[LlmDcTier] = []
+    for tier_id, tier_data in raw_tiers.items():
+        normalized_id = str(tier_id).strip()
+        if not normalized_id:
+            raise ValueError(f"{field}.tiers contains an empty tier id.")
+        if isinstance(tier_data, int):
+            tiers.append(LlmDcTier(normalized_id, tier_data))
+            continue
+        if not isinstance(tier_data, dict):
+            raise ValueError(f"{field}.tiers.{normalized_id} must be an object or integer.")
+        tiers.append(
+            LlmDcTier(
+                id=normalized_id,
+                dc=int(_required(tier_data, "dc", f"{field}.tiers.{normalized_id}")),
+                label=str(tier_data.get("label", "")),
+                guidance=str(tier_data.get("guidance", "")),
+            )
+        )
+    allowed = _parse_string_tuple(data.get("allowed_tiers", [tier.id for tier in tiers]), f"{field}.allowed_tiers")
+    default = str(data["default_tier"]).strip() if "default_tier" in data and data["default_tier"] is not None else None
+    guidance = _parse_string_tuple(data.get("guidance", []), f"{field}.guidance")
+    return tuple(tiers), allowed, default, guidance
 
 
 def _parse_int_range(data: Any, field: str) -> tuple[int, int]:
@@ -866,6 +907,26 @@ def _validate_llm_challenge_policy(challenge: ExplorationChallenge) -> None:
             f"{challenge.id}.llm_policy.allowed_preparation_effect_types contains unknown values: "
             f"{', '.join(sorted(unknown_preparation_types))}."
         )
+    tier_ids = [tier.id for tier in policy.dc_tiers]
+    if len(tier_ids) != len(set(tier_ids)):
+        raise ValueError(f"exploration challenge {challenge.id}.llm_policy.dc_policy.tiers contains duplicate ids.")
+    tier_id_set = set(tier_ids)
+    unknown_allowed_tiers = set(policy.allowed_difficulty_tiers) - tier_id_set
+    if unknown_allowed_tiers:
+        raise ValueError(
+            f"exploration challenge {challenge.id}.llm_policy.dc_policy.allowed_tiers references unknown tiers: "
+            f"{', '.join(sorted(unknown_allowed_tiers))}."
+        )
+    if policy.default_difficulty_tier is not None and policy.default_difficulty_tier not in tier_id_set:
+        raise ValueError(
+            f"exploration challenge {challenge.id}.llm_policy.dc_policy.default_tier references unknown tier."
+        )
+    for tier in policy.dc_tiers:
+        if tier.dc < policy.dc_min or tier.dc > policy.dc_max:
+            raise ValueError(
+                f"exploration challenge {challenge.id}.llm_policy.dc_policy.tiers.{tier.id}.dc "
+                f"is outside dc_range {policy.dc_min}-{policy.dc_max}."
+            )
 
 
 def _apply_environment_to_board(board: BoardState, environment: tuple[ScenarioEnvironmentDefinition, ...]) -> None:

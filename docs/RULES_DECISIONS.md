@@ -326,6 +326,8 @@ Implementacja MVP:
 - Prompt LLM składa się z centralnie ładowanych plików w `content/prompts/` oraz warstw kontekstu: scenariusz, lokacja, challenge, dynamiczny stan gry i historia prób.
 - `llm_context` może opisywać dostępne materiały, zakazane założenia, sensowne podejścia, niemożliwe podejścia i ryzyka.
 - `llm_policy` przy challenge definiuje lokalny słownik mechaniczny dla LLM: lokalne skille, tagi podejść, komplikacje, dozwolone konsekwencje, zakres ST, zakres postępu, dozwolone typy przygotowania, zakres bonusu przygotowania i limit zasobów.
+- Jeśli challenge ma `dc_policy`, LLM musi zwrócić `difficulty_tier`, `difficulty_reason` i `dc`; silnik waliduje, że `dc` jest dokładnie wartością tieru z contentu.
+- `dc_policy` jest definiowane dla przeszkody/scenariusza, nie dla z góry wymyślonych rozwiązań. LLM ocenia trudność deklaracji graczy względem profilu przeszkody.
 - Zasób zaproponowany przez LLM działa mechanicznie tylko wtedy, gdy drużyna go posiada i `bonus_tags` zasobu przecinają się z tagami podejścia.
 - Analyzer deklaracji zwraca `action_flow`, zadeklarowane zasoby, istniejące resource ids, założone nowe fakty i brakujące wymagania. Jeśli zasób nie istnieje w inventory albo materiałach sceny, runtime nie wykonuje rzutu.
 - Freeform challenge MVP rozróżnia `challenge_attempt`, `preparation` i `combined`.

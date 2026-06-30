@@ -538,6 +538,9 @@ Minimalny kontrakt:
 * Pydantic waliduje kształt odpowiedzi LLM.
 * Silnik gry waliduje aktualny stan: aktywną strefę, wyzwanie, flagi, zasoby i tagi.
 * Każde wyzwanie może definiować `llm_policy`: lokalne skille, tagi podejść, komplikacje, dozwolone konsekwencje, zakres ST, zakres postępu, dozwolone typy przygotowania i limit zasobów.
+* Trudność testów freeform powinna być content-driven: challenge może definiować `dc_policy` z tierami trudności i odpowiadającymi im ST.
+* LLM wybiera `difficulty_tier` na podstawie deklaracji graczy i kontekstu przeszkody, a silnik sprawdza, czy `dc` dokładnie odpowiada wartości tieru z contentu.
+* `dc_policy` opisuje profil przeszkody, nie listę gotowych rozwiązań. Nie należy definiować ST per predefiniowany sposób pokonania przeszkody, jeśli celem jest kreatywny freeform.
 * Jeśli challenge nie ma `llm_policy`, działa fallback MVP dla kompatybilności starszych scenariuszy.
 * Item albo zasób daje efekt tylko wtedy, gdy drużyna go posiada i jego `bonus_tags` pasują do tagów podejścia.
 * Deklarowany zasób spoza inventory albo materiałów sceny nie może działać mechanicznie. Analyzer ma go odrzucić albo poprosić o doprecyzowanie, a silnik robi dodatkową walidację faktów.

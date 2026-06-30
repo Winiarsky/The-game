@@ -40,7 +40,9 @@ def _proposal(**overrides):
         "approach_tags": ["climbing", "quiet"],
         "ability": "dexterity",
         "skill": "acrobatics",
-        "dc": 13,
+        "difficulty_tier": "medium",
+        "difficulty_reason": "Wspinaczka po starej bramie jest możliwa, ale wymaga sprawności.",
+        "dc": 15,
         "progress_on_success": 2,
         "progress_on_failure": 1,
         "used_resource_ids": ["rope"],
@@ -268,7 +270,37 @@ def test_gm_classifier_rejects_dc_outside_challenge_policy():
     )
     proposal = _proposal(dc=20, used_resource_ids=())
 
-    with pytest.raises(GmProposalValidationError, match="poza zakresem policy"):
+    with pytest.raises(GmProposalValidationError, match="nie zgadza się z dc_policy"):
+        validate_gm_classifier_proposal(proposal, request)
+
+
+def test_gm_classifier_rejects_dc_that_does_not_match_difficulty_tier():
+    exploration, state = _state()
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Próbujemy wejść górą.",
+    )
+    proposal = _proposal(difficulty_tier="medium", dc=12, used_resource_ids=())
+
+    with pytest.raises(GmProposalValidationError, match="nie zgadza się z dc_policy"):
+        validate_gm_classifier_proposal(proposal, request)
+
+
+def test_gm_classifier_rejects_unknown_difficulty_tier():
+    exploration, state = _state()
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Próbujemy wejść górą.",
+    )
+    proposal = _proposal(difficulty_tier="legendary", dc=15, used_resource_ids=())
+
+    with pytest.raises(GmProposalValidationError, match="nie jest dozwolony"):
         validate_gm_classifier_proposal(proposal, request)
 
 
@@ -381,7 +413,7 @@ def test_gm_classifier_builds_temporary_challenge_option():
     assert option.id == "gm_generated"
     assert option.ability_check.ability == "dexterity"
     assert option.ability_check.skill == "acrobatics"
-    assert option.ability_check.dc == 13
+    assert option.ability_check.dc == 15
     assert option.progress_on_success == 2
     assert option.progress_on_failure == 1
     assert option.failure_noise == 1
@@ -401,6 +433,8 @@ def test_gm_classifier_request_payload_contains_context_layers_and_dynamic_state
     payload = request.to_prompt_payload()
 
     assert "brak działającego mechanizmu lotu" in payload["scenario_context"]["forbidden_assumptions"]
+    assert payload["challenge"]["llm_policy"]["dc_policy"]["tiers"][1]["id"] == "medium"
+    assert payload["challenge"]["llm_policy"]["dc_policy"]["tiers"][1]["dc"] == 15
     assert "lina nie pozwala latać" in payload["zone_context"]["forbidden_assumptions"]
     assert "przelot na linie bez magii" in payload["challenge"]["context"]["impossible_approaches"]
     assert "szybki podkop pod kamienną bramą bez odpowiednich narzędzi i czasu" in payload["challenge"]["context"]["impossible_approaches"]

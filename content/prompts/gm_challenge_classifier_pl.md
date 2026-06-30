@@ -23,7 +23,9 @@ Zwracaj wyłącznie JSON w takim kształcie:
   "approach_tags": ["tag1", "tag2"],
   "ability": "strength",
   "skill": "athletics",
-  "dc": 12,
+  "difficulty_tier": "medium",
+  "difficulty_reason": "Dlaczego ta deklaracja pasuje do tego poziomu trudności.",
+  "dc": 15,
   "progress_on_success": 2,
   "progress_on_failure": 1,
   "used_resource_ids": [],
@@ -64,7 +66,7 @@ Dla samego przygotowania zwróć:
   "gm_notes": "Techniczne uzasadnienie tylko do logów."
 }
 
-Dla przygotowania i natychmiastowej próby zwróć `action_flow: "combined"`, `requires_roll_now: true`, `preparation_effect` oraz komplet pól rzutu: `ability`, `skill`, `dc`, `progress_on_success`, `progress_on_failure`.
+Dla przygotowania i natychmiastowej próby zwróć `action_flow: "combined"`, `requires_roll_now: true`, `preparation_effect` oraz komplet pól rzutu: `ability`, `skill`, `difficulty_tier`, `difficulty_reason`, `dc`, `progress_on_success`, `progress_on_failure`.
 
 Zasady:
 - `intent_type` powinien być `challenge_attempt`; inne typy powinny zostać odfiltrowane przez analyzer.
@@ -72,7 +74,10 @@ Zasady:
 - `challenge_attempt`: musi mieć rzut teraz, czyli `requires_roll_now: true`, bez obowiązkowego `preparation_effect`.
 - `preparation`: nie ma rzutu teraz, czyli `requires_roll_now: false`; musi mieć `preparation_effect`; pola `ability`, `skill`, `dc`, `progress_on_success`, `progress_on_failure` mogą być null.
 - `combined`: zapisuje przygotowanie i od razu robi próbę; musi mieć `preparation_effect`, `requires_roll_now: true` i komplet pól rzutu.
-- `dc` zwykle 10-15 dla MVP; 5-25 tylko w wyjątkach.
+- Jeśli `challenge.llm_policy.dc_policy.tiers` nie jest puste, nie wybieraj ST swobodnie.
+- Najpierw wybierz `difficulty_tier` z `challenge.llm_policy.dc_policy.allowed_tiers`, potem ustaw `dc` dokładnie na wartość tego tieru.
+- `difficulty_reason` ma krótko wyjaśnić, dlaczego deklaracja graczy pasuje do tego tieru w tej konkretnej przeszkodzie.
+- Jeśli `dc_policy` nie jest zdefiniowane, użyj tylko zakresu `dc_range`.
 - `progress_on_success` od 1 do 3.
 - `progress_on_failure` od 0 do 1.
 - Efekt przygotowania musi mieścić się w `challenge.llm_policy.allowed_preparation_effect_types`.

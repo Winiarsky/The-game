@@ -48,6 +48,7 @@
 - [x] Add local declaration thread for freeform corrections inside active exploration challenges.
 - [x] Add resource/fact grounding and structured freeform action flow for challenge attempts and preparations.
 - [x] Add LLM interpretation explain/reject/reclassify controls before freeform challenge resolution.
+- [x] Add content-driven DC policy tiers for freeform challenge proposals.
 - [ ] Add interaction/object-level LLM policy when freeform interactions expand beyond challenges.
 - [ ] Extend preparation effects with advantage/disadvantage, effect boost, unlock option, and grant resource.
 - [ ] Add full inventory/cantrip integration for exploration option bonuses.

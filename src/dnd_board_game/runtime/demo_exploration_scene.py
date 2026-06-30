@@ -786,6 +786,8 @@ def _handle_freeform_action_once(
                 "ability": option.ability_check.ability,
                 "skill": option.ability_check.skill,
                 "dc": option.ability_check.dc,
+                "difficulty_tier": proposal.difficulty_tier,
+                "difficulty_reason": proposal.difficulty_reason,
                 "progress_on_success": option.progress_on_success,
                 "progress_on_failure": option.progress_on_failure,
                 "approach_tags": list(option.tags),
@@ -820,6 +822,10 @@ def _handle_freeform_action_once(
         f"ST {option.ability_check.dc}, postęp przy sukcesie: +{option.progress_on_success}, "
         f"postęp przy porażce: +{option.progress_on_failure}."
     )
+    if proposal.difficulty_tier:
+        summary = f"{summary} Trudność: {proposal.difficulty_tier}."
+    if proposal.difficulty_reason:
+        summary = f"{summary} Powód ST: {proposal.difficulty_reason}"
     if resource is not None:
         summary = f"{summary} Zasób: {resource.label}."
     print(summary)
@@ -833,6 +839,8 @@ def _handle_freeform_action_once(
             "player_narration": proposal.player_narration,
             "gm_notes": proposal.gm_notes,
             "action_flow": proposal.action_flow.value,
+            "difficulty_tier": proposal.difficulty_tier,
+            "difficulty_reason": proposal.difficulty_reason,
         },
     )
     decision = _decide_gm_interpretation(args, observer, validated.challenge.id, option.id, summary, proposal.gm_notes)

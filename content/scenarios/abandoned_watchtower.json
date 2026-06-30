@@ -1469,6 +1469,36 @@
             8,
             18
           ],
+          "dc_policy": {
+            "tiers": {
+              "easy": {
+                "dc": 12,
+                "label": "łatwe",
+                "guidance": "Podejście wykorzystuje oczywistą słabość bramy, dobre przygotowanie albo bezpieczny sposób działania."
+              },
+              "medium": {
+                "dc": 15,
+                "label": "średnie",
+                "guidance": "Podejście jest naturalne dla tej przeszkody, ale wymaga wysiłku, precyzji albo sprawności."
+              },
+              "hard": {
+                "dc": 18,
+                "label": "trudne",
+                "guidance": "Podejście jest możliwe, ale ryzykowne, nieoptymalne albo idzie pod naturę przeszkody."
+              }
+            },
+            "allowed_tiers": [
+              "easy",
+              "medium",
+              "hard"
+            ],
+            "default_tier": "medium",
+            "guidance": [
+              "Oceniaj deklarację graczy względem tej konkretnej starej, zarośniętej bramy, a nie względem gotowych rozwiązań.",
+              "Dobre narzędzie, wcześniejsze przygotowanie albo wykorzystanie widocznej słabości może obniżyć tier.",
+              "Działanie szybkie, głośne, nieprecyzyjne albo przeciwne naturze przeszkody powinno podnieść tier."
+            ]
+          },
           "progress_on_success_range": [
             1,
             3
