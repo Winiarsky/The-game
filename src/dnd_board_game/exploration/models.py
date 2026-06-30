@@ -88,6 +88,7 @@ class LlmChallengePolicy:
         "ślepy_trop",
     )
     allowed_consequence_types: tuple[str, ...] = ("add_noise", "add_complication", "none")
+    allowed_preparation_effect_types: tuple[str, ...] = ("modifier", "reduce_negative_effect")
     max_resources_per_attempt: int = 1
     dc_min: int = 5
     dc_max: int = 25
@@ -95,6 +96,10 @@ class LlmChallengePolicy:
     progress_success_max: int = 3
     progress_failure_min: int = 0
     progress_failure_max: int = 1
+    preparation_modifier_min: int = 1
+    preparation_modifier_max: int = 2
+    negative_effect_reduction_min: int = 1
+    negative_effect_reduction_max: int = 1
 
     def as_payload(self) -> dict[str, object]:
         return {
@@ -102,10 +107,13 @@ class LlmChallengePolicy:
             "allowed_approach_tags": list(self.allowed_approach_tags),
             "allowed_complications": list(self.allowed_complications),
             "allowed_consequence_types": list(self.allowed_consequence_types),
+            "allowed_preparation_effect_types": list(self.allowed_preparation_effect_types),
             "max_resources_per_attempt": self.max_resources_per_attempt,
             "dc_range": [self.dc_min, self.dc_max],
             "progress_on_success_range": [self.progress_success_min, self.progress_success_max],
             "progress_on_failure_range": [self.progress_failure_min, self.progress_failure_max],
+            "preparation_modifier_range": [self.preparation_modifier_min, self.preparation_modifier_max],
+            "negative_effect_reduction_range": [self.negative_effect_reduction_min, self.negative_effect_reduction_max],
         }
 
 
@@ -502,6 +510,7 @@ def resolve_challenge_option(
     option: ExplorationChallengeOption,
     roll: D20RollResult,
     resource: ExplorationResource | None = None,
+    negative_effect_reduction: int = 0,
 ) -> ChallengeResult:
     if option not in available_challenge_options(state, challenge):
         raise ValueError(f"Challenge option {option.id} is not available.")
@@ -520,6 +529,8 @@ def resolve_challenge_option(
         noise_added = max(0, noise_added - resource.mitigates_noise)
         mitigated = set(resource.mitigates_complications)
         complications_added = tuple(complication for complication in complications_added if complication not in mitigated)
+    if negative_effect_reduction:
+        noise_added = max(0, noise_added - negative_effect_reduction)
 
     complications = tuple(dict.fromkeys((*current.complications, *complications_added)))
     flags = state.flags

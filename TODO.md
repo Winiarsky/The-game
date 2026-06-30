@@ -46,7 +46,10 @@
 - [x] Add LLM declaration analyzer, prompt registry, interpretation acceptance, and challenge attempt history.
 - [x] Move LLM classifier MVP policy lists into exploration challenge content.
 - [x] Add local declaration thread for freeform corrections inside active exploration challenges.
+- [x] Add resource/fact grounding and structured freeform action flow for challenge attempts and preparations.
+- [x] Add LLM interpretation explain/reject/reclassify controls before freeform challenge resolution.
 - [ ] Add interaction/object-level LLM policy when freeform interactions expand beyond challenges.
+- [ ] Extend preparation effects with advantage/disadvantage, effect boost, unlock option, and grant resource.
 - [ ] Add full inventory/cantrip integration for exploration option bonuses.
 - [ ] Add voice input and richer UI for free-form exploration declarations.
 - [x] Implement hardware adapter interface around `board.Connection`.

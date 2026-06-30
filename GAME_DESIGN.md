@@ -525,6 +525,7 @@ LLM nie powinien być źródłem zasad ani samodzielnie zmieniać stanu gry.
 Rola LLM:
 
 * przeanalizować, czy deklaracja pasuje do świata fantasy, kontekstu sceny i aktywnego wyzwania,
+* rozdzielić deklarację na próbę wyzwania, przygotowanie albo połączenie obu,
 * przetłumaczyć deklarację gracza na istniejące podejście,
 * zaproponować pasującą cechę, skill, ryzyko i tagi,
 * wskazać możliwy koszt albo komplikację,
@@ -536,11 +537,16 @@ Minimalny kontrakt:
 
 * Pydantic waliduje kształt odpowiedzi LLM.
 * Silnik gry waliduje aktualny stan: aktywną strefę, wyzwanie, flagi, zasoby i tagi.
-* Każde wyzwanie może definiować `llm_policy`: lokalne skille, tagi podejść, komplikacje, dozwolone konsekwencje, zakres ST, zakres postępu i limit zasobów.
+* Każde wyzwanie może definiować `llm_policy`: lokalne skille, tagi podejść, komplikacje, dozwolone konsekwencje, zakres ST, zakres postępu, dozwolone typy przygotowania i limit zasobów.
 * Jeśli challenge nie ma `llm_policy`, działa fallback MVP dla kompatybilności starszych scenariuszy.
 * Item albo zasób daje efekt tylko wtedy, gdy drużyna go posiada i jego `bonus_tags` pasują do tagów podejścia.
+* Deklarowany zasób spoza inventory albo materiałów sceny nie może działać mechanicznie. Analyzer ma go odrzucić albo poprosić o doprecyzowanie, a silnik robi dodatkową walidację faktów.
+* Freeform `action_flow` obsługuje w MVP: `challenge_attempt`, `preparation` i `combined`.
+* Przygotowanie może dać krótkotrwały efekt `modifier` albo `reduce_negative_effect` z czasem trwania `next_attempt`.
+* Efekt przygotowania działa tylko przy następnej próbie, której tagi pasują do `target_tags`, i po użyciu wygasa.
 * Odpowiedź LLM może utworzyć tymczasową opcję challenge, ale rozstrzygnięcie nadal przechodzi przez deterministic engine.
 * Interpretacja LLM musi zostać zaakceptowana przed rzutem.
+* Gracz może poprosić o wyjaśnienie interpretacji, odrzucić ją, skorygować albo poprosić o reinterpretację tej samej deklaracji.
 * Historia prób challenge jest częścią stanu gry i trafia do dynamicznego kontekstu LLM.
 * Lokalny wątek deklaracji przechowuje odrzucone deklaracje, pytania i korekty w ramach aktywnego challenge, żeby odpowiedzi typu "to bez butów" miały kontekst.
 

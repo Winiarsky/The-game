@@ -9,6 +9,7 @@ from dnd_board_game.llm import (
     GmDeclarationAnalysisType,
     GmDeclarationThreadEntry,
     GmClassifierProposal,
+    GmPreparationEffect,
     GmProposalValidationError,
     GroqGmClassifierClient,
     build_gm_classifier_request,
@@ -99,6 +100,129 @@ def test_gm_classifier_rejects_resource_not_in_inventory():
 
     with pytest.raises(GmProposalValidationError, match="Drużyna nie ma zasobu"):
         validate_gm_classifier_proposal(proposal, request)
+
+
+def test_gm_classifier_request_payload_contains_active_preparation_effects():
+    exploration, state = _state()
+    effect = GmPreparationEffect.model_validate(
+        {
+            "type": "modifier",
+            "label": "Lina przygotowana na przęsłach",
+            "target_tags": ["climbing"],
+            "value": 2,
+            "duration": "next_attempt",
+            "source": "test",
+        }
+    )
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Wchodzimy górą.",
+        active_preparation_effects=(effect,),
+    )
+
+    payload = request.to_prompt_payload()
+
+    assert payload["active_preparation_effects"][0]["label"] == "Lina przygotowana na przęsłach"
+
+
+def test_gm_classifier_accepts_modifier_preparation_without_roll():
+    exploration, state = _state()
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Owijamy linę, żeby łatwiej wejść później.",
+    )
+    proposal = _proposal(
+        approach_label="Przygotowanie liny",
+        approach_tags=["climbing"],
+        ability=None,
+        skill=None,
+        dc=None,
+        progress_on_success=None,
+        progress_on_failure=None,
+        used_resource_ids=[],
+        action_flow="preparation",
+        requires_roll_now=False,
+        preparation_effect={
+            "type": "modifier",
+            "label": "Lina stabilizuje wspinaczkę",
+            "target_tags": ["climbing"],
+            "value": 2,
+            "duration": "next_attempt",
+            "source": "freeform",
+        },
+    )
+
+    validated = validate_gm_classifier_proposal(proposal, request)
+
+    assert validated.proposal.preparation_effect is not None
+    assert validated.proposal.preparation_effect.value == 2
+
+
+def test_gm_classifier_rejects_preparation_modifier_outside_policy():
+    exploration, state = _state()
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Przygotowujemy bardzo mocny bonus.",
+    )
+    proposal = _proposal(
+        approach_label="Przesadne przygotowanie",
+        approach_tags=["climbing"],
+        ability=None,
+        skill=None,
+        dc=None,
+        progress_on_success=None,
+        progress_on_failure=None,
+        used_resource_ids=[],
+        action_flow="preparation",
+        requires_roll_now=False,
+        preparation_effect={
+            "type": "modifier",
+            "label": "Przesadny bonus",
+            "target_tags": ["climbing"],
+            "value": 5,
+            "duration": "next_attempt",
+            "source": "freeform",
+        },
+    )
+
+    with pytest.raises(GmProposalValidationError, match="Modyfikator przygotowania jest poza zakresem policy"):
+        validate_gm_classifier_proposal(proposal, request)
+
+
+def test_gm_classifier_accepts_combined_preparation_and_attempt():
+    exploration, state = _state()
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Owijamy linę i od razu wchodzimy górą.",
+    )
+    proposal = _proposal(
+        action_flow="combined",
+        requires_roll_now=True,
+        preparation_effect={
+            "type": "modifier",
+            "label": "Lina stabilizuje wspinaczkę",
+            "target_tags": ["climbing"],
+            "value": 2,
+            "duration": "next_attempt",
+            "source": "freeform",
+        },
+    )
+
+    validated = validate_gm_classifier_proposal(proposal, request)
+
+    assert validated.proposal.action_flow.value == "combined"
 
 
 def test_gm_classifier_rejects_unknown_skill_and_bad_dc():

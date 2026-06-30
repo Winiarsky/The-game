@@ -356,13 +356,19 @@ Tryb eksploracji:
 - LLM classifier jest opcjonalny; w trybie freeform domyślnie używa Gemini, a `--gm-classifier groq|gemini|none` pozwala wymusić providera. Wymaga odpowiednio `GROQ_API_KEY` albo `GEMINI_API_KEY` w środowisku.
 - LLM działa w dwóch krokach: analyzer deklaracji sprawdza zgodność ze światem/sceną, a classifier dopiero potem proponuje mechanikę testu.
 - Odpowiedź LLM przechodzi przez Pydantic, walidację stanu gry i akceptację interpretacji przez `--gm-accept ask|yes|no`.
+- W trybie `--gm-accept ask` decyzje terminalowe są jawne: `+` akceptuje, `-` odrzuca i prosi o korektę, `?` pokazuje wyjaśnienie mechaniczne bez zmiany stanu, a `r` prosi LLM o reinterpretację tej samej deklaracji.
 - Payload LLM zawiera warstwy kontekstu: scenariusz, lokacja, challenge, dynamiczny stan gry i historię wcześniejszych prób.
 - Payload LLM zawiera też `llm_policy` aktywnego challenge, czyli lokalnie dozwolone tagi, komplikacje, consequence types, zakres ST i zakres postępu.
+- Analyzer LLM zwraca `action_flow`: `challenge_attempt`, `preparation`, `combined`, `player_question`, `unsupported` albo `needs_clarification`.
+- Zasoby są twardo walidowane: deklarowany przedmiot musi być w `party_resources` albo w materiałach sceny. Inaczej runtime zapisuje `declaration_fact_rejected` i nie wykonuje rzutu.
+- Przygotowanie zapisuje krótkotrwały efekt `modifier` albo `reduce_negative_effect`; działa tylko przy następnej pasującej próbie i po użyciu wygasa.
 - Payload LLM zawiera lokalny `declaration_thread`, jeśli gracz wcześniej odrzucił deklarację, zadał pytanie albo doprecyzował podejście w ramach tego samego promptu freeform.
 - Po odrzuceniu deklaracji tryb `--interactive-freeform` może poprosić o kolejną próbę bez restartowania runtime.
 - Błędy Groq/Gemini `429` i chwilowe `5xx` są ponawiane automatycznie z krótkim backoffem; `--freeform-retries` nadal oznacza liczbę prób deklaracji gracza, nie liczbę ponowień HTTP.
 - Jeśli analyzer prosi o doprecyzowanie i podaje znormalizowaną intencję, odpowiedź `tak` potwierdza tę interpretację bez wysyłania samego `tak` jako nowej deklaracji do LLM.
-- Decyzje terminalowe nie są deklaracjami fabularnymi: `+` akceptuje interpretację/decyzję, a `-` ją odrzuca.
+- Decyzje terminalowe nie są deklaracjami fabularnymi: `+`, `-`, `?` i `r` sterują wyłącznie interpretacją LLM.
+- Po `-` następny tekst gracza trafia do lokalnego `declaration_thread` jako korekta.
+- Po `r` runtime nie pyta o nową deklarację, tylko odpala classifier ponownie z kontekstem poprzedniej odrzuconej interpretacji.
 
 Manualne prompty do `--freeform-action`:
 
@@ -374,6 +380,10 @@ Manualne prompty do `--freeform-action`:
 - `Chcemy zdjąć kilka spróchniałych desek po cichu i zrobić przejście tylko dla jednej osoby.`
 - `Chcemy teleportować się za bramę czarem, którego nikt z drużyny nie zna.`
 - `Wsiadam na linę i przelatuję nad bramą.`
+- `Wyciągam słoik z kwasem i polewam zawiasy.`
+- `Owijamy linę wokół górnej belki, żeby łatwiej wejść później.`
+- `Potem wchodzimy górą po bramie.`
+- `Działamy powoli i cicho, zanim podważymy mechanizm.`
 - `Ścinamy pobliskie wielkie drzewo i robimy taran.`
 - `Używamy starej piły, zanim ją znaleźliśmy.`
 - `Sypiemy piasek w mechanizm bramy, żeby ją odblokować.`

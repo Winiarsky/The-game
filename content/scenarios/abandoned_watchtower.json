@@ -1460,6 +1460,10 @@
             "add_complication",
             "none"
           ],
+          "allowed_preparation_effect_types": [
+            "modifier",
+            "reduce_negative_effect"
+          ],
           "max_resources_per_attempt": 1,
           "dc_range": [
             8,
@@ -1471,6 +1475,14 @@
           ],
           "progress_on_failure_range": [
             0,
+            1
+          ],
+          "preparation_modifier_range": [
+            1,
+            2
+          ],
+          "negative_effect_reduction_range": [
+            1,
             1
           ]
         },

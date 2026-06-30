@@ -118,6 +118,33 @@ def _gm_unsupported_proposal():
     )
 
 
+def _gm_preparation_proposal():
+    return GmClassifierProposal.model_validate(
+        {
+            "intent_type": "challenge_attempt",
+            "target_challenge_id": "closed_gate",
+            "approach_label": "Przygotowanie liny",
+            "approach_tags": ["climbing"],
+            "used_resource_ids": [],
+            "action_flow": "preparation",
+            "requires_roll_now": False,
+            "preparation_effect": {
+                "type": "modifier",
+                "label": "Lina stabilizuje wspinaczkę",
+                "target_tags": ["climbing"],
+                "value": 2,
+                "duration": "next_attempt",
+                "source": "freeform",
+            },
+            "player_narration": "Mocujecie linę tak, żeby następne wejście było łatwiejsze.",
+        }
+    )
+
+
+def _gm_climb_without_resource_proposal():
+    return _gm_rope_proposal().model_copy(update={"used_resource_ids": ()})
+
+
 def test_demo_exploration_scene_runs_scripted_zone_travel_and_search(tmp_path):
     result = run_demo(
         _args(
@@ -527,6 +554,172 @@ def test_demo_exploration_scene_correction_attempt_gets_declaration_thread(tmp_p
     assert client.analysis_requests[1].player_action == "Dobra, to bez butów, próbujemy przeskoczyć z rozbiegu."
     assert "gm_declaration_thread_updated" in event_types
     assert "gm_classifier_option_resolved" in event_types
+
+
+def test_demo_exploration_scene_interpretation_help_does_not_change_state_before_accept(tmp_path, monkeypatch):
+    proposal = _gm_rope_proposal().model_copy(update={"gm_notes": "Test dexterity/acrobatics, bo deklaracja opisuje wspinaczkę."})
+    client = FakeGmClient(proposal)
+    answers = iter(["?", "+"])
+    monkeypatch.setattr(demo_exploration_scene.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda _prompt: next(answers))
+
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--gm-classifier",
+            "groq",
+            "--interactive-freeform",
+            "--freeform-action",
+            "Wchodzimy górą po bramie.",
+            "--challenge-roll",
+            "gm_generated=14",
+            "--max-steps",
+            "1",
+        ),
+        gm_client=client,
+    )
+
+    events = _events(result.observation_path)
+    event_types = [event["event_type"] for event in events]
+    assert "gm_interpretation_explained" in event_types
+    assert "gm_interpretation_accepted" in event_types
+    assert demo_exploration_scene.challenge_state_for(result.final_state, "closed_gate").current_progress == 2
+
+
+def test_demo_exploration_scene_reclassifies_same_declaration_with_context(tmp_path, monkeypatch):
+    first = _gm_rope_proposal().model_copy(update={"approach_label": "Pierwsza interpretacja"})
+    second = _gm_rope_proposal().model_copy(update={"approach_label": "Druga interpretacja"})
+    client = FakeGmClient([first, second])
+    answers = iter(["r", "+"])
+    monkeypatch.setattr(demo_exploration_scene.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda _prompt: next(answers))
+
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--gm-classifier",
+            "groq",
+            "--interactive-freeform",
+            "--freeform-action",
+            "Wchodzimy górą po bramie.",
+            "--challenge-roll",
+            "gm_generated=14",
+            "--max-steps",
+            "1",
+        ),
+        gm_client=client,
+    )
+
+    events = _events(result.observation_path)
+    event_types = [event["event_type"] for event in events]
+    assert len(client.requests) == 2
+    assert "Poprzednia interpretacja" in client.requests[1].declaration_thread[-1].content
+    assert "gm_interpretation_reclassify_requested" in event_types
+    assert "gm_interpretation_reclassified" in event_types
+    assert demo_exploration_scene.challenge_state_for(result.final_state, "closed_gate").current_progress == 2
+
+
+def test_demo_exploration_scene_rejected_interpretation_records_correction(tmp_path, monkeypatch):
+    client = FakeGmClient([_gm_rope_proposal(), _gm_rope_proposal()])
+    answers = iter(["-", "Nie, chodzi nam o wspinaczkę bez użycia klina.", "+"])
+    monkeypatch.setattr(demo_exploration_scene.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda _prompt: next(answers))
+
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--gm-classifier",
+            "groq",
+            "--interactive-freeform",
+            "--freeform-retries",
+            "2",
+            "--freeform-action",
+            "Próbujemy przejść po bramie.",
+            "--challenge-roll",
+            "gm_generated=14",
+            "--max-steps",
+            "1",
+        ),
+        gm_client=client,
+    )
+
+    events = _events(result.observation_path)
+    event_types = [event["event_type"] for event in events]
+    assert "gm_interpretation_rejected" in event_types
+    assert "gm_interpretation_corrected" in event_types
+    assert client.analysis_requests[1].player_action == "Nie, chodzi nam o wspinaczkę bez użycia klina."
+    assert demo_exploration_scene.challenge_state_for(result.final_state, "closed_gate").current_progress == 2
+
+
+def test_demo_exploration_scene_preparation_then_attempt_applies_effect(tmp_path, monkeypatch):
+    client = FakeGmClient(
+        [_gm_preparation_proposal(), _gm_climb_without_resource_proposal()],
+        analysis=[
+            _gm_analysis(normalized_intent="Przygotowanie liny."),
+            _gm_analysis(normalized_intent="Wejście górą."),
+        ],
+    )
+    answers = iter(["Wchodzimy górą po bramie."])
+    monkeypatch.setattr(demo_exploration_scene.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda _prompt: next(answers))
+
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--gm-classifier",
+            "groq",
+            "--interactive-freeform",
+            "--freeform-retries",
+            "2",
+            "--freeform-action",
+            "Owijamy linę wokół belki, żeby łatwiej wejść.",
+            "--gm-accept",
+            "yes",
+            "--challenge-roll",
+            "gm_generated=10",
+            "--max-steps",
+            "1",
+        ),
+        gm_client=client,
+    )
+
+    events = _events(result.observation_path)
+    event_types = [event["event_type"] for event in events]
+    assert "preparation_effect_created" in event_types
+    assert "preparation_effect_applied" in event_types
+    assert "preparation_effect_expired" in event_types
+    assert "gm_classifier_option_resolved" in event_types
+    assert demo_exploration_scene.challenge_state_for(result.final_state, "closed_gate").current_progress == 2
+
+
+def test_demo_exploration_scene_declared_missing_resource_does_not_roll(tmp_path):
+    client = FakeGmClient(
+        _gm_rope_proposal(),
+        analysis=_gm_analysis(
+            message="Drużyna nie ma słoika z kwasem.",
+            normalized_intent="Użycie kwasu na zawiasach.",
+        ).model_copy(update={"declared_resources": ("słoik z kwasem",)}),
+    )
+
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--gm-classifier",
+            "groq",
+            "--interactive-freeform",
+            "--freeform-action",
+            "Wyciągam słoik z kwasem i polewam zawiasy.",
+            "--max-steps",
+            "1",
+        ),
+        gm_client=client,
+    )
+
+    events = _events(result.observation_path)
+    event_types = [event["event_type"] for event in events]
+    assert "declaration_fact_rejected" in event_types
+    assert "gm_classifier_option_resolved" not in event_types
+    assert demo_exploration_scene.challenge_state_for(result.final_state, "closed_gate").current_progress == 0
 
 
 def test_demo_exploration_scene_search_can_reveal_saw_resource(tmp_path):

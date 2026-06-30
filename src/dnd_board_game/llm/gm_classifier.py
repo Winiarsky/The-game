@@ -48,6 +48,15 @@ class GmDeclarationAnalysisType(StrEnum):
     PLAYER_QUESTION = "player_question"
 
 
+class GmActionFlow(StrEnum):
+    CHALLENGE_ATTEMPT = "challenge_attempt"
+    PREPARATION = "preparation"
+    COMBINED = "combined"
+    PLAYER_QUESTION = "player_question"
+    UNSUPPORTED = "unsupported"
+    NEEDS_CLARIFICATION = "needs_clarification"
+
+
 class GmConsequenceTrigger(StrEnum):
     CRITICAL_SUCCESS = "critical_success"
     SUCCESS = "success"
@@ -64,6 +73,15 @@ class GmConsequenceType(StrEnum):
     CONSUME_RESOURCE = "consume_resource"
     UNLOCK_OPTION = "unlock_option"
     NONE = "none"
+
+
+class PreparationEffectType(StrEnum):
+    MODIFIER = "modifier"
+    REDUCE_NEGATIVE_EFFECT = "reduce_negative_effect"
+
+
+class PreparationEffectDuration(StrEnum):
+    NEXT_ATTEMPT = "next_attempt"
 
 
 CORE_DND_5E_ABILITIES = frozenset(
@@ -110,6 +128,22 @@ class GmConsequence(BaseModel):
     value: str | int | bool | None = None
 
 
+class GmPreparationEffect(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    type: PreparationEffectType
+    label: str = Field(default="", max_length=120)
+    target_tags: tuple[str, ...] = ()
+    value: int = Field(default=1, ge=0, le=5)
+    duration: PreparationEffectDuration = PreparationEffectDuration.NEXT_ATTEMPT
+    source: str = Field(default="preparation", max_length=80)
+
+    @field_validator("target_tags")
+    @classmethod
+    def _target_tags_must_be_unique(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        return tuple(dict.fromkeys(tag.strip().lower() for tag in value if tag.strip()))
+
+
 class GmClassifierProposal(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -123,6 +157,9 @@ class GmClassifierProposal(BaseModel):
     progress_on_success: int | None = Field(default=None, ge=0, le=3)
     progress_on_failure: int | None = Field(default=None, ge=0, le=1)
     used_resource_ids: tuple[str, ...] = ()
+    action_flow: GmActionFlow = GmActionFlow.CHALLENGE_ATTEMPT
+    preparation_effect: GmPreparationEffect | None = None
+    requires_roll_now: bool = True
     consequences: tuple[GmConsequence, ...] = ()
     success_message: str = ""
     failure_message: str = ""
@@ -171,6 +208,7 @@ class GmClassifierRequest:
     state: ExplorationState
     player_action: str
     declaration_thread: tuple[GmDeclarationThreadEntry, ...] = ()
+    active_preparation_effects: tuple[GmPreparationEffect, ...] = ()
 
     def to_prompt_payload(self) -> dict[str, Any]:
         challenge_state = challenge_state_for(self.state, self.challenge.id)
@@ -221,6 +259,7 @@ class GmClassifierRequest:
             "allowed_consequence_types": list(policy.allowed_consequence_types),
             "allowed_complications": sorted(policy.allowed_complications),
             "declaration_thread": [entry.as_payload() for entry in self.declaration_thread],
+            "active_preparation_effects": [effect.model_dump(mode="json") for effect in self.active_preparation_effects],
             "player_action": self.player_action,
         }
 
@@ -450,12 +489,44 @@ def build_gm_classifier_request(
     state: ExplorationState,
     player_action: str,
     declaration_thread: tuple[GmDeclarationThreadEntry, ...] = (),
+    active_preparation_effects: tuple[GmPreparationEffect, ...] = (),
 ) -> GmClassifierRequest:
     zone = next(zone for zone in state.zones if zone.id == state.party_position.zone_id)
     challenge = next((challenge for challenge in state.challenges if challenge.zone_id == zone.id), None)
     if challenge is None:
         raise GmProposalValidationError(f"Strefa {zone.name} nie ma aktywnego wyzwania eksploracyjnego.")
-    return GmClassifierRequest(scenario_id, scenario_name, scenario_context, zone, challenge, state, player_action, declaration_thread)
+    return GmClassifierRequest(
+        scenario_id,
+        scenario_name,
+        scenario_context,
+        zone,
+        challenge,
+        state,
+        player_action,
+        declaration_thread,
+        active_preparation_effects,
+    )
+
+
+def validate_gm_declaration_analysis(
+    analysis: GmDeclarationAnalysis,
+    request: GmClassifierRequest,
+) -> None:
+    if analysis.action_flow in {
+        GmActionFlow.PLAYER_QUESTION,
+        GmActionFlow.UNSUPPORTED,
+        GmActionFlow.NEEDS_CLARIFICATION,
+    }:
+        return
+    if analysis.missing_requirements:
+        raise GmProposalValidationError("; ".join(analysis.missing_requirements))
+    if analysis.assumed_new_facts:
+        raise GmProposalValidationError(
+            "Deklaracja zakłada nowe fakty spoza sceny: " + ", ".join(analysis.assumed_new_facts)
+        )
+    unknown_resources = _unknown_declared_resources(analysis, request)
+    if unknown_resources:
+        raise GmProposalValidationError("Drużyna nie ma zadeklarowanych zasobów: " + ", ".join(unknown_resources))
 
 
 def validate_gm_classifier_proposal(
@@ -480,6 +551,23 @@ def validate_gm_classifier_proposal(
         raise GmProposalValidationError("To wyzwanie jest już zakończone.")
     if not proposal.approach_label.strip():
         raise GmProposalValidationError("Propozycja LLM nie ma nazwy podejścia.")
+    if proposal.preparation_effect is not None:
+        _validate_preparation_effect(proposal.preparation_effect, policy)
+    if proposal.action_flow == GmActionFlow.PREPARATION:
+        if proposal.preparation_effect is None:
+            raise GmProposalValidationError("Przygotowanie wymaga preparation_effect.")
+        if proposal.requires_roll_now:
+            raise GmProposalValidationError("Przygotowanie bez próby nie może wymagać rzutu teraz.")
+        resources = _validate_resources(proposal, request.state)
+        _validate_fact_grounding(proposal, request)
+        return GmValidatedProposal(proposal, request.challenge, resources)
+    if proposal.action_flow == GmActionFlow.COMBINED:
+        if proposal.preparation_effect is None:
+            raise GmProposalValidationError("Combined action wymaga preparation_effect.")
+        if not proposal.requires_roll_now:
+            raise GmProposalValidationError("Combined action musi wymagać rzutu teraz.")
+    if proposal.action_flow != GmActionFlow.CHALLENGE_ATTEMPT and proposal.action_flow != GmActionFlow.COMBINED:
+        raise GmProposalValidationError(f"Nieobsługiwany action_flow dla classifiera: {proposal.action_flow.value}.")
     if proposal.ability not in CORE_DND_5E_ABILITIES:
         raise GmProposalValidationError(f"Nieobsługiwana cecha testu: {proposal.ability}.")
     if proposal.skill is not None and proposal.skill not in _allowed_skills(policy):
@@ -501,6 +589,8 @@ def validate_gm_classifier_proposal(
     unknown_tags = set(proposal.approach_tags) - set(policy.allowed_approach_tags)
     if unknown_tags:
         raise GmProposalValidationError(f"Nieobsługiwane tagi podejścia: {', '.join(sorted(unknown_tags))}.")
+    if proposal.preparation_effect is not None and not set(proposal.preparation_effect.target_tags).intersection(proposal.approach_tags):
+        raise GmProposalValidationError("Efekt przygotowania nie pasuje tagami do próby challenge.")
     _validate_context_constraints(proposal, request)
     if len(proposal.used_resource_ids) > policy.max_resources_per_attempt:
         raise GmProposalValidationError(
@@ -508,6 +598,7 @@ def validate_gm_classifier_proposal(
             f"{policy.max_resources_per_attempt} zasobów naraz."
         )
     resources = _validate_resources(proposal, request.state)
+    _validate_fact_grounding(proposal, request)
     _validate_consequences(proposal, policy)
     _validate_narration_consistency(proposal)
     return GmValidatedProposal(proposal, request.challenge, resources)
@@ -562,6 +653,112 @@ def _validate_resources(
             )
         result.append(resource)
     return tuple(result)
+
+
+def _validate_preparation_effect(effect: GmPreparationEffect, policy: LlmChallengePolicy) -> None:
+    if effect.type.value not in policy.allowed_preparation_effect_types:
+        raise GmProposalValidationError(f"Efekt przygotowania {effect.type.value} nie jest dozwolony w tym wyzwaniu.")
+    if effect.duration != PreparationEffectDuration.NEXT_ATTEMPT:
+        raise GmProposalValidationError("MVP obsługuje tylko przygotowania duration=next_attempt.")
+    if not effect.target_tags:
+        raise GmProposalValidationError("Efekt przygotowania musi wskazywać target_tags.")
+    unknown_tags = set(effect.target_tags) - set(policy.allowed_approach_tags)
+    if unknown_tags:
+        raise GmProposalValidationError(
+            f"Efekt przygotowania ma nieobsługiwane target_tags: {', '.join(sorted(unknown_tags))}."
+        )
+    if effect.type == PreparationEffectType.MODIFIER:
+        if not policy.preparation_modifier_min <= effect.value <= policy.preparation_modifier_max:
+            raise GmProposalValidationError(
+                "Modyfikator przygotowania jest poza zakresem policy: "
+                f"{policy.preparation_modifier_min}-{policy.preparation_modifier_max}."
+            )
+    if effect.type == PreparationEffectType.REDUCE_NEGATIVE_EFFECT:
+        if not policy.negative_effect_reduction_min <= effect.value <= policy.negative_effect_reduction_max:
+            raise GmProposalValidationError(
+                "Redukcja negatywnego efektu jest poza zakresem policy: "
+                f"{policy.negative_effect_reduction_min}-{policy.negative_effect_reduction_max}."
+            )
+
+
+def _validate_fact_grounding(proposal: GmClassifierProposal, request: GmClassifierRequest) -> None:
+    known_tokens = _known_resource_or_material_tokens(request)
+    technical_text = " ".join(
+        (
+            request.player_action,
+            proposal.approach_label,
+            proposal.player_narration,
+            proposal.success_message,
+            proposal.failure_message,
+            proposal.critical_failure_message,
+        )
+    )
+    unknown_mentions = _unsupported_resource_mentions(technical_text, known_tokens)
+    if unknown_mentions:
+        raise GmProposalValidationError(
+            "Propozycja używa zasobu albo faktu, którego nie ma w stanie gry: "
+            + ", ".join(sorted(unknown_mentions))
+            + "."
+        )
+
+
+def _unknown_declared_resources(
+    analysis: GmDeclarationAnalysis,
+    request: GmClassifierRequest,
+) -> tuple[str, ...]:
+    known_tokens = _known_resource_or_material_tokens(request)
+    unknown: list[str] = []
+    for resource_id in analysis.referenced_existing_resource_ids:
+        if _normalize_fact_token(resource_id) not in known_tokens:
+            unknown.append(resource_id)
+    for resource in analysis.declared_resources:
+        normalized = _normalize_fact_token(resource)
+        if normalized and normalized not in known_tokens and not _resource_phrase_is_known(normalized, known_tokens):
+            unknown.append(resource)
+    return tuple(dict.fromkeys(unknown))
+
+
+def _known_resource_or_material_tokens(request: GmClassifierRequest) -> set[str]:
+    tokens: set[str] = set()
+    for resource in request.state.resources:
+        if resource.id in request.state.inventory_resource_ids:
+            tokens.add(_normalize_fact_token(resource.id))
+            tokens.add(_normalize_fact_token(resource.label))
+    for context in (request.scenario_context, request.zone.llm_context, request.challenge.llm_context):
+        for material in context.available_materials:
+            tokens.add(_normalize_fact_token(material))
+    return {token for token in tokens if token}
+
+
+def _resource_phrase_is_known(normalized_phrase: str, known_tokens: set[str]) -> bool:
+    if normalized_phrase in known_tokens:
+        return True
+    return any(
+        normalized_phrase in known or known in normalized_phrase
+        for known in known_tokens
+        if len(normalized_phrase) >= 4 and len(known) >= 4
+    )
+
+
+def _unsupported_resource_mentions(text: str, known_tokens: set[str]) -> tuple[str, ...]:
+    normalized = _normalize_fact_token(text)
+    guarded_terms = {
+        "kwas": ("kwas", "sloik z kwasem", "słoik z kwasem"),
+        "lopata": ("lopata", "łopata", "szpadel"),
+        "skoczne buty": ("skoczne buty", "buty skoczne"),
+        "pistolet laserowy": ("pistolet laserowy", "laserowy pistolet", "laser"),
+    }
+    unknown: list[str] = []
+    for label, variants in guarded_terms.items():
+        if any(_normalize_fact_token(variant) in normalized for variant in variants):
+            if not any(_normalize_fact_token(variant) in known_tokens for variant in variants):
+                unknown.append(label)
+    return tuple(dict.fromkeys(unknown))
+
+
+def _normalize_fact_token(value: str) -> str:
+    translation = str.maketrans({"ą": "a", "ć": "c", "ę": "e", "ł": "l", "ń": "n", "ó": "o", "ś": "s", "ż": "z", "ź": "z"})
+    return " ".join(value.strip().lower().translate(translation).split())
 
 
 def _allowed_skills(policy: LlmChallengePolicy) -> frozenset[str]:
@@ -721,10 +918,30 @@ class GmDeclarationAnalysis(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     analysis_type: GmDeclarationAnalysisType
+    action_flow: GmActionFlow | None = None
     player_message: str = Field(default="", max_length=800)
     normalized_intent: str = Field(default="", max_length=500)
     reason: str = Field(default="", max_length=1000)
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    declared_resources: tuple[str, ...] = ()
+    referenced_existing_resource_ids: tuple[str, ...] = ()
+    assumed_new_facts: tuple[str, ...] = ()
+    missing_requirements: tuple[str, ...] = ()
+
+    @field_validator("declared_resources", "referenced_existing_resource_ids", "assumed_new_facts", "missing_requirements")
+    @classmethod
+    def _string_tuple_items(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        return tuple(dict.fromkeys(item.strip() for item in value if item.strip()))
+
+    def model_post_init(self, __context: Any) -> None:
+        if self.action_flow is None:
+            default_flow = {
+                GmDeclarationAnalysisType.PLAUSIBLE: GmActionFlow.CHALLENGE_ATTEMPT,
+                GmDeclarationAnalysisType.NEEDS_CLARIFICATION: GmActionFlow.NEEDS_CLARIFICATION,
+                GmDeclarationAnalysisType.UNSUPPORTED: GmActionFlow.UNSUPPORTED,
+                GmDeclarationAnalysisType.PLAYER_QUESTION: GmActionFlow.PLAYER_QUESTION,
+            }[self.analysis_type]
+            object.__setattr__(self, "action_flow", default_flow)
 
 
 def _world_notes(state: ExplorationState, challenge: ExplorationChallenge) -> list[str]:

@@ -48,6 +48,7 @@ KNOWN_LLM_CONSEQUENCE_TYPES = frozenset(
         "none",
     }
 )
+KNOWN_LLM_PREPARATION_EFFECT_TYPES = frozenset({"modifier", "reduce_negative_effect"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -600,6 +601,14 @@ def _parse_llm_challenge_policy(data: Any, field: str) -> LlmChallengePolicy:
         data.get("progress_on_failure_range", [0, 1]),
         f"{field}.progress_on_failure_range",
     )
+    preparation_modifier_min, preparation_modifier_max = _parse_int_range(
+        data.get("preparation_modifier_range", [1, 2]),
+        f"{field}.preparation_modifier_range",
+    )
+    negative_effect_reduction_min, negative_effect_reduction_max = _parse_int_range(
+        data.get("negative_effect_reduction_range", [1, 1]),
+        f"{field}.negative_effect_reduction_range",
+    )
     return LlmChallengePolicy(
         allowed_local_skills=_parse_string_tuple(data.get("allowed_local_skills", ["crafting"]), f"{field}.allowed_local_skills"),
         allowed_approach_tags=_parse_string_tuple(data.get("allowed_approach_tags", list(defaults.allowed_approach_tags)), f"{field}.allowed_approach_tags"),
@@ -608,6 +617,10 @@ def _parse_llm_challenge_policy(data: Any, field: str) -> LlmChallengePolicy:
             data.get("allowed_consequence_types", list(defaults.allowed_consequence_types)),
             f"{field}.allowed_consequence_types",
         ),
+        allowed_preparation_effect_types=_parse_string_tuple(
+            data.get("allowed_preparation_effect_types", list(defaults.allowed_preparation_effect_types)),
+            f"{field}.allowed_preparation_effect_types",
+        ),
         max_resources_per_attempt=int(data.get("max_resources_per_attempt", 1)),
         dc_min=dc_min,
         dc_max=dc_max,
@@ -615,6 +628,10 @@ def _parse_llm_challenge_policy(data: Any, field: str) -> LlmChallengePolicy:
         progress_success_max=progress_success_max,
         progress_failure_min=progress_failure_min,
         progress_failure_max=progress_failure_max,
+        preparation_modifier_min=preparation_modifier_min,
+        preparation_modifier_max=preparation_modifier_max,
+        negative_effect_reduction_min=negative_effect_reduction_min,
+        negative_effect_reduction_max=negative_effect_reduction_max,
     )
 
 
@@ -827,12 +844,27 @@ def _validate_llm_challenge_policy(challenge: ExplorationChallenge) -> None:
         raise ValueError(
             f"exploration challenge {challenge.id}.llm_policy.progress_on_failure_range minimum cannot exceed maximum."
         )
+    if policy.preparation_modifier_min > policy.preparation_modifier_max:
+        raise ValueError(
+            f"exploration challenge {challenge.id}.llm_policy.preparation_modifier_range minimum cannot exceed maximum."
+        )
+    if policy.negative_effect_reduction_min > policy.negative_effect_reduction_max:
+        raise ValueError(
+            f"exploration challenge {challenge.id}.llm_policy.negative_effect_reduction_range minimum cannot exceed maximum."
+        )
     unknown_consequence_types = set(policy.allowed_consequence_types) - KNOWN_LLM_CONSEQUENCE_TYPES
     if unknown_consequence_types:
         raise ValueError(
             "exploration challenge "
             f"{challenge.id}.llm_policy.allowed_consequence_types contains unknown values: "
             f"{', '.join(sorted(unknown_consequence_types))}."
+        )
+    unknown_preparation_types = set(policy.allowed_preparation_effect_types) - KNOWN_LLM_PREPARATION_EFFECT_TYPES
+    if unknown_preparation_types:
+        raise ValueError(
+            "exploration challenge "
+            f"{challenge.id}.llm_policy.allowed_preparation_effect_types contains unknown values: "
+            f"{', '.join(sorted(unknown_preparation_types))}."
         )
 
 

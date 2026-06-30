@@ -10,6 +10,7 @@ import threading
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
+from enum import StrEnum
 from pathlib import Path
 
 from dnd_board_game.actors import Actor
@@ -82,6 +83,18 @@ class DeclarationThreadEntry:
     role: str
     content: str
     outcome: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class RuntimePreparationEffect:
+    effect: object
+    source_option_id: str
+
+
+class GmInterpretationDecision(StrEnum):
+    ACCEPT = "accept"
+    REJECT = "reject"
+    RECLASSIFY = "reclassify"
 
 
 def run_demo(
@@ -606,9 +619,19 @@ def _handle_freeform_actions(
     current_action = args.freeform_action.strip()
     max_attempts = max(1, int(args.freeform_retries))
     declaration_thread: list[DeclarationThreadEntry] = []
+    active_preparation_effects: list[RuntimePreparationEffect] = []
     for attempt in range(1, max_attempts + 1):
         if not current_action:
             current_action = _read_next_freeform_action(args, attempt)
+            if current_action and _last_thread_entry_was_rejected_interpretation(declaration_thread):
+                observer.record(
+                    "gm_interpretation_corrected",
+                    {
+                        "attempt": attempt,
+                        "correction": current_action,
+                        "previous_outcome": _thread_entry_text(declaration_thread[-1]) if declaration_thread else "",
+                    },
+                )
         if not current_action:
             message = "Nie podano kolejnej deklaracji freeform."
             print(message)
@@ -624,6 +647,7 @@ def _handle_freeform_actions(
             current_action,
             attempt,
             tuple(declaration_thread),
+            active_preparation_effects,
         )
         messages.extend(attempt_messages)
         if resolved:
@@ -653,7 +677,10 @@ def _handle_freeform_action_once(
     freeform_action: str,
     attempt: int,
     declaration_thread: tuple[DeclarationThreadEntry, ...] = (),
+    active_preparation_effects: list[RuntimePreparationEffect] | None = None,
+    reclassification_count: int = 0,
 ) -> tuple[ExplorationState, tuple[str, ...], bool]:
+    active_preparation_effects = active_preparation_effects if active_preparation_effects is not None else []
     if args.gm_classifier == "none":
         message = "Freeform action wymaga `--gm-classifier groq` albo `--gm-classifier gemini`."
         print(message)
@@ -664,7 +691,9 @@ def _handle_freeform_action_once(
             build_gm_classifier_request,
             challenge_option_from_validated_proposal,
             declaration_analysis_type,
+            validate_gm_declaration_analysis,
             validate_gm_classifier_proposal,
+            gm_action_flow,
         ) = _load_gm_classifier_tools()
         request = build_gm_classifier_request(
             scenario_id=exploration.scenario_id,
@@ -673,6 +702,7 @@ def _handle_freeform_action_once(
             state=state,
             player_action=freeform_action,
             declaration_thread=_llm_declaration_thread(declaration_thread),
+            active_preparation_effects=_llm_preparation_effects(active_preparation_effects),
         )
         observer.record(
             "gm_classifier_requested",
@@ -686,14 +716,20 @@ def _handle_freeform_action_once(
         )
         client = gm_client or _create_gm_classifier_client(args)
         analysis = _analyze_freeform_declaration(client, request)
+        validate_gm_declaration_analysis(analysis, request)
         observer.record(
             "gm_declaration_analyzed",
             {
                 "analysis_type": analysis.analysis_type.value,
+                "action_flow": analysis.action_flow.value if analysis.action_flow else None,
                 "player_message": analysis.player_message,
                 "normalized_intent": analysis.normalized_intent,
                 "reason": analysis.reason,
                 "confidence": analysis.confidence,
+                "declared_resources": list(analysis.declared_resources),
+                "referenced_existing_resource_ids": list(analysis.referenced_existing_resource_ids),
+                "assumed_new_facts": list(analysis.assumed_new_facts),
+                "missing_requirements": list(analysis.missing_requirements),
                 "attempt": attempt,
             },
         )
@@ -730,6 +766,15 @@ def _handle_freeform_action_once(
             },
         )
         validated = validate_gm_classifier_proposal(proposal, request)
+        if proposal.action_flow == gm_action_flow.PREPARATION:
+            messages = _record_preparation_effect(
+                args,
+                proposal,
+                validated.challenge.id,
+                active_preparation_effects,
+                observer,
+            )
+            return state, messages, False
         option = challenge_option_from_validated_proposal(validated)
         resource = validated.resources[0] if validated.resources else None
         observer.record(
@@ -750,6 +795,14 @@ def _handle_freeform_action_once(
     except (RuntimeError, KeyError, ValueError) as exc:
         message = f"Nie udało się użyć deklaracji freeform: {exc}"
         print(message)
+        observer.record(
+            "declaration_fact_rejected",
+            {
+                "reason": str(exc),
+                "attempt": attempt,
+                "player_action": freeform_action,
+            },
+        )
         observer.record("gm_classifier_proposal_rejected", {"reason": str(exc), "attempt": attempt})
         retry_message = "Możecie spróbować opisać inne podejście." if args.interactive_freeform else ""
         if retry_message:
@@ -779,9 +832,44 @@ def _handle_freeform_action_once(
             "summary": summary,
             "player_narration": proposal.player_narration,
             "gm_notes": proposal.gm_notes,
+            "action_flow": proposal.action_flow.value,
         },
     )
-    if not _confirm_gm_interpretation(args, observer, validated.challenge.id, option.id):
+    decision = _decide_gm_interpretation(args, observer, validated.challenge.id, option.id, summary, proposal.gm_notes)
+    if decision == GmInterpretationDecision.RECLASSIFY:
+        if reclassification_count >= 2:
+            message = "Osiągnięto limit reinterpretacji tej samej deklaracji. Wpiszcie korektę podejścia."
+            print(message)
+            messages.append(message)
+            return state, tuple(messages), False
+        observer.record(
+            "gm_interpretation_reclassified",
+            {
+                "challenge_id": validated.challenge.id,
+                "option_id": option.id,
+                "reclassification_count": reclassification_count + 1,
+            },
+        )
+        return _handle_freeform_action_once(
+            args,
+            exploration,
+            state,
+            observer,
+            gm_client,
+            freeform_action,
+            attempt,
+            (
+                *declaration_thread,
+                DeclarationThreadEntry(
+                    "system",
+                    _reclassification_context(summary, proposal.player_narration, proposal.gm_notes),
+                    "Gracz poprosił o reinterpretację tej samej deklaracji bez zmiany tekstu.",
+                ),
+            ),
+            active_preparation_effects,
+            reclassification_count + 1,
+        )
+    if decision == GmInterpretationDecision.REJECT:
         message = "Odrzucono interpretację MG. Wpiszcie korektę albo doprecyzowanie podejścia."
         print(message)
         messages.append(message)
@@ -789,10 +877,30 @@ def _handle_freeform_action_once(
     if args.gm_dry_run:
         observer.record("gm_classifier_dry_run_finished", {"challenge_id": validated.challenge.id, "option_id": option.id})
         return state, tuple(messages), True
+    combined_effect_messages: tuple[str, ...] = ()
+    if proposal.action_flow == gm_action_flow.COMBINED and proposal.preparation_effect is not None:
+        combined_effect_messages = _store_preparation_effect(
+            proposal.preparation_effect,
+            option.id,
+            active_preparation_effects,
+            observer,
+        )
+        messages.extend(combined_effect_messages)
     if resource is not None:
         _activate_resource(args, validated.challenge, option, resource, observer)
     temporary_challenge = replace(validated.challenge, options=(option, *validated.challenge.options))
-    new_state, result_messages = _resolve_challenge_option(args, exploration.actors, state, temporary_challenge, option, resource, observer)
+    applicable_effects = _applicable_preparation_effects(active_preparation_effects, option)
+    new_state, result_messages = _resolve_challenge_option(
+        args,
+        exploration.actors,
+        state,
+        temporary_challenge,
+        option,
+        resource,
+        observer,
+        preparation_effects=applicable_effects,
+    )
+    _expire_preparation_effects(active_preparation_effects, applicable_effects, observer, validated.challenge.id, option.id)
     observer.record(
         "gm_classifier_option_resolved",
         {
@@ -816,12 +924,20 @@ def _llm_declaration_thread(entries: tuple[DeclarationThreadEntry, ...]):
     return tuple(GmDeclarationThreadEntry(entry.role, entry.content, entry.outcome) for entry in entries[-8:])
 
 
+def _llm_preparation_effects(entries: list[RuntimePreparationEffect]):
+    return tuple(entry.effect for entry in entries)
+
+
 def _declaration_thread_entry_payload(entry: DeclarationThreadEntry) -> dict[str, str]:
     return {
         "role": entry.role,
         "content": entry.content,
         "outcome": entry.outcome,
     }
+
+
+def _thread_entry_text(entry: DeclarationThreadEntry) -> str:
+    return entry.outcome or entry.content
 
 
 def _thread_outcome_from_messages(messages: tuple[str, ...]) -> str:
@@ -833,6 +949,13 @@ def _thread_outcome_from_messages(messages: tuple[str, ...]) -> str:
         if "Odrzucono interpretację MG" in message:
             return message
     return messages[-1]
+
+
+def _last_thread_entry_was_rejected_interpretation(entries: list[DeclarationThreadEntry]) -> bool:
+    return bool(entries) and any(
+        "Odrzucono interpretację MG" in entry.content or "Odrzucono interpretację MG" in entry.outcome
+        for entry in entries[-2:]
+    )
 
 
 def _analyze_freeform_declaration(client: object, request: object):
@@ -850,26 +973,83 @@ def _analyze_freeform_declaration(client: object, request: object):
     )
 
 
-def _confirm_gm_interpretation(
+def _decide_gm_interpretation(
     args: argparse.Namespace,
     observer: SessionObserver,
     challenge_id: str,
     option_id: str,
-) -> bool:
+    summary: str,
+    gm_notes: str,
+) -> GmInterpretationDecision:
     if args.gm_accept == "yes":
-        accepted = True
+        decision = GmInterpretationDecision.ACCEPT
     elif args.gm_accept == "no":
-        accepted = False
+        decision = GmInterpretationDecision.REJECT
     elif not sys.stdin.isatty():
-        accepted = True
+        decision = GmInterpretationDecision.ACCEPT
     else:
-        print("Decyzja terminalowa: wpisz `+`, żeby przejść do rzutu, albo `-`, żeby opisać podejście inaczej.")
-        accepted = _read_terminal_decision("Komenda: ", accept_commands={"+", "akceptuj", "a", "tak", "t"}, reject_commands={"-", "odrzuc", "o", "nie", "n"})
+        print("Decyzja terminalowa: `+` akceptuje, `-` odrzuca, `?` wyjaśnia, `r` prosi o reinterpretację.")
+        while True:
+            answer = input("Komenda: ").strip().lower()
+            if answer in {"+", "akceptuj", "a", "tak", "t"}:
+                decision = GmInterpretationDecision.ACCEPT
+                break
+            if answer in {"-", "odrzuc", "o", "nie", "n"}:
+                decision = GmInterpretationDecision.REJECT
+                break
+            if answer in {"?", "help", "h", "wyjasnij", "wyjaśnij"}:
+                _explain_gm_interpretation(observer, challenge_id, option_id, summary, gm_notes)
+                continue
+            if answer in {"r", "reinterpretuj", "ponow", "ponów"}:
+                decision = GmInterpretationDecision.RECLASSIFY
+                break
+            print("Nieznana komenda. Dostępne: +, -, ?, r.")
     observer.record(
-        "gm_interpretation_accepted" if accepted else "gm_interpretation_rejected",
+        _gm_decision_event_type(decision),
         {"challenge_id": challenge_id, "option_id": option_id},
     )
-    return accepted
+    return decision
+
+
+def _gm_decision_event_type(decision: GmInterpretationDecision) -> str:
+    if decision == GmInterpretationDecision.ACCEPT:
+        return "gm_interpretation_accepted"
+    if decision == GmInterpretationDecision.RECLASSIFY:
+        return "gm_interpretation_reclassify_requested"
+    return "gm_interpretation_rejected"
+
+
+def _explain_gm_interpretation(
+    observer: SessionObserver,
+    challenge_id: str,
+    option_id: str,
+    summary: str,
+    gm_notes: str,
+) -> None:
+    explanation = gm_notes.strip() if gm_notes.strip() else summary
+    print(f"Wyjaśnienie mechaniczne: {explanation}")
+    observer.record(
+        "gm_interpretation_explained",
+        {
+            "challenge_id": challenge_id,
+            "option_id": option_id,
+            "summary": summary,
+            "gm_notes": gm_notes,
+        },
+    )
+
+
+def _reclassification_context(summary: str, player_narration: str, gm_notes: str) -> str:
+    parts = [
+        "Poprzednia interpretacja została odrzucona albo wymaga ponownej klasyfikacji.",
+        f"Poprzednie podsumowanie mechaniczne: {summary}",
+    ]
+    if player_narration:
+        parts.append(f"Poprzednia narracja: {player_narration}")
+    if gm_notes:
+        parts.append(f"Poprzednie notatki MG: {gm_notes}")
+    parts.append("Nie powtarzaj tej samej interpretacji bez zmiany uzasadnienia albo pól mechanicznych.")
+    return "\n".join(parts)
 
 
 def _confirm_clarified_intent(
@@ -940,9 +1120,11 @@ def _gm_model_name(args: argparse.Namespace) -> str:
 def _load_gm_classifier_tools():
     try:
         from dnd_board_game.llm import (
+            GmActionFlow,
             GmDeclarationAnalysisType,
             build_gm_classifier_request,
             challenge_option_from_validated_proposal,
+            validate_gm_declaration_analysis,
             validate_gm_classifier_proposal,
         )
     except ModuleNotFoundError as exc:
@@ -951,7 +1133,9 @@ def _load_gm_classifier_tools():
         build_gm_classifier_request,
         challenge_option_from_validated_proposal,
         GmDeclarationAnalysisType,
+        validate_gm_declaration_analysis,
         validate_gm_classifier_proposal,
+        GmActionFlow,
     )
 
 
@@ -1146,17 +1330,21 @@ def _resolve_challenge_option(
     option: ExplorationChallengeOption,
     resource: ExplorationResource | None,
     observer: SessionObserver,
+    preparation_effects: tuple[RuntimePreparationEffect, ...] = (),
 ) -> tuple[ExplorationState, tuple[str, ...]]:
     actor = next((candidate for candidate in actors if str(candidate.id) == args.leader_id), actors[0])
     modifiers = (
         *_ability_roll_modifiers(actor, option.ability_check.ability, option.ability_check.skill),
         *option.ability_check.modifiers,
         *_resource_roll_modifiers(resource),
+        *_preparation_roll_modifiers(preparation_effects),
         *_support_roll_modifiers(state, option),
     )
     mode = RollMode.ADVANTAGE if resource is not None and resource.advantage else RollMode.NORMAL
     request = D20RollRequest(mode=mode, modifiers=modifiers)
     instruction = roll_instruction(request)
+    if preparation_effects:
+        print("Aktywne przygotowania: " + ", ".join(_preparation_summary(effect) for effect in preparation_effects) + ".")
     print(f"Test podejścia: {option.label}. ST {option.ability_check.dc}. {instruction.message}")
     natural_roll = _challenge_roll_for_option(args, option.id)
     if natural_roll is None:
@@ -1164,7 +1352,14 @@ def _resolve_challenge_option(
     else:
         print(f"Używam wyniku testowego dla {option.label}: {natural_roll}.")
     roll = resolve_d20_roll(D20RollInput(request, natural_roll))
-    result = resolve_challenge_option(state, challenge, option, roll, resource)
+    result = resolve_challenge_option(
+        state,
+        challenge,
+        option,
+        roll,
+        resource,
+        negative_effect_reduction=_preparation_negative_effect_reduction(preparation_effects),
+    )
     print(result.message)
     observer.record(
         "challenge_option_resolved",
@@ -1321,6 +1516,121 @@ def _activate_resource(
         input("Naciśnij Enter, aby przejść do testu. ")
 
 
+def _record_preparation_effect(
+    args: argparse.Namespace,
+    proposal,
+    challenge_id: str,
+    active_preparation_effects: list[RuntimePreparationEffect],
+    observer: SessionObserver,
+) -> tuple[str, ...]:
+    messages: list[str] = []
+    if proposal.player_narration:
+        print(proposal.player_narration)
+        messages.append(proposal.player_narration)
+    summary = _preparation_proposal_summary(proposal)
+    print(summary)
+    messages.append(summary)
+    observer.record(
+        "gm_interpretation_proposed",
+        {
+            "challenge_id": challenge_id,
+            "option_id": "preparation",
+            "summary": summary,
+            "player_narration": proposal.player_narration,
+            "gm_notes": proposal.gm_notes,
+            "action_flow": proposal.action_flow.value,
+        },
+    )
+    decision = _decide_gm_interpretation(args, observer, challenge_id, "preparation", summary, proposal.gm_notes)
+    if decision != GmInterpretationDecision.ACCEPT:
+        message = "Odrzucono interpretację MG. Wpiszcie korektę albo doprecyzowanie podejścia."
+        print(message)
+        messages.append(message)
+        return tuple(messages)
+    messages.extend(_store_preparation_effect(proposal.preparation_effect, "preparation", active_preparation_effects, observer))
+    return tuple(messages)
+
+
+def _store_preparation_effect(
+    effect,
+    source_option_id: str,
+    active_preparation_effects: list[RuntimePreparationEffect],
+    observer: SessionObserver,
+) -> tuple[str, ...]:
+    entry = RuntimePreparationEffect(effect, source_option_id)
+    active_preparation_effects.append(entry)
+    message = f"Przygotowanie zapisane: {effect.label}. Zadziała przy następnej pasującej próbie."
+    print(message)
+    observer.record(
+        "preparation_effect_created",
+        {
+            "source_option_id": source_option_id,
+            "type": effect.type.value,
+            "label": effect.label,
+            "target_tags": list(effect.target_tags),
+            "value": effect.value,
+            "duration": effect.duration.value,
+            "source": effect.source,
+        },
+    )
+    return (message,)
+
+
+def _preparation_proposal_summary(proposal) -> str:
+    effect = proposal.preparation_effect
+    if effect is None:
+        return "Propozycja MG: przygotowanie bez opisanego efektu."
+    effect_kind = "modyfikator" if effect.type.value == "modifier" else "redukcja negatywnego efektu"
+    return (
+        f"Propozycja MG: przygotowanie `{effect.label}`. "
+        f"Efekt: {effect_kind} {effect.value}, tagi: {', '.join(effect.target_tags)}."
+    )
+
+
+def _applicable_preparation_effects(
+    active_preparation_effects: list[RuntimePreparationEffect],
+    option: ExplorationChallengeOption,
+) -> tuple[RuntimePreparationEffect, ...]:
+    option_tags = set(option.tags)
+    return tuple(
+        entry
+        for entry in active_preparation_effects
+        if option_tags.intersection(set(entry.effect.target_tags))
+    )
+
+
+def _expire_preparation_effects(
+    active_preparation_effects: list[RuntimePreparationEffect],
+    applied_effects: tuple[RuntimePreparationEffect, ...],
+    observer: SessionObserver,
+    challenge_id: str,
+    option_id: str,
+) -> None:
+    for effect in applied_effects:
+        observer.record(
+            "preparation_effect_applied",
+            {
+                "challenge_id": challenge_id,
+                "option_id": option_id,
+                "label": effect.effect.label,
+                "type": effect.effect.type.value,
+                "target_tags": list(effect.effect.target_tags),
+                "value": effect.effect.value,
+            },
+        )
+        if effect in active_preparation_effects:
+            active_preparation_effects.remove(effect)
+        observer.record(
+            "preparation_effect_expired",
+            {
+                "challenge_id": challenge_id,
+                "option_id": option_id,
+                "label": effect.effect.label,
+                "duration": effect.effect.duration.value,
+            },
+        )
+
+
 def _resource_roll_modifiers(resource: ExplorationResource | None) -> tuple[RollModifier, ...]:
     if resource is None or resource.modifier == 0:
         return ()
@@ -1332,6 +1642,34 @@ def _resource_roll_modifiers(resource: ExplorationResource | None) -> tuple[Roll
             stacking_key=f"resource:{resource.id}",
         ),
     )
+
+
+def _preparation_roll_modifiers(effects: tuple[RuntimePreparationEffect, ...]) -> tuple[RollModifier, ...]:
+    modifiers: list[RollModifier] = []
+    for entry in effects:
+        effect = entry.effect
+        if effect.type.value != "modifier" or effect.value == 0:
+            continue
+        modifiers.append(
+            RollModifier(
+                f"Przygotowanie: {effect.label}",
+                effect.value,
+                RollModifierType.SITUATIONAL,
+                stacking_key=f"preparation:{effect.label}:{','.join(effect.target_tags)}",
+            )
+        )
+    return tuple(modifiers)
+
+
+def _preparation_negative_effect_reduction(effects: tuple[RuntimePreparationEffect, ...]) -> int:
+    return sum(effect.effect.value for effect in effects if effect.effect.type.value == "reduce_negative_effect")
+
+
+def _preparation_summary(entry: RuntimePreparationEffect) -> str:
+    effect = entry.effect
+    if effect.type.value == "modifier":
+        return f"{effect.label} +{effect.value}"
+    return f"{effect.label} -{effect.value} negatywnego efektu"
 
 
 def _support_roll_modifiers(state: ExplorationState, option: ExplorationChallengeOption) -> tuple[RollModifier, ...]:

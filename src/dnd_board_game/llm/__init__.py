@@ -1,6 +1,7 @@
 """Optional LLM adapters for game-master assistance."""
 
 from .gm_classifier import (
+    GmActionFlow,
     GmClassifierClient,
     GmClassifierProposal,
     GmClassifierRequest,
@@ -9,18 +10,23 @@ from .gm_classifier import (
     GmDeclarationAnalysisType,
     GmDeclarationThreadEntry,
     GmIntentType,
+    GmPreparationEffect,
     GmProposalValidationError,
     GmValidatedProposal,
     GeminiGmClassifierClient,
     GroqGmClassifierClient,
+    PreparationEffectDuration,
+    PreparationEffectType,
     build_gm_classifier_request,
     challenge_option_from_validated_proposal,
+    validate_gm_declaration_analysis,
     validate_gm_classifier_proposal,
 )
 from .prompts import PromptId, load_prompt
 
 __all__ = [
     "GmClassifierClient",
+    "GmActionFlow",
     "GmClassifierProposal",
     "GmClassifierRequest",
     "GmConsequence",
@@ -28,12 +34,16 @@ __all__ = [
     "GmDeclarationAnalysisType",
     "GmDeclarationThreadEntry",
     "GmIntentType",
+    "GmPreparationEffect",
     "GmProposalValidationError",
     "GmValidatedProposal",
     "GeminiGmClassifierClient",
     "GroqGmClassifierClient",
+    "PreparationEffectDuration",
+    "PreparationEffectType",
     "build_gm_classifier_request",
     "challenge_option_from_validated_proposal",
+    "validate_gm_declaration_analysis",
     "validate_gm_classifier_proposal",
     "PromptId",
     "load_prompt",
