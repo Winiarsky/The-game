@@ -26,13 +26,13 @@ from dnd_board_game.exploration import (
 )
 from dnd_board_game.hardware import LedColor
 
+from .content_config import load_freeform_grounding_terms, load_llm_core_rules
 from .prompts import PromptId, load_prompt
 
 
-# This module should own LLM transport, response parsing and mechanical validation.
-# Scenario-specific content should live in content JSON and LlmContext. The MVP
-# policy constants below are intentionally marked so they can be moved into
-# scenario/challenge configuration in a later content-driven stage.
+# This module owns LLM transport, response parsing and mechanical validation.
+# General vocabularies are loaded from content/llm/*.json, while specific
+# obstacle details stay in scenario JSON via LlmContext and LlmChallengePolicy.
 
 
 class GmIntentType(StrEnum):
@@ -89,40 +89,9 @@ class PreparationEffectDuration(StrEnum):
     NEXT_ATTEMPT = "next_attempt"
 
 
-CORE_DND_5E_ABILITIES = frozenset(
-    {
-        "strength",
-        "dexterity",
-        "constitution",
-        "intelligence",
-        "wisdom",
-        "charisma",
-    }
-)
-CORE_DND_5E_SKILLS = frozenset(
-    {
-        "acrobatics",
-        "animal_handling",
-        "arcana",
-        "athletics",
-        "deception",
-        "history",
-        "insight",
-        "intimidation",
-        "investigation",
-        "medicine",
-        "nature",
-        "perception",
-        "performance",
-        "persuasion",
-        "religion",
-        "sleight_of_hand",
-        "stealth",
-        "survival",
-    }
-)
-
-DEFAULT_MVP_LLM_POLICY = LlmChallengePolicy()
+CORE_LLM_RULES = load_llm_core_rules()
+CORE_DND_5E_ABILITIES = frozenset(CORE_LLM_RULES.abilities)
+CORE_DND_5E_SKILLS = frozenset(CORE_LLM_RULES.skills)
 
 
 class GmConsequence(BaseModel):
@@ -807,17 +776,12 @@ def _resource_phrase_is_known(normalized_phrase: str, known_tokens: set[str]) ->
 
 def _unsupported_resource_mentions(text: str, known_tokens: set[str]) -> tuple[str, ...]:
     normalized = _normalize_fact_token(text)
-    guarded_terms = {
-        "kwas": ("kwas", "sloik z kwasem", "słoik z kwasem"),
-        "lopata": ("lopata", "łopata", "szpadel"),
-        "skoczne buty": ("skoczne buty", "buty skoczne"),
-        "pistolet laserowy": ("pistolet laserowy", "laserowy pistolet", "laser"),
-    }
     unknown: list[str] = []
-    for label, variants in guarded_terms.items():
-        if any(_normalize_fact_token(variant) in normalized for variant in variants):
-            if not any(_normalize_fact_token(variant) in known_tokens for variant in variants):
-                unknown.append(label)
+    for mention in load_freeform_grounding_terms().guarded_resource_mentions:
+        normalized_variants = tuple(_normalize_fact_token(variant) for variant in mention.variants)
+        if any(variant in normalized for variant in normalized_variants):
+            if not any(variant in known_tokens for variant in normalized_variants):
+                unknown.append(mention.label)
     return tuple(dict.fromkeys(unknown))
 
 

@@ -359,6 +359,7 @@ Tryb eksploracji:
 - W trybie `--gm-accept ask` decyzje terminalowe są jawne: `+` akceptuje, `-` odrzuca i prosi o korektę, `?` pokazuje wyjaśnienie mechaniczne bez zmiany stanu, a `r` prosi LLM o reinterpretację tej samej deklaracji.
 - Payload LLM zawiera warstwy kontekstu: scenariusz, lokacja, challenge, dynamiczny stan gry i historię wcześniejszych prób.
 - Payload LLM zawiera też `llm_policy` aktywnego challenge, czyli lokalnie dozwolone tagi, komplikacje, consequence types, zakres ST i zakres postępu.
+- Ogólne słowniki LLM są w `content/llm/`; szczegóły konkretnej przeszkody są w scenariuszu, np. w `exploration.challenges[].llm_context` i `llm_policy`.
 - Jeśli `llm_policy` zawiera `dc_policy`, LLM wybiera `difficulty_tier`, podaje `difficulty_reason` i musi ustawić `dc` dokładnie z tieru z contentu. Nie ustala ST swobodnie.
 - Dla `abandoned_watchtower` brama ma content-driven tiery: `easy=12`, `medium=15`, `hard=18`.
 - Analyzer LLM zwraca `action_flow`: `challenge_attempt`, `preparation`, `combined`, `player_question`, `unsupported` albo `needs_clarification`.

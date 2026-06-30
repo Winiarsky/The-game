@@ -16,6 +16,7 @@ from dnd_board_game.llm import (
     challenge_option_from_validated_proposal,
     validate_gm_classifier_proposal,
 )
+from dnd_board_game.llm.content_config import load_freeform_grounding_terms, load_llm_core_rules
 from dnd_board_game.scenarios import build_exploration_from_scenario, load_scenario
 
 
@@ -659,9 +660,19 @@ def test_gm_classifier_request_payload_contains_context_layers_and_dynamic_state
     assert "heavy_force" in payload["allowed_tags"]
     assert "bribe" not in payload["allowed_tags"]
     assert "crafting" in payload["allowed_skills"]
+    assert "athletics" in load_llm_core_rules().skills
     assert payload["dynamic_state"]["challenge_progress"]["current"] == 0
     assert payload["dynamic_state"]["inventory_resource_ids"] == ["rope", "wedge"]
     assert payload["dynamic_state"]["attempt_history"] == []
+
+
+def test_llm_content_config_loads_general_rules_and_grounding_terms():
+    rules = load_llm_core_rules()
+    grounding = load_freeform_grounding_terms()
+
+    assert "strength" in rules.abilities
+    assert "athletics" in rules.skills
+    assert any(mention.label == "kwas" for mention in grounding.guarded_resource_mentions)
 
 
 def test_gm_classifier_request_payload_contains_declaration_thread():

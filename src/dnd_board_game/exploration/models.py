@@ -66,45 +66,11 @@ class LlmDcTier:
 
 @dataclass(frozen=True, slots=True)
 class LlmChallengePolicy:
-    allowed_local_skills: tuple[str, ...] = ("crafting",)
-    allowed_approach_tags: tuple[str, ...] = (
-        "arcane",
-        "bribe",
-        "climbing",
-        "crafting",
-        "fire",
-        "heavy_force",
-        "lever",
-        "light",
-        "lockpicking",
-        "medicine",
-        "nature",
-        "noise",
-        "picket",
-        "quiet",
-        "religious",
-        "saw",
-        "scouting",
-        "social",
-    )
-    allowed_complications: tuple[str, ...] = (
-        "alarm_w_strażnicy",
-        "bolesny_upadek",
-        "drzazgi",
-        "guards_alerted",
-        "jammed_gate",
-        "lost_resource",
-        "minor_injury",
-        "narastający_hałas",
-        "ryzyko_upadku",
-        "stracony_czas",
-        "time_cost",
-        "uszkodzony_mechanizm",
-        "zaklinowana_sztacheta",
-        "ślepy_trop",
-    )
-    allowed_consequence_types: tuple[str, ...] = ("add_noise", "add_complication", "none")
-    allowed_preparation_effect_types: tuple[str, ...] = ("modifier", "reduce_negative_effect")
+    allowed_local_skills: tuple[str, ...] = ()
+    allowed_approach_tags: tuple[str, ...] = ()
+    allowed_complications: tuple[str, ...] = ()
+    allowed_consequence_types: tuple[str, ...] = ("none",)
+    allowed_preparation_effect_types: tuple[str, ...] = ()
     allowed_grant_resource_ids: tuple[str, ...] = ()
     allowed_unlock_option_ids: tuple[str, ...] = ()
     max_resources_per_attempt: int = 1

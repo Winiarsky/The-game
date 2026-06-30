@@ -541,7 +541,8 @@ Minimalny kontrakt:
 * Trudność testów freeform powinna być content-driven: challenge może definiować `dc_policy` z tierami trudności i odpowiadającymi im ST.
 * LLM wybiera `difficulty_tier` na podstawie deklaracji graczy i kontekstu przeszkody, a silnik sprawdza, czy `dc` dokładnie odpowiada wartości tieru z contentu.
 * `dc_policy` opisuje profil przeszkody, nie listę gotowych rozwiązań. Nie należy definiować ST per predefiniowany sposób pokonania przeszkody, jeśli celem jest kreatywny freeform.
-* Jeśli challenge nie ma `llm_policy`, działa fallback MVP dla kompatybilności starszych scenariuszy.
+* Jeśli challenge nie ma `llm_policy`, freeform nie powinien dostawać bogatego domyślnego słownika z kodu. Szczegółowy słownik tagów, komplikacji, efektów i whitelist musi pochodzić z contentu scenariusza.
+* Ogólne słowniki LLM, np. cechy i skille D&D 5e oraz aliasy pilnowanych zasobów, są trzymane w `content/llm/`.
 * Item albo zasób daje efekt tylko wtedy, gdy drużyna go posiada i jego `bonus_tags` pasują do tagów podejścia.
 * Deklarowany zasób spoza inventory albo materiałów sceny nie może działać mechanicznie. Analyzer ma go odrzucić albo poprosić o doprecyzowanie, a silnik robi dodatkową walidację faktów.
 * Freeform `action_flow` obsługuje w MVP: `challenge_attempt`, `preparation` i `combined`.
@@ -558,6 +559,7 @@ Warstwy kontekstu dla LLM:
 
 * prompt analyzer opisuje rolę MG-analityka deklaracji,
 * prompt classifier opisuje rolę MG-klasyfikatora mechaniki,
+* `content/llm` opisuje ogólne słowniki i konfigurację wspólną,
 * scenario context opisuje klimat, dostępne materiały i zakazane założenia scenariusza,
 * zone context opisuje lokalne warunki,
 * challenge context opisuje sensowne i niemożliwe podejścia do konkretnej przeszkody,

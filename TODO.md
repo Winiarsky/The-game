@@ -49,6 +49,8 @@
 - [x] Add resource/fact grounding and structured freeform action flow for challenge attempts and preparations.
 - [x] Add LLM interpretation explain/reject/reclassify controls before freeform challenge resolution.
 - [x] Add content-driven DC policy tiers for freeform challenge proposals.
+- [x] Move general LLM vocabularies and freeform grounding terms into `content/llm`.
+- [x] Remove obsolete single-step legacy GM classifier prompt.
 - [ ] Add interaction/object-level LLM policy when freeform interactions expand beyond challenges.
 - [x] Extend preparation effects with advantage/disadvantage, effect boost, unlock option, and grant resource.
 - [x] Show consequence preview before accepted freeform challenge rolls.

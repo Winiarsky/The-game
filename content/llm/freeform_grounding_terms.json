@@ -1,0 +1,35 @@
+{
+  "guarded_resource_mentions": [
+    {
+      "label": "kwas",
+      "variants": [
+        "kwas",
+        "sloik z kwasem",
+        "słoik z kwasem"
+      ]
+    },
+    {
+      "label": "lopata",
+      "variants": [
+        "lopata",
+        "łopata",
+        "szpadel"
+      ]
+    },
+    {
+      "label": "skoczne buty",
+      "variants": [
+        "skoczne buty",
+        "buty skoczne"
+      ]
+    },
+    {
+      "label": "pistolet laserowy",
+      "variants": [
+        "pistolet laserowy",
+        "laserowy pistolet",
+        "laser"
+      ]
+    }
+  ]
+}
