@@ -1,8 +1,10 @@
+from dataclasses import replace
+
 import pytest
 from pydantic import ValidationError
 
-from dnd_board_game.combat import SceneFlags
-from dnd_board_game.exploration import ExplorationState
+from dnd_board_game.combat import SceneFlags, set_scene_flag
+from dnd_board_game.exploration import ExplorationState, set_party_zone
 from dnd_board_game.llm import (
     GeminiGmClassifierClient,
     GmDeclarationAnalysis,
@@ -664,6 +666,51 @@ def test_gm_classifier_request_payload_contains_context_layers_and_dynamic_state
     assert payload["dynamic_state"]["challenge_progress"]["current"] == 0
     assert payload["dynamic_state"]["inventory_resource_ids"] == ["rope", "wedge"]
     assert payload["dynamic_state"]["attempt_history"] == []
+
+
+def test_gm_classifier_request_uses_active_zone_challenge_policy():
+    exploration, state = _state()
+    courtyard = next(zone for zone in state.zones if zone.id == "courtyard")
+    state = set_party_zone(state, courtyard)
+    state = replace(state, flags=set_scene_flag(state.flags, "gate_passed", True))
+
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Nasłuchujemy i sprawdzamy ślady na dziedzińcu.",
+    )
+
+    payload = request.to_prompt_payload()
+    assert payload["challenge"]["id"] == "courtyard_search"
+    assert "listening" in payload["allowed_tags"]
+    assert "heavy_force" not in payload["allowed_tags"]
+    assert payload["challenge"]["llm_policy"]["dc_policy"]["tiers"][1]["dc"] == 15
+
+
+def test_gm_classifier_rejects_gate_style_tag_for_courtyard_challenge():
+    exploration, state = _state()
+    courtyard = next(zone for zone in state.zones if zone.id == "courtyard")
+    state = set_party_zone(state, courtyard)
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Rozwalamy dziedziniec siłą.",
+    )
+    proposal = _proposal(
+        target_challenge_id="courtyard_search",
+        approach_label="Siłowe przeszukanie dziedzińca",
+        approach_tags=["heavy_force"],
+        ability="strength",
+        skill="athletics",
+        used_resource_ids=[],
+    )
+
+    with pytest.raises(GmProposalValidationError, match="Nieobsługiwane tagi"):
+        validate_gm_classifier_proposal(proposal, request)
 
 
 def test_llm_content_config_loads_general_rules_and_grounding_terms():

@@ -3,7 +3,9 @@ from dnd_board_game.exploration import (
     ExplorationState,
     available_challenge_options,
     challenge_state_for,
+    reveal_exploration_points,
     resolve_challenge_option,
+    visible_exploration_points,
 )
 from dnd_board_game.rules import D20RollInput, D20RollRequest, RollModifier, RollModifierType, resolve_d20_roll
 from dnd_board_game.scenarios import build_exploration_from_scenario, load_scenario
@@ -122,3 +124,18 @@ def test_resource_locked_option_is_hidden_until_resource_is_owned():
     )
 
     assert "saw_picket" in {option.id for option in available_challenge_options(with_saw, challenge)}
+
+
+def test_courtyard_challenge_reveals_hidden_npc_after_completion():
+    state = _state()
+    challenge = next(item for item in state.challenges if item.id == "courtyard_search")
+    option = next(item for item in challenge.options if item.id == "inspect_tracks_courtyard")
+
+    result = resolve_challenge_option(state, challenge, option, _roll(12))
+    revealed_state, revealed = reveal_exploration_points(result.state, challenge.reveals_on_complete)
+
+    updated = challenge_state_for(result.state, challenge.id)
+    assert updated.completed is True
+    assert challenge.reveals_on_complete == ("wounded_scout",)
+    assert [point.id for point in revealed] == ["wounded_scout"]
+    assert "wounded_scout" in {point.id for point in visible_exploration_points(revealed_state.points)}

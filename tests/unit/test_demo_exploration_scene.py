@@ -276,10 +276,15 @@ def _gm_picket_without_resource_proposal():
     )
 
 
+def _gm_picket_with_saw_resource_proposal():
+    return _gm_picket_without_resource_proposal().model_copy(update={"used_resource_ids": ("saw",)})
+
+
 def test_demo_exploration_scene_runs_scripted_zone_travel_and_search(tmp_path):
     result = run_demo(
         _args(
             tmp_path,
+            "--legacy-option-menu",
             "--exploration-script",
             "zone:gate",
             "--exploration-script",
@@ -291,7 +296,7 @@ def test_demo_exploration_scene_runs_scripted_zone_travel_and_search(tmp_path):
             "--exploration-script",
             "zone:courtyard",
             "--exploration-script",
-            "confirm",
+            "option:search_courtyard",
             "--party-check-roll",
             "hero=10",
             "--party-check-roll",
@@ -316,6 +321,7 @@ def test_demo_exploration_scene_partial_gate_progress_keeps_courtyard_locked(tmp
     result = run_demo(
         _args(
             tmp_path,
+            "--legacy-option-menu",
             "--exploration-script",
             "zone:gate",
             "--exploration-script",
@@ -330,6 +336,89 @@ def test_demo_exploration_scene_partial_gate_progress_keeps_courtyard_locked(tmp
     assert result.final_state.party_position.zone_id == "gate"
     assert "challenge_progress_updated" in event_types
     assert [zone.id for zone in demo_exploration_scene.available_exploration_zones(result.final_state)] == ["gate"]
+
+
+def test_demo_exploration_scene_shows_new_locations_after_gate_completion(tmp_path):
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--legacy-option-menu",
+            "--exploration-script",
+            "zone:gate",
+            "--exploration-script",
+            "option:force_gate",
+            "--challenge-roll",
+            "force_gate=12",
+            "--max-steps",
+            "3",
+        )
+    )
+
+    events = _events(result.observation_path)
+    assert any("Lokacje dostępne teraz" in message and "Dziedziniec" in message for message in result.messages)
+    assert any(event["event_type"] == "exploration_available_locations_shown" for event in events)
+
+
+def test_demo_exploration_scene_zone_travel_preview_uses_only_markers(tmp_path):
+    connection = FakeConnection(scanned=[(9, 2), (9, 1), (9, 10), (9, 10)])
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--board-backend",
+            "simulator",
+            "--show-leds",
+            "--legacy-option-menu",
+            "--challenge-roll",
+            "force_gate=12",
+            "--max-steps",
+            "3",
+        ),
+        connection_factory=lambda args: connection,
+    )
+
+    events = _events(result.observation_path)
+    assert any(event["event_type"] == "zone_travel_previewed" for event in events)
+    assert any("Wybrana lokacja: Dziedziniec" in message for message in result.messages)
+    assert any("Pusty dziedziniec" in message for message in result.messages)
+    set_led_positions = [event[1] for event in connection.events if event[0] == "set_leds"]
+    assert [(9, 2)] in set_led_positions
+    assert [(9, 10)] in set_led_positions
+    assert not any(len(positions) > 1 and (9, 10) in positions for positions in set_led_positions)
+
+
+def test_demo_exploration_scene_courtyard_challenge_reveals_wounded_scout(tmp_path):
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--legacy-option-menu",
+            "--exploration-script",
+            "zone:gate",
+            "--exploration-script",
+            "option:force_gate",
+            "--exploration-script",
+            "zone:courtyard",
+            "--exploration-script",
+            "zone:courtyard",
+            "--exploration-script",
+            "zone:courtyard",
+            "--exploration-script",
+            "option:inspect_tracks_courtyard",
+            "--challenge-roll",
+            "force_gate=12",
+            "--challenge-roll",
+            "inspect_tracks_courtyard=12",
+            "--max-steps",
+            "8",
+        )
+    )
+
+    events = _events(result.observation_path)
+    event_types = [event["event_type"] for event in events]
+    visible_points = {point.id for point in demo_exploration_scene.visible_exploration_points(result.final_state.points)}
+    assert "wounded_scout" in visible_points
+    assert "exploration_point_revealed" in event_types
+    assert any(event["payload"]["point_ids"] == ["wounded_scout"] for event in events if event["event_type"] == "exploration_point_revealed")
+    assert any("Ranny zwiadowca" in message for message in result.messages)
 
 
 def test_demo_exploration_scene_gm_classifier_dry_run_does_not_change_progress(tmp_path):
@@ -932,7 +1021,7 @@ def test_demo_exploration_scene_effect_boost_increases_success_progress(tmp_path
 
 def test_demo_exploration_scene_grant_resource_effect_adds_resource_after_success(tmp_path, monkeypatch):
     client = FakeGmClient(
-        [_gm_grant_saw_preparation_proposal(), _gm_picket_without_resource_proposal()],
+        [_gm_grant_saw_preparation_proposal(), _gm_picket_with_saw_resource_proposal()],
         analysis=[
             _gm_analysis(normalized_intent="Szukamy piły."),
             _gm_analysis(normalized_intent="Próbujemy użyć odkrytego narzędzia."),
@@ -965,6 +1054,8 @@ def test_demo_exploration_scene_grant_resource_effect_adds_resource_after_succes
     event_types = [event["event_type"] for event in _events(result.observation_path)]
     assert "saw" in result.final_state.inventory_resource_ids
     assert "resource_granted" in event_types
+    assert "gm_classifier_proposal_rejected" not in event_types
+    assert "resource_used" in event_types
 
 
 def test_demo_exploration_scene_unlock_option_effect_sets_unlock_flag_after_success(tmp_path, monkeypatch):
@@ -1038,6 +1129,7 @@ def test_demo_exploration_scene_search_can_reveal_saw_resource(tmp_path):
     result = run_demo(
         _args(
             tmp_path,
+            "--legacy-option-menu",
             "--exploration-script",
             "zone:gate",
             "--exploration-script",
@@ -1086,6 +1178,7 @@ def test_demo_exploration_scene_rejects_non_adjacent_zone_travel(tmp_path):
     result = run_demo(
         _args(
             tmp_path,
+            "--legacy-option-menu",
             "--exploration-script",
             "zone:gate",
             "--exploration-script",
@@ -1147,6 +1240,25 @@ def test_demo_exploration_scene_gate_click_shows_challenge_prompt_by_default(tmp
     assert "exploration_menu_opened" not in event_types
     assert any("Aby przejść dalej" in message for message in result.messages)
     assert any("Aktualny postęp: 0/3" in message for message in result.messages)
+
+
+def test_demo_exploration_scene_pending_scripts_do_not_open_challenge_menu_by_default(tmp_path):
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--exploration-script",
+            "zone:gate",
+            "--exploration-script",
+            "option:break_picket",
+            "--max-steps",
+            "1",
+        )
+    )
+
+    event_types = [event["event_type"] for event in _events(result.observation_path)]
+    assert "challenge_freeform_prompted" in event_types
+    assert "exploration_menu_opened" not in event_types
+    assert demo_exploration_scene.challenge_state_for(result.final_state, "closed_gate").current_progress == 0
 
 
 def test_demo_exploration_scene_village_setup_confirms_visible_points_with_fake_connection(tmp_path):

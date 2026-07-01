@@ -241,6 +241,7 @@ class ExplorationChallenge:
     progress_required: int
     completed_flag: str
     options: tuple[ExplorationChallengeOption, ...]
+    reveals_on_complete: tuple[str, ...] = ()
     llm_context: LlmContext = LlmContext()
     llm_policy: LlmChallengePolicy = LlmChallengePolicy()
 
@@ -509,6 +510,28 @@ def grant_resource(state: ExplorationState, resource_id: str) -> ExplorationStat
     for flag in resource.unlocks_flags:
         flags = set_scene_flag(flags, flag, True)
     return replace(state, flags=flags, inventory_resource_ids=tuple(sorted((*state.inventory_resource_ids, resource_id))))
+
+
+def reveal_exploration_points(
+    state: ExplorationState,
+    point_ids: tuple[str, ...],
+) -> tuple[ExplorationState, tuple[ExplorationPoint, ...]]:
+    requested = set(point_ids)
+    if not requested:
+        return state, ()
+    unknown = requested - {point.id for point in state.points}
+    if unknown:
+        raise ValueError(f"Unknown exploration points: {', '.join(sorted(unknown))}.")
+    revealed: list[ExplorationPoint] = []
+    points: list[ExplorationPoint] = []
+    for point in state.points:
+        if point.id in requested and point.visibility != SetupVisibility.VISIBLE:
+            updated = replace(point, visibility=SetupVisibility.VISIBLE)
+            points.append(updated)
+            revealed.append(updated)
+        else:
+            points.append(point)
+    return replace(state, points=tuple(points)), tuple(revealed)
 
 
 def resolve_challenge_option(

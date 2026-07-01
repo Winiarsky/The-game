@@ -457,6 +457,16 @@ Wyłam sztachetę:
 
 Opcje mogą mieć różne profile: szybkie, głośne, bezpieczne, ryzykowne, ciche, kosztowne albo wymagające zasobu.
 
+Scena eksploracyjna może mieć kilka wyzwań w kolejnych strefach. Ukończenie jednego wyzwania może odblokować następną strefę, ujawnić nowy punkt zainteresowania albo przygotować hook pod inny typ interakcji, np. NPC.
+
+Przykład:
+
+```text
+Brama -> odblokowuje Dziedziniec
+Dziedziniec -> po przeszukaniu ujawnia Rannego zwiadowcę
+Ranny zwiadowca -> kolejny etap: interakcja z NPC
+```
+
 ### Przygotowanie Do Testu
 
 Gracze powinni móc przygotować się do wyzwania przed głównym rozstrzygnięciem.

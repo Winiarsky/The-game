@@ -1,0 +1,21 @@
+{
+  "llm_context": {
+    "summary": "Opuszczona, zarośnięta strażnica przy starym trakcie. Miejsce jest wilgotne, częściowo spróchniałe i dawno nieutrzymywane.",
+    "available_materials": [
+      "spróchniałe drewno",
+      "kamienie",
+      "zarośla",
+      "stare deski",
+      "rdzewiejące metalowe elementy"
+    ],
+    "forbidden_assumptions": [
+      "brak dużych świeżych drzew do ścięcia",
+      "brak działającego mechanizmu lotu",
+      "brak dostępnej magii środowiskowej znikąd"
+    ],
+    "risk_notes": [
+      "hałas może przyciągnąć uwagę",
+      "spróchniałe elementy mogą pękać pod ciężarem"
+    ]
+  }
+}

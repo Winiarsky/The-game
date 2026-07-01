@@ -301,6 +301,12 @@ Bez planszy:
 PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenario content/scenarios/abandoned_watchtower.json --board-backend none --exploration-script zone:gate --exploration-script option:force_gate --challenge-roll force_gate=12 --exploration-script zone:courtyard --exploration-script zone:courtyard --exploration-script zone:courtyard --exploration-script option:search_courtyard --party-check-roll hero=13 --party-check-roll rogue=7 --session-id abandoned_watchtower_demo --max-steps 6
 ```
 
+Deterministyczny test drugiego challenge'a i ujawnienia NPC hooka:
+
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenario content/scenarios/abandoned_watchtower.json --board-backend none --legacy-option-menu --exploration-script zone:gate --exploration-script option:force_gate --challenge-roll force_gate=12 --exploration-script zone:courtyard --exploration-script zone:courtyard --exploration-script zone:courtyard --exploration-script option:inspect_tracks_courtyard --challenge-roll inspect_tracks_courtyard=12 --session-id abandoned_watchtower_courtyard_demo --max-steps 8
+```
+
 W symulatorze:
 
 ```bash

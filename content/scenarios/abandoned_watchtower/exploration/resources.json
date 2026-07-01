@@ -1,0 +1,36 @@
+{
+  "resources": [
+    {
+      "id": "rope",
+      "label": "Lina z hakiem",
+      "bonus_tags": [
+        "climbing"
+      ],
+      "modifier": 2
+    },
+    {
+      "id": "wedge",
+      "label": "Drewniany klin",
+      "bonus_tags": [
+        "lever",
+        "quiet"
+      ],
+      "mitigates_complications": [
+        "jammed_gate"
+      ],
+      "mitigates_noise": 1
+    },
+    {
+      "id": "saw",
+      "label": "Stara piła",
+      "bonus_tags": [
+        "saw",
+        "picket"
+      ],
+      "modifier": 2,
+      "unlocks_flags": [
+        "saw_found"
+      ]
+    }
+  ]
+}

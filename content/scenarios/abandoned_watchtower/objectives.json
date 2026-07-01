@@ -1,0 +1,12 @@
+{
+  "objectives": [
+    {
+      "id": "find_hidden_cache",
+      "name": "Zbadaj strażnicę",
+      "description": "Sprawdźcie opuszczoną strażnicę i znajdźcie ukrytą skrytkę.",
+      "condition": "flag_equals",
+      "flag_key": "hidden_cache_found",
+      "flag_value": true
+    }
+  ]
+}

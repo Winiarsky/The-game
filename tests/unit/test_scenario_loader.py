@@ -11,7 +11,20 @@ from dnd_board_game.world import Coordinate
 
 
 def _abandoned_watchtower_data_without_refs():
-    data = json.loads(Path("content/scenarios/abandoned_watchtower.json").read_text(encoding="utf-8"))
+    base = Path("content/scenarios/abandoned_watchtower")
+    data = json.loads((base / "scenario.json").read_text(encoding="utf-8"))
+    data.pop("parts", None)
+    data["actors"] = json.loads((base / "actors.json").read_text(encoding="utf-8"))["actors"]
+    data["objectives"] = json.loads((base / "objectives.json").read_text(encoding="utf-8"))["objectives"]
+    data["llm_context"] = json.loads((base / "llm_context.json").read_text(encoding="utf-8"))["llm_context"]
+    data["exploration"] = {
+        "party_start_zone": json.loads((base / "exploration/party_start_zone.json").read_text(encoding="utf-8"))["party_start_zone"],
+        "zones": json.loads((base / "exploration/zones.json").read_text(encoding="utf-8"))["zones"],
+        "points": json.loads((base / "exploration/points.json").read_text(encoding="utf-8"))["points"],
+        "challenges": json.loads((base / "exploration/challenges.json").read_text(encoding="utf-8"))["challenges"],
+        "resources": json.loads((base / "exploration/resources.json").read_text(encoding="utf-8"))["resources"],
+        "initial_resources": json.loads((base / "exploration/initial_resources.json").read_text(encoding="utf-8"))["initial_resources"],
+    }
     attack = {
         "id": "test_attack",
         "name": "Test Attack",
@@ -128,8 +141,8 @@ def test_load_abandoned_watchtower_builds_exploration_scene():
     assert exploration.party_position.zone_id == "gate"
     assert len(exploration.actors) == 2
     assert len(exploration.zones) == 4
-    assert len(exploration.challenges) == 1
-    challenge = exploration.challenges[0]
+    assert len(exploration.challenges) == 2
+    challenge = next(item for item in exploration.challenges if item.id == "closed_gate")
     assert challenge.completed_flag == "gate_passed"
     assert challenge.llm_policy.allowed_local_skills == ("crafting",)
     assert "heavy_force" in challenge.llm_policy.allowed_approach_tags
@@ -147,6 +160,55 @@ def test_load_abandoned_watchtower_builds_exploration_scene():
     courtyard = next(zone for zone in exploration.zones if zone.id == "courtyard")
     assert courtyard.search_dc == 12
     assert courtyard.search_reveals == ("hidden_cache",)
+    courtyard_challenge = next(item for item in exploration.challenges if item.id == "courtyard_search")
+    assert courtyard_challenge.zone_id == "courtyard"
+    assert courtyard_challenge.completed_flag == "courtyard_searched"
+    assert courtyard_challenge.reveals_on_complete == ("wounded_scout",)
+    assert "listening" in courtyard_challenge.llm_policy.allowed_approach_tags
+    assert "heavy_force" not in courtyard_challenge.llm_policy.allowed_approach_tags
+    wounded_scout = next(point for point in exploration.points if point.id == "wounded_scout")
+    assert wounded_scout.zone_id == "courtyard"
+    assert wounded_scout.visibility == SetupVisibility.HIDDEN
+
+
+def test_load_abandoned_watchtower_folder_manifest_matches_alias_file():
+    from_alias = build_exploration_from_scenario(load_scenario("content/scenarios/abandoned_watchtower.json"))
+    from_folder = build_exploration_from_scenario(load_scenario("content/scenarios/abandoned_watchtower"))
+
+    assert from_alias.scenario_id == from_folder.scenario_id == "abandoned_watchtower"
+    assert [zone.id for zone in from_alias.zones] == [zone.id for zone in from_folder.zones]
+    assert [challenge.id for challenge in from_alias.challenges] == [challenge.id for challenge in from_folder.challenges]
+    assert [point.id for point in from_alias.points] == [point.id for point in from_folder.points]
+    assert from_folder.initial_resource_ids == ("rope", "wedge")
+
+
+def test_load_abandoned_watchtower_folder_keeps_monster_and_item_refs_working():
+    loaded = load_scenario("content/scenarios/abandoned_watchtower")
+    exploration = build_exploration_from_scenario(loaded)
+
+    hero = next(actor for actor in exploration.actors if actor.id == "hero")
+    assert hero.name == "Bohater"
+    assert loaded.path == Path("content/scenarios/abandoned_watchtower/scenario.json")
+
+
+def test_exploration_challenge_reveal_rejects_unknown_point(tmp_path):
+    data = _abandoned_watchtower_data_without_refs()
+    data["exploration"]["challenges"][0]["reveals_on_complete"] = ["missing_point"]
+    scenario_path = tmp_path / "bad_reveal_point.json"
+    scenario_path.write_text(json.dumps(data), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="reveals_on_complete"):
+        load_scenario(scenario_path)
+
+
+def test_exploration_challenge_reveal_rejects_point_from_other_zone(tmp_path):
+    data = _abandoned_watchtower_data_without_refs()
+    data["exploration"]["challenges"][0]["reveals_on_complete"] = ["hidden_cache"]
+    scenario_path = tmp_path / "bad_reveal_zone.json"
+    scenario_path.write_text(json.dumps(data), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="outside challenge zone"):
+        load_scenario(scenario_path)
 
 
 def test_exploration_challenge_llm_policy_rejects_bad_range(tmp_path):

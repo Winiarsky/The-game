@@ -1,0 +1,437 @@
+{
+  "challenges": [
+    {
+      "id": "closed_gate",
+      "zone_id": "gate",
+      "name": "Zamknięta brama",
+      "progress_required": 3,
+      "completed_flag": "gate_passed",
+      "llm_policy": {
+        "allowed_local_skills": [
+          "crafting"
+        ],
+        "allowed_approach_tags": [
+          "heavy_force",
+          "noise",
+          "climbing",
+          "quiet",
+          "lever",
+          "scouting",
+          "picket",
+          "saw"
+        ],
+        "allowed_complications": [
+          "alarm_w_strażnicy",
+          "bolesny_upadek",
+          "drzazgi",
+          "jammed_gate",
+          "narastający_hałas",
+          "minor_injury",
+          "ryzyko_upadku",
+          "stracony_czas",
+          "uszkodzony_mechanizm",
+          "zaklinowana_sztacheta",
+          "ślepy_trop"
+        ],
+        "allowed_consequence_types": [
+          "add_noise",
+          "add_complication",
+          "none"
+        ],
+        "allowed_preparation_effect_types": [
+          "modifier",
+          "reduce_negative_effect",
+          "advantage",
+          "disadvantage",
+          "effect_boost",
+          "unlock_option",
+          "grant_resource"
+        ],
+        "allowed_grant_resource_ids": [
+          "saw"
+        ],
+        "allowed_unlock_option_ids": [
+          "saw_picket"
+        ],
+        "max_resources_per_attempt": 1,
+        "dc_range": [
+          8,
+          18
+        ],
+        "dc_policy": {
+          "tiers": {
+            "easy": {
+              "dc": 12,
+              "label": "łatwe",
+              "guidance": "Podejście wykorzystuje oczywistą słabość bramy, dobre przygotowanie albo bezpieczny sposób działania."
+            },
+            "medium": {
+              "dc": 15,
+              "label": "średnie",
+              "guidance": "Podejście jest naturalne dla tej przeszkody, ale wymaga wysiłku, precyzji albo sprawności."
+            },
+            "hard": {
+              "dc": 18,
+              "label": "trudne",
+              "guidance": "Podejście jest możliwe, ale ryzykowne, nieoptymalne albo idzie pod naturę przeszkody."
+            }
+          },
+          "allowed_tiers": [
+            "easy",
+            "medium",
+            "hard"
+          ],
+          "default_tier": "medium",
+          "guidance": [
+            "Oceniaj deklarację graczy względem tej konkretnej starej, zarośniętej bramy, a nie względem gotowych rozwiązań.",
+            "Dobre narzędzie, wcześniejsze przygotowanie albo wykorzystanie widocznej słabości może obniżyć tier.",
+            "Działanie szybkie, głośne, nieprecyzyjne albo przeciwne naturze przeszkody powinno podnieść tier."
+          ]
+        },
+        "progress_on_success_range": [
+          1,
+          3
+        ],
+        "progress_on_failure_range": [
+          0,
+          1
+        ],
+        "preparation_modifier_range": [
+          1,
+          2
+        ],
+        "negative_effect_reduction_range": [
+          1,
+          1
+        ],
+        "effect_boost_range": [
+          1,
+          1
+        ]
+      },
+      "llm_context": {
+        "summary": "Zamknięta, stara brama blokuje wejście na dziedziniec. Da się ją uszkodzić, podważyć, przeciąć, obejść albo wspiąć się po uszkodzonych przęsłach.",
+        "reasonable_approaches": [
+          "wyważenie",
+          "wspinaczka",
+          "podważenie mechanizmu",
+          "przecięcie drewna",
+          "poszukanie obejścia",
+          "poszerzenie szpary"
+        ],
+        "impossible_approaches": [
+          "przelot na linie bez magii",
+          "zrobienie tarana ze świeżo ściętego drzewa",
+          "otwarcie nieistniejącym magicznym przełącznikiem",
+          "szybki podkop pod kamienną bramą bez odpowiednich narzędzi i czasu"
+        ],
+        "risk_notes": [
+          "wyważanie jest głośne",
+          "wspinaczka grozi upadkiem",
+          "podważanie może zaklinować mechanizm",
+          "podkop w tej scenie byłby zbyt wolny na szybkie sforsowanie bramy"
+        ]
+      },
+      "options": [
+        {
+          "id": "force_gate",
+          "label": "Rozwal bramę",
+          "color": "danger",
+          "description": "Spróbujcie wyłamać spróchniałe rygle siłą.",
+          "ability_check": {
+            "ability": "strength",
+            "skill": "athletics",
+            "dc": 12
+          },
+          "progress_on_success": 3,
+          "progress_on_failure": 1,
+          "success_noise": 1,
+          "failure_noise": 2,
+          "critical_failure_noise": 3,
+          "quiet_success_margin": 10,
+          "quiet_on_natural_20": true,
+          "failure_complication": "narastający_hałas",
+          "critical_failure_complication": "alarm_w_strażnicy",
+          "tags": [
+            "heavy_force",
+            "noise"
+          ],
+          "success_message": "Rygle pękają i brama ustępuje.",
+          "failure_message": "Brama trzyma, ale drewno pracuje i część rygla puszcza.",
+          "critical_failure_message": "Uderzenie rozchodzi się echem po ruinach. Brama częściowo puszcza, ale robicie dużo hałasu."
+        },
+        {
+          "id": "vault_gate",
+          "label": "Przejdź górą",
+          "color": "warning",
+          "description": "Spróbujcie przedostać się górą przez zniszczone przęsła.",
+          "ability_check": {
+            "ability": "dexterity",
+            "skill": "acrobatics",
+            "dc": 13
+          },
+          "progress_on_success": 2,
+          "progress_on_failure": 1,
+          "failure_noise": 1,
+          "failure_complication": "ryzyko_upadku",
+          "critical_failure_complication": "bolesny_upadek",
+          "tags": [
+            "climbing",
+            "quiet"
+          ],
+          "success_message": "Znajdujecie bezpieczniejszą drogę po przęsłach.",
+          "failure_message": "Przęsła są śliskie, ale odkrywacie, którędy da się wejść wyżej.",
+          "critical_failure_message": "Przęsło pęka pod ciężarem. Robicie częściowy postęp, ale ktoś boleśnie ląduje przy bramie."
+        },
+        {
+          "id": "lever_gate",
+          "label": "Podważ mechanizm",
+          "color": "interactive",
+          "description": "Zbudujcie prostą dźwignię z desek i kamieni, żeby podważyć skrzydło bramy.",
+          "ability_check": {
+            "ability": "intelligence",
+            "skill": "crafting",
+            "dc": 11
+          },
+          "progress_on_success": 3,
+          "progress_on_failure": 1,
+          "failure_complication": "jammed_gate",
+          "critical_failure_complication": "uszkodzony_mechanizm",
+          "tags": [
+            "lever",
+            "quiet"
+          ],
+          "success_message": "Prowizoryczna dźwignia działa. Brama odchyla się dość szeroko.",
+          "failure_message": "Dźwignia się klinuje, ale mechanizm trochę puszcza.",
+          "critical_failure_message": "Mechanizm zgrzyta i blokuje się krzywo. Macie postęp, ale dalsza praca będzie trudniejsza."
+        },
+        {
+          "id": "find_way_around",
+          "label": "Poszukaj obejścia",
+          "color": "marker",
+          "description": "Sprawdźcie mur i zarośla, szukając bocznego wejścia.",
+          "ability_check": {
+            "ability": "wisdom",
+            "skill": "survival",
+            "dc": 12
+          },
+          "progress_on_success": 2,
+          "progress_on_failure": 1,
+          "failure_complication": "stracony_czas",
+          "critical_failure_complication": "ślepy_trop",
+          "tags": [
+            "scouting",
+            "quiet"
+          ],
+          "success_message": "Znajdujecie częściowo ukryte przejście przy murze.",
+          "failure_message": "Nie znajdujecie wejścia od razu, ale lepiej rozumiecie układ muru.",
+          "critical_failure_message": "Tropicie fałszywy ślad. Tracicie czas, ale nadal zawężacie możliwości."
+        },
+        {
+          "id": "break_picket",
+          "label": "Wyłam sztachetę",
+          "color": "warning",
+          "description": "Spróbujcie poszerzyć wąską szparę w bramie.",
+          "ability_check": {
+            "ability": "strength",
+            "skill": "athletics",
+            "dc": 10
+          },
+          "progress_on_success": 1,
+          "progress_on_failure": 1,
+          "failure_noise": 1,
+          "failure_complication": "drzazgi",
+          "critical_failure_complication": "zaklinowana_sztacheta",
+          "tags": [
+            "picket"
+          ],
+          "success_message": "Jedna ze sztachet ustępuje i przejście robi się szersze.",
+          "failure_message": "Sztacheta trzeszczy, ale szpara powoli się powiększa.",
+          "critical_failure_message": "Sztacheta pęka nierówno i kaleczy dłonie, ale daje minimalny postęp."
+        },
+        {
+          "id": "saw_picket",
+          "label": "Przetnij starą piłą",
+          "color": "interactive",
+          "description": "Użyjcie znalezionej piły, żeby cicho powiększyć szparę w bramie.",
+          "ability_check": {
+            "ability": "dexterity",
+            "skill": "crafting",
+            "dc": 10
+          },
+          "progress_on_success": 2,
+          "progress_on_failure": 1,
+          "failure_complication": "stracony_czas",
+          "tags": [
+            "saw",
+            "picket",
+            "quiet"
+          ],
+          "unlocks_if_resource_id": "saw",
+          "success_message": "Piła bierze stare drewno bez większego hałasu.",
+          "failure_message": "Piła zacina się w mokrym drewnie, ale nacięcie pomaga.",
+          "critical_failure_message": "Zęby piły łamią się częściowo, ale brama i tak puszcza odrobinę."
+        }
+      ]
+    },
+    {
+      "id": "courtyard_search",
+      "zone_id": "courtyard",
+      "name": "Przeszukanie dziedzińca",
+      "progress_required": 2,
+      "completed_flag": "courtyard_searched",
+      "reveals_on_complete": [
+        "wounded_scout"
+      ],
+      "llm_policy": {
+        "allowed_local_skills": [
+          "tracking"
+        ],
+        "allowed_approach_tags": [
+          "scouting",
+          "tracking",
+          "listening",
+          "medical",
+          "quiet",
+          "careful"
+        ],
+        "allowed_complications": [
+          "zniszczone_ślady",
+          "narastający_hałas",
+          "stracony_czas",
+          "fałszywy_trop"
+        ],
+        "allowed_consequence_types": [
+          "add_noise",
+          "add_complication",
+          "none"
+        ],
+        "allowed_preparation_effect_types": [
+          "modifier",
+          "advantage",
+          "reduce_negative_effect"
+        ],
+        "max_resources_per_attempt": 1,
+        "dc_range": [
+          8,
+          18
+        ],
+        "dc_policy": {
+          "tiers": {
+            "easy": {
+              "dc": 12,
+              "label": "łatwe",
+              "guidance": "Podejście jest ostrożne i korzysta z widocznych śladów na dziedzińcu."
+            },
+            "medium": {
+              "dc": 15,
+              "label": "średnie",
+              "guidance": "Podejście wymaga skupienia, tropienia albo uważnego sprawdzania ruin."
+            },
+            "hard": {
+              "dc": 18,
+              "label": "trudne",
+              "guidance": "Podejście jest chaotyczne, ryzykowne albo łatwo niszczy delikatne ślady."
+            }
+          },
+          "allowed_tiers": [
+            "easy",
+            "medium",
+            "hard"
+          ],
+          "default_tier": "medium",
+          "guidance": [
+            "Oceniaj deklarację względem zarośniętego dziedzińca, śladów walki i zawalonego wozu.",
+            "Ciche, uważne sprawdzanie śladów może być łatwiejsze niż chaotyczne przeszukiwanie.",
+            "Działanie głośne albo niedbałe powinno zwiększać ryzyko hałasu lub zniszczenia śladów."
+          ]
+        },
+        "progress_on_success_range": [
+          1,
+          2
+        ],
+        "progress_on_failure_range": [
+          0,
+          1
+        ],
+        "preparation_modifier_range": [
+          1,
+          2
+        ],
+        "negative_effect_reduction_range": [
+          1,
+          1
+        ],
+        "effect_boost_range": [
+          1,
+          1
+        ]
+      },
+      "llm_context": {
+        "summary": "Na dziedzińcu widać ślady walki, przeciągania czegoś ciężkiego i naruszony zawalony wóz. Ktoś mógł ukryć się pod deskami.",
+        "reasonable_approaches": [
+          "sprawdzenie śladów w błocie",
+          "nasłuchiwanie cichego oddechu",
+          "ostrożne przeszukanie wozu",
+          "obejrzenie krwi i tropów"
+        ],
+        "impossible_approaches": [
+          "odnalezienie NPC przez radio",
+          "sprawdzenie kamer monitoringu"
+        ],
+        "risk_notes": [
+          "głośne przeszukiwanie może spłoszyć albo przestraszyć ukrytą osobę",
+          "niedbałe grzebanie w ruinach może zniszczyć ślady"
+        ]
+      },
+      "options": [
+        {
+          "id": "inspect_tracks_courtyard",
+          "label": "Sprawdź ślady walki",
+          "color": "interactive",
+          "description": "Prześledźcie ślady krwi i błota na dziedzińcu.",
+          "ability_check": {
+            "ability": "wisdom",
+            "skill": "survival",
+            "dc": 12
+          },
+          "progress_on_success": 2,
+          "progress_on_failure": 1,
+          "failure_complication": "stracony_czas",
+          "critical_failure_complication": "fałszywy_trop",
+          "tags": [
+            "tracking",
+            "scouting"
+          ],
+          "success_message": "Ślady prowadzą was pod zawalony wóz.",
+          "failure_message": "Tracicie chwilę na błędny trop, ale zawężacie obszar poszukiwań.",
+          "critical_failure_message": "Błoto miesza tropy i prowadzi was w złą stronę, ale dostrzegacie fragment prawdziwego śladu."
+        },
+        {
+          "id": "listen_courtyard",
+          "label": "Nasłuchuj",
+          "color": "movement",
+          "description": "Zatrzymajcie się i posłuchajcie, czy ktoś oddycha albo porusza się w ruinach.",
+          "ability_check": {
+            "ability": "wisdom",
+            "skill": "perception",
+            "dc": 12
+          },
+          "progress_on_success": 1,
+          "progress_on_failure": 0,
+          "failure_noise": 1,
+          "critical_failure_noise": 2,
+          "failure_complication": "narastający_hałas",
+          "tags": [
+            "listening",
+            "quiet",
+            "careful"
+          ],
+          "success_message": "Słyszycie słaby oddech spod zawalonego wozu.",
+          "failure_message": "Przez chwilę słyszycie tylko wiatr i własne kroki.",
+          "critical_failure_message": "Ktoś kopie luźną deskę. Hałas niesie się po pustym dziedzińcu."
+        }
+      ]
+    }
+  ]
+}

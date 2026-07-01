@@ -174,10 +174,10 @@ class LoadedExploration:
 
 def load_scenario(path: str | Path) -> LoadedScenario:
     scenario_path = Path(path)
-    data = _read_json(scenario_path)
-    definition = _parse_scenario(data, scenario_path)
+    data, loaded_path = _load_scenario_data(scenario_path)
+    definition = _parse_scenario(data, loaded_path)
     _validate_scenario(definition)
-    return LoadedScenario(definition=definition, path=scenario_path)
+    return LoadedScenario(definition=definition, path=loaded_path)
 
 
 def build_encounter_from_scenario(loaded: LoadedScenario) -> LoadedEncounter:
@@ -529,6 +529,7 @@ def _parse_exploration_challenge(data: Any) -> ExplorationChallenge:
         progress_required=int(data.get("progress_required", 3)),
         completed_flag=str(_required(data, "completed_flag", f"exploration challenge {challenge_id}")),
         options=tuple(_parse_exploration_challenge_option(entry, challenge_id) for entry in options_data),
+        reveals_on_complete=tuple(str(item) for item in data.get("reveals_on_complete", [])),
         llm_context=_parse_llm_context(data.get("llm_context", {}), f"exploration challenge {challenge_id}.llm_context"),
         llm_policy=_parse_llm_challenge_policy(data.get("llm_policy", {}), f"exploration challenge {challenge_id}.llm_policy"),
     )
@@ -885,6 +886,16 @@ def _validate_exploration(definition: ScenarioDefinition) -> None:
             raise ValueError(f"exploration challenge {challenge.id}.completed_flag cannot be empty.")
         if not challenge.options:
             raise ValueError(f"exploration challenge {challenge.id}.options must contain at least one option.")
+        for point_id in challenge.reveals_on_complete:
+            point = next((candidate for candidate in definition.exploration_points if candidate.id == point_id), None)
+            if point is None:
+                raise ValueError(
+                    f"exploration challenge {challenge.id}.reveals_on_complete references unknown point: {point_id}."
+                )
+            if point.zone_id != challenge.zone_id:
+                raise ValueError(
+                    f"exploration challenge {challenge.id}.reveals_on_complete references point outside challenge zone: {point_id}."
+                )
         _validate_llm_challenge_policy(challenge, resource_ids)
         option_ids = {option.id for option in challenge.options}
         unknown_unlock_options = set(challenge.llm_policy.allowed_unlock_option_ids) - option_ids
@@ -1019,21 +1030,117 @@ def _parse_color(value: Any, field: str) -> tuple[int, int, int]:
     raise ValueError(f"Unknown color for {field}: {value}.")
 
 
+def _load_scenario_data(path: Path) -> tuple[dict[str, Any], Path]:
+    scenario_path = path / "scenario.json" if path.is_dir() else path
+    data = _read_json(scenario_path)
+    data, source_path = _resolve_scenario_include(data, scenario_path)
+    return _expand_scenario_parts(data, source_path), source_path
+
+
+def _resolve_scenario_include(data: dict[str, Any], scenario_path: Path) -> tuple[dict[str, Any], Path]:
+    include = data.get("$include")
+    if include is None:
+        return data, scenario_path
+    if not isinstance(include, str):
+        raise ValueError(f"{scenario_path}.$include must be a string.")
+    include_path = _relative_content_path(scenario_path, include)
+    included = _read_json(include_path)
+    included, source_path = _resolve_scenario_include(included, include_path)
+    overlay = {key: value for key, value in data.items() if key != "$include"}
+    if overlay:
+        included = _deep_merge(included, overlay)
+    return included, source_path
+
+
+def _expand_scenario_parts(data: dict[str, Any], scenario_path: Path) -> dict[str, Any]:
+    parts = data.get("parts")
+    if parts is None:
+        return data
+    if not isinstance(parts, dict):
+        raise ValueError(f"{scenario_path}.parts must be an object.")
+    expanded = {key: value for key, value in data.items() if key != "parts"}
+    for field in ("actors", "environment", "objectives", "player_start_zones", "llm_context"):
+        if field in parts:
+            expanded[field] = _load_named_part(scenario_path, parts[field], field)
+    if "exploration" in parts:
+        existing = expanded.get("exploration", {})
+        if existing is None:
+            existing = {}
+        if not isinstance(existing, dict):
+            raise ValueError(f"{scenario_path}.exploration must be an object when parts.exploration is used.")
+        expanded["exploration"] = _deep_merge(existing, _load_exploration_parts(scenario_path, parts["exploration"]))
+    return expanded
+
+
+def _load_exploration_parts(scenario_path: Path, part: Any) -> dict[str, Any]:
+    if isinstance(part, str):
+        loaded = _load_json_value(_relative_content_path(scenario_path, part))
+        if not isinstance(loaded, dict):
+            raise ValueError(f"{scenario_path}.parts.exploration must point to an object.")
+        return _extract_part_value(loaded, "exploration")
+    if not isinstance(part, dict):
+        raise ValueError(f"{scenario_path}.parts.exploration must be a string or object.")
+    result: dict[str, Any] = {}
+    for field, ref in part.items():
+        result[field] = _load_named_part(scenario_path, ref, field)
+    return result
+
+
+def _load_named_part(scenario_path: Path, ref: Any, field: str) -> Any:
+    if isinstance(ref, str):
+        return _extract_part_value(_load_json_value(_relative_content_path(scenario_path, ref)), field)
+    return ref
+
+
+def _extract_part_value(value: Any, field: str) -> Any:
+    if isinstance(value, dict) and field in value:
+        return value[field]
+    return value
+
+
+def _relative_content_path(source_path: Path, ref: str) -> Path:
+    path = Path(ref)
+    if path.is_absolute():
+        return path
+    return source_path.parent / path
+
+
+def _deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(base)
+    for key, value in overlay.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
 def _read_json(path: Path) -> dict[str, Any]:
-    try:
-        with path.open("r", encoding="utf-8") as handle:
-            data = json.load(handle)
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"Invalid JSON in {path}: {exc}") from exc
+    data = _load_json_value(path)
     if not isinstance(data, dict):
         raise ValueError(f"{path} must contain a JSON object.")
     return data
 
 
+def _load_json_value(path: Path) -> Any:
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            return json.load(handle)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid JSON in {path}: {exc}") from exc
+
+
 def _content_ref_path(scenario_path: Path, category: str, ref: str) -> Path:
-    root = scenario_path.parent.parent
+    root = _content_root_path(scenario_path)
     filename = ref if ref.endswith(".json") else f"{ref}.json"
     return root / category / filename
+
+
+def _content_root_path(scenario_path: Path) -> Path:
+    for parent in (scenario_path.parent, *scenario_path.parents):
+        if parent.name == "content":
+            return parent
+    return scenario_path.parent.parent
 
 
 def _parse_ability_scores(data: dict[str, Any]) -> AbilityScores:

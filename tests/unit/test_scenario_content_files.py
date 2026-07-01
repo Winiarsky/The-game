@@ -101,17 +101,19 @@ def test_first_playable_scene_positions_are_in_bounds():
 
 def test_abandoned_watchtower_file_exists_and_loads():
     scenario_path = Path("content/scenarios/abandoned_watchtower.json")
+    scenario_folder = Path("content/scenarios/abandoned_watchtower")
 
     loaded = load_scenario(scenario_path)
 
     assert scenario_path.exists()
+    assert scenario_folder.exists()
     assert loaded.definition.id == "abandoned_watchtower"
     assert loaded.definition.scene_mode.value == "exploration"
     assert len(loaded.definition.exploration_zones) == 4
 
 
 def test_abandoned_watchtower_references_existing_content_files():
-    text = Path("content/scenarios/abandoned_watchtower.json").read_text(encoding="utf-8")
+    text = Path("content/scenarios/abandoned_watchtower/actors.json").read_text(encoding="utf-8")
 
     assert Path("content/items/longsword.json").exists()
     assert Path("content/items/dagger.json").exists()

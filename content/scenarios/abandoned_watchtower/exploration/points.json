@@ -1,0 +1,46 @@
+{
+  "points": [
+    {
+      "id": "old_camp_tools",
+      "name": "Ślady dawnego obozowiska",
+      "zone_id": "gate",
+      "positions": [
+        [
+          11,
+          3
+        ]
+      ],
+      "color": "success",
+      "visibility": "hidden",
+      "description": "Pod zbutwiałą płachtą leży stara piła. Może pomóc przy drewnianej bramie."
+    },
+    {
+      "id": "hidden_cache",
+      "name": "Ukryta skrytka",
+      "zone_id": "courtyard",
+      "positions": [
+        [
+          11,
+          12
+        ]
+      ],
+      "color": "success",
+      "visibility": "hidden",
+      "description": "Pod luźną deską znajduje się stary nóż, który może służyć jako sztylet."
+    },
+    {
+      "id": "wounded_scout",
+      "name": "Ranny zwiadowca",
+      "zone_id": "courtyard",
+      "positions": [
+        [
+          8,
+          8
+        ]
+      ],
+      "color": "interactive",
+      "visibility": "hidden",
+      "description": "Pod zawalonym wozem leży ranny zwiadowca. Jest przytomny, ale osłabiony. Pełna interakcja z NPC będzie obsłużona w kolejnym etapie."
+    }
+  ]
+}

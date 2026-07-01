@@ -42,6 +42,7 @@ from dnd_board_game.exploration import (
     matching_resources,
     menu_option_for_position,
     party_position_feedback,
+    reveal_exploration_points,
     resolve_challenge_option,
     resolve_party_check,
     resolve_zone_search,
@@ -97,6 +98,20 @@ class GmInterpretationDecision(StrEnum):
     RECLASSIFY = "reclassify"
 
 
+def _print_section(title: str, body: str | None = None) -> None:
+    print(f"\n\n=== {title} ===")
+    if body:
+        print(body)
+
+
+def _print_block(message: str) -> None:
+    print(f"\n{message}")
+
+
+def _print_result(message: str) -> None:
+    print(f"\n-> {message}")
+
+
 def run_demo(
     args: argparse.Namespace,
     *,
@@ -131,12 +146,12 @@ def run_demo(
         inventory_resource_ids=exploration.initial_resource_ids,
     )
     messages: list[str] = [f"Scenariusz eksploracji: {exploration.scenario_name}."]
-    print(messages[-1])
+    _print_section(messages[-1])
     setup_messages, feedback_events = _run_exploration_setup(args, exploration, state, adapter, observer)
     messages.extend(setup_messages)
     for objective in objectives:
         objective_message = f"Cel eksploracji: {objective.name}. {objective.description}".strip()
-        print(objective_message)
+        _print_section("Cel sceny", objective_message)
         messages.append(objective_message)
         observer.record(
             "objective_started",
@@ -152,12 +167,13 @@ def run_demo(
     scripts = list(args.exploration_script)
     freeform_action = args.freeform_action.strip() if args.freeform_action else ""
     freeform_consumed = False
+    last_map_prompt_key = _map_prompt_key(state)
     steps = 0
     while steps < args.max_steps:
         steps += 1
         if freeform_action and not freeform_consumed:
             freeform_consumed = True
-            state, freeform_messages, _freeform_resolved = _handle_freeform_actions(args, exploration, state, observer, gm_client)
+            state, freeform_messages, _freeform_resolved = _handle_freeform_actions(args, exploration, state, adapter, observer, gm_client)
             objectives = _record_objectives_after_flags(objectives, state.flags, observer)
             messages.extend(freeform_messages)
             if _objectives_completed(objectives):
@@ -172,10 +188,23 @@ def run_demo(
             adapter.show_feedback(exploration_zone_feedback(state))
             feedback_events += 1
             observer.record("led_feedback_sent", {"phase": "exploration_map"})
+        prompt_key = _map_prompt_key(state)
+        if prompt_key != last_map_prompt_key:
+            map_prompt = _map_prompt_message(state)
+            _print_section("Dostępne lokacje", map_prompt)
+            messages.append(map_prompt)
+            observer.record(
+                "exploration_available_locations_shown",
+                {
+                    "zone_ids": [zone.id for zone in available_exploration_zones(state)],
+                    "point_ids": [point.id for point in visible_exploration_points(state.points)],
+                },
+            )
+            last_map_prompt_key = prompt_key
         clicked = _next_exploration_click(args, state, adapter, observer, scripts)
         if clicked is None:
             message = "Eksploracja zakończona."
-            print(message)
+            _print_result(message)
             messages.append(message)
             observer.record("exploration_finished", {"reason": "ended_by_user"})
             break
@@ -195,7 +224,7 @@ def run_demo(
         observer.record("exploration_zone_clicked", {"position": list(clicked.as_tuple()), "zone_id": zone.id if zone else None})
         if zone is None:
             message = "Nie ma tu dostępnej lokacji."
-            print(message)
+            _print_result(message)
             messages.append(message)
             continue
         if zone.id != state.party_position.zone_id:
@@ -205,7 +234,7 @@ def run_demo(
             continue
         if clicked != zone.marker_position:
             message = f"To fragment strefy: {zone.name}. Główne opcje tej lokacji są w podświetlonym punkcie centralnym."
-            print(message)
+            _print_result(message)
             observer.record(
                 "zone_tile_inspected",
                 {
@@ -225,7 +254,7 @@ def run_demo(
             break
     else:
         message = f"Eksploracja zatrzymana po limicie kroków: {args.max_steps}."
-        print(message)
+        _print_result(message)
         messages.append(message)
         observer.record("exploration_finished", {"reason": "max_steps", "max_steps": args.max_steps})
 
@@ -291,7 +320,7 @@ def _run_exploration_setup(
     messages: list[str] = []
     feedback_events = 0
     message = "Połóż mapę eksploracji na planszy i ustaw jawne elementy sceny."
-    print(message)
+    _print_section("Setup sceny", message)
     messages.append(message)
     observer.record("exploration_setup_started", {"scenario_id": exploration.scenario_id})
 
@@ -305,7 +334,7 @@ def _run_exploration_setup(
         else:
             zone_lines.append("Kliknij odpowiednią lokację, aby wejść w interakcję.")
         zones_message = "\n".join(zone_lines)
-        print(zones_message)
+        _print_block(zones_message)
         messages.append(zones_message)
         observer.record(
             "exploration_setup_step_started",
@@ -333,7 +362,7 @@ def _run_exploration_setup(
     for batch_index, batch in enumerate(_batched(setup_positions, 5), start=1):
         label = f": {setup_names}" if setup_names else ""
         step_message = f"Setup jawnych elementów {batch_index}{label}. Kliknij jedno z podświetlonych pól po ustawieniu elementów."
-        print(step_message)
+        _print_block(step_message)
         messages.append(step_message)
         feedback_events += _confirm_setup_step(args, adapter, observer, batch, LedColor.INTERACTIVE_OBJECT, "exploration_setup_points", step_message)
 
@@ -367,6 +396,30 @@ def _confirm_setup_step(
     adapter.clear()
     observer.record("exploration_setup_step_confirmed", {"phase": phase, "selected_position": list(selected) if selected else None})
     return 1
+
+
+def _map_prompt_key(state: ExplorationState) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    return (
+        tuple(zone.id for zone in available_exploration_zones(state)),
+        tuple(point.id for point in visible_exploration_points(state.points)),
+    )
+
+
+def _map_prompt_message(state: ExplorationState) -> str:
+    lines: list[str] = []
+    zones = available_exploration_zones(state)
+    if zones:
+        lines.append("Lokacje dostępne teraz:")
+        for zone in zones:
+            current_marker = " (aktualna)" if zone.id == state.party_position.zone_id else ""
+            lines.append(f"- {zone.name}{current_marker}: kolor {led_color_name_pl(zone.color)}")
+    points = visible_exploration_points(state.points)
+    if points:
+        lines.append("Ujawnione punkty:")
+        for point in points:
+            lines.append(f"- {point.name}: kolor {led_color_name_pl(point.color)}")
+    lines.append("Kliknij jedną z dostępnych lokacji albo ujawniony punkt na planszy.")
+    return "\n".join(lines)
 
 
 def _next_exploration_click(args: argparse.Namespace, state: ExplorationState, adapter: BoardLedAdapter | None, observer: SessionObserver, scripts: list[str]) -> Coordinate | None:
@@ -425,15 +478,22 @@ def _handle_zone_travel(
     current = _current_zone(state)
     if destination.id not in current.adjacent_zone_ids:
         message = f"Nie można przejść bezpośrednio z {current.name} do {destination.name}."
-        print(message)
+        _print_result(message)
         observer.record("zone_travel_rejected", {"from_zone_id": current.id, "to_zone_id": destination.id, "reason": "not_adjacent"})
         return state, (message,), 0
-    message = f"Czy opuścić {current.name} i przejść do {destination.name}? Kliknij tę strefę ponownie, aby potwierdzić."
-    print(message)
+    message = _zone_travel_preview_message(current, destination)
+    _print_section("Przejście między lokacjami", message)
     observer.record("zone_travel_previewed", {"from_zone_id": current.id, "to_zone_id": destination.id})
     feedback_events = 0
     if adapter is not None:
-        adapter.show_feedback(LedFeedback((LedFrame(current.positions, LedColor.ACTIVE_ACTOR, LedRole.ACTIVE_ACTOR), LedFrame(destination.positions, destination.color, LedRole.DESTINATION))))
+        adapter.show_feedback(
+            LedFeedback(
+                (
+                    LedFrame((current.marker_position,), LedColor.ACTIVE_ACTOR, LedRole.ACTIVE_ACTOR),
+                    LedFrame((destination.marker_position,), destination.color, LedRole.DESTINATION),
+                )
+            )
+        )
         feedback_events += 1
         observer.record("led_feedback_sent", {"phase": "zone_travel_preview", "to_zone_id": destination.id})
     confirmed = _confirm_zone_click(args, state, destination, adapter, observer, scripts)
@@ -445,13 +505,30 @@ def _handle_zone_travel(
     observer.record("zone_travel_confirmed", {"from_zone_id": current.id, "to_zone_id": destination.id})
     observer.record("party_zone_changed", {"from_zone_id": current.id, "to_zone_id": destination.id})
     confirm_message = f"Drużyna przechodzi do strefy: {destination.name}."
-    print(confirm_message)
+    _print_result(confirm_message)
     if adapter is not None:
         adapter.clear()
         adapter.show_feedback(party_position_feedback(new_state))
         feedback_events += 1
         observer.record("led_feedback_sent", {"phase": "party_position", "zone_id": destination.id})
     return new_state, (message, confirm_message), feedback_events
+
+
+def _zone_travel_preview_message(current: ExplorationZone, destination: ExplorationZone) -> str:
+    lines = [
+        f"Wybrana lokacja: {destination.name}.",
+    ]
+    if destination.description:
+        lines.append(destination.description)
+    lines.extend(
+        [
+            "",
+            f"Czy chcecie opuścić {current.name} i przejść do: {destination.name}?",
+            "Kliknij główny punkt tej lokacji ponownie, aby potwierdzić.",
+            "Kliknięcie innej lokacji pokaże jej opis i pytanie o przejście.",
+        ]
+    )
+    return "\n".join(lines)
 
 
 def _handle_zone_options(
@@ -465,13 +542,14 @@ def _handle_zone_options(
     gm_client: object | None,
 ) -> tuple[ExplorationState, tuple[str, ...], int]:
     challenge = challenge_for_zone(state, zone.id)
-    if challenge is not None and available_challenge_options(state, challenge) and not args.legacy_option_menu and not scripts:
+    if challenge is not None and available_challenge_options(state, challenge) and not args.legacy_option_menu:
         new_state, challenge_messages, resolved = _handle_challenge_freeform_prompt(
             args,
             exploration,
             state,
             zone,
             challenge,
+            adapter,
             observer,
             gm_client,
         )
@@ -481,10 +559,10 @@ def _handle_zone_options(
     menu = build_exploration_menu(state, zone)
     if not menu.options:
         message = f"{zone.name}: nie ma teraz dostępnych opcji."
-        print(message)
+        _print_result(message)
         return state, (message,), 0
     message = _menu_message(zone, menu)
-    print(message)
+    _print_section(f"Lokacja: {zone.name}", message)
     observer.record(
         "exploration_menu_opened",
         {
@@ -506,7 +584,7 @@ def _handle_zone_options(
         return state, (message,), feedback_events
     if selected.kind == ExplorationMenuOptionKind.CANCEL:
         cancel_message = "Wycofano wybór opcji."
-        print(cancel_message)
+        _print_result(cancel_message)
         observer.record("exploration_menu_cancelled", {"zone_id": zone.id})
         return state, (message, cancel_message), feedback_events
     if selected.kind == ExplorationMenuOptionKind.LOOK_AROUND:
@@ -516,7 +594,7 @@ def _handle_zone_options(
         challenge = challenge_for_zone(state, zone.id)
         if challenge is None:
             error_message = f"{zone.name}: ta opcja wyzwania nie jest już dostępna."
-            print(error_message)
+            _print_result(error_message)
             return state, (message, error_message), feedback_events
         option = next(option for option in available_challenge_options(state, challenge) if option.id == selected.source_id)
         resources = matching_resources(state, option)
@@ -532,6 +610,7 @@ def _handle_zone_options(
             option,
             resource,
             observer,
+            adapter=adapter,
         )
         return new_state, (message, *result_messages), feedback_events
     if selected.kind == ExplorationMenuOptionKind.ZONE_OPTION:
@@ -545,7 +624,7 @@ def _handle_zone_options(
             return new_state, (message, *check_messages), feedback_events
         new_state = _apply_message_option_flags(state, option, observer)
         option_message = option.message or option.description or f"Wykonano opcję: {option.label}."
-        print(option_message)
+        _print_result(option_message)
         return new_state, (message, option_message), feedback_events
     return state, (message,), feedback_events
 
@@ -556,11 +635,12 @@ def _handle_challenge_freeform_prompt(
     state: ExplorationState,
     zone: ExplorationZone,
     challenge: ExplorationChallenge,
+    adapter: BoardLedAdapter | None,
     observer: SessionObserver,
     gm_client: object | None,
 ) -> tuple[ExplorationState, tuple[str, ...], bool]:
     message = _challenge_prompt_message(state, zone, challenge)
-    print(message)
+    _print_section(f"Wyzwanie: {challenge.name}", message)
     observer.record(
         "challenge_freeform_prompted",
         {
@@ -571,12 +651,12 @@ def _handle_challenge_freeform_prompt(
         },
     )
     if args.gm_classifier != "none":
-        new_state, freeform_messages, resolved = _handle_freeform_actions(args, exploration, state, observer, gm_client)
+        new_state, freeform_messages, resolved = _handle_freeform_actions(args, exploration, state, adapter, observer, gm_client)
         return new_state, (message, *freeform_messages), resolved
     if args.board_backend != "none" and sys.stdin.isatty():
-        print("Wpisz deklarację przez `--gm-classifier groq --interactive-freeform` albo `--gm-classifier gemini --interactive-freeform`, albo uruchom stare menu opcją `--legacy-option-menu`.")
+        _print_block("Wpisz deklarację przez `--gm-classifier groq --interactive-freeform` albo `--gm-classifier gemini --interactive-freeform`, albo uruchom stare menu opcją `--legacy-option-menu`.")
     else:
-        print("Brak aktywnego klasyfikatora LLM. Użyj `--legacy-option-menu`, aby wybrać predefiniowaną opcję.")
+        _print_block("Brak aktywnego klasyfikatora LLM. Użyj `--legacy-option-menu`, aby wybrać predefiniowaną opcję.")
     return state, (message,), False
 
 
@@ -612,6 +692,7 @@ def _handle_freeform_actions(
     args: argparse.Namespace,
     exploration: LoadedExploration,
     state: ExplorationState,
+    adapter: BoardLedAdapter | None,
     observer: SessionObserver,
     gm_client: object | None,
 ) -> tuple[ExplorationState, tuple[str, ...], bool]:
@@ -634,7 +715,7 @@ def _handle_freeform_actions(
                 )
         if not current_action:
             message = "Nie podano kolejnej deklaracji freeform."
-            print(message)
+            _print_result(message)
             messages.append(message)
             observer.record("gm_classifier_retry_cancelled", {"attempt": attempt})
             return state, tuple(messages), False
@@ -642,6 +723,7 @@ def _handle_freeform_actions(
             args,
             exploration,
             state,
+            adapter,
             observer,
             gm_client,
             current_action,
@@ -650,6 +732,7 @@ def _handle_freeform_actions(
             active_preparation_effects,
         )
         messages.extend(attempt_messages)
+        state = new_state
         if resolved:
             return new_state, tuple(messages), True
         declaration_thread.append(DeclarationThreadEntry("player", current_action, _thread_outcome_from_messages(attempt_messages)))
@@ -672,6 +755,7 @@ def _handle_freeform_action_once(
     args: argparse.Namespace,
     exploration: LoadedExploration,
     state: ExplorationState,
+    adapter: BoardLedAdapter | None,
     observer: SessionObserver,
     gm_client: object | None,
     freeform_action: str,
@@ -683,7 +767,7 @@ def _handle_freeform_action_once(
     active_preparation_effects = active_preparation_effects if active_preparation_effects is not None else []
     if args.gm_classifier == "none":
         message = "Freeform action wymaga `--gm-classifier groq` albo `--gm-classifier gemini`."
-        print(message)
+        _print_result(message)
         observer.record("gm_classifier_proposal_rejected", {"reason": "classifier_disabled"})
         return state, (message,), False
     try:
@@ -735,12 +819,12 @@ def _handle_freeform_action_once(
         )
         if analysis.analysis_type == declaration_analysis_type.PLAYER_QUESTION:
             message = analysis.player_message or "To jest pytanie o sytuację. Nie wykonuję rzutu ani nie zmieniam stanu sceny."
-            print(message)
+            _print_section("Odpowiedź MG", message)
             observer.record("player_question_answered", {"message": message, "attempt": attempt})
             return state, (message,), False
         if analysis.analysis_type == declaration_analysis_type.NEEDS_CLARIFICATION:
             message = analysis.player_message or "Doprecyzujcie, co dokładnie próbujecie zrobić."
-            print(message)
+            _print_section("Doprecyzowanie", message)
             observer.record(
                 "gm_declaration_needs_clarification",
                 {
@@ -754,7 +838,7 @@ def _handle_freeform_action_once(
             request = replace(request, player_action=analysis.normalized_intent)
         if analysis.analysis_type == declaration_analysis_type.UNSUPPORTED:
             message = analysis.player_message or "Ta deklaracja nie pasuje do aktualnej sceny."
-            print(message)
+            _print_section("Deklaracja odrzucona", message)
             observer.record("gm_declaration_unsupported", {"message": message, "attempt": attempt})
             return state, (message,), False
         proposal = client.classify(request)
@@ -767,14 +851,15 @@ def _handle_freeform_action_once(
         )
         validated = validate_gm_classifier_proposal(proposal, request)
         if proposal.action_flow == gm_action_flow.PREPARATION:
-            messages = _record_preparation_effect(
+            updated_state, messages = _record_preparation_effect(
                 args,
+                state,
                 proposal,
                 validated.challenge.id,
                 active_preparation_effects,
                 observer,
             )
-            return state, messages, False
+            return updated_state, messages, False
         option = challenge_option_from_validated_proposal(validated)
         resource = validated.resources[0] if validated.resources else None
         observer.record(
@@ -796,7 +881,7 @@ def _handle_freeform_action_once(
         )
     except (RuntimeError, KeyError, ValueError) as exc:
         message = f"Nie udało się użyć deklaracji freeform: {exc}"
-        print(message)
+        _print_section("Deklaracja nie przeszła walidacji", message)
         observer.record(
             "declaration_fact_rejected",
             {
@@ -808,13 +893,13 @@ def _handle_freeform_action_once(
         observer.record("gm_classifier_proposal_rejected", {"reason": str(exc), "attempt": attempt})
         retry_message = "Możecie spróbować opisać inne podejście." if args.interactive_freeform else ""
         if retry_message:
-            print(retry_message)
+            _print_block(retry_message)
             return state, (message, retry_message), False
         return state, (message,), False
 
     messages: list[str] = []
     if proposal.player_narration:
-        print(proposal.player_narration)
+        _print_section("Narracja MG", proposal.player_narration)
         messages.append(proposal.player_narration)
     applicable_preview_effects = _applicable_preparation_effects(active_preparation_effects, option)
     if proposal.action_flow == gm_action_flow.COMBINED and proposal.preparation_effect is not None:
@@ -834,8 +919,8 @@ def _handle_freeform_action_once(
         summary = f"{summary} Powód ST: {proposal.difficulty_reason}"
     if resource is not None:
         summary = f"{summary} Zasób: {resource.label}."
-    print(summary)
-    print(preview)
+    _print_section("Propozycja mechaniczna", summary)
+    _print_section("Konsekwencje przed rzutem", preview)
     messages.append(summary)
     messages.append(preview)
     observer.record(
@@ -863,7 +948,7 @@ def _handle_freeform_action_once(
     if decision == GmInterpretationDecision.RECLASSIFY:
         if reclassification_count >= 2:
             message = "Osiągnięto limit reinterpretacji tej samej deklaracji. Wpiszcie korektę podejścia."
-            print(message)
+            _print_result(message)
             messages.append(message)
             return state, tuple(messages), False
         observer.record(
@@ -878,6 +963,7 @@ def _handle_freeform_action_once(
             args,
             exploration,
             state,
+            adapter,
             observer,
             gm_client,
             freeform_action,
@@ -895,7 +981,7 @@ def _handle_freeform_action_once(
         )
     if decision == GmInterpretationDecision.REJECT:
         message = "Odrzucono interpretację MG. Wpiszcie korektę albo doprecyzowanie podejścia."
-        print(message)
+        _print_result(message)
         messages.append(message)
         return state, tuple(messages), False
     if args.gm_dry_run:
@@ -922,6 +1008,7 @@ def _handle_freeform_action_once(
         option,
         resource,
         observer,
+        adapter=adapter,
         preparation_effects=applicable_effects,
     )
     new_state = _apply_post_challenge_preparation_effects(
@@ -1021,7 +1108,7 @@ def _decide_gm_interpretation(
     elif not sys.stdin.isatty():
         decision = GmInterpretationDecision.ACCEPT
     else:
-        print("Decyzja terminalowa: `+` akceptuje, `-` odrzuca, `?` wyjaśnia, `r` prosi o reinterpretację.")
+        _print_section("Decyzja terminalowa", "`+` akceptuje, `-` odrzuca, `?` wyjaśnia, `r` prosi o reinterpretację.")
         while True:
             answer = input("Komenda: ").strip().lower()
             if answer in {"+", "akceptuj", "a", "tak", "t"}:
@@ -1036,7 +1123,7 @@ def _decide_gm_interpretation(
             if answer in {"r", "reinterpretuj", "ponow", "ponów"}:
                 decision = GmInterpretationDecision.RECLASSIFY
                 break
-            print("Nieznana komenda. Dostępne: +, -, ?, r.")
+            _print_result("Nieznana komenda. Dostępne: +, -, ?, r.")
     observer.record(
         _gm_decision_event_type(decision),
         {"challenge_id": challenge_id, "option_id": option_id},
@@ -1060,7 +1147,7 @@ def _explain_gm_interpretation(
     gm_notes: str,
 ) -> None:
     explanation = gm_notes.strip() if gm_notes.strip() else summary
-    print(f"Wyjaśnienie mechaniczne: {explanation}")
+    _print_section("Wyjaśnienie mechaniczne", explanation)
     observer.record(
         "gm_interpretation_explained",
         {
@@ -1098,8 +1185,10 @@ def _confirm_clarified_intent(
     elif not sys.stdin.isatty():
         accepted = False
     else:
-        print(f"Interpretacja do potwierdzenia: {normalized_intent}")
-        print("Decyzja terminalowa: wpisz `+`, żeby użyć tej interpretacji, albo `-`, żeby wrócić do deklaracji.")
+        _print_section(
+            "Interpretacja do potwierdzenia",
+            f"{normalized_intent}\n\nDecyzja terminalowa: wpisz `+`, żeby użyć tej interpretacji, albo `-`, żeby wrócić do deklaracji.",
+        )
         accepted = _read_terminal_decision("Komenda: ", accept_commands={"+", "tak", "t", "akceptuj", "a"}, reject_commands={"-", "nie", "n", "odrzuc", "o"})
     observer.record(
         "gm_declaration_clarification_accepted" if accepted else "gm_declaration_clarification_rejected",
@@ -1120,7 +1209,7 @@ def _read_terminal_decision(
             return True
         if answer in reject_commands:
             return False
-        print(
+        _print_result(
             "Nieznana komenda. Dostępne: "
             f"{', '.join(sorted(accept_commands | reject_commands))}."
         )
@@ -1211,7 +1300,7 @@ def _objectives_completed(objectives) -> bool:
 
 def _finish_exploration_objectives(observer: SessionObserver, messages: list[str]) -> None:
     message = "Cel eksploracji został osiągnięty. Scena zakończona."
-    print(message)
+    _print_section("Koniec sceny", message)
     messages.append(message)
     observer.record("exploration_finished", {"reason": "objectives_completed"})
 
@@ -1259,7 +1348,7 @@ def _select_menu_option(
         return None
     acceptable = [option.slot_position.as_tuple() for option in menu.options]
     observer.record("board_scan_requested", {"phase": "exploration_menu", "acceptable_positions": [list(position) for position in acceptable]})
-    print("Kliknij jedno z podświetlonych pól opcji.")
+    _print_block("Kliknij jedno z podświetlonych pól opcji.")
     selected_position = scan_board(acceptable, timeout_s=args.scan_timeout)
     if selected_position is None:
         observer.record("board_scan_cancelled", {"phase": "exploration_menu"})
@@ -1290,7 +1379,7 @@ def _handle_look_around(
         f"Rozglądacie się po okolicy: {zone.name}. "
         f"Możecie kliknąć do {args.look_around_clicks} pól tej strefy."
     )
-    print(message)
+    _print_section("Rozejrzyj się po okolicy", message)
     observer.record("look_around_started", {"zone_id": zone.id, "limit": args.look_around_clicks})
     feedback_events = 0
     if adapter is not None:
@@ -1312,7 +1401,7 @@ def _handle_look_around(
             continue
         if clicked in zone.positions:
             tile_message = f"Sprawdzacie fragment lokacji {zone.name} na polu {clicked.as_tuple()}. Nie ma tu nic oczywistego."
-            print(tile_message)
+            _print_result(tile_message)
             messages.append(tile_message)
             observer.record(
                 "look_around_tile_checked",
@@ -1320,7 +1409,7 @@ def _handle_look_around(
             )
             continue
         outside_message = "To pole nie należy do aktualnie oglądanej lokacji."
-        print(outside_message)
+        _print_result(outside_message)
         messages.append(outside_message)
     observer.record("look_around_finished", {"zone_id": zone.id})
     return current_state, tuple(messages), feedback_events
@@ -1346,7 +1435,7 @@ def _next_look_around_click(
         return None
     acceptable = [position.as_tuple() for position in zone.positions]
     acceptable.extend(position.as_tuple() for point in visible_exploration_points(state.points) for position in point.positions)
-    print("Kliknij pole w oglądanej strefie albo poczekaj, aby zakończyć rozejrzenie.")
+    _print_block("Kliknij pole w oglądanej strefie albo poczekaj, aby zakończyć rozejrzenie.")
     selected = scan_board(acceptable, timeout_s=args.scan_timeout)
     if selected is None:
         observer.record("board_scan_cancelled", {"phase": "look_around"})
@@ -1363,6 +1452,7 @@ def _resolve_challenge_option(
     option: ExplorationChallengeOption,
     resource: ExplorationResource | None,
     observer: SessionObserver,
+    adapter: BoardLedAdapter | None = None,
     preparation_effects: tuple[RuntimePreparationEffect, ...] = (),
 ) -> tuple[ExplorationState, tuple[str, ...]]:
     actor = next((candidate for candidate in actors if str(candidate.id) == args.leader_id), actors[0])
@@ -1377,13 +1467,13 @@ def _resolve_challenge_option(
     request = D20RollRequest(mode=mode, modifiers=modifiers)
     instruction = roll_instruction(request)
     if preparation_effects:
-        print("Aktywne przygotowania: " + ", ".join(_preparation_summary(effect) for effect in preparation_effects) + ".")
-    print(f"Test podejścia: {option.label}. ST {option.ability_check.dc}. {instruction.message}")
+        _print_block("Aktywne przygotowania: " + ", ".join(_preparation_summary(effect) for effect in preparation_effects) + ".")
+    _print_section("Test podejścia", f"{option.label}. ST {option.ability_check.dc}. {instruction.message}")
     natural_roll = _challenge_roll_for_option(args, option.id)
     if natural_roll is None:
         natural_roll = _read_int_or_default(args, f"Wpisz naturalny wynik testu dla {actor.name}: ", 10)
     else:
-        print(f"Używam wyniku testowego dla {option.label}: {natural_roll}.")
+        _print_block(f"Używam wyniku testowego dla {option.label}: {natural_roll}.")
     roll = resolve_d20_roll(D20RollInput(request, natural_roll))
     result = resolve_challenge_option(
         state,
@@ -1394,7 +1484,7 @@ def _resolve_challenge_option(
         negative_effect_reduction=_preparation_negative_effect_reduction(preparation_effects),
         progress_boost_on_success=_preparation_progress_boost(preparation_effects),
     )
-    print(result.message)
+    _print_section("Wynik podejścia", result.message)
     observer.record(
         "challenge_option_resolved",
         {
@@ -1421,19 +1511,54 @@ def _resolve_challenge_option(
     )
     if result.completed:
         observer.record("challenge_completed", {"challenge_id": challenge.id, "completed_flag": challenge.completed_flag})
-    return result.state, (result.message,)
+    final_state, reveal_messages = _reveal_points_for_completed_challenge(args, result.state, challenge, adapter, observer)
+    return final_state, (result.message, *reveal_messages)
+
+
+def _reveal_points_for_completed_challenge(
+    args: argparse.Namespace,
+    state: ExplorationState,
+    challenge: ExplorationChallenge,
+    adapter: BoardLedAdapter | None,
+    observer: SessionObserver,
+) -> tuple[ExplorationState, tuple[str, ...]]:
+    if not challenge.reveals_on_complete or not challenge_state_for(state, challenge.id).completed:
+        return state, ()
+    new_state, revealed = reveal_exploration_points(state, challenge.reveals_on_complete)
+    messages: list[str] = []
+    for point in revealed:
+        message = f"Odkrywacie nowy punkt w lokacji: {point.name}."
+        _print_section("Nowy punkt odkryty", message)
+        messages.append(message)
+    if revealed:
+        observer.record(
+            "exploration_point_revealed",
+            {
+                "challenge_id": challenge.id,
+                "point_ids": [point.id for point in revealed],
+                "point_names": [point.name for point in revealed],
+            },
+        )
+        if adapter is not None:
+            positions = tuple(position for point in revealed for position in point.positions)
+            adapter.clear()
+            adapter.show_feedback(exploration_setup_feedback(positions, LedColor.INTERACTION_SUCCESS))
+            observer.record("led_feedback_sent", {"phase": "challenge_revealed_points", "challenge_id": challenge.id})
+            if args.wait_for_enter:
+                _pause_for_led_step(args, messages[-1])
+    return new_state, tuple(messages)
 
 
 def _confirm_zone_click(args: argparse.Namespace, state: ExplorationState, destination: ExplorationZone, adapter: BoardLedAdapter | None, observer: SessionObserver, scripts: list[str]) -> bool:
     if scripts:
         clicked = _coordinate_from_script(scripts.pop(0), state)
-        return clicked in destination.positions if clicked else False
+        return clicked == destination.marker_position if clicked else False
     if args.board_backend == "none" or adapter is None:
         return True
     scan_board = getattr(adapter.connection, "scan_board", None)
     if not callable(scan_board):
         return True
-    selected = scan_board([position.as_tuple() for position in destination.positions], timeout_s=args.scan_timeout)
+    selected = scan_board([destination.marker_position.as_tuple()], timeout_s=args.scan_timeout)
     observer.record("board_scan_received", {"phase": "zone_travel_confirmation", "position": list(selected) if selected else None})
     return selected is not None
 
@@ -1514,9 +1639,10 @@ def _select_resource(
         return next((resource for resource in resources if resource.id == selected_id), None)
     if args.board_backend == "none":
         return None
-    print("Możesz użyć jednego zasobu albo nacisnąć Enter bez zasobu:")
+    resource_lines = ["Możesz użyć jednego zasobu albo nacisnąć Enter bez zasobu:"]
     for resource in resources:
-        print(f"- {resource.id}: {_resource_summary(resource)}")
+        resource_lines.append(f"- {resource.id}: {_resource_summary(resource)}")
+    _print_section("Zasoby pasujące do podejścia", "\n".join(resource_lines))
     raw = input("Zasób: ").strip()
     if not raw:
         return None
@@ -1530,9 +1656,10 @@ def _activate_resource(
     resource: ExplorationResource,
     observer: SessionObserver,
 ) -> None:
-    print(f"Aktywowano zasób: {resource.label}.")
-    print(f"Efekt zasobu dla podejścia `{option.label}`: {_resource_summary(resource)}.")
-    print("Za chwilę wykonacie test z uwzględnieniem tego bonusu.")
+    _print_section(
+        "Aktywowano zasób",
+        f"{resource.label}\nEfekt zasobu dla podejścia `{option.label}`: {_resource_summary(resource)}.\nZa chwilę wykonacie test z uwzględnieniem tego bonusu.",
+    )
     observer.record("resource_used", {"challenge_id": challenge.id, "option_id": option.id, "resource_id": resource.id})
     observer.record(
         "resource_activated",
@@ -1552,17 +1679,18 @@ def _activate_resource(
 
 def _record_preparation_effect(
     args: argparse.Namespace,
+    state: ExplorationState,
     proposal,
     challenge_id: str,
     active_preparation_effects: list[RuntimePreparationEffect],
     observer: SessionObserver,
-) -> tuple[str, ...]:
+) -> tuple[ExplorationState, tuple[str, ...]]:
     messages: list[str] = []
     if proposal.player_narration:
-        print(proposal.player_narration)
+        _print_section("Narracja MG", proposal.player_narration)
         messages.append(proposal.player_narration)
     summary = _preparation_proposal_summary(proposal)
-    print(summary)
+    _print_section("Propozycja przygotowania", summary)
     messages.append(summary)
     observer.record(
         "gm_interpretation_proposed",
@@ -1578,11 +1706,104 @@ def _record_preparation_effect(
     decision = _decide_gm_interpretation(args, observer, challenge_id, "preparation", summary, proposal.gm_notes)
     if decision != GmInterpretationDecision.ACCEPT:
         message = "Odrzucono interpretację MG. Wpiszcie korektę albo doprecyzowanie podejścia."
-        print(message)
+        _print_result(message)
         messages.append(message)
-        return tuple(messages)
-    messages.extend(_store_preparation_effect(proposal.preparation_effect, "preparation", active_preparation_effects, observer))
-    return tuple(messages)
+        return state, tuple(messages)
+    updated_state, stored_messages = _apply_or_store_preparation_effect(
+        state,
+        proposal.preparation_effect,
+        "preparation",
+        active_preparation_effects,
+        observer,
+        challenge_id,
+    )
+    messages.extend(stored_messages)
+    return updated_state, tuple(messages)
+
+
+def _apply_or_store_preparation_effect(
+    state: ExplorationState,
+    effect,
+    source_option_id: str,
+    active_preparation_effects: list[RuntimePreparationEffect],
+    observer: SessionObserver,
+    challenge_id: str,
+) -> tuple[ExplorationState, tuple[str, ...]]:
+    if effect is not None and effect.type.value in {"grant_resource", "unlock_option"}:
+        return _apply_immediate_preparation_effect(state, effect, source_option_id, observer, challenge_id)
+    return state, _store_preparation_effect(effect, source_option_id, active_preparation_effects, observer)
+
+
+def _apply_immediate_preparation_effect(
+    state: ExplorationState,
+    effect,
+    source_option_id: str,
+    observer: SessionObserver,
+    challenge_id: str,
+) -> tuple[ExplorationState, tuple[str, ...]]:
+    if effect is None:
+        return state, ()
+    if effect.type.value == "grant_resource" and getattr(effect, "resource_id", None):
+        updated = grant_resource(state, effect.resource_id)
+        message = f"Zasób dodany do ekwipunku: {effect.resource_id}."
+        _print_result(message)
+        observer.record(
+            "resource_granted",
+            {
+                "challenge_id": challenge_id,
+                "option_id": source_option_id,
+                "resource_id": effect.resource_id,
+                "source": effect.source,
+            },
+        )
+        observer.record(
+            "preparation_effect_created",
+            {
+                "source_option_id": source_option_id,
+                "type": effect.type.value,
+                "label": effect.label,
+                "target_tags": list(effect.target_tags),
+                "value": effect.value,
+                "duration": effect.duration.value,
+                "source": effect.source,
+                "resource_id": effect.resource_id,
+                "option_id": getattr(effect, "option_id", None),
+                "applied_immediately": True,
+            },
+        )
+        return updated, (message,)
+    if effect.type.value == "unlock_option" and getattr(effect, "option_id", None):
+        flag = _llm_unlocked_option_flag(effect.option_id)
+        updated = replace(state, flags=set_scene_flag(state.flags, flag, True))
+        message = f"Odblokowano podejście: {effect.option_id}."
+        _print_result(message)
+        observer.record(
+            "option_unlocked",
+            {
+                "challenge_id": challenge_id,
+                "option_id": source_option_id,
+                "unlocked_option_id": effect.option_id,
+                "flag": flag,
+                "source": effect.source,
+            },
+        )
+        observer.record(
+            "preparation_effect_created",
+            {
+                "source_option_id": source_option_id,
+                "type": effect.type.value,
+                "label": effect.label,
+                "target_tags": list(effect.target_tags),
+                "value": effect.value,
+                "duration": effect.duration.value,
+                "source": effect.source,
+                "resource_id": getattr(effect, "resource_id", None),
+                "option_id": effect.option_id,
+                "applied_immediately": True,
+            },
+        )
+        return updated, (message,)
+    return state, _store_preparation_effect(effect, source_option_id, [], observer)
 
 
 def _store_preparation_effect(
@@ -1594,7 +1815,7 @@ def _store_preparation_effect(
     entry = RuntimePreparationEffect(effect, source_option_id)
     active_preparation_effects.append(entry)
     message = f"Przygotowanie zapisane: {effect.label}. Zadziała przy następnej pasującej próbie."
-    print(message)
+    _print_result(message)
     observer.record(
         "preparation_effect_created",
         {
@@ -1783,7 +2004,7 @@ def _apply_post_challenge_preparation_effects(
             before = set(updated.inventory_resource_ids)
             updated = grant_resource(updated, effect.resource_id)
             if effect.resource_id not in before:
-                print(f"Zasób dodany do ekwipunku: {effect.resource_id}.")
+                _print_result(f"Zasób dodany do ekwipunku: {effect.resource_id}.")
                 observer.record(
                     "resource_granted",
                     {
@@ -1796,7 +2017,7 @@ def _apply_post_challenge_preparation_effects(
         if effect.type.value == "unlock_option" and getattr(effect, "option_id", None):
             flag = _llm_unlocked_option_flag(effect.option_id)
             updated = replace(updated, flags=set_scene_flag(updated.flags, flag, True))
-            print(f"Odblokowano podejście: {effect.option_id}.")
+            _print_result(f"Odblokowano podejście: {effect.option_id}.")
             observer.record(
                 "option_unlocked",
                 {
@@ -1868,12 +2089,13 @@ def _join_explanation(preview: str, gm_notes: str) -> str:
 
 
 def _support_roll_modifiers(state: ExplorationState, option: ExplorationChallengeOption) -> tuple[RollModifier, ...]:
-    flag = f"gate_support:{option.id}"
-    if not bool(next((value for key, value in state.flags.values if key == flag), False)):
+    flag = f"challenge_support:{option.id}"
+    legacy_flag = f"gate_support:{option.id}"
+    if not bool(next((value for key, value in state.flags.values if key in {flag, legacy_flag}), False)):
         return ()
     return (
         RollModifier(
-            "Przygotowanie przy bramie",
+            "Przygotowanie do wyzwania",
             2,
             RollModifierType.SITUATIONAL,
             stacking_key=flag,
@@ -1901,13 +2123,13 @@ def _handle_exploration_point(
     observer: SessionObserver,
 ) -> tuple[ExplorationState, tuple[str, ...], int]:
     message = point.description or f"Odnaleziono punkt: {point.name}."
-    print(message)
+    _print_section(f"Punkt eksploracji: {point.name}", message)
     observer.record("exploration_point_clicked", {"point_id": point.id, "zone_id": point.zone_id})
     new_state = state
     if point.id == "old_camp_tools":
         new_state = grant_resource(state, "saw")
         found_message = "Drużyna zabiera starą piłę. Odblokowuje to nowe podejście przy bramie."
-        print(found_message)
+        _print_result(found_message)
         observer.record("resource_found", {"point_id": point.id, "resource_id": "saw"})
         messages = (message, found_message)
     else:
@@ -1933,16 +2155,16 @@ def _resolve_search_option(
 ) -> tuple[ExplorationState, tuple[str, ...]]:
     if zone.id in state.exhausted_search_zones:
         message = f"Ta strefa była już badana: {zone.name}."
-        print(message)
+        _print_result(message)
         observer.record("zone_search_exhausted", {"zone_id": zone.id})
         return state, (message,)
     request = D20RollRequest()
     instruction = _party_check_instruction(actors, zone.search_ability, zone.search_skill)
-    print(f"Test drużynowy Spostrzegawczości w strefie {zone.name}. {instruction}")
+    _print_section("Test drużynowy", f"Spostrzegawczość w strefie {zone.name}. {instruction}")
     observer.record("party_check_requested", {"zone_id": zone.id, "dc": zone.search_dc, "actors": [str(actor.id) for actor in actors]})
     rolls = _party_check_inputs(args, actors, request, ability=zone.search_ability, skill=zone.search_skill)
     result = resolve_zone_search(state, zone, rolls)
-    print(result.message)
+    _print_result(result.message)
     observer.record(
         "party_check_resolved",
         {
@@ -1984,10 +2206,10 @@ def _apply_search_preparation_bonus(
     if not options:
         return state
     selected = random.Random(args.exploration_seed).choice(options)
-    flag_key = f"gate_support:{selected.id}"
+    flag_key = f"challenge_support:{selected.id}"
     new_state = replace(state, flags=set_scene_flag(state.flags, flag_key, True))
     message = f"Przygotowanie pomaga przy podejściu: {selected.label} (+2)."
-    print(message)
+    _print_result(message)
     observer.record("challenge_support_discovered", {"challenge_id": challenge.id, "option_id": selected.id, "flag_key": flag_key})
     return new_state
 
@@ -2002,7 +2224,7 @@ def _resolve_check_option(args: argparse.Namespace, actors: tuple[Actor, ...], s
     if option.allow_help and args.helper_id:
         request = D20RollRequest(mode=RollMode.ADVANTAGE, modifiers=modifiers)
     instruction = roll_instruction(request)
-    print(f"Test: {option.label}. {instruction.message}")
+    _print_section("Test cechy", f"{option.label}. {instruction.message}")
     natural_roll = _read_int_or_default(args, f"Wpisz naturalny wynik testu dla {actor.name}: ", 10)
     result = resolve_party_check((PartyCheckInput(actor, natural_roll, request),), option.ability_check.dc)
     flags = state.flags
@@ -2014,7 +2236,7 @@ def _resolve_check_option(args: argparse.Namespace, actors: tuple[Actor, ...], s
         message = option.success_message or option.message or "Test zakończony sukcesem."
     else:
         message = option.failure_message or "Test zakończony porażką."
-    print(message)
+    _print_result(message)
     observer.record("party_check_resolved", {"option_id": option.id, "success": result.success, "winner_id": str(actor.id), "winning_total": result.winning_roll.total})
     return replace(state, flags=flags), (message,)
 
