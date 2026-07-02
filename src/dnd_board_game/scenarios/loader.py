@@ -949,9 +949,16 @@ def _validate_exploration(definition: ScenarioDefinition) -> None:
                 raise ValueError(
                     f"exploration challenge {challenge.id}.reveals_on_complete references unknown point: {point_id}."
                 )
-            if point.zone_id != challenge.zone_id:
+            point_zone = next((zone for zone in definition.exploration_zones if zone.id == point.zone_id), None)
+            reveal_unlocked_by_challenge = (
+                point_zone is not None
+                and point_zone.available_if_flag == challenge.completed_flag
+                and point_zone.available_if_value is True
+            )
+            if point.zone_id != challenge.zone_id and not reveal_unlocked_by_challenge:
                 raise ValueError(
-                    f"exploration challenge {challenge.id}.reveals_on_complete references point outside challenge zone: {point_id}."
+                    f"exploration challenge {challenge.id}.reveals_on_complete references point outside challenge zone "
+                    f"or challenge-unlocked zone: {point_id}."
                 )
         _validate_llm_challenge_policy(challenge, resource_ids)
         option_ids = {option.id for option in challenge.options}

@@ -6,6 +6,9 @@
       "name": "Zamknięta brama",
       "progress_required": 3,
       "completed_flag": "gate_passed",
+      "reveals_on_complete": [
+        "wounded_scout"
+      ],
       "llm_policy": {
         "allowed_local_skills": [
           "crafting",
@@ -326,9 +329,6 @@
       "name": "Przeszukanie dziedzińca",
       "progress_required": 2,
       "completed_flag": "courtyard_searched",
-      "reveals_on_complete": [
-        "wounded_scout"
-      ],
       "llm_policy": {
         "allowed_local_skills": [
           "tracking"

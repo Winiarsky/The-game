@@ -144,6 +144,7 @@ def test_load_abandoned_watchtower_builds_exploration_scene():
     assert len(exploration.challenges) == 2
     challenge = next(item for item in exploration.challenges if item.id == "closed_gate")
     assert challenge.completed_flag == "gate_passed"
+    assert challenge.reveals_on_complete == ("wounded_scout",)
     assert challenge.llm_policy.allowed_local_skills == ("crafting", "lockpicking")
     assert "heavy_force" in challenge.llm_policy.allowed_approach_tags
     assert "bribe" not in challenge.llm_policy.allowed_approach_tags
@@ -163,7 +164,7 @@ def test_load_abandoned_watchtower_builds_exploration_scene():
     courtyard_challenge = next(item for item in exploration.challenges if item.id == "courtyard_search")
     assert courtyard_challenge.zone_id == "courtyard"
     assert courtyard_challenge.completed_flag == "courtyard_searched"
-    assert courtyard_challenge.reveals_on_complete == ("wounded_scout",)
+    assert courtyard_challenge.reveals_on_complete == ()
     assert "listening" in courtyard_challenge.llm_policy.allowed_approach_tags
     assert "heavy_force" not in courtyard_challenge.llm_policy.allowed_approach_tags
     wounded_scout = next(point for point in exploration.points if point.id == "wounded_scout")
@@ -207,7 +208,24 @@ def test_exploration_challenge_reveal_rejects_unknown_point(tmp_path):
 
 def test_exploration_challenge_reveal_rejects_point_from_other_zone(tmp_path):
     data = _abandoned_watchtower_data_without_refs()
-    data["exploration"]["challenges"][0]["reveals_on_complete"] = ["hidden_cache"]
+    data["exploration"]["zones"].append(
+        {
+            "id": "remote_cellar",
+            "name": "Odległa piwnica",
+            "positions": [[19, 20]],
+            "available_if_flag": "cellar_found",
+        }
+    )
+    data["exploration"]["points"].append(
+        {
+            "id": "remote_secret",
+            "name": "Odległy sekret",
+            "zone_id": "remote_cellar",
+            "positions": [[19, 20]],
+            "visibility": "hidden",
+        }
+    )
+    data["exploration"]["challenges"][0]["reveals_on_complete"] = ["remote_secret"]
     scenario_path = tmp_path / "bad_reveal_zone.json"
     scenario_path.write_text(json.dumps(data), encoding="utf-8")
 

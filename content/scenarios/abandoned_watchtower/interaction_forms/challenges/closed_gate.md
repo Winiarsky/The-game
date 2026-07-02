@@ -15,12 +15,37 @@ Czy jest jawna od początku? tak
 
 ## 4. Opis Dla Graczy
 Stary trakt urywa się przed zamkniętą bramą opuszczonej strażnicy, której dwa niskie, omszałe filary podtrzymują ciężkie skrzydła zbite z grubych, napuchniętych od wilgoci desek. Zardzewiałe okucia trzymają się ledwie na słowo honoru, stare gwoździe wystają pod dziwnymi kątami, a dolną część bramy oplatają ciernie, mokre pnącza i gęste zarośla, jakby natura przez lata próbowała wciągnąć całe przejście z powrotem w ziemię. Przez wąskie szczeliny między deskami widać tylko ciemność, omszałe kamienie i fragment zawalonej konstrukcji po drugiej stronie. W powietrzu czuć pleśń, rdzę i starą wilgoć, a każde mocniejsze dotknięcie bramy wywołuje skrzypienie, które w martwej ciszy brzmi niepokojąco głośno.
+
 ## 5. Informacje Dla MG / LLM
-Brama jest drewniana, stara i napuchnieta od wilgoci, ale nadal trzyma sie calkiem solidnie przez metalowe okucia, zardzewiale zawiasy i drewniany rygiel po wewnetrznej stronie. Przy dokladniejszym zbadaniu mozna odkryc wyryta pieczec zakladu kowalskiego oraz date wykonania. Po znaku i dacie widac, ze brama ma okolo 20 lat.
+Krótki opis kontekstu dla MG/LLM:
+Brama jest pierwszą realną przeszkodą eksploracyjną sceny. Ma sprawdzić, czy drużyna próbuje siły, sprytu, ostrożnego badania, narzędzi albo obejścia. Nie jest zagadką z jednym poprawnym rozwiązaniem.
 
-Najsłabszym punktem bramy sa zawiasy. Nie jest to od razu oczywiste dla graczy. Z tylu, po stronie dziedzinca, znajduje sie drewniany rygiel, ktory utrudnia wywazenie bramy. Jesli ktos przedostanie sie na druga strone, moze zdjac rygiel i wtedy dalsze otwarcie bramy bedzie duzo latwiejsze.
+### Prawda Scenariusza
+- Brama jest drewniana, stara i napuchnięta od wilgoci, ale nadal trzyma się solidnie dzięki metalowym okuciom, zardzewiałym zawiasom i drewnianemu ryglowi po wewnętrznej stronie.
+- Najsłabszym punktem bramy są zawiasy. Nie jest to od razu oczywiste dla graczy.
+- Z tyłu, po stronie dziedzińca, znajduje się drewniany rygiel, który utrudnia siłowe wyważenie bramy. Jeśli ktoś przedostanie się na drugą stronę, może zdjąć rygiel i wtedy dalsze otwarcie bramy będzie dużo łatwiejsze.
+- Zamek jest zatarty, więc da się próbować narzędzi złodziejskich, ale jest to trudniejsze niż przy sprawnym mechanizmie.
+- Przy dokładniejszym zbadaniu można odkryć wyrytą pieczęć zakładu kowalskiego oraz datę wykonania. Po znaku i dacie widać, że brama ma około 20 lat.
+- Ziemia pod bramą to twardy kamień/beton, więc szybki podkop nie ma sensu w tej scenie.
+- Na górze bramy są słabo widoczne z dołu kolce, niebezpieczne przy przechodzeniu górą.
+- Obok bramy jest solidny murowany płot, po którym można spróbować wejść, ale grozi to poślizgnięciem albo hałasem.
 
-Brama jest zamknieta, a sam zamek jest zatarty, co utrudnia otwarcie narzedziami zlodziejskimi. Ziemia pod brama to twardy kamien/beton, wiec szybki podkop nie ma sensu w tej scenie. Na gorze bramy sa slabo widoczne z dolu kolce, niebezpieczne przy przechodzeniu gora. Obok bramy jest solidny murowany plot, po ktorym mozna sprobowac wejsc, ale tez grozi poslizgnieciem albo halasem.
+### Zasady Prowadzenia
+- Nie kanalizuj graczy do jednej gotowej opcji. LLM/MG ma interpretować deklarację drużyny i dobrać mechanikę do opisu.
+- Nagradzaj wcześniejsze badanie bramy, sensowne użycie narzędzi, asekurację i ciche działanie.
+- Siłowe działania mogą szybko dawać duży postęp, ale zwykle generują hałas.
+- Ciche, precyzyjne działania powinny być mniej ryzykowne pod względem hałasu, ale mogą wymagać lepszego opisu, narzędzia albo trudniejszego testu.
+- Nie zdradzaj od razu, że zawiasy są najsłabszym punktem. Ujawnij to po badaniu bramy, dobrym opisie działania albo sukcesie odpowiedniego testu.
+- Jeśli gracze pytają o ryzyko, można opisać je fabularnie: skrzypienie, mokre drewno, kolce na górze, zatarty zamek, niestabilne okucia.
+- Fail-forward: porażka nie powinna blokować sceny. Może dawać mniejszy postęp, hałas, stratę czasu, drobną ranę albo komplikację.
+
+### Wiedza I Ograniczenia
+- Brama nie ma magicznego hasła ani sekretnego przycisku otwierającego przejście.
+- Szybki podkop jest niewykonalny w tej scenie z powodu twardego podłoża i ograniczonego czasu.
+- Podpalenie bramy jest zablokowane jako szybkie rozwiązanie: wilgotne drewno i zarośla dadzą głównie dym, hałas i ryzyko, nie natychmiastowe przejście.
+- Latanie, teleportacja albo inne magiczne obejścia działają tylko wtedy, gdy drużyna faktycznie ma odpowiedni czar, zasób albo efekt.
+- Zwykła broń bez narzędzi i czasu nie powinna tworzyć dużej, bezpiecznej dziury w bramie.
+- Jeśli gracze używają nieistniejącego zasobu, LLM/MG powinien poprosić o doprecyzowanie albo odrzucić założenie, zamiast przyznawać ten zasób.
 
 ## 6. Rola Interakcji W Scenie
 - [ ] cel sceny

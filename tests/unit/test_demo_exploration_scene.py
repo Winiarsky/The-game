@@ -147,27 +147,6 @@ def _gm_force_gate_completion_proposal():
     )
 
 
-def _gm_courtyard_search_completion_proposal():
-    return GmClassifierProposal.model_validate(
-        {
-            "intent_type": "challenge_attempt",
-            "target_challenge_id": "courtyard_search",
-            "approach_label": "Sprawdzenie śladów na dziedzińcu",
-            "approach_tags": ["tracking", "scouting"],
-            "ability": "wisdom",
-            "skill": "survival",
-            "difficulty_tier": "medium",
-            "difficulty_reason": "Ślady są widoczne, ale teren jest zabałaganiony.",
-            "dc": 15,
-            "progress_on_success": 2,
-            "progress_on_failure": 1,
-            "used_resource_ids": [],
-            "consequences": [],
-            "player_narration": "Śledzicie krew, błoto i przesunięte deski na dziedzińcu.",
-        }
-    )
-
-
 def _gm_unsupported_proposal():
     return GmClassifierProposal.model_validate(
         {
@@ -421,33 +400,24 @@ def test_demo_exploration_scene_zone_travel_preview_uses_only_markers(tmp_path):
     assert not any(len(positions) > 1 and (9, 10) in positions for positions in set_led_positions)
 
 
-def test_demo_exploration_scene_courtyard_challenge_reveals_wounded_scout(tmp_path):
+def test_demo_exploration_scene_gate_completion_reveals_wounded_scout(tmp_path):
     result = run_demo(
         _args(
             tmp_path,
             "--gm-classifier",
             "groq",
             "--freeform-action",
-            "Wyważamy bramę, a potem sprawdzamy ślady na dziedzińcu.",
+            "Wyważamy bramę.",
             "--gm-accept",
             "yes",
             "--exploration-script",
             "zone:gate",
-            "--exploration-script",
-            "zone:courtyard",
-            "--exploration-script",
-            "zone:courtyard",
-            "--exploration-script",
-            "zone:courtyard",
             "--challenge-roll",
             "gm_generated=15",
             "--max-steps",
-            "8",
+            "3",
         ),
-        gm_client=FakeGmClient([
-            _gm_force_gate_completion_proposal(),
-            _gm_courtyard_search_completion_proposal(),
-        ]),
+        gm_client=FakeGmClient(_gm_force_gate_completion_proposal()),
     )
 
     events = _events(result.observation_path)

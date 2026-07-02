@@ -10,6 +10,7 @@ Cel: autor scenariusza opisuje interakcję po ludzku, a implementacja przekłada
 - Każdy efekt zmieniający stan gry musi mieć znany prymityw mechaniczny, np. `set_flag`, `grant_resource`, `reveal_information`, `start_challenge`, `offer_trade`.
 - Globalne intencje powinny pochodzić z katalogu systemowego, a lokalna interakcja tylko je dopuszcza, blokuje albo ogranicza przez `intent_permissions`.
 - Content szczegółowy należy do scenariusza, nie do kodu runtime.
+- Sekcja `Informacje Dla MG / LLM` zawsze powinna być rozbita na `Prawda Scenariusza`, `Zasady Prowadzenia` oraz `Wiedza I Ograniczenia`.
 - Jeśli czegoś nie da się jeszcze wyrazić istniejącym prymitywem, formularz powinien to ujawnić jako zadanie implementacyjne.
 
 ## Pełny Formularz
@@ -32,11 +33,28 @@ Czy jest jawna od początku? tak/nie/warunkowo
 Co gracze widzą/słyszą/czują od razu?
 
 ## 5. Informacje Dla MG / LLM
-Co jest prawdą za kulisami?
-Czego NPC/obiekt chce?
-Czego się boi?
-Czego nie wie?
-Jakie są ważne ograniczenia świata?
+Krótki opis kontekstu dla MG/LLM:
+
+### Prawda Scenariusza
+Fakty, które są obiektywnie prawdziwe w scenariuszu, nawet jeśli gracze jeszcze ich nie znają.
+- fakt:
+- fakt:
+- fakt:
+
+### Zasady Prowadzenia
+Jak MG/LLM ma prowadzić tę interakcję przy stole.
+- co nagradzać:
+- czego nie zdradzać od razu:
+- kiedy dawać podpowiedzi:
+- jaki ton utrzymać:
+
+### Wiedza I Ograniczenia
+Co NPC/obiekt/lokacja wie, czego nie wie i czego nie może zrobić.
+- czego NPC/obiekt chce:
+- czego się boi:
+- czego nie wie:
+- jakie są ważne ograniczenia świata:
+- jakie założenia graczy trzeba odrzucać:
 
 ## 6. Rola Interakcji W Scenie
 Po co ta interakcja istnieje?
@@ -210,7 +228,10 @@ Typ:
 Nazwa:
 Gdzie:
 Opis dla graczy:
-Prawda dla MG:
+Informacje dla MG / LLM:
+Prawda scenariusza:
+Zasady prowadzenia:
+Wiedza i ograniczenia:
 Po co istnieje:
 Co gracze mogą próbować:
 Czego nie wolno / czego tu nie ma:

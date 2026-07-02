@@ -126,10 +126,10 @@ def test_resource_locked_option_is_hidden_until_resource_is_owned():
     assert "saw_picket" in {option.id for option in available_challenge_options(with_saw, challenge)}
 
 
-def test_courtyard_challenge_reveals_hidden_npc_after_completion():
+def test_gate_challenge_reveals_hidden_npc_after_completion():
     state = _state()
-    challenge = next(item for item in state.challenges if item.id == "courtyard_search")
-    option = next(item for item in challenge.options if item.id == "inspect_tracks_courtyard")
+    challenge = next(item for item in state.challenges if item.id == "closed_gate")
+    option = next(item for item in challenge.options if item.id == "force_gate")
 
     result = resolve_challenge_option(state, challenge, option, _roll(12))
     revealed_state, revealed = reveal_exploration_points(result.state, challenge.reveals_on_complete)
