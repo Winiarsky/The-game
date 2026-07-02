@@ -8,7 +8,8 @@
       "completed_flag": "gate_passed",
       "llm_policy": {
         "allowed_local_skills": [
-          "crafting"
+          "crafting",
+          "lockpicking"
         ],
         "allowed_approach_tags": [
           "heavy_force",
@@ -18,17 +19,27 @@
           "lever",
           "scouting",
           "picket",
-          "saw"
+          "saw",
+          "lockpicking",
+          "rusted_lock",
+          "rusted_hinge",
+          "weak_point",
+          "inner_bolt",
+          "wall_climb",
+          "spikes"
         ],
         "allowed_complications": [
           "alarm_w_strażnicy",
           "bolesny_upadek",
           "drzazgi",
           "jammed_gate",
+          "jammed_lock",
+          "kolce_na_bramie",
           "narastający_hałas",
           "minor_injury",
           "ryzyko_upadku",
           "stracony_czas",
+          "przestraszony_zwiadowca",
           "uszkodzony_mechanizm",
           "zaklinowana_sztacheta",
           "ślepy_trop"
@@ -63,17 +74,17 @@
             "easy": {
               "dc": 12,
               "label": "łatwe",
-              "guidance": "Podejście wykorzystuje oczywistą słabość bramy, dobre przygotowanie albo bezpieczny sposób działania."
+              "guidance": "Podejście wykorzystuje odkrytą słabość bramy, dobre przygotowanie, mur obok albo dostęp do wewnętrznego rygla."
             },
             "medium": {
               "dc": 15,
               "label": "średnie",
-              "guidance": "Podejście jest naturalne dla tej przeszkody, ale wymaga wysiłku, precyzji albo sprawności."
+              "guidance": "Podejście jest naturalne dla starej drewnianej bramy z metalowymi okuciami, ale wymaga wysiłku, precyzji albo sprawności."
             },
             "hard": {
               "dc": 18,
               "label": "trudne",
-              "guidance": "Podejście jest możliwe, ale ryzykowne, nieoptymalne albo idzie pod naturę przeszkody."
+              "guidance": "Podejście jest możliwe, ale ryzykowne, nieoptymalne, ignoruje rygiel po drugiej stronie, zatarty zamek, kolce albo twarde podłoże."
             }
           },
           "allowed_tiers": [
@@ -83,9 +94,9 @@
           ],
           "default_tier": "medium",
           "guidance": [
-            "Oceniaj deklarację graczy względem tej konkretnej starej, zarośniętej bramy, a nie względem gotowych rozwiązań.",
-            "Dobre narzędzie, wcześniejsze przygotowanie albo wykorzystanie widocznej słabości może obniżyć tier.",
-            "Działanie szybkie, głośne, nieprecyzyjne albo przeciwne naturze przeszkody powinno podnieść tier."
+            "Oceniaj deklarację graczy względem tej konkretnej starej drewnianej bramy z metalowymi okuciami, zardzewiałym zamkiem, skorodowanymi zawiasami, kolcami na górze i ryglem po wewnętrznej stronie.",
+            "Dobre narzędzie, wcześniejsze przygotowanie, zdjęcie rygla od środka albo wykorzystanie odkrytej słabości może obniżyć tier.",
+            "Działanie szybkie, głośne, nieprecyzyjne albo ignorujące zatarty zamek, kolce, twarde podłoże lub rygiel po drugiej stronie powinno podnieść tier."
           ]
         },
         "progress_on_success_range": [
@@ -110,26 +121,34 @@
         ]
       },
       "llm_context": {
-        "summary": "Zamknięta, stara brama blokuje wejście na dziedziniec. Da się ją uszkodzić, podważyć, przeciąć, obejść albo wspiąć się po uszkodzonych przęsłach.",
+        "summary": "Zamknięta, stara drewniana brama blokuje wejście na dziedziniec. Ma metalowe okucia, skorodowane zawiasy, zatarty zamek, kolce na górze i drewniany rygiel po wewnętrznej stronie. Podłoże pod bramą jest twarde, więc szybki podkop nie ma sensu.",
         "reasonable_approaches": [
           "wyważenie",
           "wspinaczka",
-          "podważenie mechanizmu",
+          "podważenie zawiasów",
+          "otwarcie zatartego zamka",
           "przecięcie drewna",
-          "poszukanie obejścia",
-          "poszerzenie szpary"
+          "przejście murem obok",
+          "poszerzenie szpary",
+          "zbadanie słabych punktów",
+          "przedostanie się na drugą stronę i zdjęcie rygla"
         ],
         "impossible_approaches": [
           "przelot na linie bez magii",
           "zrobienie tarana ze świeżo ściętego drzewa",
           "otwarcie nieistniejącym magicznym przełącznikiem",
-          "szybki podkop pod kamienną bramą bez odpowiednich narzędzi i czasu"
+          "szybki podkop pod bramą przez twarde kamienne albo betonowe podłoże",
+          "magiczne hasło otwierające bramę",
+          "wyrąbanie dużej dziury zwykłą bronią bez odpowiednich narzędzi i czasu",
+          "szybkie spalenie bramy w wilgoci bez dużego dymu i hałasu"
         ],
         "risk_notes": [
           "wyważanie jest głośne",
-          "wspinaczka grozi upadkiem",
-          "podważanie może zaklinować mechanizm",
-          "podkop w tej scenie byłby zbyt wolny na szybkie sforsowanie bramy"
+          "wspinaczka grozi upadkiem albo skaleczeniem o kolce",
+          "zatarty zamek może się zaklinować",
+          "podważanie zawiasów może zaklinować mechanizm",
+          "duży hałas może zaniepokoić rannego zwiadowcę po drugiej stronie sceny",
+          "emblemat kowala jest informacją, nie zasobem, chyba że późniejszy content pozwoli go fizycznie zabrać"
         ]
       },
       "options": [
@@ -137,7 +156,7 @@
           "id": "force_gate",
           "label": "Rozwal bramę",
           "color": "danger",
-          "description": "Spróbujcie wyłamać spróchniałe rygle siłą.",
+          "description": "Spróbujcie siłą sforsować stare drewniane skrzydła mimo rygla po wewnętrznej stronie.",
           "ability_check": {
             "ability": "strength",
             "skill": "athletics",
@@ -164,7 +183,7 @@
           "id": "vault_gate",
           "label": "Przejdź górą",
           "color": "warning",
-          "description": "Spróbujcie przedostać się górą przez zniszczone przęsła.",
+          "description": "Spróbujcie przedostać się górą przez bramę, uważając na kolce i śliskie deski.",
           "ability_check": {
             "ability": "dexterity",
             "skill": "acrobatics",
@@ -174,20 +193,21 @@
           "progress_on_failure": 1,
           "failure_noise": 1,
           "failure_complication": "ryzyko_upadku",
-          "critical_failure_complication": "bolesny_upadek",
+          "critical_failure_complication": "kolce_na_bramie",
           "tags": [
             "climbing",
-            "quiet"
+            "quiet",
+            "spikes"
           ],
-          "success_message": "Znajdujecie bezpieczniejszą drogę po przęsłach.",
-          "failure_message": "Przęsła są śliskie, ale odkrywacie, którędy da się wejść wyżej.",
-          "critical_failure_message": "Przęsło pęka pod ciężarem. Robicie częściowy postęp, ale ktoś boleśnie ląduje przy bramie."
+          "success_message": "Znajdujecie bezpieczniejszą drogę nad bramą.",
+          "failure_message": "Deski są śliskie i kolce utrudniają przejście, ale odkrywacie, którędy da się wejść wyżej.",
+          "critical_failure_message": "Ktoś zahacza o kolce albo zsuwa się z bramy. Robicie częściowy postęp, ale sytuacja robi się boleśnie ryzykowna."
         },
         {
           "id": "lever_gate",
-          "label": "Podważ mechanizm",
+          "label": "Podważ zawiasy",
           "color": "interactive",
-          "description": "Zbudujcie prostą dźwignię z desek i kamieni, żeby podważyć skrzydło bramy.",
+          "description": "Zbudujcie prostą dźwignię z desek i kamieni, żeby podważyć skorodowane zawiasy albo skrzydło bramy.",
           "ability_check": {
             "ability": "intelligence",
             "skill": "crafting",
@@ -199,17 +219,18 @@
           "critical_failure_complication": "uszkodzony_mechanizm",
           "tags": [
             "lever",
-            "quiet"
+            "quiet",
+            "rusted_hinge"
           ],
-          "success_message": "Prowizoryczna dźwignia działa. Brama odchyla się dość szeroko.",
-          "failure_message": "Dźwignia się klinuje, ale mechanizm trochę puszcza.",
-          "critical_failure_message": "Mechanizm zgrzyta i blokuje się krzywo. Macie postęp, ale dalsza praca będzie trudniejsza."
+          "success_message": "Prowizoryczna dźwignia łapie pod skorodowany zawias. Brama odchyla się dość szeroko.",
+          "failure_message": "Dźwignia się klinuje, ale zawias trochę puszcza.",
+          "critical_failure_message": "Zawias zgrzyta i blokuje się krzywo. Macie postęp, ale dalsza praca będzie trudniejsza."
         },
         {
           "id": "find_way_around",
-          "label": "Poszukaj obejścia",
+          "label": "Wejdź murem obok",
           "color": "marker",
-          "description": "Sprawdźcie mur i zarośla, szukając bocznego wejścia.",
+          "description": "Sprawdźcie solidny murowany płot przy bramie i spróbujcie przejść nim obok zamkniętego przejścia.",
           "ability_check": {
             "ability": "wisdom",
             "skill": "survival",
@@ -221,11 +242,36 @@
           "critical_failure_complication": "ślepy_trop",
           "tags": [
             "scouting",
+            "quiet",
+            "wall_climb"
+          ],
+          "success_message": "Mur obok bramy daje praktyczne obejście.",
+          "failure_message": "Nie przechodzicie od razu, ale lepiej rozumiecie układ muru i możliwe punkty podparcia.",
+          "critical_failure_message": "Tropicie fałszywy ślad albo osuwacie luźny fragment muru. Tracicie czas, ale nadal zawężacie możliwości."
+        },
+        {
+          "id": "lockpick_gate",
+          "label": "Otwórz zamek",
+          "color": "warning",
+          "description": "Spróbujcie otworzyć zatarty, zardzewiały zamek narzędziami złodziejskimi albo podobnym precyzyjnym sposobem.",
+          "ability_check": {
+            "ability": "dexterity",
+            "skill": "sleight_of_hand",
+            "dc": 15
+          },
+          "progress_on_success": 2,
+          "progress_on_failure": 0,
+          "failure_noise": 1,
+          "failure_complication": "jammed_lock",
+          "critical_failure_complication": "uszkodzony_mechanizm",
+          "tags": [
+            "lockpicking",
+            "rusted_lock",
             "quiet"
           ],
-          "success_message": "Znajdujecie częściowo ukryte przejście przy murze.",
-          "failure_message": "Nie znajdujecie wejścia od razu, ale lepiej rozumiecie układ muru.",
-          "critical_failure_message": "Tropicie fałszywy ślad. Tracicie czas, ale nadal zawężacie możliwości."
+          "success_message": "Zatarty zamek ustępuje i brama robi się wyraźnie łatwiejsza do otwarcia.",
+          "failure_message": "Zamek ani drgnie. Mechanizm skrzypi i grozi zaklinowaniem.",
+          "critical_failure_message": "Narzędzie szarpie zamek w złą stronę. Mechanizm klinuje się i dalsze otwieranie będzie trudniejsze."
         },
         {
           "id": "break_picket",

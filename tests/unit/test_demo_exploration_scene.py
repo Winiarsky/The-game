@@ -3,9 +3,13 @@ import sys
 import time
 
 from dnd_board_game.hardware import BoardLedAdapter
-from dnd_board_game.llm import GmClassifierProposal, GmDeclarationAnalysis, GmDeclarationAnalysisType
+from dnd_board_game.combat import SceneFlags
+from dnd_board_game.exploration import ExplorationState, reveal_exploration_points
+from dnd_board_game.llm import GmClassifierProposal, GmDeclarationAnalysis, GmDeclarationAnalysisType, NpcInteractionProposal
 from dnd_board_game.runtime import demo_exploration_scene
 from dnd_board_game.runtime.demo_exploration_scene import build_parser, run_demo
+from dnd_board_game.scenarios import build_exploration_from_scenario, load_scenario
+from dnd_board_game.runtime.session_observer import SessionObserver
 from dnd_board_game.world import Coordinate
 
 
@@ -62,6 +66,18 @@ class FakeGmClient:
         return self.proposals[0]
 
 
+class FakeNpcClient:
+    model = "fake-npc"
+
+    def __init__(self, proposal):
+        self.proposal = proposal
+        self.requests = []
+
+    def interact_npc(self, request):
+        self.requests.append(request)
+        return self.proposal
+
+
 def _args(tmp_path, *extra):
     parser = build_parser()
     return parser.parse_args(
@@ -106,6 +122,48 @@ def _gm_rope_proposal():
             "used_resource_ids": ["rope"],
             "consequences": [{"trigger": "failure", "type": "add_noise", "value": 1}],
             "player_narration": "Lina łapie o występ muru.",
+        }
+    )
+
+
+def _gm_force_gate_completion_proposal():
+    return GmClassifierProposal.model_validate(
+        {
+            "intent_type": "challenge_attempt",
+            "target_challenge_id": "closed_gate",
+            "approach_label": "Wyważenie bramy",
+            "approach_tags": ["heavy_force", "noise"],
+            "ability": "strength",
+            "skill": "athletics",
+            "difficulty_tier": "medium",
+            "difficulty_reason": "Stara brama może ustąpić pod mocnym naporem, ale będzie głośno.",
+            "dc": 15,
+            "progress_on_success": 3,
+            "progress_on_failure": 1,
+            "used_resource_ids": [],
+            "consequences": [{"trigger": "failure", "type": "add_noise", "value": 1}],
+            "player_narration": "Napieracie na skrzydła bramy, próbując złamać stary rygiel.",
+        }
+    )
+
+
+def _gm_courtyard_search_completion_proposal():
+    return GmClassifierProposal.model_validate(
+        {
+            "intent_type": "challenge_attempt",
+            "target_challenge_id": "courtyard_search",
+            "approach_label": "Sprawdzenie śladów na dziedzińcu",
+            "approach_tags": ["tracking", "scouting"],
+            "ability": "wisdom",
+            "skill": "survival",
+            "difficulty_tier": "medium",
+            "difficulty_reason": "Ślady są widoczne, ale teren jest zabałaganiony.",
+            "dc": 15,
+            "progress_on_success": 2,
+            "progress_on_failure": 1,
+            "used_resource_ids": [],
+            "consequences": [],
+            "player_narration": "Śledzicie krew, błoto i przesunięte deski na dziedzińcu.",
         }
     )
 
@@ -280,55 +338,22 @@ def _gm_picket_with_saw_resource_proposal():
     return _gm_picket_without_resource_proposal().model_copy(update={"used_resource_ids": ("saw",)})
 
 
-def test_demo_exploration_scene_runs_scripted_zone_travel_and_search(tmp_path):
-    result = run_demo(
-        _args(
-            tmp_path,
-            "--legacy-option-menu",
-            "--exploration-script",
-            "zone:gate",
-            "--exploration-script",
-            "confirm",
-            "--exploration-script",
-            "zone:courtyard",
-            "--exploration-script",
-            "zone:courtyard",
-            "--exploration-script",
-            "zone:courtyard",
-            "--exploration-script",
-            "option:search_courtyard",
-            "--party-check-roll",
-            "hero=10",
-            "--party-check-roll",
-            "rogue=10",
-        )
-    )
-
-    events = _events(result.observation_path)
-    event_types = [event["event_type"] for event in events]
-    assert result.final_state.party_position.zone_id == "courtyard"
-    assert any("kolor czerwony" in message for message in result.messages)
-    assert not any("RGB" in message for message in result.messages)
-    assert "party_zone_changed" in event_types
-    assert "party_check_resolved" in event_types
-    assert "zone_search_revealed" in event_types
-    assert any(point.visibility.value == "visible" for point in result.final_state.points if point.id == "hidden_cache")
-    party_check = [event for event in events if event["event_type"] == "party_check_resolved"][-1]
-    assert party_check["payload"]["winning_total"] == 12
-
-
 def test_demo_exploration_scene_partial_gate_progress_keeps_courtyard_locked(tmp_path):
     result = run_demo(
         _args(
             tmp_path,
-            "--legacy-option-menu",
+            "--gm-classifier",
+            "groq",
+            "--freeform-action",
+            "Próbujemy poszerzyć szparę w sztachetach.",
+            "--gm-accept",
+            "yes",
             "--exploration-script",
             "zone:gate",
-            "--exploration-script",
-            "option:break_picket",
             "--challenge-roll",
-            "break_picket=10",
-        )
+            "gm_generated=10",
+        ),
+        gm_client=FakeGmClient(_gm_picket_without_resource_proposal()),
     )
 
     events = _events(result.observation_path)
@@ -342,16 +367,20 @@ def test_demo_exploration_scene_shows_new_locations_after_gate_completion(tmp_pa
     result = run_demo(
         _args(
             tmp_path,
-            "--legacy-option-menu",
+            "--gm-classifier",
+            "groq",
+            "--freeform-action",
+            "Wyważamy starą bramę.",
+            "--gm-accept",
+            "yes",
             "--exploration-script",
             "zone:gate",
-            "--exploration-script",
-            "option:force_gate",
             "--challenge-roll",
-            "force_gate=12",
+            "gm_generated=15",
             "--max-steps",
             "3",
-        )
+        ),
+        gm_client=FakeGmClient(_gm_force_gate_completion_proposal()),
     )
 
     events = _events(result.observation_path)
@@ -360,20 +389,26 @@ def test_demo_exploration_scene_shows_new_locations_after_gate_completion(tmp_pa
 
 
 def test_demo_exploration_scene_zone_travel_preview_uses_only_markers(tmp_path):
-    connection = FakeConnection(scanned=[(9, 2), (9, 1), (9, 10), (9, 10)])
+    connection = FakeConnection(scanned=[(9, 10), (9, 10)])
     result = run_demo(
         _args(
             tmp_path,
             "--board-backend",
             "simulator",
             "--show-leds",
-            "--legacy-option-menu",
+            "--gm-classifier",
+            "groq",
+            "--freeform-action",
+            "Wyważamy starą bramę.",
+            "--gm-accept",
+            "yes",
             "--challenge-roll",
-            "force_gate=12",
+            "gm_generated=15",
             "--max-steps",
             "3",
         ),
         connection_factory=lambda args: connection,
+        gm_client=FakeGmClient(_gm_force_gate_completion_proposal()),
     )
 
     events = _events(result.observation_path)
@@ -390,26 +425,29 @@ def test_demo_exploration_scene_courtyard_challenge_reveals_wounded_scout(tmp_pa
     result = run_demo(
         _args(
             tmp_path,
-            "--legacy-option-menu",
+            "--gm-classifier",
+            "groq",
+            "--freeform-action",
+            "Wyważamy bramę, a potem sprawdzamy ślady na dziedzińcu.",
+            "--gm-accept",
+            "yes",
             "--exploration-script",
             "zone:gate",
             "--exploration-script",
-            "option:force_gate",
-            "--exploration-script",
             "zone:courtyard",
             "--exploration-script",
             "zone:courtyard",
             "--exploration-script",
             "zone:courtyard",
-            "--exploration-script",
-            "option:inspect_tracks_courtyard",
             "--challenge-roll",
-            "force_gate=12",
-            "--challenge-roll",
-            "inspect_tracks_courtyard=12",
+            "gm_generated=15",
             "--max-steps",
             "8",
-        )
+        ),
+        gm_client=FakeGmClient([
+            _gm_force_gate_completion_proposal(),
+            _gm_courtyard_search_completion_proposal(),
+        ]),
     )
 
     events = _events(result.observation_path)
@@ -419,6 +457,108 @@ def test_demo_exploration_scene_courtyard_challenge_reveals_wounded_scout(tmp_pa
     assert "exploration_point_revealed" in event_types
     assert any(event["payload"]["point_ids"] == ["wounded_scout"] for event in events if event["event_type"] == "exploration_point_revealed")
     assert any("Ranny zwiadowca" in message for message in result.messages)
+
+
+def test_demo_exploration_scene_npc_interaction_sets_flags_and_reveals_info(tmp_path):
+    exploration = build_exploration_from_scenario(load_scenario("content/scenarios/abandoned_watchtower.json"))
+    state = ExplorationState(
+        exploration.zones,
+        exploration.points,
+        exploration.party_position,
+        SceneFlags(),
+        challenges=exploration.challenges,
+        resources=exploration.resources,
+        inventory_resource_ids=exploration.initial_resource_ids,
+    )
+    state, _revealed = reveal_exploration_points(state, ("wounded_scout",))
+    point = next(point for point in state.points if point.id == "wounded_scout")
+    proposal = NpcInteractionProposal.model_validate(
+        {
+            "action_type": "help",
+            "player_narration": "Klękacie przy zwiadowcy i odsuwacie deski, starając się nie szarpać rany.",
+            "npc_response": "Zwiadowca syczy z bólu, ale przestaje się cofać.",
+            "requires_roll": True,
+            "ability": "wisdom",
+            "skill": "medicine",
+            "dc": 10,
+            "success_message": "Stabilizujecie zwiadowcę. Może już mówić spokojniej.",
+            "failure_message": "Zwiadowca wpada w panikę i potrzebuje więcej czasu.",
+            "flag_changes_on_success": [
+                {"key": "scout_treated", "value": True},
+                {"key": "scout_stabilized", "value": True},
+            ],
+            "flag_changes_on_failure": [{"key": "scout_panicked", "value": True}],
+            "revealed_information_ids": ["tower_hint"],
+        }
+    )
+    args = _args(
+        tmp_path,
+        "--gm-classifier",
+        "gemini",
+        "--freeform-action",
+        "opatrujemy rannego zwiadowcę i pytamy, co widział",
+        "--gm-accept",
+        "yes",
+        "--party-check-roll",
+        "hero=12",
+        "--party-check-roll",
+        "rogue=12",
+    )
+    observer = SessionObserver("npc_test", tmp_path)
+
+    new_state, messages, _sent = demo_exploration_scene._handle_exploration_point(
+        args,
+        exploration,
+        state,
+        point,
+        None,
+        observer,
+        FakeNpcClient(proposal),
+    )
+
+    events = _events(observer.path)
+    assert any("Stabilizujecie zwiadowcę" in message for message in messages)
+    assert any("gobliny przeciągnęły coś ciężkiego do wieży" in message for message in messages)
+    assert ("scout_stabilized", True) in new_state.flags.values
+    assert ("tower_hint_learned", True) in new_state.flags.values
+    assert "npc_check_resolved" in [event["event_type"] for event in events]
+    assert "npc_information_revealed" in [event["event_type"] for event in events]
+
+
+def test_demo_exploration_scene_debug_point_starts_npc_interaction_without_map_flow(tmp_path):
+    proposal = NpcInteractionProposal.model_validate(
+        {
+            "action_type": "calm",
+            "player_narration": "Mówicie spokojnie i pokazujecie puste dłonie.",
+            "npc_response": "Zwiadowca oddycha wolniej i opuszcza rękę.",
+            "requires_roll": False,
+            "flag_changes_on_success": [{"key": "scout_calmed", "value": True}],
+        }
+    )
+
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--gm-classifier",
+            "gemini",
+            "--freeform-action",
+            "uspokajamy zwiadowcę i pytamy, czy jest bezpieczny",
+            "--gm-accept",
+            "yes",
+            "--debug-point",
+            "wounded_scout",
+            "--max-steps",
+            "1",
+        ),
+        gm_client=FakeNpcClient(proposal),
+    )
+
+    events = _events(result.observation_path)
+    event_types = [event["event_type"] for event in events]
+    assert ("scout_calmed", True) in result.final_state.flags.values
+    assert "debug_point_interaction_started" in event_types
+    assert "npc_interaction_started" in event_types
+    assert not any(event["event_type"] == "exploration_setup_started" for event in events)
 
 
 def test_demo_exploration_scene_gm_classifier_dry_run_does_not_change_progress(tmp_path):
@@ -1125,77 +1265,6 @@ def test_demo_exploration_scene_declared_missing_resource_does_not_roll(tmp_path
     assert demo_exploration_scene.challenge_state_for(result.final_state, "closed_gate").current_progress == 0
 
 
-def test_demo_exploration_scene_search_can_reveal_saw_resource(tmp_path):
-    result = run_demo(
-        _args(
-            tmp_path,
-            "--legacy-option-menu",
-            "--exploration-script",
-            "zone:gate",
-            "--exploration-script",
-            "option:inspect_gate_area",
-            "--exploration-script",
-            "point:old_camp_tools",
-            "--max-steps",
-            "8",
-            "--party-check-roll",
-            "hero=15",
-            "--party-check-roll",
-            "rogue=15",
-        )
-    )
-
-    events = _events(result.observation_path)
-    event_types = [event["event_type"] for event in events]
-    assert "resource_found" in event_types
-    assert "saw" in result.final_state.inventory_resource_ids
-
-
-def test_demo_exploration_scene_village_message_option_sets_flag_and_completes_objective(tmp_path):
-    result = run_demo(
-        _scenario_args(
-            tmp_path,
-            "content/scenarios/village_square_mvp.json",
-            "--exploration-script",
-            "zone:market",
-            "--exploration-script",
-            "option:talk_to_elder",
-            "--max-steps",
-            "4",
-        )
-    )
-
-    events = _events(result.observation_path)
-    event_types = [event["event_type"] for event in events]
-    assert ("quest_hook_found", True) in result.final_state.flags.values
-    assert "scene_flag_set" in event_types
-    assert "objective_completed" in event_types
-    assert "exploration_finished" in event_types
-    assert any("Cel eksploracji" in message for message in result.messages)
-
-
-def test_demo_exploration_scene_rejects_non_adjacent_zone_travel(tmp_path):
-    result = run_demo(
-        _args(
-            tmp_path,
-            "--legacy-option-menu",
-            "--exploration-script",
-            "zone:gate",
-            "--exploration-script",
-            "confirm",
-            "--exploration-script",
-            "zone:tower",
-            "--exploration-script",
-            "end",
-        )
-    )
-
-    events = _events(result.observation_path)
-    event_types = [event["event_type"] for event in events]
-    assert result.final_state.party_position.zone_id == "gate"
-    assert "zone_travel_rejected" in event_types
-
-
 def test_demo_exploration_scene_inspects_non_anchor_tile_without_options(tmp_path):
     result = run_demo(
         _args(
@@ -1237,7 +1306,6 @@ def test_demo_exploration_scene_gate_click_shows_challenge_prompt_by_default(tmp
 
     event_types = [event["event_type"] for event in _events(result.observation_path)]
     assert "challenge_freeform_prompted" in event_types
-    assert "exploration_menu_opened" not in event_types
     assert any("Aby przejść dalej" in message for message in result.messages)
     assert any("Aktualny postęp: 0/3" in message for message in result.messages)
 
@@ -1249,7 +1317,7 @@ def test_demo_exploration_scene_pending_scripts_do_not_open_challenge_menu_by_de
             "--exploration-script",
             "zone:gate",
             "--exploration-script",
-            "option:break_picket",
+            "unused_script_command",
             "--max-steps",
             "1",
         )
@@ -1257,7 +1325,6 @@ def test_demo_exploration_scene_pending_scripts_do_not_open_challenge_menu_by_de
 
     event_types = [event["event_type"] for event in _events(result.observation_path)]
     assert "challenge_freeform_prompted" in event_types
-    assert "exploration_menu_opened" not in event_types
     assert demo_exploration_scene.challenge_state_for(result.final_state, "closed_gate").current_progress == 0
 
 
@@ -1281,60 +1348,6 @@ def test_demo_exploration_scene_village_setup_confirms_visible_points_with_fake_
     assert any("Dostępne lokacje" in message for message in result.messages)
     event_types = [event["event_type"] for event in _events(result.observation_path)]
     assert "exploration_setup_step_confirmed" in event_types
-
-
-def test_demo_exploration_menu_clears_anchor_before_showing_options(tmp_path):
-    connection = FakeConnection(scanned=[(9, 2), (8, 1)])
-    args = _args(
-        tmp_path,
-        "--board-backend",
-        "simulator",
-        "--show-leds",
-        "--legacy-option-menu",
-        "--max-steps",
-        "1",
-    )
-
-    run_demo(args, connection_factory=lambda args: connection)
-
-    menu_start_indexes = [
-        index
-        for index, event in enumerate(connection.events)
-        if event[0] == "set_leds" and event[1] == [(9, 1)]
-    ]
-    assert menu_start_indexes
-    menu_start = menu_start_indexes[-1]
-    assert connection.events[menu_start - 1] == ("leds_off",)
-    menu_events = [event for event in connection.events[menu_start:] if event[0] == "set_leds"]
-    assert all(event[1] != [(9, 2)] for event in menu_events)
-
-
-def test_demo_exploration_clears_revealed_point_before_next_map_state(tmp_path):
-    connection = FakeConnection(scanned=[(9, 2), (10, 3), (9, 2), (8, 1)])
-    args = _args(
-        tmp_path,
-        "--board-backend",
-        "simulator",
-        "--show-leds",
-        "--legacy-option-menu",
-        "--max-steps",
-        "2",
-        "--party-check-roll",
-        "hero=15",
-        "--party-check-roll",
-        "rogue=15",
-    )
-
-    run_demo(args, connection_factory=lambda args: connection)
-
-    revealed_indexes = [
-        index
-        for index, event in enumerate(connection.events)
-        if event[0] == "set_leds" and event[1] == [(11, 3)]
-    ]
-    assert revealed_indexes
-    revealed_index = revealed_indexes[-1]
-    assert ("leds_off",) in connection.events[revealed_index + 1 :]
 
 
 def test_wait_for_scan_or_enter_returns_click():

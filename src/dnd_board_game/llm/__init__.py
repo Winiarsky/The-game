@@ -22,6 +22,17 @@ from .gm_classifier import (
     validate_gm_declaration_analysis,
     validate_gm_classifier_proposal,
 )
+from .npc_interaction import (
+    GeminiNpcInteractionClient,
+    GroqNpcInteractionClient,
+    NpcFlagChange,
+    NpcInteractionClient,
+    NpcInteractionProposal,
+    NpcInteractionRequest,
+    NpcValidatedInteraction,
+    build_npc_interaction_request,
+    validate_npc_interaction_proposal,
+)
 from .prompts import PromptId, load_prompt
 
 __all__ = [
@@ -39,10 +50,19 @@ __all__ = [
     "GmValidatedProposal",
     "GeminiGmClassifierClient",
     "GroqGmClassifierClient",
+    "GeminiNpcInteractionClient",
+    "GroqNpcInteractionClient",
+    "NpcFlagChange",
+    "NpcInteractionClient",
+    "NpcInteractionProposal",
+    "NpcInteractionRequest",
+    "NpcValidatedInteraction",
     "PreparationEffectDuration",
     "PreparationEffectType",
+    "build_npc_interaction_request",
     "build_gm_classifier_request",
     "challenge_option_from_validated_proposal",
+    "validate_npc_interaction_proposal",
     "validate_gm_declaration_analysis",
     "validate_gm_classifier_proposal",
     "PromptId",

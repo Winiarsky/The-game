@@ -44,6 +44,22 @@ Keep entries short and practical:
 
 Do not copy long rulebook text into the repository.
 
+## Scenario Interactions
+
+For new NPC, object, location, obstacle, or event interactions, start from:
+
+```text
+docs/SCENARIO_INTERACTION_FORM.md
+```
+
+Copyable template:
+
+```text
+content/templates/interaction_form.md
+```
+
+The form is the handoff between scenario design and implementation. Fill it in with player-facing description, GM-only truth, intended intents, locked information, mechanical effects, limits, and example player declarations. Codex should then turn it into scenario JSON, tests, and any missing deterministic mechanics.
+
 ## Testing
 
 Use small batches:

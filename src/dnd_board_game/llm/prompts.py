@@ -7,11 +7,13 @@ from pathlib import Path
 class PromptId(StrEnum):
     GM_DECLARATION_ANALYZER = "gm_declaration_analyzer"
     GM_CHALLENGE_CLASSIFIER = "gm_challenge_classifier"
+    GM_NPC_INTERACTION = "gm_npc_interaction"
 
 
 PROMPT_PATHS: dict[PromptId, Path] = {
     PromptId.GM_DECLARATION_ANALYZER: Path("content/prompts/gm_declaration_analyzer_pl.md"),
     PromptId.GM_CHALLENGE_CLASSIFIER: Path("content/prompts/gm_challenge_classifier_pl.md"),
+    PromptId.GM_NPC_INTERACTION: Path("content/prompts/gm_npc_interaction_pl.md"),
 }
 
 

@@ -547,6 +547,7 @@ Minimalny kontrakt:
 
 * Pydantic waliduje kształt odpowiedzi LLM.
 * Silnik gry waliduje aktualny stan: aktywną strefę, wyzwanie, flagi, zasoby i tagi.
+* LLM nie wykonuje efektów gry. LLM strukturyzuje deklarację graczy, a deterministic engine wykonuje tylko znane prymitywy mechaniczne.
 * Każde wyzwanie może definiować `llm_policy`: lokalne skille, tagi podejść, komplikacje, dozwolone konsekwencje, zakres ST, zakres postępu, dozwolone typy przygotowania, whitelisty grantowanych zasobów/odblokowywanych opcji i limit zasobów.
 * Trudność testów freeform powinna być content-driven: challenge może definiować `dc_policy` z tierami trudności i odpowiadającymi im ST.
 * LLM wybiera `difficulty_tier` na podstawie deklaracji graczy i kontekstu przeszkody, a silnik sprawdza, czy `dc` dokładnie odpowiada wartości tieru z contentu.
@@ -578,6 +579,173 @@ Warstwy kontekstu dla LLM:
 * dynamic state opisuje fakty, które już zaszły w tej sesji.
 
 Po odrzuceniu deklaracji aplikacja powinna dać graczom możliwość wpisania kolejnego podejścia bez resetowania sceny.
+
+### Globalne Intencje I Lokalne Policy
+
+Freeform nie powinien być budowany jako sztywne menu gotowych akcji per obiekt. Zamiast tego system powinien mieć globalny katalog intencji, a każdy obiekt, NPC, lokacja albo przeszkoda powinny definiować lokalne policy, które mówi, które intencje są dozwolone, zablokowane albo dozwolone z konsekwencją.
+
+Globalny katalog intencji powinien być trzymany w contentcie, np. `content/llm/intent_catalog.json`, a nie zaszyty w promptach lub runtime. Przykładowe intencje:
+
+* `social`,
+* `information`,
+* `medical`,
+* `theft`,
+* `harm`,
+* `force`,
+* `stealth`,
+* `crafting`,
+* `search`,
+* `magic`,
+* `trade`,
+* `gambling`,
+* `movement`.
+
+Każda intencja może mieć globalne, domyślne mapowanie na mechanikę, np.:
+
+```json
+{
+  "theft": {
+    "label": "kradzież albo przeszukanie bez zgody",
+    "default_checks": [
+      ["dexterity", "sleight_of_hand"],
+      ["charisma", "deception"],
+      ["intelligence", "investigation"]
+    ]
+  }
+}
+```
+
+Lokalny obiekt nie powinien kopiować całej mechaniki globalnej. Powinien raczej określać lokalne granice:
+
+```json
+{
+  "intent_permissions": {
+    "social": {"status": "allowed"},
+    "medical": {"status": "allowed"},
+    "theft": {"status": "allowed_with_consequence"},
+    "harm": {"status": "allowed_with_consequence"},
+    "magic": {"status": "blocked"}
+  }
+}
+```
+
+Statusy intencji powinny być enumem, np.:
+
+* `allowed`,
+* `allowed_with_consequence`,
+* `blocked`,
+* `locked`,
+* `hidden`.
+
+LLM powinien najpierw sklasyfikować deklarację gracza do globalnej intencji i ewentualnej metody, np. `theft` + `stealth`, `social` + `persuasion`, `gambling` + `high_stakes`. Dopiero potem engine sprawdza lokalne `intent_permissions`.
+
+### Parametry, Warunki I Efekty
+
+Każdy skutek zmieniający stan gry musi ostatecznie mieć znany typ mechaniczny. Nie oznacza to osobnego kodu dla każdego pomysłu scenariusza. Oznacza to zestaw globalnych prymitywów, z których content scenariusza składa lokalne zachowanie.
+
+Globalny katalog efektów powinien być trzymany w contentcie, np. `content/llm/effect_catalog.json`. Przykładowe typy efektów:
+
+* `set_flag`,
+* `grant_resource`,
+* `remove_resource`,
+* `reveal_information`,
+* `start_challenge`,
+* `offer_trade`,
+* `trigger_encounter`,
+* `npc_refuses`,
+* `change_relationship`,
+* `add_complication`,
+* `add_noise`.
+
+Globalny katalog warunków powinien być trzymany w contentcie, np. `content/llm/condition_catalog.json`. Przykładowe typy warunków:
+
+* `flag_equals`,
+* `resource_available`,
+* `parameter_compare`,
+* `relationship_at_least`,
+* `challenge_completed`.
+
+Lokalne policy może definiować parametry intencji oraz branch'e:
+
+```json
+{
+  "intent_permissions": {
+    "gambling": {
+      "status": "allowed",
+      "parameters": {
+        "stake_gold": {"type": "integer", "min": 1, "max": 500}
+      },
+      "branches": [
+        {
+          "if": {"stake_gold": {"lt": 100}},
+          "then": {"type": "start_challenge", "challenge_id": "small_dice_game"}
+        },
+        {
+          "if": {"stake_gold": {"gte": 100}},
+          "then": {"type": "offer_trade", "offer_id": "magic_ring_wager"}
+        }
+      ]
+    }
+  }
+}
+```
+
+W tym modelu LLM ekstrahuje parametry z deklaracji, np. `stake_gold: 150`, ale engine egzekwuje limity, warunki i efekty. LLM nie może samodzielnie przyznać złota, dodać itemu, odpalić encountera albo ujawnić informacji, jeśli nie istnieje odpowiedni globalny efekt oraz lokalne policy na to nie pozwala.
+
+Przykład podziału odpowiedzialności:
+
+* gracz: "Stawiam 150 sztuk złota u hazardzisty",
+* LLM: `intent=gambling`, `parameters.stake_gold=150`,
+* engine: sprawdza lokalne policy hazardzisty,
+* engine: wybiera branch `stake_gold >= 100`,
+* engine: wykonuje globalny efekt `offer_trade` z `offer_id=magic_ring_wager`.
+
+Nowy kod powinien być potrzebny dopiero wtedy, gdy projekt potrzebuje nowego globalnego prymitywu, np. pełnego sklepu, systemu reputacji, craftingu, mini-gry hazardowej albo kalendarza. Pojedyncze pomysły scenariuszowe powinny być wyrażane przez istniejące prymitywy.
+
+### NPC I Obiekty Interaktywne
+
+NPC, obiekty i lokacje powinny korzystać z tego samego modelu intencji. NPC może mieć dodatkowy kontekst odgrywania postaci, np. osobowość, stan emocjonalny i zablokowane informacje, ale mechaniczny kontrakt powinien nadal opierać się na globalnych intencjach, lokalnym policy i znanych efektach.
+
+Przykład NPC:
+
+```json
+{
+  "intent_permissions": {
+    "social": {"status": "allowed"},
+    "medical": {"status": "allowed"},
+    "information": {
+      "status": "locked",
+      "unlock_if_flags": ["scout_stabilized"],
+      "reveals": ["tower_hint"]
+    },
+    "theft": {
+      "status": "allowed_with_consequence",
+      "limits": {
+        "loot_table_id": "wounded_scout_pockets"
+      },
+      "consequences": {
+        "on_success": [{"type": "set_flag", "key": "scout_robbed", "value": true}],
+        "on_failure": [{"type": "set_flag", "key": "scout_panicked", "value": true}]
+      }
+    }
+  }
+}
+```
+
+Przykład przeszkody:
+
+```json
+{
+  "intent_permissions": {
+    "force": {"status": "allowed"},
+    "crafting": {"status": "allowed"},
+    "search": {"status": "allowed"},
+    "social": {"status": "blocked", "reason": "Brama nie jest istotą żywą."}
+  }
+}
+```
+
+Ważna zasada: lokalne policy opisuje granice i konsekwencje sceny, a nie musi przewidywać dokładnej treści deklaracji gracza. Gracz może pisać kreatywnie, LLM klasyfikuje intencję i parametry, a engine waliduje i wykonuje znane efekty.
 
 ---
 

@@ -319,7 +319,13 @@ Implementacja MVP:
 - Domyślny model eksploracyjnego testu to `fail-forward`: porażka zmienia koszt, ryzyko albo komplikację, ale nie powinna zatrzymywać całej sceny.
 - Wyzwania eksploracyjne mają model postępu, np. `progress_required`, `current_progress`, opcje działań, postęp na sukcesie, postęp na porażce i konsekwencje. Pierwszy zaimplementowany slice to zamknięta brama w `abandoned_watchtower`.
 - Scenariusz eksploracyjny może mieć kilka wyzwań w kolejnych strefach. `abandoned_watchtower` ma teraz bramę oraz przeszukanie dziedzińca po jej sforsowaniu.
-- Ukończone wyzwanie może ujawnić ukryty punkt eksploracji przez `reveals_on_complete`. W `abandoned_watchtower` przeszukanie dziedzińca ujawnia punkt `Ranny zwiadowca`, który jest hookiem pod kolejne MVP interakcji z NPC.
+- Ukończone wyzwanie może ujawnić ukryty punkt eksploracji przez `reveals_on_complete`. W `abandoned_watchtower` przeszukanie dziedzińca ujawnia punkt `Ranny zwiadowca`, który ma pierwszą interakcję NPC przez LLM.
+- Interakcje NPC są content-driven: opis publiczny, kontekst dla MG, osobowość, stan, capabilities, zablokowane informacje i policy testów/flag są definiowane przy punkcie eksploracji w scenariuszu. LLM może narracyjnie odgrywać NPC i proponować test/flagę, ale deterministic runtime waliduje dozwolone akcje, ST, skille, flagi i ujawniane informacje.
+- Kluczowe informacje NPC mogą być zablokowane przez `reveal_if_flags`; runtime nie ujawnia ich tylko dlatego, że LLM je wymienił. Najpierw musi zostać ustawiona wymagana flaga, np. po uspokojeniu albo opatrzeniu rannego zwiadowcy.
+- Kolejny model interakcji powinien przejść z ad hoc `allowed_actions` na globalny katalog intencji oraz lokalne `intent_permissions`. Globalne intencje, np. `social`, `information`, `medical`, `theft`, `harm`, `force`, `stealth`, `crafting`, `search`, `magic`, `trade`, `gambling`, powinny być zdefiniowane w contentcie wspólnym, a obiekty/NPC/lokacje powinny tylko gate'ować je statusami typu `allowed`, `allowed_with_consequence`, `blocked`, `locked`, `hidden`.
+- Intencje mogą mieć parametry, limity i branch'e, np. `gambling.stake_gold`. LLM może wyekstrahować `intent` i parametry z deklaracji gracza, ale runtime musi egzekwować limity i wybrać branch z contentu.
+- Każdy skutek zmieniający stan gry musi być znanym prymitywem mechanicznym, np. `set_flag`, `grant_resource`, `remove_resource`, `reveal_information`, `start_challenge`, `offer_trade`, `trigger_encounter`, `npc_refuses`, `change_relationship`, `add_complication`, `add_noise`. Scenariusze powinny składać lokalne zachowanie z tych prymitywów zamiast wymagać osobnego kodu dla każdego pomysłu.
+- Globalne katalogi intencji, efektów i warunków powinny docelowo trafić do `content/llm/`, np. `intent_catalog.json`, `effect_catalog.json`, `condition_catalog.json`. Kod powinien zawierać parser/walidator i wykonawców znanych prymitywów, a nie szczegółowy content scenariusza.
 - Opcje wyzwań mogą mieć tagi zasobów/narzędzi/czarów, np. `climbing`, `crowbar`, `quiet`; pasujące itemy mogą dawać premię, przewagę albo łagodzić hałas/komplikacje. Pełny ekwipunek pozostaje poza MVP.
 - Proste opcje eksploracyjne typu `message` mogą ustawiać flagi sceny. Dzięki temu rozmowa, odczytanie tablicy albo obejrzenie punktu zainteresowania może domknąć objective bez sztucznego testu cechy.
 - `village_square_mvp` jest pierwszą mini-sceną eksploracji społecznej: kilka jawnych lokacji, setup jawnych NPC/obiektów, ukryty punkt i objective zależne od flagi.
@@ -359,7 +365,6 @@ Poza zakresem MVP:
 Testy:
 
 - `tests/unit/test_exploration_setup.py`
-- `tests/unit/test_exploration_menu.py`
 - `tests/unit/test_exploration_led_feedback.py`
 - `tests/unit/test_exploration_zones.py`
 - `tests/unit/test_party_checks.py`

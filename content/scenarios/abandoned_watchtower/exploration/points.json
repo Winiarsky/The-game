@@ -40,7 +40,84 @@
       ],
       "color": "interactive",
       "visibility": "hidden",
-      "description": "Pod zawalonym wozem leży ranny zwiadowca. Jest przytomny, ale osłabiony. Pełna interakcja z NPC będzie obsłużona w kolejnym etapie."
+      "description": "Pod zawalonym wozem leży ranny zwiadowca. Jest przytomny, ale osłabiony.",
+      "npc_interaction": {
+        "name": "Ranny zwiadowca",
+        "public_description": "Pod zawalonym wozem leży ranny zwiadowca w rozdartej opończy. Oddycha płytko, ściska bok i reaguje nerwowo na każdy gwałtowny ruch.",
+        "gm_context": "Zwiadowca ukrył się po ataku goblinów. Jest przestraszony i obolały. Nie poda ważnych informacji, dopóki drużyna go nie uspokoi albo nie udzieli mu podstawowej pomocy. Nie jest wrogiem. Nie zna pełnego planu goblinów, ale widział, że coś przenosili do wieży obserwacyjnej.",
+        "personality": "Zmęczony, podejrzliwy, mówi krótkimi zdaniami. Po okazaniu pomocy staje się wdzięczny i konkretny.",
+        "current_state": "Ranny, przestraszony, przygnieciony lekkimi deskami. Może rozmawiać, ale łatwo wpada w panikę.",
+        "dialogue_intro": "Zwiadowca syczy z bólu: 'Nie podchodźcie tak nagle... kto tam?'",
+        "capabilities": [
+          "can_talk",
+          "can_be_helped",
+          "can_be_calmed",
+          "can_be_robbed",
+          "can_be_attacked"
+        ],
+        "locked_information": [
+          {
+            "id": "tower_hint",
+            "label": "Wskazówka o wieży",
+            "text": "Zwiadowca mówi, że gobliny przeciągnęły coś ciężkiego do wieży obserwacyjnej i zostawiły tam straż.",
+            "reveal_if_flags": [
+              "scout_stabilized"
+            ],
+            "sets_flags": [
+              "tower_hint_learned"
+            ]
+          },
+          {
+            "id": "hidden_cache_hint",
+            "label": "Wskazówka o skrytce",
+            "text": "Zwiadowca wskazuje luźną deskę przy wozie i mówi, że ukrył tam awaryjny nóż.",
+            "reveal_if_flags": [
+              "scout_trusts_party"
+            ],
+            "sets_flags": [
+              "cache_hint_learned"
+            ]
+          }
+        ],
+        "policy": {
+          "allowed_actions": [
+            "talk",
+            "calm",
+            "help",
+            "question",
+            "intimidate",
+            "rob",
+            "leave"
+          ],
+          "allowed_flags": [
+            "scout_calmed",
+            "scout_treated",
+            "scout_stabilized",
+            "scout_trusts_party",
+            "scout_panicked",
+            "scout_robbed",
+            "tower_hint_learned",
+            "cache_hint_learned"
+          ],
+          "allowed_abilities": [
+            "charisma",
+            "wisdom",
+            "intelligence"
+          ],
+          "allowed_skills": [
+            "persuasion",
+            "medicine",
+            "insight",
+            "intimidation",
+            "investigation",
+            "deception"
+          ],
+          "dc_range": [
+            10,
+            16
+          ]
+        }
+      }
     }
   ]
 }

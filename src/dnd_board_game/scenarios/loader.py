@@ -29,6 +29,9 @@ from dnd_board_game.exploration import (
     LlmChallengePolicy,
     LlmContext,
     LlmDcTier,
+    NpcInteraction,
+    NpcInteractionPolicy,
+    NpcLockedInformation,
     PartyPosition,
     SceneMode,
 )
@@ -514,6 +517,60 @@ def _parse_exploration_point(data: Any) -> ExplorationPoint:
         ),
         description=str(data.get("description", "")),
         requires_setup=bool(data.get("requires_setup", True)),
+        npc_interaction=_parse_npc_interaction(data.get("npc_interaction"), point_id),
+    )
+
+
+def _parse_npc_interaction(data: Any, point_id: str) -> NpcInteraction | None:
+    if data is None:
+        return None
+    if not isinstance(data, dict):
+        raise ValueError(f"exploration point {point_id}.npc_interaction must be an object.")
+    policy_data = data.get("policy", {})
+    if policy_data is None:
+        policy_data = {}
+    if not isinstance(policy_data, dict):
+        raise ValueError(f"exploration point {point_id}.npc_interaction.policy must be an object.")
+    dc_range = policy_data.get("dc_range", [5, 25])
+    if not isinstance(dc_range, list | tuple) or len(dc_range) != 2:
+        raise ValueError(f"exploration point {point_id}.npc_interaction.policy.dc_range must be [min, max].")
+    dc_min = int(dc_range[0])
+    dc_max = int(dc_range[1])
+    if dc_min > dc_max:
+        raise ValueError(f"exploration point {point_id}.npc_interaction.policy.dc_range min cannot exceed max.")
+    return NpcInteraction(
+        name=str(data.get("name", data.get("public_name", point_id))),
+        public_description=str(_required(data, "public_description", f"npc interaction {point_id}")),
+        gm_context=str(data.get("gm_context", "")),
+        personality=str(data.get("personality", "")),
+        current_state=str(data.get("current_state", "")),
+        dialogue_intro=str(data.get("dialogue_intro", "")),
+        capabilities=tuple(str(item) for item in data.get("capabilities", [])),
+        locked_information=tuple(
+            _parse_npc_locked_information(entry, point_id)
+            for entry in data.get("locked_information", [])
+        ),
+        policy=NpcInteractionPolicy(
+            allowed_actions=tuple(str(item) for item in policy_data.get("allowed_actions", [])),
+            allowed_flags=tuple(str(item) for item in policy_data.get("allowed_flags", [])),
+            allowed_abilities=tuple(str(item) for item in policy_data.get("allowed_abilities", [])),
+            allowed_skills=tuple(str(item) for item in policy_data.get("allowed_skills", [])),
+            dc_min=dc_min,
+            dc_max=dc_max,
+        ),
+    )
+
+
+def _parse_npc_locked_information(data: Any, point_id: str) -> NpcLockedInformation:
+    if not isinstance(data, dict):
+        raise ValueError(f"exploration point {point_id}.npc_interaction.locked_information entries must be objects.")
+    info_id = str(_required(data, "id", f"npc interaction {point_id}.locked_information"))
+    return NpcLockedInformation(
+        id=info_id,
+        label=str(_required(data, "label", f"npc locked information {info_id}")),
+        text=str(_required(data, "text", f"npc locked information {info_id}")),
+        reveal_if_flags=tuple(str(item) for item in data.get("reveal_if_flags", [])),
+        sets_flags=tuple(str(item) for item in data.get("sets_flags", [])),
     )
 
 

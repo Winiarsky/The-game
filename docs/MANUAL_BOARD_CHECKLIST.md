@@ -307,15 +307,12 @@ Checklist:
 - [ ] Domyślny widok eksploracji pokazuje tylko główne punkty dostępnych lokacji.
 - [ ] Kliknięcie innej strefy pokazuje pytanie o przejście.
 - [ ] Drugie kliknięcie tej samej strefy potwierdza przejście.
-- [ ] Kliknięcie aktualnego punktu głównego pokazuje wszystkie opcje jako kolorowe pola menu.
-- [ ] Kliknięcie pola opcji wybiera tę konkretną opcję.
-- [ ] Opcja `Wycofaj` zamyka menu i wraca do widoku punktów głównych.
-- [ ] Opcja `Rozejrzyj się po okolicy` podświetla całą strefę na 30% i pozwala kliknąć kafle strefy.
-- [ ] Opcja `Zbadaj obszar` prosi o rzuty całej drużyny.
-- [ ] Najwyższy wynik drużyny rozstrzyga test.
-- [ ] Sukces ujawnia ukrytą skrytkę LED-em.
-- [ ] Ponowne badanie tej samej strefy jest blokowane.
-- [ ] JSONL zawiera `exploration_started`, `exploration_setup_confirmed`, `exploration_menu_opened`, `exploration_menu_option_selected`, `party_check_resolved` i `zone_search_revealed`.
+- [ ] Kliknięcie aktualnego punktu głównego pokazuje opis aktywnego wyzwania.
+- [ ] Aplikacja prosi drużynę o wolną deklarację działania.
+- [ ] LLM proponuje interpretację mechaniczną, a gracz akceptuje ją `+` albo odrzuca `-`.
+- [ ] Przed rzutem aplikacja pokazuje test, ST, aktywne bonusy i konsekwencje.
+- [ ] Po rozstrzygnięciu wyzwanie aktualizuje progress, hałas, komplikacje i odblokowane lokacje.
+- [ ] JSONL zawiera `exploration_started`, `exploration_setup_confirmed`, `challenge_freeform_prompted`, `gm_classifier_option_proposed`, `gm_classifier_option_resolved` i `challenge_progress_updated`.
 
 ### Runtime `demo_exploration_scene` Mini-Scena Wioski
 

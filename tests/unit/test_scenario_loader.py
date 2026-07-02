@@ -144,7 +144,7 @@ def test_load_abandoned_watchtower_builds_exploration_scene():
     assert len(exploration.challenges) == 2
     challenge = next(item for item in exploration.challenges if item.id == "closed_gate")
     assert challenge.completed_flag == "gate_passed"
-    assert challenge.llm_policy.allowed_local_skills == ("crafting",)
+    assert challenge.llm_policy.allowed_local_skills == ("crafting", "lockpicking")
     assert "heavy_force" in challenge.llm_policy.allowed_approach_tags
     assert "bribe" not in challenge.llm_policy.allowed_approach_tags
     assert challenge.llm_policy.dc_min == 8
@@ -169,6 +169,10 @@ def test_load_abandoned_watchtower_builds_exploration_scene():
     wounded_scout = next(point for point in exploration.points if point.id == "wounded_scout")
     assert wounded_scout.zone_id == "courtyard"
     assert wounded_scout.visibility == SetupVisibility.HIDDEN
+    assert wounded_scout.npc_interaction is not None
+    assert wounded_scout.npc_interaction.name == "Ranny zwiadowca"
+    assert "scout_stabilized" in wounded_scout.npc_interaction.policy.allowed_flags
+    assert {info.id for info in wounded_scout.npc_interaction.locked_information} == {"tower_hint", "hidden_cache_hint"}
 
 
 def test_load_abandoned_watchtower_folder_manifest_matches_alias_file():

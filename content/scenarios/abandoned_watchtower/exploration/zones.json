@@ -118,18 +118,21 @@
         ]
       ],
       "color": "marker",
-      "description": "Zarośnięta brama prowadząca na dziedziniec.",
+      "description": "Zarośnięta, stara drewniana brama z metalowymi okuciami prowadząca na dziedziniec.",
       "llm_context": {
-        "summary": "Przed drużyną stoi stara drewniana brama i niski fragment muru. Wokół są zarośla, kamienie i spróchniałe deski.",
+        "summary": "Przed drużyną stoi stara drewniana brama z metalowymi okuciami, zardzewiałym zamkiem, skorodowanymi zawiasami i kolcami na górze. Obok jest niski fragment muru. Wokół są zarośla, kamienie i spróchniałe deski.",
         "available_materials": [
           "spróchniałe przęsła",
           "kamienie",
           "stare deski",
-          "zarośla"
+          "zarośla",
+          "metalowe okucia",
+          "skorodowane zawiasy"
         ],
         "forbidden_assumptions": [
           "lina nie pozwala latać",
-          "nie ma tu wysokiego drzewa do ścięcia na taran"
+          "nie ma tu wysokiego drzewa do ścięcia na taran",
+          "podłoże pod bramą jest zbyt twarde na szybki podkop"
         ]
       },
       "adjacent_zone_ids": [

@@ -1,7 +1,5 @@
 from dnd_board_game.exploration import (
     ExplorationState,
-    build_exploration_menu,
-    exploration_menu_feedback,
     exploration_zone_feedback,
     look_around_feedback,
 )
@@ -36,18 +34,6 @@ def test_default_exploration_feedback_shows_only_zone_anchors():
 
     assert _positions(feedback) == {gate.marker_position}
     assert _frame_for(feedback, gate.marker_position).color == gate.color
-
-
-def test_menu_feedback_shows_only_option_slots():
-    state = _state()
-    gate = next(zone for zone in state.zones if zone.id == "gate")
-    menu = build_exploration_menu(state, gate)
-
-    feedback = exploration_menu_feedback(menu)
-
-    expected = {option.slot_position for option in menu.options}
-    assert _positions(feedback) == expected
-    assert gate.marker_position not in _positions(feedback)
 
 
 def test_look_around_feedback_shows_whole_zone():

@@ -653,7 +653,7 @@ def test_gm_classifier_request_payload_contains_context_layers_and_dynamic_state
     assert payload["challenge"]["llm_policy"]["dc_policy"]["tiers"][1]["dc"] == 15
     assert "lina nie pozwala latać" in payload["zone_context"]["forbidden_assumptions"]
     assert "przelot na linie bez magii" in payload["challenge"]["context"]["impossible_approaches"]
-    assert "szybki podkop pod kamienną bramą bez odpowiednich narzędzi i czasu" in payload["challenge"]["context"]["impossible_approaches"]
+    assert "szybki podkop pod bramą przez twarde kamienne albo betonowe podłoże" in payload["challenge"]["context"]["impossible_approaches"]
     assert payload["challenge"]["llm_policy"]["dc_range"] == [8, 18]
     assert payload["challenge"]["llm_policy"]["allowed_grant_resource_ids"] == ["saw"]
     assert payload["challenge"]["llm_policy"]["allowed_unlock_option_ids"] == ["saw_picket"]

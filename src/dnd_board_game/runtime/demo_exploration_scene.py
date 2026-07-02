@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import os
 import queue
-import random
 import select
 import sys
 import threading
@@ -14,38 +13,27 @@ from enum import StrEnum
 from pathlib import Path
 
 from dnd_board_game.actors import Actor
-from dnd_board_game.combat import SceneFlags, SetupVisibility, objective_status_after_flags, set_scene_flag
+from dnd_board_game.combat import SceneFlags, SetupVisibility, objective_status_after_flags, scene_flag, set_scene_flag
 from dnd_board_game.exploration import (
     ExplorationChallenge,
     ExplorationChallengeOption,
-    ExplorationMenu,
-    ExplorationMenuOption,
-    ExplorationMenuOptionKind,
-    ExplorationOption,
-    ExplorationOptionKind,
     ExplorationPoint,
     ExplorationResource,
     ExplorationState,
     ExplorationZone,
     PartyCheckInput,
-    SearchResult,
     available_challenge_options,
     available_exploration_zones,
-    build_exploration_menu,
     challenge_for_zone,
     challenge_state_for,
     exploration_setup_feedback,
-    exploration_menu_feedback,
     exploration_zone_feedback,
     grant_resource,
-    look_around_feedback,
     matching_resources,
-    menu_option_for_position,
     party_position_feedback,
     reveal_exploration_points,
     resolve_challenge_option,
     resolve_party_check,
-    resolve_zone_search,
     set_party_zone,
     visible_exploration_points,
     visible_exploration_zones,
@@ -147,6 +135,18 @@ def run_demo(
     )
     messages: list[str] = [f"Scenariusz eksploracji: {exploration.scenario_name}."]
     _print_section(messages[-1])
+    if args.debug_point:
+        state, debug_messages, feedback_events = _run_debug_point_interaction(
+            args,
+            exploration,
+            state,
+            adapter,
+            observer,
+            gm_client,
+        )
+        messages.extend(debug_messages)
+        observer.record("session_finished", {"observation_path": str(observer.path)})
+        return DemoExplorationResult(tuple(messages), state, observer.path, feedback_events)
     setup_messages, feedback_events = _run_exploration_setup(args, exploration, state, adapter, observer)
     messages.extend(setup_messages)
     for objective in objectives:
@@ -210,7 +210,7 @@ def run_demo(
             break
         point = _visible_point_for_position(state, clicked)
         if point is not None:
-            state, point_messages, sent = _handle_exploration_point(args, state, point, adapter, observer)
+            state, point_messages, sent = _handle_exploration_point(args, exploration, state, point, adapter, observer, gm_client)
             objectives = _record_objectives_after_flags(objectives, state.flags, observer)
             messages.extend(point_messages)
             feedback_events += sent
@@ -281,10 +281,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--party-check-roll", action="append", default=[])
     parser.add_argument("--challenge-roll", action="append", default=[])
     parser.add_argument("--resource-choice", action="append", default=[])
-    parser.add_argument("--exploration-seed", type=int, default=7)
-    parser.add_argument("--look-around-clicks", type=int, default=3)
     parser.add_argument("--leader-id", default="hero")
-    parser.add_argument("--helper-id", default=None)
     parser.add_argument("--gm-classifier", choices=("auto", "none", "groq", "gemini"), default="auto")
     parser.add_argument("--freeform-action", default="")
     parser.add_argument("--groq-model", default=None)
@@ -293,7 +290,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--gm-accept", choices=("ask", "yes", "no"), default="ask")
     parser.add_argument("--freeform-retries", type=int, default=1)
     parser.add_argument("--interactive-freeform", action="store_true", default=False)
-    parser.add_argument("--legacy-option-menu", action="store_true", default=False)
+    parser.add_argument("--debug-point", default="", help="Debug: reveal and interact with this exploration point immediately.")
     return parser
 
 
@@ -308,6 +305,51 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"demo_exploration_scene failed: {exc}", file=sys.stderr)
         return 1
     return 0
+
+
+def _run_debug_point_interaction(
+    args: argparse.Namespace,
+    exploration: LoadedExploration,
+    state: ExplorationState,
+    adapter: BoardLedAdapter | None,
+    observer: SessionObserver,
+    gm_client: object | None,
+) -> tuple[ExplorationState, tuple[str, ...], int]:
+    point_id = args.debug_point.strip()
+    known_point_ids = {point.id for point in state.points}
+    if point_id not in known_point_ids:
+        raise ValueError(f"Unknown debug exploration point: {point_id}.")
+    state, _revealed = reveal_exploration_points(state, (point_id,))
+    point = next(point for point in state.points if point.id == point_id)
+    zone = next((zone for zone in state.zones if zone.id == point.zone_id), None)
+    if zone is None:
+        raise ValueError(f"Debug point {point_id} references unknown zone: {point.zone_id}.")
+    state = set_party_zone(state, zone)
+    message = (
+        f"Debug: pomijam setup mapy i przechodzę od razu do punktu `{point.id}` "
+        f"w lokacji: {zone.name}."
+    )
+    _print_section("Debug punktu eksploracji", message)
+    observer.record(
+        "debug_point_interaction_started",
+        {
+            "point_id": point.id,
+            "point_name": point.name,
+            "zone_id": zone.id,
+            "zone_name": zone.name,
+        },
+    )
+    state, point_messages, feedback_events = _handle_exploration_point(
+        args,
+        exploration,
+        state,
+        point,
+        adapter,
+        observer,
+        gm_client,
+    )
+    observer.record("debug_point_interaction_finished", {"point_id": point.id})
+    return state, (message, *point_messages), feedback_events
 
 
 def _run_exploration_setup(
@@ -542,7 +584,7 @@ def _handle_zone_options(
     gm_client: object | None,
 ) -> tuple[ExplorationState, tuple[str, ...], int]:
     challenge = challenge_for_zone(state, zone.id)
-    if challenge is not None and available_challenge_options(state, challenge) and not args.legacy_option_menu:
+    if challenge is not None and available_challenge_options(state, challenge):
         new_state, challenge_messages, resolved = _handle_challenge_freeform_prompt(
             args,
             exploration,
@@ -556,77 +598,10 @@ def _handle_zone_options(
         if resolved:
             return new_state, challenge_messages, 0
         return state, challenge_messages, 0
-    menu = build_exploration_menu(state, zone)
-    if not menu.options:
-        message = f"{zone.name}: nie ma teraz dostępnych opcji."
-        _print_result(message)
-        return state, (message,), 0
-    message = _menu_message(zone, menu)
-    _print_section(f"Lokacja: {zone.name}", message)
-    observer.record(
-        "exploration_menu_opened",
-        {
-            "zone_id": zone.id,
-            "options": [
-                {"id": option.id, "label": option.label, "kind": option.kind.value, "position": list(option.slot_position.as_tuple())}
-                for option in menu.options
-            ],
-        },
-    )
-    feedback_events = 0
-    if adapter is not None:
-        adapter.clear()
-        adapter.show_feedback(exploration_menu_feedback(menu))
-        feedback_events += 1
-        observer.record("led_feedback_sent", {"phase": "exploration_menu", "zone_id": zone.id})
-    selected = _select_menu_option(args, menu, adapter, observer, scripts)
-    if selected is None:
-        return state, (message,), feedback_events
-    if selected.kind == ExplorationMenuOptionKind.CANCEL:
-        cancel_message = "Wycofano wybór opcji."
-        _print_result(cancel_message)
-        observer.record("exploration_menu_cancelled", {"zone_id": zone.id})
-        return state, (message, cancel_message), feedback_events
-    if selected.kind == ExplorationMenuOptionKind.LOOK_AROUND:
-        new_state, look_messages, sent = _handle_look_around(args, state, zone, adapter, observer, scripts)
-        return new_state, (message, *look_messages), feedback_events + sent
-    if selected.kind == ExplorationMenuOptionKind.CHALLENGE:
-        challenge = challenge_for_zone(state, zone.id)
-        if challenge is None:
-            error_message = f"{zone.name}: ta opcja wyzwania nie jest już dostępna."
-            _print_result(error_message)
-            return state, (message, error_message), feedback_events
-        option = next(option for option in available_challenge_options(state, challenge) if option.id == selected.source_id)
-        resources = matching_resources(state, option)
-        observer.record("challenge_option_confirmed", {"challenge_id": challenge.id, "option_id": option.id})
-        resource = _select_resource(args, option, resources)
-        if resource is not None:
-            _activate_resource(args, challenge, option, resource, observer)
-        new_state, result_messages = _resolve_challenge_option(
-            args,
-            exploration.actors,
-            state,
-            challenge,
-            option,
-            resource,
-            observer,
-            adapter=adapter,
-        )
-        return new_state, (message, *result_messages), feedback_events
-    if selected.kind == ExplorationMenuOptionKind.ZONE_OPTION:
-        option = next(option for option in zone.options if option.id == selected.source_id)
-        observer.record("zone_option_confirmed", {"zone_id": zone.id, "option_id": option.id})
-        if option.kind == ExplorationOptionKind.SEARCH:
-            new_state, search_messages = _resolve_search_option(args, exploration.actors, state, zone, adapter, observer)
-            return new_state, (message, *search_messages), feedback_events
-        if option.kind == ExplorationOptionKind.CHECK and option.ability_check is not None:
-            new_state, check_messages = _resolve_check_option(args, exploration.actors, state, option, observer)
-            return new_state, (message, *check_messages), feedback_events
-        new_state = _apply_message_option_flags(state, option, observer)
-        option_message = option.message or option.description or f"Wykonano opcję: {option.label}."
-        _print_result(option_message)
-        return new_state, (message, option_message), feedback_events
-    return state, (message,), feedback_events
+    message = f"{zone.name}: nie ma teraz aktywnego wyzwania LLM ani punktu interakcji do obsłużenia."
+    _print_result(message)
+    observer.record("exploration_zone_has_no_freeform_interaction", {"zone_id": zone.id})
+    return state, (message,), 0
 
 
 def _handle_challenge_freeform_prompt(
@@ -654,9 +629,9 @@ def _handle_challenge_freeform_prompt(
         new_state, freeform_messages, resolved = _handle_freeform_actions(args, exploration, state, adapter, observer, gm_client)
         return new_state, (message, *freeform_messages), resolved
     if args.board_backend != "none" and sys.stdin.isatty():
-        _print_block("Wpisz deklarację przez `--gm-classifier groq --interactive-freeform` albo `--gm-classifier gemini --interactive-freeform`, albo uruchom stare menu opcją `--legacy-option-menu`.")
+        _print_block("Wpisz deklarację przez `--gm-classifier gemini --interactive-freeform` albo `--gm-classifier groq --interactive-freeform`.")
     else:
-        _print_block("Brak aktywnego klasyfikatora LLM. Użyj `--legacy-option-menu`, aby wybrać predefiniowaną opcję.")
+        _print_block("Brak aktywnego klasyfikatora LLM. Uruchom runtime z `--gm-classifier gemini --interactive-freeform` albo podaj `--freeform-action`.")
     return state, (message,), False
 
 
@@ -1231,6 +1206,22 @@ def _create_gm_classifier_client(args: argparse.Namespace) -> object:
     raise RuntimeError(f"Unknown GM classifier: {args.gm_classifier}.")
 
 
+def _create_npc_interaction_client(args: argparse.Namespace) -> object:
+    if args.gm_classifier == "groq":
+        try:
+            from dnd_board_game.llm import GroqNpcInteractionClient
+        except ModuleNotFoundError as exc:
+            raise RuntimeError("NPC LLM wymaga zależności `pydantic`. Uruchom `pip install -r requirements.txt`.") from exc
+        return GroqNpcInteractionClient(model=args.groq_model)
+    if args.gm_classifier == "gemini":
+        try:
+            from dnd_board_game.llm import GeminiNpcInteractionClient
+        except ModuleNotFoundError as exc:
+            raise RuntimeError("NPC LLM wymaga zależności `pydantic`. Uruchom `pip install -r requirements.txt`.") from exc
+        return GeminiNpcInteractionClient(model=args.gemini_model)
+    raise RuntimeError(f"Unknown NPC LLM provider: {args.gm_classifier}.")
+
+
 def _gm_model_name(args: argparse.Namespace) -> str:
     if args.gm_classifier == "gemini":
         return args.gemini_model or os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
@@ -1261,24 +1252,31 @@ def _load_gm_classifier_tools():
     )
 
 
-def _apply_message_option_flags(
-    state: ExplorationState,
-    option: ExplorationOption,
-    observer: SessionObserver,
-) -> ExplorationState:
-    flags = state.flags
-    changed: list[str] = []
-    if option.success_flag and not _scene_flag_bool(flags, option.success_flag):
-        flags = set_scene_flag(flags, option.success_flag, True)
-        changed.append(option.success_flag)
-    if option.failure_flag and not _scene_flag_bool(flags, option.failure_flag):
-        flags = set_scene_flag(flags, option.failure_flag, True)
-        changed.append(option.failure_flag)
-    for flag_key in changed:
-        observer.record("scene_flag_set", {"option_id": option.id, "flag_key": flag_key, "value": True})
-    if not changed:
-        return state
-    return replace(state, flags=flags)
+def _load_npc_interaction_tools():
+    try:
+        from dnd_board_game.llm import build_npc_interaction_request, validate_npc_interaction_proposal
+    except ModuleNotFoundError as exc:
+        raise RuntimeError("NPC LLM wymaga zależności `pydantic`. Uruchom `pip install -r requirements.txt`.") from exc
+    return build_npc_interaction_request, validate_npc_interaction_proposal
+
+
+def _npc_interaction_summary(proposal) -> str:
+    if proposal.requires_roll:
+        skill_text = f"/{proposal.skill}" if proposal.skill else ""
+        base = f"Akcja: {proposal.action_type}. Test: {proposal.ability}{skill_text}, ST {proposal.dc}."
+    else:
+        base = f"Akcja: {proposal.action_type}. Bez rzutu."
+    success_flags = ", ".join(change.key for change in proposal.flag_changes_on_success)
+    failure_flags = ", ".join(change.key for change in proposal.flag_changes_on_failure)
+    info = ", ".join(proposal.revealed_information_ids)
+    details = []
+    if success_flags:
+        details.append(f"flagi przy sukcesie: {success_flags}")
+    if failure_flags:
+        details.append(f"flagi przy porażce: {failure_flags}")
+    if info:
+        details.append(f"możliwe informacje: {info}")
+    return f"{base} {'; '.join(details)}".strip()
 
 
 def _scene_flag_bool(flags: SceneFlags, key: str) -> bool:
@@ -1303,145 +1301,6 @@ def _finish_exploration_objectives(observer: SessionObserver, messages: list[str
     _print_section("Koniec sceny", message)
     messages.append(message)
     observer.record("exploration_finished", {"reason": "objectives_completed"})
-
-
-def _menu_message(zone: ExplorationZone, menu: ExplorationMenu) -> str:
-    lines = [f"{zone.name}. Dostępne opcje:"]
-    for option in menu.options:
-        lines.append(f"- {option.label}: kolor {led_color_name_pl(option.color)}, pole {option.slot_position.as_tuple()}")
-    lines.append("Kliknij podświetlone pole opcji, aby ją wybrać.")
-    return "\n".join(lines)
-
-
-def _select_menu_option(
-    args: argparse.Namespace,
-    menu: ExplorationMenu,
-    adapter: BoardLedAdapter | None,
-    observer: SessionObserver,
-    scripts: list[str],
-) -> ExplorationMenuOption | None:
-    if scripts:
-        command = scripts.pop(0).strip()
-        if command.startswith("option:"):
-            option_id = command.removeprefix("option:")
-            selected = next((option for option in menu.options if option.id == option_id), None)
-            if selected is None:
-                raise ValueError(f"Unknown exploration menu option: {option_id}.")
-            observer.record("exploration_menu_option_selected", {"zone_id": menu.zone.id, "option_id": selected.id, "source": "script"})
-            return selected
-        if command == "confirm":
-            selected = next(option for option in menu.options if option.kind != ExplorationMenuOptionKind.CANCEL)
-            observer.record("exploration_menu_option_selected", {"zone_id": menu.zone.id, "option_id": selected.id, "source": "script_compat"})
-            return selected
-        if command == "cancel":
-            selected = next(option for option in menu.options if option.kind == ExplorationMenuOptionKind.CANCEL)
-            observer.record("exploration_menu_option_selected", {"zone_id": menu.zone.id, "option_id": selected.id, "source": "script"})
-            return selected
-        scripts.insert(0, command)
-        return None
-    if args.board_backend == "none" or adapter is None:
-        selected = next(option for option in menu.options if option.kind != ExplorationMenuOptionKind.CANCEL)
-        observer.record("exploration_menu_option_selected", {"zone_id": menu.zone.id, "option_id": selected.id, "source": "default"})
-        return selected
-    scan_board = getattr(adapter.connection, "scan_board", None)
-    if not callable(scan_board):
-        return None
-    acceptable = [option.slot_position.as_tuple() for option in menu.options]
-    observer.record("board_scan_requested", {"phase": "exploration_menu", "acceptable_positions": [list(position) for position in acceptable]})
-    _print_block("Kliknij jedno z podświetlonych pól opcji.")
-    selected_position = scan_board(acceptable, timeout_s=args.scan_timeout)
-    if selected_position is None:
-        observer.record("board_scan_cancelled", {"phase": "exploration_menu"})
-        return None
-    coordinate = Coordinate(int(selected_position[0]), int(selected_position[1]))
-    selected = menu_option_for_position(menu, coordinate)
-    observer.record(
-        "exploration_menu_option_selected",
-        {
-            "zone_id": menu.zone.id,
-            "option_id": selected.id if selected else None,
-            "position": list(coordinate.as_tuple()),
-            "source": "board",
-        },
-    )
-    return selected
-
-
-def _handle_look_around(
-    args: argparse.Namespace,
-    state: ExplorationState,
-    zone: ExplorationZone,
-    adapter: BoardLedAdapter | None,
-    observer: SessionObserver,
-    scripts: list[str],
-) -> tuple[ExplorationState, tuple[str, ...], int]:
-    message = (
-        f"Rozglądacie się po okolicy: {zone.name}. "
-        f"Możecie kliknąć do {args.look_around_clicks} pól tej strefy."
-    )
-    _print_section("Rozejrzyj się po okolicy", message)
-    observer.record("look_around_started", {"zone_id": zone.id, "limit": args.look_around_clicks})
-    feedback_events = 0
-    if adapter is not None:
-        adapter.clear()
-        adapter.show_feedback(look_around_feedback(zone))
-        feedback_events += 1
-        observer.record("led_feedback_sent", {"phase": "look_around", "zone_id": zone.id})
-    messages = [message]
-    current_state = state
-    for index in range(args.look_around_clicks):
-        clicked = _next_look_around_click(args, current_state, zone, adapter, observer, scripts)
-        if clicked is None:
-            break
-        point = _visible_point_for_position(current_state, clicked)
-        if point is not None:
-            current_state, point_messages, sent = _handle_exploration_point(args, current_state, point, adapter, observer)
-            messages.extend(point_messages)
-            feedback_events += sent
-            continue
-        if clicked in zone.positions:
-            tile_message = f"Sprawdzacie fragment lokacji {zone.name} na polu {clicked.as_tuple()}. Nie ma tu nic oczywistego."
-            _print_result(tile_message)
-            messages.append(tile_message)
-            observer.record(
-                "look_around_tile_checked",
-                {"zone_id": zone.id, "position": list(clicked.as_tuple()), "index": index},
-            )
-            continue
-        outside_message = "To pole nie należy do aktualnie oglądanej lokacji."
-        _print_result(outside_message)
-        messages.append(outside_message)
-    observer.record("look_around_finished", {"zone_id": zone.id})
-    return current_state, tuple(messages), feedback_events
-
-
-def _next_look_around_click(
-    args: argparse.Namespace,
-    state: ExplorationState,
-    zone: ExplorationZone,
-    adapter: BoardLedAdapter | None,
-    observer: SessionObserver,
-    scripts: list[str],
-) -> Coordinate | None:
-    if scripts:
-        command = scripts.pop(0).strip()
-        if command in {"look_done", "cancel", "end"}:
-            return None
-        return _coordinate_from_script(command, state)
-    if args.board_backend == "none" or adapter is None:
-        return None
-    scan_board = getattr(adapter.connection, "scan_board", None)
-    if not callable(scan_board):
-        return None
-    acceptable = [position.as_tuple() for position in zone.positions]
-    acceptable.extend(position.as_tuple() for point in visible_exploration_points(state.points) for position in point.positions)
-    _print_block("Kliknij pole w oglądanej strefie albo poczekaj, aby zakończyć rozejrzenie.")
-    selected = scan_board(acceptable, timeout_s=args.scan_timeout)
-    if selected is None:
-        observer.record("board_scan_cancelled", {"phase": "look_around"})
-        return None
-    observer.record("board_scan_received", {"phase": "look_around", "position": list(selected)})
-    return Coordinate(int(selected[0]), int(selected[1]))
 
 
 def _resolve_challenge_option(
@@ -2117,10 +1976,12 @@ def _visible_point_for_position(state: ExplorationState, position: Coordinate) -
 
 def _handle_exploration_point(
     args: argparse.Namespace,
+    exploration: LoadedExploration,
     state: ExplorationState,
-    point,
+    point: ExplorationPoint,
     adapter: BoardLedAdapter | None,
     observer: SessionObserver,
+    gm_client: object | None = None,
 ) -> tuple[ExplorationState, tuple[str, ...], int]:
     message = point.description or f"Odnaleziono punkt: {point.name}."
     _print_section(f"Punkt eksploracji: {point.name}", message)
@@ -2142,103 +2003,161 @@ def _handle_exploration_point(
         observer.record("led_feedback_sent", {"phase": "exploration_point", "point_id": point.id})
         if args.wait_for_enter:
             _pause_for_led_step(args, message)
+    if point.npc_interaction is not None:
+        new_state, npc_messages = _handle_npc_interaction(args, exploration, new_state, point, observer, gm_client)
+        messages = (*messages, *npc_messages)
     return new_state, messages, feedback_events
 
 
-def _resolve_search_option(
+def _handle_npc_interaction(
     args: argparse.Namespace,
-    actors: tuple[Actor, ...],
+    exploration: LoadedExploration,
     state: ExplorationState,
-    zone: ExplorationZone,
-    adapter: BoardLedAdapter | None,
+    point: ExplorationPoint,
     observer: SessionObserver,
+    gm_client: object | None,
 ) -> tuple[ExplorationState, tuple[str, ...]]:
-    if zone.id in state.exhausted_search_zones:
-        message = f"Ta strefa była już badana: {zone.name}."
-        _print_result(message)
-        observer.record("zone_search_exhausted", {"zone_id": zone.id})
-        return state, (message,)
-    request = D20RollRequest()
-    instruction = _party_check_instruction(actors, zone.search_ability, zone.search_skill)
-    _print_section("Test drużynowy", f"Spostrzegawczość w strefie {zone.name}. {instruction}")
-    observer.record("party_check_requested", {"zone_id": zone.id, "dc": zone.search_dc, "actors": [str(actor.id) for actor in actors]})
-    rolls = _party_check_inputs(args, actors, request, ability=zone.search_ability, skill=zone.search_skill)
-    result = resolve_zone_search(state, zone, rolls)
-    _print_result(result.message)
+    npc = point.npc_interaction
+    if npc is None:
+        return state, ()
+    intro = npc.dialogue_intro or npc.public_description
+    _print_section(f"NPC: {npc.name}", intro)
     observer.record(
-        "party_check_resolved",
+        "npc_interaction_started",
         {
-            "zone_id": zone.id,
-            "dc": result.party_check.dc,
-            "success": result.party_check.success,
-            "winner_id": str(result.party_check.winner.id),
-            "winning_total": result.party_check.winning_roll.total,
-            "rolls": [
-                {"actor_id": str(actor.id), "natural_roll": roll.natural_roll, "total": roll.total}
-                for actor, roll in result.party_check.rolls
-            ],
+            "point_id": point.id,
+            "zone_id": point.zone_id,
+            "npc_name": npc.name,
+            "capabilities": list(npc.capabilities),
         },
     )
-    if result.party_check.success:
-        observer.record("zone_search_revealed", {"zone_id": zone.id, "point_ids": [point.id for point in result.revealed_points]})
-        result_state = _apply_search_preparation_bonus(args, result.state, zone, observer)
-        if result_state is not result.state:
-            result = SearchResult(result_state, result.party_check, result.revealed_points, result.message)
-        if adapter is not None and result.revealed_points:
-            positions = tuple(position for point in result.revealed_points for position in point.positions)
-            adapter.clear()
-            adapter.show_feedback(exploration_setup_feedback(positions, LedColor.INTERACTION_SUCCESS))
+    if args.gm_classifier == "none":
+        message = "Interakcje NPC przez LLM wymagają `--gm-classifier gemini` albo `--gm-classifier groq`."
+        _print_result(message)
+        return state, (intro, message)
+    if args.freeform_action.strip():
+        player_action = args.freeform_action.strip()
+    elif args.interactive_freeform and sys.stdin.isatty():
+        player_action = input("Co robicie wobec NPC?: ").strip()
     else:
-        observer.record("zone_search_exhausted", {"zone_id": zone.id})
-    return result.state, (result.message,)
+        message = "Brak deklaracji wobec NPC. Użyj `--interactive-freeform` albo `--freeform-action`."
+        _print_result(message)
+        return state, (intro, message)
+    if not player_action:
+        message = "Nie podano deklaracji wobec NPC."
+        _print_result(message)
+        return state, (intro, message)
+    try:
+        (
+            build_npc_interaction_request,
+            validate_npc_interaction_proposal,
+        ) = _load_npc_interaction_tools()
+        zone = next(zone for zone in exploration.zones if zone.id == point.zone_id)
+        request = build_npc_interaction_request(
+            scenario_id=exploration.scenario_id,
+            scenario_name=exploration.scenario_name,
+            zone=zone,
+            point=point,
+            state=state,
+            player_action=player_action,
+        )
+        observer.record(
+            "npc_interaction_requested",
+            {
+                "provider": args.gm_classifier,
+                "model": _gm_model_name(args),
+                "point_id": point.id,
+                "player_action": player_action,
+                "payload": request.to_prompt_payload(),
+            },
+        )
+        client = gm_client or _create_npc_interaction_client(args)
+        if not hasattr(client, "interact_npc"):
+            client = _create_npc_interaction_client(args)
+        proposal = client.interact_npc(request)
+        observer.record("npc_interaction_response_received", {"proposal": proposal.model_dump(mode="json")})
+        validated = validate_npc_interaction_proposal(proposal, request)
+    except (RuntimeError, KeyError, ValueError) as exc:
+        message = f"Nie udało się użyć interakcji NPC: {exc}"
+        _print_section("Interakcja NPC odrzucona", message)
+        observer.record("npc_interaction_rejected", {"point_id": point.id, "reason": str(exc)})
+        return state, (intro, message)
 
+    proposal = validated.proposal
+    messages: list[str] = [intro]
+    if proposal.player_narration:
+        _print_section("Narracja MG", proposal.player_narration)
+        messages.append(proposal.player_narration)
+    if proposal.npc_response:
+        _print_section("Odpowiedź NPC", proposal.npc_response)
+        messages.append(proposal.npc_response)
+    summary = _npc_interaction_summary(proposal)
+    _print_section("Propozycja interakcji", summary)
+    messages.append(summary)
+    decision = _decide_gm_interpretation(
+        args,
+        observer,
+        point.id,
+        proposal.action_type,
+        summary,
+        proposal.gm_notes,
+    )
+    if decision != GmInterpretationDecision.ACCEPT:
+        message = "Odrzucono interpretację NPC. Kliknij punkt lub wpisz deklarację ponownie."
+        _print_result(message)
+        messages.append(message)
+        observer.record("npc_interaction_interpretation_rejected", {"point_id": point.id, "action_type": proposal.action_type})
+        return state, tuple(messages)
 
-def _apply_search_preparation_bonus(
-    args: argparse.Namespace,
-    state: ExplorationState,
-    zone: ExplorationZone,
-    observer: SessionObserver,
-) -> ExplorationState:
-    challenge = challenge_for_zone(state, zone.id)
-    if challenge is None or challenge_state_for(state, challenge.id).completed:
-        return state
-    options = available_challenge_options(state, challenge)
-    if not options:
-        return state
-    selected = random.Random(args.exploration_seed).choice(options)
-    flag_key = f"challenge_support:{selected.id}"
-    new_state = replace(state, flags=set_scene_flag(state.flags, flag_key, True))
-    message = f"Przygotowanie pomaga przy podejściu: {selected.label} (+2)."
-    _print_result(message)
-    observer.record("challenge_support_discovered", {"challenge_id": challenge.id, "option_id": selected.id, "flag_key": flag_key})
-    return new_state
-
-
-def _resolve_check_option(args: argparse.Namespace, actors: tuple[Actor, ...], state: ExplorationState, option: ExplorationOption, observer: SessionObserver) -> tuple[ExplorationState, tuple[str, ...]]:
-    actor = next((candidate for candidate in actors if str(candidate.id) == args.leader_id), actors[0])
-    ability = option.ability_check.ability if option.ability_check else "wisdom"
-    modifiers = option.ability_check.modifiers if option.ability_check else ()
-    ability_modifiers = _ability_roll_modifiers(actor, ability)
-    modifiers = (*ability_modifiers, *modifiers)
-    request = D20RollRequest(modifiers=modifiers)
-    if option.allow_help and args.helper_id:
-        request = D20RollRequest(mode=RollMode.ADVANTAGE, modifiers=modifiers)
-    instruction = roll_instruction(request)
-    _print_section("Test cechy", f"{option.label}. {instruction.message}")
-    natural_roll = _read_int_or_default(args, f"Wpisz naturalny wynik testu dla {actor.name}: ", 10)
-    result = resolve_party_check((PartyCheckInput(actor, natural_roll, request),), option.ability_check.dc)
-    flags = state.flags
-    if result.success and option.success_flag:
-        flags = set_scene_flag(flags, option.success_flag, True)
-    if not result.success and option.failure_flag:
-        flags = set_scene_flag(flags, option.failure_flag, True)
-    if result.success:
-        message = option.success_message or option.message or "Test zakończony sukcesem."
-    else:
-        message = option.failure_message or "Test zakończony porażką."
-    _print_result(message)
-    observer.record("party_check_resolved", {"option_id": option.id, "success": result.success, "winner_id": str(actor.id), "winning_total": result.winning_roll.total})
-    return replace(state, flags=flags), (message,)
+    new_state = state
+    success = True
+    roll_payload = None
+    if proposal.requires_roll:
+        assert proposal.ability is not None and proposal.dc is not None
+        instruction = _party_check_instruction(exploration.actors, proposal.ability, proposal.skill)
+        _print_section(
+            "Test przy NPC",
+            f"{proposal.action_type}. ST {proposal.dc}. {instruction}",
+        )
+        rolls = _party_check_inputs(args, exploration.actors, D20RollRequest(), ability=proposal.ability, skill=proposal.skill)
+        result = resolve_party_check(rolls, proposal.dc)
+        success = result.success
+        roll_payload = {
+            "dc": result.dc,
+            "success": result.success,
+            "winner_id": str(result.winner.id),
+            "winning_total": result.winning_roll.total,
+            "rolls": [
+                {"actor_id": str(actor.id), "natural_roll": roll.natural_roll, "total": roll.total}
+                for actor, roll in result.rolls
+            ],
+        }
+        result_message = proposal.success_message if success else proposal.failure_message
+        if not result_message:
+            result_message = "Test przy NPC zakończony sukcesem." if success else "Test przy NPC nie wychodzi czysto."
+        _print_section("Wynik interakcji NPC", result_message)
+        messages.append(result_message)
+        observer.record("npc_check_resolved", {"point_id": point.id, **roll_payload})
+    changes = proposal.flag_changes_on_success if success else proposal.flag_changes_on_failure
+    for change in changes:
+        new_state = replace(new_state, flags=set_scene_flag(new_state.flags, change.key, change.value))
+        observer.record("npc_flag_set", {"point_id": point.id, "key": change.key, "value": change.value, "success": success})
+    revealed_messages: list[str] = []
+    for info_id in proposal.revealed_information_ids:
+        info = next(item for item in npc.locked_information if item.id == info_id)
+        if all(scene_flag(new_state.flags, flag, False) for flag in info.reveal_if_flags):
+            for flag in info.sets_flags:
+                new_state = replace(new_state, flags=set_scene_flag(new_state.flags, flag, True))
+                observer.record("npc_flag_set", {"point_id": point.id, "key": flag, "value": True, "source": info_id})
+            _print_section(f"Informacja: {info.label}", info.text)
+            revealed_messages.append(info.text)
+            observer.record("npc_information_revealed", {"point_id": point.id, "information_id": info.id})
+    messages.extend(revealed_messages)
+    observer.record(
+        "npc_interaction_finished",
+        {"point_id": point.id, "action_type": proposal.action_type, "success": success, "roll": roll_payload},
+    )
+    return new_state, tuple(messages)
 
 
 def _party_check_inputs(
