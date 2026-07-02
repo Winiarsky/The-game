@@ -21,6 +21,33 @@ class ExplorationOptionKind(StrEnum):
     CHECK = "check"
 
 
+class CheckParticipants(StrEnum):
+    SINGLE_ACTOR = "single_actor"
+    LEAD_WITH_HELP = "lead_with_help"
+    WHOLE_PARTY = "whole_party"
+    SELECTED_ACTORS = "selected_actors"
+
+
+class CheckAggregation(StrEnum):
+    LEAD_RESULT = "lead_result"
+    HIGHEST = "highest"
+    LOWEST = "lowest"
+    MAJORITY = "majority"
+    ALL_MUST_SUCCEED = "all_must_succeed"
+    ANY_SUCCESS = "any_success"
+    SUM_PROGRESS = "sum_progress"
+
+
+class ConsequenceTarget(StrEnum):
+    LEAD_ACTOR = "lead_actor"
+    HELPER_ACTOR = "helper_actor"
+    FAILED_ACTORS = "failed_actors"
+    WHOLE_PARTY = "whole_party"
+    SCENE = "scene"
+    NPC = "npc"
+    OBJECT = "object"
+
+
 @dataclass(frozen=True, slots=True)
 class LlmContext:
     summary: str = ""
@@ -298,6 +325,63 @@ class PartyCheckResult:
 
 
 @dataclass(frozen=True, slots=True)
+class ExplorationCheckPlan:
+    participants: CheckParticipants
+    aggregation: CheckAggregation
+    consequence_targets: tuple[ConsequenceTarget, ...]
+    ability: str
+    dc: int
+    skill: str | None = None
+    lead_actor_id: str | None = None
+    helper_actor_id: str | None = None
+    selected_actor_ids: tuple[str, ...] = ()
+    reason_for_players: str = ""
+
+    def as_payload(self) -> dict[str, object]:
+        return {
+            "participants": self.participants.value,
+            "aggregation": self.aggregation.value,
+            "consequence_targets": [target.value for target in self.consequence_targets],
+            "lead_actor_id": self.lead_actor_id,
+            "helper_actor_id": self.helper_actor_id,
+            "selected_actor_ids": list(self.selected_actor_ids),
+            "ability": self.ability,
+            "skill": self.skill,
+            "dc": self.dc,
+            "reason_for_players": self.reason_for_players,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ExplorationCheckResult:
+    plan: ExplorationCheckPlan
+    rolls: tuple[tuple[Actor, D20RollResult], ...]
+    success: bool
+    selected_actor: Actor
+    selected_roll: D20RollResult
+    successful_actors: tuple[Actor, ...]
+    failed_actors: tuple[Actor, ...]
+    consequence_actors: tuple[Actor, ...]
+    progress_total: int = 0
+
+    def as_payload(self) -> dict[str, object]:
+        return {
+            "plan": self.plan.as_payload(),
+            "success": self.success,
+            "selected_actor_id": str(self.selected_actor.id),
+            "selected_total": self.selected_roll.total,
+            "successful_actor_ids": [str(actor.id) for actor in self.successful_actors],
+            "failed_actor_ids": [str(actor.id) for actor in self.failed_actors],
+            "consequence_actor_ids": [str(actor.id) for actor in self.consequence_actors],
+            "progress_total": self.progress_total,
+            "rolls": [
+                {"actor_id": str(actor.id), "natural_roll": roll.natural_roll, "total": roll.total}
+                for actor, roll in self.rolls
+            ],
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class SearchResult:
     state: ExplorationState
     party_check: PartyCheckResult
@@ -328,6 +412,9 @@ class ExplorationChallengeOption:
     success_complication: str | None = None
     failure_complication: str | None = None
     critical_failure_complication: str | None = None
+    check_participants: CheckParticipants | None = None
+    check_aggregation: CheckAggregation | None = None
+    consequence_targets: tuple[ConsequenceTarget, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -674,12 +761,89 @@ def set_party_zone(state: ExplorationState, zone: ExplorationZone) -> Exploratio
     return replace(state, party_position=PartyPosition(zone.id, zone.marker_position))
 
 
-def resolve_party_check(inputs: tuple[PartyCheckInput, ...], dc: int) -> PartyCheckResult:
+def resolve_exploration_check(
+    plan: ExplorationCheckPlan,
+    inputs: tuple[PartyCheckInput, ...],
+) -> ExplorationCheckResult:
     if not inputs:
         raise ValueError("Party check requires at least one roll.")
     rolls = tuple((item.actor, resolve_d20_roll(D20RollInput(item.request, item.natural_roll))) for item in inputs)
-    winner, winning_roll = max(rolls, key=lambda item: (item[1].total, item[1].natural_roll, item[0].name))
-    return PartyCheckResult(rolls, winner, winning_roll, dc, resolve_ability_check(winning_roll, dc).success)
+    passed = tuple((actor, roll) for actor, roll in rolls if resolve_ability_check(roll, plan.dc).success)
+    failed = tuple((actor, roll) for actor, roll in rolls if not resolve_ability_check(roll, plan.dc).success)
+    if plan.aggregation in {CheckAggregation.HIGHEST, CheckAggregation.ANY_SUCCESS, CheckAggregation.SUM_PROGRESS}:
+        selected_actor, selected_roll = max(rolls, key=lambda item: (item[1].total, item[1].natural_roll, item[0].name))
+    elif plan.aggregation == CheckAggregation.LOWEST:
+        selected_actor, selected_roll = min(rolls, key=lambda item: (item[1].total, item[1].natural_roll, item[0].name))
+    else:
+        lead_id = plan.lead_actor_id
+        lead_entry = next(((actor, roll) for actor, roll in rolls if str(actor.id) == lead_id), None)
+        if lead_entry is None:
+            lead_entry = rolls[0]
+        selected_actor, selected_roll = lead_entry
+
+    if plan.aggregation == CheckAggregation.HIGHEST:
+        success = resolve_ability_check(selected_roll, plan.dc).success
+    elif plan.aggregation == CheckAggregation.LOWEST:
+        success = resolve_ability_check(selected_roll, plan.dc).success
+    elif plan.aggregation == CheckAggregation.MAJORITY:
+        success = len(passed) >= ((len(rolls) + 1) // 2)
+    elif plan.aggregation == CheckAggregation.ALL_MUST_SUCCEED:
+        success = len(failed) == 0
+    elif plan.aggregation == CheckAggregation.ANY_SUCCESS:
+        success = len(passed) > 0
+    elif plan.aggregation == CheckAggregation.SUM_PROGRESS:
+        success = len(passed) > 0
+    else:
+        success = resolve_ability_check(selected_roll, plan.dc).success
+
+    successful_actors = tuple(actor for actor, _roll in passed)
+    failed_actors = tuple(actor for actor, _roll in failed)
+    consequence_actors = _consequence_actors(plan, rolls, failed_actors)
+    return ExplorationCheckResult(
+        plan=plan,
+        rolls=rolls,
+        success=success,
+        selected_actor=selected_actor,
+        selected_roll=selected_roll,
+        successful_actors=successful_actors,
+        failed_actors=failed_actors,
+        consequence_actors=consequence_actors,
+        progress_total=len(passed) if plan.aggregation == CheckAggregation.SUM_PROGRESS else 0,
+    )
+
+
+def _consequence_actors(
+    plan: ExplorationCheckPlan,
+    rolls: tuple[tuple[Actor, D20RollResult], ...],
+    failed_actors: tuple[Actor, ...],
+) -> tuple[Actor, ...]:
+    actors_by_id = {str(actor.id): actor for actor, _roll in rolls}
+    result: list[Actor] = []
+    for target in plan.consequence_targets:
+        if target == ConsequenceTarget.LEAD_ACTOR and plan.lead_actor_id in actors_by_id:
+            result.append(actors_by_id[str(plan.lead_actor_id)])
+        elif target == ConsequenceTarget.HELPER_ACTOR and plan.helper_actor_id in actors_by_id:
+            result.append(actors_by_id[str(plan.helper_actor_id)])
+        elif target == ConsequenceTarget.FAILED_ACTORS:
+            result.extend(failed_actors)
+        elif target == ConsequenceTarget.WHOLE_PARTY:
+            result.extend(actor for actor, _roll in rolls)
+    unique: dict[str, Actor] = {}
+    for actor in result:
+        unique.setdefault(str(actor.id), actor)
+    return tuple(unique.values())
+
+
+def resolve_party_check(inputs: tuple[PartyCheckInput, ...], dc: int) -> PartyCheckResult:
+    plan = ExplorationCheckPlan(
+        participants=CheckParticipants.WHOLE_PARTY,
+        aggregation=CheckAggregation.HIGHEST,
+        consequence_targets=(ConsequenceTarget.SCENE,),
+        ability="wisdom",
+        dc=dc,
+    )
+    result = resolve_exploration_check(plan, inputs)
+    return PartyCheckResult(result.rolls, result.selected_actor, result.selected_roll, dc, result.success)
 
 
 def resolve_zone_search(

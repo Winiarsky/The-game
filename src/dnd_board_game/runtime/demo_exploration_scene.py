@@ -15,7 +15,11 @@ from pathlib import Path
 from dnd_board_game.actors import Actor
 from dnd_board_game.combat import SceneFlags, SetupVisibility, objective_status_after_flags, scene_flag, set_scene_flag
 from dnd_board_game.exploration import (
+    CheckAggregation,
+    CheckParticipants,
+    ConsequenceTarget,
     ExplorationChallenge,
+    ExplorationCheckPlan,
     ExplorationChallengeOption,
     ExplorationPoint,
     ExplorationResource,
@@ -33,6 +37,7 @@ from dnd_board_game.exploration import (
     party_position_feedback,
     reveal_exploration_points,
     resolve_challenge_option,
+    resolve_exploration_check,
     resolve_party_check,
     set_party_zone,
     visible_exploration_points,
@@ -282,6 +287,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--challenge-roll", action="append", default=[])
     parser.add_argument("--resource-choice", action="append", default=[])
     parser.add_argument("--leader-id", default="hero")
+    parser.add_argument("--lead-actor", default=None)
+    parser.add_argument("--helper-actor", default=None)
+    parser.add_argument("--selected-actor", action="append", default=[])
     parser.add_argument("--gm-classifier", choices=("auto", "none", "groq", "gemini"), default="auto")
     parser.add_argument("--freeform-action", default="")
     parser.add_argument("--groq-model", default=None)
@@ -1314,9 +1322,8 @@ def _resolve_challenge_option(
     adapter: BoardLedAdapter | None = None,
     preparation_effects: tuple[RuntimePreparationEffect, ...] = (),
 ) -> tuple[ExplorationState, tuple[str, ...]]:
-    actor = next((candidate for candidate in actors if str(candidate.id) == args.leader_id), actors[0])
+    plan = _default_challenge_check_plan(args, option)
     modifiers = (
-        *_ability_roll_modifiers(actor, option.ability_check.ability, option.ability_check.skill),
         *option.ability_check.modifiers,
         *_resource_roll_modifiers(resource),
         *_preparation_roll_modifiers(preparation_effects),
@@ -1327,13 +1334,13 @@ def _resolve_challenge_option(
     instruction = roll_instruction(request)
     if preparation_effects:
         _print_block("Aktywne przygotowania: " + ", ".join(_preparation_summary(effect) for effect in preparation_effects) + ".")
-    _print_section("Test podejścia", f"{option.label}. ST {option.ability_check.dc}. {instruction.message}")
-    natural_roll = _challenge_roll_for_option(args, option.id)
-    if natural_roll is None:
-        natural_roll = _read_int_or_default(args, f"Wpisz naturalny wynik testu dla {actor.name}: ", 10)
-    else:
-        _print_block(f"Używam wyniku testowego dla {option.label}: {natural_roll}.")
-    roll = resolve_d20_roll(D20RollInput(request, natural_roll))
+    _print_section("Test podejścia", f"{option.label}. ST {option.ability_check.dc}. {_check_plan_instruction(actors, plan)} {instruction.message}")
+    observer.record("check_plan_created", {"phase": "challenge", "challenge_id": challenge.id, "option_id": option.id, "plan": plan.as_payload()})
+    check_inputs = _check_inputs_for_plan(args, actors, request, plan, option_id=option.id)
+    check_result = resolve_exploration_check(plan, check_inputs)
+    roll = check_result.selected_roll
+    actor = check_result.selected_actor
+    observer.record("check_resolved", {"phase": "challenge", "challenge_id": challenge.id, "option_id": option.id, **check_result.as_payload()})
     result = resolve_challenge_option(
         state,
         challenge,
@@ -1355,6 +1362,8 @@ def _resolve_challenge_option(
             "success": result.success,
             "critical_failure": result.critical_failure,
             "resource_id": resource.id if resource else None,
+            "check_plan": plan.as_payload(),
+            "consequence_actor_ids": [str(actor.id) for actor in check_result.consequence_actors],
         },
     )
     observer.record(
@@ -2114,19 +2123,27 @@ def _handle_npc_interaction(
     roll_payload = None
     if proposal.requires_roll:
         assert proposal.ability is not None and proposal.dc is not None
-        instruction = _party_check_instruction(exploration.actors, proposal.ability, proposal.skill)
+        plan = _default_npc_check_plan(args, proposal)
+        instruction = _check_plan_instruction(exploration.actors, plan)
         _print_section(
             "Test przy NPC",
             f"{proposal.action_type}. ST {proposal.dc}. {instruction}",
         )
-        rolls = _party_check_inputs(args, exploration.actors, D20RollRequest(), ability=proposal.ability, skill=proposal.skill)
-        result = resolve_party_check(rolls, proposal.dc)
+        observer.record("check_plan_created", {"phase": "npc", "point_id": point.id, "action_type": proposal.action_type, "plan": plan.as_payload()})
+        rolls = _check_inputs_for_plan(args, exploration.actors, D20RollRequest(), plan)
+        result = resolve_exploration_check(plan, rolls)
         success = result.success
         roll_payload = {
-            "dc": result.dc,
+            "dc": result.plan.dc,
             "success": result.success,
-            "winner_id": str(result.winner.id),
-            "winning_total": result.winning_roll.total,
+            "winner_id": str(result.selected_actor.id),
+            "winning_total": result.selected_roll.total,
+            "selected_actor_id": str(result.selected_actor.id),
+            "selected_total": result.selected_roll.total,
+            "successful_actor_ids": [str(actor.id) for actor in result.successful_actors],
+            "failed_actor_ids": [str(actor.id) for actor in result.failed_actors],
+            "consequence_actor_ids": [str(actor.id) for actor in result.consequence_actors],
+            "check_plan": result.plan.as_payload(),
             "rolls": [
                 {"actor_id": str(actor.id), "natural_roll": roll.natural_roll, "total": roll.total}
                 for actor, roll in result.rolls
@@ -2138,6 +2155,7 @@ def _handle_npc_interaction(
         _print_section("Wynik interakcji NPC", result_message)
         messages.append(result_message)
         observer.record("npc_check_resolved", {"point_id": point.id, **roll_payload})
+        observer.record("check_resolved", {"phase": "npc", "point_id": point.id, **result.as_payload()})
     changes = proposal.flag_changes_on_success if success else proposal.flag_changes_on_failure
     for change in changes:
         new_state = replace(new_state, flags=set_scene_flag(new_state.flags, change.key, change.value))
@@ -2179,6 +2197,139 @@ def _party_check_inputs(
         )
         result.append(PartyCheckInput(actor, natural_roll, actor_request))
     return tuple(result)
+
+
+def _lead_actor_id(args: argparse.Namespace) -> str:
+    return str(args.lead_actor or args.leader_id)
+
+
+def _actor_by_id(actors: tuple[Actor, ...], actor_id: str | None) -> Actor | None:
+    if not actor_id:
+        return None
+    return next((actor for actor in actors if str(actor.id) == str(actor_id)), None)
+
+
+def _check_actors_for_plan(
+    actors: tuple[Actor, ...],
+    plan: ExplorationCheckPlan,
+) -> tuple[Actor, ...]:
+    if plan.participants == CheckParticipants.WHOLE_PARTY:
+        return actors
+    if plan.participants == CheckParticipants.SELECTED_ACTORS:
+        selected = tuple(actor for actor in actors if str(actor.id) in set(plan.selected_actor_ids))
+        return selected or actors
+    lead = _actor_by_id(actors, plan.lead_actor_id) or actors[0]
+    if plan.participants == CheckParticipants.LEAD_WITH_HELP:
+        helper = _actor_by_id(actors, plan.helper_actor_id)
+        if helper is not None and helper != lead:
+            return (lead, helper)
+    return (lead,)
+
+
+def _check_inputs_for_plan(
+    args: argparse.Namespace,
+    actors: tuple[Actor, ...],
+    request: D20RollRequest,
+    plan: ExplorationCheckPlan,
+    *,
+    option_id: str | None = None,
+) -> tuple[PartyCheckInput, ...]:
+    overrides = _parse_actor_value_overrides(args.party_check_roll, int)
+    challenge_roll = _challenge_roll_for_option(args, option_id) if option_id else None
+    result: list[PartyCheckInput] = []
+    plan_actors = _check_actors_for_plan(actors, plan)
+    for index, actor in enumerate(plan_actors):
+        default_roll = int(overrides.get(str(actor.id), challenge_roll if challenge_roll is not None and index == 0 else 10))
+        natural_roll = _read_int_or_default(args, f"Wpisz naturalny wynik testu dla {actor.name} albo Enter dla {default_roll}: ", default_roll)
+        actor_request = D20RollRequest(
+            mode=request.mode,
+            modifiers=(*_ability_roll_modifiers(actor, plan.ability, plan.skill), *request.modifiers),
+        )
+        result.append(PartyCheckInput(actor, natural_roll, actor_request))
+    return tuple(result)
+
+
+def _default_challenge_check_plan(
+    args: argparse.Namespace,
+    option: ExplorationChallengeOption,
+) -> ExplorationCheckPlan:
+    return ExplorationCheckPlan(
+        participants=option.check_participants or CheckParticipants.SINGLE_ACTOR,
+        aggregation=option.check_aggregation or CheckAggregation.LEAD_RESULT,
+        consequence_targets=option.consequence_targets or (ConsequenceTarget.LEAD_ACTOR, ConsequenceTarget.SCENE),
+        lead_actor_id=_lead_actor_id(args),
+        helper_actor_id=args.helper_actor,
+        selected_actor_ids=tuple(args.selected_actor),
+        ability=option.ability_check.ability,
+        skill=option.ability_check.skill,
+        dc=option.ability_check.dc,
+        reason_for_players=option.description,
+    )
+
+
+def _default_npc_check_plan(
+    args: argparse.Namespace,
+    proposal,
+) -> ExplorationCheckPlan:
+    participants = proposal.check_participants
+    aggregation = proposal.check_aggregation
+    consequence_targets = proposal.consequence_targets
+    if participants is None:
+        if proposal.action_type in {"medical"}:
+            participants = CheckParticipants.LEAD_WITH_HELP
+        elif proposal.action_type in {"search"}:
+            participants = CheckParticipants.WHOLE_PARTY
+        else:
+            participants = CheckParticipants.SINGLE_ACTOR
+    if aggregation is None:
+        aggregation = CheckAggregation.HIGHEST if participants == CheckParticipants.WHOLE_PARTY else CheckAggregation.LEAD_RESULT
+    if not consequence_targets:
+        if proposal.action_type in {"medical", "social", "information"}:
+            consequence_targets = (ConsequenceTarget.NPC,)
+        elif proposal.action_type in {"theft", "harm", "intimidation"}:
+            consequence_targets = (ConsequenceTarget.LEAD_ACTOR, ConsequenceTarget.NPC)
+        else:
+            consequence_targets = (ConsequenceTarget.SCENE,)
+    return ExplorationCheckPlan(
+        participants=participants,
+        aggregation=aggregation,
+        consequence_targets=tuple(consequence_targets),
+        lead_actor_id=_lead_actor_id(args),
+        helper_actor_id=args.helper_actor,
+        selected_actor_ids=tuple(args.selected_actor),
+        ability=proposal.ability or "wisdom",
+        skill=proposal.skill,
+        dc=proposal.dc or 10,
+        reason_for_players=proposal.player_narration,
+    )
+
+
+def _check_plan_instruction(actors: tuple[Actor, ...], plan: ExplorationCheckPlan) -> str:
+    actor_names = ", ".join(actor.name for actor in _check_actors_for_plan(actors, plan))
+    participants_text = {
+        CheckParticipants.SINGLE_ACTOR: f"test wykonuje jedna postać: {actor_names}",
+        CheckParticipants.LEAD_WITH_HELP: f"test wykonuje prowadzący z pomocą: {actor_names}",
+        CheckParticipants.WHOLE_PARTY: "rzuca cała drużyna",
+        CheckParticipants.SELECTED_ACTORS: f"rzucają wybrane postacie: {actor_names}",
+    }[plan.participants]
+    aggregation_text = {
+        CheckAggregation.LEAD_RESULT: "liczy się wynik prowadzącego",
+        CheckAggregation.HIGHEST: "liczy się najwyższy wynik",
+        CheckAggregation.LOWEST: "liczy się najniższy wynik",
+        CheckAggregation.MAJORITY: "sukces wymaga co najmniej połowy zdanych testów",
+        CheckAggregation.ALL_MUST_SUCCEED: "wszyscy muszą zdać",
+        CheckAggregation.ANY_SUCCESS: "wystarczy jeden sukces",
+        CheckAggregation.SUM_PROGRESS: "każdy sukces dokłada postęp",
+    }[plan.aggregation]
+    consequence_text = ", ".join(target.value for target in plan.consequence_targets) or "brak"
+    modifier_text = ", ".join(
+        f"{actor.name} {_format_modifier(_ability_roll_modifiers(actor, plan.ability, plan.skill)[0].value)}"
+        for actor in _check_actors_for_plan(actors, plan)
+    )
+    return (
+        f"{participants_text}; {aggregation_text}. "
+        f"Konsekwencje porażki: {consequence_text}. Modyfikatory: {modifier_text}."
+    )
 
 
 def _ability_roll_modifiers(actor: Actor, ability: str, skill: str | None = None) -> tuple[RollModifier, ...]:

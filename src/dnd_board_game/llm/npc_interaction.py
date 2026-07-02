@@ -9,7 +9,14 @@ from typing import Any, Protocol
 import requests
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
-from dnd_board_game.exploration import ExplorationPoint, ExplorationState, ExplorationZone
+from dnd_board_game.exploration import (
+    CheckAggregation,
+    CheckParticipants,
+    ConsequenceTarget,
+    ExplorationPoint,
+    ExplorationState,
+    ExplorationZone,
+)
 from dnd_board_game.combat import scene_flag
 
 from .gm_classifier import CORE_DND_5E_ABILITIES, CORE_DND_5E_SKILLS, GmProposalValidationError, _retry_delay
@@ -33,6 +40,9 @@ class NpcInteractionProposal(BaseModel):
     ability: str | None = None
     skill: str | None = None
     dc: int | None = Field(default=None, ge=5, le=25)
+    check_participants: CheckParticipants | None = None
+    check_aggregation: CheckAggregation | None = None
+    consequence_targets: tuple[ConsequenceTarget, ...] = ()
     success_message: str = Field(default="", max_length=1000)
     failure_message: str = Field(default="", max_length=1000)
     flag_changes_on_success: tuple[NpcFlagChange, ...] = ()

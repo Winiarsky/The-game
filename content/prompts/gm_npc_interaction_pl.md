@@ -19,6 +19,9 @@ Zwracaj JSON w takim kształcie:
   "ability": "wisdom",
   "skill": "medicine",
   "dc": 12,
+  "check_participants": "lead_with_help",
+  "check_aggregation": "lead_result",
+  "consequence_targets": ["npc", "lead_actor"],
   "success_message": "Opis sukcesu.",
   "failure_message": "Opis porażki bez blokowania sceny.",
   "flag_changes_on_success": [
@@ -47,3 +50,7 @@ Zasady:
 - `revealed_information_ids` mogą zawierać tylko id z `npc.locked_information`.
 - ST musi mieścić się w `npc.policy.dc_range`.
 - Jeśli nie trzeba rzutu, ustaw `ability`, `skill` i `dc` na null.
+- Dla testów rozmowy z NPC zwykle używaj `single_actor` albo `lead_with_help` oraz `lead_result`.
+- Dla wspólnego badania śladów albo obserwacji możesz użyć `whole_party` i `highest`.
+- Dla skradania, cichego działania całej drużyny albo sytuacji, gdzie wystarczy jedna zła próba, użyj `whole_party` i `lowest`.
+- `consequence_targets` wybierz z: `lead_actor`, `helper_actor`, `failed_actors`, `whole_party`, `scene`, `npc`, `object`.

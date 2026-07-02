@@ -13,6 +13,9 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 
 from dnd_board_game.combat import SceneAbilityCheck
 from dnd_board_game.exploration import (
+    CheckAggregation,
+    CheckParticipants,
+    ConsequenceTarget,
     ExplorationChallenge,
     ExplorationChallengeOption,
     ExplorationResource,
@@ -138,6 +141,9 @@ class GmClassifierProposal(BaseModel):
     action_flow: GmActionFlow = GmActionFlow.CHALLENGE_ATTEMPT
     preparation_effect: GmPreparationEffect | None = None
     requires_roll_now: bool = True
+    check_participants: CheckParticipants | None = None
+    check_aggregation: CheckAggregation | None = None
+    consequence_targets: tuple[ConsequenceTarget, ...] = ()
     consequences: tuple[GmConsequence, ...] = ()
     success_message: str = ""
     failure_message: str = ""
@@ -614,6 +620,9 @@ def challenge_option_from_validated_proposal(validated: GmValidatedProposal) -> 
         success_complication=complications[GmConsequenceTrigger.SUCCESS],
         failure_complication=complications[GmConsequenceTrigger.FAILURE],
         critical_failure_complication=complications[GmConsequenceTrigger.CRITICAL_FAILURE],
+        check_participants=proposal.check_participants,
+        check_aggregation=proposal.check_aggregation,
+        consequence_targets=proposal.consequence_targets,
     )
 
 

@@ -2,8 +2,13 @@
 
 from .models import (
     ChallengeResult,
+    CheckAggregation,
+    CheckParticipants,
+    ConsequenceTarget,
     ExplorationChallenge,
     ExplorationChallengeAttempt,
+    ExplorationCheckPlan,
+    ExplorationCheckResult,
     ExplorationChallengeOption,
     ExplorationChallengeState,
     ExplorationOption,
@@ -36,6 +41,7 @@ from .models import (
     party_position_feedback,
     reveal_exploration_points,
     resolve_challenge_option,
+    resolve_exploration_check,
     resolve_party_check,
     resolve_zone_search,
     set_party_zone,
@@ -47,8 +53,13 @@ from .models import (
 
 __all__ = [
     "ChallengeResult",
+    "CheckAggregation",
+    "CheckParticipants",
+    "ConsequenceTarget",
     "ExplorationChallenge",
     "ExplorationChallengeAttempt",
+    "ExplorationCheckPlan",
+    "ExplorationCheckResult",
     "ExplorationChallengeOption",
     "ExplorationChallengeState",
     "ExplorationOption",
@@ -81,6 +92,7 @@ __all__ = [
     "party_position_feedback",
     "reveal_exploration_points",
     "resolve_challenge_option",
+    "resolve_exploration_check",
     "resolve_party_check",
     "resolve_zone_search",
     "set_party_zone",

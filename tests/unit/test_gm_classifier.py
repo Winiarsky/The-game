@@ -725,6 +725,14 @@ def test_llm_content_config_loads_general_rules_and_grounding_terms():
     assert "theft" in intent_catalog.ids
 
 
+def test_gm_classifier_rejects_unknown_check_aggregation():
+    data = _proposal().model_dump(mode="json")
+    data["check_aggregation"] = "best_vibes"
+
+    with pytest.raises(ValidationError):
+        GmClassifierProposal.model_validate(data)
+
+
 def test_gm_classifier_request_payload_contains_declaration_thread():
     exploration, state = _state()
     request = build_gm_classifier_request(

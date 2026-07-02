@@ -167,6 +167,30 @@ def _gm_force_gate_completion_proposal():
     )
 
 
+def _gm_quiet_party_proposal():
+    return GmClassifierProposal.model_validate(
+        {
+            "intent_type": "challenge_attempt",
+            "target_challenge_id": "closed_gate",
+            "approach_label": "Ciche przejście przy bramie",
+            "approach_tags": ["quiet", "climbing"],
+            "ability": "dexterity",
+            "skill": "acrobatics",
+            "difficulty_tier": "medium",
+            "difficulty_reason": "Cała drużyna próbuje przejść cicho, więc ryzykiem jest najgorszy wynik.",
+            "dc": 15,
+            "progress_on_success": 2,
+            "progress_on_failure": 1,
+            "used_resource_ids": [],
+            "check_participants": "whole_party",
+            "check_aggregation": "lowest",
+            "consequence_targets": ["scene", "failed_actors"],
+            "consequences": [{"trigger": "failure", "type": "add_noise", "value": 1}],
+            "player_narration": "Próbujecie przejść bardzo cicho, pilnując każdego kroku.",
+        }
+    )
+
+
 def _gm_unsupported_proposal():
     return GmClassifierProposal.model_validate(
         {
@@ -387,6 +411,38 @@ def test_demo_exploration_scene_shows_new_locations_after_gate_completion(tmp_pa
     assert any(event["event_type"] == "exploration_available_locations_shown" for event in events)
 
 
+def test_demo_exploration_scene_challenge_can_use_lowest_party_check(tmp_path):
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--gm-classifier",
+            "groq",
+            "--freeform-action",
+            "Próbujemy przejść przy bramie bardzo cicho.",
+            "--gm-accept",
+            "yes",
+            "--exploration-script",
+            "zone:gate",
+            "--party-check-roll",
+            "hero=17",
+            "--party-check-roll",
+            "rogue=5",
+            "--max-steps",
+            "1",
+        ),
+        gm_client=FakeGmClient(_gm_quiet_party_proposal()),
+    )
+
+    events = _events(result.observation_path)
+    check_events = [event for event in events if event["event_type"] == "check_resolved" and event["payload"]["phase"] == "challenge"]
+    assert check_events
+    assert check_events[0]["payload"]["plan"]["participants"] == "whole_party"
+    assert check_events[0]["payload"]["plan"]["aggregation"] == "lowest"
+    assert check_events[0]["payload"]["success"] is False
+    assert check_events[0]["payload"]["selected_actor_id"] == "rogue"
+    assert check_events[0]["payload"]["consequence_actor_ids"] == ["rogue"]
+
+
 def test_demo_exploration_scene_zone_travel_preview_uses_only_markers(tmp_path):
     connection = FakeConnection(scanned=[(9, 10), (9, 10)])
     result = run_demo(
@@ -513,6 +569,11 @@ def test_demo_exploration_scene_npc_interaction_sets_flags_and_reveals_info(tmp_
     assert ("tower_hint_learned", True) in new_state.flags.values
     assert "npc_check_resolved" in [event["event_type"] for event in events]
     assert "npc_information_revealed" in [event["event_type"] for event in events]
+    check_events = [event for event in events if event["event_type"] == "check_resolved" and event["payload"]["phase"] == "npc"]
+    assert check_events
+    assert check_events[0]["payload"]["plan"]["participants"] == "lead_with_help"
+    assert check_events[0]["payload"]["plan"]["aggregation"] == "lead_result"
+    assert check_events[0]["payload"]["plan"]["consequence_targets"] == ["npc"]
 
 
 def test_demo_exploration_scene_npc_interaction_rejects_blocked_intent(tmp_path):

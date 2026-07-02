@@ -314,6 +314,8 @@ Implementacja MVP:
 - Kliknięcie pola menu wybiera konkretną opcję; `Wycofaj` zamyka menu.
 - `Rozejrzyj się po okolicy` dopiero wtedy podświetla całą strefę i pozwala klikać jej kafle.
 - `Zbadaj obszar` dotyczy aktualnej strefy, może być wykonane raz na strefę i bierze najwyższy wynik z testu drużyny.
+- Testy eksploracyjne mają jawny plan: kto rzuca (`single_actor`, `lead_with_help`, `whole_party`, `selected_actors`), jak agregujemy wynik (`lead_result`, `highest`, `lowest`, `majority`, `all_must_succeed`, `any_success`, `sum_progress`) i kogo dotyczą konsekwencje (`lead_actor`, `helper_actor`, `failed_actors`, `whole_party`, `scene`, `npc`, `object`).
+- Dla wspólnego szukania domyślnie pasuje `whole_party/highest` albo `any_success`; dla skradania całej drużyny pasuje `whole_party/lowest`; dla działań prowadzonych przez jedną postać pasuje `single_actor` albo `lead_with_help` z `lead_result`.
 - Sukces badania może ujawnić ukryty punkt i ustawić flagę sceny.
 - Eksploracyjne przeszkody docelowo nie powinny być twardymi blokadami rzutu.
 - Domyślny model eksploracyjnego testu to `fail-forward`: porażka zmienia koszt, ryzyko albo komplikację, ale nie powinna zatrzymywać całej sceny.
@@ -365,6 +367,7 @@ Poza zakresem MVP:
 Testy:
 
 - `tests/unit/test_exploration_setup.py`
+- `tests/unit/test_exploration_checks.py`
 - `tests/unit/test_exploration_led_feedback.py`
 - `tests/unit/test_exploration_zones.py`
 - `tests/unit/test_party_checks.py`

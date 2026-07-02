@@ -32,6 +32,9 @@ Zwracaj wyłącznie JSON w takim kształcie:
   "action_flow": "challenge_attempt",
   "preparation_effect": null,
   "requires_roll_now": true,
+  "check_participants": "single_actor",
+  "check_aggregation": "lead_result",
+  "consequence_targets": ["lead_actor", "scene"],
   "consequences": [
     {"trigger": "failure", "type": "add_noise", "value": 1},
     {"trigger": "critical_failure", "type": "add_complication", "value": "minor_injury"}
@@ -76,6 +79,14 @@ Zasady:
 - `challenge_attempt`: musi mieć rzut teraz, czyli `requires_roll_now: true`, bez obowiązkowego `preparation_effect`.
 - `preparation`: nie ma rzutu teraz, czyli `requires_roll_now: false`; musi mieć `preparation_effect`; pola `ability`, `skill`, `dc`, `progress_on_success`, `progress_on_failure` mogą być null.
 - `combined`: zapisuje przygotowanie i od razu robi próbę; musi mieć `preparation_effect`, `requires_roll_now: true` i komplet pól rzutu.
+- `check_participants` wybierz z: `single_actor`, `lead_with_help`, `whole_party`, `selected_actors`.
+- `check_aggregation` wybierz z: `lead_result`, `highest`, `lowest`, `majority`, `all_must_succeed`, `any_success`, `sum_progress`.
+- `consequence_targets` wybierz z: `lead_actor`, `helper_actor`, `failed_actors`, `whole_party`, `scene`, `npc`, `object`.
+- Jeśli pojedyncza postać wykonuje akcję, zwykle użyj `single_actor` i `lead_result`.
+- Jeśli jedna postać prowadzi, a druga pomaga, użyj `lead_with_help` i `lead_result`.
+- Jeśli cała drużyna czegoś szuka lub nasłuchuje, użyj `whole_party` i `highest` albo `any_success`.
+- Jeśli cała drużyna próbuje działać cicho, skradanie zależy od najsłabszego wyniku: użyj `whole_party` i `lowest`.
+- Jeśli klasyczny group check pasuje najlepiej, użyj `whole_party` i `majority`.
 - Jeśli `challenge.llm_policy.dc_policy.tiers` nie jest puste, nie wybieraj ST swobodnie.
 - Najpierw wybierz `difficulty_tier` z `challenge.llm_policy.dc_policy.allowed_tiers`, potem ustaw `dc` dokładnie na wartość tego tieru.
 - `difficulty_reason` ma krótko wyjaśnić, dlaczego deklaracja graczy pasuje do tego tieru w tej konkretnej przeszkodzie.
