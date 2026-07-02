@@ -173,7 +173,18 @@ def test_load_abandoned_watchtower_builds_exploration_scene():
     assert wounded_scout.npc_interaction is not None
     assert wounded_scout.npc_interaction.name == "Ranny zwiadowca"
     assert "scout_stabilized" in wounded_scout.npc_interaction.policy.allowed_flags
-    assert {info.id for info in wounded_scout.npc_interaction.locked_information} == {"tower_hint", "hidden_cache_hint"}
+    policy = wounded_scout.npc_interaction.policy
+    assert policy.intent_permission("medical") is not None
+    assert policy.intent_permission("information") is not None
+    assert policy.intent_permission("information").status == "locked"
+    assert policy.intent_permission("trade").status == "blocked"
+    assert "sleight_of_hand" in policy.allowed_skills
+    assert {info.id for info in wounded_scout.npc_interaction.locked_information} == {
+        "tower_hint",
+        "beast_hint",
+        "commander_curse_hint",
+        "hidden_cache_hint",
+    }
 
 
 def test_load_abandoned_watchtower_folder_manifest_matches_alias_file():

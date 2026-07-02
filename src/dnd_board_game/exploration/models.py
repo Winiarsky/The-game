@@ -178,17 +178,57 @@ class NpcLockedInformation:
 
 
 @dataclass(frozen=True, slots=True)
+class NpcIntentPermission:
+    intent: str
+    status: str
+    notes: str = ""
+    unlock_if_flags: tuple[str, ...] = ()
+    limits: dict[str, object] | None = None
+    consequences: dict[str, object] | None = None
+    reveals: tuple[str, ...] = ()
+
+    def as_payload(self) -> dict[str, object]:
+        payload: dict[str, object] = {
+            "status": self.status,
+            "notes": self.notes,
+            "unlock_if_flags": list(self.unlock_if_flags),
+            "reveals": list(self.reveals),
+        }
+        if self.limits:
+            payload["limits"] = self.limits
+        if self.consequences:
+            payload["consequences"] = self.consequences
+        return payload
+
+
+@dataclass(frozen=True, slots=True)
 class NpcInteractionPolicy:
     allowed_actions: tuple[str, ...] = ()
+    intent_permissions: tuple[NpcIntentPermission, ...] = ()
     allowed_flags: tuple[str, ...] = ()
     allowed_abilities: tuple[str, ...] = ()
     allowed_skills: tuple[str, ...] = ()
     dc_min: int = 5
     dc_max: int = 25
 
+    @property
+    def allowed_intents(self) -> tuple[str, ...]:
+        return tuple(item.intent for item in self.intent_permissions if item.status != "blocked")
+
+    def intent_permission(self, intent: str) -> NpcIntentPermission | None:
+        normalized = intent.strip().lower()
+        for item in self.intent_permissions:
+            if item.intent == normalized:
+                return item
+        return None
+
     def as_payload(self) -> dict[str, object]:
         return {
             "allowed_actions": list(self.allowed_actions),
+            "intent_permissions": {
+                permission.intent: permission.as_payload()
+                for permission in self.intent_permissions
+            },
             "allowed_flags": list(self.allowed_flags),
             "allowed_abilities": list(self.allowed_abilities),
             "allowed_skills": list(self.allowed_skills),

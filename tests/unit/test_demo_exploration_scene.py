@@ -78,6 +78,26 @@ class FakeNpcClient:
         return self.proposal
 
 
+def test_npc_interaction_proposal_accepts_null_optional_messages():
+    proposal = NpcInteractionProposal.model_validate(
+        {
+            "action_type": "social",
+            "player_narration": None,
+            "npc_response": None,
+            "requires_roll": False,
+            "success_message": None,
+            "failure_message": None,
+            "gm_notes": None,
+        }
+    )
+
+    assert proposal.player_narration == ""
+    assert proposal.npc_response == ""
+    assert proposal.success_message == ""
+    assert proposal.failure_message == ""
+    assert proposal.gm_notes == ""
+
+
 def _args(tmp_path, *extra):
     parser = build_parser()
     return parser.parse_args(
@@ -444,7 +464,7 @@ def test_demo_exploration_scene_npc_interaction_sets_flags_and_reveals_info(tmp_
     point = next(point for point in state.points if point.id == "wounded_scout")
     proposal = NpcInteractionProposal.model_validate(
         {
-            "action_type": "help",
+            "action_type": "medical",
             "player_narration": "Klękacie przy zwiadowcy i odsuwacie deski, starając się nie szarpać rany.",
             "npc_response": "Zwiadowca syczy z bólu, ale przestaje się cofać.",
             "requires_roll": True,
@@ -488,17 +508,63 @@ def test_demo_exploration_scene_npc_interaction_sets_flags_and_reveals_info(tmp_
 
     events = _events(observer.path)
     assert any("Stabilizujecie zwiadowcę" in message for message in messages)
-    assert any("gobliny przeciągnęły coś ciężkiego do wieży" in message for message in messages)
+    assert any("ktoś przeciągnął coś ciężkiego w stronę wieży obserwacyjnej" in message for message in messages)
     assert ("scout_stabilized", True) in new_state.flags.values
     assert ("tower_hint_learned", True) in new_state.flags.values
     assert "npc_check_resolved" in [event["event_type"] for event in events]
     assert "npc_information_revealed" in [event["event_type"] for event in events]
 
 
+def test_demo_exploration_scene_npc_interaction_rejects_blocked_intent(tmp_path):
+    exploration = build_exploration_from_scenario(load_scenario("content/scenarios/abandoned_watchtower.json"))
+    state = ExplorationState(
+        exploration.zones,
+        exploration.points,
+        exploration.party_position,
+        SceneFlags(),
+        challenges=exploration.challenges,
+        resources=exploration.resources,
+        inventory_resource_ids=exploration.initial_resource_ids,
+    )
+    state, _revealed = reveal_exploration_points(state, ("wounded_scout",))
+    point = next(point for point in state.points if point.id == "wounded_scout")
+    proposal = NpcInteractionProposal.model_validate(
+        {
+            "action_type": "trade",
+            "player_narration": "Próbujecie ubić z nim targ, ale zwiadowca nie jest kupcem.",
+            "requires_roll": False,
+        }
+    )
+    args = _args(
+        tmp_path,
+        "--gm-classifier",
+        "gemini",
+        "--freeform-action",
+        "chcemy kupić od niego informacje",
+        "--gm-accept",
+        "yes",
+    )
+    observer = SessionObserver("npc_blocked_test", tmp_path)
+
+    new_state, messages, _sent = demo_exploration_scene._handle_exploration_point(
+        args,
+        exploration,
+        state,
+        point,
+        None,
+        observer,
+        FakeNpcClient(proposal),
+    )
+
+    assert new_state == state
+    assert any("NPC intent is blocked here: trade" in message for message in messages)
+    assert "npc_interaction_rejected" in [event["event_type"] for event in _events(observer.path)]
+
+
 def test_demo_exploration_scene_debug_point_starts_npc_interaction_without_map_flow(tmp_path):
     proposal = NpcInteractionProposal.model_validate(
         {
-            "action_type": "calm",
+            "action_type": "social",
             "player_narration": "Mówicie spokojnie i pokazujecie puste dłonie.",
             "npc_response": "Zwiadowca oddycha wolniej i opuszcza rękę.",
             "requires_roll": False,

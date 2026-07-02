@@ -30,6 +30,7 @@ from dnd_board_game.exploration import (
     LlmContext,
     LlmDcTier,
     NpcInteraction,
+    NpcIntentPermission,
     NpcInteractionPolicy,
     NpcLockedInformation,
     PartyPosition,
@@ -552,6 +553,7 @@ def _parse_npc_interaction(data: Any, point_id: str) -> NpcInteraction | None:
         ),
         policy=NpcInteractionPolicy(
             allowed_actions=tuple(str(item) for item in policy_data.get("allowed_actions", [])),
+            intent_permissions=_parse_npc_intent_permissions(policy_data.get("intent_permissions", {}), point_id),
             allowed_flags=tuple(str(item) for item in policy_data.get("allowed_flags", [])),
             allowed_abilities=tuple(str(item) for item in policy_data.get("allowed_abilities", [])),
             allowed_skills=tuple(str(item) for item in policy_data.get("allowed_skills", [])),
@@ -559,6 +561,53 @@ def _parse_npc_interaction(data: Any, point_id: str) -> NpcInteraction | None:
             dc_max=dc_max,
         ),
     )
+
+
+def _parse_npc_intent_permissions(data: Any, point_id: str) -> tuple[NpcIntentPermission, ...]:
+    if data is None:
+        return ()
+    if not isinstance(data, dict):
+        raise ValueError(f"exploration point {point_id}.npc_interaction.policy.intent_permissions must be an object.")
+    permissions: list[NpcIntentPermission] = []
+    for raw_intent, raw_permission in data.items():
+        intent = str(raw_intent).strip().lower()
+        if not intent:
+            raise ValueError(f"exploration point {point_id}.npc_interaction.policy.intent_permissions contains empty intent.")
+        if isinstance(raw_permission, str):
+            permission_data: dict[str, Any] = {"status": raw_permission}
+        elif isinstance(raw_permission, dict):
+            permission_data = raw_permission
+        else:
+            raise ValueError(
+                f"exploration point {point_id}.npc_interaction.policy.intent_permissions.{intent} must be string or object."
+            )
+        status = str(permission_data.get("status", "")).strip().lower()
+        if status not in {"allowed", "allowed_with_consequence", "allowed_with_context", "locked", "blocked"}:
+            raise ValueError(
+                f"exploration point {point_id}.npc_interaction.policy.intent_permissions.{intent}.status is invalid."
+            )
+        limits = permission_data.get("limits")
+        if limits is not None and not isinstance(limits, dict):
+            raise ValueError(
+                f"exploration point {point_id}.npc_interaction.policy.intent_permissions.{intent}.limits must be an object."
+            )
+        consequences = permission_data.get("consequences")
+        if consequences is not None and not isinstance(consequences, dict):
+            raise ValueError(
+                f"exploration point {point_id}.npc_interaction.policy.intent_permissions.{intent}.consequences must be an object."
+            )
+        permissions.append(
+            NpcIntentPermission(
+                intent=intent,
+                status=status,
+                notes=str(permission_data.get("notes", "")),
+                unlock_if_flags=tuple(str(item) for item in permission_data.get("unlock_if_flags", [])),
+                limits=limits,
+                consequences=consequences,
+                reveals=tuple(str(item) for item in permission_data.get("reveals", [])),
+            )
+        )
+    return tuple(permissions)
 
 
 def _parse_npc_locked_information(data: Any, point_id: str) -> NpcLockedInformation:

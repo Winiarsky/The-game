@@ -52,10 +52,10 @@
 - [x] Move general LLM vocabularies and freeform grounding terms into `content/llm`.
 - [x] Remove obsolete single-step legacy GM classifier prompt.
 - [x] Add folder-based scenario manifests and split `abandoned_watchtower` into smaller JSON parts.
-- [ ] Add interaction/object-level LLM policy when freeform interactions expand beyond challenges.
-- [ ] Add global LLM intent catalog in `content/llm/intent_catalog.json`.
+- [x] Add interaction/object-level LLM policy when freeform interactions expand beyond challenges.
+- [x] Add global LLM intent catalog in `content/llm/intent_catalog.json`.
 - [ ] Add global LLM effect and condition catalogs for deterministic content-driven outcomes.
-- [ ] Replace NPC `allowed_actions` with local `intent_permissions` based on the global intent catalog.
+- [x] Replace NPC `allowed_actions` with local `intent_permissions` based on the global intent catalog.
 - [ ] Add runtime validation/execution for intent parameters, limits, branches, and known effect primitives.
 - [x] Extend preparation effects with advantage/disadvantage, effect boost, unlock option, and grant resource.
 - [x] Show consequence preview before accepted freeform challenge rolls.

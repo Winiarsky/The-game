@@ -44,9 +44,9 @@
       "npc_interaction": {
         "name": "Ranny zwiadowca",
         "public_description": "Pod zawalonym wozem leży ranny zwiadowca w rozdartej opończy. Oddycha płytko, ściska bok i reaguje nerwowo na każdy gwałtowny ruch.",
-        "gm_context": "Zwiadowca ukrył się po ataku goblinów. Jest przestraszony i obolały. Nie poda ważnych informacji, dopóki drużyna go nie uspokoi albo nie udzieli mu podstawowej pomocy. Nie jest wrogiem. Nie zna pełnego planu goblinów, ale widział, że coś przenosili do wieży obserwacyjnej.",
+        "gm_context": "Prawda scenariusza: zwiadowca został ranny przez bestię grasującą w okolicy strażnicy. Bestią jest przeklęty komendant strażnicy, który przemienia się w sowoniedźwiedzia. Rany nie wyglądają jak zadane zwykłą bronią. Zwiadowca widział, że coś ciężkiego przeciągnięto w stronę wieży obserwacyjnej. Ma torbę z meldunkami, cenną dla niego, ale o niewielkiej wartości rynkowej. W rękawie ukrywa mały nóż i użyje go tylko w desperacji. Zasady prowadzenia: nie ujawniaj wszystkich tropów od razu; łagodne podejście i realna pomoc powinny budować zaufanie; zastraszanie i kradzież są możliwe, ale ryzykowne; informacje są zablokowane flagami; podpowiedzi dawaj dopiero, gdy gracze pytają albo robią coś, co naturalnie odsłania trop. Wiedza i ograniczenia: zwiadowca nie zna pełnej prawdy o klątwie komendanta, nie ma dużej ilości złota ani magicznego przedmiotu, nie może zostać aktywnym towarzyszem drużyny, a improwizowane materiały opatrunkowe pojawiają się jako użyteczny zasób tylko wtedy, gdy gracze ich szukają.",
         "personality": "Zmęczony, podejrzliwy, mówi krótkimi zdaniami. Po okazaniu pomocy staje się wdzięczny i konkretny.",
-        "current_state": "Ranny, przestraszony, przygnieciony lekkimi deskami. Może rozmawiać, ale łatwo wpada w panikę.",
+        "current_state": "Ranny, przestraszony, podejrzliwy i przygnieciony lekkimi deskami. Może rozmawiać, ale łatwo wpada w panikę. Ściska torbę z meldunkami i próbuje nie zdradzać, że ma ukryty nóż.",
         "dialogue_intro": "Zwiadowca syczy z bólu: 'Nie podchodźcie tak nagle... kto tam?'",
         "capabilities": [
           "can_talk",
@@ -59,12 +59,35 @@
           {
             "id": "tower_hint",
             "label": "Wskazówka o wieży",
-            "text": "Zwiadowca mówi, że gobliny przeciągnęły coś ciężkiego do wieży obserwacyjnej i zostawiły tam straż.",
+            "text": "Zwiadowca mówi, że ktoś przeciągnął coś ciężkiego w stronę wieży obserwacyjnej. Widział ślady w błocie i słyszał metaliczny zgrzyt na kamieniach.",
             "reveal_if_flags": [
               "scout_stabilized"
             ],
             "sets_flags": [
               "tower_hint_learned"
+            ]
+          },
+          {
+            "id": "beast_hint",
+            "label": "Trop bestii",
+            "text": "Rany zwiadowcy wyglądają jak po wielkich pazurach i dziobie. Zwiadowca mamrocze o czymś z sowią głową i cielskiem niedźwiedzia.",
+            "reveal_if_flags": [
+              "scout_calmed"
+            ],
+            "sets_flags": [
+              "beast_hint_learned"
+            ]
+          },
+          {
+            "id": "commander_curse_hint",
+            "label": "Podejrzenie klątwy komendanta",
+            "text": "Zwiadowca przypomina sobie fragment starego płaszcza komendanta albo znak strażnicy widoczny na bestii. Nie rozumie tego, ale trop sugeruje związek z dawnym dowódcą.",
+            "reveal_if_flags": [
+              "scout_trusts_party",
+              "beast_hint_learned"
+            ],
+            "sets_flags": [
+              "commander_curse_suspected"
             ]
           },
           {
@@ -81,14 +104,89 @@
         ],
         "policy": {
           "allowed_actions": [
-            "talk",
-            "calm",
-            "help",
-            "question",
-            "intimidate",
-            "rob",
-            "leave"
+            "social",
+            "medical",
+            "information",
+            "search",
+            "theft",
+            "harm",
+            "intimidation"
           ],
+          "intent_permissions": {
+            "social": {
+              "status": "allowed",
+              "notes": "Uspokajanie, rozmowa i budowanie zaufania."
+            },
+            "medical": {
+              "status": "allowed",
+              "notes": "Opatrywanie, stabilizacja i badanie ran."
+            },
+            "information": {
+              "status": "locked",
+              "unlock_if_flags": [
+                "scout_calmed",
+                "scout_stabilized",
+                "scout_trusts_party"
+              ],
+              "reveals": [
+                "tower_hint",
+                "beast_hint",
+                "commander_curse_hint",
+                "hidden_cache_hint"
+              ]
+            },
+            "search": {
+              "status": "allowed",
+              "notes": "Badanie ran, okolicy, śladów, emblematów i ukrytego noża."
+            },
+            "theft": {
+              "status": "allowed_with_consequence",
+              "limits": {
+                "max_loot": "meldunki i drobiazgi osobiste",
+                "no_significant_gold": true
+              },
+              "consequences": {
+                "on_success": [
+                  "scout_robbed",
+                  "trust_lost"
+                ],
+                "on_failure": [
+                  "scout_panicked",
+                  "noise_added"
+                ],
+                "on_critical_failure": [
+                  "hidden_knife_response",
+                  "noise_added"
+                ]
+              }
+            },
+            "harm": {
+              "status": "allowed_with_consequence",
+              "consequences": {
+                "on_any": [
+                  "moral_consequence",
+                  "noise_added"
+                ],
+                "on_kill": [
+                  "scout_dead"
+                ]
+              }
+            },
+            "intimidation": {
+              "status": "allowed_with_consequence",
+              "notes": "Możliwe, ale trudne i ryzykowne; porażka powinna pogarszać panikę albo hałas."
+            },
+            "magic": {
+              "status": "allowed_with_context",
+              "notes": "Tylko jeśli drużyna faktycznie ma odpowiedni czar lub zasób."
+            },
+            "trade": {
+              "status": "blocked"
+            },
+            "gambling": {
+              "status": "blocked"
+            }
+          },
           "allowed_flags": [
             "scout_calmed",
             "scout_treated",
@@ -96,13 +194,23 @@
             "scout_trusts_party",
             "scout_panicked",
             "scout_robbed",
+            "scout_dead",
+            "trust_lost",
+            "noise_added",
+            "hidden_knife_response",
+            "medical_complication",
+            "beast_attention",
             "tower_hint_learned",
+            "beast_hint_learned",
+            "commander_curse_suspected",
             "cache_hint_learned"
           ],
           "allowed_abilities": [
             "charisma",
             "wisdom",
-            "intelligence"
+            "intelligence",
+            "dexterity",
+            "strength"
           ],
           "allowed_skills": [
             "persuasion",
@@ -110,7 +218,11 @@
             "insight",
             "intimidation",
             "investigation",
-            "deception"
+            "deception",
+            "sleight_of_hand",
+            "survival",
+            "history",
+            "athletics"
           ],
           "dc_range": [
             10,

@@ -18,7 +18,7 @@ from dnd_board_game.llm import (
     challenge_option_from_validated_proposal,
     validate_gm_classifier_proposal,
 )
-from dnd_board_game.llm.content_config import load_freeform_grounding_terms, load_llm_core_rules
+from dnd_board_game.llm.content_config import load_freeform_grounding_terms, load_llm_core_rules, load_llm_intent_catalog
 from dnd_board_game.scenarios import build_exploration_from_scenario, load_scenario
 
 
@@ -716,10 +716,13 @@ def test_gm_classifier_rejects_gate_style_tag_for_courtyard_challenge():
 def test_llm_content_config_loads_general_rules_and_grounding_terms():
     rules = load_llm_core_rules()
     grounding = load_freeform_grounding_terms()
+    intent_catalog = load_llm_intent_catalog()
 
     assert "strength" in rules.abilities
     assert "athletics" in rules.skills
     assert any(mention.label == "kwas" for mention in grounding.guarded_resource_mentions)
+    assert "social" in intent_catalog.ids
+    assert "theft" in intent_catalog.ids
 
 
 def test_gm_classifier_request_payload_contains_declaration_thread():

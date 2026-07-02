@@ -9,6 +9,7 @@ from typing import Any
 
 CORE_RULES_PATH = Path("content/llm/dnd5e_core_rules.json")
 GROUNDING_TERMS_PATH = Path("content/llm/freeform_grounding_terms.json")
+INTENT_CATALOG_PATH = Path("content/llm/intent_catalog.json")
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,6 +27,23 @@ class GuardedResourceMention:
 @dataclass(frozen=True, slots=True)
 class FreeformGroundingTerms:
     guarded_resource_mentions: tuple[GuardedResourceMention, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class LlmIntentDefinition:
+    id: str
+    label: str
+    description: str
+
+
+@dataclass(frozen=True, slots=True)
+class LlmIntentCatalog:
+    version: int
+    intents: tuple[LlmIntentDefinition, ...]
+
+    @property
+    def ids(self) -> tuple[str, ...]:
+        return tuple(item.id for item in self.intents)
 
 
 @lru_cache(maxsize=1)
@@ -46,6 +64,31 @@ def load_freeform_grounding_terms(path: Path = GROUNDING_TERMS_PATH) -> Freeform
     return FreeformGroundingTerms(
         guarded_resource_mentions=tuple(_parse_guarded_resource_mention(entry, path) for entry in entries)
     )
+
+
+@lru_cache(maxsize=1)
+def load_llm_intent_catalog(path: Path = INTENT_CATALOG_PATH) -> LlmIntentCatalog:
+    data = _read_json(path)
+    intents = data.get("intents", {})
+    if not isinstance(intents, dict):
+        raise ValueError(f"{path}.intents must be an object.")
+    parsed: list[LlmIntentDefinition] = []
+    for intent_id, raw_definition in intents.items():
+        normalized_intent_id = str(intent_id).strip().lower()
+        if not normalized_intent_id:
+            raise ValueError(f"{path}.intents contains empty intent id.")
+        if not isinstance(raw_definition, dict):
+            raise ValueError(f"{path}.intents.{intent_id} must be an object.")
+        label = str(raw_definition.get("label", "")).strip()
+        description = str(raw_definition.get("description", "")).strip()
+        if not label:
+            raise ValueError(f"{path}.intents.{intent_id}.label cannot be empty.")
+        if not description:
+            raise ValueError(f"{path}.intents.{intent_id}.description cannot be empty.")
+        parsed.append(LlmIntentDefinition(normalized_intent_id, label, description))
+    if not parsed:
+        raise ValueError(f"{path}.intents cannot be empty.")
+    return LlmIntentCatalog(version=int(data.get("version", 1)), intents=tuple(parsed))
 
 
 def _parse_guarded_resource_mention(data: Any, path: Path) -> GuardedResourceMention:

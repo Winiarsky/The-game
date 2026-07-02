@@ -45,6 +45,11 @@ class NpcInteractionProposal(BaseModel):
     def _lower_optional(cls, value: str | None) -> str | None:
         return value.strip().lower() if value else value
 
+    @field_validator("player_narration", "npc_response", "success_message", "failure_message", "gm_notes", mode="before")
+    @classmethod
+    def _none_to_empty_text(cls, value: object) -> object:
+        return "" if value is None else value
+
     @field_validator("revealed_information_ids")
     @classmethod
     def _unique_information_ids(cls, value: tuple[str, ...]) -> tuple[str, ...]:
@@ -219,7 +224,24 @@ def validate_npc_interaction_proposal(
     if npc is None:
         raise ValueError(f"Exploration point {request.point.id} has no npc_interaction.")
     policy = npc.policy
-    if policy.allowed_actions and proposal.action_type not in policy.allowed_actions:
+    success_flags = {change.key for change in proposal.flag_changes_on_success if change.value is True}
+    permission = policy.intent_permission(proposal.action_type)
+    if policy.intent_permissions:
+        if permission is None:
+            raise ValueError(f"NPC intent is not allowed here: {proposal.action_type}.")
+        if permission.status == "blocked":
+            raise ValueError(f"NPC intent is blocked here: {proposal.action_type}.")
+        if permission.status == "locked":
+            missing_flags = [
+                flag
+                for flag in permission.unlock_if_flags
+                if not scene_flag(request.state.flags, flag, False) and flag not in success_flags
+            ]
+            if missing_flags:
+                raise ValueError(
+                    f"NPC intent {proposal.action_type} is locked by flags: {', '.join(missing_flags)}."
+                )
+    elif policy.allowed_actions and proposal.action_type not in policy.allowed_actions:
         raise ValueError(f"NPC action is not allowed here: {proposal.action_type}.")
     if proposal.requires_roll:
         if proposal.ability is None or proposal.ability not in CORE_DND_5E_ABILITIES:
@@ -244,7 +266,6 @@ def validate_npc_interaction_proposal(
         if info_id not in known_info:
             raise ValueError(f"NPC tried to reveal unknown information: {info_id}.")
         missing_flags = [flag for flag in known_info[info_id].reveal_if_flags if not scene_flag(request.state.flags, flag, False)]
-        success_flags = {change.key for change in proposal.flag_changes_on_success if change.value is True}
         missing_after_success = [flag for flag in missing_flags if flag not in success_flags]
         if missing_after_success:
             raise ValueError(

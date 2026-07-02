@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "intents": {
+    "social": {
+      "label": "Interakcja społeczna",
+      "description": "Uspokajanie, przekonywanie, rozmowa, budowanie zaufania."
+    },
+    "medical": {
+      "label": "Pomoc medyczna",
+      "description": "Opatrywanie ran, stabilizacja, diagnoza stanu zdrowia."
+    },
+    "information": {
+      "label": "Zdobywanie informacji",
+      "description": "Pytania, wypytywanie, prośby o wskazówki i ujawnianie tropów."
+    },
+    "search": {
+      "label": "Badanie i przeszukiwanie",
+      "description": "Oględziny, badanie śladów, rozpoznawanie szczegółów i ukrytych elementów."
+    },
+    "theft": {
+      "label": "Kradzież",
+      "description": "Kradzież kieszonkowa, zabranie przedmiotu po cichu albo przeszukanie cudzych rzeczy."
+    },
+    "harm": {
+      "label": "Krzywdzenie",
+      "description": "Atak, dobicie, brutalne działanie albo świadome pogorszenie stanu NPC."
+    },
+    "intimidation": {
+      "label": "Zastraszanie",
+      "description": "Groźby, presja, wymuszanie informacji lub posłuszeństwa."
+    },
+    "magic": {
+      "label": "Magia",
+      "description": "Działanie oparte o czar, magiczny przedmiot albo efekt nadnaturalny."
+    },
+    "trade": {
+      "label": "Handel",
+      "description": "Wymiana, sprzedaż, kupno albo targowanie się."
+    },
+    "gambling": {
+      "label": "Hazard",
+      "description": "Zakłady, gra o stawkę, ryzykowanie zasobów dla zysku."
+    }
+  }
+}
