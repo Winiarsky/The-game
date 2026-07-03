@@ -160,6 +160,7 @@ class ExplorationUiSession:
             "active_point": _point_payload(self.active_point) if self.active_point else None,
             "resources": [_resource_payload(resource) for resource in self.state.resources if resource.id in self.state.inventory_resource_ids],
             "actors": [{"id": str(actor.id), "name": actor.name} for actor in self.exploration.actors],
+            "scene_status": _scene_status_payload(self.state),
             "flags": [{"key": key, "value": value} for key, value in self.state.flags.values],
             "messages": [message.as_payload() for message in self.messages],
             "pending": self.pending.as_payload() if self.pending else None,
@@ -658,6 +659,60 @@ def _challenge_payload(state: ExplorationState, challenge: ExplorationChallenge 
     }
 
 
+def _scene_status_payload(state: ExplorationState) -> list[dict[str, str]]:
+    flags = dict(state.flags.values)
+    status: list[dict[str, str]] = []
+    gate_state = "otwarta" if flags.get("gate_passed") is True else "zamknięta"
+    status.append({"label": "Brama", "value": gate_state})
+    closed_gate = next((challenge for challenge in state.challenges if challenge.id == "closed_gate"), None)
+    if closed_gate is not None:
+        closed_gate_state = challenge_state_for(state, closed_gate.id)
+        status.append(
+            {
+                "label": "Postęp bramy",
+                "value": f"{closed_gate_state.current_progress}/{closed_gate.progress_required}",
+            }
+        )
+        status.append({"label": "Hałas", "value": _noise_label(closed_gate_state.noise)})
+        if closed_gate_state.complications:
+            status.append({"label": "Komplikacje", "value": ", ".join(closed_gate_state.complications)})
+    courtyard = next((challenge for challenge in state.challenges if challenge.id == "courtyard_search"), None)
+    if courtyard is not None:
+        courtyard_state = challenge_state_for(state, courtyard.id)
+        courtyard_value = "przeszukany" if courtyard_state.completed else f"w toku {courtyard_state.current_progress}/{courtyard.progress_required}"
+        status.append({"label": "Dziedziniec", "value": courtyard_value})
+    visible_point_ids = {point.id for point in visible_exploration_points(state.points)}
+    if "wounded_scout" in visible_point_ids:
+        if flags.get("scout_stabilized") is True:
+            scout_state = "opatrzony"
+        elif flags.get("scout_calmed") is True:
+            scout_state = "uspokojony"
+        elif flags.get("scout_panicked") is True:
+            scout_state = "spanikowany"
+        else:
+            scout_state = "odkryty, ranny"
+        status.append({"label": "Ranny zwiadowca", "value": scout_state})
+    if flags.get("tower_hint_learned") is True:
+        status.append({"label": "Trop", "value": "coś ciężkiego przeciągnięto ku wieży"})
+    if flags.get("beast_hint_learned") is True:
+        status.append({"label": "Trop bestii", "value": "rany wskazują na wielkie pazury i dziób"})
+    if flags.get("commander_curse_suspected") is True:
+        status.append({"label": "Podejrzenie", "value": "bestia może mieć związek z dawnym komendantem"})
+    if "hidden_cache" in visible_point_ids:
+        status.append({"label": "Ukryta skrytka", "value": "odkryta"})
+    return status
+
+
+def _noise_label(noise: int) -> str:
+    if noise <= 0:
+        return "brak"
+    if noise <= 2:
+        return f"niski ({noise})"
+    if noise <= 4:
+        return f"średni ({noise})"
+    return f"wysoki ({noise})"
+
+
 def _resource_payload(resource: ExplorationResource) -> dict[str, object]:
     return {"id": resource.id, "label": resource.label, "bonus_tags": list(resource.bonus_tags)}
 
@@ -706,6 +761,10 @@ _HTML = """
     details.debug-panel summary { cursor: pointer; color: #a9a298; }
     .status { border-left: 3px solid #f5c542; padding: 10px 12px; margin: 0 0 12px; background: #211f16; color: #f5e3a1; }
     .status[hidden] { display: none; }
+    .status-list { display: grid; gap: 8px; margin-top: 6px; }
+    .status-item { border-bottom: 1px solid #34383d; padding-bottom: 7px; }
+    .status-item:last-child { border-bottom: 0; padding-bottom: 0; }
+    .status-item b { display: block; }
     .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
     input, textarea, button { font: inherit; }
     textarea { width: 100%; min-height: 80px; box-sizing: border-box; background: #0f1113; color: #ece7dc; border: 1px solid #3a3f45; border-radius: 5px; padding: 10px; }
@@ -723,7 +782,7 @@ _HTML = """
     <div class="card"><b>Lokacja</b><div id="zone"></div></div>
     <div class="card"><b>Wyzwanie</b><div id="challenge"></div></div>
     <div class="card"><b>Zasoby</b><div id="resources"></div></div>
-    <div class="card"><b>Flagi debug</b><pre id="flags"></pre></div>
+    <div class="card"><b>Stan sceny</b><div id="scene-status"></div></div>
     <button class="secondary" onclick="resetSession()">Reset</button>
   </aside>
   <section>
@@ -820,7 +879,7 @@ function render() {
   document.getElementById('zone').textContent = state.current_zone.name;
   document.getElementById('challenge').textContent = state.active_challenge ? `${state.active_challenge.name}: ${state.active_challenge.current_progress}/${state.active_challenge.progress_required}, hałas ${state.active_challenge.noise}` : 'Brak';
   document.getElementById('resources').innerHTML = state.resources.map(r => `<div>${r.label}</div>`).join('') || 'Brak';
-  document.getElementById('flags').textContent = JSON.stringify(state.flags, null, 2);
+  document.getElementById('scene-status').innerHTML = sceneStatusHtml();
   document.getElementById('scene-description').innerHTML = sceneDescriptionHtml(state);
   document.getElementById('messages').innerHTML = state.messages.map(m => `<div class="message"><b>${m.title}</b><br>${m.body}</div>`).join('');
   document.getElementById('pending').innerHTML = pendingHtml(state.pending);
@@ -840,6 +899,13 @@ function esc(value) {
 function listHtml(items) {
   if (!items || !items.length) return '';
   return `<ul>${items.map(item => `<li>${esc(item)}</li>`).join('')}</ul>`;
+}
+function sceneStatusHtml() {
+  const items = state.scene_status || [];
+  if (!items.length) return '<span class="muted">Brak zmian.</span>';
+  return `<div class="status-list">${items.map(item => `
+    <div class="status-item"><b>${esc(item.label)}</b><span>${esc(item.value)}</span></div>
+  `).join('')}</div>`;
 }
 function sceneDescriptionHtml(state) {
   const zone = state.current_zone || {};

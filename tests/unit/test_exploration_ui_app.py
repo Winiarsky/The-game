@@ -133,6 +133,7 @@ def test_exploration_ui_action_accept_and_roll_flow():
     data = rolls_response.get_json()
     assert data["active_challenge"] is None
     assert data["travel_options"][0]["id"] == "courtyard"
+    assert {"label": "Brama", "value": "otwarta"} in data["scene_status"]
 
 
 def test_exploration_ui_accept_can_select_lead_actor():
@@ -186,6 +187,7 @@ def test_exploration_ui_reveals_selects_and_resolves_npc_point():
     point_state = point_response.get_json()
     assert point_state["active_point"]["id"] == "wounded_scout"
     assert point_state["active_point"]["npc"]["name"] == "Ranny zwiadowca"
+    assert {"label": "Ranny zwiadowca", "value": "odkryty, ranny"} in point_state["scene_status"]
 
     action_response = client.post("/api/action", json={"text": "Uspokajamy zwiadowcę."})
     assert action_response.status_code == 200
@@ -193,3 +195,4 @@ def test_exploration_ui_reveals_selects_and_resolves_npc_point():
 
     accepted = client.post("/api/decision", json={"decision": "accept"}).get_json()
     assert {"key": "scout_calmed", "value": True} in accepted["flags"]
+    assert {"label": "Ranny zwiadowca", "value": "uspokojony"} in accepted["scene_status"]
