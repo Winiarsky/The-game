@@ -62,6 +62,7 @@
 - [x] Add second exploration challenge in abandoned watchtower and reveal first hidden NPC hook.
 - [x] Add first NPC interaction MVP after exploration point reveal.
 - [x] Add exploration check plans for actor selection, result aggregation, and consequence targets.
+- [x] Add simple local web UI for exploration and LLM playtesting.
 - [ ] Add full inventory/cantrip integration for exploration option bonuses.
 - [ ] Add voice input and richer UI for free-form exploration declarations.
 - [x] Implement hardware adapter interface around `board.Connection`.

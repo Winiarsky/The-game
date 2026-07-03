@@ -341,6 +341,37 @@ Interaktywny retry po odrzuceniu:
 PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenario content/scenarios/abandoned_watchtower.json --board-backend none --interactive-freeform --freeform-retries 3 --session-id gm_context_retries_demo --max-steps 2
 ```
 
+Lokalny web UI do wygodniejszego testowania freeform eksploracji:
+
+```bash
+source .env
+```
+
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.exploration_ui --scenario content/scenarios/abandoned_watchtower.json --gm-classifier gemini --port 5200
+```
+
+Potem otwórz:
+
+```text
+http://127.0.0.1:5200
+```
+
+UI działa jako prosty lokalny runtime testowy:
+
+- pokazuje aktualną lokację, cel, wyzwanie, progress, hałas, komplikacje i zasoby drużyny,
+- pozwala wpisać deklarację freeform,
+- pokazuje interpretację MG i preview mechaniczne przed rzutem,
+- obsługuje decyzje `+` / `-` / `?` / reinterpretację jako przyciski,
+- po akceptacji prosi o fizyczne wyniki kości i rozstrzyga test przez deterministic engine,
+- zapisuje stan tylko w pamięci procesu; przycisk reset ładuje scenariusz od nowa.
+
+Debug bez przechodzenia mapy, od razu na punkcie NPC:
+
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.exploration_ui --scenario content/scenarios/abandoned_watchtower.json --gm-classifier gemini --debug-point wounded_scout --port 5200
+```
+
 Pierwsza mini-scena wioski w symulatorze:
 
 ```bash
