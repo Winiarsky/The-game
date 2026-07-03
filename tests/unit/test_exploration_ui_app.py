@@ -1,4 +1,4 @@
-from dnd_board_game.llm import GmClassifierProposal, GmDeclarationAnalysis, GmDeclarationAnalysisType
+from dnd_board_game.llm import GmClassifierProposal, GmDeclarationAnalysis, GmDeclarationAnalysisType, NpcInteractionProposal
 from dnd_board_game.ui.exploration_app import ExplorationUiSession, create_app
 
 
@@ -15,6 +15,25 @@ class FakeGmClient:
         )
 
     def classify(self, request):
+        if request.state.party_position.zone_id == "courtyard":
+            return GmClassifierProposal.model_validate(
+                {
+                    "intent_type": "challenge_attempt",
+                    "target_challenge_id": "courtyard_search",
+                    "approach_label": "Ostrożne przeszukanie wozu",
+                    "approach_tags": ["search", "careful"],
+                    "ability": "wisdom",
+                    "skill": "perception",
+                    "difficulty_tier": "easy",
+                    "difficulty_reason": "Test.",
+                    "dc": 12,
+                    "progress_on_success": 2,
+                    "progress_on_failure": 1,
+                    "used_resource_ids": [],
+                    "consequences": [],
+                    "player_narration": "Sprawdzacie naruszony wóz i ślady na błocie.",
+                }
+            )
         return GmClassifierProposal.model_validate(
             {
                 "intent_type": "challenge_attempt",
@@ -35,10 +54,26 @@ class FakeGmClient:
         )
 
 
+class FakeNpcClient:
+    model = "fake-npc"
+
+    def interact_npc(self, request):
+        return NpcInteractionProposal.model_validate(
+            {
+                "action_type": "social",
+                "player_narration": "Podchodzicie spokojnie i mówicie, że chcecie pomóc.",
+                "npc_response": "Zwiadowca oddycha płycej, ale przestaje się szarpać.",
+                "requires_roll": False,
+                "flag_changes_on_success": [{"key": "scout_calmed", "value": True}],
+            }
+        )
+
+
 def _client():
     session = ExplorationUiSession(
         "content/scenarios/abandoned_watchtower.json",
         gm_client=FakeGmClient(),
+        npc_client=FakeNpcClient(),
     )
     return create_app(session).test_client()
 
@@ -137,3 +172,24 @@ def test_exploration_ui_shows_and_handles_travel_after_completed_challenge():
     data = response.get_json()
     assert data["current_zone"]["id"] == "courtyard"
     assert data["active_challenge"]["id"] == "courtyard_search"
+
+
+def test_exploration_ui_reveals_selects_and_resolves_npc_point():
+    client = _client()
+    client.post("/api/action", json={"text": "Wyważamy bramę."})
+    client.post("/api/decision", json={"decision": "accept"})
+    client.post("/api/rolls", json={"rolls": {"hero": 16}})
+    client.post("/api/travel", json={"zone_id": "courtyard"})
+
+    point_response = client.post("/api/point", json={"point_id": "wounded_scout"})
+    assert point_response.status_code == 200
+    point_state = point_response.get_json()
+    assert point_state["active_point"]["id"] == "wounded_scout"
+    assert point_state["active_point"]["npc"]["name"] == "Ranny zwiadowca"
+
+    action_response = client.post("/api/action", json={"text": "Uspokajamy zwiadowcę."})
+    assert action_response.status_code == 200
+    assert action_response.get_json()["pending"]["kind"] == "npc"
+
+    accepted = client.post("/api/decision", json={"decision": "accept"}).get_json()
+    assert {"key": "scout_calmed", "value": True} in accepted["flags"]

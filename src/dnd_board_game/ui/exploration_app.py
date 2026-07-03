@@ -135,6 +135,7 @@ class ExplorationUiSession:
         self.declaration_thread: list[GmDeclarationThreadEntry] = []
         self.active_preparation_effects: list[GmPreparationEffect] = []
         self.selected_lead_actor_id = str(self.exploration.actors[0].id)
+        self.active_point_id = self.debug_point_id
 
     @property
     def current_zone(self) -> ExplorationZone:
@@ -142,9 +143,9 @@ class ExplorationUiSession:
 
     @property
     def active_point(self) -> ExplorationPoint | None:
-        if not self.debug_point_id:
+        if not self.active_point_id:
             return None
-        return next((point for point in self.state.points if point.id == self.debug_point_id), None)
+        return next((point for point in self.state.points if point.id == self.active_point_id), None)
 
     def state_payload(self) -> dict[str, object]:
         active_challenge = self.active_challenge
@@ -154,6 +155,7 @@ class ExplorationUiSession:
             "available_zones": [_zone_payload(zone) for zone in visible_exploration_zones(self.state.zones) if zone_is_ui_available(self.state, zone)],
             "travel_options": [_zone_payload(zone) for zone in self.travel_options()],
             "visible_points": [_point_payload(point) for point in visible_exploration_points(self.state.points)],
+            "current_zone_points": [_point_payload(point) for point in self.current_zone_points()],
             "active_challenge": _challenge_payload(self.state, active_challenge) if active_challenge else None,
             "active_point": _point_payload(self.active_point) if self.active_point else None,
             "resources": [_resource_payload(resource) for resource in self.state.resources if resource.id in self.state.inventory_resource_ids],
@@ -200,7 +202,24 @@ class ExplorationUiSession:
         previous = self.current_zone
         self.state = set_party_zone(self.state, destination)
         self.pending = None
+        self.active_point_id = ""
         self._add_message("Przejście", f"Drużyna przechodzi z {previous.name} do lokacji: {destination.name}.")
+        return self.state_payload()
+
+    def current_zone_points(self) -> tuple[ExplorationPoint, ...]:
+        return tuple(point for point in visible_exploration_points(self.state.points) if point.zone_id == self.current_zone.id)
+
+    def select_point(self, point_id: str) -> dict[str, object]:
+        if not point_id:
+            self.active_point_id = ""
+            return self.state_payload()
+        point = next((candidate for candidate in self.current_zone_points() if candidate.id == point_id), None)
+        if point is None:
+            raise ValueError("Ten punkt nie jest dostępny w aktualnej lokacji.")
+        self.active_point_id = point.id
+        self.pending = None
+        if point.npc_interaction is not None and point.npc_interaction.dialogue_intro:
+            self._add_message(point.npc_interaction.name, point.npc_interaction.dialogue_intro)
         return self.state_payload()
 
     def _submit_challenge_action(self, challenge: ExplorationChallenge, text: str) -> dict[str, object]:
@@ -457,6 +476,14 @@ def create_app(session: ExplorationUiSession) -> Flask:
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
+    @app.post("/api/point")
+    def api_point():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(session.select_point(str(data.get("point_id", ""))))
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
     @app.post("/api/reset")
     def api_reset():
         session.reset()
@@ -595,7 +622,21 @@ def _zone_payload(zone: ExplorationZone) -> dict[str, object]:
 def _point_payload(point: ExplorationPoint | None) -> dict[str, object] | None:
     if point is None:
         return None
-    return {"id": point.id, "name": point.name, "zone_id": point.zone_id, "description": point.description}
+    payload: dict[str, object] = {
+        "id": point.id,
+        "name": point.name,
+        "zone_id": point.zone_id,
+        "description": point.description,
+        "has_npc": point.npc_interaction is not None,
+    }
+    if point.npc_interaction is not None:
+        payload["npc"] = {
+            "name": point.npc_interaction.name,
+            "public_description": point.npc_interaction.public_description,
+            "current_state": point.npc_interaction.current_state,
+            "dialogue_intro": point.npc_interaction.dialogue_intro,
+        }
+    return payload
 
 
 def _challenge_payload(state: ExplorationState, challenge: ExplorationChallenge | None) -> dict[str, object] | None:
@@ -701,6 +742,10 @@ _HTML = """
       <h3>Dostępne przejścia</h3>
       <div id="travel-options"></div>
     </div>
+    <div class="card" id="points-panel">
+      <h3>Odkryte punkty</h3>
+      <div id="point-options"></div>
+    </div>
     <div class="card" id="pending-panel">
       <h3>Decyzja MG</h3>
       <div id="pending"></div>
@@ -712,7 +757,7 @@ _HTML = """
       </div>
     </div>
     <div class="card" id="action-panel">
-      <h3>Co robi drużyna?</h3>
+      <h3 id="action-title">Co robi drużyna?</h3>
       <textarea id="action"></textarea>
       <div class="row" style="margin-top:8px">
         <button onclick="sendAction()">Wyślij</button>
@@ -782,9 +827,11 @@ function render() {
   document.getElementById('lead-actor-choice').innerHTML = leadActorChoiceHtml();
   document.getElementById('result').innerHTML = resultAck ? `<div class="result"><b>${esc(resultAck.title)}</b><br>${esc(resultAck.body)}</div>` : '';
   document.getElementById('travel-options').innerHTML = travelOptionsHtml();
+  document.getElementById('point-options').innerHTML = pointOptionsHtml();
   document.getElementById('roll-prompt').innerHTML = rollPromptHtml();
   document.getElementById('rolls').innerHTML = state.required_rolls.map(r => `<label>${r.actor_name}: <input data-actor="${r.actor_id}" type="number" min="1" max="20" value="10"></label>`).join(' ');
   document.getElementById('debug-payload').textContent = JSON.stringify(state, null, 2);
+  document.getElementById('action-title').textContent = state.active_point && state.active_point.has_npc ? 'Co robicie wobec NPC?' : 'Co robi drużyna?';
   updateActivePanel();
 }
 function esc(value) {
@@ -826,6 +873,15 @@ function sceneDescriptionHtml(state) {
         <button class="secondary" type="button" onclick="toggleHints()">Pokaż wskazówki MG</button>
         <div id="gm-hints" class="hint-panel" hidden>${hints.join('')}</div>
       `);
+    }
+  }
+  if (state.active_point) {
+    const point = state.active_point;
+    parts.push(`<p><b>${esc(point.name)}</b></p>`);
+    parts.push(point.description ? `<p>${esc(point.description)}</p>` : '');
+    if (point.npc) {
+      parts.push(`<p>${esc(point.npc.public_description)}</p>`);
+      if (point.npc.current_state) parts.push(`<p><b>Stan NPC:</b> ${esc(point.npc.current_state)}</p>`);
     }
   }
   if (!challenge && state.travel_options && state.travel_options.length) {
@@ -901,13 +957,33 @@ function travelOptionsHtml() {
     </div>
   `).join('');
 }
+function pointOptionsHtml() {
+  const points = state.current_zone_points || [];
+  if (!points.length) return '<p>Brak odkrytych punktów w tej lokacji.</p>';
+  const rows = points.map(point => {
+    const active = state.active_point && state.active_point.id === point.id;
+    const label = point.has_npc ? 'Wejdź w interakcję' : 'Sprawdź';
+    return `
+      <div class="row" style="justify-content:space-between; margin: 6px 0">
+        <div><b>${esc(point.name)}</b>${active ? ' <span class="muted">(aktywny)</span>' : ''}<br><span class="muted">${esc(point.description)}</span></div>
+        <button onclick="selectPoint('${esc(point.id)}')">${label}</button>
+      </div>
+    `;
+  });
+  if (state.active_point) {
+    rows.push('<button class="secondary" onclick="selectPoint(&quot;&quot;)">Wróć do lokacji</button>');
+  }
+  return rows.join('');
+}
 function updateActivePanel() {
   const hasPendingDecision = state.pending && state.pending.stage === 'decision';
   const hasRolls = state.required_rolls && state.required_rolls.length > 0;
   const hasResult = Boolean(resultAck);
-  const hasTravel = !hasResult && !hasPendingDecision && !hasRolls && state.travel_options && state.travel_options.length > 0;
+  const hasTravel = !state.active_challenge && !state.active_point && !hasResult && !hasPendingDecision && !hasRolls && state.travel_options && state.travel_options.length > 0;
+  const hasPoints = !hasResult && !hasPendingDecision && !hasRolls && state.current_zone_points && state.current_zone_points.length > 0;
   document.getElementById('result-panel').hidden = !hasResult;
   document.getElementById('travel-panel').hidden = !hasTravel;
+  document.getElementById('points-panel').hidden = !hasPoints;
   document.getElementById('pending-panel').hidden = !hasPendingDecision;
   document.getElementById('roll-panel').hidden = !hasRolls;
   document.getElementById('action-panel').hidden = hasResult || hasTravel || hasPendingDecision || hasRolls;
@@ -929,6 +1005,7 @@ function sendRolls() {
 }
 function resetSession() { api('/api/reset', {}, 'Resetuję scenę...'); }
 function travel(zoneId) { api('/api/travel', {zone_id: zoneId}, 'Przechodzę do wybranej lokacji...'); }
+function selectPoint(pointId) { api('/api/point', {point_id: pointId}, pointId ? 'Otwieram punkt eksploracji...' : 'Wracam do lokacji...'); }
 function ackResult() {
   resultAck = null;
   render();
