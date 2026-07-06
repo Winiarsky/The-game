@@ -63,6 +63,10 @@
 - [x] Add first NPC interaction MVP after exploration point reveal.
 - [x] Add exploration check plans for actor selection, result aggregation, and consequence targets.
 - [x] Add simple local web UI for exploration and LLM playtesting.
+- [x] Add content-driven exploration encounter triggers and pending encounter UI.
+- [x] Add guided pre-combat encounter setup steps to the exploration web UI.
+- [x] Start rolled initiative and initial combat state from the exploration web UI.
+- [x] Couple exploration web UI with board/simulator backend for LEDs and board clicks.
 - [ ] Add full inventory/cantrip integration for exploration option bonuses.
 - [ ] Add voice input and richer UI for free-form exploration declarations.
 - [x] Implement hardware adapter interface around `board.Connection`.

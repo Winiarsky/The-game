@@ -1,0 +1,22 @@
+{
+  "encounter_triggers": [
+    {
+      "id": "gate_noise_alarm",
+      "name": "Alarm na dziedzińcu",
+      "description": "Hałas przy bramie niesie się po pustej strażnicy. Coś odpowiada ruchem po drugiej stronie murów.",
+      "encounter_scenario": "content/scenarios/multi_actor_skirmish.json",
+      "condition": "noise_at_least",
+      "challenge_id": "closed_gate",
+      "noise": 3
+    },
+    {
+      "id": "scout_panic_alarm",
+      "name": "Krzyk zwiadowcy",
+      "description": "Spanikowany zwiadowca krzyczy i zdradza pozycję drużyny. W strażnicy zaczyna się poruszenie.",
+      "encounter_scenario": "content/scenarios/multi_actor_skirmish.json",
+      "condition": "flag_equals",
+      "flag_key": "scout_panicked",
+      "flag_value": true
+    }
+  ]
+}

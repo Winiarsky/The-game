@@ -13,6 +13,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--gm-classifier", choices=("none", "groq", "gemini"), default="gemini")
     parser.add_argument("--groq-model", default=None)
     parser.add_argument("--gemini-model", default=None)
+    parser.add_argument("--board-backend", choices=("none", "simulator", "hardware"), default="none")
+    parser.add_argument("--board-url", default="http://127.0.0.1:5000")
+    parser.add_argument("--board-serial-port", default="")
+    parser.add_argument("--wled-url", default="")
+    parser.add_argument("--scan-timeout", type=float, default=30.0)
     parser.add_argument("--debug-point", default="")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=5200)
@@ -29,6 +34,14 @@ def main(argv: list[str] | None = None) -> int:
         npc_client=npc_client,
         debug_point_id=args.debug_point or None,
     )
+    if args.board_backend != "none":
+        session.configure_board(
+            backend=args.board_backend,
+            board_url=args.board_url,
+            board_serial_port=args.board_serial_port,
+            wled_url=args.wled_url,
+            scan_timeout_s=args.scan_timeout,
+        )
     app = create_app(session)
     print(f"Exploration UI: http://{args.host}:{args.port}")
     app.run(host=args.host, port=args.port, debug=args.debug)

@@ -351,6 +351,16 @@ source .env
 PYTHONPATH=src python -m dnd_board_game.runtime.exploration_ui --scenario content/scenarios/abandoned_watchtower.json --gm-classifier gemini --port 5200
 ```
 
+Z symulatorem planszy od razu podłączonym do UI:
+
+```bash
+python -m board.simulator.app
+```
+
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.exploration_ui --scenario content/scenarios/abandoned_watchtower.json --gm-classifier gemini --board-backend simulator --board-url http://127.0.0.1:5000 --port 5200
+```
+
 Potem otwórz:
 
 ```text
@@ -364,6 +374,16 @@ UI działa jako prosty lokalny runtime testowy:
 - pokazuje interpretację MG i preview mechaniczne przed rzutem,
 - obsługuje decyzje `+` / `-` / `?` / reinterpretację jako przyciski,
 - po akceptacji prosi o fizyczne wyniki kości i rozstrzyga test przez deterministic engine,
+- pokazuje `Stan sceny` jako czytelne wpisy zamiast surowych flag,
+- po spełnieniu `encounter_triggers` z contentu pokazuje panel `Zaczyna się encounter` z powodem i scenariuszem walki,
+- prowadzi krokowy setup encountera przed walką: start walki, bohaterowie, przeciwnicy i jawne elementy sceny,
+- setup encountera pokazuje aktualną grupę do rozstawienia, kolor i pola z contentu; po potwierdzeniu ostatniego kroku pokazuje komendę do runtime'u walki,
+- po setupie prowadzi inicjatywę: bohaterowie wpisują naturalne wyniki d20, przeciwnicy rzucają automatycznie,
+- po ustaleniu inicjatywy tworzy początkowy `CombatState` i pokazuje rundę, aktywnego aktora, kolejność oraz HP/AC uczestników,
+- ma panel `Plansza` z przełącznikiem `brak/symulator/hardware`,
+- tryb `hardware` używa tego samego `board/config.json` i `board.Connection`, z którego korzystała aplikacja legacy,
+- po podłączeniu planszy synchronizuje LED-y z aktualnym krokiem: dostępne lokacje, setup encountera, inicjatywa i aktywny aktor walki,
+- przycisk `Czekaj na kliknięcie` czyta kliknięcie z `scan_board` i wykonuje właściwy krok, np. przejście do lokacji albo potwierdzenie setupu,
 - zapisuje stan tylko w pamięci procesu; przycisk reset ładuje scenariusz od nowa.
 
 Debug bez przechodzenia mapy, od razu na punkcie NPC:

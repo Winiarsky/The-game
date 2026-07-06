@@ -38,7 +38,7 @@
           8
         ]
       ],
-      "color": "interactive",
+      "color": "purple",
       "visibility": "hidden",
       "description": "Pod zawalonym wozem leży ranny zwiadowca. Jest przytomny, ale osłabiony.",
       "npc_interaction": {

@@ -119,6 +119,7 @@
       ],
       "color": "marker",
       "description": "Zarośnięta, stara drewniana brama z metalowymi okuciami prowadząca na dziedziniec.",
+      "image": "assets/gate_preview.png",
       "llm_context": {
         "summary": "Przed drużyną stoi stara drewniana brama z metalowymi okuciami, zardzewiałym zamkiem, skorodowanymi zawiasami i kolcami na górze. Obok jest niski fragment muru. Wokół są zarośla, kamienie i spróchniałe deski.",
         "available_materials": [

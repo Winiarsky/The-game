@@ -22,6 +22,7 @@ def _abandoned_watchtower_data_without_refs():
         "zones": json.loads((base / "exploration/zones.json").read_text(encoding="utf-8"))["zones"],
         "points": json.loads((base / "exploration/points.json").read_text(encoding="utf-8"))["points"],
         "challenges": json.loads((base / "exploration/challenges.json").read_text(encoding="utf-8"))["challenges"],
+        "encounter_triggers": json.loads((base / "exploration/encounter_triggers.json").read_text(encoding="utf-8"))["encounter_triggers"],
         "resources": json.loads((base / "exploration/resources.json").read_text(encoding="utf-8"))["resources"],
         "initial_resources": json.loads((base / "exploration/initial_resources.json").read_text(encoding="utf-8"))["initial_resources"],
     }
@@ -154,6 +155,7 @@ def test_load_abandoned_watchtower_builds_exploration_scene():
     assert "Opuszczona" in exploration.llm_context.summary
     assert "brak działającego mechanizmu lotu" in exploration.llm_context.forbidden_assumptions
     gate = next(zone for zone in exploration.zones if zone.id == "gate")
+    assert gate.image == "assets/gate_preview.png"
     assert "lina nie pozwala latać" in gate.llm_context.forbidden_assumptions
     assert "przelot na linie bez magii" in challenge.llm_context.impossible_approaches
     assert {resource.id for resource in exploration.resources} == {"rope", "wedge", "saw"}
@@ -262,6 +264,18 @@ def test_exploration_challenge_llm_policy_rejects_unknown_consequence_type(tmp_p
 
     with pytest.raises(ValueError, match="allowed_consequence_types"):
         load_scenario(scenario_path)
+
+
+def test_load_abandoned_watchtower_builds_exploration_encounter_triggers():
+    exploration = build_exploration_from_scenario(load_scenario("content/scenarios/abandoned_watchtower.json"))
+
+    triggers = {trigger.id: trigger for trigger in exploration.encounter_triggers}
+
+    assert triggers["gate_noise_alarm"].condition.value == "noise_at_least"
+    assert triggers["gate_noise_alarm"].challenge_id == "closed_gate"
+    assert triggers["gate_noise_alarm"].noise == 3
+    assert triggers["scout_panic_alarm"].condition.value == "flag_equals"
+    assert triggers["scout_panic_alarm"].flag_key == "scout_panicked"
 
 
 def test_load_village_square_mvp_builds_exploration_locations_setup_points_and_objective():

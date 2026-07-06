@@ -1,19 +1,43 @@
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass, replace
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from flask import Flask, jsonify, render_template_string, request
+from flask import Flask, jsonify, render_template_string, request, send_from_directory
 
-from dnd_board_game.actors import Actor
-from dnd_board_game.combat import SceneFlags, scene_flag, set_scene_flag
+from dnd_board_game.actors import Actor, Faction
+from dnd_board_game.combat import (
+    ActorSetupEntry,
+    CombatState,
+    EncounterSetup,
+    InitiativeEntry,
+    InitiativeOrder,
+    InitiativePrompt,
+    SceneFlags,
+    SetupStep,
+    SetupStepKind,
+    SetupVisibility,
+    build_setup_steps,
+    build_initiative_order,
+    build_player_initiative_prompts,
+    current_actor as combat_current_actor,
+    active_actor_led_feedback,
+    initiative_prompt_led_feedback,
+    roll_enemy_initiative,
+    scene_flag,
+    set_scene_flag,
+    setup_led_feedback,
+    start_combat,
+)
 from dnd_board_game.exploration import (
     CheckAggregation,
     CheckParticipants,
     ConsequenceTarget,
     ExplorationChallenge,
+    ExplorationEncounterTrigger,
     ExplorationChallengeOption,
     ExplorationCheckPlan,
     ExplorationPoint,
@@ -21,10 +45,13 @@ from dnd_board_game.exploration import (
     ExplorationState,
     ExplorationZone,
     PartyCheckInput,
+    PendingEncounter,
     available_exploration_zones,
     challenge_for_zone,
     challenge_state_for,
     grant_resource,
+    exploration_zone_feedback,
+    party_position_feedback,
     reveal_exploration_points,
     resolve_challenge_option,
     resolve_exploration_check,
@@ -47,8 +74,16 @@ from dnd_board_game.llm import (
     validate_gm_classifier_proposal,
     validate_npc_interaction_proposal,
 )
+from dnd_board_game.hardware import BoardLedAdapter, LedColor, LedFeedback, LedFrame, LedRole, led_color_name_pl
 from dnd_board_game.rules import D20RollInput, D20RollRequest, RollModifier, RollModifierType, ability_modifier, resolve_d20_roll
-from dnd_board_game.scenarios import LoadedExploration, build_exploration_from_scenario, load_scenario
+from dnd_board_game.scenarios import (
+    LoadedEncounter,
+    LoadedExploration,
+    build_encounter_from_scenario,
+    build_exploration_from_scenario,
+    load_scenario,
+)
+from dnd_board_game.world import Coordinate
 
 
 class PendingKind(StrEnum):
@@ -59,6 +94,15 @@ class PendingKind(StrEnum):
 class PendingStage(StrEnum):
     DECISION = "decision"
     ROLL = "roll"
+
+
+class UiFlowStage(StrEnum):
+    WAITING_FOR_BOARD = "waiting_for_board"
+    READY_TO_START = "ready_to_start"
+    PARTY_SETUP = "party_setup"
+    LOCATION_PREVIEW = "location_preview"
+    LOCATION_ACTIVE = "location_active"
+    INTERACTION_RESULT = "interaction_result"
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,6 +146,67 @@ class PendingInteraction:
         return payload
 
 
+@dataclass(slots=True)
+class EncounterSetupFlow:
+    encounter: LoadedEncounter
+    steps: tuple[SetupStep, ...]
+    current_index: int = 0
+    completed: bool = False
+
+    @property
+    def current_step(self) -> SetupStep | None:
+        if self.completed or not self.steps:
+            return None
+        return self.steps[self.current_index]
+
+    def as_payload(self) -> dict[str, object]:
+        step = self.current_step
+        return {
+            "scenario_id": self.encounter.scenario_id,
+            "scenario_name": self.encounter.scenario_name,
+            "status": "completed" if self.completed else "active",
+            "current_index": self.current_index,
+            "step_count": len(self.steps),
+            "current_step": _setup_step_payload(step) if step is not None else None,
+        }
+
+
+@dataclass(slots=True)
+class EncounterInitiativeFlow:
+    encounter: LoadedEncounter
+    prompts: tuple[InitiativePrompt, ...]
+    entries: list[InitiativeEntry]
+    current_prompt_index: int = 0
+    completed: bool = False
+    order: InitiativeOrder | None = None
+
+    @property
+    def current_prompt(self) -> InitiativePrompt | None:
+        if self.completed or self.current_prompt_index >= len(self.prompts):
+            return None
+        return self.prompts[self.current_prompt_index]
+
+    def as_payload(self) -> dict[str, object]:
+        prompt = self.current_prompt
+        return {
+            "scenario_id": self.encounter.scenario_id,
+            "scenario_name": self.encounter.scenario_name,
+            "status": "completed" if self.completed else "active",
+            "current_prompt_index": self.current_prompt_index,
+            "prompt_count": len(self.prompts),
+            "current_prompt": _initiative_prompt_payload(prompt) if prompt is not None else None,
+            "entries": [_initiative_entry_payload(entry) for entry in self.entries],
+            "order": [_initiative_entry_payload(entry) for entry in self.order.entries] if self.order is not None else [],
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class BoardScanTarget:
+    positions: tuple[Coordinate, ...]
+    feedback: LedFeedback
+    empty_message: str
+
+
 class ExplorationUiSession:
     def __init__(
         self,
@@ -136,6 +241,26 @@ class ExplorationUiSession:
         self.active_preparation_effects: list[GmPreparationEffect] = []
         self.selected_lead_actor_id = str(self.exploration.actors[0].id)
         self.active_point_id = self.debug_point_id
+        self.pending_encounter: PendingEncounter | None = None
+        self.encounter_setup_flow: EncounterSetupFlow | None = None
+        self.encounter_initiative_flow: EncounterInitiativeFlow | None = None
+        self.combat_state: CombatState | None = None
+        self.encounter_rng = random.Random(7)
+        board_defaults = _load_board_defaults()
+        self.board_backend = "none"
+        self.configured_board_backend = board_defaults["backend"]
+        self.board_url = board_defaults["board_url"]
+        self.board_serial_port = board_defaults["serial_port"]
+        self.wled_url = board_defaults["wled_url"]
+        self.scan_timeout_s = 30.0
+        self.board_adapter: BoardLedAdapter | None = None
+        self.board_message = (
+            "Plansza niepodłączona. Domyślne ustawienia wczytane z board/config.json "
+            f"({self.configured_board_backend})."
+        )
+        self.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE if self.debug_point_id else UiFlowStage.WAITING_FOR_BOARD
+        self.preview_zone_id = ""
+        self.interaction_result: dict[str, object] | None = None
 
     @property
     def current_zone(self) -> ExplorationZone:
@@ -148,36 +273,171 @@ class ExplorationUiSession:
         return next((point for point in self.state.points if point.id == self.active_point_id), None)
 
     def state_payload(self) -> dict[str, object]:
-        active_challenge = self.active_challenge
+        self._refresh_pending_encounter()
+        active_challenge = self.active_challenge if self.ui_flow_stage == UiFlowStage.LOCATION_ACTIVE else None
+        current_zone_points = self.current_zone_points() if self.ui_flow_stage == UiFlowStage.LOCATION_ACTIVE else ()
+        scene_status = _scene_status_payload(self.state)
+        if self.pending_encounter is not None:
+            scene_status.append({"label": "Encounter", "value": self.pending_encounter.name})
+        preview_zone = self._preview_zone()
         return {
             "scenario": {"id": self.exploration.scenario_id, "name": self.exploration.scenario_name},
-            "current_zone": _zone_payload(self.current_zone),
-            "available_zones": [_zone_payload(zone) for zone in visible_exploration_zones(self.state.zones) if zone_is_ui_available(self.state, zone)],
-            "travel_options": [_zone_payload(zone) for zone in self.travel_options()],
+            "flow": {
+                "stage": self.ui_flow_stage.value,
+                "can_start": self.ui_flow_stage == UiFlowStage.READY_TO_START,
+                "preview_zone": _zone_payload(preview_zone, self._scenario_asset_root(), self.state) if preview_zone else None,
+                "available_locations": [_zone_payload(zone, self._scenario_asset_root(), self.state) for zone in self._scene_location_zones()],
+                "interaction_result": self.interaction_result,
+            },
+            "current_zone": _zone_payload(self.current_zone, self._scenario_asset_root()),
+            "available_zones": [_zone_payload(zone, self._scenario_asset_root()) for zone in visible_exploration_zones(self.state.zones) if zone_is_ui_available(self.state, zone)],
+            "travel_options": [_zone_payload(zone, self._scenario_asset_root()) for zone in self.travel_options()],
             "visible_points": [_point_payload(point) for point in visible_exploration_points(self.state.points)],
-            "current_zone_points": [_point_payload(point) for point in self.current_zone_points()],
+            "current_zone_points": [_point_payload(point) for point in current_zone_points],
             "active_challenge": _challenge_payload(self.state, active_challenge) if active_challenge else None,
             "active_point": _point_payload(self.active_point) if self.active_point else None,
             "resources": [_resource_payload(resource) for resource in self.state.resources if resource.id in self.state.inventory_resource_ids],
             "actors": [{"id": str(actor.id), "name": actor.name} for actor in self.exploration.actors],
-            "scene_status": _scene_status_payload(self.state),
+            "scene_status": scene_status,
             "flags": [{"key": key, "value": value} for key, value in self.state.flags.values],
             "messages": [message.as_payload() for message in self.messages],
             "pending": self.pending.as_payload() if self.pending else None,
+            "pending_encounter": self._pending_encounter_payload(),
+            "encounter_setup": self.encounter_setup_flow.as_payload() if self.encounter_setup_flow else None,
+            "encounter_initiative": (
+                self.encounter_initiative_flow.as_payload() if self.encounter_initiative_flow else None
+            ),
+            "combat": _combat_payload(self.combat_state) if self.combat_state else None,
+            "board": self._board_payload(),
             "required_rolls": self.required_rolls_payload(),
         }
 
+    def configure_board(
+        self,
+        *,
+        backend: str,
+        board_url: str = "",
+        board_serial_port: str = "",
+        wled_url: str = "",
+        scan_timeout_s: float | None = None,
+    ) -> dict[str, object]:
+        backend = str(backend or "none").strip().lower()
+        if backend not in {"none", "simulator", "hardware"}:
+            raise ValueError("Backend planszy musi mieć wartość none, simulator albo hardware.")
+        self.board_backend = backend
+        self.board_url = board_url.strip() or self.board_url
+        self.board_serial_port = board_serial_port.strip()
+        self.wled_url = wled_url.strip()
+        if scan_timeout_s is not None:
+            self.scan_timeout_s = max(0.1, float(scan_timeout_s))
+        if backend == "none":
+            self.board_adapter = None
+            self.board_message = "Plansza niepodłączona."
+            if not self.debug_point_id:
+                self.ui_flow_stage = UiFlowStage.WAITING_FOR_BOARD
+            return self.state_payload()
+        from board.connection import Connection
+
+        if backend == "simulator":
+            connection = Connection(backend="simulator", simulator_url=self.board_url)
+        else:
+            connection = Connection(backend="hardware", serial_port=self.board_serial_port or None, wled_url=self.wled_url or None)
+        self.attach_board_connection(connection, backend=backend)
+        if self.ui_flow_stage == UiFlowStage.WAITING_FOR_BOARD:
+            self.ui_flow_stage = UiFlowStage.READY_TO_START
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def attach_board_connection(self, connection: object, *, backend: str = "simulator") -> None:
+        self.board_backend = backend
+        self.board_adapter = BoardLedAdapter(connection)  # type: ignore[arg-type]
+        self.board_message = f"Plansza podłączona: {backend}."
+        if backend in {"simulator", "hardware"} and self.ui_flow_stage == UiFlowStage.WAITING_FOR_BOARD:
+            self.ui_flow_stage = UiFlowStage.READY_TO_START
+
+    def start_session(self) -> dict[str, object]:
+        if self.board_adapter is None or self.board_backend not in {"simulator", "hardware"}:
+            raise ValueError("Najpierw wybierz i zastosuj backend planszy: symulator albo hardware.")
+        if self.ui_flow_stage not in {UiFlowStage.READY_TO_START, UiFlowStage.WAITING_FOR_BOARD}:
+            return self.state_payload()
+        self.ui_flow_stage = UiFlowStage.LOCATION_PREVIEW
+        self.preview_zone_id = ""
+        self.pending = None
+        self.active_point_id = ""
+        self.board_message = "Wybierz jawny element sceny na planszy."
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def finish_interaction_result(self) -> dict[str, object]:
+        if self.ui_flow_stage != UiFlowStage.INTERACTION_RESULT:
+            return self.state_payload()
+        self.interaction_result = None
+        self.preview_zone_id = ""
+        self.ui_flow_stage = UiFlowStage.LOCATION_PREVIEW
+        self.board_message = "Wybierz kolejną dostępną lokację na planszy."
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def cancel_location_preview(self) -> dict[str, object]:
+        if self.ui_flow_stage != UiFlowStage.LOCATION_PREVIEW:
+            return self.state_payload()
+        self.preview_zone_id = ""
+        self.board_message = "Wrócono do wyboru dostępnych lokacji."
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def scan_board_selection(self) -> dict[str, object]:
+        if self.board_adapter is None:
+            raise ValueError("Najpierw podłącz backend planszy.")
+        target = self._current_board_scan_target()
+        if not target.positions:
+            raise ValueError(target.empty_message)
+        self._show_board_feedback(target.feedback)
+        scan_board = getattr(self.board_adapter.connection, "scan_board", None)
+        if not callable(scan_board):
+            raise ValueError("Aktualny backend planszy nie obsługuje scan_board.")
+        selected_raw = scan_board([position.as_tuple() for position in target.positions], timeout_s=self.scan_timeout_s)
+        if selected_raw is None:
+            self.board_message = "Nie wybrano pola na planszy."
+            return self.state_payload()
+        selected = _coordinate_from_scan(selected_raw)
+        return self._handle_board_position(selected)
+
     def submit_action(self, text: str) -> dict[str, object]:
+        if self.ui_flow_stage != UiFlowStage.LOCATION_ACTIVE:
+            raise ValueError("Najpierw rozpocznij sesję i potwierdź wejście do lokacji na planszy.")
         text = text.strip()
         if not text:
             raise ValueError("Deklaracja nie może być pusta.")
         point = self.active_point
         if point is not None and point.npc_interaction is not None:
             return self._submit_npc_action(point, text)
+        referenced_point = self._referenced_current_zone_point(text)
+        if referenced_point is not None:
+            positions = ", ".join(f"({position.col},{position.row})" for position in referenced_point.positions)
+            self._add_message(
+                "Punkt eksploracji",
+                (
+                    f"{referenced_point.name} jest osobnym punktem interakcji. "
+                    f"Najpierw przestaw pionek drużyny na podświetlone na {led_color_name_pl(referenced_point.color)} "
+                    f"pole {positions}, żeby wejść w interakcję z tym punktem."
+                ),
+            )
+            return self.state_payload()
         challenge = self.active_challenge
         if challenge is None:
             raise ValueError("W aktualnej lokacji nie ma aktywnego wyzwania ani punktu NPC.")
         return self._submit_challenge_action(challenge, text)
+
+    def _referenced_current_zone_point(self, text: str) -> ExplorationPoint | None:
+        normalized = text.lower()
+        for point in self.current_zone_points():
+            point_words = [word for word in point.name.lower().replace("-", " ").split() if len(word) >= 4]
+            if any(word in normalized for word in point_words):
+                return point
+            if point.npc_interaction is not None and "zwiadow" in normalized and "zwiadow" in point.name.lower():
+                return point
+        return None
 
     @property
     def active_challenge(self) -> ExplorationChallenge | None:
@@ -196,6 +456,19 @@ class ExplorationUiSession:
             if zone_id in available_by_id and zone_id != self.current_zone.id
         )
 
+    def _preview_zone(self) -> ExplorationZone | None:
+        if not self.preview_zone_id:
+            return None
+        return next((zone for zone in self._scene_location_zones() if zone.id == self.preview_zone_id), None)
+
+    def _scenario_asset_root(self) -> Path:
+        if self.scenario_path.is_dir():
+            return self.scenario_path
+        sibling = self.scenario_path.with_suffix("")
+        if sibling.is_dir():
+            return sibling
+        return self.scenario_path.parent
+
     def travel_to(self, zone_id: str) -> dict[str, object]:
         destination = next((zone for zone in self.travel_options() if zone.id == zone_id), None)
         if destination is None:
@@ -204,13 +477,293 @@ class ExplorationUiSession:
         self.state = set_party_zone(self.state, destination)
         self.pending = None
         self.active_point_id = ""
+        self.preview_zone_id = ""
+        self.interaction_result = None
+        self.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
         self._add_message("Przejście", f"Drużyna przechodzi z {previous.name} do lokacji: {destination.name}.")
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def start_encounter_setup(self) -> dict[str, object]:
+        self._refresh_pending_encounter()
+        if self.pending_encounter is None:
+            raise ValueError("Nie ma aktywnego encountera do przygotowania.")
+        encounter = build_encounter_from_scenario(load_scenario(self.pending_encounter.encounter_scenario))
+        steps = _build_encounter_setup_steps(encounter)
+        if not steps:
+            raise ValueError("Scenariusz encountera nie ma elementów do setupu.")
+        self.encounter_setup_flow = EncounterSetupFlow(encounter=encounter, steps=steps)
+        self._add_message(
+            "Setup przed walką",
+            f"Rozpoczynam setup encountera: {encounter.scenario_name}. Potwierdzajcie kolejne grupy po rozstawieniu figurek.",
+        )
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def confirm_encounter_setup_step(self) -> dict[str, object]:
+        if self.encounter_setup_flow is None:
+            return self.start_encounter_setup()
+        flow = self.encounter_setup_flow
+        step = flow.current_step
+        if step is None:
+            return self.state_payload()
+        self._add_message("Setup potwierdzony", f"Potwierdzono: {step.label}.")
+        if flow.current_index + 1 >= len(flow.steps):
+            flow.completed = True
+            self._add_message(
+                "Setup zakończony",
+                "Figurki i jawne elementy encountera są rozstawione. Następny krok to inicjatywa i start walki.",
+            )
+        else:
+            flow.current_index += 1
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def start_encounter_initiative(self) -> dict[str, object]:
+        if self.encounter_setup_flow is None or not self.encounter_setup_flow.completed:
+            raise ValueError("Najpierw zakończ setup encountera.")
+        if self.combat_state is not None:
+            return self.state_payload()
+        encounter = self.encounter_setup_flow.encounter
+        prompts = build_player_initiative_prompts(encounter.actors)
+        self.encounter_initiative_flow = EncounterInitiativeFlow(encounter=encounter, prompts=prompts, entries=[])
+        self._add_message(
+            "Inicjatywa",
+            "Rozpoczyna się walka. Bohaterowie wykonują test inicjatywy po kolei; przeciwnicy rzucają automatycznie.",
+        )
+        if not prompts:
+            self._finish_encounter_initiative()
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def submit_encounter_initiative_roll(self, natural_roll: int) -> dict[str, object]:
+        if self.encounter_initiative_flow is None:
+            raise ValueError("Inicjatywa encountera nie została rozpoczęta.")
+        flow = self.encounter_initiative_flow
+        prompt = flow.current_prompt
+        if prompt is None:
+            return self.state_payload()
+        roll = resolve_d20_roll(D20RollInput(prompt.request, natural_roll))
+        entry = InitiativeEntry(
+            actor=prompt.actor,
+            roll=roll,
+            dexterity_modifier=prompt.dexterity_modifier,
+            stable_order=_actor_stable_order(flow.encounter, prompt.actor),
+        )
+        flow.entries.append(entry)
+        self._add_message(
+            "Rzut inicjatywy",
+            f"{prompt.actor.name}: naturalny wynik {roll.natural_roll}, razem {roll.total}.",
+        )
+        flow.current_prompt_index += 1
+        if flow.current_prompt is None:
+            self._finish_encounter_initiative()
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def _finish_encounter_initiative(self) -> None:
+        if self.encounter_initiative_flow is None or self.encounter_initiative_flow.completed:
+            return
+        flow = self.encounter_initiative_flow
+        known_actor_ids = {entry.actor.id for entry in flow.entries}
+        for actor in flow.encounter.actors:
+            if actor.id in known_actor_ids or actor.faction == Faction.ALLY or actor.is_defeated():
+                continue
+            entry = replace(roll_enemy_initiative(actor, self.encounter_rng), stable_order=_actor_stable_order(flow.encounter, actor))
+            flow.entries.append(entry)
+            self._add_message(
+                "Inicjatywa przeciwnika",
+                f"{actor.name}: automatyczny wynik {entry.roll.natural_roll}, razem {entry.roll.total}.",
+            )
+        order = build_initiative_order(flow.entries)
+        flow.order = order
+        flow.completed = True
+        self.combat_state = start_combat(flow.encounter.actors, order)
+        order_text = ", ".join(entry.actor.name for entry in order.entries)
+        self._add_message(
+            "Kolejność inicjatywy",
+            f"Kolejność została ustalona: {order_text}. Pierwsza tura: {order.current_actor.name}.",
+        )
+        self._sync_board_leds()
+
+    def _board_payload(self) -> dict[str, object]:
+        return {
+            "backend": self.board_backend,
+            "configured_backend": self.configured_board_backend,
+            "board_url": self.board_url,
+            "board_serial_port": self.board_serial_port,
+            "wled_url": self.wled_url,
+            "scan_timeout_s": self.scan_timeout_s,
+            "connected": self.board_adapter is not None,
+            "message": self.board_message,
+        }
+
+    def _sync_board_leds(self) -> None:
+        if self.board_adapter is None:
+            return
+        target = self._current_board_scan_target()
+        self._show_board_feedback(target.feedback)
+
+    def _show_board_feedback(self, feedback: LedFeedback) -> None:
+        if self.board_adapter is None:
+            return
+        self.board_adapter.clear()
+        if feedback.frames:
+            self.board_adapter.show_feedback(feedback)
+
+    def _current_board_scan_target(self) -> BoardScanTarget:
+        if self.encounter_setup_flow is not None:
+            step = self.encounter_setup_flow.current_step
+            if step is not None:
+                return BoardScanTarget(
+                    positions=step.positions,
+                    feedback=setup_led_feedback(step),
+                    empty_message="Aktualny krok setupu nie ma pól do kliknięcia.",
+                )
+        if self.encounter_initiative_flow is not None:
+            prompt = self.encounter_initiative_flow.current_prompt
+            if prompt is not None:
+                return BoardScanTarget(
+                    positions=(prompt.actor.position,),
+                    feedback=initiative_prompt_led_feedback(prompt),
+                    empty_message="Nie ma aktywnego aktora do podświetlenia inicjatywy.",
+                )
+        if self.combat_state is not None:
+            feedback = active_actor_led_feedback(self.combat_state.initiative_order)
+            return BoardScanTarget(
+                positions=(combat_current_actor(self.combat_state).position,),
+                feedback=feedback,
+                empty_message="Nie ma aktywnego aktora walki.",
+            )
+        if self.ui_flow_stage in {UiFlowStage.WAITING_FOR_BOARD, UiFlowStage.READY_TO_START}:
+            return BoardScanTarget(
+                positions=(),
+                feedback=LedFeedback(),
+                empty_message="Najpierw wybierz planszę i kliknij Start.",
+            )
+        if self.ui_flow_stage == UiFlowStage.INTERACTION_RESULT:
+            return BoardScanTarget(
+                positions=(),
+                feedback=LedFeedback(),
+                empty_message="Najpierw zakończ podsumowanie interakcji w UI.",
+            )
+        if self.ui_flow_stage == UiFlowStage.PARTY_SETUP:
+            position = self.current_zone.marker_position
+            return BoardScanTarget(
+                positions=(position,),
+                feedback=LedFeedback((LedFrame((position,), LedColor.MARKER, LedRole.DESTINATION),)),
+                empty_message="Nie ma pola startowego drużyny do kliknięcia.",
+            )
+        if self.ui_flow_stage == UiFlowStage.LOCATION_PREVIEW:
+            zones = self._scene_location_zones()
+            if self.preview_zone_id:
+                zone = self._preview_zone()
+                feedback = _single_zone_feedback(zone) if zone is not None else exploration_zone_feedback(self.state)
+            else:
+                feedback = _zone_markers_feedback(zones)
+            return BoardScanTarget(
+                positions=tuple(zone.marker_position for zone in zones),
+                feedback=feedback,
+                empty_message="Nie ma teraz dostępnych lokacji do kliknięcia.",
+            )
+        positions = tuple(zone.marker_position for zone in self._board_selectable_zones()) + tuple(
+            position for point in self.current_zone_points() for position in point.positions
+        )
+        return BoardScanTarget(
+            positions=positions,
+            feedback=exploration_zone_feedback(self.state),
+            empty_message="Nie ma teraz dostępnych lokacji ani punktów do kliknięcia.",
+        )
+
+    def _board_selectable_zones(self) -> tuple[ExplorationZone, ...]:
+        available_by_id = {zone.id: zone for zone in available_exploration_zones(self.state)}
+        zone_ids = (self.current_zone.id, *(zone.id for zone in self.travel_options()))
+        return tuple(available_by_id[zone_id] for zone_id in zone_ids if zone_id in available_by_id)
+
+    def _scene_location_zones(self) -> tuple[ExplorationZone, ...]:
+        visible = tuple(zone for zone in visible_exploration_zones(self.state.zones) if zone.id != "barracks")
+        preferred = ("gate", "courtyard", "tower")
+        by_id = {zone.id: zone for zone in visible}
+        ordered = tuple(by_id[zone_id] for zone_id in preferred if zone_id in by_id)
+        rest = tuple(zone for zone in visible if zone.id not in preferred)
+        return (*ordered, *rest)
+
+    def _handle_board_position(self, selected: Coordinate) -> dict[str, object]:
+        if self.encounter_setup_flow is not None and self.encounter_setup_flow.current_step is not None:
+            self.board_message = f"Potwierdzono setup kliknięciem pola {selected.as_tuple()}."
+            return self.confirm_encounter_setup_step()
+        if self.encounter_initiative_flow is not None and self.encounter_initiative_flow.current_prompt is not None:
+            prompt = self.encounter_initiative_flow.current_prompt
+            self.board_message = f"Wskazano aktora do inicjatywy: {prompt.actor.name}. Wpisz wynik d20 w UI."
+            return self.state_payload()
+        if self.combat_state is not None:
+            actor = combat_current_actor(self.combat_state)
+            self.board_message = f"Aktywny aktor walki: {actor.name}."
+            return self.state_payload()
+        if self.ui_flow_stage == UiFlowStage.PARTY_SETUP:
+            if selected == self.current_zone.marker_position:
+                self.ui_flow_stage = UiFlowStage.LOCATION_PREVIEW
+                self.preview_zone_id = ""
+                self.board_message = (
+                    f"Figurka drużyny ustawiona. Dostępna lokacja: {self.current_zone.name}, "
+                    f"kolor {led_color_name_pl(self.current_zone.color)}. Kliknij odpowiednią lokację, aby wejść w interakcję."
+                )
+                self._sync_board_leds()
+                return self.state_payload()
+            self.board_message = "Kliknięte pole nie jest podświetlonym polem startowym drużyny."
+            return self.state_payload()
+        if self.ui_flow_stage == UiFlowStage.LOCATION_PREVIEW:
+            for zone in self._scene_location_zones():
+                if selected == zone.marker_position:
+                    if not zone_is_ui_available(self.state, zone):
+                        self.preview_zone_id = zone.id
+                        self.board_message = _locked_zone_message(zone)
+                        self._sync_board_leds()
+                        return self.state_payload()
+                    if self.preview_zone_id == zone.id:
+                        if zone.id != self.current_zone.id:
+                            self.state = set_party_zone(self.state, zone)
+                            self.active_point_id = ""
+                        self.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+                        self.preview_zone_id = ""
+                        self.board_message = f"Drużyna wchodzi do lokacji: {zone.name}."
+                        self._sync_board_leds()
+                        return self.state_payload()
+                    self.preview_zone_id = zone.id
+                    self.board_message = (
+                        f"Podgląd lokacji: {zone.name}. Czy chcesz przejść do tej lokacji? "
+                        "Potwierdź kliknięciem tego samego pola."
+                    )
+                    self._sync_board_leds()
+                    return self.state_payload()
+            self.board_message = f"Kliknięte pole {selected.as_tuple()} nie jest teraz dostępną lokacją."
+            return self.state_payload()
+        for point in self.current_zone_points():
+            if selected in point.positions:
+                self.board_message = f"Wybrano punkt: {point.name}."
+                return self.select_point(point.id)
+        for zone in self._board_selectable_zones():
+            if selected == zone.marker_position:
+                if zone.id == self.current_zone.id:
+                    self.board_message = f"Wybrano aktualną lokację: {zone.name}."
+                    return self.state_payload()
+                self.ui_flow_stage = UiFlowStage.LOCATION_PREVIEW
+                self.preview_zone_id = zone.id
+                self.board_message = (
+                    f"Podgląd lokacji: {zone.name}. Czy opuścić {self.current_zone.name} i przejść do {zone.name}? "
+                    "Kliknij tę samą lokację ponownie, aby potwierdzić."
+                )
+                self._sync_board_leds()
+                return self.state_payload()
+        self.board_message = f"Kliknięte pole {selected.as_tuple()} nie pasuje do aktualnych opcji."
         return self.state_payload()
 
     def current_zone_points(self) -> tuple[ExplorationPoint, ...]:
         return tuple(point for point in visible_exploration_points(self.state.points) if point.zone_id == self.current_zone.id)
 
     def select_point(self, point_id: str) -> dict[str, object]:
+        if self.ui_flow_stage != UiFlowStage.LOCATION_ACTIVE:
+            raise ValueError("Najpierw potwierdź wejście do lokacji.")
         if not point_id:
             self.active_point_id = ""
             return self.state_payload()
@@ -221,6 +774,7 @@ class ExplorationUiSession:
         self.pending = None
         if point.npc_interaction is not None and point.npc_interaction.dialogue_intro:
             self._add_message(point.npc_interaction.name, point.npc_interaction.dialogue_intro)
+        self._sync_board_leds()
         return self.state_payload()
 
     def _submit_challenge_action(self, challenge: ExplorationChallenge, text: str) -> dict[str, object]:
@@ -352,12 +906,16 @@ class ExplorationUiSession:
         else:
             self._resolve_npc_roll(check_result)
         self.pending = None
+        self._refresh_pending_encounter()
+        self._sync_board_leds()
         return self.state_payload()
 
     def _resolve_challenge_roll(self, check_result) -> None:
         assert self.pending is not None and self.pending.challenge is not None and self.pending.option is not None
         resource = self.pending.resources[0] if self.pending.resources else None
         challenge = self.pending.challenge
+        available_before = {zone.id for zone in available_exploration_zones(self.state)}
+        visible_points_before = {point.id for point in visible_exploration_points(self.state.points)}
         if self.pending.option not in challenge.options:
             challenge = replace(challenge, options=(*challenge.options, self.pending.option))
         result = resolve_challenge_option(
@@ -370,7 +928,21 @@ class ExplorationUiSession:
         self.state = result.state
         self._add_message("Wynik podejścia", result.message)
         if result.completed:
-            self._reveal_completed_challenge_points(self.pending.challenge)
+            revealed_points = self._reveal_completed_challenge_points(self.pending.challenge)
+            available_after = {zone.id for zone in available_exploration_zones(self.state)}
+            visible_points_after = {point.id for point in visible_exploration_points(self.state.points)}
+            unlocked_zone_ids = tuple(sorted(available_after - available_before))
+            revealed_point_ids = tuple(sorted((visible_points_after - visible_points_before) | {point.id for point in revealed_points}))
+            self.interaction_result = {
+                "title": f"Zakończono: {self.pending.challenge.name}",
+                "body": result.message,
+                "unlocked_zones": [_zone_payload(zone, self._scenario_asset_root()) for zone in self.state.zones if zone.id in unlocked_zone_ids],
+                "revealed_points": [_point_payload(point) for point in self.state.points if point.id in revealed_point_ids],
+                "current_zone": _zone_payload(self.current_zone, self._scenario_asset_root()),
+                "next_instruction": "Zakończ interakcję, żeby wrócić do wyboru lokacji.",
+            }
+            self.ui_flow_stage = UiFlowStage.INTERACTION_RESULT
+            self.preview_zone_id = ""
 
     def _resolve_npc_roll(self, check_result) -> None:
         assert self.pending is not None
@@ -401,12 +973,59 @@ class ExplorationUiSession:
                     self.state = replace(self.state, flags=set_scene_flag(self.state.flags, flag, True))
                 self._add_message(f"Informacja: {info.label}", info.text)
 
-    def _reveal_completed_challenge_points(self, challenge: ExplorationChallenge) -> None:
+    def _reveal_completed_challenge_points(self, challenge: ExplorationChallenge) -> tuple[ExplorationPoint, ...]:
         if not challenge.reveals_on_complete or not challenge_state_for(self.state, challenge.id).completed:
-            return
+            return ()
         self.state, revealed = reveal_exploration_points(self.state, challenge.reveals_on_complete)
         for point in revealed:
             self._add_message("Nowy punkt odkryty", f"Odkrywacie nowy punkt w lokacji: {point.name}.")
+        return revealed
+
+    def _refresh_pending_encounter(self) -> None:
+        if self.pending_encounter is not None:
+            return
+        for trigger in self.exploration.encounter_triggers:
+            reason = self._trigger_reason(trigger)
+            if reason:
+                self.pending_encounter = PendingEncounter(
+                    trigger_id=trigger.id,
+                    name=trigger.name,
+                    description=trigger.description,
+                    encounter_scenario=trigger.encounter_scenario,
+                    reason=reason,
+                )
+                self._add_message("Encounter", f"{trigger.name}. {trigger.description}".strip())
+                return
+
+    def _trigger_reason(self, trigger: ExplorationEncounterTrigger) -> str:
+        if trigger.condition.value == "noise_at_least" and trigger.challenge_id is not None and trigger.noise is not None:
+            noise = challenge_state_for(self.state, trigger.challenge_id).noise
+            if noise >= trigger.noise:
+                return f"Hałas osiągnął {noise}, próg: {trigger.noise}."
+        if trigger.condition.value == "flag_equals" and trigger.flag_key:
+            value = scene_flag(self.state.flags, trigger.flag_key, None)
+            if value == trigger.flag_value:
+                return f"Flaga {trigger.flag_key} ma wartość {trigger.flag_value}."
+        if trigger.condition.value == "point_revealed" and trigger.point_id:
+            visible_ids = {point.id for point in visible_exploration_points(self.state.points)}
+            if trigger.point_id in visible_ids:
+                return f"Ujawniono punkt: {trigger.point_id}."
+        return ""
+
+    def _pending_encounter_payload(self) -> dict[str, object] | None:
+        if self.pending_encounter is None:
+            return None
+        return {
+            "trigger_id": self.pending_encounter.trigger_id,
+            "name": self.pending_encounter.name,
+            "description": self.pending_encounter.description,
+            "encounter_scenario": self.pending_encounter.encounter_scenario,
+            "reason": self.pending_encounter.reason,
+            "command": (
+                "PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat_loop "
+                f"--scenario {self.pending_encounter.encounter_scenario} --board-backend none --initiative-mode rolled"
+            ),
+        }
 
     def required_rolls_payload(self) -> list[dict[str, object]]:
         if self.pending is None or self.pending.stage != PendingStage.ROLL or self.pending.check_plan is None:
@@ -437,9 +1056,20 @@ def create_app(session: ExplorationUiSession) -> Flask:
     def index():
         return render_template_string(_HTML)
 
+    @app.get("/scenario-assets/<path:filename>")
+    def scenario_assets(filename: str):
+        return send_from_directory(session._scenario_asset_root().resolve(), filename)
+
     @app.get("/api/state")
     def api_state():
         return jsonify(session.state_payload())
+
+    @app.post("/api/start")
+    def api_start():
+        try:
+            return jsonify(session.start_session())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
     @app.post("/api/action")
     def api_action():
@@ -469,6 +1099,20 @@ def create_app(session: ExplorationUiSession) -> Flask:
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
+    @app.post("/api/interaction/finish")
+    def api_interaction_finish():
+        try:
+            return jsonify(session.finish_interaction_result())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/location/cancel-preview")
+    def api_location_cancel_preview():
+        try:
+            return jsonify(session.cancel_location_preview())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
     @app.post("/api/travel")
     def api_travel():
         data = request.get_json(silent=True) or {}
@@ -485,12 +1129,208 @@ def create_app(session: ExplorationUiSession) -> Flask:
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
+    @app.post("/api/board/configure")
+    def api_board_configure():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.configure_board(
+                    backend=str(data.get("backend", "none")),
+                    board_url=str(data.get("board_url", "")),
+                    board_serial_port=str(data.get("board_serial_port", "")),
+                    wled_url=str(data.get("wled_url", "")),
+                    scan_timeout_s=float(data["scan_timeout_s"]) if data.get("scan_timeout_s") not in {None, ""} else None,
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/board/scan")
+    def api_board_scan():
+        try:
+            return jsonify(session.scan_board_selection())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/encounter/setup/start")
+    def api_encounter_setup_start():
+        try:
+            return jsonify(session.start_encounter_setup())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/encounter/setup/confirm")
+    def api_encounter_setup_confirm():
+        try:
+            return jsonify(session.confirm_encounter_setup_step())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/encounter/initiative/start")
+    def api_encounter_initiative_start():
+        try:
+            return jsonify(session.start_encounter_initiative())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/encounter/initiative/roll")
+    def api_encounter_initiative_roll():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(session.submit_encounter_initiative_roll(int(data.get("natural_roll", 0))))
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
     @app.post("/api/reset")
     def api_reset():
         session.reset()
         return jsonify(session.state_payload())
 
     return app
+
+
+def _build_encounter_setup_steps(encounter: LoadedEncounter) -> tuple[SetupStep, ...]:
+    setup = EncounterSetup(
+        name=encounter.scenario_name,
+        actors=tuple(
+            ActorSetupEntry(actor=actor, role=actor.faction.value, position=actor.position, visibility=SetupVisibility.VISIBLE)
+            for actor in encounter.actors
+        ),
+        environment=encounter.environment,
+    )
+    steps = list(build_setup_steps(setup))
+    if encounter.player_start_zones:
+        start_positions = tuple(sorted({position for zone in encounter.player_start_zones for position in zone}))
+        ally_names = ", ".join(actor.name for actor in encounter.actors if actor.faction == Faction.ALLY)
+        steps.insert(
+            1,
+            SetupStep(
+                kind=SetupStepKind.ACTORS,
+                label="pola startowe bohaterów",
+                positions=start_positions,
+                color=(64, 220, 255),
+                message=(
+                    f"Ustaw bohaterów ({ally_names}) na jednym z podświetlonych pól startowych. "
+                    "Każda figurka powinna stać na osobnym polu."
+                ),
+            ),
+        )
+    return tuple(_split_large_setup_steps(tuple(steps), max_positions=5))
+
+
+def _split_large_setup_steps(steps: tuple[SetupStep, ...], *, max_positions: int) -> tuple[SetupStep, ...]:
+    result: list[SetupStep] = []
+    for step in steps:
+        if len(step.positions) <= max_positions:
+            result.append(step)
+            continue
+        chunks = tuple(
+            step.positions[index : index + max_positions] for index in range(0, len(step.positions), max_positions)
+        )
+        for index, chunk in enumerate(chunks, start=1):
+            result.append(
+                replace(
+                    step,
+                    positions=chunk,
+                    label=f"{step.label} {index}",
+                    message=f"{step.message} Część {index}/{len(chunks)}.",
+                )
+            )
+    return tuple(result)
+
+
+def _setup_step_payload(step: SetupStep | None) -> dict[str, object] | None:
+    if step is None:
+        return None
+    return {
+        "kind": step.kind.value,
+        "label": step.label,
+        "message": step.message,
+        "positions": [[position.col, position.row] for position in step.positions],
+        "color": _setup_color_name(step),
+    }
+
+
+def _setup_color_name(step: SetupStep) -> str:
+    if step.kind == SetupStepKind.ACTORS:
+        return "turkusowy"
+    if step.kind == SetupStepKind.ENEMIES:
+        return "czerwony/różowy"
+    return led_color_name_pl(step.color)
+
+
+def _initiative_prompt_payload(prompt: InitiativePrompt | None) -> dict[str, object] | None:
+    if prompt is None:
+        return None
+    return {
+        "actor_id": str(prompt.actor.id),
+        "actor_name": prompt.actor.name,
+        "message": prompt.message,
+        "dexterity_modifier": prompt.dexterity_modifier,
+    }
+
+
+def _initiative_entry_payload(entry: InitiativeEntry) -> dict[str, object]:
+    return {
+        "actor_id": str(entry.actor.id),
+        "actor_name": entry.actor.name,
+        "natural_roll": entry.roll.natural_roll,
+        "modifier": entry.roll.breakdown.modifier_total,
+        "total": entry.roll.total,
+        "dexterity_modifier": entry.dexterity_modifier,
+        "stable_order": entry.stable_order,
+    }
+
+
+def _combat_payload(state: CombatState | None) -> dict[str, object] | None:
+    if state is None:
+        return None
+    actor = combat_current_actor(state)
+    return {
+        "status": state.status.value,
+        "round_number": state.round_number,
+        "current_actor": _combat_actor_payload(actor),
+        "actors": [_combat_actor_payload(candidate) for candidate in state.actors],
+        "winner": state.winner.value if state.winner is not None else None,
+    }
+
+
+def _combat_actor_payload(actor: Actor) -> dict[str, object]:
+    return {
+        "id": str(actor.id),
+        "name": actor.name,
+        "faction": actor.faction.value,
+        "hp": actor.hp,
+        "temp_hp": actor.temp_hp,
+        "ac": actor.ac,
+        "position": [actor.position.col, actor.position.row],
+        "defeated": actor.is_defeated(),
+    }
+
+
+def _actor_stable_order(encounter: LoadedEncounter, actor: Actor) -> int:
+    for index, candidate in enumerate(encounter.actors):
+        if candidate.id == actor.id:
+            return index
+    return len(encounter.actors)
+
+
+def _coordinate_from_scan(raw: object) -> Coordinate:
+    if not isinstance(raw, (tuple, list)) or len(raw) != 2:
+        raise ValueError(f"Niepoprawna odpowiedź scan_board: {raw!r}.")
+    return Coordinate(int(raw[0]), int(raw[1]))
+
+
+def _load_board_defaults() -> dict[str, str]:
+    from board.settings import connection_backend, hardware_scan_config, load_board_config, simulator_url, wled_config
+
+    config = load_board_config()
+    return {
+        "backend": connection_backend(config) or "hardware",
+        "board_url": simulator_url(config) or "http://127.0.0.1:5000",
+        "serial_port": str((hardware_scan_config(config) or {}).get("serial_port") or "").strip(),
+        "wled_url": str((wled_config(config) or {}).get("base_url") or "").strip(),
+    }
 
 
 def _analyze(client: object, request_data: object) -> GmDeclarationAnalysis:
@@ -610,14 +1450,33 @@ def _check_plan_text(actors: tuple[Actor, ...], plan: ExplorationCheckPlan) -> s
     )
 
 
-def _zone_payload(zone: ExplorationZone) -> dict[str, object]:
-    return {
+def _zone_payload(zone: ExplorationZone, asset_root: Path | None = None, state: ExplorationState | None = None) -> dict[str, object]:
+    payload: dict[str, object] = {
         "id": zone.id,
         "name": zone.name,
         "description": zone.description,
         "summary": zone.llm_context.summary,
         "available_materials": list(zone.llm_context.available_materials),
+        "color": led_color_name_pl(zone.color),
+        "available": zone_is_ui_available(state, zone) if state is not None else True,
     }
+    if state is not None and not zone_is_ui_available(state, zone):
+        payload["locked_reason"] = _locked_zone_message(zone)
+    if zone.image:
+        image_path = zone.image.lstrip("/")
+        payload["image"] = zone.image
+        payload["image_url"] = f"/scenario-assets/{image_path}"
+    return payload
+
+
+def _single_zone_feedback(zone: ExplorationZone | None) -> LedFeedback:
+    if zone is None:
+        return LedFeedback()
+    return LedFeedback((LedFrame((zone.marker_position,), zone.color, LedRole.DESTINATION),))
+
+
+def _zone_markers_feedback(zones: tuple[ExplorationZone, ...]) -> LedFeedback:
+    return LedFeedback(tuple(LedFrame((zone.marker_position,), zone.color, LedRole.DESTINATION) for zone in zones))
 
 
 def _point_payload(point: ExplorationPoint | None) -> dict[str, object] | None:
@@ -628,6 +1487,8 @@ def _point_payload(point: ExplorationPoint | None) -> dict[str, object] | None:
         "name": point.name,
         "zone_id": point.zone_id,
         "description": point.description,
+        "positions": [[position.col, position.row] for position in point.positions],
+        "color": led_color_name_pl(point.color),
         "has_npc": point.npc_interaction is not None,
     }
     if point.npc_interaction is not None:
@@ -734,6 +1595,12 @@ def zone_is_ui_available(state: ExplorationState, zone: ExplorationZone) -> bool
     return zone.available_if_flag is None or scene_flag(state.flags, zone.available_if_flag, None) == zone.available_if_value
 
 
+def _locked_zone_message(zone: ExplorationZone) -> str:
+    if zone.available_if_flag == "gate_passed":
+        return f"{zone.name} jest jeszcze niedostępna. Najpierw trzeba otworzyć bramę."
+    return f"{zone.name} jest jeszcze niedostępna."
+
+
 _HTML = """
 <!doctype html>
 <html lang="pl">
@@ -755,6 +1622,12 @@ _HTML = """
     .scene-description p { margin: 7px 0; line-height: 1.45; }
     .scene-description ul { margin: 6px 0 0 20px; padding: 0; }
     .scene-description li { margin: 3px 0; }
+    .start-panel { min-height: 220px; display: grid; place-items: center; text-align: center; }
+    .start-panel .inner { max-width: 620px; }
+    .start-button { font-size: 18px; padding: 12px 22px; margin-top: 12px; }
+    .start-button:disabled { background: #3a3f45; color: #a9a298; cursor: not-allowed; }
+    .location-preview-image { width: 100%; max-height: 360px; object-fit: cover; border-radius: 6px; border: 1px solid #34383d; margin: 8px 0 12px; }
+    .scene-thumb { width: 180px; height: 96px; object-fit: cover; border-radius: 5px; border: 1px solid #34383d; float: right; margin: 0 0 10px 14px; }
     .hint-panel { margin-top: 10px; padding-top: 10px; border-top: 1px solid #34383d; }
     .hint-panel[hidden] { display: none; }
     .debug-panel { margin-top: 10px; }
@@ -769,6 +1642,8 @@ _HTML = """
     input, textarea, button { font: inherit; }
     textarea { width: 100%; min-height: 80px; box-sizing: border-box; background: #0f1113; color: #ece7dc; border: 1px solid #3a3f45; border-radius: 5px; padding: 10px; }
     input { width: 90px; background: #0f1113; color: #ece7dc; border: 1px solid #3a3f45; border-radius: 5px; padding: 8px; }
+    select { background: #0f1113; color: #ece7dc; border: 1px solid #3a3f45; border-radius: 5px; padding: 8px; }
+    .wide-input { width: 100%; box-sizing: border-box; margin-top: 5px; }
     button { background: #2f6feb; color: white; border: 0; border-radius: 5px; padding: 9px 12px; cursor: pointer; }
     button.secondary { background: #3a3f45; }
     button.danger { background: #b42318; }
@@ -782,12 +1657,31 @@ _HTML = """
     <div class="card"><b>Lokacja</b><div id="zone"></div></div>
     <div class="card"><b>Wyzwanie</b><div id="challenge"></div></div>
     <div class="card"><b>Zasoby</b><div id="resources"></div></div>
-    <div class="card"><b>Stan sceny</b><div id="scene-status"></div></div>
+    <div class="card">
+      <b>Plansza</b>
+      <div id="board-status" class="muted"></div>
+      <label>Tryb
+        <select id="board-backend">
+          <option value="none">brak</option>
+          <option value="simulator">symulator</option>
+          <option value="hardware">hardware</option>
+        </select>
+      </label>
+      <label>URL symulatora <input id="board-url" class="wide-input" value="http://127.0.0.1:5000"></label>
+      <label>Port hardware <input id="board-serial-port" class="wide-input" placeholder="/dev/ttyUSB0"></label>
+      <label>WLED URL <input id="wled-url" class="wide-input" placeholder="http://adres-wled"></label>
+      <label>Timeout skanu <input id="scan-timeout" type="number" min="1" max="120" value="30"></label>
+      <div class="row" style="margin-top:8px">
+        <button onclick="configureBoard()">Zastosuj</button>
+        <button class="secondary" onclick="scanBoard()">Czekaj na kliknięcie</button>
+      </div>
+    </div>
     <button class="secondary" onclick="resetSession()">Reset</button>
   </aside>
   <section>
     <h1>Eksploracja</h1>
     <div id="status" class="status" hidden></div>
+    <div class="card" id="flow-panel"></div>
     <div class="card scene-description">
       <h3>Opis sceny</h3>
       <div id="scene-description"></div>
@@ -796,6 +1690,10 @@ _HTML = """
       <h3>Wynik</h3>
       <div id="result"></div>
       <button onclick="ackResult()">Dalej</button>
+    </div>
+    <div class="card" id="encounter-panel">
+      <h3>Zaczyna się encounter</h3>
+      <div id="encounter"></div>
     </div>
     <div class="card" id="travel-panel">
       <h3>Dostępne przejścia</h3>
@@ -842,6 +1740,9 @@ _HTML = """
 let state = null;
 let busy = false;
 let resultAck = null;
+let boardScanInFlight = false;
+let lastAutoScanKey = '';
+let passiveBoardScanInFlight = false;
 function setBusy(message) {
   busy = Boolean(message);
   const status = document.getElementById('status');
@@ -849,6 +1750,7 @@ function setBusy(message) {
   status.textContent = message || '';
   document.querySelectorAll('button, textarea, input').forEach(el => {
     if (el.closest('details.debug-panel')) return;
+    if (el.dataset.allowBusy === 'true') return;
     el.disabled = busy;
   });
 }
@@ -859,8 +1761,8 @@ async function api(path, body, busyMessage) {
     const data = await res.json();
     if (!res.ok) alert(data.error || 'Błąd');
     state = data.state || data;
-    if (path === '/api/rolls' && res.ok) {
-      resultAck = latestResultMessage(state);
+  if (path === '/api/rolls' && res.ok) {
+      resultAck = state.flow && state.flow.stage === 'interaction_result' ? null : latestResultMessage(state);
     } else if (path !== '/api/decision') {
       resultAck = null;
     }
@@ -879,12 +1781,14 @@ function render() {
   document.getElementById('zone').textContent = state.current_zone.name;
   document.getElementById('challenge').textContent = state.active_challenge ? `${state.active_challenge.name}: ${state.active_challenge.current_progress}/${state.active_challenge.progress_required}, hałas ${state.active_challenge.noise}` : 'Brak';
   document.getElementById('resources').innerHTML = state.resources.map(r => `<div>${r.label}</div>`).join('') || 'Brak';
-  document.getElementById('scene-status').innerHTML = sceneStatusHtml();
+  renderBoardPanel();
+  document.getElementById('flow-panel').innerHTML = flowPanelHtml();
   document.getElementById('scene-description').innerHTML = sceneDescriptionHtml(state);
   document.getElementById('messages').innerHTML = state.messages.map(m => `<div class="message"><b>${m.title}</b><br>${m.body}</div>`).join('');
   document.getElementById('pending').innerHTML = pendingHtml(state.pending);
   document.getElementById('lead-actor-choice').innerHTML = leadActorChoiceHtml();
   document.getElementById('result').innerHTML = resultAck ? `<div class="result"><b>${esc(resultAck.title)}</b><br>${esc(resultAck.body)}</div>` : '';
+  document.getElementById('encounter').innerHTML = encounterHtml();
   document.getElementById('travel-options').innerHTML = travelOptionsHtml();
   document.getElementById('point-options').innerHTML = pointOptionsHtml();
   document.getElementById('roll-prompt').innerHTML = rollPromptHtml();
@@ -892,6 +1796,16 @@ function render() {
   document.getElementById('debug-payload').textContent = JSON.stringify(state, null, 2);
   document.getElementById('action-title').textContent = state.active_point && state.active_point.has_npc ? 'Co robicie wobec NPC?' : 'Co robi drużyna?';
   updateActivePanel();
+  maybeAutoScanBoard();
+}
+function renderBoardPanel() {
+  const board = state.board || {};
+  document.getElementById('board-status').textContent = `${board.message || 'Plansza niepodłączona.'} Domyślny backend z configu: ${board.configured_backend || '-'}.`;
+  document.getElementById('board-backend').value = board.backend || 'none';
+  document.getElementById('board-url').value = board.board_url || 'http://127.0.0.1:5000';
+  document.getElementById('board-serial-port').value = board.board_serial_port || '';
+  document.getElementById('wled-url').value = board.wled_url || '';
+  document.getElementById('scan-timeout').value = board.scan_timeout_s || 30;
 }
 function esc(value) {
   return String(value || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
@@ -907,11 +1821,104 @@ function sceneStatusHtml() {
     <div class="status-item"><b>${esc(item.label)}</b><span>${esc(item.value)}</span></div>
   `).join('')}</div>`;
 }
+function flowPanelHtml() {
+  const flow = state.flow || {};
+  const stage = flow.stage || 'waiting_for_board';
+  if (stage === 'waiting_for_board') {
+    return `
+      <div class="start-panel"><div class="inner">
+        <h2>Wybierz planszę</h2>
+        <p>Najpierw wybierz backend planszy w panelu po lewej: <b>symulator</b> albo <b>hardware</b>, a potem kliknij <b>Zastosuj</b>.</p>
+        <p class="muted">Tryb „brak” zostaje tylko do testów technicznych i nie uruchamia normalnej sesji gracza.</p>
+        <button class="start-button" disabled>Start</button>
+      </div></div>
+    `;
+  }
+  if (stage === 'ready_to_start') {
+    return `
+      <div class="start-panel"><div class="inner">
+        <h2>Plansza gotowa</h2>
+        <p>Backend planszy jest podłączony. Kliknij Start, żeby pokazać jawne elementy sceny na planszy.</p>
+        <button class="start-button" onclick="startSession()">Start</button>
+      </div></div>
+    `;
+  }
+  if (stage === 'party_setup') {
+    return `
+      <h3>Setup drużyny</h3>
+  <p>Ustaw figurkę drużyny na podświetlonym polu i potwierdź kliknięciem planszy.</p>
+      <p class="muted">Aplikacja czeka teraz na kliknięcie podświetlonego pola.</p>
+    `;
+  }
+  if (stage === 'location_preview') {
+    const preview = flow.preview_zone;
+    if (!preview) {
+      return `
+        <h3>Jawne elementy sceny</h3>
+        ${availableLocationsHtml(flow.available_locations || [])}
+        <p>Kliknij element sceny, aby zobaczyć podgląd. Dostępny element potwierdzisz drugim kliknięciem.</p>
+        <p class="muted">Aplikacja czeka teraz na kliknięcie jednego z jawnych elementów.</p>
+      `;
+    }
+    const image = preview.image_url ? `<img class="location-preview-image" src="${esc(preview.image_url)}" alt="${esc(preview.name)}">` : '';
+    if (preview.available === false) {
+      return `
+        <h3>Podgląd elementu</h3>
+        ${image}
+        <p><b>${esc(preview.name)}</b></p>
+        <p>${esc(preview.description || preview.summary || '')}</p>
+        <div class="status">${esc(preview.locked_reason || 'Ten element jest jeszcze zablokowany.')}</div>
+        <button class="secondary" data-allow-busy="true" onclick="cancelLocationPreview()">Wróć do wyboru elementów</button>
+      `;
+    }
+    return `
+      <h3>Podgląd elementu</h3>
+      ${image}
+      <p><b>${esc(preview.name)}</b></p>
+      <p>${esc(preview.description || preview.summary || '')}</p>
+      <p><b>Czy chcesz wejść w interakcję?</b> Potwierdź kliknięciem tego samego pola na planszy.</p>
+      <p class="muted">Aplikacja czeka teraz na potwierdzenie tym samym polem.</p>
+      <button class="secondary" data-allow-busy="true" onclick="cancelLocationPreview()">Wróć do wyboru elementów</button>
+    `;
+  }
+  if (stage === 'interaction_result') {
+    const result = flow.interaction_result || {};
+    const unlocked = result.unlocked_zones || [];
+    const points = result.revealed_points || [];
+    return `
+      <h3>${esc(result.title || 'Wynik interakcji')}</h3>
+      <div class="result">${esc(result.body || '')}</div>
+      ${unlocked.length ? `<p><b>Odblokowano lokacje:</b></p><ul>${unlocked.map(zone => `<li>${esc(zone.name)}</li>`).join('')}</ul>` : ''}
+      ${points.length ? `<p><b>Ujawniono punkty:</b></p><ul>${points.map(point => `<li>${esc(point.name)}</li>`).join('')}</ul>` : ''}
+      <p class="muted">${esc(result.next_instruction || 'Zakończ interakcję, aby wrócić do wyboru lokacji.')}</p>
+      <button onclick="finishInteraction()">Zakończ interakcję</button>
+    `;
+  }
+  return `
+    <h3>Aktywna lokacja</h3>
+    <p>Lokacja jest aktywna. Opisz, co robi drużyna, albo wybierz dostępny punkt/przejście planszą.</p>
+  `;
+}
+function availableLocationsHtml(locations) {
+  if (!locations.length) return '<p>Brak jawnych elementów sceny.</p>';
+  return `<ul>${locations.map(zone => {
+    const status = zone.available === false ? `zablokowane: ${esc(zone.locked_reason || '')}` : 'dostępne';
+    return `<li><b>${esc(zone.name)}</b>: kolor ${esc(colorNameForZone(zone))}, ${status}</li>`;
+  }).join('')}</ul>`;
+}
+function colorNameForZone(zone) {
+  return zone.color || 'kolor specjalny';
+}
 function sceneDescriptionHtml(state) {
   const zone = state.current_zone || {};
   const challenge = state.active_challenge;
+  const stage = state.flow ? state.flow.stage : 'location_active';
+  if (stage !== 'location_active') {
+    return '<p class="muted">Pełny opis lokacji pojawi się po potwierdzeniu wejścia na planszy.</p>';
+  }
   const parts = [
     `<p><b>${esc(zone.name)}</b></p>`,
+    zone.image_url ? `<img class="scene-thumb" src="${esc(zone.image_url)}" alt="${esc(zone.name)}">` : '',
     zone.description ? `<p>${esc(zone.description)}</p>` : '',
     zone.summary ? `<p>${esc(zone.summary)}</p>` : '',
   ];
@@ -951,7 +1958,7 @@ function sceneDescriptionHtml(state) {
     }
   }
   if (!challenge && state.travel_options && state.travel_options.length) {
-    parts.push(`<p><b>Droga dalej jest otwarta.</b> Wybierz jedną z dostępnych lokacji poniżej.</p>`);
+    parts.push(`<p><b>Droga dalej jest otwarta.</b> Zakończ interakcję albo wybierz lokację na planszy.</p>`);
   }
   return parts.filter(Boolean).join('');
 }
@@ -1023,16 +2030,101 @@ function travelOptionsHtml() {
     </div>
   `).join('');
 }
+function encounterHtml() {
+  const encounter = state.pending_encounter;
+  if (!encounter) return '';
+  const setup = state.encounter_setup;
+  const initiative = state.encounter_initiative;
+  const setupHtml = encounterSetupHtml(setup);
+  const initiativeHtml = encounterInitiativeHtml(setup, initiative);
+  const combatHtml = combatStartHtml();
+  return `
+    <p><b>${esc(encounter.name)}</b></p>
+    <p>${esc(encounter.description)}</p>
+    <p><b>Powód:</b> ${esc(encounter.reason)}</p>
+    <p><b>Scenariusz encountera:</b> ${esc(encounter.encounter_scenario)}</p>
+    ${setupHtml}
+    ${initiativeHtml}
+    ${combatHtml}
+    ${state.combat ? '' : `<details class="debug-panel"><summary>Komenda awaryjna terminala</summary><pre>${esc(encounter.command)}</pre></details>`}
+  `;
+}
+function encounterSetupHtml(setup) {
+  if (!setup) {
+    return `
+      <div class="message"><b>Setup przed walką</b><br>Najpierw rozstawcie figurki i jawne elementy sceny.</div>
+      <button onclick="startEncounterSetup()">Rozpocznij setup</button>
+    `;
+  }
+  if (setup.status === 'completed') {
+    return '<div class="result"><b>Setup zakończony</b><br>Plansza jest przygotowana do inicjatywy i walki.</div>';
+  }
+  const step = setup.current_step || {};
+  const positions = (step.positions || []).map(pos => `(${pos[0]},${pos[1]})`).join(', ') || '-';
+  return `
+    <div class="message">
+      <b>Krok ${Number(setup.current_index) + 1}/${setup.step_count}: ${esc(step.label || '')}</b><br>
+      ${esc(step.message || '')}
+      <p><b>Kolor:</b> ${esc(step.color || '-')}</p>
+      <p><b>Pola:</b> ${esc(positions)}</p>
+    </div>
+    <button onclick="confirmEncounterSetup()">Potwierdź krok setupu</button>
+  `;
+}
+function encounterInitiativeHtml(setup, initiative) {
+  if (!setup || setup.status !== 'completed' || state.combat) return '';
+  if (!initiative) {
+    return `
+      <div class="message"><b>Inicjatywa</b><br>Setup zakończony. Teraz ustalcie kolejność tur.</div>
+      <button onclick="startEncounterInitiative()">Rozpocznij inicjatywę</button>
+    `;
+  }
+  if (initiative.status === 'completed') return '';
+  const prompt = initiative.current_prompt || {};
+  return `
+    <div class="message">
+      <b>Rzut inicjatywy ${Number(initiative.current_prompt_index) + 1}/${initiative.prompt_count}</b><br>
+      ${esc(prompt.message || 'Wpisz naturalny wynik d20.')}
+    </div>
+    <div class="row">
+      <label>Wynik d20: <input id="encounter-initiative-roll" type="number" min="1" max="20" value="10"></label>
+      <button onclick="submitEncounterInitiativeRoll()">Zapisz rzut</button>
+    </div>
+  `;
+}
+function combatStartHtml() {
+  const combat = state.combat;
+  if (!combat) return '';
+  const order = state.encounter_initiative && state.encounter_initiative.order ? state.encounter_initiative.order : [];
+  const actors = combat.actors || [];
+  return `
+    <div class="result">
+      <b>Walka rozpoczęta</b><br>
+      Runda ${esc(combat.round_number)}. Tura: ${esc(combat.current_actor.name)}.
+    </div>
+    <p><b>Kolejność inicjatywy:</b> ${order.map(entry => `${esc(entry.actor_name)} (${entry.total})`).join(', ')}</p>
+    <div class="status-list">
+      ${actors.map(actor => `
+        <div class="status-item">
+          <b>${esc(actor.name)} ${actor.id === combat.current_actor.id ? '(tura)' : ''}</b>
+          <span>${esc(actor.faction)} | HP ${esc(actor.hp)} / AC ${esc(actor.ac)} | pole (${esc(actor.position[0])},${esc(actor.position[1])})</span>
+        </div>
+      `).join('')}
+    </div>
+    <p class="muted">Pełne akcje walki będą kolejnym krokiem UI; stan walki jest już zbudowany z encountera i inicjatywy.</p>
+  `;
+}
 function pointOptionsHtml() {
   const points = state.current_zone_points || [];
   if (!points.length) return '<p>Brak odkrytych punktów w tej lokacji.</p>';
   const rows = points.map(point => {
     const active = state.active_point && state.active_point.id === point.id;
-    const label = point.has_npc ? 'Wejdź w interakcję' : 'Sprawdź';
+    const positions = (point.positions || []).map(pos => `(${pos[0]},${pos[1]})`).join(', ');
     return `
-      <div class="row" style="justify-content:space-between; margin: 6px 0">
-        <div><b>${esc(point.name)}</b>${active ? ' <span class="muted">(aktywny)</span>' : ''}<br><span class="muted">${esc(point.description)}</span></div>
-        <button onclick="selectPoint('${esc(point.id)}')">${label}</button>
+      <div class="status-item" style="margin: 6px 0">
+        <b>${esc(point.name)}${active ? ' (aktywny)' : ''}</b>
+        <div class="muted">${esc(point.description)}</div>
+        <div>LED: ${esc(point.color || 'kolor specjalny')}${positions ? `, pole ${esc(positions)}` : ''}. Przestaw pionek drużyny na to pole i kliknij planszę, aby wejść w interakcję.</div>
       </div>
     `;
   });
@@ -1042,17 +2134,22 @@ function pointOptionsHtml() {
   return rows.join('');
 }
 function updateActivePanel() {
+  const stage = state.flow ? state.flow.stage : 'location_active';
+  const flowActive = stage !== 'location_active';
   const hasPendingDecision = state.pending && state.pending.stage === 'decision';
   const hasRolls = state.required_rolls && state.required_rolls.length > 0;
   const hasResult = Boolean(resultAck);
-  const hasTravel = !state.active_challenge && !state.active_point && !hasResult && !hasPendingDecision && !hasRolls && state.travel_options && state.travel_options.length > 0;
-  const hasPoints = !hasResult && !hasPendingDecision && !hasRolls && state.current_zone_points && state.current_zone_points.length > 0;
+  const hasEncounter = Boolean(state.pending_encounter);
+  const hasTravel = false;
+  const hasPoints = !flowActive && !hasEncounter && !hasResult && !hasPendingDecision && !hasRolls && state.current_zone_points && state.current_zone_points.length > 0;
+  document.getElementById('flow-panel').hidden = false;
   document.getElementById('result-panel').hidden = !hasResult;
+  document.getElementById('encounter-panel').hidden = !hasEncounter || hasResult;
   document.getElementById('travel-panel').hidden = !hasTravel;
   document.getElementById('points-panel').hidden = !hasPoints;
   document.getElementById('pending-panel').hidden = !hasPendingDecision;
   document.getElementById('roll-panel').hidden = !hasRolls;
-  document.getElementById('action-panel').hidden = hasResult || hasTravel || hasPendingDecision || hasRolls;
+  document.getElementById('action-panel').hidden = flowActive || hasEncounter || hasResult || hasTravel || hasPendingDecision || hasRolls;
 }
 function sendAction() { api('/api/action', {text: document.getElementById('action').value}, 'Czekam na decyzję MG...'); }
 function decision(value) {
@@ -1072,6 +2169,79 @@ function sendRolls() {
 function resetSession() { api('/api/reset', {}, 'Resetuję scenę...'); }
 function travel(zoneId) { api('/api/travel', {zone_id: zoneId}, 'Przechodzę do wybranej lokacji...'); }
 function selectPoint(pointId) { api('/api/point', {point_id: pointId}, pointId ? 'Otwieram punkt eksploracji...' : 'Wracam do lokacji...'); }
+function finishInteraction() { api('/api/interaction/finish', {}, 'Wracam do wyboru lokacji...'); }
+function cancelLocationPreview() { api('/api/location/cancel-preview', {}, 'Wracam do wyboru lokacji...'); }
+function configureBoard() {
+  api('/api/board/configure', {
+    backend: document.getElementById('board-backend').value,
+    board_url: document.getElementById('board-url').value,
+    board_serial_port: document.getElementById('board-serial-port').value,
+    wled_url: document.getElementById('wled-url').value,
+    scan_timeout_s: Number(document.getElementById('scan-timeout').value || 30)
+  }, 'Łączę z planszą...');
+}
+function startSession() { api('/api/start', {}, 'Rozpoczynam sesję...'); }
+function scanBoard() { api('/api/board/scan', {}, 'Czekam na kliknięcie pola na planszy...'); }
+async function scanBoardAuto() {
+  boardScanInFlight = true;
+  setBusy('Czekam na kliknięcie pola na planszy...');
+  try {
+    const res = await fetch('/api/board/scan', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({})});
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error || 'Błąd planszy');
+    }
+    state = data.state || data;
+    boardScanInFlight = false;
+    render();
+  } finally {
+    boardScanInFlight = false;
+    setBusy('');
+  }
+}
+function maybeAutoScanBoard() {
+  const flow = state.flow || {};
+  const stage = flow.stage || '';
+  if (!state.board || !state.board.connected) return;
+  if (stage === 'location_active' && state.current_zone_points && state.current_zone_points.length && !state.active_point) {
+    maybePassivePointScan();
+    return;
+  }
+  if (!['party_setup', 'location_preview'].includes(stage)) return;
+  const previewId = flow.preview_zone ? flow.preview_zone.id : '';
+  const key = `${stage}:${previewId}`;
+  if (boardScanInFlight || lastAutoScanKey === key) return;
+  lastAutoScanKey = key;
+  setTimeout(scanBoardAuto, 50);
+}
+async function scanBoardPassive() {
+  passiveBoardScanInFlight = true;
+  try {
+    const res = await fetch('/api/board/scan', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({})});
+    const data = await res.json();
+    state = data.state || data;
+    passiveBoardScanInFlight = false;
+    render();
+  } finally {
+    passiveBoardScanInFlight = false;
+    const flow = state && state.flow ? state.flow : {};
+    if (flow.stage === 'location_active' && state.current_zone_points && state.current_zone_points.length && !state.active_point) {
+      setTimeout(maybePassivePointScan, 300);
+    }
+  }
+}
+function maybePassivePointScan() {
+  if (passiveBoardScanInFlight || boardScanInFlight) return;
+  passiveBoardScanInFlight = true;
+  setTimeout(scanBoardPassive, 50);
+}
+function startEncounterSetup() { api('/api/encounter/setup/start', {}, 'Przygotowuję kroki setupu encountera...'); }
+function confirmEncounterSetup() { api('/api/encounter/setup/confirm', {}, 'Potwierdzam krok setupu...'); }
+function startEncounterInitiative() { api('/api/encounter/initiative/start', {}, 'Rozpoczynam inicjatywę...'); }
+function submitEncounterInitiativeRoll() {
+  const input = document.getElementById('encounter-initiative-roll');
+  api('/api/encounter/initiative/roll', {natural_roll: Number(input ? input.value : 0)}, 'Zapisuję rzut inicjatywy...');
+}
 function ackResult() {
   resultAck = null;
   render();

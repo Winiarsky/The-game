@@ -58,5 +58,6 @@ def test_board_led_adapter_writes_frames_to_connection_and_clears():
     adapter.clear()
 
     assert connection.calls
-    assert connection.calls[0][0] == [(0, 0)]
+    assert (0, 0) in connection.calls[0][0]
+    assert all(isinstance(color, list) for color in connection.calls[0][1])
     assert connection.cleared is True

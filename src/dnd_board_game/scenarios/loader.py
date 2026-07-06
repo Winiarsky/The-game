@@ -21,6 +21,7 @@ from dnd_board_game.combat import (
 from dnd_board_game.exploration import (
     ExplorationChallenge,
     ExplorationChallengeOption,
+    ExplorationEncounterTrigger,
     ExplorationOption,
     ExplorationOptionKind,
     ExplorationPoint,
@@ -35,6 +36,7 @@ from dnd_board_game.exploration import (
     NpcLockedInformation,
     PartyPosition,
     SceneMode,
+    EncounterTriggerCondition,
 )
 from dnd_board_game.hardware import LedColor
 from dnd_board_game.rules import D20RollRequest, RollModifier, RollModifierType
@@ -137,6 +139,7 @@ class ScenarioDefinition:
     exploration_challenges: tuple[ExplorationChallenge, ...] = ()
     exploration_resources: tuple[ExplorationResource, ...] = ()
     exploration_initial_resources: tuple[str, ...] = ()
+    exploration_encounter_triggers: tuple[ExplorationEncounterTrigger, ...] = ()
     party_start_zone_id: str | None = None
     llm_context: LlmContext = LlmContext()
 
@@ -172,6 +175,7 @@ class LoadedExploration:
     resources: tuple[ExplorationResource, ...]
     initial_resource_ids: tuple[str, ...]
     party_position: PartyPosition
+    encounter_triggers: tuple[ExplorationEncounterTrigger, ...] = ()
     llm_context: LlmContext = LlmContext()
     objectives: tuple[SceneObjective, ...] = ()
 
@@ -276,6 +280,7 @@ def build_exploration_from_scenario(loaded: LoadedScenario) -> LoadedExploration
         challenges=definition.exploration_challenges,
         resources=definition.exploration_resources,
         initial_resource_ids=definition.exploration_initial_resources,
+        encounter_triggers=definition.exploration_encounter_triggers,
         party_position=PartyPosition(start_zone.id, start_zone.marker_position),
         llm_context=definition.llm_context,
         objectives=objectives,
@@ -316,6 +321,7 @@ def _parse_scenario(data: dict[str, Any], scenario_path: Path) -> ScenarioDefini
         exploration_challenges=tuple(_parse_exploration_challenge(entry) for entry in exploration_data.get("challenges", [])),
         exploration_resources=tuple(_parse_exploration_resource(entry) for entry in exploration_data.get("resources", [])),
         exploration_initial_resources=tuple(str(item) for item in exploration_data.get("initial_resources", [])),
+        exploration_encounter_triggers=tuple(_parse_exploration_encounter_trigger(entry) for entry in exploration_data.get("encounter_triggers", [])),
         party_start_zone_id=str(exploration_data["party_start_zone"]) if "party_start_zone" in exploration_data else None,
         llm_context=_parse_llm_context(data.get("llm_context", {}), "scenario.llm_context"),
     )
@@ -455,6 +461,7 @@ def _parse_exploration_zone(data: Any) -> ExplorationZone:
         color=_parse_color(data.get("color", "marker"), f"exploration zone {zone_id}.color"),
         anchor_position=_parse_coordinate(data["anchor_position"], f"exploration zone {zone_id}.anchor_position") if "anchor_position" in data else None,
         description=str(data.get("description", "")),
+        image=str(data.get("image", "")),
         visibility=_enum_value(
             SetupVisibility,
             str(data.get("visibility", SetupVisibility.VISIBLE.value)),
@@ -686,6 +693,29 @@ def _parse_exploration_resource(data: Any) -> ExplorationResource:
         mitigates_complications=tuple(str(item) for item in data.get("mitigates_complications", [])),
         mitigates_noise=int(data.get("mitigates_noise", 0)),
         unlocks_flags=tuple(str(item) for item in data.get("unlocks_flags", [])),
+    )
+
+
+def _parse_exploration_encounter_trigger(data: Any) -> ExplorationEncounterTrigger:
+    if not isinstance(data, dict):
+        raise ValueError("scenario.exploration.encounter_triggers entries must be objects.")
+    trigger_id = str(_required(data, "id", "exploration encounter trigger"))
+    condition = _enum_value(
+        EncounterTriggerCondition,
+        str(_required(data, "condition", f"exploration encounter trigger {trigger_id}")),
+        f"exploration encounter trigger {trigger_id}.condition",
+    )
+    return ExplorationEncounterTrigger(
+        id=trigger_id,
+        name=str(_required(data, "name", f"exploration encounter trigger {trigger_id}")),
+        description=str(data.get("description", "")),
+        encounter_scenario=str(_required(data, "encounter_scenario", f"exploration encounter trigger {trigger_id}")),
+        condition=condition,
+        challenge_id=str(data["challenge_id"]) if "challenge_id" in data else None,
+        noise=int(data["noise"]) if "noise" in data else None,
+        flag_key=str(data["flag_key"]) if "flag_key" in data else None,
+        flag_value=data.get("flag_value", True),
+        point_id=str(data["point_id"]) if "point_id" in data else None,
     )
 
 
@@ -1030,6 +1060,19 @@ def _validate_exploration(definition: ScenarioDefinition) -> None:
                 raise ValueError(
                     f"exploration challenge option {option.id}.unlocks_if_resource_id references unknown resource."
                 )
+    challenge_ids = {challenge.id for challenge in definition.exploration_challenges}
+    for trigger in definition.exploration_encounter_triggers:
+        if trigger.condition == EncounterTriggerCondition.NOISE_AT_LEAST:
+            if trigger.challenge_id not in challenge_ids:
+                raise ValueError(f"exploration encounter trigger {trigger.id}.challenge_id references unknown challenge.")
+            if trigger.noise is None:
+                raise ValueError(f"exploration encounter trigger {trigger.id}.noise is required for noise_at_least.")
+        elif trigger.condition == EncounterTriggerCondition.FLAG_EQUALS:
+            if not trigger.flag_key:
+                raise ValueError(f"exploration encounter trigger {trigger.id}.flag_key is required for flag_equals.")
+        elif trigger.condition == EncounterTriggerCondition.POINT_REVEALED:
+            if trigger.point_id not in point_ids:
+                raise ValueError(f"exploration encounter trigger {trigger.id}.point_id references unknown point.")
 
 
 def _validate_llm_challenge_policy(challenge: ExplorationChallenge, resource_ids: set[str]) -> None:
@@ -1134,6 +1177,7 @@ def _parse_color(value: Any, field: str) -> tuple[int, int, int]:
         "marker": LedColor.MARKER,
         "movement": LedColor.MOVEMENT_RANGE,
         "multi": LedColor.MULTI_OPTION_TILE,
+        "purple": LedColor.MENU_PURPLE,
         "success": LedColor.INTERACTION_SUCCESS,
         "warning": LedColor.ENEMY_MOVEMENT_DESTINATION,
         "danger": LedColor.ATTACK_MISS,

@@ -80,8 +80,18 @@ class BoardLedAdapter:
         self.connection = connection
 
     def show_feedback(self, feedback: LedFeedback) -> None:
+        updates: dict[tuple[int, int], tuple[int, int, int]] = {}
         for frame in feedback.frames:
-            self.connection.set_leds([position.as_tuple() for position in frame.positions], list(frame.color))
+            for position in frame.positions:
+                updates[position.as_tuple()] = frame.color
+        if not updates:
+            return
+        positions = list(updates.keys())
+        colors = [list(color) for color in updates.values()]
+        if len({tuple(color) for color in colors}) == 1:
+            self.connection.set_leds(positions, colors[0])
+        else:
+            self.connection.set_leds(positions, colors)
 
     def show_movement(self, feedback: LedFeedback) -> None:
         self.show_feedback(feedback)

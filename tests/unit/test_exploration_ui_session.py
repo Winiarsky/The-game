@@ -4,7 +4,7 @@ from dnd_board_game.llm import (
     GmDeclarationAnalysisType,
     NpcInteractionProposal,
 )
-from dnd_board_game.ui.exploration_app import ExplorationUiSession
+from dnd_board_game.ui.exploration_app import ExplorationUiSession, UiFlowStage
 
 
 class FakeGmClient:
@@ -69,6 +69,7 @@ def test_exploration_ui_session_resolves_gate_challenge():
         "content/scenarios/abandoned_watchtower.json",
         gm_client=FakeGmClient(_challenge_proposal()),
     )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
 
     state = session.submit_action("Wyważamy bramę.")
     assert state["pending"]["stage"] == "decision"
@@ -91,6 +92,7 @@ def test_exploration_ui_session_rejects_pending_interpretation():
         "content/scenarios/abandoned_watchtower.json",
         gm_client=FakeGmClient(_challenge_proposal()),
     )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
 
     session.submit_action("Wyważamy bramę.")
     state = session.decide("reject")
@@ -129,11 +131,13 @@ def test_exploration_ui_session_reset_restores_initial_state():
         "content/scenarios/abandoned_watchtower.json",
         gm_client=FakeGmClient(_challenge_proposal()),
     )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
     session.submit_action("Wyważamy bramę.")
     session.decide("accept")
     session.resolve_rolls({"hero": 16})
 
     session.reset()
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
     state = session.state_payload()
 
     assert state["active_challenge"]["current_progress"] == 0

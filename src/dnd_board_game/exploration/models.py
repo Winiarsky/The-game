@@ -48,6 +48,12 @@ class ConsequenceTarget(StrEnum):
     OBJECT = "object"
 
 
+class EncounterTriggerCondition(StrEnum):
+    NOISE_AT_LEAST = "noise_at_least"
+    FLAG_EQUALS = "flag_equals"
+    POINT_REVEALED = "point_revealed"
+
+
 @dataclass(frozen=True, slots=True)
 class LlmContext:
     summary: str = ""
@@ -66,6 +72,29 @@ class LlmContext:
             "impossible_approaches": list(self.impossible_approaches),
             "risk_notes": list(self.risk_notes),
         }
+
+
+@dataclass(frozen=True, slots=True)
+class ExplorationEncounterTrigger:
+    id: str
+    name: str
+    description: str
+    encounter_scenario: str
+    condition: EncounterTriggerCondition
+    challenge_id: str | None = None
+    noise: int | None = None
+    flag_key: str | None = None
+    flag_value: object = True
+    point_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PendingEncounter:
+    trigger_id: str
+    name: str
+    description: str
+    encounter_scenario: str
+    reason: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -164,6 +193,7 @@ class ExplorationZone:
     color: tuple[int, int, int]
     anchor_position: Coordinate | None = None
     description: str = ""
+    image: str = ""
     visibility: SetupVisibility = SetupVisibility.VISIBLE
     available_if_flag: str | None = None
     available_if_value: object = True
