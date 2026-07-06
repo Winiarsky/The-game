@@ -55,6 +55,14 @@ class EncounterTriggerCondition(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class EncounterOutcome:
+    title: str
+    body: str
+    effects: tuple[dict[str, object], ...] = ()
+    next_instruction: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class LlmContext:
     summary: str = ""
     available_materials: tuple[str, ...] = ()
@@ -86,6 +94,8 @@ class ExplorationEncounterTrigger:
     flag_key: str | None = None
     flag_value: object = True
     point_id: str | None = None
+    outcome_on_victory: EncounterOutcome | None = None
+    outcome_on_defeat: EncounterOutcome | None = None
 
 
 @dataclass(frozen=True, slots=True)

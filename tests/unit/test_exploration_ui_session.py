@@ -1,3 +1,7 @@
+from dataclasses import replace
+
+from dnd_board_game.actors import Faction
+from dnd_board_game.combat import replace_actor, set_scene_flag
 from dnd_board_game.llm import (
     GmClassifierProposal,
     GmDeclarationAnalysis,
@@ -192,6 +196,39 @@ def test_exploration_ui_session_writes_debug_log_for_npc_effects(tmp_path):
     assert payload["session_id"] == "ui_log_test"
     assert payload["path"] == str(session.observer.path)
     assert any(event["event_type"] == "ui_effect_applied" for event in payload["events"])
+
+
+def test_exploration_ui_session_applies_victory_outcome_after_combat():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.state = replace(session.state, flags=set_scene_flag(session.state.flags, "scout_panicked", True))
+
+    state = session.state_payload()
+    assert state["pending_encounter"]["trigger_id"] == "scout_panic_alarm"
+
+    session.start_encounter_setup()
+    while session.encounter_setup_flow is not None and not session.encounter_setup_flow.completed:
+        session.confirm_encounter_setup_step()
+    session.start_encounter_initiative()
+    session.submit_encounter_initiative_roll(15)
+    session.submit_encounter_initiative_roll(14)
+
+    assert session.combat_state is not None
+    for actor in tuple(session.combat_state.actors):
+        if actor.faction == Faction.ENEMY:
+            session.combat_state = replace_actor(session.combat_state, replace(actor, hp=0))
+
+    state = session.resolve_active_combat()
+
+    assert state["combat"] is None
+    assert state["pending_encounter"] is None
+    assert state["flow"]["stage"] == "interaction_result"
+    assert {"key": "courtyard_cleared", "value": True} in state["flags"]
+    assert any(point["id"] == "wounded_scout" for point in state["flow"]["interaction_result"]["revealed_points"])
+    assert any(point["id"] == "wounded_scout" for point in state["visible_points"])
+
+    state = session.finish_interaction_result()
+    assert state["pending_encounter"] is None
 
 
 def test_exploration_ui_session_reset_restores_initial_state():

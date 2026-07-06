@@ -7,7 +7,41 @@
       "encounter_scenario": "content/scenarios/multi_actor_skirmish.json",
       "condition": "noise_at_least",
       "challenge_id": "closed_gate",
-      "noise": 3
+      "noise": 3,
+      "outcome_on_victory": {
+        "title": "Dziedziniec ucichł",
+        "body": "Po ostatnim ciosie echo walki gaśnie między murami. Wśród przewróconych desek słychać płytki oddech kogoś, kto przeżył alarm.",
+        "next_instruction": "Zakończ wynik, a potem wybierz ujawniony punkt rannego zwiadowcy na planszy.",
+        "effects": [
+          {
+            "type": "set_flag",
+            "parameters": {
+              "key": "courtyard_cleared",
+              "value": true
+            }
+          },
+          {
+            "type": "reveal_point",
+            "parameters": {
+              "point_id": "wounded_scout"
+            }
+          }
+        ]
+      },
+      "outcome_on_defeat": {
+        "title": "Alarm rozbija drużynę",
+        "body": "Przeciwnicy przejmują dziedziniec. Drużyna musi wycofać się z hałasem i zapamiętać koszt tej porażki.",
+        "next_instruction": "Zakończ wynik, żeby wrócić do eksploracji i zdecydować, czy scena wymaga resetu albo konsekwencji MG.",
+        "effects": [
+          {
+            "type": "set_flag",
+            "parameters": {
+              "key": "party_defeated_at_courtyard",
+              "value": true
+            }
+          }
+        ]
+      }
     },
     {
       "id": "scout_panic_alarm",
@@ -16,7 +50,41 @@
       "encounter_scenario": "content/scenarios/multi_actor_skirmish.json",
       "condition": "flag_equals",
       "flag_key": "scout_panicked",
-      "flag_value": true
+      "flag_value": true,
+      "outcome_on_victory": {
+        "title": "Krzyk przycichł",
+        "body": "Po walce zwiadowca dalej oddycha, ale patrzy już bardziej przytomnie. Wokół niego robi się dość bezpiecznie, by spróbować rozmowy albo pomocy.",
+        "next_instruction": "Zakończ wynik, a potem wybierz rannego zwiadowcę na planszy.",
+        "effects": [
+          {
+            "type": "set_flag",
+            "parameters": {
+              "key": "courtyard_cleared",
+              "value": true
+            }
+          },
+          {
+            "type": "reveal_point",
+            "parameters": {
+              "point_id": "wounded_scout"
+            }
+          }
+        ]
+      },
+      "outcome_on_defeat": {
+        "title": "Panika przeradza się w klęskę",
+        "body": "Krzyk zwiadowcy ściąga przeciwników szybciej, niż drużyna jest w stanie opanować sytuację.",
+        "next_instruction": "Zakończ wynik, żeby wrócić do eksploracji i zdecydować o konsekwencjach MG.",
+        "effects": [
+          {
+            "type": "set_flag",
+            "parameters": {
+              "key": "party_defeated_at_courtyard",
+              "value": true
+            }
+          }
+        ]
+      }
     }
   ]
 }

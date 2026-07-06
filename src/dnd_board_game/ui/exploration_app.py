@@ -36,6 +36,7 @@ from dnd_board_game.exploration import (
     CheckAggregation,
     CheckParticipants,
     ConsequenceTarget,
+    EncounterOutcome,
     ExplorationChallenge,
     ExplorationEncounterTrigger,
     ExplorationChallengeOption,
@@ -253,6 +254,7 @@ class ExplorationUiSession:
         self.encounter_setup_flow: EncounterSetupFlow | None = None
         self.encounter_initiative_flow: EncounterInitiativeFlow | None = None
         self.combat_state: CombatState | None = None
+        self.resolved_encounter_trigger_ids: set[str] = set()
         self.encounter_rng = random.Random(7)
         board_defaults = _load_board_defaults()
         self.board_backend = "none"
@@ -544,6 +546,60 @@ class ExplorationUiSession:
             "Setup przed walką",
             f"Rozpoczynam setup encountera: {encounter.scenario_name}. Potwierdzajcie kolejne grupy po rozstawieniu figurek.",
         )
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def resolve_active_combat(self) -> dict[str, object]:
+        if self.pending_encounter is None:
+            raise ValueError("Nie ma aktywnego encountera do rozstrzygnięcia.")
+        if self.combat_state is None:
+            raise ValueError("Walka nie została jeszcze rozpoczęta.")
+        if self.combat_state.winner is None:
+            raise ValueError("Walka nie ma jeszcze zwycięzcy.")
+        trigger = self._trigger_by_id(self.pending_encounter.trigger_id)
+        if trigger is None:
+            raise ValueError(f"Nieznany trigger encountera: {self.pending_encounter.trigger_id}.")
+        if self.combat_state.winner == Faction.ALLY:
+            outcome = trigger.outcome_on_victory or _default_encounter_victory_outcome(self.pending_encounter.name)
+        else:
+            outcome = trigger.outcome_on_defeat or _default_encounter_defeat_outcome(self.pending_encounter.name)
+        visible_points_before = {point.id for point in visible_exploration_points(self.state.points)}
+        effects = []
+        for effect in outcome.effects:
+            result = apply_exploration_effect(self.state, effect)
+            self.state = result.state
+            self._record_effect_result(result, source="encounter_outcome", raw_effect=effect)
+            effects.append(result)
+        visible_points_after = {point.id for point in visible_exploration_points(self.state.points)}
+        revealed_point_ids = tuple(sorted(visible_points_after - visible_points_before))
+        self.resolved_encounter_trigger_ids.add(trigger.id)
+        self._record(
+            "ui_encounter_resolved",
+            {
+                "trigger_id": trigger.id,
+                "winner": self.combat_state.winner.value,
+                "effect_types": [result.effect_type for result in effects],
+                "revealed_point_ids": list(revealed_point_ids),
+            },
+        )
+        self._add_message(outcome.title or "Wynik encountera", outcome.body or "Encounter został rozstrzygnięty.")
+        self.interaction_result = {
+            "title": outcome.title or "Wynik encountera",
+            "body": outcome.body or "Encounter został rozstrzygnięty.",
+            "unlocked_zones": [],
+            "revealed_points": [_point_payload(point) for point in self.state.points if point.id in revealed_point_ids],
+            "current_zone": _zone_payload(self.current_zone, self._scenario_asset_root()),
+            "next_instruction": outcome.next_instruction or "Zakończ wynik, żeby wrócić do wyboru lokacji.",
+        }
+        self.pending_encounter = None
+        self.encounter_setup_flow = None
+        self.encounter_initiative_flow = None
+        self.combat_state = None
+        self.pending = None
+        self.preview_zone_id = ""
+        self.active_point_id = ""
+        self.ui_flow_stage = UiFlowStage.INTERACTION_RESULT
+        self.board_message = "Encounter rozstrzygnięty. Na planszy podświetlono nowe opcje sceny."
         self._sync_board_leds()
         return self.state_payload()
 
@@ -1114,6 +1170,8 @@ class ExplorationUiSession:
         if self.pending_encounter is not None:
             return
         for trigger in self.exploration.encounter_triggers:
+            if trigger.id in self.resolved_encounter_trigger_ids:
+                continue
             reason = self._trigger_reason(trigger)
             if reason:
                 self.pending_encounter = PendingEncounter(
@@ -1125,6 +1183,9 @@ class ExplorationUiSession:
                 )
                 self._add_message("Encounter", f"{trigger.name}. {trigger.description}".strip())
                 return
+
+    def _trigger_by_id(self, trigger_id: str) -> ExplorationEncounterTrigger | None:
+        return next((trigger for trigger in self.exploration.encounter_triggers if trigger.id == trigger_id), None)
 
     def _trigger_reason(self, trigger: ExplorationEncounterTrigger) -> str:
         if trigger.condition.value == "noise_at_least" and trigger.challenge_id is not None and trigger.noise is not None:
@@ -1333,6 +1394,13 @@ def create_app(session: ExplorationUiSession) -> Flask:
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
+    @app.post("/api/encounter/combat/resolve")
+    def api_encounter_combat_resolve():
+        try:
+            return jsonify(session.resolve_active_combat())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
     @app.post("/api/reset")
     def api_reset():
         session.reset()
@@ -1476,6 +1544,22 @@ def _combat_actor_payload(actor: Actor) -> dict[str, object]:
         "position": [actor.position.col, actor.position.row],
         "defeated": actor.is_defeated(),
     }
+
+
+def _default_encounter_victory_outcome(name: str) -> EncounterOutcome:
+    return EncounterOutcome(
+        title="Encounter rozstrzygnięty",
+        body=f"Drużyna wygrywa encounter: {name}.",
+        next_instruction="Zakończ wynik, żeby wrócić do eksploracji.",
+    )
+
+
+def _default_encounter_defeat_outcome(name: str) -> EncounterOutcome:
+    return EncounterOutcome(
+        title="Drużyna pokonana",
+        body=f"Drużyna przegrywa encounter: {name}. Zapisz konsekwencje ręcznie albo zresetuj scenę.",
+        next_instruction="Zakończ wynik, żeby wrócić do eksploracji.",
+    )
 
 
 def _actor_stable_order(encounter: LoadedEncounter, actor: Actor) -> int:
@@ -2353,10 +2437,12 @@ function combatStartHtml() {
   if (!combat) return '';
   const order = state.encounter_initiative && state.encounter_initiative.order ? state.encounter_initiative.order : [];
   const actors = combat.actors || [];
+  const finished = combat.status === 'finished';
+  const winnerLabel = combat.winner === 'ally' ? 'drużyna' : (combat.winner === 'enemy' ? 'przeciwnicy' : combat.winner || '-');
   return `
     <div class="result">
-      <b>Walka rozpoczęta</b><br>
-      Runda ${esc(combat.round_number)}. Tura: ${esc(combat.current_actor.name)}.
+      <b>${finished ? 'Walka zakończona' : 'Walka rozpoczęta'}</b><br>
+      ${finished ? `Zwycięzca: ${esc(winnerLabel)}.` : `Runda ${esc(combat.round_number)}. Tura: ${esc(combat.current_actor.name)}.`}
     </div>
     <p><b>Kolejność inicjatywy:</b> ${order.map(entry => `${esc(entry.actor_name)} (${entry.total})`).join(', ')}</p>
     <div class="status-list">
@@ -2367,7 +2453,7 @@ function combatStartHtml() {
         </div>
       `).join('')}
     </div>
-    <p class="muted">Pełne akcje walki będą kolejnym krokiem UI; stan walki jest już zbudowany z encountera i inicjatywy.</p>
+    ${finished ? '<button onclick="resolveCombatOutcome()">Zastosuj wynik walki</button>' : '<p class="muted">Pełne akcje walki będą kolejnym krokiem UI; stan walki jest już zbudowany z encountera i inicjatywy.</p>'}
   `;
 }
 function pointOptionsHtml() {
@@ -2498,6 +2584,7 @@ function submitEncounterInitiativeRoll() {
   const input = document.getElementById('encounter-initiative-roll');
   api('/api/encounter/initiative/roll', {natural_roll: Number(input ? input.value : 0)}, 'Zapisuję rzut inicjatywy...');
 }
+function resolveCombatOutcome() { api('/api/encounter/combat/resolve', {}, 'Zastosowuję wynik walki w eksploracji...'); }
 function ackResult() {
   resultAck = null;
   render();

@@ -22,6 +22,7 @@ from dnd_board_game.exploration import (
     ExplorationChallenge,
     ExplorationChallengeOption,
     ExplorationEncounterTrigger,
+    EncounterOutcome,
     ExplorationOption,
     ExplorationOptionKind,
     ExplorationPoint,
@@ -737,6 +738,27 @@ def _parse_exploration_encounter_trigger(data: Any) -> ExplorationEncounterTrigg
         flag_key=str(data["flag_key"]) if "flag_key" in data else None,
         flag_value=data.get("flag_value", True),
         point_id=str(data["point_id"]) if "point_id" in data else None,
+        outcome_on_victory=_parse_encounter_outcome(
+            data.get("outcome_on_victory"),
+            f"exploration encounter trigger {trigger_id}.outcome_on_victory",
+        ),
+        outcome_on_defeat=_parse_encounter_outcome(
+            data.get("outcome_on_defeat"),
+            f"exploration encounter trigger {trigger_id}.outcome_on_defeat",
+        ),
+    )
+
+
+def _parse_encounter_outcome(data: Any, field: str) -> EncounterOutcome | None:
+    if data is None:
+        return None
+    if not isinstance(data, dict):
+        raise ValueError(f"{field} must be an object.")
+    return EncounterOutcome(
+        title=str(data.get("title", "")),
+        body=str(data.get("body", "")),
+        effects=_parse_effects(data.get("effects", []), f"{field}.effects"),
+        next_instruction=str(data.get("next_instruction", "")),
     )
 
 
