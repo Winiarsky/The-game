@@ -103,6 +103,28 @@ def _session(*, active: bool = True):
     return session
 
 
+def test_exploration_ui_page_includes_session_log_panel():
+    client = _client()
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert 'id="session-log-panel"' in html
+    assert 'id="session-log-filter"' in html
+    assert "/api/session-log" in html
+
+
+def test_exploration_ui_session_log_endpoint_returns_events():
+    client = _client()
+
+    data = client.get("/api/session-log").get_json()
+
+    assert data["session_id"].startswith("exploration_ui_")
+    assert data["path"].endswith(".jsonl")
+    assert data["events"][0]["event_type"] == "ui_session_started"
+
+
 class FakeBoardConnection:
     def __init__(self, clicks=None):
         self.clicks = list(clicks or [])
