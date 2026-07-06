@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import random
+import uuid
 from dataclasses import dataclass, replace
 from enum import StrEnum
 from pathlib import Path
@@ -82,6 +83,7 @@ from dnd_board_game.scenarios import (
     build_exploration_from_scenario,
     load_scenario,
 )
+from dnd_board_game.runtime.session_observer import SessionObserver
 from dnd_board_game.world import Coordinate
 
 
@@ -214,14 +216,21 @@ class ExplorationUiSession:
         gm_client: object | None = None,
         npc_client: object | None = None,
         debug_point_id: str | None = None,
+        session_id: str | None = None,
+        observation_dir: str | Path = "data/session_observations",
     ) -> None:
         self.scenario_path = Path(scenario_path)
         self.gm_client = gm_client
         self.npc_client = npc_client
         self.debug_point_id = debug_point_id or ""
+        self._fixed_session_id = session_id
+        self.observation_dir = Path(observation_dir)
+        self.observer = SessionObserver(session_id or _ui_session_id(), self.observation_dir)
         self.reset()
 
     def reset(self) -> None:
+        if self._fixed_session_id is None:
+            self.observer = SessionObserver(_ui_session_id(), self.observation_dir)
         self.exploration = build_exploration_from_scenario(load_scenario(self.scenario_path))
         self.state = ExplorationState(
             self.exploration.zones,
@@ -260,6 +269,17 @@ class ExplorationUiSession:
         self.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE if self.debug_point_id else UiFlowStage.WAITING_FOR_BOARD
         self.preview_zone_id = ""
         self.interaction_result: dict[str, object] | None = None
+        self._record(
+            "ui_session_started",
+            {
+                "scenario_path": str(self.scenario_path),
+                "scenario_id": self.exploration.scenario_id,
+                "scenario_name": self.exploration.scenario_name,
+                "debug_point_id": self.debug_point_id,
+                "initial_zone_id": self.state.party_position.zone_id,
+                "initial_resource_ids": list(self.state.inventory_resource_ids),
+            },
+        )
 
     @property
     def current_zone(self) -> ExplorationZone:
@@ -281,6 +301,10 @@ class ExplorationUiSession:
         preview_zone = self._preview_zone()
         return {
             "scenario": {"id": self.exploration.scenario_id, "name": self.exploration.scenario_name},
+            "session_log": {
+                "session_id": self.observer.session_id,
+                "path": str(self.observer.path),
+            },
             "flow": {
                 "stage": self.ui_flow_stage.value,
                 "can_start": self.ui_flow_stage == UiFlowStage.READY_TO_START,
@@ -334,6 +358,7 @@ class ExplorationUiSession:
             self.board_message = "Plansza niepodłączona."
             if not self.debug_point_id:
                 self.ui_flow_stage = UiFlowStage.WAITING_FOR_BOARD
+            self._record("ui_board_configured", {"backend": backend, "connected": False})
             return self.state_payload()
         from board.connection import Connection
 
@@ -345,6 +370,16 @@ class ExplorationUiSession:
         if self.ui_flow_stage == UiFlowStage.WAITING_FOR_BOARD:
             self.ui_flow_stage = UiFlowStage.READY_TO_START
         self._sync_board_leds()
+        self._record(
+            "ui_board_configured",
+            {
+                "backend": backend,
+                "connected": True,
+                "board_url": self.board_url,
+                "serial_port": self.board_serial_port,
+                "wled_url": self.wled_url,
+            },
+        )
         return self.state_payload()
 
     def attach_board_connection(self, connection: object, *, backend: str = "simulator") -> None:
@@ -365,6 +400,7 @@ class ExplorationUiSession:
         self.active_point_id = ""
         self.board_message = "Wybierz jawny element sceny na planszy."
         self._sync_board_leds()
+        self._record("ui_play_session_started", {"stage": self.ui_flow_stage.value, "board_backend": self.board_backend})
         return self.state_payload()
 
     def finish_interaction_result(self) -> dict[str, object]:
@@ -398,8 +434,10 @@ class ExplorationUiSession:
         selected_raw = scan_board([position.as_tuple() for position in target.positions], timeout_s=self.scan_timeout_s)
         if selected_raw is None:
             self.board_message = "Nie wybrano pola na planszy."
+            self._record("ui_board_scan_timeout", {"stage": self.ui_flow_stage.value})
             return self.state_payload()
         selected = _coordinate_from_scan(selected_raw)
+        self._record("ui_board_scan_received", {"stage": self.ui_flow_stage.value, "position": [selected.col, selected.row]})
         return self._handle_board_position(selected)
 
     def submit_action(self, text: str) -> dict[str, object]:
@@ -408,6 +446,15 @@ class ExplorationUiSession:
         text = text.strip()
         if not text:
             raise ValueError("Deklaracja nie może być pusta.")
+        self._record(
+            "ui_action_submitted",
+            {
+                "text": text,
+                "zone_id": self.current_zone.id,
+                "active_point_id": self.active_point.id if self.active_point else None,
+                "active_challenge_id": self.active_challenge.id if self.active_challenge else None,
+            },
+        )
         point = self.active_point
         if point is not None and point.npc_interaction is not None:
             return self._submit_npc_action(point, text)
@@ -480,6 +527,7 @@ class ExplorationUiSession:
         self.interaction_result = None
         self.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
         self._add_message("Przejście", f"Drużyna przechodzi z {previous.name} do lokacji: {destination.name}.")
+        self._record("ui_zone_traveled", {"from_zone_id": previous.id, "to_zone_id": destination.id})
         self._sync_board_leds()
         return self.state_payload()
 
@@ -799,6 +847,13 @@ class ExplorationUiSession:
             request_data = replace(request_data, player_action=analysis.normalized_intent)
         proposal = client.classify(request_data)
         validated = validate_gm_classifier_proposal(proposal, request_data)
+        self._record(
+            "ui_gm_proposal_validated",
+            {
+                "challenge_id": validated.challenge.id,
+                "proposal": proposal.model_dump(mode="json"),
+            },
+        )
         if proposal.action_flow == GmActionFlow.PREPARATION:
             effect = proposal.preparation_effect
             if effect is not None:
@@ -831,6 +886,13 @@ class ExplorationUiSession:
         )
         proposal = client.interact_npc(request_data)
         validated = validate_npc_interaction_proposal(proposal, request_data)
+        self._record(
+            "ui_npc_proposal_validated",
+            {
+                "point_id": point.id,
+                "proposal": validated.proposal.model_dump(mode="json"),
+            },
+        )
         self.pending = PendingInteraction(
             kind=PendingKind.NPC,
             stage=PendingStage.DECISION,
@@ -848,6 +910,15 @@ class ExplorationUiSession:
         if self.pending is None:
             raise ValueError("Brak propozycji oczekującej na decyzję.")
         normalized = decision.strip().lower()
+        self._record(
+            "ui_pending_decision_submitted",
+            {
+                "decision": normalized,
+                "pending_kind": self.pending.kind.value,
+                "pending_stage": self.pending.stage.value,
+                "lead_actor_id": lead_actor_id,
+            },
+        )
         if normalized in {"reject", "odrzuc", "odrzuć", "-"}:
             self._add_message("Decyzja", "Odrzucono interpretację. Wpisz deklarację inaczej.")
             self.pending = None
@@ -900,6 +971,14 @@ class ExplorationUiSession:
         plan = self.pending.check_plan
         inputs = _check_inputs_from_payload(self.exploration.actors, plan, raw_rolls)
         check_result = resolve_exploration_check(plan, inputs)
+        self._record(
+            "ui_rolls_resolved",
+            {
+                "pending_kind": self.pending.kind.value,
+                "raw_rolls": raw_rolls,
+                "check_result": check_result.as_payload(),
+            },
+        )
         if self.pending.kind == PendingKind.CHALLENGE:
             self._resolve_challenge_roll(check_result)
         else:
@@ -926,6 +1005,19 @@ class ExplorationUiSession:
         )
         self.state = result.state
         self._add_message("Wynik podejścia", result.message)
+        self._record(
+            "ui_challenge_resolved",
+            {
+                "challenge_id": challenge.id,
+                "option_id": self.pending.option.id,
+                "success": result.success,
+                "completed": result.completed,
+                "progress_added": result.progress_added,
+                "noise_added": result.noise_added,
+                "complications_added": list(result.complications_added),
+                "resource_id": resource.id if resource else None,
+            },
+        )
         if result.completed:
             revealed_points = self._reveal_completed_challenge_points(self.pending.challenge)
             available_after = {zone.id for zone in available_exploration_zones(self.state)}
@@ -950,6 +1042,7 @@ class ExplorationUiSession:
         success = check_result.success
         message = proposal.success_message if success else proposal.failure_message
         self._add_message("Wynik interakcji NPC", message or ("Sukces." if success else "Porażka."))
+        self._record("ui_npc_roll_resolved", {"success": success, "message": message})
         self._apply_npc_flags(proposal, success=success)
         self._reveal_npc_information(proposal)
 
@@ -959,6 +1052,7 @@ class ExplorationUiSession:
             for effect in effects:
                 result = apply_exploration_effect(self.state, effect.as_effect_payload())
                 self.state = result.state
+                self._record_effect_result(result, source="npc_proposal", raw_effect=effect.as_effect_payload())
             return
         changes = proposal.flag_changes_on_success if success else proposal.flag_changes_on_failure
         for change in changes:
@@ -967,6 +1061,11 @@ class ExplorationUiSession:
                 {"type": "set_flag", "parameters": {"key": change.key, "value": change.value}},
             )
             self.state = result.state
+            self._record_effect_result(
+                result,
+                source="npc_legacy_flag_change",
+                raw_effect={"type": "set_flag", "parameters": {"key": change.key, "value": change.value}},
+            )
 
     def _reveal_npc_information(self, proposal: NpcInteractionProposal) -> None:
         if self.pending is None or self.pending.point is None or self.pending.point.npc_interaction is None:
@@ -985,7 +1084,9 @@ class ExplorationUiSession:
                 for effect in effects:
                     result = apply_exploration_effect(self.state, effect)
                     self.state = result.state
+                    self._record_effect_result(result, source="npc_information", raw_effect=effect)
                 self._add_message(f"Informacja: {info.label}", info.text)
+                self._record("ui_npc_information_revealed", {"information_id": info.id, "label": info.label})
 
     def _reveal_completed_challenge_points(self, challenge: ExplorationChallenge) -> tuple[ExplorationPoint, ...]:
         if not challenge.reveals_on_complete or not challenge_state_for(self.state, challenge.id).completed:
@@ -1000,6 +1101,11 @@ class ExplorationUiSession:
             if result.changed:
                 point = next(item for item in self.state.points if item.id == point_id)
                 revealed.append(point)
+            self._record_effect_result(
+                result,
+                source="challenge_completion",
+                raw_effect={"type": "reveal_point", "parameters": {"point_id": point_id}},
+            )
         for point in revealed:
             self._add_message("Nowy punkt odkryty", f"Odkrywacie nowy punkt w lokacji: {point.name}.")
         return tuple(revealed)
@@ -1060,6 +1166,25 @@ class ExplorationUiSession:
 
     def _add_message(self, title: str, body: str) -> None:
         self.messages.append(UiMessage(title, body))
+        self._record("ui_message_added", {"title": title, "body": body})
+
+    def _record(self, event_type: str, payload: dict[str, Any] | None = None) -> None:
+        self.observer.record(event_type, payload or {})
+
+    def _record_effect_result(self, result, *, source: str, raw_effect: dict[str, object]) -> None:
+        self._record(
+            "ui_effect_applied",
+            {
+                "source": source,
+                "effect_type": result.effect_type,
+                "changed": result.changed,
+                "message": result.message,
+                "effect": raw_effect,
+                "flags": [{"key": key, "value": value} for key, value in self.state.flags.values],
+                "inventory_resource_ids": list(self.state.inventory_resource_ids),
+                "visible_point_ids": [point.id for point in visible_exploration_points(self.state.points)],
+            },
+        )
 
     def _gm_client(self) -> object:
         if self.gm_client is None:
@@ -1086,6 +1211,10 @@ def create_app(session: ExplorationUiSession) -> Flask:
     @app.get("/api/state")
     def api_state():
         return jsonify(session.state_payload())
+
+    @app.get("/api/session-log")
+    def api_session_log():
+        return jsonify(_session_log_payload(session))
 
     @app.post("/api/start")
     def api_start():
@@ -1210,6 +1339,24 @@ def create_app(session: ExplorationUiSession) -> Flask:
         return jsonify(session.state_payload())
 
     return app
+
+
+def _session_log_payload(session: ExplorationUiSession, *, limit: int = 200) -> dict[str, object]:
+    path = session.observer.path
+    events: list[dict[str, object]] = []
+    if path.exists():
+        lines = path.read_text(encoding="utf-8").splitlines()[-limit:]
+        import json
+
+        for line in lines:
+            if not line.strip():
+                continue
+            events.append(json.loads(line))
+    return {
+        "session_id": session.observer.session_id,
+        "path": str(path),
+        "events": events,
+    }
 
 
 def _build_encounter_setup_steps(encounter: LoadedEncounter) -> tuple[SetupStep, ...]:
@@ -1354,6 +1501,10 @@ def _load_board_defaults() -> dict[str, str]:
         "serial_port": str((hardware_scan_config(config) or {}).get("serial_port") or "").strip(),
         "wled_url": str((wled_config(config) or {}).get("base_url") or "").strip(),
     }
+
+
+def _ui_session_id() -> str:
+    return f"exploration_ui_{uuid.uuid4().hex[:10]}"
 
 
 def _analyze(client: object, request_data: object) -> GmDeclarationAnalysis:
@@ -1655,6 +1806,16 @@ _HTML = """
     .hint-panel[hidden] { display: none; }
     .debug-panel { margin-top: 10px; }
     details.debug-panel summary { cursor: pointer; color: #a9a298; }
+    .log-toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; margin: 8px 0 10px; }
+    .log-toolbar input { width: 220px; }
+    .log-meta { color: #a9a298; font-size: 12px; word-break: break-all; margin: 6px 0 10px; }
+    .log-event { border-left: 3px solid #3a3f45; padding: 8px 10px; margin: 0 0 8px; background: #14181d; }
+    .log-event.important { border-left-color: #f5c542; background: #1d1a11; }
+    .log-event.effect { border-left-color: #3fb950; background: #111d16; }
+    .log-event .event-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .log-event code { color: #d2e7ff; }
+    .log-event details { margin-top: 6px; }
+    .log-event summary { cursor: pointer; color: #a9a298; }
     .status { border-left: 3px solid #f5c542; padding: 10px 12px; margin: 0 0 12px; background: #211f16; color: #f5e3a1; }
     .status[hidden] { display: none; }
     .status-list { display: grid; gap: 8px; margin-top: 6px; }
@@ -1753,6 +1914,15 @@ _HTML = """
       <summary>Historia komunikatów</summary>
       <div id="messages"></div>
     </details>
+    <details class="card debug-panel" id="session-log-panel">
+      <summary>Log sesji</summary>
+      <div class="log-meta" id="session-log-meta"></div>
+      <div class="log-toolbar">
+        <label>Filtr event type <input id="session-log-filter" data-allow-busy="true" placeholder="np. ui_effect_applied" oninput="renderSessionLog()"></label>
+        <button class="secondary" data-allow-busy="true" onclick="refreshSessionLog()">Odśwież log</button>
+      </div>
+      <div id="session-log-events" class="muted">Log nie został jeszcze wczytany.</div>
+    </details>
     <details class="card debug-panel">
       <summary>Debug payload</summary>
       <pre id="debug-payload"></pre>
@@ -1766,6 +1936,7 @@ let resultAck = null;
 let boardScanInFlight = false;
 let lastAutoScanKey = '';
 let passiveBoardScanInFlight = false;
+let sessionLog = null;
 function setBusy(message) {
   busy = Boolean(message);
   const status = document.getElementById('status');
@@ -1790,6 +1961,7 @@ async function api(path, body, busyMessage) {
       resultAck = null;
     }
     render();
+    refreshSessionLog();
   } finally {
     setBusy('');
   }
@@ -1798,6 +1970,7 @@ async function loadState() {
   const res = await fetch('/api/state');
   state = await res.json();
   render();
+  refreshSessionLog();
 }
 function render() {
   document.getElementById('scenario').textContent = state.scenario.name;
@@ -1817,6 +1990,7 @@ function render() {
   document.getElementById('roll-prompt').innerHTML = rollPromptHtml();
   document.getElementById('rolls').innerHTML = state.required_rolls.map(r => `<label>${r.actor_name}: <input data-actor="${r.actor_id}" type="number" min="1" max="20" value="10"></label>`).join(' ');
   document.getElementById('debug-payload').textContent = JSON.stringify(state, null, 2);
+  renderSessionLogMeta();
   document.getElementById('action-title').textContent = state.active_point && state.active_point.has_npc ? 'Co robicie wobec NPC?' : 'Co robi drużyna?';
   updateActivePanel();
   maybeAutoScanBoard();
@@ -1832,6 +2006,65 @@ function renderBoardPanel() {
 }
 function esc(value) {
   return String(value || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+async function refreshSessionLog() {
+  const res = await fetch('/api/session-log');
+  sessionLog = await res.json();
+  renderSessionLog();
+}
+function renderSessionLogMeta() {
+  const meta = document.getElementById('session-log-meta');
+  if (!meta || !state || !state.session_log) return;
+  meta.innerHTML = `Session: <code>${esc(state.session_log.session_id)}</code><br>Plik: <code>${esc(state.session_log.path)}</code>`;
+}
+function renderSessionLog() {
+  renderSessionLogMeta();
+  const container = document.getElementById('session-log-events');
+  if (!container) return;
+  if (!sessionLog) {
+    container.innerHTML = '<span class="muted">Log nie został jeszcze wczytany.</span>';
+    return;
+  }
+  const filter = (document.getElementById('session-log-filter')?.value || '').trim().toLowerCase();
+  const events = (sessionLog.events || []).filter(event => !filter || String(event.event_type || '').toLowerCase().includes(filter));
+  if (!events.length) {
+    container.innerHTML = '<span class="muted">Brak eventów dla aktualnego filtra.</span>';
+    return;
+  }
+  container.innerHTML = events.slice().reverse().map(event => sessionLogEventHtml(event)).join('');
+}
+function sessionLogEventHtml(event) {
+  const type = String(event.event_type || '');
+  const payload = event.payload || {};
+  const classes = ['log-event'];
+  if (type === 'ui_effect_applied') classes.push('effect');
+  if (['ui_action_submitted','ui_npc_proposal_validated','ui_gm_proposal_validated','ui_rolls_resolved','ui_effect_applied','ui_challenge_resolved'].includes(type)) {
+    classes.push('important');
+  }
+  const summary = sessionLogSummary(type, payload);
+  return `
+    <div class="${classes.join(' ')}">
+      <div class="event-head">
+        <div><code>${esc(type)}</code> <span class="muted">#${esc(event.seq)}</span></div>
+        <div class="muted">${esc(event.ts || '')}</div>
+      </div>
+      ${summary ? `<div>${summary}</div>` : ''}
+      <details><summary>Payload JSON</summary><pre>${esc(JSON.stringify(payload, null, 2))}</pre></details>
+    </div>
+  `;
+}
+function sessionLogSummary(type, payload) {
+  if (type === 'ui_action_submitted') return `Deklaracja: ${esc(payload.text || '')}`;
+  if (type === 'ui_effect_applied') {
+    const effect = payload.effect || {};
+    return `Efekt: ${esc(payload.effect_type || effect.type || '')}; źródło: ${esc(payload.source || '')}; zmiana stanu: ${payload.changed ? 'tak' : 'nie'}`;
+  }
+  if (type === 'ui_npc_proposal_validated') return `NPC point: ${esc(payload.point_id || '')}`;
+  if (type === 'ui_gm_proposal_validated') return `Challenge: ${esc(payload.challenge_id || '')}`;
+  if (type === 'ui_rolls_resolved') return `Rzuty dla: ${esc(payload.pending_kind || '')}`;
+  if (type === 'ui_challenge_resolved') return `Challenge: ${esc(payload.challenge_id || '')}; completed: ${payload.completed ? 'tak' : 'nie'}`;
+  if (type === 'ui_message_added') return `${esc(payload.title || '')}: ${esc(payload.body || '')}`;
+  return '';
 }
 function listHtml(items) {
   if (!items || !items.length) return '';

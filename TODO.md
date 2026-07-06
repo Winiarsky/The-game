@@ -58,6 +58,8 @@
 - [x] Replace NPC `allowed_actions` with local `intent_permissions` based on the global intent catalog.
 - [x] Route exploration web UI NPC flags and challenge reveals through the effect executor.
 - [x] Add content-driven NPC effect fields with legacy flag-change fallback.
+- [x] Add per-session web UI JSONL debug logs for actions, LLM proposals, rolls, and effects.
+- [x] Add web UI session log panel backed by `/api/session-log`.
 - [ ] Integrate exploration effect executor with NPC/freeform runtime validation for intent parameters, limits, and branches.
 - [x] Extend preparation effects with advantage/disadvantage, effect boost, unlock option, and grant resource.
 - [x] Show consequence preview before accepted freeform challenge rolls.

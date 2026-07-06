@@ -4,7 +4,7 @@ from dnd_board_game.llm import (
     GmDeclarationAnalysisType,
     NpcInteractionProposal,
 )
-from dnd_board_game.ui.exploration_app import ExplorationUiSession, UiFlowStage
+from dnd_board_game.ui.exploration_app import ExplorationUiSession, UiFlowStage, create_app
 
 
 class FakeGmClient:
@@ -151,6 +151,47 @@ def test_exploration_ui_session_npc_information_sets_flags_without_roll():
     assert {"key": "scout_stabilized", "value": True} in state["flags"]
     assert {"key": "tower_hint_learned", "value": True} in state["flags"]
     assert any(message["title"] == "Informacja: Wskazówka o wieży" for message in state["messages"])
+
+
+def test_exploration_ui_session_writes_debug_log_for_npc_effects(tmp_path):
+    proposal = NpcInteractionProposal.model_validate(
+        {
+            "action_type": "social",
+            "player_narration": "Mówicie spokojnie.",
+            "npc_response": "Zwiadowca przestaje się szarpać.",
+            "requires_roll": False,
+            "effects_on_success": [
+                {"type": "set_flag", "parameters": {"key": "scout_calmed", "value": True}},
+            ],
+        }
+    )
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        npc_client=FakeNpcClient(proposal),
+        debug_point_id="wounded_scout",
+        session_id="ui_log_test",
+        observation_dir=tmp_path,
+    )
+
+    session.submit_action("Uspokajamy zwiadowcę.")
+    session.decide("accept")
+
+    events = [__import__("json").loads(line) for line in session.observer.path.read_text(encoding="utf-8").splitlines()]
+    event_types = [event["event_type"] for event in events]
+    effect_event = next(event for event in events if event["event_type"] == "ui_effect_applied")
+
+    assert event_types[:1] == ["ui_session_started"]
+    assert "ui_action_submitted" in event_types
+    assert "ui_npc_proposal_validated" in event_types
+    assert effect_event["payload"]["source"] == "npc_proposal"
+    assert effect_event["payload"]["effect"]["parameters"]["key"] == "scout_calmed"
+    assert {"key": "scout_calmed", "value": True} in effect_event["payload"]["flags"]
+
+    client = create_app(session).test_client()
+    payload = client.get("/api/session-log").get_json()
+    assert payload["session_id"] == "ui_log_test"
+    assert payload["path"] == str(session.observer.path)
+    assert any(event["event_type"] == "ui_effect_applied" for event in payload["events"])
 
 
 def test_exploration_ui_session_reset_restores_initial_state():
