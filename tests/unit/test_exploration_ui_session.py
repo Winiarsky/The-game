@@ -68,6 +68,20 @@ def _challenge_proposal(**overrides):
     return GmClassifierProposal.model_validate(data)
 
 
+def _start_combat_from_scout_alarm(session: ExplorationUiSession):
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.state = replace(session.state, flags=set_scene_flag(session.state.flags, "scout_panicked", True))
+    session.state_payload()
+    session.start_encounter_setup()
+    while session.encounter_setup_flow is not None and not session.encounter_setup_flow.completed:
+        session.confirm_encounter_setup_step()
+    session.start_encounter_initiative()
+    session.submit_encounter_initiative_roll(20)
+    session.submit_encounter_initiative_roll(19)
+    assert session.combat_state is not None
+    return session.combat_state
+
+
 def test_exploration_ui_session_resolves_gate_challenge():
     session = ExplorationUiSession(
         "content/scenarios/abandoned_watchtower.json",
@@ -229,6 +243,38 @@ def test_exploration_ui_session_applies_victory_outcome_after_combat():
 
     state = session.finish_interaction_result()
     assert state["pending_encounter"] is None
+
+
+def test_exploration_ui_session_player_attack_applies_damage_and_uses_action():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_combat_from_scout_alarm(session)
+
+    state = session.state_payload()
+    assert state["combat"]["current_actor"]["faction"] == "ally"
+    assert state["combat"]["legal_targets"]
+    target_id = state["combat"]["legal_targets"][0]["id"]
+
+    state = session.submit_player_attack(target_id=target_id, natural_roll=20, damage=5)
+
+    damaged = next(actor for actor in state["combat"]["actors"] if actor["id"] == target_id)
+    assert damaged["hp"] < 7
+    assert state["combat"]["turn_action"]["action_use"] == "action_used"
+    assert any(message["title"] == "Atak" and "trafia krytycznie" in message["body"] for message in state["messages"])
+
+
+def test_exploration_ui_session_enemy_turn_resolves_and_advances():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_combat_from_scout_alarm(session)
+
+    while session.combat_state is not None and session.combat_state.initiative_order.current_actor.faction != Faction.ENEMY:
+        session.finish_combat_turn()
+    assert session.combat_state is not None
+    enemy_id = str(session.combat_state.initiative_order.current_actor.id)
+
+    state = session.resolve_enemy_turn()
+
+    assert any(message["title"] == "Tura przeciwnika" for message in state["messages"])
+    assert state["combat"]["current_actor"]["id"] != enemy_id or state["combat"]["status"] == "finished"
 
 
 def test_exploration_ui_session_reset_restores_initial_state():

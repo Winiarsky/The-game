@@ -12,10 +12,13 @@ from flask import Flask, jsonify, render_template_string, request, send_from_dir
 from dnd_board_game.actors import Actor, Faction
 from dnd_board_game.combat import (
     ActorSetupEntry,
+    AttackDeclaration,
     CombatState,
     EncounterSetup,
     InitiativeEntry,
     InitiativeOrder,
+    DamageComponentInput,
+    DamageType,
     InitiativePrompt,
     SceneFlags,
     SetupStep,
@@ -25,12 +28,21 @@ from dnd_board_game.combat import (
     build_initiative_order,
     build_player_initiative_prompts,
     current_actor as combat_current_actor,
+    finish_turn,
     active_actor_led_feedback,
+    apply_damage,
     initiative_prompt_led_feedback,
+    replace_actor,
+    resolve_attack,
+    resolve_damage,
+    resolve_enemy_auto_turn,
     roll_enemy_initiative,
     scene_flag,
+    select_attack_target,
     setup_led_feedback,
     start_combat,
+    start_attack_action,
+    use_turn_action,
 )
 from dnd_board_game.exploration import (
     CheckAggregation,
@@ -332,7 +344,7 @@ class ExplorationUiSession:
             "encounter_initiative": (
                 self.encounter_initiative_flow.as_payload() if self.encounter_initiative_flow else None
             ),
-            "combat": _combat_payload(self.combat_state) if self.combat_state else None,
+            "combat": _combat_payload(self.combat_state, self._active_encounter()) if self.combat_state else None,
             "board": self._board_payload(),
             "required_rolls": self.required_rolls_payload(),
         }
@@ -688,6 +700,105 @@ class ExplorationUiSession:
             f"Kolejność została ustalona: {order_text}. Pierwsza tura: {order.current_actor.name}.",
         )
         self._sync_board_leds()
+
+    def submit_player_attack(self, *, target_id: str, natural_roll: int, damage: int = 0) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        if self.combat_state.status.value != "active":
+            raise ValueError("Walka nie jest aktywna.")
+        encounter = self._active_encounter()
+        if encounter is None:
+            raise ValueError("Brak danych encountera dla aktywnej walki.")
+        attacker = combat_current_actor(self.combat_state)
+        if attacker.faction != Faction.ALLY:
+            raise ValueError("To nie jest tura bohatera.")
+        source = encounter.attack_sources_by_actor.get(attacker.id)
+        if source is None:
+            raise ValueError(f"Aktor {attacker.name} nie ma zdefiniowanego ataku.")
+        action = start_attack_action(encounter.board, attacker, self.combat_state.actors, source)
+        selected = select_attack_target(action, target_id=target_id)
+        assert selected.selected_target is not None
+        declaration = AttackDeclaration(attacker=attacker, target=selected.selected_target, source=source)
+        attack_roll = resolve_d20_roll(D20RollInput(source.attack_roll_request, natural_roll))
+        action_result = use_turn_action(self.combat_state)
+        if not action_result.accepted:
+            raise ValueError(action_result.message)
+        resolution = resolve_attack(declaration, attack_roll, selected.action_use)
+        updated_state = action_result.state
+        message = _player_attack_message(attacker.name, selected.selected_target.name, attack_roll.total, resolution.hit, resolution.critical)
+        if resolution.hit:
+            damage_amount = max(0, int(damage))
+            damage_result = resolve_damage((DamageComponentInput(damage_amount, DamageType(source.damage_type), source.name),))
+            target_actor = next((actor for actor in updated_state.actors if str(actor.id) == selected.selected_target.id), None)
+            if target_actor is None:
+                raise ValueError(f"Nieznany cel ataku: {selected.selected_target.id}.")
+            updated_target = apply_damage(target_actor, damage_result)
+            updated_state = replace_actor(updated_state, updated_target)
+            message = f"{message} Obrażenia: {damage_result.total_applied}. {target_actor.name}: HP {target_actor.hp} -> {updated_target.hp}."
+        self.combat_state = updated_state
+        self._add_message("Atak", message)
+        self._record(
+            "ui_combat_player_attack",
+            {
+                "attacker_id": str(attacker.id),
+                "target_id": selected.selected_target.id,
+                "natural_roll": attack_roll.natural_roll,
+                "total": attack_roll.total,
+                "hit": resolution.hit,
+                "critical": resolution.critical,
+                "damage": int(damage) if resolution.hit else 0,
+            },
+        )
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def resolve_enemy_turn(self) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        if self.combat_state.status.value != "active":
+            raise ValueError("Walka nie jest aktywna.")
+        encounter = self._active_encounter()
+        if encounter is None:
+            raise ValueError("Brak danych encountera dla aktywnej walki.")
+        enemy = combat_current_actor(self.combat_state)
+        if enemy.faction != Faction.ENEMY:
+            raise ValueError("To nie jest tura przeciwnika.")
+        source = encounter.attack_sources_by_actor.get(enemy.id)
+        if source is None:
+            raise ValueError(f"Aktor {enemy.name} nie ma zdefiniowanego ataku.")
+        result = resolve_enemy_auto_turn(encounter.board, self.combat_state, enemy, source, self.encounter_rng)
+        self.combat_state = finish_turn(result.state)
+        self._add_message("Tura przeciwnika", result.message)
+        self._record(
+            "ui_combat_enemy_turn",
+            {
+                "enemy_id": str(enemy.id),
+                "target_id": result.target.id if result.target is not None else None,
+                "message": result.message,
+                "action_used": result.action_used,
+            },
+        )
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def finish_combat_turn(self) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        if self.combat_state.status.value != "active":
+            return self.state_payload()
+        actor = combat_current_actor(self.combat_state)
+        self.combat_state = finish_turn(self.combat_state)
+        self._add_message("Koniec tury", f"Zakończono turę: {actor.name}.")
+        self._record("ui_combat_turn_finished", {"actor_id": str(actor.id)})
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def _active_encounter(self) -> LoadedEncounter | None:
+        if self.encounter_initiative_flow is not None:
+            return self.encounter_initiative_flow.encounter
+        if self.encounter_setup_flow is not None:
+            return self.encounter_setup_flow.encounter
+        return None
 
     def _board_payload(self) -> dict[str, object]:
         return {
@@ -1394,6 +1505,34 @@ def create_app(session: ExplorationUiSession) -> Flask:
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
+    @app.post("/api/combat/player-attack")
+    def api_combat_player_attack():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.submit_player_attack(
+                    target_id=str(data.get("target_id", "")),
+                    natural_roll=int(data.get("natural_roll", 0)),
+                    damage=int(data.get("damage", 0)),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/enemy-turn")
+    def api_combat_enemy_turn():
+        try:
+            return jsonify(session.resolve_enemy_turn())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/end-turn")
+    def api_combat_end_turn():
+        try:
+            return jsonify(session.finish_combat_turn())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
     @app.post("/api/encounter/combat/resolve")
     def api_encounter_combat_resolve():
         try:
@@ -1520,16 +1659,26 @@ def _initiative_entry_payload(entry: InitiativeEntry) -> dict[str, object]:
     }
 
 
-def _combat_payload(state: CombatState | None) -> dict[str, object] | None:
+def _combat_payload(state: CombatState | None, encounter: LoadedEncounter | None = None) -> dict[str, object] | None:
     if state is None:
         return None
     actor = combat_current_actor(state)
+    attack_source = encounter.attack_sources_by_actor.get(actor.id) if encounter is not None else None
+    targets = ()
+    if encounter is not None and attack_source is not None and state.status.value == "active":
+        targets = start_attack_action(encounter.board, actor, state.actors, attack_source).legal_targets
     return {
         "status": state.status.value,
         "round_number": state.round_number,
         "current_actor": _combat_actor_payload(actor),
         "actors": [_combat_actor_payload(candidate) for candidate in state.actors],
         "winner": state.winner.value if state.winner is not None else None,
+        "turn_action": {
+            "action_use": state.turn_action.action_use.value,
+            "movement_used_feet": state.turn_action.movement_used_feet,
+        },
+        "available_attack": _attack_source_payload(attack_source) if attack_source is not None else None,
+        "legal_targets": [_combat_target_payload(target) for target in targets],
     }
 
 
@@ -1544,6 +1693,36 @@ def _combat_actor_payload(actor: Actor) -> dict[str, object]:
         "position": [actor.position.col, actor.position.row],
         "defeated": actor.is_defeated(),
     }
+
+
+def _attack_source_payload(source) -> dict[str, object]:
+    return {
+        "name": source.name,
+        "range_feet": source.range_feet,
+        "damage_hint": source.damage_hint,
+        "damage_fixed": source.damage_fixed,
+        "damage_die_sides": source.damage_die_sides,
+        "damage_modifier": source.damage_modifier,
+        "damage_type": source.damage_type,
+    }
+
+
+def _combat_target_payload(target) -> dict[str, object]:
+    return {
+        "id": target.id,
+        "name": target.name,
+        "ac": target.ac,
+        "hp": target.hp,
+        "position": [target.position.col, target.position.row],
+    }
+
+
+def _player_attack_message(attacker_name: str, target_name: str, total: int, hit: bool, critical: bool) -> str:
+    if critical:
+        return f"{attacker_name} trafia krytycznie {target_name}. Wynik ataku: {total}."
+    if hit:
+        return f"{attacker_name} trafia {target_name}. Wynik ataku: {total}."
+    return f"{attacker_name} pudłuje przeciwko {target_name}. Wynik ataku: {total}."
 
 
 def _default_encounter_victory_outcome(name: str) -> EncounterOutcome:
@@ -2439,6 +2618,9 @@ function combatStartHtml() {
   const actors = combat.actors || [];
   const finished = combat.status === 'finished';
   const winnerLabel = combat.winner === 'ally' ? 'drużyna' : (combat.winner === 'enemy' ? 'przeciwnicy' : combat.winner || '-');
+  const actor = combat.current_actor || {};
+  const isAllyTurn = actor.faction === 'ally';
+  const isEnemyTurn = actor.faction === 'enemy';
   return `
     <div class="result">
       <b>${finished ? 'Walka zakończona' : 'Walka rozpoczęta'}</b><br>
@@ -2453,8 +2635,44 @@ function combatStartHtml() {
         </div>
       `).join('')}
     </div>
-    ${finished ? '<button onclick="resolveCombatOutcome()">Zastosuj wynik walki</button>' : '<p class="muted">Pełne akcje walki będą kolejnym krokiem UI; stan walki jest już zbudowany z encountera i inicjatywy.</p>'}
+    ${finished ? '<button onclick="resolveCombatOutcome()">Zastosuj wynik walki</button>' : combatTurnControlsHtml(combat, isAllyTurn, isEnemyTurn)}
   `;
+}
+function combatTurnControlsHtml(combat, isAllyTurn, isEnemyTurn) {
+  if (isEnemyTurn) {
+    return `
+      <div class="message"><b>Tura przeciwnika</b><br>Kliknij, żeby przeciwnik wykonał automatyczny ruch i atak.</div>
+      <button onclick="resolveEnemyTurn()">Rozegraj turę przeciwnika</button>
+    `;
+  }
+  if (!isAllyTurn) {
+    return '<p class="muted">Ten aktor nie ma automatycznych kontrolek w MVP.</p><button onclick="finishCombatTurn()">Zakończ turę</button>';
+  }
+  const source = combat.available_attack || {};
+  const targets = combat.legal_targets || [];
+  const actionUsed = combat.turn_action && combat.turn_action.action_use === 'action_used';
+  const targetOptions = targets.map(target => `<option value="${esc(target.id)}">${esc(target.name)} | AC ${esc(target.ac)} | HP ${esc(target.hp)}</option>`).join('');
+  return `
+    <div class="message">
+      <b>Akcja bohatera</b><br>
+      Atak: ${esc(source.name || '-')}${source.damage_hint ? `, obrażenia: ${esc(source.damage_hint)}` : ''}.
+      ${actionUsed ? '<br>Akcja w tej turze została już zużyta.' : ''}
+    </div>
+    ${targets.length && !actionUsed ? `
+      <div class="row">
+        <label>Cel <select id="combat-target">${targetOptions}</select></label>
+        <label>d20 <input id="combat-attack-roll" type="number" min="1" max="20" value="10"></label>
+        <label>Obrażenia <input id="combat-damage" type="number" min="0" value="${esc(defaultDamageValue(source))}"></label>
+        <button onclick="submitPlayerAttack()">Atakuj</button>
+      </div>
+    ` : '<p class="muted">Brak legalnych celów ataku wręcz albo akcja jest zużyta.</p>'}
+    <button class="secondary" onclick="finishCombatTurn()">Zakończ turę</button>
+  `;
+}
+function defaultDamageValue(source) {
+  if (!source) return 0;
+  if (source.damage_fixed !== null && source.damage_fixed !== undefined) return Number(source.damage_fixed) + Number(source.damage_modifier || 0);
+  return Math.max(0, Number(source.damage_modifier || 0));
 }
 function pointOptionsHtml() {
   const points = state.current_zone_points || [];
@@ -2584,6 +2802,18 @@ function submitEncounterInitiativeRoll() {
   const input = document.getElementById('encounter-initiative-roll');
   api('/api/encounter/initiative/roll', {natural_roll: Number(input ? input.value : 0)}, 'Zapisuję rzut inicjatywy...');
 }
+function submitPlayerAttack() {
+  const target = document.getElementById('combat-target');
+  const roll = document.getElementById('combat-attack-roll');
+  const damage = document.getElementById('combat-damage');
+  api('/api/combat/player-attack', {
+    target_id: target ? target.value : '',
+    natural_roll: Number(roll ? roll.value : 0),
+    damage: Number(damage ? damage.value : 0)
+  }, 'Rozstrzygam atak...');
+}
+function resolveEnemyTurn() { api('/api/combat/enemy-turn', {}, 'Rozgrywam turę przeciwnika...'); }
+function finishCombatTurn() { api('/api/combat/end-turn', {}, 'Kończę turę...'); }
 function resolveCombatOutcome() { api('/api/encounter/combat/resolve', {}, 'Zastosowuję wynik walki w eksploracji...'); }
 function ackResult() {
   resultAck = null;
