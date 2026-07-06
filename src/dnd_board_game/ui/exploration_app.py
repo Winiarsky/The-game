@@ -28,7 +28,6 @@ from dnd_board_game.combat import (
     initiative_prompt_led_feedback,
     roll_enemy_initiative,
     scene_flag,
-    set_scene_flag,
     setup_led_feedback,
     start_combat,
 )
@@ -46,10 +45,10 @@ from dnd_board_game.exploration import (
     ExplorationZone,
     PartyCheckInput,
     PendingEncounter,
+    apply_exploration_effect,
     available_exploration_zones,
     challenge_for_zone,
     challenge_state_for,
-    grant_resource,
     exploration_zone_feedback,
     party_position_feedback,
     reveal_exploration_points,
@@ -955,9 +954,19 @@ class ExplorationUiSession:
         self._reveal_npc_information(proposal)
 
     def _apply_npc_flags(self, proposal: NpcInteractionProposal, *, success: bool) -> None:
+        effects = proposal.effects_on_success if success else proposal.effects_on_failure
+        if effects:
+            for effect in effects:
+                result = apply_exploration_effect(self.state, effect.as_effect_payload())
+                self.state = result.state
+            return
         changes = proposal.flag_changes_on_success if success else proposal.flag_changes_on_failure
         for change in changes:
-            self.state = replace(self.state, flags=set_scene_flag(self.state.flags, change.key, change.value))
+            result = apply_exploration_effect(
+                self.state,
+                {"type": "set_flag", "parameters": {"key": change.key, "value": change.value}},
+            )
+            self.state = result.state
 
     def _reveal_npc_information(self, proposal: NpcInteractionProposal) -> None:
         if self.pending is None or self.pending.point is None or self.pending.point.npc_interaction is None:
@@ -969,17 +978,31 @@ class ExplorationUiSession:
             if info is None:
                 continue
             if all(scene_flag(self.state.flags, flag, False) for flag in info.reveal_if_flags):
-                for flag in info.sets_flags:
-                    self.state = replace(self.state, flags=set_scene_flag(self.state.flags, flag, True))
+                effects = info.effects_on_reveal or tuple(
+                    {"type": "set_flag", "parameters": {"key": flag, "value": True}}
+                    for flag in info.sets_flags
+                )
+                for effect in effects:
+                    result = apply_exploration_effect(self.state, effect)
+                    self.state = result.state
                 self._add_message(f"Informacja: {info.label}", info.text)
 
     def _reveal_completed_challenge_points(self, challenge: ExplorationChallenge) -> tuple[ExplorationPoint, ...]:
         if not challenge.reveals_on_complete or not challenge_state_for(self.state, challenge.id).completed:
             return ()
-        self.state, revealed = reveal_exploration_points(self.state, challenge.reveals_on_complete)
+        revealed: list[ExplorationPoint] = []
+        for point_id in challenge.reveals_on_complete:
+            result = apply_exploration_effect(
+                self.state,
+                {"type": "reveal_point", "parameters": {"point_id": point_id}},
+            )
+            self.state = result.state
+            if result.changed:
+                point = next(item for item in self.state.points if item.id == point_id)
+                revealed.append(point)
         for point in revealed:
             self._add_message("Nowy punkt odkryty", f"Odkrywacie nowy punkt w lokacji: {point.name}.")
-        return revealed
+        return tuple(revealed)
 
     def _refresh_pending_encounter(self) -> None:
         if self.pending_encounter is not None:

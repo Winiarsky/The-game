@@ -187,6 +187,10 @@ def test_load_abandoned_watchtower_builds_exploration_scene():
         "commander_curse_hint",
         "hidden_cache_hint",
     }
+    tower_hint = next(info for info in wounded_scout.npc_interaction.locked_information if info.id == "tower_hint")
+    assert tower_hint.effects_on_reveal == (
+        {"type": "set_flag", "parameters": {"key": "tower_hint_learned", "value": True}},
+    )
 
 
 def test_load_abandoned_watchtower_folder_manifest_matches_alias_file():

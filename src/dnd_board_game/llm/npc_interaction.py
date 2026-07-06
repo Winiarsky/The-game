@@ -16,6 +16,7 @@ from dnd_board_game.exploration import (
     ExplorationPoint,
     ExplorationState,
     ExplorationZone,
+    validate_exploration_effect,
 )
 from dnd_board_game.combat import scene_flag
 
@@ -28,6 +29,21 @@ class NpcFlagChange(BaseModel):
 
     key: str = Field(max_length=120)
     value: bool | int | str = True
+
+
+class NpcEffect(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    type: str = Field(max_length=80)
+    parameters: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("type")
+    @classmethod
+    def _normalize_type(cls, value: str) -> str:
+        return value.strip().lower()
+
+    def as_effect_payload(self) -> dict[str, object]:
+        return {"type": self.type, "parameters": dict(self.parameters)}
 
 
 class NpcInteractionProposal(BaseModel):
@@ -47,6 +63,8 @@ class NpcInteractionProposal(BaseModel):
     failure_message: str = Field(default="", max_length=1000)
     flag_changes_on_success: tuple[NpcFlagChange, ...] = ()
     flag_changes_on_failure: tuple[NpcFlagChange, ...] = ()
+    effects_on_success: tuple[NpcEffect, ...] = ()
+    effects_on_failure: tuple[NpcEffect, ...] = ()
     revealed_information_ids: tuple[str, ...] = ()
     gm_notes: str = Field(default="", max_length=1000)
 
@@ -234,7 +252,10 @@ def validate_npc_interaction_proposal(
     if npc is None:
         raise ValueError(f"Exploration point {request.point.id} has no npc_interaction.")
     policy = npc.policy
-    success_flags = {change.key for change in proposal.flag_changes_on_success if change.value is True}
+    success_flags = {
+        *{change.key for change in proposal.flag_changes_on_success if change.value is True},
+        *_true_set_flag_keys(proposal.effects_on_success),
+    }
     permission = policy.intent_permission(proposal.action_type)
     if policy.intent_permissions:
         if permission is None:
@@ -271,6 +292,8 @@ def validate_npc_interaction_proposal(
     for change in (*proposal.flag_changes_on_success, *proposal.flag_changes_on_failure):
         if allowed_flags and change.key not in allowed_flags:
             raise ValueError(f"NPC flag is not allowed here: {change.key}.")
+    _validate_npc_effects(proposal.effects_on_success, request, "effects_on_success")
+    _validate_npc_effects(proposal.effects_on_failure, request, "effects_on_failure")
     known_info = {info.id: info for info in npc.locked_information}
     for info_id in proposal.revealed_information_ids:
         if info_id not in known_info:
@@ -282,3 +305,34 @@ def validate_npc_interaction_proposal(
                 f"NPC information {info_id} is still locked by flags: {', '.join(missing_after_success)}."
             )
     return NpcValidatedInteraction(proposal=proposal, point=request.point)
+
+
+def _validate_npc_effects(
+    effects: tuple[NpcEffect, ...],
+    request: NpcInteractionRequest,
+    field: str,
+) -> None:
+    npc = request.point.npc_interaction
+    if npc is None:
+        raise ValueError(f"Exploration point {request.point.id} has no npc_interaction.")
+    allowed_effect_types = set(npc.policy.allowed_effect_types)
+    allowed_flags = set(npc.policy.allowed_flags)
+    for effect in effects:
+        if allowed_effect_types and effect.type not in allowed_effect_types:
+            raise ValueError(f"NPC effect is not allowed here: {effect.type}.")
+        payload = effect.as_effect_payload()
+        validate_exploration_effect(payload, request.state)
+        if effect.type == "set_flag":
+            key = str(effect.parameters.get("key", ""))
+            if allowed_flags and key not in allowed_flags:
+                raise ValueError(f"NPC effect flag is not allowed here: {key}.")
+
+
+def _true_set_flag_keys(effects: tuple[NpcEffect, ...]) -> set[str]:
+    result: set[str] = set()
+    for effect in effects:
+        if effect.type == "set_flag" and effect.parameters.get("value") is True:
+            key = str(effect.parameters.get("key", "")).strip()
+            if key:
+                result.add(key)
+    return result

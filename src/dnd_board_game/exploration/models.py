@@ -223,6 +223,7 @@ class NpcLockedInformation:
     text: str
     reveal_if_flags: tuple[str, ...] = ()
     sets_flags: tuple[str, ...] = ()
+    effects_on_reveal: tuple[dict[str, object], ...] = ()
 
     def as_payload(self) -> dict[str, object]:
         return {
@@ -231,6 +232,7 @@ class NpcLockedInformation:
             "text": self.text,
             "reveal_if_flags": list(self.reveal_if_flags),
             "sets_flags": list(self.sets_flags),
+            "effects_on_reveal": list(self.effects_on_reveal),
         }
 
 
@@ -263,6 +265,7 @@ class NpcInteractionPolicy:
     allowed_actions: tuple[str, ...] = ()
     intent_permissions: tuple[NpcIntentPermission, ...] = ()
     allowed_flags: tuple[str, ...] = ()
+    allowed_effect_types: tuple[str, ...] = ("set_flag",)
     allowed_abilities: tuple[str, ...] = ()
     allowed_skills: tuple[str, ...] = ()
     dc_min: int = 5
@@ -287,6 +290,7 @@ class NpcInteractionPolicy:
                 for permission in self.intent_permissions
             },
             "allowed_flags": list(self.allowed_flags),
+            "allowed_effect_types": list(self.allowed_effect_types),
             "allowed_abilities": list(self.allowed_abilities),
             "allowed_skills": list(self.allowed_skills),
             "dc_range": [self.dc_min, self.dc_max],

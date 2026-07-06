@@ -65,6 +65,15 @@
             ],
             "sets_flags": [
               "tower_hint_learned"
+            ],
+            "effects_on_reveal": [
+              {
+                "type": "set_flag",
+                "parameters": {
+                  "key": "tower_hint_learned",
+                  "value": true
+                }
+              }
             ]
           },
           {

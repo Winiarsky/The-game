@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "conditions": {
+    "flag_equals": {
+      "label": "Flaga ma wartość",
+      "description": "Warunek spełniony, gdy flaga sceny ma wskazaną wartość.",
+      "parameters": {
+        "key": "string",
+        "value": "any"
+      }
+    },
+    "has_resource": {
+      "label": "Drużyna ma zasób",
+      "description": "Warunek spełniony, gdy ekwipunek eksploracji zawiera wskazany zasób.",
+      "parameters": {
+        "resource_id": "string"
+      }
+    },
+    "point_revealed": {
+      "label": "Punkt ujawniony",
+      "description": "Warunek spełniony, gdy wskazany punkt eksploracji jest widoczny.",
+      "parameters": {
+        "point_id": "string"
+      }
+    },
+    "challenge_noise_at_least": {
+      "label": "Hałas wyzwania co najmniej",
+      "description": "Warunek spełniony, gdy wskazane wyzwanie ma co najmniej podany poziom hałasu.",
+      "parameters": {
+        "challenge_id": "string",
+        "value": "integer"
+      }
+    },
+    "challenge_completed": {
+      "label": "Wyzwanie ukończone",
+      "description": "Warunek spełniony, gdy wskazane wyzwanie eksploracyjne jest ukończone.",
+      "parameters": {
+        "challenge_id": "string"
+      }
+    }
+  }
+}

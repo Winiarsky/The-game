@@ -1,5 +1,11 @@
 """Exploration mode: map zones, party position, and point-and-click options."""
 
+from .effects import (
+    ExplorationEffectResult,
+    apply_exploration_effect,
+    exploration_condition_matches,
+    validate_exploration_effect,
+)
 from .models import (
     ChallengeResult,
     CheckAggregation,
@@ -60,6 +66,7 @@ __all__ = [
     "CheckParticipants",
     "ConsequenceTarget",
     "EncounterTriggerCondition",
+    "ExplorationEffectResult",
     "ExplorationChallenge",
     "ExplorationChallengeAttempt",
     "ExplorationCheckPlan",
@@ -90,7 +97,9 @@ __all__ = [
     "available_challenge_options",
     "challenge_for_zone",
     "challenge_state_for",
+    "apply_exploration_effect",
     "exploration_setup_feedback",
+    "exploration_condition_matches",
     "exploration_zone_feedback",
     "grant_resource",
     "look_around_feedback",
@@ -102,6 +111,7 @@ __all__ = [
     "resolve_party_check",
     "resolve_zone_search",
     "set_party_zone",
+    "validate_exploration_effect",
     "visible_exploration_points",
     "visible_exploration_zones",
     "zone_for_position",

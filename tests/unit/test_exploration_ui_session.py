@@ -108,7 +108,9 @@ def test_exploration_ui_session_debug_npc_sets_flags_without_roll():
             "player_narration": "Mówicie spokojnie i trzymacie ręce widocznie.",
             "npc_response": "Zwiadowca oddycha wolniej.",
             "requires_roll": False,
-            "flag_changes_on_success": [{"key": "scout_calmed", "value": True}],
+            "effects_on_success": [
+                {"type": "set_flag", "parameters": {"key": "scout_calmed", "value": True}},
+            ],
         }
     )
     session = ExplorationUiSession(
@@ -124,6 +126,31 @@ def test_exploration_ui_session_debug_npc_sets_flags_without_roll():
 
     assert state["pending"] is None
     assert {"key": "scout_calmed", "value": True} in state["flags"]
+
+
+def test_exploration_ui_session_npc_information_sets_flags_without_roll():
+    proposal = NpcInteractionProposal.model_validate(
+        {
+            "action_type": "medical",
+            "player_narration": "Opatrujecie ranę zwiadowcy.",
+            "npc_response": "Zwiadowca odzyskuje oddech i wskazuje ślady.",
+            "requires_roll": False,
+            "flag_changes_on_success": [{"key": "scout_stabilized", "value": True}],
+            "revealed_information_ids": ["tower_hint"],
+        }
+    )
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        npc_client=FakeNpcClient(proposal),
+        debug_point_id="wounded_scout",
+    )
+
+    session.submit_action("Opatrujemy zwiadowcę.")
+    state = session.decide("accept")
+
+    assert {"key": "scout_stabilized", "value": True} in state["flags"]
+    assert {"key": "tower_hint_learned", "value": True} in state["flags"]
+    assert any(message["title"] == "Informacja: Wskazówka o wieży" for message in state["messages"])
 
 
 def test_exploration_ui_session_reset_restores_initial_state():

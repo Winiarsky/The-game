@@ -24,13 +24,15 @@ Zwracaj JSON w takim kształcie:
   "consequence_targets": ["npc", "lead_actor"],
   "success_message": "Opis sukcesu.",
   "failure_message": "Opis porażki bez blokowania sceny.",
-  "flag_changes_on_success": [
-    {"key": "scout_treated", "value": true},
-    {"key": "scout_stabilized", "value": true}
+  "effects_on_success": [
+    {"type": "set_flag", "parameters": {"key": "scout_treated", "value": true}},
+    {"type": "set_flag", "parameters": {"key": "scout_stabilized", "value": true}}
   ],
-  "flag_changes_on_failure": [
-    {"key": "scout_panicked", "value": true}
+  "effects_on_failure": [
+    {"type": "set_flag", "parameters": {"key": "scout_panicked", "value": true}}
   ],
+  "flag_changes_on_success": [],
+  "flag_changes_on_failure": [],
   "revealed_information_ids": [],
   "gm_notes": "Techniczne uzasadnienie tylko do logów."
 }
@@ -46,7 +48,10 @@ Zasady:
 - Jeśli próbują kradzieży kieszonkowej lub zabrania czegoś po cichu, zwykle użyj Dexterity/Sleight of Hand, jeśli ta umiejętność jest dozwolona w policy.
 - Jeśli próbują zabrać coś siłą, może to być Strength/Athletics albo brutalna akcja z konsekwencją, zależnie od opisu.
 - Jeśli pytają o informacje, nie ujawniaj zablokowanych informacji, dopóki nie są spełnione wymagane flagi.
-- `flag_changes_on_success` i `flag_changes_on_failure` mogą używać tylko flag z `npc.policy.allowed_flags`.
+- Preferuj `effects_on_success` i `effects_on_failure` zamiast `flag_changes_on_success` i `flag_changes_on_failure`.
+- Efekty mogą używać tylko typów z `npc.policy.allowed_effect_types`.
+- Efekt `set_flag` może używać tylko flag z `npc.policy.allowed_flags`.
+- `flag_changes_on_success` i `flag_changes_on_failure` są starszym formatem kompatybilności; jeśli używasz `effects_on_*`, zostaw je puste.
 - `revealed_information_ids` mogą zawierać tylko id z `npc.locked_information`.
 - ST musi mieścić się w `npc.policy.dc_range`.
 - Jeśli nie trzeba rzutu, ustaw `ability`, `skill` i `dc` na null.

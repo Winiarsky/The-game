@@ -562,6 +562,7 @@ def _parse_npc_interaction(data: Any, point_id: str) -> NpcInteraction | None:
             allowed_actions=tuple(str(item) for item in policy_data.get("allowed_actions", [])),
             intent_permissions=_parse_npc_intent_permissions(policy_data.get("intent_permissions", {}), point_id),
             allowed_flags=tuple(str(item) for item in policy_data.get("allowed_flags", [])),
+            allowed_effect_types=tuple(str(item).strip() for item in policy_data.get("allowed_effect_types", ["set_flag"]) if str(item).strip()),
             allowed_abilities=tuple(str(item) for item in policy_data.get("allowed_abilities", [])),
             allowed_skills=tuple(str(item) for item in policy_data.get("allowed_skills", [])),
             dc_min=dc_min,
@@ -627,7 +628,27 @@ def _parse_npc_locked_information(data: Any, point_id: str) -> NpcLockedInformat
         text=str(_required(data, "text", f"npc locked information {info_id}")),
         reveal_if_flags=tuple(str(item) for item in data.get("reveal_if_flags", [])),
         sets_flags=tuple(str(item) for item in data.get("sets_flags", [])),
+        effects_on_reveal=_parse_effects(data.get("effects_on_reveal", []), f"npc locked information {info_id}.effects_on_reveal"),
     )
+
+
+def _parse_effects(data: Any, field: str) -> tuple[dict[str, object], ...]:
+    if data is None:
+        return ()
+    if not isinstance(data, list):
+        raise ValueError(f"{field} must be a list.")
+    effects: list[dict[str, object]] = []
+    for index, item in enumerate(data):
+        if not isinstance(item, dict):
+            raise ValueError(f"{field}[{index}] must be an object.")
+        effect_type = str(item.get("type", "")).strip()
+        if not effect_type:
+            raise ValueError(f"{field}[{index}].type cannot be empty.")
+        parameters = item.get("parameters", {})
+        if not isinstance(parameters, dict):
+            raise ValueError(f"{field}[{index}].parameters must be an object.")
+        effects.append({"type": effect_type, "parameters": dict(parameters)})
+    return tuple(effects)
 
 
 def _parse_exploration_challenge(data: Any) -> ExplorationChallenge:

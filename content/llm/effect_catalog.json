@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "effects": {
+    "set_flag": {
+      "label": "Ustaw flagę sceny",
+      "description": "Ustawia jawnie dozwoloną flagę sceny na podaną wartość.",
+      "parameters": {
+        "key": "string",
+        "value": "any"
+      }
+    },
+    "grant_resource": {
+      "label": "Dodaj zasób eksploracji",
+      "description": "Dodaje znany zasób eksploracji do ekwipunku drużyny.",
+      "parameters": {
+        "resource_id": "string"
+      }
+    },
+    "unlock_option": {
+      "label": "Odblokuj opcję wyzwania",
+      "description": "Ustawia flagę odblokowania dla opcji wyzwania wygenerowanej przez LLM.",
+      "parameters": {
+        "option_id": "string"
+      }
+    },
+    "reveal_point": {
+      "label": "Ujawnij punkt eksploracji",
+      "description": "Ujawnia znany ukryty punkt eksploracji.",
+      "parameters": {
+        "point_id": "string"
+      }
+    },
+    "add_noise": {
+      "label": "Dodaj hałas",
+      "description": "Dodaje hałas do stanu wskazanego wyzwania eksploracyjnego.",
+      "parameters": {
+        "challenge_id": "string",
+        "value": "integer"
+      }
+    }
+  }
+}

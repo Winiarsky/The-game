@@ -54,9 +54,11 @@
 - [x] Add folder-based scenario manifests and split `abandoned_watchtower` into smaller JSON parts.
 - [x] Add interaction/object-level LLM policy when freeform interactions expand beyond challenges.
 - [x] Add global LLM intent catalog in `content/llm/intent_catalog.json`.
-- [ ] Add global LLM effect and condition catalogs for deterministic content-driven outcomes.
+- [x] Add global LLM effect and condition catalogs for deterministic content-driven outcomes.
 - [x] Replace NPC `allowed_actions` with local `intent_permissions` based on the global intent catalog.
-- [ ] Add runtime validation/execution for intent parameters, limits, branches, and known effect primitives.
+- [x] Route exploration web UI NPC flags and challenge reveals through the effect executor.
+- [x] Add content-driven NPC effect fields with legacy flag-change fallback.
+- [ ] Integrate exploration effect executor with NPC/freeform runtime validation for intent parameters, limits, and branches.
 - [x] Extend preparation effects with advantage/disadvantage, effect boost, unlock option, and grant resource.
 - [x] Show consequence preview before accepted freeform challenge rolls.
 - [x] Add second exploration challenge in abandoned watchtower and reveal first hidden NPC hook.

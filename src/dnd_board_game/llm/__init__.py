@@ -25,6 +25,7 @@ from .gm_classifier import (
 from .npc_interaction import (
     GeminiNpcInteractionClient,
     GroqNpcInteractionClient,
+    NpcEffect,
     NpcFlagChange,
     NpcInteractionClient,
     NpcInteractionProposal,
@@ -52,6 +53,7 @@ __all__ = [
     "GroqGmClassifierClient",
     "GeminiNpcInteractionClient",
     "GroqNpcInteractionClient",
+    "NpcEffect",
     "NpcFlagChange",
     "NpcInteractionClient",
     "NpcInteractionProposal",
