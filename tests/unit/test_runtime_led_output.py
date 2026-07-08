@@ -46,7 +46,12 @@ def test_run_demo_sends_led_feedback_when_requested(tmp_path):
     assert result.feedback_sent is True
     assert connection.cleared is True
     assert connection.calls
-    sent_colors = [color for _positions, color in connection.calls]
+    sent_colors = []
+    for _positions, color in connection.calls:
+        if color and isinstance(color[0], list):
+            sent_colors.extend(color)
+        else:
+            sent_colors.append(color)
     assert [180, 0, 0] in sent_colors
     assert [0, 220, 255] in sent_colors
     assert [255, 0, 80] in sent_colors

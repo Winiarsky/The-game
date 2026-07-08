@@ -7,7 +7,7 @@ from dnd_board_game.actors import Faction
 from dnd_board_game.combat import AttackSourceType, DamageType, EnvironmentSetupType, SceneObjectiveCondition, SetupVisibility
 from dnd_board_game.exploration import SceneMode
 from dnd_board_game.scenarios import build_encounter_from_scenario, build_exploration_from_scenario, load_scenario
-from dnd_board_game.world import Coordinate
+from dnd_board_game.world import Coordinate, find_path
 
 
 def _abandoned_watchtower_data_without_refs():
@@ -91,7 +91,32 @@ def test_load_multi_actor_scenario_builds_separate_actors_and_sources():
     assert goblin_b.name == "Goblin B"
     assert goblin_a.position == Coordinate(1, 0)
     assert goblin_b.position == Coordinate(1, 1)
-    assert encounter.attack_sources_by_actor[rogue.id].name == "Sztylet"
+    assert encounter.attack_sources_by_actor[rogue.id].name == "Kusza"
+
+
+def test_load_gate_skirmish_uses_shared_map_setup_and_ranged_rogue():
+    encounter = build_encounter_from_scenario(load_scenario("content/scenarios/gate_skirmish.json"))
+
+    enemies = [actor for actor in encounter.actors if actor.faction == Faction.ENEMY]
+    rogue = next(actor for actor in encounter.actors if actor.id == "rogue")
+
+    assert len(enemies) == 2
+    assert encounter.player_start_zones == ((Coordinate(7, 6), Coordinate(8, 6), Coordinate(9, 6)),)
+    assert encounter.attack_sources_by_actor[rogue.id].name == "Kusza"
+    assert encounter.attack_sources_by_actor[rogue.id].range_feet == 80
+    assert encounter.board.terrain_at(Coordinate(8, 5)).blocks_movement is True
+    assert encounter.board.terrain_at(Coordinate(10, 7)).is_difficult is True
+
+
+def test_gate_skirmish_blocks_fallen_gate_but_allows_cart_tile():
+    encounter = build_encounter_from_scenario(load_scenario("content/scenarios/gate_skirmish.json"))
+    hero = next(actor for actor in encounter.actors if actor.id == "hero")
+
+    gate_path = find_path(encounter.board, hero, encounter.actors, Coordinate(8, 5))
+    cart_path = find_path(encounter.board, hero, encounter.actors, Coordinate(8, 8))
+
+    assert gate_path.valid is False
+    assert cart_path.valid is True
 
 
 def test_load_scenario_builds_environment_entries():
@@ -141,6 +166,8 @@ def test_load_abandoned_watchtower_builds_exploration_scene():
     assert exploration.scenario_id == "abandoned_watchtower"
     assert exploration.party_position.zone_id == "gate"
     assert len(exploration.actors) == 2
+    assert len(exploration.environment) == 2
+    assert exploration.board.terrain_at(Coordinate(8, 5)).blocks_movement is False
     assert len(exploration.zones) == 4
     assert len(exploration.challenges) == 2
     challenge = next(item for item in exploration.challenges if item.id == "closed_gate")

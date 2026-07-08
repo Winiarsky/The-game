@@ -8,6 +8,7 @@
   },
   "parts": {
     "actors": "actors.json",
+    "environment": "environment.json",
     "objectives": "objectives.json",
     "llm_context": "llm_context.json",
     "exploration": {

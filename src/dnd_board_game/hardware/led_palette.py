@@ -55,6 +55,8 @@ LED_COLOR_NAMES_PL: dict[RGBColor, str] = {
     LedColor.MENU_PINK: "różowy",
     LedColor.PLAYER_START_ZONE: "turkusowy",
     LedColor.MULTI_OPTION_TILE: "brązowy",
+    LedColor.BLOCKING_TERRAIN: "ciemnoczerwony",
+    LedColor.DIFFICULT_TERRAIN: "pomarańczowy",
 }
 
 

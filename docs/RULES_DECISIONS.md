@@ -211,9 +211,13 @@ Status: partial
 
 Implementacja MVP:
 
-- MVP obsługuje prosty melee weapon attack.
+- MVP obsługuje prosty melee weapon attack oraz prosty ranged weapon attack.
 - Aplikacja pokazuje legalne cele ataku LED-ami.
 - Gracz wybiera cel przez planszę albo fallback runtime.
+- Legalny cel ataku musi mieścić się w `range_feet` źródła ataku.
+- Dystans na siatce liczony jest w uproszczony sposób: `max(abs(dc), abs(dr)) * 5 feet`.
+- Ranged line of sight / line of effect używa prostego algorytmu Bresenhama na siatce.
+- Linia jest blokowana przez ściany/krawędzie, zamknięte drzwi i blokujący terrain na polach pośrednich.
 - Atak porównuje wynik ataku z AC celu.
 - Naturalne `20` przy ataku oznacza trafienie krytyczne.
 - Naturalne `1` przy ataku oznacza automatyczne pudło.
@@ -240,8 +244,8 @@ Implementacja MVP:
 Poza zakresem MVP:
 
 - pełne reakcje,
-- pełne ranged attacks,
 - czary, area effects i złożone itemy,
+- pełne zasady osłony dla ranged attacks,
 - odporności i podatności,
 - pełne death saving throws,
 - destrukcja obiektów i przeszkód.
@@ -272,6 +276,8 @@ Odstępstwa / decyzje planszowe:
 - Wynik eksploracyjnej interakcji może ustawić flagę sceny, np. `crate_secured` albo `crate_trap_missed`.
 - Objective może używać warunku `flag_equals`, więc scena może zakończyć się dopiero po konkretnym skutku interakcji, a nie samym kliknięciu obiektu.
 - Setup startowy pokazuje pola, na których gracze mogą ustawić figurki, ale MVP nie skanuje automatycznie poprawności ustawienia.
+- Ranged MVP nie implementuje jeszcze cover bonus, half cover, three-quarters cover ani disadvantage za strzał w zwarciu.
+- Uproszczony LOS traktuje blokujące pola pośrednie jako pełną blokadę, ale nie modeluje rogów, precyzyjnej geometrii miniaturek ani wysokości.
 
 Testy:
 
@@ -279,6 +285,7 @@ Testy:
 - `tests/unit/test_attack_targets.py`
 - `tests/unit/test_attack_flow.py`
 - `tests/unit/test_attack_resolution.py`
+- `tests/unit/test_line_of_sight.py`
 - `tests/unit/test_damage.py`
 - `tests/unit/test_attack_led_feedback.py`
 - `tests/unit/test_demo_mini_combat.py`
@@ -306,6 +313,8 @@ Implementacja MVP:
 - Nie ma inicjatywy, tur walki ani indywidualnego ruchu bohaterów.
 - Drużyna ma wspólny pionek i aktualną strefę.
 - Setup eksploracji pokazuje jawne strefy/lokacje bez wymuszania kliknięcia potwierdzającego.
+- Przed startem eksploracji web UI może przeprowadzić setup jawnych elementów mapy z `environment`, np. blokad, rumowisk i obiektów sceny.
+- Ta sama mapa `environment` może być używana w eksploracji i w encounterach, żeby fizyczne przeszkody nie zmieniały się między trybami.
 - Fizyczne jawne elementy sceny, np. NPC, obiekty albo markery, mogą wymagać rozstawienia przez `requires_setup`; wtedy są prowadzone batchami i potwierdzane kliknięciem.
 - Ukryte i warunkowe elementy nie są zdradzane w setupie.
 - Kliknięcie innej strefy tworzy podgląd przejścia, a drugie kliknięcie tej samej strefy potwierdza.

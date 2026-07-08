@@ -37,6 +37,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "led_offset": 0,
         "led_count": 620,
         "brightness": 128,
+        "color_order": "rgb",
         "request_timeout_s": 2.0,
     },
 }
@@ -111,6 +112,8 @@ def _apply_env_overrides(config: dict[str, Any]) -> dict[str, Any]:
         wled_cfg["led_count"] = int(os.environ["WLED_LED_COUNT"])
     if os.environ.get("WLED_BRIGHTNESS"):
         wled_cfg["brightness"] = int(os.environ["WLED_BRIGHTNESS"])
+    if os.environ.get("WLED_COLOR_ORDER"):
+        wled_cfg["color_order"] = str(os.environ["WLED_COLOR_ORDER"]).strip().lower()
     return config
 
 

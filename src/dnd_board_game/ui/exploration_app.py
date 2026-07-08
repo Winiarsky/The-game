@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import random
 import uuid
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
@@ -12,6 +12,7 @@ from flask import Flask, jsonify, render_template_string, request, send_from_dir
 from dnd_board_game.actors import Actor, Faction
 from dnd_board_game.combat import (
     ActorSetupEntry,
+    ActionUse,
     AttackDeclaration,
     CombatState,
     EncounterSetup,
@@ -20,6 +21,8 @@ from dnd_board_game.combat import (
     DamageComponentInput,
     DamageType,
     InitiativePrompt,
+    EnvironmentSetupEntry,
+    EnvironmentSetupType,
     SceneFlags,
     SetupStep,
     SetupStepKind,
@@ -43,6 +46,7 @@ from dnd_board_game.combat import (
     start_combat,
     start_attack_action,
     use_turn_action,
+    use_movement,
 )
 from dnd_board_game.exploration import (
     CheckAggregation,
@@ -87,7 +91,7 @@ from dnd_board_game.llm import (
     validate_gm_classifier_proposal,
     validate_npc_interaction_proposal,
 )
-from dnd_board_game.hardware import BoardLedAdapter, LedColor, LedFeedback, LedFrame, LedRole, led_color_name_pl
+from dnd_board_game.hardware import BoardLedAdapter, LedColor, LedFeedback, LedFrame, LedRole, led_color_name_pl, movement_led_feedback
 from dnd_board_game.rules import D20RollInput, D20RollRequest, RollModifier, RollModifierType, ability_modifier, resolve_d20_roll
 from dnd_board_game.scenarios import (
     LoadedEncounter,
@@ -97,7 +101,7 @@ from dnd_board_game.scenarios import (
     load_scenario,
 )
 from dnd_board_game.runtime.session_observer import SessionObserver
-from dnd_board_game.world import Coordinate
+from dnd_board_game.world import Coordinate, MovementRangeResult, find_path, movement_range
 
 
 class PendingKind(StrEnum):
@@ -166,6 +170,68 @@ class EncounterSetupFlow:
     steps: tuple[SetupStep, ...]
     current_index: int = 0
     completed: bool = False
+    player_start_actor_ids: tuple[str, ...] = ()
+    player_start_assignments: dict[str, Coordinate] = field(default_factory=dict)
+
+    @property
+    def current_step(self) -> SetupStep | None:
+        if self.completed or not self.steps:
+            return None
+        return self.steps[self.current_index]
+
+    def as_payload(self) -> dict[str, object]:
+        step = self.current_step
+        current_start_actor = self.current_player_start_actor
+        step_payload = _setup_step_payload(step) if step is not None else None
+        if step_payload is not None and self.is_player_start_step:
+            assigned_positions = set(self.player_start_assignments.values())
+            step_payload["requires_board_assignment"] = True
+            step_payload["assignment_actor_id"] = str(current_start_actor.id) if current_start_actor is not None else None
+            step_payload["assignment_actor_name"] = current_start_actor.name if current_start_actor is not None else None
+            step_payload["assigned_positions"] = [
+                [position.col, position.row] for position in self.player_start_assignments.values()
+            ]
+            step_payload["available_positions"] = [
+                [position.col, position.row] for position in step.positions if position not in assigned_positions
+            ]
+        return {
+            "scenario_id": self.encounter.scenario_id,
+            "scenario_name": self.encounter.scenario_name,
+            "status": "completed" if self.completed else "active",
+            "current_index": self.current_index,
+            "step_count": len(self.steps),
+            "current_step": step_payload,
+        }
+
+    @property
+    def is_player_start_step(self) -> bool:
+        step = self.current_step
+        return step is not None and step.label == "pola startowe bohaterów"
+
+    @property
+    def current_player_start_actor(self) -> Actor | None:
+        if not self.is_player_start_step:
+            return None
+        assigned = set(self.player_start_assignments)
+        for actor_id in self.player_start_actor_ids:
+            if actor_id in assigned:
+                continue
+            return next((actor for actor in self.encounter.actors if str(actor.id) == actor_id), None)
+        return None
+
+    def remaining_player_start_positions(self) -> tuple[Coordinate, ...]:
+        step = self.current_step
+        if step is None:
+            return ()
+        assigned = set(self.player_start_assignments.values())
+        return tuple(position for position in step.positions if position not in assigned)
+
+
+@dataclass(slots=True)
+class ExplorationSetupFlow:
+    steps: tuple[SetupStep, ...]
+    current_index: int = 0
+    completed: bool = False
 
     @property
     def current_step(self) -> SetupStep | None:
@@ -176,8 +242,6 @@ class EncounterSetupFlow:
     def as_payload(self) -> dict[str, object]:
         step = self.current_step
         return {
-            "scenario_id": self.encounter.scenario_id,
-            "scenario_name": self.encounter.scenario_name,
             "status": "completed" if self.completed else "active",
             "current_index": self.current_index,
             "step_count": len(self.steps),
@@ -263,10 +327,14 @@ class ExplorationUiSession:
         self.selected_lead_actor_id = str(self.exploration.actors[0].id)
         self.active_point_id = self.debug_point_id
         self.pending_encounter: PendingEncounter | None = None
+        self.exploration_setup_flow: ExplorationSetupFlow | None = None
+        self.post_interaction_setup_steps: tuple[SetupStep, ...] = ()
+        self.selected_combat_movement_path = None
         self.encounter_setup_flow: EncounterSetupFlow | None = None
         self.encounter_initiative_flow: EncounterInitiativeFlow | None = None
         self.combat_state: CombatState | None = None
         self.resolved_encounter_trigger_ids: set[str] = set()
+        self.pending_enemy_turn_result = None
         self.encounter_rng = random.Random(7)
         board_defaults = _load_board_defaults()
         self.board_backend = "none"
@@ -328,6 +396,7 @@ class ExplorationUiSession:
             },
             "current_zone": _zone_payload(self.current_zone, self._scenario_asset_root()),
             "available_zones": [_zone_payload(zone, self._scenario_asset_root()) for zone in visible_exploration_zones(self.state.zones) if zone_is_ui_available(self.state, zone)],
+            "visible_environment": [_environment_entry_payload(entry) for entry in self.exploration.environment if entry.visibility == SetupVisibility.VISIBLE],
             "travel_options": [_zone_payload(zone, self._scenario_asset_root()) for zone in self.travel_options()],
             "visible_points": [_point_payload(point) for point in visible_exploration_points(self.state.points)],
             "current_zone_points": [_point_payload(point) for point in current_zone_points],
@@ -340,11 +409,19 @@ class ExplorationUiSession:
             "messages": [message.as_payload() for message in self.messages],
             "pending": self.pending.as_payload() if self.pending else None,
             "pending_encounter": self._pending_encounter_payload(),
+            "exploration_setup": self.exploration_setup_flow.as_payload() if self.exploration_setup_flow else None,
             "encounter_setup": self.encounter_setup_flow.as_payload() if self.encounter_setup_flow else None,
             "encounter_initiative": (
                 self.encounter_initiative_flow.as_payload() if self.encounter_initiative_flow else None
             ),
-            "combat": _combat_payload(self.combat_state, self._active_encounter()) if self.combat_state else None,
+            "combat": _combat_payload(
+                self.combat_state,
+                self._active_encounter(),
+                self.selected_combat_movement_path,
+                self.pending_enemy_turn_result,
+            )
+            if self.combat_state
+            else None,
             "board": self._board_payload(),
             "required_rolls": self.required_rolls_payload(),
         }
@@ -408,11 +485,17 @@ class ExplorationUiSession:
             raise ValueError("Najpierw wybierz i zastosuj backend planszy: symulator albo hardware.")
         if self.ui_flow_stage not in {UiFlowStage.READY_TO_START, UiFlowStage.WAITING_FOR_BOARD}:
             return self.state_payload()
-        self.ui_flow_stage = UiFlowStage.LOCATION_PREVIEW
+        setup_steps = _build_exploration_setup_steps(self.exploration.environment)
+        if setup_steps:
+            self.exploration_setup_flow = ExplorationSetupFlow(setup_steps)
+            self.ui_flow_stage = UiFlowStage.PARTY_SETUP
+            self.board_message = "Najpierw rozstaw widoczne elementy mapy i potwierdź kroki setupu."
+        else:
+            self.ui_flow_stage = UiFlowStage.LOCATION_PREVIEW
+            self.board_message = "Wybierz jawny element sceny na planszy."
         self.preview_zone_id = ""
         self.pending = None
         self.active_point_id = ""
-        self.board_message = "Wybierz jawny element sceny na planszy."
         self._sync_board_leds()
         self._record("ui_play_session_started", {"stage": self.ui_flow_stage.value, "board_backend": self.board_backend})
         return self.state_payload()
@@ -422,6 +505,13 @@ class ExplorationUiSession:
             return self.state_payload()
         self.interaction_result = None
         self.preview_zone_id = ""
+        if self.post_interaction_setup_steps:
+            self.exploration_setup_flow = ExplorationSetupFlow(self.post_interaction_setup_steps)
+            self.post_interaction_setup_steps = ()
+            self.ui_flow_stage = UiFlowStage.PARTY_SETUP
+            self.board_message = "Rozstaw nowy element mapy wynikający z interakcji."
+            self._sync_board_leds()
+            return self.state_payload()
         self.ui_flow_stage = UiFlowStage.LOCATION_PREVIEW
         self.board_message = "Wybierz kolejną dostępną lokację na planszy."
         self._sync_board_leds()
@@ -432,6 +522,29 @@ class ExplorationUiSession:
             return self.state_payload()
         self.preview_zone_id = ""
         self.board_message = "Wrócono do wyboru dostępnych lokacji."
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def confirm_exploration_setup_step(self) -> dict[str, object]:
+        if self.exploration_setup_flow is None:
+            return self.state_payload()
+        flow = self.exploration_setup_flow
+        step = flow.current_step
+        if step is None:
+            return self.state_payload()
+        self._add_message("Setup mapy", f"Potwierdzono: {step.label}.")
+        if flow.current_index + 1 >= len(flow.steps):
+            flow.completed = True
+            self.exploration_setup_flow = None
+            self.ui_flow_stage = UiFlowStage.LOCATION_PREVIEW
+            self.preview_zone_id = ""
+            self.board_message = "Elementy mapy ustawione. Wybierz jawny element sceny na planszy."
+            self._refresh_pending_encounter()
+            if self.pending_encounter is not None:
+                self.board_message = "Encounter gotowy. Potwierdź rozpoczęcie setupu w UI albo Enterem."
+        else:
+            flow.current_index += 1
+            self.board_message = "Potwierdź kolejny element mapy."
         self._sync_board_leds()
         return self.state_payload()
 
@@ -452,6 +565,13 @@ class ExplorationUiSession:
             return self.state_payload()
         selected = _coordinate_from_scan(selected_raw)
         self._record("ui_board_scan_received", {"stage": self.ui_flow_stage.value, "position": [selected.col, selected.row]})
+        return self._handle_board_position(selected)
+
+    def select_board_position(self, selected: Coordinate) -> dict[str, object]:
+        target = self._current_board_scan_target()
+        if target.positions and selected not in target.positions:
+            raise ValueError("Wybrane pole nie jest teraz aktywnym polem planszy.")
+        self._record("ui_board_position_selected", {"stage": self.ui_flow_stage.value, "position": [selected.col, selected.row]})
         return self._handle_board_position(selected)
 
     def submit_action(self, text: str) -> dict[str, object]:
@@ -553,7 +673,11 @@ class ExplorationUiSession:
         steps = _build_encounter_setup_steps(encounter)
         if not steps:
             raise ValueError("Scenariusz encountera nie ma elementów do setupu.")
-        self.encounter_setup_flow = EncounterSetupFlow(encounter=encounter, steps=steps)
+        self.encounter_setup_flow = EncounterSetupFlow(
+            encounter=encounter,
+            steps=steps,
+            player_start_actor_ids=tuple(str(actor.id) for actor in encounter.actors if actor.faction == Faction.ALLY),
+        )
         self._add_message(
             "Setup przed walką",
             f"Rozpoczynam setup encountera: {encounter.scenario_name}. Potwierdzajcie kolejne grupy po rozstawieniu figurek.",
@@ -622,7 +746,55 @@ class ExplorationUiSession:
         step = flow.current_step
         if step is None:
             return self.state_payload()
+        if flow.is_player_start_step:
+            actor = flow.current_player_start_actor
+            actor_name = actor.name if actor is not None else "kolejnego bohatera"
+            raise ValueError(f"Ten krok wymaga kliknięcia planszy: wybierz pole startowe dla {actor_name}.")
         self._add_message("Setup potwierdzony", f"Potwierdzono: {step.label}.")
+        if flow.current_index + 1 >= len(flow.steps):
+            flow.completed = True
+            self._add_message(
+                "Setup zakończony",
+                "Figurki i jawne elementy encountera są rozstawione. Następny krok to inicjatywa i start walki.",
+            )
+        else:
+            flow.current_index += 1
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def assign_encounter_player_start_position(self, selected: Coordinate) -> dict[str, object]:
+        if self.encounter_setup_flow is None:
+            raise ValueError("Setup encountera nie jest aktywny.")
+        flow = self.encounter_setup_flow
+        if not flow.is_player_start_step:
+            raise ValueError("Aktualny krok setupu nie zbiera pól startowych bohaterów.")
+        actor = flow.current_player_start_actor
+        if actor is None:
+            return self._advance_completed_player_start_step()
+        remaining = flow.remaining_player_start_positions()
+        if selected not in remaining:
+            self.board_message = "Kliknij wolne, podświetlone pole startowe dla aktualnego bohatera."
+            return self.state_payload()
+        updated_actor = replace(actor, position=selected)
+        updated_actors = tuple(updated_actor if candidate.id == actor.id else candidate for candidate in flow.encounter.actors)
+        flow.encounter = replace(flow.encounter, actors=updated_actors)
+        flow.player_start_assignments[str(actor.id)] = selected
+        self.board_message = f"Ustawiono {actor.name} na polu {selected.as_tuple()}."
+        self._add_message("Pole startowe", f"{actor.name}: {selected.as_tuple()}.")
+        self._record(
+            "ui_encounter_player_start_assigned",
+            {"actor_id": str(actor.id), "position": [selected.col, selected.row]},
+        )
+        if flow.current_player_start_actor is None:
+            return self._advance_completed_player_start_step()
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def _advance_completed_player_start_step(self) -> dict[str, object]:
+        if self.encounter_setup_flow is None:
+            return self.state_payload()
+        flow = self.encounter_setup_flow
+        self._add_message("Setup potwierdzony", "Pola startowe bohaterów zostały przypisane z planszy.")
         if flow.current_index + 1 >= len(flow.steps):
             flow.completed = True
             self._add_message(
@@ -736,6 +908,7 @@ class ExplorationUiSession:
             updated_state = replace_actor(updated_state, updated_target)
             message = f"{message} Obrażenia: {damage_result.total_applied}. {target_actor.name}: HP {target_actor.hp} -> {updated_target.hp}."
         self.combat_state = updated_state
+        self.selected_combat_movement_path = None
         self._add_message("Atak", message)
         self._record(
             "ui_combat_player_attack",
@@ -747,6 +920,89 @@ class ExplorationUiSession:
                 "hit": resolution.hit,
                 "critical": resolution.critical,
                 "damage": int(damage) if resolution.hit else 0,
+            },
+        )
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def submit_player_attack_at_position(self, position: Coordinate) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        encounter = self._active_encounter()
+        if encounter is None:
+            raise ValueError("Brak danych encountera dla aktywnej walki.")
+        attacker = combat_current_actor(self.combat_state)
+        source = encounter.attack_sources_by_actor.get(attacker.id)
+        if source is None:
+            raise ValueError(f"Aktor {attacker.name} nie ma zdefiniowanego ataku.")
+        action = start_attack_action(encounter.board, attacker, self.combat_state.actors, source)
+        selected = select_attack_target(action, position=position)
+        assert selected.selected_target is not None
+        return self.submit_player_attack(
+            target_id=selected.selected_target.id,
+            natural_roll=10,
+            damage=_default_damage_amount(source),
+        )
+
+    def preview_combat_movement(self, *, col: int, row: int) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        if self.combat_state.status.value != "active":
+            raise ValueError("Walka nie jest aktywna.")
+        encounter = self._active_encounter()
+        if encounter is None:
+            raise ValueError("Brak danych encountera dla aktywnej walki.")
+        actor = combat_current_actor(self.combat_state)
+        if actor.faction != Faction.ALLY:
+            raise ValueError("To nie jest tura bohatera.")
+        destination = Coordinate(int(col), int(row))
+        path = find_path(encounter.board, actor, self.combat_state.actors, destination)
+        if not path.valid:
+            raise ValueError("Nie można dojść do wskazanego pola.")
+        self.selected_combat_movement_path = path
+        self.board_message = (
+            f"Wybrano ścieżkę ruchu {actor.name} -> {destination.as_tuple()} "
+            f"({path.cost_feet} ft). Kliknij to pole ponownie, żeby zatwierdzić."
+        )
+        self._record(
+            "ui_combat_movement_previewed",
+            {
+                "actor_id": str(actor.id),
+                "destination": [destination.col, destination.row],
+                "path": [[position.col, position.row] for position in path.path],
+                "cost_feet": path.cost_feet,
+            },
+        )
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def submit_combat_movement(self, *, col: int, row: int) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        if self.combat_state.status.value != "active":
+            raise ValueError("Walka nie jest aktywna.")
+        encounter = self._active_encounter()
+        if encounter is None:
+            raise ValueError("Brak danych encountera dla aktywnej walki.")
+        actor = combat_current_actor(self.combat_state)
+        if actor.faction != Faction.ALLY:
+            raise ValueError("To nie jest tura bohatera.")
+        destination = Coordinate(int(col), int(row))
+        path = find_path(encounter.board, actor, self.combat_state.actors, destination)
+        result = use_movement(self.combat_state, actor, path)
+        if not result.accepted:
+            raise ValueError(result.message)
+        self.combat_state = result.state
+        self.selected_combat_movement_path = None
+        self._add_message("Ruch", result.message)
+        self._record(
+            "ui_combat_player_moved",
+            {
+                "actor_id": str(actor.id),
+                "destination": [destination.col, destination.row],
+                "path": [[position.col, position.row] for position in path.path],
+                "cost_feet": path.cost_feet,
+                "movement_remaining_feet": result.movement_remaining_feet,
             },
         )
         self._sync_board_leds()
@@ -767,17 +1023,73 @@ class ExplorationUiSession:
         if source is None:
             raise ValueError(f"Aktor {enemy.name} nie ma zdefiniowanego ataku.")
         result = resolve_enemy_auto_turn(encounter.board, self.combat_state, enemy, source, self.encounter_rng)
+        if result.movement_path is not None and result.movement_path.valid and result.movement_path.destination != enemy.position:
+            self.pending_enemy_turn_result = result
+            self.board_message = (
+                f"{enemy.name} rusza na {result.movement_path.destination.as_tuple()}. "
+                "Przestaw figurkę po podświetlonej ścieżce i kliknij pole docelowe."
+            )
+            self._add_message(
+                "Ruch przeciwnika",
+                f"{enemy.name} planuje ruch na {result.movement_path.destination.as_tuple()}. Potwierdź pole docelowe na planszy.",
+            )
+            self._sync_board_leds()
+            return self.state_payload()
+        if result.target is not None:
+            self.pending_enemy_turn_result = result
+            self.board_message = (
+                f"{enemy.name} atakuje {result.target.name}. Kliknij podświetlone pole celu, żeby potwierdzić atak."
+            )
+            self._add_message(
+                "Atak przeciwnika",
+                f"{enemy.name} atakuje {result.target.name}. Potwierdź atak klikając pole celu.",
+            )
+            self._sync_board_leds()
+            return self.state_payload()
+        return self._commit_pending_enemy_turn(result)
+
+    def _commit_pending_enemy_turn(self, result=None) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        result = result or self.pending_enemy_turn_result
+        if result is None:
+            raise ValueError("Brak oczekującej tury przeciwnika do potwierdzenia.")
         self.combat_state = finish_turn(result.state)
+        self.selected_combat_movement_path = None
+        self.pending_enemy_turn_result = None
         self._add_message("Tura przeciwnika", result.message)
         self._record(
             "ui_combat_enemy_turn",
             {
-                "enemy_id": str(enemy.id),
+                "enemy_id": str(result.enemy.id),
                 "target_id": result.target.id if result.target is not None else None,
                 "message": result.message,
                 "action_used": result.action_used,
             },
         )
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def reset_board_scan(self) -> dict[str, object]:
+        if self.board_adapter is None:
+            raise ValueError("Najpierw podłącz backend planszy.")
+        connection = self.board_adapter.connection
+        resetter = getattr(connection, "reset_connection", None)
+        rearmer = getattr(connection, "rearm_scan", None)
+        canceller = getattr(connection, "cancel_scan", None)
+        if callable(resetter):
+            resetter()
+            action = "reset_connection"
+        elif callable(rearmer):
+            rearmer()
+            action = "rearm_scan"
+        elif callable(canceller):
+            canceller()
+            action = "cancel_scan"
+        else:
+            raise ValueError("Aktualny backend planszy nie obsługuje resetu skanu.")
+        self.board_message = "Zresetowano oczekiwanie na kliknięcie planszy."
+        self._record("ui_board_scan_reset", {"action": action})
         self._sync_board_leds()
         return self.state_payload()
 
@@ -788,6 +1100,7 @@ class ExplorationUiSession:
             return self.state_payload()
         actor = combat_current_actor(self.combat_state)
         self.combat_state = finish_turn(self.combat_state)
+        self.selected_combat_movement_path = None
         self._add_message("Koniec tury", f"Zakończono turę: {actor.name}.")
         self._record("ui_combat_turn_finished", {"actor_id": str(actor.id)})
         self._sync_board_leds()
@@ -829,6 +1142,13 @@ class ExplorationUiSession:
         if self.encounter_setup_flow is not None:
             step = self.encounter_setup_flow.current_step
             if step is not None:
+                if self.encounter_setup_flow.is_player_start_step:
+                    positions = self.encounter_setup_flow.remaining_player_start_positions()
+                    return BoardScanTarget(
+                        positions=positions,
+                        feedback=setup_led_feedback(replace(step, positions=positions)),
+                        empty_message="Kliknij wolne pole startowe dla aktualnego bohatera.",
+                    )
                 return BoardScanTarget(
                     positions=step.positions,
                     feedback=setup_led_feedback(step),
@@ -843,11 +1163,41 @@ class ExplorationUiSession:
                     empty_message="Nie ma aktywnego aktora do podświetlenia inicjatywy.",
                 )
         if self.combat_state is not None:
+            encounter = self._active_encounter()
+            actor = combat_current_actor(self.combat_state)
+            if self.pending_enemy_turn_result is not None:
+                target_positions = _pending_enemy_turn_target_positions(self.pending_enemy_turn_result)
+                return BoardScanTarget(
+                    positions=target_positions,
+                    feedback=_pending_enemy_turn_led_feedback(self.pending_enemy_turn_result),
+                    empty_message="Tura przeciwnika czeka na potwierdzenie pola docelowego albo celu.",
+                )
+            if encounter is not None and actor.faction == Faction.ALLY and self.combat_state.status.value == "active":
+                movement = _remaining_movement_range(encounter.board, self.combat_state, actor)
+                attack_targets = _legal_combat_targets(encounter, self.combat_state, actor)
+                return BoardScanTarget(
+                    positions=tuple(sorted(movement.reachable_tiles | frozenset(target.position for target in attack_targets))),
+                    feedback=_combat_choice_led_feedback(movement, attack_targets, self.selected_combat_movement_path, encounter.board),
+                    empty_message="Aktywny bohater nie ma dostępnych pól ruchu ani celów ataku.",
+                )
             feedback = active_actor_led_feedback(self.combat_state.initiative_order)
             return BoardScanTarget(
-                positions=(combat_current_actor(self.combat_state).position,),
+                positions=(actor.position,),
                 feedback=feedback,
                 empty_message="Nie ma aktywnego aktora walki.",
+            )
+        if self.pending_encounter is not None:
+            return BoardScanTarget(
+                positions=(),
+                feedback=LedFeedback(),
+                empty_message="Encounter czeka na rozpoczęcie setupu w UI albo Enterem.",
+            )
+        if self.exploration_setup_flow is not None and self.exploration_setup_flow.current_step is not None:
+            step = self.exploration_setup_flow.current_step
+            return BoardScanTarget(
+                positions=step.positions,
+                feedback=setup_led_feedback(step),
+                empty_message="Aktualny krok setupu mapy nie ma pól do kliknięcia.",
             )
         if self.ui_flow_stage in {UiFlowStage.WAITING_FOR_BOARD, UiFlowStage.READY_TO_START}:
             return BoardScanTarget(
@@ -904,6 +1254,8 @@ class ExplorationUiSession:
 
     def _handle_board_position(self, selected: Coordinate) -> dict[str, object]:
         if self.encounter_setup_flow is not None and self.encounter_setup_flow.current_step is not None:
+            if self.encounter_setup_flow.is_player_start_step:
+                return self.assign_encounter_player_start_position(selected)
             self.board_message = f"Potwierdzono setup kliknięciem pola {selected.as_tuple()}."
             return self.confirm_encounter_setup_step()
         if self.encounter_initiative_flow is not None and self.encounter_initiative_flow.current_prompt is not None:
@@ -912,8 +1264,35 @@ class ExplorationUiSession:
             return self.state_payload()
         if self.combat_state is not None:
             actor = combat_current_actor(self.combat_state)
+            if self.pending_enemy_turn_result is not None:
+                expected = _pending_enemy_turn_target_positions(self.pending_enemy_turn_result)
+                if selected in expected:
+                    self.board_message = f"Potwierdzono turę przeciwnika kliknięciem pola {selected.as_tuple()}."
+                    return self._commit_pending_enemy_turn()
+                self.board_message = "Kliknij podświetlone pole docelowe tury przeciwnika."
+                return self.state_payload()
+            if actor.faction == Faction.ALLY:
+                encounter = self._active_encounter()
+                try:
+                    if encounter is not None and _combat_target_at_position(encounter, self.combat_state, actor, selected) is not None:
+                        self.board_message = f"Atak bohatera: {actor.name} -> {selected.as_tuple()}."
+                        return self.submit_player_attack_at_position(selected)
+                    if (
+                        self.selected_combat_movement_path is not None
+                        and self.selected_combat_movement_path.valid
+                        and self.selected_combat_movement_path.destination == selected
+                    ):
+                        self.board_message = f"Ruch bohatera: {actor.name} -> {selected.as_tuple()}."
+                        return self.submit_combat_movement(col=selected.col, row=selected.row)
+                    return self.preview_combat_movement(col=selected.col, row=selected.row)
+                except ValueError as exc:
+                    self.board_message = str(exc)
+                    return self.state_payload()
             self.board_message = f"Aktywny aktor walki: {actor.name}."
             return self.state_payload()
+        if self.exploration_setup_flow is not None and self.exploration_setup_flow.current_step is not None:
+            self.board_message = f"Potwierdzono setup mapy kliknięciem pola {selected.as_tuple()}."
+            return self.confirm_exploration_setup_step()
         if self.ui_flow_stage == UiFlowStage.PARTY_SETUP:
             if selected == self.current_zone.marker_position:
                 self.ui_flow_stage = UiFlowStage.LOCATION_PREVIEW
@@ -1191,6 +1570,26 @@ class ExplorationUiSession:
             visible_points_after = {point.id for point in visible_exploration_points(self.state.points)}
             unlocked_zone_ids = tuple(sorted(available_after - available_before))
             revealed_point_ids = tuple(sorted((visible_points_after - visible_points_before) | {point.id for point in revealed_points}))
+            if self.pending.option.id == "force_gate" or "heavy_force" in self.pending.option.tags:
+                self.post_interaction_setup_steps = (_fallen_gate_setup_step(),)
+                self.interaction_result = {
+                    "title": f"Zakończono: {self.pending.challenge.name}",
+                    "body": result.message,
+                    "unlocked_zones": [
+                        _zone_payload(zone, self._scenario_asset_root()) for zone in self.state.zones if zone.id in unlocked_zone_ids
+                    ],
+                    "revealed_points": [_point_payload(point) for point in self.state.points if point.id in revealed_point_ids],
+                    "current_zone": _zone_payload(self.current_zone, self._scenario_asset_root()),
+                    "next_instruction": "Potwierdź wynik, żeby rozstawić przewróconą bramę jako nową przeszkodę.",
+                }
+                self.ui_flow_stage = UiFlowStage.INTERACTION_RESULT
+                self.preview_zone_id = ""
+                self.board_message = "Wyważenie zakończone. Potwierdź wynik, a potem ustaw przewróconą bramę."
+                self._add_message(
+                    "Nowy element mapy",
+                    "Wyważona brama przewraca się na dziedziniec. Po potwierdzeniu wyniku ustaw przewrócone skrzydło na podświetlonych polach.",
+                )
+                return
             self.interaction_result = {
                 "title": f"Zakończono: {self.pending.challenge.name}",
                 "body": result.message,
@@ -1278,6 +1677,10 @@ class ExplorationUiSession:
         return tuple(revealed)
 
     def _refresh_pending_encounter(self) -> None:
+        if self.post_interaction_setup_steps:
+            return
+        if self.exploration_setup_flow is not None:
+            return
         if self.pending_encounter is not None:
             return
         for trigger in self.exploration.encounter_triggers:
@@ -1437,6 +1840,13 @@ def create_app(session: ExplorationUiSession) -> Flask:
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
+    @app.post("/api/exploration/setup/confirm")
+    def api_exploration_setup_confirm():
+        try:
+            return jsonify(session.confirm_exploration_setup_step())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
     @app.post("/api/travel")
     def api_travel():
         data = request.get_json(silent=True) or {}
@@ -1473,6 +1883,21 @@ def create_app(session: ExplorationUiSession) -> Flask:
     def api_board_scan():
         try:
             return jsonify(session.scan_board_selection())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/board/select")
+    def api_board_select():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(session.select_board_position(Coordinate(int(data.get("col", 0)), int(data.get("row", 0)))))
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/board/reset-scan")
+    def api_board_reset_scan():
+        try:
+            return jsonify(session.reset_board_scan())
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
@@ -1516,6 +1941,14 @@ def create_app(session: ExplorationUiSession) -> Flask:
                     damage=int(data.get("damage", 0)),
                 )
             )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/move")
+    def api_combat_move():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(session.submit_combat_movement(col=int(data.get("col", 0)), row=int(data.get("row", 0))))
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
@@ -1573,10 +2006,11 @@ def _build_encounter_setup_steps(encounter: LoadedEncounter) -> tuple[SetupStep,
             ActorSetupEntry(actor=actor, role=actor.faction.value, position=actor.position, visibility=SetupVisibility.VISIBLE)
             for actor in encounter.actors
         ),
-        environment=encounter.environment,
+        environment=(),
     )
     steps = list(build_setup_steps(setup))
     if encounter.player_start_zones:
+        steps = [step for step in steps if not (step.kind == SetupStepKind.ACTORS and step.label == "bohaterów")]
         start_positions = tuple(sorted({position for zone in encounter.player_start_zones for position in zone}))
         ally_names = ", ".join(actor.name for actor in encounter.actors if actor.faction == Faction.ALLY)
         steps.insert(
@@ -1587,12 +2021,84 @@ def _build_encounter_setup_steps(encounter: LoadedEncounter) -> tuple[SetupStep,
                 positions=start_positions,
                 color=(64, 220, 255),
                 message=(
-                    f"Ustaw bohaterów ({ally_names}) na jednym z podświetlonych pól startowych. "
-                    "Każda figurka powinna stać na osobnym polu."
+                    f"Ustaw bohaterów ({ally_names}) na podświetlonych polach startowych. "
+                    "Gra poprosi o kliknięcie pola dla każdego bohatera osobno."
                 ),
             ),
         )
     return tuple(_split_large_setup_steps(tuple(steps), max_positions=5))
+
+
+def _build_exploration_setup_steps(environment: tuple[EnvironmentSetupEntry, ...]) -> tuple[SetupStep, ...]:
+    visible = tuple(entry for entry in environment if entry.visibility == SetupVisibility.VISIBLE and entry.positions)
+    if not visible:
+        return ()
+    steps = [
+        SetupStep(
+            kind=SetupStepKind.ENVIRONMENT,
+            label="elementy mapy",
+            positions=(),
+            color=LedColor.MARKER,
+            message="Przed eksploracją rozstawcie jawne elementy mapy: przeszkody, rumowiska i obiekty sceny.",
+        )
+    ]
+    for setup_type in sorted({entry.setup_type for entry in visible}, key=lambda item: item.value):
+        entries = tuple(entry for entry in visible if entry.setup_type == setup_type)
+        positions = tuple(sorted({position for entry in entries for position in entry.positions}))
+        names = ", ".join(entry.name for entry in entries)
+        label = _exploration_environment_label(setup_type)
+        steps.append(
+            SetupStep(
+                kind=SetupStepKind.ENVIRONMENT,
+                label=label,
+                positions=positions,
+                color=_exploration_environment_color(setup_type),
+                message=f"Ustaw {label}: {names}{_setup_positions_text(positions)}.",
+            )
+        )
+    return tuple(_split_large_setup_steps(tuple(steps), max_positions=8))
+
+
+def _fallen_gate_setup_step() -> SetupStep:
+    positions = (Coordinate(8, 5), Coordinate(9, 5))
+    return SetupStep(
+        kind=SetupStepKind.ENVIRONMENT,
+        label="przewrócona brama",
+        positions=positions,
+        color=LedColor.BLOCKING_TERRAIN,
+        message=f"Ustaw przewróconą bramę: ciężkie skrzydło leży na polach{_setup_positions_text(positions)}.",
+    )
+
+
+def _setup_positions_text(positions: tuple[Coordinate, ...]) -> str:
+    if not positions:
+        return ""
+    return " na polach: " + ", ".join(f"({position.col},{position.row})" for position in positions)
+
+
+def _exploration_environment_label(setup_type: EnvironmentSetupType) -> str:
+    labels = {
+        EnvironmentSetupType.OBSTACLE: "przeszkody",
+        EnvironmentSetupType.DIFFICULT_TERRAIN: "trudny teren",
+        EnvironmentSetupType.BLOCKING_TERRAIN: "blokady",
+        EnvironmentSetupType.COVER: "osłony",
+        EnvironmentSetupType.INTERACTABLE: "obiekty interaktywne",
+        EnvironmentSetupType.NPC: "NPC",
+        EnvironmentSetupType.CONTAINER: "obiekty sceny",
+        EnvironmentSetupType.MARKER: "markery",
+        EnvironmentSetupType.CUSTOM: "elementy otoczenia",
+    }
+    return labels[setup_type]
+
+
+def _exploration_environment_color(setup_type: EnvironmentSetupType) -> tuple[int, int, int]:
+    if setup_type in {EnvironmentSetupType.OBSTACLE, EnvironmentSetupType.BLOCKING_TERRAIN, EnvironmentSetupType.COVER}:
+        return LedColor.BLOCKING_TERRAIN
+    if setup_type == EnvironmentSetupType.DIFFICULT_TERRAIN:
+        return LedColor.DIFFICULT_TERRAIN
+    if setup_type in {EnvironmentSetupType.INTERACTABLE, EnvironmentSetupType.NPC, EnvironmentSetupType.CONTAINER}:
+        return LedColor.INTERACTIVE_OBJECT
+    return LedColor.MARKER
 
 
 def _split_large_setup_steps(steps: tuple[SetupStep, ...], *, max_positions: int) -> tuple[SetupStep, ...]:
@@ -1624,7 +2130,25 @@ def _setup_step_payload(step: SetupStep | None) -> dict[str, object] | None:
         "label": step.label,
         "message": step.message,
         "positions": [[position.col, position.row] for position in step.positions],
-        "color": _setup_color_name(step),
+        "color": _setup_color_name(step) if step.positions else None,
+        "has_positions": bool(step.positions),
+    }
+
+
+def _environment_entry_payload(entry: EnvironmentSetupEntry) -> dict[str, object]:
+    return {
+        "id": entry.id,
+        "name": entry.name,
+        "type": entry.setup_type.value,
+        "label": _exploration_environment_label(entry.setup_type),
+        "description": entry.description,
+        "positions": [[position.col, position.row] for position in entry.positions],
+        "color": led_color_name_pl(_exploration_environment_color(entry.setup_type)) if entry.positions else None,
+        "blocks_movement": entry.setup_type in {
+            EnvironmentSetupType.OBSTACLE,
+            EnvironmentSetupType.BLOCKING_TERRAIN,
+            EnvironmentSetupType.COVER,
+        },
     }
 
 
@@ -1659,14 +2183,27 @@ def _initiative_entry_payload(entry: InitiativeEntry) -> dict[str, object]:
     }
 
 
-def _combat_payload(state: CombatState | None, encounter: LoadedEncounter | None = None) -> dict[str, object] | None:
+def _combat_payload(
+    state: CombatState | None,
+    encounter: LoadedEncounter | None = None,
+    selected_movement_path=None,
+    pending_enemy_turn_result=None,
+) -> dict[str, object] | None:
     if state is None:
         return None
     actor = combat_current_actor(state)
     attack_source = encounter.attack_sources_by_actor.get(actor.id) if encounter is not None else None
     targets = ()
-    if encounter is not None and attack_source is not None and state.status.value == "active":
+    movement = None
+    if (
+        encounter is not None
+        and attack_source is not None
+        and state.status.value == "active"
+        and state.turn_action.action_use == ActionUse.ACTION_AVAILABLE
+    ):
         targets = start_attack_action(encounter.board, actor, state.actors, attack_source).legal_targets
+    if encounter is not None and actor.faction == Faction.ALLY and state.status.value == "active":
+        movement = _remaining_movement_range(encounter.board, state, actor)
     return {
         "status": state.status.value,
         "round_number": state.round_number,
@@ -1679,6 +2216,9 @@ def _combat_payload(state: CombatState | None, encounter: LoadedEncounter | None
         },
         "available_attack": _attack_source_payload(attack_source) if attack_source is not None else None,
         "legal_targets": [_combat_target_payload(target) for target in targets],
+        "movement": _movement_payload(movement, state, actor) if movement is not None else None,
+        "movement_preview": _movement_preview_payload(selected_movement_path),
+        "enemy_turn_preview": _enemy_turn_preview_payload(pending_enemy_turn_result),
     }
 
 
@@ -1717,12 +2257,131 @@ def _combat_target_payload(target) -> dict[str, object]:
     }
 
 
+def _remaining_movement_range(board, state: CombatState, actor: Actor) -> MovementRangeResult:
+    result = movement_range(board, actor, state.actors)
+    remaining = max(0, actor.speed_feet - state.turn_action.movement_used_feet)
+    reachable = frozenset(tile for tile in result.reachable_tiles if result.costs_by_tile.get(tile, 999) <= remaining)
+    costs = {tile: cost for tile, cost in result.costs_by_tile.items() if tile in reachable}
+    paths = {tile: path for tile, path in result.paths_by_tile.items() if tile in reachable}
+    return MovementRangeResult(origin=result.origin, reachable_tiles=reachable, costs_by_tile=costs, paths_by_tile=paths)
+
+
+def _legal_combat_targets(encounter: LoadedEncounter, state: CombatState, actor: Actor):
+    if state.turn_action.action_use != ActionUse.ACTION_AVAILABLE:
+        return ()
+    source = encounter.attack_sources_by_actor.get(actor.id)
+    if source is None:
+        return ()
+    return start_attack_action(encounter.board, actor, state.actors, source).legal_targets
+
+
+def _combat_target_at_position(encounter: LoadedEncounter, state: CombatState, actor: Actor, position: Coordinate):
+    for target in _legal_combat_targets(encounter, state, actor):
+        if target.position == position:
+            return target
+    return None
+
+
+def _combat_choice_led_feedback(movement: MovementRangeResult, attack_targets, selected_path=None, board=None) -> LedFeedback:
+    frames = list(movement_led_feedback(movement).frames)
+    if board is not None:
+        difficult_tiles = tuple(
+            sorted(tile for tile in movement.reachable_tiles if tile != movement.origin and board.terrain_at(tile).is_difficult)
+        )
+        if difficult_tiles:
+            frames.append(LedFrame(difficult_tiles, LedColor.DIFFICULT_TERRAIN, LedRole.DIFFICULT_TERRAIN))
+    if selected_path is not None and selected_path.valid and selected_path.path:
+        path_without_origin = tuple(tile for tile in selected_path.path if tile != selected_path.origin)
+        if path_without_origin:
+            frames.append(LedFrame(path_without_origin, LedColor.PLAYER_MOVEMENT_PATH, LedRole.SELECTED_PATH))
+        frames.append(LedFrame((selected_path.destination,), LedColor.MOVEMENT_DESTINATION, LedRole.DESTINATION))
+    target_positions = tuple(sorted(target.position for target in attack_targets))
+    if target_positions:
+        frames.append(LedFrame(target_positions, LedColor.ENEMY, LedRole.ENEMY))
+    return LedFeedback(tuple(frames))
+
+
+def _pending_enemy_turn_target_positions(result) -> tuple[Coordinate, ...]:
+    if result is None:
+        return ()
+    if result.movement_path is not None and result.movement_path.valid:
+        return (result.movement_path.destination,)
+    if result.target is not None:
+        return (result.target.position,)
+    return ()
+
+
+def _pending_enemy_turn_led_feedback(result) -> LedFeedback:
+    if result is None:
+        return LedFeedback()
+    if result.movement_path is not None and result.movement_path.valid:
+        path_positions = tuple(position for position in result.movement_path.path if position != result.movement_path.origin)
+        frames: list[LedFrame] = []
+        if path_positions:
+            frames.append(LedFrame(path_positions, LedColor.ENEMY_MOVEMENT_PATH, LedRole.SELECTED_PATH))
+        frames.append(LedFrame((result.movement_path.destination,), LedColor.ENEMY_MOVEMENT_DESTINATION, LedRole.DESTINATION))
+        return LedFeedback(tuple(frames))
+    if result.target is not None:
+        return LedFeedback((LedFrame((result.target.position,), LedColor.ENEMY, LedRole.ENEMY),))
+    return LedFeedback()
+
+
+def _enemy_turn_preview_payload(result) -> dict[str, object] | None:
+    if result is None:
+        return None
+    payload: dict[str, object] = {"enemy_id": str(result.enemy.id), "enemy_name": result.enemy.name}
+    if result.movement_path is not None and result.movement_path.valid:
+        payload["kind"] = "movement"
+        payload["destination"] = [result.movement_path.destination.col, result.movement_path.destination.row]
+        payload["path"] = [[position.col, position.row] for position in result.movement_path.path]
+        payload["cost_feet"] = result.movement_path.cost_feet
+    elif result.target is not None:
+        payload["kind"] = "attack"
+        payload["target_id"] = result.target.id
+        payload["target_name"] = result.target.name
+        payload["target_position"] = [result.target.position.col, result.target.position.row]
+    return payload
+
+
+def _movement_preview_payload(path) -> dict[str, object] | None:
+    if path is None or not path.valid:
+        return None
+    return {
+        "destination": [path.destination.col, path.destination.row],
+        "cost_feet": path.cost_feet,
+        "path": [[position.col, position.row] for position in path.path],
+    }
+
+
+def _movement_payload(result, state: CombatState, actor: Actor) -> dict[str, object]:
+    remaining = max(0, actor.speed_feet - state.turn_action.movement_used_feet)
+    destinations = tuple(sorted(tile for tile in result.reachable_tiles if tile != result.origin))
+    return {
+        "remaining_feet": remaining,
+        "destinations": [
+            {
+                "col": tile.col,
+                "row": tile.row,
+                "cost_feet": result.costs_by_tile[tile],
+                "path": [[position.col, position.row] for position in result.paths_by_tile.get(tile, ())],
+            }
+            for tile in destinations
+        ],
+    }
+
+
 def _player_attack_message(attacker_name: str, target_name: str, total: int, hit: bool, critical: bool) -> str:
     if critical:
         return f"{attacker_name} trafia krytycznie {target_name}. Wynik ataku: {total}."
     if hit:
         return f"{attacker_name} trafia {target_name}. Wynik ataku: {total}."
     return f"{attacker_name} pudłuje przeciwko {target_name}. Wynik ataku: {total}."
+
+
+def _default_damage_amount(source) -> int:
+    if source.damage_fixed is not None:
+        return max(0, int(source.damage_fixed) + int(source.damage_modifier))
+    return max(0, int(source.damage_modifier))
 
 
 def _default_encounter_victory_outcome(name: str) -> EncounterOutcome:
@@ -2103,6 +2762,7 @@ _HTML = """
     <h2 id="scenario">Scenariusz</h2>
     <div class="card"><b>Lokacja</b><div id="zone"></div></div>
     <div class="card"><b>Wyzwanie</b><div id="challenge"></div></div>
+    <div class="card"><b>Jawne elementy sceny</b><div id="visible-environment"></div></div>
     <div class="card"><b>Zasoby</b><div id="resources"></div></div>
     <div class="card">
       <b>Plansza</b>
@@ -2120,7 +2780,8 @@ _HTML = """
       <label>Timeout skanu <input id="scan-timeout" type="number" min="1" max="120" value="30"></label>
       <div class="row" style="margin-top:8px">
         <button onclick="configureBoard()">Zastosuj</button>
-        <button class="secondary" onclick="scanBoard()">Czekaj na kliknięcie</button>
+        <button class="secondary" onclick="scanBoard()">Skanuj planszę</button>
+        <button class="secondary" data-allow-busy="true" onclick="resetBoardScan()">Reset skanu</button>
       </div>
     </div>
     <button class="secondary" onclick="resetSession()">Reset</button>
@@ -2129,7 +2790,7 @@ _HTML = """
     <h1>Eksploracja</h1>
     <div id="status" class="status" hidden></div>
     <div class="card" id="flow-panel"></div>
-    <div class="card scene-description">
+    <div class="card scene-description" id="scene-description-card">
       <h3>Opis sceny</h3>
       <div id="scene-description"></div>
     </div>
@@ -2196,9 +2857,9 @@ _HTML = """
 let state = null;
 let busy = false;
 let resultAck = null;
+let playerTurnScanLoop = false;
 let boardScanInFlight = false;
-let lastAutoScanKey = '';
-let passiveBoardScanInFlight = false;
+let boardScanToken = 0;
 let sessionLog = null;
 function setBusy(message) {
   busy = Boolean(message);
@@ -2239,10 +2900,13 @@ function render() {
   document.getElementById('scenario').textContent = state.scenario.name;
   document.getElementById('zone').textContent = state.current_zone.name;
   document.getElementById('challenge').textContent = state.active_challenge ? `${state.active_challenge.name}: ${state.active_challenge.current_progress}/${state.active_challenge.progress_required}, hałas ${state.active_challenge.noise}` : 'Brak';
+  document.getElementById('visible-environment').innerHTML = visibleEnvironmentHtml();
   document.getElementById('resources').innerHTML = state.resources.map(r => `<div>${r.label}</div>`).join('') || 'Brak';
   renderBoardPanel();
   document.getElementById('flow-panel').innerHTML = flowPanelHtml();
-  document.getElementById('scene-description').innerHTML = sceneDescriptionHtml(state);
+  const sceneHtml = sceneDescriptionHtml(state);
+  document.getElementById('scene-description').innerHTML = sceneHtml;
+  document.getElementById('scene-description-card').hidden = !sceneHtml;
   document.getElementById('messages').innerHTML = state.messages.map(m => `<div class="message"><b>${m.title}</b><br>${m.body}</div>`).join('');
   document.getElementById('pending').innerHTML = pendingHtml(state.pending);
   document.getElementById('lead-actor-choice').innerHTML = leadActorChoiceHtml();
@@ -2256,7 +2920,6 @@ function render() {
   renderSessionLogMeta();
   document.getElementById('action-title').textContent = state.active_point && state.active_point.has_npc ? 'Co robicie wobec NPC?' : 'Co robi drużyna?';
   updateActivePanel();
-  maybeAutoScanBoard();
 }
 function renderBoardPanel() {
   const board = state.board || {};
@@ -2363,10 +3026,25 @@ function flowPanelHtml() {
     `;
   }
   if (stage === 'party_setup') {
+    const setup = state.exploration_setup;
+    if (setup && setup.current_step) {
+      const step = setup.current_step || {};
+      const hasPositions = Boolean(step.has_positions);
+      const positions = (step.positions || []).map(pos => `(${pos[0]},${pos[1]})`).join(', ');
+      return `
+        <h3>Setup mapy ${Number(setup.current_index) + 1}/${setup.step_count}</h3>
+        <p><b>${esc(step.label || '')}</b></p>
+        <p>${esc(step.message || '')}</p>
+        ${hasPositions ? `<p><b>Kolor:</b> ${esc(step.color || '-')}</p><p><b>Pola:</b> ${esc(positions)}</p>` : '<p class="muted">Ten krok jest tylko instrukcją i nie podświetla pól na planszy.</p>'}
+        <p class="muted">${hasPositions ? 'Rozstaw elementy na fizycznej planszy. Jeśli potwierdzasz planszą, najpierw kliknij Skanuj planszę.' : 'Potwierdź, żeby przejść do pierwszego podświetlanego elementu mapy.'}</p>
+        <div class="row"><button onclick="confirmExplorationSetup()">Potwierdź setup</button>${hasPositions ? '<button class="secondary" data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>' : ''}</div>
+      `;
+    }
     return `
       <h3>Setup drużyny</h3>
-  <p>Ustaw figurkę drużyny na podświetlonym polu i potwierdź kliknięciem planszy.</p>
-      <p class="muted">Aplikacja czeka teraz na kliknięcie podświetlonego pola.</p>
+      <p>Ustaw figurkę drużyny na podświetlonym polu.</p>
+      <button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>
+      <p class="muted">Po uruchomieniu skanu kliknij podświetlone pole.</p>
     `;
   }
   if (stage === 'location_preview') {
@@ -2375,8 +3053,8 @@ function flowPanelHtml() {
       return `
         <h3>Jawne elementy sceny</h3>
         ${availableLocationsHtml(flow.available_locations || [])}
-        <p>Kliknij element sceny, aby zobaczyć podgląd. Dostępny element potwierdzisz drugim kliknięciem.</p>
-        <p class="muted">Aplikacja czeka teraz na kliknięcie jednego z jawnych elementów.</p>
+        <p>Kliknij Skanuj planszę, a potem wskaż element sceny. Dostępny element potwierdzisz kolejnym skanem i drugim kliknięciem.</p>
+        <button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>
       `;
     }
     const image = preview.image_url ? `<img class="location-preview-image" src="${esc(preview.image_url)}" alt="${esc(preview.name)}">` : '';
@@ -2396,8 +3074,7 @@ function flowPanelHtml() {
       <p><b>${esc(preview.name)}</b></p>
       <p>${esc(preview.description || preview.summary || '')}</p>
       <p><b>Czy chcesz wejść w interakcję?</b> Potwierdź kliknięciem tego samego pola na planszy.</p>
-      <p class="muted">Aplikacja czeka teraz na potwierdzenie tym samym polem.</p>
-      <button class="secondary" data-allow-busy="true" onclick="cancelLocationPreview()">Wróć do wyboru elementów</button>
+      <div class="row"><button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button><button class="secondary" data-allow-busy="true" onclick="cancelLocationPreview()">Wróć do wyboru elementów</button></div>
     `;
   }
   if (stage === 'interaction_result') {
@@ -2413,10 +3090,7 @@ function flowPanelHtml() {
       <button onclick="finishInteraction()">Zakończ interakcję</button>
     `;
   }
-  return `
-    <h3>Aktywna lokacja</h3>
-    <p>Lokacja jest aktywna. Opisz, co robi drużyna, albo wybierz dostępny punkt/przejście planszą.</p>
-  `;
+  return '';
 }
 function availableLocationsHtml(locations) {
   if (!locations.length) return '<p>Brak jawnych elementów sceny.</p>';
@@ -2428,12 +3102,27 @@ function availableLocationsHtml(locations) {
 function colorNameForZone(zone) {
   return zone.color || 'kolor specjalny';
 }
+function visibleEnvironmentHtml() {
+  const entries = state.visible_environment || [];
+  if (!entries.length) return '<div class="muted">Brak jawnych elementów.</div>';
+  return entries.map(entry => {
+    const positions = (entry.positions || []).map(pos => `(${pos[0]},${pos[1]})`).join(', ');
+    const blocked = entry.blocks_movement ? 'blokuje ruch' : 'można wejść';
+    return `
+      <div class="status-item" style="margin:6px 0">
+        <b>${esc(entry.name)}</b>
+        <span>${esc(entry.label || entry.type || '')}${entry.color ? ` | ${esc(entry.color)}` : ''}</span>
+        <span>${positions ? `pola ${esc(positions)} | ` : ''}${esc(blocked)}</span>
+      </div>
+    `;
+  }).join('');
+}
 function sceneDescriptionHtml(state) {
   const zone = state.current_zone || {};
   const challenge = state.active_challenge;
   const stage = state.flow ? state.flow.stage : 'location_active';
   if (stage !== 'location_active') {
-    return '<p class="muted">Pełny opis lokacji pojawi się po potwierdzeniu wejścia na planszy.</p>';
+    return '';
   }
   const parts = [
     `<p><b>${esc(zone.name)}</b></p>`,
@@ -2479,7 +3168,8 @@ function sceneDescriptionHtml(state) {
   if (!challenge && state.travel_options && state.travel_options.length) {
     parts.push(`<p><b>Droga dalej jest otwarta.</b> Zakończ interakcję albo wybierz lokację na planszy.</p>`);
   }
-  return parts.filter(Boolean).join('');
+  const html = parts.filter(Boolean).join('');
+  return html.trim() ? html : '';
 }
 function toggleHints() {
   const panel = document.getElementById('gm-hints');
@@ -2571,7 +3261,7 @@ function encounterHtml() {
 function encounterSetupHtml(setup) {
   if (!setup) {
     return `
-      <div class="message"><b>Setup przed walką</b><br>Najpierw rozstawcie figurki i jawne elementy sceny.</div>
+      <div class="message"><b>Setup przed walką</b><br>Rozpocznijcie setup encountera. Jawne elementy sceny są już na planszy.</div>
       <button onclick="startEncounterSetup()">Rozpocznij setup</button>
     `;
   }
@@ -2579,15 +3269,24 @@ function encounterSetupHtml(setup) {
     return '<div class="result"><b>Setup zakończony</b><br>Plansza jest przygotowana do inicjatywy i walki.</div>';
   }
   const step = setup.current_step || {};
-  const positions = (step.positions || []).map(pos => `(${pos[0]},${pos[1]})`).join(', ') || '-';
+  const hasPositions = Boolean(step.has_positions);
+  const requiresBoardAssignment = Boolean(step.requires_board_assignment);
+  const positions = (step.positions || []).map(pos => `(${pos[0]},${pos[1]})`).join(', ');
+  const availablePositions = (step.available_positions || step.positions || []).map(pos => `(${pos[0]},${pos[1]})`).join(', ');
+  const assignmentButtons = (step.available_positions || []).map(pos =>
+    `<button class="secondary" onclick="selectBoardPosition(${Number(pos[0])}, ${Number(pos[1])})">(${Number(pos[0])},${Number(pos[1])})</button>`
+  ).join('');
   return `
     <div class="message">
       <b>Krok ${Number(setup.current_index) + 1}/${setup.step_count}: ${esc(step.label || '')}</b><br>
       ${esc(step.message || '')}
-      <p><b>Kolor:</b> ${esc(step.color || '-')}</p>
-      <p><b>Pola:</b> ${esc(positions)}</p>
+      ${requiresBoardAssignment ? `<p><b>Aktualnie ustaw:</b> ${esc(step.assignment_actor_name || '-')}</p><p><b>Wolne pola:</b> ${esc(availablePositions || '-')}</p>` : ''}
+      ${hasPositions && !requiresBoardAssignment ? `<p><b>Kolor:</b> ${esc(step.color || '-')}</p><p><b>Pola:</b> ${esc(positions)}</p>` : ''}
+      ${!hasPositions ? '<p class="muted">Ten krok jest tylko instrukcją i nie podświetla pól na planszy.</p>' : ''}
     </div>
-    <button onclick="confirmEncounterSetup()">Potwierdź krok setupu</button>
+    ${requiresBoardAssignment
+      ? `<div class="row"><button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>${assignmentButtons}</div><p class="muted">Postaw figurkę wskazanego bohatera na podświetlonym polu i uruchom skan. Przyciski pól są awaryjnym wyborem bez skanu planszy. Po ostatnim bohaterze gra przejdzie dalej.</p>`
+      : '<button onclick="confirmEncounterSetup()">Potwierdź krok setupu</button>'}
   `;
 }
 function encounterInitiativeHtml(setup, initiative) {
@@ -2635,38 +3334,61 @@ function combatStartHtml() {
         </div>
       `).join('')}
     </div>
+    ${latestCombatMessageHtml()}
     ${finished ? '<button onclick="resolveCombatOutcome()">Zastosuj wynik walki</button>' : combatTurnControlsHtml(combat, isAllyTurn, isEnemyTurn)}
   `;
 }
+function latestCombatMessageHtml() {
+  const combatTitles = new Set(['Atak', 'Ruch', 'Koniec tury', 'Atak przeciwnika', 'Ruch przeciwnika', 'Tura przeciwnika']);
+  const messages = state.messages || [];
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    if (!combatTitles.has(messages[i].title)) continue;
+    return `<div class="message"><b>${esc(messages[i].title)}</b><br>${esc(messages[i].body)}</div>`;
+  }
+  return '';
+}
 function combatTurnControlsHtml(combat, isAllyTurn, isEnemyTurn) {
   if (isEnemyTurn) {
+    const preview = combat.enemy_turn_preview || null;
+    if (preview && preview.kind === 'movement') {
+      return `
+        <div class="message"><b>Ruch przeciwnika</b><br>${esc(preview.enemy_name)} porusza się na (${esc(preview.destination[0])},${esc(preview.destination[1])}). Przestaw figurkę po podświetlonej ścieżce i kliknij pole docelowe.</div>
+        <button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>
+      `;
+    }
+    if (preview && preview.kind === 'attack') {
+      return `
+        <div class="message"><b>Atak przeciwnika</b><br>${esc(preview.enemy_name)} atakuje ${esc(preview.target_name)}. Kliknij podświetlone pole celu, żeby potwierdzić atak.</div>
+        <button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>
+      `;
+    }
     return `
-      <div class="message"><b>Tura przeciwnika</b><br>Kliknij, żeby przeciwnik wykonał automatyczny ruch i atak.</div>
-      <button onclick="resolveEnemyTurn()">Rozegraj turę przeciwnika</button>
+      <div class="message"><b>Tura przeciwnika</b><br>Enter albo przycisk wyliczy zamiar przeciwnika. Potem potwierdzisz ruch lub atak kliknięciem na planszy.</div>
+      <button data-allow-busy="true" onclick="resolveEnemyTurn()">Rozegraj turę przeciwnika</button>
     `;
   }
   if (!isAllyTurn) {
-    return '<p class="muted">Ten aktor nie ma automatycznych kontrolek w MVP.</p><button onclick="finishCombatTurn()">Zakończ turę</button>';
+    return '<p class="muted">Ten aktor nie ma automatycznych kontrolek w MVP.</p><button data-allow-busy="true" onclick="finishCombatTurn()">Zakończ turę</button>';
   }
   const source = combat.available_attack || {};
   const targets = combat.legal_targets || [];
+  const movement = combat.movement || {remaining_feet: 0, destinations: []};
+  const preview = combat.movement_preview || null;
   const actionUsed = combat.turn_action && combat.turn_action.action_use === 'action_used';
-  const targetOptions = targets.map(target => `<option value="${esc(target.id)}">${esc(target.name)} | AC ${esc(target.ac)} | HP ${esc(target.hp)}</option>`).join('');
+  const moveCount = (movement.destinations || []).length;
+  const targetText = targets.length
+    ? targets.map(target => `${target.name} (${target.position[0]},${target.position[1]})`).join(', ')
+    : 'brak';
   return `
     <div class="message">
-      <b>Akcja bohatera</b><br>
-      Atak: ${esc(source.name || '-')}${source.damage_hint ? `, obrażenia: ${esc(source.damage_hint)}` : ''}.
-      ${actionUsed ? '<br>Akcja w tej turze została już zużyta.' : ''}
+      <b>Plansza steruje turą</b><br>
+      Niebieskie pola: ruch (${esc(moveCount)} pól, zostało ${esc(movement.remaining_feet || 0)} ft).<br>
+      ${preview ? `Wybrana ścieżka: (${esc(preview.destination[0])},${esc(preview.destination[1])}), koszt ${esc(preview.cost_feet)} ft. Kliknij Skanuj planszę i wskaż to pole ponownie, żeby zatwierdzić.<br>` : 'Kliknij Skanuj planszę i wskaż niebieskie pole, żeby podejrzeć ścieżkę. Powtórz skan i kliknięcie, żeby zatwierdzić ruch.<br>'}
+      Czerwone pola z przeciwnikiem: atak ${esc(source.name || '-')}${source.damage_hint ? `, obrażenia POC: ${esc(defaultDamageValue(source))}` : ''}.<br>
+      Cele w zasięgu: ${esc(targetText)}.
+      ${actionUsed ? '<br>Akcja w tej turze została już zużyta, czerwone cele nie będą aktywne.' : ''}
     </div>
-    ${targets.length && !actionUsed ? `
-      <div class="row">
-        <label>Cel <select id="combat-target">${targetOptions}</select></label>
-        <label>d20 <input id="combat-attack-roll" type="number" min="1" max="20" value="10"></label>
-        <label>Obrażenia <input id="combat-damage" type="number" min="0" value="${esc(defaultDamageValue(source))}"></label>
-        <button onclick="submitPlayerAttack()">Atakuj</button>
-      </div>
-    ` : '<p class="muted">Brak legalnych celów ataku wręcz albo akcja jest zużyta.</p>'}
-    <button class="secondary" onclick="finishCombatTurn()">Zakończ turę</button>
+    <div class="row"><button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button><button class="secondary" data-allow-busy="true" onclick="finishCombatTurn()">Zakończ turę</button></div>
   `;
 }
 function defaultDamageValue(source) {
@@ -2684,13 +3406,14 @@ function pointOptionsHtml() {
       <div class="status-item" style="margin: 6px 0">
         <b>${esc(point.name)}${active ? ' (aktywny)' : ''}</b>
         <div class="muted">${esc(point.description)}</div>
-        <div>LED: ${esc(point.color || 'kolor specjalny')}${positions ? `, pole ${esc(positions)}` : ''}. Przestaw pionek drużyny na to pole i kliknij planszę, aby wejść w interakcję.</div>
+        <div>LED: ${esc(point.color || 'kolor specjalny')}${positions ? `, pole ${esc(positions)}` : ''}. Przestaw pionek drużyny na to pole, kliknij Skanuj planszę i wskaż pole.</div>
       </div>
     `;
   });
   if (state.active_point) {
     rows.push('<button class="secondary" onclick="selectPoint(&quot;&quot;)">Wróć do lokacji</button>');
   }
+  rows.unshift('<button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>');
   return rows.join('');
 }
 function updateActivePanel() {
@@ -2702,7 +3425,8 @@ function updateActivePanel() {
   const hasEncounter = Boolean(state.pending_encounter);
   const hasTravel = false;
   const hasPoints = !flowActive && !hasEncounter && !hasResult && !hasPendingDecision && !hasRolls && state.current_zone_points && state.current_zone_points.length > 0;
-  document.getElementById('flow-panel').hidden = false;
+  const flowPanel = document.getElementById('flow-panel');
+  flowPanel.hidden = hasEncounter || !flowPanel.innerHTML.trim();
   document.getElementById('result-panel').hidden = !hasResult;
   document.getElementById('encounter-panel').hidden = !hasEncounter || hasResult;
   document.getElementById('travel-panel').hidden = !hasTravel;
@@ -2731,6 +3455,7 @@ function travel(zoneId) { api('/api/travel', {zone_id: zoneId}, 'Przechodzę do 
 function selectPoint(pointId) { api('/api/point', {point_id: pointId}, pointId ? 'Otwieram punkt eksploracji...' : 'Wracam do lokacji...'); }
 function finishInteraction() { api('/api/interaction/finish', {}, 'Wracam do wyboru lokacji...'); }
 function cancelLocationPreview() { api('/api/location/cancel-preview', {}, 'Wracam do wyboru lokacji...'); }
+function confirmExplorationSetup() { api('/api/exploration/setup/confirm', {}, 'Potwierdzam setup mapy...'); }
 function configureBoard() {
   api('/api/board/configure', {
     backend: document.getElementById('board-backend').value,
@@ -2741,60 +3466,59 @@ function configureBoard() {
   }, 'Łączę z planszą...');
 }
 function startSession() { api('/api/start', {}, 'Rozpoczynam sesję...'); }
-function scanBoard() { api('/api/board/scan', {}, 'Czekam na kliknięcie pola na planszy...'); }
-async function scanBoardAuto() {
+function isAllyCombatTurnActive() {
+  const combat = state && state.combat ? state.combat : null;
+  const actor = combat && combat.current_actor ? combat.current_actor : {};
+  return Boolean(combat && combat.status === 'active' && actor.faction === 'ally' && !combat.enemy_turn_preview);
+}
+async function scanBoard() {
+  if (boardScanInFlight) return;
+  const continuous = isAllyCombatTurnActive();
+  if (continuous) playerTurnScanLoop = true;
+  await scanBoardOnce();
+}
+async function scanBoardOnce() {
+  if (boardScanInFlight) return;
+  const token = boardScanToken;
   boardScanInFlight = true;
   setBusy('Czekam na kliknięcie pola na planszy...');
   try {
     const res = await fetch('/api/board/scan', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({})});
     const data = await res.json();
+    if (token !== boardScanToken) return;
     if (!res.ok) {
-      alert(data.error || 'Błąd planszy');
+      playerTurnScanLoop = false;
+      alert(data.error || 'Błąd');
     }
     state = data.state || data;
-    boardScanInFlight = false;
+    if (!isAllyCombatTurnActive()) playerTurnScanLoop = false;
     render();
+    refreshSessionLog();
   } finally {
+    if (token === boardScanToken) {
+      boardScanInFlight = false;
+      setBusy('');
+    }
+  }
+  if (token === boardScanToken && playerTurnScanLoop && isAllyCombatTurnActive()) {
+    setTimeout(scanBoardOnce, 50);
+  }
+}
+async function stopBoardScanLoop() {
+  playerTurnScanLoop = false;
+  boardScanToken += 1;
+  if (boardScanInFlight) {
+    try {
+      await fetch('/api/board/reset-scan', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({})});
+    } catch (_error) {
+      // Best effort: the next stale scan response is ignored by boardScanToken.
+    }
     boardScanInFlight = false;
     setBusy('');
   }
 }
-function maybeAutoScanBoard() {
-  const flow = state.flow || {};
-  const stage = flow.stage || '';
-  if (!state.board || !state.board.connected) return;
-  if (stage === 'location_active' && state.current_zone_points && state.current_zone_points.length && !state.active_point) {
-    maybePassivePointScan();
-    return;
-  }
-  if (!['party_setup', 'location_preview'].includes(stage)) return;
-  const previewId = flow.preview_zone ? flow.preview_zone.id : '';
-  const key = `${stage}:${previewId}`;
-  if (boardScanInFlight || lastAutoScanKey === key) return;
-  lastAutoScanKey = key;
-  setTimeout(scanBoardAuto, 50);
-}
-async function scanBoardPassive() {
-  passiveBoardScanInFlight = true;
-  try {
-    const res = await fetch('/api/board/scan', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({})});
-    const data = await res.json();
-    state = data.state || data;
-    passiveBoardScanInFlight = false;
-    render();
-  } finally {
-    passiveBoardScanInFlight = false;
-    const flow = state && state.flow ? state.flow : {};
-    if (flow.stage === 'location_active' && state.current_zone_points && state.current_zone_points.length && !state.active_point) {
-      setTimeout(maybePassivePointScan, 300);
-    }
-  }
-}
-function maybePassivePointScan() {
-  if (passiveBoardScanInFlight || boardScanInFlight) return;
-  passiveBoardScanInFlight = true;
-  setTimeout(scanBoardPassive, 50);
-}
+function selectBoardPosition(col, row) { api('/api/board/select', {col, row}, 'Wybieram pole planszy...'); }
+function resetBoardScan() { api('/api/board/reset-scan', {}, 'Resetuję oczekiwanie planszy...'); }
 function startEncounterSetup() { api('/api/encounter/setup/start', {}, 'Przygotowuję kroki setupu encountera...'); }
 function confirmEncounterSetup() { api('/api/encounter/setup/confirm', {}, 'Potwierdzam krok setupu...'); }
 function startEncounterInitiative() { api('/api/encounter/initiative/start', {}, 'Rozpoczynam inicjatywę...'); }
@@ -2812,13 +3536,77 @@ function submitPlayerAttack() {
     damage: Number(damage ? damage.value : 0)
   }, 'Rozstrzygam atak...');
 }
+function submitCombatMove() {
+  const destination = document.getElementById('combat-move-destination');
+  const parts = destination && destination.value ? destination.value.split(',') : ['0', '0'];
+  api('/api/combat/move', {col: Number(parts[0]), row: Number(parts[1])}, 'Wykonuję ruch...');
+}
 function resolveEnemyTurn() { api('/api/combat/enemy-turn', {}, 'Rozgrywam turę przeciwnika...'); }
-function finishCombatTurn() { api('/api/combat/end-turn', {}, 'Kończę turę...'); }
+async function finishCombatTurn() {
+  await stopBoardScanLoop();
+  api('/api/combat/end-turn', {}, 'Kończę turę...');
+}
 function resolveCombatOutcome() { api('/api/encounter/combat/resolve', {}, 'Zastosowuję wynik walki w eksploracji...'); }
 function ackResult() {
   resultAck = null;
   render();
 }
+function isVisible(id) {
+  const el = document.getElementById(id);
+  return Boolean(el && !el.hidden && el.offsetParent !== null);
+}
+function visiblePrimaryScanButton() {
+  const containers = ['flow-panel', 'encounter-panel', 'points-panel'];
+  for (const id of containers) {
+    const container = document.getElementById(id);
+    if (!container || container.hidden || container.offsetParent === null) continue;
+    const button = container.querySelector('button[data-primary-scan="true"]');
+    if (button && !button.disabled && button.offsetParent !== null) return button;
+  }
+  return null;
+}
+function triggerPrimaryAction() {
+  if (busy) return false;
+  if (isVisible('result-panel')) { ackResult(); return true; }
+  if (isVisible('pending-panel')) { decision('accept'); return true; }
+  if (isVisible('roll-panel')) { sendRolls(); return true; }
+  if (isVisible('action-panel')) { sendAction(); return true; }
+  const scanButton = visiblePrimaryScanButton();
+  if (scanButton) { scanButton.click(); return true; }
+  const setup = state.encounter_setup;
+  const initiative = state.encounter_initiative;
+  const combat = state.combat;
+    if (isVisible('encounter-panel')) {
+    if (combat && combat.status === 'finished') { resolveCombatOutcome(); return true; }
+    if (combat && combat.status === 'active') {
+      if (combat.enemy_turn_preview) return false;
+      const actor = combat.current_actor || {};
+      if (actor.faction === 'enemy') { resolveEnemyTurn(); return true; }
+      return false;
+    }
+    if (initiative && initiative.status !== 'completed') { submitEncounterInitiativeRoll(); return true; }
+    if (setup && setup.status === 'completed' && !initiative) { startEncounterInitiative(); return true; }
+    if (setup && setup.current_step && setup.current_step.requires_board_assignment) return false;
+    if (setup && setup.status === 'active') { confirmEncounterSetup(); return true; }
+    if (!setup) { startEncounterSetup(); return true; }
+  }
+  if (isVisible('flow-panel')) {
+    const stage = state.flow ? state.flow.stage : '';
+    if (stage === 'party_setup' && state.exploration_setup) { confirmExplorationSetup(); return true; }
+    if (stage === 'interaction_result') { finishInteraction(); return true; }
+    if (stage === 'ready_to_start') { startSession(); return true; }
+  }
+  return false;
+}
+document.addEventListener('keydown', event => {
+  if (event.key !== 'Enter') return;
+  const target = event.target;
+  if (target && target.tagName === 'TEXTAREA' && event.shiftKey) return;
+  if (target && target.closest && target.closest('details.debug-panel')) return;
+  if (triggerPrimaryAction()) {
+    event.preventDefault();
+  }
+});
 loadState();
 </script>
 </body>

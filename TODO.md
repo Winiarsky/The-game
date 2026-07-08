@@ -72,6 +72,10 @@
 - [x] Start rolled initiative and initial combat state from the exploration web UI.
 - [x] Apply combat outcome effects back into exploration after an encounter.
 - [x] Add MVP combat actions to the exploration web UI.
+- [x] Add player combat movement to the exploration web UI.
+- [x] Add Bresenham line-of-sight and MVP ranged attacks.
+- [x] Add a small gate skirmish encounter for immediate ranged testing.
+- [x] Add exploration map environment setup before location selection.
 - [x] Couple exploration web UI with board/simulator backend for LEDs and board clicks.
 - [ ] Add full inventory/cantrip integration for exploration option bonuses.
 - [ ] Add voice input and richer UI for free-form exploration declarations.

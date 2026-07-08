@@ -45,6 +45,28 @@ Każda implementacja reguły powinna dać się powiązać z konkretnym pojęciem
 
 ---
 
+## Plansza jako główny interfejs
+
+Fizyczna plansza jest głównym medium wejścia i wyjścia podczas eksploracji oraz walki.
+
+W walce aplikacja powinna komunikować dostępne intencje przez LED:
+
+* niebieskie pola oznaczają legalne pola ruchu aktywnego bohatera,
+* czerwone albo czerwono-różowe pola z przeciwnikiem oznaczają legalny cel ataku,
+* inne kolory mogą oznaczać jawne interakcje lub setup, jeśli dana scena je posiada.
+
+Gracz powinien wskazywać intencję przez kliknięcie podświetlonego pola na planszy:
+
+* kliknięcie niebieskiego pola wykonuje ruch,
+* kliknięcie pola z legalnym przeciwnikiem wykonuje atak,
+* kliknięcie pola interakcji wykonuje albo otwiera odpowiednią interakcję sceny.
+
+Panele web UI mogą pokazywać stan, koszty ruchu, cele i awaryjne kontrolki, ale nie powinny być podstawowym sposobem wyboru ruchu albo celu ataku w grywalnym przepływie.
+
+W MVP pola z `blocking_terrain` i przeszkodami blokującymi ruch są niewchodzalne. Pola obiektów sceny typu `container`, np. rozbity wóz, mogą być zajmowane, dopóki content nie oznaczy ich jako blokujące.
+
+---
+
 ## Pierwszy Techniczny Kamień Milowy
 
 Pierwszy techniczny kamień milowy służy sprawdzeniu, czy podstawowe systemy działają poprawnie.

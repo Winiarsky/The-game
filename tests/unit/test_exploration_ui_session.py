@@ -44,6 +44,30 @@ class FakeNpcClient:
         return self.proposal
 
 
+class FakeBoardConnection:
+    def __init__(self, clicks=None):
+        self.led_calls = []
+        self.clicks = list(clicks or [])
+        self.reset_calls = []
+
+    def set_leds(self, positions, rgb_color):
+        self.led_calls.append((positions, rgb_color))
+
+    def leds_off(self):
+        self.led_calls.append(("off", None))
+
+    def scan_board(self, acceptable_responses=None, *, timeout_s=None):  # noqa: ARG002
+        if not self.clicks:
+            return None
+        click = self.clicks.pop(0)
+        if acceptable_responses and click not in acceptable_responses:
+            return None
+        return click
+
+    def reset_connection(self):
+        self.reset_calls.append("reset_connection")
+
+
 def _challenge_proposal(**overrides):
     data = {
         "intent_type": "challenge_attempt",
@@ -74,6 +98,10 @@ def _start_combat_from_scout_alarm(session: ExplorationUiSession):
     session.state_payload()
     session.start_encounter_setup()
     while session.encounter_setup_flow is not None and not session.encounter_setup_flow.completed:
+        if session.encounter_setup_flow.is_player_start_step:
+            for position in session.encounter_setup_flow.current_step.positions[:2]:
+                session.assign_encounter_player_start_position(position)
+            continue
         session.confirm_encounter_setup_step()
     session.start_encounter_initiative()
     session.submit_encounter_initiative_roll(20)
@@ -101,8 +129,65 @@ def test_exploration_ui_session_resolves_gate_challenge():
 
     assert state["pending"] is None
     assert state["active_challenge"] is None
+    assert state["flow"]["stage"] == "interaction_result"
+    assert state["exploration_setup"] is None
+    assert state["pending_encounter"] is None
+
+    state = session.finish_interaction_result()
+
+    assert state["flow"]["stage"] == "party_setup"
+    assert state["exploration_setup"]["current_step"]["label"] == "przewrócona brama"
+    assert state["exploration_setup"]["current_step"]["positions"] == [[8, 5], [9, 5]]
+
+    state = session.confirm_exploration_setup_step()
+
     assert state["travel_options"][0]["id"] == "courtyard"
+    assert state["pending_encounter"]["trigger_id"] == "gate_open_skirmish"
     assert any(message["title"] == "Nowy punkt odkryty" for message in state["messages"])
+
+
+def test_exploration_ui_session_pending_encounter_waits_for_ui_setup_not_board_click():
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=FakeGmClient(_challenge_proposal()),
+    )
+    board = FakeBoardConnection()
+    session.attach_board_connection(board, backend="simulator")
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    session.submit_action("Wyważamy bramę.")
+    session.decide("accept")
+    session.resolve_rolls({"hero": 16})
+    session.finish_interaction_result()
+    state = session.confirm_exploration_setup_step()
+
+    assert state["pending_encounter"]["trigger_id"] == "gate_open_skirmish"
+    assert state["board"]["message"] == "Encounter gotowy. Potwierdź rozpoczęcie setupu w UI albo Enterem."
+    assert board.led_calls[-1] == ("off", None)
+
+    client = create_app(session).test_client()
+    response = client.post("/api/board/scan", json={})
+
+    assert response.status_code == 400
+    assert "Encounter czeka na rozpoczęcie setupu" in response.get_json()["error"]
+
+
+def test_exploration_ui_session_starts_with_map_setup_before_location_preview():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    session.attach_board_connection(FakeBoardConnection(), backend="simulator")
+
+    state = session.start_session()
+
+    assert state["flow"]["stage"] == "party_setup"
+    assert state["exploration_setup"]["current_step"]["label"] == "elementy mapy"
+    assert state["exploration_setup"]["current_step"]["has_positions"] is False
+    assert state["exploration_setup"]["current_step"]["color"] is None
+
+    while session.exploration_setup_flow is not None:
+        state = session.confirm_exploration_setup_step()
+
+    assert state["flow"]["stage"] == "location_preview"
+    assert state["exploration_setup"] is None
 
 
 def test_exploration_ui_session_rejects_pending_interpretation():
@@ -222,6 +307,10 @@ def test_exploration_ui_session_applies_victory_outcome_after_combat():
 
     session.start_encounter_setup()
     while session.encounter_setup_flow is not None and not session.encounter_setup_flow.completed:
+        if session.encounter_setup_flow.is_player_start_step:
+            for position in session.encounter_setup_flow.current_step.positions[:2]:
+                session.assign_encounter_player_start_position(position)
+            continue
         session.confirm_encounter_setup_step()
     session.start_encounter_initiative()
     session.submit_encounter_initiative_roll(15)
@@ -262,7 +351,74 @@ def test_exploration_ui_session_player_attack_applies_damage_and_uses_action():
     assert any(message["title"] == "Atak" and "trafia krytycznie" in message["body"] for message in state["messages"])
 
 
-def test_exploration_ui_session_enemy_turn_resolves_and_advances():
+def test_exploration_ui_session_board_click_on_enemy_resolves_attack():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_combat_from_scout_alarm(session)
+    state = session.state_payload()
+    target = state["combat"]["legal_targets"][0]
+    session.attach_board_connection(FakeBoardConnection(clicks=[tuple(target["position"])]), backend="simulator")
+
+    state = session.scan_board_selection()
+
+    damaged = next(actor for actor in state["combat"]["actors"] if actor["id"] == target["id"])
+    assert damaged["hp"] < target["hp"]
+    assert state["combat"]["turn_action"]["action_use"] == "action_used"
+    assert any(message["title"] == "Atak" for message in state["messages"])
+
+
+def test_exploration_ui_session_board_scan_shows_feedback_once_before_waiting_for_click():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_combat_from_scout_alarm(session)
+    state = session.state_payload()
+    target = state["combat"]["legal_targets"][0]
+    board = FakeBoardConnection(clicks=[tuple(target["position"])])
+    session.attach_board_connection(board, backend="simulator")
+
+    session.scan_board_selection()
+
+    assert board.led_calls[0] == ("off", None)
+    assert board.led_calls[1] != ("off", None)
+
+
+def test_exploration_ui_session_player_movement_updates_position_and_remaining_speed():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_combat_from_scout_alarm(session)
+
+    state = session.state_payload()
+    actor_id = state["combat"]["current_actor"]["id"]
+    destination = next(tile for tile in state["combat"]["movement"]["destinations"] if tile["cost_feet"] == 5)
+
+    state = session.submit_combat_movement(col=destination["col"], row=destination["row"])
+
+    moved = next(actor for actor in state["combat"]["actors"] if actor["id"] == actor_id)
+    assert moved["position"] == [destination["col"], destination["row"]]
+    assert state["combat"]["movement"]["remaining_feet"] == 25
+    assert any(message["title"] == "Ruch" for message in state["messages"])
+
+
+def test_exploration_ui_session_board_movement_requires_second_click_confirmation():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_combat_from_scout_alarm(session)
+    state = session.state_payload()
+    actor_id = state["combat"]["current_actor"]["id"]
+    destination = next(tile for tile in state["combat"]["movement"]["destinations"] if tile["cost_feet"] == 5)
+    clicked = (destination["col"], destination["row"])
+    session.attach_board_connection(FakeBoardConnection(clicks=[clicked, clicked]), backend="simulator")
+
+    preview = session.scan_board_selection()
+
+    actor_after_preview = next(actor for actor in preview["combat"]["actors"] if actor["id"] == actor_id)
+    assert actor_after_preview["position"] == state["combat"]["current_actor"]["position"]
+    assert preview["combat"]["movement_preview"]["destination"] == [destination["col"], destination["row"]]
+
+    moved = session.scan_board_selection()
+
+    actor_after_move = next(actor for actor in moved["combat"]["actors"] if actor["id"] == actor_id)
+    assert actor_after_move["position"] == [destination["col"], destination["row"]]
+    assert moved["combat"]["movement_preview"] is None
+
+
+def test_exploration_ui_session_enemy_turn_waits_for_board_confirmation():
     session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
     _start_combat_from_scout_alarm(session)
 
@@ -271,10 +427,36 @@ def test_exploration_ui_session_enemy_turn_resolves_and_advances():
     assert session.combat_state is not None
     enemy_id = str(session.combat_state.initiative_order.current_actor.id)
 
-    state = session.resolve_enemy_turn()
+    preview = session.resolve_enemy_turn()
+
+    assert preview["combat"]["current_actor"]["id"] == enemy_id
+    assert preview["combat"]["enemy_turn_preview"] is not None
+    assert any(message["title"] in {"Ruch przeciwnika", "Atak przeciwnika"} for message in preview["messages"])
+
+    enemy_preview = preview["combat"]["enemy_turn_preview"]
+    if enemy_preview["kind"] == "movement":
+        click = tuple(enemy_preview["destination"])
+    else:
+        click = tuple(enemy_preview["target_position"])
+    board = FakeBoardConnection(clicks=[click])
+    session.attach_board_connection(board, backend="simulator")
+
+    state = session.scan_board_selection()
 
     assert any(message["title"] == "Tura przeciwnika" for message in state["messages"])
+    assert state["combat"]["enemy_turn_preview"] is None
     assert state["combat"]["current_actor"]["id"] != enemy_id or state["combat"]["status"] == "finished"
+
+
+def test_exploration_ui_session_can_reset_board_scan():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    board = FakeBoardConnection()
+    session.attach_board_connection(board, backend="simulator")
+
+    state = session.reset_board_scan()
+
+    assert board.reset_calls == ["reset_connection"]
+    assert state["board"]["message"] == "Zresetowano oczekiwanie na kliknięcie planszy."
 
 
 def test_exploration_ui_session_reset_restores_initial_state():

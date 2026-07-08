@@ -57,10 +57,10 @@ def test_multi_actor_scenario_references_existing_content_files():
 
     assert Path("content/monsters/goblin.json").exists()
     assert Path("content/items/longsword.json").exists()
-    assert Path("content/items/dagger.json").exists()
+    assert Path("content/items/crossbow.json").exists()
     assert text.count('"source_ref": "goblin"') == 3
     assert '"longsword"' in text
-    assert '"dagger"' in text
+    assert '"crossbow"' in text
 
 
 def test_first_playable_scene_file_exists_and_loads():
@@ -116,9 +116,9 @@ def test_abandoned_watchtower_references_existing_content_files():
     text = Path("content/scenarios/abandoned_watchtower/actors.json").read_text(encoding="utf-8")
 
     assert Path("content/items/longsword.json").exists()
-    assert Path("content/items/dagger.json").exists()
+    assert Path("content/items/crossbow.json").exists()
     assert '"longsword"' in text
-    assert '"dagger"' in text
+    assert '"crossbow"' in text
 
 
 def test_abandoned_watchtower_positions_are_in_bounds():

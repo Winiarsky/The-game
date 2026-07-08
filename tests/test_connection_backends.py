@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from board.connection import Connection, _HardwareBackend
+from board.connection import Connection, _HardwareBackend, _color_to_hex
 
 
 class _FakeSimulatorBackend:
@@ -148,6 +148,11 @@ def test_connection_supports_per_cell_colors(monkeypatch):
         (0, [255, 0, 0]),
         (31, [0, 0, 255]),
     ]
+
+
+def test_wled_color_hex_supports_grb_channel_order():
+    assert _color_to_hex([0, 255, 120], "rgb") == "00FF78"
+    assert _color_to_hex([0, 255, 120], "grb") == "FF0078"
 
 
 def test_connection_forwards_cancel_scan_to_simulator_backend(monkeypatch):

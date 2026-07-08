@@ -2,6 +2,7 @@
 
 from .board_state import BoardState, Door, Edge, edge_between
 from .coordinates import BoardDimensions, Coordinate
+from .line_of_sight import bresenham_line, line_of_sight_clear
 from .movement import (
     DIFFICULT_MOVE_COST_FEET,
     NORMAL_MOVE_COST_FEET,
@@ -30,9 +31,11 @@ __all__ = [
     "PathResult",
     "Terrain",
     "TerrainType",
+    "bresenham_line",
     "can_traverse",
     "edge_between",
     "find_path",
+    "line_of_sight_clear",
     "movement_cost",
     "movement_range",
     "neighbors",

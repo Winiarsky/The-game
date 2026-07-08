@@ -115,6 +115,26 @@ def test_exploration_ui_page_includes_session_log_panel():
     assert "/api/session-log" in html
 
 
+def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan():
+    client = _client()
+
+    html = client.get("/").get_data(as_text=True)
+
+    assert 'data-allow-busy="true" onclick="finishCombatTurn()"' in html
+    assert 'data-allow-busy="true" onclick="resolveEnemyTurn()"' in html
+    assert "latestCombatMessageHtml()" in html
+    assert "maybeAutoScanBoard" not in html
+    assert "scanBoardAuto" not in html
+    assert 'data-primary-scan="true" onclick="scanBoard()"' in html
+    assert "visiblePrimaryScanButton()" in html
+    assert "playerTurnScanLoop" in html
+    assert "boardScanInFlight" in html
+    assert "boardScanToken" in html
+    assert "stopBoardScanLoop()" in html
+    assert "playerTurnScanLoop = false;" in html
+    assert "isAllyCombatTurnActive()" in html
+
+
 def test_exploration_ui_session_log_endpoint_returns_events():
     client = _client()
 
@@ -195,6 +215,36 @@ def test_exploration_ui_state_includes_player_facing_scene_description():
     assert data["active_challenge"]["risk_notes"]
 
 
+def _finish_map_setup(client):
+    while True:
+        state = client.get("/api/state").get_json()
+        if state["flow"]["stage"] != "party_setup" or state.get("exploration_setup") is None:
+            return state
+        client.post("/api/exploration/setup/confirm", json={})
+
+
+def _confirm_fallen_gate_setup(client):
+    state = client.get("/api/state").get_json()
+    if state["flow"]["stage"] == "interaction_result":
+        state = client.post("/api/interaction/finish", json={}).get_json()
+    assert state["flow"]["stage"] == "party_setup"
+    assert state["exploration_setup"]["current_step"]["label"] == "przewrócona brama"
+    return client.post("/api/exploration/setup/confirm", json={}).get_json()
+
+
+def _advance_encounter_setup(client, board):
+    state = client.get("/api/state").get_json()
+    setup = state["encounter_setup"]
+    if setup["status"] == "completed":
+        return state
+    step = setup["current_step"]
+    if step.get("requires_board_assignment"):
+        position = tuple(step["available_positions"][0])
+        board.clicks.append(position)
+        return client.post("/api/board/scan", json={}).get_json()
+    return client.post("/api/encounter/setup/confirm", json={}).get_json()
+
+
 def test_exploration_ui_start_and_double_click_location_flow_updates_leds():
     session = _session(active=False)
     board = FakeBoardConnection(clicks=[(9, 2), (9, 2)])
@@ -206,6 +256,9 @@ def test_exploration_ui_start_and_double_click_location_flow_updates_leds():
     assert ready["flow"]["stage"] == "ready_to_start"
 
     started = client.post("/api/start", json={}).get_json()
+    assert started["flow"]["stage"] == "party_setup"
+
+    started = _finish_map_setup(client)
     assert started["flow"]["stage"] == "location_preview"
     assert started["flow"]["preview_zone"] is None
     assert [zone["id"] for zone in started["flow"]["available_locations"]] == ["gate", "courtyard", "tower"]
@@ -228,6 +281,7 @@ def test_exploration_ui_blocked_visible_location_shows_locked_preview():
     client = create_app(session).test_client()
 
     client.post("/api/start", json={})
+    _finish_map_setup(client)
     preview = client.post("/api/board/scan", json={}).get_json()
 
     assert preview["flow"]["stage"] == "location_preview"
@@ -270,10 +324,20 @@ def test_exploration_ui_action_accept_and_roll_flow():
     assert rolls_response.status_code == 200
     data = rolls_response.get_json()
     assert data["flow"]["stage"] == "interaction_result"
-    assert data["flow"]["interaction_result"]["unlocked_zones"][0]["id"] == "courtyard"
+    assert data["flow"]["interaction_result"]["next_instruction"]
+    assert data["exploration_setup"] is None
     assert data["active_challenge"] is None
+    assert data["pending_encounter"] is None
+
+    setup = client.post("/api/interaction/finish", json={}).get_json()
+    assert setup["flow"]["stage"] == "party_setup"
+    assert setup["exploration_setup"]["current_step"]["label"] == "przewrócona brama"
+
+    data = client.post("/api/exploration/setup/confirm", json={}).get_json()
+
     assert data["travel_options"][0]["id"] == "courtyard"
     assert {"label": "Brama", "value": "otwarta"} in data["scene_status"]
+    assert data["pending_encounter"]["trigger_id"] == "gate_open_skirmish"
 
 
 def test_exploration_ui_accept_can_select_lead_actor():
@@ -307,6 +371,10 @@ def test_exploration_ui_shows_and_handles_travel_after_completed_challenge():
     completed = client.post("/api/rolls", json={"rolls": {"hero": 16}}).get_json()
 
     assert completed["active_challenge"] is None
+    assert completed["flow"]["stage"] == "interaction_result"
+
+    completed = _confirm_fallen_gate_setup(client)
+
     assert completed["travel_options"][0]["id"] == "courtyard"
 
     response = client.post("/api/travel", json={"zone_id": "courtyard"})
@@ -328,6 +396,10 @@ def test_exploration_ui_finish_interaction_returns_to_location_selection():
 
     assert response.status_code == 200
     data = response.get_json()
+    assert data["flow"]["stage"] == "party_setup"
+    assert data["exploration_setup"]["current_step"]["label"] == "przewrócona brama"
+
+    data = client.post("/api/exploration/setup/confirm", json={}).get_json()
     assert data["flow"]["stage"] == "location_preview"
     assert data["flow"]["preview_zone"] is None
     assert [zone["id"] for zone in data["flow"]["available_locations"]] == ["gate", "courtyard", "tower"]
@@ -342,7 +414,9 @@ def test_exploration_ui_can_cancel_location_preview():
     client.post("/api/action", json={"text": "Wyważamy bramę."})
     client.post("/api/decision", json={"decision": "accept"})
     client.post("/api/rolls", json={"rolls": {"hero": 16}})
-    client.post("/api/interaction/finish")
+    _confirm_fallen_gate_setup(client)
+    session.resolved_encounter_trigger_ids.add("gate_open_skirmish")
+    session.pending_encounter = None
     preview = client.post("/api/board/scan", json={}).get_json()
     assert preview["flow"]["stage"] == "location_preview"
     assert preview["flow"]["preview_zone"]["id"] == "courtyard"
@@ -360,6 +434,7 @@ def test_exploration_ui_reveals_selects_and_resolves_npc_point():
     client.post("/api/action", json={"text": "Wyważamy bramę."})
     client.post("/api/decision", json={"decision": "accept"})
     client.post("/api/rolls", json={"rolls": {"hero": 16}})
+    _confirm_fallen_gate_setup(client)
     client.post("/api/travel", json={"zone_id": "courtyard"})
 
     point_response = client.post("/api/point", json={"point_id": "wounded_scout"})
@@ -383,6 +458,7 @@ def test_exploration_ui_points_are_board_first_and_text_redirects_to_point_led()
     client.post("/api/action", json={"text": "Wyważamy bramę."})
     client.post("/api/decision", json={"decision": "accept"})
     client.post("/api/rolls", json={"rolls": {"hero": 16}})
+    _confirm_fallen_gate_setup(client)
     client.post("/api/travel", json={"zone_id": "courtyard"})
 
     state = client.get("/api/state").get_json()
@@ -398,40 +474,56 @@ def test_exploration_ui_points_are_board_first_and_text_redirects_to_point_led()
     assert "podświetlone na fioletowy" in data["messages"][-1]["body"]
 
 
-def test_exploration_ui_sets_pending_encounter_after_noise_trigger():
+def test_exploration_ui_sets_pending_gate_skirmish_after_gate_opens():
     client = _client()
     client.post("/api/action", json={"text": "Hałasujemy przy bramie."})
     client.post("/api/decision", json={"decision": "accept"})
     data = client.post("/api/rolls", json={"rolls": {"hero": 16}}).get_json()
 
-    assert data["pending_encounter"]["trigger_id"] == "gate_noise_alarm"
-    assert data["pending_encounter"]["encounter_scenario"] == "content/scenarios/multi_actor_skirmish.json"
-    assert {"label": "Encounter", "value": "Alarm na dziedzińcu"} in data["scene_status"]
+    assert data["pending_encounter"] is None
+    data = _confirm_fallen_gate_setup(client)
+
+    assert data["pending_encounter"]["trigger_id"] == "gate_open_skirmish"
+    assert data["pending_encounter"]["encounter_scenario"] == "content/scenarios/gate_skirmish.json"
+    assert {"label": "Encounter", "value": "Gobliny za bramą"} in data["scene_status"]
 
 
 def test_exploration_ui_runs_guided_encounter_setup_after_trigger():
-    client = _client()
+    session = _session()
+    board = FakeBoardConnection()
+    session.attach_board_connection(board, backend="simulator")
+    client = create_app(session).test_client()
     client.post("/api/action", json={"text": "Hałasujemy przy bramie."})
     client.post("/api/decision", json={"decision": "accept"})
     client.post("/api/rolls", json={"rolls": {"hero": 16}})
+    _confirm_fallen_gate_setup(client)
 
     setup_started = client.post("/api/encounter/setup/start").get_json()
     setup = setup_started["encounter_setup"]
-    assert setup["scenario_id"] == "multi_actor_skirmish"
+    assert setup["scenario_id"] == "gate_skirmish"
     assert setup["status"] == "active"
     assert setup["current_step"]["label"] == "Start walki"
-    assert setup["step_count"] >= 4
+    assert setup["step_count"] >= 3
 
     next_step = client.post("/api/encounter/setup/confirm").get_json()["encounter_setup"]
-    assert next_step["current_step"]["label"] == "bohaterów"
-    assert next_step["current_step"]["positions"] == [[0, 0], [0, 1]]
+    assert next_step["current_step"]["label"] == "pola startowe bohaterów"
+    assert next_step["current_step"]["positions"] == [[7, 6], [8, 6], [9, 6]]
+    assert next_step["current_step"]["requires_board_assignment"] is True
+    assert next_step["current_step"]["assignment_actor_id"] == "hero"
 
-    enemy_step = client.post("/api/encounter/setup/confirm").get_json()["encounter_setup"]
+    board.clicks.append((8, 6))
+    rogue_step = client.post("/api/board/scan").get_json()["encounter_setup"]
+    assert rogue_step["current_step"]["label"] == "pola startowe bohaterów"
+    assert rogue_step["current_step"]["assignment_actor_id"] == "rogue"
+    assert rogue_step["current_step"]["available_positions"] == [[7, 6], [9, 6]]
+
+    board.clicks.append((9, 6))
+    enemy_step = client.post("/api/board/scan").get_json()["encounter_setup"]
     assert enemy_step["current_step"]["label"] == "jawnych przeciwników i NPC"
-    assert enemy_step["current_step"]["positions"] == [[1, 0], [1, 1], [1, 2]]
+    assert enemy_step["current_step"]["positions"] == [[7, 9], [11, 7]]
 
     while True:
-        state = client.post("/api/encounter/setup/confirm").get_json()
+        state = _advance_encounter_setup(client, board)
         setup = state["encounter_setup"]
         if setup["status"] == "completed":
             break
@@ -440,14 +532,39 @@ def test_exploration_ui_runs_guided_encounter_setup_after_trigger():
     assert any(message["title"] == "Setup zakończony" for message in state["messages"])
 
 
-def test_exploration_ui_starts_combat_after_setup_and_initiative():
-    client = _client()
+def test_exploration_ui_can_assign_player_start_from_ui_position_buttons():
+    session = _session()
+    client = create_app(session).test_client()
     client.post("/api/action", json={"text": "Hałasujemy przy bramie."})
     client.post("/api/decision", json={"decision": "accept"})
     client.post("/api/rolls", json={"rolls": {"hero": 16}})
+    _confirm_fallen_gate_setup(client)
+
+    client.post("/api/encounter/setup/start")
+    client.post("/api/encounter/setup/confirm")
+
+    rogue_step = client.post("/api/board/select", json={"col": 8, "row": 6}).get_json()["encounter_setup"]
+    assert rogue_step["current_step"]["label"] == "pola startowe bohaterów"
+    assert rogue_step["current_step"]["assignment_actor_id"] == "rogue"
+    assert rogue_step["current_step"]["available_positions"] == [[7, 6], [9, 6]]
+
+    enemy_step = client.post("/api/board/select", json={"col": 9, "row": 6}).get_json()["encounter_setup"]
+    assert enemy_step["current_step"]["label"] == "jawnych przeciwników i NPC"
+    assert enemy_step["current_step"]["positions"] == [[7, 9], [11, 7]]
+
+
+def test_exploration_ui_starts_combat_after_setup_and_initiative():
+    session = _session()
+    board = FakeBoardConnection()
+    session.attach_board_connection(board, backend="simulator")
+    client = create_app(session).test_client()
+    client.post("/api/action", json={"text": "Hałasujemy przy bramie."})
+    client.post("/api/decision", json={"decision": "accept"})
+    client.post("/api/rolls", json={"rolls": {"hero": 16}})
+    _confirm_fallen_gate_setup(client)
     client.post("/api/encounter/setup/start")
     while True:
-        setup_state = client.post("/api/encounter/setup/confirm").get_json()
+        setup_state = _advance_encounter_setup(client, board)
         if setup_state["encounter_setup"]["status"] == "completed":
             break
 
@@ -468,7 +585,7 @@ def test_exploration_ui_starts_combat_after_setup_and_initiative():
     ]
     assert combat["status"] == "active"
     assert combat["round_number"] == 1
-    assert len(combat["actors"]) == 5
+    assert len(combat["actors"]) == 4
     assert any(message["title"] == "Kolejność inicjatywy" for message in after_rogue["messages"])
 
 
@@ -482,7 +599,9 @@ def test_exploration_ui_board_scan_selects_travel_zone_and_updates_leds():
     client.post("/api/action", json={"text": "Wyważamy bramę głośno."})
     client.post("/api/decision", json={"decision": "accept"})
     client.post("/api/rolls", json={"rolls": {"hero": 16}})
-    client.post("/api/interaction/finish")
+    _confirm_fallen_gate_setup(client)
+    session.resolved_encounter_trigger_ids.add("gate_open_skirmish")
+    session.pending_encounter = None
 
     assert board.led_calls
 

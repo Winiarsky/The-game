@@ -1,0 +1,19 @@
+{
+  "id": "crossbow",
+  "name": "Kusza",
+  "kind": "weapon",
+  "attacks": [
+    {
+      "id": "crossbow_shot",
+      "name": "Kusza",
+      "source_type": "weapon",
+      "range_feet": 80,
+      "attack_modifier": 5,
+      "damage": {
+        "dice": "1d8",
+        "modifier": 3,
+        "damage_type": "piercing"
+      }
+    }
+  ]
+}

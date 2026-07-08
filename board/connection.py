@@ -74,11 +74,19 @@ def _normalize_wled_url(url: str) -> str:
     return str(url or "").strip().rstrip("/")
 
 
-def _color_to_hex(color: list[int]) -> str:
+def _ordered_color(color: list[int], color_order: str = "rgb") -> list[int]:
     clipped = [max(0, min(255, int(component))) for component in color[:3]]
     while len(clipped) < 3:
         clipped.append(0)
-    return "".join(f"{component:02X}" for component in clipped[:3])
+    channels = {"r": clipped[0], "g": clipped[1], "b": clipped[2]}
+    order = str(color_order or "rgb").strip().lower()
+    if sorted(order) != ["b", "g", "r"]:
+        order = "rgb"
+    return [channels[channel] for channel in order]
+
+
+def _color_to_hex(color: list[int], color_order: str = "rgb") -> str:
+    return "".join(f"{component:02X}" for component in _ordered_color(color, color_order))
 
 
 def _candidate_ports() -> list[Any]:
@@ -251,6 +259,7 @@ class _WledClient:
         self.led_offset = int(cfg.get("led_offset") or 0)
         self.led_count = int(cfg.get("led_count") or 620)
         self.brightness = max(1, min(255, int(cfg.get("brightness") or 128)))
+        self.color_order = str(cfg.get("color_order") or "rgb").strip().lower()
         self.request_timeout_s = float(cfg.get("request_timeout_s") or 2.0)
         retry_cooldown_raw = cfg.get("retry_cooldown_s")
         self.retry_cooldown_s = max(0.0, float(3.0 if retry_cooldown_raw is None else retry_cooldown_raw))
@@ -341,7 +350,7 @@ class _WledClient:
         stop = self.led_offset + self.led_count
         instructions: list[Any] = [start, stop, "000000"]
         for led_index, color in led_updates:
-            instructions.extend([self.led_offset + int(led_index), _color_to_hex(color)])
+            instructions.extend([self.led_offset + int(led_index), _color_to_hex(color, self.color_order)])
         try:
             self._post_state(
                 {

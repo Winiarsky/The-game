@@ -6,7 +6,7 @@ from typing import Sequence
 
 from dnd_board_game.actors import Actor, Faction
 from dnd_board_game.rules import AttackRollOutcome, AttackRollResult, D20RollRequest, D20RollResult, resolve_attack_roll
-from dnd_board_game.world import BoardState, Coordinate
+from dnd_board_game.world import BoardState, Coordinate, line_of_sight_clear
 
 from .action_economy import ActionUse, consume_action
 from .targets import CombatTarget, actor_as_combat_target, is_public_attack_target
@@ -68,6 +68,16 @@ class AttackResolution:
 
 
 def legal_melee_targets(board: BoardState, attacker: Actor, actors: Sequence[Actor]) -> tuple[CombatTarget, ...]:
+    source = AttackSource("melee", AttackSourceType.WEAPON, 5, D20RollRequest())
+    return legal_attack_targets(board, attacker, actors, source)
+
+
+def legal_attack_targets(
+    board: BoardState,
+    attacker: Actor,
+    actors: Sequence[Actor],
+    source: AttackSource,
+) -> tuple[CombatTarget, ...]:
     targets: list[CombatTarget] = []
     for actor in actors:
         if actor.id == attacker.id:
@@ -77,7 +87,9 @@ def legal_melee_targets(board: BoardState, attacker: Actor, actors: Sequence[Act
         target = actor_as_combat_target(actor)
         if not is_public_attack_target(target):
             continue
-        if _is_adjacent(attacker.position, actor.position) and _has_clear_melee_line(board, attacker.position, actor.position):
+        if _target_in_range(attacker.position, actor.position, source.range_feet) and line_of_sight_clear(
+            board, attacker.position, actor.position
+        ):
             targets.append(target)
     return tuple(sorted(targets, key=lambda target: (target.position.col, target.position.row, target.id)))
 
@@ -88,7 +100,7 @@ def start_attack_action(
     actors: Sequence[Actor],
     source: AttackSource,
 ) -> AttackActionState:
-    return AttackActionState(attacker=attacker, source=source, legal_targets=legal_melee_targets(board, attacker, actors))
+    return AttackActionState(attacker=attacker, source=source, legal_targets=legal_attack_targets(board, attacker, actors, source))
 
 
 def select_attack_target(
@@ -129,19 +141,8 @@ def resolve_attack(declaration: AttackDeclaration, attack_roll: D20RollResult, a
     )
 
 
-def _is_adjacent(a: Coordinate, b: Coordinate) -> bool:
-    dc = abs(a.col - b.col)
-    dr = abs(a.row - b.row)
-    return max(dc, dr) == 1 and (dc != 0 or dr != 0)
-
-
-def _has_clear_melee_line(board: BoardState, a: Coordinate, b: Coordinate) -> bool:
-    dc = abs(a.col - b.col)
-    dr = abs(a.row - b.row)
-    if dc + dr == 1:
-        return not board.blocks_edge(a, b)
-    if dc == 1 and dr == 1:
-        side_a = Coordinate(b.col, a.row)
-        side_b = Coordinate(a.col, b.row)
-        return not (board.blocks_edge(a, side_a) and board.blocks_edge(a, side_b))
-    return False
+def _target_in_range(a: Coordinate, b: Coordinate, range_feet: int) -> bool:
+    if range_feet <= 0:
+        return False
+    distance_feet = max(abs(a.col - b.col), abs(a.row - b.row)) * 5
+    return 0 < distance_feet <= range_feet

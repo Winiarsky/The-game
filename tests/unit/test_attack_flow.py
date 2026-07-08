@@ -12,6 +12,7 @@ from dnd_board_game.combat import (
 )
 from dnd_board_game.rules import D20RollRequest
 from dnd_board_game.world import BoardState, Coordinate
+from dnd_board_game.world import BLOCKING_TERRAIN
 
 
 def _actor(actor_id: str, faction: Faction, position: Coordinate) -> Actor:
@@ -31,6 +32,10 @@ def _source() -> AttackSource:
     return AttackSource("Miecz", AttackSourceType.WEAPON, 5, D20RollRequest(), "1d6 slashing")
 
 
+def _ranged_source() -> AttackSource:
+    return AttackSource("Kusza", AttackSourceType.WEAPON, 80, D20RollRequest(), "1d8 piercing")
+
+
 def test_start_attack_action_collects_legal_targets():
     board = BoardState()
     hero = _actor("hero", Faction.ALLY, Coordinate(0, 0))
@@ -40,6 +45,37 @@ def test_start_attack_action_collects_legal_targets():
 
     assert state.status == AttackActionStatus.SELECTING_TARGET
     assert [target.id for target in state.legal_targets] == ["goblin"]
+
+
+def test_ranged_attack_collects_target_in_range():
+    board = BoardState()
+    rogue = _actor("rogue", Faction.ALLY, Coordinate(0, 0))
+    goblin = _actor("goblin", Faction.ENEMY, Coordinate(10, 0))
+
+    state = start_attack_action(board, rogue, (rogue, goblin), _ranged_source())
+
+    assert [target.id for target in state.legal_targets] == ["goblin"]
+
+
+def test_ranged_attack_rejects_target_outside_range():
+    board = BoardState()
+    rogue = _actor("rogue", Faction.ALLY, Coordinate(0, 0))
+    goblin = _actor("goblin", Faction.ENEMY, Coordinate(17, 0))
+
+    state = start_attack_action(board, rogue, (rogue, goblin), _ranged_source())
+
+    assert state.legal_targets == ()
+
+
+def test_ranged_attack_rejects_target_behind_blocking_terrain():
+    board = BoardState()
+    board.set_terrain(Coordinate(2, 0), BLOCKING_TERRAIN)
+    rogue = _actor("rogue", Faction.ALLY, Coordinate(0, 0))
+    goblin = _actor("goblin", Faction.ENEMY, Coordinate(4, 0))
+
+    state = start_attack_action(board, rogue, (rogue, goblin), _ranged_source())
+
+    assert state.legal_targets == ()
 
 
 def test_select_attack_target_by_id_and_position():

@@ -1,6 +1,43 @@
 {
   "encounter_triggers": [
     {
+      "id": "gate_open_skirmish",
+      "name": "Gobliny za bramą",
+      "description": "Gdy brama ustępuje, z dziedzińca wybiegają dwa gobliny. To szybka potyczka do sprawdzenia ruchu, przeszkód i strzału z kuszy.",
+      "encounter_scenario": "content/scenarios/gate_skirmish.json",
+      "condition": "flag_equals",
+      "flag_key": "gate_passed",
+      "flag_value": true,
+      "outcome_on_victory": {
+        "title": "Przejście zabezpieczone",
+        "body": "Dwa gobliny padają albo uciekają w głąb ruin. Drużyna ma chwilę, by rozejrzeć się po dziedzińcu.",
+        "next_instruction": "Zakończ wynik, a potem wybierz dziedziniec albo ujawnione punkty na planszy.",
+        "effects": [
+          {
+            "type": "set_flag",
+            "parameters": {
+              "key": "gate_skirmish_cleared",
+              "value": true
+            }
+          }
+        ]
+      },
+      "outcome_on_defeat": {
+        "title": "Gobliny wypychają drużynę",
+        "body": "Gobliny wykorzystują wąskie przejście i zmuszają drużynę do odwrotu spod bramy.",
+        "next_instruction": "Zakończ wynik, żeby wrócić do eksploracji i zdecydować o konsekwencjach MG.",
+        "effects": [
+          {
+            "type": "set_flag",
+            "parameters": {
+              "key": "party_defeated_at_gate",
+              "value": true
+            }
+          }
+        ]
+      }
+    },
+    {
       "id": "gate_noise_alarm",
       "name": "Alarm na dziedzińcu",
       "description": "Hałas przy bramie niesie się po pustej strażnicy. Coś odpowiada ruchem po drugiej stronie murów.",

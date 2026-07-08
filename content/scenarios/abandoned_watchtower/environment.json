@@ -1,0 +1,20 @@
+{
+  "environment": [
+    {
+      "id": "broken_cart",
+      "name": "Rozbity wóz",
+      "type": "container",
+      "positions": [[7, 8], [8, 8]],
+      "visibility": "visible",
+      "description": "Rozbity wóz na dziedzińcu. Pod nim później można odnaleźć rannego zwiadowcę."
+    },
+    {
+      "id": "rubble_patch",
+      "name": "Rumowisko",
+      "type": "difficult_terrain",
+      "positions": [[10, 7], [10, 8], [11, 8]],
+      "visibility": "visible",
+      "description": "Luźne kamienie i połamane belki spowalniają ruch."
+    }
+  ]
+}

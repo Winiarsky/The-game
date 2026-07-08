@@ -177,6 +177,7 @@ class LoadedExploration:
     initial_resource_ids: tuple[str, ...]
     party_position: PartyPosition
     encounter_triggers: tuple[ExplorationEncounterTrigger, ...] = ()
+    environment: tuple[EnvironmentSetupEntry, ...] = ()
     llm_context: LlmContext = LlmContext()
     objectives: tuple[SceneObjective, ...] = ()
 
@@ -257,6 +258,7 @@ def build_exploration_from_scenario(loaded: LoadedScenario) -> LoadedExploration
     if definition.scene_mode != SceneMode.EXPLORATION:
         raise ValueError(f"Scenario {definition.id} is not an exploration scenario.")
     board = BoardState(dimensions=definition.board_dimensions)
+    _apply_environment_to_board(board, definition.environment)
     actors = tuple(_actor_from_definition(actor) for actor in definition.actors)
     start_zone = _zone_by_id(definition.exploration_zones, definition.party_start_zone_id)
     objectives = tuple(
@@ -282,6 +284,17 @@ def build_exploration_from_scenario(loaded: LoadedScenario) -> LoadedExploration
         resources=definition.exploration_resources,
         initial_resource_ids=definition.exploration_initial_resources,
         encounter_triggers=definition.exploration_encounter_triggers,
+        environment=tuple(
+            EnvironmentSetupEntry(
+                id=entry.id,
+                name=entry.name,
+                setup_type=entry.setup_type,
+                positions=entry.positions,
+                visibility=entry.visibility,
+                description=entry.description,
+            )
+            for entry in definition.environment
+        ),
         party_position=PartyPosition(start_zone.id, start_zone.marker_position),
         llm_context=definition.llm_context,
         objectives=objectives,
