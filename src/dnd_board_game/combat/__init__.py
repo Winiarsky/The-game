@@ -18,7 +18,7 @@ from .attack_flow import (
 )
 from .attack_led import attack_result_led_feedback, attack_targets_led_feedback, selected_attack_target_led_feedback
 from .damage import DamageComponentInput, DamageResult, DamageType, apply_damage, resolve_damage
-from .enemy_ai import EnemyAutoAttackResult, EnemyAutoTurnResult, resolve_enemy_auto_attack, resolve_enemy_auto_turn
+from .enemy_ai import EnemyAutoAttackResult, EnemyAutoTurnResult, EnemyTurnPlan, plan_enemy_turn, resolve_enemy_auto_attack, resolve_enemy_auto_turn
 from .initiative import (
     InitiativeEntry,
     InitiativeOrder,
@@ -120,6 +120,7 @@ __all__ = [
     "DamageType",
     "EnemyAutoAttackResult",
     "EnemyAutoTurnResult",
+    "EnemyTurnPlan",
     "EncounterSetup",
     "EnvironmentSetupEntry",
     "EnvironmentSetupType",
@@ -175,6 +176,7 @@ __all__ = [
     "movement_remaining",
     "objective_status_after_combat",
     "objective_status_after_flags",
+    "plan_enemy_turn",
     "preview_turn_intent",
     "replace_actor",
     "resolve_attack",

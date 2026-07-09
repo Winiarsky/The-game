@@ -42,6 +42,17 @@ class EnemyAutoTurnResult:
     action_used: bool = False
 
 
+@dataclass(frozen=True, slots=True)
+class EnemyTurnPlan:
+    state: CombatState
+    enemy: Actor
+    target: CombatTarget | None
+    message: str
+    movement_path: PathResult | None = None
+    moved_enemy: Actor | None = None
+    action_used: bool = False
+
+
 def resolve_enemy_auto_attack(
     board: BoardState,
     state: CombatState,
@@ -109,53 +120,90 @@ def resolve_enemy_auto_turn(
     source: AttackSource,
     rng: random.Random,
 ) -> EnemyAutoTurnResult:
+    plan = plan_enemy_turn(board, state, enemy)
+    if plan.target is None:
+        if plan.movement_path is not None:
+            follow_up = resolve_enemy_auto_attack(board, plan.state, plan.enemy, source, rng)
+            return EnemyAutoTurnResult(
+                follow_up.state,
+                plan.enemy,
+                None,
+                plan.message,
+                movement_path=plan.movement_path,
+                moved_enemy=plan.moved_enemy,
+                action_used=follow_up.action_used,
+            )
+        return EnemyAutoTurnResult(
+            plan.state,
+            plan.enemy,
+            None,
+            plan.message,
+            movement_path=plan.movement_path,
+            moved_enemy=plan.moved_enemy,
+            action_used=plan.action_used,
+        )
+    attack = resolve_enemy_auto_attack(board, plan.state, plan.enemy, source, rng)
+    if plan.movement_path is None:
+        return _turn_result_from_attack(attack)
+    if attack.target is None:
+        return EnemyAutoTurnResult(
+            attack.state,
+            plan.enemy,
+            None,
+            f"{_enemy_movement_message(enemy, plan.movement_path)} Po ruchu nadal nie ma legalnego celu ataku.",
+            movement_path=plan.movement_path,
+            moved_enemy=plan.moved_enemy,
+            action_used=attack.action_used,
+        )
+    return EnemyAutoTurnResult(
+        state=attack.state,
+        enemy=plan.enemy,
+        target=attack.target,
+        message=f"{_enemy_movement_message(enemy, plan.movement_path)} {attack.message}",
+        movement_path=plan.movement_path,
+        moved_enemy=plan.moved_enemy,
+        attack_roll=attack.attack_roll,
+        attack_resolution=attack.attack_resolution,
+        damage=attack.damage,
+        updated_target=attack.updated_target,
+        action_used=attack.action_used,
+    )
+
+
+def plan_enemy_turn(board: BoardState, state: CombatState, enemy: Actor) -> EnemyTurnPlan:
     targets = legal_melee_targets(board, enemy, state.actors)
     if targets:
-        attack = resolve_enemy_auto_attack(board, state, enemy, source, rng)
-        return _turn_result_from_attack(attack)
+        target = _select_enemy_target(enemy, targets)
+        return EnemyTurnPlan(state, enemy, target, f"{enemy.name} atakuje {target.name}.")
 
     movement_path = _best_enemy_movement_path(board, state, enemy)
-    moved_enemy: Actor | None = None
-    moved_state = state
-    movement_message = f"{enemy.name} nie ma legalnego celu ataku."
     if movement_path is not None and movement_path.valid and movement_path.destination != enemy.position:
         movement = use_movement(state, enemy, movement_path)
         moved_state = movement.state
         moved_enemy = _actor_for_id(moved_state, enemy.id)
-        movement_message = f"{enemy.name} rusza się na {movement_path.destination.as_tuple()}."
-    else:
-        action_result = use_turn_action(state)
-        return EnemyAutoTurnResult(
-            action_result.state,
-            enemy,
-            None,
-            f"{enemy.name} nie ma legalnego celu ani dostępnego ruchu i kończy akcję.",
-            action_used=action_result.accepted,
-        )
-
-    follow_up = resolve_enemy_auto_attack(board, moved_state, moved_enemy, source, rng)
-    if follow_up.target is None:
-        return EnemyAutoTurnResult(
-            follow_up.state,
+        moved_targets = legal_melee_targets(board, moved_enemy, moved_state.actors)
+        target = _select_enemy_target(moved_enemy, moved_targets) if moved_targets else None
+        message = _enemy_movement_message(enemy, movement_path)
+        if target is not None:
+            message = f"{message} Po ruchu atakuje {target.name}."
+        else:
+            message = f"{message} Po ruchu nadal nie ma legalnego celu ataku."
+        return EnemyTurnPlan(
+            moved_state,
             moved_enemy,
-            None,
-            f"{movement_message} Po ruchu nadal nie ma legalnego celu ataku.",
+            target,
+            message,
             movement_path=movement_path,
             moved_enemy=moved_enemy,
-            action_used=follow_up.action_used,
         )
-    return EnemyAutoTurnResult(
-        state=follow_up.state,
-        enemy=moved_enemy,
-        target=follow_up.target,
-        message=f"{movement_message} {follow_up.message}",
-        movement_path=movement_path,
-        moved_enemy=moved_enemy,
-        attack_roll=follow_up.attack_roll,
-        attack_resolution=follow_up.attack_resolution,
-        damage=follow_up.damage,
-        updated_target=follow_up.updated_target,
-        action_used=follow_up.action_used,
+
+    action_result = use_turn_action(state)
+    return EnemyTurnPlan(
+        action_result.state,
+        enemy,
+        None,
+        f"{enemy.name} nie ma legalnego celu ani dostępnego ruchu i kończy akcję.",
+        action_used=action_result.accepted,
     )
 
 
@@ -214,6 +262,10 @@ def _best_enemy_movement_path(board: BoardState, state: CombatState, enemy: Acto
             best_key = key
             best_path = path
     return best_path
+
+
+def _enemy_movement_message(enemy: Actor, movement_path: PathResult) -> str:
+    return f"{enemy.name} rusza się na {movement_path.destination.as_tuple()}."
 
 
 def _turn_result_from_attack(result: EnemyAutoAttackResult) -> EnemyAutoTurnResult:

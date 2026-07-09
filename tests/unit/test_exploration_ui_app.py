@@ -133,6 +133,15 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
     assert "stopBoardScanLoop()" in html
     assert "playerTurnScanLoop = false;" in html
     assert "isAllyCombatTurnActive()" in html
+    assert "pendingPlayerAttackHtml" in html
+    assert "/api/combat/player-attack-roll" in html
+    assert "/api/combat/player-damage" in html
+    assert "enemyRollSummaryHtml" in html
+    assert "/api/combat/enemy-attack-roll" not in html
+    assert "/api/combat/enemy-damage" not in html
+    assert "confirmLocationPreview()" in html
+    assert "/api/location/confirm-preview" in html
+    assert "drugim kliknięciem" not in html
 
 
 def test_exploration_ui_session_log_endpoint_returns_events():
@@ -245,7 +254,7 @@ def _advance_encounter_setup(client, board):
     return client.post("/api/encounter/setup/confirm", json={}).get_json()
 
 
-def test_exploration_ui_start_and_double_click_location_flow_updates_leds():
+def test_exploration_ui_start_preview_location_and_confirm_from_ui_updates_leds():
     session = _session(active=False)
     board = FakeBoardConnection(clicks=[(9, 2), (9, 2)])
     session.attach_board_connection(board, backend="simulator")
@@ -269,7 +278,12 @@ def test_exploration_ui_start_and_double_click_location_flow_updates_leds():
     assert preview["flow"]["preview_zone"]["id"] == "gate"
     assert preview["active_challenge"] is None
 
-    active = client.post("/api/board/scan", json={}).get_json()
+    repeated_preview = client.post("/api/board/scan", json={}).get_json()
+    assert repeated_preview["flow"]["stage"] == "location_preview"
+    assert repeated_preview["flow"]["preview_zone"]["id"] == "gate"
+    assert repeated_preview["active_challenge"] is None
+
+    active = client.post("/api/location/confirm-preview", json={}).get_json()
     assert active["flow"]["stage"] == "location_active"
     assert active["active_challenge"]["id"] == "closed_gate"
 

@@ -73,4 +73,5 @@ def test_enemy_without_reachable_target_still_moves_without_stack_trace():
 
     assert result.movement_path is not None
     assert result.target is None
+    assert result.action_used is True
     assert "nadal nie ma legalnego celu" in result.message

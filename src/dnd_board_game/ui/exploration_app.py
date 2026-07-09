@@ -92,7 +92,7 @@ from dnd_board_game.llm import (
     validate_npc_interaction_proposal,
 )
 from dnd_board_game.hardware import BoardLedAdapter, LedColor, LedFeedback, LedFrame, LedRole, led_color_name_pl, movement_led_feedback
-from dnd_board_game.rules import D20RollInput, D20RollRequest, RollModifier, RollModifierType, ability_modifier, resolve_d20_roll
+from dnd_board_game.rules import D20RollInput, D20RollRequest, RollModifier, RollModifierType, ability_modifier, resolve_d20_roll, roll_instruction
 from dnd_board_game.scenarios import (
     LoadedEncounter,
     LoadedExploration,
@@ -285,6 +285,17 @@ class BoardScanTarget:
     empty_message: str
 
 
+@dataclass(frozen=True, slots=True)
+class PendingPlayerAttack:
+    attacker_id: str
+    target_id: str
+    stage: str = "attack_roll"
+    natural_roll: int | None = None
+    total: int | None = None
+    hit: bool | None = None
+    critical: bool = False
+
+
 class ExplorationUiSession:
     def __init__(
         self,
@@ -335,6 +346,7 @@ class ExplorationUiSession:
         self.combat_state: CombatState | None = None
         self.resolved_encounter_trigger_ids: set[str] = set()
         self.pending_enemy_turn_result = None
+        self.pending_player_attack: PendingPlayerAttack | None = None
         self.encounter_rng = random.Random(7)
         board_defaults = _load_board_defaults()
         self.board_backend = "none"
@@ -419,6 +431,7 @@ class ExplorationUiSession:
                 self._active_encounter(),
                 self.selected_combat_movement_path,
                 self.pending_enemy_turn_result,
+                self.pending_player_attack,
             )
             if self.combat_state
             else None,
@@ -522,6 +535,24 @@ class ExplorationUiSession:
             return self.state_payload()
         self.preview_zone_id = ""
         self.board_message = "Wrócono do wyboru dostępnych lokacji."
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def confirm_location_preview(self) -> dict[str, object]:
+        if self.ui_flow_stage != UiFlowStage.LOCATION_PREVIEW:
+            return self.state_payload()
+        zone = self._preview_zone()
+        if zone is None:
+            raise ValueError("Najpierw wybierz element sceny na planszy.")
+        if not zone_is_ui_available(self.state, zone):
+            raise ValueError(_locked_zone_message(zone))
+        if zone.id != self.current_zone.id:
+            self.state = set_party_zone(self.state, zone)
+            self.active_point_id = ""
+        self.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+        self.preview_zone_id = ""
+        self.board_message = f"Drużyna wchodzi do lokacji: {zone.name}."
+        self._record("ui_location_preview_confirmed", {"zone_id": zone.id})
         self._sync_board_leds()
         return self.state_payload()
 
@@ -908,6 +939,7 @@ class ExplorationUiSession:
             updated_state = replace_actor(updated_state, updated_target)
             message = f"{message} Obrażenia: {damage_result.total_applied}. {target_actor.name}: HP {target_actor.hp} -> {updated_target.hp}."
         self.combat_state = updated_state
+        self.pending_player_attack = None
         self.selected_combat_movement_path = None
         self._add_message("Atak", message)
         self._record(
@@ -925,24 +957,142 @@ class ExplorationUiSession:
         self._sync_board_leds()
         return self.state_payload()
 
-    def submit_player_attack_at_position(self, position: Coordinate) -> dict[str, object]:
+    def select_player_attack_target_at_position(self, position: Coordinate) -> dict[str, object]:
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
+        if self.combat_state.status.value != "active":
+            raise ValueError("Walka nie jest aktywna.")
         encounter = self._active_encounter()
         if encounter is None:
             raise ValueError("Brak danych encountera dla aktywnej walki.")
         attacker = combat_current_actor(self.combat_state)
+        if attacker.faction != Faction.ALLY:
+            raise ValueError("To nie jest tura bohatera.")
         source = encounter.attack_sources_by_actor.get(attacker.id)
         if source is None:
             raise ValueError(f"Aktor {attacker.name} nie ma zdefiniowanego ataku.")
         action = start_attack_action(encounter.board, attacker, self.combat_state.actors, source)
         selected = select_attack_target(action, position=position)
         assert selected.selected_target is not None
-        return self.submit_player_attack(
+        self.pending_player_attack = PendingPlayerAttack(
+            attacker_id=str(attacker.id),
             target_id=selected.selected_target.id,
-            natural_roll=10,
-            damage=_default_damage_amount(source),
         )
+        self.board_message = f"Wybrano cel ataku: {selected.selected_target.name}. Wpisz rzut d20 w panelu walki."
+        self._add_message(
+            "Atak",
+            f"{attacker.name} celuje w {selected.selected_target.name}. Rzuć d20 na trafienie i wpisz wynik.",
+        )
+        self._record(
+            "ui_combat_player_attack_target_selected",
+            {"attacker_id": str(attacker.id), "target_id": selected.selected_target.id},
+        )
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def submit_player_attack_roll(self, *, natural_roll: int) -> dict[str, object]:
+        pending = self.pending_player_attack
+        if pending is None or pending.stage != "attack_roll":
+            raise ValueError("Nie ma oczekującego rzutu ataku gracza.")
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        encounter = self._active_encounter()
+        if encounter is None:
+            raise ValueError("Brak danych encountera dla aktywnej walki.")
+        attacker = combat_current_actor(self.combat_state)
+        if str(attacker.id) != pending.attacker_id:
+            raise ValueError("Oczekujący atak nie należy do aktywnego aktora.")
+        source = encounter.attack_sources_by_actor.get(attacker.id)
+        if source is None:
+            raise ValueError(f"Aktor {attacker.name} nie ma zdefiniowanego ataku.")
+        action = start_attack_action(encounter.board, attacker, self.combat_state.actors, source)
+        selected = select_attack_target(action, target_id=pending.target_id)
+        assert selected.selected_target is not None
+        declaration = AttackDeclaration(attacker=attacker, target=selected.selected_target, source=source)
+        attack_roll = resolve_d20_roll(D20RollInput(source.attack_roll_request, int(natural_roll)))
+        action_result = use_turn_action(self.combat_state)
+        if not action_result.accepted:
+            raise ValueError(action_result.message)
+        resolution = resolve_attack(declaration, attack_roll, selected.action_use)
+        self.combat_state = action_result.state
+        self.selected_combat_movement_path = None
+        message = _player_attack_message(attacker.name, selected.selected_target.name, attack_roll.total, resolution.hit, resolution.critical)
+        if not resolution.hit:
+            self.pending_player_attack = None
+            self._add_message("Atak", message)
+            self._record(
+                "ui_combat_player_attack_roll",
+                {
+                    "attacker_id": str(attacker.id),
+                    "target_id": selected.selected_target.id,
+                    "natural_roll": attack_roll.natural_roll,
+                    "total": attack_roll.total,
+                    "hit": False,
+                    "critical": resolution.critical,
+                },
+            )
+            self._sync_board_leds()
+            return self.state_payload()
+        self.pending_player_attack = replace(
+            pending,
+            stage="damage_roll",
+            natural_roll=attack_roll.natural_roll,
+            total=attack_roll.total,
+            hit=True,
+            critical=resolution.critical,
+        )
+        self._add_message("Atak", f"{message} Trafienie: rzuć obrażenia {source.damage_hint} i wpisz sumę.")
+        self._record(
+            "ui_combat_player_attack_roll",
+            {
+                "attacker_id": str(attacker.id),
+                "target_id": selected.selected_target.id,
+                "natural_roll": attack_roll.natural_roll,
+                "total": attack_roll.total,
+                "hit": True,
+                "critical": resolution.critical,
+            },
+        )
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def submit_player_damage_roll(self, *, damage: int) -> dict[str, object]:
+        pending = self.pending_player_attack
+        if pending is None or pending.stage != "damage_roll":
+            raise ValueError("Nie ma oczekującego rzutu obrażeń gracza.")
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        encounter = self._active_encounter()
+        if encounter is None:
+            raise ValueError("Brak danych encountera dla aktywnej walki.")
+        attacker = combat_current_actor(self.combat_state)
+        if str(attacker.id) != pending.attacker_id:
+            raise ValueError("Oczekujące obrażenia nie należą do aktywnego aktora.")
+        source = encounter.attack_sources_by_actor.get(attacker.id)
+        if source is None:
+            raise ValueError(f"Aktor {attacker.name} nie ma zdefiniowanego ataku.")
+        target_actor = next((actor for actor in self.combat_state.actors if str(actor.id) == pending.target_id), None)
+        if target_actor is None:
+            raise ValueError(f"Nieznany cel ataku: {pending.target_id}.")
+        damage_amount = max(0, int(damage))
+        damage_result = resolve_damage((DamageComponentInput(damage_amount, DamageType(source.damage_type), source.name),))
+        updated_target = apply_damage(target_actor, damage_result)
+        self.combat_state = replace_actor(self.combat_state, updated_target)
+        self.pending_player_attack = None
+        self._add_message(
+            "Obrażenia",
+            f"{attacker.name} zadaje {damage_result.total_applied} obrażeń. {target_actor.name}: HP {target_actor.hp} -> {updated_target.hp}.",
+        )
+        self._record(
+            "ui_combat_player_damage_roll",
+            {
+                "attacker_id": str(attacker.id),
+                "target_id": str(target_actor.id),
+                "damage": damage_result.total_applied,
+            },
+        )
+        self._sync_board_leds()
+        return self.state_payload()
 
     def preview_combat_movement(self, *, col: int, row: int) -> dict[str, object]:
         if self.combat_state is None:
@@ -1042,11 +1192,11 @@ class ExplorationUiSession:
             )
             self._add_message(
                 "Atak przeciwnika",
-                f"{enemy.name} atakuje {result.target.name}. Potwierdź atak klikając pole celu.",
+                f"{enemy.name} atakuje {result.target.name}. {_enemy_roll_summary(result)} Potwierdź atak klikając pole celu.",
             )
             self._sync_board_leds()
             return self.state_payload()
-        return self._commit_pending_enemy_turn(result)
+        return self._finish_pending_enemy_turn(result)
 
     def _commit_pending_enemy_turn(self, result=None) -> dict[str, object]:
         if self.combat_state is None:
@@ -1054,16 +1204,21 @@ class ExplorationUiSession:
         result = result or self.pending_enemy_turn_result
         if result is None:
             raise ValueError("Brak oczekującej tury przeciwnika do potwierdzenia.")
+        return self._finish_pending_enemy_turn(result)
+
+    def _finish_pending_enemy_turn(self, result) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
         self.combat_state = finish_turn(result.state)
         self.selected_combat_movement_path = None
         self.pending_enemy_turn_result = None
-        self._add_message("Tura przeciwnika", result.message)
+        self._add_message("Tura przeciwnika", _enemy_turn_message(result))
         self._record(
             "ui_combat_enemy_turn",
             {
                 "enemy_id": str(result.enemy.id),
                 "target_id": result.target.id if result.target is not None else None,
-                "message": result.message,
+                "message": _enemy_turn_message(result),
                 "action_used": result.action_used,
             },
         )
@@ -1101,6 +1256,7 @@ class ExplorationUiSession:
         actor = combat_current_actor(self.combat_state)
         self.combat_state = finish_turn(self.combat_state)
         self.selected_combat_movement_path = None
+        self.pending_player_attack = None
         self._add_message("Koniec tury", f"Zakończono turę: {actor.name}.")
         self._record("ui_combat_turn_finished", {"actor_id": str(actor.id)})
         self._sync_board_leds()
@@ -1167,10 +1323,22 @@ class ExplorationUiSession:
             actor = combat_current_actor(self.combat_state)
             if self.pending_enemy_turn_result is not None:
                 target_positions = _pending_enemy_turn_target_positions(self.pending_enemy_turn_result)
+                if not target_positions:
+                    return BoardScanTarget(
+                        positions=(),
+                        feedback=active_actor_led_feedback(self.combat_state.initiative_order),
+                        empty_message="Atak przeciwnika czeka na wpisanie rzutu w UI.",
+                    )
                 return BoardScanTarget(
                     positions=target_positions,
                     feedback=_pending_enemy_turn_led_feedback(self.pending_enemy_turn_result),
                     empty_message="Tura przeciwnika czeka na potwierdzenie pola docelowego albo celu.",
+                )
+            if self.pending_player_attack is not None:
+                return BoardScanTarget(
+                    positions=(),
+                    feedback=active_actor_led_feedback(self.combat_state.initiative_order),
+                    empty_message="Atak gracza czeka na wpisanie rzutu w UI.",
                 )
             if encounter is not None and actor.faction == Faction.ALLY and self.combat_state.status.value == "active":
                 movement = _remaining_movement_range(encounter.board, self.combat_state, actor)
@@ -1266,6 +1434,9 @@ class ExplorationUiSession:
             actor = combat_current_actor(self.combat_state)
             if self.pending_enemy_turn_result is not None:
                 expected = _pending_enemy_turn_target_positions(self.pending_enemy_turn_result)
+                if not expected:
+                    self.board_message = "Atak przeciwnika czeka na wpisanie rzutu w UI."
+                    return self.state_payload()
                 if selected in expected:
                     self.board_message = f"Potwierdzono turę przeciwnika kliknięciem pola {selected.as_tuple()}."
                     return self._commit_pending_enemy_turn()
@@ -1276,7 +1447,7 @@ class ExplorationUiSession:
                 try:
                     if encounter is not None and _combat_target_at_position(encounter, self.combat_state, actor, selected) is not None:
                         self.board_message = f"Atak bohatera: {actor.name} -> {selected.as_tuple()}."
-                        return self.submit_player_attack_at_position(selected)
+                        return self.select_player_attack_target_at_position(selected)
                     if (
                         self.selected_combat_movement_path is not None
                         and self.selected_combat_movement_path.valid
@@ -1313,19 +1484,10 @@ class ExplorationUiSession:
                         self.board_message = _locked_zone_message(zone)
                         self._sync_board_leds()
                         return self.state_payload()
-                    if self.preview_zone_id == zone.id:
-                        if zone.id != self.current_zone.id:
-                            self.state = set_party_zone(self.state, zone)
-                            self.active_point_id = ""
-                        self.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
-                        self.preview_zone_id = ""
-                        self.board_message = f"Drużyna wchodzi do lokacji: {zone.name}."
-                        self._sync_board_leds()
-                        return self.state_payload()
                     self.preview_zone_id = zone.id
                     self.board_message = (
                         f"Podgląd lokacji: {zone.name}. Czy chcesz przejść do tej lokacji? "
-                        "Potwierdź kliknięciem tego samego pola."
+                        "Potwierdź Enterem albo przyciskiem w UI."
                     )
                     self._sync_board_leds()
                     return self.state_payload()
@@ -1840,6 +2002,13 @@ def create_app(session: ExplorationUiSession) -> Flask:
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
+    @app.post("/api/location/confirm-preview")
+    def api_location_confirm_preview():
+        try:
+            return jsonify(session.confirm_location_preview())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
     @app.post("/api/exploration/setup/confirm")
     def api_exploration_setup_confirm():
         try:
@@ -1930,17 +2099,19 @@ def create_app(session: ExplorationUiSession) -> Flask:
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
-    @app.post("/api/combat/player-attack")
-    def api_combat_player_attack():
+    @app.post("/api/combat/player-attack-roll")
+    def api_combat_player_attack_roll():
         data = request.get_json(silent=True) or {}
         try:
-            return jsonify(
-                session.submit_player_attack(
-                    target_id=str(data.get("target_id", "")),
-                    natural_roll=int(data.get("natural_roll", 0)),
-                    damage=int(data.get("damage", 0)),
-                )
-            )
+            return jsonify(session.submit_player_attack_roll(natural_roll=int(data.get("natural_roll", 0))))
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/player-damage")
+    def api_combat_player_damage():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(session.submit_player_damage_roll(damage=int(data.get("damage", 0))))
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
@@ -2188,6 +2359,7 @@ def _combat_payload(
     encounter: LoadedEncounter | None = None,
     selected_movement_path=None,
     pending_enemy_turn_result=None,
+    pending_player_attack: PendingPlayerAttack | None = None,
 ) -> dict[str, object] | None:
     if state is None:
         return None
@@ -2218,7 +2390,8 @@ def _combat_payload(
         "legal_targets": [_combat_target_payload(target) for target in targets],
         "movement": _movement_payload(movement, state, actor) if movement is not None else None,
         "movement_preview": _movement_preview_payload(selected_movement_path),
-        "enemy_turn_preview": _enemy_turn_preview_payload(pending_enemy_turn_result),
+        "enemy_turn_preview": _enemy_turn_preview_payload(pending_enemy_turn_result, encounter),
+        "pending_player_attack": _pending_player_attack_payload(pending_player_attack, state, encounter),
     }
 
 
@@ -2245,6 +2418,42 @@ def _attack_source_payload(source) -> dict[str, object]:
         "damage_modifier": source.damage_modifier,
         "damage_type": source.damage_type,
     }
+
+
+def _pending_player_attack_payload(
+    pending: PendingPlayerAttack | None,
+    state: CombatState,
+    encounter: LoadedEncounter | None,
+) -> dict[str, object] | None:
+    if pending is None or encounter is None:
+        return None
+    attacker = next((actor for actor in state.actors if str(actor.id) == pending.attacker_id), None)
+    target = next((actor for actor in state.actors if str(actor.id) == pending.target_id), None)
+    if attacker is None or target is None:
+        return None
+    source = encounter.attack_sources_by_actor.get(attacker.id)
+    if source is None:
+        return None
+    instruction = roll_instruction(source.attack_roll_request)
+    return {
+        "stage": pending.stage,
+        "attacker": _combat_actor_payload(attacker),
+        "target": _combat_actor_payload(target),
+        "source": _attack_source_payload(source),
+        "attack_instruction": instruction.message,
+        "attack_modifier": instruction.breakdown.modifier_total,
+        "damage_instruction": _damage_roll_instruction(source),
+        "natural_roll": pending.natural_roll,
+        "total": pending.total,
+        "hit": pending.hit,
+        "critical": pending.critical,
+    }
+
+
+def _damage_roll_instruction(source) -> str:
+    if source.damage_fixed is not None:
+        return f"Obrażenia stałe: {source.damage_fixed} {source.damage_type}. Wpisz {source.damage_fixed}."
+    return f"Rzuć obrażenia: {source.damage_hint}. Wpisz sumę po modyfikatorach."
 
 
 def _combat_target_payload(target) -> dict[str, object]:
@@ -2326,10 +2535,29 @@ def _pending_enemy_turn_led_feedback(result) -> LedFeedback:
     return LedFeedback()
 
 
-def _enemy_turn_preview_payload(result) -> dict[str, object] | None:
+def _enemy_turn_preview_payload(result, encounter: LoadedEncounter | None = None) -> dict[str, object] | None:
     if result is None:
         return None
     payload: dict[str, object] = {"enemy_id": str(result.enemy.id), "enemy_name": result.enemy.name}
+    source = encounter.attack_sources_by_actor.get(result.enemy.id) if encounter is not None else None
+    if result.target is not None:
+        payload["target_id"] = result.target.id
+        payload["target_name"] = result.target.name
+        payload["target_position"] = [result.target.position.col, result.target.position.row]
+    if source is not None:
+        instruction = roll_instruction(source.attack_roll_request)
+        payload["source"] = _attack_source_payload(source)
+        payload["attack_instruction"] = instruction.message
+        payload["attack_modifier"] = instruction.breakdown.modifier_total
+        payload["damage_instruction"] = _damage_roll_instruction(source)
+    if result.attack_roll is not None:
+        payload["natural_roll"] = result.attack_roll.natural_roll
+        payload["total"] = result.attack_roll.total
+    if result.attack_resolution is not None:
+        payload["hit"] = result.attack_resolution.hit
+        payload["critical"] = result.attack_resolution.critical
+    if result.damage is not None:
+        payload["damage"] = result.damage.total_applied
     if result.movement_path is not None and result.movement_path.valid:
         payload["kind"] = "movement"
         payload["destination"] = [result.movement_path.destination.col, result.movement_path.destination.row]
@@ -2337,10 +2565,30 @@ def _enemy_turn_preview_payload(result) -> dict[str, object] | None:
         payload["cost_feet"] = result.movement_path.cost_feet
     elif result.target is not None:
         payload["kind"] = "attack"
-        payload["target_id"] = result.target.id
-        payload["target_name"] = result.target.name
-        payload["target_position"] = [result.target.position.col, result.target.position.row]
     return payload
+
+
+def _enemy_roll_summary(result) -> str:
+    if result.attack_roll is None or result.target is None:
+        return ""
+    parts = [
+        f"Rzut d20: {result.attack_roll.natural_roll}",
+        f"wynik końcowy: {result.attack_roll.total}",
+    ]
+    if result.attack_resolution is not None:
+        parts.append("trafienie" if result.attack_resolution.hit else "pudło")
+        if result.attack_resolution.critical:
+            parts.append("krytyk")
+    if result.damage is not None:
+        parts.append(f"obrażenia: {result.damage.total_applied}")
+    return ". ".join(parts) + "."
+
+
+def _enemy_turn_message(result) -> str:
+    summary = _enemy_roll_summary(result)
+    if not summary:
+        return result.message
+    return f"{result.message} {summary}"
 
 
 def _movement_preview_payload(path) -> dict[str, object] | None:
@@ -2376,12 +2624,6 @@ def _player_attack_message(attacker_name: str, target_name: str, total: int, hit
     if hit:
         return f"{attacker_name} trafia {target_name}. Wynik ataku: {total}."
     return f"{attacker_name} pudłuje przeciwko {target_name}. Wynik ataku: {total}."
-
-
-def _default_damage_amount(source) -> int:
-    if source.damage_fixed is not None:
-        return max(0, int(source.damage_fixed) + int(source.damage_modifier))
-    return max(0, int(source.damage_modifier))
 
 
 def _default_encounter_victory_outcome(name: str) -> EncounterOutcome:
@@ -3053,7 +3295,7 @@ function flowPanelHtml() {
       return `
         <h3>Jawne elementy sceny</h3>
         ${availableLocationsHtml(flow.available_locations || [])}
-        <p>Kliknij Skanuj planszę, a potem wskaż element sceny. Dostępny element potwierdzisz kolejnym skanem i drugim kliknięciem.</p>
+        <p>Kliknij Skanuj planszę, a potem wskaż element sceny.</p>
         <button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>
       `;
     }
@@ -3073,8 +3315,8 @@ function flowPanelHtml() {
       ${image}
       <p><b>${esc(preview.name)}</b></p>
       <p>${esc(preview.description || preview.summary || '')}</p>
-      <p><b>Czy chcesz wejść w interakcję?</b> Potwierdź kliknięciem tego samego pola na planszy.</p>
-      <div class="row"><button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button><button class="secondary" data-allow-busy="true" onclick="cancelLocationPreview()">Wróć do wyboru elementów</button></div>
+      <p><b>Czy chcesz wejść w interakcję?</b> Potwierdź Enterem albo przyciskiem.</p>
+      <div class="row"><button onclick="confirmLocationPreview()">Wejdź w eksplorację</button><button class="secondary" data-allow-busy="true" onclick="cancelLocationPreview()">Wróć do wyboru elementów</button></div>
     `;
   }
   if (stage === 'interaction_result') {
@@ -3339,7 +3581,7 @@ function combatStartHtml() {
   `;
 }
 function latestCombatMessageHtml() {
-  const combatTitles = new Set(['Atak', 'Ruch', 'Koniec tury', 'Atak przeciwnika', 'Ruch przeciwnika', 'Tura przeciwnika']);
+  const combatTitles = new Set(['Atak', 'Obrażenia', 'Ruch', 'Koniec tury', 'Atak przeciwnika', 'Obrażenia przeciwnika', 'Ruch przeciwnika', 'Tura przeciwnika']);
   const messages = state.messages || [];
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     if (!combatTitles.has(messages[i].title)) continue;
@@ -3352,13 +3594,13 @@ function combatTurnControlsHtml(combat, isAllyTurn, isEnemyTurn) {
     const preview = combat.enemy_turn_preview || null;
     if (preview && preview.kind === 'movement') {
       return `
-        <div class="message"><b>Ruch przeciwnika</b><br>${esc(preview.enemy_name)} porusza się na (${esc(preview.destination[0])},${esc(preview.destination[1])}). Przestaw figurkę po podświetlonej ścieżce i kliknij pole docelowe.</div>
+        <div class="message"><b>Ruch przeciwnika</b><br>${esc(preview.enemy_name)} porusza się na (${esc(preview.destination[0])},${esc(preview.destination[1])}). Przestaw figurkę po podświetlonej ścieżce i kliknij pole docelowe.${enemyRollSummaryHtml(preview)}</div>
         <button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>
       `;
     }
     if (preview && preview.kind === 'attack') {
       return `
-        <div class="message"><b>Atak przeciwnika</b><br>${esc(preview.enemy_name)} atakuje ${esc(preview.target_name)}. Kliknij podświetlone pole celu, żeby potwierdzić atak.</div>
+        <div class="message"><b>Atak przeciwnika</b><br>${esc(preview.enemy_name)} atakuje ${esc(preview.target_name)}.${enemyRollSummaryHtml(preview)} Kliknij podświetlone pole celu, żeby potwierdzić atak.</div>
         <button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>
       `;
     }
@@ -3369,6 +3611,9 @@ function combatTurnControlsHtml(combat, isAllyTurn, isEnemyTurn) {
   }
   if (!isAllyTurn) {
     return '<p class="muted">Ten aktor nie ma automatycznych kontrolek w MVP.</p><button data-allow-busy="true" onclick="finishCombatTurn()">Zakończ turę</button>';
+  }
+  if (combat.pending_player_attack) {
+    return pendingPlayerAttackHtml(combat.pending_player_attack);
   }
   const source = combat.available_attack || {};
   const targets = combat.legal_targets || [];
@@ -3384,12 +3629,49 @@ function combatTurnControlsHtml(combat, isAllyTurn, isEnemyTurn) {
       <b>Plansza steruje turą</b><br>
       Niebieskie pola: ruch (${esc(moveCount)} pól, zostało ${esc(movement.remaining_feet || 0)} ft).<br>
       ${preview ? `Wybrana ścieżka: (${esc(preview.destination[0])},${esc(preview.destination[1])}), koszt ${esc(preview.cost_feet)} ft. Kliknij Skanuj planszę i wskaż to pole ponownie, żeby zatwierdzić.<br>` : 'Kliknij Skanuj planszę i wskaż niebieskie pole, żeby podejrzeć ścieżkę. Powtórz skan i kliknięcie, żeby zatwierdzić ruch.<br>'}
-      Czerwone pola z przeciwnikiem: atak ${esc(source.name || '-')}${source.damage_hint ? `, obrażenia POC: ${esc(defaultDamageValue(source))}` : ''}.<br>
+      Czerwone pola z przeciwnikiem: atak ${esc(source.name || '-')}${source.damage_hint ? `, po trafieniu rzuć ${esc(source.damage_hint)}` : ''}.<br>
       Cele w zasięgu: ${esc(targetText)}.
       ${actionUsed ? '<br>Akcja w tej turze została już zużyta, czerwone cele nie będą aktywne.' : ''}
     </div>
     <div class="row"><button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button><button class="secondary" data-allow-busy="true" onclick="finishCombatTurn()">Zakończ turę</button></div>
   `;
+}
+function pendingPlayerAttackHtml(pending) {
+  const target = pending.target || {};
+  const source = pending.source || {};
+  if (pending.stage === 'damage_roll') {
+    return `
+      <div class="message">
+        <b>Rzut obrażeń</b><br>
+        Cel: ${esc(target.name || '-')}. Trafienie ${pending.critical ? 'krytyczne' : 'zwykłe'}: d20 ${esc(pending.natural_roll || '')}, razem ${esc(pending.total || '')}.<br>
+        ${esc(pending.damage_instruction || '')}
+      </div>
+      <div class="row">
+        <label>Obrażenia: <input id="combat-damage-roll" type="number" min="0" value="${esc(defaultDamageValue(source))}"></label>
+        <button onclick="submitPlayerDamageRoll()">Zapisz obrażenia</button>
+        <button class="secondary" data-allow-busy="true" onclick="finishCombatTurn()">Zakończ turę</button>
+      </div>
+    `;
+  }
+  return `
+    <div class="message">
+      <b>Rzut ataku</b><br>
+      Cel: ${esc(target.name || '-')}. Atak: ${esc(source.name || '-')}.<br>
+      ${esc(pending.attack_instruction || 'Rzuć 1d20 i wpisz wynik.')}<br>
+      Po trafieniu gra poprosi o obrażenia: ${esc(pending.damage_instruction || source.damage_hint || '')}
+    </div>
+    <div class="row">
+      <label>Wynik d20: <input id="combat-attack-natural-roll" type="number" min="1" max="20" value="10"></label>
+      <button onclick="submitPlayerAttackRoll()">Zapisz rzut</button>
+      <button class="secondary" data-allow-busy="true" onclick="finishCombatTurn()">Zakończ turę</button>
+    </div>
+  `;
+}
+function enemyRollSummaryHtml(preview) {
+  if (!preview || preview.natural_roll === null || preview.natural_roll === undefined) return '';
+  const outcome = preview.hit ? (preview.critical ? 'trafienie krytyczne' : 'trafienie') : 'pudło';
+  const damage = preview.damage !== null && preview.damage !== undefined ? `<br>Obrażenia: ${esc(preview.damage)}.` : '';
+  return `<br>Automatyczny rzut przeciwnika: d20 ${esc(preview.natural_roll)}, razem ${esc(preview.total)} (${outcome}).${damage}`;
 }
 function defaultDamageValue(source) {
   if (!source) return 0;
@@ -3455,6 +3737,7 @@ function travel(zoneId) { api('/api/travel', {zone_id: zoneId}, 'Przechodzę do 
 function selectPoint(pointId) { api('/api/point', {point_id: pointId}, pointId ? 'Otwieram punkt eksploracji...' : 'Wracam do lokacji...'); }
 function finishInteraction() { api('/api/interaction/finish', {}, 'Wracam do wyboru lokacji...'); }
 function cancelLocationPreview() { api('/api/location/cancel-preview', {}, 'Wracam do wyboru lokacji...'); }
+function confirmLocationPreview() { api('/api/location/confirm-preview', {}, 'Wchodzę w eksplorację...'); }
 function confirmExplorationSetup() { api('/api/exploration/setup/confirm', {}, 'Potwierdzam setup mapy...'); }
 function configureBoard() {
   api('/api/board/configure', {
@@ -3469,7 +3752,7 @@ function startSession() { api('/api/start', {}, 'Rozpoczynam sesję...'); }
 function isAllyCombatTurnActive() {
   const combat = state && state.combat ? state.combat : null;
   const actor = combat && combat.current_actor ? combat.current_actor : {};
-  return Boolean(combat && combat.status === 'active' && actor.faction === 'ally' && !combat.enemy_turn_preview);
+  return Boolean(combat && combat.status === 'active' && actor.faction === 'ally' && !combat.enemy_turn_preview && !combat.pending_player_attack);
 }
 async function scanBoard() {
   if (boardScanInFlight) return;
@@ -3526,15 +3809,13 @@ function submitEncounterInitiativeRoll() {
   const input = document.getElementById('encounter-initiative-roll');
   api('/api/encounter/initiative/roll', {natural_roll: Number(input ? input.value : 0)}, 'Zapisuję rzut inicjatywy...');
 }
-function submitPlayerAttack() {
-  const target = document.getElementById('combat-target');
-  const roll = document.getElementById('combat-attack-roll');
-  const damage = document.getElementById('combat-damage');
-  api('/api/combat/player-attack', {
-    target_id: target ? target.value : '',
-    natural_roll: Number(roll ? roll.value : 0),
-    damage: Number(damage ? damage.value : 0)
-  }, 'Rozstrzygam atak...');
+function submitPlayerAttackRoll() {
+  const roll = document.getElementById('combat-attack-natural-roll');
+  api('/api/combat/player-attack-roll', {natural_roll: Number(roll ? roll.value : 0)}, 'Rozstrzygam rzut ataku...');
+}
+function submitPlayerDamageRoll() {
+  const damage = document.getElementById('combat-damage-roll');
+  api('/api/combat/player-damage', {damage: Number(damage ? damage.value : 0)}, 'Zapisuję obrażenia...');
 }
 function submitCombatMove() {
   const destination = document.getElementById('combat-move-destination');
@@ -3579,6 +3860,11 @@ function triggerPrimaryAction() {
     if (isVisible('encounter-panel')) {
     if (combat && combat.status === 'finished') { resolveCombatOutcome(); return true; }
     if (combat && combat.status === 'active') {
+      if (combat.pending_player_attack) {
+        if (combat.pending_player_attack.stage === 'damage_roll') submitPlayerDamageRoll();
+        else submitPlayerAttackRoll();
+        return true;
+      }
       if (combat.enemy_turn_preview) return false;
       const actor = combat.current_actor || {};
       if (actor.faction === 'enemy') { resolveEnemyTurn(); return true; }
@@ -3592,6 +3878,8 @@ function triggerPrimaryAction() {
   }
   if (isVisible('flow-panel')) {
     const stage = state.flow ? state.flow.stage : '';
+    const preview = state.flow ? state.flow.preview_zone : null;
+    if (stage === 'location_preview' && preview && preview.available !== false) { confirmLocationPreview(); return true; }
     if (stage === 'party_setup' && state.exploration_setup) { confirmExplorationSetup(); return true; }
     if (stage === 'interaction_result') { finishInteraction(); return true; }
     if (stage === 'ready_to_start') { startSession(); return true; }

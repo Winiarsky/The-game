@@ -351,19 +351,35 @@ def test_exploration_ui_session_player_attack_applies_damage_and_uses_action():
     assert any(message["title"] == "Atak" and "trafia krytycznie" in message["body"] for message in state["messages"])
 
 
-def test_exploration_ui_session_board_click_on_enemy_resolves_attack():
+def test_exploration_ui_session_board_click_on_enemy_prompts_manual_attack_and_damage_rolls():
     session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
     _start_combat_from_scout_alarm(session)
     state = session.state_payload()
     target = state["combat"]["legal_targets"][0]
     session.attach_board_connection(FakeBoardConnection(clicks=[tuple(target["position"])]), backend="simulator")
 
-    state = session.scan_board_selection()
+    selected = session.scan_board_selection()
+
+    assert selected["combat"]["pending_player_attack"]["stage"] == "attack_roll"
+    assert selected["combat"]["pending_player_attack"]["target"]["id"] == target["id"]
+    assert "Rzuć 1d20" in selected["combat"]["pending_player_attack"]["attack_instruction"]
+    assert selected["combat"]["turn_action"]["action_use"] == "action_available"
+
+    attack_roll = session.submit_player_attack_roll(natural_roll=20)
+    pending = attack_roll["combat"]["pending_player_attack"]
+    assert pending["stage"] == "damage_roll"
+    assert pending["hit"] is True
+    assert pending["critical"] is True
+    assert "Rzuć obrażenia" in pending["damage_instruction"]
+    assert attack_roll["combat"]["turn_action"]["action_use"] == "action_used"
+
+    state = session.submit_player_damage_roll(damage=5)
 
     damaged = next(actor for actor in state["combat"]["actors"] if actor["id"] == target["id"])
     assert damaged["hp"] < target["hp"]
+    assert state["combat"]["pending_player_attack"] is None
     assert state["combat"]["turn_action"]["action_use"] == "action_used"
-    assert any(message["title"] == "Atak" for message in state["messages"])
+    assert any(message["title"] == "Obrażenia" for message in state["messages"])
 
 
 def test_exploration_ui_session_board_scan_shows_feedback_once_before_waiting_for_click():
@@ -438,12 +454,21 @@ def test_exploration_ui_session_enemy_turn_waits_for_board_confirmation():
         click = tuple(enemy_preview["destination"])
     else:
         click = tuple(enemy_preview["target_position"])
+    if "natural_roll" in enemy_preview:
+        assert isinstance(enemy_preview["natural_roll"], int)
+        assert isinstance(enemy_preview["total"], int)
+        assert "hit" in enemy_preview
     board = FakeBoardConnection(clicks=[click])
     session.attach_board_connection(board, backend="simulator")
 
     state = session.scan_board_selection()
 
     assert any(message["title"] == "Tura przeciwnika" for message in state["messages"])
+    if "natural_roll" in enemy_preview:
+        assert any(
+            message["title"] == "Tura przeciwnika" and "Rzut d20:" in message["body"] and "wynik końcowy:" in message["body"]
+            for message in state["messages"]
+        )
     assert state["combat"]["enemy_turn_preview"] is None
     assert state["combat"]["current_actor"]["id"] != enemy_id or state["combat"]["status"] == "finished"
 
