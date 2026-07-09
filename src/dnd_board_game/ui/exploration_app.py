@@ -346,6 +346,7 @@ class ExplorationUiSession:
         self.combat_state: CombatState | None = None
         self.resolved_encounter_trigger_ids: set[str] = set()
         self.pending_enemy_turn_result = None
+        self.pending_enemy_turn_ack_result = None
         self.pending_player_attack: PendingPlayerAttack | None = None
         self.encounter_rng = random.Random(7)
         board_defaults = _load_board_defaults()
@@ -431,6 +432,7 @@ class ExplorationUiSession:
                 self._active_encounter(),
                 self.selected_combat_movement_path,
                 self.pending_enemy_turn_result,
+                self.pending_enemy_turn_ack_result,
                 self.pending_player_attack,
             )
             if self.combat_state
@@ -1204,6 +1206,28 @@ class ExplorationUiSession:
         result = result or self.pending_enemy_turn_result
         if result is None:
             raise ValueError("Brak oczekującej tury przeciwnika do potwierdzenia.")
+        self.combat_state = result.state
+        self.selected_combat_movement_path = None
+        self.pending_enemy_turn_result = None
+        self.pending_enemy_turn_ack_result = result
+        self.board_message = "Wynik tury przeciwnika gotowy. Potwierdź Enterem albo przyciskiem w UI."
+        self._record(
+            "ui_combat_enemy_turn_board_confirmed",
+            {
+                "enemy_id": str(result.enemy.id),
+                "target_id": result.target.id if result.target is not None else None,
+                "message": _enemy_turn_message(result),
+            },
+        )
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def confirm_enemy_turn_result(self) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        result = self.pending_enemy_turn_ack_result
+        if result is None:
+            raise ValueError("Brak wyniku tury przeciwnika do potwierdzenia.")
         return self._finish_pending_enemy_turn(result)
 
     def _finish_pending_enemy_turn(self, result) -> dict[str, object]:
@@ -1212,6 +1236,7 @@ class ExplorationUiSession:
         self.combat_state = finish_turn(result.state)
         self.selected_combat_movement_path = None
         self.pending_enemy_turn_result = None
+        self.pending_enemy_turn_ack_result = None
         self._add_message("Tura przeciwnika", _enemy_turn_message(result))
         self._record(
             "ui_combat_enemy_turn",
@@ -1256,6 +1281,7 @@ class ExplorationUiSession:
         actor = combat_current_actor(self.combat_state)
         self.combat_state = finish_turn(self.combat_state)
         self.selected_combat_movement_path = None
+        self.pending_enemy_turn_ack_result = None
         self.pending_player_attack = None
         self._add_message("Koniec tury", f"Zakończono turę: {actor.name}.")
         self._record("ui_combat_turn_finished", {"actor_id": str(actor.id)})
@@ -2130,6 +2156,13 @@ def create_app(session: ExplorationUiSession) -> Flask:
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
+    @app.post("/api/combat/enemy-turn/confirm")
+    def api_combat_enemy_turn_confirm():
+        try:
+            return jsonify(session.confirm_enemy_turn_result())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
     @app.post("/api/combat/end-turn")
     def api_combat_end_turn():
         try:
@@ -2359,6 +2392,7 @@ def _combat_payload(
     encounter: LoadedEncounter | None = None,
     selected_movement_path=None,
     pending_enemy_turn_result=None,
+    pending_enemy_turn_ack_result=None,
     pending_player_attack: PendingPlayerAttack | None = None,
 ) -> dict[str, object] | None:
     if state is None:
@@ -2391,6 +2425,7 @@ def _combat_payload(
         "movement": _movement_payload(movement, state, actor) if movement is not None else None,
         "movement_preview": _movement_preview_payload(selected_movement_path),
         "enemy_turn_preview": _enemy_turn_preview_payload(pending_enemy_turn_result, encounter),
+        "enemy_turn_result": _enemy_turn_result_payload(pending_enemy_turn_ack_result, encounter),
         "pending_player_attack": _pending_player_attack_payload(pending_player_attack, state, encounter),
     }
 
@@ -2565,6 +2600,15 @@ def _enemy_turn_preview_payload(result, encounter: LoadedEncounter | None = None
         payload["cost_feet"] = result.movement_path.cost_feet
     elif result.target is not None:
         payload["kind"] = "attack"
+    return payload
+
+
+def _enemy_turn_result_payload(result, encounter: LoadedEncounter | None = None) -> dict[str, object] | None:
+    payload = _enemy_turn_preview_payload(result, encounter)
+    if payload is None:
+        return None
+    payload["message"] = _enemy_turn_message(result)
+    payload["summary"] = _enemy_roll_summary(result)
     return payload
 
 
@@ -3585,12 +3629,15 @@ function latestCombatMessageHtml() {
   const messages = state.messages || [];
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     if (!combatTitles.has(messages[i].title)) continue;
-    return `<div class="message"><b>${esc(messages[i].title)}</b><br>${esc(messages[i].body)}</div>`;
+    return `<div class="message"><b>Ostatni rezultat: ${esc(messages[i].title)}</b><br>${esc(messages[i].body)}</div>`;
   }
   return '';
 }
 function combatTurnControlsHtml(combat, isAllyTurn, isEnemyTurn) {
   if (isEnemyTurn) {
+    if (combat.enemy_turn_result) {
+      return enemyTurnResultHtml(combat.enemy_turn_result);
+    }
     const preview = combat.enemy_turn_preview || null;
     if (preview && preview.kind === 'movement') {
       return `
@@ -3625,6 +3672,7 @@ function combatTurnControlsHtml(combat, isAllyTurn, isEnemyTurn) {
     ? targets.map(target => `${target.name} (${target.position[0]},${target.position[1]})`).join(', ')
     : 'brak';
   return `
+    ${playerTurnStatusHtml(combat)}
     <div class="message">
       <b>Plansza steruje turą</b><br>
       Niebieskie pola: ruch (${esc(moveCount)} pól, zostało ${esc(movement.remaining_feet || 0)} ft).<br>
@@ -3636,15 +3684,62 @@ function combatTurnControlsHtml(combat, isAllyTurn, isEnemyTurn) {
     <div class="row"><button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button><button class="secondary" data-allow-busy="true" onclick="finishCombatTurn()">Zakończ turę</button></div>
   `;
 }
+function playerTurnStatusHtml(combat) {
+  const actor = combat.current_actor || {};
+  const movement = combat.movement || {};
+  const preview = combat.movement_preview || null;
+  const actionUsed = combat.turn_action && combat.turn_action.action_use === 'action_used';
+  const remaining = Number(movement.remaining_feet || 0);
+  let next = '';
+  if (preview) {
+    next = `Wybrano ruch na (${esc(preview.destination[0])},${esc(preview.destination[1])}) za ${esc(preview.cost_feet)} ft. Potwierdź pole planszą albo zakończ turę.`;
+  } else if (actionUsed && remaining > 0) {
+    next = `Akcja zużyta. Możesz jeszcze ruszyć się (${esc(remaining)} ft) albo zakończyć turę.`;
+  } else if (actionUsed) {
+    next = 'Akcja zużyta. Możesz zakończyć turę.';
+  } else if (remaining > 0) {
+    next = `Akcja dostępna. Możesz ruszyć się (${esc(remaining)} ft), zaatakować albo zakończyć turę.`;
+  } else {
+    next = 'Ruch wykorzystany. Możesz zaatakować albo zakończyć turę.';
+  }
+  return `
+    <div class="result">
+      <b>Tura gracza: ${esc(actor.name || '-')}</b><br>
+      <b>Akcja:</b> ${actionUsed ? 'zużyta' : 'dostępna'} | <b>Ruch:</b> ${esc(remaining)} ft<br>
+      ${next}
+    </div>
+  `;
+}
+function enemyTurnResultHtml(result) {
+  const target = result.target_name ? ` przeciwko ${esc(result.target_name)}` : '';
+  const hitText = result.hit === true ? (result.critical ? 'TRAFIENIE KRYTYCZNE' : 'TRAFIENIE') : (result.hit === false ? 'PUDŁO' : 'BRAK ATAKU');
+  const rollHtml = result.natural_roll !== null && result.natural_roll !== undefined
+    ? `<div><b>Rzut d20:</b> ${esc(result.natural_roll)} | <b>Wynik końcowy:</b> ${esc(result.total)}</div>`
+    : '';
+  const damageHtml = result.damage !== null && result.damage !== undefined
+    ? `<div><b>Obrażenia:</b> ${esc(result.damage)}</div>`
+    : '';
+  return `
+    <div class="result">
+      <b>Wynik tury przeciwnika: ${hitText}</b><br>
+      ${esc(result.enemy_name || 'Przeciwnik')}${target}<br>
+      ${rollHtml}
+      ${damageHtml}
+      <div class="muted">${esc(result.message || '')}</div>
+    </div>
+    <button data-allow-busy="true" onclick="confirmEnemyTurnResult()">Potwierdź wynik przeciwnika</button>
+  `;
+}
 function pendingPlayerAttackHtml(pending) {
   const target = pending.target || {};
   const source = pending.source || {};
   if (pending.stage === 'damage_roll') {
     return `
-      <div class="message">
-        <b>Rzut obrażeń</b><br>
-        Cel: ${esc(target.name || '-')}. Trafienie ${pending.critical ? 'krytyczne' : 'zwykłe'}: d20 ${esc(pending.natural_roll || '')}, razem ${esc(pending.total || '')}.<br>
-        ${esc(pending.damage_instruction || '')}
+      <div class="result">
+        <b>Tura gracza: wpisz obrażenia</b><br>
+        <b>Cel:</b> ${esc(target.name || '-')} | <b>Trafienie:</b> ${pending.critical ? 'krytyczne' : 'zwykłe'}<br>
+        <b>Rzut d20:</b> ${esc(pending.natural_roll || '')} | <b>Wynik końcowy:</b> ${esc(pending.total || '')}<br>
+        <b>Co teraz:</b> ${esc(pending.damage_instruction || '')}
       </div>
       <div class="row">
         <label>Obrażenia: <input id="combat-damage-roll" type="number" min="0" value="${esc(defaultDamageValue(source))}"></label>
@@ -3654,11 +3749,11 @@ function pendingPlayerAttackHtml(pending) {
     `;
   }
   return `
-    <div class="message">
-      <b>Rzut ataku</b><br>
-      Cel: ${esc(target.name || '-')}. Atak: ${esc(source.name || '-')}.<br>
-      ${esc(pending.attack_instruction || 'Rzuć 1d20 i wpisz wynik.')}<br>
-      Po trafieniu gra poprosi o obrażenia: ${esc(pending.damage_instruction || source.damage_hint || '')}
+    <div class="result">
+      <b>Tura gracza: wybrano cel</b><br>
+      <b>Cel:</b> ${esc(target.name || '-')} | <b>Atak:</b> ${esc(source.name || '-')}<br>
+      <b>Co teraz:</b> ${esc(pending.attack_instruction || 'Rzuć 1d20 i wpisz wynik.')}<br>
+      Po trafieniu: ${esc(pending.damage_instruction || source.damage_hint || '')}
     </div>
     <div class="row">
       <label>Wynik d20: <input id="combat-attack-natural-roll" type="number" min="1" max="20" value="10"></label>
@@ -3823,6 +3918,7 @@ function submitCombatMove() {
   api('/api/combat/move', {col: Number(parts[0]), row: Number(parts[1])}, 'Wykonuję ruch...');
 }
 function resolveEnemyTurn() { api('/api/combat/enemy-turn', {}, 'Rozgrywam turę przeciwnika...'); }
+function confirmEnemyTurnResult() { api('/api/combat/enemy-turn/confirm', {}, 'Potwierdzam wynik przeciwnika...'); }
 async function finishCombatTurn() {
   await stopBoardScanLoop();
   api('/api/combat/end-turn', {}, 'Kończę turę...');
@@ -3860,6 +3956,7 @@ function triggerPrimaryAction() {
     if (isVisible('encounter-panel')) {
     if (combat && combat.status === 'finished') { resolveCombatOutcome(); return true; }
     if (combat && combat.status === 'active') {
+      if (combat.enemy_turn_result) { confirmEnemyTurnResult(); return true; }
       if (combat.pending_player_attack) {
         if (combat.pending_player_attack.stage === 'damage_roll') submitPlayerDamageRoll();
         else submitPlayerAttackRoll();

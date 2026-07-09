@@ -461,7 +461,16 @@ def test_exploration_ui_session_enemy_turn_waits_for_board_confirmation():
     board = FakeBoardConnection(clicks=[click])
     session.attach_board_connection(board, backend="simulator")
 
-    state = session.scan_board_selection()
+    result = session.scan_board_selection()
+
+    assert result["combat"]["enemy_turn_preview"] is None
+    assert result["combat"]["enemy_turn_result"] is not None
+    assert result["combat"]["current_actor"]["id"] == enemy_id
+    if "natural_roll" in enemy_preview:
+        assert "Rzut d20:" in result["combat"]["enemy_turn_result"]["message"]
+        assert "wynik końcowy:" in result["combat"]["enemy_turn_result"]["message"]
+
+    state = session.confirm_enemy_turn_result()
 
     assert any(message["title"] == "Tura przeciwnika" for message in state["messages"])
     if "natural_roll" in enemy_preview:
@@ -470,6 +479,7 @@ def test_exploration_ui_session_enemy_turn_waits_for_board_confirmation():
             for message in state["messages"]
         )
     assert state["combat"]["enemy_turn_preview"] is None
+    assert state["combat"]["enemy_turn_result"] is None
     assert state["combat"]["current_actor"]["id"] != enemy_id or state["combat"]["status"] == "finished"
 
 

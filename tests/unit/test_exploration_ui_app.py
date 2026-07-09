@@ -123,6 +123,13 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
     assert 'data-allow-busy="true" onclick="finishCombatTurn()"' in html
     assert 'data-allow-busy="true" onclick="resolveEnemyTurn()"' in html
     assert "latestCombatMessageHtml()" in html
+    assert "Ostatni rezultat:" in html
+    assert "playerTurnStatusHtml" in html
+    assert "Tura gracza:" in html
+    assert "Akcja:" in html
+    assert "Ruch:" in html
+    assert "wybrano cel" in html
+    assert "wpisz obrażenia" in html
     assert "maybeAutoScanBoard" not in html
     assert "scanBoardAuto" not in html
     assert 'data-primary-scan="true" onclick="scanBoard()"' in html
@@ -137,6 +144,9 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
     assert "/api/combat/player-attack-roll" in html
     assert "/api/combat/player-damage" in html
     assert "enemyRollSummaryHtml" in html
+    assert "enemyTurnResultHtml" in html
+    assert "confirmEnemyTurnResult()" in html
+    assert "/api/combat/enemy-turn/confirm" in html
     assert "/api/combat/enemy-attack-roll" not in html
     assert "/api/combat/enemy-damage" not in html
     assert "confirmLocationPreview()" in html
