@@ -264,6 +264,22 @@ def _advance_encounter_setup(client, board):
     return client.post("/api/encounter/setup/confirm", json={}).get_json()
 
 
+def _resolve_enemy_turn_from_ui(client, board):
+    state = client.post("/api/combat/enemy-turn", json={}).get_json()
+    preview = state["combat"]["enemy_turn_preview"]
+    if preview is None:
+        return state
+
+    if preview["kind"] == "movement":
+        board.clicks.append(tuple(preview["destination"]))
+    else:
+        board.clicks.append(tuple(preview["target_position"]))
+
+    result = client.post("/api/board/scan", json={}).get_json()
+    assert result["combat"]["enemy_turn_result"] is not None
+    return client.post("/api/combat/enemy-turn/confirm", json={}).get_json()
+
+
 def test_exploration_ui_start_preview_location_and_confirm_from_ui_updates_leds():
     session = _session(active=False)
     board = FakeBoardConnection(clicks=[(9, 2), (9, 2)])
@@ -611,6 +627,99 @@ def test_exploration_ui_starts_combat_after_setup_and_initiative():
     assert combat["round_number"] == 1
     assert len(combat["actors"]) == 4
     assert any(message["title"] == "Kolejność inicjatywy" for message in after_rogue["messages"])
+
+
+def test_exploration_ui_happy_path_returns_to_player_after_enemy_turns():
+    session = _session(active=False)
+    board = FakeBoardConnection(clicks=[(9, 2)])
+    session.attach_board_connection(board, backend="simulator")
+    client = create_app(session).test_client()
+
+    ready = client.get("/api/state").get_json()
+    assert ready["flow"]["stage"] == "ready_to_start"
+
+    started = client.post("/api/start", json={}).get_json()
+    assert started["flow"]["stage"] == "party_setup"
+
+    preview_ready = _finish_map_setup(client)
+    assert preview_ready["flow"]["stage"] == "location_preview"
+
+    preview = client.post("/api/board/scan", json={}).get_json()
+    assert preview["flow"]["preview_zone"]["id"] == "gate"
+    assert preview["active_challenge"] is None
+
+    active = client.post("/api/location/confirm-preview", json={}).get_json()
+    assert active["flow"]["stage"] == "location_active"
+    assert active["active_challenge"]["id"] == "closed_gate"
+
+    action = client.post("/api/action", json={"text": "Hałasujemy przy bramie."}).get_json()
+    assert action["pending"]["stage"] == "decision"
+
+    accepted = client.post("/api/decision", json={"decision": "accept"}).get_json()
+    assert accepted["required_rolls"] == [{"actor_id": "hero", "actor_name": "Bohater"}]
+
+    resolved = client.post("/api/rolls", json={"rolls": {"hero": 16}}).get_json()
+    assert resolved["flow"]["stage"] == "interaction_result"
+
+    setup_ready = _confirm_fallen_gate_setup(client)
+    assert setup_ready["pending_encounter"]["trigger_id"] == "gate_open_skirmish"
+
+    setup_started = client.post("/api/encounter/setup/start", json={}).get_json()
+    assert setup_started["encounter_setup"]["status"] == "active"
+    while True:
+        setup_state = _advance_encounter_setup(client, board)
+        if setup_state["encounter_setup"]["status"] == "completed":
+            break
+
+    initiative = client.post("/api/encounter/initiative/start", json={}).get_json()
+    assert initiative["encounter_initiative"]["current_prompt"]["actor_id"] == "hero"
+
+    client.post("/api/encounter/initiative/roll", json={"natural_roll": 20})
+    combat_started = client.post("/api/encounter/initiative/roll", json={"natural_roll": 19}).get_json()
+    combat = combat_started["combat"]
+    first_player_id = combat["current_actor"]["id"]
+    assert combat["status"] == "active"
+    assert combat["current_actor"]["faction"] == "ally"
+    assert first_player_id == "rogue"
+
+    move_destination = next(tile for tile in combat["movement"]["destinations"] if tile["cost_feet"] == 5)
+    moved = client.post(
+        "/api/combat/move",
+        json={"col": move_destination["col"], "row": move_destination["row"]},
+    ).get_json()
+    assert moved["combat"]["current_actor"]["id"] == first_player_id
+    assert moved["combat"]["movement"]["remaining_feet"] == 25
+    assert moved["combat"]["turn_action"]["action_use"] == "action_available"
+
+    target = moved["combat"]["legal_targets"][0]
+    selected = client.post(
+        "/api/board/select",
+        json={"col": target["position"][0], "row": target["position"][1]},
+    ).get_json()
+    assert selected["combat"]["pending_player_attack"]["stage"] == "attack_roll"
+
+    attack_roll = client.post("/api/combat/player-attack-roll", json={"natural_roll": 20}).get_json()
+    assert attack_roll["combat"]["pending_player_attack"]["stage"] == "damage_roll"
+
+    damaged = client.post("/api/combat/player-damage", json={"damage": 5}).get_json()
+    assert damaged["combat"]["pending_player_attack"] is None
+    assert damaged["combat"]["turn_action"]["action_use"] == "action_used"
+
+    state = client.post("/api/combat/end-turn", json={}).get_json()
+    while state["combat"]["current_actor"]["faction"] == "ally":
+        state = client.post("/api/combat/end-turn", json={}).get_json()
+
+    assert state["combat"]["current_actor"]["faction"] == "enemy"
+    assert state["combat"]["round_number"] == 1
+
+    while state["combat"]["current_actor"]["faction"] == "enemy":
+        state = _resolve_enemy_turn_from_ui(client, board)
+
+    assert state["combat"]["current_actor"]["faction"] == "ally"
+    assert state["combat"]["round_number"] == 2
+    assert state["combat"]["enemy_turn_preview"] is None
+    assert state["combat"]["enemy_turn_result"] is None
+    assert any(message["title"] == "Tura przeciwnika" for message in state["messages"])
 
 
 def test_exploration_ui_board_scan_selects_travel_zone_and_updates_leds():
