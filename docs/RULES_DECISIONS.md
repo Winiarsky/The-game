@@ -235,6 +235,13 @@ Implementacja MVP:
 - Mini-pętla walki obsługuje start tury, zużycie akcji, koniec tury, przejście inicjatywy i zakończenie walki.
 - Tura śledzi osobno akcję główną, akcję bonusową, reakcję i zużyty ruch.
 - W MVP zaimplementowane jest zużycie/reset akcji bonusowej i reakcji jako zasobów tury, ale bez konkretnych zdolności korzystających z tych zasobów.
+- Jawne obiekty sceny mogą oferować deterministyczne interakcje walki zużywające akcję główną.
+- Interakcje walki są data-driven: `SceneInteraction` może deklarować listę `conditions` oraz listę `effects`.
+- Warunki interakcji MVP obejmują dostępną akcję, sąsiedztwo obiektu, stanie na obiekcie, sąsiedniego przeciwnika oraz wolne pole docelowe.
+- Efekty interakcji MVP obejmują `grant_ac_bonus_until_move`, `move_actor_to_tile`, `grant_attack_bonus_while_on_object` i `grant_next_attack_penalty`.
+- `Rozbity wóz` w `gate_skirmish` ma dwie interakcje opisane tym modelem: osłona `+2 AC` do opuszczenia pola oraz wejście na wóz dające `+2` do ataku, dopóki aktor stoi na polu wozu.
+- `Rumowisko` w `gate_skirmish` jest jednocześnie trudnym terenem i obiektem interakcji: aktor stojący na rumowisku może użyć akcji `Sypnij gruzem`, żeby wymusić u najbliższego sąsiedniego przeciwnika rzut obronny na Zręczność ST 12; porażka daje `-2` do następnego ataku, sukces nie nakłada kary.
+- Warunki interakcji są jawne w payloadzie UI, np. pozycja aktora przy obiekcie, wolne pole docelowe i dostępna akcja.
 - W runtime demo przeciwnik wykonuje automatyczny melee attack przez wstrzyknięty RNG.
 - Jeśli przeciwnik musi się ruszyć przed atakiem, aplikacja pokazuje ścieżkę LED i wymaga kliknięcia pola docelowego po fizycznym przestawieniu figurki.
 - Domyślny przeciwnik demo używa ataku `Szabla`, modyfikatora `+4` i obrażeń `1d6 + 2 slashing`.
@@ -256,6 +263,8 @@ Poza zakresem MVP:
 - destrukcja obiektów i przeszkód.
 - pełne AI ruchu przeciwników,
 - ruch w turze podczas multi-actor MVP,
+- testy sporne, rzuty obronne i obrażenia obszarowe z interakcji sceny,
+- przesuwanie obiektów sceny po planszy,
 - konkretne bonus actions, konkretne reactions i multiattack.
 
 Odstępstwa / decyzje planszowe:
@@ -274,6 +283,9 @@ Odstępstwa / decyzje planszowe:
 - W takim przypadku plansza pokazuje kolor `multi-option`, kliknięcie tego samego pola przełącza opcję, a Enter potwierdza aktualną opcję.
 - Obiekty sceny mogą deklarować `blocks_movement`, `allow_interaction_when_occupied_by_enemy` i `cover_bonus`.
 - Jeśli cel ataku stoi na obiekcie z `cover_bonus`, runtime dodaje jawny modyfikator osłony do instrukcji rzutu ataku.
+- W web UI walki efekty interakcji obiektu są przypięte do pozycji aktora: osłona wygasa po ruchu z pola, a premia z wozu wygasa po zejściu z pól wozu.
+- UI walki nie rozpoznaje już efektów wozu po ID interakcji; wykonuje znane prymitywy efektów z contentu.
+- Zielone LED-y oznaczają legalne pola interakcji sceny; jeśli pole jest jednocześnie ruchem i interakcją, kliknięcie z dostępną akcją otwiera wybór interakcji.
 - Interakcja przy przeciwniku może wywołać uproszczony atak okazyjny jako decyzję planszowego MVP.
 - Pierwsza scena grywalna może zakończyć się przez spełnienie celu sceny, a nie tylko przez pokonanie wszystkich przeciwników.
 - Interakcja z jawnym obiektem jest akcją główną: kliknięcie obiektu pokazuje podgląd, drugie kliknięcie potwierdza i zużywa akcję.
@@ -307,6 +319,7 @@ Testy:
 - `tests/unit/test_scene_interactions.py`
 - `tests/unit/test_interaction_intent.py`
 - `tests/unit/test_turn_led_feedback.py`
+- `tests/unit/test_exploration_ui_session.py`
 
 ## Eksploracja
 

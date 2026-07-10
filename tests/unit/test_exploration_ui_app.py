@@ -138,6 +138,9 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
     assert "combatPrimaryActionHtml" in html
     assert "combatLastResultHtml" in html
     assert "combatActionDetailsHtml" in html
+    assert "pendingCombatInteractionHtml" in html
+    assert "/api/combat/interaction/confirm" in html
+    assert "/api/combat/interaction/cancel" in html
     assert "combatMainPromptHtml" in html
     assert "combatInstructionText" in html
     assert "combatActorStatusHtml" in html

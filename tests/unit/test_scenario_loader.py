@@ -158,6 +158,37 @@ def test_load_first_playable_scene_builds_setup_objective_and_scene_object():
     assert encounter.board.terrain_at(Coordinate(2, 2)).is_difficult is True
 
 
+def test_load_gate_skirmish_parses_combat_interaction_conditions_and_effects():
+    encounter = build_encounter_from_scenario(load_scenario("content/scenarios/gate_skirmish.json"))
+    cart = next(scene_object for scene_object in encounter.scene_objects if scene_object.id == "broken_cart")
+    rubble = next(scene_object for scene_object in encounter.scene_objects if scene_object.id == "rubble_patch")
+
+    take_cover = next(interaction for interaction in cart.interactions if interaction.id == "take_cover_cart")
+    climb = next(interaction for interaction in cart.interactions if interaction.id == "climb_cart")
+    throw_rubble = next(interaction for interaction in rubble.interactions if interaction.id == "throw_rubble")
+
+    assert [condition.condition_type for condition in take_cover.conditions] == [
+        "action_available",
+        "actor_adjacent_to_object",
+    ]
+    assert take_cover.effects[0].effect_type == "grant_ac_bonus_until_move"
+    assert ("value", 2) in take_cover.effects[0].parameters
+    assert [effect.effect_type for effect in climb.effects] == [
+        "move_actor_to_tile",
+        "grant_attack_bonus_while_on_object",
+    ]
+    assert rubble.blocks_movement is False
+    assert [condition.condition_type for condition in throw_rubble.conditions] == [
+        "action_available",
+        "actor_on_object",
+        "adjacent_enemy_exists",
+    ]
+    assert throw_rubble.effects[0].effect_type == "grant_next_attack_penalty"
+    assert ("value", -2) in throw_rubble.effects[0].parameters
+    assert ("saving_throw_ability", "dexterity") in throw_rubble.effects[0].parameters
+    assert ("saving_throw_dc", 12) in throw_rubble.effects[0].parameters
+
+
 def test_load_abandoned_watchtower_builds_exploration_scene():
     loaded = load_scenario("content/scenarios/abandoned_watchtower.json")
     exploration = build_exploration_from_scenario(loaded)

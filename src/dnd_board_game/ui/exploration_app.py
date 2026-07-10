@@ -13,8 +13,10 @@ from dnd_board_game.actors import Actor, Faction
 from dnd_board_game.combat import (
     ActorSetupEntry,
     ActionUse,
+    ActiveCombatEffect,
     AttackDeclaration,
     CombatState,
+    CombatInteractionOption,
     EncounterSetup,
     InitiativeEntry,
     InitiativeOrder,
@@ -30,10 +32,18 @@ from dnd_board_game.combat import (
     build_setup_steps,
     build_initiative_order,
     build_player_initiative_prompts,
+    combat_interaction_hint_positions,
+    combat_interaction_positions,
+    consume_next_attack_effects,
     current_actor as combat_current_actor,
     finish_turn,
     active_actor_led_feedback,
+    apply_combat_interaction_effects,
     apply_damage_result,
+    attack_source_with_combat_effects,
+    available_combat_interaction_options,
+    available_scene_interactions,
+    expire_invalid_combat_effects,
     initiative_prompt_led_feedback,
     replace_actor,
     resolve_attack,
@@ -42,6 +52,8 @@ from dnd_board_game.combat import (
     roll_enemy_initiative,
     plan_enemy_turn,
     scene_flag,
+    scene_object_at_position,
+    scene_object_by_id,
     select_attack_target,
     setup_led_feedback,
     start_combat,
@@ -297,6 +309,24 @@ class PendingPlayerAttack:
     critical: bool = False
 
 
+@dataclass(frozen=True, slots=True)
+class PendingCombatInteraction:
+    actor_id: str
+    object_id: str
+    object_name: str
+    target_position: Coordinate
+    options: tuple[CombatInteractionOption, ...]
+
+    def as_payload(self) -> dict[str, object]:
+        return {
+            "actor_id": self.actor_id,
+            "object_id": self.object_id,
+            "object_name": self.object_name,
+            "target_position": [self.target_position.col, self.target_position.row],
+            "options": [option.as_payload() for option in self.options],
+        }
+
+
 class ExplorationUiSession:
     def __init__(
         self,
@@ -350,6 +380,8 @@ class ExplorationUiSession:
         self.pending_enemy_turn_result = None
         self.pending_enemy_turn_ack_result = None
         self.pending_player_attack: PendingPlayerAttack | None = None
+        self.pending_combat_interaction: PendingCombatInteraction | None = None
+        self.active_combat_effects: tuple[ActiveCombatEffect, ...] = ()
         self.encounter_rng = random.Random(7)
         board_defaults = _load_board_defaults()
         self.board_backend = "none"
@@ -390,6 +422,7 @@ class ExplorationUiSession:
 
     def state_payload(self) -> dict[str, object]:
         self._refresh_pending_encounter()
+        self._expire_invalid_combat_effects()
         active_challenge = self.active_challenge if self.ui_flow_stage == UiFlowStage.LOCATION_ACTIVE else None
         current_zone_points = self.current_zone_points() if self.ui_flow_stage == UiFlowStage.LOCATION_ACTIVE else ()
         scene_status = _scene_status_payload(self.state)
@@ -437,6 +470,8 @@ class ExplorationUiSession:
                 self.pending_enemy_turn_result,
                 self.pending_enemy_turn_ack_result,
                 self.pending_player_attack,
+                self.pending_combat_interaction,
+                self.active_combat_effects,
             )
             if self.combat_state
             else None,
@@ -923,6 +958,7 @@ class ExplorationUiSession:
         source = encounter.attack_sources_by_actor.get(attacker.id)
         if source is None:
             raise ValueError(f"Aktor {attacker.name} nie ma zdefiniowanego ataku.")
+        source = self._effective_attack_source(attacker, source)
         action = start_attack_action(encounter.board, attacker, self.combat_state.actors, source)
         selected = select_attack_target(action, target_id=target_id)
         assert selected.selected_target is not None
@@ -932,6 +968,7 @@ class ExplorationUiSession:
         if not action_result.accepted:
             raise ValueError(action_result.message)
         resolution = resolve_attack(declaration, attack_roll, selected.action_use)
+        self.active_combat_effects = consume_next_attack_effects(self.active_combat_effects, str(attacker.id))
         updated_state = action_result.state
         message = _player_attack_message(attacker.name, selected.selected_target.name, attack_roll.total, resolution.hit, resolution.critical)
         applied_damage = None
@@ -980,6 +1017,7 @@ class ExplorationUiSession:
         source = encounter.attack_sources_by_actor.get(attacker.id)
         if source is None:
             raise ValueError(f"Aktor {attacker.name} nie ma zdefiniowanego ataku.")
+        source = self._effective_attack_source(attacker, source)
         action = start_attack_action(encounter.board, attacker, self.combat_state.actors, source)
         selected = select_attack_target(action, position=position)
         assert selected.selected_target is not None
@@ -1014,6 +1052,7 @@ class ExplorationUiSession:
         source = encounter.attack_sources_by_actor.get(attacker.id)
         if source is None:
             raise ValueError(f"Aktor {attacker.name} nie ma zdefiniowanego ataku.")
+        source = self._effective_attack_source(attacker, source)
         action = start_attack_action(encounter.board, attacker, self.combat_state.actors, source)
         selected = select_attack_target(action, target_id=pending.target_id)
         assert selected.selected_target is not None
@@ -1060,6 +1099,7 @@ class ExplorationUiSession:
         source = encounter.attack_sources_by_actor.get(attacker.id)
         if source is None:
             raise ValueError(f"Aktor {attacker.name} nie ma zdefiniowanego ataku.")
+        source = self._effective_attack_source(attacker, source)
         action = start_attack_action(encounter.board, attacker, self.combat_state.actors, source)
         selected = select_attack_target(action, target_id=pending.target_id)
         assert selected.selected_target is not None
@@ -1069,6 +1109,7 @@ class ExplorationUiSession:
         if not action_result.accepted:
             raise ValueError(action_result.message)
         resolution = resolve_attack(declaration, attack_roll, selected.action_use)
+        self.active_combat_effects = consume_next_attack_effects(self.active_combat_effects, str(attacker.id))
         self.combat_state = action_result.state
         self.selected_combat_movement_path = None
         message = _player_attack_message(attacker.name, selected.selected_target.name, attack_roll.total, resolution.hit, resolution.critical)
@@ -1126,6 +1167,7 @@ class ExplorationUiSession:
         source = encounter.attack_sources_by_actor.get(attacker.id)
         if source is None:
             raise ValueError(f"Aktor {attacker.name} nie ma zdefiniowanego ataku.")
+        source = self._effective_attack_source(attacker, source)
         target_actor = next((actor for actor in self.combat_state.actors if str(actor.id) == pending.target_id), None)
         if target_actor is None:
             raise ValueError(f"Nieznany cel ataku: {pending.target_id}.")
@@ -1201,6 +1243,8 @@ class ExplorationUiSession:
             raise ValueError(result.message)
         self.combat_state = result.state
         self.selected_combat_movement_path = None
+        self.pending_combat_interaction = None
+        self._expire_invalid_combat_effects()
         self._add_message("Ruch", result.message)
         self._record(
             "ui_combat_player_moved",
@@ -1214,6 +1258,159 @@ class ExplorationUiSession:
         )
         self._sync_board_leds()
         return self.state_payload()
+
+    def select_combat_interaction_at_position(self, position: Coordinate) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        encounter = self._active_encounter()
+        if encounter is None:
+            raise ValueError("Brak danych encountera dla aktywnej walki.")
+        actor = combat_current_actor(self.combat_state)
+        options = self._available_combat_interaction_options(encounter, actor, position)
+        if not options:
+            raise ValueError("To pole nie ma teraz dostępnej interakcji.")
+        scene_object = self._scene_object_at_position(encounter, position)
+        assert scene_object is not None
+        self.pending_combat_interaction = PendingCombatInteraction(
+            actor_id=str(actor.id),
+            object_id=scene_object.id,
+            object_name=scene_object.name,
+            target_position=position,
+            options=options,
+        )
+        self.selected_combat_movement_path = None
+        self.pending_player_attack = None
+        option_labels = ", ".join(option.label for option in options)
+        self.board_message = f"Wybrano interakcję z obiektem: {scene_object.name}. Wybierz w UI: {option_labels}."
+        self._add_message(
+            "Interakcja",
+            f"{actor.name} wybiera {scene_object.name}. Dostępne opcje: {option_labels}.",
+        )
+        self._record(
+            "ui_combat_interaction_selected",
+            {
+                "actor_id": str(actor.id),
+                "object_id": scene_object.id,
+                "position": [position.col, position.row],
+                "options": [option.id for option in options],
+            },
+        )
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def confirm_combat_interaction(self, interaction_id: str) -> dict[str, object]:
+        pending = self.pending_combat_interaction
+        if pending is None:
+            raise ValueError("Nie ma interakcji do potwierdzenia.")
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        encounter = self._active_encounter()
+        if encounter is None:
+            raise ValueError("Brak danych encountera dla aktywnej walki.")
+        actor = combat_current_actor(self.combat_state)
+        if str(actor.id) != pending.actor_id:
+            raise ValueError("Oczekująca interakcja nie należy do aktywnego aktora.")
+        option = next((candidate for candidate in pending.options if candidate.id == interaction_id), None)
+        if option is None:
+            raise ValueError("Nieznana opcja interakcji.")
+        action_result = use_turn_action(self.combat_state)
+        if not action_result.accepted:
+            raise ValueError(action_result.message)
+        scene_object = self._scene_object_by_id(encounter, option.object_id)
+        if scene_object is None:
+            raise ValueError("Obiekt interakcji nie istnieje w aktywnym encounterze.")
+        interaction = next((candidate for candidate in available_scene_interactions(scene_object) if candidate.id == option.id), None)
+        if interaction is None:
+            raise ValueError("Interakcja nie istnieje w aktywnym encounterze.")
+        applied = apply_combat_interaction_effects(
+            state=action_result.state,
+            actor=actor,
+            scene_object=scene_object,
+            interaction=interaction,
+            target_position=option.target_position,
+            active_effects=self.active_combat_effects,
+            rng=self.encounter_rng,
+        )
+        self.combat_state = applied.state
+        self.active_combat_effects = applied.active_effects
+        message = f"{actor.name}: {applied.message}"
+        self.pending_combat_interaction = None
+        self.selected_combat_movement_path = None
+        self._add_message("Interakcja", message)
+        self.board_message = message
+        self._record(
+            "ui_combat_interaction_confirmed",
+            {
+                "actor_id": str(actor.id),
+                "object_id": scene_object.id,
+                "interaction_id": option.id,
+                "message": message,
+                "saving_throw": applied.saving_throw.as_payload() if applied.saving_throw is not None else None,
+            },
+        )
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def cancel_combat_interaction(self) -> dict[str, object]:
+        pending = self.pending_combat_interaction
+        if pending is None:
+            raise ValueError("Nie ma interakcji do anulowania.")
+        self.pending_combat_interaction = None
+        self.board_message = "Anulowano interakcję. Kliknij Skanuj planszę, żeby wybrać ruch, cel albo obiekt."
+        self._add_message("Interakcja", "Anulowano wybór interakcji.")
+        self._record(
+            "ui_combat_interaction_cancelled",
+            {"actor_id": pending.actor_id, "object_id": pending.object_id},
+        )
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def _effective_attack_source(self, actor: Actor, source):
+        return attack_source_with_combat_effects(actor, source, self.active_combat_effects)
+
+    def _available_combat_interaction_options(
+        self,
+        encounter: LoadedEncounter,
+        actor: Actor,
+        position: Coordinate,
+    ) -> tuple[CombatInteractionOption, ...]:
+        if self.combat_state is None or actor.faction != Faction.ALLY:
+            return ()
+        if self.combat_state.status.value != "active":
+            return ()
+        return available_combat_interaction_options(encounter.scene_objects, self.combat_state, actor, position)
+
+    def _combat_interaction_positions(self, encounter: LoadedEncounter, actor: Actor) -> tuple[Coordinate, ...]:
+        if self.combat_state is None:
+            return ()
+        return combat_interaction_positions(encounter.scene_objects, self.combat_state, actor)
+
+    def _combat_interaction_hint_positions(
+        self,
+        encounter: LoadedEncounter,
+        actor: Actor,
+        movement: MovementRangeResult,
+    ) -> tuple[Coordinate, ...]:
+        if self.combat_state is None:
+            return ()
+        return combat_interaction_hint_positions(encounter.scene_objects, self.combat_state, actor, movement.reachable_tiles)
+
+    def _scene_object_at_position(self, encounter: LoadedEncounter, position: Coordinate):
+        return scene_object_at_position(encounter.scene_objects, position)
+
+    def _scene_object_by_id(self, encounter: LoadedEncounter, object_id: str):
+        return scene_object_by_id(encounter.scene_objects, object_id)
+
+    def _expire_invalid_combat_effects(self) -> None:
+        if self.combat_state is None or not self.active_combat_effects:
+            return
+        encounter = self._active_encounter()
+        scene_objects = encounter.scene_objects if encounter is not None else ()
+        self.combat_state, self.active_combat_effects = expire_invalid_combat_effects(
+            self.combat_state,
+            scene_objects,
+            self.active_combat_effects,
+        )
 
     def resolve_enemy_turn(self) -> dict[str, object]:
         if self.combat_state is None:
@@ -1245,6 +1442,7 @@ class ExplorationUiSession:
             self._sync_board_leds()
             return self.state_payload()
         self.pending_enemy_turn_intent = None
+        source = self._effective_attack_source(enemy, source)
         result = resolve_enemy_auto_turn(encounter.board, self.combat_state, enemy, source, self.encounter_rng)
         if result.movement_path is not None and result.movement_path.valid and result.movement_path.destination != enemy.position:
             self.pending_enemy_turn_result = result
@@ -1278,6 +1476,8 @@ class ExplorationUiSession:
         if result is None:
             raise ValueError("Brak oczekującej tury przeciwnika do potwierdzenia.")
         self.combat_state = result.state
+        if result.attack_roll is not None:
+            self.active_combat_effects = consume_next_attack_effects(self.active_combat_effects, str(result.enemy.id))
         self.selected_combat_movement_path = None
         self.pending_enemy_turn_intent = None
         self.pending_enemy_turn_result = None
@@ -1358,6 +1558,7 @@ class ExplorationUiSession:
         self.pending_enemy_turn_result = None
         self.pending_enemy_turn_ack_result = None
         self.pending_player_attack = None
+        self.pending_combat_interaction = None
         self._add_message("Koniec tury", f"Zakończono turę: {actor.name}.")
         self._record("ui_combat_turn_finished", {"actor_id": str(actor.id)})
         self._sync_board_leds()
@@ -1447,12 +1648,41 @@ class ExplorationUiSession:
                     feedback=active_actor_led_feedback(self.combat_state.initiative_order),
                     empty_message="Atak gracza czeka na wpisanie rzutu w UI.",
                 )
+            if self.pending_combat_interaction is not None:
+                position = self.pending_combat_interaction.target_position
+                scene_object_positions = ()
+                if encounter is not None:
+                    scene_object = self._scene_object_by_id(encounter, self.pending_combat_interaction.object_id)
+                    scene_object_positions = scene_object.positions if scene_object is not None else (position,)
+                return BoardScanTarget(
+                    positions=(),
+                    feedback=LedFeedback((LedFrame(scene_object_positions or (position,), LedColor.INTERACTIVE_OBJECT, LedRole.DESTINATION),)),
+                    empty_message="Interakcja czeka na potwierdzenie przyciskiem albo Enterem.",
+                )
             if encounter is not None and actor.faction == Faction.ALLY and self.combat_state.status.value == "active":
                 movement = _remaining_movement_range(encounter.board, self.combat_state, actor)
-                attack_targets = _legal_combat_targets(encounter, self.combat_state, actor)
+                attack_source = encounter.attack_sources_by_actor.get(actor.id)
+                attack_source = self._effective_attack_source(actor, attack_source) if attack_source is not None else None
+                attack_targets = _legal_combat_targets(encounter, self.combat_state, actor, attack_source)
+                interaction_positions = self._combat_interaction_positions(encounter, actor)
+                interaction_hint_positions = self._combat_interaction_hint_positions(encounter, actor, movement)
+                highlighted_interactions = tuple(sorted(frozenset(interaction_positions) | frozenset(interaction_hint_positions)))
                 return BoardScanTarget(
-                    positions=tuple(sorted(movement.reachable_tiles | frozenset(target.position for target in attack_targets))),
-                    feedback=_combat_choice_led_feedback(movement, attack_targets, self.selected_combat_movement_path, encounter.board),
+                    positions=tuple(
+                        sorted(
+                            movement.reachable_tiles
+                            | frozenset(target.position for target in attack_targets)
+                            | frozenset(interaction_positions)
+                            | frozenset(interaction_hint_positions)
+                        )
+                    ),
+                    feedback=_combat_choice_led_feedback(
+                        movement,
+                        attack_targets,
+                        self.selected_combat_movement_path,
+                        encounter.board,
+                        highlighted_interactions,
+                    ),
                     empty_message="Aktywny bohater nie ma dostępnych pól ruchu ani celów ataku.",
                 )
             feedback = active_actor_led_feedback(self.combat_state.initiative_order)
@@ -1552,9 +1782,13 @@ class ExplorationUiSession:
             if actor.faction == Faction.ALLY:
                 encounter = self._active_encounter()
                 try:
-                    if encounter is not None and _combat_target_at_position(encounter, self.combat_state, actor, selected) is not None:
+                    attack_source = encounter.attack_sources_by_actor.get(actor.id) if encounter is not None else None
+                    attack_source = self._effective_attack_source(actor, attack_source) if attack_source is not None else None
+                    if encounter is not None and _combat_target_at_position(encounter, self.combat_state, actor, selected, attack_source) is not None:
                         self.board_message = f"Atak bohatera: {actor.name} -> {selected.as_tuple()}."
                         return self.select_player_attack_target_at_position(selected)
+                    if encounter is not None and self._available_combat_interaction_options(encounter, actor, selected):
+                        return self.select_combat_interaction_at_position(selected)
                     if (
                         self.selected_combat_movement_path is not None
                         and self.selected_combat_movement_path.valid
@@ -2236,6 +2470,21 @@ def create_app(session: ExplorationUiSession) -> Flask:
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
+    @app.post("/api/combat/interaction/confirm")
+    def api_combat_interaction_confirm():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(session.confirm_combat_interaction(str(data.get("interaction_id", ""))))
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/interaction/cancel")
+    def api_combat_interaction_cancel():
+        try:
+            return jsonify(session.cancel_combat_interaction())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
     @app.post("/api/combat/move")
     def api_combat_move():
         data = request.get_json(silent=True) or {}
@@ -2482,6 +2731,14 @@ def _initiative_entry_payload(entry: InitiativeEntry) -> dict[str, object]:
     }
 
 
+def _effective_attack_source_for_effects(
+    actor: Actor,
+    source,
+    active_combat_effects: tuple[ActiveCombatEffect, ...],
+):
+    return attack_source_with_combat_effects(actor, source, active_combat_effects)
+
+
 def _combat_payload(
     state: CombatState | None,
     encounter: LoadedEncounter | None = None,
@@ -2490,11 +2747,15 @@ def _combat_payload(
     pending_enemy_turn_result=None,
     pending_enemy_turn_ack_result=None,
     pending_player_attack: PendingPlayerAttack | None = None,
+    pending_combat_interaction: PendingCombatInteraction | None = None,
+    active_combat_effects: tuple[ActiveCombatEffect, ...] = (),
 ) -> dict[str, object] | None:
     if state is None:
         return None
     actor = combat_current_actor(state)
     attack_source = encounter.attack_sources_by_actor.get(actor.id) if encounter is not None else None
+    if attack_source is not None:
+        attack_source = _effective_attack_source_for_effects(actor, attack_source, active_combat_effects)
     targets = ()
     movement = None
     if (
@@ -2509,8 +2770,8 @@ def _combat_payload(
     return {
         "status": state.status.value,
         "round_number": state.round_number,
-        "current_actor": _combat_actor_payload(actor),
-        "actors": [_combat_actor_payload(candidate) for candidate in state.actors],
+        "current_actor": _combat_actor_payload(actor, active_combat_effects),
+        "actors": [_combat_actor_payload(candidate, active_combat_effects) for candidate in state.actors],
         "winner": state.winner.value if state.winner is not None else None,
         "turn_action": {
             "action_use": state.turn_action.action_use.value,
@@ -2525,11 +2786,13 @@ def _combat_payload(
         "enemy_turn_intent": _enemy_turn_intent_payload(pending_enemy_turn_intent, encounter),
         "enemy_turn_preview": _enemy_turn_preview_payload(pending_enemy_turn_result, encounter),
         "enemy_turn_result": _enemy_turn_result_payload(pending_enemy_turn_ack_result, encounter),
-        "pending_player_attack": _pending_player_attack_payload(pending_player_attack, state, encounter),
+        "pending_player_attack": _pending_player_attack_payload(pending_player_attack, state, encounter, active_combat_effects),
+        "pending_combat_interaction": pending_combat_interaction.as_payload() if pending_combat_interaction is not None else None,
+        "active_effects": [effect.as_payload() for effect in active_combat_effects],
     }
 
 
-def _combat_actor_payload(actor: Actor) -> dict[str, object]:
+def _combat_actor_payload(actor: Actor, active_combat_effects: tuple[ActiveCombatEffect, ...] = ()) -> dict[str, object]:
     return {
         "id": str(actor.id),
         "name": actor.name,
@@ -2540,6 +2803,7 @@ def _combat_actor_payload(actor: Actor) -> dict[str, object]:
         "ac": actor.ac,
         "position": [actor.position.col, actor.position.row],
         "defeated": actor.is_defeated(),
+        "effects": [effect.as_payload() for effect in active_combat_effects if effect.actor_id == str(actor.id)],
     }
 
 
@@ -2559,6 +2823,7 @@ def _pending_player_attack_payload(
     pending: PendingPlayerAttack | None,
     state: CombatState,
     encounter: LoadedEncounter | None,
+    active_combat_effects: tuple[ActiveCombatEffect, ...] = (),
 ) -> dict[str, object] | None:
     if pending is None or encounter is None:
         return None
@@ -2569,11 +2834,12 @@ def _pending_player_attack_payload(
     source = encounter.attack_sources_by_actor.get(attacker.id)
     if source is None:
         return None
+    source = _effective_attack_source_for_effects(attacker, source, active_combat_effects)
     instruction = roll_instruction(source.attack_roll_request)
     return {
         "stage": pending.stage,
-        "attacker": _combat_actor_payload(attacker),
-        "target": _combat_actor_payload(target),
+        "attacker": _combat_actor_payload(attacker, active_combat_effects),
+        "target": _combat_actor_payload(target, active_combat_effects),
         "source": _attack_source_payload(source),
         "attack_instruction": instruction.message,
         "attack_modifier": instruction.breakdown.modifier_total,
@@ -2625,23 +2891,29 @@ def _remaining_movement_range(board, state: CombatState, actor: Actor) -> Moveme
     return MovementRangeResult(origin=result.origin, reachable_tiles=reachable, costs_by_tile=costs, paths_by_tile=paths)
 
 
-def _legal_combat_targets(encounter: LoadedEncounter, state: CombatState, actor: Actor):
+def _legal_combat_targets(encounter: LoadedEncounter, state: CombatState, actor: Actor, source=None):
     if state.turn_action.action_use != ActionUse.ACTION_AVAILABLE:
         return ()
-    source = encounter.attack_sources_by_actor.get(actor.id)
+    source = source or encounter.attack_sources_by_actor.get(actor.id)
     if source is None:
         return ()
     return start_attack_action(encounter.board, actor, state.actors, source).legal_targets
 
 
-def _combat_target_at_position(encounter: LoadedEncounter, state: CombatState, actor: Actor, position: Coordinate):
-    for target in _legal_combat_targets(encounter, state, actor):
+def _combat_target_at_position(encounter: LoadedEncounter, state: CombatState, actor: Actor, position: Coordinate, source=None):
+    for target in _legal_combat_targets(encounter, state, actor, source):
         if target.position == position:
             return target
     return None
 
 
-def _combat_choice_led_feedback(movement: MovementRangeResult, attack_targets, selected_path=None, board=None) -> LedFeedback:
+def _combat_choice_led_feedback(
+    movement: MovementRangeResult,
+    attack_targets,
+    selected_path=None,
+    board=None,
+    interaction_positions: tuple[Coordinate, ...] = (),
+) -> LedFeedback:
     frames = list(movement_led_feedback(movement).frames)
     if board is not None:
         difficult_tiles = tuple(
@@ -2657,6 +2929,8 @@ def _combat_choice_led_feedback(movement: MovementRangeResult, attack_targets, s
     target_positions = tuple(sorted(target.position for target in attack_targets))
     if target_positions:
         frames.append(LedFrame(target_positions, LedColor.ENEMY, LedRole.ENEMY))
+    if interaction_positions:
+        frames.append(LedFrame(tuple(sorted(interaction_positions)), LedColor.INTERACTIVE_OBJECT, LedRole.DESTINATION))
     return LedFeedback(tuple(frames))
 
 
@@ -3915,8 +4189,9 @@ function combatPromptTitle(combat, finished, isAllyTurn, isEnemyTurn) {
       ? `Tura ${actor.name || 'gracza'}: wpisz obrażenia`
       : `Tura ${actor.name || 'gracza'}: rzuć d20`;
   }
+  if (isAllyTurn && combat.pending_combat_interaction) return `Tura ${actor.name || 'gracza'}: wybierz interakcję`;
   if (isAllyTurn && combat.movement_preview) return `Tura ${actor.name || 'gracza'}: potwierdź ruch`;
-  if (isAllyTurn) return `Tura ${actor.name || 'gracza'}: wybierz ruch albo cel`;
+  if (isAllyTurn) return `Tura ${actor.name || 'gracza'}: wybierz ruch, cel albo obiekt`;
   return `Tura ${actor.name || '-'}`;
 }
 function combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn) {
@@ -3948,6 +4223,10 @@ function combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn) {
     }
     return `Wybrano cel ${target.name || '-'}. Rzuć d20 na atak ${source.name || ''} i wpisz naturalny wynik.`;
   }
+  if (combat.pending_combat_interaction) {
+    const pendingInteraction = combat.pending_combat_interaction;
+    return `Wybrano obiekt ${pendingInteraction.object_name || '-'}. Wybierz interakcję i potwierdź przyciskiem albo Enterem.`;
+  }
   const movement = combat.movement || {};
   const preview = combat.movement_preview || null;
   const remaining = Number(movement.remaining_feet || 0);
@@ -3957,8 +4236,8 @@ function combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn) {
   }
   if (actionUsed && remaining > 0) return `Akcja zużyta. Możesz jeszcze ruszyć się (${remaining} ft) albo zakończyć turę.`;
   if (actionUsed) return 'Akcja zużyta. Możesz zakończyć turę.';
-  if (remaining > 0) return `Kliknij Skanuj planszę, a potem wybierz niebieskie pole ruchu albo czerwony cel.`;
-  return 'Ruch wykorzystany. Możesz zaatakować czerwony cel albo zakończyć turę.';
+  if (remaining > 0) return `Kliknij Skanuj planszę, a potem wybierz niebieskie pole ruchu, czerwony cel albo zielony obiekt.`;
+  return 'Ruch wykorzystany. Możesz zaatakować czerwony cel, użyć zielonego obiektu albo zakończyć turę.';
 }
 function combatMiniStatusHtml(combat) {
   const actor = combat.current_actor || {};
@@ -4046,6 +4325,9 @@ function combatPrimaryActionHtml(combat, isAllyTurn, isEnemyTurn) {
   if (combat.pending_player_attack) {
     return pendingPlayerAttackHtml(combat.pending_player_attack);
   }
+  if (combat.pending_combat_interaction) {
+    return pendingCombatInteractionHtml(combat.pending_combat_interaction);
+  }
   const movement = combat.movement || {remaining_feet: 0, destinations: []};
   const preview = combat.movement_preview || null;
   return `
@@ -4057,6 +4339,7 @@ function combatActionDetailsHtml(combat, isAllyTurn, isEnemyTurn) {
   if (isEnemyTurn) return enemyTurnDetailsHtml(combat);
   if (!isAllyTurn) return '<p class="muted">Brak dodatkowych szczegółów dla tego aktora.</p>';
   if (combat.pending_player_attack) return pendingPlayerAttackDetailsHtml(combat.pending_player_attack);
+  if (combat.pending_combat_interaction) return pendingCombatInteractionDetailsHtml(combat.pending_combat_interaction);
   return playerTurnDetailsHtml(combat);
 }
 function playerTurnDetailsHtml(combat) {
@@ -4076,7 +4359,7 @@ function playerTurnDetailsHtml(combat) {
   return `
     <p><b>Tura gracza:</b> ${esc(actor.name || '-')}</p>
     <p><b>Akcja:</b> ${actionUsed ? 'zużyta' : 'dostępna'} | <b>Bonus action:</b> ${bonusActionUsed ? 'zużyta' : 'dostępna'} | <b>Reakcja:</b> ${reactionAvailable ? 'dostępna' : 'zużyta'} | <b>Ruch:</b> ${esc(remaining)} ft</p>
-    <p>Niebieskie pola: ruch (${esc(moveCount)} pól). Czerwone pola: legalne cele ataku.</p>
+    <p>Niebieskie pola: ruch (${esc(moveCount)} pól). Czerwone pola: legalne cele ataku. Zielone pola: interakcje sceny.</p>
     ${preview ? `<p>Wybrana ścieżka: (${esc(preview.destination[0])},${esc(preview.destination[1])}), koszt ${esc(preview.cost_feet)} ft.</p>` : ''}
     <p><b>Atak:</b> ${esc(source.name || '-')}${source.damage_hint ? `, po trafieniu rzuć ${esc(source.damage_hint)}` : ''}</p>
     <p><b>Cele w zasięgu:</b> ${esc(targetText)}</p>
@@ -4172,6 +4455,26 @@ function pendingPlayerAttackHtml(pending) {
       <button class="secondary" data-allow-busy="true" onclick="finishCombatTurn()">Zakończ turę</button>
     </div>
   `;
+}
+function pendingCombatInteractionHtml(pending) {
+  const options = pending.options || [];
+  if (!options.length) return '<p>Brak dostępnych opcji interakcji.</p>';
+  const primary = options[0];
+  const buttons = options.map(option => `<button data-allow-busy="true" onclick="confirmCombatInteraction('${esc(option.id)}')">${esc(option.label)}</button>`).join('');
+  return `
+    <p>Obiekt: ${esc(pending.object_name || '-')} | pole (${esc(pending.target_position ? pending.target_position[0] : '-')},${esc(pending.target_position ? pending.target_position[1] : '-')})</p>
+    <p>${esc(primary.description || 'Interakcja zużywa akcję główną.')}</p>
+    <div class="row">${buttons}<button class="secondary" data-allow-busy="true" onclick="cancelCombatInteraction()">Anuluj</button></div>
+  `;
+}
+function pendingCombatInteractionDetailsHtml(pending) {
+  const options = pending.options || [];
+  if (!options.length) return '<p>Brak szczegółów interakcji.</p>';
+  return options.map(option => `
+    <p><b>${esc(option.label)}</b></p>
+    <p>${esc(option.description || '')}</p>
+    <p><b>Warunki:</b> ${(option.conditions || []).map(condition => esc(condition)).join(', ') || 'brak'}</p>
+  `).join('');
 }
 function pendingPlayerAttackDetailsHtml(pending) {
   const target = pending.target || {};
@@ -4294,7 +4597,7 @@ function startSession() { api('/api/start', {}, 'Rozpoczynam sesję...'); }
 function isAllyCombatTurnActive() {
   const combat = state && state.combat ? state.combat : null;
   const actor = combat && combat.current_actor ? combat.current_actor : {};
-  return Boolean(combat && combat.status === 'active' && actor.faction === 'ally' && !combat.enemy_turn_preview && !combat.pending_player_attack);
+  return Boolean(combat && combat.status === 'active' && actor.faction === 'ally' && !combat.enemy_turn_preview && !combat.pending_player_attack && !combat.pending_combat_interaction);
 }
 async function scanBoard() {
   if (boardScanInFlight) return;
@@ -4357,6 +4660,8 @@ function submitPlayerAttackRoll() {
 }
 function confirmPlayerAttackTarget() { api('/api/combat/player-attack-confirm', {}, 'Potwierdzam atak...'); }
 function cancelPlayerAttackTarget() { api('/api/combat/player-attack-cancel', {}, 'Anuluję wybór celu...'); }
+function confirmCombatInteraction(interactionId) { api('/api/combat/interaction/confirm', {interaction_id: interactionId}, 'Potwierdzam interakcję...'); }
+function cancelCombatInteraction() { api('/api/combat/interaction/cancel', {}, 'Anuluję interakcję...'); }
 function submitPlayerDamageRoll() {
   const damage = document.getElementById('combat-damage-roll');
   api('/api/combat/player-damage', {damage: Number(damage ? damage.value : 0)}, 'Zapisuję obrażenia...');
@@ -4406,6 +4711,11 @@ function triggerPrimaryAction() {
     if (combat && combat.status === 'finished') { resolveCombatOutcome(); return true; }
     if (combat && combat.status === 'active') {
       if (combat.enemy_turn_result) { confirmEnemyTurnResult(); return true; }
+      if (combat.pending_combat_interaction) {
+        const options = combat.pending_combat_interaction.options || [];
+        if (options.length) confirmCombatInteraction(options[0].id);
+        return true;
+      }
       if (combat.pending_player_attack) {
         if (combat.pending_player_attack.stage === 'confirm_attack') confirmPlayerAttackTarget();
         else if (combat.pending_player_attack.stage === 'damage_roll') submitPlayerDamageRoll();

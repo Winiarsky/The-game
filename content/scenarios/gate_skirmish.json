@@ -77,7 +77,50 @@
       "type": "container",
       "positions": [[7, 8], [8, 8]],
       "visibility": "visible",
-      "description": "Rozbity wóz na dziedzińcu."
+      "description": "Rozbity wóz na dziedzińcu.",
+      "interaction_label": "Użyj rozbitego wozu",
+      "blocks_movement": false,
+      "cover_bonus": 2,
+      "interactions": [
+        {
+          "id": "take_cover_cart",
+          "label": "Otrzymaj osłonę",
+          "description": "Bohater wykorzystuje wóz jako osłonę. Dostaje +2 AC, dopóki nie opuści pola, na którym wszedł w osłonę.",
+          "conditions": [
+            {"type": "action_available"},
+            {"type": "actor_adjacent_to_object"}
+          ],
+          "effects": [
+            {
+              "type": "grant_ac_bonus_until_move",
+              "parameters": {
+                "value": 2,
+                "label": "Osłona: rozbity wóz"
+              }
+            }
+          ]
+        },
+        {
+          "id": "climb_cart",
+          "label": "Wejdź na wóz",
+          "description": "Bohater wchodzi na wybrane wolne pole wozu. Dostaje +2 do ataku, dopóki stoi na wozie.",
+          "conditions": [
+            {"type": "action_available"},
+            {"type": "actor_adjacent_to_object"},
+            {"type": "target_tile_free"}
+          ],
+          "effects": [
+            {"type": "move_actor_to_tile"},
+            {
+              "type": "grant_attack_bonus_while_on_object",
+              "parameters": {
+                "value": 2,
+                "label": "Pozycja na wozie"
+              }
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "rubble_patch",
@@ -85,7 +128,32 @@
       "type": "difficult_terrain",
       "positions": [[10, 7], [10, 8], [11, 8]],
       "visibility": "visible",
-      "description": "Luźne kamienie i połamane belki spowalniają ruch."
+      "description": "Luźne kamienie i połamane belki spowalniają ruch.",
+      "interaction_label": "Użyj rumowiska",
+      "interactions": [
+        {
+          "id": "throw_rubble",
+          "label": "Sypnij gruzem",
+          "description": "Bohater stojący na rumowisku sypie gruzem w sąsiedniego przeciwnika. Przeciwnik wykonuje rzut obronny na Zręczność ST 12; przy porażce dostaje -2 do następnego ataku.",
+          "conditions": [
+            {"type": "action_available"},
+            {"type": "actor_on_object"},
+            {"type": "adjacent_enemy_exists"}
+          ],
+          "effects": [
+            {
+              "type": "grant_next_attack_penalty",
+              "parameters": {
+                "value": -2,
+                "label": "Gruz w oczach",
+                "target": "nearest_adjacent_enemy",
+                "saving_throw_ability": "dexterity",
+                "saving_throw_dc": 12
+              }
+            }
+          ]
+        }
+      ]
     }
   ]
 }

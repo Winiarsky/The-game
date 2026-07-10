@@ -78,6 +78,10 @@
 - [x] Improve combat UI current-step clarity.
 - [x] Close D&D combat core MVP for HP, damage, defeat, and attack results.
 - [x] Add explicit combat turn economy placeholders for action, bonus action, reaction, and split movement.
+- [x] Add deterministic combat interactions for the broken cart with LED support.
+- [x] Add data-driven combat scene interaction conditions and effects.
+- [x] Add rubble combat interaction with next-attack penalty and LED support.
+- [x] Add enemy Dexterity saving throw for rubble combat interaction.
 - [x] Add exploration map environment setup before location selection.
 - [x] Couple exploration web UI with board/simulator backend for LEDs and board clicks.
 - [ ] Add full inventory/cantrip integration for exploration option bonuses.

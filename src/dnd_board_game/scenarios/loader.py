@@ -13,6 +13,8 @@ from dnd_board_game.combat import (
     EnvironmentSetupType,
     SceneAbilityCheck,
     SceneInteraction,
+    SceneInteractionCondition,
+    SceneInteractionEffect,
     SceneObjective,
     SceneObjectiveCondition,
     SceneObject,
@@ -225,8 +227,7 @@ def build_encounter_from_scenario(loaded: LoadedScenario) -> LoadedEncounter:
             cover_bonus=entry.cover_bonus,
         )
         for entry in definition.environment
-        if entry.setup_type in {EnvironmentSetupType.INTERACTABLE, EnvironmentSetupType.CONTAINER, EnvironmentSetupType.NPC}
-        and entry.interaction_label is not None
+        if entry.interaction_label is not None
     )
     objectives = tuple(
         SceneObjective(
@@ -933,7 +934,51 @@ def _parse_interaction(data: Any, environment_id: str) -> SceneInteraction:
         failure_flag=str(data["failure_flag"]) if "failure_flag" in data else None,
         success_message=str(data.get("success_message", "")),
         failure_message=str(data.get("failure_message", "")),
+        conditions=_parse_interaction_conditions(data.get("conditions", []), interaction_id),
+        effects=_parse_interaction_effects(data.get("effects", []), interaction_id),
     )
+
+
+def _parse_interaction_conditions(data: Any, interaction_id: str) -> tuple[SceneInteractionCondition, ...]:
+    if data is None:
+        return ()
+    if not isinstance(data, list):
+        raise ValueError(f"interaction {interaction_id}.conditions must be a list.")
+    return tuple(
+        SceneInteractionCondition(
+            condition_type=str(_required(_require_mapping(entry, f"interaction {interaction_id}.conditions"), "type", f"interaction {interaction_id}.condition")),
+            parameters=_parse_interaction_parameters(entry.get("parameters", {}), f"interaction {interaction_id}.condition"),
+        )
+        for entry in data
+    )
+
+
+def _parse_interaction_effects(data: Any, interaction_id: str) -> tuple[SceneInteractionEffect, ...]:
+    if data is None:
+        return ()
+    if not isinstance(data, list):
+        raise ValueError(f"interaction {interaction_id}.effects must be a list.")
+    return tuple(
+        SceneInteractionEffect(
+            effect_type=str(_required(_require_mapping(entry, f"interaction {interaction_id}.effects"), "type", f"interaction {interaction_id}.effect")),
+            parameters=_parse_interaction_parameters(entry.get("parameters", {}), f"interaction {interaction_id}.effect"),
+        )
+        for entry in data
+    )
+
+
+def _require_mapping(data: Any, field: str) -> dict[str, Any]:
+    if not isinstance(data, dict):
+        raise ValueError(f"{field} entries must be objects.")
+    return data
+
+
+def _parse_interaction_parameters(data: Any, field: str) -> tuple[tuple[str, object], ...]:
+    if data is None:
+        return ()
+    if not isinstance(data, dict):
+        raise ValueError(f"{field}.parameters must be an object.")
+    return tuple(sorted((str(key), value) for key, value in data.items()))
 
 
 def _parse_scene_ability_check(data: Any, interaction_id: str) -> SceneAbilityCheck:

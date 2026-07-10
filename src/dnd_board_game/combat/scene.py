@@ -57,6 +57,18 @@ class SceneAbilityCheck:
 
 
 @dataclass(frozen=True, slots=True)
+class SceneInteractionCondition:
+    condition_type: str
+    parameters: tuple[tuple[str, object], ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class SceneInteractionEffect:
+    effect_type: str
+    parameters: tuple[tuple[str, object], ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class SceneInteraction:
     id: str
     label: str
@@ -66,6 +78,8 @@ class SceneInteraction:
     failure_flag: str | None = None
     success_message: str = ""
     failure_message: str = ""
+    conditions: tuple[SceneInteractionCondition, ...] = ()
+    effects: tuple[SceneInteractionEffect, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

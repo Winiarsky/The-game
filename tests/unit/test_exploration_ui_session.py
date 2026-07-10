@@ -1,7 +1,9 @@
+import random
 from dataclasses import replace
 
 from dnd_board_game.actors import Faction
 from dnd_board_game.combat import replace_actor, set_scene_flag
+from dnd_board_game.hardware import LedColor
 from dnd_board_game.llm import (
     GmClassifierProposal,
     GmDeclarationAnalysis,
@@ -9,6 +11,7 @@ from dnd_board_game.llm import (
     NpcInteractionProposal,
 )
 from dnd_board_game.ui.exploration_app import ExplorationUiSession, UiFlowStage, create_app
+from dnd_board_game.world import Coordinate
 
 
 class FakeGmClient:
@@ -95,6 +98,24 @@ def _challenge_proposal(**overrides):
 def _start_combat_from_scout_alarm(session: ExplorationUiSession):
     session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
     session.state = replace(session.state, flags=set_scene_flag(session.state.flags, "scout_panicked", True))
+    session.state_payload()
+    session.start_encounter_setup()
+    while session.encounter_setup_flow is not None and not session.encounter_setup_flow.completed:
+        if session.encounter_setup_flow.is_player_start_step:
+            for position in session.encounter_setup_flow.current_step.positions[:2]:
+                session.assign_encounter_player_start_position(position)
+            continue
+        session.confirm_encounter_setup_step()
+    session.start_encounter_initiative()
+    session.submit_encounter_initiative_roll(20)
+    session.submit_encounter_initiative_roll(19)
+    assert session.combat_state is not None
+    return session.combat_state
+
+
+def _start_gate_skirmish(session: ExplorationUiSession):
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.state = replace(session.state, flags=set_scene_flag(session.state.flags, "gate_passed", True))
     session.state_payload()
     session.start_encounter_setup()
     while session.encounter_setup_flow is not None and not session.encounter_setup_flow.completed:
@@ -472,6 +493,138 @@ def test_exploration_ui_session_board_movement_requires_second_click_confirmatio
     actor_after_move = next(actor for actor in moved["combat"]["actors"] if actor["id"] == actor_id)
     assert actor_after_move["position"] == [destination["col"], destination["row"]]
     assert moved["combat"]["movement_preview"] is None
+
+
+def test_exploration_ui_session_cart_cover_uses_action_and_expires_after_movement():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+
+    state = session.submit_combat_movement(col=7, row=7)
+    actor_id = state["combat"]["current_actor"]["id"]
+    base_ac = state["combat"]["current_actor"]["ac"]
+
+    selected = session.select_board_position(Coordinate(7, 8))
+
+    assert selected["combat"]["pending_combat_interaction"]["object_id"] == "broken_cart"
+    assert {option["id"] for option in selected["combat"]["pending_combat_interaction"]["options"]} == {
+        "take_cover_cart",
+        "climb_cart",
+    }
+
+    covered = session.confirm_combat_interaction("take_cover_cart")
+    actor = next(candidate for candidate in covered["combat"]["actors"] if candidate["id"] == actor_id)
+
+    assert covered["combat"]["turn_action"]["action_use"] == "action_used"
+    assert actor["ac"] == base_ac + 2
+    assert actor["effects"][0]["kind"] == "grant_ac_bonus_until_move"
+    assert any(message["title"] == "Interakcja" and "AC +2" in message["body"] for message in covered["messages"])
+
+    moved = session.submit_combat_movement(col=6, row=7)
+    moved_actor = next(candidate for candidate in moved["combat"]["actors"] if candidate["id"] == actor_id)
+
+    assert moved_actor["position"] == [6, 7]
+    assert moved_actor["ac"] == base_ac
+    assert moved_actor["effects"] == []
+
+
+def test_exploration_ui_session_cart_climb_moves_actor_and_adds_attack_bonus_next_turn():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+
+    state = session.submit_combat_movement(col=7, row=7)
+    actor_id = state["combat"]["current_actor"]["id"]
+    session.select_board_position(Coordinate(7, 8))
+
+    climbed = session.confirm_combat_interaction("climb_cart")
+    actor = next(candidate for candidate in climbed["combat"]["actors"] if candidate["id"] == actor_id)
+
+    assert actor["position"] == [7, 8]
+    assert actor["effects"][0]["kind"] == "grant_attack_bonus_while_on_object"
+    assert climbed["combat"]["turn_action"]["action_use"] == "action_used"
+
+    session.finish_combat_turn()
+    while session.combat_state is not None and str(session.combat_state.initiative_order.current_actor.id) != actor_id:
+        session.finish_combat_turn()
+
+    selected = session.select_player_attack_target_at_position(Coordinate(7, 9))
+    modifiers = selected["combat"]["pending_player_attack"]["active_modifiers"]
+
+    assert any(modifier["label"] == "Pozycja na wozie" and modifier["value"] == 2 for modifier in modifiers)
+
+
+def test_exploration_ui_session_cart_interactions_are_shown_with_interactive_leds():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    board = FakeBoardConnection()
+    session.attach_board_connection(board, backend="simulator")
+    session.scan_board_selection()
+
+    colored_positions = {}
+    for positions, rgb_color in board.led_calls:
+        if positions == "off":
+            continue
+        if rgb_color and all(isinstance(channel, int) for channel in rgb_color):
+            colored_positions.update({position: rgb_color for position in positions})
+        else:
+            colored_positions.update(dict(zip(positions, rgb_color, strict=True)))
+
+    assert colored_positions[(7, 8)] == list(LedColor.INTERACTIVE_OBJECT)
+    assert colored_positions[(8, 8)] == list(LedColor.INTERACTIVE_OBJECT)
+
+
+def test_exploration_ui_session_rubble_interaction_penalizes_adjacent_enemy_attack():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    session.encounter_rng = random.Random(1)
+    active_actor = session.combat_state.initiative_order.current_actor
+    session.combat_state = replace_actor(session.combat_state, replace(active_actor, position=Coordinate(10, 7)))
+
+    selected = session.select_board_position(Coordinate(10, 7))
+
+    assert selected["combat"]["pending_combat_interaction"]["object_id"] == "rubble_patch"
+    assert [option["id"] for option in selected["combat"]["pending_combat_interaction"]["options"]] == ["throw_rubble"]
+
+    applied = session.confirm_combat_interaction("throw_rubble")
+    enemy = next(actor for actor in applied["combat"]["actors"] if actor["id"] == "goblin_b")
+
+    assert applied["combat"]["turn_action"]["action_use"] == "action_used"
+    assert enemy["effects"][0]["kind"] == "grant_next_attack_penalty"
+    assert enemy["effects"][0]["value"] == -2
+    assert any(message["title"] == "Interakcja" and "Gruz w oczach" in message["body"] for message in applied["messages"])
+    assert any(message["title"] == "Interakcja" and "rzut obronny na Zręczność" in message["body"] for message in applied["messages"])
+    assert any(message["title"] == "Interakcja" and "ST 12" in message["body"] for message in applied["messages"])
+
+    enemy_actor = next(actor for actor in session.combat_state.actors if str(actor.id) == "goblin_b")
+    source = session.encounter_setup_flow.encounter.attack_sources_by_actor[enemy_actor.id]
+    modified_source = session._effective_attack_source(enemy_actor, source)
+
+    assert any(
+        modifier.label == "Gruz w oczach" and modifier.value == -2
+        for modifier in modified_source.attack_roll_request.modifiers
+    )
+
+
+def test_exploration_ui_session_rubble_tile_is_interactive_when_actor_stands_on_it():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    active_actor = session.combat_state.initiative_order.current_actor
+    session.combat_state = replace_actor(session.combat_state, replace(active_actor, position=Coordinate(10, 7)))
+    board = FakeBoardConnection()
+    session.attach_board_connection(board, backend="simulator")
+    session.scan_board_selection()
+
+    colored_positions = {}
+    for positions, rgb_color in board.led_calls:
+        if positions == "off":
+            continue
+        if rgb_color and all(isinstance(channel, int) for channel in rgb_color):
+            colored_positions.update({position: rgb_color for position in positions})
+        else:
+            colored_positions.update(dict(zip(positions, rgb_color, strict=True)))
+
+    assert colored_positions[(10, 7)] == list(LedColor.INTERACTIVE_OBJECT)
 
 
 def test_exploration_ui_session_enemy_turn_waits_for_board_confirmation():
