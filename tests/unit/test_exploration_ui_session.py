@@ -344,6 +344,8 @@ def test_exploration_ui_session_player_attack_applies_damage_and_uses_action():
     assert state["combat"]["current_actor"]["max_hp"] >= state["combat"]["current_actor"]["hp"]
     assert "temp_hp" in state["combat"]["current_actor"]
     assert "defeated" in state["combat"]["current_actor"]
+    assert state["combat"]["turn_action"]["bonus_action_use"] == "action_available"
+    assert state["combat"]["turn_action"]["reaction_available"] is True
     target_id = state["combat"]["legal_targets"][0]["id"]
 
     state = session.submit_player_attack(target_id=target_id, natural_roll=20, damage=5)

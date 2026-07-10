@@ -10,7 +10,9 @@ from dnd_board_game.combat import (
     movement_remaining,
     replace_actor,
     start_combat,
+    use_bonus_action,
     use_movement,
+    use_reaction,
     use_turn_action,
 )
 from dnd_board_game.rules import D20RollInput, D20RollRequest, resolve_d20_roll
@@ -73,6 +75,38 @@ def test_finish_turn_advances_actor_and_resets_action():
     assert current_actor(state).id == goblin.id
     assert use_turn_action(state).accepted is True
     assert movement_remaining(state, goblin) == goblin.speed_feet
+
+
+def test_bonus_action_can_only_be_used_once_and_resets_on_next_turn():
+    hero = _actor("hero", Faction.ALLY, 0)
+    goblin = _actor("goblin", Faction.ENEMY, 1)
+    state = start_combat((hero, goblin), _order(hero, goblin))
+
+    first = use_bonus_action(state)
+    second = use_bonus_action(first.state)
+    next_turn = finish_turn(first.state)
+
+    assert first.accepted is True
+    assert first.state.turn_action.bonus_action_use.value == "action_used"
+    assert second.accepted is False
+    assert "Akcja bonusowa" in second.message
+    assert next_turn.turn_action.bonus_action_use.value == "action_available"
+
+
+def test_reaction_can_only_be_used_once_and_resets_on_next_turn():
+    hero = _actor("hero", Faction.ALLY, 0)
+    goblin = _actor("goblin", Faction.ENEMY, 1)
+    state = start_combat((hero, goblin), _order(hero, goblin))
+
+    first = use_reaction(state)
+    second = use_reaction(first.state)
+    next_turn = finish_turn(first.state)
+
+    assert first.accepted is True
+    assert first.state.turn_action.reaction_available is False
+    assert second.accepted is False
+    assert "Reakcja" in second.message
+    assert next_turn.turn_action.reaction_available is True
 
 
 def test_movement_before_and_after_action_uses_shared_turn_pool():

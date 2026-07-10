@@ -19,6 +19,8 @@ class CombatStatus(StrEnum):
 @dataclass(frozen=True, slots=True)
 class TurnActionState:
     action_use: ActionUse = ActionUse.ACTION_AVAILABLE
+    bonus_action_use: ActionUse = ActionUse.ACTION_AVAILABLE
+    reaction_available: bool = True
     movement_used_feet: int = 0
 
 
@@ -88,6 +90,32 @@ def use_turn_action(state: CombatState) -> TurnActionUseResult:
         replace(state, turn_action=replace(state.turn_action, action_use=action_use)),
         True,
         "Akcja została zużyta.",
+    )
+
+
+def use_bonus_action(state: CombatState) -> TurnActionUseResult:
+    if state.status != CombatStatus.ACTIVE:
+        return TurnActionUseResult(state, False, "Walka nie jest aktywna.")
+    try:
+        bonus_action_use = consume_action(state.turn_action.bonus_action_use)
+    except ValueError:
+        return TurnActionUseResult(state, False, "Akcja bonusowa w tej turze została już zużyta.")
+    return TurnActionUseResult(
+        replace(state, turn_action=replace(state.turn_action, bonus_action_use=bonus_action_use)),
+        True,
+        "Akcja bonusowa została zużyta.",
+    )
+
+
+def use_reaction(state: CombatState) -> TurnActionUseResult:
+    if state.status != CombatStatus.ACTIVE:
+        return TurnActionUseResult(state, False, "Walka nie jest aktywna.")
+    if not state.turn_action.reaction_available:
+        return TurnActionUseResult(state, False, "Reakcja w tej rundzie została już zużyta.")
+    return TurnActionUseResult(
+        replace(state, turn_action=replace(state.turn_action, reaction_available=False)),
+        True,
+        "Reakcja została zużyta.",
     )
 
 

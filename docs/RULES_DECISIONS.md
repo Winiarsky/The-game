@@ -233,6 +233,8 @@ Implementacja MVP:
 - `hp > 0` nie oznacza automatycznie, że obiekt jest legalnym celem ataku.
 - Cel ataku musi być `attackable=True` i `visible`.
 - Mini-pętla walki obsługuje start tury, zużycie akcji, koniec tury, przejście inicjatywy i zakończenie walki.
+- Tura śledzi osobno akcję główną, akcję bonusową, reakcję i zużyty ruch.
+- W MVP zaimplementowane jest zużycie/reset akcji bonusowej i reakcji jako zasobów tury, ale bez konkretnych zdolności korzystających z tych zasobów.
 - W runtime demo przeciwnik wykonuje automatyczny melee attack przez wstrzyknięty RNG.
 - Jeśli przeciwnik musi się ruszyć przed atakiem, aplikacja pokazuje ścieżkę LED i wymaga kliknięcia pola docelowego po fizycznym przestawieniu figurki.
 - Domyślny przeciwnik demo używa ataku `Szabla`, modyfikatora `+4` i obrażeń `1d6 + 2 slashing`.
@@ -254,7 +256,7 @@ Poza zakresem MVP:
 - destrukcja obiektów i przeszkód.
 - pełne AI ruchu przeciwników,
 - ruch w turze podczas multi-actor MVP,
-- bonus action, reaction i multiattack.
+- konkretne bonus actions, konkretne reactions i multiattack.
 
 Odstępstwa / decyzje planszowe:
 

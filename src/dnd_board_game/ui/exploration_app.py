@@ -2514,6 +2514,8 @@ def _combat_payload(
         "winner": state.winner.value if state.winner is not None else None,
         "turn_action": {
             "action_use": state.turn_action.action_use.value,
+            "bonus_action_use": state.turn_action.bonus_action_use.value,
+            "reaction_available": state.turn_action.reaction_available,
             "movement_used_feet": state.turn_action.movement_used_feet,
         },
         "available_attack": _attack_source_payload(attack_source) if attack_source is not None else None,
@@ -3189,9 +3191,19 @@ _HTML = """
   <title>Eksploracja</title>
   <style>
     body { margin: 0; font-family: system-ui, sans-serif; background: #101214; color: #ece7dc; }
-    main { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
-    aside { border-right: 1px solid #34383d; padding: 16px; background: #171a1e; overflow: auto; }
-    section { padding: 18px; overflow: auto; }
+    main { min-height: 100vh; }
+    aside { position: fixed; inset: 0 auto 0 0; z-index: 30; width: 280px; border-right: 1px solid #34383d; padding: 16px; background: #171a1e; overflow: auto; transform: translateX(-100%); transition: transform 160ms ease; box-shadow: 12px 0 28px rgba(0,0,0,0.28); }
+    body.side-panel-open aside { transform: translateX(0); }
+    section { padding: 18px 18px 18px 64px; overflow: auto; }
+    .side-panel-toggle { position: fixed; z-index: 45; top: 14px; left: 12px; width: 40px; height: 40px; padding: 0; border: 1px solid #3a3f45; background: #20252b; color: #ece7dc; display: grid; place-items: center; }
+    .side-panel-close { width: 32px; height: 32px; padding: 0; background: #3a3f45; }
+    .side-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+    .side-panel-scrim { position: fixed; inset: 0; z-index: 25; background: rgba(0,0,0,0.42); opacity: 0; pointer-events: none; transition: opacity 160ms ease; }
+    body.side-panel-open .side-panel-scrim { opacity: 1; pointer-events: auto; }
+    @media (max-width: 720px) {
+      aside { width: min(320px, calc(100vw - 52px)); }
+      section { padding-left: 58px; }
+    }
     h1, h2, h3 { margin: 0 0 10px; }
     .muted { color: #a9a298; font-size: 13px; }
     .card { border: 1px solid #34383d; border-radius: 6px; padding: 12px; margin: 0 0 12px; background: #1d2126; }
@@ -3258,9 +3270,14 @@ _HTML = """
   </style>
 </head>
 <body>
+<button id="side-panel-toggle" class="side-panel-toggle" data-allow-busy="true" onclick="toggleSidePanel()" aria-controls="side-panel" aria-expanded="false" title="Panel boczny">☰</button>
+<div id="side-panel-scrim" class="side-panel-scrim" data-allow-busy="true" onclick="setSidePanelOpen(false)"></div>
 <main>
-  <aside>
-    <h2 id="scenario">Scenariusz</h2>
+  <aside id="side-panel" aria-hidden="true">
+    <div class="side-panel-head">
+      <h2 id="scenario">Scenariusz</h2>
+      <button class="side-panel-close" data-allow-busy="true" onclick="setSidePanelOpen(false)" aria-label="Zamknij panel">×</button>
+    </div>
     <div class="card"><b>Lokacja</b><div id="zone"></div></div>
     <div class="card"><b>Wyzwanie</b><div id="challenge"></div></div>
     <div class="card"><b>Jawne elementy sceny</b><div id="visible-environment"></div></div>
@@ -3362,6 +3379,19 @@ let playerTurnScanLoop = false;
 let boardScanInFlight = false;
 let boardScanToken = 0;
 let sessionLog = null;
+let sidePanelOpen = localStorage.getItem('explorationSidePanelOpen') === 'true';
+function setSidePanelOpen(open) {
+  sidePanelOpen = Boolean(open);
+  localStorage.setItem('explorationSidePanelOpen', sidePanelOpen ? 'true' : 'false');
+  document.body.classList.toggle('side-panel-open', sidePanelOpen);
+  const panel = document.getElementById('side-panel');
+  const toggle = document.getElementById('side-panel-toggle');
+  if (panel) panel.setAttribute('aria-hidden', sidePanelOpen ? 'false' : 'true');
+  if (toggle) toggle.setAttribute('aria-expanded', sidePanelOpen ? 'true' : 'false');
+}
+function toggleSidePanel() {
+  setSidePanelOpen(!sidePanelOpen);
+}
 function setBusy(message) {
   busy = Boolean(message);
   const status = document.getElementById('status');
@@ -3935,6 +3965,8 @@ function combatMiniStatusHtml(combat) {
   const movement = combat.movement || {};
   const remaining = Number(movement.remaining_feet || 0);
   const actionUsed = combat.turn_action && combat.turn_action.action_use === 'action_used';
+  const bonusActionUsed = combat.turn_action && combat.turn_action.bonus_action_use === 'action_used';
+  const reactionAvailable = !combat.turn_action || combat.turn_action.reaction_available !== false;
   const position = actor.position || ['-', '-'];
   return `
     <div class="combat-mini-status">
@@ -3942,7 +3974,7 @@ function combatMiniStatusHtml(combat) {
       <span>${esc(actor.name || '-')}</span>
       <span>HP ${esc(actorHpLabel(actor))} / AC ${esc(actor.ac)}</span>
       <span>Pole (${esc(position[0])},${esc(position[1])})</span>
-      ${actor.faction === 'ally' ? `<span>Akcja: ${actionUsed ? 'zużyta' : 'dostępna'}</span><span>Ruch: ${esc(remaining)} ft</span>` : ''}
+      ${actor.faction === 'ally' ? `<span>Akcja: ${actionUsed ? 'zużyta' : 'dostępna'}</span><span>Bonus: ${bonusActionUsed ? 'zużyta' : 'dostępna'}</span><span>Reakcja: ${reactionAvailable ? 'dostępna' : 'zużyta'}</span><span>Ruch: ${esc(remaining)} ft</span>` : ''}
     </div>
   `;
 }
@@ -3951,11 +3983,13 @@ function combatActorStatusHtml(combat) {
   const movement = combat.movement || {};
   const remaining = Number(movement.remaining_feet || 0);
   const actionUsed = combat.turn_action && combat.turn_action.action_use === 'action_used';
+  const bonusActionUsed = combat.turn_action && combat.turn_action.bonus_action_use === 'action_used';
+  const reactionAvailable = !combat.turn_action || combat.turn_action.reaction_available !== false;
   return `
     <p><b>${esc(actor.name || '-')}</b> (${esc(actor.faction || '-')})</p>
     <p>Runda ${esc(combat.round_number || '-')}, pole (${esc(actor.position ? actor.position[0] : '-')},${esc(actor.position ? actor.position[1] : '-')})</p>
     <p>HP ${esc(actorHpLabel(actor))} / AC ${esc(actor.ac)}</p>
-    ${actor.faction === 'ally' ? `<p>Akcja: ${actionUsed ? 'zużyta' : 'dostępna'} | Ruch: ${esc(remaining)} ft</p>` : ''}
+    ${actor.faction === 'ally' ? `<p>Akcja: ${actionUsed ? 'zużyta' : 'dostępna'} | Bonus action: ${bonusActionUsed ? 'zużyta' : 'dostępna'} | Reakcja: ${reactionAvailable ? 'dostępna' : 'zużyta'} | Ruch: ${esc(remaining)} ft</p>` : ''}
   `;
 }
 function actorHpLabel(actor) {
@@ -4032,6 +4066,8 @@ function playerTurnDetailsHtml(combat) {
   const movement = combat.movement || {};
   const preview = combat.movement_preview || null;
   const actionUsed = combat.turn_action && combat.turn_action.action_use === 'action_used';
+  const bonusActionUsed = combat.turn_action && combat.turn_action.bonus_action_use === 'action_used';
+  const reactionAvailable = !combat.turn_action || combat.turn_action.reaction_available !== false;
   const remaining = Number(movement.remaining_feet || 0);
   const moveCount = (movement.destinations || []).length;
   const targetText = targets.length
@@ -4039,7 +4075,7 @@ function playerTurnDetailsHtml(combat) {
     : 'brak';
   return `
     <p><b>Tura gracza:</b> ${esc(actor.name || '-')}</p>
-    <p><b>Akcja:</b> ${actionUsed ? 'zużyta' : 'dostępna'} | <b>Ruch:</b> ${esc(remaining)} ft</p>
+    <p><b>Akcja:</b> ${actionUsed ? 'zużyta' : 'dostępna'} | <b>Bonus action:</b> ${bonusActionUsed ? 'zużyta' : 'dostępna'} | <b>Reakcja:</b> ${reactionAvailable ? 'dostępna' : 'zużyta'} | <b>Ruch:</b> ${esc(remaining)} ft</p>
     <p>Niebieskie pola: ruch (${esc(moveCount)} pól). Czerwone pola: legalne cele ataku.</p>
     ${preview ? `<p>Wybrana ścieżka: (${esc(preview.destination[0])},${esc(preview.destination[1])}), koszt ${esc(preview.cost_feet)} ft.</p>` : ''}
     <p><b>Atak:</b> ${esc(source.name || '-')}${source.damage_hint ? `, po trafieniu rzuć ${esc(source.damage_hint)}` : ''}</p>
@@ -4406,6 +4442,7 @@ document.addEventListener('keydown', event => {
     event.preventDefault();
   }
 });
+setSidePanelOpen(sidePanelOpen);
 loadState();
 </script>
 </body>

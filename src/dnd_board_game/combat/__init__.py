@@ -88,6 +88,8 @@ from .session import (
     replace_actor,
     start_combat,
     stop_combat,
+    use_bonus_action,
+    use_reaction,
     use_movement,
     use_turn_action,
 )
@@ -200,6 +202,8 @@ __all__ = [
     "set_scene_flag",
     "target_is_defeated",
     "use_movement",
+    "use_bonus_action",
+    "use_reaction",
     "use_turn_action",
     "visible_scene_objects",
 ]

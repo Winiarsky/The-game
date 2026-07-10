@@ -122,6 +122,13 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
 
     assert 'data-allow-busy="true" onclick="finishCombatTurn()"' in html
     assert 'data-allow-busy="true" onclick="resolveEnemyTurn()"' in html
+    assert 'id="side-panel-toggle"' in html
+    assert 'id="side-panel"' in html
+    assert 'id="side-panel-scrim"' in html
+    assert "toggleSidePanel()" in html
+    assert "setSidePanelOpen(false)" in html
+    assert "explorationSidePanelOpen" in html
+    assert "side-panel-open" in html
     assert 'id="page-title"' in html
     assert 'id="encounter-title"' in html
     assert "state.combat) return combatStartHtml()" in html
@@ -149,6 +156,8 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
     assert "enemyTurnDetailsHtml" in html
     assert "Tura gracza:" in html
     assert "Akcja:" in html
+    assert "Bonus action:" in html
+    assert "Reakcja:" in html
     assert "Ruch:" in html
     assert "wybrano cel" in html
     assert "wpisz obrażenia" in html
