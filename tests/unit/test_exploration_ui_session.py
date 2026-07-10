@@ -360,10 +360,18 @@ def test_exploration_ui_session_board_click_on_enemy_prompts_manual_attack_and_d
 
     selected = session.scan_board_selection()
 
-    assert selected["combat"]["pending_player_attack"]["stage"] == "attack_roll"
+    assert selected["combat"]["pending_player_attack"]["stage"] == "confirm_attack"
     assert selected["combat"]["pending_player_attack"]["target"]["id"] == target["id"]
+    assert selected["combat"]["pending_player_attack"]["target"]["ac"] == target["ac"]
+    assert selected["combat"]["pending_player_attack"]["attack_modifier"] > 0
+    assert selected["combat"]["pending_player_attack"]["active_modifiers"]
     assert "Rzuć 1d20" in selected["combat"]["pending_player_attack"]["attack_instruction"]
     assert selected["combat"]["turn_action"]["action_use"] == "action_available"
+
+    confirmed = session.confirm_player_attack_target()
+    assert confirmed["combat"]["pending_player_attack"]["stage"] == "attack_roll"
+    assert confirmed["combat"]["pending_player_attack"]["target"]["id"] == target["id"]
+    assert confirmed["combat"]["turn_action"]["action_use"] == "action_available"
 
     attack_roll = session.submit_player_attack_roll(natural_roll=20)
     pending = attack_roll["combat"]["pending_player_attack"]
@@ -442,10 +450,31 @@ def test_exploration_ui_session_enemy_turn_waits_for_board_confirmation():
         session.finish_combat_turn()
     assert session.combat_state is not None
     enemy_id = str(session.combat_state.initiative_order.current_actor.id)
+    board = FakeBoardConnection()
+    session.attach_board_connection(board, backend="simulator")
+
+    intent = session.resolve_enemy_turn()
+
+    assert intent["combat"]["current_actor"]["id"] == enemy_id
+    assert intent["combat"]["enemy_turn_intent"] is not None
+    assert intent["combat"]["enemy_turn_preview"] is None
+    assert any(message["title"] == "Zamiar przeciwnika" for message in intent["messages"])
+    intent_payload = intent["combat"]["enemy_turn_intent"]
+    highlighted_positions = {
+        tuple(position)
+        for positions, _color in board.led_calls
+        if positions != "off"
+        for position in positions
+    }
+    if intent_payload["kind"] == "movement":
+        assert tuple(intent_payload["destination"]) in highlighted_positions
+    if intent_payload.get("target_position"):
+        assert tuple(intent_payload["target_position"]) in highlighted_positions
 
     preview = session.resolve_enemy_turn()
 
     assert preview["combat"]["current_actor"]["id"] == enemy_id
+    assert preview["combat"]["enemy_turn_intent"] is None
     assert preview["combat"]["enemy_turn_preview"] is not None
     assert any(message["title"] in {"Ruch przeciwnika", "Atak przeciwnika"} for message in preview["messages"])
 
@@ -458,8 +487,7 @@ def test_exploration_ui_session_enemy_turn_waits_for_board_confirmation():
         assert isinstance(enemy_preview["natural_roll"], int)
         assert isinstance(enemy_preview["total"], int)
         assert "hit" in enemy_preview
-    board = FakeBoardConnection(clicks=[click])
-    session.attach_board_connection(board, backend="simulator")
+    board.clicks.append(click)
 
     result = session.scan_board_selection()
 

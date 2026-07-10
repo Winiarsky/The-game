@@ -75,6 +75,7 @@
 - [x] Add player combat movement to the exploration web UI.
 - [x] Add Bresenham line-of-sight and MVP ranged attacks.
 - [x] Add a small gate skirmish encounter for immediate ranged testing.
+- [x] Improve combat UI current-step clarity.
 - [x] Add exploration map environment setup before location selection.
 - [x] Couple exploration web UI with board/simulator backend for LEDs and board clicks.
 - [ ] Add full inventory/cantrip integration for exploration option bonuses.

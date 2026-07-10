@@ -40,6 +40,7 @@ from dnd_board_game.combat import (
     resolve_damage,
     resolve_enemy_auto_turn,
     roll_enemy_initiative,
+    plan_enemy_turn,
     scene_flag,
     select_attack_target,
     setup_led_feedback,
@@ -289,7 +290,7 @@ class BoardScanTarget:
 class PendingPlayerAttack:
     attacker_id: str
     target_id: str
-    stage: str = "attack_roll"
+    stage: str = "confirm_attack"
     natural_roll: int | None = None
     total: int | None = None
     hit: bool | None = None
@@ -345,6 +346,7 @@ class ExplorationUiSession:
         self.encounter_initiative_flow: EncounterInitiativeFlow | None = None
         self.combat_state: CombatState | None = None
         self.resolved_encounter_trigger_ids: set[str] = set()
+        self.pending_enemy_turn_intent = None
         self.pending_enemy_turn_result = None
         self.pending_enemy_turn_ack_result = None
         self.pending_player_attack: PendingPlayerAttack | None = None
@@ -431,6 +433,7 @@ class ExplorationUiSession:
                 self.combat_state,
                 self._active_encounter(),
                 self.selected_combat_movement_path,
+                self.pending_enemy_turn_intent,
                 self.pending_enemy_turn_result,
                 self.pending_enemy_turn_ack_result,
                 self.pending_player_attack,
@@ -980,14 +983,60 @@ class ExplorationUiSession:
             attacker_id=str(attacker.id),
             target_id=selected.selected_target.id,
         )
-        self.board_message = f"Wybrano cel ataku: {selected.selected_target.name}. Wpisz rzut d20 w panelu walki."
+        self.board_message = f"Wybrano cel ataku: {selected.selected_target.name}. Potwierdź atak Enterem albo przyciskiem."
         self._add_message(
-            "Atak",
-            f"{attacker.name} celuje w {selected.selected_target.name}. Rzuć d20 na trafienie i wpisz wynik.",
+            "Podgląd ataku",
+            f"{attacker.name} celuje w {selected.selected_target.name}. Sprawdź warunki ataku i potwierdź przed rzutem.",
         )
         self._record(
             "ui_combat_player_attack_target_selected",
             {"attacker_id": str(attacker.id), "target_id": selected.selected_target.id},
+        )
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def confirm_player_attack_target(self) -> dict[str, object]:
+        pending = self.pending_player_attack
+        if pending is None or pending.stage != "confirm_attack":
+            raise ValueError("Nie ma celu ataku do potwierdzenia.")
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        encounter = self._active_encounter()
+        if encounter is None:
+            raise ValueError("Brak danych encountera dla aktywnej walki.")
+        attacker = combat_current_actor(self.combat_state)
+        if str(attacker.id) != pending.attacker_id:
+            raise ValueError("Oczekujący atak nie należy do aktywnego aktora.")
+        source = encounter.attack_sources_by_actor.get(attacker.id)
+        if source is None:
+            raise ValueError(f"Aktor {attacker.name} nie ma zdefiniowanego ataku.")
+        action = start_attack_action(encounter.board, attacker, self.combat_state.actors, source)
+        selected = select_attack_target(action, target_id=pending.target_id)
+        assert selected.selected_target is not None
+        self.pending_player_attack = replace(pending, stage="attack_roll")
+        instruction = roll_instruction(source.attack_roll_request)
+        self.board_message = f"Potwierdzono atak: {attacker.name} -> {selected.selected_target.name}. Wpisz rzut d20 w panelu walki."
+        self._add_message(
+            "Atak",
+            f"{attacker.name} atakuje {selected.selected_target.name}. {instruction.message}",
+        )
+        self._record(
+            "ui_combat_player_attack_target_confirmed",
+            {"attacker_id": str(attacker.id), "target_id": selected.selected_target.id},
+        )
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def cancel_player_attack_target(self) -> dict[str, object]:
+        pending = self.pending_player_attack
+        if pending is None or pending.stage not in {"confirm_attack", "attack_roll"}:
+            raise ValueError("Nie ma wyboru celu ataku do anulowania.")
+        self.pending_player_attack = None
+        self.board_message = "Anulowano wybór celu ataku. Kliknij Skanuj planszę, żeby wybrać ruch albo cel."
+        self._add_message("Atak", "Anulowano wybór celu ataku.")
+        self._record(
+            "ui_combat_player_attack_target_cancelled",
+            {"attacker_id": pending.attacker_id, "target_id": pending.target_id},
         )
         self._sync_board_leds()
         return self.state_payload()
@@ -1174,6 +1223,22 @@ class ExplorationUiSession:
         source = encounter.attack_sources_by_actor.get(enemy.id)
         if source is None:
             raise ValueError(f"Aktor {enemy.name} nie ma zdefiniowanego ataku.")
+        if self.pending_enemy_turn_intent is None:
+            intent = plan_enemy_turn(encounter.board, self.combat_state, enemy)
+            self.pending_enemy_turn_intent = intent
+            self.board_message = _enemy_turn_intent_message(intent)
+            self._add_message("Zamiar przeciwnika", f"{_enemy_turn_intent_message(intent)} Potwierdź Enterem albo przyciskiem.")
+            self._record(
+                "ui_combat_enemy_turn_intent",
+                {
+                    "enemy_id": str(enemy.id),
+                    "target_id": intent.target.id if intent.target is not None else None,
+                    "message": intent.message,
+                },
+            )
+            self._sync_board_leds()
+            return self.state_payload()
+        self.pending_enemy_turn_intent = None
         result = resolve_enemy_auto_turn(encounter.board, self.combat_state, enemy, source, self.encounter_rng)
         if result.movement_path is not None and result.movement_path.valid and result.movement_path.destination != enemy.position:
             self.pending_enemy_turn_result = result
@@ -1208,6 +1273,7 @@ class ExplorationUiSession:
             raise ValueError("Brak oczekującej tury przeciwnika do potwierdzenia.")
         self.combat_state = result.state
         self.selected_combat_movement_path = None
+        self.pending_enemy_turn_intent = None
         self.pending_enemy_turn_result = None
         self.pending_enemy_turn_ack_result = result
         self.board_message = "Wynik tury przeciwnika gotowy. Potwierdź Enterem albo przyciskiem w UI."
@@ -1235,6 +1301,7 @@ class ExplorationUiSession:
             raise ValueError("Walka nie została rozpoczęta.")
         self.combat_state = finish_turn(result.state)
         self.selected_combat_movement_path = None
+        self.pending_enemy_turn_intent = None
         self.pending_enemy_turn_result = None
         self.pending_enemy_turn_ack_result = None
         self._add_message("Tura przeciwnika", _enemy_turn_message(result))
@@ -1281,6 +1348,8 @@ class ExplorationUiSession:
         actor = combat_current_actor(self.combat_state)
         self.combat_state = finish_turn(self.combat_state)
         self.selected_combat_movement_path = None
+        self.pending_enemy_turn_intent = None
+        self.pending_enemy_turn_result = None
         self.pending_enemy_turn_ack_result = None
         self.pending_player_attack = None
         self._add_message("Koniec tury", f"Zakończono turę: {actor.name}.")
@@ -1347,6 +1416,12 @@ class ExplorationUiSession:
         if self.combat_state is not None:
             encounter = self._active_encounter()
             actor = combat_current_actor(self.combat_state)
+            if self.pending_enemy_turn_intent is not None:
+                return BoardScanTarget(
+                    positions=(),
+                    feedback=_enemy_turn_intent_led_feedback(self.pending_enemy_turn_intent),
+                    empty_message="Zamiar przeciwnika czeka na potwierdzenie Enterem albo przyciskiem.",
+                )
             if self.pending_enemy_turn_result is not None:
                 target_positions = _pending_enemy_turn_target_positions(self.pending_enemy_turn_result)
                 if not target_positions:
@@ -2133,6 +2208,20 @@ def create_app(session: ExplorationUiSession) -> Flask:
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
+    @app.post("/api/combat/player-attack-confirm")
+    def api_combat_player_attack_confirm():
+        try:
+            return jsonify(session.confirm_player_attack_target())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/player-attack-cancel")
+    def api_combat_player_attack_cancel():
+        try:
+            return jsonify(session.cancel_player_attack_target())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
     @app.post("/api/combat/player-damage")
     def api_combat_player_damage():
         data = request.get_json(silent=True) or {}
@@ -2391,6 +2480,7 @@ def _combat_payload(
     state: CombatState | None,
     encounter: LoadedEncounter | None = None,
     selected_movement_path=None,
+    pending_enemy_turn_intent=None,
     pending_enemy_turn_result=None,
     pending_enemy_turn_ack_result=None,
     pending_player_attack: PendingPlayerAttack | None = None,
@@ -2424,6 +2514,7 @@ def _combat_payload(
         "legal_targets": [_combat_target_payload(target) for target in targets],
         "movement": _movement_payload(movement, state, actor) if movement is not None else None,
         "movement_preview": _movement_preview_payload(selected_movement_path),
+        "enemy_turn_intent": _enemy_turn_intent_payload(pending_enemy_turn_intent, encounter),
         "enemy_turn_preview": _enemy_turn_preview_payload(pending_enemy_turn_result, encounter),
         "enemy_turn_result": _enemy_turn_result_payload(pending_enemy_turn_ack_result, encounter),
         "pending_player_attack": _pending_player_attack_payload(pending_player_attack, state, encounter),
@@ -2477,11 +2568,22 @@ def _pending_player_attack_payload(
         "source": _attack_source_payload(source),
         "attack_instruction": instruction.message,
         "attack_modifier": instruction.breakdown.modifier_total,
+        "attack_mode": instruction.mode.value,
+        "active_modifiers": [_roll_modifier_payload(modifier) for modifier in instruction.breakdown.active_modifiers],
+        "ignored_modifiers": [_roll_modifier_payload(modifier) for modifier in instruction.breakdown.ignored_modifiers],
         "damage_instruction": _damage_roll_instruction(source),
         "natural_roll": pending.natural_roll,
         "total": pending.total,
         "hit": pending.hit,
         "critical": pending.critical,
+    }
+
+
+def _roll_modifier_payload(modifier: RollModifier) -> dict[str, object]:
+    return {
+        "label": modifier.label,
+        "value": modifier.value,
+        "type": modifier.modifier_type.value,
     }
 
 
@@ -2570,6 +2672,51 @@ def _pending_enemy_turn_led_feedback(result) -> LedFeedback:
     return LedFeedback()
 
 
+def _enemy_turn_intent_led_feedback(intent) -> LedFeedback:
+    if intent is None:
+        return LedFeedback()
+    frames: list[LedFrame] = []
+    if intent.movement_path is not None and intent.movement_path.valid:
+        path_positions = tuple(position for position in intent.movement_path.path if position != intent.movement_path.origin)
+        if path_positions:
+            frames.append(LedFrame(path_positions, LedColor.ENEMY_MOVEMENT_PATH, LedRole.SELECTED_PATH))
+        frames.append(LedFrame((intent.movement_path.destination,), LedColor.ENEMY_MOVEMENT_DESTINATION, LedRole.DESTINATION))
+    if intent.target is not None:
+        frames.append(LedFrame((intent.target.position,), LedColor.ENEMY, LedRole.ENEMY))
+    return LedFeedback(tuple(frames))
+
+
+def _enemy_turn_intent_payload(intent, encounter: LoadedEncounter | None = None) -> dict[str, object] | None:
+    if intent is None:
+        return None
+    payload: dict[str, object] = {
+        "enemy_id": str(intent.enemy.id),
+        "enemy_name": intent.enemy.name,
+        "message": _enemy_turn_intent_message(intent),
+    }
+    source = encounter.attack_sources_by_actor.get(intent.enemy.id) if encounter is not None else None
+    if intent.target is not None:
+        payload["target_id"] = intent.target.id
+        payload["target_name"] = intent.target.name
+        payload["target_position"] = [intent.target.position.col, intent.target.position.row]
+    if source is not None:
+        instruction = roll_instruction(source.attack_roll_request)
+        payload["source"] = _attack_source_payload(source)
+        payload["attack_instruction"] = instruction.message
+        payload["attack_modifier"] = instruction.breakdown.modifier_total
+        payload["damage_instruction"] = _damage_roll_instruction(source)
+    if intent.movement_path is not None and intent.movement_path.valid:
+        payload["kind"] = "movement"
+        payload["destination"] = [intent.movement_path.destination.col, intent.movement_path.destination.row]
+        payload["path"] = [[position.col, position.row] for position in intent.movement_path.path]
+        payload["cost_feet"] = intent.movement_path.cost_feet
+    elif intent.target is not None:
+        payload["kind"] = "attack"
+    else:
+        payload["kind"] = "wait"
+    return payload
+
+
 def _enemy_turn_preview_payload(result, encounter: LoadedEncounter | None = None) -> dict[str, object] | None:
     if result is None:
         return None
@@ -2626,6 +2773,10 @@ def _enemy_roll_summary(result) -> str:
     if result.damage is not None:
         parts.append(f"obrażenia: {result.damage.total_applied}")
     return ". ".join(parts) + "."
+
+
+def _enemy_turn_intent_message(intent) -> str:
+    return intent.message
 
 
 def _enemy_turn_message(result) -> str:
@@ -3030,6 +3181,24 @@ _HTML = """
     .status-item { border-bottom: 1px solid #34383d; padding-bottom: 7px; }
     .status-item:last-child { border-bottom: 0; padding-bottom: 0; }
     .status-item b { display: block; }
+    .combat-current-step { border: 1px solid #4b4227; border-radius: 6px; background: #181713; padding: 12px; }
+    .combat-prompt { border-left: 4px solid #f5c542; background: #211f16; color: #f5e3a1; padding: 12px 14px; margin: 0 0 10px; }
+    .combat-prompt b { display: block; font-size: 18px; margin-bottom: 4px; }
+    .combat-mini-status { display: flex; gap: 10px; flex-wrap: wrap; margin: 0 0 10px; color: #d6d0c4; font-size: 13px; }
+    .combat-mini-status span { border: 1px solid #34383d; border-radius: 999px; padding: 3px 8px; background: #111417; }
+    .combat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin: 0 0 12px; }
+    .combat-section { border: 1px solid #34383d; border-radius: 6px; padding: 10px 12px; background: #171b20; }
+    .combat-section h4 { margin: 0 0 7px; font-size: 14px; color: #f5e3a1; }
+    .combat-section p { margin: 0 0 7px; }
+    .combat-section p:last-child { margin-bottom: 0; }
+    .combat-empty { color: #a9a298; }
+    .combat-stage { display: grid; gap: 12px; margin: 0 0 12px; }
+    .combat-action-card { border: 1px solid #34383d; border-radius: 6px; padding: 10px; background: #171b20; }
+    .combat-action-card p { margin: 0 0 8px; }
+    .combat-last-result { border-left: 3px solid #3fb950; padding: 10px 12px; background: #132018; }
+    .combat-last-result h4 { margin: 0 0 6px; color: #d7f6df; }
+    .combat-details { border-top: 1px solid #34383d; margin-top: 12px; padding-top: 10px; }
+    .combat-details summary { cursor: pointer; color: #a9a298; }
     .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
     input, textarea, button { font: inherit; }
     textarea { width: 100%; min-height: 80px; box-sizing: border-box; background: #0f1113; color: #ece7dc; border: 1px solid #3a3f45; border-radius: 5px; padding: 10px; }
@@ -3073,7 +3242,7 @@ _HTML = """
     <button class="secondary" onclick="resetSession()">Reset</button>
   </aside>
   <section>
-    <h1>Eksploracja</h1>
+    <h1 id="page-title">Eksploracja</h1>
     <div id="status" class="status" hidden></div>
     <div class="card" id="flow-panel"></div>
     <div class="card scene-description" id="scene-description-card">
@@ -3086,7 +3255,7 @@ _HTML = """
       <button onclick="ackResult()">Dalej</button>
     </div>
     <div class="card" id="encounter-panel">
-      <h3>Zaczyna się encounter</h3>
+      <h3 id="encounter-title">Zaczyna się encounter</h3>
       <div id="encounter"></div>
     </div>
     <div class="card" id="travel-panel">
@@ -3183,6 +3352,9 @@ async function loadState() {
   refreshSessionLog();
 }
 function render() {
+  const inCombat = Boolean(state.combat);
+  document.getElementById('page-title').textContent = inCombat ? 'Walka' : 'Eksploracja';
+  document.getElementById('encounter-title').textContent = inCombat ? 'Walka' : 'Zaczyna się encounter';
   document.getElementById('scenario').textContent = state.scenario.name;
   document.getElementById('zone').textContent = state.current_zone.name;
   document.getElementById('challenge').textContent = state.active_challenge ? `${state.active_challenge.name}: ${state.active_challenge.current_progress}/${state.active_challenge.progress_required}, hałas ${state.active_challenge.noise}` : 'Brak';
@@ -3528,6 +3700,7 @@ function travelOptionsHtml() {
 function encounterHtml() {
   const encounter = state.pending_encounter;
   if (!encounter) return '';
+  if (state.combat) return combatStartHtml();
   const setup = state.encounter_setup;
   const initiative = state.encounter_initiative;
   const setupHtml = encounterSetupHtml(setup);
@@ -3602,26 +3775,149 @@ function combatStartHtml() {
   const order = state.encounter_initiative && state.encounter_initiative.order ? state.encounter_initiative.order : [];
   const actors = combat.actors || [];
   const finished = combat.status === 'finished';
-  const winnerLabel = combat.winner === 'ally' ? 'drużyna' : (combat.winner === 'enemy' ? 'przeciwnicy' : combat.winner || '-');
   const actor = combat.current_actor || {};
   const isAllyTurn = actor.faction === 'ally';
   const isEnemyTurn = actor.faction === 'enemy';
   return `
-    <div class="result">
-      <b>${finished ? 'Walka zakończona' : 'Walka rozpoczęta'}</b><br>
-      ${finished ? `Zwycięzca: ${esc(winnerLabel)}.` : `Runda ${esc(combat.round_number)}. Tura: ${esc(combat.current_actor.name)}.`}
+    <div class="combat-stage">
+      ${combatCurrentStepHtml(combat, finished, isAllyTurn, isEnemyTurn)}
+      ${combatLastResultHtml()}
     </div>
-    <p><b>Kolejność inicjatywy:</b> ${order.map(entry => `${esc(entry.actor_name)} (${entry.total})`).join(', ')}</p>
-    <div class="status-list">
-      ${actors.map(actor => `
-        <div class="status-item">
-          <b>${esc(actor.name)} ${actor.id === combat.current_actor.id ? '(tura)' : ''}</b>
-          <span>${esc(actor.faction)} | HP ${esc(actor.hp)} / AC ${esc(actor.ac)} | pole (${esc(actor.position[0])},${esc(actor.position[1])})</span>
-        </div>
-      `).join('')}
+    <details class="combat-details">
+      <summary>Szczegóły walki</summary>
+      <section class="combat-section">
+        <h4>Aktualny aktor</h4>
+        ${combatActorStatusHtml(combat)}
+      </section>
+      <section class="combat-section">
+        <h4>Szczegóły aktualnego kroku</h4>
+        ${combatActionDetailsHtml(combat, isAllyTurn, isEnemyTurn)}
+      </section>
+      <p><b>Kolejność inicjatywy:</b> ${order.map(entry => `${esc(entry.actor_name)} (${entry.total})`).join(', ')}</p>
+      <div class="status-list">
+        ${actors.map(actor => `
+          <div class="status-item">
+            <b>${esc(actor.name)} ${actor.id === combat.current_actor.id ? '(tura)' : ''}</b>
+            <span>${esc(actor.faction)} | HP ${esc(actor.hp)} / AC ${esc(actor.ac)} | pole (${esc(actor.position[0])},${esc(actor.position[1])})</span>
+          </div>
+        `).join('')}
+      </div>
+    </details>
+  `;
+}
+function combatCurrentStepHtml(combat, finished, isAllyTurn, isEnemyTurn) {
+  return `
+    <div class="combat-current-step">
+      ${combatMainPromptHtml(combat, finished, isAllyTurn, isEnemyTurn)}
+      ${combatMiniStatusHtml(combat)}
+      <div class="combat-action-card">
+        ${finished ? '<button onclick="resolveCombatOutcome()">Zastosuj wynik walki</button>' : combatPrimaryActionHtml(combat, isAllyTurn, isEnemyTurn)}
+      </div>
     </div>
-    ${latestCombatMessageHtml()}
-    ${finished ? '<button onclick="resolveCombatOutcome()">Zastosuj wynik walki</button>' : combatTurnControlsHtml(combat, isAllyTurn, isEnemyTurn)}
+  `;
+}
+function combatMainPromptHtml(combat, finished, isAllyTurn, isEnemyTurn) {
+  return `
+    <div class="combat-prompt">
+      <b>${esc(combatPromptTitle(combat, finished, isAllyTurn, isEnemyTurn))}</b>
+      <span>${esc(combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn))}</span>
+    </div>
+  `;
+}
+function combatPromptTitle(combat, finished, isAllyTurn, isEnemyTurn) {
+  if (finished) return 'Walka zakończona';
+  const actor = combat.current_actor || {};
+  if (isEnemyTurn) {
+    if (combat.enemy_turn_result) return `Tura ${actor.name || 'przeciwnika'}: potwierdź wynik`;
+    if (combat.enemy_turn_intent) return `Tura ${actor.name || 'przeciwnika'}: zamiar`;
+    if (combat.enemy_turn_preview) return `Tura ${actor.name || 'przeciwnika'}: potwierdź planszą`;
+    return `Tura ${actor.name || 'przeciwnika'}: rozegraj zamiar`;
+  }
+  if (isAllyTurn && combat.pending_player_attack) {
+    if (combat.pending_player_attack.stage === 'confirm_attack') return `Tura ${actor.name || 'gracza'}: potwierdź atak`;
+    return combat.pending_player_attack.stage === 'damage_roll'
+      ? `Tura ${actor.name || 'gracza'}: wpisz obrażenia`
+      : `Tura ${actor.name || 'gracza'}: rzuć d20`;
+  }
+  if (isAllyTurn && combat.movement_preview) return `Tura ${actor.name || 'gracza'}: potwierdź ruch`;
+  if (isAllyTurn) return `Tura ${actor.name || 'gracza'}: wybierz ruch albo cel`;
+  return `Tura ${actor.name || '-'}`;
+}
+function combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn) {
+  if (finished) return 'Zastosuj wynik walki, żeby wrócić do eksploracji.';
+  const actor = combat.current_actor || {};
+  if (isEnemyTurn) {
+    if (combat.enemy_turn_result) return 'Przeczytaj wynik tury przeciwnika i potwierdź go Enterem albo przyciskiem.';
+    const intent = combat.enemy_turn_intent || null;
+    if (intent) return `${intent.message || 'Przeciwnik deklaruje zamiar.'} Potwierdź, żeby przejść do wykonania na planszy.`;
+    const preview = combat.enemy_turn_preview || null;
+    if (preview && preview.kind === 'movement') {
+      return `Przestaw ${preview.enemy_name} na pole (${preview.destination[0]},${preview.destination[1]}), uruchom skan i kliknij pole docelowe.`;
+    }
+    if (preview && preview.kind === 'attack') {
+      return `${preview.enemy_name} atakuje ${preview.target_name}. Uruchom skan i kliknij podświetlony cel.`;
+    }
+    return 'Naciśnij Enter albo przycisk, żeby gra pokazała zamiar przeciwnika.';
+  }
+  if (!isAllyTurn) return 'Ten aktor nie ma automatycznych kontrolek w MVP. Możesz zakończyć turę.';
+  const pending = combat.pending_player_attack || null;
+  if (pending) {
+    const target = pending.target || {};
+    const source = pending.source || {};
+    if (pending.stage === 'confirm_attack') {
+      return `Wybrano ${target.name || '-'}. Potwierdź atak, żeby przejść do rzutu d20.`;
+    }
+    if (pending.stage === 'damage_roll') {
+      return `Trafiono ${target.name || 'cel'}. Rzuć obrażenia ${pending.damage_instruction || source.damage_hint || ''} i wpisz wynik.`;
+    }
+    return `Wybrano cel ${target.name || '-'}. Rzuć d20 na atak ${source.name || ''} i wpisz naturalny wynik.`;
+  }
+  const movement = combat.movement || {};
+  const preview = combat.movement_preview || null;
+  const remaining = Number(movement.remaining_feet || 0);
+  const actionUsed = combat.turn_action && combat.turn_action.action_use === 'action_used';
+  if (preview) {
+    return `Wybrano ruch na (${preview.destination[0]},${preview.destination[1]}). Uruchom skan i kliknij pole docelowe, żeby zatwierdzić.`;
+  }
+  if (actionUsed && remaining > 0) return `Akcja zużyta. Możesz jeszcze ruszyć się (${remaining} ft) albo zakończyć turę.`;
+  if (actionUsed) return 'Akcja zużyta. Możesz zakończyć turę.';
+  if (remaining > 0) return `Kliknij Skanuj planszę, a potem wybierz niebieskie pole ruchu albo czerwony cel.`;
+  return 'Ruch wykorzystany. Możesz zaatakować czerwony cel albo zakończyć turę.';
+}
+function combatMiniStatusHtml(combat) {
+  const actor = combat.current_actor || {};
+  const movement = combat.movement || {};
+  const remaining = Number(movement.remaining_feet || 0);
+  const actionUsed = combat.turn_action && combat.turn_action.action_use === 'action_used';
+  const position = actor.position || ['-', '-'];
+  return `
+    <div class="combat-mini-status">
+      <span>Runda ${esc(combat.round_number || '-')}</span>
+      <span>${esc(actor.name || '-')}</span>
+      <span>HP ${esc(actor.hp)} / AC ${esc(actor.ac)}</span>
+      <span>Pole (${esc(position[0])},${esc(position[1])})</span>
+      ${actor.faction === 'ally' ? `<span>Akcja: ${actionUsed ? 'zużyta' : 'dostępna'}</span><span>Ruch: ${esc(remaining)} ft</span>` : ''}
+    </div>
+  `;
+}
+function combatActorStatusHtml(combat) {
+  const actor = combat.current_actor || {};
+  const movement = combat.movement || {};
+  const remaining = Number(movement.remaining_feet || 0);
+  const actionUsed = combat.turn_action && combat.turn_action.action_use === 'action_used';
+  return `
+    <p><b>${esc(actor.name || '-')}</b> (${esc(actor.faction || '-')})</p>
+    <p>Runda ${esc(combat.round_number || '-')}, pole (${esc(actor.position ? actor.position[0] : '-')},${esc(actor.position ? actor.position[1] : '-')})</p>
+    <p>HP ${esc(actor.hp)} / AC ${esc(actor.ac)}</p>
+    ${actor.faction === 'ally' ? `<p>Akcja: ${actionUsed ? 'zużyta' : 'dostępna'} | Ruch: ${esc(remaining)} ft</p>` : ''}
+  `;
+}
+function combatLastResultHtml() {
+  return `
+    <div class="combat-last-result">
+      <h4>Ostatni rezultat</h4>
+      ${latestCombatMessageHtml()}
+    </div>
   `;
 }
 function latestCombatMessageHtml() {
@@ -3629,30 +3925,32 @@ function latestCombatMessageHtml() {
   const messages = state.messages || [];
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     if (!combatTitles.has(messages[i].title)) continue;
-    return `<div class="message"><b>Ostatni rezultat: ${esc(messages[i].title)}</b><br>${esc(messages[i].body)}</div>`;
+    return `<p><b>${esc(messages[i].title)}</b></p><p>${esc(messages[i].body)}</p>`;
   }
-  return '';
+  return '<p class="combat-empty">Brak rezultatu w tej walce.</p>';
 }
-function combatTurnControlsHtml(combat, isAllyTurn, isEnemyTurn) {
+function combatPrimaryActionHtml(combat, isAllyTurn, isEnemyTurn) {
   if (isEnemyTurn) {
+    if (combat.enemy_turn_intent) {
+      return enemyTurnIntentHtml(combat.enemy_turn_intent);
+    }
     if (combat.enemy_turn_result) {
       return enemyTurnResultHtml(combat.enemy_turn_result);
     }
     const preview = combat.enemy_turn_preview || null;
     if (preview && preview.kind === 'movement') {
       return `
-        <div class="message"><b>Ruch przeciwnika</b><br>${esc(preview.enemy_name)} porusza się na (${esc(preview.destination[0])},${esc(preview.destination[1])}). Przestaw figurkę po podświetlonej ścieżce i kliknij pole docelowe.${enemyRollSummaryHtml(preview)}</div>
+        <p>Oczekiwane pole: (${esc(preview.destination[0])},${esc(preview.destination[1])})</p>
         <button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>
       `;
     }
     if (preview && preview.kind === 'attack') {
       return `
-        <div class="message"><b>Atak przeciwnika</b><br>${esc(preview.enemy_name)} atakuje ${esc(preview.target_name)}.${enemyRollSummaryHtml(preview)} Kliknij podświetlone pole celu, żeby potwierdzić atak.</div>
+        <p>Oczekiwany cel: ${esc(preview.target_name)}</p>
         <button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>
       `;
     }
     return `
-      <div class="message"><b>Tura przeciwnika</b><br>Enter albo przycisk wyliczy zamiar przeciwnika. Potem potwierdzisz ruch lub atak kliknięciem na planszy.</div>
       <button data-allow-busy="true" onclick="resolveEnemyTurn()">Rozegraj turę przeciwnika</button>
     `;
   }
@@ -3662,85 +3960,110 @@ function combatTurnControlsHtml(combat, isAllyTurn, isEnemyTurn) {
   if (combat.pending_player_attack) {
     return pendingPlayerAttackHtml(combat.pending_player_attack);
   }
-  const source = combat.available_attack || {};
-  const targets = combat.legal_targets || [];
   const movement = combat.movement || {remaining_feet: 0, destinations: []};
   const preview = combat.movement_preview || null;
-  const actionUsed = combat.turn_action && combat.turn_action.action_use === 'action_used';
-  const moveCount = (movement.destinations || []).length;
-  const targetText = targets.length
-    ? targets.map(target => `${target.name} (${target.position[0]},${target.position[1]})`).join(', ')
-    : 'brak';
   return `
-    ${playerTurnStatusHtml(combat)}
-    <div class="message">
-      <b>Plansza steruje turą</b><br>
-      Niebieskie pola: ruch (${esc(moveCount)} pól, zostało ${esc(movement.remaining_feet || 0)} ft).<br>
-      ${preview ? `Wybrana ścieżka: (${esc(preview.destination[0])},${esc(preview.destination[1])}), koszt ${esc(preview.cost_feet)} ft. Kliknij Skanuj planszę i wskaż to pole ponownie, żeby zatwierdzić.<br>` : 'Kliknij Skanuj planszę i wskaż niebieskie pole, żeby podejrzeć ścieżkę. Powtórz skan i kliknięcie, żeby zatwierdzić ruch.<br>'}
-      Czerwone pola z przeciwnikiem: atak ${esc(source.name || '-')}${source.damage_hint ? `, po trafieniu rzuć ${esc(source.damage_hint)}` : ''}.<br>
-      Cele w zasięgu: ${esc(targetText)}.
-      ${actionUsed ? '<br>Akcja w tej turze została już zużyta, czerwone cele nie będą aktywne.' : ''}
-    </div>
+    ${preview ? `<p>Potwierdź pole: (${esc(preview.destination[0])},${esc(preview.destination[1])}), koszt ${esc(preview.cost_feet)} ft.</p>` : `<p>Ruch dostępny: ${esc(movement.remaining_feet || 0)} ft.</p>`}
     <div class="row"><button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button><button class="secondary" data-allow-busy="true" onclick="finishCombatTurn()">Zakończ turę</button></div>
   `;
 }
-function playerTurnStatusHtml(combat) {
+function combatActionDetailsHtml(combat, isAllyTurn, isEnemyTurn) {
+  if (isEnemyTurn) return enemyTurnDetailsHtml(combat);
+  if (!isAllyTurn) return '<p class="muted">Brak dodatkowych szczegółów dla tego aktora.</p>';
+  if (combat.pending_player_attack) return pendingPlayerAttackDetailsHtml(combat.pending_player_attack);
+  return playerTurnDetailsHtml(combat);
+}
+function playerTurnDetailsHtml(combat) {
+  const source = combat.available_attack || {};
+  const targets = combat.legal_targets || [];
   const actor = combat.current_actor || {};
   const movement = combat.movement || {};
   const preview = combat.movement_preview || null;
   const actionUsed = combat.turn_action && combat.turn_action.action_use === 'action_used';
   const remaining = Number(movement.remaining_feet || 0);
-  let next = '';
-  if (preview) {
-    next = `Wybrano ruch na (${esc(preview.destination[0])},${esc(preview.destination[1])}) za ${esc(preview.cost_feet)} ft. Potwierdź pole planszą albo zakończ turę.`;
-  } else if (actionUsed && remaining > 0) {
-    next = `Akcja zużyta. Możesz jeszcze ruszyć się (${esc(remaining)} ft) albo zakończyć turę.`;
-  } else if (actionUsed) {
-    next = 'Akcja zużyta. Możesz zakończyć turę.';
-  } else if (remaining > 0) {
-    next = `Akcja dostępna. Możesz ruszyć się (${esc(remaining)} ft), zaatakować albo zakończyć turę.`;
-  } else {
-    next = 'Ruch wykorzystany. Możesz zaatakować albo zakończyć turę.';
-  }
+  const moveCount = (movement.destinations || []).length;
+  const targetText = targets.length
+    ? targets.map(target => `${target.name} (${target.position[0]},${target.position[1]})`).join(', ')
+    : 'brak';
   return `
-    <div class="result">
-      <b>Tura gracza: ${esc(actor.name || '-')}</b><br>
-      <b>Akcja:</b> ${actionUsed ? 'zużyta' : 'dostępna'} | <b>Ruch:</b> ${esc(remaining)} ft<br>
-      ${next}
-    </div>
+    <p><b>Tura gracza:</b> ${esc(actor.name || '-')}</p>
+    <p><b>Akcja:</b> ${actionUsed ? 'zużyta' : 'dostępna'} | <b>Ruch:</b> ${esc(remaining)} ft</p>
+    <p>Niebieskie pola: ruch (${esc(moveCount)} pól). Czerwone pola: legalne cele ataku.</p>
+    ${preview ? `<p>Wybrana ścieżka: (${esc(preview.destination[0])},${esc(preview.destination[1])}), koszt ${esc(preview.cost_feet)} ft.</p>` : ''}
+    <p><b>Atak:</b> ${esc(source.name || '-')}${source.damage_hint ? `, po trafieniu rzuć ${esc(source.damage_hint)}` : ''}</p>
+    <p><b>Cele w zasięgu:</b> ${esc(targetText)}</p>
+  `;
+}
+function enemyTurnDetailsHtml(combat) {
+  const intent = combat.enemy_turn_intent || null;
+  if (intent) {
+    const source = intent.source || {};
+    const targetText = intent.target_name ? ` przeciwko ${esc(intent.target_name)}` : '';
+    const moveText = intent.kind === 'movement'
+      ? `<p><b>Ruch:</b> (${esc(intent.destination[0])},${esc(intent.destination[1])}), koszt ${esc(intent.cost_feet)} ft.</p>`
+      : '';
+    const attackText = intent.target_name
+      ? `<p><b>Atak:</b> ${esc(source.name || '-')} ${targetText}. Premia do rzutu: ${esc(signedNumber(intent.attack_modifier || 0))}.</p>`
+      : '';
+    return `
+      <p><b>Zamiar przeciwnika:</b> ${esc(intent.message || '')}</p>
+      ${moveText}
+      ${attackText}
+    `;
+  }
+  const result = combat.enemy_turn_result || null;
+  if (result) {
+    const target = result.target_name ? ` przeciwko ${esc(result.target_name)}` : '';
+    const hitText = result.hit === true ? (result.critical ? 'TRAFIENIE KRYTYCZNE' : 'TRAFIENIE') : (result.hit === false ? 'PUDŁO' : 'BRAK ATAKU');
+    const rollHtml = result.natural_roll !== null && result.natural_roll !== undefined
+      ? `<p><b>Rzut d20:</b> ${esc(result.natural_roll)} | <b>Wynik końcowy:</b> ${esc(result.total)}</p>`
+      : '';
+    const damageHtml = result.damage !== null && result.damage !== undefined
+      ? `<p><b>Obrażenia:</b> ${esc(result.damage)}</p>`
+      : '';
+    return `
+      <p><b>Wynik tury przeciwnika:</b> ${hitText}</p>
+      <p>${esc(result.enemy_name || 'Przeciwnik')}${target}</p>
+      ${rollHtml}
+      ${damageHtml}
+      <p class="muted">${esc(result.message || '')}</p>
+    `;
+  }
+  const preview = combat.enemy_turn_preview || null;
+  if (preview && preview.kind === 'movement') {
+    return `<p><b>Ruch przeciwnika:</b> ${esc(preview.enemy_name)} porusza się na (${esc(preview.destination[0])},${esc(preview.destination[1])}). Przestaw figurkę po ścieżce i potwierdź pole planszą.${enemyRollSummaryHtml(preview)}</p>`;
+  }
+  if (preview && preview.kind === 'attack') {
+    return `<p><b>Atak przeciwnika:</b> ${esc(preview.enemy_name)} atakuje ${esc(preview.target_name)}. Potwierdź podświetlony cel planszą.${enemyRollSummaryHtml(preview)}</p>`;
+  }
+  return '<p>Enter albo przycisk wyliczy zamiar przeciwnika. Potem potwierdzisz ruch lub atak kliknięciem na planszy.</p>';
+}
+function enemyTurnIntentHtml(intent) {
+  return `
+    <button data-allow-busy="true" onclick="resolveEnemyTurn()">Potwierdź zamiar przeciwnika</button>
   `;
 }
 function enemyTurnResultHtml(result) {
-  const target = result.target_name ? ` przeciwko ${esc(result.target_name)}` : '';
-  const hitText = result.hit === true ? (result.critical ? 'TRAFIENIE KRYTYCZNE' : 'TRAFIENIE') : (result.hit === false ? 'PUDŁO' : 'BRAK ATAKU');
-  const rollHtml = result.natural_roll !== null && result.natural_roll !== undefined
-    ? `<div><b>Rzut d20:</b> ${esc(result.natural_roll)} | <b>Wynik końcowy:</b> ${esc(result.total)}</div>`
-    : '';
-  const damageHtml = result.damage !== null && result.damage !== undefined
-    ? `<div><b>Obrażenia:</b> ${esc(result.damage)}</div>`
-    : '';
   return `
-    <div class="result">
-      <b>Wynik tury przeciwnika: ${hitText}</b><br>
-      ${esc(result.enemy_name || 'Przeciwnik')}${target}<br>
-      ${rollHtml}
-      ${damageHtml}
-      <div class="muted">${esc(result.message || '')}</div>
-    </div>
     <button data-allow-busy="true" onclick="confirmEnemyTurnResult()">Potwierdź wynik przeciwnika</button>
   `;
 }
 function pendingPlayerAttackHtml(pending) {
   const target = pending.target || {};
   const source = pending.source || {};
+  if (pending.stage === 'confirm_attack') {
+    const modifierLabel = signedNumber(pending.attack_modifier || 0);
+    return `
+      <p>Cel: ${esc(target.name || '-')} | AC ${esc(target.ac || '-')} | premia ${esc(modifierLabel)}</p>
+      <div class="row">
+        <button data-allow-busy="true" onclick="confirmPlayerAttackTarget()">Potwierdź atak</button>
+        <button class="secondary" data-allow-busy="true" onclick="cancelPlayerAttackTarget()">Anuluj wybór celu</button>
+      </div>
+    `;
+  }
   if (pending.stage === 'damage_roll') {
     return `
-      <div class="result">
-        <b>Tura gracza: wpisz obrażenia</b><br>
-        <b>Cel:</b> ${esc(target.name || '-')} | <b>Trafienie:</b> ${pending.critical ? 'krytyczne' : 'zwykłe'}<br>
-        <b>Rzut d20:</b> ${esc(pending.natural_roll || '')} | <b>Wynik końcowy:</b> ${esc(pending.total || '')}<br>
-        <b>Co teraz:</b> ${esc(pending.damage_instruction || '')}
-      </div>
+      <p>${esc(pending.damage_instruction || 'Wpisz obrażenia po trafieniu.')}</p>
       <div class="row">
         <label>Obrażenia: <input id="combat-damage-roll" type="number" min="0" value="${esc(defaultDamageValue(source))}"></label>
         <button onclick="submitPlayerDamageRoll()">Zapisz obrażenia</button>
@@ -3749,17 +4072,44 @@ function pendingPlayerAttackHtml(pending) {
     `;
   }
   return `
-    <div class="result">
-      <b>Tura gracza: wybrano cel</b><br>
-      <b>Cel:</b> ${esc(target.name || '-')} | <b>Atak:</b> ${esc(source.name || '-')}<br>
-      <b>Co teraz:</b> ${esc(pending.attack_instruction || 'Rzuć 1d20 i wpisz wynik.')}<br>
-      Po trafieniu: ${esc(pending.damage_instruction || source.damage_hint || '')}
-    </div>
+    <p>${esc(pending.attack_instruction || 'Rzuć 1d20 i wpisz wynik.')}</p>
     <div class="row">
       <label>Wynik d20: <input id="combat-attack-natural-roll" type="number" min="1" max="20" value="10"></label>
       <button onclick="submitPlayerAttackRoll()">Zapisz rzut</button>
       <button class="secondary" data-allow-busy="true" onclick="finishCombatTurn()">Zakończ turę</button>
     </div>
+  `;
+}
+function pendingPlayerAttackDetailsHtml(pending) {
+  const target = pending.target || {};
+  const source = pending.source || {};
+  if (pending.stage === 'confirm_attack') {
+    const active = pending.active_modifiers || [];
+    const ignored = pending.ignored_modifiers || [];
+    const modifierLabel = signedNumber(pending.attack_modifier || 0);
+    return `
+      <p><b>Potwierdzenie ataku</b></p>
+      <p><b>Cel:</b> ${esc(target.name || '-')} | <b>AC celu:</b> ${esc(target.ac || '-')} | <b>Pole:</b> (${esc(target.position ? target.position[0] : '-')},${esc(target.position ? target.position[1] : '-')})</p>
+      <p><b>Atak:</b> ${esc(source.name || '-')} | <b>Zasięg:</b> ${esc(source.range_feet || 0)} ft | <b>Premia końcowa:</b> ${esc(modifierLabel)}</p>
+      <p><b>Aktywne premie/kary:</b> ${active.length ? active.map(mod => `${esc(mod.label)} ${esc(signedNumber(mod.value))}`).join(', ') : 'brak'}</p>
+      ${ignored.length ? `<p><b>Odrzucone duplikaty:</b> ${ignored.map(mod => `${esc(mod.label)} ${esc(signedNumber(mod.value))}`).join(', ')}</p>` : ''}
+      <p><b>Rzut:</b> ${esc(pending.attack_instruction || 'Rzuć 1d20 i wpisz wynik.')}</p>
+      <p><b>Po trafieniu:</b> ${esc(pending.damage_instruction || source.damage_hint || '')}</p>
+    `;
+  }
+  if (pending.stage === 'damage_roll') {
+    return `
+      <p><b>Tura gracza: wpisz obrażenia</b></p>
+      <p><b>Cel:</b> ${esc(target.name || '-')} | <b>Trafienie:</b> ${pending.critical ? 'krytyczne' : 'zwykłe'}</p>
+      <p><b>Rzut d20:</b> ${esc(pending.natural_roll || '')} | <b>Wynik końcowy:</b> ${esc(pending.total || '')}</p>
+      <p><b>Co teraz:</b> ${esc(pending.damage_instruction || '')}</p>
+    `;
+  }
+  return `
+    <p><b>Tura gracza: wybrano cel</b></p>
+    <p><b>Cel:</b> ${esc(target.name || '-')} | <b>Atak:</b> ${esc(source.name || '-')}</p>
+    <p><b>Co teraz:</b> ${esc(pending.attack_instruction || 'Rzuć 1d20 i wpisz wynik.')}</p>
+    <p><b>Po trafieniu:</b> ${esc(pending.damage_instruction || source.damage_hint || '')}</p>
   `;
 }
 function enemyRollSummaryHtml(preview) {
@@ -3772,6 +4122,10 @@ function defaultDamageValue(source) {
   if (!source) return 0;
   if (source.damage_fixed !== null && source.damage_fixed !== undefined) return Number(source.damage_fixed) + Number(source.damage_modifier || 0);
   return Math.max(0, Number(source.damage_modifier || 0));
+}
+function signedNumber(value) {
+  const number = Number(value || 0);
+  return number >= 0 ? `+${number}` : `${number}`;
 }
 function pointOptionsHtml() {
   const points = state.current_zone_points || [];
@@ -3908,6 +4262,8 @@ function submitPlayerAttackRoll() {
   const roll = document.getElementById('combat-attack-natural-roll');
   api('/api/combat/player-attack-roll', {natural_roll: Number(roll ? roll.value : 0)}, 'Rozstrzygam rzut ataku...');
 }
+function confirmPlayerAttackTarget() { api('/api/combat/player-attack-confirm', {}, 'Potwierdzam atak...'); }
+function cancelPlayerAttackTarget() { api('/api/combat/player-attack-cancel', {}, 'Anuluję wybór celu...'); }
 function submitPlayerDamageRoll() {
   const damage = document.getElementById('combat-damage-roll');
   api('/api/combat/player-damage', {damage: Number(damage ? damage.value : 0)}, 'Zapisuję obrażenia...');
@@ -3958,7 +4314,8 @@ function triggerPrimaryAction() {
     if (combat && combat.status === 'active') {
       if (combat.enemy_turn_result) { confirmEnemyTurnResult(); return true; }
       if (combat.pending_player_attack) {
-        if (combat.pending_player_attack.stage === 'damage_roll') submitPlayerDamageRoll();
+        if (combat.pending_player_attack.stage === 'confirm_attack') confirmPlayerAttackTarget();
+        else if (combat.pending_player_attack.stage === 'damage_roll') submitPlayerDamageRoll();
         else submitPlayerAttackRoll();
         return true;
       }

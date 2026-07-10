@@ -122,9 +122,30 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
 
     assert 'data-allow-busy="true" onclick="finishCombatTurn()"' in html
     assert 'data-allow-busy="true" onclick="resolveEnemyTurn()"' in html
+    assert 'id="page-title"' in html
+    assert 'id="encounter-title"' in html
+    assert "state.combat) return combatStartHtml()" in html
+    assert "inCombat ? 'Walka' : 'Eksploracja'" in html
     assert "latestCombatMessageHtml()" in html
-    assert "Ostatni rezultat:" in html
-    assert "playerTurnStatusHtml" in html
+    assert "combatCurrentStepHtml" in html
+    assert "combatPrimaryActionHtml" in html
+    assert "combatLastResultHtml" in html
+    assert "combatActionDetailsHtml" in html
+    assert "combatMainPromptHtml" in html
+    assert "combatInstructionText" in html
+    assert "combatActorStatusHtml" in html
+    assert "combat-current-step" in html
+    assert "combat-mini-status" in html
+    assert "combat-last-result" in html
+    assert "combat-stage" in html
+    assert "combat-action-card" in html
+    assert "Szczegóły walki" in html
+    assert "Aktualny aktor" in html
+    assert "Ostatni rezultat" in html
+    assert "Szczegóły aktualnego kroku" in html
+    assert "playerTurnDetailsHtml" in html
+    assert "pendingPlayerAttackDetailsHtml" in html
+    assert "enemyTurnDetailsHtml" in html
     assert "Tura gracza:" in html
     assert "Akcja:" in html
     assert "Ruch:" in html
@@ -141,9 +162,16 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
     assert "playerTurnScanLoop = false;" in html
     assert "isAllyCombatTurnActive()" in html
     assert "pendingPlayerAttackHtml" in html
+    assert "Potwierdzenie ataku" in html
+    assert "confirmPlayerAttackTarget()" in html
+    assert "cancelPlayerAttackTarget()" in html
+    assert "/api/combat/player-attack-confirm" in html
+    assert "/api/combat/player-attack-cancel" in html
     assert "/api/combat/player-attack-roll" in html
     assert "/api/combat/player-damage" in html
     assert "enemyRollSummaryHtml" in html
+    assert "enemyTurnIntentHtml" in html
+    assert "Zamiar przeciwnika" in html
     assert "enemyTurnResultHtml" in html
     assert "confirmEnemyTurnResult()" in html
     assert "/api/combat/enemy-turn/confirm" in html
@@ -266,6 +294,8 @@ def _advance_encounter_setup(client, board):
 
 def _resolve_enemy_turn_from_ui(client, board):
     state = client.post("/api/combat/enemy-turn", json={}).get_json()
+    if state["combat"]["enemy_turn_intent"] is not None:
+        state = client.post("/api/combat/enemy-turn", json={}).get_json()
     preview = state["combat"]["enemy_turn_preview"]
     if preview is None:
         return state
@@ -696,7 +726,12 @@ def test_exploration_ui_happy_path_returns_to_player_after_enemy_turns():
         "/api/board/select",
         json={"col": target["position"][0], "row": target["position"][1]},
     ).get_json()
-    assert selected["combat"]["pending_player_attack"]["stage"] == "attack_roll"
+    assert selected["combat"]["pending_player_attack"]["stage"] == "confirm_attack"
+    assert selected["combat"]["pending_player_attack"]["target"]["id"] == target["id"]
+    assert selected["combat"]["turn_action"]["action_use"] == "action_available"
+
+    confirmed = client.post("/api/combat/player-attack-confirm", json={}).get_json()
+    assert confirmed["combat"]["pending_player_attack"]["stage"] == "attack_roll"
 
     attack_roll = client.post("/api/combat/player-attack-roll", json={"natural_roll": 20}).get_json()
     assert attack_roll["combat"]["pending_player_attack"]["stage"] == "damage_roll"
