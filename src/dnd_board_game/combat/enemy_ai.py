@@ -9,7 +9,7 @@ from dnd_board_game.world import BoardState, PathResult, find_path, movement_ran
 
 from .action_economy import ActionUse
 from .attack_flow import AttackDeclaration, AttackResolution, AttackSource, legal_melee_targets, resolve_attack
-from .damage import DamageComponentInput, DamageResult, DamageType, apply_damage, resolve_damage
+from .damage import AppliedDamageResult, DamageComponentInput, DamageResult, DamageType, apply_damage_result, resolve_damage
 from .session import CombatState, replace_actor, use_movement, use_turn_action
 from .targets import CombatTarget
 
@@ -23,6 +23,7 @@ class EnemyAutoAttackResult:
     attack_roll: D20RollResult | None = None
     attack_resolution: AttackResolution | None = None
     damage: DamageResult | None = None
+    applied_damage: AppliedDamageResult | None = None
     updated_target: Actor | None = None
     action_used: bool = False
 
@@ -38,6 +39,7 @@ class EnemyAutoTurnResult:
     attack_roll: D20RollResult | None = None
     attack_resolution: AttackResolution | None = None
     damage: DamageResult | None = None
+    applied_damage: AppliedDamageResult | None = None
     updated_target: Actor | None = None
     action_used: bool = False
 
@@ -80,6 +82,7 @@ def resolve_enemy_auto_attack(
     resolution = resolve_attack(declaration, attack_roll, ActionUse.ACTION_AVAILABLE)
     updated_state = action_result.state
     damage: DamageResult | None = None
+    applied_damage: AppliedDamageResult | None = None
     updated_target: Actor | None = None
 
     if resolution.hit:
@@ -91,11 +94,14 @@ def resolve_enemy_auto_attack(
         damage_type = DamageType(source.damage_type)
         damage = resolve_damage((DamageComponentInput(damage_amount, damage_type, source.name),))
         target_actor = _actor_for_target(action_result.state, target)
-        updated_target = apply_damage(target_actor, damage)
+        applied_damage = apply_damage_result(target_actor, damage)
+        updated_target = applied_damage.actor_after
         updated_state = replace_actor(action_result.state, updated_target)
+        defeated_text = " Cel zostaje pokonany." if applied_damage.defeated_by_damage else ""
         message = (
             f"{enemy.name} trafia {target.name}. Wynik ataku: {attack_roll.total}. "
-            f"Obrażenia: {damage.total_applied} {damage_type.value}."
+            f"Obrażenia: {damage.total_applied} {damage_type.value}. "
+            f"{target_actor.name}: HP {applied_damage.hp_before} -> {applied_damage.hp_after}.{defeated_text}"
         )
     else:
         message = f"{enemy.name} pudłuje przeciwko {target.name}. Wynik ataku: {attack_roll.total}."
@@ -108,6 +114,7 @@ def resolve_enemy_auto_attack(
         attack_roll=attack_roll,
         attack_resolution=resolution,
         damage=damage,
+        applied_damage=applied_damage,
         updated_target=updated_target,
         action_used=True,
     )
@@ -277,6 +284,7 @@ def _turn_result_from_attack(result: EnemyAutoAttackResult) -> EnemyAutoTurnResu
         attack_roll=result.attack_roll,
         attack_resolution=result.attack_resolution,
         damage=result.damage,
+        applied_damage=result.applied_damage,
         updated_target=result.updated_target,
         action_used=result.action_used,
     )

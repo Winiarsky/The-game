@@ -17,7 +17,7 @@ from .attack_flow import (
     start_attack_action,
 )
 from .attack_led import attack_result_led_feedback, attack_targets_led_feedback, selected_attack_target_led_feedback
-from .damage import DamageComponentInput, DamageResult, DamageType, apply_damage, resolve_damage
+from .damage import AppliedDamageResult, DamageComponentInput, DamageResult, DamageType, apply_damage, apply_damage_result, resolve_damage
 from .enemy_ai import EnemyAutoAttackResult, EnemyAutoTurnResult, EnemyTurnPlan, plan_enemy_turn, resolve_enemy_auto_attack, resolve_enemy_auto_turn
 from .initiative import (
     InitiativeEntry,
@@ -104,6 +104,7 @@ from .turn_intent import (
 __all__ = [
     "ActorSetupEntry",
     "ActionUse",
+    "AppliedDamageResult",
     "AttackActionState",
     "AttackActionStatus",
     "AttackDeclaration",
@@ -151,6 +152,7 @@ __all__ = [
     "actor_as_combat_target",
     "actor_by_id",
     "apply_damage",
+    "apply_damage_result",
     "attack_declaration_from_state",
     "attack_result_led_feedback",
     "attack_targets_led_feedback",

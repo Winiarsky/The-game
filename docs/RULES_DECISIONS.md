@@ -224,8 +224,11 @@ Implementacja MVP:
 - Przy trafieniu aplikacja prosi o wynik obrażeń.
 - W MVP gracz może wpisać końcowy wynik obrażeń krytycznych samodzielnie.
 - Obrażenia są wpisywane jako komponenty z typem obrażeń.
+- `hp` aktora oznacza aktualne HP, a `max_hp` oznacza maksymalne HP z contentu/scenariusza.
 - Obrażenia najpierw zmniejszają temporary HP, potem HP.
 - HP nie spada poniżej `0`.
+- Wynik aplikacji obrażeń zapisuje HP i temporary HP przed/po, ile obrażeń pochłonęło temporary HP, ile weszło w HP oraz czy cios pokonał cel.
+- Komunikaty UI po trafieniu muszą pokazywać obrażenia oraz zmianę HP celu.
 - Stan pokonania/śmierci jest uproszczony w MVP.
 - `hp > 0` nie oznacza automatycznie, że obiekt jest legalnym celem ataku.
 - Cel ataku musi być `attackable=True` i `visible`.

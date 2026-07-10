@@ -41,19 +41,56 @@ class DamageResult:
     total_applied: int
 
 
+@dataclass(frozen=True, slots=True)
+class AppliedDamageResult:
+    damage: DamageResult
+    actor_before: Actor
+    actor_after: Actor
+    hp_before: int
+    hp_after: int
+    temp_hp_before: int
+    temp_hp_after: int
+    absorbed_by_temp_hp: int
+    applied_to_hp: int
+    defeated: bool
+    defeated_by_damage: bool
+
+
 def resolve_damage(components: tuple[DamageComponentInput, ...]) -> DamageResult:
     total = sum(component.amount for component in components)
     return DamageResult(components=components, total_before_reduction=total, total_applied=total)
 
 
-def apply_damage(actor: Actor, damage: DamageResult) -> Actor:
+def apply_damage_result(actor: Actor, damage: DamageResult) -> AppliedDamageResult:
     remaining = damage.total_applied
-    temp_hp = actor.temp_hp
-    hp = actor.hp
-    if temp_hp > 0:
-        absorbed = min(temp_hp, remaining)
+    temp_hp_before = actor.temp_hp
+    hp_before = actor.hp
+    temp_hp = temp_hp_before
+    hp = hp_before
+    absorbed = 0
+    if temp_hp_before > 0:
+        absorbed = min(temp_hp_before, remaining)
         temp_hp -= absorbed
         remaining -= absorbed
+    applied_to_hp = 0
     if remaining > 0:
+        applied_to_hp = min(hp, remaining)
         hp = max(0, hp - remaining)
-    return replace(actor, hp=hp, temp_hp=temp_hp)
+    actor_after = replace(actor, hp=hp, temp_hp=temp_hp)
+    return AppliedDamageResult(
+        damage=damage,
+        actor_before=actor,
+        actor_after=actor_after,
+        hp_before=hp_before,
+        hp_after=hp,
+        temp_hp_before=temp_hp_before,
+        temp_hp_after=temp_hp,
+        absorbed_by_temp_hp=absorbed,
+        applied_to_hp=applied_to_hp,
+        defeated=actor_after.is_defeated(),
+        defeated_by_damage=not actor.is_defeated() and actor_after.is_defeated(),
+    )
+
+
+def apply_damage(actor: Actor, damage: DamageResult) -> Actor:
+    return apply_damage_result(actor, damage).actor_after

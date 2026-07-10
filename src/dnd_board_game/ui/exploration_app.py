@@ -33,7 +33,7 @@ from dnd_board_game.combat import (
     current_actor as combat_current_actor,
     finish_turn,
     active_actor_led_feedback,
-    apply_damage,
+    apply_damage_result,
     initiative_prompt_led_feedback,
     replace_actor,
     resolve_attack,
@@ -934,15 +934,17 @@ class ExplorationUiSession:
         resolution = resolve_attack(declaration, attack_roll, selected.action_use)
         updated_state = action_result.state
         message = _player_attack_message(attacker.name, selected.selected_target.name, attack_roll.total, resolution.hit, resolution.critical)
+        applied_damage = None
         if resolution.hit:
             damage_amount = max(0, int(damage))
             damage_result = resolve_damage((DamageComponentInput(damage_amount, DamageType(source.damage_type), source.name),))
             target_actor = next((actor for actor in updated_state.actors if str(actor.id) == selected.selected_target.id), None)
             if target_actor is None:
                 raise ValueError(f"Nieznany cel ataku: {selected.selected_target.id}.")
-            updated_target = apply_damage(target_actor, damage_result)
+            applied_damage = apply_damage_result(target_actor, damage_result)
+            updated_target = applied_damage.actor_after
             updated_state = replace_actor(updated_state, updated_target)
-            message = f"{message} Obrażenia: {damage_result.total_applied}. {target_actor.name}: HP {target_actor.hp} -> {updated_target.hp}."
+            message = f"{message} {_damage_application_message(applied_damage)}"
         self.combat_state = updated_state
         self.pending_player_attack = None
         self.selected_combat_movement_path = None
@@ -957,6 +959,8 @@ class ExplorationUiSession:
                 "hit": resolution.hit,
                 "critical": resolution.critical,
                 "damage": int(damage) if resolution.hit else 0,
+                "target_ac": selected.selected_target.ac,
+                "damage_result": _applied_damage_payload(applied_damage),
             },
         )
         self._sync_board_leds()
@@ -1127,12 +1131,13 @@ class ExplorationUiSession:
             raise ValueError(f"Nieznany cel ataku: {pending.target_id}.")
         damage_amount = max(0, int(damage))
         damage_result = resolve_damage((DamageComponentInput(damage_amount, DamageType(source.damage_type), source.name),))
-        updated_target = apply_damage(target_actor, damage_result)
+        applied_damage = apply_damage_result(target_actor, damage_result)
+        updated_target = applied_damage.actor_after
         self.combat_state = replace_actor(self.combat_state, updated_target)
         self.pending_player_attack = None
         self._add_message(
             "Obrażenia",
-            f"{attacker.name} zadaje {damage_result.total_applied} obrażeń. {target_actor.name}: HP {target_actor.hp} -> {updated_target.hp}.",
+            f"{attacker.name} zadaje obrażenia. {_damage_application_message(applied_damage)}",
         )
         self._record(
             "ui_combat_player_damage_roll",
@@ -1140,6 +1145,7 @@ class ExplorationUiSession:
                 "attacker_id": str(attacker.id),
                 "target_id": str(target_actor.id),
                 "damage": damage_result.total_applied,
+                "damage_result": _applied_damage_payload(applied_damage),
             },
         )
         self._sync_board_leds()
@@ -2527,6 +2533,7 @@ def _combat_actor_payload(actor: Actor) -> dict[str, object]:
         "name": actor.name,
         "faction": actor.faction.value,
         "hp": actor.hp,
+        "max_hp": actor.max_hp,
         "temp_hp": actor.temp_hp,
         "ac": actor.ac,
         "position": [actor.position.col, actor.position.row],
@@ -2574,6 +2581,7 @@ def _pending_player_attack_payload(
         "damage_instruction": _damage_roll_instruction(source),
         "natural_roll": pending.natural_roll,
         "total": pending.total,
+        "target_ac": target.ac,
         "hit": pending.hit,
         "critical": pending.critical,
     }
@@ -2599,6 +2607,9 @@ def _combat_target_payload(target) -> dict[str, object]:
         "name": target.name,
         "ac": target.ac,
         "hp": target.hp,
+        "max_hp": target.max_hp,
+        "temp_hp": target.temp_hp,
+        "defeated": target.defeated,
         "position": [target.position.col, target.position.row],
     }
 
@@ -2738,8 +2749,11 @@ def _enemy_turn_preview_payload(result, encounter: LoadedEncounter | None = None
     if result.attack_resolution is not None:
         payload["hit"] = result.attack_resolution.hit
         payload["critical"] = result.attack_resolution.critical
+        payload["target_ac"] = result.attack_resolution.attack_roll_result.target_ac
     if result.damage is not None:
         payload["damage"] = result.damage.total_applied
+    if getattr(result, "applied_damage", None) is not None:
+        payload["damage_result"] = _applied_damage_payload(result.applied_damage)
     if result.movement_path is not None and result.movement_path.valid:
         payload["kind"] = "movement"
         payload["destination"] = [result.movement_path.destination.col, result.movement_path.destination.row]
@@ -2772,6 +2786,10 @@ def _enemy_roll_summary(result) -> str:
             parts.append("krytyk")
     if result.damage is not None:
         parts.append(f"obrażenia: {result.damage.total_applied}")
+    if getattr(result, "applied_damage", None) is not None:
+        parts.append(f"HP celu: {result.applied_damage.hp_before} -> {result.applied_damage.hp_after}")
+        if result.applied_damage.defeated_by_damage:
+            parts.append("cel pokonany")
     return ". ".join(parts) + "."
 
 
@@ -2819,6 +2837,34 @@ def _player_attack_message(attacker_name: str, target_name: str, total: int, hit
     if hit:
         return f"{attacker_name} trafia {target_name}. Wynik ataku: {total}."
     return f"{attacker_name} pudłuje przeciwko {target_name}. Wynik ataku: {total}."
+
+
+def _damage_application_message(result) -> str:
+    defeated_text = " Cel zostaje pokonany." if result.defeated_by_damage else ""
+    temp_text = ""
+    if result.temp_hp_before > 0 or result.absorbed_by_temp_hp > 0:
+        temp_text = f" Temp HP {result.temp_hp_before} -> {result.temp_hp_after}, pochłonięto {result.absorbed_by_temp_hp}."
+    return (
+        f"Obrażenia: {result.damage.total_applied}. "
+        f"{result.actor_before.name}: HP {result.hp_before} -> {result.hp_after} / {result.actor_after.max_hp}."
+        f"{temp_text}{defeated_text}"
+    )
+
+
+def _applied_damage_payload(result) -> dict[str, object] | None:
+    if result is None:
+        return None
+    return {
+        "damage": result.damage.total_applied,
+        "hp_before": result.hp_before,
+        "hp_after": result.hp_after,
+        "temp_hp_before": result.temp_hp_before,
+        "temp_hp_after": result.temp_hp_after,
+        "absorbed_by_temp_hp": result.absorbed_by_temp_hp,
+        "applied_to_hp": result.applied_to_hp,
+        "defeated": result.defeated,
+        "defeated_by_damage": result.defeated_by_damage,
+    }
 
 
 def _default_encounter_victory_outcome(name: str) -> EncounterOutcome:
@@ -3798,7 +3844,7 @@ function combatStartHtml() {
         ${actors.map(actor => `
           <div class="status-item">
             <b>${esc(actor.name)} ${actor.id === combat.current_actor.id ? '(tura)' : ''}</b>
-            <span>${esc(actor.faction)} | HP ${esc(actor.hp)} / AC ${esc(actor.ac)} | pole (${esc(actor.position[0])},${esc(actor.position[1])})</span>
+            <span>${esc(actor.faction)} | HP ${esc(actorHpLabel(actor))} / AC ${esc(actor.ac)} | pole (${esc(actor.position[0])},${esc(actor.position[1])})</span>
           </div>
         `).join('')}
       </div>
@@ -3894,7 +3940,7 @@ function combatMiniStatusHtml(combat) {
     <div class="combat-mini-status">
       <span>Runda ${esc(combat.round_number || '-')}</span>
       <span>${esc(actor.name || '-')}</span>
-      <span>HP ${esc(actor.hp)} / AC ${esc(actor.ac)}</span>
+      <span>HP ${esc(actorHpLabel(actor))} / AC ${esc(actor.ac)}</span>
       <span>Pole (${esc(position[0])},${esc(position[1])})</span>
       ${actor.faction === 'ally' ? `<span>Akcja: ${actionUsed ? 'zużyta' : 'dostępna'}</span><span>Ruch: ${esc(remaining)} ft</span>` : ''}
     </div>
@@ -3908,9 +3954,15 @@ function combatActorStatusHtml(combat) {
   return `
     <p><b>${esc(actor.name || '-')}</b> (${esc(actor.faction || '-')})</p>
     <p>Runda ${esc(combat.round_number || '-')}, pole (${esc(actor.position ? actor.position[0] : '-')},${esc(actor.position ? actor.position[1] : '-')})</p>
-    <p>HP ${esc(actor.hp)} / AC ${esc(actor.ac)}</p>
+    <p>HP ${esc(actorHpLabel(actor))} / AC ${esc(actor.ac)}</p>
     ${actor.faction === 'ally' ? `<p>Akcja: ${actionUsed ? 'zużyta' : 'dostępna'} | Ruch: ${esc(remaining)} ft</p>` : ''}
   `;
+}
+function actorHpLabel(actor) {
+  if (!actor) return '-';
+  const maxHp = actor.max_hp !== null && actor.max_hp !== undefined ? actor.max_hp : actor.hp;
+  const temp = Number(actor.temp_hp || 0);
+  return `${actor.hp} / ${maxHp}${temp > 0 ? ` + ${temp} temp` : ''}${actor.defeated ? ' (pokonany)' : ''}`;
 }
 function combatLastResultHtml() {
   return `
@@ -4021,11 +4073,16 @@ function enemyTurnDetailsHtml(combat) {
     const damageHtml = result.damage !== null && result.damage !== undefined
       ? `<p><b>Obrażenia:</b> ${esc(result.damage)}</p>`
       : '';
+    const damageResult = result.damage_result || null;
+    const hpHtml = damageResult
+      ? `<p><b>HP celu:</b> ${esc(damageResult.hp_before)} -> ${esc(damageResult.hp_after)}${damageResult.defeated_by_damage ? ' | cel pokonany' : ''}</p>`
+      : '';
     return `
       <p><b>Wynik tury przeciwnika:</b> ${hitText}</p>
       <p>${esc(result.enemy_name || 'Przeciwnik')}${target}</p>
       ${rollHtml}
       ${damageHtml}
+      ${hpHtml}
       <p class="muted">${esc(result.message || '')}</p>
     `;
   }

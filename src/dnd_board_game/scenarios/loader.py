@@ -975,6 +975,7 @@ def _actor_from_definition(definition: ScenarioActorDefinition) -> Actor:
         speed_feet=definition.speed_feet,
         position=definition.position,
         faction=definition.faction,
+        max_hp=definition.hp,
         ability_scores=definition.ability_scores,
     )
 

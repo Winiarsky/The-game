@@ -63,9 +63,15 @@ def test_enemy_auto_attack_hits_with_deterministic_rng_and_applies_damage():
     assert result.attack_roll.total == 15
     assert result.damage is not None
     assert result.damage.total_applied == 4
+    assert result.applied_damage is not None
+    assert result.applied_damage.hp_before == 20
+    assert result.applied_damage.hp_after == 16
+    assert result.applied_damage.defeated is False
     updated_hero = next(actor for actor in result.state.actors if actor.id == hero.id)
     assert updated_hero.hp == 16
+    assert updated_hero.max_hp == 20
     assert "trafia" in result.message
+    assert "HP 20 -> 16" in result.message
 
 
 def test_enemy_auto_attack_skips_when_no_legal_target():

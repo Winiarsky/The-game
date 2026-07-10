@@ -134,6 +134,7 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
     assert "combatMainPromptHtml" in html
     assert "combatInstructionText" in html
     assert "combatActorStatusHtml" in html
+    assert "actorHpLabel" in html
     assert "combat-current-step" in html
     assert "combat-mini-status" in html
     assert "combat-last-result" in html
@@ -151,6 +152,7 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
     assert "Ruch:" in html
     assert "wybrano cel" in html
     assert "wpisz obrażenia" in html
+    assert "HP celu" in html
     assert "maybeAutoScanBoard" not in html
     assert "scanBoardAuto" not in html
     assert 'data-primary-scan="true" onclick="scanBoard()"' in html

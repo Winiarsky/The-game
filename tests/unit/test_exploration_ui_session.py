@@ -341,14 +341,20 @@ def test_exploration_ui_session_player_attack_applies_damage_and_uses_action():
     state = session.state_payload()
     assert state["combat"]["current_actor"]["faction"] == "ally"
     assert state["combat"]["legal_targets"]
+    assert state["combat"]["current_actor"]["max_hp"] >= state["combat"]["current_actor"]["hp"]
+    assert "temp_hp" in state["combat"]["current_actor"]
+    assert "defeated" in state["combat"]["current_actor"]
     target_id = state["combat"]["legal_targets"][0]["id"]
 
     state = session.submit_player_attack(target_id=target_id, natural_roll=20, damage=5)
 
     damaged = next(actor for actor in state["combat"]["actors"] if actor["id"] == target_id)
     assert damaged["hp"] < 7
+    assert damaged["max_hp"] >= damaged["hp"]
+    assert damaged["defeated"] is False
     assert state["combat"]["turn_action"]["action_use"] == "action_used"
     assert any(message["title"] == "Atak" and "trafia krytycznie" in message["body"] for message in state["messages"])
+    assert any(message["title"] == "Atak" and "HP" in message["body"] for message in state["messages"])
 
 
 def test_exploration_ui_session_board_click_on_enemy_prompts_manual_attack_and_damage_rolls():
@@ -378,6 +384,7 @@ def test_exploration_ui_session_board_click_on_enemy_prompts_manual_attack_and_d
     assert pending["stage"] == "damage_roll"
     assert pending["hit"] is True
     assert pending["critical"] is True
+    assert pending["target_ac"] == target["ac"]
     assert "Rzuć obrażenia" in pending["damage_instruction"]
     assert attack_roll["combat"]["turn_action"]["action_use"] == "action_used"
 
@@ -385,9 +392,32 @@ def test_exploration_ui_session_board_click_on_enemy_prompts_manual_attack_and_d
 
     damaged = next(actor for actor in state["combat"]["actors"] if actor["id"] == target["id"])
     assert damaged["hp"] < target["hp"]
+    assert damaged["max_hp"] == target["max_hp"]
     assert state["combat"]["pending_player_attack"] is None
     assert state["combat"]["turn_action"]["action_use"] == "action_used"
-    assert any(message["title"] == "Obrażenia" for message in state["messages"])
+    assert any(message["title"] == "Obrażenia" and "HP" in message["body"] for message in state["messages"])
+
+
+def test_exploration_ui_session_player_damage_can_finish_combat_and_remove_target():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_combat_from_scout_alarm(session)
+    state = session.state_payload()
+    target = state["combat"]["legal_targets"][0]
+
+    assert session.combat_state is not None
+    for actor in tuple(session.combat_state.actors):
+        if actor.faction == Faction.ENEMY and str(actor.id) != target["id"]:
+            session.combat_state = replace_actor(session.combat_state, replace(actor, hp=0))
+
+    state = session.submit_player_attack(target_id=target["id"], natural_roll=20, damage=999)
+
+    defeated = next(actor for actor in state["combat"]["actors"] if actor["id"] == target["id"])
+    assert defeated["hp"] == 0
+    assert defeated["defeated"] is True
+    assert state["combat"]["status"] == "finished"
+    assert state["combat"]["winner"] == "ally"
+    assert state["combat"]["legal_targets"] == []
+    assert any(message["title"] == "Atak" and "Cel zostaje pokonany" in message["body"] for message in state["messages"])
 
 
 def test_exploration_ui_session_board_scan_shows_feedback_once_before_waiting_for_click():

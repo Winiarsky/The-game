@@ -30,6 +30,13 @@ class CombatTarget:
     target_type: CombatTargetType
     visibility: CombatTargetVisibility = CombatTargetVisibility.VISIBLE
     attackable: bool = True
+    max_hp: int = 0
+    temp_hp: int = 0
+    defeated: bool = False
+
+    def __post_init__(self) -> None:
+        if self.max_hp <= 0:
+            object.__setattr__(self, "max_hp", max(0, self.hp))
 
 
 def actor_as_combat_target(actor: Actor) -> CombatTarget:
@@ -42,6 +49,9 @@ def actor_as_combat_target(actor: Actor) -> CombatTarget:
         target_type=CombatTargetType.ACTOR,
         visibility=CombatTargetVisibility.VISIBLE,
         attackable=not actor.is_defeated(),
+        max_hp=actor.max_hp,
+        temp_hp=actor.temp_hp,
+        defeated=actor.is_defeated(),
     )
 
 

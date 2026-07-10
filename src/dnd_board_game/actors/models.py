@@ -37,7 +37,12 @@ class Actor:
     speed_feet: int
     position: Coordinate
     faction: Faction
+    max_hp: int = 0
     ability_scores: AbilityScores = field(default_factory=AbilityScores)
+
+    def __post_init__(self) -> None:
+        if self.max_hp <= 0:
+            object.__setattr__(self, "max_hp", max(0, self.hp))
 
     def is_defeated(self) -> bool:
         return self.hp <= 0
