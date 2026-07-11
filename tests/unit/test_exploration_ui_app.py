@@ -137,10 +137,31 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
     assert "combatCurrentStepHtml" in html
     assert "combatPrimaryActionHtml" in html
     assert "combatLastResultHtml" in html
+    assert "combatActiveEffectsHtml" in html
+    assert "combatAllEffectsHtml" in html
+    assert "relevantCombatEffects" in html
+    assert "combatEffectHtml" in html
+    assert "attackEffectsDetailsHtml" in html
     assert "combatActionDetailsHtml" in html
     assert "pendingCombatInteractionHtml" in html
     assert "/api/combat/interaction/confirm" in html
     assert "/api/combat/interaction/cancel" in html
+    assert "pendingOpportunityMovementHtml" in html
+    assert "pendingOpportunityMovementDetailsHtml" in html
+    assert "confirmOpportunityMovement()" in html
+    assert "cancelOpportunityMovement()" in html
+    assert "/api/combat/opportunity-movement/confirm" in html
+    assert "/api/combat/opportunity-movement/cancel" in html
+    assert "pendingEnemyOpportunityAttackHtml" in html
+    assert "pendingEnemyOpportunityAttackDetailsHtml" in html
+    assert "startEnemyOpportunityAttack()" in html
+    assert "skipEnemyOpportunityAttack()" in html
+    assert "submitEnemyOpportunityAttackRoll()" in html
+    assert "submitEnemyOpportunityDamageRoll()" in html
+    assert "/api/combat/enemy-opportunity/start" in html
+    assert "/api/combat/enemy-opportunity/skip" in html
+    assert "/api/combat/enemy-opportunity/roll" in html
+    assert "/api/combat/enemy-opportunity/damage" in html
     assert "combatMainPromptHtml" in html
     assert "combatInstructionText" in html
     assert "combatActorStatusHtml" in html
@@ -153,6 +174,9 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
     assert "Szczegóły walki" in html
     assert "Aktualny aktor" in html
     assert "Ostatni rezultat" in html
+    assert "Aktywne efekty" in html
+    assert "Wszystkie aktywne efekty" in html
+    assert "Efekty ataku" in html
     assert "Szczegóły aktualnego kroku" in html
     assert "playerTurnDetailsHtml" in html
     assert "pendingPlayerAttackDetailsHtml" in html
@@ -183,6 +207,40 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
     assert "/api/combat/player-attack-cancel" in html
     assert "/api/combat/player-attack-roll" in html
     assert "/api/combat/player-damage" in html
+    assert "/api/combat/dash" in html
+    assert "/api/combat/dodge" in html
+    assert "/api/combat/disengage" in html
+    assert "/api/combat/help/start" in html
+    assert "/api/combat/help/confirm" in html
+    assert "/api/combat/help/cancel" in html
+    assert "/api/combat/ready/start" in html
+    assert "/api/combat/ready/confirm" in html
+    assert "/api/combat/ready/cancel" in html
+    assert "/api/combat/ready-attack/start" in html
+    assert "/api/combat/ready-attack/skip" in html
+    assert "/api/combat/ready-attack/roll" in html
+    assert "/api/combat/ready-attack/damage" in html
+    assert "useCombatDash()" in html
+    assert "useCombatDodge()" in html
+    assert "useCombatDisengage()" in html
+    assert "startCombatHelp()" in html
+    assert "confirmCombatHelp()" in html
+    assert "cancelCombatHelp()" in html
+    assert "pendingCombatHelpHtml" in html
+    assert "pendingCombatHelpDetailsHtml" in html
+    assert "startCombatReady()" in html
+    assert "confirmCombatReady()" in html
+    assert "cancelCombatReady()" in html
+    assert "pendingCombatReadyHtml" in html
+    assert "pendingReadyAttackHtml" in html
+    assert ">Ready<" in html
+    assert ">Help<" in html
+    assert ">Dash<" in html
+    assert ">Unik<" in html
+    assert ">Odwrót<" in html
+    assert "Atak okazyjny" in html
+    assert "Wykonaj atak okazyjny" in html
+    assert "Potwierdź ruch mimo ryzyka" in html
     assert "enemyRollSummaryHtml" in html
     assert "enemyTurnIntentHtml" in html
     assert "Zamiar przeciwnika" in html
@@ -602,6 +660,12 @@ def test_exploration_ui_runs_guided_encounter_setup_after_trigger():
     assert rogue_step["current_step"]["available_positions"] == [[7, 6], [9, 6]]
 
     board.clicks.append((9, 6))
+    cleric_step = client.post("/api/board/scan").get_json()["encounter_setup"]
+    assert cleric_step["current_step"]["label"] == "pola startowe bohaterów"
+    assert cleric_step["current_step"]["assignment_actor_id"] == "cleric"
+    assert cleric_step["current_step"]["available_positions"] == [[7, 6]]
+
+    board.clicks.append((7, 6))
     enemy_step = client.post("/api/board/scan").get_json()["encounter_setup"]
     assert enemy_step["current_step"]["label"] == "jawnych przeciwników i NPC"
     assert enemy_step["current_step"]["positions"] == [[7, 9], [11, 7]]
@@ -632,7 +696,12 @@ def test_exploration_ui_can_assign_player_start_from_ui_position_buttons():
     assert rogue_step["current_step"]["assignment_actor_id"] == "rogue"
     assert rogue_step["current_step"]["available_positions"] == [[7, 6], [9, 6]]
 
-    enemy_step = client.post("/api/board/select", json={"col": 9, "row": 6}).get_json()["encounter_setup"]
+    cleric_step = client.post("/api/board/select", json={"col": 9, "row": 6}).get_json()["encounter_setup"]
+    assert cleric_step["current_step"]["label"] == "pola startowe bohaterów"
+    assert cleric_step["current_step"]["assignment_actor_id"] == "cleric"
+    assert cleric_step["current_step"]["available_positions"] == [[7, 6]]
+
+    enemy_step = client.post("/api/board/select", json={"col": 7, "row": 6}).get_json()["encounter_setup"]
     assert enemy_step["current_step"]["label"] == "jawnych przeciwników i NPC"
     assert enemy_step["current_step"]["positions"] == [[7, 9], [11, 7]]
 
@@ -659,8 +728,11 @@ def test_exploration_ui_starts_combat_after_setup_and_initiative():
     assert after_hero["encounter_initiative"]["current_prompt"]["actor_id"] == "rogue"
 
     after_rogue = client.post("/api/encounter/initiative/roll", json={"natural_roll": 10}).get_json()
-    initiative = after_rogue["encounter_initiative"]
-    combat = after_rogue["combat"]
+    assert after_rogue["encounter_initiative"]["current_prompt"]["actor_id"] == "cleric"
+
+    after_cleric = client.post("/api/encounter/initiative/roll", json={"natural_roll": 8}).get_json()
+    initiative = after_cleric["encounter_initiative"]
+    combat = after_cleric["combat"]
 
     assert initiative["status"] == "completed"
     assert [entry["actor_id"] for entry in initiative["order"]] == [
@@ -669,8 +741,8 @@ def test_exploration_ui_starts_combat_after_setup_and_initiative():
     ]
     assert combat["status"] == "active"
     assert combat["round_number"] == 1
-    assert len(combat["actors"]) == 4
-    assert any(message["title"] == "Kolejność inicjatywy" for message in after_rogue["messages"])
+    assert len(combat["actors"]) == 5
+    assert any(message["title"] == "Kolejność inicjatywy" for message in after_cleric["messages"])
 
 
 def test_exploration_ui_happy_path_returns_to_player_after_enemy_turns():
@@ -719,7 +791,8 @@ def test_exploration_ui_happy_path_returns_to_player_after_enemy_turns():
     assert initiative["encounter_initiative"]["current_prompt"]["actor_id"] == "hero"
 
     client.post("/api/encounter/initiative/roll", json={"natural_roll": 20})
-    combat_started = client.post("/api/encounter/initiative/roll", json={"natural_roll": 19}).get_json()
+    client.post("/api/encounter/initiative/roll", json={"natural_roll": 19})
+    combat_started = client.post("/api/encounter/initiative/roll", json={"natural_roll": 18}).get_json()
     combat = combat_started["combat"]
     first_player_id = combat["current_actor"]["id"]
     assert combat["status"] == "active"

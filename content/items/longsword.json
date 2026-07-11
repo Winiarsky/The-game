@@ -7,6 +7,7 @@
       "id": "longsword_slash",
       "name": "Miecz",
       "source_type": "weapon",
+      "ability": "strength",
       "range_feet": 5,
       "attack_modifier": 5,
       "damage": {

@@ -7,6 +7,7 @@
       "id": "crossbow_shot",
       "name": "Kusza",
       "source_type": "weapon",
+      "ability": "dexterity",
       "range_feet": 80,
       "attack_modifier": 5,
       "damage": {

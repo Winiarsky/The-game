@@ -24,7 +24,7 @@
         "wisdom": 12,
         "charisma": 10
       },
-      "item_refs": ["longsword"]
+      "item_refs": ["longsword", "crossbow", "strength_potion"]
     },
     {
       "id": "rogue",
@@ -45,6 +45,80 @@
         "charisma": 12
       },
       "item_refs": ["crossbow"]
+    },
+    {
+      "id": "cleric",
+      "name": "Kapłan",
+      "kind": "player_character",
+      "faction": "ally",
+      "ac": 13,
+      "hp": 14,
+      "temp_hp": 0,
+      "speed_feet": 30,
+      "position": [9, 6],
+      "ability_scores": {
+        "strength": 10,
+        "dexterity": 12,
+        "constitution": 12,
+        "intelligence": 10,
+        "wisdom": 16,
+        "charisma": 14
+      },
+      "spell_slots": {
+        "1": 2
+      },
+      "spell_save_dc": 13,
+      "attacks": [
+        {
+          "id": "sacred_flame",
+          "name": "Święty płomień",
+          "source_type": "spell",
+          "ability": "wisdom",
+          "range_feet": 60,
+          "attack_modifier": 0,
+          "save_ability": "dexterity",
+          "save_damage_on_success": "none",
+          "damage": {
+            "dice": "1d8",
+            "modifier": 0,
+            "damage_type": "radiant"
+          }
+        },
+        {
+          "id": "radiant_line",
+          "name": "Smuga światła",
+          "source_type": "spell",
+          "ability": "wisdom",
+          "range_feet": 30,
+          "spell_level": 1,
+          "attack_modifier": 0,
+          "save_ability": "dexterity",
+          "save_damage_on_success": "half",
+          "area": {
+            "shape": "line",
+            "length_feet": 30,
+            "width_feet": 5
+          },
+          "damage": {
+            "dice": "1d8",
+            "modifier": 0,
+            "damage_type": "radiant"
+          }
+        }
+      ],
+      "healing_sources": [
+        {
+          "id": "healing_word",
+          "name": "Słowo leczenia",
+          "source_type": "spell",
+          "range_feet": 60,
+          "spell_level": 1,
+          "healing": {
+            "dice": "1d4",
+            "modifier": 3
+          }
+        }
+      ]
     },
     {
       "id": "goblin_a",

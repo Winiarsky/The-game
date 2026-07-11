@@ -9,6 +9,11 @@ from dnd_board_game.actors import AbilityScores, Actor, ActorId, Faction
 from dnd_board_game.combat import (
     AttackSource,
     AttackSourceType,
+    HealingSource,
+    HealingSourceType,
+    SpellArea,
+    SpellAreaShape,
+    SpellSlotState,
     EnvironmentSetupEntry,
     EnvironmentSetupType,
     SceneAbilityCheck,
@@ -82,6 +87,35 @@ class ScenarioAttackDefinition:
     damage_die_sides: int | None
     damage_modifier: int
     damage_type: str
+    ability: str | None = None
+    spell_level: int = 0
+    area: SpellArea | None = None
+    save_ability: str | None = None
+    save_dc: int = 0
+    save_damage_on_success: str = "none"
+
+
+@dataclass(frozen=True, slots=True)
+class ScenarioHealingDefinition:
+    id: str
+    name: str
+    source_type: HealingSourceType
+    range_feet: int
+    healing_fixed: int | None
+    healing_die_sides: int | None
+    healing_modifier: int
+    spell_level: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class ScenarioCombatActionDefinition:
+    id: str
+    name: str
+    action_type: str
+    label: str
+    value: int = 0
+    ability: str | None = None
+    duration: str = "next_turn_start"
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,7 +130,11 @@ class ScenarioActorDefinition:
     speed_feet: int
     position: Coordinate
     ability_scores: AbilityScores
+    spell_slots: tuple[SpellSlotState, ...]
+    spell_save_dc: int
     attacks: tuple[ScenarioAttackDefinition, ...]
+    healing_sources: tuple[ScenarioHealingDefinition, ...] = ()
+    combat_actions: tuple[ScenarioCombatActionDefinition, ...] = ()
     source_ref: str | None = None
 
 
@@ -160,6 +198,9 @@ class LoadedEncounter:
     board: BoardState
     actors: tuple[Actor, ...]
     attack_sources_by_actor: dict[ActorId, AttackSource]
+    attack_source_options_by_actor: dict[ActorId, tuple[AttackSource, ...]]
+    healing_sources_by_actor: dict[ActorId, tuple[HealingSource, ...]]
+    combat_actions_by_actor: dict[ActorId, tuple[ScenarioCombatActionDefinition, ...]]
     environment: tuple[EnvironmentSetupEntry, ...]
     player_start_zones: tuple[tuple[Coordinate, ...], ...] = ()
     objectives: tuple[SceneObjective, ...] = ()
@@ -197,9 +238,22 @@ def build_encounter_from_scenario(loaded: LoadedScenario) -> LoadedEncounter:
     board = BoardState(dimensions=definition.board_dimensions)
     _apply_environment_to_board(board, definition.environment)
     actors = tuple(_actor_from_definition(actor) for actor in definition.actors)
-    attack_sources_by_actor = {
-        ActorId(actor.id): _attack_source_from_definition(actor.attacks[0], f"attack_{actor.id}")
+    attack_source_options_by_actor = {
+        ActorId(actor.id): tuple(
+            _attack_source_from_definition(attack, f"attack_{actor.id}:{attack.id}") for attack in actor.attacks
+        )
         for actor in definition.actors
+    }
+    attack_sources_by_actor = {actor_id: sources[0] for actor_id, sources in attack_source_options_by_actor.items() if sources}
+    healing_sources_by_actor = {
+        ActorId(actor.id): tuple(_healing_source_from_definition(source) for source in actor.healing_sources)
+        for actor in definition.actors
+        if actor.healing_sources
+    }
+    combat_actions_by_actor = {
+        ActorId(actor.id): actor.combat_actions
+        for actor in definition.actors
+        if actor.combat_actions
     }
     environment = tuple(
         EnvironmentSetupEntry(
@@ -247,6 +301,9 @@ def build_encounter_from_scenario(loaded: LoadedScenario) -> LoadedEncounter:
         board=board,
         actors=actors,
         attack_sources_by_actor=attack_sources_by_actor,
+        attack_source_options_by_actor=attack_source_options_by_actor,
+        healing_sources_by_actor=healing_sources_by_actor,
+        combat_actions_by_actor=combat_actions_by_actor,
         environment=environment,
         player_start_zones=definition.player_start_zones,
         objectives=objectives,
@@ -356,12 +413,20 @@ def _parse_actor(data: dict[str, Any], scenario_path: Path) -> ScenarioActorDefi
         attacks_data = []
     if not isinstance(attacks_data, list):
         raise ValueError(f"actor {merged.get('id', '<unknown>')}.attacks must be a list.")
+    healing_data = merged.get("healing_sources", [])
+    if not isinstance(healing_data, list):
+        raise ValueError(f"actor {merged.get('id', '<unknown>')}.healing_sources must be a list.")
+    combat_actions_data = merged.get("combat_actions", [])
+    if not isinstance(combat_actions_data, list):
+        raise ValueError(f"actor {merged.get('id', '<unknown>')}.combat_actions must be a list.")
     item_refs = merged.get("item_refs", [])
     if not isinstance(item_refs, list):
         raise ValueError(f"actor {merged.get('id', '<unknown>')}.item_refs must be a list.")
     for item_ref in item_refs:
         item = _read_json(_content_ref_path(scenario_path, "items", str(item_ref)))
         attacks_data.extend(item.get("attacks", []))
+        healing_data.extend(item.get("healing_sources", []))
+        combat_actions_data.extend(item.get("combat_actions", []))
 
     actor_id = str(_required(merged, "id", "actor"))
     attacks = tuple(_parse_attack(attack, actor_id) for attack in attacks_data)
@@ -378,7 +443,11 @@ def _parse_actor(data: dict[str, Any], scenario_path: Path) -> ScenarioActorDefi
         speed_feet=int(_required(merged, "speed_feet", f"actor {actor_id}")),
         position=_parse_coordinate(_required(merged, "position", f"actor {actor_id}"), f"actor {actor_id}.position"),
         ability_scores=_parse_ability_scores(_required_mapping(merged, "ability_scores", f"actor {actor_id}")),
+        spell_slots=_parse_spell_slots(merged.get("spell_slots", {}), actor_id),
+        spell_save_dc=int(merged.get("spell_save_dc", 0)),
         attacks=attacks,
+        healing_sources=tuple(_parse_healing_source(source, actor_id) for source in healing_data),
+        combat_actions=tuple(_parse_combat_action(action, actor_id) for action in combat_actions_data),
         source_ref=str(source_ref) if source_ref is not None else None,
     )
 
@@ -402,6 +471,48 @@ def _parse_attack(data: dict[str, Any], actor_id: str) -> ScenarioAttackDefiniti
         damage_die_sides=_parse_damage_die(damage),
         damage_modifier=int(damage.get("modifier", 0)),
         damage_type=str(_required(damage, "damage_type", f"attack {attack_id}.damage")),
+        ability=str(data["ability"]) if "ability" in data else None,
+        spell_level=int(data.get("spell_level", 0)),
+        area=_parse_spell_area(data.get("area"), f"attack {attack_id}.area"),
+        save_ability=str(data["save_ability"]) if "save_ability" in data else None,
+        save_dc=int(data.get("save_dc", 0)),
+        save_damage_on_success=str(data.get("save_damage_on_success", "none")),
+    )
+
+
+def _parse_healing_source(data: dict[str, Any], actor_id: str) -> ScenarioHealingDefinition:
+    if not isinstance(data, dict):
+        raise ValueError(f"actor {actor_id}.healing_sources entries must be objects.")
+    source_id = str(_required(data, "id", f"actor {actor_id}.healing_source"))
+    healing = _required_mapping(data, "healing", f"healing source {source_id}")
+    return ScenarioHealingDefinition(
+        id=source_id,
+        name=str(_required(data, "name", f"healing source {source_id}")),
+        source_type=_enum_value(
+            HealingSourceType,
+            str(_required(data, "source_type", f"healing source {source_id}")),
+            f"healing source {source_id}.source_type",
+        ),
+        range_feet=int(_required(data, "range_feet", f"healing source {source_id}")),
+        healing_fixed=_parse_damage_fixed(healing),
+        healing_die_sides=_parse_damage_die(healing),
+        healing_modifier=int(healing.get("modifier", 0)),
+        spell_level=int(data.get("spell_level", 0)),
+    )
+
+
+def _parse_combat_action(data: dict[str, Any], actor_id: str) -> ScenarioCombatActionDefinition:
+    if not isinstance(data, dict):
+        raise ValueError(f"actor {actor_id}.combat_actions entries must be objects.")
+    action_id = str(_required(data, "id", f"actor {actor_id}.combat_action"))
+    return ScenarioCombatActionDefinition(
+        id=action_id,
+        name=str(_required(data, "name", f"combat action {action_id}")),
+        action_type=str(_required(data, "action_type", f"combat action {action_id}")),
+        label=str(data.get("label", data.get("name", action_id))),
+        value=int(data.get("value", 0)),
+        ability=str(data["ability"]) if "ability" in data else None,
+        duration=str(data.get("duration", "next_turn_start")),
     )
 
 
@@ -1022,6 +1133,8 @@ def _actor_from_definition(definition: ScenarioActorDefinition) -> Actor:
         faction=definition.faction,
         max_hp=definition.hp,
         ability_scores=definition.ability_scores,
+        spell_slots=definition.spell_slots,
+        spell_save_dc=definition.spell_save_dc,
     )
 
 
@@ -1045,6 +1158,27 @@ def _attack_source_from_definition(definition: ScenarioAttackDefinition, stackin
         damage_die_sides=definition.damage_die_sides,
         damage_modifier=definition.damage_modifier,
         damage_type=definition.damage_type,
+        id=definition.id,
+        ability=definition.ability,
+        spell_level=definition.spell_level,
+        area=definition.area,
+        save_ability=definition.save_ability,
+        save_dc=definition.save_dc,
+        save_damage_on_success=definition.save_damage_on_success,
+    )
+
+
+def _healing_source_from_definition(definition: ScenarioHealingDefinition) -> HealingSource:
+    return HealingSource(
+        id=definition.id,
+        name=definition.name,
+        source_type=definition.source_type,
+        range_feet=definition.range_feet,
+        healing_hint=_healing_hint(definition),
+        healing_fixed=definition.healing_fixed,
+        healing_die_sides=definition.healing_die_sides,
+        healing_modifier=definition.healing_modifier,
+        spell_level=definition.spell_level,
     )
 
 
@@ -1413,6 +1547,32 @@ def _parse_ability_scores(data: dict[str, Any]) -> AbilityScores:
     )
 
 
+def _parse_spell_slots(data: Any, actor_id: str) -> tuple[SpellSlotState, ...]:
+    if data is None:
+        return ()
+    if not isinstance(data, dict):
+        raise ValueError(f"actor {actor_id}.spell_slots must be an object.")
+    slots: list[SpellSlotState] = []
+    for level, value in data.items():
+        maximum = int(value)
+        slots.append(SpellSlotState(level=int(level), remaining=maximum, maximum=maximum))
+    return tuple(sorted(slots, key=lambda slot: slot.level))
+
+
+def _parse_spell_area(data: Any, field: str) -> SpellArea | None:
+    if data is None:
+        return None
+    if not isinstance(data, dict):
+        raise ValueError(f"{field} must be an object.")
+    shape = _enum_value(SpellAreaShape, str(_required(data, "shape", field)), f"{field}.shape")
+    return SpellArea(
+        shape=shape,
+        radius_feet=int(data.get("radius_feet", 0)),
+        length_feet=int(data.get("length_feet", 0)),
+        width_feet=int(data.get("width_feet", 5)),
+    )
+
+
 def _parse_coordinate(value: Any, field: str) -> Coordinate:
     if not isinstance(value, list | tuple) or len(value) != 2:
         raise ValueError(f"{field} must be [col, row].")
@@ -1445,6 +1605,19 @@ def _damage_hint(definition: ScenarioAttackDefinition) -> str:
         sign = "+" if definition.damage_modifier > 0 else "-"
         base = f"{base} {sign} {abs(definition.damage_modifier)}"
     return f"{base} {definition.damage_type}"
+
+
+def _healing_hint(definition: ScenarioHealingDefinition) -> str:
+    if definition.healing_fixed is not None:
+        base = str(definition.healing_fixed)
+    elif definition.healing_die_sides is None:
+        base = "leczenie"
+    else:
+        base = f"1d{definition.healing_die_sides}"
+    if definition.healing_modifier:
+        sign = "+" if definition.healing_modifier > 0 else "-"
+        base = f"{base} {sign} {abs(definition.healing_modifier)}"
+    return base
 
 
 def _required(data: dict[str, Any], field: str, context: str) -> Any:

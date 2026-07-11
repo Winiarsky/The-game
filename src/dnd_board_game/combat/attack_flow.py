@@ -9,6 +9,7 @@ from dnd_board_game.rules import AttackRollOutcome, AttackRollResult, D20RollReq
 from dnd_board_game.world import BoardState, Coordinate, line_of_sight_clear
 
 from .action_economy import ActionUse, consume_action
+from .spells import SpellArea
 from .targets import CombatTarget, actor_as_combat_target, is_public_attack_target
 
 
@@ -37,6 +38,13 @@ class AttackSource:
     damage_die_sides: int | None = None
     damage_modifier: int = 0
     damage_type: str = "slashing"
+    id: str = ""
+    ability: str | None = None
+    spell_level: int = 0
+    area: SpellArea | None = None
+    save_ability: str | None = None
+    save_dc: int = 0
+    save_damage_on_success: str = "none"
 
 
 @dataclass(frozen=True, slots=True)

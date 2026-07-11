@@ -22,6 +22,7 @@ class TurnActionState:
     bonus_action_use: ActionUse = ActionUse.ACTION_AVAILABLE
     reaction_available: bool = True
     movement_used_feet: int = 0
+    extra_movement_feet: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,6 +47,7 @@ class CombatState:
     turn_action: TurnActionState = TurnActionState()
     status: CombatStatus = CombatStatus.ACTIVE
     winner: Faction | None = None
+    spent_reaction_actor_ids: frozenset[ActorId] = frozenset()
 
     @property
     def round_number(self) -> int:
@@ -108,19 +110,47 @@ def use_bonus_action(state: CombatState) -> TurnActionUseResult:
 
 
 def use_reaction(state: CombatState) -> TurnActionUseResult:
+    return use_actor_reaction(state, current_actor(state))
+
+
+def reaction_available_for(state: CombatState, actor: Actor) -> bool:
+    return state.status == CombatStatus.ACTIVE and actor.id not in state.spent_reaction_actor_ids
+
+
+def use_actor_reaction(state: CombatState, actor: Actor) -> TurnActionUseResult:
     if state.status != CombatStatus.ACTIVE:
         return TurnActionUseResult(state, False, "Walka nie jest aktywna.")
-    if not state.turn_action.reaction_available:
+    if not reaction_available_for(state, actor):
         return TurnActionUseResult(state, False, "Reakcja w tej rundzie została już zużyta.")
+    spent = frozenset((*state.spent_reaction_actor_ids, actor.id))
+    turn_action = state.turn_action
+    if actor.id == current_actor(state).id:
+        turn_action = replace(turn_action, reaction_available=False)
     return TurnActionUseResult(
-        replace(state, turn_action=replace(state.turn_action, reaction_available=False)),
+        replace(state, spent_reaction_actor_ids=spent, turn_action=turn_action),
         True,
         "Reakcja została zużyta.",
     )
 
 
 def movement_remaining(state: CombatState, actor: Actor) -> int:
-    return max(0, actor.speed_feet - state.turn_action.movement_used_feet)
+    return max(0, actor.speed_feet + state.turn_action.extra_movement_feet - state.turn_action.movement_used_feet)
+
+
+def use_dash(state: CombatState, actor: Actor) -> TurnActionUseResult:
+    if actor.id != current_actor(state).id:
+        return TurnActionUseResult(state, False, "To nie jest tura tego aktora.")
+    action_result = use_turn_action(state)
+    if not action_result.accepted:
+        return action_result
+    updated = replace(
+        action_result.state,
+        turn_action=replace(
+            action_result.state.turn_action,
+            extra_movement_feet=action_result.state.turn_action.extra_movement_feet + actor.speed_feet,
+        ),
+    )
+    return TurnActionUseResult(updated, True, f"Dash: {actor.name} dostaje dodatkowe {actor.speed_feet} feet ruchu w tej turze.")
 
 
 def use_movement(state: CombatState, actor: Actor, path: PathResult) -> TurnMovementUseResult:
@@ -156,7 +186,14 @@ def finish_turn(state: CombatState) -> CombatState:
     if finished_state.status != CombatStatus.ACTIVE:
         return finished_state
     order = _sync_order_actor_states(finished_state.initiative_order, finished_state.actors).advance_turn(skip_defeated=True)
-    return replace(finished_state, initiative_order=order, turn_action=TurnActionState())
+    next_actor = actor_by_id(finished_state, order.current_actor.id)
+    spent = frozenset(actor_id for actor_id in finished_state.spent_reaction_actor_ids if actor_id != next_actor.id)
+    return replace(
+        finished_state,
+        initiative_order=order,
+        spent_reaction_actor_ids=spent,
+        turn_action=TurnActionState(reaction_available=next_actor.id not in spent),
+    )
 
 
 def stop_combat(state: CombatState) -> CombatState:

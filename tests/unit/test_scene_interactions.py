@@ -2,6 +2,7 @@ from dataclasses import replace
 
 from dnd_board_game.actors import AbilityScores, Actor, ActorId, Faction
 from dnd_board_game.combat import (
+    ActiveCombatEffect,
     InitiativeEntry,
     InitiativeOrder,
     SceneAbilityCheck,
@@ -13,16 +14,18 @@ from dnd_board_game.combat import (
     AttackSourceType,
     apply_combat_interaction_effects,
     attack_source_with_combat_effects,
+    attack_source_with_target_combat_effects,
     available_combat_interaction_options,
     available_scene_interactions,
     combat_interaction_hint_positions,
     consume_next_attack_effects,
     expire_invalid_combat_effects,
+    expire_turn_start_effects,
     replace_actor,
     resolve_scene_interaction,
     start_combat,
 )
-from dnd_board_game.rules import D20RollInput, D20RollRequest, RollModifier, RollModifierType, resolve_d20_roll
+from dnd_board_game.rules import D20RollInput, D20RollRequest, RollMode, RollModifier, RollModifierType, resolve_d20_roll
 from dnd_board_game.world import Coordinate
 
 
@@ -244,6 +247,55 @@ def test_rubble_interaction_adds_next_attack_penalty_and_consumes_it():
     assert "Goblin" in applied.message
     assert any(modifier.label == "Gruz w oczach" and modifier.value == -2 for modifier in modified_source.attack_roll_request.modifiers)
     assert consume_next_attack_effects(applied.active_effects, str(enemy.id)) == ()
+
+
+def test_help_effect_grants_advantage_against_specific_target_and_is_consumed():
+    helper = _actor("helper", Faction.ALLY, Coordinate(0, 0))
+    ally = _actor("ally", Faction.ALLY, Coordinate(1, 0))
+    target = _actor("goblin", Faction.ENEMY, Coordinate(0, 1))
+    other = _actor("orc", Faction.ENEMY, Coordinate(2, 0))
+    source = AttackSource("Miecz", AttackSourceType.WEAPON, 5, D20RollRequest())
+    effect = ActiveCombatEffect(
+        id="help:helper:ally:goblin",
+        actor_id=str(ally.id),
+        kind="help_attack_advantage",
+        label="Pomoc",
+        object_id="combat_action:help",
+        value=0,
+        source_actor_id=str(helper.id),
+        target_actor_id=str(target.id),
+    )
+
+    helped = attack_source_with_target_combat_effects(ally, target, source, (effect,))
+    other_target = attack_source_with_target_combat_effects(ally, other, source, (effect,))
+
+    assert helped.attack_roll_request.mode == RollMode.ADVANTAGE
+    assert other_target.attack_roll_request.mode == RollMode.NORMAL
+    assert consume_next_attack_effects((effect,), str(ally.id), str(other.id)) == (effect,)
+    assert consume_next_attack_effects((effect,), str(ally.id), str(target.id)) == ()
+
+
+def test_help_effect_cancels_disadvantage_and_expires_on_helper_turn_start():
+    helper = _actor("helper", Faction.ALLY, Coordinate(0, 0))
+    ally = _actor("ally", Faction.ALLY, Coordinate(1, 0))
+    target = _actor("goblin", Faction.ENEMY, Coordinate(0, 1))
+    source = AttackSource("Miecz", AttackSourceType.WEAPON, 5, D20RollRequest(mode=RollMode.DISADVANTAGE))
+    effect = ActiveCombatEffect(
+        id="help:helper:ally:goblin",
+        actor_id=str(ally.id),
+        kind="help_attack_advantage",
+        label="Pomoc",
+        object_id="combat_action:help",
+        value=0,
+        source_actor_id=str(helper.id),
+        target_actor_id=str(target.id),
+    )
+
+    helped = attack_source_with_target_combat_effects(ally, target, source, (effect,))
+
+    assert helped.attack_roll_request.mode == RollMode.NORMAL
+    assert expire_turn_start_effects((effect,), str(ally.id)) == (effect,)
+    assert expire_turn_start_effects((effect,), str(helper.id)) == ()
 
 
 def test_rubble_interaction_resolves_enemy_dexterity_save_before_penalty():

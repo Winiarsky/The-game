@@ -234,7 +234,38 @@ Implementacja MVP:
 - Cel ataku musi być `attackable=True` i `visible`.
 - Mini-pętla walki obsługuje start tury, zużycie akcji, koniec tury, przejście inicjatywy i zakończenie walki.
 - Tura śledzi osobno akcję główną, akcję bonusową, reakcję i zużyty ruch.
-- W MVP zaimplementowane jest zużycie/reset akcji bonusowej i reakcji jako zasobów tury, ale bez konkretnych zdolności korzystających z tych zasobów.
+- Reakcja jest śledzona per aktor, również poza jego własną turą, i odświeża się na początku jego następnej tury.
+- `Dash` zużywa akcję główną i dodaje aktorowi dodatkową pulę ruchu równą jego `speed_feet` do końca bieżącej tury.
+- `Dodge/Unik` zużywa akcję główną i w MVP daje efekt `Unik`: ataki przeciwko aktorowi mają jawny modyfikator `-2`; efekt wygasa na początku następnej tury tego aktora.
+- `Disengage/Odwrót` zużywa akcję główną i w MVP daje efekt `Odwrót`: bezpieczne odejście do końca tury, blokujące ataki okazyjne.
+- Atak okazyjny może zostać sprowokowany, gdy aktor dobrowolnie opuszcza zasięg wręcz żywego wroga z dostępną reakcją i zdefiniowanym atakiem wręcz/reach.
+- W MVP zasięg okazyjnego bierze `range_feet` ataku do 10 feet, żeby obsłużyć zwykły zasięg 5 ft i broń z reach 10 ft, ale wykluczyć broń dystansową typu kusza.
+- UI gracza zatrzymuje ruch prowokujący, pokazuje zagrożenia i wymaga Entera albo przycisku przed rozstrzygnięciem reakcji i wykonaniem ruchu.
+- Wykrywanie ataku okazyjnego jest symetryczne dla bohaterów i przeciwników.
+- Gdy przeciwnik opuszcza zasięg bohatera podczas zapowiedzianego ruchu, UI pozwala wykonać albo pominąć reakcję bohatera; przy wykonaniu gracz wpisuje rzut d20 i, po trafieniu, obrażenia.
+- Jeśli atak okazyjny bohatera pokona przeciwnika, ruch i dalsza część tury przeciwnika zostają przerwane.
+- `Help/Pomoc` w combacie zużywa akcję główną pomagającego.
+- W MVP `Help` działa tylko dla ataku: pomagający musi wskazać żywego sojusznika oraz żywego przeciwnika w zasięgu 5 ft pomagającego.
+- Wybrany sojusznik dostaje przewagę na następny atak przeciw wskazanemu celowi; efekt nie działa na inne cele.
+- Efekt `Help` znika po takim ataku albo na początku następnej tury pomagającego.
+- `Help` w eksploracji i testach umiejętności jest poza zakresem tego etapu.
+- `Ready/Przygotowanie` w combacie zużywa akcję główną aktywnego aktora i zapisuje przygotowany atak jako efekt `ready_attack`.
+- W MVP przygotowany atak może reagować na ruch przeciwnika albo atak przeciwnika; gdy warunek zajdzie, UI pozwala wykonać albo pominąć reakcję.
+- Wykonanie przygotowanego ataku zużywa reakcję aktora, wymaga wpisania rzutu d20 i, po trafieniu, wpisania obrażeń.
+- Efekt `Ready` znika po użyciu reakcji albo na początku następnej tury aktora.
+- Jeśli przygotowany atak pokona przeciwnika przed zakończeniem jego zamiaru, tura tego przeciwnika zostaje przerwana.
+- Aktor może mieć wiele źródeł ataku (`AttackSource`), np. broń albo czar ofensywny; UI wybiera aktywne źródło, a legalne cele i LED-y liczą się dla tego źródła.
+- `AttackSource` może wskazywać cechę (`ability`), żeby efekty typu premia do Siły działały tylko na właściwe źródła, np. miecz, ale nie kuszę ani czar.
+- Aktor może mieć proste sloty czarów (`spell_slots`); czary poziomu `0` nie zużywają slotu, a czary poziomu `1+` zużywają slot wskazanego poziomu w momencie użycia akcji.
+- Aktor rzucający czary może mieć `spell_save_dc`; źródło czaru może nadpisać DC własnym `save_dc`.
+- `AttackSource` może być save-spellem przez `save_ability`; wtedy przeciwnik wykonuje automatyczny rzut obronny, a UI pokazuje naturalny d20, modyfikator cechy, sumę, ST i sukces/porażkę.
+- `AttackSource` może mieć obszar (`area`) typu `radius`, `line` albo `cone`; plansza wybiera środek obszaru albo sąsiednie pole kierunku, UI pokazuje preview LED i wymaga Entera/przycisku przed wykonaniem.
+- W MVP czary obszarowe i save-spelle aplikują wpisany przez gracza końcowy wynik obrażeń po wyniku save’a: `none` oznacza brak obrażeń przy sukcesie, `half` oznacza połowę obrażeń przy sukcesie.
+- Leczenie w combacie jest osobnym źródłem akcji (`HealingSource`), a nie atakiem; legalnym celem jest ranny sojusznik w zasięgu i linii widzenia.
+- Gracz wpisuje końcowy wynik leczenia z fizycznego rzutu, a aplikacja ogranicza HP do `max_hp`.
+- Magiczny napój siły w MVP jest prostą akcją walki z contentu: zużywa akcję główną i daje efekt `strength_potion` do początku następnej tury aktora.
+- `strength_potion` daje premię do ataku i obrażeń tylko źródłom opartym o Siłę.
+- Nie implementujemy jeszcze pełnego inventory, liczby ładunków, attunement, przygotowanych/list znanych czarów, concentration ani zaawansowanych efektów czarów poza obrażeniami/lekkim leczeniem.
 - Jawne obiekty sceny mogą oferować deterministyczne interakcje walki zużywające akcję główną.
 - Interakcje walki są data-driven: `SceneInteraction` może deklarować listę `conditions` oraz listę `effects`.
 - Warunki interakcji MVP obejmują dostępną akcję, sąsiedztwo obiektu, stanie na obiekcie, sąsiedniego przeciwnika oraz wolne pole docelowe.
@@ -242,6 +273,7 @@ Implementacja MVP:
 - `Rozbity wóz` w `gate_skirmish` ma dwie interakcje opisane tym modelem: osłona `+2 AC` do opuszczenia pola oraz wejście na wóz dające `+2` do ataku, dopóki aktor stoi na polu wozu.
 - `Rumowisko` w `gate_skirmish` jest jednocześnie trudnym terenem i obiektem interakcji: aktor stojący na rumowisku może użyć akcji `Sypnij gruzem`, żeby wymusić u najbliższego sąsiedniego przeciwnika rzut obronny na Zręczność ST 12; porażka daje `-2` do następnego ataku, sukces nie nakłada kary.
 - Warunki interakcji są jawne w payloadzie UI, np. pozycja aktora przy obiekcie, wolne pole docelowe i dostępna akcja.
+- Aktywne efekty walki zwracają do UI jednolity opis wartości i wygaśnięcia, np. `+2 AC | znika po ruchu z pola` albo `-2 do następnego ataku | znika po następnym ataku`.
 - W runtime demo przeciwnik wykonuje automatyczny melee attack przez wstrzyknięty RNG.
 - Jeśli przeciwnik musi się ruszyć przed atakiem, aplikacja pokazuje ścieżkę LED i wymaga kliknięcia pola docelowego po fizycznym przestawieniu figurki.
 - Domyślny przeciwnik demo używa ataku `Szabla`, modyfikatora `+4` i obrażeń `1d6 + 2 slashing`.

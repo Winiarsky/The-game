@@ -82,9 +82,20 @@
 - [x] Add data-driven combat scene interaction conditions and effects.
 - [x] Add rubble combat interaction with next-attack penalty and LED support.
 - [x] Add enemy Dexterity saving throw for rubble combat interaction.
+- [x] Show active combat effects with clear value and expiration in the combat UI.
+- [x] Add Dash and Dodge player combat actions to the exploration UI.
+- [x] Add Disengage player combat action as a turn-end status effect.
+- [x] Add opportunity attack reaction tracking and player movement confirmation.
+- [x] Add hero opportunity attack choice during enemy movement preview.
+- [x] Add combat Help action with ally advantage against a chosen target.
+- [x] Add combat Ready action for prepared attacks triggered during enemy turns.
+- [x] Add combat action sources, cleric healing, and strength potion MVP.
+- [x] Add MVP spell slots and area spell targeting for combat.
+- [x] Add MVP spell save DC and automatic enemy saving throws.
 - [x] Add exploration map environment setup before location selection.
 - [x] Couple exploration web UI with board/simulator backend for LEDs and board clicks.
 - [ ] Add full inventory/cantrip integration for exploration option bonuses.
+- [ ] Add prepared/known spell rules and concentration.
 - [ ] Add voice input and richer UI for free-form exploration declarations.
 - [x] Implement hardware adapter interface around `board.Connection`.
 - [x] Add LED frame generation for selected path and movement range.

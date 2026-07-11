@@ -8,6 +8,7 @@ from dnd_board_game.actors import Actor, Faction
 from dnd_board_game.rules import (
     D20RollInput,
     D20RollRequest,
+    RollMode,
     RollModifier,
     RollModifierType,
     ability_modifier,
@@ -52,6 +53,8 @@ class ActiveCombatEffect:
     value: int
     anchor_position: Coordinate | None = None
     base_ac: int | None = None
+    source_actor_id: str | None = None
+    target_actor_id: str | None = None
 
     def as_payload(self) -> dict[str, object]:
         payload: dict[str, object] = {
@@ -61,12 +64,73 @@ class ActiveCombatEffect:
             "label": self.label,
             "object_id": self.object_id,
             "value": self.value,
+            "value_label": effect_value_label(self),
+            "expires": effect_expiration_label(self),
+            "summary": effect_summary_label(self),
         }
         if self.anchor_position is not None:
             payload["anchor_position"] = [self.anchor_position.col, self.anchor_position.row]
         if self.base_ac is not None:
             payload["base_ac"] = self.base_ac
+        if self.source_actor_id is not None:
+            payload["source_actor_id"] = self.source_actor_id
+        if self.target_actor_id is not None:
+            payload["target_actor_id"] = self.target_actor_id
         return payload
+
+
+def effect_value_label(effect: ActiveCombatEffect) -> str:
+    if effect.kind == "grant_ac_bonus_until_move":
+        return f"+{effect.value} AC"
+    if effect.kind == "grant_attack_bonus_while_on_object":
+        return f"{format_signed(effect.value)} do ataku"
+    if effect.kind == "grant_next_attack_penalty":
+        return f"{format_signed(effect.value)} do następnego ataku"
+    if effect.kind == "dodge_until_next_turn":
+        return f"{format_signed(effect.value)} do ataków przeciwko aktorowi"
+    if effect.kind == "disengage_until_turn_end":
+        return "bezpieczne odejście"
+    if effect.kind == "help_attack_advantage":
+        return "przewaga do ataku"
+    if effect.kind == "ready_attack":
+        return ready_attack_trigger_label(effect)
+    if effect.kind == "strength_potion":
+        return f"{format_signed(effect.value)} do ataku i obrażeń z Siły"
+    return format_signed(effect.value)
+
+
+def effect_expiration_label(effect: ActiveCombatEffect) -> str:
+    if effect.kind == "grant_ac_bonus_until_move":
+        return "znika po ruchu z pola"
+    if effect.kind == "grant_attack_bonus_while_on_object":
+        return "znika po zejściu z obiektu"
+    if effect.kind == "grant_next_attack_penalty":
+        return "znika po następnym ataku"
+    if effect.kind == "dodge_until_next_turn":
+        return "znika na początku następnej tury aktora"
+    if effect.kind == "disengage_until_turn_end":
+        return "znika na końcu tury"
+    if effect.kind == "help_attack_advantage":
+        return "znika po ataku albo na początku następnej tury pomagającego"
+    if effect.kind == "ready_attack":
+        return "znika po użyciu reakcji albo na początku następnej tury aktora"
+    if effect.kind == "strength_potion":
+        return "znika na początku następnej tury aktora"
+    return "czas trwania zależy od efektu"
+
+
+def effect_summary_label(effect: ActiveCombatEffect) -> str:
+    return f"{effect.label} | {effect_value_label(effect)} | {effect_expiration_label(effect)}"
+
+
+def ready_attack_trigger_label(effect: ActiveCombatEffect) -> str:
+    if effect.object_id == "combat_action:ready:enemy_moves":
+        return "atak, gdy przeciwnik się poruszy"
+    if effect.object_id == "combat_action:ready:enemy_attacks":
+        return "atak, gdy przeciwnik zaatakuje"
+    if effect.object_id == "combat_action:ready:enemy_enters_reach":
+        return "atak, gdy przeciwnik wejdzie w zasięg"
+    return "przygotowany atak"
 
 
 @dataclass(frozen=True, slots=True)
@@ -354,7 +418,9 @@ def attack_source_with_combat_effects(actor: Actor, source, active_effects: tupl
     for effect in active_effects:
         if effect.actor_id != str(actor.id):
             continue
-        if effect.kind not in {"grant_attack_bonus_while_on_object", "grant_next_attack_penalty"}:
+        if effect.kind not in {"grant_attack_bonus_while_on_object", "grant_next_attack_penalty", "strength_potion"}:
+            continue
+        if effect.kind == "strength_potion" and getattr(source, "ability", None) != "strength":
             continue
         modifiers.append(
             RollModifier(
@@ -364,7 +430,12 @@ def attack_source_with_combat_effects(actor: Actor, source, active_effects: tupl
                 stacking_key=effect.id,
             )
         )
-    if not modifiers:
+    damage_bonus = sum(
+        effect.value
+        for effect in active_effects
+        if effect.actor_id == str(actor.id) and effect.kind == "strength_potion" and getattr(source, "ability", None) == "strength"
+    )
+    if not modifiers and damage_bonus == 0:
         return source
     return replace(
         source,
@@ -372,15 +443,105 @@ def attack_source_with_combat_effects(actor: Actor, source, active_effects: tupl
             mode=source.attack_roll_request.mode,
             modifiers=source.attack_roll_request.modifiers + tuple(modifiers),
         ),
+        damage_modifier=source.damage_modifier + damage_bonus,
+        damage_hint=_damage_hint_with_bonus(source, damage_bonus) if damage_bonus else source.damage_hint,
     )
 
 
-def consume_next_attack_effects(active_effects: tuple[ActiveCombatEffect, ...], actor_id: str) -> tuple[ActiveCombatEffect, ...]:
+def attack_source_with_target_combat_effects(
+    attacker: Actor,
+    target: Actor,
+    source,
+    active_effects: tuple[ActiveCombatEffect, ...],
+):
+    source = attack_source_with_combat_effects(attacker, source, active_effects)
+    modifiers = []
+    mode = source.attack_roll_request.mode
+    for effect in active_effects:
+        if effect.actor_id == str(target.id) and effect.kind == "dodge_until_next_turn":
+            modifiers.append(
+                RollModifier(
+                    effect.label,
+                    effect.value,
+                    RollModifierType.CUSTOM,
+                    stacking_key=effect.id,
+                )
+            )
+        if (
+            effect.kind == "help_attack_advantage"
+            and effect.actor_id == str(attacker.id)
+            and effect.target_actor_id == str(target.id)
+        ):
+            mode = _with_advantage(mode)
+    if not modifiers and mode == source.attack_roll_request.mode:
+        return source
+    return replace(
+        source,
+        attack_roll_request=D20RollRequest(
+            mode=mode,
+            modifiers=source.attack_roll_request.modifiers + tuple(modifiers),
+        ),
+    )
+
+
+def consume_next_attack_effects(
+    active_effects: tuple[ActiveCombatEffect, ...],
+    actor_id: str,
+    target_actor_id: str | None = None,
+) -> tuple[ActiveCombatEffect, ...]:
     return tuple(
         effect
         for effect in active_effects
-        if not (effect.actor_id == actor_id and effect.kind == "grant_next_attack_penalty")
+        if not (
+            (effect.actor_id == actor_id and effect.kind == "grant_next_attack_penalty")
+            or (
+                target_actor_id is not None
+                and effect.actor_id == actor_id
+                and effect.kind == "help_attack_advantage"
+                and effect.target_actor_id == target_actor_id
+            )
+        )
     )
+
+
+def expire_turn_start_effects(active_effects: tuple[ActiveCombatEffect, ...], actor_id: str) -> tuple[ActiveCombatEffect, ...]:
+    return tuple(
+        effect
+        for effect in active_effects
+        if not (
+            (effect.actor_id == actor_id and effect.kind == "dodge_until_next_turn")
+            or (effect.source_actor_id == actor_id and effect.kind == "help_attack_advantage")
+            or (effect.actor_id == actor_id and effect.kind == "ready_attack")
+            or (effect.actor_id == actor_id and effect.kind == "strength_potion")
+        )
+    )
+
+
+def expire_turn_end_effects(active_effects: tuple[ActiveCombatEffect, ...], actor_id: str) -> tuple[ActiveCombatEffect, ...]:
+    return tuple(
+        effect
+        for effect in active_effects
+        if not (effect.actor_id == actor_id and effect.kind == "disengage_until_turn_end")
+    )
+
+
+def _with_advantage(mode: RollMode) -> RollMode:
+    if mode == RollMode.DISADVANTAGE:
+        return RollMode.NORMAL
+    return RollMode.ADVANTAGE
+
+
+def _damage_hint_with_bonus(source, bonus: int) -> str:
+    if bonus == 0:
+        return source.damage_hint
+    if source.damage_die_sides is None:
+        total = max(0, int(source.damage_fixed or 0) + int(source.damage_modifier or 0) + bonus)
+        return str(total)
+    modifier = int(source.damage_modifier or 0) + bonus
+    if modifier == 0:
+        return f"1d{source.damage_die_sides} {source.damage_type}"
+    sign = "+" if modifier > 0 else "-"
+    return f"1d{source.damage_die_sides} {sign} {abs(modifier)} {source.damage_type}"
 
 
 def remove_combat_effects_from_state(
