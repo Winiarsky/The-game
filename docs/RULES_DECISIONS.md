@@ -257,6 +257,13 @@ Implementacja MVP:
 - Aktor może mieć wiele źródeł ataku (`AttackSource`), np. broń albo czar ofensywny; UI wybiera aktywne źródło, a legalne cele i LED-y liczą się dla tego źródła.
 - `AttackSource` może wskazywać cechę (`ability`), żeby efekty typu premia do Siły działały tylko na właściwe źródła, np. miecz, ale nie kuszę ani czar.
 - Aktor może mieć proste sloty czarów (`spell_slots`); czary poziomu `0` nie zużywają slotu, a czary poziomu `1+` zużywają slot wskazanego poziomu w momencie użycia akcji.
+- Źródła czarów mają jawne `casting_kind`: `cantrip` albo `leveled`; jeśli content go nie poda, loader wylicza go ze `source_type=spell` i `spell_level`.
+- Źródła czarów i leczenia mogą mieć flagę `prepared`; w MVP nieprzygotowane źródło nie jest legalną aktywną opcją w UI.
+- Koncentracja MVP działa jako `ActiveCombatEffect` z `source_actor_id`; jeden rzucający może utrzymywać tylko jeden efekt `concentration_*`.
+- Rzucenie nowego czaru koncentracyjnego tego samego aktora usuwa jego poprzedni efekt koncentracji i pokazuje komunikat w UI.
+- `Błogosławieństwo` w `gate_skirmish` jest testowym czarem koncentracyjnym: zużywa akcję i slot 1. poziomu, wybiera sojusznika i daje mu `+1` do ataku, dopóki koncentracja trwa.
+- Gdy aktor utrzymujący koncentrację otrzyma obrażenia, wykonuje CON save przeciw ST `max(10, obrażenia // 2)`. Sojusznik wymaga wpisania d20 w UI, przeciwnik rzuca automatycznie; porażka usuwa efekty `concentration_*` tego aktora.
+- MVP testu koncentracji nie uwzględnia jeszcze proficiency, advantage/disadvantage, featów ani klasowych premii do concentration save.
 - Aktor rzucający czary może mieć `spell_save_dc`; źródło czaru może nadpisać DC własnym `save_dc`.
 - `AttackSource` może być save-spellem przez `save_ability`; wtedy przeciwnik wykonuje automatyczny rzut obronny, a UI pokazuje naturalny d20, modyfikator cechy, sumę, ST i sukces/porażkę.
 - `AttackSource` może mieć obszar (`area`) typu `radius`, `line` albo `cone`; plansza wybiera środek obszaru albo sąsiednie pole kierunku, UI pokazuje preview LED i wymaga Entera/przycisku przed wykonaniem.
@@ -265,7 +272,7 @@ Implementacja MVP:
 - Gracz wpisuje końcowy wynik leczenia z fizycznego rzutu, a aplikacja ogranicza HP do `max_hp`.
 - Magiczny napój siły w MVP jest prostą akcją walki z contentu: zużywa akcję główną i daje efekt `strength_potion` do początku następnej tury aktora.
 - `strength_potion` daje premię do ataku i obrażeń tylko źródłom opartym o Siłę.
-- Nie implementujemy jeszcze pełnego inventory, liczby ładunków, attunement, przygotowanych/list znanych czarów, concentration ani zaawansowanych efektów czarów poza obrażeniami/lekkim leczeniem.
+- Nie implementujemy jeszcze pełnego inventory, liczby ładunków, attunement, osobnych list znanych i przygotowanych czarów, zaawansowanych modyfikatorów testu koncentracji ani zaawansowanych efektów czarów poza obrażeniami/lekkim leczeniem i prostym buffem do ataku.
 - Jawne obiekty sceny mogą oferować deterministyczne interakcje walki zużywające akcję główną.
 - Interakcje walki są data-driven: `SceneInteraction` może deklarować listę `conditions` oraz listę `effects`.
 - Warunki interakcji MVP obejmują dostępną akcję, sąsiedztwo obiektu, stanie na obiekcie, sąsiedniego przeciwnika oraz wolne pole docelowe.

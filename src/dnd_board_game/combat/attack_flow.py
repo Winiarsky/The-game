@@ -20,6 +20,12 @@ class AttackSourceType(StrEnum):
     CUSTOM = "custom"
 
 
+class SpellCastingKind(StrEnum):
+    NONE = "none"
+    CANTRIP = "cantrip"
+    LEVELED = "leveled"
+
+
 class AttackActionStatus(StrEnum):
     SELECTING_TARGET = "selecting_target"
     TARGET_SELECTED = "target_selected"
@@ -45,6 +51,8 @@ class AttackSource:
     save_ability: str | None = None
     save_dc: int = 0
     save_damage_on_success: str = "none"
+    casting_kind: SpellCastingKind = SpellCastingKind.NONE
+    prepared: bool = True
 
 
 @dataclass(frozen=True, slots=True)

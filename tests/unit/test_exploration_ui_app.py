@@ -213,6 +213,14 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
     assert "/api/combat/help/start" in html
     assert "/api/combat/help/confirm" in html
     assert "/api/combat/help/cancel" in html
+    assert "/api/combat/concentration/start" in html
+    assert "/api/combat/concentration/confirm" in html
+    assert "/api/combat/concentration/cancel" in html
+    assert "/api/combat/concentration-check" in html
+    assert "pendingConcentrationCheckHtml" in html
+    assert "pendingConcentrationCheckDetailsHtml" in html
+    assert "submitConcentrationCheck()" in html
+    assert "pending_concentration_check" in html
     assert "/api/combat/ready/start" in html
     assert "/api/combat/ready/confirm" in html
     assert "/api/combat/ready/cancel" in html
@@ -228,6 +236,8 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
     assert "cancelCombatHelp()" in html
     assert "pendingCombatHelpHtml" in html
     assert "pendingCombatHelpDetailsHtml" in html
+    assert "pendingConcentrationActionHtml" in html
+    assert "pendingConcentrationActionDetailsHtml" in html
     assert "startCombatReady()" in html
     assert "confirmCombatReady()" in html
     assert "cancelCombatReady()" in html

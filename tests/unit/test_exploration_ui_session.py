@@ -3,6 +3,7 @@ from dataclasses import replace
 
 from dnd_board_game.actors import Faction
 from dnd_board_game.combat import EnemyAutoTurnResult, replace_actor, set_scene_flag
+from dnd_board_game.combat.damage import DamageComponentInput, DamageType, apply_damage_result, resolve_damage
 from dnd_board_game.hardware import LedColor
 from dnd_board_game.llm import (
     GmClassifierProposal,
@@ -590,6 +591,10 @@ def test_exploration_ui_session_can_select_attack_source_and_strength_potion_mod
     state = session.state_payload()
     source_ids = {source["id"] for source in state["combat"]["available_attack_sources"]}
     assert {"longsword_slash", "crossbow_shot"} <= source_ids
+    longsword_payload = next(source for source in state["combat"]["available_attack_sources"] if source["id"] == "longsword_slash")
+    crossbow_payload = next(source for source in state["combat"]["available_attack_sources"] if source["id"] == "crossbow_shot")
+    assert longsword_payload["mechanic"]["type"] == "MeleeAttack"
+    assert crossbow_payload["mechanic"]["type"] == "RangedAttack"
 
     selected = session.select_combat_attack_source("longsword_slash")
     assert selected["combat"]["selected_attack_source_id"] == "longsword_slash"
@@ -617,6 +622,11 @@ def test_exploration_ui_session_cleric_can_heal_wounded_ally():
 
     selected = session.select_combat_healing_source("healing_word")
     assert selected["combat"]["selected_healing_source_id"] == "healing_word"
+    healing_payload = next(source for source in selected["combat"]["available_healing_sources"] if source["id"] == "healing_word")
+    assert healing_payload["mechanic"]["type"] == "SpellHealing"
+    assert healing_payload["casting_kind"] == "leveled"
+    assert healing_payload["resource_label"] == "slot 1. poziomu"
+    assert healing_payload["prepared"] is True
     assert any(target["id"] == "hero" for target in selected["combat"]["legal_healing_targets"])
 
     target_position = next(actor.position for actor in session.combat_state.actors if str(actor.id) == "hero")
@@ -632,6 +642,97 @@ def test_exploration_ui_session_cleric_can_heal_wounded_ally():
     assert any(message["title"] == "Leczenie" and "HP 10 -> 16" in message["body"] for message in healed["messages"])
 
 
+def test_exploration_ui_session_cleric_concentration_spell_grants_attack_bonus():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    while str(session.combat_state.initiative_order.current_actor.id) != "cleric":
+        session.finish_combat_turn()
+
+    started = session.start_combat_concentration_action("bless_attack_bonus")
+    pending = started["combat"]["pending_concentration_action"]
+    assert pending["action"]["id"] == "bless_attack_bonus"
+    assert pending["action"]["resource_label"] == "slot 1. poziomu"
+    assert pending["action"]["concentration"] is True
+    assert any(target["id"] == "hero" for target in pending["targets"])
+
+    confirmed = session.confirm_combat_concentration_action(target_id="hero")
+    hero = next(actor for actor in confirmed["combat"]["actors"] if actor["id"] == "hero")
+    cleric = next(actor for actor in confirmed["combat"]["actors"] if actor["id"] == "cleric")
+
+    assert confirmed["combat"]["pending_concentration_action"] is None
+    assert confirmed["combat"]["turn_action"]["action_use"] == "action_used"
+    assert cleric["spell_slots"][0]["remaining"] == 1
+    assert cleric["concentration"]["kind"] == "concentration_attack_bonus"
+    assert cleric["concentration"]["target_actor_id"] == "hero"
+    assert any(effect["kind"] == "concentration_attack_bonus" and effect["value"] == 1 for effect in hero["effects"])
+
+    hero_actor = next(actor for actor in session.combat_state.actors if str(actor.id) == "hero")
+    source = next(source for source in session._attack_sources_for_actor(hero_actor) if source.id == "longsword_slash")
+    modified = session._effective_attack_source(hero_actor, source)
+    assert any(modifier.label == "Błogosławieństwo" and modifier.value == 1 for modifier in modified.attack_roll_request.modifiers)
+
+
+def _cleric_casts_bless_on_hero(session: ExplorationUiSession) -> None:
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    while str(session.combat_state.initiative_order.current_actor.id) != "cleric":
+        session.finish_combat_turn()
+    session.start_combat_concentration_action("bless_attack_bonus")
+    session.confirm_combat_concentration_action(target_id="hero")
+
+
+def _apply_test_damage(session: ExplorationUiSession, actor_id: str, damage_amount: int) -> None:
+    assert session.combat_state is not None
+    actor = next(candidate for candidate in session.combat_state.actors if str(candidate.id) == actor_id)
+    damage = resolve_damage((DamageComponentInput(damage_amount, DamageType.SLASHING, "test"),))
+    applied = apply_damage_result(actor, damage)
+    session.combat_state = replace_actor(session.combat_state, applied.actor_after)
+    session._maybe_prompt_concentration_check(applied)
+
+
+def test_exploration_ui_session_concentration_check_failure_removes_attack_bonus():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _cleric_casts_bless_on_hero(session)
+
+    _apply_test_damage(session, "cleric", 12)
+    payload = session.state_payload()
+    pending = payload["combat"]["pending_concentration_check"]
+
+    assert pending["actor"]["id"] == "cleric"
+    assert pending["damage"] == 12
+    assert pending["dc"] == 10
+    assert pending["modifier"] == 1
+    assert pending["effects"][0]["kind"] == "concentration_attack_bonus"
+
+    resolved = session.submit_concentration_check(natural_roll=1)
+    hero = next(actor for actor in resolved["combat"]["actors"] if actor["id"] == "hero")
+    cleric = next(actor for actor in resolved["combat"]["actors"] if actor["id"] == "cleric")
+
+    assert resolved["combat"]["pending_concentration_check"] is None
+    assert hero["effects"] == []
+    assert cleric["concentration"] is None
+
+    hero_actor = next(actor for actor in session.combat_state.actors if str(actor.id) == "hero")
+    source = next(source for source in session._attack_sources_for_actor(hero_actor) if source.id == "longsword_slash")
+    modified = session._effective_attack_source(hero_actor, source)
+    assert not any(modifier.label == "Błogosławieństwo" for modifier in modified.attack_roll_request.modifiers)
+
+
+def test_exploration_ui_session_concentration_check_success_keeps_attack_bonus():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _cleric_casts_bless_on_hero(session)
+
+    _apply_test_damage(session, "cleric", 12)
+    resolved = session.submit_concentration_check(natural_roll=20)
+    hero = next(actor for actor in resolved["combat"]["actors"] if actor["id"] == "hero")
+    cleric = next(actor for actor in resolved["combat"]["actors"] if actor["id"] == "cleric")
+
+    assert resolved["combat"]["pending_concentration_check"] is None
+    assert cleric["concentration"]["kind"] == "concentration_attack_bonus"
+    assert any(effect["kind"] == "concentration_attack_bonus" and effect["value"] == 1 for effect in hero["effects"])
+
+
 def test_exploration_ui_session_cleric_area_spell_previews_line_and_consumes_slot():
     session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
     _start_gate_skirmish(session)
@@ -644,6 +745,13 @@ def test_exploration_ui_session_cleric_area_spell_previews_line_and_consumes_slo
     selected = session.select_combat_attack_source("radiant_line")
 
     assert selected["combat"]["selected_attack_source_id"] == "radiant_line"
+    source_payload = next(source for source in selected["combat"]["available_attack_sources"] if source["id"] == "radiant_line")
+    assert source_payload["mechanic"]["type"] == "AreaSpellAttack"
+    assert source_payload["casting_kind"] == "leveled"
+    assert source_payload["resource_label"] == "slot 1. poziomu"
+    cantrip_payload = next(source for source in selected["combat"]["available_attack_sources"] if source["id"] == "sacred_flame")
+    assert cantrip_payload["casting_kind"] == "cantrip"
+    assert cantrip_payload["resource_label"] == "cantrip"
     assert [10, 6] in selected["combat"]["legal_area_positions"]
     assert selected["combat"]["legal_targets"] == []
 

@@ -96,6 +96,8 @@ def effect_value_label(effect: ActiveCombatEffect) -> str:
         return ready_attack_trigger_label(effect)
     if effect.kind == "strength_potion":
         return f"{format_signed(effect.value)} do ataku i obrażeń z Siły"
+    if effect.kind == "concentration_attack_bonus":
+        return f"{format_signed(effect.value)} do ataku"
     return format_signed(effect.value)
 
 
@@ -116,6 +118,8 @@ def effect_expiration_label(effect: ActiveCombatEffect) -> str:
         return "znika po użyciu reakcji albo na początku następnej tury aktora"
     if effect.kind == "strength_potion":
         return "znika na początku następnej tury aktora"
+    if effect.kind == "concentration_attack_bonus":
+        return "znika po utracie koncentracji albo rzuceniu nowego czaru koncentracyjnego"
     return "czas trwania zależy od efektu"
 
 
@@ -418,7 +422,7 @@ def attack_source_with_combat_effects(actor: Actor, source, active_effects: tupl
     for effect in active_effects:
         if effect.actor_id != str(actor.id):
             continue
-        if effect.kind not in {"grant_attack_bonus_while_on_object", "grant_next_attack_penalty", "strength_potion"}:
+        if effect.kind not in {"grant_attack_bonus_while_on_object", "grant_next_attack_penalty", "strength_potion", "concentration_attack_bonus"}:
             continue
         if effect.kind == "strength_potion" and getattr(source, "ability", None) != "strength":
             continue

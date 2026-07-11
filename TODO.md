@@ -92,10 +92,15 @@
 - [x] Add combat action sources, cleric healing, and strength potion MVP.
 - [x] Add MVP spell slots and area spell targeting for combat.
 - [x] Add MVP spell save DC and automatic enemy saving throws.
+- [x] Show cantrip vs spell-slot sources in the gate skirmish UI.
+- [x] Add MVP concentration spell with a real attack-bonus effect.
+- [x] Add concentration saving throws after damage.
+- [x] Add action mechanics class hierarchy and extension guide.
+- [x] Extract first combat action resolution services from exploration UI.
 - [x] Add exploration map environment setup before location selection.
 - [x] Couple exploration web UI with board/simulator backend for LEDs and board clicks.
 - [ ] Add full inventory/cantrip integration for exploration option bonuses.
-- [ ] Add prepared/known spell rules and concentration.
+- [ ] Add full prepared/known spell rules and advanced concentration modifiers.
 - [ ] Add voice input and richer UI for free-form exploration declarations.
 - [x] Implement hardware adapter interface around `board.Connection`.
 - [x] Add LED frame generation for selected path and movement range.

@@ -4,7 +4,14 @@ from pathlib import Path
 import pytest
 
 from dnd_board_game.actors import Faction
-from dnd_board_game.combat import AttackSourceType, DamageType, EnvironmentSetupType, SceneObjectiveCondition, SetupVisibility
+from dnd_board_game.combat import (
+    AttackSourceType,
+    DamageType,
+    EnvironmentSetupType,
+    SceneObjectiveCondition,
+    SetupVisibility,
+    SpellCastingKind,
+)
 from dnd_board_game.exploration import SceneMode
 from dnd_board_game.scenarios import build_encounter_from_scenario, build_exploration_from_scenario, load_scenario
 from dnd_board_game.world import Coordinate, find_path
@@ -99,11 +106,25 @@ def test_load_gate_skirmish_uses_shared_map_setup_and_ranged_rogue():
 
     enemies = [actor for actor in encounter.actors if actor.faction == Faction.ENEMY]
     rogue = next(actor for actor in encounter.actors if actor.id == "rogue")
+    cleric = next(actor for actor in encounter.actors if actor.id == "cleric")
 
     assert len(enemies) == 2
     assert encounter.player_start_zones == ((Coordinate(7, 6), Coordinate(8, 6), Coordinate(9, 6)),)
     assert encounter.attack_sources_by_actor[rogue.id].name == "Kusza"
     assert encounter.attack_sources_by_actor[rogue.id].range_feet == 80
+    cleric_sources = {source.id: source for source in encounter.attack_source_options_by_actor[cleric.id]}
+    assert cleric_sources["sacred_flame"].casting_kind == SpellCastingKind.CANTRIP
+    assert cleric_sources["sacred_flame"].spell_level == 0
+    assert cleric_sources["radiant_line"].casting_kind == SpellCastingKind.LEVELED
+    assert cleric_sources["radiant_line"].spell_level == 1
+    assert encounter.healing_sources_by_actor[cleric.id][0].casting_kind == SpellCastingKind.LEVELED
+    bless = next(action for action in encounter.combat_actions_by_actor[cleric.id] if action.id == "bless_attack_bonus")
+    assert bless.action_type == "concentration_attack_bonus"
+    assert bless.casting_kind == SpellCastingKind.LEVELED
+    assert bless.spell_level == 1
+    assert bless.concentration is True
+    assert bless.target_faction == "ally"
+    assert bless.value == 1
     assert encounter.board.terrain_at(Coordinate(8, 5)).blocks_movement is True
     assert encounter.board.terrain_at(Coordinate(10, 7)).is_difficult is True
 

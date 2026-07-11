@@ -60,6 +60,7 @@ combat -> WLED
 - Explicit events or result objects between modules.
 - Small APIs with tests before adding feature breadth.
 - Data-driven content after the core behavior is stable.
+- Combat/exploration features should map to the action-mechanics hierarchy in `docs/MECHANICS_ARCHITECTURE.md` before UI-specific flow is added.
 
 ## Hardware Boundary
 

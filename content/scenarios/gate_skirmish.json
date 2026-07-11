@@ -73,6 +73,8 @@
           "id": "sacred_flame",
           "name": "Święty płomień",
           "source_type": "spell",
+          "casting_kind": "cantrip",
+          "prepared": true,
           "ability": "wisdom",
           "range_feet": 60,
           "attack_modifier": 0,
@@ -88,6 +90,8 @@
           "id": "radiant_line",
           "name": "Smuga światła",
           "source_type": "spell",
+          "casting_kind": "leveled",
+          "prepared": true,
           "ability": "wisdom",
           "range_feet": 30,
           "spell_level": 1,
@@ -111,12 +115,29 @@
           "id": "healing_word",
           "name": "Słowo leczenia",
           "source_type": "spell",
+          "casting_kind": "leveled",
+          "prepared": true,
           "range_feet": 60,
           "spell_level": 1,
           "healing": {
             "dice": "1d4",
             "modifier": 3
           }
+        }
+      ],
+      "combat_actions": [
+        {
+          "id": "bless_attack_bonus",
+          "name": "Błogosławieństwo",
+          "action_type": "concentration_attack_bonus",
+          "label": "Błogosławieństwo",
+          "value": 1,
+          "target_faction": "ally",
+          "spell_level": 1,
+          "casting_kind": "leveled",
+          "prepared": true,
+          "concentration": true,
+          "duration": "concentration"
         }
       ]
     },

@@ -11,6 +11,7 @@ from dnd_board_game.combat import (
     AttackSourceType,
     HealingSource,
     HealingSourceType,
+    SpellCastingKind,
     SpellArea,
     SpellAreaShape,
     SpellSlotState,
@@ -93,6 +94,8 @@ class ScenarioAttackDefinition:
     save_ability: str | None = None
     save_dc: int = 0
     save_damage_on_success: str = "none"
+    casting_kind: SpellCastingKind = SpellCastingKind.NONE
+    prepared: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,6 +108,8 @@ class ScenarioHealingDefinition:
     healing_die_sides: int | None
     healing_modifier: int
     spell_level: int = 0
+    casting_kind: SpellCastingKind = SpellCastingKind.NONE
+    prepared: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,6 +121,11 @@ class ScenarioCombatActionDefinition:
     value: int = 0
     ability: str | None = None
     duration: str = "next_turn_start"
+    target_faction: str = "self"
+    spell_level: int = 0
+    casting_kind: SpellCastingKind = SpellCastingKind.NONE
+    prepared: bool = True
+    concentration: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -457,14 +467,16 @@ def _parse_attack(data: dict[str, Any], actor_id: str) -> ScenarioAttackDefiniti
         raise ValueError(f"actor {actor_id}.attacks entries must be objects.")
     attack_id = str(_required(data, "id", f"actor {actor_id}.attack"))
     damage = _required_mapping(data, "damage", f"attack {attack_id}")
+    source_type = _enum_value(
+        AttackSourceType,
+        str(_required(data, "source_type", f"attack {attack_id}")),
+        f"attack {attack_id}.source_type",
+    )
+    spell_level = int(data.get("spell_level", 0))
     return ScenarioAttackDefinition(
         id=attack_id,
         name=str(_required(data, "name", f"attack {attack_id}")),
-        source_type=_enum_value(
-            AttackSourceType,
-            str(_required(data, "source_type", f"attack {attack_id}")),
-            f"attack {attack_id}.source_type",
-        ),
+        source_type=source_type,
         range_feet=int(_required(data, "range_feet", f"attack {attack_id}")),
         attack_modifier=int(_required(data, "attack_modifier", f"attack {attack_id}")),
         damage_fixed=_parse_damage_fixed(damage),
@@ -472,11 +484,13 @@ def _parse_attack(data: dict[str, Any], actor_id: str) -> ScenarioAttackDefiniti
         damage_modifier=int(damage.get("modifier", 0)),
         damage_type=str(_required(damage, "damage_type", f"attack {attack_id}.damage")),
         ability=str(data["ability"]) if "ability" in data else None,
-        spell_level=int(data.get("spell_level", 0)),
+        spell_level=spell_level,
         area=_parse_spell_area(data.get("area"), f"attack {attack_id}.area"),
         save_ability=str(data["save_ability"]) if "save_ability" in data else None,
         save_dc=int(data.get("save_dc", 0)),
         save_damage_on_success=str(data.get("save_damage_on_success", "none")),
+        casting_kind=_parse_spell_casting_kind(data.get("casting_kind"), source_type, spell_level, f"attack {attack_id}.casting_kind"),
+        prepared=bool(data.get("prepared", True)),
     )
 
 
@@ -485,19 +499,28 @@ def _parse_healing_source(data: dict[str, Any], actor_id: str) -> ScenarioHealin
         raise ValueError(f"actor {actor_id}.healing_sources entries must be objects.")
     source_id = str(_required(data, "id", f"actor {actor_id}.healing_source"))
     healing = _required_mapping(data, "healing", f"healing source {source_id}")
+    source_type = _enum_value(
+        HealingSourceType,
+        str(_required(data, "source_type", f"healing source {source_id}")),
+        f"healing source {source_id}.source_type",
+    )
+    spell_level = int(data.get("spell_level", 0))
     return ScenarioHealingDefinition(
         id=source_id,
         name=str(_required(data, "name", f"healing source {source_id}")),
-        source_type=_enum_value(
-            HealingSourceType,
-            str(_required(data, "source_type", f"healing source {source_id}")),
-            f"healing source {source_id}.source_type",
-        ),
+        source_type=source_type,
         range_feet=int(_required(data, "range_feet", f"healing source {source_id}")),
         healing_fixed=_parse_damage_fixed(healing),
         healing_die_sides=_parse_damage_die(healing),
         healing_modifier=int(healing.get("modifier", 0)),
-        spell_level=int(data.get("spell_level", 0)),
+        spell_level=spell_level,
+        casting_kind=_parse_spell_casting_kind(
+            data.get("casting_kind"),
+            source_type,
+            spell_level,
+            f"healing source {source_id}.casting_kind",
+        ),
+        prepared=bool(data.get("prepared", True)),
     )
 
 
@@ -505,14 +528,27 @@ def _parse_combat_action(data: dict[str, Any], actor_id: str) -> ScenarioCombatA
     if not isinstance(data, dict):
         raise ValueError(f"actor {actor_id}.combat_actions entries must be objects.")
     action_id = str(_required(data, "id", f"actor {actor_id}.combat_action"))
+    action_type = str(_required(data, "action_type", f"combat action {action_id}"))
+    spell_level = int(data.get("spell_level", 0))
+    source_type = AttackSourceType.SPELL if action_type.startswith("concentration_") else AttackSourceType.CUSTOM
     return ScenarioCombatActionDefinition(
         id=action_id,
         name=str(_required(data, "name", f"combat action {action_id}")),
-        action_type=str(_required(data, "action_type", f"combat action {action_id}")),
+        action_type=action_type,
         label=str(data.get("label", data.get("name", action_id))),
         value=int(data.get("value", 0)),
         ability=str(data["ability"]) if "ability" in data else None,
         duration=str(data.get("duration", "next_turn_start")),
+        target_faction=str(data.get("target_faction", "self")),
+        spell_level=spell_level,
+        casting_kind=_parse_spell_casting_kind(
+            data.get("casting_kind"),
+            source_type,
+            spell_level,
+            f"combat action {action_id}.casting_kind",
+        ),
+        prepared=bool(data.get("prepared", True)),
+        concentration=bool(data.get("concentration", False)),
     )
 
 
@@ -1165,6 +1201,8 @@ def _attack_source_from_definition(definition: ScenarioAttackDefinition, stackin
         save_ability=definition.save_ability,
         save_dc=definition.save_dc,
         save_damage_on_success=definition.save_damage_on_success,
+        casting_kind=definition.casting_kind,
+        prepared=definition.prepared,
     )
 
 
@@ -1179,6 +1217,8 @@ def _healing_source_from_definition(definition: ScenarioHealingDefinition) -> He
         healing_die_sides=definition.healing_die_sides,
         healing_modifier=definition.healing_modifier,
         spell_level=definition.spell_level,
+        casting_kind=definition.casting_kind,
+        prepared=definition.prepared,
     )
 
 
@@ -1557,6 +1597,27 @@ def _parse_spell_slots(data: Any, actor_id: str) -> tuple[SpellSlotState, ...]:
         maximum = int(value)
         slots.append(SpellSlotState(level=int(level), remaining=maximum, maximum=maximum))
     return tuple(sorted(slots, key=lambda slot: slot.level))
+
+
+def _parse_spell_casting_kind(
+    data: Any,
+    source_type,
+    spell_level: int,
+    field: str,
+) -> SpellCastingKind:
+    source_type_value = getattr(source_type, "value", str(source_type))
+    if data is None:
+        if source_type_value != "spell":
+            return SpellCastingKind.NONE
+        return SpellCastingKind.LEVELED if int(spell_level) > 0 else SpellCastingKind.CANTRIP
+    kind = _enum_value(SpellCastingKind, str(data), field)
+    if source_type_value != "spell" and kind != SpellCastingKind.NONE:
+        raise ValueError(f"{field} can only be set for spell sources.")
+    if kind == SpellCastingKind.LEVELED and int(spell_level) <= 0:
+        raise ValueError(f"{field} leveled requires spell_level greater than 0.")
+    if kind == SpellCastingKind.CANTRIP and int(spell_level) != 0:
+        raise ValueError(f"{field} cantrip requires spell_level 0.")
+    return kind
 
 
 def _parse_spell_area(data: Any, field: str) -> SpellArea | None:

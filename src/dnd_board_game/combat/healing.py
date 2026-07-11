@@ -7,7 +7,7 @@ from typing import Sequence
 from dnd_board_game.actors import Actor
 from dnd_board_game.world import BoardState, line_of_sight_clear
 
-from .attack_flow import AttackSourceType
+from .attack_flow import AttackSourceType, SpellCastingKind
 from .targets import CombatTarget, actor_as_combat_target, is_public_attack_target
 
 
@@ -28,6 +28,8 @@ class HealingSource:
     healing_die_sides: int | None = None
     healing_modifier: int = 0
     spell_level: int = 0
+    casting_kind: SpellCastingKind = SpellCastingKind.NONE
+    prepared: bool = True
 
 
 @dataclass(frozen=True, slots=True)

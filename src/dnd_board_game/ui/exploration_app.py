@@ -9,6 +9,16 @@ from typing import Any
 
 from flask import Flask, jsonify, render_template_string, request, send_from_directory
 
+from dnd_board_game.actions import (
+    ActionResourceResolver,
+    AreaSpellResolver,
+    HealingActionResolver,
+    SpellSaveAttackResolver,
+    action_mechanic_payload,
+    attack_mechanic_from_source,
+    combat_action_mechanic_from_definition,
+    healing_mechanic_from_source,
+)
 from dnd_board_game.actors import Actor, Faction
 from dnd_board_game.combat import (
     ActorSetupEntry,
@@ -45,8 +55,6 @@ from dnd_board_game.combat import (
     active_actor_led_feedback,
     apply_combat_interaction_effects,
     apply_damage_result,
-    apply_healing_result,
-    apply_save_damage_amount,
     actors_in_area,
     area_positions_for_center,
     area_positions_for_direction,
@@ -61,9 +69,7 @@ from dnd_board_game.combat import (
     legal_healing_targets,
     legal_area_centers,
     can_consume_spell_resource,
-    consume_spell_resource,
     direction_anchor_positions,
-    resolve_spell_save,
     opportunity_attackers_for_movement,
     replace_actor,
     resolve_attack,
@@ -395,6 +401,46 @@ class PendingCombatHelp:
 
 
 @dataclass(frozen=True, slots=True)
+class PendingConcentrationAction:
+    caster_id: str
+    action_id: str
+    target_ids: tuple[str, ...]
+
+    def as_payload(self, state: CombatState, active_effects: tuple[ActiveCombatEffect, ...], action=None) -> dict[str, object]:
+        return {
+            "caster": _combat_actor_payload(_actor_by_string_id_from_state(state, self.caster_id), active_effects),
+            "action": _combat_action_payload(action) if action is not None else None,
+            "targets": [
+                _combat_actor_payload(actor, active_effects)
+                for actor in state.actors
+                if str(actor.id) in self.target_ids
+            ],
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class PendingConcentrationCheck:
+    actor_id: str
+    effect_ids: tuple[str, ...]
+    damage: int
+    dc: int
+
+    def as_payload(self, state: CombatState, active_effects: tuple[ActiveCombatEffect, ...]) -> dict[str, object]:
+        actor = _actor_by_string_id_from_state(state, self.actor_id)
+        modifier = ability_modifier(actor.ability_scores.constitution)
+        effects = tuple(effect for effect in active_effects if effect.id in self.effect_ids)
+        return {
+            "actor": _combat_actor_payload(actor, active_effects),
+            "effect_ids": list(self.effect_ids),
+            "effects": [effect.as_payload() for effect in effects],
+            "damage": self.damage,
+            "dc": self.dc,
+            "modifier": modifier,
+            "instruction": f"{actor.name} otrzymał {self.damage} obrażeń. Rzuć CON save przeciw ST {self.dc}.",
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class PendingCombatReady:
     actor_id: str
     triggers: tuple[str, ...] = ("enemy_moves", "enemy_attacks")
@@ -475,6 +521,10 @@ class ExplorationUiSession:
         self._fixed_session_id = session_id
         self.observation_dir = Path(observation_dir)
         self.observer = SessionObserver(session_id or _ui_session_id(), self.observation_dir)
+        self.action_resource_resolver = ActionResourceResolver()
+        self.spell_save_attack_resolver = SpellSaveAttackResolver()
+        self.area_spell_resolver = AreaSpellResolver()
+        self.healing_action_resolver = HealingActionResolver()
         self.reset()
 
     def reset(self) -> None:
@@ -514,6 +564,8 @@ class ExplorationUiSession:
         self.pending_area_spell: PendingAreaSpell | None = None
         self.pending_combat_interaction: PendingCombatInteraction | None = None
         self.pending_combat_help: PendingCombatHelp | None = None
+        self.pending_concentration_action: PendingConcentrationAction | None = None
+        self.pending_concentration_check: PendingConcentrationCheck | None = None
         self.pending_combat_ready: PendingCombatReady | None = None
         self.pending_opportunity_movement: PendingOpportunityMovement | None = None
         self.pending_enemy_opportunity_attack: PendingEnemyOpportunityAttack | None = None
@@ -613,6 +665,8 @@ class ExplorationUiSession:
                 self.pending_area_spell,
                 self.pending_combat_interaction,
                 self.pending_combat_help,
+                self.pending_concentration_action,
+                self.pending_concentration_check,
                 self.pending_combat_ready,
                 self.pending_opportunity_movement,
                 self.pending_enemy_opportunity_attack,
@@ -1098,6 +1152,7 @@ class ExplorationUiSession:
         self.pending_area_spell = None
         self.pending_combat_interaction = None
         self.pending_combat_help = None
+        self.pending_concentration_action = None
         self.pending_combat_ready = None
         self.pending_opportunity_movement = None
 
@@ -1129,50 +1184,34 @@ class ExplorationUiSession:
     def _actor_can_use_attack_source(self, actor: Actor, source) -> bool:
         if source is None:
             return False
+        if getattr(source, "prepared", True) is False:
+            return False
         return can_consume_spell_resource(actor, getattr(source, "spell_level", 0))
 
     def _actor_can_use_healing_source(self, actor: Actor, source: HealingSource | None) -> bool:
         if source is None:
             return False
+        if getattr(source, "prepared", True) is False:
+            return False
         return can_consume_spell_resource(actor, getattr(source, "spell_level", 0))
 
-    def _consume_actor_spell_resource(self, actor: Actor, spell_level: int) -> None:
+    def _actor_can_use_combat_action(self, actor: Actor, action) -> bool:
+        if action is None:
+            return False
+        if getattr(action, "prepared", True) is False:
+            return False
+        return can_consume_spell_resource(actor, getattr(action, "spell_level", 0))
+
+    def _concentration_targets_for_action(self, actor: Actor, action) -> tuple[Actor, ...]:
         if self.combat_state is None:
-            raise ValueError("Walka nie została rozpoczęta.")
-        result = consume_spell_resource(actor, spell_level)
-        if result.consumed:
-            self.combat_state = replace_actor(self.combat_state, result.actor_after)
-
-    def _spell_save_dc(self, caster: Actor, source) -> int:
-        dc = int(getattr(source, "save_dc", 0) or 0)
-        if dc > 0:
-            return dc
-        if caster.spell_save_dc > 0:
-            return caster.spell_save_dc
-        raise ValueError(f"Czar {source.name} wymaga ST rzutu obronnego.")
-
-    def _roll_spell_save(self, caster: Actor, target: Actor, source) -> SpellSaveResult:
-        ability = getattr(source, "save_ability", None)
-        if not ability:
-            raise ValueError(f"Czar {source.name} nie ma zdefiniowanego rzutu obronnego.")
-        return resolve_spell_save(
-            target,
-            ability=ability,
-            dc=self._spell_save_dc(caster, source),
-            natural_roll=self.encounter_rng.randint(1, 20),
-            damage_on_success=getattr(source, "save_damage_on_success", "none"),
-        )
-
-    def _roll_spell_saves_for_targets(self, caster: Actor, source, target_ids: tuple[str, ...]) -> tuple[SpellSaveResult, ...]:
-        if self.combat_state is None or not getattr(source, "save_ability", None):
             return ()
-        saves: list[SpellSaveResult] = []
-        for target_id in target_ids:
-            target = next((actor for actor in self.combat_state.actors if str(actor.id) == target_id), None)
-            if target is None or target.is_defeated():
-                continue
-            saves.append(self._roll_spell_save(caster, target, source))
-        return tuple(saves)
+        if getattr(action, "target_faction", "self") == "ally":
+            return tuple(
+                candidate
+                for candidate in self.combat_state.actors
+                if candidate.faction == actor.faction and not candidate.is_defeated()
+            )
+        return (actor,)
 
     def _healing_sources_for_actor(self, actor: Actor) -> tuple[HealingSource, ...]:
         encounter = self._active_encounter()
@@ -1271,6 +1310,231 @@ class ExplorationUiSession:
         self._sync_board_leds()
         return self.state_payload()
 
+    def start_combat_concentration_action(self, action_id: str) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        actor = combat_current_actor(self.combat_state)
+        if actor.faction != Faction.ALLY:
+            raise ValueError("To nie jest tura bohatera.")
+        encounter = self._active_encounter()
+        if encounter is None:
+            raise ValueError("Brak danych encountera dla aktywnej walki.")
+        action = next(
+            (candidate for candidate in encounter.combat_actions_by_actor.get(actor.id, ()) if candidate.id == action_id),
+            None,
+        )
+        if action is None or action.action_type != "concentration_attack_bonus":
+            raise ValueError("Nieznana akcja koncentracji.")
+        if not self._actor_can_use_combat_action(actor, action):
+            raise ValueError(f"Brak slotów czaru dla {action.label}.")
+        targets = self._concentration_targets_for_action(actor, action)
+        if not targets:
+            raise ValueError("Brak legalnego celu czaru koncentracyjnego.")
+        self._clear_player_pending_choices()
+        self.pending_concentration_action = PendingConcentrationAction(
+            caster_id=str(actor.id),
+            action_id=action.id,
+            target_ids=tuple(str(target.id) for target in targets),
+        )
+        self.board_message = f"{action.label}: wybierz sojusznika dla efektu koncentracji."
+        self._add_message("Koncentracja", f"{actor.name} przygotowuje {action.label}. Wybierz sojusznika.")
+        self._record(
+            "ui_combat_concentration_started",
+            {"caster_id": str(actor.id), "action_id": action.id, "target_ids": [str(target.id) for target in targets]},
+        )
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def confirm_combat_concentration_action(self, *, target_id: str) -> dict[str, object]:
+        pending = self.pending_concentration_action
+        if pending is None:
+            raise ValueError("Nie ma czaru koncentracyjnego do potwierdzenia.")
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        caster = combat_current_actor(self.combat_state)
+        if str(caster.id) != pending.caster_id:
+            raise ValueError("Oczekujący czar koncentracyjny nie należy do aktywnego aktora.")
+        if target_id not in pending.target_ids:
+            raise ValueError("Wybrany cel nie jest legalnym celem czaru koncentracyjnego.")
+        encounter = self._active_encounter()
+        if encounter is None:
+            raise ValueError("Brak danych encountera dla aktywnej walki.")
+        action = next(
+            (candidate for candidate in encounter.combat_actions_by_actor.get(caster.id, ()) if candidate.id == pending.action_id),
+            None,
+        )
+        if action is None:
+            raise ValueError("Nieznana akcja koncentracji.")
+        if not self._actor_can_use_combat_action(caster, action):
+            raise ValueError(f"Brak slotów czaru dla {action.label}.")
+        target = _actor_by_string_id_from_state(self.combat_state, target_id)
+        resource_use = self.action_resource_resolver.consume_action_and_source_resource(
+            self.combat_state,
+            caster,
+            spell_level=action.spell_level,
+        )
+        self.combat_state = resource_use.state
+        removed = tuple(
+            effect
+            for effect in self.active_combat_effects
+            if effect.kind.startswith("concentration_") and effect.source_actor_id == str(caster.id)
+        )
+        self.active_combat_effects = tuple(
+            effect
+            for effect in self.active_combat_effects
+            if not (effect.kind.startswith("concentration_") and effect.source_actor_id == str(caster.id))
+        ) + (
+            ActiveCombatEffect(
+                id=f"concentration_attack_bonus:{caster.id}:{target.id}:{action.id}",
+                actor_id=str(target.id),
+                kind="concentration_attack_bonus",
+                label=action.label,
+                object_id=f"combat_action:{action.id}",
+                value=action.value,
+                source_actor_id=str(caster.id),
+                target_actor_id=str(target.id),
+            ),
+        )
+        self.pending_concentration_action = None
+        self.selected_combat_movement_path = None
+        ended = f" Poprzednia koncentracja zakończona: {', '.join(effect.label for effect in removed)}." if removed else ""
+        message = f"{caster.name} rzuca {action.label}. {target.name} ma {action.value:+d} do ataku, dopóki koncentracja trwa.{ended}"
+        self.board_message = message
+        self._add_message("Koncentracja", message)
+        self._record(
+            "ui_combat_concentration_confirmed",
+            {
+                "caster_id": str(caster.id),
+                "target_id": str(target.id),
+                "action_id": action.id,
+                "value": action.value,
+                "removed_effect_ids": [effect.id for effect in removed],
+            },
+        )
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def cancel_combat_concentration_action(self) -> dict[str, object]:
+        pending = self.pending_concentration_action
+        if pending is None:
+            raise ValueError("Nie ma czaru koncentracyjnego do anulowania.")
+        self.pending_concentration_action = None
+        self.board_message = "Anulowano czar koncentracyjny. Kliknij Skanuj planszę, żeby wybrać ruch, cel albo obiekt."
+        self._add_message("Koncentracja", "Anulowano czar koncentracyjny.")
+        self._record("ui_combat_concentration_cancelled", {"caster_id": pending.caster_id, "action_id": pending.action_id})
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def _concentration_effects_for_actor(self, actor_id: str) -> tuple[ActiveCombatEffect, ...]:
+        return tuple(
+            effect
+            for effect in self.active_combat_effects
+            if effect.kind.startswith("concentration_") and effect.source_actor_id == actor_id
+        )
+
+    def _remove_concentration_effects_for_actor(self, actor_id: str) -> tuple[ActiveCombatEffect, ...]:
+        removed = self._concentration_effects_for_actor(actor_id)
+        self.active_combat_effects = tuple(
+            effect
+            for effect in self.active_combat_effects
+            if not (effect.kind.startswith("concentration_") and effect.source_actor_id == actor_id)
+        )
+        return removed
+
+    def _maybe_prompt_concentration_check(self, applied_damage) -> None:
+        if self.combat_state is None or applied_damage is None:
+            return
+        damage = int(getattr(applied_damage.damage, "total_applied", 0) or 0)
+        if damage <= 0:
+            return
+        actor_id = str(applied_damage.actor_after.id)
+        effects = self._concentration_effects_for_actor(actor_id)
+        if not effects:
+            return
+        actor = self._actor_by_string_id(actor_id)
+        if actor.is_defeated():
+            removed = self._remove_concentration_effects_for_actor(actor_id)
+            self._add_message("Koncentracja", f"{actor.name} pada. Koncentracja zakończona: {', '.join(effect.label for effect in removed)}.")
+            return
+        dc = max(10, damage // 2)
+        if actor.faction != Faction.ALLY:
+            natural_roll = self.encounter_rng.randint(1, 20)
+            self._resolve_concentration_check(actor_id=actor_id, effect_ids=tuple(effect.id for effect in effects), damage=damage, dc=dc, natural_roll=natural_roll)
+            return
+        self.pending_concentration_check = PendingConcentrationCheck(
+            actor_id=actor_id,
+            effect_ids=tuple(effect.id for effect in effects),
+            damage=damage,
+            dc=dc,
+        )
+        self.board_message = f"{actor.name}: rzut na utrzymanie koncentracji, ST {dc}."
+        self._add_message("Koncentracja", f"{actor.name} otrzymuje {damage} obrażeń. Rzuć CON save przeciw ST {dc}.")
+
+    def submit_concentration_check(self, *, natural_roll: int) -> dict[str, object]:
+        pending = self.pending_concentration_check
+        if pending is None:
+            raise ValueError("Nie ma oczekującego rzutu na koncentrację.")
+        self._resolve_concentration_check(
+            actor_id=pending.actor_id,
+            effect_ids=pending.effect_ids,
+            damage=pending.damage,
+            dc=pending.dc,
+            natural_roll=int(natural_roll),
+        )
+        self.pending_concentration_check = None
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def _resolve_concentration_check(
+        self,
+        *,
+        actor_id: str,
+        effect_ids: tuple[str, ...],
+        damage: int,
+        dc: int,
+        natural_roll: int,
+    ) -> None:
+        actor = self._actor_by_string_id(actor_id)
+        modifier = ability_modifier(actor.ability_scores.constitution)
+        request = D20RollRequest(
+            modifiers=(
+                RollModifier(
+                    "Modyfikator Kondycji",
+                    modifier,
+                    RollModifierType.ABILITY,
+                    stacking_key="ability:constitution",
+                ),
+            )
+        )
+        roll = resolve_d20_roll(D20RollInput(request, int(natural_roll)))
+        success = roll.total >= int(dc)
+        effect_labels = tuple(
+            effect.label
+            for effect in self.active_combat_effects
+            if effect.id in effect_ids
+        )
+        removed_effect_ids: list[str] = []
+        if not success:
+            removed = self._remove_concentration_effects_for_actor(actor_id)
+            removed_effect_ids = [effect.id for effect in removed if effect.id in effect_ids]
+        result_text = "koncentracja utrzymana" if success else f"koncentracja przerwana: {', '.join(effect_labels) or 'efekt'}"
+        self.board_message = f"{actor.name}: CON save {roll.natural_roll} + {modifier} = {roll.total} / ST {dc}; {result_text}."
+        self._add_message("Koncentracja", self.board_message)
+        self._record(
+            "ui_combat_concentration_check",
+            {
+                "actor_id": actor_id,
+                "effect_ids": list(effect_ids),
+                "removed_effect_ids": removed_effect_ids,
+                "damage": damage,
+                "dc": dc,
+                "natural_roll": roll.natural_roll,
+                "modifier": modifier,
+                "total": roll.total,
+                "success": success,
+            },
+        )
+
     def submit_player_attack(self, *, target_id: str, natural_roll: int, damage: int = 0) -> dict[str, object]:
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
@@ -1296,11 +1560,12 @@ class ExplorationUiSession:
         source = self._effective_attack_source(attacker, source, target_actor)
         declaration = AttackDeclaration(attacker=attacker, target=selected.selected_target, source=source)
         attack_roll = resolve_d20_roll(D20RollInput(source.attack_roll_request, natural_roll))
-        action_result = use_turn_action(self.combat_state)
-        if not action_result.accepted:
-            raise ValueError(action_result.message)
-        self.combat_state = action_result.state
-        self._consume_actor_spell_resource(attacker, source.spell_level)
+        resource_use = self.action_resource_resolver.consume_action_and_source_resource(
+            self.combat_state,
+            attacker,
+            spell_level=source.spell_level,
+        )
+        self.combat_state = resource_use.state
         resolution = resolve_attack(declaration, attack_roll, selected.action_use)
         self.active_combat_effects = consume_next_attack_effects(
             self.active_combat_effects,
@@ -1337,6 +1602,8 @@ class ExplorationUiSession:
                 "damage_result": _applied_damage_payload(applied_damage),
             },
         )
+        if applied_damage is not None:
+            self._maybe_prompt_concentration_check(applied_damage)
         self._sync_board_leds()
         return self.state_payload()
 
@@ -1410,12 +1677,15 @@ class ExplorationUiSession:
             raise ValueError(f"Aktor {caster.name} nie ma tego czaru.")
         if not self._actor_can_use_attack_source(caster, source):
             raise ValueError(f"Brak slotów czaru dla {source.name}.")
-        action_result = use_turn_action(self.combat_state)
-        if not action_result.accepted:
-            raise ValueError(action_result.message)
-        self.combat_state = action_result.state
-        self._consume_actor_spell_resource(caster, source.spell_level)
-        saves = self._roll_spell_saves_for_targets(caster, source, pending.target_ids)
+        confirmation = self.area_spell_resolver.confirm_area_spell(
+            self.combat_state,
+            caster=caster,
+            source=source,
+            target_ids=pending.target_ids,
+            rng=self.encounter_rng,
+        )
+        self.combat_state = confirmation.state
+        saves = confirmation.saving_throws
         self.pending_area_spell = replace(pending, stage="damage_roll", saving_throws=saves)
         self.selected_combat_movement_path = None
         save_text = " ".join(_spell_save_message(save) for save in saves)
@@ -1447,19 +1717,15 @@ class ExplorationUiSession:
         if source is None:
             raise ValueError(f"Aktor {caster.name} nie ma tego czaru.")
         damage_amount = max(0, int(damage))
-        applied_results = []
-        updated_state = self.combat_state
-        for target_id in pending.target_ids:
-            target_actor = next((actor for actor in updated_state.actors if str(actor.id) == target_id), None)
-            if target_actor is None or target_actor.is_defeated():
-                continue
-            save = _spell_save_for_actor(pending.saving_throws, target_id)
-            applied_amount = apply_save_damage_amount(damage_amount, save)
-            damage_result = resolve_damage((DamageComponentInput(applied_amount, DamageType(source.damage_type), source.name),))
-            applied = apply_damage_result(target_actor, damage_result)
-            updated_state = replace_actor(updated_state, applied.actor_after)
-            applied_results.append((applied, save))
-        self.combat_state = updated_state
+        resolution = self.area_spell_resolver.apply_area_damage(
+            self.combat_state,
+            source=source,
+            target_ids=pending.target_ids,
+            base_damage=damage_amount,
+            saving_throws=pending.saving_throws,
+        )
+        applied_results = [(target.applied_damage, target.saving_throw) for target in resolution.targets]
+        self.combat_state = resolution.state
         self.pending_area_spell = None
         if applied_results:
             result_text = "; ".join(
@@ -1481,6 +1747,10 @@ class ExplorationUiSession:
                 ],
             },
         )
+        for applied, _save in applied_results:
+            self._maybe_prompt_concentration_check(applied)
+            if self.pending_concentration_check is not None:
+                break
         self._sync_board_leds()
         return self.state_payload()
 
@@ -1557,12 +1827,15 @@ class ExplorationUiSession:
         if source.save_ability:
             if not self._actor_can_use_attack_source(attacker, source):
                 raise ValueError(f"Brak slotów czaru dla {source.name}.")
-            action_result = use_turn_action(self.combat_state)
-            if not action_result.accepted:
-                raise ValueError(action_result.message)
-            self.combat_state = action_result.state
-            self._consume_actor_spell_resource(attacker, source.spell_level)
-            save = self._roll_spell_save(attacker, target_actor, source)
+            confirmation = self.spell_save_attack_resolver.confirm_target_save_spell(
+                self.combat_state,
+                caster=attacker,
+                target=target_actor,
+                source=source,
+                rng=self.encounter_rng,
+            )
+            self.combat_state = confirmation.state
+            save = confirmation.saving_throw
             self.selected_combat_movement_path = None
             save_text = _spell_save_message(save)
             if save.damage_multiplier <= 0:
@@ -1649,11 +1922,12 @@ class ExplorationUiSession:
         source = self._effective_attack_source(attacker, source, target_actor)
         declaration = AttackDeclaration(attacker=attacker, target=selected.selected_target, source=source)
         attack_roll = resolve_d20_roll(D20RollInput(source.attack_roll_request, int(natural_roll)))
-        action_result = use_turn_action(self.combat_state)
-        if not action_result.accepted:
-            raise ValueError(action_result.message)
-        self.combat_state = action_result.state
-        self._consume_actor_spell_resource(attacker, source.spell_level)
+        resource_use = self.action_resource_resolver.consume_action_and_source_resource(
+            self.combat_state,
+            attacker,
+            spell_level=source.spell_level,
+        )
+        self.combat_state = resource_use.state
         resolution = resolve_attack(declaration, attack_roll, selected.action_use)
         self.active_combat_effects = consume_next_attack_effects(
             self.active_combat_effects,
@@ -1723,11 +1997,16 @@ class ExplorationUiSession:
             raise ValueError(f"Nieznany cel ataku: {pending.target_id}.")
         damage_amount = max(0, int(damage))
         save = pending.saving_throws[0] if pending.saving_throws else None
-        applied_amount = apply_save_damage_amount(damage_amount, save)
-        damage_result = resolve_damage((DamageComponentInput(applied_amount, DamageType(source.damage_type), source.name),))
-        applied_damage = apply_damage_result(target_actor, damage_result)
-        updated_target = applied_damage.actor_after
-        self.combat_state = replace_actor(self.combat_state, updated_target)
+        damage_resolution = self.spell_save_attack_resolver.apply_target_damage(
+            self.combat_state,
+            target_id=pending.target_id,
+            source=source,
+            base_damage=damage_amount,
+            saving_throw=save,
+        )
+        applied_damage = damage_resolution.applied_damage
+        damage_result = applied_damage.damage
+        self.combat_state = damage_resolution.state
         self.pending_player_attack = None
         self.pending_combat_help = None
         self._add_message(
@@ -1745,6 +2024,7 @@ class ExplorationUiSession:
                 "damage_result": _applied_damage_payload(applied_damage),
             },
         )
+        self._maybe_prompt_concentration_check(applied_damage)
         self._sync_board_leds()
         return self.state_payload()
 
@@ -1796,16 +2076,16 @@ class ExplorationUiSession:
             raise ValueError(f"Aktor {healer.name} nie ma tego źródła leczenia.")
         if not self._actor_can_use_healing_source(healer, source):
             raise ValueError(f"Brak slotów czaru dla {source.name}.")
-        action_result = use_turn_action(self.combat_state)
-        if not action_result.accepted:
-            raise ValueError(action_result.message)
-        self.combat_state = action_result.state
-        self._consume_actor_spell_resource(healer, source.spell_level)
-        target_actor = next((actor for actor in self.combat_state.actors if str(actor.id) == pending.target_id), None)
-        if target_actor is None:
-            raise ValueError(f"Nieznany cel leczenia: {pending.target_id}.")
-        applied = apply_healing_result(target_actor, source, int(healing))
-        self.combat_state = replace_actor(self.combat_state, applied.actor_after)
+        healing_resolution = self.healing_action_resolver.apply_healing(
+            self.combat_state,
+            healer=healer,
+            target_id=pending.target_id,
+            source=source,
+            amount=int(healing),
+        )
+        applied = healing_resolution.applied_healing
+        target_actor = applied.actor_before
+        self.combat_state = healing_resolution.state
         self.pending_player_healing = None
         self._add_message(
             "Leczenie",
@@ -1955,6 +2235,7 @@ class ExplorationUiSession:
             raise ValueError("Aktor oczekującego ruchu nie istnieje.")
 
         messages: list[str] = []
+        applied_damages = []
         updated_state = self.combat_state
         for attacker_id in pending.threat_actor_ids:
             actor = next((candidate for candidate in updated_state.actors if str(candidate.id) == pending.actor_id), actor)
@@ -1988,6 +2269,7 @@ class ExplorationUiSession:
                 damage_type = DamageType(source.damage_type)
                 damage_result = resolve_damage((DamageComponentInput(damage_amount, damage_type, source.name),))
                 applied_damage = apply_damage_result(actor, damage_result)
+                applied_damages.append(applied_damage)
                 updated_state = replace_actor(updated_state, applied_damage.actor_after)
                 defeated_text = " Cel zostaje pokonany." if applied_damage.defeated_by_damage else ""
                 messages.append(
@@ -2024,6 +2306,10 @@ class ExplorationUiSession:
                 "threat_actor_ids": list(pending.threat_actor_ids),
             },
         )
+        for applied_damage in applied_damages:
+            self._maybe_prompt_concentration_check(applied_damage)
+            if self.pending_concentration_check is not None:
+                break
         self._sync_board_leds()
         return self.state_payload()
 
@@ -2625,6 +2911,8 @@ class ExplorationUiSession:
                 "message": _enemy_turn_message(result),
             },
         )
+        if result.applied_damage is not None:
+            self._maybe_prompt_concentration_check(result.applied_damage)
         self._sync_board_leds()
         return self.state_payload()
 
@@ -2761,8 +3049,10 @@ class ExplorationUiSession:
             self._expire_turn_start_effects()
             self.board_message = f"{updated_target.name} pada od ataku okazyjnego. Tura przeciwnika zakończona."
             self._record("ui_combat_enemy_opportunity_defeated_enemy", {"enemy_id": pending.target_id})
+            self._maybe_prompt_concentration_check(applied_damage)
             self._sync_board_leds()
             return self.state_payload()
+        self._maybe_prompt_concentration_check(applied_damage)
         self._add_message("Atak okazyjny", message)
         return self._advance_enemy_opportunity_or_resume_preview()
 
@@ -2935,8 +3225,10 @@ class ExplorationUiSession:
             self._expire_turn_start_effects()
             self.board_message = f"{updated_target.name} pada od przygotowanej akcji. Tura przeciwnika zakończona."
             self._record("ui_combat_ready_defeated_enemy", {"enemy_id": pending.target_id})
+            self._maybe_prompt_concentration_check(applied_damage)
             self._sync_board_leds()
             return self.state_payload()
+        self._maybe_prompt_concentration_check(applied_damage)
         self._add_message("Ready", message)
         self._resume_enemy_turn_after_reaction_prompt()
         return self.state_payload()
@@ -3224,6 +3516,23 @@ class ExplorationUiSession:
                     feedback=LedFeedback((LedFrame(target_positions, LedColor.LEGAL_ATTACK_TARGET, LedRole.TARGET),)),
                     empty_message="Help czeka na wybór sojusznika i celu w UI.",
                 )
+            if self.pending_concentration_action is not None:
+                target_positions = tuple(
+                    actor.position
+                    for actor in self.combat_state.actors
+                    if str(actor.id) in self.pending_concentration_action.target_ids
+                )
+                return BoardScanTarget(
+                    positions=target_positions,
+                    feedback=LedFeedback((LedFrame(target_positions, LedColor.ALLY, LedRole.TARGET),)),
+                    empty_message="Czar koncentracyjny czeka na wybór sojusznika.",
+                )
+            if self.pending_concentration_check is not None:
+                return BoardScanTarget(
+                    positions=(),
+                    feedback=active_actor_led_feedback(self.combat_state.initiative_order),
+                    empty_message="Rzut na koncentrację czeka na wpisanie wyniku w UI.",
+                )
             if self.pending_combat_interaction is not None:
                 position = self.pending_combat_interaction.target_position
                 scene_object_positions = ()
@@ -3366,6 +3675,9 @@ class ExplorationUiSession:
             if self.pending_ready_attack is not None:
                 self.board_message = "Najpierw rozstrzygnij albo pomiń przygotowaną akcję w UI."
                 return self.state_payload()
+            if self.pending_concentration_check is not None:
+                self.board_message = "Najpierw wpisz rzut na koncentrację w UI."
+                return self.state_payload()
             if self.pending_enemy_turn_result is not None:
                 expected = _pending_enemy_turn_target_positions(self.pending_enemy_turn_result)
                 if not expected:
@@ -3379,6 +3691,21 @@ class ExplorationUiSession:
             if actor.faction == Faction.ALLY:
                 encounter = self._active_encounter()
                 try:
+                    if self.pending_concentration_action is not None:
+                        target = next(
+                            (
+                                candidate
+                                for candidate in self.combat_state.actors
+                                if str(candidate.id) in self.pending_concentration_action.target_ids
+                                and candidate.position == selected
+                            ),
+                            None,
+                        )
+                        if target is not None:
+                            self.board_message = f"Czar koncentracyjny: {actor.name} -> {selected.as_tuple()}."
+                            return self.confirm_combat_concentration_action(target_id=str(target.id))
+                        self.board_message = "Kliknij podświetlonego sojusznika dla czaru koncentracyjnego."
+                        return self.state_payload()
                     attack_source = self._selected_attack_source(actor) if encounter is not None else None
                     attack_source = self._effective_attack_source(actor, attack_source) if attack_source is not None else None
                     if attack_source is not None and not self._actor_can_use_attack_source(actor, attack_source):
@@ -4149,6 +4476,37 @@ def create_app(session: ExplorationUiSession) -> Flask:
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
+    @app.post("/api/combat/concentration/start")
+    def api_combat_concentration_start():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(session.start_combat_concentration_action(str(data.get("action_id", ""))))
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/concentration/confirm")
+    def api_combat_concentration_confirm():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(session.confirm_combat_concentration_action(target_id=str(data.get("target_id", ""))))
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/concentration/cancel")
+    def api_combat_concentration_cancel():
+        try:
+            return jsonify(session.cancel_combat_concentration_action())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/concentration-check")
+    def api_combat_concentration_check():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(session.submit_concentration_check(natural_roll=int(data.get("natural_roll", 0))))
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
     @app.post("/api/combat/interaction/confirm")
     def api_combat_interaction_confirm():
         data = request.get_json(silent=True) or {}
@@ -4557,6 +4915,12 @@ def _effective_attack_source_for_effects(
     return attack_source_with_combat_effects(actor, source, active_combat_effects)
 
 
+def _combat_action_by_id(encounter: LoadedEncounter | None, actor: Actor, action_id: str):
+    if encounter is None:
+        return None
+    return next((action for action in encounter.combat_actions_by_actor.get(actor.id, ()) if action.id == action_id), None)
+
+
 def _combat_payload(
     state: CombatState | None,
     encounter: LoadedEncounter | None = None,
@@ -4569,6 +4933,8 @@ def _combat_payload(
     pending_area_spell: PendingAreaSpell | None = None,
     pending_combat_interaction: PendingCombatInteraction | None = None,
     pending_combat_help: PendingCombatHelp | None = None,
+    pending_concentration_action: PendingConcentrationAction | None = None,
+    pending_concentration_check: PendingConcentrationCheck | None = None,
     pending_combat_ready: PendingCombatReady | None = None,
     pending_opportunity_movement: PendingOpportunityMovement | None = None,
     pending_enemy_opportunity_attack: PendingEnemyOpportunityAttack | None = None,
@@ -4652,6 +5018,20 @@ def _combat_payload(
         "pending_area_spell": _pending_area_spell_payload(pending_area_spell, state, encounter, active_combat_effects),
         "pending_combat_interaction": pending_combat_interaction.as_payload() if pending_combat_interaction is not None else None,
         "pending_combat_help": pending_combat_help.as_payload(state, active_combat_effects) if pending_combat_help is not None else None,
+        "pending_concentration_action": (
+            pending_concentration_action.as_payload(
+                state,
+                active_combat_effects,
+                _combat_action_by_id(encounter, actor, pending_concentration_action.action_id),
+            )
+            if pending_concentration_action is not None
+            else None
+        ),
+        "pending_concentration_check": (
+            pending_concentration_check.as_payload(state, active_combat_effects)
+            if pending_concentration_check is not None
+            else None
+        ),
         "pending_combat_ready": pending_combat_ready.as_payload(state, active_combat_effects) if pending_combat_ready is not None else None,
         "pending_opportunity_movement": (
             pending_opportunity_movement.as_payload(state, active_combat_effects)
@@ -4670,6 +5050,11 @@ def _combat_payload(
 
 
 def _combat_actor_payload(actor: Actor, active_combat_effects: tuple[ActiveCombatEffect, ...] = ()) -> dict[str, object]:
+    concentration_effects = [
+        effect.as_payload()
+        for effect in active_combat_effects
+        if effect.source_actor_id == str(actor.id) and effect.kind.startswith("concentration_")
+    ]
     return {
         "id": str(actor.id),
         "name": actor.name,
@@ -4686,6 +5071,7 @@ def _combat_actor_payload(actor: Actor, active_combat_effects: tuple[ActiveComba
         ],
         "spell_save_dc": actor.spell_save_dc,
         "effects": [effect.as_payload() for effect in active_combat_effects if effect.actor_id == str(actor.id)],
+        "concentration": concentration_effects[0] if concentration_effects else None,
     }
 
 
@@ -4727,10 +5113,14 @@ def _attack_source_payload(source) -> dict[str, object]:
         "damage_type": source.damage_type,
         "ability": source.ability,
         "spell_level": source.spell_level,
+        "casting_kind": source.casting_kind.value,
+        "prepared": source.prepared,
+        "resource_label": _source_resource_label(source),
         "area": _spell_area_payload(source.area),
         "save_ability": source.save_ability,
         "save_dc": source.save_dc,
         "save_damage_on_success": source.save_damage_on_success,
+        "mechanic": action_mechanic_payload(attack_mechanic_from_source(source)),
     }
 
 
@@ -4745,7 +5135,22 @@ def _healing_source_payload(source: HealingSource) -> dict[str, object]:
         "healing_die_sides": source.healing_die_sides,
         "healing_modifier": source.healing_modifier,
         "spell_level": source.spell_level,
+        "casting_kind": source.casting_kind.value,
+        "prepared": source.prepared,
+        "resource_label": _source_resource_label(source),
+        "mechanic": action_mechanic_payload(healing_mechanic_from_source(source)),
     }
+
+
+def _source_resource_label(source) -> str:
+    casting_kind = getattr(source, "casting_kind", None)
+    casting_value = getattr(casting_kind, "value", str(casting_kind or "none"))
+    if casting_value == "cantrip":
+        return "cantrip"
+    spell_level = int(getattr(source, "spell_level", 0) or 0)
+    if casting_value == "leveled" or spell_level > 0:
+        return f"slot {spell_level}. poziomu"
+    return ""
 
 
 def _spell_area_payload(area) -> dict[str, object] | None:
@@ -4792,6 +5197,13 @@ def _combat_action_payload(action) -> dict[str, object]:
         "value": action.value,
         "ability": action.ability,
         "duration": action.duration,
+        "target_faction": action.target_faction,
+        "spell_level": action.spell_level,
+        "casting_kind": action.casting_kind.value,
+        "prepared": action.prepared,
+        "concentration": action.concentration,
+        "resource_label": _source_resource_label(action),
+        "mechanic": action_mechanic_payload(combat_action_mechanic_from_definition(action)),
     }
 
 
@@ -6381,6 +6793,10 @@ function combatMainPromptHtml(combat, finished, isAllyTurn, isEnemyTurn) {
 function combatPromptTitle(combat, finished, isAllyTurn, isEnemyTurn) {
   if (finished) return 'Walka zakończona';
   const actor = combat.current_actor || {};
+  if (combat.pending_concentration_check) {
+    const pendingActor = combat.pending_concentration_check.actor || {};
+    return `${pendingActor.name || 'Bohater'}: test koncentracji`;
+  }
   if (isEnemyTurn) {
     if (combat.pending_ready_attack) return `Tura ${actor.name || 'przeciwnika'}: Ready`;
     if (combat.pending_enemy_opportunity_attack) return `Tura ${actor.name || 'przeciwnika'}: reakcja bohatera`;
@@ -6403,6 +6819,7 @@ function combatPromptTitle(combat, finished, isAllyTurn, isEnemyTurn) {
   }
   if (isAllyTurn && combat.pending_opportunity_movement) return `Tura ${actor.name || 'gracza'}: atak okazyjny`;
   if (isAllyTurn && combat.pending_combat_help) return `Tura ${actor.name || 'gracza'}: Help`;
+  if (isAllyTurn && combat.pending_concentration_action) return `Tura ${actor.name || 'gracza'}: koncentracja`;
   if (isAllyTurn && combat.pending_combat_ready) return `Tura ${actor.name || 'gracza'}: Ready`;
   if (isAllyTurn && combat.pending_combat_interaction) return `Tura ${actor.name || 'gracza'}: wybierz interakcję`;
   if (isAllyTurn && combat.movement_preview) return `Tura ${actor.name || 'gracza'}: potwierdź ruch`;
@@ -6412,6 +6829,9 @@ function combatPromptTitle(combat, finished, isAllyTurn, isEnemyTurn) {
 function combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn) {
   if (finished) return 'Zastosuj wynik walki, żeby wrócić do eksploracji.';
   const actor = combat.current_actor || {};
+  if (combat.pending_concentration_check) {
+    return combat.pending_concentration_check.instruction || 'Rzuć CON save, żeby utrzymać koncentrację.';
+  }
   if (isEnemyTurn) {
     if (combat.pending_ready_attack) {
       const pendingReady = combat.pending_ready_attack;
@@ -6449,6 +6869,9 @@ function combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn) {
   }
   if (combat.pending_combat_help) {
     return 'Wybierz sojusznika i przeciwnika. Sojusznik dostanie przewagę na następny atak przeciw temu celowi.';
+  }
+  if (combat.pending_concentration_action) {
+    return 'Wybierz sojusznika. Czar zużyje akcję i slot, a wcześniejsza koncentracja tego aktora zostanie zakończona.';
   }
   if (combat.pending_combat_ready) {
     return 'Wybierz warunek. Akcja zostanie zużyta teraz, a atak będzie można wykonać później reakcją.';
@@ -6611,6 +7034,9 @@ function latestCombatMessageHtml() {
   return '<p class="combat-empty">Brak rezultatu w tej walce.</p>';
 }
 function combatPrimaryActionHtml(combat, isAllyTurn, isEnemyTurn) {
+  if (combat.pending_concentration_check) {
+    return pendingConcentrationCheckHtml(combat.pending_concentration_check);
+  }
   if (isEnemyTurn) {
     if (combat.pending_ready_attack) {
       return pendingReadyAttackHtml(combat.pending_ready_attack);
@@ -6650,6 +7076,9 @@ function combatPrimaryActionHtml(combat, isAllyTurn, isEnemyTurn) {
   if (combat.pending_combat_help) {
     return pendingCombatHelpHtml(combat.pending_combat_help);
   }
+  if (combat.pending_concentration_action) {
+    return pendingConcentrationActionHtml(combat.pending_concentration_action);
+  }
   if (combat.pending_combat_ready) {
     return pendingCombatReadyHtml(combat.pending_combat_ready);
   }
@@ -6679,10 +7108,12 @@ function combatPrimaryActionHtml(combat, isAllyTurn, isEnemyTurn) {
   `;
 }
 function combatActionDetailsHtml(combat, isAllyTurn, isEnemyTurn) {
+  if (combat.pending_concentration_check) return pendingConcentrationCheckDetailsHtml(combat.pending_concentration_check);
   if (isEnemyTurn) return enemyTurnDetailsHtml(combat);
   if (!isAllyTurn) return '<p class="muted">Brak dodatkowych szczegółów dla tego aktora.</p>';
   if (combat.pending_opportunity_movement) return pendingOpportunityMovementDetailsHtml(combat.pending_opportunity_movement);
   if (combat.pending_combat_help) return pendingCombatHelpDetailsHtml(combat.pending_combat_help);
+  if (combat.pending_concentration_action) return pendingConcentrationActionDetailsHtml(combat.pending_concentration_action);
   if (combat.pending_combat_ready) return pendingCombatReadyDetailsHtml(combat.pending_combat_ready);
   if (combat.pending_player_attack) return pendingPlayerAttackDetailsHtml(combat.pending_player_attack);
   if (combat.pending_player_healing) return pendingPlayerHealingDetailsHtml(combat.pending_player_healing);
@@ -6693,23 +7124,63 @@ function combatActionDetailsHtml(combat, isAllyTurn, isEnemyTurn) {
 function combatSourceButtonsHtml(combat) {
   const attacks = combat.available_attack_sources || [];
   const selectedAttack = combat.selected_attack_source_id || '';
+  const actor = combat.current_actor || {};
   const attackButtons = attacks.map(source => {
     const selected = source.id === selectedAttack ? ' selected' : '';
-    return `<button class="secondary${selected}" data-allow-busy="true" onclick="selectCombatAttackSource('${esc(source.id)}')">${esc(source.name)}</button>`;
+    const disabledReason = sourceUnavailableReason(source, actor);
+    const disabled = disabledReason ? ' disabled title="' + esc(disabledReason) + '"' : '';
+    const label = sourceButtonLabel(source);
+    return `<button class="secondary${selected}" data-allow-busy="true"${disabled} onclick="selectCombatAttackSource('${esc(source.id)}')">${label}</button>`;
   }).join('');
   const healing = combat.available_healing_sources || [];
   const selectedHealing = combat.selected_healing_source_id || '';
   const healingButtons = healing.map(source => {
     const selected = source.id === selectedHealing ? ' selected' : '';
-    return `<button class="secondary${selected}" data-allow-busy="true" onclick="selectCombatHealingSource('${esc(source.id)}')">${esc(source.name)}</button>`;
+    const disabledReason = sourceUnavailableReason(source, actor);
+    const disabled = disabledReason ? ' disabled title="' + esc(disabledReason) + '"' : '';
+    const label = sourceButtonLabel(source);
+    return `<button class="secondary${selected}" data-allow-busy="true"${disabled} onclick="selectCombatHealingSource('${esc(source.id)}')">${label}</button>`;
   }).join('');
   const actionButtons = (combat.combat_actions || []).map(action => {
     if (action.action_type === 'strength_potion') {
       return `<button class="secondary" data-allow-busy="true" onclick="useStrengthPotion('${esc(action.id)}')">${esc(action.label || action.name)}</button>`;
     }
+    if (action.action_type === 'concentration_attack_bonus') {
+      const disabledReason = sourceUnavailableReason(action, actor);
+      const disabled = disabledReason ? ' disabled title="' + esc(disabledReason) + '"' : '';
+      const label = sourceButtonLabel(action);
+      return `<button class="secondary"${disabled} data-allow-busy="true" onclick="startConcentrationAction('${esc(action.id)}')">${label}</button>`;
+    }
     return '';
   }).join('');
   return `${attackButtons}${healingButtons}${actionButtons}`;
+}
+function sourceButtonLabel(source) {
+  const resource = source.resource_label ? ` · ${esc(source.resource_label)}` : '';
+  return `${esc(source.name)}${resource}`;
+}
+function sourceUnavailableReason(source, actor) {
+  if (source.prepared === false) return 'Ten czar nie jest przygotowany.';
+  const spellLevel = Number(source.spell_level || 0);
+  if (spellLevel <= 0) return '';
+  const slots = actor.spell_slots || [];
+  const slot = slots.find(item => Number(item.level) === spellLevel);
+  if (!slot || Number(slot.remaining || 0) <= 0) return `Brak slotów czaru ${spellLevel}. poziomu.`;
+  return '';
+}
+function spellSlotSummaryHtml(actor) {
+  const slots = actor.spell_slots || [];
+  if (!slots.length) return '';
+  return slots.map(slot => `slot ${esc(slot.level)}: ${esc(slot.remaining)}/${esc(slot.maximum)}`).join(', ');
+}
+function sourceSummaryText(source) {
+  const parts = [source.name || '-'];
+  if (source.resource_label) parts.push(source.resource_label);
+  if (source.prepared === false) parts.push('nieprzygotowany');
+  if (source.save_ability) parts.push(`save ${abilityLabel(source.save_ability)} ST ${source.save_dc || '-'}`);
+  if (source.area) parts.push(`obszar ${areaShapeLabel(source.area.shape)}`);
+  if (source.range_feet) parts.push(`${source.range_feet} ft`);
+  return parts.join(' · ');
 }
 function playerTurnDetailsHtml(combat) {
   const source = combat.available_attack || {};
@@ -6727,17 +7198,20 @@ function playerTurnDetailsHtml(combat) {
   const remaining = Number(movement.remaining_feet || 0);
   const extraMovement = Number((combat.turn_action && combat.turn_action.extra_movement_feet) || 0);
   const moveCount = (movement.destinations || []).length;
+  const slotSummary = spellSlotSummaryHtml(actor);
+  const concentration = actor.concentration || null;
   const targetText = targets.length
     ? targets.map(target => `${target.name} (${target.position[0]},${target.position[1]})`).join(', ')
     : 'brak';
   return `
     <p><b>Tura gracza:</b> ${esc(actor.name || '-')}</p>
     <p><b>Akcja:</b> ${actionUsed ? 'zużyta' : 'dostępna'} | <b>Bonus action:</b> ${bonusActionUsed ? 'zużyta' : 'dostępna'} | <b>Reakcja:</b> ${reactionAvailable ? 'dostępna' : 'zużyta'} | <b>Ruch:</b> ${esc(remaining)} ft${extraMovement > 0 ? ` (+${esc(extraMovement)} Dash)` : ''}</p>
+    ${slotSummary || concentration ? `<p><b>Magia:</b> ${slotSummary ? `ST czarów ${esc(actor.spell_save_dc || '-')}; ${slotSummary}` : ''}${concentration ? ` | Koncentracja: ${esc(concentration.label || '-')}` : ''}</p>` : ''}
     <p>Niebieskie pola: ruch (${esc(moveCount)} pól). Czerwone pola: legalne cele ataku. Turkusowe pola: legalne cele leczenia. Zielone pola: interakcje sceny. Żółte pola: środek albo kierunek czaru obszarowego.</p>
     ${preview ? `<p>Wybrana ścieżka: (${esc(preview.destination[0])},${esc(preview.destination[1])}), koszt ${esc(preview.cost_feet)} ft.</p>` : ''}
     <p><b>Atak:</b> ${esc(source.name || '-')}${source.damage_hint ? `, po trafieniu rzuć ${esc(source.damage_hint)}` : ''}</p>
-    <p><b>Źródła ataku:</b> ${attackSources.map(item => `${esc(item.name)} (${esc(item.range_feet)} ft)`).join(', ') || 'brak'}</p>
-    <p><b>Leczenie:</b> ${healingSources.map(item => `${esc(item.name)} (${esc(item.healing_hint)}, ${esc(item.range_feet)} ft)`).join(', ') || 'brak'}</p>
+    <p><b>Źródła ataku:</b> ${attackSources.map(sourceSummaryText).map(esc).join(', ') || 'brak'}</p>
+    <p><b>Leczenie:</b> ${healingSources.map(item => `${sourceSummaryText(item)}${item.healing_hint ? ` · ${item.healing_hint}` : ''}`).map(esc).join(', ') || 'brak'}</p>
     <p><b>Cele w zasięgu:</b> ${esc(targetText)}</p>
     <p><b>Pola czaru obszarowego:</b> ${areaPositions.map(position => `(${esc(position[0])},${esc(position[1])})`).join(', ') || 'brak'}</p>
     <p><b>Ranni sojusznicy w zasięgu:</b> ${healingTargets.map(target => `${esc(target.name)} (${esc(target.position[0])},${esc(target.position[1])})`).join(', ') || 'brak'}</p>
@@ -6880,6 +7354,51 @@ function pendingCombatHelpDetailsHtml(pending) {
     <p><b>Legalni sojusznicy:</b> ${allies.map(actor => esc(actor.name)).join(', ') || 'brak'}</p>
     <p><b>Cele w zasięgu 5 ft pomagającego:</b> ${targets.map(actor => `${esc(actor.name)} (${esc(actor.position[0])},${esc(actor.position[1])})`).join(', ') || 'brak'}</p>
     <p>Efekt: wybrany sojusznik ma przewagę na następny atak przeciw wybranemu celowi.</p>
+  `;
+}
+function pendingConcentrationActionHtml(pending) {
+  const action = pending.action || {};
+  const targets = pending.targets || [];
+  const targetOptions = targets.map(actor => `<option value="${esc(actor.id)}">${esc(actor.name)} (${esc(actor.position[0])},${esc(actor.position[1])})</option>`).join('');
+  return `
+    <p>${esc(action.label || action.name || 'Czar koncentracyjny')}: wybierz sojusznika dla efektu.</p>
+    <div class="row">
+      <label>Cel: <select id="combat-concentration-target">${targetOptions}</select></label>
+      <button data-allow-busy="true" onclick="confirmConcentrationAction()">Potwierdź czar</button>
+      <button class="secondary" data-allow-busy="true" onclick="cancelConcentrationAction()">Anuluj</button>
+    </div>
+  `;
+}
+function pendingConcentrationActionDetailsHtml(pending) {
+  const caster = pending.caster || {};
+  const action = pending.action || {};
+  const targets = pending.targets || [];
+  return `
+    <p><b>Rzucający:</b> ${esc(caster.name || '-')}</p>
+    <p><b>Czar:</b> ${esc(action.label || action.name || '-')} ${action.resource_label ? `(${esc(action.resource_label)})` : ''}</p>
+    <p><b>Koncentracja:</b> ${action.concentration ? 'tak' : 'nie'} | <b>Efekt:</b> ${esc(signedNumber(action.value || 0))} do ataku celu</p>
+    <p><b>Legalni sojusznicy:</b> ${targets.map(actor => `${esc(actor.name)} (${esc(actor.position[0])},${esc(actor.position[1])})`).join(', ') || 'brak'}</p>
+  `;
+}
+function pendingConcentrationCheckHtml(pending) {
+  const actor = pending.actor || {};
+  const modifier = Number(pending.modifier || 0);
+  return `
+    <p>${esc(actor.name || 'Bohater')} utrzymuje koncentrację: ST ${esc(pending.dc)}.</p>
+    <div class="row">
+      <label>Wynik d20: <input id="concentration-check-roll" type="number" min="1" max="20" value="10"></label>
+      <button onclick="submitConcentrationCheck()">Zapisz rzut</button>
+    </div>
+    <p class="muted">Premia CON: ${esc(signedNumber(modifier))}. Sukces utrzymuje efekt, porażka go kończy.</p>
+  `;
+}
+function pendingConcentrationCheckDetailsHtml(pending) {
+  const actor = pending.actor || {};
+  const effects = pending.effects || [];
+  return `
+    <p><b>Koncentrujący:</b> ${esc(actor.name || '-')}</p>
+    <p><b>Obrażenia:</b> ${esc(pending.damage)} | <b>ST:</b> ${esc(pending.dc)} | <b>Premia CON:</b> ${esc(signedNumber(pending.modifier || 0))}</p>
+    <p><b>Efekty zagrożone:</b> ${effects.map(effect => esc(effect.label || effect.kind || effect.id)).join(', ') || 'brak'}</p>
   `;
 }
 function pendingCombatReadyHtml(pending) {
@@ -7174,6 +7693,14 @@ function saveSuccessLabel(value) {
   if (value === 'half') return 'połowa obrażeń przy sukcesie';
   return 'brak obrażeń przy sukcesie';
 }
+function areaShapeLabel(shape) {
+  const labels = {
+    line: 'linia',
+    cone: 'stożek',
+    radius: 'okrąg'
+  };
+  return labels[shape] || shape || '-';
+}
 function defaultDamageValue(source) {
   if (!source) return 0;
   if (source.damage_fixed !== null && source.damage_fixed !== undefined) return Number(source.damage_fixed) + Number(source.damage_modifier || 0);
@@ -7262,7 +7789,7 @@ function startSession() { api('/api/start', {}, 'Rozpoczynam sesję...'); }
 function isAllyCombatTurnActive() {
   const combat = state && state.combat ? state.combat : null;
   const actor = combat && combat.current_actor ? combat.current_actor : {};
-  return Boolean(combat && combat.status === 'active' && actor.faction === 'ally' && !combat.enemy_turn_preview && !combat.pending_player_attack && !combat.pending_player_healing && !combat.pending_area_spell && !combat.pending_combat_interaction && !combat.pending_combat_help && !combat.pending_combat_ready);
+  return Boolean(combat && combat.status === 'active' && actor.faction === 'ally' && !combat.enemy_turn_preview && !combat.pending_player_attack && !combat.pending_player_healing && !combat.pending_area_spell && !combat.pending_combat_interaction && !combat.pending_combat_help && !combat.pending_concentration_action && !combat.pending_concentration_check && !combat.pending_combat_ready);
 }
 async function scanBoard() {
   if (boardScanInFlight) return;
@@ -7345,6 +7872,16 @@ function submitAreaSpellDamage() {
 }
 function cancelAreaSpell() { api('/api/combat/area-spell/cancel', {}, 'Anuluję czar obszarowy...'); }
 function useStrengthPotion(actionId) { api('/api/combat/strength-potion', {action_id: actionId}, 'Używam eliksiru...'); }
+function startConcentrationAction(actionId) { api('/api/combat/concentration/start', {action_id: actionId}, 'Przygotowuję czar koncentracyjny...'); }
+function confirmConcentrationAction() {
+  const target = document.getElementById('combat-concentration-target');
+  api('/api/combat/concentration/confirm', {target_id: target ? target.value : ''}, 'Potwierdzam czar koncentracyjny...');
+}
+function cancelConcentrationAction() { api('/api/combat/concentration/cancel', {}, 'Anuluję czar koncentracyjny...'); }
+function submitConcentrationCheck() {
+  const roll = document.getElementById('concentration-check-roll');
+  api('/api/combat/concentration-check', {natural_roll: Number(roll ? roll.value : 0)}, 'Rozstrzygam koncentrację...');
+}
 function submitCombatMove() {
   const destination = document.getElementById('combat-move-destination');
   const parts = destination && destination.value ? destination.value.split(',') : ['0', '0'];
@@ -7427,6 +7964,7 @@ function triggerPrimaryAction() {
     if (isVisible('encounter-panel')) {
     if (combat && combat.status === 'finished') { resolveCombatOutcome(); return true; }
     if (combat && combat.status === 'active') {
+      if (combat.pending_concentration_check) { submitConcentrationCheck(); return true; }
       if (combat.enemy_turn_result) { confirmEnemyTurnResult(); return true; }
       if (combat.pending_ready_attack) {
         if (combat.pending_ready_attack.stage === 'choice') startReadyAttack();
@@ -7442,6 +7980,7 @@ function triggerPrimaryAction() {
       }
       if (combat.pending_opportunity_movement) { confirmOpportunityMovement(); return true; }
       if (combat.pending_combat_help) { confirmCombatHelp(); return true; }
+      if (combat.pending_concentration_action) { confirmConcentrationAction(); return true; }
       if (combat.pending_combat_ready) { confirmCombatReady(); return true; }
       if (combat.pending_combat_interaction) {
         const options = combat.pending_combat_interaction.options || [];
