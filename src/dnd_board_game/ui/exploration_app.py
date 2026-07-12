@@ -36,6 +36,7 @@ from dnd_board_game.combat import (
     InitiativePrompt,
     SpellAreaShape,
     SpellSaveResult,
+    TurnActionState,
     EnvironmentSetupEntry,
     EnvironmentSetupType,
     SceneFlags,
@@ -69,6 +70,7 @@ from dnd_board_game.combat import (
     legal_healing_targets,
     legal_area_centers,
     can_consume_spell_resource,
+    consume_spell_resource,
     direction_anchor_positions,
     opportunity_attackers_for_movement,
     replace_actor,
@@ -105,8 +107,12 @@ from dnd_board_game.exploration import (
     ExplorationZone,
     PartyCheckInput,
     PendingEncounter,
+    active_option_bonuses_for_actor,
     apply_exploration_effect,
+    actors_matching_challenge_option,
+    available_challenge_options,
     available_exploration_zones,
+    available_challenge_options_for_actors,
     challenge_for_zone,
     challenge_state_for,
     exploration_zone_feedback,
@@ -117,6 +123,7 @@ from dnd_board_game.exploration import (
     set_party_zone,
     visible_exploration_points,
     visible_exploration_zones,
+    option_roll_modifiers_for_actor,
 )
 from dnd_board_game.llm import (
     GmActionFlow,
@@ -134,7 +141,8 @@ from dnd_board_game.llm import (
     validate_npc_interaction_proposal,
 )
 from dnd_board_game.hardware import BoardLedAdapter, LedColor, LedFeedback, LedFrame, LedRole, led_color_name_pl, movement_led_feedback
-from dnd_board_game.rules import D20RollInput, D20RollRequest, RollModifier, RollModifierType, ability_modifier, resolve_d20_roll, roll_instruction
+from dnd_board_game.inventory import break_inventory_item, consume_inventory_item, has_inventory_quantity, inventory_item_payload
+from dnd_board_game.rules import D20RollInput, D20RollRequest, RollMode, RollModifier, RollModifierType, ability_modifier, resolve_d20_roll, roll_instruction
 from dnd_board_game.scenarios import (
     LoadedEncounter,
     LoadedExploration,
@@ -154,6 +162,7 @@ class PendingKind(StrEnum):
 class PendingStage(StrEnum):
     DECISION = "decision"
     ROLL = "roll"
+    BREAKAGE = "breakage"
 
 
 class UiFlowStage(StrEnum):
@@ -184,6 +193,10 @@ class PendingInteraction:
     resources: tuple[ExplorationResource, ...] = ()
     point: ExplorationPoint | None = None
     check_plan: ExplorationCheckPlan | None = None
+    breakage_actor_id: str | None = None
+    breakage_item_id: str | None = None
+    breakage_item_label: str = ""
+    breakage_chance_percent: int | None = None
 
     def as_payload(self) -> dict[str, object]:
         payload: dict[str, object] = {
@@ -203,6 +216,13 @@ class PendingInteraction:
             payload["point_name"] = self.point.name
         if self.check_plan is not None:
             payload["check_plan"] = self.check_plan.as_payload()
+        if self.stage == PendingStage.BREAKAGE:
+            payload["breakage"] = {
+                "actor_id": self.breakage_actor_id,
+                "item_id": self.breakage_item_id,
+                "item_label": self.breakage_item_label,
+                "chance_percent": self.breakage_chance_percent,
+            }
         return payload
 
 
@@ -334,6 +354,7 @@ class PendingPlayerAttack:
     source_id: str = ""
     stage: str = "confirm_attack"
     natural_roll: int | None = None
+    natural_rolls: tuple[int, ...] = ()
     total: int | None = None
     hit: bool | None = None
     critical: bool = False
@@ -481,6 +502,7 @@ class PendingEnemyOpportunityAttack:
     current_index: int = 0
     stage: str = "choice"
     natural_roll: int | None = None
+    natural_rolls: tuple[int, ...] = ()
     total: int | None = None
     hit: bool | None = None
     critical: bool = False
@@ -498,6 +520,7 @@ class PendingReadyAttack:
     trigger: str
     stage: str = "choice"
     natural_roll: int | None = None
+    natural_rolls: tuple[int, ...] = ()
     total: int | None = None
     hit: bool | None = None
     critical: bool = False
@@ -639,10 +662,10 @@ class ExplorationUiSession:
             "travel_options": [_zone_payload(zone, self._scenario_asset_root()) for zone in self.travel_options()],
             "visible_points": [_point_payload(point) for point in visible_exploration_points(self.state.points)],
             "current_zone_points": [_point_payload(point) for point in current_zone_points],
-            "active_challenge": _challenge_payload(self.state, active_challenge) if active_challenge else None,
+            "active_challenge": _challenge_payload(self.state, active_challenge, self.exploration.actors) if active_challenge else None,
             "active_point": _point_payload(self.active_point) if self.active_point else None,
             "resources": [_resource_payload(resource) for resource in self.state.resources if resource.id in self.state.inventory_resource_ids],
-            "actors": [{"id": str(actor.id), "name": actor.name} for actor in self.exploration.actors],
+            "actors": [_exploration_actor_payload(actor) for actor in self.exploration.actors],
             "scene_status": scene_status,
             "flags": [{"key": key, "value": value} for key, value in self.state.flags.values],
             "messages": [message.as_payload() for message in self.messages],
@@ -1285,18 +1308,24 @@ class ExplorationUiSession:
         )
         if action is None or action.action_type != "strength_potion":
             raise ValueError("Nieznana akcja eliksiru.")
+        if action.source_item_id is not None and not has_inventory_quantity(actor, action.source_item_id):
+            raise ValueError("Ten przedmiot został już zużyty.")
         action_result = use_turn_action(self.combat_state)
         if not action_result.accepted:
             raise ValueError(action_result.message)
         self.combat_state = action_result.state
+        actor_after_action = combat_current_actor(self.combat_state)
+        if action.source_item_id is not None:
+            actor_after_action = consume_inventory_item(actor_after_action, action.source_item_id)
+            self.combat_state = replace_actor(self.combat_state, actor_after_action)
         self.active_combat_effects = tuple(
             effect
             for effect in self.active_combat_effects
-            if not (effect.actor_id == str(actor.id) and effect.kind == "strength_potion")
+            if not (effect.actor_id == str(actor_after_action.id) and effect.kind == "strength_potion")
         ) + (
             ActiveCombatEffect(
-                id=f"strength_potion:{actor.id}:{action.id}",
-                actor_id=str(actor.id),
+                id=f"strength_potion:{actor_after_action.id}:{action.id}",
+                actor_id=str(actor_after_action.id),
                 kind="strength_potion",
                 label=action.label,
                 object_id=f"combat_action:{action.id}",
@@ -1304,9 +1333,12 @@ class ExplorationUiSession:
             ),
         )
         self._clear_player_pending_choices()
-        self.board_message = f"{actor.name} wypija {action.label}. Ataki i obrażenia z Siły mają {action.value:+d} do następnej tury."
+        self.board_message = f"{actor_after_action.name} wypija {action.label}. Ataki i obrażenia z Siły mają {action.value:+d} do następnej tury."
         self._add_message("Eliksir", self.board_message)
-        self._record("ui_combat_strength_potion_used", {"actor_id": str(actor.id), "action_id": action.id, "value": action.value})
+        self._record(
+            "ui_combat_strength_potion_used",
+            {"actor_id": str(actor_after_action.id), "action_id": action.id, "source_item_id": action.source_item_id, "value": action.value},
+        )
         self._sync_board_leds()
         return self.state_payload()
 
@@ -1535,7 +1567,7 @@ class ExplorationUiSession:
             },
         )
 
-    def submit_player_attack(self, *, target_id: str, natural_roll: int, damage: int = 0) -> dict[str, object]:
+    def submit_player_attack(self, *, target_id: str, natural_roll: int, damage: int = 0, natural_roll_2: int | None = None) -> dict[str, object]:
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
         if self.combat_state.status.value != "active":
@@ -1559,7 +1591,7 @@ class ExplorationUiSession:
             raise ValueError(f"Nieznany cel ataku: {selected.selected_target.id}.")
         source = self._effective_attack_source(attacker, source, target_actor)
         declaration = AttackDeclaration(attacker=attacker, target=selected.selected_target, source=source)
-        attack_roll = resolve_d20_roll(D20RollInput(source.attack_roll_request, natural_roll))
+        attack_roll = resolve_d20_roll(_manual_d20_input(source.attack_roll_request, natural_roll, natural_roll_2))
         resource_use = self.action_resource_resolver.consume_action_and_source_resource(
             self.combat_state,
             attacker,
@@ -1594,6 +1626,7 @@ class ExplorationUiSession:
                 "attacker_id": str(attacker.id),
                 "target_id": selected.selected_target.id,
                 "natural_roll": attack_roll.natural_roll,
+                "natural_rolls": list(attack_roll.natural_rolls),
                 "total": attack_roll.total,
                 "hit": resolution.hit,
                 "critical": resolution.critical,
@@ -1898,7 +1931,7 @@ class ExplorationUiSession:
         self._sync_board_leds()
         return self.state_payload()
 
-    def submit_player_attack_roll(self, *, natural_roll: int) -> dict[str, object]:
+    def submit_player_attack_roll(self, *, natural_roll: int, natural_roll_2: int | None = None) -> dict[str, object]:
         pending = self.pending_player_attack
         if pending is None or pending.stage != "attack_roll":
             raise ValueError("Nie ma oczekującego rzutu ataku gracza.")
@@ -1921,7 +1954,7 @@ class ExplorationUiSession:
             raise ValueError(f"Nieznany cel ataku: {selected.selected_target.id}.")
         source = self._effective_attack_source(attacker, source, target_actor)
         declaration = AttackDeclaration(attacker=attacker, target=selected.selected_target, source=source)
-        attack_roll = resolve_d20_roll(D20RollInput(source.attack_roll_request, int(natural_roll)))
+        attack_roll = resolve_d20_roll(_manual_d20_input(source.attack_roll_request, natural_roll, natural_roll_2))
         resource_use = self.action_resource_resolver.consume_action_and_source_resource(
             self.combat_state,
             attacker,
@@ -1946,6 +1979,7 @@ class ExplorationUiSession:
                     "attacker_id": str(attacker.id),
                     "target_id": selected.selected_target.id,
                     "natural_roll": attack_roll.natural_roll,
+                    "natural_rolls": list(attack_roll.natural_rolls),
                     "total": attack_roll.total,
                     "hit": False,
                     "critical": resolution.critical,
@@ -1957,6 +1991,7 @@ class ExplorationUiSession:
             pending,
             stage="damage_roll",
             natural_roll=attack_roll.natural_roll,
+            natural_rolls=attack_roll.natural_rolls,
             total=attack_roll.total,
             hit=True,
             critical=resolution.critical,
@@ -1968,6 +2003,7 @@ class ExplorationUiSession:
                 "attacker_id": str(attacker.id),
                 "target_id": selected.selected_target.id,
                 "natural_roll": attack_roll.natural_roll,
+                "natural_rolls": list(attack_roll.natural_rolls),
                 "total": attack_roll.total,
                 "hit": True,
                 "critical": resolution.critical,
@@ -2253,7 +2289,7 @@ class ExplorationUiSession:
             updated_state = reaction.state
             actor = next(candidate for candidate in updated_state.actors if str(candidate.id) == pending.actor_id)
             source = attack_source_with_target_combat_effects(attacker, actor, source, self.active_combat_effects)
-            attack_roll = resolve_d20_roll(D20RollInput(source.attack_roll_request, self.encounter_rng.randint(1, 20)))
+            attack_roll = resolve_d20_roll(_automatic_d20_input(source.attack_roll_request, self.encounter_rng))
             declaration = AttackDeclaration(attacker=attacker, target=actor_as_combat_target(actor), source=source)
             resolution = resolve_attack(declaration, attack_roll, ActionUse.ACTION_AVAILABLE)
             self.active_combat_effects = consume_next_attack_effects(
@@ -2370,14 +2406,14 @@ class ExplorationUiSession:
                 kind="dodge_until_next_turn",
                 label="Unik",
                 object_id="combat_action:dodge",
-                value=-2,
+                value=0,
             ),
         )
         self._clear_player_pending_choices()
         self.selected_combat_movement_path = None
-        message = f"Unik: ataki przeciwko {actor.name} mają -2 do początku następnej tury tego aktora."
+        message = f"Unik: ataki przeciwko {actor.name} mają utrudnienie do początku następnej tury tego aktora."
         self._add_message("Unik", message)
-        self._record("ui_combat_dodge", {"actor_id": str(actor.id), "attack_penalty": -2})
+        self._record("ui_combat_dodge", {"actor_id": str(actor.id), "attack_mode": "disadvantage"})
         self._sync_board_leds()
         return self.state_payload()
 
@@ -2739,11 +2775,14 @@ class ExplorationUiSession:
             return
         encounter = self._active_encounter()
         scene_objects = encounter.scene_objects if encounter is not None else ()
+        before = self.active_combat_effects
         self.combat_state, self.active_combat_effects = expire_invalid_combat_effects(
             self.combat_state,
             scene_objects,
             self.active_combat_effects,
         )
+        if before != self.active_combat_effects:
+            self._add_expired_effects_message("Wygasły efekty pozycyjne", before, self.active_combat_effects)
 
     def _expire_turn_start_effects(self) -> None:
         if self.combat_state is None or not self.active_combat_effects or self.combat_state.status.value != "active":
@@ -2752,7 +2791,7 @@ class ExplorationUiSession:
         before = self.active_combat_effects
         self.active_combat_effects = expire_turn_start_effects(self.active_combat_effects, str(actor.id))
         if before != self.active_combat_effects:
-            self._add_message("Efekty", f"Wygasają efekty początku tury: {actor.name}.")
+            self._add_expired_effects_message(f"Wygasły efekty początku tury: {actor.name}", before, self.active_combat_effects)
 
     def _expire_turn_end_effects(self, actor: Actor) -> None:
         if not self.active_combat_effects:
@@ -2760,7 +2799,18 @@ class ExplorationUiSession:
         before = self.active_combat_effects
         self.active_combat_effects = expire_turn_end_effects(self.active_combat_effects, str(actor.id))
         if before != self.active_combat_effects:
-            self._add_message("Efekty", f"Wygasają efekty końca tury: {actor.name}.")
+            self._add_expired_effects_message(f"Wygasły efekty końca tury: {actor.name}", before, self.active_combat_effects)
+
+    def _add_expired_effects_message(
+        self,
+        prefix: str,
+        before: tuple[ActiveCombatEffect, ...],
+        after: tuple[ActiveCombatEffect, ...],
+    ) -> None:
+        after_ids = {effect.id for effect in after}
+        expired = [effect for effect in before if effect.id not in after_ids]
+        labels = ", ".join(effect.label for effect in expired) or "efekt"
+        self._add_message("Efekty", f"{prefix}: {labels}.")
 
     def resolve_enemy_turn(self) -> dict[str, object]:
         if self.combat_state is None:
@@ -2951,7 +3001,7 @@ class ExplorationUiSession:
         )
         return self._advance_enemy_opportunity_or_resume_preview()
 
-    def submit_enemy_opportunity_attack_roll(self, *, natural_roll: int) -> dict[str, object]:
+    def submit_enemy_opportunity_attack_roll(self, *, natural_roll: int, natural_roll_2: int | None = None) -> dict[str, object]:
         pending = self.pending_enemy_opportunity_attack
         if pending is None or pending.stage != "attack_roll":
             raise ValueError("Nie ma oczekującego rzutu ataku okazyjnego.")
@@ -2973,7 +3023,7 @@ class ExplorationUiSession:
         attacker = self._actor_by_string_id(pending.attacker_id)
         target = self._actor_by_string_id(pending.target_id)
         source = self._effective_attack_source(attacker, source, target)
-        attack_roll = resolve_d20_roll(D20RollInput(source.attack_roll_request, int(natural_roll)))
+        attack_roll = resolve_d20_roll(_manual_d20_input(source.attack_roll_request, natural_roll, natural_roll_2))
         declaration = AttackDeclaration(attacker=attacker, target=actor_as_combat_target(target), source=source)
         resolution = resolve_attack(declaration, attack_roll, ActionUse.ACTION_AVAILABLE)
         self.active_combat_effects = consume_next_attack_effects(
@@ -2988,6 +3038,7 @@ class ExplorationUiSession:
                 "attacker_id": pending.attacker_id,
                 "target_id": pending.target_id,
                 "natural_roll": attack_roll.natural_roll,
+                "natural_rolls": list(attack_roll.natural_rolls),
                 "total": attack_roll.total,
                 "hit": resolution.hit,
                 "critical": resolution.critical,
@@ -3000,6 +3051,7 @@ class ExplorationUiSession:
             pending,
             stage="damage_roll",
             natural_roll=attack_roll.natural_roll,
+            natural_rolls=attack_roll.natural_rolls,
             total=attack_roll.total,
             hit=True,
             critical=resolution.critical,
@@ -3123,7 +3175,7 @@ class ExplorationUiSession:
         self._resume_enemy_turn_after_reaction_prompt()
         return self.state_payload()
 
-    def submit_ready_attack_roll(self, *, natural_roll: int) -> dict[str, object]:
+    def submit_ready_attack_roll(self, *, natural_roll: int, natural_roll_2: int | None = None) -> dict[str, object]:
         pending = self.pending_ready_attack
         if pending is None or pending.stage != "attack_roll":
             raise ValueError("Nie ma oczekującego rzutu przygotowanej akcji.")
@@ -3145,7 +3197,7 @@ class ExplorationUiSession:
         attacker = self._actor_by_string_id(pending.readied_actor_id)
         target = self._actor_by_string_id(pending.target_id)
         source = self._effective_attack_source(attacker, source, target)
-        attack_roll = resolve_d20_roll(D20RollInput(source.attack_roll_request, int(natural_roll)))
+        attack_roll = resolve_d20_roll(_manual_d20_input(source.attack_roll_request, natural_roll, natural_roll_2))
         declaration = AttackDeclaration(attacker=attacker, target=actor_as_combat_target(target), source=source)
         resolution = resolve_attack(declaration, attack_roll, ActionUse.ACTION_AVAILABLE)
         self.active_combat_effects = self._consume_ready_attack_effect(pending.effect_id)
@@ -3161,6 +3213,7 @@ class ExplorationUiSession:
                 "attacker_id": pending.readied_actor_id,
                 "target_id": pending.target_id,
                 "natural_roll": attack_roll.natural_roll,
+                "natural_rolls": list(attack_roll.natural_rolls),
                 "total": attack_roll.total,
                 "hit": resolution.hit,
                 "critical": resolution.critical,
@@ -3175,6 +3228,7 @@ class ExplorationUiSession:
             pending,
             stage="damage_roll",
             natural_roll=attack_roll.natural_roll,
+            natural_rolls=attack_roll.natural_rolls,
             total=attack_roll.total,
             hit=True,
             critical=resolution.critical,
@@ -3513,7 +3567,7 @@ class ExplorationUiSession:
                 )
                 return BoardScanTarget(
                     positions=(),
-                    feedback=LedFeedback((LedFrame(target_positions, LedColor.LEGAL_ATTACK_TARGET, LedRole.TARGET),)),
+                    feedback=LedFeedback((LedFrame(target_positions, LedColor.LEGAL_ATTACK_TARGET, LedRole.ENEMY),)),
                     empty_message="Help czeka na wybór sojusznika i celu w UI.",
                 )
             if self.pending_concentration_action is not None:
@@ -3524,7 +3578,7 @@ class ExplorationUiSession:
                 )
                 return BoardScanTarget(
                     positions=target_positions,
-                    feedback=LedFeedback((LedFrame(target_positions, LedColor.ALLY, LedRole.TARGET),)),
+                    feedback=LedFeedback((LedFrame(target_positions, LedColor.ALLY, LedRole.ALLY),)),
                     empty_message="Czar koncentracyjny czeka na wybór sojusznika.",
                 )
             if self.pending_concentration_check is not None:
@@ -3828,6 +3882,7 @@ class ExplorationUiSession:
             player_action=text,
             declaration_thread=tuple(self.declaration_thread[-8:]),
             active_preparation_effects=tuple(self.active_preparation_effects),
+            actors=self.exploration.actors,
         )
         analysis = _analyze(client, request_data)
         validate_gm_declaration_analysis(analysis, request_data)
@@ -3935,7 +3990,12 @@ class ExplorationUiSession:
     def _accept_challenge(self) -> dict[str, object]:
         assert self.pending is not None and self.pending.option is not None and self.pending.challenge is not None
         option = self.pending.option
-        plan = _challenge_check_plan(option, self.lead_actor_id)
+        lead_actor_id = self.lead_actor_id
+        matching_actors = actors_matching_challenge_option(self.exploration.actors, option)
+        if matching_actors and not any(str(actor.id) == lead_actor_id for actor in matching_actors):
+            lead_actor_id = str(matching_actors[0].id)
+            self.selected_lead_actor_id = lead_actor_id
+        plan = _challenge_check_plan(option, lead_actor_id, self.exploration.actors)
         self.pending = replace(self.pending, stage=PendingStage.ROLL, check_plan=plan)
         self._add_message("Rzut", f"Wpisz wyniki rzutów. {_check_plan_text(self.exploration.actors, plan)}")
         return self.state_payload()
@@ -3960,6 +4020,12 @@ class ExplorationUiSession:
         return self.selected_lead_actor_id
 
     def resolve_rolls(self, raw_rolls: dict[str, object]) -> dict[str, object]:
+        if self.pending is not None and self.pending.stage == PendingStage.BREAKAGE:
+            self._resolve_breakage_roll(raw_rolls)
+            self.pending = None
+            self._refresh_pending_encounter()
+            self._sync_board_leds()
+            return self.state_payload()
         if self.pending is None or self.pending.stage != PendingStage.ROLL or self.pending.check_plan is None:
             raise ValueError("Brak oczekującego rzutu.")
         plan = self.pending.check_plan
@@ -3977,7 +4043,8 @@ class ExplorationUiSession:
             self._resolve_challenge_roll(check_result)
         else:
             self._resolve_npc_roll(check_result)
-        self.pending = None
+        if self.pending is not None and self.pending.stage != PendingStage.BREAKAGE:
+            self.pending = None
         self._refresh_pending_encounter()
         self._sync_board_leds()
         return self.state_payload()
@@ -3999,6 +4066,7 @@ class ExplorationUiSession:
         )
         self.state = result.state
         self._add_message("Wynik podejścia", result.message)
+        self._consume_active_exploration_bonuses(check_result.selected_actor, self.pending.option)
         self._record(
             "ui_challenge_resolved",
             {
@@ -4010,8 +4078,10 @@ class ExplorationUiSession:
                 "noise_added": result.noise_added,
                 "complications_added": list(result.complications_added),
                 "resource_id": resource.id if resource else None,
+                "option_bonuses": list(check_result.plan.option_bonus_payloads),
             },
         )
+        self._queue_breakage_check_if_needed(result, check_result.selected_actor)
         if result.completed:
             revealed_points = self._reveal_completed_challenge_points(self.pending.challenge)
             available_after = {zone.id for zone in available_exploration_zones(self.state)}
@@ -4048,6 +4118,98 @@ class ExplorationUiSession:
             }
             self.ui_flow_stage = UiFlowStage.INTERACTION_RESULT
             self.preview_zone_id = ""
+
+    def _consume_active_exploration_bonuses(self, actor: Actor, option: ExplorationChallengeOption) -> None:
+        current_actor = next((candidate for candidate in self.exploration.actors if candidate.id == actor.id), actor)
+        for bonus in active_option_bonuses_for_actor(current_actor, option):
+            if bonus.source_type == "spell":
+                spell_use = consume_spell_resource(current_actor, bonus.spell_level)
+                current_actor = spell_use.actor_after
+                self.exploration = self._replace_exploration_actor(current_actor)
+                if spell_use.consumed:
+                    self._add_message("Zużyty slot czaru", f"{bonus.label}: zużyto slot {bonus.spell_level}. poziomu.")
+                    self._record(
+                        "ui_exploration_spell_slot_consumed",
+                        {
+                            "actor_id": str(actor.id),
+                            "spell_id": bonus.source_id,
+                            "spell_level": bonus.spell_level,
+                            "option_id": option.id,
+                        },
+                    )
+                continue
+            if bonus.source_type != "item" or not bonus.consume:
+                continue
+            current_actor = consume_inventory_item(current_actor, bonus.source_id)
+            self.exploration = self._replace_exploration_actor(current_actor)
+            self._add_message("Zużyty przedmiot", f"{bonus.label}: zasób został zużyty.")
+            self._record(
+                "ui_exploration_item_consumed",
+                {"actor_id": str(actor.id), "item_id": bonus.source_id, "option_id": option.id},
+            )
+
+    def _queue_breakage_check_if_needed(self, result, actor: Actor) -> None:
+        if self.pending is None or self.pending.option is None or not result.critical_failure:
+            return
+        current_actor = next((candidate for candidate in self.exploration.actors if candidate.id == actor.id), actor)
+        for bonus in active_option_bonuses_for_actor(current_actor, self.pending.option):
+            if bonus.source_type != "item" or bonus.breakage_risk is None:
+                continue
+            if bonus.breakage_risk.trigger != "critical_failure":
+                continue
+            self.pending = replace(
+                self.pending,
+                stage=PendingStage.BREAKAGE,
+                breakage_actor_id=str(actor.id),
+                breakage_item_id=bonus.source_id,
+                breakage_item_label=bonus.label,
+                breakage_chance_percent=bonus.breakage_risk.chance_percent,
+            )
+            self._add_message(
+                "Sprawdź trwałość przedmiotu",
+                f"Krytyczna porażka. Rzuć k100 dla: {bonus.label}. "
+                f"Wynik {bonus.breakage_risk.chance_percent} lub mniej oznacza uszkodzenie.",
+            )
+            self._record(
+                "ui_exploration_item_breakage_queued",
+                {
+                    "actor_id": str(actor.id),
+                    "item_id": bonus.source_id,
+                    "chance_percent": bonus.breakage_risk.chance_percent,
+                },
+            )
+            return
+
+    def _resolve_breakage_roll(self, raw_rolls: dict[str, object]) -> None:
+        assert self.pending is not None
+        actor_id = self.pending.breakage_actor_id
+        item_id = self.pending.breakage_item_id
+        chance = self.pending.breakage_chance_percent
+        if actor_id is None or item_id is None or chance is None:
+            raise ValueError("Brak danych testu trwałości przedmiotu.")
+        if actor_id not in raw_rolls:
+            raise ValueError("Brakuje wyniku k100 dla testu trwałości.")
+        roll = int(raw_rolls[actor_id])
+        if roll < 1 or roll > 100:
+            raise ValueError("Test trwałości wymaga wyniku k100 od 1 do 100.")
+        actor = next((candidate for candidate in self.exploration.actors if str(candidate.id) == actor_id), None)
+        if actor is None:
+            raise ValueError(f"Nieznany aktor testu trwałości: {actor_id}.")
+        broken = roll <= chance
+        if broken:
+            self.exploration = self._replace_exploration_actor(break_inventory_item(actor, item_id))
+            message = f"{self.pending.breakage_item_label} psuje się. Nie daje już premii i nie spełnia wymagań."
+        else:
+            message = f"{self.pending.breakage_item_label} wytrzymuje. Przedmiot nadal działa."
+        self._add_message("Wynik trwałości przedmiotu", f"k100 {roll} / próg {chance}. {message}")
+        self._record(
+            "ui_exploration_item_breakage_resolved",
+            {"actor_id": actor_id, "item_id": item_id, "roll": roll, "chance_percent": chance, "broken": broken},
+        )
+
+    def _replace_exploration_actor(self, updated_actor: Actor) -> LoadedExploration:
+        actors = tuple(updated_actor if actor.id == updated_actor.id else actor for actor in self.exploration.actors)
+        return replace(self.exploration, actors=actors)
 
     def _resolve_npc_roll(self, check_result) -> None:
         assert self.pending is not None
@@ -4180,10 +4342,20 @@ class ExplorationUiSession:
         }
 
     def required_rolls_payload(self) -> list[dict[str, object]]:
+        if self.pending is not None and self.pending.stage == PendingStage.BREAKAGE and self.pending.breakage_actor_id is not None:
+            actor = next((candidate for candidate in self.exploration.actors if str(candidate.id) == self.pending.breakage_actor_id), None)
+            return [
+                {
+                    "actor_id": self.pending.breakage_actor_id,
+                    "actor_name": actor.name if actor is not None else self.pending.breakage_actor_id,
+                    "die_sides": 100,
+                    "label": "k100 trwałości",
+                }
+            ]
         if self.pending is None or self.pending.stage != PendingStage.ROLL or self.pending.check_plan is None:
             return []
         return [
-            {"actor_id": str(actor.id), "actor_name": actor.name}
+            {"actor_id": str(actor.id), "actor_name": actor.name, "die_sides": 20, "label": "d20"}
             for actor in _actors_for_plan(self.exploration.actors, self.pending.check_plan)
         ]
 
@@ -4389,7 +4561,13 @@ def create_app(session: ExplorationUiSession) -> Flask:
     def api_combat_player_attack_roll():
         data = request.get_json(silent=True) or {}
         try:
-            return jsonify(session.submit_player_attack_roll(natural_roll=int(data.get("natural_roll", 0))))
+            natural_roll_2 = data.get("natural_roll_2")
+            return jsonify(
+                session.submit_player_attack_roll(
+                    natural_roll=int(data.get("natural_roll", 0)),
+                    natural_roll_2=int(natural_roll_2) if natural_roll_2 not in (None, "") else None,
+                )
+            )
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
@@ -4634,7 +4812,13 @@ def create_app(session: ExplorationUiSession) -> Flask:
     def api_combat_enemy_opportunity_roll():
         data = request.get_json(silent=True) or {}
         try:
-            return jsonify(session.submit_enemy_opportunity_attack_roll(natural_roll=int(data.get("natural_roll", 0))))
+            natural_roll_2 = data.get("natural_roll_2")
+            return jsonify(
+                session.submit_enemy_opportunity_attack_roll(
+                    natural_roll=int(data.get("natural_roll", 0)),
+                    natural_roll_2=int(natural_roll_2) if natural_roll_2 not in (None, "") else None,
+                )
+            )
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
@@ -4664,7 +4848,13 @@ def create_app(session: ExplorationUiSession) -> Flask:
     def api_combat_ready_attack_roll():
         data = request.get_json(silent=True) or {}
         try:
-            return jsonify(session.submit_ready_attack_roll(natural_roll=int(data.get("natural_roll", 0))))
+            natural_roll_2 = data.get("natural_roll_2")
+            return jsonify(
+                session.submit_ready_attack_roll(
+                    natural_roll=int(data.get("natural_roll", 0)),
+                    natural_roll_2=int(natural_roll_2) if natural_roll_2 not in (None, "") else None,
+                )
+            )
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
@@ -4921,6 +5111,21 @@ def _combat_action_by_id(encounter: LoadedEncounter | None, actor: Actor, action
     return next((action for action in encounter.combat_actions_by_actor.get(actor.id, ()) if action.id == action_id), None)
 
 
+def _manual_d20_input(request: D20RollRequest, natural_roll: int, natural_roll_2: int | None = None) -> D20RollInput:
+    if request.mode == RollMode.NORMAL:
+        return D20RollInput(request, int(natural_roll))
+    if natural_roll_2 is None:
+        raise ValueError("Ten rzut wymaga wpisania dwóch wyników d20.")
+    return D20RollInput(request, int(natural_roll), int(natural_roll_2))
+
+
+def _automatic_d20_input(request: D20RollRequest, rng) -> D20RollInput:
+    first = rng.randint(1, 20)
+    if request.mode == RollMode.NORMAL:
+        return D20RollInput(request, first)
+    return D20RollInput(request, first, rng.randint(1, 20))
+
+
 def _combat_payload(
     state: CombatState | None,
     encounter: LoadedEncounter | None = None,
@@ -4989,7 +5194,12 @@ def _combat_payload(
     return {
         "status": state.status.value,
         "round_number": state.round_number,
-        "current_actor": _combat_actor_payload(actor, active_combat_effects),
+        "current_actor": _combat_actor_payload(
+            actor,
+            active_combat_effects,
+            turn_action=state.turn_action,
+            movement_remaining_feet=movement_remaining(state, actor) if movement is not None else None,
+        ),
         "actors": [_combat_actor_payload(candidate, active_combat_effects) for candidate in state.actors],
         "winner": state.winner.value if state.winner is not None else None,
         "turn_action": {
@@ -5005,7 +5215,10 @@ def _combat_payload(
         "available_healing_sources": [_healing_source_payload(source) for source in healing_sources],
         "selected_healing_source_id": healing_source.id if healing_source is not None else None,
         "legal_healing_targets": [_combat_target_payload(target) for target in healing_targets],
-        "combat_actions": [_combat_action_payload(action) for action in (encounter.combat_actions_by_actor.get(actor.id, ()) if encounter is not None else ())],
+        "combat_actions": [
+            _combat_action_payload(action, actor)
+            for action in (encounter.combat_actions_by_actor.get(actor.id, ()) if encounter is not None else ())
+        ],
         "legal_targets": [_combat_target_payload(target) for target in targets],
         "legal_area_positions": [[position.col, position.row] for position in area_positions],
         "movement": _movement_payload(movement, state, actor) if movement is not None else None,
@@ -5049,12 +5262,19 @@ def _combat_payload(
     }
 
 
-def _combat_actor_payload(actor: Actor, active_combat_effects: tuple[ActiveCombatEffect, ...] = ()) -> dict[str, object]:
+def _combat_actor_payload(
+    actor: Actor,
+    active_combat_effects: tuple[ActiveCombatEffect, ...] = (),
+    *,
+    turn_action: TurnActionState | None = None,
+    movement_remaining_feet: int | None = None,
+) -> dict[str, object]:
     concentration_effects = [
         effect.as_payload()
         for effect in active_combat_effects
         if effect.source_actor_id == str(actor.id) and effect.kind.startswith("concentration_")
     ]
+    actor_effects = [effect.as_payload() for effect in active_combat_effects if effect.actor_id == str(actor.id)]
     return {
         "id": str(actor.id),
         "name": actor.name,
@@ -5070,9 +5290,81 @@ def _combat_actor_payload(actor: Actor, active_combat_effects: tuple[ActiveComba
             for slot in actor.spell_slots
         ],
         "spell_save_dc": actor.spell_save_dc,
-        "effects": [effect.as_payload() for effect in active_combat_effects if effect.actor_id == str(actor.id)],
+        "inventory": [inventory_item_payload(item) for item in actor.inventory],
+        "effects": actor_effects,
         "concentration": concentration_effects[0] if concentration_effects else None,
+        "status_chips": _combat_actor_status_chips(
+            actor,
+            actor_effects=actor_effects,
+            concentration=concentration_effects[0] if concentration_effects else None,
+            turn_action=turn_action,
+            movement_remaining_feet=movement_remaining_feet,
+        ),
     }
+
+
+def _status_chip(label: str, *, tone: str = "neutral", title: str = "") -> dict[str, str]:
+    return {"label": label, "tone": tone, "title": title}
+
+
+def _combat_actor_status_chips(
+    actor: Actor,
+    *,
+    actor_effects: list[dict[str, object]],
+    concentration: dict[str, object] | None,
+    turn_action: TurnActionState | None = None,
+    movement_remaining_feet: int | None = None,
+) -> list[dict[str, str]]:
+    chips: list[dict[str, str]] = []
+    if actor.is_defeated():
+        chips.append(_status_chip("Pokonany", tone="danger"))
+    if turn_action is not None:
+        chips.append(
+            _status_chip(
+                "Akcja zużyta" if turn_action.action_use == ActionUse.ACTION_USED else "Akcja dostępna",
+                tone="spent" if turn_action.action_use == ActionUse.ACTION_USED else "ready",
+            )
+        )
+        chips.append(
+            _status_chip(
+                "Bonus zużyty" if turn_action.bonus_action_use == ActionUse.ACTION_USED else "Bonus dostępny",
+                tone="spent" if turn_action.bonus_action_use == ActionUse.ACTION_USED else "ready",
+            )
+        )
+        chips.append(
+            _status_chip(
+                "Reakcja dostępna" if turn_action.reaction_available else "Reakcja zużyta",
+                tone="ready" if turn_action.reaction_available else "spent",
+            )
+        )
+        if movement_remaining_feet is not None:
+            chips.append(_status_chip(f"Ruch {movement_remaining_feet} ft", tone="movement"))
+    if concentration is not None:
+        chips.append(
+            _status_chip(
+                f"Koncentracja: {concentration.get('label', '-')}",
+                tone="magic",
+                title=str(concentration.get("expires", "")),
+            )
+        )
+    for effect in actor_effects:
+        label = str(effect.get("label") or effect.get("kind") or "Efekt")
+        value = str(effect.get("value_label") or "")
+        chip_label = f"{label}: {value}" if value else label
+        chips.append(_status_chip(chip_label, tone=_effect_chip_tone(str(effect.get("kind", ""))), title=str(effect.get("expires", ""))))
+    return chips
+
+
+def _effect_chip_tone(kind: str) -> str:
+    if kind in {"grant_ac_bonus_until_move", "dodge_until_next_turn", "disengage_until_turn_end"}:
+        return "defense"
+    if kind in {"grant_attack_bonus_while_on_object", "help_attack_advantage", "strength_potion", "concentration_attack_bonus"}:
+        return "offense"
+    if kind in {"grant_next_attack_penalty"}:
+        return "penalty"
+    if kind in {"ready_attack"}:
+        return "ready"
+    return "neutral"
 
 
 def _actor_by_string_id_from_state(state: CombatState, actor_id: str) -> Actor:
@@ -5188,7 +5480,9 @@ def _format_signed(value: int) -> str:
     return f"+{value}" if value >= 0 else str(value)
 
 
-def _combat_action_payload(action) -> dict[str, object]:
+def _combat_action_payload(action, actor: Actor | None = None) -> dict[str, object]:
+    quantity = _combat_action_item_quantity(action, actor)
+    available = action.prepared and (quantity is None or quantity > 0)
     return {
         "id": action.id,
         "name": action.name,
@@ -5202,9 +5496,19 @@ def _combat_action_payload(action) -> dict[str, object]:
         "casting_kind": action.casting_kind.value,
         "prepared": action.prepared,
         "concentration": action.concentration,
+        "source_item_id": action.source_item_id,
+        "source_item_quantity": quantity,
+        "available": available,
         "resource_label": _source_resource_label(action),
         "mechanic": action_mechanic_payload(combat_action_mechanic_from_definition(action)),
     }
+
+
+def _combat_action_item_quantity(action, actor: Actor | None) -> int | None:
+    if actor is None or action.source_item_id is None:
+        return None
+    item = next((candidate for candidate in actor.inventory if candidate.id == action.source_item_id), None)
+    return item.quantity if item is not None else 0
 
 
 def _pending_player_attack_payload(
@@ -5239,6 +5543,7 @@ def _pending_player_attack_payload(
         "ignored_modifiers": [_roll_modifier_payload(modifier) for modifier in instruction.breakdown.ignored_modifiers],
         "damage_instruction": _damage_roll_instruction(source),
         "natural_roll": pending.natural_roll,
+        "natural_rolls": list(pending.natural_rolls),
         "total": pending.total,
         "target_ac": target.ac,
         "hit": pending.hit,
@@ -5345,6 +5650,7 @@ def _pending_enemy_opportunity_attack_payload(
         "ignored_modifiers": [_roll_modifier_payload(modifier) for modifier in instruction.breakdown.ignored_modifiers],
         "damage_instruction": _damage_roll_instruction(source),
         "natural_roll": pending.natural_roll,
+        "natural_rolls": list(pending.natural_rolls),
         "total": pending.total,
         "target_ac": target.ac,
         "hit": pending.hit,
@@ -5383,6 +5689,7 @@ def _pending_ready_attack_payload(
         "ignored_modifiers": [_roll_modifier_payload(modifier) for modifier in instruction.breakdown.ignored_modifiers],
         "damage_instruction": _damage_roll_instruction(source),
         "natural_roll": pending.natural_roll,
+        "natural_rolls": list(pending.natural_rolls),
         "total": pending.total,
         "target_ac": target.ac,
         "hit": pending.hit,
@@ -5484,11 +5791,11 @@ def _combat_choice_led_feedback(
         frames.append(LedFrame(target_positions, LedColor.ENEMY, LedRole.ENEMY))
     healing_positions = tuple(sorted(target.position for target in healing_targets))
     if healing_positions:
-        frames.append(LedFrame(healing_positions, LedColor.ALLY, LedRole.TARGET))
+        frames.append(LedFrame(healing_positions, LedColor.ALLY, LedRole.ALLY))
     if interaction_positions:
         frames.append(LedFrame(tuple(sorted(interaction_positions)), LedColor.INTERACTIVE_OBJECT, LedRole.DESTINATION))
     if area_spell_positions:
-        frames.append(LedFrame(tuple(sorted(area_spell_positions)), LedColor.MARKER, LedRole.TARGET))
+        frames.append(LedFrame(tuple(sorted(area_spell_positions)), LedColor.MARKER, LedRole.DESTINATION))
     return LedFeedback(tuple(frames))
 
 
@@ -5505,7 +5812,7 @@ def _pending_area_spell_led_feedback(pending: PendingAreaSpell, state: CombatSta
             if str(actor.id) in pending.target_ids and not actor.is_defeated()
         )
         if target_positions:
-            frames.append(LedFrame(target_positions, LedColor.ENEMY, LedRole.TARGET))
+            frames.append(LedFrame(target_positions, LedColor.ENEMY, LedRole.ENEMY))
     return LedFeedback(tuple(frames))
 
 
@@ -5622,6 +5929,7 @@ def _enemy_turn_preview_payload(
         payload["damage_instruction"] = _damage_roll_instruction(source)
     if result.attack_roll is not None:
         payload["natural_roll"] = result.attack_roll.natural_roll
+        payload["natural_rolls"] = list(result.attack_roll.natural_rolls)
         payload["total"] = result.attack_roll.total
     if result.attack_resolution is not None:
         payload["hit"] = result.attack_resolution.hit
@@ -5658,7 +5966,7 @@ def _enemy_roll_summary(result) -> str:
     if result.attack_roll is None or result.target is None:
         return ""
     parts = [
-        f"Rzut d20: {result.attack_roll.natural_roll}",
+        f"Rzut d20: {_d20_roll_result_text(result.attack_roll)}",
         f"wynik końcowy: {result.attack_roll.total}",
     ]
     if result.attack_resolution is not None:
@@ -5672,6 +5980,13 @@ def _enemy_roll_summary(result) -> str:
         if result.applied_damage.defeated_by_damage:
             parts.append("cel pokonany")
     return ". ".join(parts) + "."
+
+
+def _d20_roll_result_text(roll) -> str:
+    natural_rolls = getattr(roll, "natural_rolls", ()) or ()
+    if len(natural_rolls) > 1:
+        return f"{' / '.join(str(value) for value in natural_rolls)} -> {roll.natural_roll}"
+    return str(roll.natural_roll)
 
 
 def _enemy_turn_intent_message(intent) -> str:
@@ -5807,7 +6122,21 @@ def _analyze(client: object, request_data: object) -> GmDeclarationAnalysis:
     )
 
 
-def _challenge_check_plan(option: ExplorationChallengeOption, lead_actor_id: str) -> ExplorationCheckPlan:
+def _challenge_check_plan(option: ExplorationChallengeOption, lead_actor_id: str, actors: tuple[Actor, ...]) -> ExplorationCheckPlan:
+    roll_modifiers_by_actor_id = tuple(
+        (str(actor.id), option_roll_modifiers_for_actor(actor, option))
+        for actor in actors
+        if option_roll_modifiers_for_actor(actor, option)
+    )
+    option_bonus_payloads = tuple(
+        {
+            **bonus.as_payload(),
+            "actor_id": str(actor.id),
+            "actor_name": actor.name,
+        }
+        for actor in actors
+        for bonus in active_option_bonuses_for_actor(actor, option)
+    )
     return ExplorationCheckPlan(
         participants=option.check_participants or CheckParticipants.SINGLE_ACTOR,
         aggregation=option.check_aggregation or CheckAggregation.LEAD_RESULT,
@@ -5817,6 +6146,8 @@ def _challenge_check_plan(option: ExplorationChallengeOption, lead_actor_id: str
         dc=option.ability_check.dc,
         lead_actor_id=lead_actor_id,
         reason_for_players=option.description,
+        roll_modifiers_by_actor_id=roll_modifiers_by_actor_id,
+        option_bonus_payloads=option_bonus_payloads,
     )
 
 
@@ -5847,7 +6178,7 @@ def _check_inputs_from_payload(
         if actor_id not in raw_rolls:
             raise ValueError(f"Brakuje wyniku rzutu dla: {actor.name}.")
         natural_roll = int(raw_rolls[actor_id])
-        request = D20RollRequest(modifiers=_ability_roll_modifiers(actor, plan.ability, plan.skill))
+        request = D20RollRequest(modifiers=(*_ability_roll_modifiers(actor, plan.ability, plan.skill), *_plan_roll_modifiers(actor, plan)))
         result.append(PartyCheckInput(actor, natural_roll, request))
     return tuple(result)
 
@@ -5872,6 +6203,14 @@ def _ability_roll_modifiers(actor: Actor, ability: str, skill: str | None = None
     if skill:
         label = f"Modyfikator {ability}/{skill}"
     return (RollModifier(label, ability_modifier(score), RollModifierType.ABILITY, stacking_key=f"ability:{ability}"),)
+
+
+def _plan_roll_modifiers(actor: Actor, plan: ExplorationCheckPlan) -> tuple[RollModifier, ...]:
+    actor_id = str(actor.id)
+    for candidate_actor_id, modifiers in plan.roll_modifiers_by_actor_id:
+        if candidate_actor_id == actor_id:
+            return modifiers
+    return ()
 
 
 def _challenge_proposal_text(
@@ -5962,10 +6301,15 @@ def _point_payload(point: ExplorationPoint | None) -> dict[str, object] | None:
     return payload
 
 
-def _challenge_payload(state: ExplorationState, challenge: ExplorationChallenge | None) -> dict[str, object] | None:
+def _challenge_payload(
+    state: ExplorationState,
+    challenge: ExplorationChallenge | None,
+    actors: tuple[Actor, ...] = (),
+) -> dict[str, object] | None:
     if challenge is None:
         return None
     challenge_state = challenge_state_for(state, challenge.id)
+    options = available_challenge_options_for_actors(state, challenge, actors) if actors else available_challenge_options(state, challenge)
     return {
         "id": challenge.id,
         "name": challenge.name,
@@ -5978,6 +6322,28 @@ def _challenge_payload(state: ExplorationState, challenge: ExplorationChallenge 
         "noise": challenge_state.noise,
         "completed": challenge_state.completed,
         "complications": list(challenge_state.complications),
+        "options": [_challenge_option_payload(option, actors) for option in options],
+    }
+
+
+def _exploration_actor_payload(actor: Actor) -> dict[str, object]:
+    return {
+        "id": str(actor.id),
+        "name": actor.name,
+        "ability_scores": {
+            "strength": actor.ability_scores.strength,
+            "dexterity": actor.ability_scores.dexterity,
+            "constitution": actor.ability_scores.constitution,
+            "intelligence": actor.ability_scores.intelligence,
+            "wisdom": actor.ability_scores.wisdom,
+            "charisma": actor.ability_scores.charisma,
+        },
+        "inventory": [inventory_item_payload(item) for item in actor.inventory],
+        "spell_ids": list(actor.spell_ids),
+        "spell_slots": [
+            {"level": slot.level, "remaining": slot.remaining, "maximum": slot.maximum}
+            for slot in actor.spell_slots
+        ],
     }
 
 
@@ -6039,16 +6405,26 @@ def _resource_payload(resource: ExplorationResource) -> dict[str, object]:
     return {"id": resource.id, "label": resource.label, "bonus_tags": list(resource.bonus_tags)}
 
 
-def _challenge_option_payload(option: ExplorationChallengeOption) -> dict[str, object]:
+def _challenge_option_payload(option: ExplorationChallengeOption, actors: tuple[Actor, ...] = ()) -> dict[str, object]:
+    eligible_actors = actors_matching_challenge_option(actors, option) if actors else ()
     return {
         "id": option.id,
         "label": option.label,
+        "description": option.description,
         "ability": option.ability_check.ability,
         "skill": option.ability_check.skill,
         "dc": option.ability_check.dc,
         "progress_on_success": option.progress_on_success,
         "progress_on_failure": option.progress_on_failure,
         "tags": list(option.tags),
+        "requires_item_ids": list(option.requires_item_ids),
+        "requires_spell_ids": list(option.requires_spell_ids),
+        "requires_ability_scores": [
+            {"ability": ability, "minimum": minimum}
+            for ability, minimum in option.requires_ability_scores
+        ],
+        "bonuses": [bonus.as_payload() for bonus in option.bonuses],
+        "eligible_actors": [{"id": str(actor.id), "name": actor.name} for actor in eligible_actors],
     }
 
 
@@ -6117,6 +6493,7 @@ _HTML = """
     .status[hidden] { display: none; }
     .status-list { display: grid; gap: 8px; margin-top: 6px; }
     .status-item { border-bottom: 1px solid #34383d; padding-bottom: 7px; }
+    .status-item.defeated { opacity: 0.55; }
     .status-item:last-child { border-bottom: 0; padding-bottom: 0; }
     .status-item b { display: block; }
     .combat-current-step { border: 1px solid #4b4227; border-radius: 6px; background: #181713; padding: 12px; }
@@ -6124,6 +6501,16 @@ _HTML = """
     .combat-prompt b { display: block; font-size: 18px; margin-bottom: 4px; }
     .combat-mini-status { display: flex; gap: 10px; flex-wrap: wrap; margin: 0 0 10px; color: #d6d0c4; font-size: 13px; }
     .combat-mini-status span { border: 1px solid #34383d; border-radius: 999px; padding: 3px 8px; background: #111417; }
+    .status-chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 10px; }
+    .status-chip { border: 1px solid #34383d; border-radius: 999px; padding: 3px 8px; background: #111417; color: #d6d0c4; font-size: 12px; line-height: 1.35; }
+    .status-chip.ready { border-color: #2f8f55; color: #d7f6df; background: #102018; }
+    .status-chip.spent { border-color: #5a6068; color: #a9a298; background: #151719; }
+    .status-chip.movement { border-color: #2f6feb; color: #d2e7ff; background: #111927; }
+    .status-chip.magic { border-color: #9b74ff; color: #eadfff; background: #1a1428; }
+    .status-chip.offense { border-color: #d88b26; color: #ffe1b8; background: #24170b; }
+    .status-chip.defense { border-color: #3fb950; color: #d7f6df; background: #102018; }
+    .status-chip.penalty { border-color: #db6d6d; color: #ffd6d6; background: #241111; }
+    .status-chip.danger { border-color: #db6d6d; color: #ffd6d6; background: #241111; }
     .combat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin: 0 0 12px; }
     .combat-section { border: 1px solid #34383d; border-radius: 6px; padding: 10px 12px; background: #171b20; }
     .combat-section h4 { margin: 0 0 7px; font-size: 14px; color: #f5e3a1; }
@@ -6334,7 +6721,11 @@ function render() {
   document.getElementById('travel-options').innerHTML = travelOptionsHtml();
   document.getElementById('point-options').innerHTML = pointOptionsHtml();
   document.getElementById('roll-prompt').innerHTML = rollPromptHtml();
-  document.getElementById('rolls').innerHTML = state.required_rolls.map(r => `<label>${r.actor_name}: <input data-actor="${r.actor_id}" type="number" min="1" max="20" value="10"></label>`).join(' ');
+  document.getElementById('rolls').innerHTML = state.required_rolls.map(r => {
+    const sides = Number(r.die_sides || 20);
+    const value = sides === 100 ? 50 : 10;
+    return `<label>${esc(r.actor_name)} ${esc(r.label || `d${sides}`)}: <input data-actor="${esc(r.actor_id)}" type="number" min="1" max="${sides}" value="${value}"></label>`;
+  }).join(' ');
   document.getElementById('debug-payload').textContent = JSON.stringify(state, null, 2);
   renderSessionLogMeta();
   document.getElementById('action-title').textContent = state.active_point && state.active_point.has_npc ? 'Co robicie wobec NPC?' : 'Co robi drużyna?';
@@ -6552,12 +6943,15 @@ function sceneDescriptionHtml(state) {
   if (zone.available_materials && zone.available_materials.length) {
     parts.push(`<p><b>Widoczne elementy otoczenia:</b></p>${listHtml(zone.available_materials)}`);
   }
-  if (challenge) {
+    if (challenge) {
     parts.push(`<p><b>${esc(challenge.name)}</b></p>`);
     if (challenge.summary) parts.push(`<p>${esc(challenge.summary)}</p>`);
     parts.push(`<p><b>Postęp:</b> ${challenge.current_progress}/${challenge.progress_required}. <b>Hałas:</b> ${challenge.noise}.</p>`);
     if (challenge.complications && challenge.complications.length) {
       parts.push(`<p><b>Komplikacje:</b> ${challenge.complications.map(esc).join(', ')}</p>`);
+    }
+    if (challenge.options && challenge.options.length) {
+      parts.push(challengeOptionsHtml(challenge.options));
     }
     const hasHints = (challenge.reasonable_approaches && challenge.reasonable_approaches.length)
       || (challenge.risk_notes && challenge.risk_notes.length);
@@ -6589,6 +6983,46 @@ function sceneDescriptionHtml(state) {
   }
   const html = parts.filter(Boolean).join('');
   return html.trim() ? html : '';
+}
+function challengeOptionsHtml(options) {
+  return `
+    <div class="status-list">
+      ${options.map(option => {
+        const skill = option.skill ? `/${esc(option.skill)}` : '';
+        const requirements = challengeOptionRequirementsText(option);
+        const actors = (option.eligible_actors || []).map(actor => actor.name).join(', ');
+        return `
+          <div class="status-item">
+            <b>${esc(option.label)}</b>
+            <div>${esc(option.description || '')}</div>
+            <div class="muted">Test: ${esc(option.ability)}${skill}, ST ${esc(option.dc)}. Sukces +${esc(option.progress_on_success)}, porażka +${esc(option.progress_on_failure)}.</div>
+            ${requirements ? `<div class="muted">Wymaga: ${requirements}</div>` : ''}
+            ${challengeOptionBonusesText(option) ? `<div class="muted">Premie: ${challengeOptionBonusesText(option)}</div>` : ''}
+            ${actors ? `<div class="muted">Może wykonać: ${esc(actors)}</div>` : ''}
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+function challengeOptionRequirementsText(option) {
+  const parts = [];
+  if (option.requires_item_ids && option.requires_item_ids.length) parts.push(`item ${option.requires_item_ids.map(esc).join(', ')}`);
+  if (option.requires_spell_ids && option.requires_spell_ids.length) parts.push(`czar ${option.requires_spell_ids.map(esc).join(', ')}`);
+  if (option.requires_ability_scores && option.requires_ability_scores.length) {
+    parts.push(option.requires_ability_scores.map(req => `${esc(req.ability)} ${esc(req.minimum)}`).join(', '));
+  }
+  return parts.join('; ');
+}
+function challengeOptionBonusesText(option) {
+  const bonuses = option.bonuses || [];
+  return bonuses.map(bonus => {
+    const mod = Number(bonus.modifier || 0);
+    const breakage = bonus.breakage_risk ? `, ryzyko uszkodzenia ${esc(bonus.breakage_risk.chance_percent)}% przy krytycznej porażce` : '';
+    const spellLevel = Number(bonus.spell_level || 0);
+    const spellCost = bonus.source_type === 'spell' ? (spellLevel > 0 ? `, zużywa slot ${spellLevel}. poziomu` : ', cantrip bez slota') : '';
+    return `${esc(bonus.label || bonus.source_id)} ${signedNumber(mod)}${spellCost}${breakage}`;
+  }).join('; ');
 }
 function toggleHints() {
   const panel = document.getElementById('gm-hints');
@@ -6624,7 +7058,12 @@ function leadActorChoiceHtml() {
   return `<label><b>Kto prowadzi test?</b> <select id="lead-actor">${options}</select></label>`;
 }
 function rollPromptHtml() {
-  if (!state.pending || state.pending.stage !== 'roll') return '';
+  if (!state.pending) return '';
+  if (state.pending.stage === 'breakage') {
+    const info = state.pending.breakage || {};
+    return `<p><b>Test trwałości:</b> rzuć k100 dla ${esc(info.item_label || info.item_id || 'przedmiotu')}. Wynik ${esc(info.chance_percent || 0)} lub mniej oznacza uszkodzenie.</p>`;
+  }
+  if (state.pending.stage !== 'roll') return '';
   const plan = state.pending.check_plan || {};
   const participants = {
     single_actor: 'rzuca jeden wybrany bohater',
@@ -6639,7 +7078,15 @@ function rollPromptHtml() {
     majority_success: 'sukces, jeśli zda co najmniej połowa'
   }[plan.aggregation] || plan.aggregation || '';
   const names = (state.required_rolls || []).map(r => r.actor_name).join(', ');
-  return `<p><b>Format rzutu:</b> ${esc(participants)}${aggregation ? `, ${esc(aggregation)}` : ''}.</p><p><b>Rzucają:</b> ${esc(names || '-')}</p>`;
+  const bonuses = (plan.option_bonuses || []).filter(bonus => Number(bonus.modifier || 0) !== 0);
+  const bonusHtml = bonuses.length
+    ? `<p><b>Aktywne premie:</b> ${bonuses.map(bonus => {
+        const spellLevel = Number(bonus.spell_level || 0);
+        const spellCost = bonus.source_type === 'spell' ? (spellLevel > 0 ? `, zużyje slot ${spellLevel}. poziomu` : ', cantrip bez slota') : '';
+        return `${esc(bonus.actor_name || '')}: ${esc(bonus.label || bonus.source_id)} ${signedNumber(Number(bonus.modifier || 0))}${spellCost}`;
+      }).join('; ')}</p>`
+    : '';
+  return `<p><b>Format rzutu:</b> ${esc(participants)}${aggregation ? `, ${esc(aggregation)}` : ''}.</p><p><b>Rzucają:</b> ${esc(names || '-')}</p>${bonusHtml}`;
 }
 function latestResultMessage(state) {
   const messages = state.messages || [];
@@ -6762,9 +7209,10 @@ function combatStartHtml() {
       <p><b>Kolejność inicjatywy:</b> ${order.map(entry => `${esc(entry.actor_name)} (${entry.total})`).join(', ')}</p>
       <div class="status-list">
         ${actors.map(actor => `
-          <div class="status-item">
+          <div class="status-item${actor.defeated ? ' defeated' : ''}">
             <b>${esc(actor.name)} ${actor.id === combat.current_actor.id ? '(tura)' : ''}</b>
             <span>${esc(actor.faction)} | HP ${esc(actorHpLabel(actor))} / AC ${esc(actor.ac)} | pole (${esc(actor.position[0])},${esc(actor.position[1])})</span>
+            ${statusChipsHtml(actor.status_chips || actorEffectChips(actor), 'Brak aktywnych statusów.')}
           </div>
         `).join('')}
       </div>
@@ -6938,6 +7386,7 @@ function combatMiniStatusHtml(combat) {
       <span>Pole (${esc(position[0])},${esc(position[1])})</span>
       ${actor.faction === 'ally' ? `<span>Akcja: ${actionUsed ? 'zużyta' : 'dostępna'}</span><span>Bonus: ${bonusActionUsed ? 'zużyta' : 'dostępna'}</span><span>Reakcja: ${reactionAvailable ? 'dostępna' : 'zużyta'}</span><span>Ruch: ${esc(remaining)} ft${extraMovement > 0 ? ` (+${esc(extraMovement)} Dash)` : ''}</span>` : ''}
     </div>
+    ${statusChipsHtml(actor.status_chips || [], 'Brak statusów aktywnego aktora.')}
   `;
 }
 function combatActorStatusHtml(combat) {
@@ -6952,8 +7401,41 @@ function combatActorStatusHtml(combat) {
     <p><b>${esc(actor.name || '-')}</b> (${esc(actor.faction || '-')})</p>
     <p>Runda ${esc(combat.round_number || '-')}, pole (${esc(actor.position ? actor.position[0] : '-')},${esc(actor.position ? actor.position[1] : '-')})</p>
     <p>HP ${esc(actorHpLabel(actor))} / AC ${esc(actor.ac)}</p>
+    ${actorInventoryHtml(actor)}
     ${actor.faction === 'ally' ? `<p>Akcja: ${actionUsed ? 'zużyta' : 'dostępna'} | Bonus action: ${bonusActionUsed ? 'zużyta' : 'dostępna'} | Reakcja: ${reactionAvailable ? 'dostępna' : 'zużyta'} | Ruch: ${esc(remaining)} ft${extraMovement > 0 ? ` (+${esc(extraMovement)} Dash)` : ''}</p>` : ''}
+    ${statusChipsHtml(actor.status_chips || [], 'Brak statusów aktywnego aktora.')}
   `;
+}
+function actorInventoryHtml(actor) {
+  const items = actor && actor.inventory ? actor.inventory : [];
+  if (!items.length) return '';
+  return `<p><b>Ekwipunek:</b> ${items.map(item => `${esc(item.name || item.id)}${item.quantity !== undefined ? ` x${esc(item.quantity)}` : ''}${item.equipped === false ? ' (niezałożone)' : ''}`).join(', ')}</p>`;
+}
+function statusChipsHtml(chips, emptyText) {
+  const items = chips || [];
+  if (!items.length) return emptyText ? `<p class="combat-empty">${esc(emptyText)}</p>` : '';
+  return `<div class="status-chips">${items.map(chip => {
+    const tone = chip.tone || 'neutral';
+    const title = chip.title ? ` title="${esc(chip.title)}"` : '';
+    return `<span class="status-chip ${esc(tone)}"${title}>${esc(chip.label || '')}</span>`;
+  }).join('')}</div>`;
+}
+function actorEffectChips(actor) {
+  const chips = [];
+  if (actor.defeated) chips.push({label: 'Pokonany', tone: 'danger'});
+  (actor.effects || []).forEach(effect => {
+    const label = `${effect.label || effect.kind || 'Efekt'}${effect.value_label ? `: ${effect.value_label}` : ''}`;
+    chips.push({label, tone: effectChipTone(effect.kind), title: effect.expires || ''});
+  });
+  if (actor.concentration) chips.push({label: `Koncentracja: ${actor.concentration.label || '-'}`, tone: 'magic', title: actor.concentration.expires || ''});
+  return chips;
+}
+function effectChipTone(kind) {
+  if (kind === 'grant_ac_bonus_until_move' || kind === 'dodge_until_next_turn' || kind === 'disengage_until_turn_end') return 'defense';
+  if (kind === 'grant_attack_bonus_while_on_object' || kind === 'help_attack_advantage' || kind === 'strength_potion' || kind === 'concentration_attack_bonus') return 'offense';
+  if (kind === 'grant_next_attack_penalty') return 'penalty';
+  if (kind === 'ready_attack') return 'ready';
+  return 'neutral';
 }
 function combatActiveEffectsHtml(combat) {
   const effects = relevantCombatEffects(combat);
@@ -7143,7 +7625,10 @@ function combatSourceButtonsHtml(combat) {
   }).join('');
   const actionButtons = (combat.combat_actions || []).map(action => {
     if (action.action_type === 'strength_potion') {
-      return `<button class="secondary" data-allow-busy="true" onclick="useStrengthPotion('${esc(action.id)}')">${esc(action.label || action.name)}</button>`;
+      const disabledReason = sourceUnavailableReason(action, actor);
+      const disabled = disabledReason ? ' disabled title="' + esc(disabledReason) + '"' : '';
+      const label = sourceButtonLabel(action);
+      return `<button class="secondary"${disabled} data-allow-busy="true" onclick="useStrengthPotion('${esc(action.id)}')">${label}</button>`;
     }
     if (action.action_type === 'concentration_attack_bonus') {
       const disabledReason = sourceUnavailableReason(action, actor);
@@ -7161,6 +7646,10 @@ function sourceButtonLabel(source) {
 }
 function sourceUnavailableReason(source, actor) {
   if (source.prepared === false) return 'Ten czar nie jest przygotowany.';
+  if (source.available === false) {
+    if (source.source_item_id) return 'Ten przedmiot został zużyty.';
+    return 'Ta opcja nie jest dostępna.';
+  }
   const spellLevel = Number(source.spell_level || 0);
   if (spellLevel <= 0) return '';
   const slots = actor.spell_slots || [];
@@ -7200,12 +7689,14 @@ function playerTurnDetailsHtml(combat) {
   const moveCount = (movement.destinations || []).length;
   const slotSummary = spellSlotSummaryHtml(actor);
   const concentration = actor.concentration || null;
+  const inventory = actorInventoryHtml(actor);
   const targetText = targets.length
     ? targets.map(target => `${target.name} (${target.position[0]},${target.position[1]})`).join(', ')
     : 'brak';
   return `
     <p><b>Tura gracza:</b> ${esc(actor.name || '-')}</p>
     <p><b>Akcja:</b> ${actionUsed ? 'zużyta' : 'dostępna'} | <b>Bonus action:</b> ${bonusActionUsed ? 'zużyta' : 'dostępna'} | <b>Reakcja:</b> ${reactionAvailable ? 'dostępna' : 'zużyta'} | <b>Ruch:</b> ${esc(remaining)} ft${extraMovement > 0 ? ` (+${esc(extraMovement)} Dash)` : ''}</p>
+    ${inventory}
     ${slotSummary || concentration ? `<p><b>Magia:</b> ${slotSummary ? `ST czarów ${esc(actor.spell_save_dc || '-')}; ${slotSummary}` : ''}${concentration ? ` | Koncentracja: ${esc(concentration.label || '-')}` : ''}</p>` : ''}
     <p>Niebieskie pola: ruch (${esc(moveCount)} pól). Czerwone pola: legalne cele ataku. Turkusowe pola: legalne cele leczenia. Zielone pola: interakcje sceny. Żółte pola: środek albo kierunek czaru obszarowego.</p>
     ${preview ? `<p>Wybrana ścieżka: (${esc(preview.destination[0])},${esc(preview.destination[1])}), koszt ${esc(preview.cost_feet)} ft.</p>` : ''}
@@ -7248,7 +7739,7 @@ function enemyTurnDetailsHtml(combat) {
     const target = result.target_name ? ` przeciwko ${esc(result.target_name)}` : '';
     const hitText = result.hit === true ? (result.critical ? 'TRAFIENIE KRYTYCZNE' : 'TRAFIENIE') : (result.hit === false ? 'PUDŁO' : 'BRAK ATAKU');
     const rollHtml = result.natural_roll !== null && result.natural_roll !== undefined
-      ? `<p><b>Rzut d20:</b> ${esc(result.natural_roll)} | <b>Wynik końcowy:</b> ${esc(result.total)}</p>`
+      ? `<p><b>Rzut d20:</b> ${d20RollResultText(result)} | <b>Wynik końcowy:</b> ${esc(result.total)}</p>`
       : '';
     const damageHtml = result.damage !== null && result.damage !== undefined
       ? `<p><b>Obrażenia:</b> ${esc(result.damage)}</p>`
@@ -7310,7 +7801,7 @@ function pendingEnemyOpportunityAttackHtml(pending) {
   return `
     <p>${esc(pending.attack_instruction || 'Rzuć 1d20 i wpisz wynik.')}</p>
     <div class="row">
-      <label>Wynik d20: <input id="enemy-opportunity-natural-roll" type="number" min="1" max="20" value="10"></label>
+      ${d20RollInputsHtml('enemy-opportunity-natural-roll', pending.attack_mode)}
       <button onclick="submitEnemyOpportunityAttackRoll()">Zapisz rzut</button>
     </div>
   `;
@@ -7444,7 +7935,7 @@ function pendingReadyAttackHtml(pending) {
   return `
     <p>${esc(pending.attack_instruction || 'Rzuć 1d20 i wpisz wynik.')}</p>
     <div class="row">
-      <label>Wynik d20: <input id="ready-natural-roll" type="number" min="1" max="20" value="10"></label>
+      ${d20RollInputsHtml('ready-natural-roll', pending.attack_mode)}
       <button onclick="submitReadyAttackRoll()">Zapisz rzut</button>
     </div>
   `;
@@ -7517,11 +8008,31 @@ function pendingPlayerAttackHtml(pending) {
   return `
     <p>${esc(pending.attack_instruction || 'Rzuć 1d20 i wpisz wynik.')}</p>
     <div class="row">
-      <label>Wynik d20: <input id="combat-attack-natural-roll" type="number" min="1" max="20" value="10"></label>
+      ${d20RollInputsHtml('combat-attack-natural-roll', pending.attack_mode)}
       <button onclick="submitPlayerAttackRoll()">Zapisz rzut</button>
       <button class="secondary" data-allow-busy="true" onclick="finishCombatTurn()">Zakończ turę</button>
     </div>
   `;
+}
+function d20RollInputsHtml(baseId, mode) {
+  const second = mode === 'advantage' || mode === 'disadvantage';
+  const label = mode === 'advantage' ? 'Przewaga' : (mode === 'disadvantage' ? 'Utrudnienie' : 'Wynik d20');
+  return `
+    <label>${esc(second ? `${label} 1` : label)}: <input id="${esc(baseId)}" type="number" min="1" max="20" value="10"></label>
+    ${second ? `<label>${esc(label)} 2: <input id="${esc(baseId)}-2" type="number" min="1" max="20" value="10"></label>` : ''}
+  `;
+}
+function d20RollPayload(baseId) {
+  const roll = document.getElementById(baseId);
+  const roll2 = document.getElementById(`${baseId}-2`);
+  const payload = {natural_roll: Number(roll ? roll.value : 0)};
+  if (roll2) payload.natural_roll_2 = Number(roll2.value || 0);
+  return payload;
+}
+function d20RollResultText(result) {
+  const rolls = result && result.natural_rolls ? result.natural_rolls : [];
+  if (rolls.length > 1) return `${rolls.map(esc).join(' / ')} -> ${esc(result.natural_roll || '')}`;
+  return result && result.natural_roll !== null && result.natural_roll !== undefined ? esc(result.natural_roll) : '';
 }
 function pendingAreaSpellHtml(pending) {
   const source = pending.source || {};
@@ -7634,7 +8145,7 @@ function pendingPlayerAttackDetailsHtml(pending) {
       <p><b>Tura gracza: wpisz obrażenia</b></p>
       <p><b>Cel:</b> ${esc(target.name || '-')} | <b>Trafienie:</b> ${pending.critical ? 'krytyczne' : 'zwykłe'}</p>
       ${attackEffectsDetailsHtml(pending)}
-      <p><b>Rzut d20:</b> ${esc(pending.natural_roll || '')} | <b>Wynik końcowy:</b> ${esc(pending.total || '')}</p>
+      <p><b>Rzut d20:</b> ${d20RollResultText(pending)} | <b>Wynik końcowy:</b> ${esc(pending.total || '')}</p>
       <p><b>Co teraz:</b> ${esc(pending.damage_instruction || '')}</p>
     `;
   }
@@ -7664,7 +8175,7 @@ function enemyRollSummaryHtml(preview) {
   if (!preview || preview.natural_roll === null || preview.natural_roll === undefined) return '';
   const outcome = preview.hit ? (preview.critical ? 'trafienie krytyczne' : 'trafienie') : 'pudło';
   const damage = preview.damage !== null && preview.damage !== undefined ? `<br>Obrażenia: ${esc(preview.damage)}.` : '';
-  return `<br>Automatyczny rzut przeciwnika: d20 ${esc(preview.natural_roll)}, razem ${esc(preview.total)} (${outcome}).${damage}`;
+  return `<br>Automatyczny rzut przeciwnika: d20 ${d20RollResultText(preview)}, razem ${esc(preview.total)} (${outcome}).${damage}`;
 }
 function spellSavesHtml(saves) {
   if (!saves || !saves.length) return '';
@@ -7847,8 +8358,7 @@ function submitEncounterInitiativeRoll() {
   api('/api/encounter/initiative/roll', {natural_roll: Number(input ? input.value : 0)}, 'Zapisuję rzut inicjatywy...');
 }
 function submitPlayerAttackRoll() {
-  const roll = document.getElementById('combat-attack-natural-roll');
-  api('/api/combat/player-attack-roll', {natural_roll: Number(roll ? roll.value : 0)}, 'Rozstrzygam rzut ataku...');
+  api('/api/combat/player-attack-roll', d20RollPayload('combat-attack-natural-roll'), 'Rozstrzygam rzut ataku...');
 }
 function selectCombatAttackSource(sourceId) { api('/api/combat/attack-source', {source_id: sourceId}, 'Wybieram źródło ataku...'); }
 function selectCombatHealingSource(sourceId) { api('/api/combat/healing-source', {source_id: sourceId}, 'Wybieram leczenie...'); }
@@ -7909,8 +8419,7 @@ function resolveEnemyTurn() { api('/api/combat/enemy-turn', {}, 'Rozgrywam turę
 function startEnemyOpportunityAttack() { api('/api/combat/enemy-opportunity/start', {}, 'Rozpoczynam atak okazyjny...'); }
 function skipEnemyOpportunityAttack() { api('/api/combat/enemy-opportunity/skip', {}, 'Pomijam reakcję...'); }
 function submitEnemyOpportunityAttackRoll() {
-  const roll = document.getElementById('enemy-opportunity-natural-roll');
-  api('/api/combat/enemy-opportunity/roll', {natural_roll: Number(roll ? roll.value : 0)}, 'Rozstrzygam atak okazyjny...');
+  api('/api/combat/enemy-opportunity/roll', d20RollPayload('enemy-opportunity-natural-roll'), 'Rozstrzygam atak okazyjny...');
 }
 function submitEnemyOpportunityDamageRoll() {
   const damage = document.getElementById('enemy-opportunity-damage-roll');
@@ -7919,8 +8428,7 @@ function submitEnemyOpportunityDamageRoll() {
 function startReadyAttack() { api('/api/combat/ready-attack/start', {}, 'Używam przygotowanej akcji...'); }
 function skipReadyAttack() { api('/api/combat/ready-attack/skip', {}, 'Pomijam przygotowaną akcję...'); }
 function submitReadyAttackRoll() {
-  const roll = document.getElementById('ready-natural-roll');
-  api('/api/combat/ready-attack/roll', {natural_roll: Number(roll ? roll.value : 0)}, 'Rozstrzygam przygotowaną akcję...');
+  api('/api/combat/ready-attack/roll', d20RollPayload('ready-natural-roll'), 'Rozstrzygam przygotowaną akcję...');
 }
 function submitReadyDamageRoll() {
   const damage = document.getElementById('ready-damage-roll');

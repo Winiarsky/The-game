@@ -1182,7 +1182,7 @@ def test_demo_exploration_scene_advantage_preparation_changes_roll_instruction(t
     )
 
     output = capsys.readouterr().out
-    assert "Rzuć 2d20 i wpisz wyższy wynik" in output
+    assert "Rzuć 2d20 z przewagą i wpisz oba wyniki" in output
 
 
 def test_demo_exploration_scene_disadvantage_preparation_changes_roll_instruction(tmp_path, monkeypatch, capsys):
@@ -1218,7 +1218,7 @@ def test_demo_exploration_scene_disadvantage_preparation_changes_roll_instructio
     )
 
     output = capsys.readouterr().out
-    assert "Rzuć 2d20 i wpisz niższy wynik" in output
+    assert "Rzuć 2d20 z utrudnieniem i wpisz oba wyniki" in output
 
 
 def test_demo_exploration_scene_effect_boost_increases_success_progress(tmp_path, monkeypatch):

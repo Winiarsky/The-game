@@ -11,8 +11,12 @@ from dnd_board_game.llm import (
     GmDeclarationAnalysisType,
     NpcInteractionProposal,
 )
+from dnd_board_game.rules import RollMode
 from dnd_board_game.ui.exploration_app import (
     ExplorationUiSession,
+    PendingInteraction,
+    PendingKind,
+    PendingStage,
     PendingEnemyOpportunityAttack,
     UiFlowStage,
     create_app,
@@ -209,7 +213,7 @@ def test_exploration_ui_session_resolves_gate_challenge():
 
     state = session.decide("accept")
     assert state["pending"]["stage"] == "roll"
-    assert state["required_rolls"] == [{"actor_id": "hero", "actor_name": "Bohater"}]
+    assert state["required_rolls"] == [{"actor_id": "hero", "actor_name": "Bohater", "die_sides": 20, "label": "d20"}]
 
     state = session.resolve_rolls({"hero": 16})
 
@@ -217,19 +221,73 @@ def test_exploration_ui_session_resolves_gate_challenge():
     assert state["active_challenge"] is None
     assert state["flow"]["stage"] == "interaction_result"
     assert state["exploration_setup"] is None
-    assert state["pending_encounter"] is None
 
-    state = session.finish_interaction_result()
 
-    assert state["flow"]["stage"] == "party_setup"
-    assert state["exploration_setup"]["current_step"]["label"] == "przewrócona brama"
-    assert state["exploration_setup"]["current_step"]["positions"] == [[8, 5], [9, 5]]
+def test_exploration_ui_session_applies_item_bonus_and_breaks_item_after_critical_failure():
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=FakeGmClient(_challenge_proposal()),
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    challenge = next(item for item in session.state.challenges if item.id == "closed_gate")
+    option = next(item for item in challenge.options if item.id == "lockpick_gate")
+    session.pending = PendingInteraction(
+        kind=PendingKind.CHALLENGE,
+        stage=PendingStage.DECISION,
+        proposal=_challenge_proposal(),
+        challenge=challenge,
+        option=option,
+    )
 
-    state = session.confirm_exploration_setup_step()
+    accepted = session.decide("accept", lead_actor_id="hero")
 
-    assert state["travel_options"][0]["id"] == "courtyard"
-    assert state["pending_encounter"]["trigger_id"] == "gate_open_skirmish"
-    assert any(message["title"] == "Nowy punkt odkryty" for message in state["messages"])
+    assert accepted["required_rolls"] == [{"actor_id": "rogue", "actor_name": "Łotrzyca", "die_sides": 20, "label": "d20"}]
+    plan = accepted["pending"]["check_plan"]
+    assert plan["option_bonuses"][0]["source_id"] == "thieves_tools"
+    assert plan["option_bonuses"][0]["modifier"] == 2
+
+    after_roll = session.resolve_rolls({"rogue": 1})
+
+    assert after_roll["pending"]["stage"] == "breakage"
+    assert after_roll["required_rolls"] == [{"actor_id": "rogue", "actor_name": "Łotrzyca", "die_sides": 100, "label": "k100 trwałości"}]
+    assert after_roll["pending"]["breakage"]["chance_percent"] == 25
+
+    after_breakage = session.resolve_rolls({"rogue": 12})
+
+    assert after_breakage["pending"] is None
+    rogue = next(actor for actor in after_breakage["actors"] if actor["id"] == "rogue")
+    thieves_tools = next(item for item in rogue["inventory"] if item["id"] == "thieves_tools")
+    assert thieves_tools["broken"] is True
+    assert thieves_tools["available"] is False
+
+
+def test_exploration_ui_session_consumes_leveled_spell_slot_for_exploration_bonus():
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=FakeGmClient(_challenge_proposal()),
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    challenge = next(item for item in session.state.challenges if item.id == "closed_gate")
+    option = next(item for item in challenge.options if item.id == "reveal_bolt_with_flame")
+    option = replace(option, bonuses=(replace(option.bonuses[0], spell_level=1),))
+    session.pending = PendingInteraction(
+        kind=PendingKind.CHALLENGE,
+        stage=PendingStage.DECISION,
+        proposal=_challenge_proposal(),
+        challenge=challenge,
+        option=option,
+    )
+
+    accepted = session.decide("accept", lead_actor_id="hero")
+
+    assert accepted["required_rolls"] == [{"actor_id": "cleric", "actor_name": "Kapłan", "die_sides": 20, "label": "d20"}]
+    assert accepted["pending"]["check_plan"]["option_bonuses"][0]["spell_level"] == 1
+
+    resolved = session.resolve_rolls({"cleric": 12})
+
+    cleric = next(actor for actor in resolved["actors"] if actor["id"] == "cleric")
+    assert cleric["spell_slots"][0]["remaining"] == 1
+    assert any(message["title"] == "Zużyty slot czaru" for message in resolved["messages"])
 
 
 def test_exploration_ui_session_pending_encounter_waits_for_ui_setup_not_board_click():
@@ -591,6 +649,12 @@ def test_exploration_ui_session_can_select_attack_source_and_strength_potion_mod
     state = session.state_payload()
     source_ids = {source["id"] for source in state["combat"]["available_attack_sources"]}
     assert {"longsword_slash", "crossbow_shot"} <= source_ids
+    hero_payload = state["combat"]["current_actor"]
+    assert {item["id"] for item in hero_payload["inventory"]} >= {"longsword", "crossbow", "strength_potion"}
+    potion_action = next(action for action in state["combat"]["combat_actions"] if action["id"] == "drink_strength_potion")
+    assert potion_action["source_item_id"] == "strength_potion"
+    assert potion_action["source_item_quantity"] == 1
+    assert potion_action["available"] is True
     longsword_payload = next(source for source in state["combat"]["available_attack_sources"] if source["id"] == "longsword_slash")
     crossbow_payload = next(source for source in state["combat"]["available_attack_sources"] if source["id"] == "crossbow_shot")
     assert longsword_payload["mechanic"]["type"] == "MeleeAttack"
@@ -603,6 +667,10 @@ def test_exploration_ui_session_can_select_attack_source_and_strength_potion_mod
     assert boosted["combat"]["turn_action"]["action_use"] == "action_used"
     actor = next(candidate for candidate in boosted["combat"]["actors"] if candidate["id"] == "hero")
     assert any(effect["kind"] == "strength_potion" for effect in actor["effects"])
+    strength_potion = next(item for item in actor["inventory"] if item["id"] == "strength_potion")
+    assert strength_potion["quantity"] == 0
+    spent_action = next(action for action in boosted["combat"]["combat_actions"] if action["id"] == "drink_strength_potion")
+    assert spent_action["available"] is False
 
     hero = next(candidate for candidate in session.combat_state.actors if str(candidate.id) == "hero")
     base_source = next(source for source in session._attack_sources_for_actor(hero) if source.id == "longsword_slash")
@@ -814,6 +882,7 @@ def test_exploration_ui_session_dodge_adds_defensive_effect_until_next_turn():
 
     dodged = session.use_combat_dodge()
     actor_payload = next(candidate for candidate in dodged["combat"]["actors"] if candidate["id"] == str(actor.id))
+    current_actor_payload = dodged["combat"]["current_actor"]
     enemy_actor = next(candidate for candidate in session.combat_state.actors if candidate.faction == Faction.ENEMY)
     source = session.encounter_setup_flow.encounter.attack_sources_by_actor[enemy_actor.id]
     modified_source = session._effective_attack_source(enemy_actor, source, actor)
@@ -821,9 +890,13 @@ def test_exploration_ui_session_dodge_adds_defensive_effect_until_next_turn():
     assert dodged["combat"]["turn_action"]["action_use"] == "action_used"
     assert actor_payload["effects"][0]["kind"] == "dodge_until_next_turn"
     assert actor_payload["effects"][0]["label"] == "Unik"
-    assert actor_payload["effects"][0]["value_label"] == "-2 do ataków przeciwko aktorowi"
+    assert actor_payload["effects"][0]["value_label"] == "ataki przeciwko aktorowi mają utrudnienie"
     assert actor_payload["effects"][0]["expires"] == "znika na początku następnej tury aktora"
-    assert any(modifier.label == "Unik" and modifier.value == -2 for modifier in modified_source.attack_roll_request.modifiers)
+    chip_labels = {chip["label"] for chip in current_actor_payload["status_chips"]}
+    assert "Akcja zużyta" in chip_labels
+    assert "Reakcja dostępna" in chip_labels
+    assert "Unik: ataki przeciwko aktorowi mają utrudnienie" in chip_labels
+    assert modified_source.attack_roll_request.mode == RollMode.DISADVANTAGE
 
     session.finish_combat_turn()
     assert any(effect.actor_id == str(actor.id) and effect.kind == "dodge_until_next_turn" for effect in session.active_combat_effects)
@@ -831,6 +904,7 @@ def test_exploration_ui_session_dodge_adds_defensive_effect_until_next_turn():
         session.finish_combat_turn()
 
     assert not any(effect.actor_id == str(actor.id) and effect.kind == "dodge_until_next_turn" for effect in session.active_combat_effects)
+    assert any(message.title == "Efekty" and "Unik" in message.body for message in session.messages)
 
 
 def test_exploration_ui_session_disengage_adds_effect_until_turn_end():
@@ -939,10 +1013,12 @@ def test_exploration_ui_session_help_grants_advantage_to_ally_attack_against_tar
     assert selected["combat"]["pending_player_attack"]["attack_mode"] == "advantage"
 
     session.confirm_player_attack_target()
-    rolled = session.submit_player_attack_roll(natural_roll=10)
+    rolled = session.submit_player_attack_roll(natural_roll=10, natural_roll_2=15)
 
     assert not any(effect.kind == "help_attack_advantage" for effect in session.active_combat_effects)
     assert rolled["combat"]["pending_player_attack"] is not None
+    assert rolled["combat"]["pending_player_attack"]["natural_rolls"] == [10, 15]
+    assert rolled["combat"]["pending_player_attack"]["natural_roll"] == 15
 
 
 def test_exploration_ui_session_ready_prepares_attack_and_can_trigger_on_enemy_movement():
@@ -1128,6 +1204,7 @@ def test_exploration_ui_session_rubble_interaction_penalizes_adjacent_enemy_atta
     assert enemy["effects"][0]["value_label"] == "-2 do następnego ataku"
     assert enemy["effects"][0]["expires"] == "znika po następnym ataku"
     assert enemy["effects"][0]["summary"] == "Gruz w oczach | -2 do następnego ataku | znika po następnym ataku"
+    assert any(chip["label"] == "Gruz w oczach: -2 do następnego ataku" and chip["tone"] == "penalty" for chip in enemy["status_chips"])
     assert any(message["title"] == "Interakcja" and "Gruz w oczach" in message["body"] for message in applied["messages"])
     assert any(message["title"] == "Interakcja" and "rzut obronny na Zręczność" in message["body"] for message in applied["messages"])
     assert any(message["title"] == "Interakcja" and "ST 12" in message["body"] for message in applied["messages"])

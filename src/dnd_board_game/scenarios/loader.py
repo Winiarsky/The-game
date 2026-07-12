@@ -30,12 +30,14 @@ from dnd_board_game.exploration import (
     ExplorationChallenge,
     ExplorationChallengeOption,
     ExplorationEncounterTrigger,
+    ExplorationOptionBonus,
     EncounterOutcome,
     ExplorationOption,
     ExplorationOptionKind,
     ExplorationPoint,
     ExplorationResource,
     ExplorationZone,
+    ItemBreakageRisk,
     LlmChallengePolicy,
     LlmContext,
     LlmDcTier,
@@ -48,6 +50,7 @@ from dnd_board_game.exploration import (
     EncounterTriggerCondition,
 )
 from dnd_board_game.hardware import LedColor
+from dnd_board_game.inventory import InventoryItem
 from dnd_board_game.rules import D20RollRequest, RollModifier, RollModifierType
 from dnd_board_game.world import BLOCKING_TERRAIN, DIFFICULT_TERRAIN, BoardDimensions, BoardState, Coordinate
 
@@ -126,6 +129,7 @@ class ScenarioCombatActionDefinition:
     casting_kind: SpellCastingKind = SpellCastingKind.NONE
     prepared: bool = True
     concentration: bool = False
+    source_item_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,6 +146,8 @@ class ScenarioActorDefinition:
     ability_scores: AbilityScores
     spell_slots: tuple[SpellSlotState, ...]
     spell_save_dc: int
+    inventory: tuple[InventoryItem, ...]
+    spell_ids: tuple[str, ...]
     attacks: tuple[ScenarioAttackDefinition, ...]
     healing_sources: tuple[ScenarioHealingDefinition, ...] = ()
     combat_actions: tuple[ScenarioCombatActionDefinition, ...] = ()
@@ -432,16 +438,30 @@ def _parse_actor(data: dict[str, Any], scenario_path: Path) -> ScenarioActorDefi
     item_refs = merged.get("item_refs", [])
     if not isinstance(item_refs, list):
         raise ValueError(f"actor {merged.get('id', '<unknown>')}.item_refs must be a list.")
+    inventory_data = merged.get("inventory", [])
+    if not isinstance(inventory_data, list):
+        raise ValueError(f"actor {merged.get('id', '<unknown>')}.inventory must be a list.")
+    inventory_items: list[InventoryItem] = []
     for item_ref in item_refs:
         item = _read_json(_content_ref_path(scenario_path, "items", str(item_ref)))
+        inventory_items.append(_inventory_item_from_item_data(item, quantity=1, equipped=True, source_ref=str(item_ref)))
         attacks_data.extend(item.get("attacks", []))
         healing_data.extend(item.get("healing_sources", []))
-        combat_actions_data.extend(item.get("combat_actions", []))
+        combat_actions_data.extend(_combat_actions_with_item_source(item.get("combat_actions", []), str(item_ref)))
+    for item_entry in inventory_data:
+        item, inventory_item = _parse_inventory_entry(item_entry, scenario_path, actor_id=str(merged.get("id", "<unknown>")))
+        inventory_items.append(inventory_item)
+        if inventory_item.equipped:
+            attacks_data.extend(item.get("attacks", []))
+            healing_data.extend(item.get("healing_sources", []))
+        combat_actions_data.extend(_combat_actions_with_item_source(item.get("combat_actions", []), inventory_item.id))
 
     actor_id = str(_required(merged, "id", "actor"))
     attacks = tuple(_parse_attack(attack, actor_id) for attack in attacks_data)
     if not attacks:
         raise ValueError(f"actor {actor_id}.attacks must contain at least one attack.")
+    healing_sources = tuple(_parse_healing_source(source, actor_id) for source in healing_data)
+    combat_actions = tuple(_parse_combat_action(action, actor_id) for action in combat_actions_data)
     return ScenarioActorDefinition(
         id=actor_id,
         name=str(_required(merged, "name", f"actor {actor_id}")),
@@ -455,10 +475,89 @@ def _parse_actor(data: dict[str, Any], scenario_path: Path) -> ScenarioActorDefi
         ability_scores=_parse_ability_scores(_required_mapping(merged, "ability_scores", f"actor {actor_id}")),
         spell_slots=_parse_spell_slots(merged.get("spell_slots", {}), actor_id),
         spell_save_dc=int(merged.get("spell_save_dc", 0)),
+        inventory=tuple(inventory_items),
+        spell_ids=_spell_ids_for_actor(attacks, healing_sources, combat_actions),
         attacks=attacks,
-        healing_sources=tuple(_parse_healing_source(source, actor_id) for source in healing_data),
-        combat_actions=tuple(_parse_combat_action(action, actor_id) for action in combat_actions_data),
+        healing_sources=healing_sources,
+        combat_actions=combat_actions,
         source_ref=str(source_ref) if source_ref is not None else None,
+    )
+
+
+def _spell_ids_for_actor(
+    attacks: tuple[ScenarioAttackDefinition, ...],
+    healing_sources: tuple[ScenarioHealingDefinition, ...],
+    combat_actions: tuple[ScenarioCombatActionDefinition, ...],
+) -> tuple[str, ...]:
+    ids: list[str] = []
+    ids.extend(attack.id for attack in attacks if attack.source_type == AttackSourceType.SPELL)
+    ids.extend(source.id for source in healing_sources if source.source_type == HealingSourceType.SPELL)
+    ids.extend(action.id for action in combat_actions if action.casting_kind != SpellCastingKind.NONE)
+    return tuple(dict.fromkeys(ids))
+
+
+def _combat_actions_with_item_source(actions: Any, item_id: str) -> list[dict[str, Any]]:
+    if actions is None:
+        return []
+    if not isinstance(actions, list):
+        raise ValueError(f"item {item_id}.combat_actions must be a list.")
+    result: list[dict[str, Any]] = []
+    for action in actions:
+        if not isinstance(action, dict):
+            raise ValueError(f"item {item_id}.combat_actions entries must be objects.")
+        item_action = dict(action)
+        item_action.setdefault("source_item_id", item_id)
+        result.append(item_action)
+    return result
+
+
+def _parse_inventory_entry(item_entry: Any, scenario_path: Path, actor_id: str) -> tuple[dict[str, Any], InventoryItem]:
+    if not isinstance(item_entry, dict):
+        raise ValueError(f"actor {actor_id}.inventory entries must be objects.")
+    item_ref = item_entry.get("item_ref", item_entry.get("ref"))
+    if item_ref is not None:
+        item_data = _read_json(_content_ref_path(scenario_path, "items", str(item_ref)))
+        item_id = str(item_data.get("id", item_ref))
+        name = str(item_data.get("name", item_id))
+        kind = str(item_data.get("kind", "item"))
+        source_ref = str(item_ref)
+    else:
+        item_data = item_entry
+        item_id = str(_required(item_entry, "id", f"actor {actor_id}.inventory"))
+        name = str(_required(item_entry, "name", f"actor {actor_id}.inventory {item_id}"))
+        kind = str(item_entry.get("kind", "item"))
+        source_ref = None
+    quantity = int(item_entry.get("quantity", 1))
+    if quantity < 0:
+        raise ValueError(f"actor {actor_id}.inventory {item_id}.quantity must be non-negative.")
+    inventory_item = InventoryItem(
+        id=item_id,
+        name=str(item_entry.get("name", name)),
+        kind=str(item_entry.get("kind", kind)),
+        quantity=quantity,
+        equipped=bool(item_entry.get("equipped", True)),
+        source_ref=source_ref,
+        broken=bool(item_entry.get("broken", False)),
+    )
+    return item_data, inventory_item
+
+
+def _inventory_item_from_item_data(
+    item: dict[str, Any],
+    *,
+    quantity: int,
+    equipped: bool,
+    source_ref: str | None,
+) -> InventoryItem:
+    item_id = str(_required(item, "id", f"item {source_ref or '<inline>'}"))
+    return InventoryItem(
+        id=item_id,
+        name=str(item.get("name", item_id)),
+        kind=str(item.get("kind", "item")),
+        quantity=quantity,
+        equipped=equipped,
+        source_ref=source_ref,
+        broken=bool(item.get("broken", False)),
     )
 
 
@@ -549,6 +648,7 @@ def _parse_combat_action(data: dict[str, Any], actor_id: str) -> ScenarioCombatA
         ),
         prepared=bool(data.get("prepared", True)),
         concentration=bool(data.get("concentration", False)),
+        source_item_id=str(data["source_item_id"]) if "source_item_id" in data else None,
     )
 
 
@@ -835,6 +935,11 @@ def _parse_exploration_challenge_option(data: Any, challenge_id: str) -> Explora
     if not isinstance(data, dict):
         raise ValueError(f"exploration challenge {challenge_id}.options entries must be objects.")
     option_id = str(_required(data, "id", f"exploration challenge {challenge_id}.option"))
+    requirements = data.get("requires", {})
+    if requirements is None:
+        requirements = {}
+    if not isinstance(requirements, dict):
+        raise ValueError(f"exploration challenge option {option_id}.requires must be an object.")
     return ExplorationChallengeOption(
         id=option_id,
         label=str(_required(data, "label", f"exploration challenge option {option_id}")),
@@ -860,7 +965,71 @@ def _parse_exploration_challenge_option(data: Any, challenge_id: str) -> Explora
         success_complication=str(data["success_complication"]) if "success_complication" in data else None,
         failure_complication=str(data["failure_complication"]) if "failure_complication" in data else None,
         critical_failure_complication=str(data["critical_failure_complication"]) if "critical_failure_complication" in data else None,
+        requires_item_ids=_parse_string_tuple(
+            data.get("requires_item_ids", requirements.get("items", [])),
+            f"exploration challenge option {option_id}.requires.items",
+        ),
+        requires_spell_ids=_parse_string_tuple(
+            data.get("requires_spell_ids", requirements.get("spells", [])),
+            f"exploration challenge option {option_id}.requires.spells",
+        ),
+        requires_ability_scores=_parse_required_ability_scores(
+            data.get("requires_ability_scores", requirements.get("ability_scores", {})),
+            option_id,
+        ),
+        bonuses=_parse_exploration_option_bonuses(data.get("bonuses", []), option_id),
     )
+
+
+def _parse_exploration_option_bonuses(data: Any, option_id: str) -> tuple[ExplorationOptionBonus, ...]:
+    if data is None:
+        return ()
+    if not isinstance(data, list):
+        raise ValueError(f"exploration challenge option {option_id}.bonuses must be a list.")
+    result: list[ExplorationOptionBonus] = []
+    for index, entry in enumerate(data):
+        if not isinstance(entry, dict):
+            raise ValueError(f"exploration challenge option {option_id}.bonuses[{index}] must be an object.")
+        source_type = str(entry.get("source_type", entry.get("source", "")))
+        if source_type not in {"item", "spell"}:
+            raise ValueError(f"exploration challenge option {option_id}.bonuses[{index}].source_type must be item or spell.")
+        source_id = str(_required(entry, "id", f"exploration challenge option {option_id}.bonuses[{index}]"))
+        label = str(entry.get("label", source_id))
+        breakage_data = entry.get("breakage")
+        breakage_risk = None
+        if breakage_data is not None:
+            if not isinstance(breakage_data, dict):
+                raise ValueError(f"exploration challenge option {option_id}.bonuses[{index}].breakage must be an object.")
+            breakage_risk = ItemBreakageRisk(
+                chance_percent=int(_required(breakage_data, "chance_percent", f"exploration challenge option {option_id}.bonuses[{index}].breakage")),
+                trigger=str(breakage_data.get("trigger", "critical_failure")),
+            )
+        result.append(
+            ExplorationOptionBonus(
+                source_type=source_type,
+                source_id=source_id,
+                label=label,
+                modifier=int(entry.get("modifier", 0)),
+                spell_level=int(entry.get("spell_level", 0)),
+                consume=bool(entry.get("consume", False)),
+                breakage_risk=breakage_risk,
+            )
+        )
+    return tuple(result)
+
+
+def _parse_required_ability_scores(data: Any, option_id: str) -> tuple[tuple[str, int], ...]:
+    if data is None:
+        return ()
+    if not isinstance(data, dict):
+        raise ValueError(f"exploration challenge option {option_id}.requires.ability_scores must be an object.")
+    result: list[tuple[str, int]] = []
+    for ability, minimum in data.items():
+        ability_name = str(ability)
+        if ability_name not in {"strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"}:
+            raise ValueError(f"exploration challenge option {option_id}.requires.ability_scores has unknown ability: {ability_name}.")
+        result.append((ability_name, int(minimum)))
+    return tuple(result)
 
 
 def _parse_exploration_resource(data: Any) -> ExplorationResource:
@@ -1171,6 +1340,8 @@ def _actor_from_definition(definition: ScenarioActorDefinition) -> Actor:
         ability_scores=definition.ability_scores,
         spell_slots=definition.spell_slots,
         spell_save_dc=definition.spell_save_dc,
+        inventory=definition.inventory,
+        spell_ids=definition.spell_ids,
     )
 
 
@@ -1263,6 +1434,8 @@ def _validate_exploration(definition: ScenarioDefinition) -> None:
     zone_ids = {zone.id for zone in definition.exploration_zones}
     point_ids = {point.id for point in definition.exploration_points}
     resource_ids = {resource.id for resource in definition.exploration_resources}
+    actor_item_ids = {item.id for actor in definition.actors for item in actor.inventory}
+    actor_spell_ids = {spell_id for actor in definition.actors for spell_id in actor.spell_ids}
     if definition.party_start_zone_id not in zone_ids:
         raise ValueError("exploration.party_start_zone references unknown zone.")
     for resource_id in definition.exploration_initial_resources:
@@ -1336,6 +1509,29 @@ def _validate_exploration(definition: ScenarioDefinition) -> None:
                 raise ValueError(
                     f"exploration challenge option {option.id}.unlocks_if_resource_id references unknown resource."
                 )
+            unknown_items = set(option.requires_item_ids) - actor_item_ids
+            if unknown_items:
+                raise ValueError(
+                    f"exploration challenge option {option.id}.requires.items references unknown actor inventory items: "
+                    f"{', '.join(sorted(unknown_items))}."
+                )
+            unknown_spells = set(option.requires_spell_ids) - actor_spell_ids
+            if unknown_spells:
+                raise ValueError(
+                    f"exploration challenge option {option.id}.requires.spells references unknown actor spells: "
+                    f"{', '.join(sorted(unknown_spells))}."
+                )
+            for bonus in option.bonuses:
+                if bonus.source_type == "item" and bonus.source_id not in actor_item_ids:
+                    raise ValueError(
+                        f"exploration challenge option {option.id}.bonuses references unknown actor inventory item: "
+                        f"{bonus.source_id}."
+                    )
+                if bonus.source_type == "spell" and bonus.source_id not in actor_spell_ids:
+                    raise ValueError(
+                        f"exploration challenge option {option.id}.bonuses references unknown actor spell: "
+                        f"{bonus.source_id}."
+                    )
     challenge_ids = {challenge.id for challenge in definition.exploration_challenges}
     for trigger in definition.exploration_encounter_triggers:
         if trigger.condition == EncounterTriggerCondition.NOISE_AT_LEAST:

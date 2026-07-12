@@ -40,8 +40,35 @@ def test_roll_instruction_shows_advantage_and_disadvantage_expectations():
     advantage = roll_instruction(D20RollRequest(mode=RollMode.ADVANTAGE))
     disadvantage = roll_instruction(D20RollRequest(mode=RollMode.DISADVANTAGE))
 
-    assert "Rzuć 2d20 i wpisz wyższy wynik" in advantage.message
-    assert "Rzuć 2d20 i wpisz niższy wynik" in disadvantage.message
+    assert "Rzuć 2d20 z przewagą i wpisz oba wyniki" in advantage.message
+    assert "Rzuć 2d20 z utrudnieniem i wpisz oba wyniki" in disadvantage.message
+
+
+def test_advantage_uses_higher_roll_and_stores_both_results():
+    request = D20RollRequest(mode=RollMode.ADVANTAGE, modifiers=(_modifier("Bonus", 2),))
+
+    result = resolve_d20_roll(D20RollInput(request=request, natural_roll=4, natural_roll_2=17))
+
+    assert result.natural_rolls == (4, 17)
+    assert result.natural_roll == 17
+    assert result.total == 19
+
+
+def test_disadvantage_uses_lower_roll_and_stores_both_results():
+    request = D20RollRequest(mode=RollMode.DISADVANTAGE, modifiers=(_modifier("Bonus", 2),))
+
+    result = resolve_d20_roll(D20RollInput(request=request, natural_roll=4, natural_roll_2=17))
+
+    assert result.natural_rolls == (4, 17)
+    assert result.natural_roll == 4
+    assert result.total == 6
+
+
+def test_advantage_validates_second_roll_when_provided():
+    request = D20RollRequest(mode=RollMode.ADVANTAGE)
+
+    with pytest.raises(ValueError):
+        resolve_d20_roll(D20RollInput(request=request, natural_roll=10, natural_roll_2=0))
 
 
 def test_different_bonuses_and_penalties_sum_into_active_breakdown():

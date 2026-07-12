@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, NewType
 
 if TYPE_CHECKING:
     from dnd_board_game.combat.spells import SpellSlotState
+    from dnd_board_game.inventory import InventoryItem
     from dnd_board_game.world.coordinates import Coordinate
 
 
@@ -42,6 +43,8 @@ class Actor:
     ability_scores: AbilityScores = field(default_factory=AbilityScores)
     spell_slots: tuple[SpellSlotState, ...] = ()
     spell_save_dc: int = 0
+    inventory: tuple[InventoryItem, ...] = ()
+    spell_ids: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.max_hp <= 0:

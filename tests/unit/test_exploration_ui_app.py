@@ -141,6 +141,10 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
     assert "combatAllEffectsHtml" in html
     assert "relevantCombatEffects" in html
     assert "combatEffectHtml" in html
+    assert "statusChipsHtml" in html
+    assert "actorEffectChips" in html
+    assert "status-chip" in html
+    assert "status_chips" in html
     assert "attackEffectsDetailsHtml" in html
     assert "combatActionDetailsHtml" in html
     assert "pendingCombatInteractionHtml" in html
@@ -206,6 +210,10 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
     assert "/api/combat/player-attack-confirm" in html
     assert "/api/combat/player-attack-cancel" in html
     assert "/api/combat/player-attack-roll" in html
+    assert "d20RollInputsHtml" in html
+    assert "d20RollPayload" in html
+    assert "natural_roll_2" in html
+    assert "attack_mode" in html
     assert "/api/combat/player-damage" in html
     assert "/api/combat/dash" in html
     assert "/api/combat/dodge" in html
@@ -220,6 +228,10 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
     assert "pendingConcentrationCheckHtml" in html
     assert "pendingConcentrationCheckDetailsHtml" in html
     assert "submitConcentrationCheck()" in html
+    assert "actorInventoryHtml" in html
+    assert "challengeOptionsHtml" in html
+    assert "challengeOptionRequirementsText" in html
+    assert "Ten przedmiot został zużyty" in html
     assert "pending_concentration_check" in html
     assert "/api/combat/ready/start" in html
     assert "/api/combat/ready/confirm" in html
@@ -342,6 +354,11 @@ def test_exploration_ui_state_includes_player_facing_scene_description():
     assert "stara drewniana brama" in data["current_zone"]["summary"]
     assert "wspinaczka" in data["active_challenge"]["reasonable_approaches"]
     assert data["active_challenge"]["risk_notes"]
+    options = {option["id"]: option for option in data["active_challenge"]["options"]}
+    assert options["lockpick_gate"]["requires_item_ids"] == ["thieves_tools"]
+    assert options["lockpick_gate"]["eligible_actors"] == [{"id": "rogue", "name": "Łotrzyca"}]
+    assert options["reveal_bolt_with_flame"]["requires_spell_ids"] == ["sacred_flame"]
+    assert options["reveal_bolt_with_flame"]["eligible_actors"] == [{"id": "cleric", "name": "Kapłan"}]
 
 
 def _finish_map_setup(client):
@@ -499,7 +516,7 @@ def test_exploration_ui_accept_can_select_lead_actor():
     response = client.post("/api/decision", json={"decision": "accept", "lead_actor_id": "rogue"})
 
     assert response.status_code == 200
-    assert response.get_json()["required_rolls"] == [{"actor_id": "rogue", "actor_name": "Łotrzyca"}]
+    assert response.get_json()["required_rolls"] == [{"actor_id": "rogue", "actor_name": "Łotrzyca", "die_sides": 20, "label": "d20"}]
 
 
 def test_exploration_ui_reset_endpoint_restores_state():
@@ -782,7 +799,7 @@ def test_exploration_ui_happy_path_returns_to_player_after_enemy_turns():
     assert action["pending"]["stage"] == "decision"
 
     accepted = client.post("/api/decision", json={"decision": "accept"}).get_json()
-    assert accepted["required_rolls"] == [{"actor_id": "hero", "actor_name": "Bohater"}]
+    assert accepted["required_rolls"] == [{"actor_id": "hero", "actor_name": "Bohater", "die_sides": 20, "label": "d20"}]
 
     resolved = client.post("/api/rolls", json={"rolls": {"hero": 16}}).get_json()
     assert resolved["flow"]["stage"] == "interaction_result"

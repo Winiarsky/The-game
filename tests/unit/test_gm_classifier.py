@@ -70,6 +70,7 @@ def test_gm_classifier_validates_owned_resource_with_matching_tag():
         scenario_context=exploration.llm_context,
         state=state,
         player_action="Próbujemy wejść górą z liną.",
+        actors=exploration.actors,
     )
 
     validated = validate_gm_classifier_proposal(_proposal(), request)
@@ -621,6 +622,7 @@ def test_gm_classifier_builds_temporary_challenge_option():
         scenario_context=exploration.llm_context,
         state=state,
         player_action="Próbujemy wejść górą z liną.",
+        actors=exploration.actors,
     )
 
     validated = validate_gm_classifier_proposal(_proposal(), request)
@@ -644,6 +646,7 @@ def test_gm_classifier_request_payload_contains_context_layers_and_dynamic_state
         scenario_context=exploration.llm_context,
         state=state,
         player_action="Próbujemy wejść górą z liną.",
+        actors=exploration.actors,
     )
 
     payload = request.to_prompt_payload()
@@ -666,6 +669,12 @@ def test_gm_classifier_request_payload_contains_context_layers_and_dynamic_state
     assert payload["dynamic_state"]["challenge_progress"]["current"] == 0
     assert payload["dynamic_state"]["inventory_resource_ids"] == ["rope", "wedge"]
     assert payload["dynamic_state"]["attempt_history"] == []
+    party_actors = {actor["id"]: actor for actor in payload["party_actors"]}
+    assert "thieves_tools" in {item["id"] for item in party_actors["rogue"]["inventory"]}
+    assert "sacred_flame" in party_actors["cleric"]["spell_ids"]
+    options = {option["id"]: option for option in payload["challenge"]["available_options"]}
+    assert options["lockpick_gate"]["requirements"]["item_ids"] == ["thieves_tools"]
+    assert options["reveal_bolt_with_flame"]["requirements"]["spell_ids"] == ["sacred_flame"]
 
 
 def test_gm_classifier_request_uses_active_zone_challenge_policy():

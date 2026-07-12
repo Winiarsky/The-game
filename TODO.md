@@ -83,23 +83,28 @@
 - [x] Add rubble combat interaction with next-attack penalty and LED support.
 - [x] Add enemy Dexterity saving throw for rubble combat interaction.
 - [x] Show active combat effects with clear value and expiration in the combat UI.
+- [x] Add combat actor status chips for action economy and active effects.
 - [x] Add Dash and Dodge player combat actions to the exploration UI.
 - [x] Add Disengage player combat action as a turn-end status effect.
 - [x] Add opportunity attack reaction tracking and player movement confirmation.
 - [x] Add hero opportunity attack choice during enemy movement preview.
 - [x] Add combat Help action with ally advantage against a chosen target.
 - [x] Add combat Ready action for prepared attacks triggered during enemy turns.
+- [x] Add full advantage/disadvantage d20 input and resolution for combat attacks.
 - [x] Add combat action sources, cleric healing, and strength potion MVP.
 - [x] Add MVP spell slots and area spell targeting for combat.
 - [x] Add MVP spell save DC and automatic enemy saving throws.
 - [x] Show cantrip vs spell-slot sources in the gate skirmish UI.
 - [x] Add MVP concentration spell with a real attack-bonus effect.
 - [x] Add concentration saving throws after damage.
+- [x] Add actor inventory MVP with item-backed combat actions and consumable quantity.
+- [x] Add inventory and spell requirements for exploration challenge options.
 - [x] Add action mechanics class hierarchy and extension guide.
 - [x] Extract first combat action resolution services from exploration UI.
 - [x] Add exploration map environment setup before location selection.
 - [x] Couple exploration web UI with board/simulator backend for LEDs and board clicks.
-- [ ] Add full inventory/cantrip integration for exploration option bonuses.
+- [x] Add inventory/cantrip option bonuses with actor item consumption and breakage checks to exploration rolls.
+- [ ] Add scene-resource consumption to exploration rolls.
 - [ ] Add full prepared/known spell rules and advanced concentration modifiers.
 - [ ] Add voice input and richer UI for free-form exploration declarations.
 - [x] Implement hardware adapter interface around `board.Connection`.

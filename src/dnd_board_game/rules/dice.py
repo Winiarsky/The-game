@@ -59,11 +59,13 @@ class D20RollInstruction:
 class D20RollInput:
     request: D20RollRequest
     natural_roll: int
+    natural_roll_2: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class D20RollResult:
     natural_roll: int
+    natural_rolls: tuple[int, ...]
     breakdown: RollModifierBreakdown
     total: int
     mode: RollMode
@@ -100,8 +102,8 @@ def roll_instruction(request: D20RollRequest) -> D20RollInstruction:
     breakdown = build_modifier_breakdown(request.modifiers)
     roll_text = {
         RollMode.NORMAL: "Rzuć 1d20 i wpisz wynik.",
-        RollMode.ADVANTAGE: "Rzuć 2d20 i wpisz wyższy wynik.",
-        RollMode.DISADVANTAGE: "Rzuć 2d20 i wpisz niższy wynik.",
+        RollMode.ADVANTAGE: "Rzuć 2d20 z przewagą i wpisz oba wyniki.",
+        RollMode.DISADVANTAGE: "Rzuć 2d20 z utrudnieniem i wpisz oba wyniki.",
     }[request.mode]
     message = f"{roll_text} Końcowy modyfikator: {_format_modifier(breakdown.modifier_total)}."
     if breakdown.active_modifiers:
@@ -114,17 +116,35 @@ def roll_instruction(request: D20RollRequest) -> D20RollInstruction:
 
 
 def resolve_d20_roll(roll_input: D20RollInput) -> D20RollResult:
-    if not 1 <= roll_input.natural_roll <= 20:
-        raise ValueError("A natural d20 roll must be between 1 and 20.")
+    natural_rolls = _natural_rolls_for_mode(roll_input)
+    for natural_roll in natural_rolls:
+        if not 1 <= natural_roll <= 20:
+            raise ValueError("A natural d20 roll must be between 1 and 20.")
+    selected_roll = _selected_natural_roll(roll_input.request.mode, natural_rolls)
     breakdown = build_modifier_breakdown(roll_input.request.modifiers)
     return D20RollResult(
-        natural_roll=roll_input.natural_roll,
+        natural_roll=selected_roll,
+        natural_rolls=natural_rolls,
         breakdown=breakdown,
-        total=roll_input.natural_roll + breakdown.modifier_total,
+        total=selected_roll + breakdown.modifier_total,
         mode=roll_input.request.mode,
-        is_natural_20=roll_input.natural_roll == 20,
-        is_natural_1=roll_input.natural_roll == 1,
+        is_natural_20=selected_roll == 20,
+        is_natural_1=selected_roll == 1,
     )
+
+
+def _natural_rolls_for_mode(roll_input: D20RollInput) -> tuple[int, ...]:
+    if roll_input.request.mode == RollMode.NORMAL or roll_input.natural_roll_2 is None:
+        return (roll_input.natural_roll,)
+    return (roll_input.natural_roll, roll_input.natural_roll_2)
+
+
+def _selected_natural_roll(mode: RollMode, natural_rolls: tuple[int, ...]) -> int:
+    if mode == RollMode.ADVANTAGE:
+        return max(natural_rolls)
+    if mode == RollMode.DISADVANTAGE:
+        return min(natural_rolls)
+    return natural_rolls[0]
 
 
 def _select_stacking_modifier(modifiers: list[RollModifier]) -> RollModifier:

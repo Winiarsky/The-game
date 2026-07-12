@@ -10,7 +10,7 @@ from dnd_board_game.combat import (
     resolve_enemy_auto_attack,
     start_combat,
 )
-from dnd_board_game.rules import D20RollInput, D20RollRequest, RollModifier, RollModifierType, resolve_d20_roll
+from dnd_board_game.rules import D20RollInput, D20RollRequest, RollMode, RollModifier, RollModifierType, resolve_d20_roll
 from dnd_board_game.world import BoardState, Coordinate
 
 
@@ -72,6 +72,28 @@ def test_enemy_auto_attack_hits_with_deterministic_rng_and_applies_damage():
     assert updated_hero.max_hp == 20
     assert "trafia" in result.message
     assert "HP 20 -> 16" in result.message
+
+
+def test_enemy_auto_attack_rolls_two_d20_for_disadvantage():
+    enemy = _actor("goblin", Faction.ENEMY, Coordinate(1, 0))
+    hero = _actor("hero", Faction.ALLY, Coordinate(0, 0), hp=20)
+    state = start_combat((enemy, hero), _order(enemy, hero))
+    source = _source()
+    source = AttackSource(
+        name=source.name,
+        source_type=source.source_type,
+        range_feet=source.range_feet,
+        attack_roll_request=D20RollRequest(mode=RollMode.DISADVANTAGE, modifiers=source.attack_roll_request.modifiers),
+        damage_die_sides=source.damage_die_sides,
+        damage_modifier=source.damage_modifier,
+        damage_type=source.damage_type,
+    )
+
+    result = resolve_enemy_auto_attack(BoardState(), state, enemy, source, random.Random(7))
+
+    assert result.attack_roll is not None
+    assert result.attack_roll.natural_rolls == (11, 5)
+    assert result.attack_roll.natural_roll == 5
 
 
 def test_enemy_auto_attack_skips_when_no_legal_target():

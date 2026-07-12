@@ -11,6 +11,7 @@ from typing import Any, Protocol
 import requests
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
+from dnd_board_game.actors import Actor
 from dnd_board_game.combat import SceneAbilityCheck
 from dnd_board_game.exploration import (
     CheckAggregation,
@@ -198,6 +199,7 @@ class GmClassifierRequest:
     player_action: str
     declaration_thread: tuple[GmDeclarationThreadEntry, ...] = ()
     active_preparation_effects: tuple[GmPreparationEffect, ...] = ()
+    actors: tuple[Actor, ...] = ()
 
     def to_prompt_payload(self) -> dict[str, Any]:
         challenge_state = challenge_state_for(self.state, self.challenge.id)
@@ -236,11 +238,13 @@ class GmClassifierRequest:
                         "progress_on_success": option.progress_on_success,
                         "progress_on_failure": option.progress_on_failure,
                         "tags": list(option.tags),
+                        "requirements": _option_requirements_payload(option),
                     }
                     for option in available_challenge_options(self.state, self.challenge)
                 ],
             },
             "party_resources": resources,
+            "party_actors": [_actor_grounding_payload(actor) for actor in self.actors],
             "dynamic_state": _dynamic_state_payload(self.state, self.challenge),
             "allowed_abilities": sorted(CORE_DND_5E_ABILITIES),
             "allowed_skills": sorted(_allowed_skills(policy)),
@@ -479,6 +483,7 @@ def build_gm_classifier_request(
     player_action: str,
     declaration_thread: tuple[GmDeclarationThreadEntry, ...] = (),
     active_preparation_effects: tuple[GmPreparationEffect, ...] = (),
+    actors: tuple[Actor, ...] = (),
 ) -> GmClassifierRequest:
     zone = next(zone for zone in state.zones if zone.id == state.party_position.zone_id)
     challenge = next((challenge for challenge in state.challenges if challenge.zone_id == zone.id), None)
@@ -494,6 +499,7 @@ def build_gm_classifier_request(
         player_action,
         declaration_thread,
         active_preparation_effects,
+        actors,
     )
 
 
@@ -906,6 +912,46 @@ def _resource_payload(resource: ExplorationResource) -> dict[str, Any]:
         "advantage": resource.advantage,
         "mitigates_complications": list(resource.mitigates_complications),
         "mitigates_noise": resource.mitigates_noise,
+    }
+
+
+def _actor_grounding_payload(actor: Actor) -> dict[str, Any]:
+    return {
+        "id": str(actor.id),
+        "name": actor.name,
+        "ability_scores": {
+            "strength": actor.ability_scores.strength,
+            "dexterity": actor.ability_scores.dexterity,
+            "constitution": actor.ability_scores.constitution,
+            "intelligence": actor.ability_scores.intelligence,
+            "wisdom": actor.ability_scores.wisdom,
+            "charisma": actor.ability_scores.charisma,
+        },
+        "inventory": [
+            {
+                "id": item.id,
+                "name": item.name,
+                "kind": item.kind,
+                "quantity": item.quantity,
+                "equipped": item.equipped,
+                "broken": item.broken,
+            }
+            for item in actor.inventory
+            if item.quantity > 0
+        ],
+        "spell_ids": list(actor.spell_ids),
+    }
+
+
+def _option_requirements_payload(option: ExplorationChallengeOption) -> dict[str, Any]:
+    return {
+        "item_ids": list(option.requires_item_ids),
+        "spell_ids": list(option.requires_spell_ids),
+        "ability_scores": [
+            {"ability": ability, "minimum": minimum}
+            for ability, minimum in option.requires_ability_scores
+        ],
+        "bonuses": [bonus.as_payload() for bonus in option.bonuses],
     }
 
 

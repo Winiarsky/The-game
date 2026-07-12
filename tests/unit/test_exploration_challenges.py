@@ -1,12 +1,19 @@
+from dataclasses import replace
+
 from dnd_board_game.combat import SceneFlags, scene_flag
 from dnd_board_game.exploration import (
     ExplorationState,
+    active_option_bonuses_for_actor,
+    actors_matching_challenge_option,
     available_challenge_options,
+    available_challenge_options_for_actors,
     challenge_state_for,
+    option_roll_modifiers_for_actor,
     reveal_exploration_points,
     resolve_challenge_option,
     visible_exploration_points,
 )
+from dnd_board_game.inventory import break_inventory_item
 from dnd_board_game.rules import D20RollInput, D20RollRequest, RollModifier, RollModifierType, resolve_d20_roll
 from dnd_board_game.scenarios import build_exploration_from_scenario, load_scenario
 
@@ -124,6 +131,65 @@ def test_resource_locked_option_is_hidden_until_resource_is_owned():
     )
 
     assert "saw_picket" in {option.id for option in available_challenge_options(with_saw, challenge)}
+
+
+def test_actor_requirements_hide_option_when_no_actor_matches():
+    exploration = build_exploration_from_scenario(load_scenario("content/scenarios/abandoned_watchtower.json"))
+    state = ExplorationState(
+        exploration.zones,
+        exploration.points,
+        exploration.party_position,
+        SceneFlags(),
+        challenges=exploration.challenges,
+        resources=exploration.resources,
+        inventory_resource_ids=exploration.initial_resource_ids,
+    )
+    challenge = next(item for item in state.challenges if item.id == "closed_gate")
+    lockpick = next(item for item in challenge.options if item.id == "lockpick_gate")
+
+    assert lockpick.requires_item_ids == ("thieves_tools",)
+    assert [actor.name for actor in actors_matching_challenge_option(exploration.actors, lockpick)] == ["Łotrzyca"]
+
+    actors_without_tools = tuple(actor for actor in exploration.actors if str(actor.id) != "rogue")
+
+    assert "lockpick_gate" not in {
+        option.id for option in available_challenge_options_for_actors(state, challenge, actors_without_tools)
+    }
+
+
+def test_gate_challenge_item_bonus_is_active_only_for_unbroken_item():
+    exploration = build_exploration_from_scenario(load_scenario("content/scenarios/abandoned_watchtower"))
+    challenge = next(item for item in exploration.challenges if item.id == "closed_gate")
+    lockpick = next(item for item in challenge.options if item.id == "lockpick_gate")
+    rogue = next(actor for actor in exploration.actors if str(actor.id) == "rogue")
+
+    bonuses = active_option_bonuses_for_actor(rogue, lockpick)
+    modifiers = option_roll_modifiers_for_actor(rogue, lockpick)
+
+    assert [bonus.source_id for bonus in bonuses] == ["thieves_tools"]
+    assert modifiers[0].label == "Narzędzia złodziejskie"
+    assert modifiers[0].value == 2
+
+    broken_rogue = break_inventory_item(rogue, "thieves_tools")
+
+    assert active_option_bonuses_for_actor(broken_rogue, lockpick) == ()
+    assert option_roll_modifiers_for_actor(broken_rogue, lockpick) == ()
+
+
+def test_spell_option_bonus_requires_slot_for_leveled_spell():
+    exploration = build_exploration_from_scenario(load_scenario("content/scenarios/abandoned_watchtower"))
+    challenge = next(item for item in exploration.challenges if item.id == "closed_gate")
+    flame = next(item for item in challenge.options if item.id == "reveal_bolt_with_flame")
+    cleric = next(actor for actor in exploration.actors if str(actor.id) == "cleric")
+    leveled_flame = replace(flame, bonuses=(replace(flame.bonuses[0], spell_level=1),))
+
+    assert active_option_bonuses_for_actor(cleric, flame)[0].spell_level == 0
+    assert actors_matching_challenge_option((cleric,), leveled_flame) == (cleric,)
+
+    spent_cleric = replace(cleric, spell_slots=tuple(replace(slot, remaining=0) for slot in cleric.spell_slots))
+
+    assert actors_matching_challenge_option((spent_cleric,), leveled_flame) == ()
+    assert active_option_bonuses_for_actor(spent_cleric, leveled_flame) == ()
 
 
 def test_gate_challenge_reveals_hidden_npc_after_completion():

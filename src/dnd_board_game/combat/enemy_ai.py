@@ -4,7 +4,7 @@ import random
 from dataclasses import dataclass, replace
 
 from dnd_board_game.actors import Actor
-from dnd_board_game.rules import D20RollInput, D20RollResult, resolve_d20_roll
+from dnd_board_game.rules import D20RollInput, D20RollResult, RollMode, resolve_d20_roll
 from dnd_board_game.world import BoardState, PathResult, find_path, movement_range
 
 from .action_economy import ActionUse
@@ -77,7 +77,7 @@ def resolve_enemy_auto_attack(
         )
 
     target = _select_enemy_target(enemy, targets)
-    attack_roll = resolve_d20_roll(D20RollInput(source.attack_roll_request, rng.randint(1, 20)))
+    attack_roll = resolve_d20_roll(_roll_input_for_request(source.attack_roll_request, rng))
     declaration = AttackDeclaration(attacker=enemy, target=target, source=source)
     resolution = resolve_attack(declaration, attack_roll, ActionUse.ACTION_AVAILABLE)
     updated_state = action_result.state
@@ -118,6 +118,13 @@ def resolve_enemy_auto_attack(
         updated_target=updated_target,
         action_used=True,
     )
+
+
+def _roll_input_for_request(request, rng: random.Random) -> D20RollInput:
+    first = rng.randint(1, 20)
+    if request.mode == RollMode.NORMAL:
+        return D20RollInput(request, first)
+    return D20RollInput(request, first, rng.randint(1, 20))
 
 
 def resolve_enemy_auto_turn(

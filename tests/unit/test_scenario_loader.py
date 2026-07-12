@@ -112,6 +112,13 @@ def test_load_gate_skirmish_uses_shared_map_setup_and_ranged_rogue():
     assert encounter.player_start_zones == ((Coordinate(7, 6), Coordinate(8, 6), Coordinate(9, 6)),)
     assert encounter.attack_sources_by_actor[rogue.id].name == "Kusza"
     assert encounter.attack_sources_by_actor[rogue.id].range_feet == 80
+    hero = next(actor for actor in encounter.actors if actor.id == "hero")
+    assert {item.id for item in hero.inventory} >= {"longsword", "crossbow", "strength_potion"}
+    strength_potion = next(item for item in hero.inventory if item.id == "strength_potion")
+    assert strength_potion.name == "Magiczny napój siły"
+    strength_action = next(action for action in encounter.combat_actions_by_actor[hero.id] if action.id == "drink_strength_potion")
+    assert strength_action.action_type == "strength_potion"
+    assert strength_action.source_item_id == "strength_potion"
     cleric_sources = {source.id: source for source in encounter.attack_source_options_by_actor[cleric.id]}
     assert cleric_sources["sacred_flame"].casting_kind == SpellCastingKind.CANTRIP
     assert cleric_sources["sacred_flame"].spell_level == 0
@@ -217,7 +224,8 @@ def test_load_abandoned_watchtower_builds_exploration_scene():
     assert loaded.definition.scene_mode == SceneMode.EXPLORATION
     assert exploration.scenario_id == "abandoned_watchtower"
     assert exploration.party_position.zone_id == "gate"
-    assert len(exploration.actors) == 2
+    assert len(exploration.actors) == 3
+    assert {actor.id for actor in exploration.actors} == {"hero", "rogue", "cleric"}
     assert len(exploration.environment) == 2
     assert exploration.board.terrain_at(Coordinate(8, 5)).blocks_movement is False
     assert len(exploration.zones) == 4
@@ -289,7 +297,24 @@ def test_load_abandoned_watchtower_folder_keeps_monster_and_item_refs_working():
 
     hero = next(actor for actor in exploration.actors if actor.id == "hero")
     assert hero.name == "Bohater"
+    assert {item.id for item in hero.inventory} >= {"longsword", "strength_potion"}
     assert loaded.path == Path("content/scenarios/abandoned_watchtower/scenario.json")
+    rogue = next(actor for actor in exploration.actors if actor.id == "rogue")
+    cleric = next(actor for actor in exploration.actors if actor.id == "cleric")
+    assert {item.id for item in rogue.inventory} >= {"crossbow", "thieves_tools"}
+    assert "sacred_flame" in cleric.spell_ids
+    gate = next(challenge for challenge in exploration.challenges if challenge.id == "closed_gate")
+    lockpick = next(option for option in gate.options if option.id == "lockpick_gate")
+    flame = next(option for option in gate.options if option.id == "reveal_bolt_with_flame")
+    assert lockpick.requires_item_ids == ("thieves_tools",)
+    assert lockpick.bonuses[0].source_id == "thieves_tools"
+    assert lockpick.bonuses[0].modifier == 2
+    assert lockpick.bonuses[0].breakage_risk is not None
+    assert lockpick.bonuses[0].breakage_risk.chance_percent == 25
+    assert flame.requires_spell_ids == ("sacred_flame",)
+    assert flame.bonuses[0].source_id == "sacred_flame"
+    assert flame.bonuses[0].spell_level == 0
+    assert flame.bonuses[0].modifier == 1
 
 
 def test_exploration_challenge_reveal_rejects_unknown_point(tmp_path):

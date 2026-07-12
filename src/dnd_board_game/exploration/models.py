@@ -6,7 +6,15 @@ from enum import StrEnum
 from dnd_board_game.actors import Actor
 from dnd_board_game.combat import SceneAbilityCheck, SceneFlags, SetupVisibility, scene_flag, set_scene_flag
 from dnd_board_game.hardware import LedColor, LedFeedback, LedFrame, LedRole
-from dnd_board_game.rules import D20RollInput, D20RollRequest, D20RollResult, resolve_ability_check, resolve_d20_roll
+from dnd_board_game.rules import (
+    D20RollInput,
+    D20RollRequest,
+    D20RollResult,
+    RollModifier,
+    RollModifierType,
+    resolve_ability_check,
+    resolve_d20_roll,
+)
 from dnd_board_game.world import Coordinate
 
 
@@ -380,6 +388,8 @@ class ExplorationCheckPlan:
     helper_actor_id: str | None = None
     selected_actor_ids: tuple[str, ...] = ()
     reason_for_players: str = ""
+    roll_modifiers_by_actor_id: tuple[tuple[str, tuple[RollModifier, ...]], ...] = ()
+    option_bonus_payloads: tuple[dict[str, object], ...] = ()
 
     def as_payload(self) -> dict[str, object]:
         return {
@@ -393,6 +403,11 @@ class ExplorationCheckPlan:
             "skill": self.skill,
             "dc": self.dc,
             "reason_for_players": self.reason_for_players,
+            "roll_modifiers_by_actor_id": [
+                {"actor_id": actor_id, "modifiers": [_roll_modifier_payload(modifier) for modifier in modifiers]}
+                for actor_id, modifiers in self.roll_modifiers_by_actor_id
+            ],
+            "option_bonuses": list(self.option_bonus_payloads),
         }
 
 
@@ -419,9 +434,70 @@ class ExplorationCheckResult:
             "consequence_actor_ids": [str(actor.id) for actor in self.consequence_actors],
             "progress_total": self.progress_total,
             "rolls": [
-                {"actor_id": str(actor.id), "natural_roll": roll.natural_roll, "total": roll.total}
+                {
+                    "actor_id": str(actor.id),
+                    "natural_roll": roll.natural_roll,
+                    "total": roll.total,
+                    "modifier_total": roll.breakdown.modifier_total,
+                    "active_modifiers": [_roll_modifier_payload(modifier) for modifier in roll.breakdown.active_modifiers],
+                    "ignored_modifiers": [_roll_modifier_payload(modifier) for modifier in roll.breakdown.ignored_modifiers],
+                }
                 for actor, roll in self.rolls
             ],
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ItemBreakageRisk:
+    chance_percent: int
+    trigger: str = "critical_failure"
+
+    def __post_init__(self) -> None:
+        if not 0 <= self.chance_percent <= 100:
+            raise ValueError("Item breakage chance must be between 0 and 100.")
+
+
+@dataclass(frozen=True, slots=True)
+class ExplorationOptionBonus:
+    source_type: str
+    source_id: str
+    label: str
+    modifier: int = 0
+    spell_level: int = 0
+    consume: bool = False
+    breakage_risk: ItemBreakageRisk | None = None
+
+    def __post_init__(self) -> None:
+        if self.spell_level < 0:
+            raise ValueError("Exploration spell bonus level cannot be negative.")
+
+    def as_roll_modifier(self) -> RollModifier | None:
+        if self.modifier == 0:
+            return None
+        modifier_type = RollModifierType.ITEM if self.source_type == "item" else RollModifierType.SITUATIONAL
+        return RollModifier(
+            self.label,
+            self.modifier,
+            modifier_type,
+            stacking_key=f"exploration_bonus:{self.source_type}:{self.source_id}",
+        )
+
+    def as_payload(self) -> dict[str, object]:
+        return {
+            "source_type": self.source_type,
+            "source_id": self.source_id,
+            "label": self.label,
+            "modifier": self.modifier,
+            "spell_level": self.spell_level,
+            "consume": self.consume,
+            "breakage_risk": (
+                {
+                    "chance_percent": self.breakage_risk.chance_percent,
+                    "trigger": self.breakage_risk.trigger,
+                }
+                if self.breakage_risk is not None
+                else None
+            ),
         }
 
 
@@ -459,6 +535,10 @@ class ExplorationChallengeOption:
     check_participants: CheckParticipants | None = None
     check_aggregation: CheckAggregation | None = None
     consequence_targets: tuple[ConsequenceTarget, ...] = ()
+    requires_item_ids: tuple[str, ...] = ()
+    requires_spell_ids: tuple[str, ...] = ()
+    requires_ability_scores: tuple[tuple[str, int], ...] = ()
+    bonuses: tuple[ExplorationOptionBonus, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -588,6 +668,75 @@ def available_challenge_options(
             continue
         result.append(option)
     return tuple(result)
+
+
+def available_challenge_options_for_actors(
+    state: ExplorationState,
+    challenge: ExplorationChallenge,
+    actors: tuple[Actor, ...],
+) -> tuple[ExplorationChallengeOption, ...]:
+    return tuple(
+        option
+        for option in available_challenge_options(state, challenge)
+        if not challenge_option_requires_actor(option) or actors_matching_challenge_option(actors, option)
+    )
+
+
+def challenge_option_requires_actor(option: ExplorationChallengeOption) -> bool:
+    return bool(option.requires_item_ids or option.requires_spell_ids or option.requires_ability_scores)
+
+
+def actors_matching_challenge_option(
+    actors: tuple[Actor, ...],
+    option: ExplorationChallengeOption,
+) -> tuple[Actor, ...]:
+    return tuple(actor for actor in actors if actor_meets_challenge_option_requirements(actor, option))
+
+
+def actor_meets_challenge_option_requirements(actor: Actor, option: ExplorationChallengeOption) -> bool:
+    inventory_ids = {item.id for item in actor.inventory if item.available}
+    if any(item_id not in inventory_ids for item_id in option.requires_item_ids):
+        return False
+    if any(not _actor_can_use_exploration_spell(actor, option, spell_id) for spell_id in option.requires_spell_ids):
+        return False
+    for ability, minimum in option.requires_ability_scores:
+        if getattr(actor.ability_scores, ability, 0) < minimum:
+            return False
+    return True
+
+
+def active_option_bonuses_for_actor(actor: Actor, option: ExplorationChallengeOption) -> tuple[ExplorationOptionBonus, ...]:
+    inventory_ids = {item.id for item in actor.inventory if item.available}
+    spell_ids = set(actor.spell_ids)
+    result: list[ExplorationOptionBonus] = []
+    for bonus in option.bonuses:
+        if bonus.source_type == "item" and bonus.source_id in inventory_ids:
+            result.append(bonus)
+        elif bonus.source_type == "spell" and bonus.source_id in spell_ids and _actor_has_spell_slot_for_bonus(actor, bonus):
+            result.append(bonus)
+    return tuple(result)
+
+
+def option_roll_modifiers_for_actor(actor: Actor, option: ExplorationChallengeOption) -> tuple[RollModifier, ...]:
+    return tuple(
+        modifier
+        for bonus in active_option_bonuses_for_actor(actor, option)
+        for modifier in (bonus.as_roll_modifier(),)
+        if modifier is not None
+    )
+
+
+def _actor_can_use_exploration_spell(actor: Actor, option: ExplorationChallengeOption, spell_id: str) -> bool:
+    if spell_id not in set(actor.spell_ids):
+        return False
+    matching_bonuses = tuple(bonus for bonus in option.bonuses if bonus.source_type == "spell" and bonus.source_id == spell_id)
+    return all(_actor_has_spell_slot_for_bonus(actor, bonus) for bonus in matching_bonuses)
+
+
+def _actor_has_spell_slot_for_bonus(actor: Actor, bonus: ExplorationOptionBonus) -> bool:
+    if bonus.spell_level <= 0:
+        return True
+    return any(slot.level == bonus.spell_level and slot.remaining > 0 for slot in actor.spell_slots)
 
 
 def matching_resources(
@@ -888,6 +1037,15 @@ def resolve_party_check(inputs: tuple[PartyCheckInput, ...], dc: int) -> PartyCh
     )
     result = resolve_exploration_check(plan, inputs)
     return PartyCheckResult(result.rolls, result.selected_actor, result.selected_roll, dc, result.success)
+
+
+def _roll_modifier_payload(modifier: RollModifier) -> dict[str, object]:
+    return {
+        "label": modifier.label,
+        "value": modifier.value,
+        "type": modifier.modifier_type.value,
+        "stacking_key": modifier.stacking_key,
+    }
 
 
 def resolve_zone_search(

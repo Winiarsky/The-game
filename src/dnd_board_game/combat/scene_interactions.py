@@ -87,7 +87,7 @@ def effect_value_label(effect: ActiveCombatEffect) -> str:
     if effect.kind == "grant_next_attack_penalty":
         return f"{format_signed(effect.value)} do następnego ataku"
     if effect.kind == "dodge_until_next_turn":
-        return f"{format_signed(effect.value)} do ataków przeciwko aktorowi"
+        return "ataki przeciwko aktorowi mają utrudnienie"
     if effect.kind == "disengage_until_turn_end":
         return "bezpieczne odejście"
     if effect.kind == "help_attack_advantage":
@@ -463,14 +463,7 @@ def attack_source_with_target_combat_effects(
     mode = source.attack_roll_request.mode
     for effect in active_effects:
         if effect.actor_id == str(target.id) and effect.kind == "dodge_until_next_turn":
-            modifiers.append(
-                RollModifier(
-                    effect.label,
-                    effect.value,
-                    RollModifierType.CUSTOM,
-                    stacking_key=effect.id,
-                )
-            )
+            mode = _with_disadvantage(mode)
         if (
             effect.kind == "help_attack_advantage"
             and effect.actor_id == str(attacker.id)
@@ -533,6 +526,12 @@ def _with_advantage(mode: RollMode) -> RollMode:
     if mode == RollMode.DISADVANTAGE:
         return RollMode.NORMAL
     return RollMode.ADVANTAGE
+
+
+def _with_disadvantage(mode: RollMode) -> RollMode:
+    if mode == RollMode.ADVANTAGE:
+        return RollMode.NORMAL
+    return RollMode.DISADVANTAGE
 
 
 def _damage_hint_with_bonus(source, bonus: int) -> str:

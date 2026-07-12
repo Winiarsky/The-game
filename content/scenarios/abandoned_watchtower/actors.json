@@ -22,7 +22,8 @@
         "charisma": 10
       },
       "item_refs": [
-        "longsword"
+        "longsword",
+        "strength_potion"
       ]
     },
     {
@@ -47,7 +48,106 @@
         "charisma": 12
       },
       "item_refs": [
-        "crossbow"
+        "crossbow",
+        "thieves_tools"
+      ]
+    },
+    {
+      "id": "cleric",
+      "name": "Kapłan",
+      "kind": "player_character",
+      "faction": "ally",
+      "ac": 13,
+      "hp": 14,
+      "temp_hp": 0,
+      "speed_feet": 30,
+      "position": [
+        0,
+        2
+      ],
+      "ability_scores": {
+        "strength": 10,
+        "dexterity": 12,
+        "constitution": 12,
+        "intelligence": 10,
+        "wisdom": 16,
+        "charisma": 14
+      },
+      "spell_slots": {
+        "1": 2
+      },
+      "spell_save_dc": 13,
+      "attacks": [
+        {
+          "id": "sacred_flame",
+          "name": "Święty płomień",
+          "source_type": "spell",
+          "casting_kind": "cantrip",
+          "prepared": true,
+          "ability": "wisdom",
+          "range_feet": 60,
+          "attack_modifier": 0,
+          "save_ability": "dexterity",
+          "save_damage_on_success": "none",
+          "damage": {
+            "dice": "1d8",
+            "modifier": 0,
+            "damage_type": "radiant"
+          }
+        },
+        {
+          "id": "radiant_line",
+          "name": "Smuga światła",
+          "source_type": "spell",
+          "casting_kind": "leveled",
+          "prepared": true,
+          "ability": "wisdom",
+          "range_feet": 30,
+          "spell_level": 1,
+          "attack_modifier": 0,
+          "save_ability": "dexterity",
+          "save_damage_on_success": "half",
+          "area": {
+            "shape": "line",
+            "length_feet": 30,
+            "width_feet": 5
+          },
+          "damage": {
+            "dice": "1d8",
+            "modifier": 0,
+            "damage_type": "radiant"
+          }
+        }
+      ],
+      "healing_sources": [
+        {
+          "id": "healing_word",
+          "name": "Słowo leczenia",
+          "source_type": "spell",
+          "casting_kind": "leveled",
+          "prepared": true,
+          "range_feet": 60,
+          "spell_level": 1,
+          "healing": {
+            "dice": "1d4",
+            "modifier": 3
+          }
+        }
+      ],
+      "combat_actions": [
+        {
+          "id": "bless_attack_bonus",
+          "name": "Błogosławieństwo",
+          "action_type": "concentration_attack_bonus",
+          "label": "Błogosławieństwo",
+          "value": 1,
+          "target_faction": "ally",
+          "spell_level": 1,
+          "casting_kind": "leveled",
+          "prepared": true,
+          "concentration": true,
+          "duration": "concentration"
+        }
       ]
     }
   ]

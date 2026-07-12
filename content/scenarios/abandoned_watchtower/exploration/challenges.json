@@ -272,9 +272,62 @@
             "rusted_lock",
             "quiet"
           ],
+          "requires": {
+            "items": [
+              "thieves_tools"
+            ]
+          },
+          "bonuses": [
+            {
+              "source": "item",
+              "id": "thieves_tools",
+              "label": "Narzędzia złodziejskie",
+              "modifier": 2,
+              "breakage": {
+                "trigger": "critical_failure",
+                "chance_percent": 25
+              }
+            }
+          ],
           "success_message": "Zatarty zamek ustępuje i brama robi się wyraźnie łatwiejsza do otwarcia.",
           "failure_message": "Zamek ani drgnie. Mechanizm skrzypi i grozi zaklinowaniem.",
           "critical_failure_message": "Narzędzie szarpie zamek w złą stronę. Mechanizm klinuje się i dalsze otwieranie będzie trudniejsze."
+        },
+        {
+          "id": "reveal_bolt_with_flame",
+          "label": "Rozświetl szczelinę",
+          "color": "marker",
+          "description": "Kapłan przywołuje krótki święty płomień przy szczelinie, żeby dojrzeć rygiel i słaby punkt bramy.",
+          "ability_check": {
+            "ability": "wisdom",
+            "skill": "perception",
+            "dc": 10
+          },
+          "progress_on_success": 1,
+          "progress_on_failure": 0,
+          "failure_noise": 0,
+          "tags": [
+            "scouting",
+            "quiet",
+            "weak_point"
+          ],
+          "requires": {
+            "spells": [
+              "sacred_flame"
+            ]
+          },
+          "bonuses": [
+            {
+              "source": "spell",
+              "id": "sacred_flame",
+              "label": "Święty płomień odsłania rygiel",
+              "spell_level": 0,
+              "modifier": 1
+            }
+          ],
+          "success_message": "Krótki blask pokazuje rygiel i słabsze miejsce przy okuciu.",
+          "failure_message": "Światło odbija się od mokrych desek, ale nie daje jeszcze praktycznego punktu zaczepienia.",
+          "critical_failure_message": "Blask zdradza waszą obecność na krótką chwilę, ale nie uszkadza bramy."
         },
         {
           "id": "break_picket",

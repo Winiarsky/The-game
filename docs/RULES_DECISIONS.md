@@ -232,11 +232,13 @@ Implementacja MVP:
 - Stan pokonania/śmierci jest uproszczony w MVP.
 - `hp > 0` nie oznacza automatycznie, że obiekt jest legalnym celem ataku.
 - Cel ataku musi być `attackable=True` i `visible`.
+- `RollMode.ADVANTAGE` i `RollMode.DISADVANTAGE` rozstrzygają pełne `2d20`: zapisujemy oba wyniki, a wybrana kość to wyższa przy przewadze i niższa przy utrudnieniu.
+- Przy ręcznych rzutach ataku UI wymaga wpisania obu wyników d20, jeśli rzut ma przewagę albo utrudnienie; przeciwnicy rzucają oba d20 automatycznie.
 - Mini-pętla walki obsługuje start tury, zużycie akcji, koniec tury, przejście inicjatywy i zakończenie walki.
 - Tura śledzi osobno akcję główną, akcję bonusową, reakcję i zużyty ruch.
 - Reakcja jest śledzona per aktor, również poza jego własną turą, i odświeża się na początku jego następnej tury.
 - `Dash` zużywa akcję główną i dodaje aktorowi dodatkową pulę ruchu równą jego `speed_feet` do końca bieżącej tury.
-- `Dodge/Unik` zużywa akcję główną i w MVP daje efekt `Unik`: ataki przeciwko aktorowi mają jawny modyfikator `-2`; efekt wygasa na początku następnej tury tego aktora.
+- `Dodge/Unik` zużywa akcję główną i daje efekt `Unik`: ataki przeciwko aktorowi mają utrudnienie; efekt wygasa na początku następnej tury tego aktora.
 - `Disengage/Odwrót` zużywa akcję główną i w MVP daje efekt `Odwrót`: bezpieczne odejście do końca tury, blokujące ataki okazyjne.
 - Atak okazyjny może zostać sprowokowany, gdy aktor dobrowolnie opuszcza zasięg wręcz żywego wroga z dostępną reakcją i zdefiniowanym atakiem wręcz/reach.
 - W MVP zasięg okazyjnego bierze `range_feet` ataku do 10 feet, żeby obsłużyć zwykły zasięg 5 ft i broń z reach 10 ft, ale wykluczyć broń dystansową typu kusza.
@@ -270,9 +272,18 @@ Implementacja MVP:
 - W MVP czary obszarowe i save-spelle aplikują wpisany przez gracza końcowy wynik obrażeń po wyniku save’a: `none` oznacza brak obrażeń przy sukcesie, `half` oznacza połowę obrażeń przy sukcesie.
 - Leczenie w combacie jest osobnym źródłem akcji (`HealingSource`), a nie atakiem; legalnym celem jest ranny sojusznik w zasięgu i linii widzenia.
 - Gracz wpisuje końcowy wynik leczenia z fizycznego rzutu, a aplikacja ogranicza HP do `max_hp`.
-- Magiczny napój siły w MVP jest prostą akcją walki z contentu: zużywa akcję główną i daje efekt `strength_potion` do początku następnej tury aktora.
+- Aktor może mieć proste `inventory` z itemami rozwijanymi z `content/items`; `item_refs` pozostają skrótem dla wyposażonych itemów.
+- Item może dostarczać źródła ataku, leczenia albo `combat_actions`; akcje pochodzące z consumable zapisują `source_item_id`.
+- Aktor ma uproszczone `spell_ids` wyliczane z jego źródeł czarów, leczenia i akcji czarowych; eksploracja używa ich jako warunków opcji, ale nie jest to jeszcze pełna lista known/prepared spells.
+- Opcje wyzwań eksploracji mogą deklarować wymagania `requires.items`, `requires.spells` oraz `requires.ability_scores`; UI pokazuje, którzy aktorzy spełniają wymagania, a LLM dostaje te dane jako grounding.
+- Opcje wyzwań eksploracji mogą deklarować `bonuses` z itemów lub czarów. Aktywne bonusy są dodawane do zwykłego testu d20 jako `RollModifier`, a UI pokazuje ich źródło przed rzutem.
+- Bonus eksploracji z czaru ma `spell_level`: poziom `0` jest cantripem bez zużycia slotu, a poziom `1+` wymaga wolnego slotu i zużywa go po użyciu opcji.
+- Item aktora może mieć stan `broken`; uszkodzony item pozostaje widoczny w inventory, ale nie spełnia `requires`, nie daje bonusów i ma `available=false`.
+- Bonus eksploracji z itemu może deklarować `breakage` przy krytycznej porażce. Runtime nie losuje tego ukrycie: po naturalnej 1 UI prosi o k100, a wynik w progu oznacza `broken`.
+- Bonus eksploracji może deklarować `consume`; po rozstrzygnięciu testu aktywny item z takim bonusem zmniejsza `quantity`.
+- Magiczny napój siły w MVP jest akcją walki pochodzącą z itemu aktora: zużywa akcję główną, zmniejsza `quantity` itemu o 1 i daje efekt `strength_potion` do początku następnej tury aktora.
 - `strength_potion` daje premię do ataku i obrażeń tylko źródłom opartym o Siłę.
-- Nie implementujemy jeszcze pełnego inventory, liczby ładunków, attunement, osobnych list znanych i przygotowanych czarów, zaawansowanych modyfikatorów testu koncentracji ani zaawansowanych efektów czarów poza obrażeniami/lekkim leczeniem i prostym buffem do ataku.
+- Nie implementujemy jeszcze attunement, pełnych ładunków/odnawiania itemów, osobnych list znanych i przygotowanych czarów, zaawansowanych modyfikatorów testu koncentracji ani zaawansowanych efektów czarów poza obrażeniami/lekkim leczeniem i prostym buffem do ataku.
 - Jawne obiekty sceny mogą oferować deterministyczne interakcje walki zużywające akcję główną.
 - Interakcje walki są data-driven: `SceneInteraction` może deklarować listę `conditions` oraz listę `effects`.
 - Warunki interakcji MVP obejmują dostępną akcję, sąsiedztwo obiektu, stanie na obiekcie, sąsiedniego przeciwnika oraz wolne pole docelowe.
