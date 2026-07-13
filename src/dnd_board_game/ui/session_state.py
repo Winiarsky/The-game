@@ -11,6 +11,7 @@ if TYPE_CHECKING:
         PendingConcentrationCheck,
         PendingPlayerAttack,
         PendingPlayerHealing,
+        PendingShortRest,
     )
     from dnd_board_game.combat import EnemyAutoTurnResult, EnemyTurnPlan
     from dnd_board_game.exploration import PendingEncounter
@@ -50,6 +51,7 @@ class UiPendingState:
     opportunity_movement: PendingOpportunityMovement | None = None
     enemy_opportunity_attack: PendingEnemyOpportunityAttack | None = None
     ready_attack: PendingReadyAttack | None = None
+    short_rest: PendingShortRest | None = None
 
     def clear_player_choices(self) -> None:
         self.player_attack = None

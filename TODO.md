@@ -9,7 +9,28 @@
 - [x] Add local rules decision document for implemented D&D mechanics.
 - [x] Add project roadmap with implementation milestones.
 
-## Next Engineering Tasks
+## Current Roadmap Focus
+
+Master kolejności znajduje się w `ROADMAP.md`. Aktualny stan rodzin zasad jest
+prowadzony w `docs/DND_IMPLEMENTATION_MATRIX.md`. Ta sekcja powinna zawierać tylko
+najbliższy horyzont, a nie kopię całej roadmapy.
+
+- [x] Replace the historical milestone roadmap with the mechanics-first master roadmap.
+- [x] Add a living D&D implementation matrix separating stable MVP, partial, fixture, and missing systems.
+- [ ] Lock the first full release to a documented rules baseline; recommended: D&D 5e 2014.
+- [ ] Decide and document the licensing/source-pack strategy for the target content catalog.
+- [ ] Define schema versions, stable content ids, and migration rules for content and save snapshots.
+- [ ] Unify effect source, duration, expiration, stacking, and replacement contracts.
+- [x] Add generic actor resources with short-rest and long-rest recovery policies.
+- [x] Implement automatic pre-scenario long rest and content-driven short rest independently from classes.
+- [ ] Extend the duration/recovery model with scenario-end expiration and recovery policies.
+- [ ] Add a versioned actor/scenario snapshot and deterministic round-trip test.
+- [ ] Complete actor fundamentals: proficiency profiles, skills, 0 HP, stabilization, and death saves.
+
+## Completed Work And Deferred Backlog
+
+Ta sekcja zachowuje historię dotychczasowych prac. Nie określa kolejności wykonania;
+obowiązują `Current Roadmap Focus` oraz etapy z `ROADMAP.md`.
 
 - [x] Add `.gitignore` entries for local manual test runs and session observations.
 - [x] Implement session observation writer for local JSONL metadata.
@@ -60,7 +81,7 @@
 - [x] Add content-driven NPC effect fields with legacy flag-change fallback.
 - [x] Add per-session web UI JSONL debug logs for actions, LLM proposals, rolls, and effects.
 - [x] Add web UI session log panel backed by `/api/session-log`.
-- [ ] Integrate exploration effect executor with NPC/freeform runtime validation for intent parameters, limits, and branches.
+- [ ] [Deferred M8] Integrate exploration effect executor with NPC/freeform runtime validation for intent parameters, limits, and branches.
 - [x] Extend preparation effects with advantage/disadvantage, effect boost, unlock option, and grant resource.
 - [x] Show consequence preview before accepted freeform challenge rolls.
 - [x] Add second exploration challenge in abandoned watchtower and reveal first hidden NPC hook.
@@ -125,8 +146,8 @@
 - [x] Add improvised tool mechanic validation and explicit GM approval flow.
 - [x] Add visible scene-resource effects, correction, and consumption to exploration rolls.
 - [x] Add generic pre-scenario prepared-spell selection and runtime enforcement MVP.
-- [ ] Add class-derived spell lists, known-spell profiles, and advanced concentration modifiers.
-- [ ] Add voice input and richer UI for free-form exploration declarations.
+- [ ] [Deferred K3-K4] Add class-derived spell lists, known-spell profiles, and advanced concentration modifiers.
+- [ ] [Deferred product UX] Add voice input and richer UI for free-form exploration declarations.
 - [x] Implement hardware adapter interface around `board.Connection`.
 - [x] Add LED frame generation for selected path and movement range.
 - [x] Decide first UI/runtime surface.
@@ -140,7 +161,7 @@
 
 ## Open Decisions
 
-- [ ] UI framework.
+- [x] UI framework: local Flask/web UI for the current runtime and future authoring modules.
 - [ ] Content licensing/source strategy for D&D 5e data.
 - [ ] Save file format and state versioning.
 - [x] Whether diagonal movement follows 5e optional grid rules or simplified board rules.

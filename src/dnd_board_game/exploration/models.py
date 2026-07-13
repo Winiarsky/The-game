@@ -30,6 +30,31 @@ class ExplorationOptionKind(StrEnum):
     CHECK = "check"
 
 
+class RestSafety(StrEnum):
+    SAFE = "safe"
+    CONTESTED = "contested"
+
+
+@dataclass(frozen=True, slots=True)
+class ShortRestPolicy:
+    id: str
+    safety: RestSafety
+    risk_summary: str
+    duration_minutes: int = 60
+    max_completions: int = 0
+    completion_effects: tuple[dict[str, object], ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.id.strip():
+            raise ValueError("Short rest policy id cannot be empty.")
+        if self.duration_minutes < 60:
+            raise ValueError("A short rest must last at least 60 minutes.")
+        if self.max_completions < 0:
+            raise ValueError("Short rest max_completions cannot be negative.")
+        if self.safety == RestSafety.CONTESTED and not self.risk_summary.strip():
+            raise ValueError("A contested short rest requires a risk summary.")
+
+
 class CheckParticipants(StrEnum):
     SINGLE_ACTOR = "single_actor"
     LEAD_WITH_HELP = "lead_with_help"
@@ -235,6 +260,7 @@ class ExplorationZone:
     search_success_flag: str | None = None
     search_failure_flag: str | None = None
     llm_context: LlmContext = LlmContext()
+    short_rest_policy: ShortRestPolicy | None = None
 
     @property
     def marker_position(self) -> Coordinate:
@@ -732,6 +758,8 @@ class ExplorationState:
     challenge_states: tuple[ExplorationChallengeState, ...] = ()
     resources: tuple[ExplorationResource, ...] = ()
     inventory_resource_ids: tuple[str, ...] = ()
+    elapsed_minutes: int = 0
+    short_rest_counts: tuple[tuple[str, int], ...] = ()
 
 
 def visible_exploration_zones(zones: tuple[ExplorationZone, ...]) -> tuple[ExplorationZone, ...]:

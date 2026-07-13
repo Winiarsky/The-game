@@ -24,6 +24,7 @@ class ExplorationFlowStage(StrEnum):
     PARTY_SETUP = "party_setup"
     LOCATION_PREVIEW = "location_preview"
     LOCATION_ACTIVE = "location_active"
+    SHORT_REST = "short_rest"
     INTERACTION_RESULT = "interaction_result"
 
 

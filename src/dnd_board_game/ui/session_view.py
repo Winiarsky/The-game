@@ -11,6 +11,7 @@ class UiSessionView:
     session_log: dict[str, object]
     flow: dict[str, object]
     spell_preparation: dict[str, object] | None
+    short_rest: dict[str, object] | None
     current_zone: dict[str, object]
     available_zones: list[dict[str, object]]
     visible_environment: list[dict[str, object]]
@@ -42,6 +43,7 @@ class UiSessionView:
             "session_log": self.session_log,
             "flow": self.flow,
             "spell_preparation": self.spell_preparation,
+            "short_rest": self.short_rest,
             "current_zone": self.current_zone,
             "available_zones": self.available_zones,
             "visible_environment": self.visible_environment,

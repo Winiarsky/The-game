@@ -161,6 +161,21 @@
         ],
         "success_flag": "gate_area_checked",
         "failure_flag": "gate_area_unclear"
+      },
+      "short_rest": {
+        "safety": "contested",
+        "duration_minutes": 60,
+        "max_completions": 1,
+        "risk_summary": "Godzina postoju przed bramą zwiększy hałas i może przyciągnąć patrol.",
+        "completion_effects": [
+          {
+            "type": "add_noise",
+            "parameters": {
+              "challenge_id": "closed_gate",
+              "value": 2
+            }
+          }
+        ]
       }
     },
     {
@@ -766,7 +781,13 @@
         10
       ],
       "available_if_flag": "gate_passed",
-      "available_if_value": true
+      "available_if_value": true,
+      "short_rest": {
+        "safety": "safe",
+        "duration_minutes": 60,
+        "max_completions": 1,
+        "risk_summary": "Zawalona izba daje osłonę przed wzrokiem patrolu."
+      }
     },
     {
       "id": "barracks",

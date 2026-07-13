@@ -21,6 +21,9 @@
         "wisdom": 12,
         "charisma": 10
       },
+      "hit_dice": {
+        "d10": 2
+      },
       "item_refs": [
         "longsword",
         "strength_potion"
@@ -47,6 +50,9 @@
         "wisdom": 14,
         "charisma": 12
       },
+      "hit_dice": {
+        "d8": 2
+      },
       "item_refs": [
         "crossbow",
         "thieves_tools"
@@ -72,6 +78,9 @@
         "intelligence": 10,
         "wisdom": 16,
         "charisma": 14
+      },
+      "hit_dice": {
+        "d8": 2
       },
       "spell_slots": {
         "1": 2

@@ -92,6 +92,8 @@ The exploration web surface is split into explicit responsibilities:
 - `application/exploration_flow.py` owns deterministic exploration flow transitions,
 - `application/spell_preparation_flow.py` owns the pre-scenario confirmation sequence for
   actors with generic prepared-spell profiles,
+- `application/short_rest_flow.py` owns content-driven short-rest preview, completion,
+  exploration consequences, and sequential Hit Dice spending,
 - `application/combat_movement_flow.py` owns player movement planning, movement application,
   and opportunity-attack threat detection before reactions are resolved,
 - `application/combat_reaction_flow.py` owns opportunity-attack reaction consumption,
@@ -130,6 +132,11 @@ Prepared-spell membership is deterministic actor domain state in
 `actors/spell_preparation.py`. Scenario content supplies the available list and preparation
 limit; neither the actor model nor the application flow infers a character class. Combat and
 exploration resolvers consult the same profile before consuming a spell slot.
+
+Rest data is actor domain state in `actors/resources.py`; D&D recovery decisions live in
+`rules/resting.py`. Scenario zones may provide a `ShortRestPolicy`, but they do not implement
+healing or resource recovery themselves. Starting an exploration session automatically applies
+a long rest to allied actors before the spell-preparation stage.
 
 ## First Implementation Milestones
 

@@ -134,6 +134,33 @@ def test_exploration_ui_page_includes_spell_preparation_flow():
     assert "/api/spell-preparation/confirm" in javascript
 
 
+def test_exploration_ui_page_includes_short_rest_flow():
+    client = _client()
+
+    html, javascript, _stylesheet = _page_assets(client)
+
+    assert 'id="short-rest-button"' in html
+    assert "Krótki odpoczynek" in javascript
+    assert "spendShortRestHitDie" in javascript
+    assert "/api/rest/short/start" in javascript
+    assert "/api/rest/short/hit-die" in javascript
+
+
+def test_exploration_ui_short_rest_api_advances_time_and_returns_to_exploration():
+    client = _client()
+
+    preview = client.post("/api/rest/short/start", json={})
+    completed = client.post("/api/rest/short/confirm", json={})
+    finished = client.post("/api/rest/short/finish", json={})
+
+    assert preview.status_code == 200
+    assert preview.get_json()["flow"]["stage"] == "short_rest"
+    assert completed.status_code == 200
+    assert completed.get_json()["short_rest"]["elapsed_minutes"] == 60
+    assert finished.status_code == 200
+    assert finished.get_json()["flow"]["stage"] == "location_active"
+
+
 def test_exploration_ui_page_includes_gm_decision_correction_controls():
     client = _client()
 

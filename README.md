@@ -10,7 +10,8 @@ The previous application has been archived under `legacy/previous_app/`. It is r
 - `GAME_DESIGN.md` - gameplay scope and first mechanics.
 - `ARCHITECTURE.md` - target module layout and dependency rules.
 - `TODO.md` - next small implementation tasks.
-- `ROADMAP.md` - long-term milestones from core mechanics to a short campaign.
+- `ROADMAP.md` - mechanics-first master plan through content, classes, and authoring tools.
+- `docs/DND_IMPLEMENTATION_MATRIX.md` - living audit of implemented, partial, and missing D&D systems.
 - `PROMPT_TEMPLATE.md` - recommended prompt shape for Codex work.
 - `legacy/LEGACY_DESCRIPTION.md` - useful technical lessons from the previous app.
 

@@ -1,6 +1,7 @@
 """Player character, monster, NPC, and actor state models."""
 
 from .models import AbilityScores, Actor, ActorId, Faction, is_ally_or_neutral
+from .resources import ActorResourcePool, HitDicePool, RecoveryPeriod
 from .spell_preparation import (
     PreparableSpell,
     SpellPreparationProfile,
@@ -12,8 +13,11 @@ __all__ = [
     "AbilityScores",
     "Actor",
     "ActorId",
+    "ActorResourcePool",
     "Faction",
+    "HitDicePool",
     "PreparableSpell",
+    "RecoveryPeriod",
     "SpellPreparationProfile",
     "is_ally_or_neutral",
     "prepare_spells",

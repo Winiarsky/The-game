@@ -159,6 +159,8 @@ function sessionLogSummary(type, payload) {
   if (type === 'ui_rolls_resolved') return `Rzuty dla: ${esc(payload.pending_kind || '')}`;
   if (type === 'ui_challenge_resolved') return `Challenge: ${esc(payload.challenge_id || '')}; completed: ${payload.completed ? 'tak' : 'nie'}`;
   if (type === 'ui_message_added') return `${esc(payload.title || '')}: ${esc(payload.body || '')}`;
+  if (type === 'ui_short_rest_completed') return `Short rest: ${esc(payload.zone_id || '')}; czas: ${esc(payload.elapsed_minutes || 0)} min`;
+  if (type === 'ui_short_rest_hit_die_spent') return `Hit Die: ${esc(payload.actor_id || '')}; leczenie: ${esc(payload.effective_healing || 0)} HP`;
   return '';
 }
 function listHtml(items) {
@@ -177,6 +179,9 @@ function flowPanelHtml() {
   const stage = flow.stage || 'waiting_for_board';
   if (stage === 'spell_preparation') {
     return spellPreparationHtml();
+  }
+  if (stage === 'short_rest') {
+    return shortRestHtml();
   }
   if (stage === 'waiting_for_board') {
     return `
@@ -295,6 +300,41 @@ function updateSpellPreparationCount() {
   if (target) target.textContent = String(count);
   const confirm = document.getElementById('spell-preparation-confirm');
   if (confirm) confirm.disabled = count !== Number(confirm.dataset.preparationLimit || 0);
+}
+function shortRestHtml() {
+  const rest = state.short_rest || {};
+  const policy = rest.policy || {};
+  const pending = rest.pending || {};
+  const safety = policy.safety === 'safe' ? 'bezpieczne' : 'ryzykowne';
+  if (!pending.completed) {
+    return `
+      <div class="start-panel"><div class="inner">
+        <h2>Krótki odpoczynek</h2>
+        <p><b>Czas:</b> ${esc(policy.duration_label || '1 godz.')}</p>
+        <p><b>Warunki:</b> ${esc(safety)}</p>
+        ${policy.risk_summary ? `<div class="status"><b>Koszt lub zagrożenie:</b> ${esc(policy.risk_summary)}</div>` : ''}
+        <p class="muted">Hit Dice będą wydawane dopiero po ukończeniu odpoczynku. Anulowanie teraz nie przesuwa czasu.</p>
+        <div class="row"><button onclick="confirmShortRest()">Rozpocznij godzinny odpoczynek</button><button class="secondary" data-allow-busy="true" onclick="cancelShortRest()">Anuluj</button></div>
+      </div></div>
+    `;
+  }
+  const actors = (pending.actors || []).map(actor => {
+    const dice = (actor.hit_dice || []).map(pool => {
+      const inputId = `short-rest-${actor.actor_id}-d${pool.die_sides}`;
+      const disabled = !actor.can_spend_hit_die || Number(pool.remaining || 0) <= 0;
+      return `<div class="row"><span>d${esc(pool.die_sides)}: ${esc(pool.remaining)}/${esc(pool.maximum)}</span><input id="${esc(inputId)}" type="number" min="1" max="${esc(pool.die_sides)}" placeholder="wynik"${disabled ? ' disabled' : ''}><button class="secondary"${disabled ? ' disabled' : ''} onclick="spendShortRestHitDie('${esc(actor.actor_id)}', ${esc(pool.die_sides)})">Wydaj Hit Die</button></div>`;
+    }).join('');
+    const resources = (actor.short_rest_resources || []).map(pool => `${esc(pool.label)} ${esc(pool.current)}/${esc(pool.maximum)}`).join(', ');
+    return `<div class="status-item"><b>${esc(actor.actor_name)}</b><span>HP ${esc(actor.hp)}/${esc(actor.max_hp)} · CON ${signedNumber(actor.constitution_modifier)}</span>${dice || '<span class="muted">Brak Hit Dice.</span>'}${resources ? `<span>Odnowione zasoby: ${resources}</span>` : ''}</div>`;
+  }).join('');
+  return `
+    <div class="start-panel"><div class="inner">
+      <h2>Krótki odpoczynek ukończony</h2>
+      <p>Minęła ${esc(policy.duration_label || '1 godz.')}. Każdy gracz może wydawać Hit Dice pojedynczo i po każdym rzucie zdecydować, czy rzuca następną.</p>
+      <div class="status-list">${actors}</div>
+      <button onclick="finishShortRest()">Zakończ odpoczynek</button>
+    </div></div>
+  `;
 }
 function availableLocationsHtml(locations) {
   if (!locations.length) return '<p>Brak jawnych elementów sceny.</p>';
@@ -1786,8 +1826,26 @@ function updateActivePanel() {
   document.getElementById('pending-panel').hidden = !hasPendingDecision;
   document.getElementById('roll-panel').hidden = !hasRolls;
   document.getElementById('action-panel').hidden = flowActive || hasEncounter || hasResult || hasTravel || hasPendingDecision || hasRolls;
+  const restButton = document.getElementById('short-rest-button');
+  if (restButton) {
+    const rest = state.short_rest || {};
+    restButton.disabled = rest.available !== true;
+    restButton.title = rest.unavailable_reason || '';
+  }
 }
 function sendAction() { api('/api/action', {text: document.getElementById('action').value}, 'Czekam na decyzję MG...'); }
+function startShortRest() { api('/api/rest/short/start', {}, 'Przygotowuję podgląd odpoczynku...'); }
+function confirmShortRest() { api('/api/rest/short/confirm', {}, 'Mija godzina odpoczynku...'); }
+function cancelShortRest() { api('/api/rest/short/cancel', {}, 'Anuluję odpoczynek...'); }
+function finishShortRest() { api('/api/rest/short/finish', {}, 'Wracam do eksploracji...'); }
+function spendShortRestHitDie(actorId, dieSides) {
+  const input = document.getElementById(`short-rest-${actorId}-d${dieSides}`);
+  api('/api/rest/short/hit-die', {actor_id: actorId, die_sides: dieSides, natural_roll: Number(input ? input.value : 0)}, 'Rozliczam Hit Die...');
+}
+function signedNumber(value) {
+  const number = Number(value || 0);
+  return number >= 0 ? `+${number}` : String(number);
+}
 function confirmSpellPreparation() {
   const preparation = state.spell_preparation || {};
   const spell_ids = Array.from(document.querySelectorAll('[data-preparation-spell]:checked')).map(input => input.dataset.preparationSpell);
@@ -2031,6 +2089,11 @@ function triggerPrimaryAction() {
   if (isVisible('pending-panel')) { decision('accept'); return true; }
   if (isVisible('roll-panel')) { sendRolls(); return true; }
   if (isVisible('action-panel')) { sendAction(); return true; }
+  if (state.flow && state.flow.stage === 'short_rest') {
+    if (state.short_rest && state.short_rest.pending && state.short_rest.pending.completed) finishShortRest();
+    else confirmShortRest();
+    return true;
+  }
   const scanButton = visiblePrimaryScanButton();
   if (scanButton) { scanButton.click(); return true; }
   const setup = state.encounter_setup;

@@ -310,11 +310,18 @@ def test_load_abandoned_watchtower_folder_keeps_monster_and_item_refs_working():
     assert cleric.spell_preparation.source_label == "lista czarów kapłana"
     assert cleric.spell_preparation.preparation_limit == 2
     assert cleric.spell_preparation.prepared_spell_ids == ("healing_word", "bless_attack_bonus")
+    assert cleric.hit_dice[0].die_sides == 8
+    assert cleric.hit_dice[0].remaining == 2
     assert {spell.id for spell in cleric.spell_preparation.available_spells} == {
         "radiant_line",
         "healing_word",
         "bless_attack_bonus",
     }
+    gate = next(zone for zone in exploration.zones if zone.id == "gate")
+    assert gate.short_rest_policy is not None
+    assert gate.short_rest_policy.safety.value == "contested"
+    assert gate.short_rest_policy.duration_minutes == 60
+    assert gate.short_rest_policy.completion_effects[0]["type"] == "add_noise"
     gate = next(challenge for challenge in exploration.challenges if challenge.id == "closed_gate")
     lockpick = next(option for option in gate.options if option.id == "lockpick_gate")
     flame = next(option for option in gate.options if option.id == "reveal_bolt_with_flame")

@@ -1,478 +1,521 @@
 # Roadmap Projektu
 
-Efektem końcowym projektu ma być grywalny port Dungeons & Dragons 5e na fizyczną planszę 20x30, obsługiwany przez aplikację i system LED.
+## Cel Końcowy
 
-Gra ma wspierać:
+Docelowo projekt ma być lokalną, planszowo-cyfrową implementacją Dungeons & Dragons
+5e, która:
 
-- taktyczne encountery,
-- fizyczne figurki i kości,
-- planszę jako interfejs wejścia/wyjścia,
-- aplikację jako silnik zasad i asystenta Mistrza Gry,
-- interakcje społeczne,
-- eksplorację,
-- krótką kampanię z kilkoma scenami.
+- prowadzi zasady walki, eksploracji i scen społecznych,
+- korzysta z fizycznej planszy, figurek, kości i LED,
+- posiada walidowany, data-driven katalog dozwolonego contentu D&D,
+- obsługuje bohaterów, potwory, przedmioty, czary i scenariusze,
+- ma moduł tworzenia bohaterów,
+- ma moduł tworzenia i walidowania scenariuszy,
+- pozwala rozgrywać oraz zapisywać scenariusze i kampanie bez edycji plików ręcznie.
 
-Ten dokument opisuje master plan. `TODO.md` służy do bieżących małych zadań.
+Roadmapa opisuje kolejność zależności. `TODO.md` zawiera tylko najbliższe
+zadania wykonawcze, a `docs/DND_IMPLEMENTATION_MATRIX.md` pokazuje aktualny stan
+poszczególnych rodzin zasad.
 
-## Zasady Roadmapy
+## Rekomendowany Model Rozwoju
 
-- Każdy etap powinien kończyć się czymś działającym.
-- Najpierw budujemy stabilny rdzeń, potem UI i content.
-- Mechaniki D&D 5e dodajemy stopniowo.
-- Po implementacji mechaniki aktualizujemy `docs/RULES_DECISIONS.md`.
-- Każdy większy etap powinien mieć testy jednostkowe, testy integracyjne i checklistę manualną, jeśli dotyka planszy.
-- Nie dodajemy pełnego systemu D&D naraz.
+Ogólny kierunek jest następujący:
 
-## Etap 0: Fundament Projektu
+```text
+kontrakty silnika
+    -> mechaniki ogólne
+        -> mały content testowy
+            -> pełniejsze katalogi contentu
+                -> rasy/species, backgroundy i klasy
+                    -> kreator bohatera
+                        -> kreator scenariusza i kampanii
+```
 
-Status: w toku.
+Nie należy jednak implementować wszystkich mechanik bez żadnego contentu, a potem
+dopiero zaczynać dane. Każdą nową mechanikę trzeba potwierdzić małym zestawem
+fixture'ów: zwykle dwoma lub trzema czarami, przedmiotami, potworami albo fragmentami
+scenariusza. Dopiero po ustabilizowaniu kontraktu można masowo rozbudowywać katalog.
 
-Cel: przygotować repozytorium, dokumenty, strukturę i sposób pracy.
+Taki model chroni przed dwoma problemami znanymi z legacy:
+
+- logiką konkretnej klasy, czaru albo scenariusza zaszytą w runtime,
+- dużą ilością contentu zależną od schematów, które trzeba później masowo migrować.
+
+## Reguły Kolejności
+
+1. Najpierw powstaje ogólny prymityw mechaniczny.
+2. Następnie powstają małe fixture'y udowadniające, że prymityw nie jest
+   dopasowany tylko do jednego przypadku.
+3. Mechanika trafia do UI i obserwacji sesji dopiero przez warstwę aplikacyjną.
+4. Masowy content powstaje dopiero po ustabilizowaniu schematu i migracji danych.
+5. Rasa albo klasa składa istniejące prymitywy. Nie może wymuszać warunku
+   `if actor.class == ...` w ogólnym resolverze.
+6. Edytory korzystają z tych samych schematów i walidatorów co runtime. Nie mogą
+   mieć osobnego, rozjeżdżającego się modelu danych.
+7. Każdy etap kończy się grywalnym vertical slice'em i bramką jakości.
+
+## Definition Of Done Dla Mechaniki
+
+Mechanika jest ukończona dopiero, gdy posiada:
+
+- czystą, deterministyczną logikę domenową,
+- jawne dane wejściowe, wynik i błędy walidacji,
+- co najmniej dwa reprezentatywne przypadki contentowe,
+- testy jednostkowe reguł i test przepływu aplikacyjnego,
+- widoczny stan, koszt, modyfikatory i niedostępność w UI,
+- zdarzenia w obserwacji sesji,
+- opis decyzji lub odstępstwa w `docs/RULES_DECISIONS.md`,
+- wpis w macierzy implementacji,
+- brak zależności od Flask, hardware, plików i realnego czasu w regułach.
+
+## Bramka 0: Zamknięcie Zakresu Zasad I Contentu
+
+Status: następny krok organizacyjny.
+
+Przed masowym dodawaniem zasad i danych trzeba ustalić:
+
+- bazową wersję reguł; rekomendacja dla pierwszego pełnego wydania to D&D 5e
+  2014, ponieważ obecne modele i decyzje projektu są już do niej zbliżone,
+- listę świadomych odstępstw wynikających z fizycznej planszy,
+- strategię licencji i źródła danych,
+- znaczenie słowa „pełny”: pełne SRD/otwarty pakiet czy dodatkowe materiały,
+  do których projekt ma legalne prawo,
+- wersjonowanie schematów contentu i zapisów gry,
+- stabilne identyfikatory reguł i obiektów contentu.
+
+Kryterium wyjścia:
+
+- wersja zasad i zakres danych są zapisane w dokumentacji,
+- content ma jawne pochodzenie i attribution,
+- każdy format danych posiada pole wersji albo uzgodnioną strategię migracji.
+
+# Część I: Mechaniki
+
+## Etap M1: Wspólne Kontrakty Efektów, Czasu I Zasobów
+
+Status: w toku. Ukończono pierwszy vertical slice zasobów oraz short/long rest.
+
+To jest fundament dla czarów, warunków, cech klasowych, odpoczynków, przedmiotów
+i efektów scenariusza.
+
+Kolejność:
+
+1. ujednolicony model efektu i jego źródła,
+2. czas trwania i punkty wygaśnięcia: tura, runda, odpoczynek, scenariusz,
+3. jawne zasoby z maksimum, aktualną wartością i regułą odnowienia,
+4. short rest, long rest i granica scenariusza jako cykl przygody,
+5. jedno miejsce nakładania, odświeżania, zastępowania i usuwania efektów,
+6. wersjonowalny snapshot stanu aktora i scenariusza.
+
+Zaimplementowany vertical slice:
+
+- generyczne zasoby aktora odnawiane po short albo long rest,
+- Hit Dice i leczenie `die + CON` wydawane pojedynczo po short reście,
+- content-driven polityka short resta dla lokacji,
+- godzinny koszt i jawne konsekwencje odpoczynku,
+- automatyczny long rest przed przygotowaniem scenariusza,
+- odnowienie HP, slotów i zasobów oraz ponowne otwarcie przygotowania czarów.
+
+Pozostało w M1: wspólny duration/expiration framework, scenario-end lifecycle i snapshot.
+
+Fixture'y:
+
+- przygotowanie czarów do końca scenariusza,
+- zasób odnawiany po long rest,
+- efekt do początku lub końca następnej tury,
+- efekt koncentracyjny zastępujący poprzedni efekt.
+
+Kryterium wyjścia:
+
+- czas i odnowienie nie są implementowane osobno dla każdego czaru lub klasy,
+- reset scenariusza, odpoczynek i zapis/odczyt dają deterministyczny wynik.
+
+## Etap M2: Pełny Fundament Aktora I Rzutów
+
+Kolejność:
+
+1. proficiency bonus zależny od poziomu,
+2. biegłości w skillach, save'ach, broni, pancerzach i narzędziach,
+3. expertise i wielokrotne źródła modyfikatorów bez stackowania proficiency,
+4. pasywne wartości, np. Passive Perception,
+5. senses, rozmiar, języki i podstawowe tagi aktora,
+6. stabilny model maksimum HP, Hit Dice i tymczasowego HP,
+7. utrata przytomności, stabilizacja, death saves i śmierć,
+8. odpoczynek oraz odzyskiwanie HP, Hit Dice i zasobów.
+
+Kryterium wyjścia:
+
+- bohater, NPC i potwór korzystają z tych samych podstawowych reguł,
+- test cechy, save i attack roll składają modyfikatory z jednego kontraktu.
+
+## Etap M3: Domknięcie Ruchu I Taktycznej Planszy
+
+Kolejność:
+
+1. wszystkie typy terenu i kosztów ruchu potrzebne przez bazowy zakres,
+2. prone, wstawanie i ograniczenia ruchu,
+3. Dash, Disengage i opportunity attacks w pełnym wspólnym kontrakcie,
+4. cover, linia widzenia i zasłonięcie,
+5. reach, rozmiary stworzeń i zajmowany obszar,
+6. grapple, escape i shove,
+7. skok, wspinanie, pływanie i crawling,
+8. teleportacja, forced movement oraz reakcje na opuszczanie zasięgu,
+9. opcjonalnie lot i wysokość, dopiero po ustaleniu reprezentacji na planszy.
+
+Kryterium wyjścia:
+
+- wszystkie zmiany pozycji przechodzą przez jeden zestaw reguł,
+- LED pokazuje legalne pola, koszt i powód blokady bez duplikowania zasad w UI.
+
+## Etap M4: Domknięcie Walki
+
+Kolejność:
+
+1. komplet ekonomii tury: action, bonus action, reaction, movement, free interaction,
+2. melee/ranged, reach, disadvantage w zwarciu i cover,
+3. two-weapon fighting oraz podstawowe akcje improwizowane,
+4. Ready, Help, Dodge, Hide, Search i Use an Object,
+5. critical hit, critical miss i wieloskładnikowe obrażenia,
+6. typy obrażeń, resistance, immunity i vulnerability,
+7. healing, temporary HP, damage at 0 HP i massive damage,
+8. saving throws wymuszane przez ataki i efekty,
+9. reakcje i przerwania rozstrzygane w jawnej kolejce,
+10. zakończenie encountera, ucieczka, kapitulacja i cele inne niż wybicie strony.
+
+Fixture'y powinny obejmować wojownika wręcz, postać dystansową, potwora z
+odpornością i potwora wymuszającego save.
+
+## Etap M5: Warunki I Ogólny Silnik Cech
+
+Kolejność:
+
+1. generyczne modyfikatory statystyk i roll mode,
+2. warunki oficjalnego bazowego zakresu,
+3. immunities na warunki,
+4. duration, save-at-end, save-at-start i automatyczne wygaśnięcie,
+5. aury i efekty zależne od pozycji,
+6. triggery: on hit, on damage, on move, turn start/end, rest i encounter end,
+7. ograniczone użycia i recharge,
+8. wspólny mechanizm feature definitions dla potworów, przedmiotów, ras i klas.
+
+To jest ostatni etap, po którym wolno zacząć implementować dane ras i klas.
+
+## Etap M6: Ekwipunek I Przedmioty
+
+Kolejność:
+
+1. waluta, ilość, masa i carrying capacity,
+2. wyposażenie, dobywanie, chowanie i free object interaction,
+3. broń, properties, amunicja i improwizowana broń,
+4. pancerz, tarcza, wymogi i obliczanie AC,
+5. narzędzia oraz zużywalne przedmioty,
+6. charges i reguły odnowienia,
+7. attunement,
+8. magiczne przedmioty składane z ogólnych efektów.
+
+## Etap M7: Pełny Podsystem Magii
+
+Kolejność:
+
+1. stabilny schemat czaru i jego źródła,
+2. cantripy, spell slots i cast at level,
+3. przygotowane czary, znane czary i spellbook jako osobne profile,
+4. components V/S/M, focus i kosztowne komponenty,
+5. casting time: action, bonus action, reaction i dłuższe rzucanie,
+6. range, target, area, linia efektu i legalność celów,
+7. duration, concentration i repeated saves,
+8. upcasting,
+9. ritual casting,
+10. attack spells, save spells, healing, buff, debuff, summon, movement i utility,
+11. dispel/counter oraz interakcje magiczne dopiero po stabilizacji bazowego castingu.
+
+Czary należy dodawać rodzinami mechanicznymi. Najpierw jeden reprezentant każdej
+rodziny, potem katalog. Unikalny czar może dodać nowy generyczny prymityw, ale nie
+powinien tworzyć jednorazowego przepływu w UI.
+
+## Etap M8: Eksploracja, Sceny Społeczne I Cykl Przygody
+
+Obecny challenge/freeform MVP pozostaje podstawą. Kolejność rozszerzeń:
+
+1. czas scenariusza, odpoczynki i zużycie zasobów,
+2. light, darkness, senses i stealth/perception,
+3. ukrywanie, poszukiwanie, pułapki i hazards,
+4. drzwi, zamki, pojemniki, cover i obiekty niszczalne,
+5. podróż, tempo, nawigacja i exhaustion, jeśli należą do ustalonego zakresu,
+6. conversation state, attitude i testy społeczne bez zastępowania decyzji graczy,
+7. downtime oraz crafting tylko wtedy, gdy wymaga tego docelowy zakres,
+8. wspólne efekty eksploracji, walki i scenariusza,
+9. rozgałęzienia, cele, porażki fail-forward i konsekwencje między scenami.
+
+LLM pozostaje klasyfikatorem deklaracji i pomocnikiem narracyjnym. Nie staje się
+źródłem reguł ani bezpośrednim wykonawcą zmian stanu.
+
+## Etap M9: Progresja, Kampania I Zapis
+
+Kolejność:
+
+1. wersjonowany save/load scenariusza,
+2. stan drużyny między scenariuszami,
+3. XP albo milestone jako wybrana strategia progresji,
+4. level-up jako deterministyczna transformacja postaci,
+5. stan kampanii, questów, NPC i trwałych konsekwencji,
+6. migracje zapisów i contentu,
+7. eksport diagnostyczny wraz z logiem sesji.
+
+# Część II: Content
+
+## Etap C1: Schematy, Walidacja I Pochodzenie Danych
+
+Ten etap biegnie równolegle z mechanikami, ale nie oznacza masowego katalogu.
 
 Zakres:
 
-- [x] zarchiwizować poprzednią aplikację w `legacy/previous_app/`,
-- [x] zostawić niskopoziomową warstwę `board/`,
-- [x] przygotować `PROJECT_CONTEXT.md`,
-- [x] przygotować `GAME_DESIGN.md`,
-- [x] przygotować `ARCHITECTURE.md`,
-- [x] przygotować `TODO.md`,
-- [x] przygotować workflow testów,
-- [x] przygotować checklistę manualną planszy,
-- [x] przygotować koncepcję obserwacji sesji,
-- [x] przygotować `docs/RULES_DECISIONS.md`,
-- [x] przygotować `ROADMAP.md`.
+- wersjonowane schematy actor, monster, item, spell, feature i scenario,
+- wspólne referencje oraz stabilne ID,
+- walidacja referencji i zgodności z dostępnymi prymitywami,
+- migracje schematów,
+- attribution, source id i informacja o licencji,
+- raport nieobsługiwanych mechanik podczas ładowania,
+- narzędzie audytujące kompletność katalogu.
 
-Kryterium zakończenia:
+## Etap C2: Referencyjny Pakiet Testowy
 
-- projekt ma jasne dokumenty startowe,
-- wiadomo, gdzie pisać kod,
-- wiadomo, jak testować,
-- wiadomo, jak dokumentować decyzje zasad.
+Przez wszystkie etapy M1–M9 utrzymujemy mały pakiet przekrojowy:
 
-## Etap 1: Rdzeń Planszy, Ruchu, Aktorów I Pierwszy Feedback LED
+- kilka broni, pancerzy, narzędzi i consumables,
+- potwory melee, ranged, save-based i ze specjalnym traitem,
+- czary reprezentujące każdą rodzinę mechaniczną,
+- hazards, pułapki, NPC i obiekty interaktywne,
+- scenariusz eksploracyjny, społeczny i encounter,
+- bohaterowie testowi korzystający z różnych profili zasobów.
 
-Cel: stworzyć deterministyczny, testowalny model planszy i ruchu oraz pierwszy adapter feedbacku LED bez mieszania hardware z logiką zasad.
+Ten pakiet jest testem architektury, nie docelowym katalogiem.
 
-Zakres:
+## Etap C3: Bazowy Katalog Gry
 
-- `Coordinate`,
-- wymiary planszy 20x30,
-- walidacja granic planszy,
-- sąsiedzi ortogonalni i diagonalni,
-- teren normalny i trudny,
-- blokujące pola,
-- ściany między polami,
-- drzwi otwarte/zamknięte,
-- zajęte pola,
-- podstawowe rozróżnienie sojusznik/przeciwnik/neutralny,
-- podstawowy model `Actor`,
-- koszt ruchu,
-- zasięg ruchu,
-- wyznaczanie ścieżki,
-- zakaz przechodzenia po skosie przez zablokowany róg,
-- logiczne dane feedbacku LED dla zasięgu ruchu i ścieżki,
-- adapter LED wywołujący `board.Connection` przez warstwę `hardware`.
+Po ustabilizowaniu odpowiednich mechanik katalog rozszerzamy w tej kolejności:
 
-Testy:
+1. mundane weapons, armor, adventuring gear i tools,
+2. podstawowe potwory o prostych statblockach,
+3. oficjalne warunki, damage types i hazards,
+4. czary rodzinami mechanicznymi i poziomami,
+5. magiczne przedmioty według rodzin efektów,
+6. bardziej złożone potwory, recharge, legendary i lair actions, jeśli są w zakresie,
+7. gotowe NPC templates i encounter templates.
 
-- unit testy dla koordynatów,
-- unit testy dla sąsiadów,
-- unit testy dla kosztów ruchu,
-- unit testy dla ścian i przeszkód,
-- unit testy dla pathfindingu,
-- unit testy dla feedbacku LED z fake connection.
+Każda partia danych musi przejść walidację całego katalogu i test kilku
+reprezentatywnych obiektów w prawdziwym scenariuszu.
 
-Kryterium zakończenia:
+## Etap C4: Biblioteka Scenariuszy
 
-- dla aktora ze `Speed = 30 feet` system potrafi wyznaczyć osiągalne pola,
-- wynik jest deterministyczny,
-- logika nie importuje `board`,
-- feedback LED jest generowany poza silnikiem zasad,
-- testy przechodzą przez `scripts/safe_pytest.sh`.
+Kolejność:
 
-## Etap 2: Rzuty Kośćmi I Podstawowe Reguły D&D 5e
+1. małe sceny testujące jedną rodzinę mechanik,
+2. pełny jednostrzał: eksploracja, NPC, walka, odpoczynek i konsekwencje,
+3. kilka scenariuszy o różnej strukturze,
+4. krótka kampania testująca trwały stan,
+5. biblioteka szablonów map, encounterów, challenge'y i NPC.
 
-Cel: obsłużyć fizyczne rzuty kośćmi wpisywane do aplikacji.
+## Etap C5: Docelowy Katalog
 
-Zakres:
+Docelowy katalog powstaje dopiero po zamknięciu macierzy mechanik. Zakres zależy od
+decyzji licencyjnej z Bramki 0. „Pełny content” oznacza kompletny, automatycznie
+walidowany katalog w legalnie dozwolonym pakiecie danych, a nie kopiowanie wszystkich
+tekstów podręcznikowych do repozytorium.
 
-- naturalny wynik rzutu,
-- modyfikator,
-- wynik końcowy,
-- przewaga,
-- utrudnienie,
-- rzuty ataku,
-- testy cech,
-- rzuty obronne,
-- inicjatywa,
-- naturalne `20` i `1` dla ataków,
-- deterministyczne modele wyników do testów.
+Kryterium wyjścia:
 
-Testy:
+- brak zerwanych referencji i nieznanych prymitywów,
+- raport kompletności wskazuje 100% ustalonego zakresu,
+- każdy złożony typ obiektu ma scenariusz lub test integracyjny,
+- aktualizacja contentu nie wymaga warunków specjalnych w UI/runtime.
 
-- unit testy dla zwykłego rzutu d20,
-- unit testy dla przewagi,
-- unit testy dla utrudnienia,
-- unit testy dla naturalnego `20`,
-- unit testy dla naturalnego `1`,
-- unit testy dla rozróżnienia naturalnego wyniku i wyniku końcowego.
+# Część III: Rasy, Backgroundy I Klasy
 
-Kryterium zakończenia:
+## Warunek Startu
 
-- silnik potrafi rozstrzygnąć podstawowy rzut d20 bez losowości,
-- dane rzutu nadają się do zapisania w obserwacji sesji,
-- `docs/RULES_DECISIONS.md` jest zaktualizowany.
+Nie zaczynamy masowego wdrażania ras i klas, dopóki nie są stabilne:
 
-## Etap 3: Aktorzy, HP I Inicjatywa
+- feature/effect/trigger/resource framework,
+- odpoczynki i odnowienie zasobów,
+- warunki i modyfikatory,
+- equipment i spellcasting,
+- level-up oraz wersjonowany actor snapshot.
 
-Cel: stworzyć podstawowy model istot i kolejności tur.
+Wyjątkiem są anonimowi bohaterowie-fixture'y używani do testowania mechanik.
+
+## Etap K1: Generyczna Kompozycja Postaci
 
 Zakres:
 
-- wspólny model `Actor`,
-- bohater testowy,
-- potwór testowy,
-- AC,
-- HP,
-- temporary HP,
-- speed,
-- ability scores,
-- pozycja,
-- initiative bonus,
-- kolejność inicjatywy,
-- aktywny aktor,
-- stan pokonania/śmierci w uproszczonym MVP.
-
-Testy:
-
-- unit testy modelu aktora,
-- unit testy HP i temporary HP,
-- unit testy inicjatywy,
-- unit testy przechodzenia tury.
-
-Kryterium zakończenia:
-
-- można utworzyć jednego bohatera i jednego potwora,
-- można ustawić ich na planszy,
-- można ustalić kolejność tur,
-- system wie, kto jest aktywnym aktorem.
+- `FeatureDefinition` i `FeatureGrant`,
+- źródło cechy: species/race, background, class, subclass, feat, item,
+- wymagania poziomu i wybory gracza,
+- zasoby, proficiency, akcje i efekty grantowane przez feature,
+- walidacja konfliktów i duplikatów,
+- deterministyczne złożenie końcowego aktora.
 
-## Etap 4: Atak, Obrażenia I Pierwszy Mini-Combat
-
-Cel: umożliwić prostą walkę 1 bohater vs 1 potwór bez UI produkcyjnego.
-
-Zakres:
-
-- deklaracja ataku melee,
-- sprawdzenie legalnego celu,
-- rzut ataku wpisywany ręcznie,
-- porównanie z AC,
-- trafienie,
-- pudło,
-- trafienie krytyczne,
-- automatyczne pudło,
-- wpisanie obrażeń,
-- odjęcie HP,
-- zakończenie walki po pokonaniu jednej strony.
-
-Testy:
-
-- unit testy ataku,
-- unit testy obrażeń,
-- unit testy trafienia krytycznego,
-- unit testy automatycznego pudła,
-- integracyjny test mini-walki bez hardware.
+## Etap K2: Backgroundy I Rasy/Species
 
-Kryterium zakończenia:
+Kolejność:
 
-- terminalowy albo testowy runtime potrafi przeprowadzić prostą walkę 1v1,
-- wszystkie decyzje są zapisane w obserwacji sesji,
-- testy przechodzą.
+1. backgroundy jako proficiency, języki, narzędzia, equipment i feature,
+2. podstawowe rasy/species reprezentujące senses, speed, resistance i innate magic,
+3. wybory wariantów i subrace/subspecies, jeśli należą do wybranej wersji zasad,
+4. pełny legalnie dozwolony katalog.
 
-## Etap 5: Obserwacja Sesji I Runtime Debugowy
-
-Cel: mieć wspólny punkt odniesienia do debugowania rozgrywki.
+## Etap K3: Cztery Klasy Referencyjne
 
-Zakres:
+Najpierw wdrażamy klasy reprezentujące odmienne rodziny mechanik:
 
-- lokalny zapis JSONL,
-- `session_started`,
-- `turn_started`,
-- `movement_range_calculated`,
-- `movement_path_selected`,
-- `roll_entered`,
-- `roll_resolved`,
-- `attack_resolved`,
-- `damage_applied`,
-- `session_error`,
-- prosty runtime debugowy w terminalu albo minimalnym web UI.
+1. Fighter — broń, pancerz, zasób odnawiany po odpoczynku i dodatkowe akcje,
+2. Rogue — expertise, Sneak Attack, Cunning Action i reakcje sytuacyjne,
+3. Cleric — przygotowywanie czarów, channel resource i divine features,
+4. Wizard — spellbook, przygotowywanie, ritual casting i odzyskiwanie slotów.
 
-Testy:
+To nie jest jeszcze moment na pełny katalog subclass. Celem jest udowodnienie, że
+mechanizmy klasowe składają się z ogólnych prymitywów.
 
-- unit testy formatowania eventów,
-- test zapisu do katalogu tymczasowego,
-- test kolejności `seq`,
-- test czy runtime tworzy plik obserwacji.
+## Etap K4: Pozostałe Klasy I Subclassy
 
-Kryterium zakończenia:
+Klasy dodajemy rodzinami zależności:
 
-- po sesji istnieje plik `.jsonl`,
-- plik da się otworzyć i przeanalizować bez aplikacji,
-- przy zgłoszeniu błędu można odtwórczo ustalić, co się wydarzyło.
+1. Barbarian, Monk i Ranger po ustabilizowaniu ruchu, warunków i zasobów,
+2. Bard, Druid, Paladin, Sorcerer i Warlock po pełnym spellcastingu,
+3. pozostałe klasy należące do ustalonego zakresu,
+4. po jednej referencyjnej subclassie na klasę,
+5. pełny dozwolony katalog subclass,
+6. multiclassing dopiero po stabilnym level-up każdej klasy osobno,
+7. feats po stabilizacji prerequisite i feature composition.
 
-## Etap 6: Adapter Planszy I Wizualizacja LED
+Kryterium wyjścia:
 
-Cel: połączyć czystą logikę ruchu i celu z fizyczną planszą albo symulatorem.
+- level 1–20 albo inny jawnie ustalony zakres jest pokryty automatycznym audytem,
+- level-up nie wymaga ręcznego poprawiania JSON aktora,
+- feature'y klas nie są interpretowane przez nazwę klasy w resolverach.
 
-Zakres:
+# Część IV: Moduły Autorskie
 
-- adapter wokół `board.Connection`,
-- zamiana `reachable_tiles` na ramki LED,
-- zamiana `selected_path` na ramki LED,
-- wizualizacja aktywnego aktora,
-- wizualizacja celu ataku,
-- feedback trafienia/pudła/obrażeń,
-- testy w symulatorze,
-- manualna checklista hardware.
+## Wspólny Fundament Authoringu
 
-Testy:
+Walidatory, schematy, katalogi, migracje i preview payloads powstają wcześniej jako
+narzędzia developerskie. Graficzne sub-aplikacje powstają dopiero po stabilizacji
+modeli, ale korzystają z tego samego authoring API.
 
-- unit testy generowania ramek LED bez hardware,
-- integracyjne testy adaptera z fake connection,
-- manualne testy w symulatorze,
-- manualne testy na fizycznej planszy.
+## Etap A1: Kreator Bohatera
 
-Kryterium zakończenia:
+Kolejność ekranów:
 
-- ruch aktora jest widoczny na LED,
-- ścieżka jest widoczna na LED,
-- cele ataku są widoczne na LED,
-- warstwa zasad nadal nie importuje `board`.
+1. ruleset i dozwolone source packi,
+2. metoda ability scores,
+3. rasa/species i wybory cech,
+4. background,
+5. klasa, poziom i subclass,
+6. proficiency, języki i narzędzia,
+7. equipment,
+8. spellcasting: known, spellbook i prepared profile,
+9. podsumowanie statystyk wraz z wyjaśnieniem ich źródeł,
+10. walidacja, zapis, eksport, import i level-up.
 
-## Etap 7: Pierwsza Grywalna Scena
+Kreator nie oblicza zasad samodzielnie. Wysyła wybory do domenowego buildera i
+wyświetla jego wynik oraz błędy.
 
-Cel: przejść od mini-combatu do pierwszej sceny stołowej.
+Kryterium wyjścia:
 
-Zakres:
+- można utworzyć każdą postać z ustalonego zakresu bez edycji pliku,
+- każda wartość na karcie ma widoczne źródło,
+- zapisana postać przechodzi ten sam loader co postacie scenariusza.
 
-- 2 bohaterów,
-- 3 potwory,
-- jedna prosta mapa z przeszkodami,
-- jeden NPC albo obiekt interaktywny,
-- prosty cel sceny,
-- tury i walka,
-- prosta interakcja przed albo po walce,
-- podsumowanie wyniku.
+## Etap A2: Kreator Scenariusza
 
-Testy:
+Kolejność modułów:
 
-- test ładowania sceny,
-- test rozmieszczenia aktorów,
-- test zakończenia walki,
-- test podstawowej interakcji,
-- manualna próba przejścia całej sceny.
+1. metadane i ruleset scenariusza,
+2. mapa, teren, ściany, drzwi, strefy i punkty,
+3. aktorzy, start positions i encounter groups,
+4. obiekty, hazards i zasoby sceny,
+5. NPC, wiedza, intencje i lokalne policy,
+6. challenge'e, testy, DC policy i konsekwencje,
+7. triggery, warunki, efekty i przejścia,
+8. odpoczynki, cele i wyniki scenariusza,
+9. walidacja referencji i raport nieobsługiwanych mechanik,
+10. preview mapy/LED, dry run, playtest i publikacja paczki.
 
-Kryterium zakończenia:
+Edytor powinien mieć tryb formularza dla typowych przypadków oraz kontrolowany tryb
+zaawansowany dla data-driven prymitywów. LLM może proponować tekst lub strukturę,
+ale wynik musi przejść te same deterministyczne walidatory.
 
-- da się rozegrać krótką scenę od początku do końca,
-- gracze używają planszy, figurek i fizycznych kości,
-- aplikacja prowadzi stan i feedback LED.
+## Etap A3: Kreator Kampanii
 
-## Etap 8: Interakcje Społeczne I Eksploracja
+Powstaje jako rozszerzenie kreatora scenariusza:
 
-Cel: dodać więcej niż walkę, bez budowania pełnej kampanii.
+- graf scen,
+- warunki przejść,
+- persistent flags i NPC state,
+- stan drużyny i odpoczynki między scenami,
+- questy i zakończenia,
+- migracje, wersjonowanie i publikacja pakietu kampanii.
 
-Zakres:
+# Część V: Wydania I Bramki Produktowe
 
-- obiekty interaktywne,
-- proste dialogi NPC,
-- wybory gracza,
-- testy cech wpisywanymi rzutami,
-- konsekwencje wyborów,
-- podświetlanie punktów zainteresowania LED,
-- proste flagi sceny.
+## Release R1: Stabilny Rules Kernel
 
-Testy:
+- M1–M2 ukończone,
+- wersjonowane efekty, zasoby i snapshoty,
+- aktualna macierz zasad,
+- brak nowej logiki klasowej.
 
-- unit testy interakcji,
-- testy flag sceny,
-- testy wyborów,
-- manualna checklista eksploracji.
+## Release R2: Pełna Walka Bazowa
 
-Kryterium zakończenia:
+- M3–M6 ukończone dla ustalonego zakresu,
+- reprezentatywny encounter przechodzi automatycznie i manualnie,
+- UI i LED wyjaśniają legalne akcje oraz modyfikatory.
 
-- scena może zawierać rozmowę, obiekt albo test umiejętności,
-- wynik interakcji wpływa na stan sceny.
+## Release R3: Magia I Przygoda
 
-## Etap 9: Pierwszy Stabilny Zestaw Contentu D&D
+- M7–M9 ukończone,
+- pełny jednostrzał z odpoczynkiem i zapisem,
+- brak osobnych przepływów dla pojedynczych czarów.
 
-Cel: uporządkować lokalne dane potrzebne do pierwszych scen i potwierdzić format contentu przed większą rozbudową.
+## Release R4: Content-Ready Engine
 
-Zakres:
+- schematy C1 stabilne,
+- pakiet C2 pokrywa wszystkie rodziny mechanik,
+- raport nieobsługiwanych mechanik jest pusty dla pakietu testowego.
 
-- schemat potwora,
-- schemat broni,
-- schemat aktora testowego,
-- schemat scenariusza,
-- pierwszy stabilny zestaw potworów,
-- pierwszy stabilny zestaw broni,
-- pierwszy stabilny zestaw obiektów interaktywnych,
-- attribution/licencje dla danych SRD, jeśli używane.
+## Release R5: Bazowy Katalog I Biblioteka Scenariuszy
 
-Testy:
+- C3–C4 ukończone,
+- kilka różnych scenariuszy przechodzi playtest,
+- licencje i attribution są kompletne.
 
-- walidacja JSON,
-- test ładowania contentu,
-- test brakujących pól,
-- test stabilnych identyfikatorów.
+## Release R6: Postacie D&D
 
-Kryterium zakończenia:
+- K1–K4 ukończone dla jawnie ustalonego zakresu,
+- klasy i rasy korzystają z ogólnych feature definitions,
+- automatyczny audyt progresji nie wykazuje luk.
 
-- pierwsze sceny nie mają danych zaszytych w kodzie,
-- dane są czytelne i wersjonowalne,
-- format danych nadaje się do rozbudowy,
-- nie kopiujemy niepotrzebnych opisów podręcznikowych.
+## Release R7: Authoring Suite
 
-## Etap 10: Pierwszy Stabilny UI Dla Prowadzenia Gry
+- kreator bohatera i scenariusza działają na wspólnym API,
+- twórca nie musi edytować JSON,
+- preview, walidacja i dry run są dostępne przed publikacją.
 
-Cel: zastąpić runtime debugowy pierwszym stabilnym interfejsem używalnym przy stole.
+## Release R8: Docelowy Pakiet
 
-Zakres:
+- C5 osiąga 100% legalnie ustalonego zakresu,
+- kampania demonstracyjna przechodzi od utworzenia bohatera do zakończenia,
+- projekt posiada instrukcję uruchamiania, authoringu, migracji i playtestu,
+- problemy rozgrywki można diagnozować z obserwacji sesji.
 
-- ekran aktywnego aktora,
-- panel tury,
-- wpisywanie rzutów,
-- wybór akcji,
-- podgląd HP,
-- podgląd inicjatywy,
-- komunikaty dla graczy,
-- połączenie z planszą/symulatorem,
-- dostęp do obserwacji sesji.
+## Najbliższa Kolejność Prac
 
-Testy:
+Po obecnym MVP przygotowywania czarów nie przechodzimy jeszcze do klas. Najbliższe
+etapy to:
 
-- testy API albo warstwy aplikacyjnej,
-- manualne testy przepływu tury,
-- manualne testy połączenia z planszą.
-
-Kryterium zakończenia:
-
-- da się prowadzić pierwszą scenę bez pracy bezpośrednio w terminalu,
-- UI nie miesza się z silnikiem zasad,
-- UI nadaje się do rozbudowy bez przepisywania rdzenia aplikacji.
-
-## Etap 11: Mała Kampania
-
-Cel: przygotować krótką kampanię demonstracyjną.
-
-Zakres:
-
-- 3-5 scen,
-- przynajmniej 2 encountery,
-- przynajmniej 2 interakcje społeczne,
-- przynajmniej 2 obiekty eksploracyjne,
-- proste przejścia między scenami,
-- zapis postępu,
-- podsumowanie sesji.
-
-Testy:
-
-- test ładowania kampanii,
-- test przejść między scenami,
-- test zachowania flag,
-- manualne przejście kampanii.
-
-Kryterium zakończenia:
-
-- da się rozegrać krótką kampanię przy stole,
-- plansza i aplikacja są używane razem,
-- mechaniki są stabilne na tyle, żeby poprawiać content zamiast walczyć z runtime.
-
-## Etap 12: Stabilizacja I Playtest
-
-Cel: poprawić realne problemy po graniu.
-
-Zakres:
-
-- poprawki UX,
-- poprawki manualnych checklist,
-- poprawki obserwacji sesji,
-- redukcja tarcia przy stole,
-- lepsze komunikaty,
-- porządkowanie testów,
-- dokumentacja uruchamiania.
-
-Kryterium zakończenia:
-
-- projekt da się uruchomić według dokumentacji,
-- nowa osoba może przejść checklistę,
-- błędy da się diagnozować z obserwacji sesji,
-- gra jest faktycznie grywalna.
-
-## Etap 13: Rozbudowany Katalog D&D
-
-Cel: rozszerzyć pierwszy stabilny zestaw contentu do większego katalogu użytecznego w wielu scenach i kampaniach.
-
-Ten etap powinien ruszyć dopiero po potwierdzeniu, że schematy z etapu 9 działają w praktyce.
-
-Zakres:
-
-- większy katalog potworów,
-- większy katalog broni,
-- pancerze i tarcze,
-- podstawowy ekwipunek,
-- podstawowe warunki,
-- wybrane czary potrzebne do kampanii,
-- akcje specjalne potworów,
-- walidacja danych contentu,
-- attribution/licencje dla danych SRD,
-- narzędzia do audytu brakujących pól.
-
-Testy:
-
-- testy walidacji całego katalogu,
-- testy ładowania losowo wybranych potworów/przedmiotów,
-- testy stabilności identyfikatorów,
-- testy kompatybilności danych ze scenariuszami.
-
-Kryterium zakończenia:
-
-- content jest wystarczający do budowy wielu encounterów bez ręcznego dopisywania danych w kodzie,
-- katalog jest spójny i walidowany,
-- dane są zgodne z przyjętą strategią licencji.
-
-## Etap 14: Docelowy UI Kampanii
-
-Cel: rozbudować pierwszy stabilny UI do interfejsu wygodnego przy prowadzeniu kampanii, a nie tylko pojedynczej sceny.
-
-Ten etap powinien wynikać z realnych playtestów, a nie z założeń z początku projektu.
-
-Zakres:
-
-- widok kampanii,
-- lista scen,
-- przejścia między scenami,
-- stan drużyny,
-- stan NPC,
-- stan questów lub celów,
-- historia sesji,
-- podgląd obserwacji sesji,
-- wygodniejsze zarządzanie encounterami,
-- lepsze komunikaty dla graczy,
-- narzędzia dla Mistrza Gry,
-- opcjonalne widoki dla graczy.
-
-Testy:
-
-- testy przepływu kampanii,
-- testy zachowania stanu między scenami,
-- testy API/UI dla kluczowych akcji,
-- manualny playtest krótkiej kampanii.
-
-Kryterium zakończenia:
-
-- UI pozwala wygodnie prowadzić krótką kampanię,
-- użytkownik nie musi znać struktury plików projektu,
-- debugowanie nadal opiera się na obserwacji sesji,
-- silnik zasad pozostaje oddzielony od UI.
+1. zatwierdzić bazową wersję zasad oraz strategię licencji,
+2. zinwentaryzować mechaniki w macierzy i oznaczyć luki,
+3. dokończyć wspólny model duration/expiration i scenario-end lifecycle,
+4. dodać wersjonowany snapshot i test odtworzenia stanu,
+5. domknąć fundament aktora: proficiency, skills, 0 HP i death saves,
+6. następnie realizować M3–M8 w zapisanej kolejności.

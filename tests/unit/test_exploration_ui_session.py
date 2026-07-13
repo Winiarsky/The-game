@@ -547,6 +547,62 @@ def test_exploration_ui_session_requires_spell_preparation_before_scenario_setup
     assert any(record["event_type"] == "ui_spell_preparation_confirmed" for record in events)
 
 
+def test_exploration_ui_session_completes_short_rest_and_spends_hit_die():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.exploration = replace(
+        session.exploration,
+        actors=tuple(
+            replace(actor, hp=10) if str(actor.id) == "hero" else actor
+            for actor in session.exploration.actors
+        ),
+    )
+
+    preview = session.start_short_rest()
+
+    assert preview["flow"]["stage"] == "short_rest"
+    assert preview["short_rest"]["policy"]["safety"] == "contested"
+    assert preview["short_rest"]["policy"]["duration_minutes"] == 60
+    assert preview["short_rest"]["pending"]["completed"] is False
+
+    completed = session.confirm_short_rest()
+
+    assert completed["short_rest"]["pending"]["completed"] is True
+    assert completed["short_rest"]["elapsed_minutes"] == 60
+    assert completed["active_challenge"] is None
+    assert next(item for item in completed["scene_status"] if item["label"] == "Hałas")["value"] == "niski (2)"
+    hero_before_die = next(actor for actor in completed["actors"] if actor["id"] == "hero")
+    assert hero_before_die["hp"] == 10
+
+    healed = session.spend_short_rest_hit_die(
+        actor_id="hero",
+        die_sides=10,
+        natural_roll=5,
+    )
+    hero = next(actor for actor in healed["actors"] if actor["id"] == "hero")
+
+    assert hero["hp"] == 16
+    assert hero["hit_dice"][0]["remaining"] == 1
+
+    finished = session.finish_short_rest()
+
+    assert finished["flow"]["stage"] == "location_active"
+    assert finished["short_rest"]["available"] is False
+    assert "wykorzystana" in finished["short_rest"]["unavailable_reason"]
+
+
+def test_exploration_ui_session_can_cancel_short_rest_without_advancing_time():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    session.start_short_rest()
+    cancelled = session.cancel_short_rest()
+
+    assert cancelled["flow"]["stage"] == "location_active"
+    assert cancelled["short_rest"]["elapsed_minutes"] == 0
+    assert cancelled["short_rest"]["available"] is True
+
+
 def test_exploration_ui_session_rejects_pending_interpretation():
     session = ExplorationUiSession(
         "content/scenarios/abandoned_watchtower.json",

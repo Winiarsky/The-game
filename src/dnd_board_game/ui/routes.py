@@ -52,6 +52,48 @@ def create_app(session: ExplorationUiSession) -> Flask:
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
+    @app.post("/api/rest/short/start")
+    def api_short_rest_start():
+        try:
+            return jsonify(session.start_short_rest())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/rest/short/confirm")
+    def api_short_rest_confirm():
+        try:
+            return jsonify(session.confirm_short_rest())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/rest/short/hit-die")
+    def api_short_rest_hit_die():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.spend_short_rest_hit_die(
+                    actor_id=str(data.get("actor_id", "")),
+                    die_sides=int(data.get("die_sides", 0)),
+                    natural_roll=int(data.get("natural_roll", 0)),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/rest/short/cancel")
+    def api_short_rest_cancel():
+        try:
+            return jsonify(session.cancel_short_rest())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/rest/short/finish")
+    def api_short_rest_finish():
+        try:
+            return jsonify(session.finish_short_rest())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
     @app.post("/api/action")
     def api_action():
         data = request.get_json(silent=True) or {}

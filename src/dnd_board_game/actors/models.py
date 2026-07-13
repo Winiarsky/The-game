@@ -5,6 +5,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, NewType
 
 if TYPE_CHECKING:
+    from dnd_board_game.actors.resources import ActorResourcePool, HitDicePool
     from dnd_board_game.actors.spell_preparation import SpellPreparationProfile
     from dnd_board_game.combat.spells import SpellSlotState
     from dnd_board_game.inventory import InventoryItem
@@ -47,6 +48,8 @@ class Actor:
     inventory: tuple[InventoryItem, ...] = ()
     spell_ids: tuple[str, ...] = ()
     spell_preparation: SpellPreparationProfile | None = None
+    hit_dice: tuple[HitDicePool, ...] = ()
+    resource_pools: tuple[ActorResourcePool, ...] = ()
 
     def __post_init__(self) -> None:
         if self.max_hp <= 0:

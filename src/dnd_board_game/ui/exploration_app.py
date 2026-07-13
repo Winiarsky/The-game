@@ -32,6 +32,7 @@ from dnd_board_game.application import (
     PendingConcentrationCheck,
     PendingPlayerAttack,
     PendingPlayerHealing,
+    PendingShortRest,
     PlayerAreaHealingFlowService,
     PlayerAreaSpellTransition,
     PlayerReactionFlowService,
@@ -39,6 +40,8 @@ from dnd_board_game.application import (
     PlayerCombatActionFlowService,
     PlayerCombatResourceFlowService,
     SpellPreparationFlowService,
+    ShortRestFlowService,
+    short_rest_count,
 )
 from dnd_board_game.actors import Actor, Faction, spell_is_prepared
 from dnd_board_game.combat import (
@@ -106,6 +109,7 @@ from dnd_board_game.exploration import (
     ImprovisedToolUse,
     PartyCheckInput,
     PendingEncounter,
+    ShortRestPolicy,
     MECHANIC_TOOLS,
     active_option_bonuses_for_actor,
     apply_exploration_effect,
@@ -143,7 +147,7 @@ from dnd_board_game.llm import (
 )
 from dnd_board_game.hardware import BoardSessionAdapter, LedColor, LedFeedback, LedFrame, LedRole, led_color_name_pl, movement_led_feedback
 from dnd_board_game.inventory import break_inventory_item, consume_inventory_item, inventory_item_payload
-from dnd_board_game.rules import D20RollInput, D20RollRequest, RollMode, RollModifier, RollModifierType, ability_modifier, resolve_d20_roll, roll_instruction
+from dnd_board_game.rules import D20RollInput, D20RollRequest, RollMode, RollModifier, RollModifierType, ability_modifier, complete_long_rest, resolve_d20_roll, roll_instruction
 from dnd_board_game.scenarios import (
     LoadedEncounter,
     LoadedExploration,
@@ -469,6 +473,7 @@ class ExplorationUiSession:
         self.player_combat_resource_flow = PlayerCombatResourceFlowService()
         self.player_reaction_flow = PlayerReactionFlowService()
         self.spell_preparation_flow = SpellPreparationFlowService()
+        self.short_rest_flow = ShortRestFlowService()
         self.exploration_flow = ExplorationFlowService()
         self.reset()
 
@@ -476,6 +481,16 @@ class ExplorationUiSession:
         if self._fixed_session_id is None:
             self.observer = SessionObserver(_ui_session_id(), self.observation_dir)
         self.exploration = build_exploration_from_scenario(load_scenario(self.scenario_path))
+        long_rest_results = tuple(
+            complete_long_rest(actor)
+            for actor in self.exploration.actors
+            if actor.faction == Faction.ALLY
+        )
+        rested_actors = {result.actor_after.id: result.actor_after for result in long_rest_results}
+        self.exploration = replace(
+            self.exploration,
+            actors=tuple(rested_actors.get(actor.id, actor) for actor in self.exploration.actors),
+        )
         self.state = ExplorationState(
             self.exploration.zones,
             self.exploration.points,
@@ -534,7 +549,27 @@ class ExplorationUiSession:
                 "debug_point_id": self.debug_point_id,
                 "initial_zone_id": self.state.party_position.zone_id,
                 "initial_resource_ids": list(self.state.inventory_resource_ids),
+                "automatic_long_rest": [
+                    {
+                        "actor_id": str(result.actor_after.id),
+                        "hp_recovered": result.hp_recovered,
+                        "hit_dice_recovered": result.hit_dice_recovered,
+                        "recovered_resource_ids": list(result.recovered_resource_ids),
+                    }
+                    for result in long_rest_results
+                ],
             },
+        )
+        self._record(
+            "ui_automatic_long_rest_completed",
+            {
+                "actor_ids": [str(result.actor_after.id) for result in long_rest_results],
+                "next_stage": self.ui_flow_stage.value,
+            },
+        )
+        self._add_message(
+            "Długi odpoczynek ukończony",
+            "Drużyna rozpoczyna scenariusz po long reście. Odnowiono HP, sloty i zasoby; teraz można przygotować czary.",
         )
 
     @property
@@ -666,6 +701,14 @@ class ExplorationUiSession:
         self.pending_state.ready_attack = value
 
     @property
+    def pending_short_rest(self) -> PendingShortRest | None:
+        return self.pending_state.short_rest
+
+    @pending_short_rest.setter
+    def pending_short_rest(self, value: PendingShortRest | None) -> None:
+        self.pending_state.short_rest = value
+
+    @property
     def current_zone(self) -> ExplorationZone:
         return next(zone for zone in self.state.zones if zone.id == self.state.party_position.zone_id)
 
@@ -676,11 +719,13 @@ class ExplorationUiSession:
         return next((point for point in self.state.points if point.id == self.active_point_id), None)
 
     def state_payload(self) -> dict[str, object]:
-        self._refresh_pending_encounter()
+        if self.ui_flow_stage != UiFlowStage.SHORT_REST:
+            self._refresh_pending_encounter()
         self._expire_invalid_combat_effects()
         active_challenge = self.active_challenge if self.ui_flow_stage == UiFlowStage.LOCATION_ACTIVE else None
         current_zone_points = self.current_zone_points() if self.ui_flow_stage == UiFlowStage.LOCATION_ACTIVE else ()
         scene_status = _scene_status_payload(self.state)
+        scene_status.append({"label": "Czas scenariusza", "value": _duration_minutes_label(self.state.elapsed_minutes)})
         if self.pending_encounter is not None:
             scene_status.append({"label": "Encounter", "value": self.pending_encounter.name})
         preview_zone = self._preview_zone()
@@ -698,6 +743,7 @@ class ExplorationUiSession:
                 "interaction_result": self.interaction_result,
             },
             spell_preparation=self._spell_preparation_payload(),
+            short_rest=self._short_rest_payload(),
             current_zone=_zone_payload(self.current_zone, self._scenario_asset_root()),
             available_zones=[_zone_payload(zone, self._scenario_asset_root()) for zone in visible_exploration_zones(self.state.zones) if zone_is_ui_available(self.state, zone)],
             visible_environment=[_environment_entry_payload(entry) for entry in self.exploration.environment if entry.visibility == SetupVisibility.VISIBLE],
@@ -837,6 +883,139 @@ class ExplorationUiSession:
             else:
                 self.ui_flow_stage = UiFlowStage.WAITING_FOR_BOARD
                 self.board_message = "Przygotowanie zakończone. Wybierz backend planszy."
+        return self.state_payload()
+
+    def start_short_rest(self) -> dict[str, object]:
+        if self.ui_flow_stage != UiFlowStage.LOCATION_ACTIVE:
+            raise ValueError("Krótki odpoczynek można rozpocząć tylko podczas eksploracji.")
+        if self.pending is not None or self.active_point is not None:
+            raise ValueError("Najpierw zakończ aktywną interakcję.")
+        self._refresh_pending_encounter()
+        pending = self.short_rest_flow.start(
+            state=self.state,
+            zone=self.current_zone,
+            encounter_pending=self.pending_encounter is not None,
+        )
+        self.pending_short_rest = pending
+        self.ui_flow_stage = UiFlowStage.SHORT_REST
+        self.board_message = "Podgląd krótkiego odpoczynku. Potwierdź koszt i ryzyko."
+        self._record(
+            "ui_short_rest_started",
+            {
+                "policy_id": pending.policy.id,
+                "zone_id": pending.zone_id,
+                "duration_minutes": pending.policy.duration_minutes,
+                "safety": pending.policy.safety.value,
+            },
+        )
+        return self.state_payload()
+
+    def confirm_short_rest(self) -> dict[str, object]:
+        pending = self.pending_short_rest
+        if self.ui_flow_stage != UiFlowStage.SHORT_REST or pending is None:
+            raise ValueError("Brak krótkiego odpoczynku do potwierdzenia.")
+        transition = self.short_rest_flow.complete(
+            state=self.state,
+            actors=self.exploration.actors,
+            pending=pending,
+        )
+        self.state = transition.state
+        self.exploration = replace(self.exploration, actors=transition.actors)
+        self.pending_short_rest = transition.pending
+        for effect, raw_effect in zip(transition.effects, pending.policy.completion_effects, strict=True):
+            self._record_effect_result(
+                effect,
+                source="short_rest_completion",
+                raw_effect=raw_effect,
+            )
+        recovered = {
+            str(result.actor_after.id): list(result.recovered_resource_ids)
+            for result in transition.rest_results
+            if result.recovered_resource_ids
+        }
+        self._record(
+            "ui_short_rest_completed",
+            {
+                "policy_id": pending.policy.id,
+                "zone_id": pending.zone_id,
+                "elapsed_minutes": self.state.elapsed_minutes,
+                "recovered_resources": recovered,
+                "effect_types": [effect.effect_type for effect in transition.effects],
+            },
+        )
+        self._add_message(
+            "Krótki odpoczynek ukończony",
+            "Minęła godzina. Gracze mogą teraz wydawać Hit Dice pojedynczo.",
+        )
+        self.board_message = "Odpoczynek ukończony. Wydaj Hit Dice albo zakończ odpoczynek."
+        return self.state_payload()
+
+    def spend_short_rest_hit_die(
+        self,
+        *,
+        actor_id: str,
+        die_sides: int,
+        natural_roll: int,
+    ) -> dict[str, object]:
+        pending = self.pending_short_rest
+        if (
+            self.ui_flow_stage != UiFlowStage.SHORT_REST
+            or pending is None
+            or not pending.completed
+        ):
+            raise ValueError("Hit Dice można wydawać dopiero po ukończeniu short resta.")
+        transition = self.short_rest_flow.spend_hit_die(
+            actors=self.exploration.actors,
+            actor_id=actor_id,
+            die_sides=die_sides,
+            natural_roll=natural_roll,
+        )
+        self.exploration = replace(self.exploration, actors=transition.actors)
+        result = transition.result
+        self._record(
+            "ui_short_rest_hit_die_spent",
+            {
+                "actor_id": actor_id,
+                "die_sides": die_sides,
+                "natural_roll": natural_roll,
+                "constitution_modifier": result.constitution_modifier,
+                "effective_healing": result.effective_healing,
+            },
+        )
+        self._add_message(
+            "Wydana Hit Die",
+            (
+                f"{result.actor_after.name}: d{die_sides} {natural_roll}, "
+                f"CON {_format_signed(result.constitution_modifier)}, "
+                f"odzyskano {result.effective_healing} HP."
+            ),
+        )
+        return self.state_payload()
+
+    def cancel_short_rest(self) -> dict[str, object]:
+        pending = self.pending_short_rest
+        if self.ui_flow_stage != UiFlowStage.SHORT_REST or pending is None:
+            raise ValueError("Brak krótkiego odpoczynku do anulowania.")
+        if pending.completed:
+            raise ValueError("Ukończonego odpoczynku nie można anulować.")
+        self.pending_short_rest = None
+        self.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+        self.board_message = "Krótki odpoczynek anulowany bez upływu czasu."
+        self._record("ui_short_rest_cancelled", {"policy_id": pending.policy.id})
+        return self.state_payload()
+
+    def finish_short_rest(self) -> dict[str, object]:
+        pending = self.pending_short_rest
+        if (
+            self.ui_flow_stage != UiFlowStage.SHORT_REST
+            or pending is None
+            or not pending.completed
+        ):
+            raise ValueError("Najpierw ukończ krótki odpoczynek.")
+        self.pending_short_rest = None
+        self.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+        self.board_message = "Krótki odpoczynek zakończony. Drużyna wraca do eksploracji."
+        self._record("ui_short_rest_finished", {"policy_id": pending.policy.id})
         return self.state_payload()
 
     def start_session(self) -> dict[str, object]:
@@ -1108,6 +1287,10 @@ class ExplorationUiSession:
             },
         )
         self._add_message(outcome.title or "Wynik encountera", outcome.body or "Encounter został rozstrzygnięty.")
+        self.exploration = _exploration_with_combat_actor_state(
+            self.exploration,
+            self.combat_state.actors,
+        )
         self.interaction_result = {
             "title": outcome.title or "Wynik encountera",
             "body": outcome.body or "Encounter został rozstrzygnięty.",
@@ -2780,6 +2963,42 @@ class ExplorationUiSession:
             ],
         }
 
+    def _short_rest_payload(self) -> dict[str, object]:
+        pending = self.pending_short_rest
+        policy = pending.policy if pending is not None else self.current_zone.short_rest_policy
+        completed_count = short_rest_count(self.state, policy.id) if policy is not None else 0
+        unavailable_reason: str | None = None
+        if policy is None:
+            unavailable_reason = "W tej lokacji nie ma warunków do krótkiego odpoczynku."
+        elif policy.max_completions and completed_count >= policy.max_completions:
+            unavailable_reason = "Możliwość odpoczynku w tej lokacji została już wykorzystana."
+        elif self.pending_encounter is not None:
+            unavailable_reason = "Encounter czeka na rozpoczęcie."
+        elif self.pending is not None or self.active_point is not None:
+            unavailable_reason = "Najpierw zakończ aktywną interakcję."
+        elif self.ui_flow_stage != UiFlowStage.LOCATION_ACTIVE and pending is None:
+            unavailable_reason = "Krótki odpoczynek nie jest teraz dostępny."
+        return {
+            "available": unavailable_reason is None and pending is None,
+            "unavailable_reason": unavailable_reason,
+            "elapsed_minutes": self.state.elapsed_minutes,
+            "elapsed_label": _duration_minutes_label(self.state.elapsed_minutes),
+            "policy": _short_rest_policy_payload(policy, completed_count) if policy is not None else None,
+            "pending": (
+                {
+                    "completed": pending.completed,
+                    "zone_id": pending.zone_id,
+                    "actors": [
+                        _short_rest_actor_payload(actor, completed=pending.completed)
+                        for actor in self.exploration.actors
+                        if actor.faction == Faction.ALLY
+                    ],
+                }
+                if pending is not None
+                else None
+            ),
+        }
+
     def _sync_board_leds(self) -> None:
         if self.board_adapter is None:
             return
@@ -4034,14 +4253,41 @@ def _encounter_with_session_spell_state(
     actors = tuple(
         replace(
             actor,
+            hp=session_by_id[str(actor.id)].hp,
+            temp_hp=session_by_id[str(actor.id)].temp_hp,
             spell_slots=session_by_id[str(actor.id)].spell_slots,
             spell_preparation=session_by_id[str(actor.id)].spell_preparation,
+            hit_dice=session_by_id[str(actor.id)].hit_dice,
+            resource_pools=session_by_id[str(actor.id)].resource_pools,
         )
         if str(actor.id) in session_by_id
         else actor
         for actor in encounter.actors
     )
     return replace(encounter, actors=actors)
+
+
+def _exploration_with_combat_actor_state(
+    exploration: LoadedExploration,
+    combat_actors: tuple[Actor, ...],
+) -> LoadedExploration:
+    combat_by_id = {str(actor.id): actor for actor in combat_actors}
+    actors = tuple(
+        replace(
+            actor,
+            hp=combat_by_id[str(actor.id)].hp,
+            temp_hp=combat_by_id[str(actor.id)].temp_hp,
+            spell_slots=combat_by_id[str(actor.id)].spell_slots,
+            spell_preparation=combat_by_id[str(actor.id)].spell_preparation,
+            hit_dice=combat_by_id[str(actor.id)].hit_dice,
+            resource_pools=combat_by_id[str(actor.id)].resource_pools,
+            inventory=combat_by_id[str(actor.id)].inventory,
+        )
+        if str(actor.id) in combat_by_id
+        else actor
+        for actor in exploration.actors
+    )
+    return replace(exploration, actors=actors)
 
 
 def _combat_action_by_id(encounter: LoadedEncounter | None, actor: Actor, action_id: str):
@@ -5463,6 +5709,8 @@ def _exploration_actor_payload(actor: Actor) -> dict[str, object]:
     return {
         "id": str(actor.id),
         "name": actor.name,
+        "hp": actor.hp,
+        "max_hp": actor.max_hp,
         "ability_scores": {
             "strength": actor.ability_scores.strength,
             "dexterity": actor.ability_scores.dexterity,
@@ -5477,7 +5725,73 @@ def _exploration_actor_payload(actor: Actor) -> dict[str, object]:
             {"level": slot.level, "remaining": slot.remaining, "maximum": slot.maximum}
             for slot in actor.spell_slots
         ],
+        "hit_dice": [
+            {"die_sides": pool.die_sides, "remaining": pool.remaining, "maximum": pool.maximum}
+            for pool in actor.hit_dice
+        ],
+        "resource_pools": [
+            {
+                "id": pool.id,
+                "label": pool.label,
+                "current": pool.current,
+                "maximum": pool.maximum,
+                "recovery": pool.recovery.value,
+            }
+            for pool in actor.resource_pools
+        ],
     }
+
+
+def _short_rest_policy_payload(
+    policy: ShortRestPolicy,
+    completed_count: int,
+) -> dict[str, object]:
+    return {
+        "id": policy.id,
+        "safety": policy.safety.value,
+        "duration_minutes": policy.duration_minutes,
+        "duration_label": _duration_minutes_label(policy.duration_minutes),
+        "risk_summary": policy.risk_summary,
+        "max_completions": policy.max_completions,
+        "completed_count": completed_count,
+        "has_completion_effects": bool(policy.completion_effects),
+    }
+
+
+def _short_rest_actor_payload(actor: Actor, *, completed: bool) -> dict[str, object]:
+    return {
+        "actor_id": str(actor.id),
+        "actor_name": actor.name,
+        "hp": actor.hp,
+        "max_hp": actor.max_hp,
+        "constitution_modifier": ability_modifier(actor.ability_scores.constitution),
+        "can_spend_hit_die": completed and actor.hp < actor.max_hp and any(
+            pool.remaining > 0 for pool in actor.hit_dice
+        ),
+        "hit_dice": [
+            {"die_sides": pool.die_sides, "remaining": pool.remaining, "maximum": pool.maximum}
+            for pool in actor.hit_dice
+        ],
+        "short_rest_resources": [
+            {
+                "id": pool.id,
+                "label": pool.label,
+                "current": pool.current,
+                "maximum": pool.maximum,
+            }
+            for pool in actor.resource_pools
+            if pool.recovery.value == "short_rest"
+        ],
+    }
+
+
+def _duration_minutes_label(minutes: int) -> str:
+    hours, remainder = divmod(max(0, minutes), 60)
+    if hours and remainder:
+        return f"{hours} godz. {remainder} min"
+    if hours:
+        return f"{hours} godz."
+    return f"{remainder} min"
 
 
 def _scene_status_payload(state: ExplorationState) -> list[dict[str, str]]:

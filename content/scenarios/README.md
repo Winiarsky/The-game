@@ -103,6 +103,44 @@ Aktor przygotowujący czary może deklarować generyczny profil:
 
 Identyfikatory muszą wskazywać źródła czarów poziomu 1+ tego aktora. Cantripy nie należą do profilu. Przed setupem scenariusza gracz potwierdza dokładnie `preparation_limit` pozycji; `always_prepared_spell_ids` nie zajmują limitu.
 
+Aktor może posiadać Hit Dice i generyczne zasoby odpoczynku:
+
+```json
+{
+  "hit_dice": {"d8": 2},
+  "resource_pools": [
+    {
+      "id": "focus",
+      "label": "Skupienie",
+      "current": 0,
+      "maximum": 2,
+      "recovery": "short_rest"
+    }
+  ]
+}
+```
+
+Lokacja eksploracyjna udostępnia short rest wyłącznie przez jawną politykę:
+
+```json
+{
+  "short_rest": {
+    "safety": "contested",
+    "duration_minutes": 60,
+    "max_completions": 1,
+    "risk_summary": "Postój zwiększy hałas i może przyciągnąć patrol.",
+    "completion_effects": [
+      {
+        "type": "add_noise",
+        "parameters": {"challenge_id": "closed_gate", "value": 2}
+      }
+    ]
+  }
+}
+```
+
+Brak `short_rest` oznacza, że lokacja nie pozwala odpocząć. `max_completions: 0` oznacza brak contentowego limitu. Long rest nie ma osobnego przycisku scenariusza: jest automatycznie wykonywany przed etapem przygotowania czarów.
+
 Stary płaski plik może zostać aliasem:
 
 ```json

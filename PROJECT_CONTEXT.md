@@ -150,12 +150,12 @@ Na tym etapie nie robimy:
 - pełnego VTT,
 - rozbudowanego systemu zapisu kampanii.
 
-## Otwarte Decyzje
+## Decyzje I Otwarte Pytania
 
-- Dokładny framework UI: TODO.
-- Czy pierwszy interfejs będzie webowy, terminalowy czy hybrydowy: TODO.
-- Strategia licencji i źródła danych D&D 5e: TODO.
-- Pierwszy scenariusz demo i setting kampanii: TODO.
-- Format zapisu gry po pierwszych snapshotach JSON: TODO.
-- Zasada ruchu po skosie: TODO.
-- Zakres automatyzacji rzutów: TODO. Na teraz zakładamy, że gracze rzucają fizycznie i wpisują wynik.
+- Aktualny runtime korzysta z lokalnego Flask/web UI połączonego z planszą albo symulatorem.
+- Pierwszym scenariuszem referencyjnym jest `abandoned_watchtower` wraz z encounterem `gate_skirmish`.
+- Ruch po skosie korzysta z przyjętej w projekcie reguły 5-10-5.
+- Gracze domyślnie rzucają fizycznymi kośćmi i wpisują naturalne wyniki do aplikacji.
+- Strategia licencji i źródła danych D&D 5e pozostaje do ustalenia przed budową docelowego katalogu.
+- Format zapisu gry, wersjonowanie snapshotów i migracje pozostają do zaprojektowania.
+- Bazowa wersja zasad dla pierwszego pełnego wydania wymaga formalnego zatwierdzenia; `ROADMAP.md` rekomenduje D&D 5e 2014 ze względu na obecny kierunek implementacji.

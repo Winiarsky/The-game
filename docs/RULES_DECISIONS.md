@@ -264,6 +264,13 @@ Implementacja MVP:
 - Przed setupem scenariusza UI wymaga wybrania dokładnie tylu czarów, ile wynosi limit profilu. Jest to projektowy odpowiednik przygotowania czarów po zakończonym długim odpoczynku; wybór pozostaje zablokowany do końca scenariusza.
 - Cantripy nie wymagają przygotowania. Nieprzygotowany czar poziomu 1+ nie daje bonusu eksploracyjnego i nie może zostać użyty jako atak, leczenie ani akcja czarowa, nawet jeśli aktor ma wolny slot.
 - Profil jest celowo niezależny od klasy. W tym MVP content podaje listę i limit; wyliczanie ich z poziomu klasy oraz cechy spellcasting zostaje na późniejszy etap.
+- Scenariusz rozpoczyna się automatycznym long restem drużyny. Odnawia on utracone HP, sloty czarów oraz zasoby z recovery `short_rest` lub `long_rest`, usuwa temporary HP, odzyskuje połowę maksymalnej liczby Hit Dice (minimum jedną) i ponownie otwiera przygotowanie czarów.
+- Aktor z 0 HP nie może skorzystać z long resta. Obecne automatyczne odzyskiwanie Hit Dice wypełnia pule w kolejności danych; wybór odzyskiwanych pul dla przyszłego multiclassingu pozostaje poza MVP.
+- Short rest jest akcją eksploracyjną trwającą co najmniej 60 minut. Dostępność, poziom bezpieczeństwa, limit ukończeń i konsekwencje są definiowane przez `ShortRestPolicy` bieżącej lokacji.
+- Ukończenie short resta odnawia wyłącznie generyczne zasoby z recovery `short_rest`. Nie odnawia zwykłych slotów czarów i nie otwiera przygotowania czarów.
+- Po ukończeniu short resta każdy gracz może wydawać dostępne Hit Dice pojedynczo. Aplikacja dodaje modyfikator CON, ogranicza HP do maksimum i po każdym rzucie pozwala zakończyć albo wydać następną kość.
+- Anulowanie preview short resta nie przesuwa czasu ani nie zużywa Hit Dice. Contentowe konsekwencje są wykonywane dopiero po potwierdzonym ukończeniu odpoczynku.
+- Nie ma globalnego limitu short restów. Opcjonalny `max_completions` jest ograniczeniem konkretnej lokacji/scenariusza, nie ogólną zasadą D&D.
 - Koncentracja MVP działa jako `ActiveCombatEffect` z `source_actor_id`; jeden rzucający może utrzymywać tylko jeden efekt `concentration_*`.
 - Rzucenie nowego czaru koncentracyjnego tego samego aktora usuwa jego poprzedni efekt koncentracji i pokazuje komunikat w UI.
 - `Błogosławieństwo` w `gate_skirmish` jest testowym czarem koncentracyjnym: zużywa akcję i slot 1. poziomu, wybiera sojusznika i daje mu `+1` do ataku, dopóki koncentracja trwa.

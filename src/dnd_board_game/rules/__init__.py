@@ -16,6 +16,14 @@ from .dice import (
     resolve_d20_roll,
     roll_instruction,
 )
+from .resting import (
+    HitDieSpendResult,
+    RestResult,
+    RestType,
+    complete_long_rest,
+    complete_short_rest,
+    spend_hit_die,
+)
 
 __all__ = [
     "AttackRollOutcome",
@@ -25,16 +33,22 @@ __all__ = [
     "D20RollInstruction",
     "D20RollRequest",
     "D20RollResult",
+    "HitDieSpendResult",
     "RollMode",
     "RollModifier",
     "RollModifierBreakdown",
     "RollModifierType",
+    "RestResult",
+    "RestType",
     "ability_modifier",
     "build_modifier_breakdown",
+    "complete_long_rest",
+    "complete_short_rest",
     "dexterity_modifier",
     "resolve_ability_check",
     "resolve_attack_roll",
     "resolve_d20_roll",
     "resolve_saving_throw",
     "roll_instruction",
+    "spend_hit_die",
 ]

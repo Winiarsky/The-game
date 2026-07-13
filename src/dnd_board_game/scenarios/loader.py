@@ -11,6 +11,9 @@ from dnd_board_game.actors import (
     ActorId,
     Faction,
     PreparableSpell,
+    ActorResourcePool,
+    HitDicePool,
+    RecoveryPeriod,
     SpellPreparationProfile,
 )
 from dnd_board_game.combat import (
@@ -57,6 +60,8 @@ from dnd_board_game.exploration import (
     NpcLockedInformation,
     PartyPosition,
     SceneMode,
+    RestSafety,
+    ShortRestPolicy,
     EncounterTriggerCondition,
     mechanic_tool,
 )
@@ -160,6 +165,8 @@ class ScenarioActorDefinition:
     inventory: tuple[InventoryItem, ...]
     spell_ids: tuple[str, ...]
     spell_preparation: SpellPreparationProfile | None
+    hit_dice: tuple[HitDicePool, ...]
+    resource_pools: tuple[ActorResourcePool, ...]
     attacks: tuple[ScenarioAttackDefinition, ...]
     healing_sources: tuple[ScenarioHealingDefinition, ...] = ()
     combat_actions: tuple[ScenarioCombatActionDefinition, ...] = ()
@@ -498,6 +505,8 @@ def _parse_actor(data: dict[str, Any], scenario_path: Path) -> ScenarioActorDefi
             combat_actions=combat_actions,
             spell_slots=spell_slots,
         ),
+        hit_dice=_parse_hit_dice(merged.get("hit_dice", {}), actor_id),
+        resource_pools=_parse_actor_resources(merged.get("resource_pools", []), actor_id),
         attacks=attacks,
         healing_sources=healing_sources,
         combat_actions=combat_actions,
@@ -814,6 +823,31 @@ def _parse_exploration_zone(data: Any) -> ExplorationZone:
         search_success_flag=str(search_data["success_flag"]) if "success_flag" in search_data else None,
         search_failure_flag=str(search_data["failure_flag"]) if "failure_flag" in search_data else None,
         llm_context=_parse_llm_context(data.get("llm_context", {}), f"exploration zone {zone_id}.llm_context"),
+        short_rest_policy=_parse_short_rest_policy(data.get("short_rest"), zone_id),
+    )
+
+
+def _parse_short_rest_policy(data: Any, zone_id: str) -> ShortRestPolicy | None:
+    if data is None:
+        return None
+    if not isinstance(data, dict):
+        raise ValueError(f"exploration zone {zone_id}.short_rest must be an object.")
+    effects = data.get("completion_effects", [])
+    if not isinstance(effects, list) or any(not isinstance(effect, dict) for effect in effects):
+        raise ValueError(
+            f"exploration zone {zone_id}.short_rest.completion_effects must be a list of objects."
+        )
+    return ShortRestPolicy(
+        id=str(data.get("id") or f"short_rest:{zone_id}"),
+        safety=_enum_value(
+            RestSafety,
+            str(data.get("safety", RestSafety.SAFE.value)),
+            f"exploration zone {zone_id}.short_rest.safety",
+        ),
+        risk_summary=str(data.get("risk_summary", "")),
+        duration_minutes=int(data.get("duration_minutes", 60)),
+        max_completions=int(data.get("max_completions", 0)),
+        completion_effects=tuple(effects),
     )
 
 
@@ -1461,6 +1495,8 @@ def _actor_from_definition(definition: ScenarioActorDefinition) -> Actor:
         inventory=definition.inventory,
         spell_ids=definition.spell_ids,
         spell_preparation=definition.spell_preparation,
+        hit_dice=definition.hit_dice,
+        resource_pools=definition.resource_pools,
     )
 
 
@@ -1917,6 +1953,50 @@ def _parse_spell_slots(data: Any, actor_id: str) -> tuple[SpellSlotState, ...]:
         maximum = int(value)
         slots.append(SpellSlotState(level=int(level), remaining=maximum, maximum=maximum))
     return tuple(sorted(slots, key=lambda slot: slot.level))
+
+
+def _parse_hit_dice(data: Any, actor_id: str) -> tuple[HitDicePool, ...]:
+    if data is None:
+        return ()
+    if not isinstance(data, dict):
+        raise ValueError(f"actor {actor_id}.hit_dice must be an object.")
+    pools = []
+    for raw_die, raw_maximum in data.items():
+        die = str(raw_die).strip().lower()
+        if not die.startswith("d") or not die[1:].isdigit():
+            raise ValueError(f"actor {actor_id}.hit_dice key must look like d8 or d10.")
+        maximum = int(raw_maximum)
+        pools.append(HitDicePool(int(die[1:]), maximum, maximum))
+    return tuple(sorted(pools, key=lambda pool: pool.die_sides))
+
+
+def _parse_actor_resources(data: Any, actor_id: str) -> tuple[ActorResourcePool, ...]:
+    if data is None:
+        return ()
+    if not isinstance(data, list):
+        raise ValueError(f"actor {actor_id}.resource_pools must be a list.")
+    pools = []
+    for entry in data:
+        if not isinstance(entry, dict):
+            raise ValueError(f"actor {actor_id}.resource_pools entries must be objects.")
+        resource_id = str(_required(entry, "id", f"actor {actor_id}.resource_pool"))
+        maximum = int(_required(entry, "maximum", f"actor resource {resource_id}"))
+        pools.append(
+            ActorResourcePool(
+                id=resource_id,
+                label=str(entry.get("label") or resource_id),
+                current=int(entry.get("current", maximum)),
+                maximum=maximum,
+                recovery=_enum_value(
+                    RecoveryPeriod,
+                    str(entry.get("recovery", RecoveryPeriod.NEVER.value)),
+                    f"actor resource {resource_id}.recovery",
+                ),
+            )
+        )
+    if len({pool.id for pool in pools}) != len(pools):
+        raise ValueError(f"actor {actor_id}.resource_pools ids must be unique.")
+    return tuple(pools)
 
 
 def _parse_spell_casting_kind(
