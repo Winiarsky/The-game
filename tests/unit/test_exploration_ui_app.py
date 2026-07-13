@@ -146,6 +146,20 @@ def test_exploration_ui_page_includes_short_rest_flow():
     assert "/api/rest/short/hit-die" in javascript
 
 
+def test_exploration_ui_page_and_api_include_scenario_end_lifecycle():
+    client = _client()
+
+    html, javascript, _stylesheet = _page_assets(client)
+    response = client.post("/api/scenario/finish", json={})
+
+    assert 'id="active-effects"' in html
+    assert 'id="finish-scenario-button"' in html
+    assert "Źródło:" in javascript
+    assert "/api/scenario/finish" in javascript
+    assert response.status_code == 200
+    assert response.get_json()["flow"]["stage"] == "scenario_complete"
+
+
 def test_exploration_ui_short_rest_api_advances_time_and_returns_to_exploration():
     client = _client()
 

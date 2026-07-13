@@ -93,7 +93,7 @@ Kryterium wyjścia:
 
 ## Etap M1: Wspólne Kontrakty Efektów, Czasu I Zasobów
 
-Status: w toku. Ukończono pierwszy vertical slice zasobów oraz short/long rest.
+Status: w toku. Ukończono kontrakt efektów, duration/expiration oraz vertical slice odpoczynków.
 
 To jest fundament dla czarów, warunków, cech klasowych, odpoczynków, przedmiotów
 i efektów scenariusza.
@@ -109,6 +109,12 @@ Kolejność:
 
 Zaimplementowany vertical slice:
 
+- wspólny `ActiveEffect` ze źródłem, duration, stacking key i polityką replace/refresh/stack,
+- centralne nakładanie oraz wygaszanie przez zdarzenia tury, rundy, ataku, ruchu,
+  koncentracji, encountera, odpoczynku i scenariusza,
+- migracja efektów akcji, koncentracji, przedmiotów i obiektów sceny,
+- jawne źródło i moment wygaśnięcia efektu w UI,
+- ręczne zakończenie scenariusza wygaszające efekty dzienne,
 - generyczne zasoby aktora odnawiane po short albo long rest,
 - Hit Dice i leczenie `die + CON` wydawane pojedynczo po short reście,
 - content-driven polityka short resta dla lokacji,
@@ -116,7 +122,7 @@ Zaimplementowany vertical slice:
 - automatyczny long rest przed przygotowaniem scenariusza,
 - odnowienie HP, slotów i zasobów oraz ponowne otwarcie przygotowania czarów.
 
-Pozostało w M1: wspólny duration/expiration framework, scenario-end lifecycle i snapshot.
+Pozostało w M1: wersjonowany snapshot aktora/scenariusza i deterministyczny round-trip.
 
 Fixture'y:
 

@@ -39,6 +39,7 @@ def test_ui_session_view_preserves_api_state_contract() -> None:
         active_point=None,
         resources=[],
         actors=[],
+        active_effects=[],
         scene_status=[],
         flags=[],
         messages=[],
@@ -60,3 +61,4 @@ def test_ui_session_view_preserves_api_state_contract() -> None:
     assert payload["selected_lead_actor_id"] == "hero"
     assert payload["board"] == {"backend": "none"}
     assert payload["combat"] is None
+    assert payload["active_effects"] == []

@@ -6,12 +6,23 @@ from typing import Mapping
 
 from dnd_board_game.actors import Actor, Faction
 from dnd_board_game.rules import (
+    ActiveEffect as ActiveCombatEffect,
     D20RollInput,
     D20RollRequest,
+    EffectDuration,
+    EffectEvent,
+    EffectEventType,
+    EffectSource,
+    EffectSourceType,
     RollMode,
     RollModifier,
     RollModifierType,
+    apply_active_effect,
     ability_modifier,
+    effect_expiration_label,
+    effect_summary_label,
+    effect_value_label,
+    expire_active_effects,
     resolve_d20_roll,
     resolve_saving_throw,
 )
@@ -41,100 +52,6 @@ class CombatInteractionOption:
             "target_position": [self.target_position.col, self.target_position.row],
             "conditions": list(self.conditions),
         }
-
-
-@dataclass(frozen=True, slots=True)
-class ActiveCombatEffect:
-    id: str
-    actor_id: str
-    kind: str
-    label: str
-    object_id: str
-    value: int
-    anchor_position: Coordinate | None = None
-    base_ac: int | None = None
-    source_actor_id: str | None = None
-    target_actor_id: str | None = None
-
-    def as_payload(self) -> dict[str, object]:
-        payload: dict[str, object] = {
-            "id": self.id,
-            "actor_id": self.actor_id,
-            "kind": self.kind,
-            "label": self.label,
-            "object_id": self.object_id,
-            "value": self.value,
-            "value_label": effect_value_label(self),
-            "expires": effect_expiration_label(self),
-            "summary": effect_summary_label(self),
-        }
-        if self.anchor_position is not None:
-            payload["anchor_position"] = [self.anchor_position.col, self.anchor_position.row]
-        if self.base_ac is not None:
-            payload["base_ac"] = self.base_ac
-        if self.source_actor_id is not None:
-            payload["source_actor_id"] = self.source_actor_id
-        if self.target_actor_id is not None:
-            payload["target_actor_id"] = self.target_actor_id
-        return payload
-
-
-def effect_value_label(effect: ActiveCombatEffect) -> str:
-    if effect.kind == "grant_ac_bonus_until_move":
-        return f"+{effect.value} AC"
-    if effect.kind == "grant_attack_bonus_while_on_object":
-        return f"{format_signed(effect.value)} do ataku"
-    if effect.kind == "grant_next_attack_penalty":
-        return f"{format_signed(effect.value)} do następnego ataku"
-    if effect.kind == "dodge_until_next_turn":
-        return "ataki przeciwko aktorowi mają utrudnienie"
-    if effect.kind == "disengage_until_turn_end":
-        return "bezpieczne odejście"
-    if effect.kind == "help_attack_advantage":
-        return "przewaga do ataku"
-    if effect.kind == "ready_attack":
-        return ready_attack_trigger_label(effect)
-    if effect.kind == "strength_potion":
-        return f"{format_signed(effect.value)} do ataku i obrażeń z Siły"
-    if effect.kind == "concentration_attack_bonus":
-        return f"{format_signed(effect.value)} do ataku"
-    return format_signed(effect.value)
-
-
-def effect_expiration_label(effect: ActiveCombatEffect) -> str:
-    if effect.kind == "grant_ac_bonus_until_move":
-        return "znika po ruchu z pola"
-    if effect.kind == "grant_attack_bonus_while_on_object":
-        return "znika po zejściu z obiektu"
-    if effect.kind == "grant_next_attack_penalty":
-        return "znika po następnym ataku"
-    if effect.kind == "dodge_until_next_turn":
-        return "znika na początku następnej tury aktora"
-    if effect.kind == "disengage_until_turn_end":
-        return "znika na końcu tury"
-    if effect.kind == "help_attack_advantage":
-        return "znika po ataku albo na początku następnej tury pomagającego"
-    if effect.kind == "ready_attack":
-        return "znika po użyciu reakcji albo na początku następnej tury aktora"
-    if effect.kind == "strength_potion":
-        return "znika na początku następnej tury aktora"
-    if effect.kind == "concentration_attack_bonus":
-        return "znika po utracie koncentracji albo rzuceniu nowego czaru koncentracyjnego"
-    return "czas trwania zależy od efektu"
-
-
-def effect_summary_label(effect: ActiveCombatEffect) -> str:
-    return f"{effect.label} | {effect_value_label(effect)} | {effect_expiration_label(effect)}"
-
-
-def ready_attack_trigger_label(effect: ActiveCombatEffect) -> str:
-    if effect.object_id == "combat_action:ready:enemy_moves":
-        return "atak, gdy przeciwnik się poruszy"
-    if effect.object_id == "combat_action:ready:enemy_attacks":
-        return "atak, gdy przeciwnik zaatakuje"
-    if effect.object_id == "combat_action:ready:enemy_enters_reach":
-        return "atak, gdy przeciwnik wejdzie w zasięg"
-    return "przygotowany atak"
 
 
 @dataclass(frozen=True, slots=True)
@@ -298,6 +215,12 @@ def apply_combat_interaction_effects(
                     value=value,
                     anchor_position=current_actor.position,
                     base_ac=current_actor.ac,
+                    source=EffectSource(
+                        EffectSourceType.SCENE,
+                        scene_object.id,
+                        scene_object.name,
+                    ),
+                    duration=EffectDuration.WHILE_AT_POSITION,
                 ),
             )
             messages.append(f"{label}: AC +{value} do opuszczenia pola.")
@@ -323,6 +246,12 @@ def apply_combat_interaction_effects(
                     object_id=scene_object.id,
                     value=value,
                     anchor_position=target_position,
+                    source=EffectSource(
+                        EffectSourceType.SCENE,
+                        scene_object.id,
+                        scene_object.name,
+                    ),
+                    duration=EffectDuration.WHILE_AT_POSITION,
                 ),
             )
             messages.append(f"{label}: ataki +{value}, dopóki aktor stoi na obiekcie.")
@@ -380,6 +309,12 @@ def apply_combat_interaction_effects(
                     object_id=scene_object.id,
                     value=value,
                     anchor_position=actor.position,
+                    source=EffectSource(
+                        EffectSourceType.SCENE,
+                        scene_object.id,
+                        scene_object.name,
+                    ),
+                    duration=EffectDuration.UNTIL_NEXT_ATTACK,
                 ),
             )
             messages.append(f"{label}: {target.name} ma {value} do następnego ataku.")
@@ -404,7 +339,14 @@ def expire_invalid_combat_effects(
         actor = maybe_actor_by_id(updated_state, effect.actor_id)
         valid = actor is not None and not actor.is_defeated()
         if valid and effect.kind == "grant_ac_bonus_until_move":
-            valid = effect.anchor_position is not None and actor.position == effect.anchor_position
+            valid = not expire_active_effects(
+                (effect,),
+                EffectEvent(
+                    EffectEventType.ACTOR_MOVED,
+                    actor_id=str(actor.id),
+                    position=actor.position,
+                ),
+            ).expired_effects
         elif valid and effect.kind == "grant_attack_bonus_while_on_object":
             scene_object = scene_object_by_id(scene_objects, effect.object_id)
             valid = scene_object is not None and actor.position in scene_object.positions
@@ -415,6 +357,20 @@ def expire_invalid_combat_effects(
         else:
             updated_state = restore_effect_on_state(updated_state, effect)
     return updated_state, tuple(kept)
+
+
+def expire_combat_effects(
+    state: CombatState,
+    active_effects: tuple[ActiveCombatEffect, ...],
+    event: EffectEvent,
+) -> tuple[CombatState, tuple[ActiveCombatEffect, ...], tuple[ActiveCombatEffect, ...]]:
+    """Expire effects for an event and undo any materialized actor-state changes."""
+
+    expiration = expire_active_effects(active_effects, event)
+    updated_state = state
+    for effect in expiration.expired_effects:
+        updated_state = restore_effect_on_state(updated_state, effect)
+    return updated_state, expiration.active_effects, expiration.expired_effects
 
 
 def attack_source_with_combat_effects(actor: Actor, source, active_effects: tuple[ActiveCombatEffect, ...]):
@@ -486,40 +442,28 @@ def consume_next_attack_effects(
     actor_id: str,
     target_actor_id: str | None = None,
 ) -> tuple[ActiveCombatEffect, ...]:
-    return tuple(
-        effect
-        for effect in active_effects
-        if not (
-            (effect.actor_id == actor_id and effect.kind == "grant_next_attack_penalty")
-            or (
-                target_actor_id is not None
-                and effect.actor_id == actor_id
-                and effect.kind == "help_attack_advantage"
-                and effect.target_actor_id == target_actor_id
-            )
-        )
-    )
+    return expire_active_effects(
+        active_effects,
+        EffectEvent(
+            EffectEventType.ATTACK_RESOLVED,
+            actor_id=actor_id,
+            target_actor_id=target_actor_id,
+        ),
+    ).active_effects
 
 
 def expire_turn_start_effects(active_effects: tuple[ActiveCombatEffect, ...], actor_id: str) -> tuple[ActiveCombatEffect, ...]:
-    return tuple(
-        effect
-        for effect in active_effects
-        if not (
-            (effect.actor_id == actor_id and effect.kind == "dodge_until_next_turn")
-            or (effect.source_actor_id == actor_id and effect.kind == "help_attack_advantage")
-            or (effect.actor_id == actor_id and effect.kind == "ready_attack")
-            or (effect.actor_id == actor_id and effect.kind == "strength_potion")
-        )
-    )
+    return expire_active_effects(
+        active_effects,
+        EffectEvent(EffectEventType.TURN_START, actor_id=actor_id),
+    ).active_effects
 
 
 def expire_turn_end_effects(active_effects: tuple[ActiveCombatEffect, ...], actor_id: str) -> tuple[ActiveCombatEffect, ...]:
-    return tuple(
-        effect
-        for effect in active_effects
-        if not (effect.actor_id == actor_id and effect.kind == "disengage_until_turn_end")
-    )
+    return expire_active_effects(
+        active_effects,
+        EffectEvent(EffectEventType.TURN_END, actor_id=actor_id),
+    ).active_effects
 
 
 def _with_advantage(mode: RollMode) -> RollMode:
@@ -572,7 +516,9 @@ def replace_effect(
     kind: str,
     new_effect: ActiveCombatEffect,
 ) -> tuple[ActiveCombatEffect, ...]:
-    return tuple(effect for effect in active_effects if not (effect.actor_id == actor_id and effect.kind == kind)) + (new_effect,)
+    if new_effect.actor_id != actor_id or new_effect.kind != kind:
+        raise ValueError("Replacement effect does not match actor_id and kind.")
+    return apply_active_effect(active_effects, new_effect).active_effects
 
 
 def restore_effect_on_state(state: CombatState, effect: ActiveCombatEffect) -> CombatState:

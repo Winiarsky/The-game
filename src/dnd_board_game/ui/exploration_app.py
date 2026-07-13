@@ -71,6 +71,7 @@ from dnd_board_game.combat import (
     current_actor as combat_current_actor,
     expire_turn_end_effects,
     expire_turn_start_effects,
+    expire_combat_effects,
     finish_turn,
     active_actor_led_feedback,
     attack_source_with_combat_effects,
@@ -147,7 +148,20 @@ from dnd_board_game.llm import (
 )
 from dnd_board_game.hardware import BoardSessionAdapter, LedColor, LedFeedback, LedFrame, LedRole, led_color_name_pl, movement_led_feedback
 from dnd_board_game.inventory import break_inventory_item, consume_inventory_item, inventory_item_payload
-from dnd_board_game.rules import D20RollInput, D20RollRequest, RollMode, RollModifier, RollModifierType, ability_modifier, complete_long_rest, resolve_d20_roll, roll_instruction
+from dnd_board_game.rules import (
+    D20RollInput,
+    D20RollRequest,
+    EffectEvent,
+    EffectEventType,
+    RollMode,
+    RollModifier,
+    RollModifierType,
+    ability_modifier,
+    complete_long_rest,
+    expire_active_effects,
+    resolve_d20_roll,
+    roll_instruction,
+)
 from dnd_board_game.scenarios import (
     LoadedEncounter,
     LoadedExploration,
@@ -719,7 +733,10 @@ class ExplorationUiSession:
         return next((point for point in self.state.points if point.id == self.active_point_id), None)
 
     def state_payload(self) -> dict[str, object]:
-        if self.ui_flow_stage != UiFlowStage.SHORT_REST:
+        if self.ui_flow_stage not in {
+            UiFlowStage.SHORT_REST,
+            UiFlowStage.SCENARIO_COMPLETE,
+        }:
             self._refresh_pending_encounter()
         self._expire_invalid_combat_effects()
         active_challenge = self.active_challenge if self.ui_flow_stage == UiFlowStage.LOCATION_ACTIVE else None
@@ -754,6 +771,7 @@ class ExplorationUiSession:
             active_point=_point_payload(self.active_point) if self.active_point else None,
             resources=[_resource_payload(resource) for resource in self.state.resources if resource.id in self.state.inventory_resource_ids],
             actors=[_exploration_actor_payload(actor) for actor in self.exploration.actors],
+            active_effects=[effect.as_payload() for effect in self.active_combat_effects],
             scene_status=scene_status,
             flags=[{"key": key, "value": value} for key, value in self.state.flags.values],
             messages=[message.as_payload() for message in self.messages],
@@ -918,10 +936,12 @@ class ExplorationUiSession:
             state=self.state,
             actors=self.exploration.actors,
             pending=pending,
+            active_effects=self.active_combat_effects,
         )
         self.state = transition.state
         self.exploration = replace(self.exploration, actors=transition.actors)
         self.pending_short_rest = transition.pending
+        self.active_combat_effects = transition.active_effects
         for effect, raw_effect in zip(transition.effects, pending.policy.completion_effects, strict=True):
             self._record_effect_result(
                 effect,
@@ -941,6 +961,7 @@ class ExplorationUiSession:
                 "elapsed_minutes": self.state.elapsed_minutes,
                 "recovered_resources": recovered,
                 "effect_types": [effect.effect_type for effect in transition.effects],
+                "expired_effect_ids": [effect.id for effect in transition.expired_effects],
             },
         )
         self._add_message(
@@ -948,6 +969,41 @@ class ExplorationUiSession:
             "Minęła godzina. Gracze mogą teraz wydawać Hit Dice pojedynczo.",
         )
         self.board_message = "Odpoczynek ukończony. Wydaj Hit Dice albo zakończ odpoczynek."
+        return self.state_payload()
+
+    def finish_scenario(self) -> dict[str, object]:
+        if self.combat_state is not None:
+            raise ValueError("Najpierw zakończ aktywną walkę.")
+        if self.pending_short_rest is not None or self.pending is not None:
+            raise ValueError("Najpierw zakończ aktywną decyzję albo odpoczynek.")
+        if self.ui_flow_stage == UiFlowStage.SCENARIO_COMPLETE:
+            return self.state_payload()
+        if self.ui_flow_stage not in {
+            UiFlowStage.LOCATION_ACTIVE,
+            UiFlowStage.INTERACTION_RESULT,
+        }:
+            raise ValueError("Scenariusz można zakończyć dopiero podczas aktywnej eksploracji.")
+        expiration = expire_active_effects(
+            self.active_combat_effects,
+            EffectEvent(EffectEventType.SCENARIO_ENDED),
+        )
+        self.active_combat_effects = expiration.active_effects
+        self.active_preparation_effects.clear()
+        self.pending_encounter = None
+        self.ui_flow_stage = UiFlowStage.SCENARIO_COMPLETE
+        self.board_message = "Scenariusz zakończony. Efekty dzienne wygasły."
+        self._record(
+            "ui_scenario_completed",
+            {
+                "elapsed_minutes": self.state.elapsed_minutes,
+                "expired_effect_ids": [effect.id for effect in expiration.expired_effects],
+            },
+        )
+        self._add_message(
+            "Scenariusz zakończony",
+            "Efekty trwające do końca scenariusza wygasły. Reset rozpocznie kolejny scenariusz automatycznym long restem.",
+        )
+        self._sync_board_leds()
         return self.state_payload()
 
     def spend_short_rest_hit_die(
@@ -1287,6 +1343,23 @@ class ExplorationUiSession:
             },
         )
         self._add_message(outcome.title or "Wynik encountera", outcome.body or "Encounter został rozstrzygnięty.")
+        self.combat_state, self.active_combat_effects, expired_effects = expire_combat_effects(
+            self.combat_state,
+            self.active_combat_effects,
+            EffectEvent(EffectEventType.ENCOUNTER_ENDED),
+        )
+        if expired_effects:
+            self._record(
+                "ui_effects_expired",
+                {
+                    "event": EffectEventType.ENCOUNTER_ENDED.value,
+                    "effect_ids": [effect.id for effect in expired_effects],
+                },
+            )
+            self._add_message(
+                "Efekty encountera wygasły",
+                ", ".join(effect.label for effect in expired_effects),
+            )
         self.exploration = _exploration_with_combat_actor_state(
             self.exploration,
             self.combat_state.actors,
@@ -3201,11 +3274,18 @@ class ExplorationUiSession:
                 feedback=LedFeedback(),
                 empty_message="Najpierw wybierz planszę i kliknij Start.",
             )
-        if self.ui_flow_stage == UiFlowStage.INTERACTION_RESULT:
+        if self.ui_flow_stage in {
+            UiFlowStage.INTERACTION_RESULT,
+            UiFlowStage.SCENARIO_COMPLETE,
+        }:
             return BoardScanTarget(
                 positions=(),
                 feedback=LedFeedback(),
-                empty_message="Najpierw zakończ podsumowanie interakcji w UI.",
+                empty_message=(
+                    "Scenariusz został zakończony."
+                    if self.ui_flow_stage == UiFlowStage.SCENARIO_COMPLETE
+                    else "Najpierw zakończ podsumowanie interakcji w UI."
+                ),
             )
         if self.ui_flow_stage == UiFlowStage.PARTY_SETUP:
             position = self.current_zone.marker_position

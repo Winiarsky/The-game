@@ -5,6 +5,12 @@ import pytest
 from dnd_board_game.application import ShortRestFlowService
 from dnd_board_game.exploration import ExplorationState, challenge_state_for
 from dnd_board_game.scenarios import build_exploration_from_scenario, load_scenario
+from dnd_board_game.rules import (
+    ActiveEffect,
+    EffectDuration,
+    EffectSource,
+    EffectSourceType,
+)
 
 
 def _loaded():
@@ -79,3 +85,41 @@ def test_short_rest_policy_limit_and_missing_policy_are_explicit() -> None:
         service.start(state=state, zone=gate, encounter_pending=False)
     with pytest.raises(ValueError, match="nie ma warunków"):
         service.start(state=state, zone=tower, encounter_pending=False)
+
+
+def test_short_rest_expires_only_effects_bound_to_short_rest() -> None:
+    exploration = _loaded()
+    state = _state(exploration)
+    gate = next(zone for zone in exploration.zones if zone.id == "gate")
+    service = ShortRestFlowService()
+    short_effect = ActiveEffect(
+        "short-effect",
+        "hero",
+        "short_bonus",
+        "Krótka premia",
+        "test",
+        1,
+        source=EffectSource(EffectSourceType.SYSTEM, "test", "Test"),
+        duration=EffectDuration.UNTIL_SHORT_REST,
+    )
+    daily_effect = ActiveEffect(
+        "daily-effect",
+        "hero",
+        "daily_bonus",
+        "Premia dzienna",
+        "test",
+        1,
+        source=EffectSource(EffectSourceType.SYSTEM, "test", "Test"),
+        duration=EffectDuration.UNTIL_SCENARIO_END,
+    )
+
+    pending = service.start(state=state, zone=gate, encounter_pending=False)
+    transition = service.complete(
+        state=state,
+        actors=exploration.actors,
+        pending=pending,
+        active_effects=(short_effect, daily_effect),
+    )
+
+    assert transition.expired_effects == (short_effect,)
+    assert transition.active_effects == (daily_effect,)

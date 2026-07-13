@@ -576,6 +576,13 @@ def create_app(session: ExplorationUiSession) -> Flask:
         session.reset()
         return jsonify(session.state_payload())
 
+    @app.post("/api/scenario/finish")
+    def api_scenario_finish():
+        try:
+            return jsonify(session.finish_scenario())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
     return app
 
 

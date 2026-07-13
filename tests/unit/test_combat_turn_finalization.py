@@ -13,7 +13,7 @@ from dnd_board_game.combat import (
     current_actor,
     start_combat,
 )
-from dnd_board_game.rules import D20RollInput, D20RollRequest, resolve_d20_roll
+from dnd_board_game.rules import D20RollInput, D20RollRequest, EffectDuration, resolve_d20_roll
 from dnd_board_game.world import Coordinate
 
 
@@ -53,6 +53,7 @@ def _effect(
     label: str,
     *,
     target_actor_id: str | None = None,
+    duration: EffectDuration | None = None,
 ) -> ActiveCombatEffect:
     return ActiveCombatEffect(
         id=effect_id,
@@ -62,6 +63,7 @@ def _effect(
         object_id=f"test:{effect_id}",
         value=0,
         target_actor_id=target_actor_id,
+        duration=duration,
     )
 
 
@@ -156,6 +158,32 @@ def test_finish_active_turn_advances_state_and_preserves_observation_contract() 
     assert transition.message_body == "Zakończono turę: Hero."
     assert transition.event_type == "ui_combat_turn_finished"
     assert dict(transition.event_payload) == {"actor_id": "hero"}
+
+
+def test_finish_last_turn_of_round_expires_round_bound_effects() -> None:
+    service = CombatTurnFinalizationService()
+    hero = _actor("hero", Faction.ALLY)
+    enemy = _actor("enemy", Faction.ENEMY)
+    initial = _state(hero, enemy)
+    state = replace(
+        initial,
+        initiative_order=replace(initial.initiative_order, current_index=1),
+    )
+    effect = _effect(
+        "round-effect",
+        "hero",
+        "round_bonus",
+        "Premia rundy",
+        duration=EffectDuration.UNTIL_ROUND_END,
+    )
+
+    transition = service.finish_active_turn(state=state, active_effects=(effect,))
+
+    assert transition is not None
+    assert transition.state.round_number == 2
+    assert transition.active_effects == ()
+    assert transition.expired_effects[0].effects == (effect,)
+    assert transition.expired_effects[0].message_prefix == "Wygasły efekty końca rundy 1"
 
 
 def test_finalize_enemy_turn_does_not_expire_turn_start_effects_after_combat_ends() -> None:

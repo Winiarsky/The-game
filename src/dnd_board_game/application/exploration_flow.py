@@ -26,6 +26,7 @@ class ExplorationFlowStage(StrEnum):
     LOCATION_ACTIVE = "location_active"
     SHORT_REST = "short_rest"
     INTERACTION_RESULT = "interaction_result"
+    SCENARIO_COMPLETE = "scenario_complete"
 
 
 @dataclass(frozen=True, slots=True)

@@ -539,6 +539,14 @@ Scenariusz pełni także rolę pojedynczego dnia przygody. Jeśli postać korzys
 
 Long rest odbywa się automatycznie bezpośrednio przed scenariuszem. Short rest jest decyzją drużyny podczas eksploracji: UI pokazuje godzinny koszt, bezpieczeństwo miejsca, jawne zagrożenie i zasoby możliwe do odzyskania. Po ukończeniu gracze wydają Hit Dice pojedynczo. Zagrożenie nie jest uniwersalnym losowym encounterem; wynika z contentu lokacji, np. odpoczynek przed bramą zwiększa hałas, a zawalone koszary zapewniają jedno bezpieczne miejsce odpoczynku.
 
+Aktywne efekty zawsze pokazują graczowi nazwę, źródło i moment wygaśnięcia. Ten sam
+cykl życia obsługuje efekty akcji, czarów, przedmiotów i sceny: mogą kończyć się na
+granicy tury lub rundy, po właściwym ataku/ruchu, po utracie koncentracji, odpoczynku,
+encounterze albo scenariuszu. Ponowne nałożenie korzysta z jawnej polityki
+`replace`, `refresh` albo `stack`; nie wynika z przypadkowego duplikowania wpisów.
+Zakończenie scenariusza jest jawną akcją w UI i wygasza wszystkie niepermanentne
+efekty dnia. Kolejny reset uruchamia automatyczny long rest.
+
 Przykład:
 
 ```text

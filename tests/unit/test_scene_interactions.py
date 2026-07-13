@@ -19,13 +19,23 @@ from dnd_board_game.combat import (
     available_scene_interactions,
     combat_interaction_hint_positions,
     consume_next_attack_effects,
+    expire_combat_effects,
     expire_invalid_combat_effects,
     expire_turn_start_effects,
     replace_actor,
     resolve_scene_interaction,
     start_combat,
 )
-from dnd_board_game.rules import D20RollInput, D20RollRequest, RollMode, RollModifier, RollModifierType, resolve_d20_roll
+from dnd_board_game.rules import (
+    D20RollInput,
+    D20RollRequest,
+    EffectEvent,
+    EffectEventType,
+    RollMode,
+    RollModifier,
+    RollModifierType,
+    resolve_d20_roll,
+)
 from dnd_board_game.world import Coordinate
 
 
@@ -179,6 +189,36 @@ def test_combat_interaction_applies_and_expires_ac_bonus():
 
     assert expired.ac == 14
     assert active_effects == ()
+
+
+def test_encounter_end_expires_scene_cover_and_restores_materialized_ac():
+    hero = _actor("hero", Faction.ALLY, Coordinate(0, 0), ac=14)
+    enemy = _actor("goblin", Faction.ENEMY, Coordinate(5, 5))
+    state = _combat_state(hero, enemy)
+    scene_object = SceneObject("cart", "Wóz", (Coordinate(1, 0),), "Użyj wozu", cover_bonus=2)
+    interaction = SceneInteraction(
+        "take_cover",
+        "Otrzymaj osłonę",
+        effects=(SceneInteractionEffect("grant_ac_bonus_until_move", (("value", 2),)),),
+    )
+    applied = apply_combat_interaction_effects(
+        state=state,
+        actor=hero,
+        scene_object=scene_object,
+        interaction=interaction,
+        target_position=Coordinate(1, 0),
+        active_effects=(),
+    )
+
+    expired_state, active_effects, expired_effects = expire_combat_effects(
+        applied.state,
+        applied.active_effects,
+        EffectEvent(EffectEventType.ENCOUNTER_ENDED),
+    )
+
+    assert next(actor for actor in expired_state.actors if actor.id == hero.id).ac == 14
+    assert active_effects == ()
+    assert expired_effects == applied.active_effects
 
 
 def test_rubble_interaction_requires_actor_on_object_and_adjacent_enemy():

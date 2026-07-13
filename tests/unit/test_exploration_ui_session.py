@@ -13,7 +13,13 @@ from dnd_board_game.llm import (
     GmDeclarationAnalysisType,
     NpcInteractionProposal,
 )
-from dnd_board_game.rules import RollMode
+from dnd_board_game.rules import (
+    ActiveEffect,
+    EffectDuration,
+    EffectSource,
+    EffectSourceType,
+    RollMode,
+)
 from dnd_board_game.ui.exploration_app import (
     ExplorationUiSession,
     PendingInteraction,
@@ -601,6 +607,38 @@ def test_exploration_ui_session_can_cancel_short_rest_without_advancing_time():
     assert cancelled["flow"]["stage"] == "location_active"
     assert cancelled["short_rest"]["elapsed_minutes"] == 0
     assert cancelled["short_rest"]["available"] is True
+
+
+def test_exploration_ui_session_finishes_scenario_and_expires_daily_effects():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    daily = ActiveEffect(
+        id="daily",
+        actor_id="hero",
+        kind="daily_blessing",
+        label="Błogosławieństwo dnia",
+        object_id="shrine",
+        value=1,
+        source=EffectSource(EffectSourceType.SCENE, "shrine", "Kapliczka"),
+        duration=EffectDuration.UNTIL_SCENARIO_END,
+    )
+    permanent = ActiveEffect(
+        id="permanent",
+        actor_id="hero",
+        kind="permanent_mark",
+        label="Trwały znak",
+        object_id="story",
+        value=0,
+        source=EffectSource(EffectSourceType.SCENE, "story", "Fabuła"),
+        duration=EffectDuration.PERMANENT,
+    )
+    session.active_combat_effects = (daily, permanent)
+
+    payload = session.finish_scenario()
+
+    assert payload["flow"]["stage"] == "scenario_complete"
+    assert [effect["id"] for effect in payload["active_effects"]] == ["permanent"]
+    assert any(message["title"] == "Scenariusz zakończony" for message in payload["messages"])
 
 
 def test_exploration_ui_session_rejects_pending_interpretation():
@@ -1497,7 +1535,15 @@ def test_exploration_ui_session_rubble_interaction_penalizes_adjacent_enemy_atta
     assert enemy["effects"][0]["value"] == -2
     assert enemy["effects"][0]["value_label"] == "-2 do następnego ataku"
     assert enemy["effects"][0]["expires"] == "znika po następnym ataku"
-    assert enemy["effects"][0]["summary"] == "Gruz w oczach | -2 do następnego ataku | znika po następnym ataku"
+    assert enemy["effects"][0]["summary"] == (
+        "Gruz w oczach | -2 do następnego ataku | "
+        "znika po następnym ataku | źródło: Rumowisko"
+    )
+    assert enemy["effects"][0]["source"] == {
+        "type": "scene",
+        "id": "rubble_patch",
+        "label": "Rumowisko",
+    }
     assert any(chip["label"] == "Gruz w oczach: -2 do następnego ataku" and chip["tone"] == "penalty" for chip in enemy["status_chips"])
     assert any(message["title"] == "Interakcja" and "Gruz w oczach" in message["body"] for message in applied["messages"])
     assert any(message["title"] == "Interakcja" and "rzut obronny na Zręczność" in message["body"] for message in applied["messages"])

@@ -14,6 +14,13 @@ from dnd_board_game.combat import (
     use_dash,
     use_turn_action,
 )
+from dnd_board_game.rules import (
+    AdditionalEffectExpiration,
+    EffectDuration,
+    EffectSource,
+    EffectSourceType,
+    apply_active_effect,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,6 +94,8 @@ class CombatTurnActionFlowService:
             label="Unik",
             object_id="combat_action:dodge",
             value=0,
+            source=EffectSource(EffectSourceType.ACTION, "dodge", "Unik"),
+            duration=EffectDuration.UNTIL_TURN_START,
         )
         return CombatTurnActionTransition(
             state=_consume_action(state),
@@ -115,6 +124,8 @@ class CombatTurnActionFlowService:
             label="Odwrót",
             object_id="combat_action:disengage",
             value=0,
+            source=EffectSource(EffectSourceType.ACTION, "disengage", "Odwrót"),
+            duration=EffectDuration.UNTIL_TURN_END,
         )
         return CombatTurnActionTransition(
             state=_consume_action(state),
@@ -185,14 +196,6 @@ class CombatTurnActionFlowService:
             raise ValueError("Wybrany przeciwnik nie jest legalnym celem Help.")
         ally = _actor_by_string_id(state, ally_id)
         target = _actor_by_string_id(state, target_id)
-        remaining_effects = tuple(
-            effect
-            for effect in active_effects
-            if not (
-                effect.kind == "help_attack_advantage"
-                and effect.source_actor_id == str(helper.id)
-            )
-        )
         effect = ActiveCombatEffect(
             id=f"help_attack_advantage:{helper.id}:{ally.id}:{target.id}",
             actor_id=str(ally.id),
@@ -202,10 +205,21 @@ class CombatTurnActionFlowService:
             value=0,
             source_actor_id=str(helper.id),
             target_actor_id=str(target.id),
+            source=EffectSource(EffectSourceType.ACTION, "help", "Pomoc"),
+            duration=EffectDuration.UNTIL_NEXT_ATTACK,
+            expiration_actor_id=str(ally.id),
+            stacking_key=f"help:{helper.id}",
+            additional_expirations=(
+                AdditionalEffectExpiration(
+                    EffectDuration.UNTIL_TURN_START,
+                    actor_id=str(helper.id),
+                ),
+                AdditionalEffectExpiration(EffectDuration.UNTIL_ENCOUNTER_END),
+            ),
         )
         return CombatTurnActionTransition(
             state=_consume_action(state),
-            active_effects=remaining_effects + (effect,),
+            active_effects=apply_active_effect(active_effects, effect).active_effects,
             actor_id=str(helper.id),
             message_title="Pomoc",
             message_body=(
@@ -256,11 +270,6 @@ class CombatTurnActionFlowService:
         actor = _active_hero(state)
         if str(actor.id) != actor_id:
             raise ValueError("Oczekująca akcja Ready nie należy do aktywnego aktora.")
-        remaining_effects = tuple(
-            effect
-            for effect in active_effects
-            if not (effect.actor_id == str(actor.id) and effect.kind == "ready_attack")
-        )
         effect = ActiveCombatEffect(
             id=f"ready_attack:{actor.id}:{trigger}",
             actor_id=str(actor.id),
@@ -268,10 +277,12 @@ class CombatTurnActionFlowService:
             label="Ready",
             object_id=f"combat_action:ready:{trigger}",
             value=0,
+            source=EffectSource(EffectSourceType.ACTION, "ready", "Ready"),
+            duration=EffectDuration.UNTIL_TURN_START,
         )
         return CombatTurnActionTransition(
             state=_consume_action(state),
-            active_effects=remaining_effects + (effect,),
+            active_effects=apply_active_effect(active_effects, effect).active_effects,
             actor_id=str(actor.id),
             message_title="Ready",
             message_body=f"Ready: {actor.name} przygotowuje atak, {_ready_trigger_label(trigger)}.",
@@ -301,11 +312,9 @@ def _replace_actor_effect(
     actor: Actor,
     replacement: ActiveCombatEffect,
 ) -> tuple[ActiveCombatEffect, ...]:
-    return tuple(
-        effect
-        for effect in active_effects
-        if not (effect.actor_id == str(actor.id) and effect.kind == replacement.kind)
-    ) + (replacement,)
+    if replacement.actor_id != str(actor.id):
+        raise ValueError("Replacement effect belongs to a different actor.")
+    return apply_active_effect(active_effects, replacement).active_effects
 
 
 def _actor_by_string_id(state: CombatState, actor_id: str) -> Actor:

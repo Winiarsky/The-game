@@ -20,9 +20,16 @@ from dnd_board_game.inventory import consume_inventory_item, has_inventory_quant
 from dnd_board_game.rules import (
     D20RollInput,
     D20RollRequest,
+    EffectDuration,
+    EffectEvent,
+    EffectEventType,
+    EffectSource,
+    EffectSourceType,
     RollModifier,
     RollModifierType,
+    apply_active_effect,
     ability_modifier,
+    expire_active_effects,
     resolve_d20_roll,
 )
 
@@ -99,23 +106,24 @@ class PlayerCombatResourceFlowService:
         if action.source_item_id is not None:
             actor_after = consume_inventory_item(actor_after, action.source_item_id)
             updated_state = replace_actor(updated_state, actor_after)
-        updated_effects = tuple(
-            effect
-            for effect in active_effects
-            if not (
-                effect.actor_id == str(actor_after.id)
-                and effect.kind == "strength_potion"
-            )
-        ) + (
-            ActiveCombatEffect(
-                id=f"strength_potion:{actor_after.id}:{action.id}",
-                actor_id=str(actor_after.id),
-                kind="strength_potion",
-                label=action.label,
-                object_id=f"combat_action:{action.id}",
-                value=action.value,
+        effect = ActiveCombatEffect(
+            id=f"strength_potion:{actor_after.id}:{action.id}",
+            actor_id=str(actor_after.id),
+            kind="strength_potion",
+            label=action.label,
+            object_id=f"combat_action:{action.id}",
+            value=action.value,
+            source=EffectSource(
+                EffectSourceType.ITEM,
+                action.source_item_id or action.id,
+                action.label,
             ),
+            duration=EffectDuration.UNTIL_TURN_START,
         )
+        updated_effects = apply_active_effect(
+            active_effects,
+            effect,
+        ).active_effects
         message = (
             f"{actor_after.name} wypija {action.label}. Ataki i obrażenia z Siły mają "
             f"{action.value:+d} do następnej tury."
@@ -196,19 +204,22 @@ class PlayerCombatResourceFlowService:
             caster,
             spell_level=action.spell_level,
         )
-        removed = concentration_effects_for_actor(active_effects, str(caster.id))
-        updated_effects = remove_concentration_effects(active_effects, str(caster.id)) + (
-            ActiveCombatEffect(
-                id=f"concentration_attack_bonus:{caster.id}:{target.id}:{action.id}",
-                actor_id=str(target.id),
-                kind="concentration_attack_bonus",
-                label=action.label,
-                object_id=f"combat_action:{action.id}",
-                value=action.value,
-                source_actor_id=str(caster.id),
-                target_actor_id=str(target.id),
-            ),
+        effect = ActiveCombatEffect(
+            id=f"concentration_attack_bonus:{caster.id}:{target.id}:{action.id}",
+            actor_id=str(target.id),
+            kind="concentration_attack_bonus",
+            label=action.label,
+            object_id=f"combat_action:{action.id}",
+            value=action.value,
+            source_actor_id=str(caster.id),
+            target_actor_id=str(target.id),
+            source=EffectSource(EffectSourceType.SPELL, action.id, action.label),
+            duration=EffectDuration.CONCENTRATION,
+            stacking_key=f"concentration:{caster.id}",
         )
+        application = apply_active_effect(active_effects, effect)
+        removed = application.replaced_effects
+        updated_effects = application.active_effects
         ended = (
             " Poprzednia koncentracja zakończona: "
             f"{', '.join(effect.label for effect in removed)}."
@@ -399,14 +410,10 @@ def remove_concentration_effects(
     active_effects: tuple[ActiveCombatEffect, ...],
     actor_id: str,
 ) -> tuple[ActiveCombatEffect, ...]:
-    return tuple(
-        effect
-        for effect in active_effects
-        if not (
-            effect.kind.startswith("concentration_")
-            and effect.source_actor_id == actor_id
-        )
-    )
+    return expire_active_effects(
+        active_effects,
+        EffectEvent(EffectEventType.CONCENTRATION_ENDED, actor_id=actor_id),
+    ).active_effects
 
 
 def _active_hero(state: CombatState) -> Actor:

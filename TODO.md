@@ -20,10 +20,10 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [ ] Lock the first full release to a documented rules baseline; recommended: D&D 5e 2014.
 - [ ] Decide and document the licensing/source-pack strategy for the target content catalog.
 - [ ] Define schema versions, stable content ids, and migration rules for content and save snapshots.
-- [ ] Unify effect source, duration, expiration, stacking, and replacement contracts.
+- [x] Unify effect source, duration, expiration, stacking, and replacement contracts.
 - [x] Add generic actor resources with short-rest and long-rest recovery policies.
 - [x] Implement automatic pre-scenario long rest and content-driven short rest independently from classes.
-- [ ] Extend the duration/recovery model with scenario-end expiration and recovery policies.
+- [x] Extend the duration/recovery model with scenario-end expiration and recovery policies.
 - [ ] Add a versioned actor/scenario snapshot and deterministic round-trip test.
 - [ ] Complete actor fundamentals: proficiency profiles, skills, 0 HP, stabilization, and death saves.
 

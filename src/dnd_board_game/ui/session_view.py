@@ -22,6 +22,7 @@ class UiSessionView:
     active_point: dict[str, object] | None
     resources: list[dict[str, object]]
     actors: list[dict[str, object]]
+    active_effects: list[dict[str, object]]
     scene_status: list[dict[str, object]]
     flags: list[dict[str, object]]
     messages: list[dict[str, object]]
@@ -54,6 +55,7 @@ class UiSessionView:
             "active_point": self.active_point,
             "resources": self.resources,
             "actors": self.actors,
+            "active_effects": self.active_effects,
             "scene_status": self.scene_status,
             "flags": self.flags,
             "messages": self.messages,

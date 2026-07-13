@@ -271,7 +271,17 @@ Implementacja MVP:
 - Po ukończeniu short resta każdy gracz może wydawać dostępne Hit Dice pojedynczo. Aplikacja dodaje modyfikator CON, ogranicza HP do maksimum i po każdym rzucie pozwala zakończyć albo wydać następną kość.
 - Anulowanie preview short resta nie przesuwa czasu ani nie zużywa Hit Dice. Contentowe konsekwencje są wykonywane dopiero po potwierdzonym ukończeniu odpoczynku.
 - Nie ma globalnego limitu short restów. Opcjonalny `max_completions` jest ograniczeniem konkretnej lokacji/scenariusza, nie ogólną zasadą D&D.
-- Koncentracja MVP działa jako `ActiveCombatEffect` z `source_actor_id`; jeden rzucający może utrzymywać tylko jeden efekt `concentration_*`.
+
+## Aktywne Efekty I Czas Trwania
+
+- Aktywny efekt posiada jawne `source`, `duration`, `stacking` i `stacking_key`; UI pokazuje graczowi źródło oraz moment wygaśnięcia.
+- Wspólne granice lifecycle obejmują początek/koniec tury, koniec rundy, właściwy atak, ruch z pozycji, zakończenie koncentracji, encountera, short/long resta oraz scenariusza.
+- Efekt może mieć więcej niż jeden warunek zakończenia. Przykładowo Help kończy się po właściwym ataku albo na początku następnej tury pomagającego.
+- `replace` zastępuje efekt o tym samym stacking key, `refresh` robi to samo i raportuje odświeżenie, a `stack` zachowuje osobne instancje z unikalnymi id.
+- Long rest i koniec scenariusza usuwają wszystkie efekty niepermanentne. Short rest usuwa tylko efekty jawnie trwające do short resta; nie przerywa automatycznie koncentracji.
+- Efekty ograniczone do encountera wygasają przed przeniesieniem stanu bohaterów z walki do eksploracji. Jeżeli efekt materializował zmianę stanu, np. premię do AC, wygaśnięcie przywraca wartość bazową.
+- Ręczne zakończenie scenariusza jest obecnie granicą lifecycle, nie systemem zapisu. Wersjonowany snapshot pozostaje następnym etapem M1.
+- Koncentracja MVP działa jako wspólny `ActiveEffect` z `source_actor_id`; jeden rzucający może utrzymywać tylko jeden efekt `concentration_*`.
 - Rzucenie nowego czaru koncentracyjnego tego samego aktora usuwa jego poprzedni efekt koncentracji i pokazuje komunikat w UI.
 - `Błogosławieństwo` w `gate_skirmish` jest testowym czarem koncentracyjnym: zużywa akcję i slot 1. poziomu, wybiera sojusznika i daje mu `+1` do ataku, dopóki koncentracja trwa.
 - Gdy aktor utrzymujący koncentrację otrzyma obrażenia, wykonuje CON save przeciw ST `max(10, obrażenia // 2)`. Sojusznik wymaga wpisania d20 w UI, przeciwnik rzuca automatycznie; porażka usuwa efekty `concentration_*` tego aktora.

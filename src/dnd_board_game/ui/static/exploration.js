@@ -63,6 +63,10 @@ function render() {
   document.getElementById('challenge').textContent = state.active_challenge ? `${state.active_challenge.name}: ${state.active_challenge.current_progress}/${state.active_challenge.progress_required}, hałas ${state.active_challenge.noise}` : 'Brak';
   document.getElementById('visible-environment').innerHTML = visibleEnvironmentHtml();
   document.getElementById('resources').innerHTML = state.resources.map(r => `<div>${esc(r.label)}${r.consume_on_use ? ' · jednorazowy' : ''}</div>`).join('') || 'Brak';
+  document.getElementById('active-effects').innerHTML = activeEffectsHtml();
+  const finishScenarioButton = document.getElementById('finish-scenario-button');
+  finishScenarioButton.disabled = Boolean(state.combat) || ['spell_preparation','short_rest','scenario_complete'].includes(state.flow.stage);
+  finishScenarioButton.textContent = state.flow.stage === 'scenario_complete' ? 'Scenariusz zakończony' : 'Zakończ scenariusz';
   renderBoardPanel();
   document.getElementById('flow-panel').innerHTML = flowPanelHtml();
   const sceneHtml = sceneDescriptionHtml(state);
@@ -101,6 +105,14 @@ function renderBoardPanel() {
 }
 function esc(value) {
   return String(value || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+function activeEffectsHtml() {
+  const effects = state.active_effects || [];
+  return effects.map(effect => {
+    const source = effect.source || {};
+    const sourceLabel = source.label || source.id || 'nieznane';
+    return `<div class="effect-chip"><b>${esc(effect.label)}</b><br>${esc(effect.value_label)}<br><span class="muted">Źródło: ${esc(sourceLabel)} · ${esc(effect.expires)}</span></div>`;
+  }).join('') || '<span class="muted">Brak</span>';
 }
 async function refreshSessionLog() {
   const res = await fetch('/api/session-log');
@@ -161,6 +173,8 @@ function sessionLogSummary(type, payload) {
   if (type === 'ui_message_added') return `${esc(payload.title || '')}: ${esc(payload.body || '')}`;
   if (type === 'ui_short_rest_completed') return `Short rest: ${esc(payload.zone_id || '')}; czas: ${esc(payload.elapsed_minutes || 0)} min`;
   if (type === 'ui_short_rest_hit_die_spent') return `Hit Die: ${esc(payload.actor_id || '')}; leczenie: ${esc(payload.effective_healing || 0)} HP`;
+  if (type === 'ui_effects_expired') return `Wygasłe efekty (${esc(payload.event || '')}): ${esc((payload.effect_ids || []).join(', ') || 'brak')}`;
+  if (type === 'ui_scenario_completed') return `Scenariusz zakończony; czas: ${esc(payload.elapsed_minutes || 0)} min; wygasłe efekty: ${esc((payload.expired_effect_ids || []).join(', ') || 'brak')}`;
   return '';
 }
 function listHtml(items) {
@@ -182,6 +196,15 @@ function flowPanelHtml() {
   }
   if (stage === 'short_rest') {
     return shortRestHtml();
+  }
+  if (stage === 'scenario_complete') {
+    return `
+      <div class="start-panel"><div class="inner">
+        <h2>Scenariusz zakończony</h2>
+        <p>Efekty trwające do końca scenariusza zostały wygaszone.</p>
+        <p class="muted">Kliknij Reset, aby rozpocząć scenariusz od automatycznego long resta i przygotowania czarów.</p>
+      </div></div>
+    `;
   }
   if (stage === 'waiting_for_board') {
     return `
@@ -1906,6 +1929,10 @@ function sendRolls() {
   api('/api/rolls', {rolls}, 'Rozstrzygam wynik rzutu...');
 }
 function resetSession() { api('/api/reset', {}, 'Resetuję scenę...'); }
+function finishScenario() {
+  if (!window.confirm('Zakończyć scenariusz i wygasić efekty trwające do jego końca?')) return;
+  api('/api/scenario/finish', {}, 'Kończę scenariusz...');
+}
 function travel(zoneId) { api('/api/travel', {zone_id: zoneId}, 'Przechodzę do wybranej lokacji...'); }
 function selectPoint(pointId) { api('/api/point', {point_id: pointId}, pointId ? 'Otwieram punkt eksploracji...' : 'Wracam do lokacji...'); }
 function finishInteraction() { api('/api/interaction/finish', {}, 'Wracam do wyboru lokacji...'); }

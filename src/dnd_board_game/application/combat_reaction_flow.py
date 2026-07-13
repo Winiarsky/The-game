@@ -31,7 +31,10 @@ from dnd_board_game.rules import (
     D20RollInput,
     D20RollRequest,
     D20RollResult,
+    EffectEvent,
+    EffectEventType,
     RollMode,
+    expire_active_effects,
     resolve_d20_roll,
 )
 from dnd_board_game.world import BoardState, PathResult
@@ -225,9 +228,13 @@ class PlayerReactionFlowService:
         resolution = resolve_attack(declaration, attack_roll, ActionUse.ACTION_AVAILABLE)
         updated_effects = active_effects
         if consumed_effect_id is not None:
-            updated_effects = tuple(
-                effect for effect in updated_effects if effect.id != consumed_effect_id
-            )
+            updated_effects = expire_active_effects(
+                updated_effects,
+                EffectEvent(
+                    EffectEventType.EFFECT_CONSUMED,
+                    effect_id=consumed_effect_id,
+                ),
+            ).active_effects
         updated_effects = consume_next_attack_effects(
             updated_effects,
             attacker_id,

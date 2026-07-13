@@ -10,7 +10,16 @@ from dnd_board_game.exploration import (
     ShortRestPolicy,
     apply_exploration_effect,
 )
-from dnd_board_game.rules import HitDieSpendResult, RestResult, complete_short_rest, spend_hit_die
+from dnd_board_game.rules import (
+    ActiveEffect,
+    EffectEvent,
+    EffectEventType,
+    HitDieSpendResult,
+    RestResult,
+    complete_short_rest,
+    expire_active_effects,
+    spend_hit_die,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,6 +36,8 @@ class ShortRestCompletionTransition:
     pending: PendingShortRest
     rest_results: tuple[RestResult, ...]
     effects: tuple[ExplorationEffectResult, ...]
+    active_effects: tuple[ActiveEffect, ...]
+    expired_effects: tuple[ActiveEffect, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,6 +72,7 @@ class ShortRestFlowService:
         state: ExplorationState,
         actors: tuple[Actor, ...],
         pending: PendingShortRest,
+        active_effects: tuple[ActiveEffect, ...] = (),
     ) -> ShortRestCompletionTransition:
         if pending.completed:
             raise ValueError("Ten krótki odpoczynek został już ukończony.")
@@ -86,12 +98,18 @@ class ShortRestFlowService:
             effect = apply_exploration_effect(updated_state, raw_effect)
             updated_state = effect.state
             effects.append(effect)
+        expiration = expire_active_effects(
+            active_effects,
+            EffectEvent(EffectEventType.SHORT_REST_COMPLETED),
+        )
         return ShortRestCompletionTransition(
             state=updated_state,
             actors=updated_actors,
             pending=replace(pending, completed=True),
             rest_results=rest_results,
             effects=tuple(effects),
+            active_effects=expiration.active_effects,
+            expired_effects=expiration.expired_effects,
         )
 
     def spend_hit_die(

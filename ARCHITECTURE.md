@@ -138,6 +138,14 @@ Rest data is actor domain state in `actors/resources.py`; D&D recovery decisions
 healing or resource recovery themselves. Starting an exploration session automatically applies
 a long rest to allied actors before the spell-preparation stage.
 
+Runtime effects use the transport-neutral `rules/effects.py` contract. `ActiveEffect` carries
+its mechanical source, duration, stacking policy/key and optional secondary expiration points.
+Application and combat services may interpret the effect `kind`, but they apply, replace and
+expire instances through `apply_active_effect` and `expire_active_effects`. Lifecycle events
+cover turn/round boundaries, attacks, movement, concentration, encounter end, rests and scenario
+end. `ActiveCombatEffect` remains a compatibility export of this shared type while older call
+sites are migrated incrementally. The UI exposes source and expiration but does not decide them.
+
 ## First Implementation Milestones
 
 1. Create core coordinate/grid primitives.

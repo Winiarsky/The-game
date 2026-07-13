@@ -32,14 +32,14 @@ odstępstwa zapisujemy w `docs/RULES_DECISIONS.md`.
 | Reakcje | częściowe | opportunity attack i Ready | generyczna kolejka reakcji i wiele triggerów |
 | Akcje tury | częściowe | Dash, Dodge, Disengage, Help, Ready | Hide, Search, Use an Object i warianty zasad |
 | Warunki | brak | pojedyncze efekty zachowują się podobnie do warunków | wspólny condition/effect framework |
-| Efekty i czas trwania | częściowe | ActiveCombatEffect i efekty eksploracji | jeden model duration, expiry i triggerów |
-| Odpoczynki i dzień przygody | stabilne MVP | short rest z Hit Dice i contentowym ryzykiem; automatyczny long rest przed scenariuszem | przerwania, scenario-end lifecycle i snapshot |
+| Efekty i czas trwania | stabilne MVP | wspólny ActiveEffect, źródło, stacking oraz expiry dla tur, rund, akcji, ruchu, koncentracji, odpoczynku i scenariusza | pełny condition framework i wersjonowany snapshot |
+| Odpoczynki i dzień przygody | stabilne MVP | short rest z Hit Dice i contentowym ryzykiem; automatyczny long rest przed scenariuszem; scenario-end lifecycle | przerwania i snapshot |
 | Ekwipunek | częściowe | inventory, quantity, broken, consumables, item actions | equipment, armor, weight, attunement, charges |
 | Spell slots | stabilne MVP | poziomy slotów i zużycie | upcasting, recovery profiles, multiclass slots |
 | Przygotowanie czarów | stabilne MVP | wybór po automatycznym long reście, limit, always prepared | class-derived profile |
 | Znane czary i spellbook | brak | brak osobnych profili | generic spell access profiles |
 | Targeting czarów | częściowe | single target, radius, line, cone, save i healing | pełny range/target/line-of-effect |
-| Koncentracja | częściowe | jeden efekt, zastępowanie, save po damage | wspólny duration framework i modyfikatory |
+| Koncentracja | częściowe | jeden efekt, wspólne zastępowanie/expiry, save po damage | zaawansowane modyfikatory i pełne czasy czarów |
 | Components, ritual, upcasting | brak | brak | stabilny spell schema i equipment |
 | Eksploracja | stabilne MVP | zones, points, challenges, checks, resources, effects | czas, senses, hazards i trwałe konsekwencje |
 | Freeform/LLM | stabilne MVP | analiza, klasyfikacja, korekta MG i deterministic effects | pełna walidacja branches i parametrów |

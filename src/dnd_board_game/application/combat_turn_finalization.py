@@ -14,6 +14,7 @@ from dnd_board_game.combat import (
     expire_turn_start_effects,
     finish_turn,
 )
+from dnd_board_game.rules import EffectEvent, EffectEventType, expire_active_effects
 
 from .enemy_turn_flow import enemy_turn_message
 
@@ -150,10 +151,24 @@ def _advance_turn(
 
     updated_state = finish_turn(state)
     updated_effects = after_end
+    if updated_state.round_number > state.round_number:
+        after_round = expire_active_effects(
+            updated_effects,
+            EffectEvent(EffectEventType.ROUND_ENDED),
+        ).active_effects
+        expired_at_round = _removed_effects(updated_effects, after_round)
+        if expired_at_round:
+            notices.append(
+                ExpiredCombatEffects(
+                    f"Wygasły efekty końca rundy {state.round_number}",
+                    expired_at_round,
+                )
+            )
+        updated_effects = after_round
     if updated_state.status == CombatStatus.ACTIVE:
         starting_actor = current_actor(updated_state)
-        after_start = expire_turn_start_effects(after_end, str(starting_actor.id))
-        expired_at_start = _removed_effects(after_end, after_start)
+        after_start = expire_turn_start_effects(updated_effects, str(starting_actor.id))
+        expired_at_start = _removed_effects(updated_effects, after_start)
         if expired_at_start:
             notices.append(
                 ExpiredCombatEffects(
@@ -171,4 +186,3 @@ def _removed_effects(
 ) -> tuple[ActiveCombatEffect, ...]:
     after_ids = {effect.id for effect in after}
     return tuple(effect for effect in before if effect.id not in after_ids)
-
