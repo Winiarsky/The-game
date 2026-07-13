@@ -281,6 +281,7 @@ Implementacja MVP:
 - Item aktora może mieć stan `broken`; uszkodzony item pozostaje widoczny w inventory, ale nie spełnia `requires`, nie daje bonusów i ma `available=false`.
 - Bonus eksploracji z itemu może deklarować `breakage` przy krytycznej porażce. Runtime nie losuje tego ukrycie: po naturalnej 1 UI prosi o k100, a wynik w progu oznacza `broken`.
 - Bonus eksploracji może deklarować `consume`; po rozstrzygnięciu testu aktywny item z takim bonusem zmniejsza `quantity`.
+- Wolne deklaracje eksploracji są porządkowane przez named `ExplorationMechanicId`, np. `single_actor_check`, `lead_with_help_check`, `group_check`, `use_item_check`, `use_spell_check`, `improvised_tool_check`. LLM wybiera mechanikę, ale walidacja i rozstrzygnięcie pozostają deterministyczne.
 - Magiczny napój siły w MVP jest akcją walki pochodzącą z itemu aktora: zużywa akcję główną, zmniejsza `quantity` itemu o 1 i daje efekt `strength_potion` do początku następnej tury aktora.
 - `strength_potion` daje premię do ataku i obrażeń tylko źródłom opartym o Siłę.
 - Nie implementujemy jeszcze attunement, pełnych ładunków/odnawiania itemów, osobnych list znanych i przygotowanych czarów, zaawansowanych modyfikatorów testu koncentracji ani zaawansowanych efektów czarów poza obrażeniami/lekkim leczeniem i prostym buffem do ataku.
@@ -392,6 +393,11 @@ Implementacja MVP:
 - `Rozejrzyj się po okolicy` dopiero wtedy podświetla całą strefę i pozwala klikać jej kafle.
 - `Zbadaj obszar` dotyczy aktualnej strefy, może być wykonane raz na strefę i bierze najwyższy wynik z testu drużyny.
 - Testy eksploracyjne mają jawny plan: kto rzuca (`single_actor`, `lead_with_help`, `whole_party`, `selected_actors`), jak agregujemy wynik (`lead_result`, `highest`, `lowest`, `majority`, `all_must_succeed`, `any_success`, `sum_progress`) i kogo dotyczą konsekwencje (`lead_actor`, `helper_actor`, `failed_actors`, `whole_party`, `scene`, `npc`, `object`).
+- Testy eksploracyjne mogą mieć kontrolowane modyfikatory sytuacyjne oparte o opis scenariusza, lokacji, aktywnego wyzwania/obiektu, dynamiczny stan gry albo deklarację gracza.
+- Modyfikator sytuacyjny musi mieć etykietę, źródło, powód i efekt mechaniczny: premię/karę od -2 do +2 albo `roll_mode` równy `advantage`/`disadvantage`.
+- Kilka źródeł przewagi i utrudnienia w eksploracji stosuje standardowe znoszenie D&D 5e: jeśli występuje przewaga i utrudnienie, rzut wraca do `normal`.
+- `improvised_tool_check` obsługuje prowizoryczne użycie elementu sceny jako narzędzia. Taki element musi mieć źródło i uzasadnienie z kontekstu sceny albo deklaracji gracza, daje tylko mały jednorazowy modyfikator i nie trafia do inventory.
+- Improwizowane narzędzie jest pokazywane w preview decyzji MG i może zostać poprawione albo odrzucone przed rzutem.
 - Dla wspólnego szukania domyślnie pasuje `whole_party/highest` albo `any_success`; dla skradania całej drużyny pasuje `whole_party/lowest`; dla działań prowadzonych przez jedną postać pasuje `single_actor` albo `lead_with_help` z `lead_result`.
 - Sukces badania może ujawnić ukryty punkt i ustawić flagę sceny.
 - Eksploracyjne przeszkody docelowo nie powinny być twardymi blokadami rzutu.
@@ -423,6 +429,8 @@ Implementacja MVP:
 - `grant_resource` i `unlock_option` nie tworzą nowych elementów świata. Mogą wskazywać tylko istniejące resource/option ids z contentu i tylko jeśli są na whitelistach policy.
 - Efekt przygotowania działa tylko wtedy, gdy `target_tags` przecinają się z tagami następnej próby. Po użyciu wygasa i jest zapisywany w obserwacji sesji.
 - Propozycja LLM może utworzyć tymczasową opcję `gm_generated`, która jest rozstrzygana przez zwykły deterministic `resolve_challenge_option`.
+- Propozycja LLM może dodać maksymalnie trzy modyfikatory sytuacyjne do bieżącego rzutu, ale walidator odrzuca wpisy bez realnego efektu albo bez źródła/powodu.
+- Propozycja LLM może użyć `improvised_tool_check` tylko razem z payloadem `improvised_tool`; walidator odrzuca payload improwizowanego narzędzia przy innych mechanikach.
 - Propozycja LLM musi zostać zaakceptowana przed rzutem; odrzucenie interpretacji nie zmienia stanu gry.
 - Przed akceptacją runtime pokazuje preview konsekwencji: critical success, success, failure i critical failure, razem z ST, tierem trudności, postępem, hałasem, komplikacjami i aktywnymi przygotowaniami.
 - Terminalowy flow akceptacji interpretacji używa `+` do akceptacji, `-` do odrzucenia i korekty, `?` do wyjaśnienia mechanicznego oraz `r` do reinterpretacji tej samej deklaracji bez wpisywania nowej.

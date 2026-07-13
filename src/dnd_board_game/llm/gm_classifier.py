@@ -19,16 +19,25 @@ from dnd_board_game.exploration import (
     ConsequenceTarget,
     ExplorationChallenge,
     ExplorationChallengeOption,
+    ExplorationMechanicId,
     ExplorationResource,
+    ExplorationSituationalModifier,
+    ExplorationSituationalModifierSource,
     ExplorationState,
     ExplorationZone,
+    ImprovisedToolUse,
     LlmChallengePolicy,
     LlmContext,
+    MECHANIC_TOOLS,
     available_challenge_options,
     challenge_state_for,
+    infer_mechanic_id,
+    mechanic_payload_for_option,
+    validate_mechanic_selection,
     visible_exploration_points,
 )
 from dnd_board_game.hardware import LedColor
+from dnd_board_game.rules import RollMode
 
 from .content_config import load_freeform_grounding_terms, load_llm_core_rules
 from .prompts import PromptId, load_prompt
@@ -96,6 +105,7 @@ class PreparationEffectDuration(StrEnum):
 CORE_LLM_RULES = load_llm_core_rules()
 CORE_DND_5E_ABILITIES = frozenset(CORE_LLM_RULES.abilities)
 CORE_DND_5E_SKILLS = frozenset(CORE_LLM_RULES.skills)
+MAX_SITUATIONAL_MODIFIERS = 3
 
 
 class GmConsequence(BaseModel):
@@ -124,6 +134,62 @@ class GmPreparationEffect(BaseModel):
         return tuple(dict.fromkeys(tag.strip().lower() for tag in value if tag.strip()))
 
 
+class GmSituationalModifier(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    label: str = Field(max_length=120)
+    modifier: int = Field(default=0, ge=-2, le=2)
+    source: ExplorationSituationalModifierSource
+    reason: str = Field(max_length=400)
+    roll_mode: RollMode = RollMode.NORMAL
+
+    @field_validator("label", "reason")
+    @classmethod
+    def _text_must_not_be_empty(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("field cannot be empty")
+        return normalized
+
+    def as_domain(self) -> ExplorationSituationalModifier:
+        return ExplorationSituationalModifier(
+            label=self.label,
+            modifier=self.modifier,
+            source=self.source,
+            reason=self.reason,
+            roll_mode=self.roll_mode,
+        )
+
+
+class GmImprovisedToolUse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    label: str = Field(max_length=120)
+    source: ExplorationSituationalModifierSource
+    source_detail: str = Field(max_length=200)
+    effect_modifier: int = Field(default=1, ge=-2, le=2)
+    risk: str = Field(default="", max_length=200)
+    reason: str = Field(max_length=500)
+
+    @field_validator("label", "source_detail", "reason")
+    @classmethod
+    def _text_must_not_be_empty(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("field cannot be empty")
+        return normalized
+
+    def as_domain(self) -> ImprovisedToolUse:
+        return ImprovisedToolUse(
+            label=self.label,
+            source=self.source,
+            source_detail=self.source_detail,
+            effect_modifier=self.effect_modifier,
+            risk=self.risk,
+            reason=self.reason,
+        )
+
+
 class GmClassifierProposal(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -140,6 +206,10 @@ class GmClassifierProposal(BaseModel):
     progress_on_failure: int | None = Field(default=None, ge=0, le=1)
     used_resource_ids: tuple[str, ...] = ()
     action_flow: GmActionFlow = GmActionFlow.CHALLENGE_ATTEMPT
+    selected_mechanic: ExplorationMechanicId | None = None
+    roll_mode: RollMode = RollMode.NORMAL
+    situational_modifiers: tuple[GmSituationalModifier, ...] = ()
+    improvised_tool: GmImprovisedToolUse | None = None
     preparation_effect: GmPreparationEffect | None = None
     requires_roll_now: bool = True
     check_participants: CheckParticipants | None = None
@@ -239,6 +309,22 @@ class GmClassifierRequest:
                         "progress_on_failure": option.progress_on_failure,
                         "tags": list(option.tags),
                         "requirements": _option_requirements_payload(option),
+                        "mechanic": mechanic_payload_for_option(option),
+                    }
+                    for option in available_challenge_options(self.state, self.challenge)
+                ],
+            },
+            "interaction_object": {
+                "id": self.challenge.id,
+                "name": self.challenge.name,
+                "context": self.challenge.llm_context.as_payload(),
+                "available_options": [
+                    {
+                        "id": option.id,
+                        "label": option.label,
+                        "description": option.description,
+                        "tags": list(option.tags),
+                        "requirements": _option_requirements_payload(option),
                     }
                     for option in available_challenge_options(self.state, self.challenge)
                 ],
@@ -246,11 +332,27 @@ class GmClassifierRequest:
             "party_resources": resources,
             "party_actors": [_actor_grounding_payload(actor) for actor in self.actors],
             "dynamic_state": _dynamic_state_payload(self.state, self.challenge),
+            "situational_modifier_policy": {
+                "max_count": MAX_SITUATIONAL_MODIFIERS,
+                "modifier_range": [-2, 2],
+                "roll_modes": [mode.value for mode in RollMode],
+                "sources": [source.value for source in ExplorationSituationalModifierSource],
+                "requires_source_and_reason": True,
+            },
+            "improvised_tool_policy": {
+                "mechanic_id": ExplorationMechanicId.IMPROVISED_TOOL_CHECK.value,
+                "effect_modifier_range": [-2, 2],
+                "requires_source_detail": True,
+                "requires_gm_approval": True,
+                "does_not_create_inventory_item": True,
+                "sources": [source.value for source in ExplorationSituationalModifierSource],
+            },
             "allowed_abilities": sorted(CORE_DND_5E_ABILITIES),
             "allowed_skills": sorted(_allowed_skills(policy)),
             "allowed_tags": sorted(policy.allowed_approach_tags),
             "allowed_consequence_types": list(policy.allowed_consequence_types),
             "allowed_complications": sorted(policy.allowed_complications),
+            "allowed_mechanics": [tool.as_payload() for tool in MECHANIC_TOOLS.values()],
             "declaration_thread": [entry.as_payload() for entry in self.declaration_thread],
             "active_preparation_effects": [effect.model_dump(mode="json") for effect in self.active_preparation_effects],
             "player_action": self.player_action,
@@ -549,6 +651,8 @@ def validate_gm_classifier_proposal(
     if proposal.preparation_effect is not None:
         _validate_preparation_effect(proposal.preparation_effect, policy, request)
     if proposal.action_flow == GmActionFlow.PREPARATION:
+        if proposal.roll_mode != RollMode.NORMAL or proposal.situational_modifiers:
+            raise GmProposalValidationError("Przygotowanie bez rzutu nie może mieć modyfikatorów sytuacyjnych obecnego rzutu.")
         if proposal.preparation_effect is None:
             raise GmProposalValidationError("Przygotowanie wymaga preparation_effect.")
         if proposal.requires_roll_now:
@@ -587,6 +691,23 @@ def validate_gm_classifier_proposal(
         raise GmProposalValidationError(f"Nieobsługiwane tagi podejścia: {', '.join(sorted(unknown_tags))}.")
     if proposal.preparation_effect is not None and not set(proposal.preparation_effect.target_tags).intersection(proposal.approach_tags):
         raise GmProposalValidationError("Efekt przygotowania nie pasuje tagami do próby challenge.")
+    if (
+        proposal.selected_mechanic is not None
+        and proposal.selected_mechanic != ExplorationMechanicId.PREPARATION_EFFECT
+        and proposal.requires_roll_now
+        and (proposal.check_participants is None or proposal.check_aggregation is None)
+    ):
+        raise GmProposalValidationError("selected_mechanic dla rzutu wymaga check_participants i check_aggregation.")
+    mechanic_id = _proposal_mechanic_id(proposal)
+    _validate_improvised_tool(proposal, mechanic_id)
+    try:
+        validate_mechanic_selection(
+            mechanic_id,
+            participants=proposal.check_participants,
+            aggregation=proposal.check_aggregation,
+        )
+    except ValueError as exc:
+        raise GmProposalValidationError(str(exc)) from exc
     _validate_context_constraints(proposal, request)
     if len(proposal.used_resource_ids) > policy.max_resources_per_attempt:
         raise GmProposalValidationError(
@@ -595,6 +716,7 @@ def validate_gm_classifier_proposal(
         )
     resources = _validate_resources(proposal, request.state)
     _validate_fact_grounding(proposal, request)
+    _validate_situational_modifiers(proposal)
     _validate_consequences(proposal, policy)
     _validate_narration_consistency(proposal)
     return GmValidatedProposal(proposal, request.challenge, resources)
@@ -629,6 +751,20 @@ def challenge_option_from_validated_proposal(validated: GmValidatedProposal) -> 
         check_participants=proposal.check_participants,
         check_aggregation=proposal.check_aggregation,
         consequence_targets=proposal.consequence_targets,
+        mechanic_id=_proposal_mechanic_id(proposal).value,
+        roll_mode=_combined_roll_mode(proposal.roll_mode, tuple(modifier.roll_mode for modifier in proposal.situational_modifiers)),
+        situational_modifiers=tuple(modifier.as_domain() for modifier in proposal.situational_modifiers),
+        improvised_tool=proposal.improvised_tool.as_domain() if proposal.improvised_tool else None,
+    )
+
+
+def _proposal_mechanic_id(proposal: GmClassifierProposal) -> ExplorationMechanicId:
+    if proposal.selected_mechanic is not None:
+        return proposal.selected_mechanic
+    return infer_mechanic_id(
+        participants=proposal.check_participants,
+        aggregation=proposal.check_aggregation,
+        action_flow_is_preparation=proposal.action_flow == GmActionFlow.PREPARATION,
     )
 
 
@@ -652,6 +788,45 @@ def _validate_resources(
             )
         result.append(resource)
     return tuple(result)
+
+
+def _validate_situational_modifiers(proposal: GmClassifierProposal) -> None:
+    if len(proposal.situational_modifiers) > MAX_SITUATIONAL_MODIFIERS:
+        raise GmProposalValidationError(
+            f"Można dodać maksymalnie {MAX_SITUATIONAL_MODIFIERS} modyfikatory sytuacyjne."
+        )
+    seen: set[tuple[str, str]] = set()
+    for modifier in proposal.situational_modifiers:
+        if modifier.modifier == 0 and modifier.roll_mode == RollMode.NORMAL:
+            raise GmProposalValidationError(
+                f"Modyfikator sytuacyjny {modifier.label} nie zmienia rzutu ani premii."
+            )
+        key = (modifier.source.value, modifier.label.strip().lower())
+        if key in seen:
+            raise GmProposalValidationError(f"Powtórzony modyfikator sytuacyjny: {modifier.label}.")
+        seen.add(key)
+
+
+def _validate_improvised_tool(proposal: GmClassifierProposal, mechanic_id: ExplorationMechanicId) -> None:
+    if mechanic_id == ExplorationMechanicId.IMPROVISED_TOOL_CHECK:
+        if proposal.improvised_tool is None:
+            raise GmProposalValidationError("improvised_tool_check wymaga pola improvised_tool.")
+        if proposal.improvised_tool.effect_modifier == 0:
+            raise GmProposalValidationError("Improwizowane narzędzie musi mieć niezerowy efekt mechaniczny.")
+        return
+    if proposal.improvised_tool is not None:
+        raise GmProposalValidationError("Pole improvised_tool jest dozwolone tylko dla improvised_tool_check.")
+
+
+def _combined_roll_mode(base_mode: RollMode, modifier_modes: tuple[RollMode, ...]) -> RollMode:
+    modes = {mode for mode in (base_mode, *modifier_modes) if mode != RollMode.NORMAL}
+    if RollMode.ADVANTAGE in modes and RollMode.DISADVANTAGE in modes:
+        return RollMode.NORMAL
+    if RollMode.DISADVANTAGE in modes:
+        return RollMode.DISADVANTAGE
+    if RollMode.ADVANTAGE in modes:
+        return RollMode.ADVANTAGE
+    return RollMode.NORMAL
 
 
 def _validate_preparation_effect(

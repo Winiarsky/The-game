@@ -1,6 +1,8 @@
 import random
 from dataclasses import replace
 
+import pytest
+
 from dnd_board_game.actors import Faction
 from dnd_board_game.combat import EnemyAutoTurnResult, replace_actor, set_scene_flag
 from dnd_board_game.combat.damage import DamageComponentInput, DamageType, apply_damage_result, resolve_damage
@@ -221,6 +223,169 @@ def test_exploration_ui_session_resolves_gate_challenge():
     assert state["active_challenge"] is None
     assert state["flow"]["stage"] == "interaction_result"
     assert state["exploration_setup"] is None
+
+
+def test_exploration_ui_session_can_correct_gm_decision_before_roll():
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=FakeGmClient(_challenge_proposal()),
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.submit_action("Wyważamy bramę z pomocą.")
+
+    corrected = session.update_pending_challenge_decision(
+        {
+            "mechanic_id": "lead_with_help_check",
+            "check_participants": "lead_with_help",
+            "check_aggregation": "lead_result",
+            "lead_actor_id": "rogue",
+            "helper_actor_id": "hero",
+            "ability": "dexterity",
+            "skill": "acrobatics",
+            "dc": 13,
+        }
+    )
+
+    option = corrected["pending"]["option"]
+    assert option["mechanic"]["id"] == "lead_with_help_check"
+    assert option["check_participants"] == "lead_with_help"
+    assert option["ability"] == "dexterity"
+    assert option["skill"] == "acrobatics"
+    assert option["dc"] == 13
+    assert corrected["selected_lead_actor_id"] == "rogue"
+    assert corrected["selected_helper_actor_id"] == "hero"
+
+    accepted = session.decide("accept")
+
+    assert accepted["required_rolls"] == [
+        {"actor_id": "rogue", "actor_name": "Łotrzyca", "die_sides": 20, "label": "d20"},
+        {"actor_id": "hero", "actor_name": "Bohater", "die_sides": 20, "label": "d20"},
+    ]
+    plan = accepted["pending"]["check_plan"]
+    assert plan["lead_actor_id"] == "rogue"
+    assert plan["helper_actor_id"] == "hero"
+    assert plan["mechanic"]["id"] == "lead_with_help_check"
+
+
+def test_exploration_ui_session_rejects_same_lead_and_helper_for_correction():
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=FakeGmClient(_challenge_proposal()),
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.submit_action("Wyważamy bramę z pomocą.")
+
+    with pytest.raises(ValueError, match="Pomocnik musi być inną postacią"):
+        session.update_pending_challenge_decision(
+            {
+                "mechanic_id": "lead_with_help_check",
+                "check_participants": "lead_with_help",
+                "check_aggregation": "lead_result",
+                "lead_actor_id": "hero",
+                "helper_actor_id": "hero",
+                "ability": "strength",
+                "skill": "athletics",
+                "dc": 15,
+            }
+        )
+
+
+def test_exploration_ui_session_corrects_situational_modifier_and_disadvantage_roll():
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=FakeGmClient(_challenge_proposal()),
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.submit_action("W deszczu wspinam się po mokrej linie.")
+
+    corrected = session.update_pending_challenge_decision(
+        {
+            "mechanic_id": "single_actor_check",
+            "check_participants": "single_actor",
+            "check_aggregation": "lead_result",
+            "lead_actor_id": "hero",
+            "ability": "strength",
+            "skill": "athletics",
+            "dc": 15,
+            "roll_mode": "normal",
+            "situational_modifiers": [
+                {
+                    "label": "Mokra lina",
+                    "modifier": -1,
+                    "source": "interaction_object",
+                    "reason": "Opis obiektu wskazuje mokrą linę.",
+                    "roll_mode": "disadvantage",
+                }
+            ],
+        }
+    )
+
+    option = corrected["pending"]["option"]
+    assert option["roll_mode"] == "disadvantage"
+    assert option["situational_modifiers"][0]["modifier"] == -1
+
+    accepted = session.decide("accept")
+
+    assert accepted["required_rolls"] == [
+        {
+            "actor_id": "hero",
+            "actor_name": "Bohater",
+            "die_sides": 20,
+            "label": "d20",
+            "roll_mode": "disadvantage",
+            "requires_second_roll": True,
+        }
+    ]
+    plan = accepted["pending"]["check_plan"]
+    assert plan["roll_mode"] == "disadvantage"
+    assert plan["situational_modifiers"][0]["label"] == "Mokra lina"
+
+    resolved = session.resolve_rolls({"hero": {"natural_roll": 18, "natural_roll_2": 7}})
+
+    assert resolved["pending"] is None
+    assert session.pending is None
+
+
+def test_exploration_ui_session_corrects_improvised_tool_before_roll():
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=FakeGmClient(_challenge_proposal()),
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.submit_action("Używam starej deski jak dźwigni.")
+
+    corrected = session.update_pending_challenge_decision(
+        {
+            "mechanic_id": "improvised_tool_check",
+            "check_participants": "single_actor",
+            "check_aggregation": "lead_result",
+            "lead_actor_id": "hero",
+            "ability": "strength",
+            "skill": "athletics",
+            "dc": 15,
+            "roll_mode": "normal",
+            "situational_modifiers": [],
+            "improvised_tool": {
+                "label": "Stara deska",
+                "source": "interaction_object",
+                "source_detail": "rumowisko przy bramie",
+                "effect_modifier": 1,
+                "risk": "może pęknąć przy krytycznej porażce",
+                "reason": "Opis sceny zawiera stare deski, które mogą działać jak prowizoryczna dźwignia.",
+            },
+        }
+    )
+
+    option = corrected["pending"]["option"]
+    assert option["mechanic"]["id"] == "improvised_tool_check"
+    assert option["improvised_tool"]["label"] == "Stara deska"
+    assert option["improvised_tool"]["effect_modifier"] == 1
+
+    accepted = session.decide("accept")
+
+    plan = accepted["pending"]["check_plan"]
+    assert plan["improvised_tool"]["label"] == "Stara deska"
+    assert plan["mechanic"]["id"] == "improvised_tool_check"
 
 
 def test_exploration_ui_session_applies_item_bonus_and_breaks_item_after_critical_failure():

@@ -31,12 +31,15 @@ from dnd_board_game.exploration import (
     ExplorationChallengeOption,
     ExplorationEncounterTrigger,
     ExplorationOptionBonus,
+    ExplorationSituationalModifier,
+    ExplorationSituationalModifierSource,
     EncounterOutcome,
     ExplorationOption,
     ExplorationOptionKind,
     ExplorationPoint,
     ExplorationResource,
     ExplorationZone,
+    ImprovisedToolUse,
     ItemBreakageRisk,
     LlmChallengePolicy,
     LlmContext,
@@ -48,10 +51,11 @@ from dnd_board_game.exploration import (
     PartyPosition,
     SceneMode,
     EncounterTriggerCondition,
+    mechanic_tool,
 )
 from dnd_board_game.hardware import LedColor
 from dnd_board_game.inventory import InventoryItem
-from dnd_board_game.rules import D20RollRequest, RollModifier, RollModifierType
+from dnd_board_game.rules import D20RollRequest, RollMode, RollModifier, RollModifierType
 from dnd_board_game.world import BLOCKING_TERRAIN, DIFFICULT_TERRAIN, BoardDimensions, BoardState, Coordinate
 
 
@@ -978,6 +982,13 @@ def _parse_exploration_challenge_option(data: Any, challenge_id: str) -> Explora
             option_id,
         ),
         bonuses=_parse_exploration_option_bonuses(data.get("bonuses", []), option_id),
+        mechanic_id=str(data["mechanic_id"]) if "mechanic_id" in data else None,
+        roll_mode=RollMode(str(data.get("roll_mode", RollMode.NORMAL.value))),
+        situational_modifiers=_parse_exploration_situational_modifiers(
+            data.get("situational_modifiers", []),
+            option_id,
+        ),
+        improvised_tool=_parse_improvised_tool(data.get("improvised_tool"), option_id),
     )
 
 
@@ -1016,6 +1027,42 @@ def _parse_exploration_option_bonuses(data: Any, option_id: str) -> tuple[Explor
             )
         )
     return tuple(result)
+
+
+def _parse_exploration_situational_modifiers(data: Any, option_id: str) -> tuple[ExplorationSituationalModifier, ...]:
+    if data is None:
+        return ()
+    if not isinstance(data, list):
+        raise ValueError(f"exploration challenge option {option_id}.situational_modifiers must be a list.")
+    result: list[ExplorationSituationalModifier] = []
+    for index, entry in enumerate(data):
+        if not isinstance(entry, dict):
+            raise ValueError(f"exploration challenge option {option_id}.situational_modifiers[{index}] must be an object.")
+        result.append(
+            ExplorationSituationalModifier(
+                label=str(_required(entry, "label", f"exploration challenge option {option_id}.situational_modifiers[{index}]")),
+                modifier=int(entry.get("modifier", 0)),
+                source=ExplorationSituationalModifierSource(str(entry.get("source", "gm"))),
+                reason=str(_required(entry, "reason", f"exploration challenge option {option_id}.situational_modifiers[{index}]")),
+                roll_mode=RollMode(str(entry.get("roll_mode", RollMode.NORMAL.value))),
+            )
+        )
+    return tuple(result)
+
+
+def _parse_improvised_tool(data: Any, option_id: str) -> ImprovisedToolUse | None:
+    if data is None:
+        return None
+    if not isinstance(data, dict):
+        raise ValueError(f"exploration challenge option {option_id}.improvised_tool must be an object.")
+    return ImprovisedToolUse(
+        label=str(_required(data, "label", f"exploration challenge option {option_id}.improvised_tool")),
+        source=ExplorationSituationalModifierSource(str(data.get("source", "gm"))),
+        source_detail=str(_required(data, "source_detail", f"exploration challenge option {option_id}.improvised_tool")),
+        effect_modifier=int(data.get("effect_modifier", 1)),
+        risk=str(data.get("risk", "")),
+        reason=str(_required(data, "reason", f"exploration challenge option {option_id}.improvised_tool")),
+    )
 
 
 def _parse_required_ability_scores(data: Any, option_id: str) -> tuple[tuple[str, int], ...]:
@@ -1505,6 +1552,11 @@ def _validate_exploration(definition: ScenarioDefinition) -> None:
         for option in challenge.options:
             if option.progress_on_success < 0 or option.progress_on_failure < 0:
                 raise ValueError(f"exploration challenge option {option.id}.progress values must be non-negative.")
+            if option.mechanic_id is not None:
+                try:
+                    mechanic_tool(option.mechanic_id)
+                except ValueError as exc:
+                    raise ValueError(f"exploration challenge option {option.id}.mechanic_id is unknown: {option.mechanic_id}.") from exc
             if option.unlocks_if_resource_id is not None and option.unlocks_if_resource_id not in resource_ids:
                 raise ValueError(
                     f"exploration challenge option {option.id}.unlocks_if_resource_id references unknown resource."

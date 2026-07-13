@@ -78,6 +78,176 @@ def test_gm_classifier_validates_owned_resource_with_matching_tag():
     assert [resource.id for resource in validated.resources] == ["rope"]
 
 
+def test_gm_classifier_preserves_selected_mechanic_on_generated_option():
+    exploration, state = _state()
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Łotrzyca wspina się, a Bohater ją asekuruje.",
+        actors=exploration.actors,
+    )
+    proposal = _proposal(
+        selected_mechanic="lead_with_help_check",
+        check_participants="lead_with_help",
+        check_aggregation="lead_result",
+        consequence_targets=["lead_actor", "helper_actor", "scene"],
+    )
+
+    validated = validate_gm_classifier_proposal(proposal, request)
+    option = challenge_option_from_validated_proposal(validated)
+
+    assert option.mechanic_id == "lead_with_help_check"
+    assert option.check_participants.value == "lead_with_help"
+
+
+def test_gm_classifier_preserves_situational_modifiers_on_generated_option():
+    exploration, state = _state()
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="W deszczu wspinam się po mokrej linie.",
+        actors=exploration.actors,
+    )
+    proposal = _proposal(
+        roll_mode="normal",
+        situational_modifiers=[
+            {
+                "label": "Mokra lina",
+                "modifier": -1,
+                "source": "interaction_object",
+                "reason": "Opis obiektu i deklaracja wskazują mokrą linę.",
+                "roll_mode": "disadvantage",
+            }
+        ],
+    )
+
+    validated = validate_gm_classifier_proposal(proposal, request)
+    option = challenge_option_from_validated_proposal(validated)
+
+    assert option.roll_mode.value == "disadvantage"
+    assert option.situational_modifiers[0].label == "Mokra lina"
+    assert option.situational_modifiers[0].modifier == -1
+    assert option.situational_modifiers[0].source.value == "interaction_object"
+
+
+def test_gm_classifier_preserves_improvised_tool_on_generated_option():
+    exploration, state = _state()
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Biorę starą deskę z rumowiska i używam jej jak dźwigni.",
+        actors=exploration.actors,
+    )
+    proposal = _proposal(
+        selected_mechanic="improvised_tool_check",
+        check_participants="single_actor",
+        check_aggregation="lead_result",
+        approach_label="Dźwignia ze starej deski",
+        approach_tags=["lever"],
+        ability="strength",
+        skill="athletics",
+        used_resource_ids=[],
+        player_narration="Używasz starej deski z rumowiska jako prowizorycznej dźwigni.",
+        improvised_tool={
+            "label": "Stara deska",
+            "source": "interaction_object",
+            "source_detail": "stare deski przy bramie",
+            "effect_modifier": 1,
+            "risk": "może pęknąć przy krytycznej porażce",
+            "reason": "Opis obiektu zawiera stare deski, które mogą działać jak prowizoryczna dźwignia.",
+        },
+    )
+
+    validated = validate_gm_classifier_proposal(proposal, request)
+    option = challenge_option_from_validated_proposal(validated)
+
+    assert option.mechanic_id == "improvised_tool_check"
+    assert option.improvised_tool is not None
+    assert option.improvised_tool.label == "Stara deska"
+    assert option.improvised_tool.effect_modifier == 1
+
+
+def test_gm_classifier_requires_improvised_tool_for_improvised_tool_check():
+    exploration, state = _state()
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Używam starej deski jak narzędzia.",
+        actors=exploration.actors,
+    )
+    proposal = _proposal(
+        selected_mechanic="improvised_tool_check",
+        check_participants="single_actor",
+        check_aggregation="lead_result",
+        approach_tags=["lever"],
+        used_resource_ids=[],
+    )
+
+    with pytest.raises(GmProposalValidationError, match="improvised_tool"):
+        validate_gm_classifier_proposal(proposal, request)
+
+
+def test_gm_classifier_rejects_improvised_tool_on_non_improvised_mechanic():
+    exploration, state = _state()
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Wspinam się.",
+        actors=exploration.actors,
+    )
+    proposal = _proposal(
+        selected_mechanic="single_actor_check",
+        check_participants="single_actor",
+        check_aggregation="lead_result",
+        improvised_tool={
+            "label": "Stara deska",
+            "source": "interaction_object",
+            "source_detail": "stare deski przy bramie",
+            "effect_modifier": 1,
+            "reason": "To powinno wymagać improvised_tool_check.",
+        },
+    )
+
+    with pytest.raises(GmProposalValidationError, match="tylko dla improvised_tool_check"):
+        validate_gm_classifier_proposal(proposal, request)
+
+
+def test_gm_classifier_rejects_empty_situational_modifier():
+    exploration, state = _state()
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Wspinam się.",
+        actors=exploration.actors,
+    )
+    proposal = _proposal(
+        situational_modifiers=[
+            {
+                "label": "Opis bez efektu",
+                "modifier": 0,
+                "source": "gm",
+                "reason": "Nie zmienia rzutu.",
+                "roll_mode": "normal",
+            }
+        ],
+    )
+
+    with pytest.raises(GmProposalValidationError, match="nie zmienia rzutu"):
+        validate_gm_classifier_proposal(proposal, request)
+
+
 def test_gm_classifier_rejects_resource_without_matching_tag():
     exploration, state = _state()
     request = build_gm_classifier_request(
@@ -672,9 +842,12 @@ def test_gm_classifier_request_payload_contains_context_layers_and_dynamic_state
     party_actors = {actor["id"]: actor for actor in payload["party_actors"]}
     assert "thieves_tools" in {item["id"] for item in party_actors["rogue"]["inventory"]}
     assert "sacred_flame" in party_actors["cleric"]["spell_ids"]
+    assert "lead_with_help_check" in {mechanic["id"] for mechanic in payload["allowed_mechanics"]}
     options = {option["id"]: option for option in payload["challenge"]["available_options"]}
     assert options["lockpick_gate"]["requirements"]["item_ids"] == ["thieves_tools"]
+    assert options["lockpick_gate"]["mechanic"]["id"] == "use_item_check"
     assert options["reveal_bolt_with_flame"]["requirements"]["spell_ids"] == ["sacred_flame"]
+    assert options["reveal_bolt_with_flame"]["mechanic"]["id"] == "use_spell_check"
 
 
 def test_gm_classifier_request_uses_active_zone_challenge_policy():

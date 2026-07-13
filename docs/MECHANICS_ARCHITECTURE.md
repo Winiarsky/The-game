@@ -52,6 +52,40 @@ ActionMechanic
 
 `ExplorationActionMechanic` jest miejscem na kolejne uporządkowanie wyzwań, NPC i eksploracji. Obecny etap porządkuje przede wszystkim combat.
 
+## Exploration Mechanic Tools
+
+Eksploracja ma osobną warstwę nazwanych "mechanic tools" w `src/dnd_board_game/exploration/mechanics.py`.
+To nie jest jeszcze pełna hierarchia klas akcji jak w combacie. Jest to kontrakt między LLM jako MG, walidatorem deterministycznym i UI:
+
+```text
+ExplorationMechanicId
+├── single_actor_check
+├── lead_with_help_check
+├── group_check
+├── use_item_check
+├── use_spell_check
+├── improvised_tool_check
+└── preparation_effect
+```
+
+LLM powinien wybierać `selected_mechanic` z tego katalogu, a nie wymyślać reguły. Pozostałe pola propozycji (`check_participants`, `check_aggregation`, `ability`, `skill`, `dc`, zasoby, konsekwencje i kontrolowane modyfikatory sytuacyjne) są parametrami wybranej mechaniki. Web UI pozwala MG skorygować wybraną mechanikę i podstawowe parametry testu przed zaakceptowaniem rzutu; korekta przechodzi przez tę samą walidację mechanic tool.
+
+Modyfikatory sytuacyjne eksploracji są częścią planu rzutu, nie osobną mechaniką. Każdy wpis musi wskazywać źródło (`scenario_context`, `zone_context`, `challenge_context`, `interaction_object`, `player_declaration`, `dynamic_state`, `gm`) i powód. Runtime dopuszcza tylko małe premie/kary oraz `advantage`/`disadvantage`, a UI pokazuje je MG przed rzutem.
+
+`improvised_tool_check` używa dodatkowego payloadu `ImprovisedToolUse`: etykieta, źródło, szczegół źródła, mały modyfikator, ryzyko i powód. To jest jednorazowy element planu rzutu, a nie nowy wpis w inventory. UI wymaga jawnej akceptacji MG, bo LLM nie może samodzielnie stworzyć trwałego narzędzia ani zasobu drużyny.
+
+Walidator ma pilnować spójności:
+
+- `single_actor_check`: jedna postać i `lead_result`,
+- `lead_with_help_check`: prowadzący z pomocą i `lead_result`,
+- `group_check`: `whole_party` albo `selected_actors` oraz agregacja grupowa,
+- `use_item_check`: item jako wymóg/premia/koszt/ryzyko,
+- `use_spell_check`: czar jako wymóg/premia/koszt slotu,
+- `improvised_tool_check`: wymaga `ImprovisedToolUse` i jawnej akceptacji MG przed rzutem,
+- `preparation_effect`: przygotowanie przyszłej próby.
+
+Kolejny refaktor eksploracji powinien przenieść improwizowane narzędzia na ten kontrakt: deklaracja graczy -> `selected_mechanic` -> walidacja -> preview UI -> rzut.
+
 ## Pliki
 
 - `actions/base.py`: wspólne enumy i `ActionMechanic`.
@@ -62,6 +96,7 @@ ActionMechanic
 - `actions/interactions.py`: interakcje z obiektami sceny.
 - `actions/catalog.py`: fabryki mapujące obecny content/runtime na klasy mechanik.
 - `actions/resolution.py`: małe serwisy aplikacyjne rozstrzygające akcję + zasób + efekt domenowy.
+- `exploration/mechanics.py`: katalog mechanic tools dla wolnych deklaracji eksploracji i ich payloady dla LLM/UI.
 
 ## Serwisy Rozstrzygania
 

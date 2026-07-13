@@ -10,6 +10,7 @@ from dnd_board_game.rules import (
     D20RollInput,
     D20RollRequest,
     D20RollResult,
+    RollMode,
     RollModifier,
     RollModifierType,
     resolve_ability_check,
@@ -44,6 +45,16 @@ class CheckAggregation(StrEnum):
     ALL_MUST_SUCCEED = "all_must_succeed"
     ANY_SUCCESS = "any_success"
     SUM_PROGRESS = "sum_progress"
+
+
+class ExplorationSituationalModifierSource(StrEnum):
+    SCENARIO_CONTEXT = "scenario_context"
+    ZONE_CONTEXT = "zone_context"
+    CHALLENGE_CONTEXT = "challenge_context"
+    INTERACTION_OBJECT = "interaction_object"
+    PLAYER_DECLARATION = "player_declaration"
+    DYNAMIC_STATE = "dynamic_state"
+    GM = "gm"
 
 
 class ConsequenceTarget(StrEnum):
@@ -365,6 +376,83 @@ class PartyCheckInput:
     actor: Actor
     natural_roll: int
     request: D20RollRequest
+    natural_roll_2: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ExplorationSituationalModifier:
+    label: str
+    modifier: int = 0
+    source: ExplorationSituationalModifierSource = ExplorationSituationalModifierSource.GM
+    reason: str = ""
+    roll_mode: RollMode = RollMode.NORMAL
+
+    def __post_init__(self) -> None:
+        if not self.label.strip():
+            raise ValueError("Situational modifier label cannot be empty.")
+        if not -2 <= int(self.modifier) <= 2:
+            raise ValueError("Situational modifier must be between -2 and +2.")
+        if not self.reason.strip():
+            raise ValueError("Situational modifier reason cannot be empty.")
+
+    def as_roll_modifier(self) -> RollModifier | None:
+        if self.modifier == 0:
+            return None
+        return RollModifier(
+            self.label,
+            self.modifier,
+            RollModifierType.SITUATIONAL,
+            stacking_key=f"exploration_situational:{self.source.value}:{self.label.strip().lower()}",
+        )
+
+    def as_payload(self) -> dict[str, object]:
+        return {
+            "label": self.label,
+            "modifier": self.modifier,
+            "source": self.source.value,
+            "reason": self.reason,
+            "roll_mode": self.roll_mode.value,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ImprovisedToolUse:
+    label: str
+    source: ExplorationSituationalModifierSource
+    source_detail: str
+    effect_modifier: int = 1
+    risk: str = ""
+    reason: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.label.strip():
+            raise ValueError("Improvised tool label cannot be empty.")
+        if not self.source_detail.strip():
+            raise ValueError("Improvised tool source_detail cannot be empty.")
+        if not -2 <= int(self.effect_modifier) <= 2:
+            raise ValueError("Improvised tool effect modifier must be between -2 and +2.")
+        if self.effect_modifier == 0:
+            raise ValueError("Improvised tool must have a non-zero effect modifier.")
+        if not self.reason.strip():
+            raise ValueError("Improvised tool reason cannot be empty.")
+
+    def as_roll_modifier(self) -> RollModifier:
+        return RollModifier(
+            self.label,
+            self.effect_modifier,
+            RollModifierType.SITUATIONAL,
+            stacking_key=f"exploration_improvised_tool:{self.source.value}:{self.label.strip().lower()}",
+        )
+
+    def as_payload(self) -> dict[str, object]:
+        return {
+            "label": self.label,
+            "source": self.source.value,
+            "source_detail": self.source_detail,
+            "effect_modifier": self.effect_modifier,
+            "risk": self.risk,
+            "reason": self.reason,
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -388,8 +476,12 @@ class ExplorationCheckPlan:
     helper_actor_id: str | None = None
     selected_actor_ids: tuple[str, ...] = ()
     reason_for_players: str = ""
+    roll_mode: RollMode = RollMode.NORMAL
+    situational_modifiers: tuple[ExplorationSituationalModifier, ...] = ()
+    improvised_tool: ImprovisedToolUse | None = None
     roll_modifiers_by_actor_id: tuple[tuple[str, tuple[RollModifier, ...]], ...] = ()
     option_bonus_payloads: tuple[dict[str, object], ...] = ()
+    mechanic_payload: dict[str, object] | None = None
 
     def as_payload(self) -> dict[str, object]:
         return {
@@ -403,11 +495,15 @@ class ExplorationCheckPlan:
             "skill": self.skill,
             "dc": self.dc,
             "reason_for_players": self.reason_for_players,
+            "roll_mode": self.roll_mode.value,
+            "situational_modifiers": [modifier.as_payload() for modifier in self.situational_modifiers],
+            "improvised_tool": self.improvised_tool.as_payload() if self.improvised_tool else None,
             "roll_modifiers_by_actor_id": [
                 {"actor_id": actor_id, "modifiers": [_roll_modifier_payload(modifier) for modifier in modifiers]}
                 for actor_id, modifiers in self.roll_modifiers_by_actor_id
             ],
             "option_bonuses": list(self.option_bonus_payloads),
+            "mechanic": self.mechanic_payload,
         }
 
 
@@ -539,6 +635,10 @@ class ExplorationChallengeOption:
     requires_spell_ids: tuple[str, ...] = ()
     requires_ability_scores: tuple[tuple[str, int], ...] = ()
     bonuses: tuple[ExplorationOptionBonus, ...] = ()
+    mechanic_id: str | None = None
+    roll_mode: RollMode = RollMode.NORMAL
+    situational_modifiers: tuple[ExplorationSituationalModifier, ...] = ()
+    improvised_tool: ImprovisedToolUse | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -960,7 +1060,10 @@ def resolve_exploration_check(
 ) -> ExplorationCheckResult:
     if not inputs:
         raise ValueError("Party check requires at least one roll.")
-    rolls = tuple((item.actor, resolve_d20_roll(D20RollInput(item.request, item.natural_roll))) for item in inputs)
+    rolls = tuple(
+        (item.actor, resolve_d20_roll(D20RollInput(item.request, item.natural_roll, item.natural_roll_2)))
+        for item in inputs
+    )
     passed = tuple((actor, roll) for actor, roll in rolls if resolve_ability_check(roll, plan.dc).success)
     failed = tuple((actor, roll) for actor, roll in rolls if not resolve_ability_check(roll, plan.dc).success)
     if plan.aggregation in {CheckAggregation.HIGHEST, CheckAggregation.ANY_SUCCESS, CheckAggregation.SUM_PROGRESS}:

@@ -115,6 +115,22 @@ def test_exploration_ui_page_includes_session_log_panel():
     assert "/api/session-log" in html
 
 
+def test_exploration_ui_page_includes_gm_decision_correction_controls():
+    client = _client()
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "Popraw decyzję MG" in html
+    assert "decisionCorrectionHtml" in html
+    assert "correction-roll-mode" in html
+    assert "Modyfikatory sytuacyjne" in html
+    assert "Improwizowane narzędzie" in html
+    assert "improvised-tool-label" in html
+    assert "/api/decision/correction" in html
+
+
 def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan():
     client = _client()
 
@@ -517,6 +533,81 @@ def test_exploration_ui_accept_can_select_lead_actor():
 
     assert response.status_code == 200
     assert response.get_json()["required_rolls"] == [{"actor_id": "rogue", "actor_name": "Łotrzyca", "die_sides": 20, "label": "d20"}]
+
+
+def test_exploration_ui_decision_correction_endpoint_updates_pending_option():
+    client = _client()
+
+    client.post("/api/action", json={"text": "Wyważamy bramę z pomocą."})
+    response = client.post(
+        "/api/decision/correction",
+        json={
+            "mechanic_id": "lead_with_help_check",
+            "check_participants": "lead_with_help",
+            "check_aggregation": "lead_result",
+            "lead_actor_id": "rogue",
+            "helper_actor_id": "hero",
+            "ability": "dexterity",
+            "skill": "acrobatics",
+            "dc": 13,
+            "roll_mode": "normal",
+            "situational_modifiers": [
+                {
+                    "label": "Mokra lina",
+                    "modifier": -1,
+                    "source": "interaction_object",
+                    "reason": "Opis obiektu wskazuje mokrą linę.",
+                    "roll_mode": "disadvantage",
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["selected_lead_actor_id"] == "rogue"
+    assert data["selected_helper_actor_id"] == "hero"
+    assert data["pending"]["option"]["mechanic"]["id"] == "lead_with_help_check"
+    assert data["pending"]["option"]["check_participants"] == "lead_with_help"
+    assert data["pending"]["option"]["ability"] == "dexterity"
+    assert data["pending"]["option"]["skill"] == "acrobatics"
+    assert data["pending"]["option"]["dc"] == 13
+    assert data["pending"]["option"]["roll_mode"] == "disadvantage"
+    assert data["pending"]["option"]["situational_modifiers"][0]["label"] == "Mokra lina"
+
+
+def test_exploration_ui_decision_correction_endpoint_updates_improvised_tool():
+    client = _client()
+
+    client.post("/api/action", json={"text": "Używam starej deski jak dźwigni."})
+    response = client.post(
+        "/api/decision/correction",
+        json={
+            "mechanic_id": "improvised_tool_check",
+            "check_participants": "single_actor",
+            "check_aggregation": "lead_result",
+            "lead_actor_id": "hero",
+            "ability": "strength",
+            "skill": "athletics",
+            "dc": 15,
+            "roll_mode": "normal",
+            "situational_modifiers": [],
+            "improvised_tool": {
+                "label": "Stara deska",
+                "source": "interaction_object",
+                "source_detail": "rumowisko przy bramie",
+                "effect_modifier": 1,
+                "risk": "może pęknąć przy krytycznej porażce",
+                "reason": "Opis sceny zawiera stare deski.",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["pending"]["option"]["mechanic"]["id"] == "improvised_tool_check"
+    assert data["pending"]["option"]["improvised_tool"]["label"] == "Stara deska"
+    assert data["pending"]["option"]["improvised_tool"]["effect_modifier"] == 1
 
 
 def test_exploration_ui_reset_endpoint_restores_state():

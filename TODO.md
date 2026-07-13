@@ -104,6 +104,10 @@
 - [x] Add exploration map environment setup before location selection.
 - [x] Couple exploration web UI with board/simulator backend for LEDs and board clicks.
 - [x] Add inventory/cantrip option bonuses with actor item consumption and breakage checks to exploration rolls.
+- [x] Add named exploration mechanic tools for LLM-selected challenge mechanics.
+- [x] Add GM correction UI for selected exploration mechanic before rolls.
+- [x] Add grounded situational modifiers and advantage/disadvantage to exploration rolls.
+- [x] Add improvised tool mechanic validation and explicit GM approval flow.
 - [ ] Add scene-resource consumption to exploration rolls.
 - [ ] Add full prepared/known spell rules and advanced concentration modifiers.
 - [ ] Add voice input and richer UI for free-form exploration declarations.

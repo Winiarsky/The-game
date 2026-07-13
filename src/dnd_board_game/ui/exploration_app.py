@@ -105,8 +105,13 @@ from dnd_board_game.exploration import (
     ExplorationResource,
     ExplorationState,
     ExplorationZone,
+    ExplorationMechanicId,
+    ExplorationSituationalModifier,
+    ExplorationSituationalModifierSource,
+    ImprovisedToolUse,
     PartyCheckInput,
     PendingEncounter,
+    MECHANIC_TOOLS,
     active_option_bonuses_for_actor,
     apply_exploration_effect,
     actors_matching_challenge_option,
@@ -116,11 +121,13 @@ from dnd_board_game.exploration import (
     challenge_for_zone,
     challenge_state_for,
     exploration_zone_feedback,
+    mechanic_payload_for_option,
     party_position_feedback,
     reveal_exploration_points,
     resolve_challenge_option,
     resolve_exploration_check,
     set_party_zone,
+    validate_mechanic_selection,
     visible_exploration_points,
     visible_exploration_zones,
     option_roll_modifiers_for_actor,
@@ -172,6 +179,14 @@ class UiFlowStage(StrEnum):
     LOCATION_PREVIEW = "location_preview"
     LOCATION_ACTIVE = "location_active"
     INTERACTION_RESULT = "interaction_result"
+
+
+EXPLORATION_DECISION_ABILITIES = frozenset(
+    {"strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"}
+)
+EXPLORATION_DECISION_DC_MIN = 5
+EXPLORATION_DECISION_DC_MAX = 25
+EXPLORATION_DECISION_MAX_SITUATIONAL_MODIFIERS = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -570,6 +585,7 @@ class ExplorationUiSession:
         self.declaration_thread: list[GmDeclarationThreadEntry] = []
         self.active_preparation_effects: list[GmPreparationEffect] = []
         self.selected_lead_actor_id = str(self.exploration.actors[0].id)
+        self.selected_helper_actor_id: str | None = None
         self.active_point_id = self.debug_point_id
         self.pending_encounter: PendingEncounter | None = None
         self.exploration_setup_flow: ExplorationSetupFlow | None = None
@@ -670,6 +686,9 @@ class ExplorationUiSession:
             "flags": [{"key": key, "value": value} for key, value in self.state.flags.values],
             "messages": [message.as_payload() for message in self.messages],
             "pending": self.pending.as_payload() if self.pending else None,
+            "selected_lead_actor_id": self.selected_lead_actor_id,
+            "selected_helper_actor_id": self.selected_helper_actor_id,
+            "allowed_mechanics": [tool.as_payload() for tool in MECHANIC_TOOLS.values()],
             "pending_encounter": self._pending_encounter_payload(),
             "exploration_setup": self.exploration_setup_flow.as_payload() if self.exploration_setup_flow else None,
             "encounter_setup": self.encounter_setup_flow.as_payload() if self.encounter_setup_flow else None,
@@ -3955,6 +3974,92 @@ class ExplorationUiSession:
         self._add_message("Propozycja interakcji", _npc_proposal_text(proposal))
         return self.state_payload()
 
+    def update_pending_challenge_decision(self, data: dict[str, object]) -> dict[str, object]:
+        if self.pending is None or self.pending.kind != PendingKind.CHALLENGE or self.pending.stage != PendingStage.DECISION:
+            raise ValueError("Korekta decyzji MG jest dostępna tylko przed zaakceptowaniem testu eksploracji.")
+        if self.pending.option is None:
+            raise ValueError("Brak opcji testu do poprawienia.")
+        option = self.pending.option
+        default_mechanic_id = option.mechanic_id or str(mechanic_payload_for_option(option)["id"])
+        mechanic_id = ExplorationMechanicId(str(data.get("mechanic_id") or default_mechanic_id))
+        participants = CheckParticipants(str(data.get("check_participants") or option.check_participants or CheckParticipants.SINGLE_ACTOR.value))
+        aggregation = CheckAggregation(str(data.get("check_aggregation") or option.check_aggregation or CheckAggregation.LEAD_RESULT.value))
+        validate_mechanic_selection(mechanic_id, participants=participants, aggregation=aggregation)
+
+        lead_actor_id = str(data.get("lead_actor_id") or self.selected_lead_actor_id).strip()
+        actor_ids = {str(actor.id) for actor in self.exploration.actors}
+        if lead_actor_id not in actor_ids:
+            raise ValueError("Wybrany prowadzący test nie istnieje w drużynie.")
+
+        helper_actor_id = str(data.get("helper_actor_id") or "").strip() or None
+        if participants == CheckParticipants.LEAD_WITH_HELP:
+            if helper_actor_id is None:
+                raise ValueError("Mechanika prowadzący z pomocą wymaga wyboru pomocnika.")
+            if helper_actor_id not in actor_ids:
+                raise ValueError("Wybrany pomocnik nie istnieje w drużynie.")
+            if helper_actor_id == lead_actor_id:
+                raise ValueError("Pomocnik musi być inną postacią niż prowadzący.")
+        else:
+            helper_actor_id = None
+
+        ability = str(data.get("ability") or option.ability_check.ability).strip().lower()
+        if ability not in EXPLORATION_DECISION_ABILITIES:
+            raise ValueError(f"Nieznana cecha testu: {ability}.")
+        skill_raw = data.get("skill", option.ability_check.skill)
+        skill = str(skill_raw).strip().lower() if skill_raw is not None and str(skill_raw).strip() else None
+        dc = int(data.get("dc") or option.ability_check.dc)
+        if not EXPLORATION_DECISION_DC_MIN <= dc <= EXPLORATION_DECISION_DC_MAX:
+            raise ValueError(f"ST musi być w zakresie {EXPLORATION_DECISION_DC_MIN}-{EXPLORATION_DECISION_DC_MAX}.")
+        roll_mode = RollMode(str(data.get("roll_mode") or option.roll_mode.value))
+        situational_modifiers = _situational_modifiers_from_payload(
+            data.get("situational_modifiers"),
+            fallback=option.situational_modifiers,
+        )
+        roll_mode = _combined_roll_mode(roll_mode, tuple(modifier.roll_mode for modifier in situational_modifiers))
+        improvised_tool = _improvised_tool_from_payload(
+            data.get("improvised_tool"),
+            fallback=option.improvised_tool,
+        )
+        if mechanic_id == ExplorationMechanicId.IMPROVISED_TOOL_CHECK and improvised_tool is None:
+            raise ValueError("Mechanika improwizowanego narzędzia wymaga opisu narzędzia.")
+        if mechanic_id != ExplorationMechanicId.IMPROVISED_TOOL_CHECK:
+            improvised_tool = None
+
+        updated_option = replace(
+            option,
+            ability_check=replace(option.ability_check, ability=ability, skill=skill, dc=dc),
+            check_participants=participants,
+            check_aggregation=aggregation,
+            mechanic_id=mechanic_id.value,
+            roll_mode=roll_mode,
+            situational_modifiers=situational_modifiers,
+            improvised_tool=improvised_tool,
+        )
+        self.selected_lead_actor_id = lead_actor_id
+        self.selected_helper_actor_id = helper_actor_id
+        self.pending = replace(self.pending, option=updated_option)
+        self._record(
+            "ui_gm_decision_corrected",
+            {
+                "mechanic_id": mechanic_id.value,
+                "participants": participants.value,
+                "aggregation": aggregation.value,
+                "lead_actor_id": lead_actor_id,
+                "helper_actor_id": helper_actor_id,
+                "ability": ability,
+                "skill": skill,
+                "dc": dc,
+                "roll_mode": roll_mode.value,
+                "situational_modifiers": [modifier.as_payload() for modifier in situational_modifiers],
+                "improvised_tool": improvised_tool.as_payload() if improvised_tool else None,
+            },
+        )
+        self._add_message(
+            "Poprawiono decyzję MG",
+            f"Mechanika: {mechanic_id.value}. Test: {ability}{('/' + skill) if skill else ''}, ST {dc}. Tryb: {roll_mode.value}.",
+        )
+        return self.state_payload()
+
     def decide(self, decision: str, *, lead_actor_id: str | None = None) -> dict[str, object]:
         if self.pending is None:
             raise ValueError("Brak propozycji oczekującej na decyzję.")
@@ -3995,7 +4100,23 @@ class ExplorationUiSession:
         if matching_actors and not any(str(actor.id) == lead_actor_id for actor in matching_actors):
             lead_actor_id = str(matching_actors[0].id)
             self.selected_lead_actor_id = lead_actor_id
-        plan = _challenge_check_plan(option, lead_actor_id, self.exploration.actors)
+        helper_actor_id = None
+        if option.check_participants == CheckParticipants.LEAD_WITH_HELP:
+            actor_ids = {str(actor.id) for actor in self.exploration.actors}
+            helper_actor_id = (
+                self.selected_helper_actor_id
+                if self.selected_helper_actor_id in actor_ids and self.selected_helper_actor_id != lead_actor_id
+                else None
+            )
+            if helper_actor_id is None:
+                helper_actor = next((actor for actor in self.exploration.actors if str(actor.id) != lead_actor_id), None)
+                if helper_actor is None:
+                    raise ValueError("Mechanika prowadzący z pomocą wymaga drugiej postaci.")
+                helper_actor_id = str(helper_actor.id)
+            self.selected_helper_actor_id = helper_actor_id
+        else:
+            self.selected_helper_actor_id = None
+        plan = _challenge_check_plan(option, lead_actor_id, self.exploration.actors, helper_actor_id=helper_actor_id)
         self.pending = replace(self.pending, stage=PendingStage.ROLL, check_plan=plan)
         self._add_message("Rzut", f"Wpisz wyniki rzutów. {_check_plan_text(self.exploration.actors, plan)}")
         return self.state_payload()
@@ -4354,10 +4475,15 @@ class ExplorationUiSession:
             ]
         if self.pending is None or self.pending.stage != PendingStage.ROLL or self.pending.check_plan is None:
             return []
-        return [
-            {"actor_id": str(actor.id), "actor_name": actor.name, "die_sides": 20, "label": "d20"}
-            for actor in _actors_for_plan(self.exploration.actors, self.pending.check_plan)
-        ]
+        plan = self.pending.check_plan
+        rolls: list[dict[str, object]] = []
+        for actor in _actors_for_plan(self.exploration.actors, plan):
+            payload: dict[str, object] = {"actor_id": str(actor.id), "actor_name": actor.name, "die_sides": 20, "label": "d20"}
+            if plan.roll_mode != RollMode.NORMAL:
+                payload["roll_mode"] = plan.roll_mode.value
+                payload["requires_second_roll"] = True
+            rolls.append(payload)
+        return rolls
 
     def _add_message(self, title: str, body: str) -> None:
         self.messages.append(UiMessage(title, body))
@@ -4432,6 +4558,14 @@ def create_app(session: ExplorationUiSession) -> Flask:
         try:
             lead_actor_id = data.get("lead_actor_id")
             return jsonify(session.decide(str(data.get("decision", "")), lead_actor_id=str(lead_actor_id) if lead_actor_id else None))
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/decision/correction")
+    def api_decision_correction():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(session.update_pending_challenge_decision(data))
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
@@ -6122,7 +6256,13 @@ def _analyze(client: object, request_data: object) -> GmDeclarationAnalysis:
     )
 
 
-def _challenge_check_plan(option: ExplorationChallengeOption, lead_actor_id: str, actors: tuple[Actor, ...]) -> ExplorationCheckPlan:
+def _challenge_check_plan(
+    option: ExplorationChallengeOption,
+    lead_actor_id: str,
+    actors: tuple[Actor, ...],
+    *,
+    helper_actor_id: str | None = None,
+) -> ExplorationCheckPlan:
     roll_modifiers_by_actor_id = tuple(
         (str(actor.id), option_roll_modifiers_for_actor(actor, option))
         for actor in actors
@@ -6145,9 +6285,14 @@ def _challenge_check_plan(option: ExplorationChallengeOption, lead_actor_id: str
         skill=option.ability_check.skill,
         dc=option.ability_check.dc,
         lead_actor_id=lead_actor_id,
+        helper_actor_id=helper_actor_id,
         reason_for_players=option.description,
+        roll_mode=option.roll_mode,
+        situational_modifiers=option.situational_modifiers,
+        improvised_tool=option.improvised_tool,
         roll_modifiers_by_actor_id=roll_modifiers_by_actor_id,
         option_bonus_payloads=option_bonus_payloads,
+        mechanic_payload=mechanic_payload_for_option(option),
     )
 
 
@@ -6177,10 +6322,29 @@ def _check_inputs_from_payload(
         actor_id = str(actor.id)
         if actor_id not in raw_rolls:
             raise ValueError(f"Brakuje wyniku rzutu dla: {actor.name}.")
-        natural_roll = int(raw_rolls[actor_id])
-        request = D20RollRequest(modifiers=(*_ability_roll_modifiers(actor, plan.ability, plan.skill), *_plan_roll_modifiers(actor, plan)))
-        result.append(PartyCheckInput(actor, natural_roll, request))
+        natural_roll, natural_roll_2 = _manual_rolls_from_payload(raw_rolls[actor_id], plan.roll_mode)
+        request = D20RollRequest(
+            mode=plan.roll_mode,
+            modifiers=(
+                *_ability_roll_modifiers(actor, plan.ability, plan.skill),
+                *_plan_roll_modifiers(actor, plan),
+            ),
+        )
+        result.append(PartyCheckInput(actor, natural_roll, request, natural_roll_2))
     return tuple(result)
+
+
+def _manual_rolls_from_payload(raw_roll: object, roll_mode: RollMode) -> tuple[int, int | None]:
+    if isinstance(raw_roll, dict):
+        natural_roll = int(raw_roll.get("natural_roll") or raw_roll.get("roll") or 0)
+        raw_second = raw_roll.get("natural_roll_2") or raw_roll.get("roll_2")
+        natural_roll_2 = int(raw_second) if raw_second not in (None, "") else None
+    else:
+        natural_roll = int(raw_roll)
+        natural_roll_2 = None
+    if roll_mode != RollMode.NORMAL and natural_roll_2 is None:
+        raise ValueError("Ten rzut wymaga wpisania dwóch wyników d20.")
+    return natural_roll, natural_roll_2
 
 
 def _actors_for_plan(actors: tuple[Actor, ...], plan: ExplorationCheckPlan) -> tuple[Actor, ...]:
@@ -6206,11 +6370,90 @@ def _ability_roll_modifiers(actor: Actor, ability: str, skill: str | None = None
 
 
 def _plan_roll_modifiers(actor: Actor, plan: ExplorationCheckPlan) -> tuple[RollModifier, ...]:
+    situational = tuple(
+        modifier
+        for modifier in (item.as_roll_modifier() for item in plan.situational_modifiers)
+        if modifier is not None
+    )
+    improvised = (plan.improvised_tool.as_roll_modifier(),) if plan.improvised_tool is not None else ()
+    base_modifiers = (*situational, *improvised)
     actor_id = str(actor.id)
     for candidate_actor_id, modifiers in plan.roll_modifiers_by_actor_id:
         if candidate_actor_id == actor_id:
-            return modifiers
-    return ()
+            return (*base_modifiers, *modifiers)
+    return base_modifiers
+
+
+def _situational_modifiers_from_payload(
+    raw_modifiers: object,
+    *,
+    fallback: tuple[ExplorationSituationalModifier, ...] = (),
+) -> tuple[ExplorationSituationalModifier, ...]:
+    if raw_modifiers is None:
+        return fallback
+    if not isinstance(raw_modifiers, list):
+        raise ValueError("Modyfikatory sytuacyjne muszą być listą.")
+    if len(raw_modifiers) > EXPLORATION_DECISION_MAX_SITUATIONAL_MODIFIERS:
+        raise ValueError(f"Maksymalnie {EXPLORATION_DECISION_MAX_SITUATIONAL_MODIFIERS} modyfikatory sytuacyjne.")
+    result: list[ExplorationSituationalModifier] = []
+    for raw in raw_modifiers:
+        if not isinstance(raw, dict):
+            raise ValueError("Modyfikator sytuacyjny musi być obiektem.")
+        label = str(raw.get("label") or "").strip()
+        reason = str(raw.get("reason") or "").strip()
+        modifier = int(raw.get("modifier") or 0)
+        roll_mode = RollMode(str(raw.get("roll_mode") or RollMode.NORMAL.value))
+        if not label and not reason and modifier == 0 and roll_mode == RollMode.NORMAL:
+            continue
+        source = ExplorationSituationalModifierSource(str(raw.get("source") or ExplorationSituationalModifierSource.GM.value))
+        result.append(
+            ExplorationSituationalModifier(
+                label=label,
+                modifier=modifier,
+                source=source,
+                reason=reason,
+                roll_mode=roll_mode,
+            )
+        )
+    return tuple(result)
+
+
+def _improvised_tool_from_payload(
+    raw_tool: object,
+    *,
+    fallback: ImprovisedToolUse | None = None,
+) -> ImprovisedToolUse | None:
+    if raw_tool is None:
+        return fallback
+    if not isinstance(raw_tool, dict):
+        raise ValueError("Improwizowane narzędzie musi być obiektem.")
+    label = str(raw_tool.get("label") or "").strip()
+    source_detail = str(raw_tool.get("source_detail") or "").strip()
+    reason = str(raw_tool.get("reason") or "").strip()
+    effect_modifier = int(raw_tool.get("effect_modifier") or 0)
+    risk = str(raw_tool.get("risk") or "").strip()
+    if not label and not source_detail and not reason and effect_modifier == 0 and not risk:
+        return None
+    source = ExplorationSituationalModifierSource(str(raw_tool.get("source") or ExplorationSituationalModifierSource.GM.value))
+    return ImprovisedToolUse(
+        label=label,
+        source=source,
+        source_detail=source_detail,
+        effect_modifier=effect_modifier,
+        risk=risk,
+        reason=reason,
+    )
+
+
+def _combined_roll_mode(base_mode: RollMode, modifier_modes: tuple[RollMode, ...]) -> RollMode:
+    modes = {mode for mode in (base_mode, *modifier_modes) if mode != RollMode.NORMAL}
+    if RollMode.ADVANTAGE in modes and RollMode.DISADVANTAGE in modes:
+        return RollMode.NORMAL
+    if RollMode.DISADVANTAGE in modes:
+        return RollMode.DISADVANTAGE
+    if RollMode.ADVANTAGE in modes:
+        return RollMode.ADVANTAGE
+    return RollMode.NORMAL
 
 
 def _challenge_proposal_text(
@@ -6219,11 +6462,24 @@ def _challenge_proposal_text(
     resource: ExplorationResource | None,
 ) -> str:
     resource_text = f"\nZasób: {resource.label}" if resource else ""
+    modifier_text = ""
+    if option.situational_modifiers:
+        items = ", ".join(
+            f"{modifier.label} {modifier.modifier:+d}/{modifier.roll_mode.value}"
+            for modifier in option.situational_modifiers
+        )
+        modifier_text = f"\nModyfikatory sytuacyjne: {items}."
+    improvised_text = ""
+    if option.improvised_tool is not None:
+        tool = option.improvised_tool
+        risk = f", ryzyko: {tool.risk}" if tool.risk else ""
+        improvised_text = f"\nImprowizowane narzędzie: {tool.label} {tool.effect_modifier:+d} ({tool.source_detail}{risk})."
+    roll_mode_text = f"\nTryb rzutu: {option.roll_mode.value}." if option.roll_mode != RollMode.NORMAL else ""
     return (
         f"{proposal.player_narration}\n"
         f"Podejście: {option.label}. Test: {option.ability_check.ability}/{option.ability_check.skill or '-'}, "
         f"ST {option.ability_check.dc}. Sukces: +{option.progress_on_success} postępu, "
-        f"porażka: +{option.progress_on_failure} postępu.{resource_text}"
+        f"porażka: +{option.progress_on_failure} postępu.{resource_text}{roll_mode_text}{modifier_text}{improvised_text}"
     ).strip()
 
 
@@ -6245,7 +6501,7 @@ def _check_plan_text(actors: tuple[Actor, ...], plan: ExplorationCheckPlan) -> s
     names = ", ".join(actor.name for actor in _actors_for_plan(actors, plan))
     return (
         f"Uczestnicy: {plan.participants.value} ({names}). "
-        f"Agregacja: {plan.aggregation.value}. Konsekwencje: "
+        f"Agregacja: {plan.aggregation.value}. Tryb rzutu: {plan.roll_mode.value}. Konsekwencje: "
         f"{', '.join(target.value for target in plan.consequence_targets)}."
     )
 
@@ -6416,6 +6672,17 @@ def _challenge_option_payload(option: ExplorationChallengeOption, actors: tuple[
         "dc": option.ability_check.dc,
         "progress_on_success": option.progress_on_success,
         "progress_on_failure": option.progress_on_failure,
+        "check_participants": (option.check_participants or CheckParticipants.SINGLE_ACTOR).value,
+        "check_aggregation": (option.check_aggregation or CheckAggregation.LEAD_RESULT).value,
+        "roll_mode": option.roll_mode.value,
+        "situational_modifiers": [modifier.as_payload() for modifier in option.situational_modifiers],
+        "improvised_tool": option.improvised_tool.as_payload() if option.improvised_tool else None,
+        "mechanic": (
+            {
+                **mechanic_payload_for_option(option),
+                **({"id": option.mechanic_id} if option.mechanic_id is not None else {}),
+            }
+        ),
         "tags": list(option.tags),
         "requires_item_ids": list(option.requires_item_ids),
         "requires_spell_ids": list(option.requires_spell_ids),
@@ -6651,6 +6918,7 @@ let playerTurnScanLoop = false;
 let boardScanInFlight = false;
 let boardScanToken = 0;
 let sessionLog = null;
+let decisionCorrectionOpen = false;
 let sidePanelOpen = localStorage.getItem('explorationSidePanelOpen') === 'true';
 function setSidePanelOpen(open) {
   sidePanelOpen = Boolean(open);
@@ -6724,7 +6992,11 @@ function render() {
   document.getElementById('rolls').innerHTML = state.required_rolls.map(r => {
     const sides = Number(r.die_sides || 20);
     const value = sides === 100 ? 50 : 10;
-    return `<label>${esc(r.actor_name)} ${esc(r.label || `d${sides}`)}: <input data-actor="${esc(r.actor_id)}" type="number" min="1" max="${sides}" value="${value}"></label>`;
+    if (r.requires_second_roll) {
+      return `<label>${esc(r.actor_name)} ${esc(r.label || `d${sides}`)} #1: <input data-actor="${esc(r.actor_id)}" data-roll-index="1" type="number" min="1" max="${sides}" value="${value}"></label>
+        <label>${esc(r.actor_name)} ${esc(r.label || `d${sides}`)} #2: <input data-actor="${esc(r.actor_id)}" data-roll-index="2" type="number" min="1" max="${sides}" value="${value + 3 > sides ? value - 3 : value + 3}"></label>`;
+    }
+    return `<label>${esc(r.actor_name)} ${esc(r.label || `d${sides}`)}: <input data-actor="${esc(r.actor_id)}" data-roll-index="1" type="number" min="1" max="${sides}" value="${value}"></label>`;
   }).join(' ');
   document.getElementById('debug-payload').textContent = JSON.stringify(state, null, 2);
   renderSessionLogMeta();
@@ -6995,6 +7267,7 @@ function challengeOptionsHtml(options) {
           <div class="status-item">
             <b>${esc(option.label)}</b>
             <div>${esc(option.description || '')}</div>
+            ${option.mechanic ? `<div class="muted">Mechanika: ${esc(option.mechanic.label || option.mechanic.id)}</div>` : ''}
             <div class="muted">Test: ${esc(option.ability)}${skill}, ST ${esc(option.dc)}. Sukces +${esc(option.progress_on_success)}, porażka +${esc(option.progress_on_failure)}.</div>
             ${requirements ? `<div class="muted">Wymaga: ${requirements}</div>` : ''}
             ${challengeOptionBonusesText(option) ? `<div class="muted">Premie: ${challengeOptionBonusesText(option)}</div>` : ''}
@@ -7040,8 +7313,21 @@ function pendingHtml(pending) {
   if (proposal.npc_response) lines.push(`<p><b>NPC:</b> ${esc(proposal.npc_response)}</p>`);
   if (option.label) {
     const skill = option.skill ? `/${esc(option.skill)}` : '';
+    if (option.mechanic) lines.push(`<p><b>Mechanika:</b> ${esc(option.mechanic.label || option.mechanic.id)}.</p>`);
     lines.push(`<p><b>Podejście:</b> ${esc(option.label)}. Test: ${esc(option.ability)}${skill}, ST ${esc(option.dc)}.</p>`);
+    if (option.roll_mode && option.roll_mode !== 'normal') lines.push(`<p><b>Tryb rzutu:</b> ${esc(option.roll_mode)}.</p>`);
+    if (option.situational_modifiers && option.situational_modifiers.length) {
+      lines.push(`<p><b>Modyfikatory sytuacyjne:</b> ${option.situational_modifiers.map(mod => `${esc(mod.label)} ${signedNumber(Number(mod.modifier || 0))}${mod.roll_mode && mod.roll_mode !== 'normal' ? `, ${esc(mod.roll_mode)}` : ''} (${esc(mod.source)}: ${esc(mod.reason)})`).join('; ')}</p>`);
+    }
+    if (option.improvised_tool) {
+      const tool = option.improvised_tool;
+      lines.push(`<p><b>Improwizowane narzędzie:</b> ${esc(tool.label)} ${signedNumber(Number(tool.effect_modifier || 0))} (${esc(tool.source)}: ${esc(tool.source_detail)}${tool.risk ? `, ryzyko: ${esc(tool.risk)}` : ''}). ${esc(tool.reason)}</p>`);
+    }
     lines.push(`<p><b>Postęp:</b> sukces +${esc(option.progress_on_success)}, porażka +${esc(option.progress_on_failure)}.</p>`);
+    if (pending.kind === 'challenge' && pending.stage === 'decision') {
+      lines.push(`<button class="secondary" onclick="toggleDecisionCorrection()">Popraw decyzję MG</button>`);
+      if (decisionCorrectionOpen) lines.push(decisionCorrectionHtml(option));
+    }
   } else if (proposal.action_type) {
     if (proposal.requires_roll) {
       const skill = proposal.skill ? `/${esc(proposal.skill)}` : '';
@@ -7054,8 +7340,84 @@ function pendingHtml(pending) {
 }
 function leadActorChoiceHtml() {
   if (!state.pending || state.pending.stage !== 'decision' || !state.actors || state.actors.length < 2) return '';
-  const options = state.actors.map(actor => `<option value="${esc(actor.id)}">${esc(actor.name)}</option>`).join('');
+  const selectedId = state.selected_lead_actor_id || (state.actors[0] && state.actors[0].id) || '';
+  const options = state.actors.map(actor => `<option value="${esc(actor.id)}"${String(actor.id) === String(selectedId) ? ' selected' : ''}>${esc(actor.name)}</option>`).join('');
   return `<label><b>Kto prowadzi test?</b> <select id="lead-actor">${options}</select></label>`;
+}
+function decisionCorrectionHtml(option) {
+  const mechanicId = option.mechanic && option.mechanic.id ? option.mechanic.id : 'single_actor_check';
+  const actorOptions = (selectedId, allowEmpty=false) => `${allowEmpty ? '<option value="">-</option>' : ''}${(state.actors || []).map(actor => `<option value="${esc(actor.id)}"${String(actor.id) === String(selectedId || '') ? ' selected' : ''}>${esc(actor.name)}</option>`).join('')}`;
+  const mechanicOptions = (state.allowed_mechanics || []).map(tool => `<option value="${esc(tool.id)}"${tool.id === mechanicId ? ' selected' : ''}>${esc(tool.label || tool.id)}</option>`).join('');
+  const participants = option.check_participants || (option.mechanic && option.mechanic.participants ? option.mechanic.participants : 'single_actor');
+  const aggregation = option.check_aggregation || (participants === 'whole_party' ? 'highest' : 'lead_result');
+  const abilityOptions = ['strength','dexterity','constitution','intelligence','wisdom','charisma'].map(ability => `<option value="${ability}"${ability === option.ability ? ' selected' : ''}>${ability}</option>`).join('');
+  const rollMode = option.roll_mode || 'normal';
+  const rollModeOptions = ['normal','advantage','disadvantage'].map(mode => `<option value="${mode}"${mode === rollMode ? ' selected' : ''}>${mode}</option>`).join('');
+  const sourceOptions = selectedSource => ['scenario_context','zone_context','challenge_context','interaction_object','player_declaration','dynamic_state','gm'].map(source => `<option value="${source}"${source === selectedSource ? ' selected' : ''}>${source}</option>`).join('');
+  const situational = option.situational_modifiers || [];
+  const improvised = option.improvised_tool || {};
+  const modifierRows = [0,1,2].map(index => {
+    const mod = situational[index] || {};
+    const modMode = mod.roll_mode || 'normal';
+    const modModeOptions = ['normal','advantage','disadvantage'].map(mode => `<option value="${mode}"${mode === modMode ? ' selected' : ''}>${mode}</option>`).join('');
+    return `<div class="card" data-situational-row="${index}">
+      <label>Etykieta <input class="correction-sit-label" value="${esc(mod.label || '')}" placeholder="np. Mokra lina"></label>
+      <label>Premia/kara <input class="correction-sit-modifier" type="number" min="-2" max="2" value="${esc(mod.modifier || 0)}"></label>
+      <label>Tryb <select class="correction-sit-roll-mode">${modModeOptions}</select></label>
+      <label>Źródło <select class="correction-sit-source">${sourceOptions(mod.source || 'gm')}</select></label>
+      <label>Powód <input class="correction-sit-reason" value="${esc(mod.reason || '')}" placeholder="Dlaczego ten fakt wpływa na test"></label>
+    </div>`;
+  }).join('');
+  return `
+    <div class="card" style="margin-top:10px">
+      <h4>Korekta przed rzutem</h4>
+      <label>Mechanika <select id="correction-mechanic">${mechanicOptions}</select></label>
+      <label>Uczestnicy
+        <select id="correction-participants">
+          <option value="single_actor"${participants === 'single_actor' ? ' selected' : ''}>jedna postać</option>
+          <option value="lead_with_help"${participants === 'lead_with_help' ? ' selected' : ''}>prowadzący z pomocą</option>
+          <option value="whole_party"${participants === 'whole_party' ? ' selected' : ''}>cała drużyna</option>
+          <option value="selected_actors"${participants === 'selected_actors' ? ' selected' : ''}>wybrane postacie</option>
+        </select>
+      </label>
+      <label>Agregacja
+        <select id="correction-aggregation">
+          <option value="lead_result"${aggregation === 'lead_result' ? ' selected' : ''}>wynik prowadzącego</option>
+          <option value="highest"${aggregation === 'highest' ? ' selected' : ''}>najwyższy wynik</option>
+          <option value="lowest"${aggregation === 'lowest' ? ' selected' : ''}>najniższy wynik</option>
+          <option value="majority"${aggregation === 'majority' ? ' selected' : ''}>większość sukcesów</option>
+          <option value="all_must_succeed"${aggregation === 'all_must_succeed' ? ' selected' : ''}>wszyscy muszą zdać</option>
+          <option value="any_success"${aggregation === 'any_success' ? ' selected' : ''}>wystarczy jeden sukces</option>
+          <option value="sum_progress"${aggregation === 'sum_progress' ? ' selected' : ''}>suma postępu</option>
+        </select>
+      </label>
+      <label>Prowadzący <select id="correction-lead">${actorOptions(state.selected_lead_actor_id)}</select></label>
+      <label>Pomocnik <select id="correction-helper">${actorOptions(state.selected_helper_actor_id, true)}</select></label>
+      <label>Cecha <select id="correction-ability">${abilityOptions}</select></label>
+      <label>Skill <input id="correction-skill" value="${esc(option.skill || '')}" placeholder="np. athletics"></label>
+      <label>ST <input id="correction-dc" type="number" min="5" max="25" value="${esc(option.dc || 10)}"></label>
+      <label>Tryb rzutu <select id="correction-roll-mode">${rollModeOptions}</select></label>
+      <details>
+        <summary>Modyfikatory sytuacyjne</summary>
+        ${modifierRows}
+      </details>
+      <details>
+        <summary>Improwizowane narzędzie</summary>
+        <label>Nazwa <input id="improvised-tool-label" value="${esc(improvised.label || '')}" placeholder="np. Stara deska"></label>
+        <label>Źródło <select id="improvised-tool-source">${sourceOptions(improvised.source || 'interaction_object')}</select></label>
+        <label>Szczegół źródła <input id="improvised-tool-source-detail" value="${esc(improvised.source_detail || '')}" placeholder="np. rumowisko przy bramie"></label>
+        <label>Efekt <input id="improvised-tool-effect" type="number" min="-2" max="2" value="${esc(improvised.effect_modifier || 0)}"></label>
+        <label>Ryzyko <input id="improvised-tool-risk" value="${esc(improvised.risk || '')}" placeholder="np. pęka przy krytycznej porażce"></label>
+        <label>Powód <input id="improvised-tool-reason" value="${esc(improvised.reason || '')}" placeholder="Dlaczego to działa jak prowizoryczne narzędzie"></label>
+      </details>
+      <div class="row" style="margin-top:8px">
+        <button onclick="submitDecisionCorrection()">Zapisz korektę</button>
+      </div>
+    </div>`;
+}
+function toggleDecisionCorrection() {
+  decisionCorrectionOpen = !decisionCorrectionOpen;
+  render();
 }
 function rollPromptHtml() {
   if (!state.pending) return '';
@@ -7075,9 +7437,19 @@ function rollPromptHtml() {
     lead_result: 'liczy się wynik prowadzącego',
     highest: 'liczy się najwyższy wynik',
     lowest: 'liczy się najniższy wynik',
-    majority_success: 'sukces, jeśli zda co najmniej połowa'
+    majority: 'sukces, jeśli zda co najmniej połowa'
   }[plan.aggregation] || plan.aggregation || '';
   const names = (state.required_rolls || []).map(r => r.actor_name).join(', ');
+  const mechanic = plan.mechanic || {};
+  const mechanicHtml = mechanic.id ? `<p><b>Mechanika:</b> ${esc(mechanic.label || mechanic.id)}</p>` : '';
+  const rollModeHtml = plan.roll_mode && plan.roll_mode !== 'normal' ? `<p><b>Tryb rzutu:</b> ${esc(plan.roll_mode)}.</p>` : '';
+  const situationalHtml = plan.situational_modifiers && plan.situational_modifiers.length
+    ? `<p><b>Modyfikatory sytuacyjne:</b> ${plan.situational_modifiers.map(mod => `${esc(mod.label)} ${signedNumber(Number(mod.modifier || 0))}${mod.roll_mode && mod.roll_mode !== 'normal' ? `, ${esc(mod.roll_mode)}` : ''} (${esc(mod.reason)})`).join('; ')}</p>`
+    : '';
+  const tool = plan.improvised_tool || null;
+  const improvisedHtml = tool
+    ? `<p><b>Improwizowane narzędzie:</b> ${esc(tool.label)} ${signedNumber(Number(tool.effect_modifier || 0))} (${esc(tool.source_detail)}${tool.risk ? `, ryzyko: ${esc(tool.risk)}` : ''}).</p>`
+    : '';
   const bonuses = (plan.option_bonuses || []).filter(bonus => Number(bonus.modifier || 0) !== 0);
   const bonusHtml = bonuses.length
     ? `<p><b>Aktywne premie:</b> ${bonuses.map(bonus => {
@@ -7086,7 +7458,7 @@ function rollPromptHtml() {
         return `${esc(bonus.actor_name || '')}: ${esc(bonus.label || bonus.source_id)} ${signedNumber(Number(bonus.modifier || 0))}${spellCost}`;
       }).join('; ')}</p>`
     : '';
-  return `<p><b>Format rzutu:</b> ${esc(participants)}${aggregation ? `, ${esc(aggregation)}` : ''}.</p><p><b>Rzucają:</b> ${esc(names || '-')}</p>${bonusHtml}`;
+  return `${mechanicHtml}${rollModeHtml}<p><b>Format rzutu:</b> ${esc(participants)}${aggregation ? `, ${esc(aggregation)}` : ''}.</p><p><b>Rzucają:</b> ${esc(names || '-')}</p>${situationalHtml}${improvisedHtml}${bonusHtml}`;
 }
 function latestResultMessage(state) {
   const messages = state.messages || [];
@@ -8275,9 +8647,48 @@ function decision(value) {
   const leadActor = document.getElementById('lead-actor');
   api('/api/decision', {decision:value, lead_actor_id: leadActor ? leadActor.value : null}, labels[value] || 'Czekam na MG...');
 }
+function submitDecisionCorrection() {
+  const situational_modifiers = Array.from(document.querySelectorAll('[data-situational-row]')).map(row => ({
+    label: row.querySelector('.correction-sit-label').value,
+    modifier: Number(row.querySelector('.correction-sit-modifier').value || 0),
+    roll_mode: row.querySelector('.correction-sit-roll-mode').value,
+    source: row.querySelector('.correction-sit-source').value,
+    reason: row.querySelector('.correction-sit-reason').value
+  })).filter(mod => mod.label || mod.reason || Number(mod.modifier || 0) !== 0 || mod.roll_mode !== 'normal');
+  const improvised_tool = {
+    label: document.getElementById('improvised-tool-label').value,
+    source: document.getElementById('improvised-tool-source').value,
+    source_detail: document.getElementById('improvised-tool-source-detail').value,
+    effect_modifier: Number(document.getElementById('improvised-tool-effect').value || 0),
+    risk: document.getElementById('improvised-tool-risk').value,
+    reason: document.getElementById('improvised-tool-reason').value
+  };
+  api('/api/decision/correction', {
+    mechanic_id: document.getElementById('correction-mechanic').value,
+    check_participants: document.getElementById('correction-participants').value,
+    check_aggregation: document.getElementById('correction-aggregation').value,
+    lead_actor_id: document.getElementById('correction-lead').value,
+    helper_actor_id: document.getElementById('correction-helper').value,
+    ability: document.getElementById('correction-ability').value,
+    skill: document.getElementById('correction-skill').value,
+    dc: Number(document.getElementById('correction-dc').value),
+    roll_mode: document.getElementById('correction-roll-mode').value,
+    situational_modifiers,
+    improvised_tool
+  }, 'Zapisuję korektę decyzji MG...');
+}
 function sendRolls() {
   const rolls = {};
-  document.querySelectorAll('#rolls input').forEach(input => rolls[input.dataset.actor] = Number(input.value));
+  document.querySelectorAll('#rolls input').forEach(input => {
+    const actorId = input.dataset.actor;
+    const index = input.dataset.rollIndex || '1';
+    if (index === '2') {
+      if (!rolls[actorId] || typeof rolls[actorId] !== 'object') rolls[actorId] = {natural_roll: Number(rolls[actorId] || 0)};
+      rolls[actorId].natural_roll_2 = Number(input.value);
+    } else {
+      rolls[actorId] = Number(input.value);
+    }
+  });
   api('/api/rolls', {rolls}, 'Rozstrzygam wynik rzutu...');
 }
 function resetSession() { api('/api/reset', {}, 'Resetuję scenę...'); }

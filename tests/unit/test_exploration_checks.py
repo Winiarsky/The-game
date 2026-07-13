@@ -1,13 +1,17 @@
+from dataclasses import replace
+
 from dnd_board_game.actors import AbilityScores, Actor, ActorId, Faction
 from dnd_board_game.exploration import (
     CheckAggregation,
     CheckParticipants,
     ConsequenceTarget,
     ExplorationCheckPlan,
+    ExplorationSituationalModifier,
+    ExplorationSituationalModifierSource,
     PartyCheckInput,
     resolve_exploration_check,
 )
-from dnd_board_game.rules import D20RollRequest
+from dnd_board_game.rules import D20RollRequest, RollMode
 from dnd_board_game.world import Coordinate
 
 
@@ -117,6 +121,37 @@ def test_lead_result_uses_selected_lead_actor():
     assert result.success is False
     assert result.selected_actor == hero
     assert result.consequence_actors == (hero,)
+
+
+def test_exploration_check_uses_situational_modifier_and_disadvantage():
+    hero = _actor("hero", "Bohater")
+    plan = _plan(CheckAggregation.LEAD_RESULT, lead_actor_id="hero")
+    plan = replace(
+        plan,
+        roll_mode=RollMode.DISADVANTAGE,
+        situational_modifiers=(
+            ExplorationSituationalModifier(
+                label="Mokra lina",
+                modifier=-1,
+                source=ExplorationSituationalModifierSource.INTERACTION_OBJECT,
+                reason="Opis obiektu wskazuje mokrą linę.",
+            ),
+        ),
+    )
+    request = D20RollRequest(
+        mode=plan.roll_mode,
+        modifiers=tuple(
+            modifier
+            for modifier in (item.as_roll_modifier() for item in plan.situational_modifiers)
+            if modifier is not None
+        ),
+    )
+
+    result = resolve_exploration_check(plan, (PartyCheckInput(hero, 18, request, 7),))
+
+    assert result.selected_roll.natural_roll == 7
+    assert result.selected_roll.total == 6
+    assert result.success is False
 
 
 def test_failed_actors_are_consequence_targets():
