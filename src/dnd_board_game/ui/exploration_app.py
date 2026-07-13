@@ -7,35 +7,53 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from flask import Flask, jsonify, render_template_string, request, send_from_directory
-
 from dnd_board_game.actions import (
-    ActionResourceResolver,
-    AreaSpellResolver,
-    HealingActionResolver,
-    SpellSaveAttackResolver,
     action_mechanic_payload,
     attack_mechanic_from_source,
     combat_action_mechanic_from_definition,
     healing_mechanic_from_source,
+)
+from dnd_board_game.application import (
+    CombatMovementFlowService,
+    CombatReactionFlowService,
+    CombatSceneInteractionFlowService,
+    CombatSceneInteractionTransition,
+    CombatTurnActionFlowService,
+    CombatTurnFinalizationService,
+    CombatResourceTransition,
+    EnemyTurnFlowService,
+    EnemyTurnTransitionKind,
+    ExpiredCombatEffects,
+    ExplorationFlowService,
+    ExplorationFlowStage,
+    PendingAreaSpell,
+    PendingCombatInteraction,
+    PendingConcentrationAction,
+    PendingConcentrationCheck,
+    PendingPlayerAttack,
+    PendingPlayerHealing,
+    PlayerAreaHealingFlowService,
+    PlayerAreaSpellTransition,
+    PlayerReactionFlowService,
+    PlayerAttackTransition,
+    PlayerCombatActionFlowService,
+    PlayerCombatResourceFlowService,
 )
 from dnd_board_game.actors import Actor, Faction
 from dnd_board_game.combat import (
     ActorSetupEntry,
     ActionUse,
     ActiveCombatEffect,
-    AttackDeclaration,
     CombatState,
     CombatInteractionOption,
     EncounterSetup,
+    EnemyAutoTurnResult,
+    EnemyTurnPlan,
     InitiativeEntry,
     InitiativeOrder,
-    DamageComponentInput,
-    DamageType,
     HealingSource,
     InitiativePrompt,
     SpellAreaShape,
-    SpellSaveResult,
     TurnActionState,
     EnvironmentSetupEntry,
     EnvironmentSetupType,
@@ -46,25 +64,13 @@ from dnd_board_game.combat import (
     build_setup_steps,
     build_initiative_order,
     build_player_initiative_prompts,
-    combat_interaction_hint_positions,
-    combat_interaction_positions,
-    consume_next_attack_effects,
     current_actor as combat_current_actor,
     expire_turn_end_effects,
     expire_turn_start_effects,
     finish_turn,
     active_actor_led_feedback,
-    apply_combat_interaction_effects,
-    apply_damage_result,
-    actors_in_area,
-    area_positions_for_center,
-    area_positions_for_direction,
     attack_source_with_combat_effects,
     attack_source_with_target_combat_effects,
-    actor_as_combat_target,
-    available_combat_interaction_options,
-    available_scene_interactions,
-    expire_invalid_combat_effects,
     initiative_prompt_led_feedback,
     movement_remaining,
     legal_healing_targets,
@@ -72,25 +78,13 @@ from dnd_board_game.combat import (
     can_consume_spell_resource,
     consume_spell_resource,
     direction_anchor_positions,
-    opportunity_attackers_for_movement,
     replace_actor,
-    resolve_attack,
-    resolve_damage,
-    resolve_enemy_auto_turn,
     roll_enemy_initiative,
-    plan_enemy_turn,
-    reaction_available_for,
     scene_flag,
-    scene_object_at_position,
     scene_object_by_id,
-    select_attack_target,
     setup_led_feedback,
     start_combat,
     start_attack_action,
-    use_dash,
-    use_actor_reaction,
-    use_turn_action,
-    use_movement,
 )
 from dnd_board_game.exploration import (
     CheckAggregation,
@@ -122,11 +116,9 @@ from dnd_board_game.exploration import (
     challenge_state_for,
     exploration_zone_feedback,
     mechanic_payload_for_option,
-    party_position_feedback,
     reveal_exploration_points,
     resolve_challenge_option,
     resolve_exploration_check,
-    set_party_zone,
     validate_mechanic_selection,
     visible_exploration_points,
     visible_exploration_zones,
@@ -147,8 +139,8 @@ from dnd_board_game.llm import (
     validate_gm_classifier_proposal,
     validate_npc_interaction_proposal,
 )
-from dnd_board_game.hardware import BoardLedAdapter, LedColor, LedFeedback, LedFrame, LedRole, led_color_name_pl, movement_led_feedback
-from dnd_board_game.inventory import break_inventory_item, consume_inventory_item, has_inventory_quantity, inventory_item_payload
+from dnd_board_game.hardware import BoardSessionAdapter, LedColor, LedFeedback, LedFrame, LedRole, led_color_name_pl, movement_led_feedback
+from dnd_board_game.inventory import break_inventory_item, consume_inventory_item, inventory_item_payload
 from dnd_board_game.rules import D20RollInput, D20RollRequest, RollMode, RollModifier, RollModifierType, ability_modifier, resolve_d20_roll, roll_instruction
 from dnd_board_game.scenarios import (
     LoadedEncounter,
@@ -158,7 +150,10 @@ from dnd_board_game.scenarios import (
     load_scenario,
 )
 from dnd_board_game.runtime.session_observer import SessionObserver
-from dnd_board_game.world import Coordinate, MovementRangeResult, PathResult, find_path, movement_range
+from dnd_board_game.world import Coordinate, MovementRangeResult, PathResult, movement_range
+
+from .session_state import UiPendingState
+from .session_view import UiSessionView
 
 
 class PendingKind(StrEnum):
@@ -172,13 +167,7 @@ class PendingStage(StrEnum):
     BREAKAGE = "breakage"
 
 
-class UiFlowStage(StrEnum):
-    WAITING_FOR_BOARD = "waiting_for_board"
-    READY_TO_START = "ready_to_start"
-    PARTY_SETUP = "party_setup"
-    LOCATION_PREVIEW = "location_preview"
-    LOCATION_ACTIVE = "location_active"
-    INTERACTION_RESULT = "interaction_result"
+UiFlowStage = ExplorationFlowStage
 
 
 EXPLORATION_DECISION_ABILITIES = frozenset(
@@ -363,58 +352,6 @@ class BoardScanTarget:
 
 
 @dataclass(frozen=True, slots=True)
-class PendingPlayerAttack:
-    attacker_id: str
-    target_id: str
-    source_id: str = ""
-    stage: str = "confirm_attack"
-    natural_roll: int | None = None
-    natural_rolls: tuple[int, ...] = ()
-    total: int | None = None
-    hit: bool | None = None
-    critical: bool = False
-    saving_throws: tuple[SpellSaveResult, ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
-class PendingPlayerHealing:
-    healer_id: str
-    target_id: str
-    source_id: str
-    stage: str = "healing_roll"
-
-
-@dataclass(frozen=True, slots=True)
-class PendingAreaSpell:
-    caster_id: str
-    source_id: str
-    origin: Coordinate
-    anchor: Coordinate
-    area_positions: tuple[Coordinate, ...]
-    target_ids: tuple[str, ...]
-    stage: str = "confirm_area"
-    saving_throws: tuple[SpellSaveResult, ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
-class PendingCombatInteraction:
-    actor_id: str
-    object_id: str
-    object_name: str
-    target_position: Coordinate
-    options: tuple[CombatInteractionOption, ...]
-
-    def as_payload(self) -> dict[str, object]:
-        return {
-            "actor_id": self.actor_id,
-            "object_id": self.object_id,
-            "object_name": self.object_name,
-            "target_position": [self.target_position.col, self.target_position.row],
-            "options": [option.as_payload() for option in self.options],
-        }
-
-
-@dataclass(frozen=True, slots=True)
 class PendingCombatHelp:
     helper_id: str
     ally_ids: tuple[str, ...]
@@ -433,46 +370,6 @@ class PendingCombatHelp:
                 for actor in state.actors
                 if str(actor.id) in self.target_ids
             ],
-        }
-
-
-@dataclass(frozen=True, slots=True)
-class PendingConcentrationAction:
-    caster_id: str
-    action_id: str
-    target_ids: tuple[str, ...]
-
-    def as_payload(self, state: CombatState, active_effects: tuple[ActiveCombatEffect, ...], action=None) -> dict[str, object]:
-        return {
-            "caster": _combat_actor_payload(_actor_by_string_id_from_state(state, self.caster_id), active_effects),
-            "action": _combat_action_payload(action) if action is not None else None,
-            "targets": [
-                _combat_actor_payload(actor, active_effects)
-                for actor in state.actors
-                if str(actor.id) in self.target_ids
-            ],
-        }
-
-
-@dataclass(frozen=True, slots=True)
-class PendingConcentrationCheck:
-    actor_id: str
-    effect_ids: tuple[str, ...]
-    damage: int
-    dc: int
-
-    def as_payload(self, state: CombatState, active_effects: tuple[ActiveCombatEffect, ...]) -> dict[str, object]:
-        actor = _actor_by_string_id_from_state(state, self.actor_id)
-        modifier = ability_modifier(actor.ability_scores.constitution)
-        effects = tuple(effect for effect in active_effects if effect.id in self.effect_ids)
-        return {
-            "actor": _combat_actor_payload(actor, active_effects),
-            "effect_ids": list(self.effect_ids),
-            "effects": [effect.as_payload() for effect in effects],
-            "damage": self.damage,
-            "dc": self.dc,
-            "modifier": modifier,
-            "instruction": f"{actor.name} otrzymał {self.damage} obrażeń. Rzuć CON save przeciw ST {self.dc}.",
         }
 
 
@@ -559,10 +456,17 @@ class ExplorationUiSession:
         self._fixed_session_id = session_id
         self.observation_dir = Path(observation_dir)
         self.observer = SessionObserver(session_id or _ui_session_id(), self.observation_dir)
-        self.action_resource_resolver = ActionResourceResolver()
-        self.spell_save_attack_resolver = SpellSaveAttackResolver()
-        self.area_spell_resolver = AreaSpellResolver()
-        self.healing_action_resolver = HealingActionResolver()
+        self.combat_movement_flow = CombatMovementFlowService()
+        self.combat_reaction_flow = CombatReactionFlowService()
+        self.combat_scene_interaction_flow = CombatSceneInteractionFlowService()
+        self.combat_turn_action_flow = CombatTurnActionFlowService()
+        self.combat_turn_finalization = CombatTurnFinalizationService()
+        self.enemy_turn_flow = EnemyTurnFlowService()
+        self.player_area_healing_flow = PlayerAreaHealingFlowService()
+        self.player_combat_action_flow = PlayerCombatActionFlowService()
+        self.player_combat_resource_flow = PlayerCombatResourceFlowService()
+        self.player_reaction_flow = PlayerReactionFlowService()
+        self.exploration_flow = ExplorationFlowService()
         self.reset()
 
     def reset(self) -> None:
@@ -581,13 +485,12 @@ class ExplorationUiSession:
         if self.debug_point_id:
             self.state, _revealed = reveal_exploration_points(self.state, (self.debug_point_id,))
         self.messages: list[UiMessage] = []
-        self.pending: PendingInteraction | None = None
+        self.pending_state = UiPendingState()
         self.declaration_thread: list[GmDeclarationThreadEntry] = []
         self.active_preparation_effects: list[GmPreparationEffect] = []
         self.selected_lead_actor_id = str(self.exploration.actors[0].id)
         self.selected_helper_actor_id: str | None = None
         self.active_point_id = self.debug_point_id
-        self.pending_encounter: PendingEncounter | None = None
         self.exploration_setup_flow: ExplorationSetupFlow | None = None
         self.post_interaction_setup_steps: tuple[SetupStep, ...] = ()
         self.selected_combat_movement_path = None
@@ -595,20 +498,6 @@ class ExplorationUiSession:
         self.encounter_initiative_flow: EncounterInitiativeFlow | None = None
         self.combat_state: CombatState | None = None
         self.resolved_encounter_trigger_ids: set[str] = set()
-        self.pending_enemy_turn_intent = None
-        self.pending_enemy_turn_result = None
-        self.pending_enemy_turn_ack_result = None
-        self.pending_player_attack: PendingPlayerAttack | None = None
-        self.pending_player_healing: PendingPlayerHealing | None = None
-        self.pending_area_spell: PendingAreaSpell | None = None
-        self.pending_combat_interaction: PendingCombatInteraction | None = None
-        self.pending_combat_help: PendingCombatHelp | None = None
-        self.pending_concentration_action: PendingConcentrationAction | None = None
-        self.pending_concentration_check: PendingConcentrationCheck | None = None
-        self.pending_combat_ready: PendingCombatReady | None = None
-        self.pending_opportunity_movement: PendingOpportunityMovement | None = None
-        self.pending_enemy_opportunity_attack: PendingEnemyOpportunityAttack | None = None
-        self.pending_ready_attack: PendingReadyAttack | None = None
         self.selected_attack_source_ids: dict[str, str] = {}
         self.selected_healing_source_ids: dict[str, str] = {}
         self.active_combat_effects: tuple[ActiveCombatEffect, ...] = ()
@@ -620,7 +509,7 @@ class ExplorationUiSession:
         self.board_serial_port = board_defaults["serial_port"]
         self.wled_url = board_defaults["wled_url"]
         self.scan_timeout_s = 30.0
-        self.board_adapter: BoardLedAdapter | None = None
+        self.board_adapter: BoardSessionAdapter | None = None
         self.board_message = (
             "Plansza niepodłączona. Domyślne ustawienia wczytane z board/config.json "
             f"({self.configured_board_backend})."
@@ -641,6 +530,134 @@ class ExplorationUiSession:
         )
 
     @property
+    def pending(self) -> PendingInteraction | None:
+        return self.pending_state.interaction
+
+    @pending.setter
+    def pending(self, value: PendingInteraction | None) -> None:
+        self.pending_state.interaction = value
+
+    @property
+    def pending_encounter(self) -> PendingEncounter | None:
+        return self.pending_state.encounter
+
+    @pending_encounter.setter
+    def pending_encounter(self, value: PendingEncounter | None) -> None:
+        self.pending_state.encounter = value
+
+    @property
+    def pending_enemy_turn_intent(self) -> EnemyTurnPlan | None:
+        return self.pending_state.enemy_turn_intent
+
+    @pending_enemy_turn_intent.setter
+    def pending_enemy_turn_intent(self, value: EnemyTurnPlan | None) -> None:
+        self.pending_state.enemy_turn_intent = value
+
+    @property
+    def pending_enemy_turn_result(self) -> EnemyAutoTurnResult | None:
+        return self.pending_state.enemy_turn_result
+
+    @pending_enemy_turn_result.setter
+    def pending_enemy_turn_result(self, value: EnemyAutoTurnResult | None) -> None:
+        self.pending_state.enemy_turn_result = value
+
+    @property
+    def pending_enemy_turn_ack_result(self) -> EnemyAutoTurnResult | None:
+        return self.pending_state.enemy_turn_ack_result
+
+    @pending_enemy_turn_ack_result.setter
+    def pending_enemy_turn_ack_result(self, value: EnemyAutoTurnResult | None) -> None:
+        self.pending_state.enemy_turn_ack_result = value
+
+    @property
+    def pending_player_attack(self) -> PendingPlayerAttack | None:
+        return self.pending_state.player_attack
+
+    @pending_player_attack.setter
+    def pending_player_attack(self, value: PendingPlayerAttack | None) -> None:
+        self.pending_state.player_attack = value
+
+    @property
+    def pending_player_healing(self) -> PendingPlayerHealing | None:
+        return self.pending_state.player_healing
+
+    @pending_player_healing.setter
+    def pending_player_healing(self, value: PendingPlayerHealing | None) -> None:
+        self.pending_state.player_healing = value
+
+    @property
+    def pending_area_spell(self) -> PendingAreaSpell | None:
+        return self.pending_state.area_spell
+
+    @pending_area_spell.setter
+    def pending_area_spell(self, value: PendingAreaSpell | None) -> None:
+        self.pending_state.area_spell = value
+
+    @property
+    def pending_combat_interaction(self) -> PendingCombatInteraction | None:
+        return self.pending_state.combat_interaction
+
+    @pending_combat_interaction.setter
+    def pending_combat_interaction(self, value: PendingCombatInteraction | None) -> None:
+        self.pending_state.combat_interaction = value
+
+    @property
+    def pending_combat_help(self) -> PendingCombatHelp | None:
+        return self.pending_state.combat_help
+
+    @pending_combat_help.setter
+    def pending_combat_help(self, value: PendingCombatHelp | None) -> None:
+        self.pending_state.combat_help = value
+
+    @property
+    def pending_concentration_action(self) -> PendingConcentrationAction | None:
+        return self.pending_state.concentration_action
+
+    @pending_concentration_action.setter
+    def pending_concentration_action(self, value: PendingConcentrationAction | None) -> None:
+        self.pending_state.concentration_action = value
+
+    @property
+    def pending_concentration_check(self) -> PendingConcentrationCheck | None:
+        return self.pending_state.concentration_check
+
+    @pending_concentration_check.setter
+    def pending_concentration_check(self, value: PendingConcentrationCheck | None) -> None:
+        self.pending_state.concentration_check = value
+
+    @property
+    def pending_combat_ready(self) -> PendingCombatReady | None:
+        return self.pending_state.combat_ready
+
+    @pending_combat_ready.setter
+    def pending_combat_ready(self, value: PendingCombatReady | None) -> None:
+        self.pending_state.combat_ready = value
+
+    @property
+    def pending_opportunity_movement(self) -> PendingOpportunityMovement | None:
+        return self.pending_state.opportunity_movement
+
+    @pending_opportunity_movement.setter
+    def pending_opportunity_movement(self, value: PendingOpportunityMovement | None) -> None:
+        self.pending_state.opportunity_movement = value
+
+    @property
+    def pending_enemy_opportunity_attack(self) -> PendingEnemyOpportunityAttack | None:
+        return self.pending_state.enemy_opportunity_attack
+
+    @pending_enemy_opportunity_attack.setter
+    def pending_enemy_opportunity_attack(self, value: PendingEnemyOpportunityAttack | None) -> None:
+        self.pending_state.enemy_opportunity_attack = value
+
+    @property
+    def pending_ready_attack(self) -> PendingReadyAttack | None:
+        return self.pending_state.ready_attack
+
+    @pending_ready_attack.setter
+    def pending_ready_attack(self, value: PendingReadyAttack | None) -> None:
+        self.pending_state.ready_attack = value
+
+    @property
     def current_zone(self) -> ExplorationZone:
         return next(zone for zone in self.state.zones if zone.id == self.state.party_position.zone_id)
 
@@ -659,43 +676,43 @@ class ExplorationUiSession:
         if self.pending_encounter is not None:
             scene_status.append({"label": "Encounter", "value": self.pending_encounter.name})
         preview_zone = self._preview_zone()
-        return {
-            "scenario": {"id": self.exploration.scenario_id, "name": self.exploration.scenario_name},
-            "session_log": {
+        return UiSessionView(
+            scenario={"id": self.exploration.scenario_id, "name": self.exploration.scenario_name},
+            session_log={
                 "session_id": self.observer.session_id,
                 "path": str(self.observer.path),
             },
-            "flow": {
+            flow={
                 "stage": self.ui_flow_stage.value,
                 "can_start": self.ui_flow_stage == UiFlowStage.READY_TO_START,
                 "preview_zone": _zone_payload(preview_zone, self._scenario_asset_root(), self.state) if preview_zone else None,
                 "available_locations": [_zone_payload(zone, self._scenario_asset_root(), self.state) for zone in self._scene_location_zones()],
                 "interaction_result": self.interaction_result,
             },
-            "current_zone": _zone_payload(self.current_zone, self._scenario_asset_root()),
-            "available_zones": [_zone_payload(zone, self._scenario_asset_root()) for zone in visible_exploration_zones(self.state.zones) if zone_is_ui_available(self.state, zone)],
-            "visible_environment": [_environment_entry_payload(entry) for entry in self.exploration.environment if entry.visibility == SetupVisibility.VISIBLE],
-            "travel_options": [_zone_payload(zone, self._scenario_asset_root()) for zone in self.travel_options()],
-            "visible_points": [_point_payload(point) for point in visible_exploration_points(self.state.points)],
-            "current_zone_points": [_point_payload(point) for point in current_zone_points],
-            "active_challenge": _challenge_payload(self.state, active_challenge, self.exploration.actors) if active_challenge else None,
-            "active_point": _point_payload(self.active_point) if self.active_point else None,
-            "resources": [_resource_payload(resource) for resource in self.state.resources if resource.id in self.state.inventory_resource_ids],
-            "actors": [_exploration_actor_payload(actor) for actor in self.exploration.actors],
-            "scene_status": scene_status,
-            "flags": [{"key": key, "value": value} for key, value in self.state.flags.values],
-            "messages": [message.as_payload() for message in self.messages],
-            "pending": self.pending.as_payload() if self.pending else None,
-            "selected_lead_actor_id": self.selected_lead_actor_id,
-            "selected_helper_actor_id": self.selected_helper_actor_id,
-            "allowed_mechanics": [tool.as_payload() for tool in MECHANIC_TOOLS.values()],
-            "pending_encounter": self._pending_encounter_payload(),
-            "exploration_setup": self.exploration_setup_flow.as_payload() if self.exploration_setup_flow else None,
-            "encounter_setup": self.encounter_setup_flow.as_payload() if self.encounter_setup_flow else None,
-            "encounter_initiative": (
+            current_zone=_zone_payload(self.current_zone, self._scenario_asset_root()),
+            available_zones=[_zone_payload(zone, self._scenario_asset_root()) for zone in visible_exploration_zones(self.state.zones) if zone_is_ui_available(self.state, zone)],
+            visible_environment=[_environment_entry_payload(entry) for entry in self.exploration.environment if entry.visibility == SetupVisibility.VISIBLE],
+            travel_options=[_zone_payload(zone, self._scenario_asset_root()) for zone in self.travel_options()],
+            visible_points=[_point_payload(point) for point in visible_exploration_points(self.state.points)],
+            current_zone_points=[_point_payload(point) for point in current_zone_points],
+            active_challenge=_challenge_payload(self.state, active_challenge, self.exploration.actors) if active_challenge else None,
+            active_point=_point_payload(self.active_point) if self.active_point else None,
+            resources=[_resource_payload(resource) for resource in self.state.resources if resource.id in self.state.inventory_resource_ids],
+            actors=[_exploration_actor_payload(actor) for actor in self.exploration.actors],
+            scene_status=scene_status,
+            flags=[{"key": key, "value": value} for key, value in self.state.flags.values],
+            messages=[message.as_payload() for message in self.messages],
+            pending=self.pending.as_payload() if self.pending else None,
+            selected_lead_actor_id=self.selected_lead_actor_id,
+            selected_helper_actor_id=self.selected_helper_actor_id,
+            allowed_mechanics=[tool.as_payload() for tool in MECHANIC_TOOLS.values()],
+            pending_encounter=self._pending_encounter_payload(),
+            exploration_setup=self.exploration_setup_flow.as_payload() if self.exploration_setup_flow else None,
+            encounter_setup=self.encounter_setup_flow.as_payload() if self.encounter_setup_flow else None,
+            encounter_initiative=(
                 self.encounter_initiative_flow.as_payload() if self.encounter_initiative_flow else None
             ),
-            "combat": _combat_payload(
+            combat=_combat_payload(
                 self.combat_state,
                 self._active_encounter(),
                 self.selected_combat_movement_path,
@@ -719,9 +736,9 @@ class ExplorationUiSession:
             )
             if self.combat_state
             else None,
-            "board": self._board_payload(),
-            "required_rolls": self.required_rolls_payload(),
-        }
+            board=self._board_payload(),
+            required_rolls=self.required_rolls_payload(),
+        ).as_payload()
 
     def configure_board(
         self,
@@ -748,13 +765,13 @@ class ExplorationUiSession:
                 self.ui_flow_stage = UiFlowStage.WAITING_FOR_BOARD
             self._record("ui_board_configured", {"backend": backend, "connected": False})
             return self.state_payload()
-        from board.connection import Connection
-
-        if backend == "simulator":
-            connection = Connection(backend="simulator", simulator_url=self.board_url)
-        else:
-            connection = Connection(backend="hardware", serial_port=self.board_serial_port or None, wled_url=self.wled_url or None)
-        self.attach_board_connection(connection, backend=backend)
+        self.board_adapter = BoardSessionAdapter.connect(
+            backend=backend,
+            board_url=self.board_url,
+            serial_port=self.board_serial_port,
+            wled_url=self.wled_url,
+        )
+        self.board_message = f"Plansza podłączona: {backend}."
         if self.ui_flow_stage == UiFlowStage.WAITING_FOR_BOARD:
             self.ui_flow_stage = UiFlowStage.READY_TO_START
         self._sync_board_leds()
@@ -772,24 +789,26 @@ class ExplorationUiSession:
 
     def attach_board_connection(self, connection: object, *, backend: str = "simulator") -> None:
         self.board_backend = backend
-        self.board_adapter = BoardLedAdapter(connection)  # type: ignore[arg-type]
+        self.board_adapter = BoardSessionAdapter(connection)
         self.board_message = f"Plansza podłączona: {backend}."
         if backend in {"simulator", "hardware"} and self.ui_flow_stage == UiFlowStage.WAITING_FOR_BOARD:
             self.ui_flow_stage = UiFlowStage.READY_TO_START
 
     def start_session(self) -> dict[str, object]:
-        if self.board_adapter is None or self.board_backend not in {"simulator", "hardware"}:
-            raise ValueError("Najpierw wybierz i zastosuj backend planszy: symulator albo hardware.")
-        if self.ui_flow_stage not in {UiFlowStage.READY_TO_START, UiFlowStage.WAITING_FOR_BOARD}:
-            return self.state_payload()
         setup_steps = _build_exploration_setup_steps(self.exploration.environment)
-        if setup_steps:
-            self.exploration_setup_flow = ExplorationSetupFlow(setup_steps)
-            self.ui_flow_stage = UiFlowStage.PARTY_SETUP
-            self.board_message = "Najpierw rozstaw widoczne elementy mapy i potwierdź kroki setupu."
-        else:
-            self.ui_flow_stage = UiFlowStage.LOCATION_PREVIEW
-            self.board_message = "Wybierz jawny element sceny na planszy."
+        transition = self.exploration_flow.start_session(
+            board_connected=self.board_adapter is not None,
+            board_backend=self.board_backend,
+            current_stage=self.ui_flow_stage,
+            setup_steps=setup_steps,
+        )
+        if transition is None:
+            return self.state_payload()
+        self.exploration_setup_flow = (
+            ExplorationSetupFlow(transition.setup_steps) if transition.setup_steps else None
+        )
+        self.ui_flow_stage = transition.stage
+        self.board_message = transition.board_message
         self.preview_zone_id = ""
         self.pending = None
         self.active_point_id = ""
@@ -798,45 +817,49 @@ class ExplorationUiSession:
         return self.state_payload()
 
     def finish_interaction_result(self) -> dict[str, object]:
-        if self.ui_flow_stage != UiFlowStage.INTERACTION_RESULT:
+        transition = self.exploration_flow.finish_interaction(
+            current_stage=self.ui_flow_stage,
+            post_interaction_setup_steps=self.post_interaction_setup_steps,
+        )
+        if transition is None:
             return self.state_payload()
         self.interaction_result = None
         self.preview_zone_id = ""
-        if self.post_interaction_setup_steps:
-            self.exploration_setup_flow = ExplorationSetupFlow(self.post_interaction_setup_steps)
-            self.post_interaction_setup_steps = ()
-            self.ui_flow_stage = UiFlowStage.PARTY_SETUP
-            self.board_message = "Rozstaw nowy element mapy wynikający z interakcji."
-            self._sync_board_leds()
-            return self.state_payload()
-        self.ui_flow_stage = UiFlowStage.LOCATION_PREVIEW
-        self.board_message = "Wybierz kolejną dostępną lokację na planszy."
+        self.exploration_setup_flow = (
+            ExplorationSetupFlow(transition.setup_steps) if transition.setup_steps else None
+        )
+        self.post_interaction_setup_steps = ()
+        self.ui_flow_stage = transition.stage
+        self.board_message = transition.board_message
         self._sync_board_leds()
         return self.state_payload()
 
     def cancel_location_preview(self) -> dict[str, object]:
-        if self.ui_flow_stage != UiFlowStage.LOCATION_PREVIEW:
+        transition = self.exploration_flow.cancel_location_preview(current_stage=self.ui_flow_stage)
+        if transition is None:
             return self.state_payload()
-        self.preview_zone_id = ""
-        self.board_message = "Wrócono do wyboru dostępnych lokacji."
+        self.preview_zone_id = transition.preview_zone_id
+        self.board_message = transition.board_message
         self._sync_board_leds()
         return self.state_payload()
 
     def confirm_location_preview(self) -> dict[str, object]:
-        if self.ui_flow_stage != UiFlowStage.LOCATION_PREVIEW:
+        transition = self.exploration_flow.confirm_location_preview(
+            current_stage=self.ui_flow_stage,
+            state=self.state,
+            current_zone=self.current_zone,
+            preview_zone=self._preview_zone(),
+            active_point_id=self.active_point_id,
+        )
+        if transition is None:
             return self.state_payload()
-        zone = self._preview_zone()
-        if zone is None:
-            raise ValueError("Najpierw wybierz element sceny na planszy.")
-        if not zone_is_ui_available(self.state, zone):
-            raise ValueError(_locked_zone_message(zone))
-        if zone.id != self.current_zone.id:
-            self.state = set_party_zone(self.state, zone)
-            self.active_point_id = ""
-        self.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
-        self.preview_zone_id = ""
-        self.board_message = f"Drużyna wchodzi do lokacji: {zone.name}."
-        self._record("ui_location_preview_confirmed", {"zone_id": zone.id})
+        self.state = transition.state
+        self.ui_flow_stage = transition.stage
+        self.preview_zone_id = transition.preview_zone_id
+        self.active_point_id = transition.active_point_id
+        self.board_message = transition.board_message
+        if transition.event_type:
+            self._record(transition.event_type, dict(transition.event_payload))
         self._sync_board_leds()
         return self.state_payload()
 
@@ -844,22 +867,26 @@ class ExplorationUiSession:
         if self.exploration_setup_flow is None:
             return self.state_payload()
         flow = self.exploration_setup_flow
-        step = flow.current_step
-        if step is None:
+        transition = self.exploration_flow.advance_setup_step(
+            steps=flow.steps,
+            current_index=flow.current_index,
+        )
+        if transition is None:
             return self.state_payload()
-        self._add_message("Setup mapy", f"Potwierdzono: {step.label}.")
-        if flow.current_index + 1 >= len(flow.steps):
+        self._add_message("Setup mapy", f"Potwierdzono: {transition.confirmed_label}.")
+        if transition.completed:
             flow.completed = True
             self.exploration_setup_flow = None
-            self.ui_flow_stage = UiFlowStage.LOCATION_PREVIEW
+            self.ui_flow_stage = transition.stage
             self.preview_zone_id = ""
-            self.board_message = "Elementy mapy ustawione. Wybierz jawny element sceny na planszy."
+            self.board_message = transition.board_message
             self._refresh_pending_encounter()
             if self.pending_encounter is not None:
                 self.board_message = "Encounter gotowy. Potwierdź rozpoczęcie setupu w UI albo Enterem."
         else:
-            flow.current_index += 1
-            self.board_message = "Potwierdź kolejny element mapy."
+            flow.current_index = transition.current_index
+            self.ui_flow_stage = transition.stage
+            self.board_message = transition.board_message
         self._sync_board_leds()
         return self.state_payload()
 
@@ -870,10 +897,7 @@ class ExplorationUiSession:
         if not target.positions:
             raise ValueError(target.empty_message)
         self._show_board_feedback(target.feedback)
-        scan_board = getattr(self.board_adapter.connection, "scan_board", None)
-        if not callable(scan_board):
-            raise ValueError("Aktualny backend planszy nie obsługuje scan_board.")
-        selected_raw = scan_board([position.as_tuple() for position in target.positions], timeout_s=self.scan_timeout_s)
+        selected_raw = self.board_adapter.scan(target.positions, timeout_s=self.scan_timeout_s)
         if selected_raw is None:
             self.board_message = "Nie wybrano pola na planszy."
             self._record("ui_board_scan_timeout", {"stage": self.ui_flow_stage.value})
@@ -965,18 +989,22 @@ class ExplorationUiSession:
         return self.scenario_path.parent
 
     def travel_to(self, zone_id: str) -> dict[str, object]:
-        destination = next((zone for zone in self.travel_options() if zone.id == zone_id), None)
-        if destination is None:
-            raise ValueError("Ta lokacja nie jest teraz dostępna.")
-        previous = self.current_zone
-        self.state = set_party_zone(self.state, destination)
+        transition = self.exploration_flow.travel(
+            state=self.state,
+            current_zone=self.current_zone,
+            travel_options=self.travel_options(),
+            zone_id=zone_id,
+        )
+        self.state = transition.state
         self.pending = None
-        self.active_point_id = ""
-        self.preview_zone_id = ""
+        self.active_point_id = transition.active_point_id
+        self.preview_zone_id = transition.preview_zone_id
         self.interaction_result = None
-        self.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
-        self._add_message("Przejście", f"Drużyna przechodzi z {previous.name} do lokacji: {destination.name}.")
-        self._record("ui_zone_traveled", {"from_zone_id": previous.id, "to_zone_id": destination.id})
+        self.ui_flow_stage = transition.stage
+        if transition.message_title:
+            self._add_message(transition.message_title, transition.message_body)
+        if transition.event_type:
+            self._record(transition.event_type, dict(transition.event_payload))
         self._sync_board_leds()
         return self.state_payload()
 
@@ -1189,14 +1217,7 @@ class ExplorationUiSession:
         self._sync_board_leds()
 
     def _clear_player_pending_choices(self) -> None:
-        self.pending_player_attack = None
-        self.pending_player_healing = None
-        self.pending_area_spell = None
-        self.pending_combat_interaction = None
-        self.pending_combat_help = None
-        self.pending_concentration_action = None
-        self.pending_combat_ready = None
-        self.pending_opportunity_movement = None
+        self.pending_state.clear_player_choices()
 
     def _attack_sources_for_actor(self, actor: Actor) -> tuple:
         encounter = self._active_encounter()
@@ -1237,24 +1258,6 @@ class ExplorationUiSession:
             return False
         return can_consume_spell_resource(actor, getattr(source, "spell_level", 0))
 
-    def _actor_can_use_combat_action(self, actor: Actor, action) -> bool:
-        if action is None:
-            return False
-        if getattr(action, "prepared", True) is False:
-            return False
-        return can_consume_spell_resource(actor, getattr(action, "spell_level", 0))
-
-    def _concentration_targets_for_action(self, actor: Actor, action) -> tuple[Actor, ...]:
-        if self.combat_state is None:
-            return ()
-        if getattr(action, "target_faction", "self") == "ally":
-            return tuple(
-                candidate
-                for candidate in self.combat_state.actors
-                if candidate.faction == actor.faction and not candidate.is_defeated()
-            )
-        return (actor,)
-
     def _healing_sources_for_actor(self, actor: Actor) -> tuple[HealingSource, ...]:
         encounter = self._active_encounter()
         if encounter is None:
@@ -1276,19 +1279,16 @@ class ExplorationUiSession:
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
         actor = combat_current_actor(self.combat_state)
-        if actor.faction != Faction.ALLY:
-            raise ValueError("To nie jest tura bohatera.")
-        sources = self._attack_sources_for_actor(actor)
-        source = next((candidate for candidate in sources if candidate.id == source_id), None)
-        if source is None:
-            raise ValueError("Nieznane źródło ataku.")
-        if not self._actor_can_use_attack_source(actor, source):
-            raise ValueError(f"Brak slotów czaru dla {source.name}.")
+        transition = self.player_combat_action_flow.select_attack_source(
+            state=self.combat_state,
+            sources=self._attack_sources_for_actor(actor),
+            source_id=source_id,
+        )
         self._clear_player_pending_choices()
-        self.selected_attack_source_ids[str(actor.id)] = source.id
-        self.board_message = f"Wybrano źródło ataku: {source.name}. Kliknij Skanuj planszę i wskaż legalny czerwony cel."
-        self._add_message("Atak", f"{actor.name} wybiera: {source.name}.")
-        self._record("ui_combat_attack_source_selected", {"actor_id": str(actor.id), "source_id": source.id})
+        self.selected_attack_source_ids[transition.actor_id] = transition.source_id
+        self.board_message = transition.board_message
+        self._add_message(transition.message_title, transition.message_body)
+        self._record(transition.event_type, dict(transition.event_payload))
         self._sync_board_leds()
         return self.state_payload()
 
@@ -1296,19 +1296,16 @@ class ExplorationUiSession:
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
         actor = combat_current_actor(self.combat_state)
-        if actor.faction != Faction.ALLY:
-            raise ValueError("To nie jest tura bohatera.")
-        sources = self._healing_sources_for_actor(actor)
-        source = next((candidate for candidate in sources if candidate.id == source_id), None)
-        if source is None:
-            raise ValueError("Nieznane źródło leczenia.")
-        if not self._actor_can_use_healing_source(actor, source):
-            raise ValueError(f"Brak slotów czaru dla {source.name}.")
+        transition = self.player_combat_action_flow.select_healing_source(
+            state=self.combat_state,
+            sources=self._healing_sources_for_actor(actor),
+            source_id=source_id,
+        )
         self._clear_player_pending_choices()
-        self.selected_healing_source_ids[str(actor.id)] = source.id
-        self.board_message = f"Wybrano leczenie: {source.name}. Kliknij Skanuj planszę i wskaż rannego sojusznika."
-        self._add_message("Leczenie", f"{actor.name} wybiera: {source.name}.")
-        self._record("ui_combat_healing_source_selected", {"actor_id": str(actor.id), "source_id": source.id})
+        self.selected_healing_source_ids[transition.actor_id] = transition.source_id
+        self.board_message = transition.board_message
+        self._add_message(transition.message_title, transition.message_body)
+        self._record(transition.event_type, dict(transition.event_payload))
         self._sync_board_leds()
         return self.state_payload()
 
@@ -1325,41 +1322,14 @@ class ExplorationUiSession:
             (candidate for candidate in encounter.combat_actions_by_actor.get(actor.id, ()) if candidate.id == action_id),
             None,
         )
-        if action is None or action.action_type != "strength_potion":
+        if action is None:
             raise ValueError("Nieznana akcja eliksiru.")
-        if action.source_item_id is not None and not has_inventory_quantity(actor, action.source_item_id):
-            raise ValueError("Ten przedmiot został już zużyty.")
-        action_result = use_turn_action(self.combat_state)
-        if not action_result.accepted:
-            raise ValueError(action_result.message)
-        self.combat_state = action_result.state
-        actor_after_action = combat_current_actor(self.combat_state)
-        if action.source_item_id is not None:
-            actor_after_action = consume_inventory_item(actor_after_action, action.source_item_id)
-            self.combat_state = replace_actor(self.combat_state, actor_after_action)
-        self.active_combat_effects = tuple(
-            effect
-            for effect in self.active_combat_effects
-            if not (effect.actor_id == str(actor_after_action.id) and effect.kind == "strength_potion")
-        ) + (
-            ActiveCombatEffect(
-                id=f"strength_potion:{actor_after_action.id}:{action.id}",
-                actor_id=str(actor_after_action.id),
-                kind="strength_potion",
-                label=action.label,
-                object_id=f"combat_action:{action.id}",
-                value=action.value,
-            ),
+        transition = self.player_combat_resource_flow.use_strength_potion(
+            state=self.combat_state,
+            active_effects=self.active_combat_effects,
+            action=action,
         )
-        self._clear_player_pending_choices()
-        self.board_message = f"{actor_after_action.name} wypija {action.label}. Ataki i obrażenia z Siły mają {action.value:+d} do następnej tury."
-        self._add_message("Eliksir", self.board_message)
-        self._record(
-            "ui_combat_strength_potion_used",
-            {"actor_id": str(actor_after_action.id), "action_id": action.id, "source_item_id": action.source_item_id, "value": action.value},
-        )
-        self._sync_board_leds()
-        return self.state_payload()
+        return self._apply_combat_resource_transition(transition)
 
     def start_combat_concentration_action(self, action_id: str) -> dict[str, object]:
         if self.combat_state is None:
@@ -1374,27 +1344,14 @@ class ExplorationUiSession:
             (candidate for candidate in encounter.combat_actions_by_actor.get(actor.id, ()) if candidate.id == action_id),
             None,
         )
-        if action is None or action.action_type != "concentration_attack_bonus":
+        if action is None:
             raise ValueError("Nieznana akcja koncentracji.")
-        if not self._actor_can_use_combat_action(actor, action):
-            raise ValueError(f"Brak slotów czaru dla {action.label}.")
-        targets = self._concentration_targets_for_action(actor, action)
-        if not targets:
-            raise ValueError("Brak legalnego celu czaru koncentracyjnego.")
-        self._clear_player_pending_choices()
-        self.pending_concentration_action = PendingConcentrationAction(
-            caster_id=str(actor.id),
-            action_id=action.id,
-            target_ids=tuple(str(target.id) for target in targets),
+        transition = self.player_combat_resource_flow.start_concentration(
+            state=self.combat_state,
+            active_effects=self.active_combat_effects,
+            action=action,
         )
-        self.board_message = f"{action.label}: wybierz sojusznika dla efektu koncentracji."
-        self._add_message("Koncentracja", f"{actor.name} przygotowuje {action.label}. Wybierz sojusznika.")
-        self._record(
-            "ui_combat_concentration_started",
-            {"caster_id": str(actor.id), "action_id": action.id, "target_ids": [str(target.id) for target in targets]},
-        )
-        self._sync_board_leds()
-        return self.state_payload()
+        return self._apply_combat_resource_transition(transition)
 
     def confirm_combat_concentration_action(self, *, target_id: str) -> dict[str, object]:
         pending = self.pending_concentration_action
@@ -1403,10 +1360,6 @@ class ExplorationUiSession:
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
         caster = combat_current_actor(self.combat_state)
-        if str(caster.id) != pending.caster_id:
-            raise ValueError("Oczekujący czar koncentracyjny nie należy do aktywnego aktora.")
-        if target_id not in pending.target_ids:
-            raise ValueError("Wybrany cel nie jest legalnym celem czaru koncentracyjnego.")
         encounter = self._active_encounter()
         if encounter is None:
             raise ValueError("Brak danych encountera dla aktywnej walki.")
@@ -1416,302 +1369,133 @@ class ExplorationUiSession:
         )
         if action is None:
             raise ValueError("Nieznana akcja koncentracji.")
-        if not self._actor_can_use_combat_action(caster, action):
-            raise ValueError(f"Brak slotów czaru dla {action.label}.")
-        target = _actor_by_string_id_from_state(self.combat_state, target_id)
-        resource_use = self.action_resource_resolver.consume_action_and_source_resource(
-            self.combat_state,
-            caster,
-            spell_level=action.spell_level,
+        transition = self.player_combat_resource_flow.confirm_concentration(
+            state=self.combat_state,
+            active_effects=self.active_combat_effects,
+            action=action,
+            pending=pending,
+            target_id=target_id,
         )
-        self.combat_state = resource_use.state
-        removed = tuple(
-            effect
-            for effect in self.active_combat_effects
-            if effect.kind.startswith("concentration_") and effect.source_actor_id == str(caster.id)
-        )
-        self.active_combat_effects = tuple(
-            effect
-            for effect in self.active_combat_effects
-            if not (effect.kind.startswith("concentration_") and effect.source_actor_id == str(caster.id))
-        ) + (
-            ActiveCombatEffect(
-                id=f"concentration_attack_bonus:{caster.id}:{target.id}:{action.id}",
-                actor_id=str(target.id),
-                kind="concentration_attack_bonus",
-                label=action.label,
-                object_id=f"combat_action:{action.id}",
-                value=action.value,
-                source_actor_id=str(caster.id),
-                target_actor_id=str(target.id),
-            ),
-        )
-        self.pending_concentration_action = None
-        self.selected_combat_movement_path = None
-        ended = f" Poprzednia koncentracja zakończona: {', '.join(effect.label for effect in removed)}." if removed else ""
-        message = f"{caster.name} rzuca {action.label}. {target.name} ma {action.value:+d} do ataku, dopóki koncentracja trwa.{ended}"
-        self.board_message = message
-        self._add_message("Koncentracja", message)
-        self._record(
-            "ui_combat_concentration_confirmed",
-            {
-                "caster_id": str(caster.id),
-                "target_id": str(target.id),
-                "action_id": action.id,
-                "value": action.value,
-                "removed_effect_ids": [effect.id for effect in removed],
-            },
-        )
-        self._sync_board_leds()
-        return self.state_payload()
+        return self._apply_combat_resource_transition(transition)
 
     def cancel_combat_concentration_action(self) -> dict[str, object]:
         pending = self.pending_concentration_action
         if pending is None:
             raise ValueError("Nie ma czaru koncentracyjnego do anulowania.")
-        self.pending_concentration_action = None
-        self.board_message = "Anulowano czar koncentracyjny. Kliknij Skanuj planszę, żeby wybrać ruch, cel albo obiekt."
-        self._add_message("Koncentracja", "Anulowano czar koncentracyjny.")
-        self._record("ui_combat_concentration_cancelled", {"caster_id": pending.caster_id, "action_id": pending.action_id})
-        self._sync_board_leds()
-        return self.state_payload()
-
-    def _concentration_effects_for_actor(self, actor_id: str) -> tuple[ActiveCombatEffect, ...]:
-        return tuple(
-            effect
-            for effect in self.active_combat_effects
-            if effect.kind.startswith("concentration_") and effect.source_actor_id == actor_id
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        transition = self.player_combat_resource_flow.cancel_concentration(
+            state=self.combat_state,
+            active_effects=self.active_combat_effects,
+            pending=pending,
         )
-
-    def _remove_concentration_effects_for_actor(self, actor_id: str) -> tuple[ActiveCombatEffect, ...]:
-        removed = self._concentration_effects_for_actor(actor_id)
-        self.active_combat_effects = tuple(
-            effect
-            for effect in self.active_combat_effects
-            if not (effect.kind.startswith("concentration_") and effect.source_actor_id == actor_id)
-        )
-        return removed
+        return self._apply_combat_resource_transition(transition)
 
     def _maybe_prompt_concentration_check(self, applied_damage) -> None:
         if self.combat_state is None or applied_damage is None:
             return
-        damage = int(getattr(applied_damage.damage, "total_applied", 0) or 0)
-        if damage <= 0:
-            return
-        actor_id = str(applied_damage.actor_after.id)
-        effects = self._concentration_effects_for_actor(actor_id)
-        if not effects:
-            return
-        actor = self._actor_by_string_id(actor_id)
-        if actor.is_defeated():
-            removed = self._remove_concentration_effects_for_actor(actor_id)
-            self._add_message("Koncentracja", f"{actor.name} pada. Koncentracja zakończona: {', '.join(effect.label for effect in removed)}.")
-            return
-        dc = max(10, damage // 2)
-        if actor.faction != Faction.ALLY:
-            natural_roll = self.encounter_rng.randint(1, 20)
-            self._resolve_concentration_check(actor_id=actor_id, effect_ids=tuple(effect.id for effect in effects), damage=damage, dc=dc, natural_roll=natural_roll)
-            return
-        self.pending_concentration_check = PendingConcentrationCheck(
-            actor_id=actor_id,
-            effect_ids=tuple(effect.id for effect in effects),
-            damage=damage,
-            dc=dc,
+        transition = self.player_combat_resource_flow.handle_damage(
+            state=self.combat_state,
+            active_effects=self.active_combat_effects,
+            applied_damage=applied_damage,
+            rng=self.encounter_rng,
         )
-        self.board_message = f"{actor.name}: rzut na utrzymanie koncentracji, ST {dc}."
-        self._add_message("Koncentracja", f"{actor.name} otrzymuje {damage} obrażeń. Rzuć CON save przeciw ST {dc}.")
+        if transition is not None:
+            self._apply_combat_resource_transition(transition, sync_board=False)
 
     def submit_concentration_check(self, *, natural_roll: int) -> dict[str, object]:
         pending = self.pending_concentration_check
         if pending is None:
             raise ValueError("Nie ma oczekującego rzutu na koncentrację.")
-        self._resolve_concentration_check(
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        transition = self.player_combat_resource_flow.resolve_concentration_check(
+            state=self.combat_state,
+            active_effects=self.active_combat_effects,
             actor_id=pending.actor_id,
             effect_ids=pending.effect_ids,
             damage=pending.damage,
             dc=pending.dc,
             natural_roll=int(natural_roll),
         )
-        self.pending_concentration_check = None
-        self._sync_board_leds()
-        return self.state_payload()
+        return self._apply_combat_resource_transition(transition)
 
-    def _resolve_concentration_check(
+    def _apply_combat_resource_transition(
         self,
+        transition: CombatResourceTransition,
         *,
-        actor_id: str,
-        effect_ids: tuple[str, ...],
-        damage: int,
-        dc: int,
-        natural_roll: int,
-    ) -> None:
-        actor = self._actor_by_string_id(actor_id)
-        modifier = ability_modifier(actor.ability_scores.constitution)
-        request = D20RollRequest(
-            modifiers=(
-                RollModifier(
-                    "Modyfikator Kondycji",
-                    modifier,
-                    RollModifierType.ABILITY,
-                    stacking_key="ability:constitution",
-                ),
-            )
-        )
-        roll = resolve_d20_roll(D20RollInput(request, int(natural_roll)))
-        success = roll.total >= int(dc)
-        effect_labels = tuple(
-            effect.label
-            for effect in self.active_combat_effects
-            if effect.id in effect_ids
-        )
-        removed_effect_ids: list[str] = []
-        if not success:
-            removed = self._remove_concentration_effects_for_actor(actor_id)
-            removed_effect_ids = [effect.id for effect in removed if effect.id in effect_ids]
-        result_text = "koncentracja utrzymana" if success else f"koncentracja przerwana: {', '.join(effect_labels) or 'efekt'}"
-        self.board_message = f"{actor.name}: CON save {roll.natural_roll} + {modifier} = {roll.total} / ST {dc}; {result_text}."
-        self._add_message("Koncentracja", self.board_message)
-        self._record(
-            "ui_combat_concentration_check",
-            {
-                "actor_id": actor_id,
-                "effect_ids": list(effect_ids),
-                "removed_effect_ids": removed_effect_ids,
-                "damage": damage,
-                "dc": dc,
-                "natural_roll": roll.natural_roll,
-                "modifier": modifier,
-                "total": roll.total,
-                "success": success,
-            },
-        )
+        sync_board: bool = True,
+    ) -> dict[str, object]:
+        self.combat_state = transition.state
+        self.active_combat_effects = transition.active_effects
+        if transition.clear_player_choices:
+            self._clear_player_pending_choices()
+        if transition.clear_pending_action:
+            self.pending_concentration_action = None
+        if transition.pending_action is not None:
+            self.pending_concentration_action = transition.pending_action
+        if transition.clear_pending_check:
+            self.pending_concentration_check = None
+        if transition.pending_check is not None:
+            self.pending_concentration_check = transition.pending_check
+        if transition.clear_movement_preview:
+            self.selected_combat_movement_path = None
+        if transition.board_message:
+            self.board_message = transition.board_message
+        if transition.message_title:
+            self._add_message(transition.message_title, transition.message_body)
+        if transition.event_type:
+            self._record(transition.event_type, dict(transition.event_payload))
+        if sync_board:
+            self._sync_board_leds()
+        return self.state_payload()
 
     def submit_player_attack(self, *, target_id: str, natural_roll: int, damage: int = 0, natural_roll_2: int | None = None) -> dict[str, object]:
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
-        if self.combat_state.status.value != "active":
-            raise ValueError("Walka nie jest aktywna.")
         encounter = self._active_encounter()
         if encounter is None:
             raise ValueError("Brak danych encountera dla aktywnej walki.")
         attacker = combat_current_actor(self.combat_state)
-        if attacker.faction != Faction.ALLY:
-            raise ValueError("To nie jest tura bohatera.")
         source = self._selected_attack_source(attacker)
         if source is None:
             raise ValueError(f"Aktor {attacker.name} nie ma zdefiniowanego ataku.")
-        if not self._actor_can_use_attack_source(attacker, source):
-            raise ValueError(f"Brak slotów czaru dla {source.name}.")
-        action = start_attack_action(encounter.board, attacker, self.combat_state.actors, source)
-        selected = select_attack_target(action, target_id=target_id)
-        assert selected.selected_target is not None
-        target_actor = next((actor for actor in self.combat_state.actors if str(actor.id) == selected.selected_target.id), None)
-        if target_actor is None:
-            raise ValueError(f"Nieznany cel ataku: {selected.selected_target.id}.")
-        source = self._effective_attack_source(attacker, source, target_actor)
-        declaration = AttackDeclaration(attacker=attacker, target=selected.selected_target, source=source)
-        attack_roll = resolve_d20_roll(_manual_d20_input(source.attack_roll_request, natural_roll, natural_roll_2))
-        resource_use = self.action_resource_resolver.consume_action_and_source_resource(
-            self.combat_state,
-            attacker,
-            spell_level=source.spell_level,
+        transition = self.player_combat_action_flow.resolve_direct_attack(
+            state=self.combat_state,
+            board=encounter.board,
+            source=source,
+            target_id=target_id,
+            active_effects=self.active_combat_effects,
+            natural_roll=natural_roll,
+            natural_roll_2=natural_roll_2,
+            damage=damage,
         )
-        self.combat_state = resource_use.state
-        resolution = resolve_attack(declaration, attack_roll, selected.action_use)
-        self.active_combat_effects = consume_next_attack_effects(
-            self.active_combat_effects,
-            str(attacker.id),
-            selected.selected_target.id,
-        )
-        updated_state = self.combat_state
-        message = _player_attack_message(attacker.name, selected.selected_target.name, attack_roll.total, resolution.hit, resolution.critical)
-        applied_damage = None
-        if resolution.hit:
-            damage_amount = max(0, int(damage))
-            damage_result = resolve_damage((DamageComponentInput(damage_amount, DamageType(source.damage_type), source.name),))
-            target_actor = next((actor for actor in updated_state.actors if str(actor.id) == selected.selected_target.id), target_actor)
-            applied_damage = apply_damage_result(target_actor, damage_result)
-            updated_target = applied_damage.actor_after
-            updated_state = replace_actor(updated_state, updated_target)
-            message = f"{message} {_damage_application_message(applied_damage)}"
-        self.combat_state = updated_state
-        self.pending_player_attack = None
-        self.pending_combat_help = None
-        self.selected_combat_movement_path = None
-        self._add_message("Atak", message)
-        self._record(
-            "ui_combat_player_attack",
-            {
-                "attacker_id": str(attacker.id),
-                "target_id": selected.selected_target.id,
-                "natural_roll": attack_roll.natural_roll,
-                "natural_rolls": list(attack_roll.natural_rolls),
-                "total": attack_roll.total,
-                "hit": resolution.hit,
-                "critical": resolution.critical,
-                "damage": int(damage) if resolution.hit else 0,
-                "target_ac": selected.selected_target.ac,
-                "damage_result": _applied_damage_payload(applied_damage),
-            },
-        )
-        if applied_damage is not None:
-            self._maybe_prompt_concentration_check(applied_damage)
-        self._sync_board_leds()
-        return self.state_payload()
+        return self._apply_player_attack_transition(transition)
 
     def select_player_area_spell_at_position(self, position: Coordinate) -> dict[str, object]:
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
-        if self.combat_state.status.value != "active":
-            raise ValueError("Walka nie jest aktywna.")
         encounter = self._active_encounter()
         if encounter is None:
             raise ValueError("Brak danych encountera dla aktywnej walki.")
         caster = combat_current_actor(self.combat_state)
-        if caster.faction != Faction.ALLY:
-            raise ValueError("To nie jest tura bohatera.")
         source = self._selected_attack_source(caster)
-        if source is None or source.area is None:
+        if source is None:
             raise ValueError("Wybrane źródło ataku nie jest czarem obszarowym.")
-        if not self._actor_can_use_attack_source(caster, source):
-            raise ValueError(f"Brak slotów czaru dla {source.name}.")
-        if source.area.shape == SpellAreaShape.RADIUS:
-            centers = legal_area_centers(encounter.board, caster.position, source.range_feet)
-            if position not in centers:
-                raise ValueError("Wybrane pole nie jest legalnym środkiem obszaru czaru.")
-            area_positions = area_positions_for_center(encounter.board, position, source.area)
-            anchor = position
-        else:
-            anchors = direction_anchor_positions(encounter.board, caster.position)
-            if position not in anchors:
-                raise ValueError("Kliknij sąsiednie pole, żeby wybrać kierunek czaru.")
-            area_positions = area_positions_for_direction(encounter.board, caster.position, position, source.area)
-            anchor = position
-        targets = actors_in_area(self.combat_state.actors, area_positions, caster)
-        self.pending_area_spell = PendingAreaSpell(
-            caster_id=str(caster.id),
-            source_id=source.id,
-            origin=caster.position,
-            anchor=anchor,
-            area_positions=area_positions,
-            target_ids=tuple(str(target.id) for target in targets),
+        transition = self.player_area_healing_flow.select_area_spell(
+            state=self.combat_state,
+            board=encounter.board,
+            source=source,
+            position=position,
         )
+        self.combat_state = transition.state
+        self.pending_area_spell = transition.pending
         self.pending_player_attack = None
         self.pending_player_healing = None
         self.pending_combat_help = None
-        target_names = ", ".join(target.name for target in targets) or "brak celów"
-        self.board_message = f"{source.name}: podgląd obszaru gotowy. Cele: {target_names}. Potwierdź Enterem albo przyciskiem."
-        self._add_message("Czar obszarowy", f"{caster.name} wyznacza obszar {source.name}. Cele w obszarze: {target_names}.")
-        self._record(
-            "ui_combat_area_spell_selected",
-            {
-                "caster_id": str(caster.id),
-                "source_id": source.id,
-                "anchor": [anchor.col, anchor.row],
-                "area_positions": [[tile.col, tile.row] for tile in area_positions],
-                "target_ids": [str(target.id) for target in targets],
-            },
-        )
+        self.board_message = transition.board_message
+        self._add_message(transition.message_title, transition.message_body)
+        self._record(transition.event_type, dict(transition.event_payload))
         self._sync_board_leds()
         return self.state_payload()
 
@@ -1722,39 +1506,16 @@ class ExplorationUiSession:
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
         caster = combat_current_actor(self.combat_state)
-        if str(caster.id) != pending.caster_id:
-            raise ValueError("Oczekujący czar nie należy do aktywnego aktora.")
         source = self._attack_source_by_id(caster, pending.source_id)
         if source is None:
             raise ValueError(f"Aktor {caster.name} nie ma tego czaru.")
-        if not self._actor_can_use_attack_source(caster, source):
-            raise ValueError(f"Brak slotów czaru dla {source.name}.")
-        confirmation = self.area_spell_resolver.confirm_area_spell(
-            self.combat_state,
-            caster=caster,
+        transition = self.player_area_healing_flow.confirm_area_spell(
+            state=self.combat_state,
             source=source,
-            target_ids=pending.target_ids,
+            pending=pending,
             rng=self.encounter_rng,
         )
-        self.combat_state = confirmation.state
-        saves = confirmation.saving_throws
-        self.pending_area_spell = replace(pending, stage="damage_roll", saving_throws=saves)
-        self.selected_combat_movement_path = None
-        save_text = " ".join(_spell_save_message(save) for save in saves)
-        self.board_message = (
-            f"{source.name} potwierdzony. Rzuć obrażenia {source.damage_hint}; "
-            f"sukces save oznacza {_save_damage_on_success_label(source.save_damage_on_success)}."
-        )
-        self._add_message(
-            "Czar obszarowy",
-            f"{caster.name} rzuca {source.name}. {save_text} Rzuć obrażenia {source.damage_hint}.",
-        )
-        self._record(
-            "ui_combat_area_spell_confirmed",
-            {"caster_id": str(caster.id), "source_id": source.id, "saving_throws": [save.as_payload() for save in saves]},
-        )
-        self._sync_board_leds()
-        return self.state_payload()
+        return self._apply_player_area_spell_transition(transition)
 
     def submit_player_area_spell_damage(self, *, damage: int) -> dict[str, object]:
         pending = self.pending_area_spell
@@ -1763,96 +1524,66 @@ class ExplorationUiSession:
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
         caster = combat_current_actor(self.combat_state)
-        if str(caster.id) != pending.caster_id:
-            raise ValueError("Oczekujące obrażenia czaru nie należą do aktywnego aktora.")
         source = self._attack_source_by_id(caster, pending.source_id)
         if source is None:
             raise ValueError(f"Aktor {caster.name} nie ma tego czaru.")
-        damage_amount = max(0, int(damage))
-        resolution = self.area_spell_resolver.apply_area_damage(
-            self.combat_state,
+        transition = self.player_area_healing_flow.submit_area_damage(
+            state=self.combat_state,
             source=source,
-            target_ids=pending.target_ids,
-            base_damage=damage_amount,
-            saving_throws=pending.saving_throws,
+            pending=pending,
+            damage=damage,
         )
-        applied_results = [(target.applied_damage, target.saving_throw) for target in resolution.targets]
-        self.combat_state = resolution.state
-        self.pending_area_spell = None
-        if applied_results:
-            result_text = "; ".join(
-                f"{applied.actor_before.name}: HP {applied.hp_before} -> {applied.hp_after}"
-                for applied, _save in applied_results
-            )
-        else:
-            result_text = "brak trafionych celów."
-        self._add_message("Obrażenia obszarowe", f"{caster.name} kończy {source.name}: {result_text}")
-        self._record(
-            "ui_combat_area_spell_damage",
-            {
-                "caster_id": str(caster.id),
-                "source_id": source.id,
-                "base_damage": damage_amount,
-                "targets": [
-                    {"damage_result": _applied_damage_payload(applied), "saving_throw": save.as_payload() if save is not None else None}
-                    for applied, save in applied_results
-                ],
-            },
+        return self._apply_player_area_spell_transition(transition)
+
+    def cancel_player_area_spell(self) -> dict[str, object]:
+        pending = self.pending_area_spell
+        if pending is None:
+            raise ValueError("Nie ma czaru obszarowego do anulowania.")
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        transition = self.player_area_healing_flow.cancel_area_spell(
+            state=self.combat_state,
+            pending=pending,
         )
-        for applied, _save in applied_results:
+        return self._apply_player_area_spell_transition(transition)
+
+    def _apply_player_area_spell_transition(
+        self,
+        transition: PlayerAreaSpellTransition,
+    ) -> dict[str, object]:
+        self.combat_state = transition.state
+        self.pending_area_spell = transition.pending
+        if transition.clear_movement_preview:
+            self.selected_combat_movement_path = None
+        if transition.board_message:
+            self.board_message = transition.board_message
+        self._add_message(transition.message_title, transition.message_body)
+        self._record(transition.event_type, dict(transition.event_payload))
+        for applied in transition.applied_damages:
             self._maybe_prompt_concentration_check(applied)
             if self.pending_concentration_check is not None:
                 break
         self._sync_board_leds()
         return self.state_payload()
 
-    def cancel_player_area_spell(self) -> dict[str, object]:
-        pending = self.pending_area_spell
-        if pending is None:
-            raise ValueError("Nie ma czaru obszarowego do anulowania.")
-        self.pending_area_spell = None
-        self.board_message = "Anulowano czar obszarowy. Kliknij Skanuj planszę, żeby wybrać ruch, cel albo akcję."
-        self._add_message("Czar obszarowy", "Anulowano czar obszarowy.")
-        self._record("ui_combat_area_spell_cancelled", {"caster_id": pending.caster_id, "source_id": pending.source_id})
-        self._sync_board_leds()
-        return self.state_payload()
-
     def select_player_attack_target_at_position(self, position: Coordinate) -> dict[str, object]:
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
-        if self.combat_state.status.value != "active":
-            raise ValueError("Walka nie jest aktywna.")
         encounter = self._active_encounter()
         if encounter is None:
             raise ValueError("Brak danych encountera dla aktywnej walki.")
         attacker = combat_current_actor(self.combat_state)
-        if attacker.faction != Faction.ALLY:
-            raise ValueError("To nie jest tura bohatera.")
         source = self._selected_attack_source(attacker)
         if source is None:
             raise ValueError(f"Aktor {attacker.name} nie ma zdefiniowanego ataku.")
-        if not self._actor_can_use_attack_source(attacker, source):
-            raise ValueError(f"Brak slotów czaru dla {source.name}.")
-        action = start_attack_action(encounter.board, attacker, self.combat_state.actors, source)
-        selected = select_attack_target(action, position=position)
-        assert selected.selected_target is not None
-        self.pending_player_attack = PendingPlayerAttack(
-            attacker_id=str(attacker.id),
-            target_id=selected.selected_target.id,
-            source_id=source.id,
+        transition = self.player_combat_action_flow.select_attack_target(
+            state=self.combat_state,
+            board=encounter.board,
+            source=source,
+            position=position,
+            active_effects=self.active_combat_effects,
         )
-        self.pending_combat_help = None
-        self.board_message = f"Wybrano cel ataku: {selected.selected_target.name}. Potwierdź atak Enterem albo przyciskiem."
-        self._add_message(
-            "Podgląd ataku",
-            f"{attacker.name} celuje w {selected.selected_target.name}. Sprawdź warunki ataku i potwierdź przed rzutem.",
-        )
-        self._record(
-            "ui_combat_player_attack_target_selected",
-            {"attacker_id": str(attacker.id), "target_id": selected.selected_target.id},
-        )
-        self._sync_board_leds()
-        return self.state_payload()
+        return self._apply_player_attack_transition(transition)
 
     def confirm_player_attack_target(self) -> dict[str, object]:
         pending = self.pending_player_attack
@@ -1864,91 +1595,31 @@ class ExplorationUiSession:
         if encounter is None:
             raise ValueError("Brak danych encountera dla aktywnej walki.")
         attacker = combat_current_actor(self.combat_state)
-        if str(attacker.id) != pending.attacker_id:
-            raise ValueError("Oczekujący atak nie należy do aktywnego aktora.")
         source = self._attack_source_by_id(attacker, pending.source_id)
         if source is None:
             raise ValueError(f"Aktor {attacker.name} nie ma zdefiniowanego ataku.")
-        action = start_attack_action(encounter.board, attacker, self.combat_state.actors, source)
-        selected = select_attack_target(action, target_id=pending.target_id)
-        assert selected.selected_target is not None
-        target_actor = next((actor for actor in self.combat_state.actors if str(actor.id) == selected.selected_target.id), None)
-        if target_actor is None:
-            raise ValueError(f"Nieznany cel ataku: {selected.selected_target.id}.")
-        source = self._effective_attack_source(attacker, source, target_actor)
-        if source.save_ability:
-            if not self._actor_can_use_attack_source(attacker, source):
-                raise ValueError(f"Brak slotów czaru dla {source.name}.")
-            confirmation = self.spell_save_attack_resolver.confirm_target_save_spell(
-                self.combat_state,
-                caster=attacker,
-                target=target_actor,
-                source=source,
-                rng=self.encounter_rng,
-            )
-            self.combat_state = confirmation.state
-            save = confirmation.saving_throw
-            self.selected_combat_movement_path = None
-            save_text = _spell_save_message(save)
-            if save.damage_multiplier <= 0:
-                self.pending_player_attack = None
-                self.pending_combat_help = None
-                self.board_message = f"{source.name}: {save.actor_name} zdaje rzut obronny. Brak obrażeń."
-                self._add_message("Czar", f"{attacker.name} rzuca {source.name}. {save_text} Sukces: brak obrażeń.")
-                self._record(
-                    "ui_combat_player_save_spell_resolved",
-                    {
-                        "attacker_id": str(attacker.id),
-                        "target_id": selected.selected_target.id,
-                        "source_id": source.id,
-                        "saving_throw": save.as_payload(),
-                        "damage_required": False,
-                    },
-                )
-                self._sync_board_leds()
-                return self.state_payload()
-            self.pending_player_attack = replace(pending, stage="damage_roll", saving_throws=(save,), hit=True)
-            self.board_message = f"{source.name}: {save.actor_name} nie zdaje rzutu obronnego. Wpisz obrażenia."
-            self._add_message("Czar", f"{attacker.name} rzuca {source.name}. {save_text} Wpisz obrażenia {source.damage_hint}.")
-            self._record(
-                "ui_combat_player_save_spell_confirmed",
-                {
-                    "attacker_id": str(attacker.id),
-                    "target_id": selected.selected_target.id,
-                    "source_id": source.id,
-                    "saving_throw": save.as_payload(),
-                    "damage_required": True,
-                },
-            )
-            self._sync_board_leds()
-            return self.state_payload()
-        self.pending_player_attack = replace(pending, stage="attack_roll")
-        instruction = roll_instruction(source.attack_roll_request)
-        self.board_message = f"Potwierdzono atak: {attacker.name} -> {selected.selected_target.name}. Wpisz rzut d20 w panelu walki."
-        self._add_message(
-            "Atak",
-            f"{attacker.name} atakuje {selected.selected_target.name}. {instruction.message}",
+        transition = self.player_combat_action_flow.confirm_attack_target(
+            state=self.combat_state,
+            board=encounter.board,
+            source=source,
+            pending=pending,
+            active_effects=self.active_combat_effects,
+            rng=self.encounter_rng,
         )
-        self._record(
-            "ui_combat_player_attack_target_confirmed",
-            {"attacker_id": str(attacker.id), "target_id": selected.selected_target.id},
-        )
-        self._sync_board_leds()
-        return self.state_payload()
+        return self._apply_player_attack_transition(transition)
 
     def cancel_player_attack_target(self) -> dict[str, object]:
         pending = self.pending_player_attack
         if pending is None or pending.stage not in {"confirm_attack", "attack_roll"}:
             raise ValueError("Nie ma wyboru celu ataku do anulowania.")
-        self.pending_player_attack = None
-        self.board_message = "Anulowano wybór celu ataku. Kliknij Skanuj planszę, żeby wybrać ruch albo cel."
-        self._add_message("Atak", "Anulowano wybór celu ataku.")
-        self._record(
-            "ui_combat_player_attack_target_cancelled",
-            {"attacker_id": pending.attacker_id, "target_id": pending.target_id},
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        transition = self.player_combat_action_flow.cancel_attack_target(
+            state=self.combat_state,
+            pending=pending,
+            active_effects=self.active_combat_effects,
         )
-        self._sync_board_leds()
-        return self.state_payload()
+        return self._apply_player_attack_transition(transition)
 
     def submit_player_attack_roll(self, *, natural_roll: int, natural_roll_2: int | None = None) -> dict[str, object]:
         pending = self.pending_player_attack
@@ -1960,76 +1631,19 @@ class ExplorationUiSession:
         if encounter is None:
             raise ValueError("Brak danych encountera dla aktywnej walki.")
         attacker = combat_current_actor(self.combat_state)
-        if str(attacker.id) != pending.attacker_id:
-            raise ValueError("Oczekujący atak nie należy do aktywnego aktora.")
         source = self._attack_source_by_id(attacker, pending.source_id)
         if source is None:
             raise ValueError(f"Aktor {attacker.name} nie ma zdefiniowanego ataku.")
-        action = start_attack_action(encounter.board, attacker, self.combat_state.actors, source)
-        selected = select_attack_target(action, target_id=pending.target_id)
-        assert selected.selected_target is not None
-        target_actor = next((actor for actor in self.combat_state.actors if str(actor.id) == selected.selected_target.id), None)
-        if target_actor is None:
-            raise ValueError(f"Nieznany cel ataku: {selected.selected_target.id}.")
-        source = self._effective_attack_source(attacker, source, target_actor)
-        declaration = AttackDeclaration(attacker=attacker, target=selected.selected_target, source=source)
-        attack_roll = resolve_d20_roll(_manual_d20_input(source.attack_roll_request, natural_roll, natural_roll_2))
-        resource_use = self.action_resource_resolver.consume_action_and_source_resource(
-            self.combat_state,
-            attacker,
-            spell_level=source.spell_level,
+        transition = self.player_combat_action_flow.submit_attack_roll(
+            state=self.combat_state,
+            board=encounter.board,
+            source=source,
+            pending=pending,
+            active_effects=self.active_combat_effects,
+            natural_roll=natural_roll,
+            natural_roll_2=natural_roll_2,
         )
-        self.combat_state = resource_use.state
-        resolution = resolve_attack(declaration, attack_roll, selected.action_use)
-        self.active_combat_effects = consume_next_attack_effects(
-            self.active_combat_effects,
-            str(attacker.id),
-            selected.selected_target.id,
-        )
-        self.selected_combat_movement_path = None
-        message = _player_attack_message(attacker.name, selected.selected_target.name, attack_roll.total, resolution.hit, resolution.critical)
-        if not resolution.hit:
-            self.pending_player_attack = None
-            self.pending_combat_help = None
-            self._add_message("Atak", message)
-            self._record(
-                "ui_combat_player_attack_roll",
-                {
-                    "attacker_id": str(attacker.id),
-                    "target_id": selected.selected_target.id,
-                    "natural_roll": attack_roll.natural_roll,
-                    "natural_rolls": list(attack_roll.natural_rolls),
-                    "total": attack_roll.total,
-                    "hit": False,
-                    "critical": resolution.critical,
-                },
-            )
-            self._sync_board_leds()
-            return self.state_payload()
-        self.pending_player_attack = replace(
-            pending,
-            stage="damage_roll",
-            natural_roll=attack_roll.natural_roll,
-            natural_rolls=attack_roll.natural_rolls,
-            total=attack_roll.total,
-            hit=True,
-            critical=resolution.critical,
-        )
-        self._add_message("Atak", f"{message} Trafienie: rzuć obrażenia {source.damage_hint} i wpisz sumę.")
-        self._record(
-            "ui_combat_player_attack_roll",
-            {
-                "attacker_id": str(attacker.id),
-                "target_id": selected.selected_target.id,
-                "natural_roll": attack_roll.natural_roll,
-                "natural_rolls": list(attack_roll.natural_rolls),
-                "total": attack_roll.total,
-                "hit": True,
-                "critical": resolution.critical,
-            },
-        )
-        self._sync_board_leds()
-        return self.state_payload()
+        return self._apply_player_attack_transition(transition)
 
     def submit_player_damage_roll(self, *, damage: int) -> dict[str, object]:
         pending = self.pending_player_attack
@@ -2037,83 +1651,64 @@ class ExplorationUiSession:
             raise ValueError("Nie ma oczekującego rzutu obrażeń gracza.")
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
-        encounter = self._active_encounter()
-        if encounter is None:
+        if self._active_encounter() is None:
             raise ValueError("Brak danych encountera dla aktywnej walki.")
         attacker = combat_current_actor(self.combat_state)
-        if str(attacker.id) != pending.attacker_id:
-            raise ValueError("Oczekujące obrażenia nie należą do aktywnego aktora.")
         source = self._attack_source_by_id(attacker, pending.source_id)
         if source is None:
             raise ValueError(f"Aktor {attacker.name} nie ma zdefiniowanego ataku.")
-        source = self._effective_attack_source(attacker, source)
-        target_actor = next((actor for actor in self.combat_state.actors if str(actor.id) == pending.target_id), None)
-        if target_actor is None:
-            raise ValueError(f"Nieznany cel ataku: {pending.target_id}.")
-        damage_amount = max(0, int(damage))
-        save = pending.saving_throws[0] if pending.saving_throws else None
-        damage_resolution = self.spell_save_attack_resolver.apply_target_damage(
-            self.combat_state,
-            target_id=pending.target_id,
+        transition = self.player_combat_action_flow.submit_damage(
+            state=self.combat_state,
             source=source,
-            base_damage=damage_amount,
-            saving_throw=save,
+            pending=pending,
+            active_effects=self.active_combat_effects,
+            damage=damage,
         )
-        applied_damage = damage_resolution.applied_damage
-        damage_result = applied_damage.damage
-        self.combat_state = damage_resolution.state
-        self.pending_player_attack = None
-        self.pending_combat_help = None
-        self._add_message(
-            "Obrażenia",
-            f"{attacker.name} zadaje obrażenia. {_damage_application_message(applied_damage)}",
-        )
-        self._record(
-            "ui_combat_player_damage_roll",
-            {
-                "attacker_id": str(attacker.id),
-                "target_id": str(target_actor.id),
-                "base_damage": damage_amount,
-                "damage": damage_result.total_applied,
-                "saving_throw": save.as_payload() if save is not None else None,
-                "damage_result": _applied_damage_payload(applied_damage),
-            },
-        )
-        self._maybe_prompt_concentration_check(applied_damage)
+        return self._apply_player_attack_transition(transition)
+
+    def _apply_player_attack_transition(
+        self,
+        transition: PlayerAttackTransition,
+    ) -> dict[str, object]:
+        self.combat_state = transition.state
+        self.active_combat_effects = transition.active_effects
+        self.pending_player_attack = transition.pending
+        if transition.clear_combat_help:
+            self.pending_combat_help = None
+        if transition.clear_movement_preview:
+            self.selected_combat_movement_path = None
+        if transition.board_message:
+            self.board_message = transition.board_message
+        self._add_message(transition.message_title, transition.message_body)
+        self._record(transition.event_type, dict(transition.event_payload))
+        if transition.applied_damage is not None:
+            self._maybe_prompt_concentration_check(transition.applied_damage)
         self._sync_board_leds()
         return self.state_payload()
 
     def select_player_healing_target_at_position(self, position: Coordinate) -> dict[str, object]:
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
-        if self.combat_state.status.value != "active":
-            raise ValueError("Walka nie jest aktywna.")
         encounter = self._active_encounter()
         if encounter is None:
             raise ValueError("Brak danych encountera dla aktywnej walki.")
         healer = combat_current_actor(self.combat_state)
-        if healer.faction != Faction.ALLY:
-            raise ValueError("To nie jest tura bohatera.")
         source = self._selected_healing_source(healer)
         if source is None:
             raise ValueError(f"Aktor {healer.name} nie ma zdefiniowanego leczenia.")
-        targets = legal_healing_targets(encounter.board, healer, self.combat_state.actors, source)
-        target = next((candidate for candidate in targets if candidate.position == position), None)
-        if target is None:
-            raise ValueError("Wybrane pole nie jest legalnym celem leczenia.")
-        self.pending_player_healing = PendingPlayerHealing(
-            healer_id=str(healer.id),
-            target_id=target.id,
-            source_id=source.id,
+        transition = self.player_area_healing_flow.select_healing_target(
+            state=self.combat_state,
+            board=encounter.board,
+            source=source,
+            position=position,
         )
+        self.combat_state = transition.state
+        self.pending_player_healing = transition.pending
         self.pending_player_attack = None
         self.pending_combat_help = None
-        self.board_message = f"Wybrano leczenie: {source.name} -> {target.name}. Wpisz wynik leczenia."
-        self._add_message("Leczenie", f"{healer.name} leczy {target.name}. Rzuć {source.healing_hint} i wpisz sumę.")
-        self._record(
-            "ui_combat_player_healing_target_selected",
-            {"healer_id": str(healer.id), "target_id": target.id, "source_id": source.id},
-        )
+        self.board_message = transition.board_message
+        self._add_message(transition.message_title, transition.message_body)
+        self._record(transition.event_type, dict(transition.event_payload))
         self._sync_board_leds()
         return self.state_payload()
 
@@ -2124,40 +1719,21 @@ class ExplorationUiSession:
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
         healer = combat_current_actor(self.combat_state)
-        if str(healer.id) != pending.healer_id:
-            raise ValueError("Oczekujące leczenie nie należy do aktywnego aktora.")
         source = next((candidate for candidate in self._healing_sources_for_actor(healer) if candidate.id == pending.source_id), None)
         if source is None:
             raise ValueError(f"Aktor {healer.name} nie ma tego źródła leczenia.")
-        if not self._actor_can_use_healing_source(healer, source):
-            raise ValueError(f"Brak slotów czaru dla {source.name}.")
-        healing_resolution = self.healing_action_resolver.apply_healing(
-            self.combat_state,
-            healer=healer,
-            target_id=pending.target_id,
+        transition = self.player_area_healing_flow.submit_healing(
+            state=self.combat_state,
             source=source,
-            amount=int(healing),
+            pending=pending,
+            healing=healing,
         )
-        applied = healing_resolution.applied_healing
-        target_actor = applied.actor_before
-        self.combat_state = healing_resolution.state
-        self.pending_player_healing = None
-        self._add_message(
-            "Leczenie",
-            f"{healer.name} używa {source.name}. {target_actor.name}: HP {applied.hp_before} -> {applied.hp_after} ({applied.effective_healing} realnie przywrócone).",
-        )
-        self._record(
-            "ui_combat_player_healing_roll",
-            {
-                "healer_id": str(healer.id),
-                "target_id": str(target_actor.id),
-                "source_id": source.id,
-                "healing": applied.amount,
-                "effective_healing": applied.effective_healing,
-                "hp_before": applied.hp_before,
-                "hp_after": applied.hp_after,
-            },
-        )
+        self.combat_state = transition.state
+        self.pending_player_healing = transition.pending
+        if transition.board_message:
+            self.board_message = transition.board_message
+        self._add_message(transition.message_title, transition.message_body)
+        self._record(transition.event_type, dict(transition.event_payload))
         self._sync_board_leds()
         return self.state_payload()
 
@@ -2165,114 +1741,71 @@ class ExplorationUiSession:
         pending = self.pending_player_healing
         if pending is None:
             raise ValueError("Nie ma leczenia do anulowania.")
-        self.pending_player_healing = None
-        self.board_message = "Anulowano leczenie. Kliknij Skanuj planszę, żeby wybrać ruch, cel albo akcję."
-        self._add_message("Leczenie", "Anulowano leczenie.")
-        self._record("ui_combat_player_healing_cancelled", {"healer_id": pending.healer_id, "target_id": pending.target_id})
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        transition = self.player_area_healing_flow.cancel_healing(
+            state=self.combat_state,
+            pending=pending,
+        )
+        self.combat_state = transition.state
+        self.pending_player_healing = transition.pending
+        self.board_message = transition.board_message
+        self._add_message(transition.message_title, transition.message_body)
+        self._record(transition.event_type, dict(transition.event_payload))
         self._sync_board_leds()
         return self.state_payload()
 
     def preview_combat_movement(self, *, col: int, row: int) -> dict[str, object]:
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
-        if self.combat_state.status.value != "active":
-            raise ValueError("Walka nie jest aktywna.")
         encounter = self._active_encounter()
         if encounter is None:
             raise ValueError("Brak danych encountera dla aktywnej walki.")
-        actor = combat_current_actor(self.combat_state)
-        if actor.faction != Faction.ALLY:
-            raise ValueError("To nie jest tura bohatera.")
-        destination = Coordinate(int(col), int(row))
-        movement_actor = replace(actor, speed_feet=movement_remaining(self.combat_state, actor))
-        path = find_path(encounter.board, movement_actor, self.combat_state.actors, destination)
-        if not path.valid:
-            raise ValueError("Nie można dojść do wskazanego pola.")
+        preview = self.combat_movement_flow.preview(
+            state=self.combat_state,
+            board=encounter.board,
+            destination=Coordinate(int(col), int(row)),
+        )
         self.pending_opportunity_movement = None
-        self.selected_combat_movement_path = path
-        self.board_message = (
-            f"Wybrano ścieżkę ruchu {actor.name} -> {destination.as_tuple()} "
-            f"({path.cost_feet} ft). Kliknij to pole ponownie, żeby zatwierdzić."
-        )
-        self._record(
-            "ui_combat_movement_previewed",
-            {
-                "actor_id": str(actor.id),
-                "destination": [destination.col, destination.row],
-                "path": [[position.col, position.row] for position in path.path],
-                "cost_feet": path.cost_feet,
-            },
-        )
+        self.selected_combat_movement_path = preview.path
+        self.board_message = preview.board_message
+        self._record(preview.event_type, dict(preview.event_payload))
         self._sync_board_leds()
         return self.state_payload()
 
     def submit_combat_movement(self, *, col: int, row: int) -> dict[str, object]:
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
-        if self.combat_state.status.value != "active":
-            raise ValueError("Walka nie jest aktywna.")
         encounter = self._active_encounter()
         if encounter is None:
             raise ValueError("Brak danych encountera dla aktywnej walki.")
-        actor = combat_current_actor(self.combat_state)
-        if actor.faction != Faction.ALLY:
-            raise ValueError("To nie jest tura bohatera.")
-        destination = Coordinate(int(col), int(row))
-        movement_actor = replace(actor, speed_feet=movement_remaining(self.combat_state, actor))
-        path = find_path(encounter.board, movement_actor, self.combat_state.actors, destination)
-        if not path.valid:
-            raise ValueError("Nie można wykonać ruchu na wybrane pole.")
-        threats = opportunity_attackers_for_movement(
-            self.combat_state,
-            actor,
-            actor.position,
-            destination,
-            encounter.attack_sources_by_actor,
-            self.active_combat_effects,
+        submission = self.combat_movement_flow.submit(
+            state=self.combat_state,
+            board=encounter.board,
+            attack_sources_by_actor=encounter.attack_sources_by_actor,
+            active_effects=self.active_combat_effects,
+            destination=Coordinate(int(col), int(row)),
         )
-        if threats:
+        if submission.requires_opportunity_confirmation:
             self.pending_opportunity_movement = PendingOpportunityMovement(
-                actor_id=str(actor.id),
-                destination=destination,
-                path=path,
-                threat_actor_ids=tuple(str(threat.attacker.id) for threat in threats),
+                actor_id=submission.actor_id,
+                destination=submission.destination,
+                path=submission.path,
+                threat_actor_ids=submission.threat_actor_ids,
             )
-            self.selected_combat_movement_path = path
-            threat_names = ", ".join(threat.attacker.name for threat in threats)
-            self.board_message = f"Ten ruch prowokuje atak okazyjny: {threat_names}. Potwierdź Enterem albo przyciskiem."
-            self._add_message(
-                "Atak okazyjny",
-                f"{actor.name} opuszcza zasięg wroga. Zagrożenia: {threat_names}. Potwierdź ruch, żeby rozstrzygnąć reakcje.",
-            )
-            self._record(
-                "ui_combat_opportunity_movement_pending",
-                {
-                    "actor_id": str(actor.id),
-                    "destination": [destination.col, destination.row],
-                    "threat_actor_ids": [str(threat.attacker.id) for threat in threats],
-                },
-            )
+            self.selected_combat_movement_path = submission.path
+            self.board_message = submission.board_message
+            self._add_message(submission.message_title, submission.message_body)
+            self._record(submission.event_type, dict(submission.event_payload))
             self._sync_board_leds()
             return self.state_payload()
-        result = use_movement(self.combat_state, actor, path)
-        if not result.accepted:
-            raise ValueError(result.message)
-        self.combat_state = result.state
+        self.combat_state = submission.state
         self.selected_combat_movement_path = None
         self.pending_combat_interaction = None
         self.pending_combat_help = None
         self._expire_invalid_combat_effects()
-        self._add_message("Ruch", result.message)
-        self._record(
-            "ui_combat_player_moved",
-            {
-                "actor_id": str(actor.id),
-                "destination": [destination.col, destination.row],
-                "path": [[position.col, position.row] for position in path.path],
-                "cost_feet": path.cost_feet,
-                "movement_remaining_feet": result.movement_remaining_feet,
-            },
-        )
+        self._add_message(submission.message_title, submission.message_body)
+        self._record(submission.event_type, dict(submission.event_payload))
         self._sync_board_leds()
         return self.state_payload()
 
@@ -2285,74 +1818,23 @@ class ExplorationUiSession:
         encounter = self._active_encounter()
         if encounter is None:
             raise ValueError("Brak danych encountera dla aktywnej walki.")
-        actor = next((candidate for candidate in self.combat_state.actors if str(candidate.id) == pending.actor_id), None)
-        if actor is None:
-            raise ValueError("Aktor oczekującego ruchu nie istnieje.")
-
-        messages: list[str] = []
-        applied_damages = []
-        updated_state = self.combat_state
-        for attacker_id in pending.threat_actor_ids:
-            actor = next((candidate for candidate in updated_state.actors if str(candidate.id) == pending.actor_id), actor)
-            if actor.is_defeated():
-                break
-            attacker = next((candidate for candidate in updated_state.actors if str(candidate.id) == attacker_id), None)
-            if attacker is None or attacker.is_defeated():
-                continue
-            source = encounter.attack_sources_by_actor.get(attacker.id)
-            if source is None:
-                continue
-            reaction = use_actor_reaction(updated_state, attacker)
-            if not reaction.accepted:
-                continue
-            updated_state = reaction.state
-            actor = next(candidate for candidate in updated_state.actors if str(candidate.id) == pending.actor_id)
-            source = attack_source_with_target_combat_effects(attacker, actor, source, self.active_combat_effects)
-            attack_roll = resolve_d20_roll(_automatic_d20_input(source.attack_roll_request, self.encounter_rng))
-            declaration = AttackDeclaration(attacker=attacker, target=actor_as_combat_target(actor), source=source)
-            resolution = resolve_attack(declaration, attack_roll, ActionUse.ACTION_AVAILABLE)
-            self.active_combat_effects = consume_next_attack_effects(
-                self.active_combat_effects,
-                str(attacker.id),
-                str(actor.id),
-            )
-            if resolution.hit:
-                if source.damage_fixed is not None:
-                    damage_amount = source.damage_fixed + source.damage_modifier
-                else:
-                    damage_amount = self.encounter_rng.randint(1, source.damage_die_sides or 6) + source.damage_modifier
-                damage_type = DamageType(source.damage_type)
-                damage_result = resolve_damage((DamageComponentInput(damage_amount, damage_type, source.name),))
-                applied_damage = apply_damage_result(actor, damage_result)
-                applied_damages.append(applied_damage)
-                updated_state = replace_actor(updated_state, applied_damage.actor_after)
-                defeated_text = " Cel zostaje pokonany." if applied_damage.defeated_by_damage else ""
-                messages.append(
-                    f"{attacker.name}: d20 {attack_roll.natural_roll}, razem {attack_roll.total}, trafienie. "
-                    f"{_damage_application_message(applied_damage)}{defeated_text}"
-                )
-            else:
-                messages.append(
-                    f"{attacker.name}: d20 {attack_roll.natural_roll}, razem {attack_roll.total}, pudło przeciwko {actor.name}."
-                )
-
-        actor = next((candidate for candidate in updated_state.actors if str(candidate.id) == pending.actor_id), actor)
-        if not actor.is_defeated() and updated_state.status.value == "active":
-            movement = use_movement(updated_state, actor, pending.path)
-            if not movement.accepted:
-                raise ValueError(movement.message)
-            updated_state = movement.state
-            messages.append(movement.message)
-        elif actor.is_defeated():
-            messages.append(f"{actor.name} pada przed wykonaniem ruchu.")
-
-        self.combat_state = updated_state
+        resolution = self.combat_reaction_flow.resolve_opportunity_movement(
+            state=self.combat_state,
+            actor_id=pending.actor_id,
+            path=pending.path,
+            threat_actor_ids=pending.threat_actor_ids,
+            attack_sources_by_actor=encounter.attack_sources_by_actor,
+            active_effects=self.active_combat_effects,
+            roll_d20=lambda request: _automatic_d20_input(request, self.encounter_rng),
+            roll_damage=lambda die_sides: self.encounter_rng.randint(1, die_sides),
+        )
+        self.combat_state = resolution.state
+        self.active_combat_effects = resolution.active_effects
         self.pending_opportunity_movement = None
         self.selected_combat_movement_path = None
         self.pending_combat_interaction = None
         self._expire_invalid_combat_effects()
-        message = " ".join(messages) if messages else "Brak dostępnych reakcji. Ruch zostaje wykonany."
-        self._add_message("Atak okazyjny", message)
+        self._add_message(resolution.message_title, resolution.message_body)
         self._record(
             "ui_combat_opportunity_movement_confirmed",
             {
@@ -2361,7 +1843,7 @@ class ExplorationUiSession:
                 "threat_actor_ids": list(pending.threat_actor_ids),
             },
         )
-        for applied_damage in applied_damages:
+        for applied_damage in resolution.applied_damages:
             self._maybe_prompt_concentration_check(applied_damage)
             if self.pending_concentration_check is not None:
                 break
@@ -2386,134 +1868,66 @@ class ExplorationUiSession:
     def use_combat_dash(self) -> dict[str, object]:
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
-        if self.combat_state.status.value != "active":
-            raise ValueError("Walka nie jest aktywna.")
-        actor = combat_current_actor(self.combat_state)
-        if actor.faction != Faction.ALLY:
-            raise ValueError("To nie jest tura bohatera.")
-        result = use_dash(self.combat_state, actor)
-        if not result.accepted:
-            raise ValueError(result.message)
-        self.combat_state = result.state
+        transition = self.combat_turn_action_flow.use_dash(
+            state=self.combat_state,
+            active_effects=self.active_combat_effects,
+        )
+        self.combat_state = transition.state
+        self.active_combat_effects = transition.active_effects
         self._clear_player_pending_choices()
         self.selected_combat_movement_path = None
-        self._add_message("Dash", result.message)
-        self._record("ui_combat_dash", {"actor_id": str(actor.id), "extra_movement_feet": actor.speed_feet})
+        self._add_message(transition.message_title, transition.message_body)
+        self._record(transition.event_type, dict(transition.event_payload))
         self._sync_board_leds()
         return self.state_payload()
 
     def use_combat_dodge(self) -> dict[str, object]:
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
-        if self.combat_state.status.value != "active":
-            raise ValueError("Walka nie jest aktywna.")
-        actor = combat_current_actor(self.combat_state)
-        if actor.faction != Faction.ALLY:
-            raise ValueError("To nie jest tura bohatera.")
-        action_result = use_turn_action(self.combat_state)
-        if not action_result.accepted:
-            raise ValueError(action_result.message)
-        self.combat_state = action_result.state
-        self.active_combat_effects = tuple(
-            effect
-            for effect in self.active_combat_effects
-            if not (effect.actor_id == str(actor.id) and effect.kind == "dodge_until_next_turn")
-        ) + (
-            ActiveCombatEffect(
-                id=f"dodge_until_next_turn:{actor.id}",
-                actor_id=str(actor.id),
-                kind="dodge_until_next_turn",
-                label="Unik",
-                object_id="combat_action:dodge",
-                value=0,
-            ),
+        transition = self.combat_turn_action_flow.use_dodge(
+            state=self.combat_state,
+            active_effects=self.active_combat_effects,
         )
+        self.combat_state = transition.state
+        self.active_combat_effects = transition.active_effects
         self._clear_player_pending_choices()
         self.selected_combat_movement_path = None
-        message = f"Unik: ataki przeciwko {actor.name} mają utrudnienie do początku następnej tury tego aktora."
-        self._add_message("Unik", message)
-        self._record("ui_combat_dodge", {"actor_id": str(actor.id), "attack_mode": "disadvantage"})
+        self._add_message(transition.message_title, transition.message_body)
+        self._record(transition.event_type, dict(transition.event_payload))
         self._sync_board_leds()
         return self.state_payload()
 
     def use_combat_disengage(self) -> dict[str, object]:
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
-        if self.combat_state.status.value != "active":
-            raise ValueError("Walka nie jest aktywna.")
-        actor = combat_current_actor(self.combat_state)
-        if actor.faction != Faction.ALLY:
-            raise ValueError("To nie jest tura bohatera.")
-        action_result = use_turn_action(self.combat_state)
-        if not action_result.accepted:
-            raise ValueError(action_result.message)
-        self.combat_state = action_result.state
-        self.active_combat_effects = tuple(
-            effect
-            for effect in self.active_combat_effects
-            if not (effect.actor_id == str(actor.id) and effect.kind == "disengage_until_turn_end")
-        ) + (
-            ActiveCombatEffect(
-                id=f"disengage_until_turn_end:{actor.id}",
-                actor_id=str(actor.id),
-                kind="disengage_until_turn_end",
-                label="Odwrót",
-                object_id="combat_action:disengage",
-                value=0,
-            ),
+        transition = self.combat_turn_action_flow.use_disengage(
+            state=self.combat_state,
+            active_effects=self.active_combat_effects,
         )
+        self.combat_state = transition.state
+        self.active_combat_effects = transition.active_effects
         self._clear_player_pending_choices()
         self.selected_combat_movement_path = None
-        message = f"Odwrót: {actor.name} może bezpiecznie odejść do końca tej tury."
-        self._add_message("Odwrót", message)
-        self._record("ui_combat_disengage", {"actor_id": str(actor.id)})
+        self._add_message(transition.message_title, transition.message_body)
+        self._record(transition.event_type, dict(transition.event_payload))
         self._sync_board_leds()
         return self.state_payload()
 
     def start_combat_help(self) -> dict[str, object]:
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
-        if self.combat_state.status.value != "active":
-            raise ValueError("Walka nie jest aktywna.")
-        actor = combat_current_actor(self.combat_state)
-        if actor.faction != Faction.ALLY:
-            raise ValueError("To nie jest tura bohatera.")
-        if self.combat_state.turn_action.action_use != ActionUse.ACTION_AVAILABLE:
-            raise ValueError("Akcja w tej turze została już zużyta.")
-        allies = tuple(
-            candidate
-            for candidate in self.combat_state.actors
-            if candidate.faction == actor.faction and candidate.id != actor.id and not candidate.is_defeated()
-        )
-        targets = tuple(
-            candidate
-            for candidate in self.combat_state.actors
-            if candidate.faction not in {actor.faction, Faction.NEUTRAL}
-            and not candidate.is_defeated()
-            and _coordinates_in_reach(actor.position, candidate.position, 5)
-        )
-        if not allies:
-            raise ValueError("Brak żywego sojusznika, któremu można pomóc.")
-        if not targets:
-            raise ValueError("Brak przeciwnika w zasięgu 5 ft pomagającego.")
+        preparation = self.combat_turn_action_flow.prepare_help(state=self.combat_state)
         self.pending_combat_help = PendingCombatHelp(
-            helper_id=str(actor.id),
-            ally_ids=tuple(str(ally.id) for ally in allies),
-            target_ids=tuple(str(target.id) for target in targets),
+            helper_id=preparation.helper_id,
+            ally_ids=preparation.ally_ids,
+            target_ids=preparation.target_ids,
         )
         self.pending_player_attack = None
         self.pending_combat_interaction = None
         self.selected_combat_movement_path = None
-        self.board_message = "Wybierz sojusznika i cel pomocy w panelu walki."
-        self._add_message("Pomoc", f"{actor.name} przygotowuje akcję Help.")
-        self._record(
-            "ui_combat_help_started",
-            {
-                "helper_id": str(actor.id),
-                "ally_ids": [str(ally.id) for ally in allies],
-                "target_ids": [str(target.id) for target in targets],
-            },
-        )
+        self.board_message = preparation.board_message
+        self._add_message(preparation.message_title, preparation.message_body)
+        self._record(preparation.event_type, dict(preparation.event_payload))
         self._sync_board_leds()
         return self.state_payload()
 
@@ -2523,45 +1937,20 @@ class ExplorationUiSession:
             raise ValueError("Nie ma akcji Help do potwierdzenia.")
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
-        helper = combat_current_actor(self.combat_state)
-        if str(helper.id) != pending.helper_id:
-            raise ValueError("Oczekująca akcja Help nie należy do aktywnego aktora.")
-        if ally_id not in pending.ally_ids:
-            raise ValueError("Wybrany sojusznik nie jest legalnym celem Help.")
-        if target_id not in pending.target_ids:
-            raise ValueError("Wybrany przeciwnik nie jest legalnym celem Help.")
-        ally = _actor_by_string_id_from_state(self.combat_state, ally_id)
-        target = _actor_by_string_id_from_state(self.combat_state, target_id)
-        action_result = use_turn_action(self.combat_state)
-        if not action_result.accepted:
-            raise ValueError(action_result.message)
-        self.combat_state = action_result.state
-        self.active_combat_effects = tuple(
-            effect
-            for effect in self.active_combat_effects
-            if not (
-                effect.kind == "help_attack_advantage"
-                and effect.source_actor_id == str(helper.id)
-            )
-        ) + (
-            ActiveCombatEffect(
-                id=f"help_attack_advantage:{helper.id}:{ally.id}:{target.id}",
-                actor_id=str(ally.id),
-                kind="help_attack_advantage",
-                label=f"Pomoc: {helper.name}",
-                object_id="combat_action:help",
-                value=0,
-                source_actor_id=str(helper.id),
-                target_actor_id=str(target.id),
-            ),
+        transition = self.combat_turn_action_flow.confirm_help(
+            state=self.combat_state,
+            active_effects=self.active_combat_effects,
+            helper_id=pending.helper_id,
+            ally_ids=pending.ally_ids,
+            target_ids=pending.target_ids,
+            ally_id=ally_id,
+            target_id=target_id,
         )
+        self.combat_state = transition.state
+        self.active_combat_effects = transition.active_effects
         self.pending_combat_help = None
-        message = f"Help: {helper.name} pomaga {ally.name}. Następny atak {ally.name} przeciwko {target.name} ma przewagę."
-        self._add_message("Pomoc", message)
-        self._record(
-            "ui_combat_help_confirmed",
-            {"helper_id": str(helper.id), "ally_id": str(ally.id), "target_id": str(target.id)},
-        )
+        self._add_message(transition.message_title, transition.message_body)
+        self._record(transition.event_type, dict(transition.event_payload))
         self._sync_board_leds()
         return self.state_payload()
 
@@ -2579,21 +1968,21 @@ class ExplorationUiSession:
     def start_combat_ready(self) -> dict[str, object]:
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
-        if self.combat_state.status.value != "active":
-            raise ValueError("Walka nie jest aktywna.")
-        actor = combat_current_actor(self.combat_state)
-        if actor.faction != Faction.ALLY:
-            raise ValueError("To nie jest tura bohatera.")
-        if self.combat_state.turn_action.action_use != ActionUse.ACTION_AVAILABLE:
-            raise ValueError("Akcja w tej turze została już zużyta.")
         encounter = self._active_encounter()
-        if encounter is None or encounter.attack_sources_by_actor.get(actor.id) is None:
-            raise ValueError(f"Aktor {actor.name} nie ma zdefiniowanego ataku do przygotowania.")
+        if encounter is None:
+            raise ValueError("Brak danych encountera dla aktywnej walki.")
+        preparation = self.combat_turn_action_flow.prepare_ready(
+            state=self.combat_state,
+            attack_sources_by_actor=encounter.attack_sources_by_actor,
+        )
         self._clear_player_pending_choices()
-        self.pending_combat_ready = PendingCombatReady(actor_id=str(actor.id))
-        self.board_message = "Wybierz warunek przygotowanej akcji w panelu walki."
-        self._add_message("Ready", f"{actor.name} przygotowuje akcję.")
-        self._record("ui_combat_ready_started", {"actor_id": str(actor.id)})
+        self.pending_combat_ready = PendingCombatReady(
+            actor_id=preparation.actor_id,
+            triggers=preparation.triggers,
+        )
+        self.board_message = preparation.board_message
+        self._add_message(preparation.message_title, preparation.message_body)
+        self._record(preparation.event_type, dict(preparation.event_payload))
         self._sync_board_leds()
         return self.state_payload()
 
@@ -2601,36 +1990,20 @@ class ExplorationUiSession:
         pending = self.pending_combat_ready
         if pending is None:
             raise ValueError("Nie ma akcji Ready do potwierdzenia.")
-        if trigger not in pending.triggers:
-            raise ValueError("Nieznany warunek przygotowanej akcji.")
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
-        actor = combat_current_actor(self.combat_state)
-        if str(actor.id) != pending.actor_id:
-            raise ValueError("Oczekująca akcja Ready nie należy do aktywnego aktora.")
-        action_result = use_turn_action(self.combat_state)
-        if not action_result.accepted:
-            raise ValueError(action_result.message)
-        self.combat_state = action_result.state
-        object_id = f"combat_action:ready:{trigger}"
-        self.active_combat_effects = tuple(
-            effect
-            for effect in self.active_combat_effects
-            if not (effect.actor_id == str(actor.id) and effect.kind == "ready_attack")
-        ) + (
-            ActiveCombatEffect(
-                id=f"ready_attack:{actor.id}:{trigger}",
-                actor_id=str(actor.id),
-                kind="ready_attack",
-                label="Ready",
-                object_id=object_id,
-                value=0,
-            ),
+        transition = self.combat_turn_action_flow.confirm_ready(
+            state=self.combat_state,
+            active_effects=self.active_combat_effects,
+            actor_id=pending.actor_id,
+            triggers=pending.triggers,
+            trigger=trigger,
         )
+        self.combat_state = transition.state
+        self.active_combat_effects = transition.active_effects
         self.pending_combat_ready = None
-        message = f"Ready: {actor.name} przygotowuje atak, {_ready_trigger_label(trigger)}."
-        self._add_message("Ready", message)
-        self._record("ui_combat_ready_confirmed", {"actor_id": str(actor.id), "trigger": trigger})
+        self._add_message(transition.message_title, transition.message_body)
+        self._record(transition.event_type, dict(transition.event_payload))
         self._sync_board_leds()
         return self.state_payload()
 
@@ -2651,38 +2024,13 @@ class ExplorationUiSession:
         encounter = self._active_encounter()
         if encounter is None:
             raise ValueError("Brak danych encountera dla aktywnej walki.")
-        actor = combat_current_actor(self.combat_state)
-        options = self._available_combat_interaction_options(encounter, actor, position)
-        if not options:
-            raise ValueError("To pole nie ma teraz dostępnej interakcji.")
-        scene_object = self._scene_object_at_position(encounter, position)
-        assert scene_object is not None
-        self.pending_combat_interaction = PendingCombatInteraction(
-            actor_id=str(actor.id),
-            object_id=scene_object.id,
-            object_name=scene_object.name,
-            target_position=position,
-            options=options,
+        transition = self.combat_scene_interaction_flow.select(
+            state=self.combat_state,
+            scene_objects=encounter.scene_objects,
+            position=position,
+            active_effects=self.active_combat_effects,
         )
-        self.selected_combat_movement_path = None
-        self.pending_player_attack = None
-        option_labels = ", ".join(option.label for option in options)
-        self.board_message = f"Wybrano interakcję z obiektem: {scene_object.name}. Wybierz w UI: {option_labels}."
-        self._add_message(
-            "Interakcja",
-            f"{actor.name} wybiera {scene_object.name}. Dostępne opcje: {option_labels}.",
-        )
-        self._record(
-            "ui_combat_interaction_selected",
-            {
-                "actor_id": str(actor.id),
-                "object_id": scene_object.id,
-                "position": [position.col, position.row],
-                "options": [option.id for option in options],
-            },
-        )
-        self._sync_board_leds()
-        return self.state_payload()
+        return self._apply_combat_scene_interaction_transition(transition)
 
     def confirm_combat_interaction(self, interaction_id: str) -> dict[str, object]:
         pending = self.pending_combat_interaction
@@ -2693,61 +2041,43 @@ class ExplorationUiSession:
         encounter = self._active_encounter()
         if encounter is None:
             raise ValueError("Brak danych encountera dla aktywnej walki.")
-        actor = combat_current_actor(self.combat_state)
-        if str(actor.id) != pending.actor_id:
-            raise ValueError("Oczekująca interakcja nie należy do aktywnego aktora.")
-        option = next((candidate for candidate in pending.options if candidate.id == interaction_id), None)
-        if option is None:
-            raise ValueError("Nieznana opcja interakcji.")
-        action_result = use_turn_action(self.combat_state)
-        if not action_result.accepted:
-            raise ValueError(action_result.message)
-        scene_object = self._scene_object_by_id(encounter, option.object_id)
-        if scene_object is None:
-            raise ValueError("Obiekt interakcji nie istnieje w aktywnym encounterze.")
-        interaction = next((candidate for candidate in available_scene_interactions(scene_object) if candidate.id == option.id), None)
-        if interaction is None:
-            raise ValueError("Interakcja nie istnieje w aktywnym encounterze.")
-        applied = apply_combat_interaction_effects(
-            state=action_result.state,
-            actor=actor,
-            scene_object=scene_object,
-            interaction=interaction,
-            target_position=option.target_position,
+        transition = self.combat_scene_interaction_flow.confirm(
+            state=self.combat_state,
+            scene_objects=encounter.scene_objects,
             active_effects=self.active_combat_effects,
+            pending=pending,
+            interaction_id=interaction_id,
             rng=self.encounter_rng,
         )
-        self.combat_state = applied.state
-        self.active_combat_effects = applied.active_effects
-        message = f"{actor.name}: {applied.message}"
-        self.pending_combat_interaction = None
-        self.selected_combat_movement_path = None
-        self._add_message("Interakcja", message)
-        self.board_message = message
-        self._record(
-            "ui_combat_interaction_confirmed",
-            {
-                "actor_id": str(actor.id),
-                "object_id": scene_object.id,
-                "interaction_id": option.id,
-                "message": message,
-                "saving_throw": applied.saving_throw.as_payload() if applied.saving_throw is not None else None,
-            },
-        )
-        self._sync_board_leds()
-        return self.state_payload()
+        return self._apply_combat_scene_interaction_transition(transition)
 
     def cancel_combat_interaction(self) -> dict[str, object]:
         pending = self.pending_combat_interaction
         if pending is None:
             raise ValueError("Nie ma interakcji do anulowania.")
-        self.pending_combat_interaction = None
-        self.board_message = "Anulowano interakcję. Kliknij Skanuj planszę, żeby wybrać ruch, cel albo obiekt."
-        self._add_message("Interakcja", "Anulowano wybór interakcji.")
-        self._record(
-            "ui_combat_interaction_cancelled",
-            {"actor_id": pending.actor_id, "object_id": pending.object_id},
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        transition = self.combat_scene_interaction_flow.cancel(
+            state=self.combat_state,
+            active_effects=self.active_combat_effects,
+            pending=pending,
         )
+        return self._apply_combat_scene_interaction_transition(transition)
+
+    def _apply_combat_scene_interaction_transition(
+        self,
+        transition: CombatSceneInteractionTransition,
+    ) -> dict[str, object]:
+        self.combat_state = transition.state
+        self.active_combat_effects = transition.active_effects
+        self.pending_combat_interaction = transition.pending
+        if transition.clear_movement_preview:
+            self.selected_combat_movement_path = None
+        if transition.clear_player_attack:
+            self.pending_player_attack = None
+        self.board_message = transition.board_message
+        self._add_message(transition.message_title, transition.message_body)
+        self._record(transition.event_type, dict(transition.event_payload))
         self._sync_board_leds()
         return self.state_payload()
 
@@ -2762,16 +2092,23 @@ class ExplorationUiSession:
         actor: Actor,
         position: Coordinate,
     ) -> tuple[CombatInteractionOption, ...]:
-        if self.combat_state is None or actor.faction != Faction.ALLY:
+        if self.combat_state is None:
             return ()
-        if self.combat_state.status.value != "active":
-            return ()
-        return available_combat_interaction_options(encounter.scene_objects, self.combat_state, actor, position)
+        return self.combat_scene_interaction_flow.options(
+            state=self.combat_state,
+            scene_objects=encounter.scene_objects,
+            actor=actor,
+            position=position,
+        )
 
     def _combat_interaction_positions(self, encounter: LoadedEncounter, actor: Actor) -> tuple[Coordinate, ...]:
         if self.combat_state is None:
             return ()
-        return combat_interaction_positions(encounter.scene_objects, self.combat_state, actor)
+        return self.combat_scene_interaction_flow.positions(
+            state=self.combat_state,
+            scene_objects=encounter.scene_objects,
+            actor=actor,
+        )
 
     def _combat_interaction_hint_positions(
         self,
@@ -2781,10 +2118,12 @@ class ExplorationUiSession:
     ) -> tuple[Coordinate, ...]:
         if self.combat_state is None:
             return ()
-        return combat_interaction_hint_positions(encounter.scene_objects, self.combat_state, actor, movement.reachable_tiles)
-
-    def _scene_object_at_position(self, encounter: LoadedEncounter, position: Coordinate):
-        return scene_object_at_position(encounter.scene_objects, position)
+        return self.combat_scene_interaction_flow.hint_positions(
+            state=self.combat_state,
+            scene_objects=encounter.scene_objects,
+            actor=actor,
+            reachable_tiles=movement.reachable_tiles,
+        )
 
     def _scene_object_by_id(self, encounter: LoadedEncounter, object_id: str):
         return scene_object_by_id(encounter.scene_objects, object_id)
@@ -2794,14 +2133,16 @@ class ExplorationUiSession:
             return
         encounter = self._active_encounter()
         scene_objects = encounter.scene_objects if encounter is not None else ()
-        before = self.active_combat_effects
-        self.combat_state, self.active_combat_effects = expire_invalid_combat_effects(
-            self.combat_state,
-            scene_objects,
-            self.active_combat_effects,
+        transition = self.combat_scene_interaction_flow.expire_invalid_effects(
+            state=self.combat_state,
+            scene_objects=scene_objects,
+            active_effects=self.active_combat_effects,
         )
-        if before != self.active_combat_effects:
-            self._add_expired_effects_message("Wygasły efekty pozycyjne", before, self.active_combat_effects)
+        self.combat_state = transition.state
+        self.active_combat_effects = transition.active_effects
+        if transition.expired_effects:
+            labels = ", ".join(effect.label for effect in transition.expired_effects)
+            self._add_message("Efekty", f"Wygasły efekty pozycyjne: {labels}.")
 
     def _expire_turn_start_effects(self) -> None:
         if self.combat_state is None or not self.active_combat_effects or self.combat_state.status.value != "active":
@@ -2831,126 +2172,67 @@ class ExplorationUiSession:
         labels = ", ".join(effect.label for effect in expired) or "efekt"
         self._add_message("Efekty", f"{prefix}: {labels}.")
 
+    def _add_expired_effect_notices(
+        self,
+        notices: tuple[ExpiredCombatEffects, ...],
+    ) -> None:
+        for notice in notices:
+            labels = ", ".join(effect.label for effect in notice.effects) or "efekt"
+            self._add_message("Efekty", f"{notice.message_prefix}: {labels}.")
+
     def resolve_enemy_turn(self) -> dict[str, object]:
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
-        if self.combat_state.status.value != "active":
-            raise ValueError("Walka nie jest aktywna.")
         encounter = self._active_encounter()
         if encounter is None:
             raise ValueError("Brak danych encountera dla aktywnej walki.")
-        enemy = combat_current_actor(self.combat_state)
-        if enemy.faction != Faction.ENEMY:
-            raise ValueError("To nie jest tura przeciwnika.")
-        source = encounter.attack_sources_by_actor.get(enemy.id)
-        if source is None:
-            raise ValueError(f"Aktor {enemy.name} nie ma zdefiniowanego ataku.")
         if self.pending_enemy_turn_intent is None:
-            intent = plan_enemy_turn(encounter.board, self.combat_state, enemy)
-            self.pending_enemy_turn_intent = intent
-            self.board_message = _enemy_turn_intent_message(intent)
-            self._add_message("Zamiar przeciwnika", f"{_enemy_turn_intent_message(intent)} Potwierdź Enterem albo przyciskiem.")
-            self._record(
-                "ui_combat_enemy_turn_intent",
-                {
-                    "enemy_id": str(enemy.id),
-                    "target_id": intent.target.id if intent.target is not None else None,
-                    "message": intent.message,
-                },
+            transition = self.enemy_turn_flow.plan(
+                state=self.combat_state,
+                board=encounter.board,
+                attack_sources_by_actor=encounter.attack_sources_by_actor,
             )
+            self.pending_enemy_turn_intent = transition.intent
+            self.board_message = transition.board_message
+            self._add_message(transition.message_title, transition.message_body)
+            self._record(transition.event_type, dict(transition.event_payload))
             self._sync_board_leds()
             return self.state_payload()
         intent = self.pending_enemy_turn_intent
         self.pending_enemy_turn_intent = None
-        target_actor = None
-        if intent is not None and intent.target is not None:
-            target_actor = next(
-                (actor for actor in self.combat_state.actors if str(actor.id) == intent.target.id),
-                None,
+        transition = self.enemy_turn_flow.resolve(
+            state=self.combat_state,
+            intent=intent,
+            board=encounter.board,
+            attack_sources_by_actor=encounter.attack_sources_by_actor,
+            active_effects=self.active_combat_effects,
+            rng=self.encounter_rng,
+        )
+        result = transition.result
+        if transition.kind == EnemyTurnTransitionKind.FINISHED:
+            return self._finish_pending_enemy_turn(result)
+        self.pending_enemy_turn_result = result
+        self.board_message = transition.board_message
+        if transition.kind == EnemyTurnTransitionKind.READY:
+            ready = transition.ready_trigger
+            assert ready is not None
+            self.pending_ready_attack = PendingReadyAttack(
+                readied_actor_id=ready.readied_actor_id,
+                target_id=ready.target_id,
+                effect_id=ready.effect_id,
+                trigger=ready.trigger,
             )
-        source = self._effective_attack_source(enemy, source, target_actor)
-        result = resolve_enemy_auto_turn(encounter.board, self.combat_state, enemy, source, self.encounter_rng)
-        ready = self._pending_ready_attack_for_enemy_result(result)
-        if ready is not None:
-            self.pending_enemy_turn_result = result
-            self.pending_ready_attack = ready
-            readied_actor = self._actor_by_string_id(ready.readied_actor_id)
-            self.board_message = f"Wyzwolono Ready: {readied_actor.name} może użyć przygotowanego ataku."
-            self._add_message(
-                "Ready",
-                f"{readied_actor.name}: warunek przygotowanej akcji został spełniony ({_ready_trigger_label(ready.trigger)}).",
+        elif transition.kind == EnemyTurnTransitionKind.OPPORTUNITY:
+            self.pending_enemy_opportunity_attack = PendingEnemyOpportunityAttack(
+                target_id=str(result.enemy.id),
+                threat_actor_ids=transition.threat_actor_ids,
             )
-            self._record(
-                "ui_combat_ready_triggered",
-                {
-                    "readied_actor_id": ready.readied_actor_id,
-                    "target_id": ready.target_id,
-                    "trigger": ready.trigger,
-                },
-            )
-            self._sync_board_leds()
-            return self.state_payload()
-        if result.movement_path is not None and result.movement_path.valid and result.movement_path.destination != enemy.position:
-            threats = tuple(
-                threat
-                for threat in opportunity_attackers_for_movement(
-                    self.combat_state,
-                    enemy,
-                    enemy.position,
-                    result.movement_path.destination,
-                    encounter.attack_sources_by_actor,
-                    self.active_combat_effects,
-                )
-                if threat.attacker.faction == Faction.ALLY
-            )
-            if threats:
-                self.pending_enemy_turn_result = result
-                self.pending_enemy_opportunity_attack = PendingEnemyOpportunityAttack(
-                    target_id=str(enemy.id),
-                    threat_actor_ids=tuple(str(threat.attacker.id) for threat in threats),
-                )
-                threat_names = ", ".join(threat.attacker.name for threat in threats)
-                self.board_message = (
-                    f"{enemy.name} opuszcza zasięg: {threat_names}. "
-                    "Wybierz atak okazyjny albo pomiń reakcję."
-                )
-                self._add_message(
-                    "Atak okazyjny",
-                    f"{enemy.name} prowokuje atak okazyjny. Reakcję może wykonać: {threat_names}.",
-                )
-                self._record(
-                    "ui_combat_enemy_opportunity_pending",
-                    {
-                        "enemy_id": str(enemy.id),
-                        "destination": [result.movement_path.destination.col, result.movement_path.destination.row],
-                        "threat_actor_ids": [str(threat.attacker.id) for threat in threats],
-                    },
-                )
-                self._sync_board_leds()
-                return self.state_payload()
-            self.pending_enemy_turn_result = result
-            self.board_message = (
-                f"{enemy.name} rusza na {result.movement_path.destination.as_tuple()}. "
-                "Przestaw figurkę po podświetlonej ścieżce i kliknij pole docelowe."
-            )
-            self._add_message(
-                "Ruch przeciwnika",
-                f"{enemy.name} planuje ruch na {result.movement_path.destination.as_tuple()}. Potwierdź pole docelowe na planszy.",
-            )
-            self._sync_board_leds()
-            return self.state_payload()
-        if result.target is not None:
-            self.pending_enemy_turn_result = result
-            self.board_message = (
-                f"{enemy.name} atakuje {result.target.name}. Kliknij podświetlone pole celu, żeby potwierdzić atak."
-            )
-            self._add_message(
-                "Atak przeciwnika",
-                f"{enemy.name} atakuje {result.target.name}. {_enemy_roll_summary(result)} Potwierdź atak klikając pole celu.",
-            )
-            self._sync_board_leds()
-            return self.state_payload()
-        return self._finish_pending_enemy_turn(result)
+        if transition.message_title:
+            self._add_message(transition.message_title, transition.message_body)
+        if transition.event_type:
+            self._record(transition.event_type, dict(transition.event_payload))
+        self._sync_board_leds()
+        return self.state_payload()
 
     def _commit_pending_enemy_turn(self, result=None) -> dict[str, object]:
         if self.combat_state is None:
@@ -2958,28 +2240,20 @@ class ExplorationUiSession:
         result = result or self.pending_enemy_turn_result
         if result is None:
             raise ValueError("Brak oczekującej tury przeciwnika do potwierdzenia.")
-        self.combat_state = result.state
-        if result.attack_roll is not None:
-            self.active_combat_effects = consume_next_attack_effects(
-                self.active_combat_effects,
-                str(result.enemy.id),
-                result.target.id if result.target is not None else None,
-            )
+        transition = self.combat_turn_finalization.commit_enemy_result(
+            result=result,
+            active_effects=self.active_combat_effects,
+        )
+        self.combat_state = transition.state
+        self.active_combat_effects = transition.active_effects
         self.selected_combat_movement_path = None
         self.pending_enemy_turn_intent = None
         self.pending_enemy_turn_result = None
         self.pending_enemy_opportunity_attack = None
         self.pending_ready_attack = None
-        self.pending_enemy_turn_ack_result = result
-        self.board_message = "Wynik tury przeciwnika gotowy. Potwierdź Enterem albo przyciskiem w UI."
-        self._record(
-            "ui_combat_enemy_turn_board_confirmed",
-            {
-                "enemy_id": str(result.enemy.id),
-                "target_id": result.target.id if result.target is not None else None,
-                "message": _enemy_turn_message(result),
-            },
-        )
+        self.pending_enemy_turn_ack_result = transition.result
+        self.board_message = transition.board_message
+        self._record(transition.event_type, dict(transition.event_payload))
         if result.applied_damage is not None:
             self._maybe_prompt_concentration_check(result.applied_damage)
         self._sync_board_leds()
@@ -3029,53 +2303,46 @@ class ExplorationUiSession:
         encounter = self._active_encounter()
         if encounter is None:
             raise ValueError("Brak danych encountera dla aktywnej walki.")
-        attacker = self._actor_by_string_id(pending.attacker_id)
-        target = self._actor_by_string_id(pending.target_id)
-        source = encounter.attack_sources_by_actor.get(attacker.id)
-        if source is None:
-            raise ValueError(f"Aktor {attacker.name} nie ma zdefiniowanego ataku.")
-        reaction = use_actor_reaction(self.combat_state, attacker)
-        if not reaction.accepted:
-            raise ValueError(reaction.message)
-        self.combat_state = reaction.state
-        self.pending_enemy_turn_result = self._enemy_turn_result_with_spent_reactions()
-        attacker = self._actor_by_string_id(pending.attacker_id)
-        target = self._actor_by_string_id(pending.target_id)
-        source = self._effective_attack_source(attacker, source, target)
-        attack_roll = resolve_d20_roll(_manual_d20_input(source.attack_roll_request, natural_roll, natural_roll_2))
-        declaration = AttackDeclaration(attacker=attacker, target=actor_as_combat_target(target), source=source)
-        resolution = resolve_attack(declaration, attack_roll, ActionUse.ACTION_AVAILABLE)
-        self.active_combat_effects = consume_next_attack_effects(
-            self.active_combat_effects,
-            str(attacker.id),
-            pending.target_id,
+        reaction = self.player_reaction_flow.resolve_attack_roll(
+            state=self.combat_state,
+            attacker_id=pending.attacker_id,
+            target_id=pending.target_id,
+            attack_sources_by_actor=encounter.attack_sources_by_actor,
+            active_effects=self.active_combat_effects,
+            natural_roll=natural_roll,
+            natural_roll_2=natural_roll_2,
         )
-        message = _player_attack_message(attacker.name, target.name, attack_roll.total, resolution.hit, resolution.critical)
+        self.combat_state = reaction.state
+        self.active_combat_effects = reaction.active_effects
+        self.pending_enemy_turn_result = self._enemy_turn_result_with_spent_reactions()
         self._record(
             "ui_combat_enemy_opportunity_attack_roll",
             {
                 "attacker_id": pending.attacker_id,
                 "target_id": pending.target_id,
-                "natural_roll": attack_roll.natural_roll,
-                "natural_rolls": list(attack_roll.natural_rolls),
-                "total": attack_roll.total,
-                "hit": resolution.hit,
-                "critical": resolution.critical,
+                "natural_roll": reaction.attack_roll.natural_roll,
+                "natural_rolls": list(reaction.attack_roll.natural_rolls),
+                "total": reaction.attack_roll.total,
+                "hit": reaction.hit,
+                "critical": reaction.critical,
             },
         )
-        if not resolution.hit:
-            self._add_message("Atak okazyjny", message)
+        if not reaction.hit:
+            self._add_message("Atak okazyjny", reaction.message)
             return self._advance_enemy_opportunity_or_resume_preview()
         self.pending_enemy_opportunity_attack = replace(
             pending,
             stage="damage_roll",
-            natural_roll=attack_roll.natural_roll,
-            natural_rolls=attack_roll.natural_rolls,
-            total=attack_roll.total,
+            natural_roll=reaction.attack_roll.natural_roll,
+            natural_rolls=reaction.attack_roll.natural_rolls,
+            total=reaction.attack_roll.total,
             hit=True,
-            critical=resolution.critical,
+            critical=reaction.critical,
         )
-        self._add_message("Atak okazyjny", f"{message} Trafienie: rzuć obrażenia {source.damage_hint} i wpisz sumę.")
+        self._add_message(
+            "Atak okazyjny",
+            f"{reaction.message} Trafienie: rzuć obrażenia {reaction.source.damage_hint} i wpisz sumę.",
+        )
         self._sync_board_leds()
         return self.state_payload()
 
@@ -3088,24 +2355,26 @@ class ExplorationUiSession:
         encounter = self._active_encounter()
         if encounter is None:
             raise ValueError("Brak danych encountera dla aktywnej walki.")
-        attacker = self._actor_by_string_id(pending.attacker_id)
-        target = self._actor_by_string_id(pending.target_id)
-        source = encounter.attack_sources_by_actor.get(attacker.id)
-        if source is None:
-            raise ValueError(f"Aktor {attacker.name} nie ma zdefiniowanego ataku.")
-        source = self._effective_attack_source(attacker, source, target)
-        damage_result = resolve_damage((DamageComponentInput(max(0, int(damage)), DamageType(source.damage_type), source.name),))
-        applied_damage = apply_damage_result(target, damage_result)
+        damage_resolution = self.player_reaction_flow.apply_damage(
+            state=self.combat_state,
+            attacker_id=pending.attacker_id,
+            target_id=pending.target_id,
+            attack_sources_by_actor=encounter.attack_sources_by_actor,
+            active_effects=self.active_combat_effects,
+            damage=damage,
+        )
+        applied_damage = damage_resolution.applied_damage
         updated_target = applied_damage.actor_after
-        self.combat_state = replace_actor(self.combat_state, updated_target)
+        self.combat_state = damage_resolution.state
         self.pending_enemy_turn_result = self._enemy_turn_result_with_updated_actor(updated_target)
+        attacker = self._actor_by_string_id(pending.attacker_id)
         message = f"{attacker.name} trafia atakiem okazyjnym. {_damage_application_message(applied_damage)}"
         self._record(
             "ui_combat_enemy_opportunity_damage",
             {
                 "attacker_id": pending.attacker_id,
                 "target_id": pending.target_id,
-                "damage": damage_result.total_applied,
+                "damage": applied_damage.damage.total_applied,
                 "damage_result": _applied_damage_payload(applied_damage),
             },
         )
@@ -3203,56 +2472,49 @@ class ExplorationUiSession:
         encounter = self._active_encounter()
         if encounter is None:
             raise ValueError("Brak danych encountera dla aktywnej walki.")
-        attacker = self._actor_by_string_id(pending.readied_actor_id)
-        target = self._actor_by_string_id(pending.target_id)
-        source = encounter.attack_sources_by_actor.get(attacker.id)
-        if source is None:
-            raise ValueError(f"Aktor {attacker.name} nie ma zdefiniowanego ataku.")
-        reaction = use_actor_reaction(self.combat_state, attacker)
-        if not reaction.accepted:
-            raise ValueError(reaction.message)
-        self.combat_state = reaction.state
-        self.pending_enemy_turn_result = self._enemy_turn_result_with_spent_reactions()
-        attacker = self._actor_by_string_id(pending.readied_actor_id)
-        target = self._actor_by_string_id(pending.target_id)
-        source = self._effective_attack_source(attacker, source, target)
-        attack_roll = resolve_d20_roll(_manual_d20_input(source.attack_roll_request, natural_roll, natural_roll_2))
-        declaration = AttackDeclaration(attacker=attacker, target=actor_as_combat_target(target), source=source)
-        resolution = resolve_attack(declaration, attack_roll, ActionUse.ACTION_AVAILABLE)
-        self.active_combat_effects = self._consume_ready_attack_effect(pending.effect_id)
-        self.active_combat_effects = consume_next_attack_effects(
-            self.active_combat_effects,
-            str(attacker.id),
-            pending.target_id,
+        reaction = self.player_reaction_flow.resolve_attack_roll(
+            state=self.combat_state,
+            attacker_id=pending.readied_actor_id,
+            target_id=pending.target_id,
+            attack_sources_by_actor=encounter.attack_sources_by_actor,
+            active_effects=self.active_combat_effects,
+            natural_roll=natural_roll,
+            natural_roll_2=natural_roll_2,
+            consumed_effect_id=pending.effect_id,
         )
-        message = _player_attack_message(attacker.name, target.name, attack_roll.total, resolution.hit, resolution.critical)
+        self.combat_state = reaction.state
+        self.active_combat_effects = reaction.active_effects
+        self.pending_enemy_turn_result = self._enemy_turn_result_with_spent_reactions()
         self._record(
             "ui_combat_ready_attack_roll",
             {
                 "attacker_id": pending.readied_actor_id,
                 "target_id": pending.target_id,
-                "natural_roll": attack_roll.natural_roll,
-                "natural_rolls": list(attack_roll.natural_rolls),
-                "total": attack_roll.total,
-                "hit": resolution.hit,
-                "critical": resolution.critical,
+                "natural_roll": reaction.attack_roll.natural_roll,
+                "natural_rolls": list(reaction.attack_roll.natural_rolls),
+                "total": reaction.attack_roll.total,
+                "hit": reaction.hit,
+                "critical": reaction.critical,
             },
         )
-        if not resolution.hit:
+        if not reaction.hit:
             self.pending_ready_attack = None
-            self._add_message("Ready", message)
+            self._add_message("Ready", reaction.message)
             self._resume_enemy_turn_after_reaction_prompt()
             return self.state_payload()
         self.pending_ready_attack = replace(
             pending,
             stage="damage_roll",
-            natural_roll=attack_roll.natural_roll,
-            natural_rolls=attack_roll.natural_rolls,
-            total=attack_roll.total,
+            natural_roll=reaction.attack_roll.natural_roll,
+            natural_rolls=reaction.attack_roll.natural_rolls,
+            total=reaction.attack_roll.total,
             hit=True,
-            critical=resolution.critical,
+            critical=reaction.critical,
         )
-        self._add_message("Ready", f"{message} Trafienie: rzuć obrażenia {source.damage_hint} i wpisz sumę.")
+        self._add_message(
+            "Ready",
+            f"{reaction.message} Trafienie: rzuć obrażenia {reaction.source.damage_hint} i wpisz sumę.",
+        )
         self._sync_board_leds()
         return self.state_payload()
 
@@ -3265,24 +2527,26 @@ class ExplorationUiSession:
         encounter = self._active_encounter()
         if encounter is None:
             raise ValueError("Brak danych encountera dla aktywnej walki.")
-        attacker = self._actor_by_string_id(pending.readied_actor_id)
-        target = self._actor_by_string_id(pending.target_id)
-        source = encounter.attack_sources_by_actor.get(attacker.id)
-        if source is None:
-            raise ValueError(f"Aktor {attacker.name} nie ma zdefiniowanego ataku.")
-        source = self._effective_attack_source(attacker, source, target)
-        damage_result = resolve_damage((DamageComponentInput(max(0, int(damage)), DamageType(source.damage_type), source.name),))
-        applied_damage = apply_damage_result(target, damage_result)
+        damage_resolution = self.player_reaction_flow.apply_damage(
+            state=self.combat_state,
+            attacker_id=pending.readied_actor_id,
+            target_id=pending.target_id,
+            attack_sources_by_actor=encounter.attack_sources_by_actor,
+            active_effects=self.active_combat_effects,
+            damage=damage,
+        )
+        applied_damage = damage_resolution.applied_damage
         updated_target = applied_damage.actor_after
-        self.combat_state = replace_actor(self.combat_state, updated_target)
+        self.combat_state = damage_resolution.state
         self.pending_enemy_turn_result = self._enemy_turn_result_with_updated_actor(updated_target)
+        attacker = self._actor_by_string_id(pending.readied_actor_id)
         message = f"{attacker.name} trafia przygotowaną akcją. {_damage_application_message(applied_damage)}"
         self._record(
             "ui_combat_ready_damage",
             {
                 "attacker_id": pending.readied_actor_id,
                 "target_id": pending.target_id,
-                "damage": damage_result.total_applied,
+                "damage": applied_damage.damage.total_applied,
                 "damage_result": _applied_damage_payload(applied_damage),
             },
         )
@@ -3305,9 +2569,6 @@ class ExplorationUiSession:
         self._add_message("Ready", message)
         self._resume_enemy_turn_after_reaction_prompt()
         return self.state_payload()
-
-    def _consume_ready_attack_effect(self, effect_id: str) -> tuple[ActiveCombatEffect, ...]:
-        return tuple(effect for effect in self.active_combat_effects if effect.id != effect_id)
 
     def _resume_enemy_turn_after_reaction_prompt(self) -> None:
         result = self.pending_enemy_turn_result
@@ -3349,31 +2610,21 @@ class ExplorationUiSession:
         encounter = self._active_encounter()
         if encounter is None:
             return None
-        trigger = _ready_trigger_for_enemy_result(result)
+        trigger = self.player_reaction_flow.detect_ready_attack(
+            state=self.combat_state,
+            enemy_result=result,
+            board=encounter.board,
+            attack_sources_by_actor=encounter.attack_sources_by_actor,
+            active_effects=self.active_combat_effects,
+        )
         if trigger is None:
             return None
-        trigger_target = result.moved_enemy if result.moved_enemy is not None else result.enemy
-        if trigger_target is None or trigger_target.is_defeated():
-            return None
-        for effect in self.active_combat_effects:
-            if effect.kind != "ready_attack" or effect.object_id != f"combat_action:ready:{trigger}":
-                continue
-            readied_actor = next((actor for actor in self.combat_state.actors if str(actor.id) == effect.actor_id), None)
-            if readied_actor is None or readied_actor.is_defeated() or not reaction_available_for(self.combat_state, readied_actor):
-                continue
-            source = encounter.attack_sources_by_actor.get(readied_actor.id)
-            if source is None:
-                continue
-            actors_for_target = result.state.actors if result.state is not None else self.combat_state.actors
-            targets = start_attack_action(encounter.board, readied_actor, actors_for_target, source).legal_targets
-            if any(target.id == str(trigger_target.id) for target in targets):
-                return PendingReadyAttack(
-                    readied_actor_id=str(readied_actor.id),
-                    target_id=str(trigger_target.id),
-                    effect_id=effect.id,
-                    trigger=trigger,
-                )
-        return None
+        return PendingReadyAttack(
+            readied_actor_id=trigger.readied_actor_id,
+            target_id=trigger.target_id,
+            effect_id=trigger.effect_id,
+            trigger=trigger.trigger,
+        )
 
     def _actor_by_string_id(self, actor_id: str) -> Actor:
         if self.combat_state is None:
@@ -3394,46 +2645,28 @@ class ExplorationUiSession:
     def _finish_pending_enemy_turn(self, result) -> dict[str, object]:
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
-        self._expire_turn_end_effects(result.enemy)
-        self.combat_state = finish_turn(result.state)
-        self._expire_turn_start_effects()
+        transition = self.combat_turn_finalization.finalize_enemy_turn(
+            result=result,
+            active_effects=self.active_combat_effects,
+        )
+        self.combat_state = transition.state
+        self.active_combat_effects = transition.active_effects
+        self._add_expired_effect_notices(transition.expired_effects)
         self.selected_combat_movement_path = None
         self.pending_enemy_turn_intent = None
         self.pending_enemy_turn_result = None
         self.pending_enemy_opportunity_attack = None
         self.pending_ready_attack = None
         self.pending_enemy_turn_ack_result = None
-        self._add_message("Tura przeciwnika", _enemy_turn_message(result))
-        self._record(
-            "ui_combat_enemy_turn",
-            {
-                "enemy_id": str(result.enemy.id),
-                "target_id": result.target.id if result.target is not None else None,
-                "message": _enemy_turn_message(result),
-                "action_used": result.action_used,
-            },
-        )
+        self._add_message(transition.message_title, transition.message_body)
+        self._record(transition.event_type, dict(transition.event_payload))
         self._sync_board_leds()
         return self.state_payload()
 
     def reset_board_scan(self) -> dict[str, object]:
         if self.board_adapter is None:
             raise ValueError("Najpierw podłącz backend planszy.")
-        connection = self.board_adapter.connection
-        resetter = getattr(connection, "reset_connection", None)
-        rearmer = getattr(connection, "rearm_scan", None)
-        canceller = getattr(connection, "cancel_scan", None)
-        if callable(resetter):
-            resetter()
-            action = "reset_connection"
-        elif callable(rearmer):
-            rearmer()
-            action = "rearm_scan"
-        elif callable(canceller):
-            canceller()
-            action = "cancel_scan"
-        else:
-            raise ValueError("Aktualny backend planszy nie obsługuje resetu skanu.")
+        action = self.board_adapter.reset_scan()
         self.board_message = "Zresetowano oczekiwanie na kliknięcie planszy."
         self._record("ui_board_scan_reset", {"action": action})
         self._sync_board_leds()
@@ -3442,12 +2675,15 @@ class ExplorationUiSession:
     def finish_combat_turn(self) -> dict[str, object]:
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
-        if self.combat_state.status.value != "active":
+        transition = self.combat_turn_finalization.finish_active_turn(
+            state=self.combat_state,
+            active_effects=self.active_combat_effects,
+        )
+        if transition is None:
             return self.state_payload()
-        actor = combat_current_actor(self.combat_state)
-        self._expire_turn_end_effects(actor)
-        self.combat_state = finish_turn(self.combat_state)
-        self._expire_turn_start_effects()
+        self.combat_state = transition.state
+        self.active_combat_effects = transition.active_effects
+        self._add_expired_effect_notices(transition.expired_effects)
         self.selected_combat_movement_path = None
         self.pending_enemy_turn_intent = None
         self.pending_enemy_turn_result = None
@@ -3455,8 +2691,8 @@ class ExplorationUiSession:
         self.pending_enemy_opportunity_attack = None
         self.pending_ready_attack = None
         self._clear_player_pending_choices()
-        self._add_message("Koniec tury", f"Zakończono turę: {actor.name}.")
-        self._record("ui_combat_turn_finished", {"actor_id": str(actor.id)})
+        self._add_message(transition.message_title, transition.message_body)
+        self._record(transition.event_type, dict(transition.event_payload))
         self._sync_board_leds()
         return self.state_payload()
 
@@ -3488,9 +2724,7 @@ class ExplorationUiSession:
     def _show_board_feedback(self, feedback: LedFeedback) -> None:
         if self.board_adapter is None:
             return
-        self.board_adapter.clear()
-        if feedback.frames:
-            self.board_adapter.show_feedback(feedback)
+        self.board_adapter.show_feedback(feedback)
 
     def _current_board_scan_target(self) -> BoardScanTarget:
         if self.encounter_setup_flow is not None:
@@ -3876,16 +3110,16 @@ class ExplorationUiSession:
         return tuple(point for point in visible_exploration_points(self.state.points) if point.zone_id == self.current_zone.id)
 
     def select_point(self, point_id: str) -> dict[str, object]:
-        if self.ui_flow_stage != UiFlowStage.LOCATION_ACTIVE:
-            raise ValueError("Najpierw potwierdź wejście do lokacji.")
-        if not point_id:
-            self.active_point_id = ""
+        selection = self.exploration_flow.select_point(
+            current_stage=self.ui_flow_stage,
+            current_points=self.current_zone_points(),
+            point_id=point_id,
+        )
+        self.active_point_id = selection.active_point_id
+        if selection.point is None:
             return self.state_payload()
-        point = next((candidate for candidate in self.current_zone_points() if candidate.id == point_id), None)
-        if point is None:
-            raise ValueError("Ten punkt nie jest dostępny w aktualnej lokacji.")
-        self.active_point_id = point.id
         self.pending = None
+        point = selection.point
         if point.npc_interaction is not None and point.npc_interaction.dialogue_intro:
             self._add_message(point.npc_interaction.name, point.npc_interaction.dialogue_intro)
         self._sync_board_leds()
@@ -4408,44 +3642,20 @@ class ExplorationUiSession:
         return tuple(revealed)
 
     def _refresh_pending_encounter(self) -> None:
-        if self.post_interaction_setup_steps:
+        detection = self.exploration_flow.detect_encounter(
+            state=self.state,
+            triggers=self.exploration.encounter_triggers,
+            resolved_trigger_ids=self.resolved_encounter_trigger_ids,
+            blocked=bool(self.post_interaction_setup_steps) or self.exploration_setup_flow is not None,
+            current_encounter=self.pending_encounter,
+        )
+        if detection is None:
             return
-        if self.exploration_setup_flow is not None:
-            return
-        if self.pending_encounter is not None:
-            return
-        for trigger in self.exploration.encounter_triggers:
-            if trigger.id in self.resolved_encounter_trigger_ids:
-                continue
-            reason = self._trigger_reason(trigger)
-            if reason:
-                self.pending_encounter = PendingEncounter(
-                    trigger_id=trigger.id,
-                    name=trigger.name,
-                    description=trigger.description,
-                    encounter_scenario=trigger.encounter_scenario,
-                    reason=reason,
-                )
-                self._add_message("Encounter", f"{trigger.name}. {trigger.description}".strip())
-                return
+        self.pending_encounter = detection.encounter
+        self._add_message(detection.message_title, detection.message_body)
 
     def _trigger_by_id(self, trigger_id: str) -> ExplorationEncounterTrigger | None:
         return next((trigger for trigger in self.exploration.encounter_triggers if trigger.id == trigger_id), None)
-
-    def _trigger_reason(self, trigger: ExplorationEncounterTrigger) -> str:
-        if trigger.condition.value == "noise_at_least" and trigger.challenge_id is not None and trigger.noise is not None:
-            noise = challenge_state_for(self.state, trigger.challenge_id).noise
-            if noise >= trigger.noise:
-                return f"Hałas osiągnął {noise}, próg: {trigger.noise}."
-        if trigger.condition.value == "flag_equals" and trigger.flag_key:
-            value = scene_flag(self.state.flags, trigger.flag_key, None)
-            if value == trigger.flag_value:
-                return f"Flaga {trigger.flag_key} ma wartość {trigger.flag_value}."
-        if trigger.condition.value == "point_revealed" and trigger.point_id:
-            visible_ids = {point.id for point in visible_exploration_points(self.state.points)}
-            if trigger.point_id in visible_ids:
-                return f"Ujawniono punkt: {trigger.point_id}."
-        return ""
 
     def _pending_encounter_payload(self) -> dict[str, object] | None:
         if self.pending_encounter is None:
@@ -4518,533 +3728,11 @@ class ExplorationUiSession:
         return self.npc_client
 
 
-def create_app(session: ExplorationUiSession) -> Flask:
-    app = Flask(__name__)
-
-    @app.get("/")
-    def index():
-        return render_template_string(_HTML)
-
-    @app.get("/scenario-assets/<path:filename>")
-    def scenario_assets(filename: str):
-        return send_from_directory(session._scenario_asset_root().resolve(), filename)
-
-    @app.get("/api/state")
-    def api_state():
-        return jsonify(session.state_payload())
-
-    @app.get("/api/session-log")
-    def api_session_log():
-        return jsonify(_session_log_payload(session))
-
-    @app.post("/api/start")
-    def api_start():
-        try:
-            return jsonify(session.start_session())
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/action")
-    def api_action():
-        data = request.get_json(silent=True) or {}
-        try:
-            return jsonify(session.submit_action(str(data.get("text", ""))))
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/decision")
-    def api_decision():
-        data = request.get_json(silent=True) or {}
-        try:
-            lead_actor_id = data.get("lead_actor_id")
-            return jsonify(session.decide(str(data.get("decision", "")), lead_actor_id=str(lead_actor_id) if lead_actor_id else None))
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/decision/correction")
-    def api_decision_correction():
-        data = request.get_json(silent=True) or {}
-        try:
-            return jsonify(session.update_pending_challenge_decision(data))
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/rolls")
-    def api_rolls():
-        data = request.get_json(silent=True) or {}
-        rolls = data.get("rolls", {})
-        if not isinstance(rolls, dict):
-            return jsonify({"error": "Pole rolls musi być obiektem.", "state": session.state_payload()}), 400
-        try:
-            return jsonify(session.resolve_rolls(rolls))
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/interaction/finish")
-    def api_interaction_finish():
-        try:
-            return jsonify(session.finish_interaction_result())
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/location/cancel-preview")
-    def api_location_cancel_preview():
-        try:
-            return jsonify(session.cancel_location_preview())
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/location/confirm-preview")
-    def api_location_confirm_preview():
-        try:
-            return jsonify(session.confirm_location_preview())
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/exploration/setup/confirm")
-    def api_exploration_setup_confirm():
-        try:
-            return jsonify(session.confirm_exploration_setup_step())
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/travel")
-    def api_travel():
-        data = request.get_json(silent=True) or {}
-        try:
-            return jsonify(session.travel_to(str(data.get("zone_id", ""))))
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/point")
-    def api_point():
-        data = request.get_json(silent=True) or {}
-        try:
-            return jsonify(session.select_point(str(data.get("point_id", ""))))
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/board/configure")
-    def api_board_configure():
-        data = request.get_json(silent=True) or {}
-        try:
-            return jsonify(
-                session.configure_board(
-                    backend=str(data.get("backend", "none")),
-                    board_url=str(data.get("board_url", "")),
-                    board_serial_port=str(data.get("board_serial_port", "")),
-                    wled_url=str(data.get("wled_url", "")),
-                    scan_timeout_s=float(data["scan_timeout_s"]) if data.get("scan_timeout_s") not in {None, ""} else None,
-                )
-            )
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/board/scan")
-    def api_board_scan():
-        try:
-            return jsonify(session.scan_board_selection())
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/board/select")
-    def api_board_select():
-        data = request.get_json(silent=True) or {}
-        try:
-            return jsonify(session.select_board_position(Coordinate(int(data.get("col", 0)), int(data.get("row", 0)))))
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/board/reset-scan")
-    def api_board_reset_scan():
-        try:
-            return jsonify(session.reset_board_scan())
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/encounter/setup/start")
-    def api_encounter_setup_start():
-        try:
-            return jsonify(session.start_encounter_setup())
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/encounter/setup/confirm")
-    def api_encounter_setup_confirm():
-        try:
-            return jsonify(session.confirm_encounter_setup_step())
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/encounter/initiative/start")
-    def api_encounter_initiative_start():
-        try:
-            return jsonify(session.start_encounter_initiative())
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/encounter/initiative/roll")
-    def api_encounter_initiative_roll():
-        data = request.get_json(silent=True) or {}
-        try:
-            return jsonify(session.submit_encounter_initiative_roll(int(data.get("natural_roll", 0))))
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/player-attack-roll")
-    def api_combat_player_attack_roll():
-        data = request.get_json(silent=True) or {}
-        try:
-            natural_roll_2 = data.get("natural_roll_2")
-            return jsonify(
-                session.submit_player_attack_roll(
-                    natural_roll=int(data.get("natural_roll", 0)),
-                    natural_roll_2=int(natural_roll_2) if natural_roll_2 not in (None, "") else None,
-                )
-            )
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/attack-source")
-    def api_combat_attack_source():
-        data = request.get_json(silent=True) or {}
-        try:
-            return jsonify(session.select_combat_attack_source(str(data.get("source_id", ""))))
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/healing-source")
-    def api_combat_healing_source():
-        data = request.get_json(silent=True) or {}
-        try:
-            return jsonify(session.select_combat_healing_source(str(data.get("source_id", ""))))
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/player-attack-confirm")
-    def api_combat_player_attack_confirm():
-        try:
-            return jsonify(session.confirm_player_attack_target())
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/player-attack-cancel")
-    def api_combat_player_attack_cancel():
-        try:
-            return jsonify(session.cancel_player_attack_target())
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/player-damage")
-    def api_combat_player_damage():
-        data = request.get_json(silent=True) or {}
-        try:
-            return jsonify(session.submit_player_damage_roll(damage=int(data.get("damage", 0))))
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/player-healing")
-    def api_combat_player_healing():
-        data = request.get_json(silent=True) or {}
-        try:
-            return jsonify(session.submit_player_healing_roll(healing=int(data.get("healing", 0))))
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/player-healing-cancel")
-    def api_combat_player_healing_cancel():
-        try:
-            return jsonify(session.cancel_player_healing())
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/area-spell/confirm")
-    def api_combat_area_spell_confirm():
-        try:
-            return jsonify(session.confirm_player_area_spell())
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/area-spell/damage")
-    def api_combat_area_spell_damage():
-        data = request.get_json(silent=True) or {}
-        try:
-            return jsonify(session.submit_player_area_spell_damage(damage=int(data.get("damage", 0))))
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/area-spell/cancel")
-    def api_combat_area_spell_cancel():
-        try:
-            return jsonify(session.cancel_player_area_spell())
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/strength-potion")
-    def api_combat_strength_potion():
-        data = request.get_json(silent=True) or {}
-        try:
-            return jsonify(session.use_combat_strength_potion(str(data.get("action_id", ""))))
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/concentration/start")
-    def api_combat_concentration_start():
-        data = request.get_json(silent=True) or {}
-        try:
-            return jsonify(session.start_combat_concentration_action(str(data.get("action_id", ""))))
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/concentration/confirm")
-    def api_combat_concentration_confirm():
-        data = request.get_json(silent=True) or {}
-        try:
-            return jsonify(session.confirm_combat_concentration_action(target_id=str(data.get("target_id", ""))))
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/concentration/cancel")
-    def api_combat_concentration_cancel():
-        try:
-            return jsonify(session.cancel_combat_concentration_action())
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/concentration-check")
-    def api_combat_concentration_check():
-        data = request.get_json(silent=True) or {}
-        try:
-            return jsonify(session.submit_concentration_check(natural_roll=int(data.get("natural_roll", 0))))
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/interaction/confirm")
-    def api_combat_interaction_confirm():
-        data = request.get_json(silent=True) or {}
-        try:
-            return jsonify(session.confirm_combat_interaction(str(data.get("interaction_id", ""))))
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/interaction/cancel")
-    def api_combat_interaction_cancel():
-        try:
-            return jsonify(session.cancel_combat_interaction())
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/move")
-    def api_combat_move():
-        data = request.get_json(silent=True) or {}
-        try:
-            return jsonify(session.submit_combat_movement(col=int(data.get("col", 0)), row=int(data.get("row", 0))))
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/opportunity-movement/confirm")
-    def api_combat_opportunity_movement_confirm():
-        try:
-            return jsonify(session.confirm_opportunity_movement())
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/opportunity-movement/cancel")
-    def api_combat_opportunity_movement_cancel():
-        try:
-            return jsonify(session.cancel_opportunity_movement())
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/dash")
-    def api_combat_dash():
-        try:
-            return jsonify(session.use_combat_dash())
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/dodge")
-    def api_combat_dodge():
-        try:
-            return jsonify(session.use_combat_dodge())
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/disengage")
-    def api_combat_disengage():
-        try:
-            return jsonify(session.use_combat_disengage())
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/help/start")
-    def api_combat_help_start():
-        try:
-            return jsonify(session.start_combat_help())
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/help/confirm")
-    def api_combat_help_confirm():
-        data = request.get_json(silent=True) or {}
-        try:
-            return jsonify(session.confirm_combat_help(ally_id=str(data.get("ally_id", "")), target_id=str(data.get("target_id", ""))))
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/help/cancel")
-    def api_combat_help_cancel():
-        try:
-            return jsonify(session.cancel_combat_help())
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/ready/start")
-    def api_combat_ready_start():
-        try:
-            return jsonify(session.start_combat_ready())
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/ready/confirm")
-    def api_combat_ready_confirm():
-        data = request.get_json(silent=True) or {}
-        try:
-            return jsonify(session.confirm_combat_ready(trigger=str(data.get("trigger", ""))))
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/ready/cancel")
-    def api_combat_ready_cancel():
-        try:
-            return jsonify(session.cancel_combat_ready())
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/enemy-turn")
-    def api_combat_enemy_turn():
-        try:
-            return jsonify(session.resolve_enemy_turn())
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/enemy-opportunity/start")
-    def api_combat_enemy_opportunity_start():
-        try:
-            return jsonify(session.start_enemy_opportunity_attack())
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/enemy-opportunity/skip")
-    def api_combat_enemy_opportunity_skip():
-        try:
-            return jsonify(session.skip_enemy_opportunity_attack())
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/enemy-opportunity/roll")
-    def api_combat_enemy_opportunity_roll():
-        data = request.get_json(silent=True) or {}
-        try:
-            natural_roll_2 = data.get("natural_roll_2")
-            return jsonify(
-                session.submit_enemy_opportunity_attack_roll(
-                    natural_roll=int(data.get("natural_roll", 0)),
-                    natural_roll_2=int(natural_roll_2) if natural_roll_2 not in (None, "") else None,
-                )
-            )
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/enemy-opportunity/damage")
-    def api_combat_enemy_opportunity_damage():
-        data = request.get_json(silent=True) or {}
-        try:
-            return jsonify(session.submit_enemy_opportunity_damage_roll(damage=int(data.get("damage", 0))))
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/ready-attack/start")
-    def api_combat_ready_attack_start():
-        try:
-            return jsonify(session.start_ready_attack())
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/ready-attack/skip")
-    def api_combat_ready_attack_skip():
-        try:
-            return jsonify(session.skip_ready_attack())
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/ready-attack/roll")
-    def api_combat_ready_attack_roll():
-        data = request.get_json(silent=True) or {}
-        try:
-            natural_roll_2 = data.get("natural_roll_2")
-            return jsonify(
-                session.submit_ready_attack_roll(
-                    natural_roll=int(data.get("natural_roll", 0)),
-                    natural_roll_2=int(natural_roll_2) if natural_roll_2 not in (None, "") else None,
-                )
-            )
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/ready-attack/damage")
-    def api_combat_ready_attack_damage():
-        data = request.get_json(silent=True) or {}
-        try:
-            return jsonify(session.submit_ready_damage_roll(damage=int(data.get("damage", 0))))
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/enemy-turn/confirm")
-    def api_combat_enemy_turn_confirm():
-        try:
-            return jsonify(session.confirm_enemy_turn_result())
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/combat/end-turn")
-    def api_combat_end_turn():
-        try:
-            return jsonify(session.finish_combat_turn())
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/encounter/combat/resolve")
-    def api_encounter_combat_resolve():
-        try:
-            return jsonify(session.resolve_active_combat())
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
-
-    @app.post("/api/reset")
-    def api_reset():
-        session.reset()
-        return jsonify(session.state_payload())
-
-    return app
-
-
-def _session_log_payload(session: ExplorationUiSession, *, limit: int = 200) -> dict[str, object]:
-    path = session.observer.path
-    events: list[dict[str, object]] = []
-    if path.exists():
-        lines = path.read_text(encoding="utf-8").splitlines()[-limit:]
-        import json
-
-        for line in lines:
-            if not line.strip():
-                continue
-            events.append(json.loads(line))
-    return {
-        "session_id": session.observer.session_id,
-        "path": str(path),
-        "events": events,
-    }
+def create_app(session: ExplorationUiSession):
+    """Compatibility entry point for the Flask transport adapter."""
+    from .routes import create_app as create_routes_app
+
+    return create_routes_app(session)
 
 
 def _build_encounter_setup_steps(encounter: LoadedEncounter) -> tuple[SetupStep, ...]:
@@ -5245,14 +3933,6 @@ def _combat_action_by_id(encounter: LoadedEncounter | None, actor: Actor, action
     return next((action for action in encounter.combat_actions_by_actor.get(actor.id, ()) if action.id == action_id), None)
 
 
-def _manual_d20_input(request: D20RollRequest, natural_roll: int, natural_roll_2: int | None = None) -> D20RollInput:
-    if request.mode == RollMode.NORMAL:
-        return D20RollInput(request, int(natural_roll))
-    if natural_roll_2 is None:
-        raise ValueError("Ten rzut wymaga wpisania dwóch wyników d20.")
-    return D20RollInput(request, int(natural_roll), int(natural_roll_2))
-
-
 def _automatic_d20_input(request: D20RollRequest, rng) -> D20RollInput:
     first = rng.randint(1, 20)
     if request.mode == RollMode.NORMAL:
@@ -5366,7 +4046,8 @@ def _combat_payload(
         "pending_combat_interaction": pending_combat_interaction.as_payload() if pending_combat_interaction is not None else None,
         "pending_combat_help": pending_combat_help.as_payload(state, active_combat_effects) if pending_combat_help is not None else None,
         "pending_concentration_action": (
-            pending_concentration_action.as_payload(
+            _pending_concentration_action_payload(
+                pending_concentration_action,
                 state,
                 active_combat_effects,
                 _combat_action_by_id(encounter, actor, pending_concentration_action.action_id),
@@ -5375,7 +4056,11 @@ def _combat_payload(
             else None
         ),
         "pending_concentration_check": (
-            pending_concentration_check.as_payload(state, active_combat_effects)
+            _pending_concentration_check_payload(
+                pending_concentration_check,
+                state,
+                active_combat_effects,
+            )
             if pending_concentration_check is not None
             else None
         ),
@@ -5508,22 +4193,56 @@ def _actor_by_string_id_from_state(state: CombatState, actor_id: str) -> Actor:
     return actor
 
 
+def _pending_concentration_action_payload(
+    pending: PendingConcentrationAction,
+    state: CombatState,
+    active_effects: tuple[ActiveCombatEffect, ...],
+    action=None,
+) -> dict[str, object]:
+    return {
+        "caster": _combat_actor_payload(
+            _actor_by_string_id_from_state(state, pending.caster_id),
+            active_effects,
+        ),
+        "action": _combat_action_payload(action) if action is not None else None,
+        "targets": [
+            _combat_actor_payload(actor, active_effects)
+            for actor in state.actors
+            if str(actor.id) in pending.target_ids
+        ],
+    }
+
+
+def _pending_concentration_check_payload(
+    pending: PendingConcentrationCheck,
+    state: CombatState,
+    active_effects: tuple[ActiveCombatEffect, ...],
+) -> dict[str, object]:
+    actor = _actor_by_string_id_from_state(state, pending.actor_id)
+    modifier = ability_modifier(actor.ability_scores.constitution)
+    effects = tuple(
+        effect for effect in active_effects if effect.id in pending.effect_ids
+    )
+    return {
+        "actor": _combat_actor_payload(actor, active_effects),
+        "effect_ids": list(pending.effect_ids),
+        "effects": [effect.as_payload() for effect in effects],
+        "damage": pending.damage,
+        "dc": pending.dc,
+        "modifier": modifier,
+        "instruction": (
+            f"{actor.name} otrzymał {pending.damage} obrażeń. "
+            f"Rzuć CON save przeciw ST {pending.dc}."
+        ),
+    }
+
+
 def _ready_trigger_label(trigger: str) -> str:
     labels = {
         "enemy_moves": "gdy przeciwnik się poruszy",
         "enemy_attacks": "gdy przeciwnik zaatakuje",
     }
     return labels.get(trigger, trigger)
-
-
-def _ready_trigger_for_enemy_result(result) -> str | None:
-    if result is None:
-        return None
-    if result.movement_path is not None and result.movement_path.valid and result.movement_path.destination != result.enemy.position:
-        return "enemy_moves"
-    if result.target is not None:
-        return "enemy_attacks"
-    return None
 
 
 def _attack_source_payload(source) -> dict[str, object]:
@@ -5588,26 +4307,6 @@ def _spell_area_payload(area) -> dict[str, object] | None:
         "length_feet": area.length_feet,
         "width_feet": area.width_feet,
     }
-
-
-def _spell_save_for_actor(saves: tuple[SpellSaveResult, ...], actor_id: str) -> SpellSaveResult | None:
-    return next((save for save in saves if save.actor_id == actor_id), None)
-
-
-def _spell_save_message(save: SpellSaveResult) -> str:
-    payload = save.as_payload()
-    outcome = "sukces" if save.success else "porażka"
-    return (
-        f"{save.actor_name}: rzut obronny na {payload['ability_label']} "
-        f"d20 {save.natural_roll}, modyfikator {_format_signed(save.modifier)}, razem {save.total} "
-        f"przeciw ST {save.dc}: {outcome}."
-    )
-
-
-def _save_damage_on_success_label(value: str) -> str:
-    if value == "half":
-        return "połowę obrażeń przy sukcesie"
-    return "brak obrażeń przy sukcesie"
 
 
 def _format_signed(value: int) -> str:
@@ -5875,13 +4574,6 @@ def _legal_combat_targets(encounter: LoadedEncounter, state: CombatState, actor:
     if source is None:
         return ()
     return start_attack_action(encounter.board, actor, state.actors, source).legal_targets
-
-
-def _coordinates_in_reach(a: Coordinate, b: Coordinate, reach_feet: int) -> bool:
-    if reach_feet <= 0:
-        return False
-    distance_feet = max(abs(a.col - b.col), abs(a.row - b.row)) * 5
-    return 0 < distance_feet <= reach_feet
 
 
 def _combat_target_at_position(encounter: LoadedEncounter, state: CombatState, actor: Actor, position: Coordinate, source=None):
@@ -6160,14 +4852,6 @@ def _movement_payload(result, state: CombatState, actor: Actor) -> dict[str, obj
             for tile in destinations
         ],
     }
-
-
-def _player_attack_message(attacker_name: str, target_name: str, total: int, hit: bool, critical: bool) -> str:
-    if critical:
-        return f"{attacker_name} trafia krytycznie {target_name}. Wynik ataku: {total}."
-    if hit:
-        return f"{attacker_name} trafia {target_name}. Wynik ataku: {total}."
-    return f"{attacker_name} pudłuje przeciwko {target_name}. Wynik ataku: {total}."
 
 
 def _damage_application_message(result) -> str:
@@ -6703,2254 +5387,3 @@ def _locked_zone_message(zone: ExplorationZone) -> str:
     if zone.available_if_flag == "gate_passed":
         return f"{zone.name} jest jeszcze niedostępna. Najpierw trzeba otworzyć bramę."
     return f"{zone.name} jest jeszcze niedostępna."
-
-
-_HTML = """
-<!doctype html>
-<html lang="pl">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Eksploracja</title>
-  <style>
-    body { margin: 0; font-family: system-ui, sans-serif; background: #101214; color: #ece7dc; }
-    main { min-height: 100vh; }
-    aside { position: fixed; inset: 0 auto 0 0; z-index: 30; width: 280px; border-right: 1px solid #34383d; padding: 16px; background: #171a1e; overflow: auto; transform: translateX(-100%); transition: transform 160ms ease; box-shadow: 12px 0 28px rgba(0,0,0,0.28); }
-    body.side-panel-open aside { transform: translateX(0); }
-    section { padding: 18px 18px 18px 64px; overflow: auto; }
-    .side-panel-toggle { position: fixed; z-index: 45; top: 14px; left: 12px; width: 40px; height: 40px; padding: 0; border: 1px solid #3a3f45; background: #20252b; color: #ece7dc; display: grid; place-items: center; }
-    .side-panel-close { width: 32px; height: 32px; padding: 0; background: #3a3f45; }
-    .side-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
-    .side-panel-scrim { position: fixed; inset: 0; z-index: 25; background: rgba(0,0,0,0.42); opacity: 0; pointer-events: none; transition: opacity 160ms ease; }
-    body.side-panel-open .side-panel-scrim { opacity: 1; pointer-events: auto; }
-    @media (max-width: 720px) {
-      aside { width: min(320px, calc(100vw - 52px)); }
-      section { padding-left: 58px; }
-    }
-    h1, h2, h3 { margin: 0 0 10px; }
-    .muted { color: #a9a298; font-size: 13px; }
-    .card { border: 1px solid #34383d; border-radius: 6px; padding: 12px; margin: 0 0 12px; background: #1d2126; }
-    .message { border-left: 3px solid #58a6ff; padding: 10px 12px; margin: 0 0 10px; background: #171b20; }
-    .result { border-left: 3px solid #3fb950; padding: 10px 12px; margin: 0 0 10px; background: #132018; }
-    .scene-description h3 { margin-top: 0; }
-    .scene-description p { margin: 7px 0; line-height: 1.45; }
-    .scene-description ul { margin: 6px 0 0 20px; padding: 0; }
-    .scene-description li { margin: 3px 0; }
-    .start-panel { min-height: 220px; display: grid; place-items: center; text-align: center; }
-    .start-panel .inner { max-width: 620px; }
-    .start-button { font-size: 18px; padding: 12px 22px; margin-top: 12px; }
-    .start-button:disabled { background: #3a3f45; color: #a9a298; cursor: not-allowed; }
-    .location-preview-image { width: 100%; max-height: 360px; object-fit: cover; border-radius: 6px; border: 1px solid #34383d; margin: 8px 0 12px; }
-    .scene-thumb { width: 180px; height: 96px; object-fit: cover; border-radius: 5px; border: 1px solid #34383d; float: right; margin: 0 0 10px 14px; }
-    .hint-panel { margin-top: 10px; padding-top: 10px; border-top: 1px solid #34383d; }
-    .hint-panel[hidden] { display: none; }
-    .debug-panel { margin-top: 10px; }
-    details.debug-panel summary { cursor: pointer; color: #a9a298; }
-    .log-toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; margin: 8px 0 10px; }
-    .log-toolbar input { width: 220px; }
-    .log-meta { color: #a9a298; font-size: 12px; word-break: break-all; margin: 6px 0 10px; }
-    .log-event { border-left: 3px solid #3a3f45; padding: 8px 10px; margin: 0 0 8px; background: #14181d; }
-    .log-event.important { border-left-color: #f5c542; background: #1d1a11; }
-    .log-event.effect { border-left-color: #3fb950; background: #111d16; }
-    .log-event .event-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-    .log-event code { color: #d2e7ff; }
-    .log-event details { margin-top: 6px; }
-    .log-event summary { cursor: pointer; color: #a9a298; }
-    .status { border-left: 3px solid #f5c542; padding: 10px 12px; margin: 0 0 12px; background: #211f16; color: #f5e3a1; }
-    .status[hidden] { display: none; }
-    .status-list { display: grid; gap: 8px; margin-top: 6px; }
-    .status-item { border-bottom: 1px solid #34383d; padding-bottom: 7px; }
-    .status-item.defeated { opacity: 0.55; }
-    .status-item:last-child { border-bottom: 0; padding-bottom: 0; }
-    .status-item b { display: block; }
-    .combat-current-step { border: 1px solid #4b4227; border-radius: 6px; background: #181713; padding: 12px; }
-    .combat-prompt { border-left: 4px solid #f5c542; background: #211f16; color: #f5e3a1; padding: 12px 14px; margin: 0 0 10px; }
-    .combat-prompt b { display: block; font-size: 18px; margin-bottom: 4px; }
-    .combat-mini-status { display: flex; gap: 10px; flex-wrap: wrap; margin: 0 0 10px; color: #d6d0c4; font-size: 13px; }
-    .combat-mini-status span { border: 1px solid #34383d; border-radius: 999px; padding: 3px 8px; background: #111417; }
-    .status-chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 10px; }
-    .status-chip { border: 1px solid #34383d; border-radius: 999px; padding: 3px 8px; background: #111417; color: #d6d0c4; font-size: 12px; line-height: 1.35; }
-    .status-chip.ready { border-color: #2f8f55; color: #d7f6df; background: #102018; }
-    .status-chip.spent { border-color: #5a6068; color: #a9a298; background: #151719; }
-    .status-chip.movement { border-color: #2f6feb; color: #d2e7ff; background: #111927; }
-    .status-chip.magic { border-color: #9b74ff; color: #eadfff; background: #1a1428; }
-    .status-chip.offense { border-color: #d88b26; color: #ffe1b8; background: #24170b; }
-    .status-chip.defense { border-color: #3fb950; color: #d7f6df; background: #102018; }
-    .status-chip.penalty { border-color: #db6d6d; color: #ffd6d6; background: #241111; }
-    .status-chip.danger { border-color: #db6d6d; color: #ffd6d6; background: #241111; }
-    .combat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin: 0 0 12px; }
-    .combat-section { border: 1px solid #34383d; border-radius: 6px; padding: 10px 12px; background: #171b20; }
-    .combat-section h4 { margin: 0 0 7px; font-size: 14px; color: #f5e3a1; }
-    .combat-section p { margin: 0 0 7px; }
-    .combat-section p:last-child { margin-bottom: 0; }
-    .combat-empty { color: #a9a298; }
-    .combat-stage { display: grid; gap: 12px; margin: 0 0 12px; }
-    .combat-action-card { border: 1px solid #34383d; border-radius: 6px; padding: 10px; background: #171b20; }
-    .combat-action-card p { margin: 0 0 8px; }
-    .combat-last-result { border-left: 3px solid #3fb950; padding: 10px 12px; background: #132018; }
-    .combat-last-result h4 { margin: 0 0 6px; color: #d7f6df; }
-    .combat-effects { border: 1px solid #34383d; border-radius: 6px; padding: 10px 12px; background: #151a20; }
-    .combat-effects h4 { margin: 0 0 7px; color: #f5e3a1; font-size: 14px; }
-    .combat-effect-list { display: grid; gap: 6px; }
-    .combat-effect { border-left: 3px solid #58a6ff; padding: 6px 8px; background: #10151a; }
-    .combat-effect b { display: block; }
-    .combat-details { border-top: 1px solid #34383d; margin-top: 12px; padding-top: 10px; }
-    .combat-details summary { cursor: pointer; color: #a9a298; }
-    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-    input, textarea, button { font: inherit; }
-    textarea { width: 100%; min-height: 80px; box-sizing: border-box; background: #0f1113; color: #ece7dc; border: 1px solid #3a3f45; border-radius: 5px; padding: 10px; }
-    input { width: 90px; background: #0f1113; color: #ece7dc; border: 1px solid #3a3f45; border-radius: 5px; padding: 8px; }
-    select { background: #0f1113; color: #ece7dc; border: 1px solid #3a3f45; border-radius: 5px; padding: 8px; }
-    .wide-input { width: 100%; box-sizing: border-box; margin-top: 5px; }
-    button { background: #2f6feb; color: white; border: 0; border-radius: 5px; padding: 9px 12px; cursor: pointer; }
-    button.secondary { background: #3a3f45; }
-    button.danger { background: #b42318; }
-    pre { white-space: pre-wrap; overflow: auto; }
-  </style>
-</head>
-<body>
-<button id="side-panel-toggle" class="side-panel-toggle" data-allow-busy="true" onclick="toggleSidePanel()" aria-controls="side-panel" aria-expanded="false" title="Panel boczny">☰</button>
-<div id="side-panel-scrim" class="side-panel-scrim" data-allow-busy="true" onclick="setSidePanelOpen(false)"></div>
-<main>
-  <aside id="side-panel" aria-hidden="true">
-    <div class="side-panel-head">
-      <h2 id="scenario">Scenariusz</h2>
-      <button class="side-panel-close" data-allow-busy="true" onclick="setSidePanelOpen(false)" aria-label="Zamknij panel">×</button>
-    </div>
-    <div class="card"><b>Lokacja</b><div id="zone"></div></div>
-    <div class="card"><b>Wyzwanie</b><div id="challenge"></div></div>
-    <div class="card"><b>Jawne elementy sceny</b><div id="visible-environment"></div></div>
-    <div class="card"><b>Zasoby</b><div id="resources"></div></div>
-    <div class="card">
-      <b>Plansza</b>
-      <div id="board-status" class="muted"></div>
-      <label>Tryb
-        <select id="board-backend">
-          <option value="none">brak</option>
-          <option value="simulator">symulator</option>
-          <option value="hardware">hardware</option>
-        </select>
-      </label>
-      <label>URL symulatora <input id="board-url" class="wide-input" value="http://127.0.0.1:5000"></label>
-      <label>Port hardware <input id="board-serial-port" class="wide-input" placeholder="/dev/ttyUSB0"></label>
-      <label>WLED URL <input id="wled-url" class="wide-input" placeholder="http://adres-wled"></label>
-      <label>Timeout skanu <input id="scan-timeout" type="number" min="1" max="120" value="30"></label>
-      <div class="row" style="margin-top:8px">
-        <button onclick="configureBoard()">Zastosuj</button>
-        <button class="secondary" onclick="scanBoard()">Skanuj planszę</button>
-        <button class="secondary" data-allow-busy="true" onclick="resetBoardScan()">Reset skanu</button>
-      </div>
-    </div>
-    <button class="secondary" onclick="resetSession()">Reset</button>
-  </aside>
-  <section>
-    <h1 id="page-title">Eksploracja</h1>
-    <div id="status" class="status" hidden></div>
-    <div class="card" id="flow-panel"></div>
-    <div class="card scene-description" id="scene-description-card">
-      <h3>Opis sceny</h3>
-      <div id="scene-description"></div>
-    </div>
-    <div class="card" id="result-panel">
-      <h3>Wynik</h3>
-      <div id="result"></div>
-      <button onclick="ackResult()">Dalej</button>
-    </div>
-    <div class="card" id="encounter-panel">
-      <h3 id="encounter-title">Zaczyna się encounter</h3>
-      <div id="encounter"></div>
-    </div>
-    <div class="card" id="travel-panel">
-      <h3>Dostępne przejścia</h3>
-      <div id="travel-options"></div>
-    </div>
-    <div class="card" id="points-panel">
-      <h3>Odkryte punkty</h3>
-      <div id="point-options"></div>
-    </div>
-    <div class="card" id="pending-panel">
-      <h3>Decyzja MG</h3>
-      <div id="pending"></div>
-      <div id="lead-actor-choice"></div>
-      <div class="row" style="margin-top:8px">
-        <button onclick="decision('accept')">Akceptuj</button>
-        <button class="danger" onclick="decision('reject')">Odrzuć</button>
-        <button class="secondary" onclick="decision('explain')">Wyjaśnij</button>
-      </div>
-    </div>
-    <div class="card" id="action-panel">
-      <h3 id="action-title">Co robi drużyna?</h3>
-      <textarea id="action"></textarea>
-      <div class="row" style="margin-top:8px">
-        <button onclick="sendAction()">Wyślij</button>
-      </div>
-    </div>
-    <div class="card" id="roll-panel">
-      <h3>Rzuty</h3>
-      <div id="roll-prompt"></div>
-      <div id="rolls"></div>
-      <button onclick="sendRolls()">Rozstrzygnij rzuty</button>
-    </div>
-    <details class="card debug-panel">
-      <summary>Historia komunikatów</summary>
-      <div id="messages"></div>
-    </details>
-    <details class="card debug-panel" id="session-log-panel">
-      <summary>Log sesji</summary>
-      <div class="log-meta" id="session-log-meta"></div>
-      <div class="log-toolbar">
-        <label>Filtr event type <input id="session-log-filter" data-allow-busy="true" placeholder="np. ui_effect_applied" oninput="renderSessionLog()"></label>
-        <button class="secondary" data-allow-busy="true" onclick="refreshSessionLog()">Odśwież log</button>
-      </div>
-      <div id="session-log-events" class="muted">Log nie został jeszcze wczytany.</div>
-    </details>
-    <details class="card debug-panel">
-      <summary>Debug payload</summary>
-      <pre id="debug-payload"></pre>
-    </details>
-  </section>
-</main>
-<script>
-let state = null;
-let busy = false;
-let resultAck = null;
-let playerTurnScanLoop = false;
-let boardScanInFlight = false;
-let boardScanToken = 0;
-let sessionLog = null;
-let decisionCorrectionOpen = false;
-let sidePanelOpen = localStorage.getItem('explorationSidePanelOpen') === 'true';
-function setSidePanelOpen(open) {
-  sidePanelOpen = Boolean(open);
-  localStorage.setItem('explorationSidePanelOpen', sidePanelOpen ? 'true' : 'false');
-  document.body.classList.toggle('side-panel-open', sidePanelOpen);
-  const panel = document.getElementById('side-panel');
-  const toggle = document.getElementById('side-panel-toggle');
-  if (panel) panel.setAttribute('aria-hidden', sidePanelOpen ? 'false' : 'true');
-  if (toggle) toggle.setAttribute('aria-expanded', sidePanelOpen ? 'true' : 'false');
-}
-function toggleSidePanel() {
-  setSidePanelOpen(!sidePanelOpen);
-}
-function setBusy(message) {
-  busy = Boolean(message);
-  const status = document.getElementById('status');
-  status.hidden = !busy;
-  status.textContent = message || '';
-  document.querySelectorAll('button, textarea, input').forEach(el => {
-    if (el.closest('details.debug-panel')) return;
-    if (el.dataset.allowBusy === 'true') return;
-    el.disabled = busy;
-  });
-}
-async function api(path, body, busyMessage) {
-  setBusy(busyMessage || 'Czekam na odpowiedź...');
-  try {
-    const res = await fetch(path, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body || {})});
-    const data = await res.json();
-    if (!res.ok) alert(data.error || 'Błąd');
-    state = data.state || data;
-  if (path === '/api/rolls' && res.ok) {
-      resultAck = state.flow && state.flow.stage === 'interaction_result' ? null : latestResultMessage(state);
-    } else if (path !== '/api/decision') {
-      resultAck = null;
-    }
-    render();
-    refreshSessionLog();
-  } finally {
-    setBusy('');
-  }
-}
-async function loadState() {
-  const res = await fetch('/api/state');
-  state = await res.json();
-  render();
-  refreshSessionLog();
-}
-function render() {
-  const inCombat = Boolean(state.combat);
-  document.getElementById('page-title').textContent = inCombat ? 'Walka' : 'Eksploracja';
-  document.getElementById('encounter-title').textContent = inCombat ? 'Walka' : 'Zaczyna się encounter';
-  document.getElementById('scenario').textContent = state.scenario.name;
-  document.getElementById('zone').textContent = state.current_zone.name;
-  document.getElementById('challenge').textContent = state.active_challenge ? `${state.active_challenge.name}: ${state.active_challenge.current_progress}/${state.active_challenge.progress_required}, hałas ${state.active_challenge.noise}` : 'Brak';
-  document.getElementById('visible-environment').innerHTML = visibleEnvironmentHtml();
-  document.getElementById('resources').innerHTML = state.resources.map(r => `<div>${r.label}</div>`).join('') || 'Brak';
-  renderBoardPanel();
-  document.getElementById('flow-panel').innerHTML = flowPanelHtml();
-  const sceneHtml = sceneDescriptionHtml(state);
-  document.getElementById('scene-description').innerHTML = sceneHtml;
-  document.getElementById('scene-description-card').hidden = !sceneHtml;
-  document.getElementById('messages').innerHTML = state.messages.map(m => `<div class="message"><b>${m.title}</b><br>${m.body}</div>`).join('');
-  document.getElementById('pending').innerHTML = pendingHtml(state.pending);
-  document.getElementById('lead-actor-choice').innerHTML = leadActorChoiceHtml();
-  document.getElementById('result').innerHTML = resultAck ? `<div class="result"><b>${esc(resultAck.title)}</b><br>${esc(resultAck.body)}</div>` : '';
-  document.getElementById('encounter').innerHTML = encounterHtml();
-  document.getElementById('travel-options').innerHTML = travelOptionsHtml();
-  document.getElementById('point-options').innerHTML = pointOptionsHtml();
-  document.getElementById('roll-prompt').innerHTML = rollPromptHtml();
-  document.getElementById('rolls').innerHTML = state.required_rolls.map(r => {
-    const sides = Number(r.die_sides || 20);
-    const value = sides === 100 ? 50 : 10;
-    if (r.requires_second_roll) {
-      return `<label>${esc(r.actor_name)} ${esc(r.label || `d${sides}`)} #1: <input data-actor="${esc(r.actor_id)}" data-roll-index="1" type="number" min="1" max="${sides}" value="${value}"></label>
-        <label>${esc(r.actor_name)} ${esc(r.label || `d${sides}`)} #2: <input data-actor="${esc(r.actor_id)}" data-roll-index="2" type="number" min="1" max="${sides}" value="${value + 3 > sides ? value - 3 : value + 3}"></label>`;
-    }
-    return `<label>${esc(r.actor_name)} ${esc(r.label || `d${sides}`)}: <input data-actor="${esc(r.actor_id)}" data-roll-index="1" type="number" min="1" max="${sides}" value="${value}"></label>`;
-  }).join(' ');
-  document.getElementById('debug-payload').textContent = JSON.stringify(state, null, 2);
-  renderSessionLogMeta();
-  document.getElementById('action-title').textContent = state.active_point && state.active_point.has_npc ? 'Co robicie wobec NPC?' : 'Co robi drużyna?';
-  updateActivePanel();
-}
-function renderBoardPanel() {
-  const board = state.board || {};
-  document.getElementById('board-status').textContent = `${board.message || 'Plansza niepodłączona.'} Domyślny backend z configu: ${board.configured_backend || '-'}.`;
-  document.getElementById('board-backend').value = board.backend || 'none';
-  document.getElementById('board-url').value = board.board_url || 'http://127.0.0.1:5000';
-  document.getElementById('board-serial-port').value = board.board_serial_port || '';
-  document.getElementById('wled-url').value = board.wled_url || '';
-  document.getElementById('scan-timeout').value = board.scan_timeout_s || 30;
-}
-function esc(value) {
-  return String(value || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
-}
-async function refreshSessionLog() {
-  const res = await fetch('/api/session-log');
-  sessionLog = await res.json();
-  renderSessionLog();
-}
-function renderSessionLogMeta() {
-  const meta = document.getElementById('session-log-meta');
-  if (!meta || !state || !state.session_log) return;
-  meta.innerHTML = `Session: <code>${esc(state.session_log.session_id)}</code><br>Plik: <code>${esc(state.session_log.path)}</code>`;
-}
-function renderSessionLog() {
-  renderSessionLogMeta();
-  const container = document.getElementById('session-log-events');
-  if (!container) return;
-  if (!sessionLog) {
-    container.innerHTML = '<span class="muted">Log nie został jeszcze wczytany.</span>';
-    return;
-  }
-  const filter = (document.getElementById('session-log-filter')?.value || '').trim().toLowerCase();
-  const events = (sessionLog.events || []).filter(event => !filter || String(event.event_type || '').toLowerCase().includes(filter));
-  if (!events.length) {
-    container.innerHTML = '<span class="muted">Brak eventów dla aktualnego filtra.</span>';
-    return;
-  }
-  container.innerHTML = events.slice().reverse().map(event => sessionLogEventHtml(event)).join('');
-}
-function sessionLogEventHtml(event) {
-  const type = String(event.event_type || '');
-  const payload = event.payload || {};
-  const classes = ['log-event'];
-  if (type === 'ui_effect_applied') classes.push('effect');
-  if (['ui_action_submitted','ui_npc_proposal_validated','ui_gm_proposal_validated','ui_rolls_resolved','ui_effect_applied','ui_challenge_resolved'].includes(type)) {
-    classes.push('important');
-  }
-  const summary = sessionLogSummary(type, payload);
-  return `
-    <div class="${classes.join(' ')}">
-      <div class="event-head">
-        <div><code>${esc(type)}</code> <span class="muted">#${esc(event.seq)}</span></div>
-        <div class="muted">${esc(event.ts || '')}</div>
-      </div>
-      ${summary ? `<div>${summary}</div>` : ''}
-      <details><summary>Payload JSON</summary><pre>${esc(JSON.stringify(payload, null, 2))}</pre></details>
-    </div>
-  `;
-}
-function sessionLogSummary(type, payload) {
-  if (type === 'ui_action_submitted') return `Deklaracja: ${esc(payload.text || '')}`;
-  if (type === 'ui_effect_applied') {
-    const effect = payload.effect || {};
-    return `Efekt: ${esc(payload.effect_type || effect.type || '')}; źródło: ${esc(payload.source || '')}; zmiana stanu: ${payload.changed ? 'tak' : 'nie'}`;
-  }
-  if (type === 'ui_npc_proposal_validated') return `NPC point: ${esc(payload.point_id || '')}`;
-  if (type === 'ui_gm_proposal_validated') return `Challenge: ${esc(payload.challenge_id || '')}`;
-  if (type === 'ui_rolls_resolved') return `Rzuty dla: ${esc(payload.pending_kind || '')}`;
-  if (type === 'ui_challenge_resolved') return `Challenge: ${esc(payload.challenge_id || '')}; completed: ${payload.completed ? 'tak' : 'nie'}`;
-  if (type === 'ui_message_added') return `${esc(payload.title || '')}: ${esc(payload.body || '')}`;
-  return '';
-}
-function listHtml(items) {
-  if (!items || !items.length) return '';
-  return `<ul>${items.map(item => `<li>${esc(item)}</li>`).join('')}</ul>`;
-}
-function sceneStatusHtml() {
-  const items = state.scene_status || [];
-  if (!items.length) return '<span class="muted">Brak zmian.</span>';
-  return `<div class="status-list">${items.map(item => `
-    <div class="status-item"><b>${esc(item.label)}</b><span>${esc(item.value)}</span></div>
-  `).join('')}</div>`;
-}
-function flowPanelHtml() {
-  const flow = state.flow || {};
-  const stage = flow.stage || 'waiting_for_board';
-  if (stage === 'waiting_for_board') {
-    return `
-      <div class="start-panel"><div class="inner">
-        <h2>Wybierz planszę</h2>
-        <p>Najpierw wybierz backend planszy w panelu po lewej: <b>symulator</b> albo <b>hardware</b>, a potem kliknij <b>Zastosuj</b>.</p>
-        <p class="muted">Tryb „brak” zostaje tylko do testów technicznych i nie uruchamia normalnej sesji gracza.</p>
-        <button class="start-button" disabled>Start</button>
-      </div></div>
-    `;
-  }
-  if (stage === 'ready_to_start') {
-    return `
-      <div class="start-panel"><div class="inner">
-        <h2>Plansza gotowa</h2>
-        <p>Backend planszy jest podłączony. Kliknij Start, żeby pokazać jawne elementy sceny na planszy.</p>
-        <button class="start-button" onclick="startSession()">Start</button>
-      </div></div>
-    `;
-  }
-  if (stage === 'party_setup') {
-    const setup = state.exploration_setup;
-    if (setup && setup.current_step) {
-      const step = setup.current_step || {};
-      const hasPositions = Boolean(step.has_positions);
-      const positions = (step.positions || []).map(pos => `(${pos[0]},${pos[1]})`).join(', ');
-      return `
-        <h3>Setup mapy ${Number(setup.current_index) + 1}/${setup.step_count}</h3>
-        <p><b>${esc(step.label || '')}</b></p>
-        <p>${esc(step.message || '')}</p>
-        ${hasPositions ? `<p><b>Kolor:</b> ${esc(step.color || '-')}</p><p><b>Pola:</b> ${esc(positions)}</p>` : '<p class="muted">Ten krok jest tylko instrukcją i nie podświetla pól na planszy.</p>'}
-        <p class="muted">${hasPositions ? 'Rozstaw elementy na fizycznej planszy. Jeśli potwierdzasz planszą, najpierw kliknij Skanuj planszę.' : 'Potwierdź, żeby przejść do pierwszego podświetlanego elementu mapy.'}</p>
-        <div class="row"><button onclick="confirmExplorationSetup()">Potwierdź setup</button>${hasPositions ? '<button class="secondary" data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>' : ''}</div>
-      `;
-    }
-    return `
-      <h3>Setup drużyny</h3>
-      <p>Ustaw figurkę drużyny na podświetlonym polu.</p>
-      <button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>
-      <p class="muted">Po uruchomieniu skanu kliknij podświetlone pole.</p>
-    `;
-  }
-  if (stage === 'location_preview') {
-    const preview = flow.preview_zone;
-    if (!preview) {
-      return `
-        <h3>Jawne elementy sceny</h3>
-        ${availableLocationsHtml(flow.available_locations || [])}
-        <p>Kliknij Skanuj planszę, a potem wskaż element sceny.</p>
-        <button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>
-      `;
-    }
-    const image = preview.image_url ? `<img class="location-preview-image" src="${esc(preview.image_url)}" alt="${esc(preview.name)}">` : '';
-    if (preview.available === false) {
-      return `
-        <h3>Podgląd elementu</h3>
-        ${image}
-        <p><b>${esc(preview.name)}</b></p>
-        <p>${esc(preview.description || preview.summary || '')}</p>
-        <div class="status">${esc(preview.locked_reason || 'Ten element jest jeszcze zablokowany.')}</div>
-        <button class="secondary" data-allow-busy="true" onclick="cancelLocationPreview()">Wróć do wyboru elementów</button>
-      `;
-    }
-    return `
-      <h3>Podgląd elementu</h3>
-      ${image}
-      <p><b>${esc(preview.name)}</b></p>
-      <p>${esc(preview.description || preview.summary || '')}</p>
-      <p><b>Czy chcesz wejść w interakcję?</b> Potwierdź Enterem albo przyciskiem.</p>
-      <div class="row"><button onclick="confirmLocationPreview()">Wejdź w eksplorację</button><button class="secondary" data-allow-busy="true" onclick="cancelLocationPreview()">Wróć do wyboru elementów</button></div>
-    `;
-  }
-  if (stage === 'interaction_result') {
-    const result = flow.interaction_result || {};
-    const unlocked = result.unlocked_zones || [];
-    const points = result.revealed_points || [];
-    return `
-      <h3>${esc(result.title || 'Wynik interakcji')}</h3>
-      <div class="result">${esc(result.body || '')}</div>
-      ${unlocked.length ? `<p><b>Odblokowano lokacje:</b></p><ul>${unlocked.map(zone => `<li>${esc(zone.name)}</li>`).join('')}</ul>` : ''}
-      ${points.length ? `<p><b>Ujawniono punkty:</b></p><ul>${points.map(point => `<li>${esc(point.name)}</li>`).join('')}</ul>` : ''}
-      <p class="muted">${esc(result.next_instruction || 'Zakończ interakcję, aby wrócić do wyboru lokacji.')}</p>
-      <button onclick="finishInteraction()">Zakończ interakcję</button>
-    `;
-  }
-  return '';
-}
-function availableLocationsHtml(locations) {
-  if (!locations.length) return '<p>Brak jawnych elementów sceny.</p>';
-  return `<ul>${locations.map(zone => {
-    const status = zone.available === false ? `zablokowane: ${esc(zone.locked_reason || '')}` : 'dostępne';
-    return `<li><b>${esc(zone.name)}</b>: kolor ${esc(colorNameForZone(zone))}, ${status}</li>`;
-  }).join('')}</ul>`;
-}
-function colorNameForZone(zone) {
-  return zone.color || 'kolor specjalny';
-}
-function visibleEnvironmentHtml() {
-  const entries = state.visible_environment || [];
-  if (!entries.length) return '<div class="muted">Brak jawnych elementów.</div>';
-  return entries.map(entry => {
-    const positions = (entry.positions || []).map(pos => `(${pos[0]},${pos[1]})`).join(', ');
-    const blocked = entry.blocks_movement ? 'blokuje ruch' : 'można wejść';
-    return `
-      <div class="status-item" style="margin:6px 0">
-        <b>${esc(entry.name)}</b>
-        <span>${esc(entry.label || entry.type || '')}${entry.color ? ` | ${esc(entry.color)}` : ''}</span>
-        <span>${positions ? `pola ${esc(positions)} | ` : ''}${esc(blocked)}</span>
-      </div>
-    `;
-  }).join('');
-}
-function sceneDescriptionHtml(state) {
-  const zone = state.current_zone || {};
-  const challenge = state.active_challenge;
-  const stage = state.flow ? state.flow.stage : 'location_active';
-  if (stage !== 'location_active') {
-    return '';
-  }
-  const parts = [
-    `<p><b>${esc(zone.name)}</b></p>`,
-    zone.image_url ? `<img class="scene-thumb" src="${esc(zone.image_url)}" alt="${esc(zone.name)}">` : '',
-    zone.description ? `<p>${esc(zone.description)}</p>` : '',
-    zone.summary ? `<p>${esc(zone.summary)}</p>` : '',
-  ];
-  if (zone.available_materials && zone.available_materials.length) {
-    parts.push(`<p><b>Widoczne elementy otoczenia:</b></p>${listHtml(zone.available_materials)}`);
-  }
-    if (challenge) {
-    parts.push(`<p><b>${esc(challenge.name)}</b></p>`);
-    if (challenge.summary) parts.push(`<p>${esc(challenge.summary)}</p>`);
-    parts.push(`<p><b>Postęp:</b> ${challenge.current_progress}/${challenge.progress_required}. <b>Hałas:</b> ${challenge.noise}.</p>`);
-    if (challenge.complications && challenge.complications.length) {
-      parts.push(`<p><b>Komplikacje:</b> ${challenge.complications.map(esc).join(', ')}</p>`);
-    }
-    if (challenge.options && challenge.options.length) {
-      parts.push(challengeOptionsHtml(challenge.options));
-    }
-    const hasHints = (challenge.reasonable_approaches && challenge.reasonable_approaches.length)
-      || (challenge.risk_notes && challenge.risk_notes.length);
-    if (hasHints) {
-      const hints = [];
-      if (challenge.reasonable_approaches && challenge.reasonable_approaches.length) {
-        hints.push(`<p><b>Sensowne podejścia:</b></p>${listHtml(challenge.reasonable_approaches)}`);
-      }
-      if (challenge.risk_notes && challenge.risk_notes.length) {
-        hints.push(`<p><b>Ryzyka:</b></p>${listHtml(challenge.risk_notes)}`);
-      }
-      parts.push(`
-        <button class="secondary" type="button" onclick="toggleHints()">Pokaż wskazówki MG</button>
-        <div id="gm-hints" class="hint-panel" hidden>${hints.join('')}</div>
-      `);
-    }
-  }
-  if (state.active_point) {
-    const point = state.active_point;
-    parts.push(`<p><b>${esc(point.name)}</b></p>`);
-    parts.push(point.description ? `<p>${esc(point.description)}</p>` : '');
-    if (point.npc) {
-      parts.push(`<p>${esc(point.npc.public_description)}</p>`);
-      if (point.npc.current_state) parts.push(`<p><b>Stan NPC:</b> ${esc(point.npc.current_state)}</p>`);
-    }
-  }
-  if (!challenge && state.travel_options && state.travel_options.length) {
-    parts.push(`<p><b>Droga dalej jest otwarta.</b> Zakończ interakcję albo wybierz lokację na planszy.</p>`);
-  }
-  const html = parts.filter(Boolean).join('');
-  return html.trim() ? html : '';
-}
-function challengeOptionsHtml(options) {
-  return `
-    <div class="status-list">
-      ${options.map(option => {
-        const skill = option.skill ? `/${esc(option.skill)}` : '';
-        const requirements = challengeOptionRequirementsText(option);
-        const actors = (option.eligible_actors || []).map(actor => actor.name).join(', ');
-        return `
-          <div class="status-item">
-            <b>${esc(option.label)}</b>
-            <div>${esc(option.description || '')}</div>
-            ${option.mechanic ? `<div class="muted">Mechanika: ${esc(option.mechanic.label || option.mechanic.id)}</div>` : ''}
-            <div class="muted">Test: ${esc(option.ability)}${skill}, ST ${esc(option.dc)}. Sukces +${esc(option.progress_on_success)}, porażka +${esc(option.progress_on_failure)}.</div>
-            ${requirements ? `<div class="muted">Wymaga: ${requirements}</div>` : ''}
-            ${challengeOptionBonusesText(option) ? `<div class="muted">Premie: ${challengeOptionBonusesText(option)}</div>` : ''}
-            ${actors ? `<div class="muted">Może wykonać: ${esc(actors)}</div>` : ''}
-          </div>
-        `;
-      }).join('')}
-    </div>
-  `;
-}
-function challengeOptionRequirementsText(option) {
-  const parts = [];
-  if (option.requires_item_ids && option.requires_item_ids.length) parts.push(`item ${option.requires_item_ids.map(esc).join(', ')}`);
-  if (option.requires_spell_ids && option.requires_spell_ids.length) parts.push(`czar ${option.requires_spell_ids.map(esc).join(', ')}`);
-  if (option.requires_ability_scores && option.requires_ability_scores.length) {
-    parts.push(option.requires_ability_scores.map(req => `${esc(req.ability)} ${esc(req.minimum)}`).join(', '));
-  }
-  return parts.join('; ');
-}
-function challengeOptionBonusesText(option) {
-  const bonuses = option.bonuses || [];
-  return bonuses.map(bonus => {
-    const mod = Number(bonus.modifier || 0);
-    const breakage = bonus.breakage_risk ? `, ryzyko uszkodzenia ${esc(bonus.breakage_risk.chance_percent)}% przy krytycznej porażce` : '';
-    const spellLevel = Number(bonus.spell_level || 0);
-    const spellCost = bonus.source_type === 'spell' ? (spellLevel > 0 ? `, zużywa slot ${spellLevel}. poziomu` : ', cantrip bez slota') : '';
-    return `${esc(bonus.label || bonus.source_id)} ${signedNumber(mod)}${spellCost}${breakage}`;
-  }).join('; ');
-}
-function toggleHints() {
-  const panel = document.getElementById('gm-hints');
-  if (!panel) return;
-  panel.hidden = !panel.hidden;
-  const button = panel.previousElementSibling;
-  if (button) button.textContent = panel.hidden ? 'Pokaż wskazówki MG' : 'Ukryj wskazówki MG';
-}
-function pendingHtml(pending) {
-  if (!pending) return '';
-  const proposal = pending.proposal || {};
-  const option = pending.option || {};
-  const lines = [];
-  if (proposal.player_narration) lines.push(`<p>${esc(proposal.player_narration)}</p>`);
-  if (proposal.npc_response) lines.push(`<p><b>NPC:</b> ${esc(proposal.npc_response)}</p>`);
-  if (option.label) {
-    const skill = option.skill ? `/${esc(option.skill)}` : '';
-    if (option.mechanic) lines.push(`<p><b>Mechanika:</b> ${esc(option.mechanic.label || option.mechanic.id)}.</p>`);
-    lines.push(`<p><b>Podejście:</b> ${esc(option.label)}. Test: ${esc(option.ability)}${skill}, ST ${esc(option.dc)}.</p>`);
-    if (option.roll_mode && option.roll_mode !== 'normal') lines.push(`<p><b>Tryb rzutu:</b> ${esc(option.roll_mode)}.</p>`);
-    if (option.situational_modifiers && option.situational_modifiers.length) {
-      lines.push(`<p><b>Modyfikatory sytuacyjne:</b> ${option.situational_modifiers.map(mod => `${esc(mod.label)} ${signedNumber(Number(mod.modifier || 0))}${mod.roll_mode && mod.roll_mode !== 'normal' ? `, ${esc(mod.roll_mode)}` : ''} (${esc(mod.source)}: ${esc(mod.reason)})`).join('; ')}</p>`);
-    }
-    if (option.improvised_tool) {
-      const tool = option.improvised_tool;
-      lines.push(`<p><b>Improwizowane narzędzie:</b> ${esc(tool.label)} ${signedNumber(Number(tool.effect_modifier || 0))} (${esc(tool.source)}: ${esc(tool.source_detail)}${tool.risk ? `, ryzyko: ${esc(tool.risk)}` : ''}). ${esc(tool.reason)}</p>`);
-    }
-    lines.push(`<p><b>Postęp:</b> sukces +${esc(option.progress_on_success)}, porażka +${esc(option.progress_on_failure)}.</p>`);
-    if (pending.kind === 'challenge' && pending.stage === 'decision') {
-      lines.push(`<button class="secondary" onclick="toggleDecisionCorrection()">Popraw decyzję MG</button>`);
-      if (decisionCorrectionOpen) lines.push(decisionCorrectionHtml(option));
-    }
-  } else if (proposal.action_type) {
-    if (proposal.requires_roll) {
-      const skill = proposal.skill ? `/${esc(proposal.skill)}` : '';
-      lines.push(`<p><b>Akcja:</b> ${esc(proposal.action_type)}. Test: ${esc(proposal.ability)}${skill}, ST ${esc(proposal.dc)}.</p>`);
-    } else {
-      lines.push(`<p><b>Akcja:</b> ${esc(proposal.action_type)}. Bez rzutu.</p>`);
-    }
-  }
-  return lines.join('') || '<p>MG proponuje interpretację deklaracji.</p>';
-}
-function leadActorChoiceHtml() {
-  if (!state.pending || state.pending.stage !== 'decision' || !state.actors || state.actors.length < 2) return '';
-  const selectedId = state.selected_lead_actor_id || (state.actors[0] && state.actors[0].id) || '';
-  const options = state.actors.map(actor => `<option value="${esc(actor.id)}"${String(actor.id) === String(selectedId) ? ' selected' : ''}>${esc(actor.name)}</option>`).join('');
-  return `<label><b>Kto prowadzi test?</b> <select id="lead-actor">${options}</select></label>`;
-}
-function decisionCorrectionHtml(option) {
-  const mechanicId = option.mechanic && option.mechanic.id ? option.mechanic.id : 'single_actor_check';
-  const actorOptions = (selectedId, allowEmpty=false) => `${allowEmpty ? '<option value="">-</option>' : ''}${(state.actors || []).map(actor => `<option value="${esc(actor.id)}"${String(actor.id) === String(selectedId || '') ? ' selected' : ''}>${esc(actor.name)}</option>`).join('')}`;
-  const mechanicOptions = (state.allowed_mechanics || []).map(tool => `<option value="${esc(tool.id)}"${tool.id === mechanicId ? ' selected' : ''}>${esc(tool.label || tool.id)}</option>`).join('');
-  const participants = option.check_participants || (option.mechanic && option.mechanic.participants ? option.mechanic.participants : 'single_actor');
-  const aggregation = option.check_aggregation || (participants === 'whole_party' ? 'highest' : 'lead_result');
-  const abilityOptions = ['strength','dexterity','constitution','intelligence','wisdom','charisma'].map(ability => `<option value="${ability}"${ability === option.ability ? ' selected' : ''}>${ability}</option>`).join('');
-  const rollMode = option.roll_mode || 'normal';
-  const rollModeOptions = ['normal','advantage','disadvantage'].map(mode => `<option value="${mode}"${mode === rollMode ? ' selected' : ''}>${mode}</option>`).join('');
-  const sourceOptions = selectedSource => ['scenario_context','zone_context','challenge_context','interaction_object','player_declaration','dynamic_state','gm'].map(source => `<option value="${source}"${source === selectedSource ? ' selected' : ''}>${source}</option>`).join('');
-  const situational = option.situational_modifiers || [];
-  const improvised = option.improvised_tool || {};
-  const modifierRows = [0,1,2].map(index => {
-    const mod = situational[index] || {};
-    const modMode = mod.roll_mode || 'normal';
-    const modModeOptions = ['normal','advantage','disadvantage'].map(mode => `<option value="${mode}"${mode === modMode ? ' selected' : ''}>${mode}</option>`).join('');
-    return `<div class="card" data-situational-row="${index}">
-      <label>Etykieta <input class="correction-sit-label" value="${esc(mod.label || '')}" placeholder="np. Mokra lina"></label>
-      <label>Premia/kara <input class="correction-sit-modifier" type="number" min="-2" max="2" value="${esc(mod.modifier || 0)}"></label>
-      <label>Tryb <select class="correction-sit-roll-mode">${modModeOptions}</select></label>
-      <label>Źródło <select class="correction-sit-source">${sourceOptions(mod.source || 'gm')}</select></label>
-      <label>Powód <input class="correction-sit-reason" value="${esc(mod.reason || '')}" placeholder="Dlaczego ten fakt wpływa na test"></label>
-    </div>`;
-  }).join('');
-  return `
-    <div class="card" style="margin-top:10px">
-      <h4>Korekta przed rzutem</h4>
-      <label>Mechanika <select id="correction-mechanic">${mechanicOptions}</select></label>
-      <label>Uczestnicy
-        <select id="correction-participants">
-          <option value="single_actor"${participants === 'single_actor' ? ' selected' : ''}>jedna postać</option>
-          <option value="lead_with_help"${participants === 'lead_with_help' ? ' selected' : ''}>prowadzący z pomocą</option>
-          <option value="whole_party"${participants === 'whole_party' ? ' selected' : ''}>cała drużyna</option>
-          <option value="selected_actors"${participants === 'selected_actors' ? ' selected' : ''}>wybrane postacie</option>
-        </select>
-      </label>
-      <label>Agregacja
-        <select id="correction-aggregation">
-          <option value="lead_result"${aggregation === 'lead_result' ? ' selected' : ''}>wynik prowadzącego</option>
-          <option value="highest"${aggregation === 'highest' ? ' selected' : ''}>najwyższy wynik</option>
-          <option value="lowest"${aggregation === 'lowest' ? ' selected' : ''}>najniższy wynik</option>
-          <option value="majority"${aggregation === 'majority' ? ' selected' : ''}>większość sukcesów</option>
-          <option value="all_must_succeed"${aggregation === 'all_must_succeed' ? ' selected' : ''}>wszyscy muszą zdać</option>
-          <option value="any_success"${aggregation === 'any_success' ? ' selected' : ''}>wystarczy jeden sukces</option>
-          <option value="sum_progress"${aggregation === 'sum_progress' ? ' selected' : ''}>suma postępu</option>
-        </select>
-      </label>
-      <label>Prowadzący <select id="correction-lead">${actorOptions(state.selected_lead_actor_id)}</select></label>
-      <label>Pomocnik <select id="correction-helper">${actorOptions(state.selected_helper_actor_id, true)}</select></label>
-      <label>Cecha <select id="correction-ability">${abilityOptions}</select></label>
-      <label>Skill <input id="correction-skill" value="${esc(option.skill || '')}" placeholder="np. athletics"></label>
-      <label>ST <input id="correction-dc" type="number" min="5" max="25" value="${esc(option.dc || 10)}"></label>
-      <label>Tryb rzutu <select id="correction-roll-mode">${rollModeOptions}</select></label>
-      <details>
-        <summary>Modyfikatory sytuacyjne</summary>
-        ${modifierRows}
-      </details>
-      <details>
-        <summary>Improwizowane narzędzie</summary>
-        <label>Nazwa <input id="improvised-tool-label" value="${esc(improvised.label || '')}" placeholder="np. Stara deska"></label>
-        <label>Źródło <select id="improvised-tool-source">${sourceOptions(improvised.source || 'interaction_object')}</select></label>
-        <label>Szczegół źródła <input id="improvised-tool-source-detail" value="${esc(improvised.source_detail || '')}" placeholder="np. rumowisko przy bramie"></label>
-        <label>Efekt <input id="improvised-tool-effect" type="number" min="-2" max="2" value="${esc(improvised.effect_modifier || 0)}"></label>
-        <label>Ryzyko <input id="improvised-tool-risk" value="${esc(improvised.risk || '')}" placeholder="np. pęka przy krytycznej porażce"></label>
-        <label>Powód <input id="improvised-tool-reason" value="${esc(improvised.reason || '')}" placeholder="Dlaczego to działa jak prowizoryczne narzędzie"></label>
-      </details>
-      <div class="row" style="margin-top:8px">
-        <button onclick="submitDecisionCorrection()">Zapisz korektę</button>
-      </div>
-    </div>`;
-}
-function toggleDecisionCorrection() {
-  decisionCorrectionOpen = !decisionCorrectionOpen;
-  render();
-}
-function rollPromptHtml() {
-  if (!state.pending) return '';
-  if (state.pending.stage === 'breakage') {
-    const info = state.pending.breakage || {};
-    return `<p><b>Test trwałości:</b> rzuć k100 dla ${esc(info.item_label || info.item_id || 'przedmiotu')}. Wynik ${esc(info.chance_percent || 0)} lub mniej oznacza uszkodzenie.</p>`;
-  }
-  if (state.pending.stage !== 'roll') return '';
-  const plan = state.pending.check_plan || {};
-  const participants = {
-    single_actor: 'rzuca jeden wybrany bohater',
-    lead_with_help: 'rzuca prowadzący z pomocą',
-    whole_party: 'rzuca cała drużyna',
-    selected_actors: 'rzucają wybrani bohaterowie'
-  }[plan.participants] || plan.participants || 'rzut eksploracyjny';
-  const aggregation = {
-    lead_result: 'liczy się wynik prowadzącego',
-    highest: 'liczy się najwyższy wynik',
-    lowest: 'liczy się najniższy wynik',
-    majority: 'sukces, jeśli zda co najmniej połowa'
-  }[plan.aggregation] || plan.aggregation || '';
-  const names = (state.required_rolls || []).map(r => r.actor_name).join(', ');
-  const mechanic = plan.mechanic || {};
-  const mechanicHtml = mechanic.id ? `<p><b>Mechanika:</b> ${esc(mechanic.label || mechanic.id)}</p>` : '';
-  const rollModeHtml = plan.roll_mode && plan.roll_mode !== 'normal' ? `<p><b>Tryb rzutu:</b> ${esc(plan.roll_mode)}.</p>` : '';
-  const situationalHtml = plan.situational_modifiers && plan.situational_modifiers.length
-    ? `<p><b>Modyfikatory sytuacyjne:</b> ${plan.situational_modifiers.map(mod => `${esc(mod.label)} ${signedNumber(Number(mod.modifier || 0))}${mod.roll_mode && mod.roll_mode !== 'normal' ? `, ${esc(mod.roll_mode)}` : ''} (${esc(mod.reason)})`).join('; ')}</p>`
-    : '';
-  const tool = plan.improvised_tool || null;
-  const improvisedHtml = tool
-    ? `<p><b>Improwizowane narzędzie:</b> ${esc(tool.label)} ${signedNumber(Number(tool.effect_modifier || 0))} (${esc(tool.source_detail)}${tool.risk ? `, ryzyko: ${esc(tool.risk)}` : ''}).</p>`
-    : '';
-  const bonuses = (plan.option_bonuses || []).filter(bonus => Number(bonus.modifier || 0) !== 0);
-  const bonusHtml = bonuses.length
-    ? `<p><b>Aktywne premie:</b> ${bonuses.map(bonus => {
-        const spellLevel = Number(bonus.spell_level || 0);
-        const spellCost = bonus.source_type === 'spell' ? (spellLevel > 0 ? `, zużyje slot ${spellLevel}. poziomu` : ', cantrip bez slota') : '';
-        return `${esc(bonus.actor_name || '')}: ${esc(bonus.label || bonus.source_id)} ${signedNumber(Number(bonus.modifier || 0))}${spellCost}`;
-      }).join('; ')}</p>`
-    : '';
-  return `${mechanicHtml}${rollModeHtml}<p><b>Format rzutu:</b> ${esc(participants)}${aggregation ? `, ${esc(aggregation)}` : ''}.</p><p><b>Rzucają:</b> ${esc(names || '-')}</p>${situationalHtml}${improvisedHtml}${bonusHtml}`;
-}
-function latestResultMessage(state) {
-  const messages = state.messages || [];
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
-    if (messages[i].title && messages[i].title.startsWith('Wynik')) return messages[i];
-  }
-  return messages[messages.length - 1] || null;
-}
-function travelOptionsHtml() {
-  const zones = state.travel_options || [];
-  if (!zones.length) return '<p>Brak dostępnych przejść z tej lokacji.</p>';
-  return zones.map(zone => `
-    <div class="row" style="justify-content:space-between; margin: 6px 0">
-      <div><b>${esc(zone.name)}</b><br><span class="muted">${esc(zone.description)}</span></div>
-      <button onclick="travel('${esc(zone.id)}')">Przejdź</button>
-    </div>
-  `).join('');
-}
-function encounterHtml() {
-  const encounter = state.pending_encounter;
-  if (!encounter) return '';
-  if (state.combat) return combatStartHtml();
-  const setup = state.encounter_setup;
-  const initiative = state.encounter_initiative;
-  const setupHtml = encounterSetupHtml(setup);
-  const initiativeHtml = encounterInitiativeHtml(setup, initiative);
-  const combatHtml = combatStartHtml();
-  return `
-    <p><b>${esc(encounter.name)}</b></p>
-    <p>${esc(encounter.description)}</p>
-    <p><b>Powód:</b> ${esc(encounter.reason)}</p>
-    <p><b>Scenariusz encountera:</b> ${esc(encounter.encounter_scenario)}</p>
-    ${setupHtml}
-    ${initiativeHtml}
-    ${combatHtml}
-    ${state.combat ? '' : `<details class="debug-panel"><summary>Komenda awaryjna terminala</summary><pre>${esc(encounter.command)}</pre></details>`}
-  `;
-}
-function encounterSetupHtml(setup) {
-  if (!setup) {
-    return `
-      <div class="message"><b>Setup przed walką</b><br>Rozpocznijcie setup encountera. Jawne elementy sceny są już na planszy.</div>
-      <button onclick="startEncounterSetup()">Rozpocznij setup</button>
-    `;
-  }
-  if (setup.status === 'completed') {
-    return '<div class="result"><b>Setup zakończony</b><br>Plansza jest przygotowana do inicjatywy i walki.</div>';
-  }
-  const step = setup.current_step || {};
-  const hasPositions = Boolean(step.has_positions);
-  const requiresBoardAssignment = Boolean(step.requires_board_assignment);
-  const positions = (step.positions || []).map(pos => `(${pos[0]},${pos[1]})`).join(', ');
-  const availablePositions = (step.available_positions || step.positions || []).map(pos => `(${pos[0]},${pos[1]})`).join(', ');
-  const assignmentButtons = (step.available_positions || []).map(pos =>
-    `<button class="secondary" onclick="selectBoardPosition(${Number(pos[0])}, ${Number(pos[1])})">(${Number(pos[0])},${Number(pos[1])})</button>`
-  ).join('');
-  return `
-    <div class="message">
-      <b>Krok ${Number(setup.current_index) + 1}/${setup.step_count}: ${esc(step.label || '')}</b><br>
-      ${esc(step.message || '')}
-      ${requiresBoardAssignment ? `<p><b>Aktualnie ustaw:</b> ${esc(step.assignment_actor_name || '-')}</p><p><b>Wolne pola:</b> ${esc(availablePositions || '-')}</p>` : ''}
-      ${hasPositions && !requiresBoardAssignment ? `<p><b>Kolor:</b> ${esc(step.color || '-')}</p><p><b>Pola:</b> ${esc(positions)}</p>` : ''}
-      ${!hasPositions ? '<p class="muted">Ten krok jest tylko instrukcją i nie podświetla pól na planszy.</p>' : ''}
-    </div>
-    ${requiresBoardAssignment
-      ? `<div class="row"><button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>${assignmentButtons}</div><p class="muted">Postaw figurkę wskazanego bohatera na podświetlonym polu i uruchom skan. Przyciski pól są awaryjnym wyborem bez skanu planszy. Po ostatnim bohaterze gra przejdzie dalej.</p>`
-      : '<button onclick="confirmEncounterSetup()">Potwierdź krok setupu</button>'}
-  `;
-}
-function encounterInitiativeHtml(setup, initiative) {
-  if (!setup || setup.status !== 'completed' || state.combat) return '';
-  if (!initiative) {
-    return `
-      <div class="message"><b>Inicjatywa</b><br>Setup zakończony. Teraz ustalcie kolejność tur.</div>
-      <button onclick="startEncounterInitiative()">Rozpocznij inicjatywę</button>
-    `;
-  }
-  if (initiative.status === 'completed') return '';
-  const prompt = initiative.current_prompt || {};
-  return `
-    <div class="message">
-      <b>Rzut inicjatywy ${Number(initiative.current_prompt_index) + 1}/${initiative.prompt_count}</b><br>
-      ${esc(prompt.message || 'Wpisz naturalny wynik d20.')}
-    </div>
-    <div class="row">
-      <label>Wynik d20: <input id="encounter-initiative-roll" type="number" min="1" max="20" value="10"></label>
-      <button onclick="submitEncounterInitiativeRoll()">Zapisz rzut</button>
-    </div>
-  `;
-}
-function combatStartHtml() {
-  const combat = state.combat;
-  if (!combat) return '';
-  const order = state.encounter_initiative && state.encounter_initiative.order ? state.encounter_initiative.order : [];
-  const actors = combat.actors || [];
-  const finished = combat.status === 'finished';
-  const actor = combat.current_actor || {};
-  const isAllyTurn = actor.faction === 'ally';
-  const isEnemyTurn = actor.faction === 'enemy';
-  return `
-    <div class="combat-stage">
-      ${combatCurrentStepHtml(combat, finished, isAllyTurn, isEnemyTurn)}
-      ${combatActiveEffectsHtml(combat)}
-      ${combatLastResultHtml()}
-    </div>
-    <details class="combat-details">
-      <summary>Szczegóły walki</summary>
-      <section class="combat-section">
-        <h4>Aktualny aktor</h4>
-        ${combatActorStatusHtml(combat)}
-      </section>
-      <section class="combat-section">
-        <h4>Szczegóły aktualnego kroku</h4>
-        ${combatActionDetailsHtml(combat, isAllyTurn, isEnemyTurn)}
-      </section>
-      <section class="combat-section">
-        <h4>Wszystkie aktywne efekty</h4>
-        ${combatAllEffectsHtml(combat)}
-      </section>
-      <p><b>Kolejność inicjatywy:</b> ${order.map(entry => `${esc(entry.actor_name)} (${entry.total})`).join(', ')}</p>
-      <div class="status-list">
-        ${actors.map(actor => `
-          <div class="status-item${actor.defeated ? ' defeated' : ''}">
-            <b>${esc(actor.name)} ${actor.id === combat.current_actor.id ? '(tura)' : ''}</b>
-            <span>${esc(actor.faction)} | HP ${esc(actorHpLabel(actor))} / AC ${esc(actor.ac)} | pole (${esc(actor.position[0])},${esc(actor.position[1])})</span>
-            ${statusChipsHtml(actor.status_chips || actorEffectChips(actor), 'Brak aktywnych statusów.')}
-          </div>
-        `).join('')}
-      </div>
-    </details>
-  `;
-}
-function combatCurrentStepHtml(combat, finished, isAllyTurn, isEnemyTurn) {
-  return `
-    <div class="combat-current-step">
-      ${combatMainPromptHtml(combat, finished, isAllyTurn, isEnemyTurn)}
-      ${combatMiniStatusHtml(combat)}
-      <div class="combat-action-card">
-        ${finished ? '<button onclick="resolveCombatOutcome()">Zastosuj wynik walki</button>' : combatPrimaryActionHtml(combat, isAllyTurn, isEnemyTurn)}
-      </div>
-    </div>
-  `;
-}
-function combatMainPromptHtml(combat, finished, isAllyTurn, isEnemyTurn) {
-  return `
-    <div class="combat-prompt">
-      <b>${esc(combatPromptTitle(combat, finished, isAllyTurn, isEnemyTurn))}</b>
-      <span>${esc(combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn))}</span>
-    </div>
-  `;
-}
-function combatPromptTitle(combat, finished, isAllyTurn, isEnemyTurn) {
-  if (finished) return 'Walka zakończona';
-  const actor = combat.current_actor || {};
-  if (combat.pending_concentration_check) {
-    const pendingActor = combat.pending_concentration_check.actor || {};
-    return `${pendingActor.name || 'Bohater'}: test koncentracji`;
-  }
-  if (isEnemyTurn) {
-    if (combat.pending_ready_attack) return `Tura ${actor.name || 'przeciwnika'}: Ready`;
-    if (combat.pending_enemy_opportunity_attack) return `Tura ${actor.name || 'przeciwnika'}: reakcja bohatera`;
-    if (combat.enemy_turn_result) return `Tura ${actor.name || 'przeciwnika'}: potwierdź wynik`;
-    if (combat.enemy_turn_intent) return `Tura ${actor.name || 'przeciwnika'}: zamiar`;
-    if (combat.enemy_turn_preview) return `Tura ${actor.name || 'przeciwnika'}: potwierdź planszą`;
-    return `Tura ${actor.name || 'przeciwnika'}: rozegraj zamiar`;
-  }
-  if (isAllyTurn && combat.pending_player_attack) {
-    if (combat.pending_player_attack.stage === 'confirm_attack') return `Tura ${actor.name || 'gracza'}: potwierdź atak`;
-    return combat.pending_player_attack.stage === 'damage_roll'
-      ? `Tura ${actor.name || 'gracza'}: wpisz obrażenia`
-      : `Tura ${actor.name || 'gracza'}: rzuć d20`;
-  }
-  if (isAllyTurn && combat.pending_player_healing) return `Tura ${actor.name || 'gracza'}: wpisz leczenie`;
-  if (isAllyTurn && combat.pending_area_spell) {
-    return combat.pending_area_spell.stage === 'damage_roll'
-      ? `Tura ${actor.name || 'gracza'}: obrażenia obszarowe`
-      : `Tura ${actor.name || 'gracza'}: potwierdź obszar`;
-  }
-  if (isAllyTurn && combat.pending_opportunity_movement) return `Tura ${actor.name || 'gracza'}: atak okazyjny`;
-  if (isAllyTurn && combat.pending_combat_help) return `Tura ${actor.name || 'gracza'}: Help`;
-  if (isAllyTurn && combat.pending_concentration_action) return `Tura ${actor.name || 'gracza'}: koncentracja`;
-  if (isAllyTurn && combat.pending_combat_ready) return `Tura ${actor.name || 'gracza'}: Ready`;
-  if (isAllyTurn && combat.pending_combat_interaction) return `Tura ${actor.name || 'gracza'}: wybierz interakcję`;
-  if (isAllyTurn && combat.movement_preview) return `Tura ${actor.name || 'gracza'}: potwierdź ruch`;
-  if (isAllyTurn) return `Tura ${actor.name || 'gracza'}: wybierz ruch, cel albo obiekt`;
-  return `Tura ${actor.name || '-'}`;
-}
-function combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn) {
-  if (finished) return 'Zastosuj wynik walki, żeby wrócić do eksploracji.';
-  const actor = combat.current_actor || {};
-  if (combat.pending_concentration_check) {
-    return combat.pending_concentration_check.instruction || 'Rzuć CON save, żeby utrzymać koncentrację.';
-  }
-  if (isEnemyTurn) {
-    if (combat.pending_ready_attack) {
-      const pendingReady = combat.pending_ready_attack;
-      const attacker = pendingReady.attacker || {};
-      const target = pendingReady.target || {};
-      if (pendingReady.stage === 'choice') return `Warunek Ready został spełniony. ${attacker.name || 'Bohater'} może zaatakować ${target.name || 'przeciwnika'}.`;
-      if (pendingReady.stage === 'damage_roll') return `Trafienie przygotowaną akcją. Rzuć obrażenia ${pendingReady.damage_instruction || ''} i wpisz wynik.`;
-      return `${attacker.name || 'Bohater'} używa przygotowanej akcji. Rzuć d20 i wpisz naturalny wynik.`;
-    }
-    if (combat.pending_enemy_opportunity_attack) {
-      const pendingOpportunity = combat.pending_enemy_opportunity_attack;
-      const attacker = pendingOpportunity.attacker || {};
-      const target = pendingOpportunity.target || {};
-      if (pendingOpportunity.stage === 'choice') return `${target.name || 'Przeciwnik'} opuszcza zasięg ${attacker.name || 'bohatera'}. Wykonaj atak okazyjny albo pomiń reakcję.`;
-      if (pendingOpportunity.stage === 'damage_roll') return `Trafienie atakiem okazyjnym. Rzuć obrażenia ${pendingOpportunity.damage_instruction || ''} i wpisz wynik.`;
-      return `${attacker.name || 'Bohater'} wykonuje atak okazyjny. Rzuć d20 i wpisz naturalny wynik.`;
-    }
-    if (combat.enemy_turn_result) return 'Przeczytaj wynik tury przeciwnika i potwierdź go Enterem albo przyciskiem.';
-    const intent = combat.enemy_turn_intent || null;
-    if (intent) return `${intent.message || 'Przeciwnik deklaruje zamiar.'} Potwierdź, żeby przejść do wykonania na planszy.`;
-    const preview = combat.enemy_turn_preview || null;
-    if (preview && preview.kind === 'movement') {
-      return `Przestaw ${preview.enemy_name} na pole (${preview.destination[0]},${preview.destination[1]}), uruchom skan i kliknij pole docelowe.`;
-    }
-    if (preview && preview.kind === 'attack') {
-      return `${preview.enemy_name} atakuje ${preview.target_name}. Uruchom skan i kliknij podświetlony cel.`;
-    }
-    return 'Naciśnij Enter albo przycisk, żeby gra pokazała zamiar przeciwnika.';
-  }
-  if (!isAllyTurn) return 'Ten aktor nie ma automatycznych kontrolek w MVP. Możesz zakończyć turę.';
-  if (combat.pending_opportunity_movement) {
-    const pendingOpportunity = combat.pending_opportunity_movement;
-    const names = (pendingOpportunity.threats || []).map(actor => actor.name).join(', ') || 'wróg';
-    return `Ten ruch opuszcza zasięg: ${names}. Potwierdź, żeby rozstrzygnąć ataki okazyjne i wykonać ruch.`;
-  }
-  if (combat.pending_combat_help) {
-    return 'Wybierz sojusznika i przeciwnika. Sojusznik dostanie przewagę na następny atak przeciw temu celowi.';
-  }
-  if (combat.pending_concentration_action) {
-    return 'Wybierz sojusznika. Czar zużyje akcję i slot, a wcześniejsza koncentracja tego aktora zostanie zakończona.';
-  }
-  if (combat.pending_combat_ready) {
-    return 'Wybierz warunek. Akcja zostanie zużyta teraz, a atak będzie można wykonać później reakcją.';
-  }
-  const pending = combat.pending_player_attack || null;
-  if (pending) {
-    const target = pending.target || {};
-    const source = pending.source || {};
-    if (pending.stage === 'confirm_attack') {
-      if (source.save_ability) {
-        return `Wybrano ${target.name || '-'}. Potwierdź czar, żeby przeciwnik wykonał automatyczny rzut obronny.`;
-      }
-      return `Wybrano ${target.name || '-'}. Potwierdź atak, żeby przejść do rzutu d20.`;
-    }
-    if (pending.stage === 'damage_roll') {
-      return `Trafiono ${target.name || 'cel'}. Rzuć obrażenia ${pending.damage_instruction || source.damage_hint || ''} i wpisz wynik.`;
-    }
-    return `Wybrano cel ${target.name || '-'}. Rzuć d20 na atak ${source.name || ''} i wpisz naturalny wynik.`;
-  }
-  const pendingHealing = combat.pending_player_healing || null;
-  if (pendingHealing) {
-    const target = pendingHealing.target || {};
-    const source = pendingHealing.source || {};
-    return `Wybrano ${target.name || '-'}. Rzuć leczenie ${source.healing_hint || ''} i wpisz sumę.`;
-  }
-  const pendingArea = combat.pending_area_spell || null;
-  if (pendingArea) {
-    const source = pendingArea.source || {};
-    const targets = (pendingArea.targets || []).map(target => target.name).join(', ') || 'brak celów';
-    if (pendingArea.stage === 'damage_roll') return `Rzuć obrażenia ${source.damage_hint || ''} i wpisz sumę dla celów w obszarze.`;
-    return `Wybrano obszar ${source.name || 'czaru'}. Cele: ${targets}. Potwierdź Enterem albo przyciskiem.`;
-  }
-  if (combat.pending_combat_interaction) {
-    const pendingInteraction = combat.pending_combat_interaction;
-    return `Wybrano obiekt ${pendingInteraction.object_name || '-'}. Wybierz interakcję i potwierdź przyciskiem albo Enterem.`;
-  }
-  const movement = combat.movement || {};
-  const preview = combat.movement_preview || null;
-  const remaining = Number(movement.remaining_feet || 0);
-  const extraMovement = Number((combat.turn_action && combat.turn_action.extra_movement_feet) || 0);
-  const actionUsed = combat.turn_action && combat.turn_action.action_use === 'action_used';
-  if (preview) {
-    return `Wybrano ruch na (${preview.destination[0]},${preview.destination[1]}). Uruchom skan i kliknij pole docelowe, żeby zatwierdzić.`;
-  }
-  if (actionUsed && remaining > 0) return `Akcja zużyta. Możesz jeszcze ruszyć się (${remaining} ft) albo zakończyć turę.`;
-  if (actionUsed) return 'Akcja zużyta. Możesz zakończyć turę.';
-  if (remaining > 0) return `Kliknij Skanuj planszę, a potem wybierz niebieskie pole ruchu, czerwony cel, turkusowego rannego sojusznika albo zielony obiekt.`;
-  return 'Ruch wykorzystany. Możesz zaatakować czerwony cel, uleczyć turkusowego sojusznika, użyć zielonego obiektu albo zakończyć turę.';
-}
-function combatMiniStatusHtml(combat) {
-  const actor = combat.current_actor || {};
-  const movement = combat.movement || {};
-  const remaining = Number(movement.remaining_feet || 0);
-  const extraMovement = Number((combat.turn_action && combat.turn_action.extra_movement_feet) || 0);
-  const actionUsed = combat.turn_action && combat.turn_action.action_use === 'action_used';
-  const bonusActionUsed = combat.turn_action && combat.turn_action.bonus_action_use === 'action_used';
-  const reactionAvailable = !combat.turn_action || combat.turn_action.reaction_available !== false;
-  const position = actor.position || ['-', '-'];
-  return `
-    <div class="combat-mini-status">
-      <span>Runda ${esc(combat.round_number || '-')}</span>
-      <span>${esc(actor.name || '-')}</span>
-      <span>HP ${esc(actorHpLabel(actor))} / AC ${esc(actor.ac)}</span>
-      <span>Pole (${esc(position[0])},${esc(position[1])})</span>
-      ${actor.faction === 'ally' ? `<span>Akcja: ${actionUsed ? 'zużyta' : 'dostępna'}</span><span>Bonus: ${bonusActionUsed ? 'zużyta' : 'dostępna'}</span><span>Reakcja: ${reactionAvailable ? 'dostępna' : 'zużyta'}</span><span>Ruch: ${esc(remaining)} ft${extraMovement > 0 ? ` (+${esc(extraMovement)} Dash)` : ''}</span>` : ''}
-    </div>
-    ${statusChipsHtml(actor.status_chips || [], 'Brak statusów aktywnego aktora.')}
-  `;
-}
-function combatActorStatusHtml(combat) {
-  const actor = combat.current_actor || {};
-  const movement = combat.movement || {};
-  const remaining = Number(movement.remaining_feet || 0);
-  const extraMovement = Number((combat.turn_action && combat.turn_action.extra_movement_feet) || 0);
-  const actionUsed = combat.turn_action && combat.turn_action.action_use === 'action_used';
-  const bonusActionUsed = combat.turn_action && combat.turn_action.bonus_action_use === 'action_used';
-  const reactionAvailable = !combat.turn_action || combat.turn_action.reaction_available !== false;
-  return `
-    <p><b>${esc(actor.name || '-')}</b> (${esc(actor.faction || '-')})</p>
-    <p>Runda ${esc(combat.round_number || '-')}, pole (${esc(actor.position ? actor.position[0] : '-')},${esc(actor.position ? actor.position[1] : '-')})</p>
-    <p>HP ${esc(actorHpLabel(actor))} / AC ${esc(actor.ac)}</p>
-    ${actorInventoryHtml(actor)}
-    ${actor.faction === 'ally' ? `<p>Akcja: ${actionUsed ? 'zużyta' : 'dostępna'} | Bonus action: ${bonusActionUsed ? 'zużyta' : 'dostępna'} | Reakcja: ${reactionAvailable ? 'dostępna' : 'zużyta'} | Ruch: ${esc(remaining)} ft${extraMovement > 0 ? ` (+${esc(extraMovement)} Dash)` : ''}</p>` : ''}
-    ${statusChipsHtml(actor.status_chips || [], 'Brak statusów aktywnego aktora.')}
-  `;
-}
-function actorInventoryHtml(actor) {
-  const items = actor && actor.inventory ? actor.inventory : [];
-  if (!items.length) return '';
-  return `<p><b>Ekwipunek:</b> ${items.map(item => `${esc(item.name || item.id)}${item.quantity !== undefined ? ` x${esc(item.quantity)}` : ''}${item.equipped === false ? ' (niezałożone)' : ''}`).join(', ')}</p>`;
-}
-function statusChipsHtml(chips, emptyText) {
-  const items = chips || [];
-  if (!items.length) return emptyText ? `<p class="combat-empty">${esc(emptyText)}</p>` : '';
-  return `<div class="status-chips">${items.map(chip => {
-    const tone = chip.tone || 'neutral';
-    const title = chip.title ? ` title="${esc(chip.title)}"` : '';
-    return `<span class="status-chip ${esc(tone)}"${title}>${esc(chip.label || '')}</span>`;
-  }).join('')}</div>`;
-}
-function actorEffectChips(actor) {
-  const chips = [];
-  if (actor.defeated) chips.push({label: 'Pokonany', tone: 'danger'});
-  (actor.effects || []).forEach(effect => {
-    const label = `${effect.label || effect.kind || 'Efekt'}${effect.value_label ? `: ${effect.value_label}` : ''}`;
-    chips.push({label, tone: effectChipTone(effect.kind), title: effect.expires || ''});
-  });
-  if (actor.concentration) chips.push({label: `Koncentracja: ${actor.concentration.label || '-'}`, tone: 'magic', title: actor.concentration.expires || ''});
-  return chips;
-}
-function effectChipTone(kind) {
-  if (kind === 'grant_ac_bonus_until_move' || kind === 'dodge_until_next_turn' || kind === 'disengage_until_turn_end') return 'defense';
-  if (kind === 'grant_attack_bonus_while_on_object' || kind === 'help_attack_advantage' || kind === 'strength_potion' || kind === 'concentration_attack_bonus') return 'offense';
-  if (kind === 'grant_next_attack_penalty') return 'penalty';
-  if (kind === 'ready_attack') return 'ready';
-  return 'neutral';
-}
-function combatActiveEffectsHtml(combat) {
-  const effects = relevantCombatEffects(combat);
-  return `
-    <div class="combat-effects">
-      <h4>Aktywne efekty</h4>
-      ${effects.length ? `<div class="combat-effect-list">${effects.map(item => combatEffectHtml(item)).join('')}</div>` : '<p class="combat-empty">Brak aktywnych efektów dla aktualnego kroku.</p>'}
-    </div>
-  `;
-}
-function combatAllEffectsHtml(combat) {
-  const actors = combat.actors || [];
-  const items = [];
-  actors.forEach(actor => {
-    (actor.effects || []).forEach(effect => items.push({actor, effect, role: actor.name || 'Aktor'}));
-  });
-  if (!items.length) return '<p class="combat-empty">Brak aktywnych efektów.</p>';
-  return `<div class="combat-effect-list">${items.map(item => combatEffectHtml(item)).join('')}</div>`;
-}
-function relevantCombatEffects(combat) {
-  const actors = combat.actors || [];
-  const current = combat.current_actor || {};
-  const items = [];
-  const seen = new Set();
-  const addActorEffects = (actorId, role) => {
-    if (!actorId) return;
-    const actor = actors.find(candidate => candidate.id === actorId);
-    if (!actor) return;
-    (actor.effects || []).forEach(effect => {
-      const key = `${actor.id}:${effect.id}`;
-      if (seen.has(key)) return;
-      seen.add(key);
-      items.push({actor, effect, role});
-    });
-  };
-  addActorEffects(current.id, 'Aktywny aktor');
-  const pending = combat.pending_player_attack || null;
-  if (pending && pending.target) addActorEffects(pending.target.id, 'Cel ataku');
-  if (pending && pending.attacker) addActorEffects(pending.attacker.id, 'Atakujący');
-  const intent = combat.enemy_turn_intent || combat.enemy_turn_preview || combat.enemy_turn_result || null;
-  if (intent && intent.target_id) addActorEffects(intent.target_id, 'Cel przeciwnika');
-  if (intent && intent.enemy_id) addActorEffects(intent.enemy_id, 'Przeciwnik');
-  return items;
-}
-function combatEffectHtml(item) {
-  const effect = item.effect || {};
-  const actor = item.actor || {};
-  const value = effect.value_label || signedNumber(effect.value || 0);
-  const expires = effect.expires || 'czas trwania zależy od efektu';
-  return `
-    <div class="combat-effect">
-      <b>${esc(item.role || 'Efekt')}: ${esc(actor.name || '-')}</b>
-      <span>${esc(effect.label || effect.kind || '-')} | ${esc(value)} | ${esc(expires)}</span>
-    </div>
-  `;
-}
-function actorHpLabel(actor) {
-  if (!actor) return '-';
-  const maxHp = actor.max_hp !== null && actor.max_hp !== undefined ? actor.max_hp : actor.hp;
-  const temp = Number(actor.temp_hp || 0);
-  return `${actor.hp} / ${maxHp}${temp > 0 ? ` + ${temp} temp` : ''}${actor.defeated ? ' (pokonany)' : ''}`;
-}
-function combatLastResultHtml() {
-  return `
-    <div class="combat-last-result">
-      <h4>Ostatni rezultat</h4>
-      ${latestCombatMessageHtml()}
-    </div>
-  `;
-}
-function latestCombatMessageHtml() {
-  const combatTitles = new Set(['Atak', 'Obrażenia', 'Ruch', 'Koniec tury', 'Atak przeciwnika', 'Obrażenia przeciwnika', 'Ruch przeciwnika', 'Tura przeciwnika', 'Atak okazyjny', 'Pomoc', 'Ready', 'Leczenie', 'Eliksir']);
-  const messages = state.messages || [];
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
-    if (!combatTitles.has(messages[i].title)) continue;
-    return `<p><b>${esc(messages[i].title)}</b></p><p>${esc(messages[i].body)}</p>`;
-  }
-  return '<p class="combat-empty">Brak rezultatu w tej walce.</p>';
-}
-function combatPrimaryActionHtml(combat, isAllyTurn, isEnemyTurn) {
-  if (combat.pending_concentration_check) {
-    return pendingConcentrationCheckHtml(combat.pending_concentration_check);
-  }
-  if (isEnemyTurn) {
-    if (combat.pending_ready_attack) {
-      return pendingReadyAttackHtml(combat.pending_ready_attack);
-    }
-    if (combat.pending_enemy_opportunity_attack) {
-      return pendingEnemyOpportunityAttackHtml(combat.pending_enemy_opportunity_attack);
-    }
-    if (combat.enemy_turn_intent) {
-      return enemyTurnIntentHtml(combat.enemy_turn_intent);
-    }
-    if (combat.enemy_turn_result) {
-      return enemyTurnResultHtml(combat.enemy_turn_result);
-    }
-    const preview = combat.enemy_turn_preview || null;
-    if (preview && preview.kind === 'movement') {
-      return `
-        <p>Oczekiwane pole: (${esc(preview.destination[0])},${esc(preview.destination[1])})</p>
-        <button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>
-      `;
-    }
-    if (preview && preview.kind === 'attack') {
-      return `
-        <p>Oczekiwany cel: ${esc(preview.target_name)}</p>
-        <button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>
-      `;
-    }
-    return `
-      <button data-allow-busy="true" onclick="resolveEnemyTurn()">Rozegraj turę przeciwnika</button>
-    `;
-  }
-  if (!isAllyTurn) {
-    return '<p class="muted">Ten aktor nie ma automatycznych kontrolek w MVP.</p><button data-allow-busy="true" onclick="finishCombatTurn()">Zakończ turę</button>';
-  }
-  if (combat.pending_opportunity_movement) {
-    return pendingOpportunityMovementHtml(combat.pending_opportunity_movement);
-  }
-  if (combat.pending_combat_help) {
-    return pendingCombatHelpHtml(combat.pending_combat_help);
-  }
-  if (combat.pending_concentration_action) {
-    return pendingConcentrationActionHtml(combat.pending_concentration_action);
-  }
-  if (combat.pending_combat_ready) {
-    return pendingCombatReadyHtml(combat.pending_combat_ready);
-  }
-  if (combat.pending_player_attack) {
-    return pendingPlayerAttackHtml(combat.pending_player_attack);
-  }
-  if (combat.pending_player_healing) {
-    return pendingPlayerHealingHtml(combat.pending_player_healing);
-  }
-  if (combat.pending_area_spell) {
-    return pendingAreaSpellHtml(combat.pending_area_spell);
-  }
-  if (combat.pending_combat_interaction) {
-    return pendingCombatInteractionHtml(combat.pending_combat_interaction);
-  }
-  const movement = combat.movement || {remaining_feet: 0, destinations: []};
-  const preview = combat.movement_preview || null;
-  const actionUsed = combat.turn_action && combat.turn_action.action_use === 'action_used';
-  return `
-    ${preview ? `<p>Potwierdź pole: (${esc(preview.destination[0])},${esc(preview.destination[1])}), koszt ${esc(preview.cost_feet)} ft.</p>` : `<p>Ruch dostępny: ${esc(movement.remaining_feet || 0)} ft.</p>`}
-    <div class="row">
-      <button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>
-      ${!actionUsed ? combatSourceButtonsHtml(combat) : ''}
-      ${!actionUsed ? '<button class="secondary" data-allow-busy="true" onclick="startCombatReady()">Ready</button><button class="secondary" data-allow-busy="true" onclick="startCombatHelp()">Help</button><button class="secondary" data-allow-busy="true" onclick="useCombatDash()">Dash</button><button class="secondary" data-allow-busy="true" onclick="useCombatDodge()">Unik</button><button class="secondary" data-allow-busy="true" onclick="useCombatDisengage()">Odwrót</button>' : ''}
-      <button class="secondary" data-allow-busy="true" onclick="finishCombatTurn()">Zakończ turę</button>
-    </div>
-  `;
-}
-function combatActionDetailsHtml(combat, isAllyTurn, isEnemyTurn) {
-  if (combat.pending_concentration_check) return pendingConcentrationCheckDetailsHtml(combat.pending_concentration_check);
-  if (isEnemyTurn) return enemyTurnDetailsHtml(combat);
-  if (!isAllyTurn) return '<p class="muted">Brak dodatkowych szczegółów dla tego aktora.</p>';
-  if (combat.pending_opportunity_movement) return pendingOpportunityMovementDetailsHtml(combat.pending_opportunity_movement);
-  if (combat.pending_combat_help) return pendingCombatHelpDetailsHtml(combat.pending_combat_help);
-  if (combat.pending_concentration_action) return pendingConcentrationActionDetailsHtml(combat.pending_concentration_action);
-  if (combat.pending_combat_ready) return pendingCombatReadyDetailsHtml(combat.pending_combat_ready);
-  if (combat.pending_player_attack) return pendingPlayerAttackDetailsHtml(combat.pending_player_attack);
-  if (combat.pending_player_healing) return pendingPlayerHealingDetailsHtml(combat.pending_player_healing);
-  if (combat.pending_area_spell) return pendingAreaSpellDetailsHtml(combat.pending_area_spell);
-  if (combat.pending_combat_interaction) return pendingCombatInteractionDetailsHtml(combat.pending_combat_interaction);
-  return playerTurnDetailsHtml(combat);
-}
-function combatSourceButtonsHtml(combat) {
-  const attacks = combat.available_attack_sources || [];
-  const selectedAttack = combat.selected_attack_source_id || '';
-  const actor = combat.current_actor || {};
-  const attackButtons = attacks.map(source => {
-    const selected = source.id === selectedAttack ? ' selected' : '';
-    const disabledReason = sourceUnavailableReason(source, actor);
-    const disabled = disabledReason ? ' disabled title="' + esc(disabledReason) + '"' : '';
-    const label = sourceButtonLabel(source);
-    return `<button class="secondary${selected}" data-allow-busy="true"${disabled} onclick="selectCombatAttackSource('${esc(source.id)}')">${label}</button>`;
-  }).join('');
-  const healing = combat.available_healing_sources || [];
-  const selectedHealing = combat.selected_healing_source_id || '';
-  const healingButtons = healing.map(source => {
-    const selected = source.id === selectedHealing ? ' selected' : '';
-    const disabledReason = sourceUnavailableReason(source, actor);
-    const disabled = disabledReason ? ' disabled title="' + esc(disabledReason) + '"' : '';
-    const label = sourceButtonLabel(source);
-    return `<button class="secondary${selected}" data-allow-busy="true"${disabled} onclick="selectCombatHealingSource('${esc(source.id)}')">${label}</button>`;
-  }).join('');
-  const actionButtons = (combat.combat_actions || []).map(action => {
-    if (action.action_type === 'strength_potion') {
-      const disabledReason = sourceUnavailableReason(action, actor);
-      const disabled = disabledReason ? ' disabled title="' + esc(disabledReason) + '"' : '';
-      const label = sourceButtonLabel(action);
-      return `<button class="secondary"${disabled} data-allow-busy="true" onclick="useStrengthPotion('${esc(action.id)}')">${label}</button>`;
-    }
-    if (action.action_type === 'concentration_attack_bonus') {
-      const disabledReason = sourceUnavailableReason(action, actor);
-      const disabled = disabledReason ? ' disabled title="' + esc(disabledReason) + '"' : '';
-      const label = sourceButtonLabel(action);
-      return `<button class="secondary"${disabled} data-allow-busy="true" onclick="startConcentrationAction('${esc(action.id)}')">${label}</button>`;
-    }
-    return '';
-  }).join('');
-  return `${attackButtons}${healingButtons}${actionButtons}`;
-}
-function sourceButtonLabel(source) {
-  const resource = source.resource_label ? ` · ${esc(source.resource_label)}` : '';
-  return `${esc(source.name)}${resource}`;
-}
-function sourceUnavailableReason(source, actor) {
-  if (source.prepared === false) return 'Ten czar nie jest przygotowany.';
-  if (source.available === false) {
-    if (source.source_item_id) return 'Ten przedmiot został zużyty.';
-    return 'Ta opcja nie jest dostępna.';
-  }
-  const spellLevel = Number(source.spell_level || 0);
-  if (spellLevel <= 0) return '';
-  const slots = actor.spell_slots || [];
-  const slot = slots.find(item => Number(item.level) === spellLevel);
-  if (!slot || Number(slot.remaining || 0) <= 0) return `Brak slotów czaru ${spellLevel}. poziomu.`;
-  return '';
-}
-function spellSlotSummaryHtml(actor) {
-  const slots = actor.spell_slots || [];
-  if (!slots.length) return '';
-  return slots.map(slot => `slot ${esc(slot.level)}: ${esc(slot.remaining)}/${esc(slot.maximum)}`).join(', ');
-}
-function sourceSummaryText(source) {
-  const parts = [source.name || '-'];
-  if (source.resource_label) parts.push(source.resource_label);
-  if (source.prepared === false) parts.push('nieprzygotowany');
-  if (source.save_ability) parts.push(`save ${abilityLabel(source.save_ability)} ST ${source.save_dc || '-'}`);
-  if (source.area) parts.push(`obszar ${areaShapeLabel(source.area.shape)}`);
-  if (source.range_feet) parts.push(`${source.range_feet} ft`);
-  return parts.join(' · ');
-}
-function playerTurnDetailsHtml(combat) {
-  const source = combat.available_attack || {};
-  const attackSources = combat.available_attack_sources || [];
-  const healingSources = combat.available_healing_sources || [];
-  const targets = combat.legal_targets || [];
-  const healingTargets = combat.legal_healing_targets || [];
-  const areaPositions = combat.legal_area_positions || [];
-  const actor = combat.current_actor || {};
-  const movement = combat.movement || {};
-  const preview = combat.movement_preview || null;
-  const actionUsed = combat.turn_action && combat.turn_action.action_use === 'action_used';
-  const bonusActionUsed = combat.turn_action && combat.turn_action.bonus_action_use === 'action_used';
-  const reactionAvailable = !combat.turn_action || combat.turn_action.reaction_available !== false;
-  const remaining = Number(movement.remaining_feet || 0);
-  const extraMovement = Number((combat.turn_action && combat.turn_action.extra_movement_feet) || 0);
-  const moveCount = (movement.destinations || []).length;
-  const slotSummary = spellSlotSummaryHtml(actor);
-  const concentration = actor.concentration || null;
-  const inventory = actorInventoryHtml(actor);
-  const targetText = targets.length
-    ? targets.map(target => `${target.name} (${target.position[0]},${target.position[1]})`).join(', ')
-    : 'brak';
-  return `
-    <p><b>Tura gracza:</b> ${esc(actor.name || '-')}</p>
-    <p><b>Akcja:</b> ${actionUsed ? 'zużyta' : 'dostępna'} | <b>Bonus action:</b> ${bonusActionUsed ? 'zużyta' : 'dostępna'} | <b>Reakcja:</b> ${reactionAvailable ? 'dostępna' : 'zużyta'} | <b>Ruch:</b> ${esc(remaining)} ft${extraMovement > 0 ? ` (+${esc(extraMovement)} Dash)` : ''}</p>
-    ${inventory}
-    ${slotSummary || concentration ? `<p><b>Magia:</b> ${slotSummary ? `ST czarów ${esc(actor.spell_save_dc || '-')}; ${slotSummary}` : ''}${concentration ? ` | Koncentracja: ${esc(concentration.label || '-')}` : ''}</p>` : ''}
-    <p>Niebieskie pola: ruch (${esc(moveCount)} pól). Czerwone pola: legalne cele ataku. Turkusowe pola: legalne cele leczenia. Zielone pola: interakcje sceny. Żółte pola: środek albo kierunek czaru obszarowego.</p>
-    ${preview ? `<p>Wybrana ścieżka: (${esc(preview.destination[0])},${esc(preview.destination[1])}), koszt ${esc(preview.cost_feet)} ft.</p>` : ''}
-    <p><b>Atak:</b> ${esc(source.name || '-')}${source.damage_hint ? `, po trafieniu rzuć ${esc(source.damage_hint)}` : ''}</p>
-    <p><b>Źródła ataku:</b> ${attackSources.map(sourceSummaryText).map(esc).join(', ') || 'brak'}</p>
-    <p><b>Leczenie:</b> ${healingSources.map(item => `${sourceSummaryText(item)}${item.healing_hint ? ` · ${item.healing_hint}` : ''}`).map(esc).join(', ') || 'brak'}</p>
-    <p><b>Cele w zasięgu:</b> ${esc(targetText)}</p>
-    <p><b>Pola czaru obszarowego:</b> ${areaPositions.map(position => `(${esc(position[0])},${esc(position[1])})`).join(', ') || 'brak'}</p>
-    <p><b>Ranni sojusznicy w zasięgu:</b> ${healingTargets.map(target => `${esc(target.name)} (${esc(target.position[0])},${esc(target.position[1])})`).join(', ') || 'brak'}</p>
-  `;
-}
-function enemyTurnDetailsHtml(combat) {
-  const pendingReady = combat.pending_ready_attack || null;
-  if (pendingReady) {
-    return pendingReadyAttackDetailsHtml(pendingReady);
-  }
-  const pendingOpportunity = combat.pending_enemy_opportunity_attack || null;
-  if (pendingOpportunity) {
-    return pendingEnemyOpportunityAttackDetailsHtml(pendingOpportunity, combat.enemy_turn_preview || null);
-  }
-  const intent = combat.enemy_turn_intent || null;
-  if (intent) {
-    const source = intent.source || {};
-    const targetText = intent.target_name ? ` przeciwko ${esc(intent.target_name)}` : '';
-    const moveText = intent.kind === 'movement'
-      ? `<p><b>Ruch:</b> (${esc(intent.destination[0])},${esc(intent.destination[1])}), koszt ${esc(intent.cost_feet)} ft.</p>`
-      : '';
-    const attackText = intent.target_name
-      ? `<p><b>Atak:</b> ${esc(source.name || '-')} ${targetText}. Premia do rzutu: ${esc(signedNumber(intent.attack_modifier || 0))}.</p>`
-      : '';
-    return `
-      <p><b>Zamiar przeciwnika:</b> ${esc(intent.message || '')}</p>
-      ${combatActiveEffectsHtml(combat)}
-      ${moveText}
-      ${attackText}
-    `;
-  }
-  const result = combat.enemy_turn_result || null;
-  if (result) {
-    const target = result.target_name ? ` przeciwko ${esc(result.target_name)}` : '';
-    const hitText = result.hit === true ? (result.critical ? 'TRAFIENIE KRYTYCZNE' : 'TRAFIENIE') : (result.hit === false ? 'PUDŁO' : 'BRAK ATAKU');
-    const rollHtml = result.natural_roll !== null && result.natural_roll !== undefined
-      ? `<p><b>Rzut d20:</b> ${d20RollResultText(result)} | <b>Wynik końcowy:</b> ${esc(result.total)}</p>`
-      : '';
-    const damageHtml = result.damage !== null && result.damage !== undefined
-      ? `<p><b>Obrażenia:</b> ${esc(result.damage)}</p>`
-      : '';
-    const damageResult = result.damage_result || null;
-    const hpHtml = damageResult
-      ? `<p><b>HP celu:</b> ${esc(damageResult.hp_before)} -> ${esc(damageResult.hp_after)}${damageResult.defeated_by_damage ? ' | cel pokonany' : ''}</p>`
-      : '';
-    return `
-      <p><b>Wynik tury przeciwnika:</b> ${hitText}</p>
-      <p>${esc(result.enemy_name || 'Przeciwnik')}${target}</p>
-      ${rollHtml}
-      ${damageHtml}
-      ${hpHtml}
-      <p class="muted">${esc(result.message || '')}</p>
-    `;
-  }
-  const preview = combat.enemy_turn_preview || null;
-  if (preview && preview.kind === 'movement') {
-    return `<p><b>Ruch przeciwnika:</b> ${esc(preview.enemy_name)} porusza się na (${esc(preview.destination[0])},${esc(preview.destination[1])}). Przestaw figurkę po ścieżce i potwierdź pole planszą.${enemyRollSummaryHtml(preview)}</p>${combatActiveEffectsHtml(combat)}`;
-  }
-  if (preview && preview.kind === 'attack') {
-    return `<p><b>Atak przeciwnika:</b> ${esc(preview.enemy_name)} atakuje ${esc(preview.target_name)}. Potwierdź podświetlony cel planszą.${enemyRollSummaryHtml(preview)}</p>${combatActiveEffectsHtml(combat)}`;
-  }
-  return '<p>Enter albo przycisk wyliczy zamiar przeciwnika. Potem potwierdzisz ruch lub atak kliknięciem na planszy.</p>';
-}
-function enemyTurnIntentHtml(intent) {
-  return `
-    <button data-allow-busy="true" onclick="resolveEnemyTurn()">Potwierdź zamiar przeciwnika</button>
-  `;
-}
-function enemyTurnResultHtml(result) {
-  return `
-    <button data-allow-busy="true" onclick="confirmEnemyTurnResult()">Potwierdź wynik przeciwnika</button>
-  `;
-}
-function pendingEnemyOpportunityAttackHtml(pending) {
-  const attacker = pending.attacker || {};
-  const target = pending.target || {};
-  const source = pending.source || {};
-  if (pending.stage === 'choice') {
-    return `
-      <p>${esc(target.name || 'Przeciwnik')} opuszcza zasięg: ${esc(attacker.name || 'bohater')}.</p>
-      <div class="row">
-        <button data-allow-busy="true" onclick="startEnemyOpportunityAttack()">Wykonaj atak okazyjny</button>
-        <button class="secondary" data-allow-busy="true" onclick="skipEnemyOpportunityAttack()">Pomiń reakcję</button>
-      </div>
-    `;
-  }
-  if (pending.stage === 'damage_roll') {
-    return `
-      <p>${esc(pending.damage_instruction || 'Wpisz obrażenia po trafieniu.')}</p>
-      <div class="row">
-        <label>Obrażenia: <input id="enemy-opportunity-damage-roll" type="number" min="0" value="${esc(defaultDamageValue(source))}"></label>
-        <button onclick="submitEnemyOpportunityDamageRoll()">Zapisz obrażenia</button>
-      </div>
-    `;
-  }
-  return `
-    <p>${esc(pending.attack_instruction || 'Rzuć 1d20 i wpisz wynik.')}</p>
-    <div class="row">
-      ${d20RollInputsHtml('enemy-opportunity-natural-roll', pending.attack_mode)}
-      <button onclick="submitEnemyOpportunityAttackRoll()">Zapisz rzut</button>
-    </div>
-  `;
-}
-function pendingEnemyOpportunityAttackDetailsHtml(pending, preview) {
-  const attacker = pending.attacker || {};
-  const target = pending.target || {};
-  const active = pending.active_modifiers || [];
-  const ignored = pending.ignored_modifiers || [];
-  const path = preview && preview.path ? preview.path.map(position => `(${position[0]},${position[1]})`).join(' -> ') : '';
-  return `
-    <p><b>Atak okazyjny bohatera:</b> ${esc(attacker.name || '-')} przeciwko ${esc(target.name || '-')}</p>
-    ${path ? `<p><b>Ruch przeciwnika:</b> ${esc(path)}</p>` : ''}
-    <p><b>Premia do rzutu:</b> ${esc(signedNumber(pending.attack_modifier || 0))} | <b>AC celu:</b> ${esc(pending.target_ac || '-')}</p>
-    <p><b>Aktywne modyfikatory:</b> ${active.map(mod => `${esc(mod.label)} ${esc(signedNumber(mod.value))}`).join(', ') || 'brak'}</p>
-    ${ignored.length ? `<p><b>Pominięte modyfikatory:</b> ${ignored.map(mod => `${esc(mod.label)} ${esc(signedNumber(mod.value))}`).join(', ')}</p>` : ''}
-    <p><b>Obrażenia:</b> ${esc(pending.damage_instruction || '-')}</p>
-  `;
-}
-function pendingCombatHelpHtml(pending) {
-  const allies = pending.allies || [];
-  const targets = pending.targets || [];
-  const allyOptions = allies.map(actor => `<option value="${esc(actor.id)}">${esc(actor.name)} (${esc(actor.position[0])},${esc(actor.position[1])})</option>`).join('');
-  const targetOptions = targets.map(actor => `<option value="${esc(actor.id)}">${esc(actor.name)} (${esc(actor.position[0])},${esc(actor.position[1])})</option>`).join('');
-  return `
-    <p>Wybierz sojusznika i przeciwnika dla akcji Help.</p>
-    <div class="row">
-      <label>Sojusznik: <select id="combat-help-ally">${allyOptions}</select></label>
-      <label>Cel: <select id="combat-help-target">${targetOptions}</select></label>
-      <button data-allow-busy="true" onclick="confirmCombatHelp()">Potwierdź Help</button>
-      <button class="secondary" data-allow-busy="true" onclick="cancelCombatHelp()">Anuluj</button>
-    </div>
-  `;
-}
-function pendingCombatHelpDetailsHtml(pending) {
-  const helper = pending.helper || {};
-  const allies = pending.allies || [];
-  const targets = pending.targets || [];
-  return `
-    <p><b>Pomagający:</b> ${esc(helper.name || '-')}</p>
-    <p><b>Legalni sojusznicy:</b> ${allies.map(actor => esc(actor.name)).join(', ') || 'brak'}</p>
-    <p><b>Cele w zasięgu 5 ft pomagającego:</b> ${targets.map(actor => `${esc(actor.name)} (${esc(actor.position[0])},${esc(actor.position[1])})`).join(', ') || 'brak'}</p>
-    <p>Efekt: wybrany sojusznik ma przewagę na następny atak przeciw wybranemu celowi.</p>
-  `;
-}
-function pendingConcentrationActionHtml(pending) {
-  const action = pending.action || {};
-  const targets = pending.targets || [];
-  const targetOptions = targets.map(actor => `<option value="${esc(actor.id)}">${esc(actor.name)} (${esc(actor.position[0])},${esc(actor.position[1])})</option>`).join('');
-  return `
-    <p>${esc(action.label || action.name || 'Czar koncentracyjny')}: wybierz sojusznika dla efektu.</p>
-    <div class="row">
-      <label>Cel: <select id="combat-concentration-target">${targetOptions}</select></label>
-      <button data-allow-busy="true" onclick="confirmConcentrationAction()">Potwierdź czar</button>
-      <button class="secondary" data-allow-busy="true" onclick="cancelConcentrationAction()">Anuluj</button>
-    </div>
-  `;
-}
-function pendingConcentrationActionDetailsHtml(pending) {
-  const caster = pending.caster || {};
-  const action = pending.action || {};
-  const targets = pending.targets || [];
-  return `
-    <p><b>Rzucający:</b> ${esc(caster.name || '-')}</p>
-    <p><b>Czar:</b> ${esc(action.label || action.name || '-')} ${action.resource_label ? `(${esc(action.resource_label)})` : ''}</p>
-    <p><b>Koncentracja:</b> ${action.concentration ? 'tak' : 'nie'} | <b>Efekt:</b> ${esc(signedNumber(action.value || 0))} do ataku celu</p>
-    <p><b>Legalni sojusznicy:</b> ${targets.map(actor => `${esc(actor.name)} (${esc(actor.position[0])},${esc(actor.position[1])})`).join(', ') || 'brak'}</p>
-  `;
-}
-function pendingConcentrationCheckHtml(pending) {
-  const actor = pending.actor || {};
-  const modifier = Number(pending.modifier || 0);
-  return `
-    <p>${esc(actor.name || 'Bohater')} utrzymuje koncentrację: ST ${esc(pending.dc)}.</p>
-    <div class="row">
-      <label>Wynik d20: <input id="concentration-check-roll" type="number" min="1" max="20" value="10"></label>
-      <button onclick="submitConcentrationCheck()">Zapisz rzut</button>
-    </div>
-    <p class="muted">Premia CON: ${esc(signedNumber(modifier))}. Sukces utrzymuje efekt, porażka go kończy.</p>
-  `;
-}
-function pendingConcentrationCheckDetailsHtml(pending) {
-  const actor = pending.actor || {};
-  const effects = pending.effects || [];
-  return `
-    <p><b>Koncentrujący:</b> ${esc(actor.name || '-')}</p>
-    <p><b>Obrażenia:</b> ${esc(pending.damage)} | <b>ST:</b> ${esc(pending.dc)} | <b>Premia CON:</b> ${esc(signedNumber(pending.modifier || 0))}</p>
-    <p><b>Efekty zagrożone:</b> ${effects.map(effect => esc(effect.label || effect.kind || effect.id)).join(', ') || 'brak'}</p>
-  `;
-}
-function pendingCombatReadyHtml(pending) {
-  const triggerOptions = (pending.triggers || []).map(trigger => `<option value="${esc(trigger.id)}">${esc(trigger.label)}</option>`).join('');
-  return `
-    <p>Przygotuj atak jako reakcję na wybrany warunek.</p>
-    <div class="row">
-      <label>Warunek: <select id="combat-ready-trigger">${triggerOptions}</select></label>
-      <button data-allow-busy="true" onclick="confirmCombatReady()">Potwierdź Ready</button>
-      <button class="secondary" data-allow-busy="true" onclick="cancelCombatReady()">Anuluj</button>
-    </div>
-  `;
-}
-function pendingCombatReadyDetailsHtml(pending) {
-  const actor = pending.actor || {};
-  return `
-    <p><b>Przygotowujący:</b> ${esc(actor.name || '-')}</p>
-    <p>Ready zużywa akcję główną teraz. Jeśli wybrany warunek zajdzie przed następną turą aktora, gracz może użyć reakcji i wykonać przygotowany atak.</p>
-  `;
-}
-function pendingReadyAttackHtml(pending) {
-  const attacker = pending.attacker || {};
-  const target = pending.target || {};
-  const source = pending.source || {};
-  if (pending.stage === 'choice') {
-    return `
-      <p>${esc(pending.trigger_label || 'Warunek Ready')} | ${esc(attacker.name || 'Bohater')} może zaatakować ${esc(target.name || 'przeciwnika')}.</p>
-      <div class="row">
-        <button data-allow-busy="true" onclick="startReadyAttack()">Użyj przygotowanej akcji</button>
-        <button class="secondary" data-allow-busy="true" onclick="skipReadyAttack()">Pomiń reakcję</button>
-      </div>
-    `;
-  }
-  if (pending.stage === 'damage_roll') {
-    return `
-      <p>${esc(pending.damage_instruction || 'Wpisz obrażenia po trafieniu.')}</p>
-      <div class="row">
-        <label>Obrażenia: <input id="ready-damage-roll" type="number" min="0" value="${esc(defaultDamageValue(source))}"></label>
-        <button onclick="submitReadyDamageRoll()">Zapisz obrażenia</button>
-      </div>
-    `;
-  }
-  return `
-    <p>${esc(pending.attack_instruction || 'Rzuć 1d20 i wpisz wynik.')}</p>
-    <div class="row">
-      ${d20RollInputsHtml('ready-natural-roll', pending.attack_mode)}
-      <button onclick="submitReadyAttackRoll()">Zapisz rzut</button>
-    </div>
-  `;
-}
-function pendingReadyAttackDetailsHtml(pending) {
-  const attacker = pending.attacker || {};
-  const target = pending.target || {};
-  const active = pending.active_modifiers || [];
-  return `
-    <p><b>Ready:</b> ${esc(attacker.name || '-')} przeciwko ${esc(target.name || '-')}</p>
-    <p><b>Warunek:</b> ${esc(pending.trigger_label || '-')}</p>
-    <p><b>Premia do rzutu:</b> ${esc(signedNumber(pending.attack_modifier || 0))} | <b>AC celu:</b> ${esc(pending.target_ac || '-')}</p>
-    <p><b>Aktywne modyfikatory:</b> ${active.map(mod => `${esc(mod.label)} ${esc(signedNumber(mod.value))}`).join(', ') || 'brak'}</p>
-  `;
-}
-function pendingOpportunityMovementHtml(pending) {
-  const names = (pending.threats || []).map(actor => actor.name).join(', ') || 'wróg';
-  return `
-    <p>Ruch na (${esc(pending.destination[0])},${esc(pending.destination[1])}) prowokuje: ${esc(names)}.</p>
-    <div class="row">
-      <button data-allow-busy="true" onclick="confirmOpportunityMovement()">Potwierdź ruch mimo ryzyka</button>
-      <button class="secondary" data-allow-busy="true" onclick="cancelOpportunityMovement()">Anuluj ruch</button>
-    </div>
-  `;
-}
-function pendingOpportunityMovementDetailsHtml(pending) {
-  const threats = pending.threats || [];
-  const threatText = threats.length
-    ? threats.map(actor => `${actor.name} (${actor.position[0]},${actor.position[1]})`).join(', ')
-    : 'brak';
-  return `
-    <p><b>Atak okazyjny:</b> wybrany ruch opuszcza zasięg wroga.</p>
-    <p><b>Zagrożenia:</b> ${esc(threatText)}</p>
-    <p><b>Ścieżka:</b> ${(pending.path || []).map(position => `(${position[0]},${position[1]})`).join(' -> ')}</p>
-  `;
-}
-function pendingPlayerAttackHtml(pending) {
-  const target = pending.target || {};
-  const source = pending.source || {};
-  if (pending.stage === 'confirm_attack') {
-    const modifierLabel = signedNumber(pending.attack_modifier || 0);
-    if (source.save_ability) {
-      return `
-        <p>Cel: ${esc(target.name || '-')} | rzut obronny ${esc(abilityLabel(source.save_ability))} przeciw ST ${esc(pending.spell_save_dc || source.save_dc || '-')}</p>
-        <div class="row">
-          <button data-allow-busy="true" onclick="confirmPlayerAttackTarget()">Potwierdź czar</button>
-          <button class="secondary" data-allow-busy="true" onclick="cancelPlayerAttackTarget()">Anuluj wybór celu</button>
-        </div>
-      `;
-    }
-    return `
-      <p>Cel: ${esc(target.name || '-')} | AC ${esc(target.ac || '-')} | premia ${esc(modifierLabel)}</p>
-      <div class="row">
-        <button data-allow-busy="true" onclick="confirmPlayerAttackTarget()">Potwierdź atak</button>
-        <button class="secondary" data-allow-busy="true" onclick="cancelPlayerAttackTarget()">Anuluj wybór celu</button>
-      </div>
-    `;
-  }
-  if (pending.stage === 'damage_roll') {
-    return `
-      <p>${esc(pending.damage_instruction || 'Wpisz obrażenia po trafieniu.')}</p>
-      ${spellSavesHtml(pending.saving_throws || [])}
-      <div class="row">
-        <label>Obrażenia: <input id="combat-damage-roll" type="number" min="0" value="${esc(defaultDamageValue(source))}"></label>
-        <button onclick="submitPlayerDamageRoll()">Zapisz obrażenia</button>
-        <button class="secondary" data-allow-busy="true" onclick="finishCombatTurn()">Zakończ turę</button>
-      </div>
-    `;
-  }
-  return `
-    <p>${esc(pending.attack_instruction || 'Rzuć 1d20 i wpisz wynik.')}</p>
-    <div class="row">
-      ${d20RollInputsHtml('combat-attack-natural-roll', pending.attack_mode)}
-      <button onclick="submitPlayerAttackRoll()">Zapisz rzut</button>
-      <button class="secondary" data-allow-busy="true" onclick="finishCombatTurn()">Zakończ turę</button>
-    </div>
-  `;
-}
-function d20RollInputsHtml(baseId, mode) {
-  const second = mode === 'advantage' || mode === 'disadvantage';
-  const label = mode === 'advantage' ? 'Przewaga' : (mode === 'disadvantage' ? 'Utrudnienie' : 'Wynik d20');
-  return `
-    <label>${esc(second ? `${label} 1` : label)}: <input id="${esc(baseId)}" type="number" min="1" max="20" value="10"></label>
-    ${second ? `<label>${esc(label)} 2: <input id="${esc(baseId)}-2" type="number" min="1" max="20" value="10"></label>` : ''}
-  `;
-}
-function d20RollPayload(baseId) {
-  const roll = document.getElementById(baseId);
-  const roll2 = document.getElementById(`${baseId}-2`);
-  const payload = {natural_roll: Number(roll ? roll.value : 0)};
-  if (roll2) payload.natural_roll_2 = Number(roll2.value || 0);
-  return payload;
-}
-function d20RollResultText(result) {
-  const rolls = result && result.natural_rolls ? result.natural_rolls : [];
-  if (rolls.length > 1) return `${rolls.map(esc).join(' / ')} -> ${esc(result.natural_roll || '')}`;
-  return result && result.natural_roll !== null && result.natural_roll !== undefined ? esc(result.natural_roll) : '';
-}
-function pendingAreaSpellHtml(pending) {
-  const source = pending.source || {};
-  const targets = pending.targets || [];
-  const targetText = targets.map(target => `${target.name} (${target.position[0]},${target.position[1]})`).join(', ') || 'brak celów';
-  if (pending.stage === 'damage_roll') {
-    return `
-      <p>${esc(pending.damage_instruction || 'Wpisz obrażenia czaru obszarowego.')}</p>
-      <p>Cele w obszarze: ${esc(targetText)}</p>
-      ${spellSavesHtml(pending.saving_throws || [])}
-      <div class="row">
-        <label>Obrażenia: <input id="area-spell-damage-roll" type="number" min="0" value="${esc(defaultDamageValue(source))}"></label>
-        <button onclick="submitAreaSpellDamage()">Zapisz obrażenia</button>
-        <button class="secondary" data-allow-busy="true" onclick="finishCombatTurn()">Zakończ turę</button>
-      </div>
-    `;
-  }
-  return `
-    <p>Obszar: ${esc((pending.area_positions || []).map(position => `(${position[0]},${position[1]})`).join(', ') || '-')}</p>
-    <p>Cele w obszarze: ${esc(targetText)}</p>
-    ${source.save_ability ? `<p>Rzut obronny: ${esc(abilityLabel(source.save_ability))} przeciw ST ${esc(pending.spell_save_dc || source.save_dc || '-')} | ${esc(saveSuccessLabel(source.save_damage_on_success))}</p>` : ''}
-    <div class="row">
-      <button data-allow-busy="true" onclick="confirmAreaSpell()">Potwierdź czar</button>
-      <button class="secondary" data-allow-busy="true" onclick="cancelAreaSpell()">Anuluj czar</button>
-    </div>
-  `;
-}
-function pendingAreaSpellDetailsHtml(pending) {
-  const source = pending.source || {};
-  const targets = pending.targets || [];
-  return `
-    <p><b>Czar:</b> ${esc(source.name || '-')} | ${esc(source.damage_hint || '-')}</p>
-    <p><b>Zakotwiczenie:</b> (${esc(pending.anchor ? pending.anchor[0] : '-')},${esc(pending.anchor ? pending.anchor[1] : '-')})</p>
-    <p><b>Obszar:</b> ${esc((pending.area_positions || []).map(position => `(${position[0]},${position[1]})`).join(', ') || '-')}</p>
-    <p><b>Cele:</b> ${targets.map(target => `${esc(target.name)} (${esc(target.position[0])},${esc(target.position[1])})`).join(', ') || 'brak'}</p>
-    ${spellSavesHtml(pending.saving_throws || [])}
-  `;
-}
-function pendingPlayerHealingHtml(pending) {
-  const target = pending.target || {};
-  const source = pending.source || {};
-  return `
-    <p>${esc(pending.healing_instruction || 'Rzuć leczenie i wpisz wynik.')}</p>
-    <div class="row">
-      <label>Leczenie: <input id="combat-healing-roll" type="number" min="0" value="${esc(defaultHealingValue(source))}"></label>
-      <button onclick="submitPlayerHealingRoll()">Zapisz leczenie</button>
-      <button class="secondary" data-allow-busy="true" onclick="cancelPlayerHealing()">Anuluj</button>
-    </div>
-    <p class="muted">Cel: ${esc(target.name || '-')}.</p>
-  `;
-}
-function pendingPlayerHealingDetailsHtml(pending) {
-  const healer = pending.healer || {};
-  const target = pending.target || {};
-  const source = pending.source || {};
-  return `
-    <p><b>Leczenie:</b> ${esc(healer.name || '-')} używa ${esc(source.name || '-')} na ${esc(target.name || '-')}</p>
-    <p><b>HP celu:</b> ${esc(actorHpLabel(target))}</p>
-    <p><b>Rzut:</b> ${esc(pending.healing_instruction || '-')}</p>
-  `;
-}
-function pendingCombatInteractionHtml(pending) {
-  const options = pending.options || [];
-  if (!options.length) return '<p>Brak dostępnych opcji interakcji.</p>';
-  const primary = options[0];
-  const buttons = options.map(option => `<button data-allow-busy="true" onclick="confirmCombatInteraction('${esc(option.id)}')">${esc(option.label)}</button>`).join('');
-  return `
-    <p>Obiekt: ${esc(pending.object_name || '-')} | pole (${esc(pending.target_position ? pending.target_position[0] : '-')},${esc(pending.target_position ? pending.target_position[1] : '-')})</p>
-    <p>${esc(primary.description || 'Interakcja zużywa akcję główną.')}</p>
-    <div class="row">${buttons}<button class="secondary" data-allow-busy="true" onclick="cancelCombatInteraction()">Anuluj</button></div>
-  `;
-}
-function pendingCombatInteractionDetailsHtml(pending) {
-  const options = pending.options || [];
-  if (!options.length) return '<p>Brak szczegółów interakcji.</p>';
-  return options.map(option => `
-    <p><b>${esc(option.label)}</b></p>
-    <p>${esc(option.description || '')}</p>
-    <p><b>Warunki:</b> ${(option.conditions || []).map(condition => esc(condition)).join(', ') || 'brak'}</p>
-  `).join('');
-}
-function pendingPlayerAttackDetailsHtml(pending) {
-  const target = pending.target || {};
-  const source = pending.source || {};
-  if (pending.stage === 'confirm_attack') {
-    const active = pending.active_modifiers || [];
-    const ignored = pending.ignored_modifiers || [];
-    const modifierLabel = signedNumber(pending.attack_modifier || 0);
-    return `
-      <p><b>Potwierdzenie ataku</b></p>
-      <p><b>Cel:</b> ${esc(target.name || '-')} | <b>AC celu:</b> ${esc(target.ac || '-')} | <b>Pole:</b> (${esc(target.position ? target.position[0] : '-')},${esc(target.position ? target.position[1] : '-')})</p>
-      <p><b>Atak:</b> ${esc(source.name || '-')} | <b>Zasięg:</b> ${esc(source.range_feet || 0)} ft | <b>Premia końcowa:</b> ${esc(modifierLabel)}</p>
-      <p><b>Aktywne premie/kary:</b> ${active.length ? active.map(mod => `${esc(mod.label)} ${esc(signedNumber(mod.value))}`).join(', ') : 'brak'}</p>
-      ${attackEffectsDetailsHtml(pending)}
-      ${ignored.length ? `<p><b>Odrzucone duplikaty:</b> ${ignored.map(mod => `${esc(mod.label)} ${esc(signedNumber(mod.value))}`).join(', ')}</p>` : ''}
-      <p><b>Rzut:</b> ${esc(pending.attack_instruction || 'Rzuć 1d20 i wpisz wynik.')}</p>
-      <p><b>Po trafieniu:</b> ${esc(pending.damage_instruction || source.damage_hint || '')}</p>
-    `;
-  }
-  if (pending.stage === 'damage_roll') {
-    if (pending.saving_throws && pending.saving_throws.length) {
-      return `
-        <p><b>Tura gracza: wpisz obrażenia czaru</b></p>
-        <p><b>Cel:</b> ${esc(target.name || '-')} | <b>Czar:</b> ${esc(source.name || '-')}</p>
-        ${spellSavesHtml(pending.saving_throws || [])}
-        <p><b>Co teraz:</b> ${esc(pending.damage_instruction || '')}</p>
-      `;
-    }
-    return `
-      <p><b>Tura gracza: wpisz obrażenia</b></p>
-      <p><b>Cel:</b> ${esc(target.name || '-')} | <b>Trafienie:</b> ${pending.critical ? 'krytyczne' : 'zwykłe'}</p>
-      ${attackEffectsDetailsHtml(pending)}
-      <p><b>Rzut d20:</b> ${d20RollResultText(pending)} | <b>Wynik końcowy:</b> ${esc(pending.total || '')}</p>
-      <p><b>Co teraz:</b> ${esc(pending.damage_instruction || '')}</p>
-    `;
-  }
-  return `
-    <p><b>Tura gracza: wybrano cel</b></p>
-    <p><b>Cel:</b> ${esc(target.name || '-')} | <b>Atak:</b> ${esc(source.name || '-')}</p>
-    ${attackEffectsDetailsHtml(pending)}
-    <p><b>Co teraz:</b> ${source.save_ability ? `Potwierdź czar. Cel wykona automatyczny rzut obronny na ${esc(abilityLabel(source.save_ability))} przeciw ST ${esc(pending.spell_save_dc || source.save_dc || '-')}.` : esc(pending.attack_instruction || 'Rzuć 1d20 i wpisz wynik.')}</p>
-    <p><b>Po trafieniu:</b> ${esc(pending.damage_instruction || source.damage_hint || '')}</p>
-  `;
-}
-function attackEffectsDetailsHtml(pending) {
-  const items = [];
-  const attacker = pending.attacker || {};
-  const target = pending.target || {};
-  (attacker.effects || []).forEach(effect => items.push({actor: attacker, effect, role: 'Atakujący'}));
-  (target.effects || []).forEach(effect => items.push({actor: target, effect, role: 'Cel'}));
-  if (!items.length) return '<p><b>Efekty ataku:</b> brak</p>';
-  return `
-    <div>
-      <p><b>Efekty ataku:</b></p>
-      <div class="combat-effect-list">${items.map(item => combatEffectHtml(item)).join('')}</div>
-    </div>
-  `;
-}
-function enemyRollSummaryHtml(preview) {
-  if (!preview || preview.natural_roll === null || preview.natural_roll === undefined) return '';
-  const outcome = preview.hit ? (preview.critical ? 'trafienie krytyczne' : 'trafienie') : 'pudło';
-  const damage = preview.damage !== null && preview.damage !== undefined ? `<br>Obrażenia: ${esc(preview.damage)}.` : '';
-  return `<br>Automatyczny rzut przeciwnika: d20 ${d20RollResultText(preview)}, razem ${esc(preview.total)} (${outcome}).${damage}`;
-}
-function spellSavesHtml(saves) {
-  if (!saves || !saves.length) return '';
-  return `
-    <div class="combat-effect-list">
-      ${saves.map(save => `
-        <span class="combat-effect">
-          ${esc(save.actor_name || save.actor_id)}: ${esc(abilityLabel(save.ability))} d20 ${esc(save.natural_roll)}, mod ${esc(signedNumber(save.modifier || 0))}, razem ${esc(save.total)} / ST ${esc(save.dc)} - ${save.success ? 'sukces' : 'porażka'}${save.success ? `, ${esc(saveSuccessLabel(save.damage_multiplier === 0.5 ? 'half' : 'none'))}` : ', pełne obrażenia'}
-        </span>
-      `).join('')}
-    </div>
-  `;
-}
-function abilityLabel(ability) {
-  const labels = {
-    strength: 'Siła',
-    dexterity: 'Zręczność',
-    constitution: 'Kondycja',
-    intelligence: 'Inteligencja',
-    wisdom: 'Mądrość',
-    charisma: 'Charyzma'
-  };
-  return labels[ability] || ability || '-';
-}
-function saveSuccessLabel(value) {
-  if (value === 'half') return 'połowa obrażeń przy sukcesie';
-  return 'brak obrażeń przy sukcesie';
-}
-function areaShapeLabel(shape) {
-  const labels = {
-    line: 'linia',
-    cone: 'stożek',
-    radius: 'okrąg'
-  };
-  return labels[shape] || shape || '-';
-}
-function defaultDamageValue(source) {
-  if (!source) return 0;
-  if (source.damage_fixed !== null && source.damage_fixed !== undefined) return Number(source.damage_fixed) + Number(source.damage_modifier || 0);
-  return Math.max(0, Number(source.damage_modifier || 0));
-}
-function defaultHealingValue(source) {
-  if (!source) return 0;
-  if (source.healing_fixed !== null && source.healing_fixed !== undefined) return Number(source.healing_fixed) + Number(source.healing_modifier || 0);
-  return Math.max(0, Number(source.healing_modifier || 0));
-}
-function signedNumber(value) {
-  const number = Number(value || 0);
-  return number >= 0 ? `+${number}` : `${number}`;
-}
-function pointOptionsHtml() {
-  const points = state.current_zone_points || [];
-  if (!points.length) return '<p>Brak odkrytych punktów w tej lokacji.</p>';
-  const rows = points.map(point => {
-    const active = state.active_point && state.active_point.id === point.id;
-    const positions = (point.positions || []).map(pos => `(${pos[0]},${pos[1]})`).join(', ');
-    return `
-      <div class="status-item" style="margin: 6px 0">
-        <b>${esc(point.name)}${active ? ' (aktywny)' : ''}</b>
-        <div class="muted">${esc(point.description)}</div>
-        <div>LED: ${esc(point.color || 'kolor specjalny')}${positions ? `, pole ${esc(positions)}` : ''}. Przestaw pionek drużyny na to pole, kliknij Skanuj planszę i wskaż pole.</div>
-      </div>
-    `;
-  });
-  if (state.active_point) {
-    rows.push('<button class="secondary" onclick="selectPoint(&quot;&quot;)">Wróć do lokacji</button>');
-  }
-  rows.unshift('<button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>');
-  return rows.join('');
-}
-function updateActivePanel() {
-  const stage = state.flow ? state.flow.stage : 'location_active';
-  const flowActive = stage !== 'location_active';
-  const hasPendingDecision = state.pending && state.pending.stage === 'decision';
-  const hasRolls = state.required_rolls && state.required_rolls.length > 0;
-  const hasResult = Boolean(resultAck);
-  const hasEncounter = Boolean(state.pending_encounter);
-  const hasTravel = false;
-  const hasPoints = !flowActive && !hasEncounter && !hasResult && !hasPendingDecision && !hasRolls && state.current_zone_points && state.current_zone_points.length > 0;
-  const flowPanel = document.getElementById('flow-panel');
-  flowPanel.hidden = hasEncounter || !flowPanel.innerHTML.trim();
-  document.getElementById('result-panel').hidden = !hasResult;
-  document.getElementById('encounter-panel').hidden = !hasEncounter || hasResult;
-  document.getElementById('travel-panel').hidden = !hasTravel;
-  document.getElementById('points-panel').hidden = !hasPoints;
-  document.getElementById('pending-panel').hidden = !hasPendingDecision;
-  document.getElementById('roll-panel').hidden = !hasRolls;
-  document.getElementById('action-panel').hidden = flowActive || hasEncounter || hasResult || hasTravel || hasPendingDecision || hasRolls;
-}
-function sendAction() { api('/api/action', {text: document.getElementById('action').value}, 'Czekam na decyzję MG...'); }
-function decision(value) {
-  const labels = {
-    accept: 'Przyjmuję decyzję MG...',
-    reject: 'Odrzucam decyzję MG...',
-    explain: 'Proszę MG o wyjaśnienie...'
-  };
-  const leadActor = document.getElementById('lead-actor');
-  api('/api/decision', {decision:value, lead_actor_id: leadActor ? leadActor.value : null}, labels[value] || 'Czekam na MG...');
-}
-function submitDecisionCorrection() {
-  const situational_modifiers = Array.from(document.querySelectorAll('[data-situational-row]')).map(row => ({
-    label: row.querySelector('.correction-sit-label').value,
-    modifier: Number(row.querySelector('.correction-sit-modifier').value || 0),
-    roll_mode: row.querySelector('.correction-sit-roll-mode').value,
-    source: row.querySelector('.correction-sit-source').value,
-    reason: row.querySelector('.correction-sit-reason').value
-  })).filter(mod => mod.label || mod.reason || Number(mod.modifier || 0) !== 0 || mod.roll_mode !== 'normal');
-  const improvised_tool = {
-    label: document.getElementById('improvised-tool-label').value,
-    source: document.getElementById('improvised-tool-source').value,
-    source_detail: document.getElementById('improvised-tool-source-detail').value,
-    effect_modifier: Number(document.getElementById('improvised-tool-effect').value || 0),
-    risk: document.getElementById('improvised-tool-risk').value,
-    reason: document.getElementById('improvised-tool-reason').value
-  };
-  api('/api/decision/correction', {
-    mechanic_id: document.getElementById('correction-mechanic').value,
-    check_participants: document.getElementById('correction-participants').value,
-    check_aggregation: document.getElementById('correction-aggregation').value,
-    lead_actor_id: document.getElementById('correction-lead').value,
-    helper_actor_id: document.getElementById('correction-helper').value,
-    ability: document.getElementById('correction-ability').value,
-    skill: document.getElementById('correction-skill').value,
-    dc: Number(document.getElementById('correction-dc').value),
-    roll_mode: document.getElementById('correction-roll-mode').value,
-    situational_modifiers,
-    improvised_tool
-  }, 'Zapisuję korektę decyzji MG...');
-}
-function sendRolls() {
-  const rolls = {};
-  document.querySelectorAll('#rolls input').forEach(input => {
-    const actorId = input.dataset.actor;
-    const index = input.dataset.rollIndex || '1';
-    if (index === '2') {
-      if (!rolls[actorId] || typeof rolls[actorId] !== 'object') rolls[actorId] = {natural_roll: Number(rolls[actorId] || 0)};
-      rolls[actorId].natural_roll_2 = Number(input.value);
-    } else {
-      rolls[actorId] = Number(input.value);
-    }
-  });
-  api('/api/rolls', {rolls}, 'Rozstrzygam wynik rzutu...');
-}
-function resetSession() { api('/api/reset', {}, 'Resetuję scenę...'); }
-function travel(zoneId) { api('/api/travel', {zone_id: zoneId}, 'Przechodzę do wybranej lokacji...'); }
-function selectPoint(pointId) { api('/api/point', {point_id: pointId}, pointId ? 'Otwieram punkt eksploracji...' : 'Wracam do lokacji...'); }
-function finishInteraction() { api('/api/interaction/finish', {}, 'Wracam do wyboru lokacji...'); }
-function cancelLocationPreview() { api('/api/location/cancel-preview', {}, 'Wracam do wyboru lokacji...'); }
-function confirmLocationPreview() { api('/api/location/confirm-preview', {}, 'Wchodzę w eksplorację...'); }
-function confirmExplorationSetup() { api('/api/exploration/setup/confirm', {}, 'Potwierdzam setup mapy...'); }
-function configureBoard() {
-  api('/api/board/configure', {
-    backend: document.getElementById('board-backend').value,
-    board_url: document.getElementById('board-url').value,
-    board_serial_port: document.getElementById('board-serial-port').value,
-    wled_url: document.getElementById('wled-url').value,
-    scan_timeout_s: Number(document.getElementById('scan-timeout').value || 30)
-  }, 'Łączę z planszą...');
-}
-function startSession() { api('/api/start', {}, 'Rozpoczynam sesję...'); }
-function isAllyCombatTurnActive() {
-  const combat = state && state.combat ? state.combat : null;
-  const actor = combat && combat.current_actor ? combat.current_actor : {};
-  return Boolean(combat && combat.status === 'active' && actor.faction === 'ally' && !combat.enemy_turn_preview && !combat.pending_player_attack && !combat.pending_player_healing && !combat.pending_area_spell && !combat.pending_combat_interaction && !combat.pending_combat_help && !combat.pending_concentration_action && !combat.pending_concentration_check && !combat.pending_combat_ready);
-}
-async function scanBoard() {
-  if (boardScanInFlight) return;
-  const continuous = isAllyCombatTurnActive();
-  if (continuous) playerTurnScanLoop = true;
-  await scanBoardOnce();
-}
-async function scanBoardOnce() {
-  if (boardScanInFlight) return;
-  const token = boardScanToken;
-  boardScanInFlight = true;
-  setBusy('Czekam na kliknięcie pola na planszy...');
-  try {
-    const res = await fetch('/api/board/scan', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({})});
-    const data = await res.json();
-    if (token !== boardScanToken) return;
-    if (!res.ok) {
-      playerTurnScanLoop = false;
-      alert(data.error || 'Błąd');
-    }
-    state = data.state || data;
-    if (!isAllyCombatTurnActive()) playerTurnScanLoop = false;
-    render();
-    refreshSessionLog();
-  } finally {
-    if (token === boardScanToken) {
-      boardScanInFlight = false;
-      setBusy('');
-    }
-  }
-  if (token === boardScanToken && playerTurnScanLoop && isAllyCombatTurnActive()) {
-    setTimeout(scanBoardOnce, 50);
-  }
-}
-async function stopBoardScanLoop() {
-  playerTurnScanLoop = false;
-  boardScanToken += 1;
-  if (boardScanInFlight) {
-    try {
-      await fetch('/api/board/reset-scan', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({})});
-    } catch (_error) {
-      // Best effort: the next stale scan response is ignored by boardScanToken.
-    }
-    boardScanInFlight = false;
-    setBusy('');
-  }
-}
-function selectBoardPosition(col, row) { api('/api/board/select', {col, row}, 'Wybieram pole planszy...'); }
-function resetBoardScan() { api('/api/board/reset-scan', {}, 'Resetuję oczekiwanie planszy...'); }
-function startEncounterSetup() { api('/api/encounter/setup/start', {}, 'Przygotowuję kroki setupu encountera...'); }
-function confirmEncounterSetup() { api('/api/encounter/setup/confirm', {}, 'Potwierdzam krok setupu...'); }
-function startEncounterInitiative() { api('/api/encounter/initiative/start', {}, 'Rozpoczynam inicjatywę...'); }
-function submitEncounterInitiativeRoll() {
-  const input = document.getElementById('encounter-initiative-roll');
-  api('/api/encounter/initiative/roll', {natural_roll: Number(input ? input.value : 0)}, 'Zapisuję rzut inicjatywy...');
-}
-function submitPlayerAttackRoll() {
-  api('/api/combat/player-attack-roll', d20RollPayload('combat-attack-natural-roll'), 'Rozstrzygam rzut ataku...');
-}
-function selectCombatAttackSource(sourceId) { api('/api/combat/attack-source', {source_id: sourceId}, 'Wybieram źródło ataku...'); }
-function selectCombatHealingSource(sourceId) { api('/api/combat/healing-source', {source_id: sourceId}, 'Wybieram leczenie...'); }
-function confirmPlayerAttackTarget() { api('/api/combat/player-attack-confirm', {}, 'Potwierdzam atak...'); }
-function cancelPlayerAttackTarget() { api('/api/combat/player-attack-cancel', {}, 'Anuluję wybór celu...'); }
-function confirmCombatInteraction(interactionId) { api('/api/combat/interaction/confirm', {interaction_id: interactionId}, 'Potwierdzam interakcję...'); }
-function cancelCombatInteraction() { api('/api/combat/interaction/cancel', {}, 'Anuluję interakcję...'); }
-function submitPlayerDamageRoll() {
-  const damage = document.getElementById('combat-damage-roll');
-  api('/api/combat/player-damage', {damage: Number(damage ? damage.value : 0)}, 'Zapisuję obrażenia...');
-}
-function submitPlayerHealingRoll() {
-  const healing = document.getElementById('combat-healing-roll');
-  api('/api/combat/player-healing', {healing: Number(healing ? healing.value : 0)}, 'Zapisuję leczenie...');
-}
-function cancelPlayerHealing() { api('/api/combat/player-healing-cancel', {}, 'Anuluję leczenie...'); }
-function confirmAreaSpell() { api('/api/combat/area-spell/confirm', {}, 'Potwierdzam czar obszarowy...'); }
-function submitAreaSpellDamage() {
-  const damage = document.getElementById('area-spell-damage-roll');
-  api('/api/combat/area-spell/damage', {damage: Number(damage ? damage.value : 0)}, 'Zapisuję obrażenia obszarowe...');
-}
-function cancelAreaSpell() { api('/api/combat/area-spell/cancel', {}, 'Anuluję czar obszarowy...'); }
-function useStrengthPotion(actionId) { api('/api/combat/strength-potion', {action_id: actionId}, 'Używam eliksiru...'); }
-function startConcentrationAction(actionId) { api('/api/combat/concentration/start', {action_id: actionId}, 'Przygotowuję czar koncentracyjny...'); }
-function confirmConcentrationAction() {
-  const target = document.getElementById('combat-concentration-target');
-  api('/api/combat/concentration/confirm', {target_id: target ? target.value : ''}, 'Potwierdzam czar koncentracyjny...');
-}
-function cancelConcentrationAction() { api('/api/combat/concentration/cancel', {}, 'Anuluję czar koncentracyjny...'); }
-function submitConcentrationCheck() {
-  const roll = document.getElementById('concentration-check-roll');
-  api('/api/combat/concentration-check', {natural_roll: Number(roll ? roll.value : 0)}, 'Rozstrzygam koncentrację...');
-}
-function submitCombatMove() {
-  const destination = document.getElementById('combat-move-destination');
-  const parts = destination && destination.value ? destination.value.split(',') : ['0', '0'];
-  api('/api/combat/move', {col: Number(parts[0]), row: Number(parts[1])}, 'Wykonuję ruch...');
-}
-function confirmOpportunityMovement() { api('/api/combat/opportunity-movement/confirm', {}, 'Rozstrzygam ataki okazyjne...'); }
-function cancelOpportunityMovement() { api('/api/combat/opportunity-movement/cancel', {}, 'Anuluję ryzykowny ruch...'); }
-function useCombatDash() { api('/api/combat/dash', {}, 'Wykonuję Dash...'); }
-function useCombatDodge() { api('/api/combat/dodge', {}, 'Wykonuję Unik...'); }
-function useCombatDisengage() { api('/api/combat/disengage', {}, 'Wykonuję Odwrót...'); }
-function startCombatHelp() { api('/api/combat/help/start', {}, 'Przygotowuję Help...'); }
-function confirmCombatHelp() {
-  const ally = document.getElementById('combat-help-ally');
-  const target = document.getElementById('combat-help-target');
-  api('/api/combat/help/confirm', {ally_id: ally ? ally.value : '', target_id: target ? target.value : ''}, 'Potwierdzam Help...');
-}
-function cancelCombatHelp() { api('/api/combat/help/cancel', {}, 'Anuluję Help...'); }
-function startCombatReady() { api('/api/combat/ready/start', {}, 'Przygotowuję Ready...'); }
-function confirmCombatReady() {
-  const trigger = document.getElementById('combat-ready-trigger');
-  api('/api/combat/ready/confirm', {trigger: trigger ? trigger.value : ''}, 'Potwierdzam Ready...');
-}
-function cancelCombatReady() { api('/api/combat/ready/cancel', {}, 'Anuluję Ready...'); }
-function resolveEnemyTurn() { api('/api/combat/enemy-turn', {}, 'Rozgrywam turę przeciwnika...'); }
-function startEnemyOpportunityAttack() { api('/api/combat/enemy-opportunity/start', {}, 'Rozpoczynam atak okazyjny...'); }
-function skipEnemyOpportunityAttack() { api('/api/combat/enemy-opportunity/skip', {}, 'Pomijam reakcję...'); }
-function submitEnemyOpportunityAttackRoll() {
-  api('/api/combat/enemy-opportunity/roll', d20RollPayload('enemy-opportunity-natural-roll'), 'Rozstrzygam atak okazyjny...');
-}
-function submitEnemyOpportunityDamageRoll() {
-  const damage = document.getElementById('enemy-opportunity-damage-roll');
-  api('/api/combat/enemy-opportunity/damage', {damage: Number(damage ? damage.value : 0)}, 'Zapisuję obrażenia ataku okazyjnego...');
-}
-function startReadyAttack() { api('/api/combat/ready-attack/start', {}, 'Używam przygotowanej akcji...'); }
-function skipReadyAttack() { api('/api/combat/ready-attack/skip', {}, 'Pomijam przygotowaną akcję...'); }
-function submitReadyAttackRoll() {
-  api('/api/combat/ready-attack/roll', d20RollPayload('ready-natural-roll'), 'Rozstrzygam przygotowaną akcję...');
-}
-function submitReadyDamageRoll() {
-  const damage = document.getElementById('ready-damage-roll');
-  api('/api/combat/ready-attack/damage', {damage: Number(damage ? damage.value : 0)}, 'Zapisuję obrażenia przygotowanej akcji...');
-}
-function confirmEnemyTurnResult() { api('/api/combat/enemy-turn/confirm', {}, 'Potwierdzam wynik przeciwnika...'); }
-async function finishCombatTurn() {
-  await stopBoardScanLoop();
-  api('/api/combat/end-turn', {}, 'Kończę turę...');
-}
-function resolveCombatOutcome() { api('/api/encounter/combat/resolve', {}, 'Zastosowuję wynik walki w eksploracji...'); }
-function ackResult() {
-  resultAck = null;
-  render();
-}
-function isVisible(id) {
-  const el = document.getElementById(id);
-  return Boolean(el && !el.hidden && el.offsetParent !== null);
-}
-function visiblePrimaryScanButton() {
-  const containers = ['flow-panel', 'encounter-panel', 'points-panel'];
-  for (const id of containers) {
-    const container = document.getElementById(id);
-    if (!container || container.hidden || container.offsetParent === null) continue;
-    const button = container.querySelector('button[data-primary-scan="true"]');
-    if (button && !button.disabled && button.offsetParent !== null) return button;
-  }
-  return null;
-}
-function triggerPrimaryAction() {
-  if (busy) return false;
-  if (isVisible('result-panel')) { ackResult(); return true; }
-  if (isVisible('pending-panel')) { decision('accept'); return true; }
-  if (isVisible('roll-panel')) { sendRolls(); return true; }
-  if (isVisible('action-panel')) { sendAction(); return true; }
-  const scanButton = visiblePrimaryScanButton();
-  if (scanButton) { scanButton.click(); return true; }
-  const setup = state.encounter_setup;
-  const initiative = state.encounter_initiative;
-  const combat = state.combat;
-    if (isVisible('encounter-panel')) {
-    if (combat && combat.status === 'finished') { resolveCombatOutcome(); return true; }
-    if (combat && combat.status === 'active') {
-      if (combat.pending_concentration_check) { submitConcentrationCheck(); return true; }
-      if (combat.enemy_turn_result) { confirmEnemyTurnResult(); return true; }
-      if (combat.pending_ready_attack) {
-        if (combat.pending_ready_attack.stage === 'choice') startReadyAttack();
-        else if (combat.pending_ready_attack.stage === 'damage_roll') submitReadyDamageRoll();
-        else submitReadyAttackRoll();
-        return true;
-      }
-      if (combat.pending_enemy_opportunity_attack) {
-        if (combat.pending_enemy_opportunity_attack.stage === 'choice') startEnemyOpportunityAttack();
-        else if (combat.pending_enemy_opportunity_attack.stage === 'damage_roll') submitEnemyOpportunityDamageRoll();
-        else submitEnemyOpportunityAttackRoll();
-        return true;
-      }
-      if (combat.pending_opportunity_movement) { confirmOpportunityMovement(); return true; }
-      if (combat.pending_combat_help) { confirmCombatHelp(); return true; }
-      if (combat.pending_concentration_action) { confirmConcentrationAction(); return true; }
-      if (combat.pending_combat_ready) { confirmCombatReady(); return true; }
-      if (combat.pending_combat_interaction) {
-        const options = combat.pending_combat_interaction.options || [];
-        if (options.length) confirmCombatInteraction(options[0].id);
-        return true;
-      }
-      if (combat.pending_player_attack) {
-        if (combat.pending_player_attack.stage === 'confirm_attack') confirmPlayerAttackTarget();
-        else if (combat.pending_player_attack.stage === 'damage_roll') submitPlayerDamageRoll();
-        else submitPlayerAttackRoll();
-        return true;
-      }
-      if (combat.pending_player_healing) { submitPlayerHealingRoll(); return true; }
-      if (combat.pending_area_spell) {
-        if (combat.pending_area_spell.stage === 'damage_roll') submitAreaSpellDamage();
-        else confirmAreaSpell();
-        return true;
-      }
-      if (combat.enemy_turn_preview) return false;
-      const actor = combat.current_actor || {};
-      if (actor.faction === 'enemy') { resolveEnemyTurn(); return true; }
-      return false;
-    }
-    if (initiative && initiative.status !== 'completed') { submitEncounterInitiativeRoll(); return true; }
-    if (setup && setup.status === 'completed' && !initiative) { startEncounterInitiative(); return true; }
-    if (setup && setup.current_step && setup.current_step.requires_board_assignment) return false;
-    if (setup && setup.status === 'active') { confirmEncounterSetup(); return true; }
-    if (!setup) { startEncounterSetup(); return true; }
-  }
-  if (isVisible('flow-panel')) {
-    const stage = state.flow ? state.flow.stage : '';
-    const preview = state.flow ? state.flow.preview_zone : null;
-    if (stage === 'location_preview' && preview && preview.available !== false) { confirmLocationPreview(); return true; }
-    if (stage === 'party_setup' && state.exploration_setup) { confirmExplorationSetup(); return true; }
-    if (stage === 'interaction_result') { finishInteraction(); return true; }
-    if (stage === 'ready_to_start') { startSession(); return true; }
-  }
-  return false;
-}
-document.addEventListener('keydown', event => {
-  if (event.key !== 'Enter') return;
-  const target = event.target;
-  if (target && target.tagName === 'TEXTAREA' && event.shiftKey) return;
-  if (target && target.closest && target.closest('details.debug-panel')) return;
-  if (triggerPrimaryAction()) {
-    event.preventDefault();
-  }
-});
-setSidePanelOpen(sidePanelOpen);
-loadState();
-</script>
-</body>
-</html>
-"""

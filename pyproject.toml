@@ -19,6 +19,9 @@ where = ["src", "."]
 include = ["dnd_board_game*", "board*"]
 exclude = ["legacy*", "tests*", "future*"]
 
+[tool.setuptools.package-data]
+"dnd_board_game.ui" = ["templates/*.html", "static/*.css", "static/*.js"]
+
 [tool.pytest.ini_options]
 pythonpath = ["src", "."]
 testpaths = ["tests"]

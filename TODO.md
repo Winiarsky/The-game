@@ -101,6 +101,21 @@
 - [x] Add inventory and spell requirements for exploration challenge options.
 - [x] Add action mechanics class hierarchy and extension guide.
 - [x] Extract first combat action resolution services from exploration UI.
+- [x] Extract Flask routes, frontend assets, pending UI state, session view contract, and board session adapter from exploration UI.
+- [x] Extract deterministic exploration start, setup, location, travel, point-selection, and encounter-trigger flow service.
+- [x] Extract player combat movement planning, direct movement application, and opportunity-threat detection service.
+- [x] Extract player opportunity-attack reaction resolution from the UI session.
+- [x] Extract hero opportunity/Ready attack resolution and Ready trigger detection from the UI session.
+- [x] Extract Dash, Dodge, Disengage, Help, and Ready preparation flow from the UI session.
+- [x] Extract enemy-turn intent planning and result classification from the UI session.
+- [x] Extract enemy-result commit and combat-turn finalization from the UI session.
+- [x] Extract player attack/healing source selection and single-target player attack flow.
+- [x] Extract player healing resolution and area-spell targeting/damage flow.
+- [x] Extract strength-potion resources and concentration lifecycle/check resolution.
+- [x] Extract combat scene interactions and position-bound effect expiration.
+- [x] Extract combat flow services from `ExplorationUiSession` in small contract-preserving slices.
+- [x] Complete pending-state typing and remove dead compatibility helpers after combat-flow extraction.
+- [x] Fix real enemy-movement Ready detection when `EnemyAutoTurnResult.enemy` already has the destination position.
 - [x] Add exploration map environment setup before location selection.
 - [x] Couple exploration web UI with board/simulator backend for LEDs and board clicks.
 - [x] Add inventory/cantrip option bonuses with actor item consumption and breakage checks to exploration rolls.

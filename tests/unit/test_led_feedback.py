@@ -1,5 +1,5 @@
 from dnd_board_game.actors import Actor, ActorId, Faction
-from dnd_board_game.hardware import BoardLedAdapter, LedRole, movement_led_feedback
+from dnd_board_game.hardware import BoardLedAdapter, BoardSessionAdapter, LedRole, movement_led_feedback
 from dnd_board_game.world import BoardState, Coordinate, find_path, movement_range
 
 
@@ -7,12 +7,21 @@ class FakeConnection:
     def __init__(self):
         self.calls = []
         self.cleared = False
+        self.scan_calls = []
+        self.reset = False
 
     def set_leds(self, positions, rgb_color):
         self.calls.append((list(positions), list(rgb_color)))
 
     def leds_off(self):
         self.cleared = True
+
+    def scan_board(self, positions, *, timeout_s):
+        self.scan_calls.append((positions, timeout_s))
+        return positions[0]
+
+    def reset_connection(self):
+        self.reset = True
 
 
 def _actor(actor_id: str, position: Coordinate) -> Actor:
@@ -61,3 +70,20 @@ def test_board_led_adapter_writes_frames_to_connection_and_clears():
     assert (0, 0) in connection.calls[0][0]
     assert all(isinstance(color, list) for color in connection.calls[0][1])
     assert connection.cleared is True
+
+
+def test_board_session_adapter_owns_scan_reset_and_led_transport():
+    connection = FakeConnection()
+    adapter = BoardSessionAdapter(connection)
+    positions = (Coordinate(3, 4),)
+
+    selected = adapter.scan(positions, timeout_s=12.5)
+    action = adapter.reset_scan()
+    adapter.show_feedback(movement_led_feedback(movement_range(BoardState(), _actor("hero", Coordinate(0, 0)), [])))
+
+    assert selected == (3, 4)
+    assert connection.scan_calls == [([(3, 4)], 12.5)]
+    assert action == "reset_connection"
+    assert connection.reset is True
+    assert connection.cleared is True
+    assert connection.calls

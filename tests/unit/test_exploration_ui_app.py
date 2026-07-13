@@ -103,6 +103,13 @@ def _session(*, active: bool = True):
     return session
 
 
+def _page_assets(client) -> tuple[str, str, str]:
+    html = client.get("/").get_data(as_text=True)
+    javascript = client.get("/static/exploration.js").get_data(as_text=True)
+    stylesheet = client.get("/static/exploration.css").get_data(as_text=True)
+    return html, javascript, stylesheet
+
+
 def test_exploration_ui_page_includes_session_log_panel():
     client = _client()
 
@@ -112,29 +119,30 @@ def test_exploration_ui_page_includes_session_log_panel():
     html = response.get_data(as_text=True)
     assert 'id="session-log-panel"' in html
     assert 'id="session-log-filter"' in html
-    assert "/api/session-log" in html
+    javascript = client.get("/static/exploration.js").get_data(as_text=True)
+    assert "/api/session-log" in javascript
 
 
 def test_exploration_ui_page_includes_gm_decision_correction_controls():
     client = _client()
 
-    response = client.get("/")
+    html, javascript, _stylesheet = _page_assets(client)
 
-    assert response.status_code == 200
-    html = response.get_data(as_text=True)
-    assert "Popraw decyzję MG" in html
-    assert "decisionCorrectionHtml" in html
-    assert "correction-roll-mode" in html
-    assert "Modyfikatory sytuacyjne" in html
-    assert "Improwizowane narzędzie" in html
-    assert "improvised-tool-label" in html
-    assert "/api/decision/correction" in html
+    assert '<script src="/static/exploration.js"></script>' in html
+    assert "Popraw decyzję MG" in javascript
+    assert "decisionCorrectionHtml" in javascript
+    assert "correction-roll-mode" in javascript
+    assert "Modyfikatory sytuacyjne" in javascript
+    assert "Improwizowane narzędzie" in javascript
+    assert "improvised-tool-label" in javascript
+    assert "/api/decision/correction" in javascript
 
 
 def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan():
     client = _client()
 
-    html = client.get("/").get_data(as_text=True)
+    html, javascript, stylesheet = _page_assets(client)
+    html = "\n".join((html, javascript, stylesheet))
 
     assert 'data-allow-busy="true" onclick="finishCombatTurn()"' in html
     assert 'data-allow-busy="true" onclick="resolveEnemyTurn()"' in html

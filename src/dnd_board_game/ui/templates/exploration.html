@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Eksploracja</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='exploration.css') }}">
+</head>
+<body>
+<button id="side-panel-toggle" class="side-panel-toggle" data-allow-busy="true" onclick="toggleSidePanel()" aria-controls="side-panel" aria-expanded="false" title="Panel boczny">☰</button>
+<div id="side-panel-scrim" class="side-panel-scrim" data-allow-busy="true" onclick="setSidePanelOpen(false)"></div>
+<main>
+  <aside id="side-panel" aria-hidden="true">
+    <div class="side-panel-head">
+      <h2 id="scenario">Scenariusz</h2>
+      <button class="side-panel-close" data-allow-busy="true" onclick="setSidePanelOpen(false)" aria-label="Zamknij panel">×</button>
+    </div>
+    <div class="card"><b>Lokacja</b><div id="zone"></div></div>
+    <div class="card"><b>Wyzwanie</b><div id="challenge"></div></div>
+    <div class="card"><b>Jawne elementy sceny</b><div id="visible-environment"></div></div>
+    <div class="card"><b>Zasoby</b><div id="resources"></div></div>
+    <div class="card">
+      <b>Plansza</b>
+      <div id="board-status" class="muted"></div>
+      <label>Tryb
+        <select id="board-backend">
+          <option value="none">brak</option>
+          <option value="simulator">symulator</option>
+          <option value="hardware">hardware</option>
+        </select>
+      </label>
+      <label>URL symulatora <input id="board-url" class="wide-input" value="http://127.0.0.1:5000"></label>
+      <label>Port hardware <input id="board-serial-port" class="wide-input" placeholder="/dev/ttyUSB0"></label>
+      <label>WLED URL <input id="wled-url" class="wide-input" placeholder="http://adres-wled"></label>
+      <label>Timeout skanu <input id="scan-timeout" type="number" min="1" max="120" value="30"></label>
+      <div class="row" style="margin-top:8px">
+        <button onclick="configureBoard()">Zastosuj</button>
+        <button class="secondary" onclick="scanBoard()">Skanuj planszę</button>
+        <button class="secondary" data-allow-busy="true" onclick="resetBoardScan()">Reset skanu</button>
+      </div>
+    </div>
+    <button class="secondary" onclick="resetSession()">Reset</button>
+  </aside>
+  <section>
+    <h1 id="page-title">Eksploracja</h1>
+    <div id="status" class="status" hidden></div>
+    <div class="card" id="flow-panel"></div>
+    <div class="card scene-description" id="scene-description-card">
+      <h3>Opis sceny</h3>
+      <div id="scene-description"></div>
+    </div>
+    <div class="card" id="result-panel">
+      <h3>Wynik</h3>
+      <div id="result"></div>
+      <button onclick="ackResult()">Dalej</button>
+    </div>
+    <div class="card" id="encounter-panel">
+      <h3 id="encounter-title">Zaczyna się encounter</h3>
+      <div id="encounter"></div>
+    </div>
+    <div class="card" id="travel-panel">
+      <h3>Dostępne przejścia</h3>
+      <div id="travel-options"></div>
+    </div>
+    <div class="card" id="points-panel">
+      <h3>Odkryte punkty</h3>
+      <div id="point-options"></div>
+    </div>
+    <div class="card" id="pending-panel">
+      <h3>Decyzja MG</h3>
+      <div id="pending"></div>
+      <div id="lead-actor-choice"></div>
+      <div class="row" style="margin-top:8px">
+        <button onclick="decision('accept')">Akceptuj</button>
+        <button class="danger" onclick="decision('reject')">Odrzuć</button>
+        <button class="secondary" onclick="decision('explain')">Wyjaśnij</button>
+      </div>
+    </div>
+    <div class="card" id="action-panel">
+      <h3 id="action-title">Co robi drużyna?</h3>
+      <textarea id="action"></textarea>
+      <div class="row" style="margin-top:8px">
+        <button onclick="sendAction()">Wyślij</button>
+      </div>
+    </div>
+    <div class="card" id="roll-panel">
+      <h3>Rzuty</h3>
+      <div id="roll-prompt"></div>
+      <div id="rolls"></div>
+      <button onclick="sendRolls()">Rozstrzygnij rzuty</button>
+    </div>
+    <details class="card debug-panel">
+      <summary>Historia komunikatów</summary>
+      <div id="messages"></div>
+    </details>
+    <details class="card debug-panel" id="session-log-panel">
+      <summary>Log sesji</summary>
+      <div class="log-meta" id="session-log-meta"></div>
+      <div class="log-toolbar">
+        <label>Filtr event type <input id="session-log-filter" data-allow-busy="true" placeholder="np. ui_effect_applied" oninput="renderSessionLog()"></label>
+        <button class="secondary" data-allow-busy="true" onclick="refreshSessionLog()">Odśwież log</button>
+      </div>
+      <div id="session-log-events" class="muted">Log nie został jeszcze wczytany.</div>
+    </details>
+    <details class="card debug-panel">
+      <summary>Debug payload</summary>
+      <pre id="debug-payload"></pre>
+    </details>
+  </section>
+</main>
+<script src="{{ url_for('static', filename='exploration.js') }}"></script>
+</body>
+</html>

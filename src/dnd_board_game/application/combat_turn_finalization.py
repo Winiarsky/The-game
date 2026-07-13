@@ -1,0 +1,174 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from dnd_board_game.actors import Actor
+from dnd_board_game.combat import (
+    ActiveCombatEffect,
+    CombatState,
+    CombatStatus,
+    EnemyAutoTurnResult,
+    consume_next_attack_effects,
+    current_actor,
+    expire_turn_end_effects,
+    expire_turn_start_effects,
+    finish_turn,
+)
+
+from .enemy_turn_flow import enemy_turn_message
+
+
+@dataclass(frozen=True, slots=True)
+class ExpiredCombatEffects:
+    message_prefix: str
+    effects: tuple[ActiveCombatEffect, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class EnemyTurnCommitTransition:
+    state: CombatState
+    active_effects: tuple[ActiveCombatEffect, ...]
+    result: EnemyAutoTurnResult
+    board_message: str
+    event_type: str
+    event_payload: tuple[tuple[str, object], ...]
+
+
+@dataclass(frozen=True, slots=True)
+class CombatTurnFinalizationTransition:
+    state: CombatState
+    active_effects: tuple[ActiveCombatEffect, ...]
+    ending_actor: Actor
+    expired_effects: tuple[ExpiredCombatEffects, ...]
+    message_title: str
+    message_body: str
+    event_type: str
+    event_payload: tuple[tuple[str, object], ...]
+
+
+class CombatTurnFinalizationService:
+    """Commit results and advance turns without UI or board side effects."""
+
+    def commit_enemy_result(
+        self,
+        *,
+        result: EnemyAutoTurnResult,
+        active_effects: tuple[ActiveCombatEffect, ...],
+    ) -> EnemyTurnCommitTransition:
+        updated_effects = active_effects
+        if result.attack_roll is not None:
+            updated_effects = consume_next_attack_effects(
+                active_effects,
+                str(result.enemy.id),
+                result.target.id if result.target is not None else None,
+            )
+        message = enemy_turn_message(result)
+        return EnemyTurnCommitTransition(
+            state=result.state,
+            active_effects=updated_effects,
+            result=result,
+            board_message=(
+                "Wynik tury przeciwnika gotowy. Potwierdź Enterem albo przyciskiem w UI."
+            ),
+            event_type="ui_combat_enemy_turn_board_confirmed",
+            event_payload=(
+                ("enemy_id", str(result.enemy.id)),
+                ("target_id", result.target.id if result.target is not None else None),
+                ("message", message),
+            ),
+        )
+
+    def finalize_enemy_turn(
+        self,
+        *,
+        result: EnemyAutoTurnResult,
+        active_effects: tuple[ActiveCombatEffect, ...],
+    ) -> CombatTurnFinalizationTransition:
+        message = enemy_turn_message(result)
+        state, effects, expired = _advance_turn(
+            result.state,
+            result.enemy,
+            active_effects,
+        )
+        return CombatTurnFinalizationTransition(
+            state=state,
+            active_effects=effects,
+            ending_actor=result.enemy,
+            expired_effects=expired,
+            message_title="Tura przeciwnika",
+            message_body=message,
+            event_type="ui_combat_enemy_turn",
+            event_payload=(
+                ("enemy_id", str(result.enemy.id)),
+                ("target_id", result.target.id if result.target is not None else None),
+                ("message", message),
+                ("action_used", result.action_used),
+            ),
+        )
+
+    def finish_active_turn(
+        self,
+        *,
+        state: CombatState,
+        active_effects: tuple[ActiveCombatEffect, ...],
+    ) -> CombatTurnFinalizationTransition | None:
+        if state.status != CombatStatus.ACTIVE:
+            return None
+        actor = current_actor(state)
+        updated_state, updated_effects, expired = _advance_turn(
+            state,
+            actor,
+            active_effects,
+        )
+        return CombatTurnFinalizationTransition(
+            state=updated_state,
+            active_effects=updated_effects,
+            ending_actor=actor,
+            expired_effects=expired,
+            message_title="Koniec tury",
+            message_body=f"Zakończono turę: {actor.name}.",
+            event_type="ui_combat_turn_finished",
+            event_payload=(("actor_id", str(actor.id)),),
+        )
+
+
+def _advance_turn(
+    state: CombatState,
+    ending_actor: Actor,
+    active_effects: tuple[ActiveCombatEffect, ...],
+) -> tuple[CombatState, tuple[ActiveCombatEffect, ...], tuple[ExpiredCombatEffects, ...]]:
+    after_end = expire_turn_end_effects(active_effects, str(ending_actor.id))
+    notices: list[ExpiredCombatEffects] = []
+    expired_at_end = _removed_effects(active_effects, after_end)
+    if expired_at_end:
+        notices.append(
+            ExpiredCombatEffects(
+                f"Wygasły efekty końca tury: {ending_actor.name}",
+                expired_at_end,
+            )
+        )
+
+    updated_state = finish_turn(state)
+    updated_effects = after_end
+    if updated_state.status == CombatStatus.ACTIVE:
+        starting_actor = current_actor(updated_state)
+        after_start = expire_turn_start_effects(after_end, str(starting_actor.id))
+        expired_at_start = _removed_effects(after_end, after_start)
+        if expired_at_start:
+            notices.append(
+                ExpiredCombatEffects(
+                    f"Wygasły efekty początku tury: {starting_actor.name}",
+                    expired_at_start,
+                )
+            )
+        updated_effects = after_start
+    return updated_state, updated_effects, tuple(notices)
+
+
+def _removed_effects(
+    before: tuple[ActiveCombatEffect, ...],
+    after: tuple[ActiveCombatEffect, ...],
+) -> tuple[ActiveCombatEffect, ...]:
+    after_ids = {effect.id for effect in after}
+    return tuple(effect for effect in before if effect.id not in after_ids)
+
