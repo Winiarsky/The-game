@@ -36,6 +36,22 @@ def create_app(session: ExplorationUiSession) -> Flask:
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
+    @app.post("/api/spell-preparation/confirm")
+    def api_spell_preparation_confirm():
+        data = request.get_json(silent=True) or {}
+        raw_spell_ids = data.get("spell_ids", [])
+        if not isinstance(raw_spell_ids, list):
+            return jsonify({"error": "Pole spell_ids musi być listą.", "state": session.state_payload()}), 400
+        try:
+            return jsonify(
+                session.confirm_spell_preparation(
+                    actor_id=str(data.get("actor_id", "")),
+                    spell_ids=tuple(str(spell_id) for spell_id in raw_spell_ids),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
     @app.post("/api/action")
     def api_action():
         data = request.get_json(silent=True) or {}

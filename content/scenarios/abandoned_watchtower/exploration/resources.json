@@ -18,7 +18,8 @@
       "mitigates_complications": [
         "jammed_gate"
       ],
-      "mitigates_noise": 1
+      "mitigates_noise": 1,
+      "consume_on_use": true
     },
     {
       "id": "saw",

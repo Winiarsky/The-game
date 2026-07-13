@@ -38,8 +38,9 @@ from dnd_board_game.application import (
     PlayerAttackTransition,
     PlayerCombatActionFlowService,
     PlayerCombatResourceFlowService,
+    SpellPreparationFlowService,
 )
-from dnd_board_game.actors import Actor, Faction
+from dnd_board_game.actors import Actor, Faction, spell_is_prepared
 from dnd_board_game.combat import (
     ActorSetupEntry,
     ActionUse,
@@ -116,6 +117,7 @@ from dnd_board_game.exploration import (
     challenge_state_for,
     exploration_zone_feedback,
     mechanic_payload_for_option,
+    matching_resources,
     reveal_exploration_points,
     resolve_challenge_option,
     resolve_exploration_check,
@@ -466,6 +468,7 @@ class ExplorationUiSession:
         self.player_combat_action_flow = PlayerCombatActionFlowService()
         self.player_combat_resource_flow = PlayerCombatResourceFlowService()
         self.player_reaction_flow = PlayerReactionFlowService()
+        self.spell_preparation_flow = SpellPreparationFlowService()
         self.exploration_flow = ExplorationFlowService()
         self.reset()
 
@@ -514,7 +517,12 @@ class ExplorationUiSession:
             "Plansza niepodłączona. Domyślne ustawienia wczytane z board/config.json "
             f"({self.configured_board_backend})."
         )
-        self.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE if self.debug_point_id else UiFlowStage.WAITING_FOR_BOARD
+        if self.debug_point_id:
+            self.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+        elif self.spell_preparation_flow.pending_actors(self.exploration.actors):
+            self.ui_flow_stage = UiFlowStage.SPELL_PREPARATION
+        else:
+            self.ui_flow_stage = UiFlowStage.WAITING_FOR_BOARD
         self.preview_zone_id = ""
         self.interaction_result: dict[str, object] | None = None
         self._record(
@@ -689,6 +697,7 @@ class ExplorationUiSession:
                 "available_locations": [_zone_payload(zone, self._scenario_asset_root(), self.state) for zone in self._scene_location_zones()],
                 "interaction_result": self.interaction_result,
             },
+            spell_preparation=self._spell_preparation_payload(),
             current_zone=_zone_payload(self.current_zone, self._scenario_asset_root()),
             available_zones=[_zone_payload(zone, self._scenario_asset_root()) for zone in visible_exploration_zones(self.state.zones) if zone_is_ui_available(self.state, zone)],
             visible_environment=[_environment_entry_payload(entry) for entry in self.exploration.environment if entry.visibility == SetupVisibility.VISIBLE],
@@ -761,7 +770,7 @@ class ExplorationUiSession:
         if backend == "none":
             self.board_adapter = None
             self.board_message = "Plansza niepodłączona."
-            if not self.debug_point_id:
+            if not self.debug_point_id and self.ui_flow_stage != UiFlowStage.SPELL_PREPARATION:
                 self.ui_flow_stage = UiFlowStage.WAITING_FOR_BOARD
             self._record("ui_board_configured", {"backend": backend, "connected": False})
             return self.state_payload()
@@ -793,6 +802,42 @@ class ExplorationUiSession:
         self.board_message = f"Plansza podłączona: {backend}."
         if backend in {"simulator", "hardware"} and self.ui_flow_stage == UiFlowStage.WAITING_FOR_BOARD:
             self.ui_flow_stage = UiFlowStage.READY_TO_START
+
+    def confirm_spell_preparation(
+        self,
+        *,
+        actor_id: str,
+        spell_ids: tuple[str, ...],
+    ) -> dict[str, object]:
+        if self.ui_flow_stage != UiFlowStage.SPELL_PREPARATION:
+            raise ValueError("Przygotowanie czarów nie jest teraz aktywne.")
+        transition = self.spell_preparation_flow.confirm(
+            actors=self.exploration.actors,
+            actor_id=actor_id,
+            spell_ids=spell_ids,
+        )
+        self.exploration = replace(self.exploration, actors=transition.actors)
+        actor = next(candidate for candidate in transition.actors if str(candidate.id) == actor_id)
+        self._record(
+            "ui_spell_preparation_confirmed",
+            {
+                "actor_id": actor_id,
+                "prepared_spell_ids": list(transition.prepared_spell_ids),
+                "complete": transition.complete,
+            },
+        )
+        self._add_message(
+            "Przygotowanie czarów",
+            f"{actor.name} potwierdza przygotowane czary.",
+        )
+        if transition.complete:
+            if self.board_adapter is not None and self.board_backend in {"simulator", "hardware"}:
+                self.ui_flow_stage = UiFlowStage.READY_TO_START
+                self.board_message = "Przygotowanie zakończone. Plansza gotowa do rozpoczęcia scenariusza."
+            else:
+                self.ui_flow_stage = UiFlowStage.WAITING_FOR_BOARD
+                self.board_message = "Przygotowanie zakończone. Wybierz backend planszy."
+        return self.state_payload()
 
     def start_session(self) -> dict[str, object]:
         setup_steps = _build_exploration_setup_steps(self.exploration.environment)
@@ -1013,6 +1058,7 @@ class ExplorationUiSession:
         if self.pending_encounter is None:
             raise ValueError("Nie ma aktywnego encountera do przygotowania.")
         encounter = build_encounter_from_scenario(load_scenario(self.pending_encounter.encounter_scenario))
+        encounter = _encounter_with_session_spell_state(encounter, self.exploration.actors)
         steps = _build_encounter_setup_steps(encounter)
         if not steps:
             raise ValueError("Scenariusz encountera nie ma elementów do setupu.")
@@ -1247,14 +1293,14 @@ class ExplorationUiSession:
     def _actor_can_use_attack_source(self, actor: Actor, source) -> bool:
         if source is None:
             return False
-        if getattr(source, "prepared", True) is False:
+        if not _source_is_prepared(actor, source):
             return False
         return can_consume_spell_resource(actor, getattr(source, "spell_level", 0))
 
     def _actor_can_use_healing_source(self, actor: Actor, source: HealingSource | None) -> bool:
         if source is None:
             return False
-        if getattr(source, "prepared", True) is False:
+        if not _source_is_prepared(actor, source):
             return False
         return can_consume_spell_resource(actor, getattr(source, "spell_level", 0))
 
@@ -2715,6 +2761,25 @@ class ExplorationUiSession:
             "message": self.board_message,
         }
 
+    def _spell_preparation_payload(self) -> dict[str, object] | None:
+        actors = tuple(actor for actor in self.exploration.actors if actor.spell_preparation is not None)
+        if not actors:
+            return None
+        pending = self.spell_preparation_flow.pending_actors(actors)
+        return {
+            "complete": not pending,
+            "current_actor_id": str(pending[0].id) if pending else None,
+            "actors": [
+                {
+                    "actor_id": str(actor.id),
+                    "actor_name": actor.name,
+                    **actor.spell_preparation.as_payload(),
+                }
+                for actor in actors
+                if actor.spell_preparation is not None
+            ],
+        }
+
     def _sync_board_leds(self) -> None:
         if self.board_adapter is None:
             return
@@ -3269,9 +3334,22 @@ class ExplorationUiSession:
             situational_modifiers=situational_modifiers,
             improvised_tool=improvised_tool,
         )
+        selected_resources = self.pending.resources
+        if "resource_id" in data:
+            resource_id = str(data.get("resource_id") or "").strip()
+            if resource_id:
+                available_resources = {
+                    resource.id: resource
+                    for resource in matching_resources(self.state, updated_option)
+                }
+                if resource_id not in available_resources:
+                    raise ValueError("Wybrany zasób nie jest dostępny albo nie pasuje do tego podejścia.")
+                selected_resources = (available_resources[resource_id],)
+            else:
+                selected_resources = ()
         self.selected_lead_actor_id = lead_actor_id
         self.selected_helper_actor_id = helper_actor_id
-        self.pending = replace(self.pending, option=updated_option)
+        self.pending = replace(self.pending, option=updated_option, resources=selected_resources)
         self._record(
             "ui_gm_decision_corrected",
             {
@@ -3286,6 +3364,7 @@ class ExplorationUiSession:
                 "roll_mode": roll_mode.value,
                 "situational_modifiers": [modifier.as_payload() for modifier in situational_modifiers],
                 "improvised_tool": improvised_tool.as_payload() if improvised_tool else None,
+                "resource_id": selected_resources[0].id if selected_resources else None,
             },
         )
         self._add_message(
@@ -3350,7 +3429,16 @@ class ExplorationUiSession:
             self.selected_helper_actor_id = helper_actor_id
         else:
             self.selected_helper_actor_id = None
-        plan = _challenge_check_plan(option, lead_actor_id, self.exploration.actors, helper_actor_id=helper_actor_id)
+        resource = self.pending.resources[0] if self.pending.resources else None
+        if resource is not None and resource not in matching_resources(self.state, option):
+            raise ValueError("Wybrany zasób nie jest już dostępny dla tego podejścia.")
+        plan = _challenge_check_plan(
+            option,
+            lead_actor_id,
+            self.exploration.actors,
+            helper_actor_id=helper_actor_id,
+            resource=resource,
+        )
         self.pending = replace(self.pending, stage=PendingStage.ROLL, check_plan=plan)
         self._add_message("Rzut", f"Wpisz wyniki rzutów. {_check_plan_text(self.exploration.actors, plan)}")
         return self.state_payload()
@@ -3421,6 +3509,17 @@ class ExplorationUiSession:
         )
         self.state = result.state
         self._add_message("Wynik podejścia", result.message)
+        if resource is not None and resource.consume_on_use:
+            raw_effect = {"type": "remove_resource", "parameters": {"resource_id": resource.id}}
+            consumption = apply_exploration_effect(self.state, raw_effect)
+            self.state = consumption.state
+            self._record_effect_result(
+                consumption,
+                source="challenge_resource_consumption",
+                raw_effect=raw_effect,
+            )
+            if consumption.changed:
+                self._add_message("Zużyty zasób", f"{resource.label} został zużyty podczas próby.")
         self._consume_active_exploration_bonuses(check_result.selected_actor, self.pending.option)
         self._record(
             "ui_challenge_resolved",
@@ -3927,6 +4026,24 @@ def _effective_attack_source_for_effects(
     return attack_source_with_combat_effects(actor, source, active_combat_effects)
 
 
+def _encounter_with_session_spell_state(
+    encounter: LoadedEncounter,
+    session_actors: tuple[Actor, ...],
+) -> LoadedEncounter:
+    session_by_id = {str(actor.id): actor for actor in session_actors}
+    actors = tuple(
+        replace(
+            actor,
+            spell_slots=session_by_id[str(actor.id)].spell_slots,
+            spell_preparation=session_by_id[str(actor.id)].spell_preparation,
+        )
+        if str(actor.id) in session_by_id
+        else actor
+        for actor in encounter.actors
+    )
+    return replace(encounter, actors=actors)
+
+
 def _combat_action_by_id(encounter: LoadedEncounter | None, actor: Actor, action_id: str):
     if encounter is None:
         return None
@@ -3988,6 +4105,7 @@ def _combat_payload(
         and attack_source is not None
         and state.status.value == "active"
         and state.turn_action.action_use == ActionUse.ACTION_AVAILABLE
+        and _source_is_prepared(actor, attack_source)
         and can_consume_spell_resource(actor, attack_source.spell_level)
     ):
         if attack_source.area is not None:
@@ -4000,6 +4118,7 @@ def _combat_payload(
         and actor.faction == Faction.ALLY
         and state.status.value == "active"
         and state.turn_action.action_use == ActionUse.ACTION_AVAILABLE
+        and _source_is_prepared(actor, healing_source)
         and can_consume_spell_resource(actor, healing_source.spell_level)
     ):
         healing_targets = legal_healing_targets(encounter.board, actor, state.actors, healing_source)
@@ -4023,10 +4142,10 @@ def _combat_payload(
             "movement_used_feet": state.turn_action.movement_used_feet,
             "extra_movement_feet": state.turn_action.extra_movement_feet,
         },
-        "available_attack": _attack_source_payload(attack_source) if attack_source is not None else None,
-        "available_attack_sources": [_attack_source_payload(source) for source in attack_sources],
+        "available_attack": _attack_source_payload(attack_source, actor) if attack_source is not None else None,
+        "available_attack_sources": [_attack_source_payload(source, actor) for source in attack_sources],
         "selected_attack_source_id": attack_source.id if attack_source is not None else None,
-        "available_healing_sources": [_healing_source_payload(source) for source in healing_sources],
+        "available_healing_sources": [_healing_source_payload(source, actor) for source in healing_sources],
         "selected_healing_source_id": healing_source.id if healing_source is not None else None,
         "legal_healing_targets": [_combat_target_payload(target) for target in healing_targets],
         "combat_actions": [
@@ -4245,7 +4364,8 @@ def _ready_trigger_label(trigger: str) -> str:
     return labels.get(trigger, trigger)
 
 
-def _attack_source_payload(source) -> dict[str, object]:
+def _attack_source_payload(source, actor: Actor | None = None) -> dict[str, object]:
+    prepared = _source_is_prepared(actor, source)
     return {
         "id": source.id,
         "name": source.name,
@@ -4259,7 +4379,11 @@ def _attack_source_payload(source) -> dict[str, object]:
         "ability": source.ability,
         "spell_level": source.spell_level,
         "casting_kind": source.casting_kind.value,
-        "prepared": source.prepared,
+        "prepared": prepared,
+        "available": prepared and (
+            actor is None or can_consume_spell_resource(actor, source.spell_level)
+        ),
+        "unavailable_reason": _spell_source_unavailable_reason(actor, source),
         "resource_label": _source_resource_label(source),
         "area": _spell_area_payload(source.area),
         "save_ability": source.save_ability,
@@ -4269,7 +4393,11 @@ def _attack_source_payload(source) -> dict[str, object]:
     }
 
 
-def _healing_source_payload(source: HealingSource) -> dict[str, object]:
+def _healing_source_payload(
+    source: HealingSource,
+    actor: Actor | None = None,
+) -> dict[str, object]:
+    prepared = _source_is_prepared(actor, source)
     return {
         "id": source.id,
         "name": source.name,
@@ -4281,7 +4409,11 @@ def _healing_source_payload(source: HealingSource) -> dict[str, object]:
         "healing_modifier": source.healing_modifier,
         "spell_level": source.spell_level,
         "casting_kind": source.casting_kind.value,
-        "prepared": source.prepared,
+        "prepared": prepared,
+        "available": prepared and (
+            actor is None or can_consume_spell_resource(actor, source.spell_level)
+        ),
+        "unavailable_reason": _spell_source_unavailable_reason(actor, source),
         "resource_label": _source_resource_label(source),
         "mechanic": action_mechanic_payload(healing_mechanic_from_source(source)),
     }
@@ -4296,6 +4428,34 @@ def _source_resource_label(source) -> str:
     if casting_value == "leveled" or spell_level > 0:
         return f"slot {spell_level}. poziomu"
     return ""
+
+
+def _source_is_prepared(actor: Actor | None, source) -> bool:
+    if actor is None:
+        return bool(getattr(source, "prepared", True))
+    casting_kind = getattr(source, "casting_kind", None)
+    casting_value = getattr(casting_kind, "value", None)
+    if casting_value is None:
+        casting_value = (
+            "leveled" if int(getattr(source, "spell_level", 0) or 0) > 0 else "none"
+        )
+    return spell_is_prepared(
+        actor.spell_preparation,
+        str(source.id),
+        casting_kind=casting_value,
+        legacy_prepared=bool(getattr(source, "prepared", True)),
+    )
+
+
+def _spell_source_unavailable_reason(actor: Actor | None, source) -> str | None:
+    if not _source_is_prepared(actor, source):
+        return "Czar nie został przygotowany."
+    if actor is not None and not can_consume_spell_resource(
+        actor,
+        int(getattr(source, "spell_level", 0)),
+    ):
+        return "Brak dostępnych slotów czaru."
+    return None
 
 
 def _spell_area_payload(area) -> dict[str, object] | None:
@@ -4315,7 +4475,9 @@ def _format_signed(value: int) -> str:
 
 def _combat_action_payload(action, actor: Actor | None = None) -> dict[str, object]:
     quantity = _combat_action_item_quantity(action, actor)
-    available = action.prepared and (quantity is None or quantity > 0)
+    prepared = _source_is_prepared(actor, action)
+    has_spell_resource = actor is None or can_consume_spell_resource(actor, action.spell_level)
+    available = prepared and has_spell_resource and (quantity is None or quantity > 0)
     return {
         "id": action.id,
         "name": action.name,
@@ -4327,11 +4489,16 @@ def _combat_action_payload(action, actor: Actor | None = None) -> dict[str, obje
         "target_faction": action.target_faction,
         "spell_level": action.spell_level,
         "casting_kind": action.casting_kind.value,
-        "prepared": action.prepared,
+        "prepared": prepared,
         "concentration": action.concentration,
         "source_item_id": action.source_item_id,
         "source_item_quantity": quantity,
         "available": available,
+        "unavailable_reason": _combat_action_unavailable_reason(
+            action,
+            actor,
+            quantity=quantity,
+        ),
         "resource_label": _source_resource_label(action),
         "mechanic": action_mechanic_payload(combat_action_mechanic_from_definition(action)),
     }
@@ -4342,6 +4509,20 @@ def _combat_action_item_quantity(action, actor: Actor | None) -> int | None:
         return None
     item = next((candidate for candidate in actor.inventory if candidate.id == action.source_item_id), None)
     return item.quantity if item is not None else 0
+
+
+def _combat_action_unavailable_reason(
+    action,
+    actor: Actor | None,
+    *,
+    quantity: int | None,
+) -> str | None:
+    spell_reason = _spell_source_unavailable_reason(actor, action)
+    if spell_reason is not None:
+        return spell_reason
+    if quantity is not None and quantity <= 0:
+        return "Brak wymaganego przedmiotu."
+    return None
 
 
 def _pending_player_attack_payload(
@@ -4946,11 +5127,19 @@ def _challenge_check_plan(
     actors: tuple[Actor, ...],
     *,
     helper_actor_id: str | None = None,
+    resource: ExplorationResource | None = None,
 ) -> ExplorationCheckPlan:
+    resource_modifier = resource.as_roll_modifier() if resource is not None else None
     roll_modifiers_by_actor_id = tuple(
-        (str(actor.id), option_roll_modifiers_for_actor(actor, option))
+        (
+            str(actor.id),
+            (
+                *option_roll_modifiers_for_actor(actor, option),
+                *((resource_modifier,) if resource_modifier is not None else ()),
+            ),
+        )
         for actor in actors
-        if option_roll_modifiers_for_actor(actor, option)
+        if option_roll_modifiers_for_actor(actor, option) or resource_modifier is not None
     )
     option_bonus_payloads = tuple(
         {
@@ -4971,11 +5160,15 @@ def _challenge_check_plan(
         lead_actor_id=lead_actor_id,
         helper_actor_id=helper_actor_id,
         reason_for_players=option.description,
-        roll_mode=option.roll_mode,
+        roll_mode=_combined_roll_mode(
+            option.roll_mode,
+            (RollMode.ADVANTAGE,) if resource is not None and resource.advantage else (),
+        ),
         situational_modifiers=option.situational_modifiers,
         improvised_tool=option.improvised_tool,
         roll_modifiers_by_actor_id=roll_modifiers_by_actor_id,
         option_bonus_payloads=option_bonus_payloads,
+        resource_payload=_resource_payload(resource) if resource is not None else None,
         mechanic_payload=mechanic_payload_for_option(option),
     )
 
@@ -5342,7 +5535,16 @@ def _noise_label(noise: int) -> str:
 
 
 def _resource_payload(resource: ExplorationResource) -> dict[str, object]:
-    return {"id": resource.id, "label": resource.label, "bonus_tags": list(resource.bonus_tags)}
+    return {
+        "id": resource.id,
+        "label": resource.label,
+        "bonus_tags": list(resource.bonus_tags),
+        "modifier": resource.modifier,
+        "advantage": resource.advantage,
+        "mitigates_complications": list(resource.mitigates_complications),
+        "mitigates_noise": resource.mitigates_noise,
+        "consume_on_use": resource.consume_on_use,
+    }
 
 
 def _challenge_option_payload(option: ExplorationChallengeOption, actors: tuple[Actor, ...] = ()) -> dict[str, object]:

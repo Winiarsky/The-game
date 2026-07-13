@@ -74,6 +74,8 @@ Modyfikatory sytuacyjne eksploracji są częścią planu rzutu, nie osobną mech
 
 `improvised_tool_check` używa dodatkowego payloadu `ImprovisedToolUse`: etykieta, źródło, szczegół źródła, mały modyfikator, ryzyko i powód. To jest jednorazowy element planu rzutu, a nie nowy wpis w inventory. UI wymaga jawnej akceptacji MG, bo LLM nie może samodzielnie stworzyć trwałego narzędzia ani zasobu drużyny.
 
+Zasoby sceny są odrębnymi, istniejącymi wpisami `ExplorationResource`. Wybrany posiadany zasób dokłada do deterministycznego planu rzutu premię i ewentualną przewagę, a resolver wyzwania stosuje redukcję hałasu oraz komplikacji. Zasób z `consume_on_use` jest po rzucie usuwany przez `apply_exploration_effect(remove_resource)`, dzięki czemu zmiana trafia do tego samego kontraktu obserwowalności co pozostałe efekty eksploracji. Korekta MG pokazuje i waliduje wybór przed rzutem.
+
 Walidator ma pilnować spójności:
 
 - `single_actor_check`: jedna postać i `lead_result`,
@@ -108,6 +110,11 @@ Aktualne serwisy:
 - `AttackActionResolver`: aplikuje obrażenia do pojedynczego celu, także po rzucie obronnym.
 - `SpellSaveAttackResolver`: potwierdza czar przeciw pojedynczemu celowi i wykonuje rzut obronny celu.
 - `AreaSpellResolver`: potwierdza czar obszarowy, wykonuje save'y celów i aplikuje obrażenia w obszarze.
+
+Przygotowanie czarów nie jest osobnym typem akcji. `actors/spell_preparation.py`
+przechowuje czysty profil i waliduje wybór, a `application/spell_preparation_flow.py`
+prowadzi sekwencję aktorów przed scenariuszem. Te same reguły dostępności są
+sprawdzane przez combat, eksplorację i payload UI przed zużyciem slotu.
 - `HealingActionResolver`: zużywa akcję/slot i aplikuje leczenie.
 
 Kolejne refaktory powinny przenosić podobne orkiestracje do tej warstwy, jeśli zaczynają łączyć więcej niż jeden element zasad. Przykłady: flankowanie z modyfikatorem ataku, koncentracja po rzuceniu czaru, efekty warunków po trafieniu.

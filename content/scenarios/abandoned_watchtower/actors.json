@@ -77,6 +77,20 @@
         "1": 2
       },
       "spell_save_dc": 13,
+      "spell_preparation": {
+        "source_label": "lista czarów kapłana",
+        "preparation_limit": 2,
+        "available_spell_ids": [
+          "radiant_line",
+          "healing_word",
+          "bless_attack_bonus"
+        ],
+        "default_prepared_spell_ids": [
+          "healing_word",
+          "bless_attack_bonus"
+        ],
+        "always_prepared_spell_ids": []
+      },
       "attacks": [
         {
           "id": "sacred_flame",

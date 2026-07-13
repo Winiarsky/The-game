@@ -1087,6 +1087,7 @@ def _resource_payload(resource: ExplorationResource) -> dict[str, Any]:
         "advantage": resource.advantage,
         "mitigates_complications": list(resource.mitigates_complications),
         "mitigates_noise": resource.mitigates_noise,
+        "consume_on_use": resource.consume_on_use,
     }
 
 

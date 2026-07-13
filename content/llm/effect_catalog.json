@@ -16,6 +16,13 @@
         "resource_id": "string"
       }
     },
+    "remove_resource": {
+      "label": "Usuń zasób eksploracji",
+      "description": "Usuwa znany zużyty zasób eksploracji z ekwipunku drużyny.",
+      "parameters": {
+        "resource_id": "string"
+      }
+    },
     "unlock_option": {
       "label": "Odblokuj opcję wyzwania",
       "description": "Ustawia flagę odblokowania dla opcji wyzwania wygenerowanej przez LLM.",

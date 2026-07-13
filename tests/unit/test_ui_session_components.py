@@ -27,6 +27,7 @@ def test_ui_session_view_preserves_api_state_contract() -> None:
         scenario={"id": "scene"},
         session_log={"session_id": "test"},
         flow={"stage": "location_active"},
+        spell_preparation=None,
         current_zone={"id": "gate"},
         available_zones=[],
         visible_environment=[],

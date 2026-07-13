@@ -13,6 +13,7 @@ from .models import (
     ExplorationState,
     challenge_state_for,
     grant_resource,
+    remove_resource,
     reveal_exploration_points,
 )
 
@@ -42,6 +43,9 @@ def validate_exploration_effect(
         _require_string(parameters, "key", effect_type)
         _require(parameters, "value", effect_type)
     elif effect_type == "grant_resource":
+        resource_id = _require_string(parameters, "resource_id", effect_type)
+        _require_resource(state, resource_id, effect_type)
+    elif effect_type == "remove_resource":
         resource_id = _require_string(parameters, "resource_id", effect_type)
         _require_resource(state, resource_id, effect_type)
     elif effect_type == "unlock_option":
@@ -79,6 +83,11 @@ def apply_exploration_effect(
         updated = grant_resource(state, resource_id)
         changed = resource_id not in state.inventory_resource_ids
         return ExplorationEffectResult(updated, effect_type, changed, f"Zasób dodany: {resource_id}.")
+    if effect_type == "remove_resource":
+        resource_id = _require_string(parameters, "resource_id", effect_type)
+        updated = remove_resource(state, resource_id)
+        changed = resource_id in state.inventory_resource_ids
+        return ExplorationEffectResult(updated, effect_type, changed, f"Zasób zużyty: {resource_id}.")
     if effect_type == "unlock_option":
         option_id = _require_string(parameters, "option_id", effect_type)
         flag = f"llm_unlocked_option:{option_id}"

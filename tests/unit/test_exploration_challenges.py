@@ -181,7 +181,17 @@ def test_spell_option_bonus_requires_slot_for_leveled_spell():
     challenge = next(item for item in exploration.challenges if item.id == "closed_gate")
     flame = next(item for item in challenge.options if item.id == "reveal_bolt_with_flame")
     cleric = next(actor for actor in exploration.actors if str(actor.id) == "cleric")
-    leveled_flame = replace(flame, bonuses=(replace(flame.bonuses[0], spell_level=1),))
+    leveled_flame = replace(
+        flame,
+        requires_spell_ids=("healing_word",),
+        bonuses=(
+            replace(
+                flame.bonuses[0],
+                source_id="healing_word",
+                spell_level=1,
+            ),
+        ),
+    )
 
     assert active_option_bonuses_for_actor(cleric, flame)[0].spell_level == 0
     assert actors_matching_challenge_option((cleric,), leveled_flame) == (cleric,)
@@ -190,6 +200,27 @@ def test_spell_option_bonus_requires_slot_for_leveled_spell():
 
     assert actors_matching_challenge_option((spent_cleric,), leveled_flame) == ()
     assert active_option_bonuses_for_actor(spent_cleric, leveled_flame) == ()
+
+
+def test_spell_option_bonus_requires_leveled_spell_to_be_prepared():
+    exploration = build_exploration_from_scenario(load_scenario("content/scenarios/abandoned_watchtower"))
+    challenge = next(item for item in exploration.challenges if item.id == "closed_gate")
+    flame = next(item for item in challenge.options if item.id == "reveal_bolt_with_flame")
+    cleric = next(actor for actor in exploration.actors if str(actor.id) == "cleric")
+    unprepared_spell_option = replace(
+        flame,
+        requires_spell_ids=("radiant_line",),
+        bonuses=(
+            replace(
+                flame.bonuses[0],
+                source_id="radiant_line",
+                spell_level=1,
+            ),
+        ),
+    )
+
+    assert actors_matching_challenge_option((cleric,), unprepared_spell_option) == ()
+    assert active_option_bonuses_for_actor(cleric, unprepared_spell_option) == ()
 
 
 def test_gate_challenge_reveals_hidden_npc_after_completion():

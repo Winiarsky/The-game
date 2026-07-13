@@ -4,7 +4,7 @@ from dataclasses import dataclass, replace
 from random import Random
 
 from dnd_board_game.actions import ActionResourceResolver, SpellSaveAttackResolver
-from dnd_board_game.actors import Actor, Faction
+from dnd_board_game.actors import Actor, Faction, spell_is_prepared
 from dnd_board_game.combat import (
     ActiveCombatEffect,
     AppliedDamageResult,
@@ -535,8 +535,13 @@ def _active_hero(state: CombatState) -> Actor:
 
 
 def _require_usable_source(actor: Actor, source: AttackSource | HealingSource) -> None:
-    if getattr(source, "prepared", True) is False:
-        raise ValueError(f"Brak slotów czaru dla {source.name}.")
+    if not spell_is_prepared(
+        actor.spell_preparation,
+        source.id,
+        casting_kind=source.casting_kind.value,
+        legacy_prepared=source.prepared,
+    ):
+        raise ValueError(f"Czar {source.name} nie został przygotowany.")
     if not can_consume_spell_resource(actor, getattr(source, "spell_level", 0)):
         raise ValueError(f"Brak slotów czaru dla {source.name}.")
 

@@ -123,8 +123,9 @@
 - [x] Add GM correction UI for selected exploration mechanic before rolls.
 - [x] Add grounded situational modifiers and advantage/disadvantage to exploration rolls.
 - [x] Add improvised tool mechanic validation and explicit GM approval flow.
-- [ ] Add scene-resource consumption to exploration rolls.
-- [ ] Add full prepared/known spell rules and advanced concentration modifiers.
+- [x] Add visible scene-resource effects, correction, and consumption to exploration rolls.
+- [x] Add generic pre-scenario prepared-spell selection and runtime enforcement MVP.
+- [ ] Add class-derived spell lists, known-spell profiles, and advanced concentration modifiers.
 - [ ] Add voice input and richer UI for free-form exploration declarations.
 - [x] Implement hardware adapter interface around `board.Connection`.
 - [x] Add LED frame generation for selected path and movement range.

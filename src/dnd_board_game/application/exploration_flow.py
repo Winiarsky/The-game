@@ -18,6 +18,7 @@ from dnd_board_game.exploration import (
 
 
 class ExplorationFlowStage(StrEnum):
+    SPELL_PREPARATION = "spell_preparation"
     WAITING_FOR_BOARD = "waiting_for_board"
     READY_TO_START = "ready_to_start"
     PARTY_SETUP = "party_setup"

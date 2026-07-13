@@ -62,7 +62,7 @@ function render() {
   document.getElementById('zone').textContent = state.current_zone.name;
   document.getElementById('challenge').textContent = state.active_challenge ? `${state.active_challenge.name}: ${state.active_challenge.current_progress}/${state.active_challenge.progress_required}, hałas ${state.active_challenge.noise}` : 'Brak';
   document.getElementById('visible-environment').innerHTML = visibleEnvironmentHtml();
-  document.getElementById('resources').innerHTML = state.resources.map(r => `<div>${r.label}</div>`).join('') || 'Brak';
+  document.getElementById('resources').innerHTML = state.resources.map(r => `<div>${esc(r.label)}${r.consume_on_use ? ' · jednorazowy' : ''}</div>`).join('') || 'Brak';
   renderBoardPanel();
   document.getElementById('flow-panel').innerHTML = flowPanelHtml();
   const sceneHtml = sceneDescriptionHtml(state);
@@ -175,6 +175,9 @@ function sceneStatusHtml() {
 function flowPanelHtml() {
   const flow = state.flow || {};
   const stage = flow.stage || 'waiting_for_board';
+  if (stage === 'spell_preparation') {
+    return spellPreparationHtml();
+  }
   if (stage === 'waiting_for_board') {
     return `
       <div class="start-panel"><div class="inner">
@@ -260,6 +263,38 @@ function flowPanelHtml() {
     `;
   }
   return '';
+}
+function spellPreparationHtml() {
+  const preparation = state.spell_preparation || {};
+  const actor = (preparation.actors || []).find(entry => String(entry.actor_id) === String(preparation.current_actor_id));
+  if (!actor) return '<p>Przygotowanie czarów zakończone.</p>';
+  const selectable = (actor.spells || []).filter(spell => !spell.always_prepared);
+  const alwaysPrepared = (actor.spells || []).filter(spell => spell.always_prepared);
+  return `
+    <div class="start-panel"><div class="inner">
+      <h2>Przygotowanie czarów — ${esc(actor.actor_name)}</h2>
+      <p>Źródło: <b>${esc(actor.source_label)}</b>. Wybierz czary po zakończonym długim odpoczynku.</p>
+      <p><b>Wybrano:</b> <span id="spell-preparation-count">${esc(actor.selected_count)}</span>/${esc(actor.preparation_limit)}</p>
+      <div class="status-list">
+        ${selectable.map(spell => `
+          <label class="status-item">
+            <span><input type="checkbox" data-preparation-spell="${esc(spell.id)}"${spell.prepared ? ' checked' : ''} onchange="updateSpellPreparationCount()"> <b>${esc(spell.label)}</b></span>
+            <span>poziom ${esc(spell.level)}</span>
+          </label>
+        `).join('') || '<p class="muted">Brak czarów do wyboru.</p>'}
+      </div>
+      ${alwaysPrepared.length ? `<p><b>Zawsze przygotowane:</b> ${alwaysPrepared.map(spell => esc(spell.label)).join(', ')}. Nie zajmują limitu.</p>` : ''}
+      <p class="muted">Po rozpoczęciu scenariusza zestaw pozostaje zablokowany do następnego długiego odpoczynku.</p>
+      <button id="spell-preparation-confirm" class="start-button" data-preparation-limit="${esc(actor.preparation_limit)}" onclick="confirmSpellPreparation()">Potwierdź przygotowanie</button>
+    </div></div>
+  `;
+}
+function updateSpellPreparationCount() {
+  const count = document.querySelectorAll('[data-preparation-spell]:checked').length;
+  const target = document.getElementById('spell-preparation-count');
+  if (target) target.textContent = String(count);
+  const confirm = document.getElementById('spell-preparation-confirm');
+  if (confirm) confirm.disabled = count !== Number(confirm.dataset.preparationLimit || 0);
 }
 function availableLocationsHtml(locations) {
   if (!locations.length) return '<p>Brak jawnych elementów sceny.</p>';
@@ -410,10 +445,14 @@ function pendingHtml(pending) {
       const tool = option.improvised_tool;
       lines.push(`<p><b>Improwizowane narzędzie:</b> ${esc(tool.label)} ${signedNumber(Number(tool.effect_modifier || 0))} (${esc(tool.source)}: ${esc(tool.source_detail)}${tool.risk ? `, ryzyko: ${esc(tool.risk)}` : ''}). ${esc(tool.reason)}</p>`);
     }
+    const selectedResource = pending.resources && pending.resources.length ? pending.resources[0] : null;
+    if (selectedResource) {
+      lines.push(`<p><b>Zasób sceny:</b> ${resourceSummary(selectedResource)}.</p>`);
+    }
     lines.push(`<p><b>Postęp:</b> sukces +${esc(option.progress_on_success)}, porażka +${esc(option.progress_on_failure)}.</p>`);
     if (pending.kind === 'challenge' && pending.stage === 'decision') {
       lines.push(`<button class="secondary" onclick="toggleDecisionCorrection()">Popraw decyzję MG</button>`);
-      if (decisionCorrectionOpen) lines.push(decisionCorrectionHtml(option));
+      if (decisionCorrectionOpen) lines.push(decisionCorrectionHtml(option, pending));
     }
   } else if (proposal.action_type) {
     if (proposal.requires_roll) {
@@ -425,13 +464,24 @@ function pendingHtml(pending) {
   }
   return lines.join('') || '<p>MG proponuje interpretację deklaracji.</p>';
 }
+function resourceSummary(resource) {
+  const effects = [];
+  if (Number(resource.modifier || 0) !== 0) effects.push(`rzut ${signedNumber(Number(resource.modifier || 0))}`);
+  if (resource.advantage) effects.push('przewaga');
+  if (Number(resource.mitigates_noise || 0) > 0) effects.push(`hałas -${Number(resource.mitigates_noise)}`);
+  if (resource.mitigates_complications && resource.mitigates_complications.length) {
+    effects.push(`chroni przed: ${resource.mitigates_complications.map(esc).join(', ')}`);
+  }
+  effects.push(resource.consume_on_use ? 'zostanie zużyty po rzucie' : 'wielokrotnego użytku');
+  return `${esc(resource.label || resource.id)} (${effects.join(', ')})`;
+}
 function leadActorChoiceHtml() {
   if (!state.pending || state.pending.stage !== 'decision' || !state.actors || state.actors.length < 2) return '';
   const selectedId = state.selected_lead_actor_id || (state.actors[0] && state.actors[0].id) || '';
   const options = state.actors.map(actor => `<option value="${esc(actor.id)}"${String(actor.id) === String(selectedId) ? ' selected' : ''}>${esc(actor.name)}</option>`).join('');
   return `<label><b>Kto prowadzi test?</b> <select id="lead-actor">${options}</select></label>`;
 }
-function decisionCorrectionHtml(option) {
+function decisionCorrectionHtml(option, pending) {
   const mechanicId = option.mechanic && option.mechanic.id ? option.mechanic.id : 'single_actor_check';
   const actorOptions = (selectedId, allowEmpty=false) => `${allowEmpty ? '<option value="">-</option>' : ''}${(state.actors || []).map(actor => `<option value="${esc(actor.id)}"${String(actor.id) === String(selectedId || '') ? ' selected' : ''}>${esc(actor.name)}</option>`).join('')}`;
   const mechanicOptions = (state.allowed_mechanics || []).map(tool => `<option value="${esc(tool.id)}"${tool.id === mechanicId ? ' selected' : ''}>${esc(tool.label || tool.id)}</option>`).join('');
@@ -443,6 +493,14 @@ function decisionCorrectionHtml(option) {
   const sourceOptions = selectedSource => ['scenario_context','zone_context','challenge_context','interaction_object','player_declaration','dynamic_state','gm'].map(source => `<option value="${source}"${source === selectedSource ? ' selected' : ''}>${source}</option>`).join('');
   const situational = option.situational_modifiers || [];
   const improvised = option.improvised_tool || {};
+  const selectedResourceId = pending.resources && pending.resources.length ? String(pending.resources[0].id) : '';
+  const optionTags = new Set(option.tags || []);
+  const matchingResourceOptions = (state.resources || []).filter(resource =>
+    String(resource.id) === selectedResourceId || (resource.bonus_tags || []).some(tag => optionTags.has(tag))
+  );
+  const resourceOptions = `<option value="">bez zasobu</option>${matchingResourceOptions.map(resource =>
+    `<option value="${esc(resource.id)}"${String(resource.id) === selectedResourceId ? ' selected' : ''}>${resourceSummary(resource)}</option>`
+  ).join('')}`;
   const modifierRows = [0,1,2].map(index => {
     const mod = situational[index] || {};
     const modMode = mod.roll_mode || 'normal';
@@ -484,6 +542,7 @@ function decisionCorrectionHtml(option) {
       <label>Skill <input id="correction-skill" value="${esc(option.skill || '')}" placeholder="np. athletics"></label>
       <label>ST <input id="correction-dc" type="number" min="5" max="25" value="${esc(option.dc || 10)}"></label>
       <label>Tryb rzutu <select id="correction-roll-mode">${rollModeOptions}</select></label>
+      <label>Zasób sceny <select id="correction-resource">${resourceOptions}</select></label>
       <details>
         <summary>Modyfikatory sytuacyjne</summary>
         ${modifierRows}
@@ -537,6 +596,9 @@ function rollPromptHtml() {
   const improvisedHtml = tool
     ? `<p><b>Improwizowane narzędzie:</b> ${esc(tool.label)} ${signedNumber(Number(tool.effect_modifier || 0))} (${esc(tool.source_detail)}${tool.risk ? `, ryzyko: ${esc(tool.risk)}` : ''}).</p>`
     : '';
+  const resourceHtml = plan.resource
+    ? `<p><b>Zasób sceny:</b> ${resourceSummary(plan.resource)}.</p>`
+    : '';
   const bonuses = (plan.option_bonuses || []).filter(bonus => Number(bonus.modifier || 0) !== 0);
   const bonusHtml = bonuses.length
     ? `<p><b>Aktywne premie:</b> ${bonuses.map(bonus => {
@@ -545,7 +607,7 @@ function rollPromptHtml() {
         return `${esc(bonus.actor_name || '')}: ${esc(bonus.label || bonus.source_id)} ${signedNumber(Number(bonus.modifier || 0))}${spellCost}`;
       }).join('; ')}</p>`
     : '';
-  return `${mechanicHtml}${rollModeHtml}<p><b>Format rzutu:</b> ${esc(participants)}${aggregation ? `, ${esc(aggregation)}` : ''}.</p><p><b>Rzucają:</b> ${esc(names || '-')}</p>${situationalHtml}${improvisedHtml}${bonusHtml}`;
+  return `${mechanicHtml}${rollModeHtml}<p><b>Format rzutu:</b> ${esc(participants)}${aggregation ? `, ${esc(aggregation)}` : ''}.</p><p><b>Rzucają:</b> ${esc(names || '-')}</p>${resourceHtml}${situationalHtml}${improvisedHtml}${bonusHtml}`;
 }
 function latestResultMessage(state) {
   const messages = state.messages || [];
@@ -1104,6 +1166,7 @@ function sourceButtonLabel(source) {
   return `${esc(source.name)}${resource}`;
 }
 function sourceUnavailableReason(source, actor) {
+  if (source.unavailable_reason) return source.unavailable_reason;
   if (source.prepared === false) return 'Ten czar nie jest przygotowany.';
   if (source.available === false) {
     if (source.source_item_id) return 'Ten przedmiot został zużyty.';
@@ -1725,6 +1788,11 @@ function updateActivePanel() {
   document.getElementById('action-panel').hidden = flowActive || hasEncounter || hasResult || hasTravel || hasPendingDecision || hasRolls;
 }
 function sendAction() { api('/api/action', {text: document.getElementById('action').value}, 'Czekam na decyzję MG...'); }
+function confirmSpellPreparation() {
+  const preparation = state.spell_preparation || {};
+  const spell_ids = Array.from(document.querySelectorAll('[data-preparation-spell]:checked')).map(input => input.dataset.preparationSpell);
+  api('/api/spell-preparation/confirm', {actor_id: preparation.current_actor_id, spell_ids}, 'Zapisuję przygotowane czary...');
+}
 function decision(value) {
   const labels = {
     accept: 'Przyjmuję decyzję MG...',
@@ -1760,6 +1828,7 @@ function submitDecisionCorrection() {
     skill: document.getElementById('correction-skill').value,
     dc: Number(document.getElementById('correction-dc').value),
     roll_mode: document.getElementById('correction-roll-mode').value,
+    resource_id: document.getElementById('correction-resource').value,
     situational_modifiers,
     improvised_tool
   }, 'Zapisuję korektę decyzji MG...');
@@ -2019,6 +2088,7 @@ function triggerPrimaryAction() {
   if (isVisible('flow-panel')) {
     const stage = state.flow ? state.flow.stage : '';
     const preview = state.flow ? state.flow.preview_zone : null;
+    if (stage === 'spell_preparation') { confirmSpellPreparation(); return true; }
     if (stage === 'location_preview' && preview && preview.available !== false) { confirmLocationPreview(); return true; }
     if (stage === 'party_setup' && state.exploration_setup) { confirmExplorationSetup(); return true; }
     if (stage === 'interaction_result') { finishInteraction(); return true; }

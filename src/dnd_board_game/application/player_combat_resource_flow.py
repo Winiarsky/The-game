@@ -5,7 +5,7 @@ from random import Random
 from typing import Protocol
 
 from dnd_board_game.actions import ActionResourceResolver
-from dnd_board_game.actors import Actor, Faction
+from dnd_board_game.actors import Actor, Faction, spell_is_prepared
 from dnd_board_game.combat import (
     ActiveCombatEffect,
     AppliedDamageResult,
@@ -419,7 +419,18 @@ def _active_hero(state: CombatState) -> Actor:
 
 
 def _require_usable_action(actor: Actor, action: CombatActionSpec) -> None:
-    if action.prepared is False or not can_consume_spell_resource(
+    casting_kind = getattr(action, "casting_kind", None)
+    casting_value = getattr(casting_kind, "value", None)
+    if casting_value is None:
+        casting_value = "leveled" if action.spell_level > 0 else "none"
+    if not spell_is_prepared(
+        actor.spell_preparation,
+        action.id,
+        casting_kind=casting_value,
+        legacy_prepared=action.prepared,
+    ):
+        raise ValueError(f"Czar {action.label} nie został przygotowany.")
+    if not can_consume_spell_resource(
         actor,
         action.spell_level,
     ):

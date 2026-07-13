@@ -533,6 +533,10 @@ Jeżeli wybrany element ekwipunku ma pasującą flagę bonusu, może dodać efek
 * anulowanie konkretnej komplikacji,
 * zużycie zasobu.
 
+Zasób sceny z `consume_on_use: true` jest jednorazowy. Silnik usuwa go dopiero po faktycznie wykonanym rzucie, także przy porażce. Sam wybór zasobu, korekta decyzji MG albo anulowanie próby nie zmieniają ekwipunku drużyny. Zasoby bez tej flagi, np. lina lub narzędzie wielokrotnego użytku, pozostają dostępne po próbie.
+
+Scenariusz pełni także rolę pojedynczego dnia przygody. Jeśli postać korzysta z przygotowywanych czarów, po wejściu do scenariusza i przed ustawieniem mapy wybiera listę na ten scenariusz, tak jak po zakończonym długim odpoczynku w D&D 5e. Ten etap jest generyczną mechaniką aktora, a nie implementacją konkretnej klasy; cantripy nie wchodzą do wyboru, a czary zawsze przygotowane nie zajmują limitu.
+
 Przykład:
 
 ```text

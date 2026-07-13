@@ -123,6 +123,17 @@ def test_exploration_ui_page_includes_session_log_panel():
     assert "/api/session-log" in javascript
 
 
+def test_exploration_ui_page_includes_spell_preparation_flow():
+    client = _client(active=False)
+
+    _html, javascript, _stylesheet = _page_assets(client)
+
+    assert "Przygotowanie czarów" in javascript
+    assert "data-preparation-spell" in javascript
+    assert "confirmSpellPreparation()" in javascript
+    assert "/api/spell-preparation/confirm" in javascript
+
+
 def test_exploration_ui_page_includes_gm_decision_correction_controls():
     client = _client()
 
@@ -132,6 +143,9 @@ def test_exploration_ui_page_includes_gm_decision_correction_controls():
     assert "Popraw decyzję MG" in javascript
     assert "decisionCorrectionHtml" in javascript
     assert "correction-roll-mode" in javascript
+    assert "correction-resource" in javascript
+    assert "Zasób sceny" in javascript
+    assert "zostanie zużyty po rzucie" in javascript
     assert "Modyfikatory sytuacyjne" in javascript
     assert "Improwizowane narzędzie" in javascript
     assert "improvised-tool-label" in javascript
@@ -337,13 +351,14 @@ def test_exploration_ui_state_endpoint_returns_json():
     assert response.get_json()["scenario"]["id"] == "abandoned_watchtower"
 
 
-def test_exploration_ui_initial_payload_waits_for_board_and_hides_actions():
+def test_exploration_ui_initial_payload_requires_spell_preparation_and_hides_actions():
     client = _client(active=False)
 
     data = client.get("/api/state").get_json()
 
-    assert data["flow"]["stage"] == "waiting_for_board"
+    assert data["flow"]["stage"] == "spell_preparation"
     assert data["flow"]["can_start"] is False
+    assert data["spell_preparation"]["current_actor_id"] == "cleric"
     assert data["active_challenge"] is None
     assert data["current_zone"]["image_url"].endswith("/scenario-assets/assets/gate_preview.png")
 
@@ -435,6 +450,10 @@ def _resolve_enemy_turn_from_ui(client, board):
 
 def test_exploration_ui_start_preview_location_and_confirm_from_ui_updates_leds():
     session = _session(active=False)
+    session.confirm_spell_preparation(
+        actor_id="cleric",
+        spell_ids=("healing_word", "bless_attack_bonus"),
+    )
     board = FakeBoardConnection(clicks=[(9, 2), (9, 2)])
     session.attach_board_connection(board, backend="simulator")
     app = create_app(session)
@@ -469,6 +488,10 @@ def test_exploration_ui_start_preview_location_and_confirm_from_ui_updates_leds(
 
 def test_exploration_ui_blocked_visible_location_shows_locked_preview():
     session = _session(active=False)
+    session.confirm_spell_preparation(
+        actor_id="cleric",
+        spell_ids=("healing_word", "bless_attack_bonus"),
+    )
     board = FakeBoardConnection(clicks=[(9, 10)])
     session.attach_board_connection(board, backend="simulator")
     client = create_app(session).test_client()
@@ -628,8 +651,31 @@ def test_exploration_ui_reset_endpoint_restores_state():
 
     assert response.status_code == 200
     data = response.get_json()
-    assert data["flow"]["stage"] == "waiting_for_board"
+    assert data["flow"]["stage"] == "spell_preparation"
     assert data["active_challenge"] is None
+
+
+def test_exploration_ui_confirms_spell_preparation_through_api():
+    client = _client(active=False)
+
+    response = client.post(
+        "/api/spell-preparation/confirm",
+        json={
+            "actor_id": "cleric",
+            "spell_ids": ["radiant_line", "healing_word"],
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["flow"]["stage"] == "waiting_for_board"
+    cleric = data["spell_preparation"]["actors"][0]
+    assert cleric["confirmed"] is True
+    assert {
+        spell["id"]
+        for spell in cleric["spells"]
+        if spell["prepared"] and not spell["always_prepared"]
+    } == {"radiant_line", "healing_word"}
 
 
 def test_exploration_ui_shows_and_handles_travel_after_completed_challenge():
@@ -873,6 +919,10 @@ def test_exploration_ui_starts_combat_after_setup_and_initiative():
 
 def test_exploration_ui_happy_path_returns_to_player_after_enemy_turns():
     session = _session(active=False)
+    session.confirm_spell_preparation(
+        actor_id="cleric",
+        spell_ids=("healing_word", "bless_attack_bonus"),
+    )
     board = FakeBoardConnection(clicks=[(9, 2)])
     session.attach_board_connection(board, backend="simulator")
     client = create_app(session).test_client()

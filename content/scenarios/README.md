@@ -73,6 +73,36 @@ content/scenarios/abandoned_watchtower/
 
 Każdy plik części może zawierać samą wartość albo obiekt nazwany polem, np. `{"actors": [...]}`. Drugi wariant jest czytelniejszy i obecnie zalecany.
 
+Zasób eksploracji może być wielokrotnego użytku albo jednorazowy:
+
+```json
+{
+  "id": "wedge",
+  "label": "Drewniany klin",
+  "bonus_tags": ["lever", "quiet"],
+  "mitigates_noise": 1,
+  "consume_on_use": true
+}
+```
+
+`consume_on_use` domyślnie ma wartość `false`. Zasób jednorazowy znika dopiero po wykonaniu zaakceptowanego rzutu eksploracyjnego.
+
+Aktor przygotowujący czary może deklarować generyczny profil:
+
+```json
+{
+  "spell_preparation": {
+    "source_label": "lista czarów kapłana",
+    "preparation_limit": 2,
+    "available_spell_ids": ["radiant_line", "healing_word", "bless_attack_bonus"],
+    "default_prepared_spell_ids": ["healing_word", "bless_attack_bonus"],
+    "always_prepared_spell_ids": []
+  }
+}
+```
+
+Identyfikatory muszą wskazywać źródła czarów poziomu 1+ tego aktora. Cantripy nie należą do profilu. Przed setupem scenariusza gracz potwierdza dokładnie `preparation_limit` pozycji; `always_prepared_spell_ids` nie zajmują limitu.
+
 Stary płaski plik może zostać aliasem:
 
 ```json

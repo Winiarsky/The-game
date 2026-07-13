@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from enum import StrEnum
 
-from dnd_board_game.actors import Actor
+from dnd_board_game.actors import Actor, spell_is_prepared
 from dnd_board_game.combat import SceneAbilityCheck, SceneFlags, SetupVisibility, scene_flag, set_scene_flag
 from dnd_board_game.hardware import LedColor, LedFeedback, LedFrame, LedRole
 from dnd_board_game.rules import (
@@ -481,6 +481,7 @@ class ExplorationCheckPlan:
     improvised_tool: ImprovisedToolUse | None = None
     roll_modifiers_by_actor_id: tuple[tuple[str, tuple[RollModifier, ...]], ...] = ()
     option_bonus_payloads: tuple[dict[str, object], ...] = ()
+    resource_payload: dict[str, object] | None = None
     mechanic_payload: dict[str, object] | None = None
 
     def as_payload(self) -> dict[str, object]:
@@ -503,6 +504,7 @@ class ExplorationCheckPlan:
                 for actor_id, modifiers in self.roll_modifiers_by_actor_id
             ],
             "option_bonuses": list(self.option_bonus_payloads),
+            "resource": self.resource_payload,
             "mechanic": self.mechanic_payload,
         }
 
@@ -690,6 +692,17 @@ class ExplorationResource:
     mitigates_complications: tuple[str, ...] = ()
     mitigates_noise: int = 0
     unlocks_flags: tuple[str, ...] = ()
+    consume_on_use: bool = False
+
+    def as_roll_modifier(self) -> RollModifier | None:
+        if self.modifier == 0:
+            return None
+        return RollModifier(
+            self.label,
+            self.modifier,
+            RollModifierType.ITEM,
+            stacking_key=f"exploration_resource:{self.id}",
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -812,7 +825,12 @@ def active_option_bonuses_for_actor(actor: Actor, option: ExplorationChallengeOp
     for bonus in option.bonuses:
         if bonus.source_type == "item" and bonus.source_id in inventory_ids:
             result.append(bonus)
-        elif bonus.source_type == "spell" and bonus.source_id in spell_ids and _actor_has_spell_slot_for_bonus(actor, bonus):
+        elif (
+            bonus.source_type == "spell"
+            and bonus.source_id in spell_ids
+            and _actor_has_prepared_spell_for_bonus(actor, bonus)
+            and _actor_has_spell_slot_for_bonus(actor, bonus)
+        ):
             result.append(bonus)
     return tuple(result)
 
@@ -830,7 +848,20 @@ def _actor_can_use_exploration_spell(actor: Actor, option: ExplorationChallengeO
     if spell_id not in set(actor.spell_ids):
         return False
     matching_bonuses = tuple(bonus for bonus in option.bonuses if bonus.source_type == "spell" and bonus.source_id == spell_id)
-    return all(_actor_has_spell_slot_for_bonus(actor, bonus) for bonus in matching_bonuses)
+    return all(
+        _actor_has_prepared_spell_for_bonus(actor, bonus)
+        and _actor_has_spell_slot_for_bonus(actor, bonus)
+        for bonus in matching_bonuses
+    )
+
+
+def _actor_has_prepared_spell_for_bonus(actor: Actor, bonus: ExplorationOptionBonus) -> bool:
+    casting_kind = "cantrip" if bonus.spell_level <= 0 else "leveled"
+    return spell_is_prepared(
+        actor.spell_preparation,
+        bonus.source_id,
+        casting_kind=casting_kind,
+    )
 
 
 def _actor_has_spell_slot_for_bonus(actor: Actor, bonus: ExplorationOptionBonus) -> bool:
@@ -863,6 +894,22 @@ def grant_resource(state: ExplorationState, resource_id: str) -> ExplorationStat
     for flag in resource.unlocks_flags:
         flags = set_scene_flag(flags, flag, True)
     return replace(state, flags=flags, inventory_resource_ids=tuple(sorted((*state.inventory_resource_ids, resource_id))))
+
+
+def remove_resource(state: ExplorationState, resource_id: str) -> ExplorationState:
+    resource = next((candidate for candidate in state.resources if candidate.id == resource_id), None)
+    if resource is None:
+        raise ValueError(f"Unknown exploration resource: {resource_id}.")
+    if resource_id not in state.inventory_resource_ids:
+        return state
+    return replace(
+        state,
+        inventory_resource_ids=tuple(
+            owned_resource_id
+            for owned_resource_id in state.inventory_resource_ids
+            if owned_resource_id != resource_id
+        ),
+    )
 
 
 def reveal_exploration_points(

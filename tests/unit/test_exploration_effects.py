@@ -45,6 +45,17 @@ def test_apply_exploration_effect_grants_known_resource_and_unlock_flags():
     assert scene_flag(result.state.flags, "saw_found") is True
 
 
+def test_apply_exploration_effect_removes_consumed_resource():
+    result = apply_exploration_effect(
+        _state(),
+        {"type": "remove_resource", "parameters": {"resource_id": "wedge"}},
+    )
+
+    assert result.changed is True
+    assert "wedge" not in result.state.inventory_resource_ids
+    assert "rope" in result.state.inventory_resource_ids
+
+
 def test_apply_exploration_effect_reveals_hidden_point():
     state = _state()
 

@@ -90,6 +90,8 @@ This keeps board communication consistent when one tile can represent multiple i
 The exploration web surface is split into explicit responsibilities:
 
 - `application/exploration_flow.py` owns deterministic exploration flow transitions,
+- `application/spell_preparation_flow.py` owns the pre-scenario confirmation sequence for
+  actors with generic prepared-spell profiles,
 - `application/combat_movement_flow.py` owns player movement planning, movement application,
   and opportunity-attack threat detection before reactions are resolved,
 - `application/combat_reaction_flow.py` owns opportunity-attack reaction consumption,
@@ -123,6 +125,11 @@ and session-observation contracts instead of reopening the coordinator boundary 
 concrete need.
 Random rolls are injected into combat application services so deterministic tests can provide
 explicit outcomes while the UI runtime may retain its seeded random source.
+
+Prepared-spell membership is deterministic actor domain state in
+`actors/spell_preparation.py`. Scenario content supplies the available list and preparation
+limit; neither the actor model nor the application flow infers a character class. Combat and
+exploration resolvers consult the same profile before consuming a spell slot.
 
 ## First Implementation Milestones
 

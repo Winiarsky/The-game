@@ -434,7 +434,17 @@ def test_exploration_ui_session_consumes_leveled_spell_slot_for_exploration_bonu
     session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
     challenge = next(item for item in session.state.challenges if item.id == "closed_gate")
     option = next(item for item in challenge.options if item.id == "reveal_bolt_with_flame")
-    option = replace(option, bonuses=(replace(option.bonuses[0], spell_level=1),))
+    option = replace(
+        option,
+        requires_spell_ids=("healing_word",),
+        bonuses=(
+            replace(
+                option.bonuses[0],
+                source_id="healing_word",
+                spell_level=1,
+            ),
+        ),
+    )
     session.pending = PendingInteraction(
         kind=PendingKind.CHALLENGE,
         stage=PendingStage.DECISION,
@@ -483,6 +493,10 @@ def test_exploration_ui_session_pending_encounter_waits_for_ui_setup_not_board_c
 
 def test_exploration_ui_session_starts_with_map_setup_before_location_preview():
     session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    session.confirm_spell_preparation(
+        actor_id="cleric",
+        spell_ids=("healing_word", "bless_attack_bonus"),
+    )
     session.attach_board_connection(FakeBoardConnection(), backend="simulator")
 
     state = session.start_session()
@@ -497,6 +511,40 @@ def test_exploration_ui_session_starts_with_map_setup_before_location_preview():
 
     assert state["flow"]["stage"] == "location_preview"
     assert state["exploration_setup"] is None
+
+
+def test_exploration_ui_session_requires_spell_preparation_before_scenario_setup():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    board = FakeBoardConnection()
+
+    initial = session.state_payload()
+
+    assert initial["flow"]["stage"] == "spell_preparation"
+    assert initial["spell_preparation"]["current_actor_id"] == "cleric"
+    cleric = initial["spell_preparation"]["actors"][0]
+    assert cleric["preparation_limit"] == 2
+    assert cleric["selected_count"] == 2
+    assert {spell["id"] for spell in cleric["spells"]} == {
+        "radiant_line",
+        "healing_word",
+        "bless_attack_bonus",
+    }
+
+    session.attach_board_connection(board, backend="simulator")
+    assert session.state_payload()["flow"]["stage"] == "spell_preparation"
+
+    confirmed = session.confirm_spell_preparation(
+        actor_id="cleric",
+        spell_ids=("radiant_line", "healing_word"),
+    )
+
+    assert confirmed["flow"]["stage"] == "ready_to_start"
+    assert confirmed["spell_preparation"]["complete"] is True
+    events = [
+        __import__("json").loads(line)
+        for line in session.observer.path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert any(record["event_type"] == "ui_spell_preparation_confirmed" for record in events)
 
 
 def test_exploration_ui_session_rejects_pending_interpretation():
@@ -968,6 +1016,10 @@ def test_exploration_ui_session_concentration_check_success_keeps_attack_bonus()
 
 def test_exploration_ui_session_cleric_area_spell_previews_line_and_consumes_slot():
     session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    session.confirm_spell_preparation(
+        actor_id="cleric",
+        spell_ids=("radiant_line", "healing_word"),
+    )
     _start_gate_skirmish(session)
     assert session.combat_state is not None
     while str(session.combat_state.initiative_order.current_actor.id) != "cleric":
@@ -1013,6 +1065,27 @@ def test_exploration_ui_session_cleric_area_spell_previews_line_and_consumes_slo
     assert damaged["combat"]["pending_area_spell"] is None
     assert damaged_goblin["hp"] == 8
     assert any(message["title"] == "Obrażenia obszarowe" and "HP 10 -> 8" in message["body"] for message in damaged["messages"])
+
+
+def test_exploration_ui_session_rejects_unprepared_leveled_spell():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    while str(session.combat_state.initiative_order.current_actor.id) != "cleric":
+        session.finish_combat_turn()
+
+    state = session.state_payload()
+    radiant_line = next(
+        source
+        for source in state["combat"]["available_attack_sources"]
+        if source["id"] == "radiant_line"
+    )
+
+    assert radiant_line["prepared"] is False
+    assert radiant_line["available"] is False
+    assert radiant_line["unavailable_reason"] == "Czar nie został przygotowany."
+    with pytest.raises(ValueError, match="nie został przygotowany"):
+        session.select_combat_attack_source("radiant_line")
 
 
 def test_exploration_ui_session_sacred_flame_uses_enemy_save_instead_of_attack_roll():
@@ -1502,3 +1575,120 @@ def test_exploration_ui_session_reset_restores_initial_state():
 
     assert state["active_challenge"]["current_progress"] == 0
     assert state["flags"] == []
+
+
+def test_exploration_ui_session_applies_resource_modifier_to_roll_plan():
+    proposal = _challenge_proposal(
+        approach_label="Wspinaczka po linie",
+        approach_tags=["climbing"],
+        ability="dexterity",
+        skill="acrobatics",
+        used_resource_ids=["rope"],
+        player_narration="Zaczepiacie linę z hakiem i wspinacie się nad bramę.",
+    )
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=FakeGmClient(proposal),
+    )
+    session.state = replace(
+        session.state,
+        resources=tuple(
+            replace(resource, advantage=True) if resource.id == "rope" else resource
+            for resource in session.state.resources
+        ),
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    pending = session.submit_action("Przerzucamy linę z hakiem i wspinamy się nad bramę.")
+    accepted = session.decide("accept")
+
+    assert pending["pending"]["resources"][0]["id"] == "rope"
+    assert pending["pending"]["resources"][0]["consume_on_use"] is False
+    plan = accepted["pending"]["check_plan"]
+    assert plan["resource"]["id"] == "rope"
+    assert plan["resource"]["advantage"] is True
+    assert plan["roll_mode"] == "advantage"
+    assert accepted["required_rolls"][0]["requires_second_roll"] is True
+    hero_modifiers = next(
+        entry["modifiers"]
+        for entry in plan["roll_modifiers_by_actor_id"]
+        if entry["actor_id"] == "hero"
+    )
+    assert {modifier["label"]: modifier["value"] for modifier in hero_modifiers}["Lina z hakiem"] == 2
+
+
+def test_exploration_ui_session_consumes_one_use_resource_after_roll_and_logs_effect(tmp_path):
+    proposal = _challenge_proposal(
+        approach_label="Ciche podważenie bramy",
+        approach_tags=["lever", "quiet"],
+        ability="intelligence",
+        skill=None,
+        used_resource_ids=["wedge"],
+        player_narration="Wbijacie drewniany klin pod mechanizm i podważacie bramę po cichu.",
+    )
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=FakeGmClient(proposal),
+        session_id="resource_consumption_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    pending = session.submit_action("Używamy drewnianego klina, żeby cicho podważyć bramę.")
+    session.decide("accept")
+    resolved = session.resolve_rolls({"hero": 10})
+
+    assert pending["pending"]["resources"][0]["id"] == "wedge"
+    assert pending["pending"]["resources"][0]["consume_on_use"] is True
+    assert "wedge" not in session.state.inventory_resource_ids
+    assert {resource["id"] for resource in resolved["resources"]} == {"rope"}
+    events = [__import__("json").loads(line) for line in session.observer.path.read_text(encoding="utf-8").splitlines()]
+    effect = next(
+        event
+        for event in events
+        if event["event_type"] == "ui_effect_applied"
+        and event["payload"]["source"] == "challenge_resource_consumption"
+    )
+    assert effect["payload"]["effect"] == {
+        "type": "remove_resource",
+        "parameters": {"resource_id": "wedge"},
+    }
+    assert effect["payload"]["inventory_resource_ids"] == ["rope"]
+
+
+def test_exploration_ui_session_can_change_or_clear_resource_before_roll():
+    proposal = _challenge_proposal(
+        approach_label="Ciche podważenie bramy",
+        approach_tags=["lever", "quiet"],
+        ability="intelligence",
+        skill=None,
+        used_resource_ids=[],
+        player_narration="Próbujecie podważyć bramę po cichu.",
+    )
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=FakeGmClient(proposal),
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.submit_action("Próbujemy cicho podważyć bramę.")
+
+    with pytest.raises(ValueError, match="nie jest dostępny albo nie pasuje"):
+        session.update_pending_challenge_decision({"resource_id": "rope"})
+
+    selected = session.update_pending_challenge_decision(
+        {
+            "mechanic_id": "single_actor_check",
+            "check_participants": "single_actor",
+            "check_aggregation": "lead_result",
+            "lead_actor_id": "hero",
+            "ability": "intelligence",
+            "dc": 15,
+            "resource_id": "wedge",
+        }
+    )
+    cleared = session.update_pending_challenge_decision({"resource_id": ""})
+    session.decide("reject")
+
+    assert selected["pending"]["resources"][0]["id"] == "wedge"
+    assert "resources" not in cleared["pending"]
+    assert "wedge" in session.state.inventory_resource_ids

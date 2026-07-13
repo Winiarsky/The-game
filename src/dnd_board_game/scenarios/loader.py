@@ -5,7 +5,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from dnd_board_game.actors import AbilityScores, Actor, ActorId, Faction
+from dnd_board_game.actors import (
+    AbilityScores,
+    Actor,
+    ActorId,
+    Faction,
+    PreparableSpell,
+    SpellPreparationProfile,
+)
 from dnd_board_game.combat import (
     AttackSource,
     AttackSourceType,
@@ -152,6 +159,7 @@ class ScenarioActorDefinition:
     spell_save_dc: int
     inventory: tuple[InventoryItem, ...]
     spell_ids: tuple[str, ...]
+    spell_preparation: SpellPreparationProfile | None
     attacks: tuple[ScenarioAttackDefinition, ...]
     healing_sources: tuple[ScenarioHealingDefinition, ...] = ()
     combat_actions: tuple[ScenarioCombatActionDefinition, ...] = ()
@@ -466,6 +474,7 @@ def _parse_actor(data: dict[str, Any], scenario_path: Path) -> ScenarioActorDefi
         raise ValueError(f"actor {actor_id}.attacks must contain at least one attack.")
     healing_sources = tuple(_parse_healing_source(source, actor_id) for source in healing_data)
     combat_actions = tuple(_parse_combat_action(action, actor_id) for action in combat_actions_data)
+    spell_slots = _parse_spell_slots(merged.get("spell_slots", {}), actor_id)
     return ScenarioActorDefinition(
         id=actor_id,
         name=str(_required(merged, "name", f"actor {actor_id}")),
@@ -477,10 +486,18 @@ def _parse_actor(data: dict[str, Any], scenario_path: Path) -> ScenarioActorDefi
         speed_feet=int(_required(merged, "speed_feet", f"actor {actor_id}")),
         position=_parse_coordinate(_required(merged, "position", f"actor {actor_id}"), f"actor {actor_id}.position"),
         ability_scores=_parse_ability_scores(_required_mapping(merged, "ability_scores", f"actor {actor_id}")),
-        spell_slots=_parse_spell_slots(merged.get("spell_slots", {}), actor_id),
+        spell_slots=spell_slots,
         spell_save_dc=int(merged.get("spell_save_dc", 0)),
         inventory=tuple(inventory_items),
         spell_ids=_spell_ids_for_actor(attacks, healing_sources, combat_actions),
+        spell_preparation=_parse_spell_preparation(
+            merged.get("spell_preparation"),
+            actor_id=actor_id,
+            attacks=attacks,
+            healing_sources=healing_sources,
+            combat_actions=combat_actions,
+            spell_slots=spell_slots,
+        ),
         attacks=attacks,
         healing_sources=healing_sources,
         combat_actions=combat_actions,
@@ -498,6 +515,59 @@ def _spell_ids_for_actor(
     ids.extend(source.id for source in healing_sources if source.source_type == HealingSourceType.SPELL)
     ids.extend(action.id for action in combat_actions if action.casting_kind != SpellCastingKind.NONE)
     return tuple(dict.fromkeys(ids))
+
+
+def _parse_spell_preparation(
+    data: Any,
+    *,
+    actor_id: str,
+    attacks: tuple[ScenarioAttackDefinition, ...],
+    healing_sources: tuple[ScenarioHealingDefinition, ...],
+    combat_actions: tuple[ScenarioCombatActionDefinition, ...],
+    spell_slots: tuple[SpellSlotState, ...],
+) -> SpellPreparationProfile | None:
+    if data is None:
+        return None
+    if not isinstance(data, dict):
+        raise ValueError(f"actor {actor_id}.spell_preparation must be an object.")
+    known_spells: dict[str, PreparableSpell] = {}
+    for source in (*attacks, *healing_sources, *combat_actions):
+        casting_kind = source.casting_kind
+        if casting_kind != SpellCastingKind.LEVELED:
+            continue
+        known_spells[source.id] = PreparableSpell(source.id, source.name, source.spell_level)
+    available_ids = _parse_string_tuple(
+        data.get("available_spell_ids", []),
+        f"actor {actor_id}.spell_preparation.available_spell_ids",
+    )
+    unknown = set(available_ids) - set(known_spells)
+    if unknown:
+        raise ValueError(
+            f"actor {actor_id}.spell_preparation references unknown leveled spells: "
+            f"{', '.join(sorted(unknown))}."
+        )
+    maximum_spell_level = max((slot.level for slot in spell_slots), default=0)
+    unavailable_levels = tuple(
+        spell_id for spell_id in available_ids if known_spells[spell_id].level > maximum_spell_level
+    )
+    if unavailable_levels:
+        raise ValueError(
+            f"actor {actor_id}.spell_preparation contains spells above available slot levels: "
+            f"{', '.join(unavailable_levels)}."
+        )
+    return SpellPreparationProfile(
+        source_label=str(data.get("source_label") or "dostępna lista czarów"),
+        preparation_limit=int(_required(data, "preparation_limit", f"actor {actor_id}.spell_preparation")),
+        available_spells=tuple(known_spells[spell_id] for spell_id in available_ids),
+        prepared_spell_ids=_parse_string_tuple(
+            data.get("default_prepared_spell_ids", []),
+            f"actor {actor_id}.spell_preparation.default_prepared_spell_ids",
+        ),
+        always_prepared_spell_ids=_parse_string_tuple(
+            data.get("always_prepared_spell_ids", []),
+            f"actor {actor_id}.spell_preparation.always_prepared_spell_ids",
+        ),
+    )
 
 
 def _combat_actions_with_item_source(actions: Any, item_id: str) -> list[dict[str, Any]]:
@@ -1092,6 +1162,7 @@ def _parse_exploration_resource(data: Any) -> ExplorationResource:
         mitigates_complications=tuple(str(item) for item in data.get("mitigates_complications", [])),
         mitigates_noise=int(data.get("mitigates_noise", 0)),
         unlocks_flags=tuple(str(item) for item in data.get("unlocks_flags", [])),
+        consume_on_use=bool(data.get("consume_on_use", False)),
     )
 
 
@@ -1389,6 +1460,7 @@ def _actor_from_definition(definition: ScenarioActorDefinition) -> Actor:
         spell_save_dc=definition.spell_save_dc,
         inventory=definition.inventory,
         spell_ids=definition.spell_ids,
+        spell_preparation=definition.spell_preparation,
     )
 
 

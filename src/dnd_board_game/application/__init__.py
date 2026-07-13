@@ -62,6 +62,7 @@ from .player_area_healing_flow import (
     PlayerAreaSpellTransition,
     PlayerHealingTransition,
 )
+from .spell_preparation_flow import SpellPreparationFlowService, SpellPreparationTransition
 from .enemy_turn_flow import (
     EnemyTurnFlowService,
     EnemyTurnIntentTransition,
@@ -117,5 +118,7 @@ __all__ = [
     "PlayerHealingTransition",
     "SetupStepTransition",
     "StartSessionTransition",
+    "SpellPreparationFlowService",
+    "SpellPreparationTransition",
     "concentration_effects_for_actor",
 ]

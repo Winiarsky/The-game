@@ -260,7 +260,10 @@ Implementacja MVP:
 - `AttackSource` może wskazywać cechę (`ability`), żeby efekty typu premia do Siły działały tylko na właściwe źródła, np. miecz, ale nie kuszę ani czar.
 - Aktor może mieć proste sloty czarów (`spell_slots`); czary poziomu `0` nie zużywają slotu, a czary poziomu `1+` zużywają slot wskazanego poziomu w momencie użycia akcji.
 - Źródła czarów mają jawne `casting_kind`: `cantrip` albo `leveled`; jeśli content go nie poda, loader wylicza go ze `source_type=spell` i `spell_level`.
-- Źródła czarów i leczenia mogą mieć flagę `prepared`; w MVP nieprzygotowane źródło nie jest legalną aktywną opcją w UI.
+- Aktor wymagający przygotowywania czarów ma generyczny `SpellPreparationProfile`: listę dostępnych czarów poziomu 1+, limit, wybór zajmujący limit oraz czary zawsze przygotowane poza limitem.
+- Przed setupem scenariusza UI wymaga wybrania dokładnie tylu czarów, ile wynosi limit profilu. Jest to projektowy odpowiednik przygotowania czarów po zakończonym długim odpoczynku; wybór pozostaje zablokowany do końca scenariusza.
+- Cantripy nie wymagają przygotowania. Nieprzygotowany czar poziomu 1+ nie daje bonusu eksploracyjnego i nie może zostać użyty jako atak, leczenie ani akcja czarowa, nawet jeśli aktor ma wolny slot.
+- Profil jest celowo niezależny od klasy. W tym MVP content podaje listę i limit; wyliczanie ich z poziomu klasy oraz cechy spellcasting zostaje na późniejszy etap.
 - Koncentracja MVP działa jako `ActiveCombatEffect` z `source_actor_id`; jeden rzucający może utrzymywać tylko jeden efekt `concentration_*`.
 - Rzucenie nowego czaru koncentracyjnego tego samego aktora usuwa jego poprzedni efekt koncentracji i pokazuje komunikat w UI.
 - `Błogosławieństwo` w `gate_skirmish` jest testowym czarem koncentracyjnym: zużywa akcję i slot 1. poziomu, wybiera sojusznika i daje mu `+1` do ataku, dopóki koncentracja trwa.
@@ -274,7 +277,7 @@ Implementacja MVP:
 - Gracz wpisuje końcowy wynik leczenia z fizycznego rzutu, a aplikacja ogranicza HP do `max_hp`.
 - Aktor może mieć proste `inventory` z itemami rozwijanymi z `content/items`; `item_refs` pozostają skrótem dla wyposażonych itemów.
 - Item może dostarczać źródła ataku, leczenia albo `combat_actions`; akcje pochodzące z consumable zapisują `source_item_id`.
-- Aktor ma uproszczone `spell_ids` wyliczane z jego źródeł czarów, leczenia i akcji czarowych; eksploracja używa ich jako warunków opcji, ale nie jest to jeszcze pełna lista known/prepared spells.
+- Aktor ma uproszczone `spell_ids` wyliczane z jego źródeł czarów, leczenia i akcji czarowych. Eksploracja sprawdza dodatkowo profil przygotowania dla czarów poziomu 1+, ale nie jest to jeszcze klasowo wyliczana pełna lista znanych/dostępnych czarów.
 - Opcje wyzwań eksploracji mogą deklarować wymagania `requires.items`, `requires.spells` oraz `requires.ability_scores`; UI pokazuje, którzy aktorzy spełniają wymagania, a LLM dostaje te dane jako grounding.
 - Opcje wyzwań eksploracji mogą deklarować `bonuses` z itemów lub czarów. Aktywne bonusy są dodawane do zwykłego testu d20 jako `RollModifier`, a UI pokazuje ich źródło przed rzutem.
 - Bonus eksploracji z czaru ma `spell_level`: poziom `0` jest cantripem bez zużycia slotu, a poziom `1+` wymaga wolnego slotu i zużywa go po użyciu opcji.
@@ -284,7 +287,7 @@ Implementacja MVP:
 - Wolne deklaracje eksploracji są porządkowane przez named `ExplorationMechanicId`, np. `single_actor_check`, `lead_with_help_check`, `group_check`, `use_item_check`, `use_spell_check`, `improvised_tool_check`. LLM wybiera mechanikę, ale walidacja i rozstrzygnięcie pozostają deterministyczne.
 - Magiczny napój siły w MVP jest akcją walki pochodzącą z itemu aktora: zużywa akcję główną, zmniejsza `quantity` itemu o 1 i daje efekt `strength_potion` do początku następnej tury aktora.
 - `strength_potion` daje premię do ataku i obrażeń tylko źródłom opartym o Siłę.
-- Nie implementujemy jeszcze attunement, pełnych ładunków/odnawiania itemów, osobnych list znanych i przygotowanych czarów, zaawansowanych modyfikatorów testu koncentracji ani zaawansowanych efektów czarów poza obrażeniami/lekkim leczeniem i prostym buffem do ataku.
+- Nie implementujemy jeszcze attunement, pełnych ładunków/odnawiania itemów, klasowo wyliczanych list czarów, profili casterów znanych czarów, zaawansowanych modyfikatorów testu koncentracji ani zaawansowanych efektów czarów poza obrażeniami/lekkim leczeniem i prostym buffem do ataku.
 - Jawne obiekty sceny mogą oferować deterministyczne interakcje walki zużywające akcję główną.
 - Interakcje walki są data-driven: `SceneInteraction` może deklarować listę `conditions` oraz listę `effects`.
 - Warunki interakcji MVP obejmują dostępną akcję, sąsiedztwo obiektu, stanie na obiekcie, sąsiedniego przeciwnika oraz wolne pole docelowe.
@@ -423,6 +426,8 @@ Implementacja MVP:
 - Jeśli challenge ma `dc_policy`, LLM musi zwrócić `difficulty_tier`, `difficulty_reason` i `dc`; silnik waliduje, że `dc` jest dokładnie wartością tieru z contentu.
 - `dc_policy` jest definiowane dla przeszkody/scenariusza, nie dla z góry wymyślonych rozwiązań. LLM ocenia trudność deklaracji graczy względem profilu przeszkody.
 - Zasób zaproponowany przez LLM działa mechanicznie tylko wtedy, gdy drużyna go posiada i `bonus_tags` zasobu przecinają się z tagami podejścia.
+- Zasób sceny może deklarować `consume_on_use`. Taki zasób jest usuwany przez prymityw `remove_resource` dopiero po wykonaniu rzutu, niezależnie od wyniku; odrzucenie lub anulowanie propozycji przed rzutem niczego nie zużywa.
+- Premia, przewaga, redukcja hałasu, chronione komplikacje i koszt zużycia zasobu muszą być widoczne w korekcie MG oraz w planie rzutu. MG może przed akceptacją wybrać inny pasujący posiadany zasób albo zrezygnować z zasobu.
 - Analyzer deklaracji zwraca `action_flow`, zadeklarowane zasoby, istniejące resource ids, założone nowe fakty i brakujące wymagania. Jeśli zasób nie istnieje w inventory albo materiałach sceny, runtime nie wykonuje rzutu.
 - Freeform challenge MVP rozróżnia `challenge_attempt`, `preparation` i `combined`.
 - Przygotowanie może utworzyć krótkotrwały efekt `modifier`, `reduce_negative_effect`, `advantage`, `disadvantage`, `effect_boost`, `grant_resource` albo `unlock_option` z `duration=next_attempt`, ale tylko jeśli typ jest dopuszczony w `llm_policy`.

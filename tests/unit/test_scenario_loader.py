@@ -43,6 +43,7 @@ def _abandoned_watchtower_data_without_refs():
     }
     for actor in data["actors"]:
         actor.pop("item_refs", None)
+        actor.pop("spell_preparation", None)
         actor["attacks"] = [attack]
     return data
 
@@ -246,6 +247,8 @@ def test_load_abandoned_watchtower_builds_exploration_scene():
     assert "lina nie pozwala latać" in gate.llm_context.forbidden_assumptions
     assert "przelot na linie bez magii" in challenge.llm_context.impossible_approaches
     assert {resource.id for resource in exploration.resources} == {"rope", "wedge", "saw"}
+    assert next(resource for resource in exploration.resources if resource.id == "wedge").consume_on_use is True
+    assert next(resource for resource in exploration.resources if resource.id == "rope").consume_on_use is False
     assert exploration.initial_resource_ids == ("rope", "wedge")
     courtyard = next(zone for zone in exploration.zones if zone.id == "courtyard")
     assert courtyard.search_dc == 12
@@ -303,6 +306,15 @@ def test_load_abandoned_watchtower_folder_keeps_monster_and_item_refs_working():
     cleric = next(actor for actor in exploration.actors if actor.id == "cleric")
     assert {item.id for item in rogue.inventory} >= {"crossbow", "thieves_tools"}
     assert "sacred_flame" in cleric.spell_ids
+    assert cleric.spell_preparation is not None
+    assert cleric.spell_preparation.source_label == "lista czarów kapłana"
+    assert cleric.spell_preparation.preparation_limit == 2
+    assert cleric.spell_preparation.prepared_spell_ids == ("healing_word", "bless_attack_bonus")
+    assert {spell.id for spell in cleric.spell_preparation.available_spells} == {
+        "radiant_line",
+        "healing_word",
+        "bless_attack_bonus",
+    }
     gate = next(challenge for challenge in exploration.challenges if challenge.id == "closed_gate")
     lockpick = next(option for option in gate.options if option.id == "lockpick_gate")
     flame = next(option for option in gate.options if option.id == "reveal_bolt_with_flame")

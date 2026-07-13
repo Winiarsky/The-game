@@ -1,5 +1,11 @@
 from dnd_board_game.combat import SceneFlags, scene_flag
-from dnd_board_game.exploration import ExplorationState, grant_resource, matching_resources, resolve_challenge_option
+from dnd_board_game.exploration import (
+    ExplorationState,
+    grant_resource,
+    matching_resources,
+    remove_resource,
+    resolve_challenge_option,
+)
 from dnd_board_game.rules import D20RollInput, D20RollRequest, resolve_d20_roll
 from dnd_board_game.scenarios import build_exploration_from_scenario, load_scenario
 
@@ -50,3 +56,25 @@ def test_granting_saw_adds_resource_and_unlock_flag():
 
     assert "saw" in updated.inventory_resource_ids
     assert scene_flag(updated.flags, "saw_found") is True
+
+
+def test_exploration_resource_exposes_item_roll_modifier_and_consumption_policy():
+    state = _state()
+    rope = next(resource for resource in state.resources if resource.id == "rope")
+    wedge = next(resource for resource in state.resources if resource.id == "wedge")
+
+    modifier = rope.as_roll_modifier()
+
+    assert modifier is not None
+    assert modifier.value == 2
+    assert modifier.modifier_type.value == "item"
+    assert rope.consume_on_use is False
+    assert wedge.consume_on_use is True
+
+
+def test_removing_owned_resource_preserves_other_resources():
+    state = _state()
+
+    updated = remove_resource(state, "wedge")
+
+    assert updated.inventory_resource_ids == ("rope",)
