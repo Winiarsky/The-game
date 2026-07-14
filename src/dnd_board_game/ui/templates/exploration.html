@@ -16,8 +16,14 @@
       <button class="side-panel-close" data-allow-busy="true" onclick="setSidePanelOpen(false)" aria-label="Zamknij panel">×</button>
     </div>
     <div class="card"><b>Lokacja</b><div id="zone"></div></div>
-    <div class="card"><b>Wyzwanie</b><div id="challenge"></div></div>
-    <div class="card"><b>Jawne elementy sceny</b><div id="visible-environment"></div></div>
+    <details class="card debug-panel">
+      <summary>Dane wyzwania (MG/debug)</summary>
+      <div id="challenge"></div>
+    </details>
+    <details class="card debug-panel">
+      <summary>Dane planszy (MG/debug)</summary>
+      <div id="visible-environment"></div>
+    </details>
     <div class="card"><b>Zasoby</b><div id="resources"></div></div>
     <div class="card">
       <b>Plansza</b>
@@ -51,6 +57,15 @@
       <h3>Opis sceny</h3>
       <div id="scene-description"></div>
     </div>
+    <div class="card scene-action" id="action-panel">
+      <h3 id="action-title">Co robicie lub o co pytacie?</h3>
+      <div id="scene-conversation"></div>
+      <textarea id="action" placeholder="Opiszcie działanie albo zadajcie MG pytanie o scenę..."></textarea>
+      <div class="row" style="margin-top:8px">
+        <button onclick="sendAction()">Powiedz MG</button>
+        <button id="short-rest-button" class="secondary" data-allow-busy="true" onclick="startShortRest()">Krótki odpoczynek</button>
+      </div>
+    </div>
     <div class="card" id="result-panel">
       <h3>Wynik</h3>
       <div id="result"></div>
@@ -78,14 +93,6 @@
         <button class="secondary" onclick="decision('explain')">Wyjaśnij</button>
       </div>
     </div>
-    <div class="card" id="action-panel">
-      <h3 id="action-title">Co robi drużyna?</h3>
-      <textarea id="action"></textarea>
-      <div class="row" style="margin-top:8px">
-        <button onclick="sendAction()">Wyślij</button>
-        <button id="short-rest-button" class="secondary" data-allow-busy="true" onclick="startShortRest()">Krótki odpoczynek</button>
-      </div>
-    </div>
     <div class="card" id="roll-panel">
       <h3>Rzuty</h3>
       <div id="roll-prompt"></div>
@@ -96,6 +103,14 @@
       <summary>Historia komunikatów</summary>
       <div id="messages"></div>
     </details>
+    <div class="card" id="snapshot-panel">
+      <h3>Zapis gry</h3>
+      <div id="snapshot-status" class="muted"></div>
+      <div class="row" style="margin-top:8px">
+        <button id="snapshot-save-button" class="secondary" data-allow-busy="true" onclick="saveSnapshot()">Zapisz</button>
+        <button id="snapshot-load-button" class="secondary" data-allow-busy="true" onclick="loadSnapshot()">Wczytaj</button>
+      </div>
+    </div>
     <details class="card debug-panel" id="session-log-panel">
       <summary>Log sesji</summary>
       <div class="log-meta" id="session-log-meta"></div>

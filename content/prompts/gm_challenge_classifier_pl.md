@@ -128,6 +128,7 @@ Zasady:
 - `improvised_tool.effect_modifier` musi mieścić się w `improvised_tool_policy.effect_modifier_range`; zwykle używaj +1 albo -1.
 - `improvised_tool.risk` opisz krótko, jeśli prowizoryczne narzędzie może się złamać, narobić hałasu albo dodać komplikację przy porażce/krytycznej porażce.
 - Improwizowane narzędzie nie trafia do inventory i nie staje się stałym przedmiotem drużyny.
+- Jeśli gracz składa pomoc z dostępnych materiałów i od razu jej używa, wybierz `challenge_attempt` oraz `improvised_tool_check`; nie twórz wtedy przedmiotu trwałego.
 - Nie używaj `improvised_tool_check`, jeśli gracz używa normalnego itemu z `party_resources`; wtedy wybierz `use_item_check`.
 - Jeśli `challenge.llm_policy.dc_policy.tiers` nie jest puste, nie wybieraj ST swobodnie.
 - Najpierw wybierz `difficulty_tier` z `challenge.llm_policy.dc_policy.allowed_tiers`, potem ustaw `dc` dokładnie na wartość tego tieru.
@@ -137,7 +138,7 @@ Zasady:
 - `progress_on_failure` od 0 do 1.
 - Efekt przygotowania musi mieścić się w `challenge.llm_policy.allowed_preparation_effect_types`.
 - `preparation_effect.type` musi pochodzić z `challenge.llm_policy.allowed_preparation_effect_types`.
-- Obsługiwane typy efektów przygotowania to: `modifier`, `reduce_negative_effect`, `advantage`, `disadvantage`, `effect_boost`, `unlock_option`, `grant_resource`.
+- Obsługiwane typy efektów przygotowania to: `modifier`, `reduce_negative_effect`, `advantage`, `disadvantage`, `effect_boost`, `unlock_option`, `grant_resource`, `create_temporary_item`.
 - `preparation_effect.type=modifier` może mieć wartość tylko z `preparation_modifier_range`.
 - `preparation_effect.type=reduce_negative_effect` może mieć wartość tylko z `negative_effect_reduction_range`.
 - `preparation_effect.type=advantage` daje przewagę przy następnej pasującej próbie; używaj tylko, gdy przygotowanie realnie poprawia warunki.
@@ -145,6 +146,8 @@ Zasady:
 - `preparation_effect.type=effect_boost` może mieć wartość tylko z `effect_boost_range` i oznacza dodatkowy efekt przy sukcesie, np. +1 postępu.
 - `preparation_effect.type=grant_resource` wymaga `resource_id` z `challenge.llm_policy.allowed_grant_resource_ids`. Nie wpisuj zasobu spoza tej listy.
 - `preparation_effect.type=unlock_option` wymaga `option_id` z `challenge.llm_policy.allowed_unlock_option_ids`. Nie twórz nowych option_id.
+- Gdy gracz wyraźnie buduje pomoc na później, a policy udostępnia pasujący wpis w `temporary_item_templates`, użyj `action_flow: "preparation"`, `requires_roll_now: false` i `preparation_effect.type=create_temporary_item`.
+- `create_temporary_item` wymaga `temporary_item_template_id` z policy i `source_materials` z dostępnych materiałów sceny. Nie wymyślaj statystyk ani nowego szablonu.
 - `preparation_effect.target_tags` muszą pochodzić z `allowed_tags` i pasować do przyszłej próby.
 - Dla `grant_resource` i `unlock_option` też ustaw sensowne `target_tags`, które opisują, kiedy efekt może zadziałać.
 - Zasób z `used_resource_ids` może być wpisany tylko, jeśli jego tagi pasują do `approach_tags`.

@@ -1,0 +1,163 @@
+import json
+from dataclasses import replace
+
+import pytest
+
+from dnd_board_game.combat import replace_actor, set_scene_flag
+from dnd_board_game.exploration import create_temporary_item
+from dnd_board_game.save import (
+    SNAPSHOT_SCHEMA_VERSION,
+    SessionSnapshot,
+    SnapshotValidationError,
+    read_snapshot,
+)
+from dnd_board_game.ui.exploration_app import ExplorationUiSession, UiFlowStage, create_app
+
+
+def _session(tmp_path) -> ExplorationUiSession:
+    return ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        session_id="snapshot_test",
+        observation_dir=tmp_path / "observations",
+        save_dir=tmp_path / "saves",
+    )
+
+
+def _start_scout_combat(session: ExplorationUiSession) -> None:
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.state = replace(session.state, flags=set_scene_flag(session.state.flags, "scout_panicked", True))
+    session.state_payload()
+    session.start_encounter_setup()
+    while session.encounter_setup_flow is not None and not session.encounter_setup_flow.completed:
+        if session.encounter_setup_flow.is_player_start_step:
+            session.assign_encounter_player_start_position(
+                session.encounter_setup_flow.remaining_player_start_positions()[0]
+            )
+        else:
+            session.confirm_encounter_setup_step()
+    session.start_encounter_initiative()
+    for roll in (20, 19, 18):
+        if session.combat_state is None:
+            session.submit_encounter_initiative_roll(roll)
+
+
+def test_snapshot_json_round_trip_is_deterministic(tmp_path):
+    session = _session(tmp_path)
+    snapshot = session.create_snapshot()
+
+    restored = SessionSnapshot.from_dict(snapshot.as_dict(), base_state=session.state)
+
+    assert restored.as_dict() == snapshot.as_dict()
+    assert restored.as_dict()["schema_version"] == SNAPSHOT_SCHEMA_VERSION
+
+
+def test_snapshot_round_trip_preserves_temporary_scene_item(tmp_path):
+    session = _session(tmp_path)
+    challenge = next(item for item in session.state.challenges if item.id == "closed_gate")
+    session.state, created = create_temporary_item(
+        session.state,
+        challenge.llm_policy.temporary_item_templates[0],
+        zone_id="gate",
+        source_materials=("stare deski", "metalowe okucia"),
+    )
+
+    restored = SessionSnapshot.from_dict(session.create_snapshot().as_dict(), base_state=session.state)
+
+    assert restored.exploration_state.temporary_items == (created,)
+
+
+def test_session_save_and_load_restores_exploration_state(tmp_path):
+    session = _session(tmp_path)
+    actor_before = session.exploration.actors[0]
+    changed_actor = replace(actor_before, hp=actor_before.hp - 3, temp_hp=2)
+    session.exploration = replace(session.exploration, actors=(changed_actor, *session.exploration.actors[1:]))
+    session.state = replace(
+        session.state,
+        flags=set_scene_flag(session.state.flags, "snapshot_flag", True),
+        elapsed_minutes=75,
+    )
+    expected = session.create_snapshot().as_dict()
+    session.save_snapshot()
+
+    session.exploration = replace(
+        session.exploration,
+        actors=(replace(changed_actor, hp=1, temp_hp=0), *session.exploration.actors[1:]),
+    )
+    session.state = replace(session.state, elapsed_minutes=999)
+    session.load_snapshot()
+
+    assert session.create_snapshot().as_dict() == expected
+    assert session.exploration.actors[0].hp == changed_actor.hp
+    assert session.state.elapsed_minutes == 75
+    assert session.snapshot_path.exists()
+
+
+def test_session_save_and_load_restores_active_combat(tmp_path):
+    session = _session(tmp_path)
+    _start_scout_combat(session)
+    assert session.combat_state is not None
+    active = session.combat_state.initiative_order.current_actor
+    session.combat_state = replace_actor(session.combat_state, replace(active, hp=active.hp - 1))
+    expected = session.create_snapshot().as_dict()
+    session.save_snapshot()
+
+    session.combat_state = None
+    session.encounter_initiative_flow = None
+    session.load_snapshot()
+
+    assert session.combat_state is not None
+    assert session.encounter_initiative_flow is not None
+    assert session._active_encounter() is not None
+    assert session.create_snapshot().as_dict() == expected
+
+
+def test_snapshot_rejects_unknown_version(tmp_path):
+    session = _session(tmp_path)
+    session.save_snapshot()
+    payload = json.loads(session.snapshot_path.read_text(encoding="utf-8"))
+    payload["schema_version"] = SNAPSHOT_SCHEMA_VERSION + 1
+    session.snapshot_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(SnapshotValidationError, match="Nieobsługiwana wersja"):
+        read_snapshot(session.snapshot_path, base_state=session.state)
+
+
+def test_snapshot_is_blocked_during_transient_player_choice(tmp_path):
+    session = _session(tmp_path)
+    session.pending_state.player_attack = object()
+
+    with pytest.raises(ValueError, match="dokończ albo anuluj"):
+        session.create_snapshot()
+
+    assert session.state_payload()["snapshot"]["can_save"] is False
+
+
+def test_snapshot_routes_save_and_restore_state(tmp_path):
+    session = _session(tmp_path)
+    client = create_app(session).test_client()
+
+    saved = client.post("/api/snapshot/save", json={})
+    session.state = replace(session.state, elapsed_minutes=120)
+    loaded = client.post("/api/snapshot/load", json={})
+
+    assert saved.status_code == 200
+    assert saved.get_json()["snapshot"]["exists"] is True
+    assert loaded.status_code == 200
+    assert session.state.elapsed_minutes == 0
+
+
+def test_load_rejects_pending_encounter_path_not_owned_by_scenario(tmp_path):
+    session = _session(tmp_path)
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.state = replace(session.state, flags=set_scene_flag(session.state.flags, "scout_panicked", True))
+    session.state_payload()
+    session.save_snapshot()
+    before = session.create_snapshot().as_dict()
+    payload = json.loads(session.snapshot_path.read_text(encoding="utf-8"))
+    payload["pending_encounter"]["encounter_scenario"] = "../../outside.json"
+    session.snapshot_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="nie odpowiada"):
+        session.load_snapshot()
+
+    assert session.create_snapshot().as_dict() == before

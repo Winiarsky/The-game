@@ -157,5 +157,6 @@ Na tym etapie nie robimy:
 - Ruch po skosie korzysta z przyjętej w projekcie reguły 5-10-5.
 - Gracze domyślnie rzucają fizycznymi kośćmi i wpisują naturalne wyniki do aplikacji.
 - Strategia licencji i źródła danych D&D 5e pozostaje do ustalenia przed budową docelowego katalogu.
-- Format zapisu gry, wersjonowanie snapshotów i migracje pozostają do zaprojektowania.
+- Snapshot pojedynczego scenariusza ma wersjonowany format v1 opisany w `docs/SAVE_FORMAT.md`;
+  stan kampanii oraz migracje przyszłych wersji pozostają do zaprojektowania w M9.
 - Bazowa wersja zasad dla pierwszego pełnego wydania wymaga formalnego zatwierdzenia; `ROADMAP.md` rekomenduje D&D 5e 2014 ze względu na obecny kierunek implementacji.

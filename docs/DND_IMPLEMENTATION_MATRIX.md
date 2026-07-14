@@ -32,8 +32,8 @@ odstępstwa zapisujemy w `docs/RULES_DECISIONS.md`.
 | Reakcje | częściowe | opportunity attack i Ready | generyczna kolejka reakcji i wiele triggerów |
 | Akcje tury | częściowe | Dash, Dodge, Disengage, Help, Ready | Hide, Search, Use an Object i warianty zasad |
 | Warunki | brak | pojedyncze efekty zachowują się podobnie do warunków | wspólny condition/effect framework |
-| Efekty i czas trwania | stabilne MVP | wspólny ActiveEffect, źródło, stacking oraz expiry dla tur, rund, akcji, ruchu, koncentracji, odpoczynku i scenariusza | pełny condition framework i wersjonowany snapshot |
-| Odpoczynki i dzień przygody | stabilne MVP | short rest z Hit Dice i contentowym ryzykiem; automatyczny long rest przed scenariuszem; scenario-end lifecycle | przerwania i snapshot |
+| Efekty i czas trwania | stabilne MVP | wspólny ActiveEffect, źródło, stacking oraz expiry dla tur, rund, akcji, ruchu, koncentracji, odpoczynku i scenariusza; stan trafia do snapshotu v1 | pełny condition framework |
+| Odpoczynki i dzień przygody | stabilne MVP | short rest z Hit Dice i contentowym ryzykiem; automatyczny long rest przed scenariuszem; scenario-end lifecycle i snapshot v1 | przerwania |
 | Ekwipunek | częściowe | inventory, quantity, broken, consumables, item actions | equipment, armor, weight, attunement, charges |
 | Spell slots | stabilne MVP | poziomy slotów i zużycie | upcasting, recovery profiles, multiclass slots |
 | Przygotowanie czarów | stabilne MVP | wybór po automatycznym long reście, limit, always prepared | class-derived profile |
@@ -45,7 +45,7 @@ odstępstwa zapisujemy w `docs/RULES_DECISIONS.md`.
 | Freeform/LLM | stabilne MVP | analiza, klasyfikacja, korekta MG i deterministic effects | pełna walidacja branches i parametrów |
 | NPC i sceny społeczne | częściowe | pierwszy przepływ NPC i lokalne policy | conversation state, attitude i szersze efekty |
 | Encounter setup | stabilne MVP | setup mapy/aktorów, inicjatywa, powrót do eksploracji | szablony encounterów i różne cele |
-| Save/load | brak | log obserwacyjny nie jest zapisem gry | wersjonowany snapshot i migracje |
+| Save/load | stabilne MVP | wersjonowany snapshot v1 aktorów, eksploracji, efektów i aktywnej walki; atomowy JSON, walidacja ids, web UI i round-trip | stan kampanii oraz migracje kolejnych wersji |
 | Kampania | brak | scenariusz i pojedyncze przejścia | persistent party/NPC/quest state |
 | Potwory | fixture | kilka lokalnych definicji scenariuszy | monster schema, traits, recharge, katalog |
 | Przedmioty | fixture | kilka broni, narzędzi i consumables | pełny schema i katalog rodzinami |

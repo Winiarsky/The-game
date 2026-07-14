@@ -146,6 +146,33 @@ def test_exploration_ui_page_includes_short_rest_flow():
     assert "/api/rest/short/hit-die" in javascript
 
 
+def test_exploration_ui_page_is_fiction_first_and_accepts_questions():
+    client = _client()
+
+    html, javascript, stylesheet = _page_assets(client)
+
+    assert html.index('id="scene-description-card"') < html.index('id="action-panel"')
+    assert 'id="scene-conversation"' in html
+    assert "Co robicie lub o co pytacie?" in html
+    assert "Opiszcie działanie albo zadajcie MG pytanie" in html
+    assert "Nie macie pomysłu? Zobaczcie inspiracje" in javascript
+    assert "Wskazówki MG i mechanika sceny" in javascript
+    assert "sceneConversationHtml" in javascript
+    assert ".scene-image" in stylesheet
+    assert ".conversation-entry" in stylesheet
+
+
+def test_exploration_ui_page_includes_snapshot_controls():
+    client = _client()
+
+    html, javascript, _stylesheet = _page_assets(client)
+
+    assert 'id="snapshot-save-button"' in html
+    assert 'id="snapshot-load-button"' in html
+    assert "/api/snapshot/save" in javascript
+    assert "/api/snapshot/load" in javascript
+
+
 def test_exploration_ui_page_and_api_include_scenario_end_lifecycle():
     client = _client()
 
@@ -434,6 +461,12 @@ def test_exploration_ui_state_includes_player_facing_scene_description():
     assert "stara drewniana brama" in data["current_zone"]["summary"]
     assert "wspinaczka" in data["active_challenge"]["reasonable_approaches"]
     assert data["active_challenge"]["risk_notes"]
+    assert {hint["id"] for hint in data["active_challenge"]["player_hints"]} >= {
+        "force_gate",
+        "vault_gate",
+        "lever_gate",
+    }
+    assert all(set(hint) == {"id", "label", "description"} for hint in data["active_challenge"]["player_hints"])
     options = {option["id"]: option for option in data["active_challenge"]["options"]}
     assert options["lockpick_gate"]["requires_item_ids"] == ["thieves_tools"]
     assert options["lockpick_gate"]["eligible_actors"] == [{"id": "rogue", "name": "Łotrzyca"}]

@@ -59,7 +59,26 @@
           "disadvantage",
           "effect_boost",
           "unlock_option",
-          "grant_resource"
+          "grant_resource",
+          "create_temporary_item"
+        ],
+        "temporary_item_templates": [
+          {
+            "id": "improvised_battering_ram",
+            "label": "Prowizoryczny taran",
+            "description": "Ciężka pomoc złożona ze starych desek i metalowych elementów; działa tylko w tej scenie.",
+            "bonus_tags": [
+              "heavy_force",
+              "noise"
+            ],
+            "modifier": 1,
+            "uses": 2,
+            "risk": "Spróchniałe drewno może pęknąć, a uderzenie będzie głośne.",
+            "allowed_materials": [
+              "stare deski",
+              "metalowe okucia"
+            ]
+          }
         ],
         "allowed_grant_resource_ids": [
           "saw"

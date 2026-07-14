@@ -24,7 +24,7 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [x] Add generic actor resources with short-rest and long-rest recovery policies.
 - [x] Implement automatic pre-scenario long rest and content-driven short rest independently from classes.
 - [x] Extend the duration/recovery model with scenario-end expiration and recovery policies.
-- [ ] Add a versioned actor/scenario snapshot and deterministic round-trip test.
+- [x] Add a versioned actor/scenario snapshot and deterministic round-trip test.
 - [ ] Complete actor fundamentals: proficiency profiles, skills, 0 HP, stabilization, and death saves.
 
 ## Completed Work And Deferred Backlog
@@ -81,6 +81,7 @@ obowiązują `Current Roadmap Focus` oraz etapy z `ROADMAP.md`.
 - [x] Add content-driven NPC effect fields with legacy flag-change fallback.
 - [x] Add per-session web UI JSONL debug logs for actions, LLM proposals, rolls, and effects.
 - [x] Add web UI session log panel backed by `/api/session-log`.
+- [x] Make exploration presentation fiction-first with freeform questions, optional player inspiration, and separate GM mechanics.
 - [ ] [Deferred M8] Integrate exploration effect executor with NPC/freeform runtime validation for intent parameters, limits, and branches.
 - [x] Extend preparation effects with advantage/disadvantage, effect boost, unlock option, and grant resource.
 - [x] Show consequence preview before accepted freeform challenge rolls.
@@ -144,6 +145,8 @@ obowiązują `Current Roadmap Focus` oraz etapy z `ROADMAP.md`.
 - [x] Add GM correction UI for selected exploration mechanic before rolls.
 - [x] Add grounded situational modifiers and advantage/disadvantage to exploration rolls.
 - [x] Add improvised tool mechanic validation and explicit GM approval flow.
+- [x] Add scene-scoped temporary items built from grounded materials, with visible uses, snapshot support, and scenario-end expiration.
+- [x] Persist interaction-scoped exploration conversations and restore their LLM context from snapshots.
 - [x] Add visible scene-resource effects, correction, and consumption to exploration rolls.
 - [x] Add generic pre-scenario prepared-spell selection and runtime enforcement MVP.
 - [ ] [Deferred K3-K4] Add class-derived spell lists, known-spell profiles, and advanced concentration modifiers.

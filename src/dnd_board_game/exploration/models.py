@@ -168,6 +168,32 @@ class LlmDcTier:
 
 
 @dataclass(frozen=True, slots=True)
+class TemporaryItemTemplate:
+    id: str
+    label: str
+    description: str
+    bonus_tags: tuple[str, ...]
+    modifier: int = 0
+    advantage: bool = False
+    uses: int = 1
+    risk: str = ""
+    allowed_materials: tuple[str, ...] = ()
+
+    def as_payload(self) -> dict[str, object]:
+        return {
+            "id": self.id,
+            "label": self.label,
+            "description": self.description,
+            "bonus_tags": list(self.bonus_tags),
+            "modifier": self.modifier,
+            "advantage": self.advantage,
+            "uses": self.uses,
+            "risk": self.risk,
+            "allowed_materials": list(self.allowed_materials),
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class LlmChallengePolicy:
     allowed_local_skills: tuple[str, ...] = ()
     allowed_approach_tags: tuple[str, ...] = ()
@@ -193,6 +219,7 @@ class LlmChallengePolicy:
     allowed_difficulty_tiers: tuple[str, ...] = ()
     default_difficulty_tier: str | None = None
     difficulty_guidance: tuple[str, ...] = ()
+    temporary_item_templates: tuple[TemporaryItemTemplate, ...] = ()
 
     def as_payload(self) -> dict[str, object]:
         return {
@@ -216,6 +243,7 @@ class LlmChallengePolicy:
                 "default_tier": self.default_difficulty_tier,
                 "guidance": list(self.difficulty_guidance),
             },
+            "temporary_item_templates": [template.as_payload() for template in self.temporary_item_templates],
         }
 
     def dc_for_tier(self, tier_id: str) -> int | None:
@@ -732,6 +760,34 @@ class ExplorationResource:
 
 
 @dataclass(frozen=True, slots=True)
+class TemporaryItem:
+    id: str
+    template_id: str
+    label: str
+    description: str
+    bonus_tags: tuple[str, ...]
+    modifier: int
+    advantage: bool
+    uses_remaining: int
+    created_in_zone_id: str
+    source_materials: tuple[str, ...] = ()
+    risk: str = ""
+
+    @property
+    def available(self) -> bool:
+        return self.uses_remaining > 0
+
+    def as_resource(self) -> ExplorationResource:
+        return ExplorationResource(
+            id=self.id,
+            label=self.label,
+            bonus_tags=self.bonus_tags,
+            modifier=self.modifier,
+            advantage=self.advantage,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class ChallengeResult:
     state: ExplorationState
     challenge: ExplorationChallenge
@@ -760,6 +816,7 @@ class ExplorationState:
     inventory_resource_ids: tuple[str, ...] = ()
     elapsed_minutes: int = 0
     short_rest_counts: tuple[tuple[str, int], ...] = ()
+    temporary_items: tuple[TemporaryItem, ...] = ()
 
 
 def visible_exploration_zones(zones: tuple[ExplorationZone, ...]) -> tuple[ExplorationZone, ...]:
@@ -904,12 +961,67 @@ def matching_resources(
 ) -> tuple[ExplorationResource, ...]:
     option_tags = set(option.tags)
     owned = set(state.inventory_resource_ids)
-    return tuple(
+    persistent = tuple(
         resource
         for resource in state.resources
         if resource.id in owned
         and (option_tags.intersection(resource.bonus_tags) or resource.id == option.unlocks_if_resource_id)
     )
+    temporary = tuple(
+        item.as_resource()
+        for item in state.temporary_items
+        if item.available and option_tags.intersection(item.bonus_tags)
+    )
+    return (*persistent, *temporary)
+
+
+def create_temporary_item(
+    state: ExplorationState,
+    template: TemporaryItemTemplate,
+    *,
+    zone_id: str,
+    source_materials: tuple[str, ...],
+) -> tuple[ExplorationState, TemporaryItem]:
+    if template.uses < 1:
+        raise ValueError("Temporary item template must provide at least one use.")
+    if zone_id not in {zone.id for zone in state.zones}:
+        raise ValueError(f"Unknown exploration zone for temporary item: {zone_id}.")
+    if not source_materials:
+        raise ValueError("Temporary item requires at least one source material.")
+    unsupported_materials = set(source_materials) - set(template.allowed_materials)
+    if unsupported_materials:
+        raise ValueError(
+            "Temporary item template does not allow materials: "
+            + ", ".join(sorted(unsupported_materials))
+            + "."
+        )
+    if any(existing.template_id == template.id for existing in state.temporary_items):
+        raise ValueError(f"Temporary item was already created in this scenario: {template.id}.")
+    item = TemporaryItem(
+        id=f"temporary:{template.id}",
+        template_id=template.id,
+        label=template.label,
+        description=template.description,
+        bonus_tags=template.bonus_tags,
+        modifier=template.modifier,
+        advantage=template.advantage,
+        uses_remaining=template.uses,
+        created_in_zone_id=zone_id,
+        source_materials=source_materials,
+        risk=template.risk,
+    )
+    return replace(state, temporary_items=(*state.temporary_items, item)), item
+
+
+def use_temporary_item(state: ExplorationState, item_id: str) -> tuple[ExplorationState, TemporaryItem]:
+    item = next((candidate for candidate in state.temporary_items if candidate.id == item_id), None)
+    if item is None:
+        raise ValueError(f"Unknown temporary item: {item_id}.")
+    if not item.available:
+        raise ValueError(f"Temporary item has no uses remaining: {item_id}.")
+    updated = replace(item, uses_remaining=item.uses_remaining - 1)
+    items = tuple(updated if candidate.id == item_id else candidate for candidate in state.temporary_items)
+    return replace(state, temporary_items=items), updated
 
 
 def grant_resource(state: ExplorationState, resource_id: str) -> ExplorationState:

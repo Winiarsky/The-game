@@ -20,7 +20,13 @@ from dnd_board_game.exploration import (
 )
 from dnd_board_game.combat import scene_flag
 
-from .gm_classifier import CORE_DND_5E_ABILITIES, CORE_DND_5E_SKILLS, GmProposalValidationError, _retry_delay
+from .gm_classifier import (
+    CORE_DND_5E_ABILITIES,
+    CORE_DND_5E_SKILLS,
+    GmDeclarationThreadEntry,
+    GmProposalValidationError,
+    _retry_delay,
+)
 from .prompts import PromptId, load_prompt
 
 
@@ -92,6 +98,7 @@ class NpcInteractionRequest:
     point: ExplorationPoint
     state: ExplorationState
     player_action: str
+    conversation_thread: tuple[GmDeclarationThreadEntry, ...] = ()
 
     def to_prompt_payload(self) -> dict[str, Any]:
         npc = self.point.npc_interaction
@@ -111,6 +118,7 @@ class NpcInteractionRequest:
             },
             "npc": npc.as_payload(),
             "scene_flags": dict(self.state.flags.values),
+            "conversation_thread": [entry.as_payload() for entry in self.conversation_thread],
             "player_action": self.player_action,
         }
 
@@ -233,6 +241,7 @@ def build_npc_interaction_request(
     point: ExplorationPoint,
     state: ExplorationState,
     player_action: str,
+    conversation_thread: tuple[GmDeclarationThreadEntry, ...] = (),
 ) -> NpcInteractionRequest:
     return NpcInteractionRequest(
         scenario_id=scenario_id,
@@ -241,6 +250,7 @@ def build_npc_interaction_request(
         point=point,
         state=state,
         player_action=player_action,
+        conversation_thread=conversation_thread,
     )
 
 

@@ -93,7 +93,7 @@ Kryterium wyjścia:
 
 ## Etap M1: Wspólne Kontrakty Efektów, Czasu I Zasobów
 
-Status: w toku. Ukończono kontrakt efektów, duration/expiration oraz vertical slice odpoczynków.
+Status: ukończony. Kontrakty efektów, czasu, zasobów, odpoczynków i snapshotu v1 mają grywalny vertical slice.
 
 To jest fundament dla czarów, warunków, cech klasowych, odpoczynków, przedmiotów
 i efektów scenariusza.
@@ -121,8 +121,9 @@ Zaimplementowany vertical slice:
 - godzinny koszt i jawne konsekwencje odpoczynku,
 - automatyczny long rest przed przygotowaniem scenariusza,
 - odnowienie HP, slotów i zasobów oraz ponowne otwarcie przygotowania czarów.
-
-Pozostało w M1: wersjonowany snapshot aktora/scenariusza i deterministyczny round-trip.
+- wersjonowany snapshot v1 stanu aktora, eksploracji, efektów i opcjonalnej walki,
+- atomowy zapis/odczyt JSON, jawna walidacja content ids oraz blokada zapisu w połowie decyzji,
+- przyciski zapisu i odczytu w web UI oraz deterministyczny round-trip.
 
 Fixture'y:
 
@@ -260,7 +261,7 @@ LLM pozostaje klasyfikatorem deklaracji i pomocnikiem narracyjnym. Nie staje si�
 
 Kolejność:
 
-1. wersjonowany save/load scenariusza,
+1. rozszerzenie snapshotu scenariusza v1 o migracje i stan między scenariuszami,
 2. stan drużyny między scenariuszami,
 3. XP albo milestone jako wybrana strategia progresji,
 4. level-up jako deterministyczna transformacja postaci,
@@ -521,7 +522,6 @@ etapy to:
 
 1. zatwierdzić bazową wersję zasad oraz strategię licencji,
 2. zinwentaryzować mechaniki w macierzy i oznaczyć luki,
-3. dokończyć wspólny model duration/expiration i scenario-end lifecycle,
-4. dodać wersjonowany snapshot i test odtworzenia stanu,
-5. domknąć fundament aktora: proficiency, skills, 0 HP i death saves,
-6. następnie realizować M3–M8 w zapisanej kolejności.
+3. domknąć fundament aktora: proficiency, skills, 0 HP i death saves,
+4. następnie realizować M3–M8 w zapisanej kolejności,
+5. w M9 rozszerzyć snapshot v1 o stan kampanii i rzeczywiste migracje między wersjami.

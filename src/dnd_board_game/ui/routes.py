@@ -29,6 +29,20 @@ def create_app(session: ExplorationUiSession) -> Flask:
     def api_session_log():
         return jsonify(_session_log_payload(session))
 
+    @app.post("/api/snapshot/save")
+    def api_snapshot_save():
+        try:
+            return jsonify(session.save_snapshot())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/snapshot/load")
+    def api_snapshot_load():
+        try:
+            return jsonify(session.load_snapshot())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
     @app.post("/api/start")
     def api_start():
         try:

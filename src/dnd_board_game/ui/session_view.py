@@ -9,6 +9,7 @@ class UiSessionView:
 
     scenario: dict[str, object]
     session_log: dict[str, object]
+    snapshot: dict[str, object]
     flow: dict[str, object]
     spell_preparation: dict[str, object] | None
     short_rest: dict[str, object] | None
@@ -26,6 +27,7 @@ class UiSessionView:
     scene_status: list[dict[str, object]]
     flags: list[dict[str, object]]
     messages: list[dict[str, object]]
+    conversation: dict[str, object]
     pending: dict[str, object] | None
     selected_lead_actor_id: str
     selected_helper_actor_id: str | None
@@ -42,6 +44,7 @@ class UiSessionView:
         return {
             "scenario": self.scenario,
             "session_log": self.session_log,
+            "snapshot": self.snapshot,
             "flow": self.flow,
             "spell_preparation": self.spell_preparation,
             "short_rest": self.short_rest,
@@ -59,6 +62,7 @@ class UiSessionView:
             "scene_status": self.scene_status,
             "flags": self.flags,
             "messages": self.messages,
+            "conversation": self.conversation,
             "pending": self.pending,
             "selected_lead_actor_id": self.selected_lead_actor_id,
             "selected_helper_actor_id": self.selected_helper_actor_id,

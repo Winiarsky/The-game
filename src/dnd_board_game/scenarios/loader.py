@@ -62,6 +62,7 @@ from dnd_board_game.exploration import (
     SceneMode,
     RestSafety,
     ShortRestPolicy,
+    TemporaryItemTemplate,
     EncounterTriggerCondition,
     mechanic_tool,
 )
@@ -92,6 +93,7 @@ KNOWN_LLM_PREPARATION_EFFECT_TYPES = frozenset(
         "effect_boost",
         "unlock_option",
         "grant_resource",
+        "create_temporary_item",
     }
 )
 
@@ -1327,7 +1329,49 @@ def _parse_llm_challenge_policy(data: Any, field: str) -> LlmChallengePolicy:
         allowed_difficulty_tiers=allowed_difficulty_tiers,
         default_difficulty_tier=default_difficulty_tier,
         difficulty_guidance=difficulty_guidance,
+        temporary_item_templates=_parse_temporary_item_templates(
+            data.get("temporary_item_templates", []),
+            f"{field}.temporary_item_templates",
+        ),
     )
+
+
+def _parse_temporary_item_templates(data: Any, field: str) -> tuple[TemporaryItemTemplate, ...]:
+    if not isinstance(data, list):
+        raise ValueError(f"{field} must be a list.")
+    templates: list[TemporaryItemTemplate] = []
+    for index, raw_template in enumerate(data):
+        item_field = f"{field}[{index}]"
+        if not isinstance(raw_template, dict):
+            raise ValueError(f"{item_field} must be an object.")
+        uses = int(raw_template.get("uses", 1))
+        modifier = int(raw_template.get("modifier", 0))
+        if uses < 1:
+            raise ValueError(f"{item_field}.uses must be positive.")
+        if not -2 <= modifier <= 2:
+            raise ValueError(f"{item_field}.modifier must be between -2 and 2.")
+        templates.append(
+            TemporaryItemTemplate(
+                id=str(raw_template.get("id", "")).strip(),
+                label=str(raw_template.get("label", "")).strip(),
+                description=str(raw_template.get("description", "")).strip(),
+                bonus_tags=_parse_string_tuple(raw_template.get("bonus_tags", []), f"{item_field}.bonus_tags"),
+                modifier=modifier,
+                advantage=bool(raw_template.get("advantage", False)),
+                uses=uses,
+                risk=str(raw_template.get("risk", "")).strip(),
+                allowed_materials=_parse_string_tuple(
+                    raw_template.get("allowed_materials", []),
+                    f"{item_field}.allowed_materials",
+                ),
+            )
+        )
+    ids = [template.id for template in templates]
+    if any(not template.id or not template.label or not template.bonus_tags for template in templates):
+        raise ValueError(f"{field} entries require id, label and bonus_tags.")
+    if len(ids) != len(set(ids)):
+        raise ValueError(f"{field} contains duplicate ids.")
+    return tuple(templates)
 
 
 def _parse_dc_policy(data: Any, field: str) -> tuple[tuple[LlmDcTier, ...], tuple[str, ...], str | None, tuple[str, ...]]:

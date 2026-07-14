@@ -63,6 +63,21 @@ Gracz powinien wskazywać intencję przez kliknięcie podświetlonego pola na pl
 
 Panele web UI mogą pokazywać stan, koszty ruchu, cele i awaryjne kontrolki, ale nie powinny być podstawowym sposobem wyboru ruchu albo celu ataku w grywalnym przepływie.
 
+### Eksploracja zaczyna się od fikcji
+
+Po wejściu do lokacji gracze najpierw widzą ilustrację i opis sytuacji. Aplikacja
+nie pokazuje od razu listy testów, ST ani kompletnego menu rozwiązań. Drużyna może
+swobodnie zadeklarować działanie albo zadać MG pytanie o scenę.
+
+Pytanie o jawny fakt otrzymuje odpowiedź bez rzutu. Poszukiwanie albo przygotowanie
+może dopiero później prowadzić do testu, zasobu lub komplikacji. System nie może
+tworzyć przedmiotów i faktów tylko dlatego, że gracz o nie zapytał.
+
+Jeśli drużyna nie ma pomysłu, może rozwinąć opcjonalne inspiracje zawierające
+przykładowe działania bez ST i ukrytych konsekwencji. Dokładne parametry testów,
+postęp, hałas i sekretne ryzyka pozostają w osobnej sekcji MG/debug. Mechanika
+pojawia się graczom dopiero po interpretacji ich deklaracji i przed akceptacją rzutu.
+
 W MVP pola z `blocking_terrain` i przeszkodami blokującymi ruch są niewchodzalne. Pola obiektów sceny typu `container`, np. rozbity wóz, mogą być zajmowane, dopóki content nie oznaczy ich jako blokujące.
 
 ---
@@ -592,7 +607,11 @@ Minimalny kontrakt:
 * Ogólne słowniki LLM, np. cechy i skille D&D 5e oraz aliasy pilnowanych zasobów, są trzymane w `content/llm/`.
 * Item albo zasób daje efekt tylko wtedy, gdy drużyna go posiada i jego `bonus_tags` pasują do tagów podejścia.
 * Deklarowany zasób spoza inventory albo materiałów sceny nie może działać mechanicznie. Analyzer ma go odrzucić albo poprosić o doprecyzowanie, a silnik robi dodatkową walidację faktów.
+* Pomoc złożona z jawnych materiałów sceny może działać na dwa sposoby: konstrukcja i natychmiastowe użycie to jednorazowe `improvised_tool_check`, natomiast osobne przygotowanie może utworzyć whitelisted `TemporaryItem`.
+* `TemporaryItem` nie jest stałym ekwipunkiem. Ma parametry z contentowego szablonu, jawną liczbę użyć, istnieje tylko w bieżącym scenariuszu i wygasa przy jego zakończeniu.
 * Freeform `action_flow` obsługuje w MVP: `challenge_attempt`, `preparation` i `combined`.
+* Rozmowa jest przypisana do stabilnego identyfikatora instancji interakcji (`challenge`, punkt albo NPC), a nie do samego ekranu. Powrót do tej instancji odtwarza jej transcript bez mieszania rozmów z innymi obiektami.
+* Snapshot przechowuje pełny transcript. Do LLM trafia ograniczone okno najnowszych wpisów aktualnej interakcji; starsza historia pozostaje dostępna dla UI i przyszłego mechanizmu podsumowań.
 * Przygotowanie może dać krótkotrwały efekt `modifier`, `reduce_negative_effect`, `advantage`, `disadvantage`, `effect_boost`, `grant_resource` albo `unlock_option`, jeśli typ jest dopuszczony przez policy aktywnego challenge.
 * `grant_resource` i `unlock_option` mogą dotyczyć tylko istniejących id z contentu i tylko wtedy, gdy id znajduje się w whitelistach `allowed_grant_resource_ids` albo `allowed_unlock_option_ids`.
 * Efekt przygotowania działa tylko przy następnej próbie, której tagi pasują do `target_tags`, i po użyciu wygasa.

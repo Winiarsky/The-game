@@ -125,6 +125,11 @@ existing order: message/log recording, LED synchronization, and payload renderin
 planned combat-flow extraction is complete; future feature work should preserve the same API
 and session-observation contracts instead of reopening the coordinator boundary without a
 concrete need.
+The exploration presentation is fiction-first: the normal player surface renders zone
+description, optional image and freeform input. `active_challenge.player_hints` contains only
+non-mechanical inspiration, while exact options, DCs, progress and risks remain in the
+collapsed GM/debug view. Questions reuse the declaration analyzer and are recorded as visible
+player/GM exchanges without entering the roll resolver.
 Random rolls are injected into combat application services so deterministic tests can provide
 explicit outcomes while the UI runtime may retain its seeded random source.
 

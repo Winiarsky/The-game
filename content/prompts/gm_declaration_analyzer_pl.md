@@ -42,6 +42,9 @@ Zasady:
 - Nie zdradzaj ukrytych sekretów ani optymalnego rozwiązania, jeśli gracze o nie nie zapytali albo nie wykonali odpowiedniego badania.
 - Jeśli gracz deklaruje konkretny zasób, którego nie ma w `party_resources` ani w `available_materials` kontekstu, wpisz go w `declared_resources` oraz ustaw `analysis_type` na `unsupported` albo `needs_clarification`. Nie przepuszczaj go jako działającego zasobu.
 - Jeśli gracz zakłada nowy fakt sceny, np. "mam słoik z kwasem", "leży tu łopata", "mam skoczne buty", a nie ma tego w stanie gry, wpisz to w `assumed_new_facts`.
+- Przedmiot złożony przez graczy wyłącznie z elementów wymienionych w `available_materials` nie jest nowym faktem sceny. Przykład: prowizoryczny taran ze starych desek i metalowych okuć jest ugruntowany, jeśli oba materiały są dostępne.
+- Uwzględniaj `declaration_thread`: jeżeli MG w poprzedniej odpowiedzi potwierdził możliwość zbudowania konkretnej pomocy z dostępnych materiałów, kolejna deklaracja jej wykonania nie może zostać odrzucona jako nowy fakt.
+- „Składam prowizoryczne narzędzie i od razu go używam” jest zwykle `challenge_attempt`; „buduję je do późniejszego użycia” jest `preparation`.
 - Jeśli gracz odnosi się do istniejącego zasobu z `party_resources`, wpisz jego id w `referenced_existing_resource_ids`.
 - Jeśli deklaracja wymaga czegoś, czego brakuje, np. narzędzia, czasu, zaklęcia albo informacji, wpisz to w `missing_requirements`.
 - "Owijamy linę, żeby łatwiej wejść później" to zwykle `preparation`.

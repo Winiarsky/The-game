@@ -6,6 +6,7 @@ import pytest
 from dnd_board_game.actors import Faction
 from dnd_board_game.combat import EnemyAutoTurnResult, replace_actor, set_scene_flag
 from dnd_board_game.combat.damage import DamageComponentInput, DamageType, apply_damage_result, resolve_damage
+from dnd_board_game.exploration import create_temporary_item
 from dnd_board_game.hardware import LedColor
 from dnd_board_game.llm import (
     GmClassifierProposal,
@@ -63,6 +64,45 @@ class FakeNpcClient:
     def interact_npc(self, request):
         self.requests.append(request)
         return self.proposal
+
+
+class FakeQuestionGmClient:
+    model = "fake-question-gm"
+
+    def __init__(self):
+        self.requests = []
+
+    def analyze(self, request):
+        self.requests.append(request)
+        return GmDeclarationAnalysis(
+            analysis_type=GmDeclarationAnalysisType.PLAYER_QUESTION,
+            player_message="W pobliżu leżą kamienie, ale żaden nie wygląda na wystarczająco duży, by sam zastąpić taran.",
+            reason="Odpowiedź oparta na available_materials bez tworzenia nowego zasobu.",
+            confidence=1.0,
+        )
+
+    def classify(self, request):  # noqa: ARG002
+        raise AssertionError("Pytanie gracza nie powinno trafiać do klasyfikatora mechaniki.")
+
+
+class FakeInvalidFactGmClient:
+    model = "fake-invalid-fact-gm"
+
+    def analyze(self, request):  # noqa: ARG002
+        return GmDeclarationAnalysis.model_validate(
+            {
+                "analysis_type": "plausible",
+                "action_flow": "challenge_attempt",
+                "player_message": "",
+                "normalized_intent": "Używam działa laserowego.",
+                "reason": "test",
+                "confidence": 1.0,
+                "assumed_new_facts": ["działo laserowe"],
+            }
+        )
+
+    def classify(self, request):  # noqa: ARG002
+        raise AssertionError("Nieugruntowana deklaracja nie powinna trafić do klasyfikatora mechaniki.")
 
 
 class FakeBoardConnection:
@@ -229,6 +269,165 @@ def test_exploration_ui_session_resolves_gate_challenge():
     assert state["active_challenge"] is None
     assert state["flow"]["stage"] == "interaction_result"
     assert state["exploration_setup"] is None
+
+
+def test_exploration_ui_session_answers_grounded_player_question_without_roll(tmp_path):
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=FakeQuestionGmClient(),
+        session_id="question_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    state = session.submit_action("Czy jest tu jakiś duży kamień, którego możemy użyć?")
+
+    assert state["pending"] is None
+    assert state["required_rolls"] == []
+    assert state["messages"][-2]["title"] == "Gracze"
+    assert state["messages"][-1] == {
+        "title": "Odpowiedź MG",
+        "body": "W pobliżu leżą kamienie, ale żaden nie wygląda na wystarczająco duży, by sam zastąpić taran.",
+    }
+    assert [entry.role for entry in session.declaration_thread] == ["player", "gm"]
+    events = [__import__("json").loads(line) for line in session.observer.path.read_text(encoding="utf-8").splitlines()]
+    assert any(event["event_type"] == "ui_gm_question_answered" for event in events)
+
+
+def test_conversation_is_scoped_to_interaction_and_reused_as_gm_context(tmp_path):
+    client = FakeQuestionGmClient()
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=client,
+        session_id="conversation_scope_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    session.submit_action("Czy możemy zbudować z tych desek taran?")
+    second = session.submit_action("Czy taki taran będzie głośny?")
+
+    assert second["conversation"]["interaction_id"] == "challenge:closed_gate"
+    assert [entry["role"] for entry in second["conversation"]["entries"]] == ["player", "gm", "player", "gm"]
+    assert [entry.role for entry in client.requests[1].declaration_thread] == ["player", "gm"]
+    session.active_point_id = "wounded_scout"
+    assert session.state_payload()["conversation"] == {
+        "interaction_id": "point:wounded_scout",
+        "entries": [],
+    }
+    session.active_point_id = ""
+    assert len(session.state_payload()["conversation"]["entries"]) == 4
+
+
+def test_snapshot_restores_interaction_conversation(tmp_path):
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=FakeQuestionGmClient(),
+        session_id="conversation_snapshot_test",
+        observation_dir=tmp_path / "observations",
+        save_dir=tmp_path / "saves",
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.submit_action("Czy możemy zbudować taran?")
+    expected = session.state_payload()["conversation"]
+    session.save_snapshot()
+    session.conversation_entries = []
+
+    restored = session.load_snapshot()
+
+    assert restored["conversation"] == expected
+
+
+def test_exploration_ui_session_turns_validation_error_into_visible_gm_message(tmp_path):
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=FakeInvalidFactGmClient(),
+        session_id="invalid_fact_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    state = session.submit_action("Używam działa laserowego.")
+
+    assert state["pending"] is None
+    assert state["messages"][-1]["title"] == "Deklaracja wymaga korekty"
+    assert "działo laserowe" in state["messages"][-1]["body"]
+    events = [__import__("json").loads(line) for line in session.observer.path.read_text(encoding="utf-8").splitlines()]
+    assert any(event["event_type"] == "ui_gm_declaration_rejected" for event in events)
+
+
+def test_exploration_ui_session_creates_and_uses_temporary_scene_item(tmp_path):
+    preparation = _challenge_proposal(
+        action_flow="preparation",
+        requires_roll_now=False,
+        selected_mechanic="preparation_effect",
+        approach_label="Budowa prowizorycznego taranu",
+        approach_tags=["heavy_force"],
+        ability=None,
+        skill=None,
+        dc=None,
+        difficulty_tier=None,
+        progress_on_success=None,
+        progress_on_failure=None,
+        preparation_effect={
+            "type": "create_temporary_item",
+            "label": "Prowizoryczny taran",
+            "target_tags": ["heavy_force"],
+            "temporary_item_template_id": "improvised_battering_ram",
+            "source_materials": ["stare deski", "metalowe okucia"],
+        },
+    )
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=FakeGmClient(preparation),
+        session_id="temporary_item_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    prepared = session.submit_action("Buduję taran do późniejszego użycia.")
+
+    assert prepared["pending"] is None
+    assert prepared["resources"][-1]["id"] == "temporary:improvised_battering_ram"
+    assert prepared["resources"][-1]["uses_remaining"] == 2
+    session.gm_client = FakeGmClient(
+        _challenge_proposal(used_resource_ids=["temporary:improvised_battering_ram"])
+    )
+    session.submit_action("Uderzam przygotowanym taranem w bramę.")
+    session.decide("accept")
+    resolved = session.resolve_rolls({"hero": 16})
+
+    temporary = next(item for item in session.state.temporary_items if item.id == "temporary:improvised_battering_ram")
+    assert temporary.uses_remaining == 1
+    assert any(message["title"] == "Użyto przedmiotu sceny" for message in resolved["messages"])
+    events = [__import__("json").loads(line) for line in session.observer.path.read_text(encoding="utf-8").splitlines()]
+    assert any(event["event_type"] == "ui_temporary_item_created" for event in events)
+    assert any(event["event_type"] == "ui_temporary_item_used" for event in events)
+
+
+def test_exploration_ui_session_expires_temporary_items_at_scenario_end(tmp_path):
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=FakeGmClient(_challenge_proposal()),
+        session_id="temporary_item_expiration_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    challenge = next(item for item in session.state.challenges if item.id == "closed_gate")
+    session.state, _item = create_temporary_item(
+        session.state,
+        challenge.llm_policy.temporary_item_templates[0],
+        zone_id="gate",
+        source_materials=("stare deski", "metalowe okucia"),
+    )
+
+    completed = session.finish_scenario()
+
+    assert session.state.temporary_items == ()
+    assert not any(resource.get("temporary") for resource in completed["resources"])
+    events = [__import__("json").loads(line) for line in session.observer.path.read_text(encoding="utf-8").splitlines()]
+    event = next(item for item in events if item["event_type"] == "ui_scenario_completed")
+    assert event["payload"]["expired_temporary_item_ids"] == ["temporary:improvised_battering_ram"]
 
 
 def test_exploration_ui_session_can_correct_gm_decision_before_roll():
@@ -680,6 +879,32 @@ def test_exploration_ui_session_debug_npc_sets_flags_without_roll():
 
     assert state["pending"] is None
     assert {"key": "scout_calmed", "value": True} in state["flags"]
+
+
+def test_npc_request_receives_only_that_npc_interaction_history():
+    proposal = NpcInteractionProposal.model_validate(
+        {
+            "action_type": "social",
+            "player_narration": "Zwiadowca obserwuje drużynę.",
+            "npc_response": "Słucham was.",
+            "requires_roll": False,
+        }
+    )
+    client = FakeNpcClient(proposal)
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        npc_client=client,
+        debug_point_id="wounded_scout",
+    )
+
+    session.submit_action("Pytamy zwiadowcę o bramę.")
+    session.decide("accept")
+    session.submit_action("Wracamy do wcześniejszego pytania.")
+
+    assert len(client.requests) == 2
+    assert client.requests[0].conversation_thread == ()
+    assert [entry.role for entry in client.requests[1].conversation_thread] == ["player", "gm", "gm"]
+    assert client.requests[1].conversation_thread[0].content == "Pytamy zwiadowcę o bramę."
 
 
 def test_exploration_ui_session_npc_information_sets_flags_without_roll():

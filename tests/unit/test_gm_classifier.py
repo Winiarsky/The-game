@@ -17,6 +17,7 @@ from dnd_board_game.llm import (
     build_gm_classifier_request,
     challenge_option_from_validated_proposal,
     validate_gm_classifier_proposal,
+    validate_gm_declaration_analysis,
 )
 from dnd_board_game.llm.content_config import load_freeform_grounding_terms, load_llm_core_rules, load_llm_intent_catalog
 from dnd_board_game.scenarios import build_exploration_from_scenario, load_scenario
@@ -171,6 +172,77 @@ def test_gm_classifier_preserves_improvised_tool_on_generated_option():
     assert option.improvised_tool is not None
     assert option.improvised_tool.label == "Stara deska"
     assert option.improvised_tool.effect_modifier == 1
+
+
+def test_declaration_analyzer_accepts_scenario_template_built_from_scene_materials():
+    exploration, state = _state()
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Tworzę taran i chcę wyważyć bramę.",
+        declaration_thread=(
+            GmDeclarationThreadEntry(
+                "gm",
+                "Ze starych desek i metalowych okuć możecie stworzyć prowizoryczny taran.",
+                "player_question",
+            ),
+        ),
+        actors=exploration.actors,
+    )
+    analysis = GmDeclarationAnalysis.model_validate(
+        {
+            "analysis_type": "plausible",
+            "action_flow": "challenge_attempt",
+            "player_message": "Możecie spróbować.",
+            "normalized_intent": "Składam prowizoryczny taran i od razu uderzam nim w bramę.",
+            "reason": "Materiały są obecne w scenie.",
+            "confidence": 0.9,
+            "declared_resources": ["prowizoryczny taran"],
+            "assumed_new_facts": ["prowizoryczny taran z desek i metalowych elementów"],
+        }
+    )
+
+    validate_gm_declaration_analysis(analysis, request)
+
+
+def test_gm_classifier_validates_temporary_item_preparation_from_policy_template():
+    exploration, state = _state()
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Buduję taran do późniejszego użycia.",
+        actors=exploration.actors,
+    )
+    proposal = _proposal(
+        action_flow="preparation",
+        requires_roll_now=False,
+        selected_mechanic="preparation_effect",
+        approach_label="Budowa prowizorycznego taranu",
+        approach_tags=["heavy_force"],
+        ability=None,
+        skill=None,
+        dc=None,
+        difficulty_tier=None,
+        progress_on_success=None,
+        progress_on_failure=None,
+        used_resource_ids=[],
+        preparation_effect={
+            "type": "create_temporary_item",
+            "label": "Prowizoryczny taran",
+            "target_tags": ["heavy_force"],
+            "temporary_item_template_id": "improvised_battering_ram",
+            "source_materials": ["stare deski", "metalowe okucia"],
+        },
+    )
+
+    validated = validate_gm_classifier_proposal(proposal, request)
+
+    assert validated.proposal.preparation_effect is not None
+    assert validated.proposal.preparation_effect.temporary_item_template_id == "improvised_battering_ram"
 
 
 def test_gm_classifier_requires_improvised_tool_for_improvised_tool_check():

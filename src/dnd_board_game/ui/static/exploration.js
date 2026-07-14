@@ -44,6 +44,7 @@ async function api(path, body, busyMessage) {
     }
     render();
     refreshSessionLog();
+    return {ok: res.ok, data};
   } finally {
     setBusy('');
   }
@@ -62,8 +63,14 @@ function render() {
   document.getElementById('zone').textContent = state.current_zone.name;
   document.getElementById('challenge').textContent = state.active_challenge ? `${state.active_challenge.name}: ${state.active_challenge.current_progress}/${state.active_challenge.progress_required}, hałas ${state.active_challenge.noise}` : 'Brak';
   document.getElementById('visible-environment').innerHTML = visibleEnvironmentHtml();
-  document.getElementById('resources').innerHTML = state.resources.map(r => `<div>${esc(r.label)}${r.consume_on_use ? ' · jednorazowy' : ''}</div>`).join('') || 'Brak';
+  document.getElementById('resources').innerHTML = state.resources.map(r => {
+    const kind = r.temporary ? ' · przedmiot sceny' : (r.consume_on_use ? ' · jednorazowy' : '');
+    const uses = r.temporary ? ` · użycia ${Number(r.uses_remaining || 0)}` : '';
+    const risk = r.risk ? `<br><span class="muted">Ryzyko: ${esc(r.risk)}</span>` : '';
+    return `<div>${esc(r.label)}${kind}${uses}${risk}</div>`;
+  }).join('') || 'Brak';
   document.getElementById('active-effects').innerHTML = activeEffectsHtml();
+  renderSnapshotPanel();
   const finishScenarioButton = document.getElementById('finish-scenario-button');
   finishScenarioButton.disabled = Boolean(state.combat) || ['spell_preparation','short_rest','scenario_complete'].includes(state.flow.stage);
   finishScenarioButton.textContent = state.flow.stage === 'scenario_complete' ? 'Scenariusz zakończony' : 'Zakończ scenariusz';
@@ -72,6 +79,9 @@ function render() {
   const sceneHtml = sceneDescriptionHtml(state);
   document.getElementById('scene-description').innerHTML = sceneHtml;
   document.getElementById('scene-description-card').hidden = !sceneHtml;
+  const conversation = document.getElementById('scene-conversation');
+  conversation.innerHTML = sceneConversationHtml();
+  conversation.scrollTop = conversation.scrollHeight;
   document.getElementById('messages').innerHTML = state.messages.map(m => `<div class="message"><b>${m.title}</b><br>${m.body}</div>`).join('');
   document.getElementById('pending').innerHTML = pendingHtml(state.pending);
   document.getElementById('lead-actor-choice').innerHTML = leadActorChoiceHtml();
@@ -91,8 +101,30 @@ function render() {
   }).join(' ');
   document.getElementById('debug-payload').textContent = JSON.stringify(state, null, 2);
   renderSessionLogMeta();
-  document.getElementById('action-title').textContent = state.active_point && state.active_point.has_npc ? 'Co robicie wobec NPC?' : 'Co robi drużyna?';
+  document.getElementById('action-title').textContent = state.active_point && state.active_point.has_npc
+    ? 'Co mówicie lub robicie wobec NPC?'
+    : 'Co robicie lub o co pytacie?';
   updateActivePanel();
+}
+function renderSnapshotPanel() {
+  const snapshot = state.snapshot || {};
+  const status = document.getElementById('snapshot-status');
+  const saveButton = document.getElementById('snapshot-save-button');
+  const loadButton = document.getElementById('snapshot-load-button');
+  if (!status || !saveButton || !loadButton) return;
+  status.innerHTML = snapshot.exists
+    ? `Dostępny zapis v${esc(snapshot.schema_version)}.<br><span class="muted">${esc(snapshot.path || '')}</span>`
+    : `Brak zapisu dla tego scenariusza.<br><span class="muted">${esc(snapshot.path || '')}</span>`;
+  if (snapshot.blocker) status.innerHTML += `<br><span class="status">${esc(snapshot.blocker)}</span>`;
+  saveButton.disabled = !snapshot.can_save;
+  loadButton.disabled = !snapshot.exists;
+}
+async function saveSnapshot() {
+  await api('/api/snapshot/save', {}, 'Zapisuję stan gry...');
+}
+async function loadSnapshot() {
+  if (!confirm('Wczytanie zastąpi aktualny stan scenariusza. Kontynuować?')) return;
+  await api('/api/snapshot/load', {}, 'Wczytuję stan gry...');
 }
 function renderBoardPanel() {
   const board = state.board || {};
@@ -392,40 +424,11 @@ function sceneDescriptionHtml(state) {
     return '';
   }
   const parts = [
-    `<p><b>${esc(zone.name)}</b></p>`,
-    zone.image_url ? `<img class="scene-thumb" src="${esc(zone.image_url)}" alt="${esc(zone.name)}">` : '',
-    zone.description ? `<p>${esc(zone.description)}</p>` : '',
+    zone.image_url ? `<img class="scene-image" src="${esc(zone.image_url)}" alt="${esc(zone.name)}">` : '',
+    `<h2>${esc(zone.name)}</h2>`,
+    zone.description ? `<p class="scene-lead">${esc(zone.description)}</p>` : '',
     zone.summary ? `<p>${esc(zone.summary)}</p>` : '',
   ];
-  if (zone.available_materials && zone.available_materials.length) {
-    parts.push(`<p><b>Widoczne elementy otoczenia:</b></p>${listHtml(zone.available_materials)}`);
-  }
-    if (challenge) {
-    parts.push(`<p><b>${esc(challenge.name)}</b></p>`);
-    if (challenge.summary) parts.push(`<p>${esc(challenge.summary)}</p>`);
-    parts.push(`<p><b>Postęp:</b> ${challenge.current_progress}/${challenge.progress_required}. <b>Hałas:</b> ${challenge.noise}.</p>`);
-    if (challenge.complications && challenge.complications.length) {
-      parts.push(`<p><b>Komplikacje:</b> ${challenge.complications.map(esc).join(', ')}</p>`);
-    }
-    if (challenge.options && challenge.options.length) {
-      parts.push(challengeOptionsHtml(challenge.options));
-    }
-    const hasHints = (challenge.reasonable_approaches && challenge.reasonable_approaches.length)
-      || (challenge.risk_notes && challenge.risk_notes.length);
-    if (hasHints) {
-      const hints = [];
-      if (challenge.reasonable_approaches && challenge.reasonable_approaches.length) {
-        hints.push(`<p><b>Sensowne podejścia:</b></p>${listHtml(challenge.reasonable_approaches)}`);
-      }
-      if (challenge.risk_notes && challenge.risk_notes.length) {
-        hints.push(`<p><b>Ryzyka:</b></p>${listHtml(challenge.risk_notes)}`);
-      }
-      parts.push(`
-        <button class="secondary" type="button" onclick="toggleHints()">Pokaż wskazówki MG</button>
-        <div id="gm-hints" class="hint-panel" hidden>${hints.join('')}</div>
-      `);
-    }
-  }
   if (state.active_point) {
     const point = state.active_point;
     parts.push(`<p><b>${esc(point.name)}</b></p>`);
@@ -435,11 +438,52 @@ function sceneDescriptionHtml(state) {
       if (point.npc.current_state) parts.push(`<p><b>Stan NPC:</b> ${esc(point.npc.current_state)}</p>`);
     }
   }
-  if (!challenge && state.travel_options && state.travel_options.length) {
-    parts.push(`<p><b>Droga dalej jest otwarta.</b> Zakończ interakcję albo wybierz lokację na planszy.</p>`);
-  }
+  if (challenge && challenge.player_hints && challenge.player_hints.length) parts.push(playerHintsHtml(challenge.player_hints));
+  if (challenge || (zone.available_materials && zone.available_materials.length)) parts.push(gmSceneDetailsHtml(zone, challenge));
   const html = parts.filter(Boolean).join('');
   return html.trim() ? html : '';
+}
+function playerHintsHtml(hints) {
+  return `
+    <details class="scene-hints">
+      <summary>Nie macie pomysłu? Zobaczcie inspiracje</summary>
+      <p class="muted">To przykłady, a nie zamknięta lista. Nadal możecie zadeklarować własne rozwiązanie.</p>
+      <div class="hint-list">${hints.map(hint => `
+        <div class="hint-item"><b>${esc(hint.label)}</b>${hint.description ? `<span>${esc(hint.description)}</span>` : ''}</div>
+      `).join('')}</div>
+    </details>
+  `;
+}
+function gmSceneDetailsHtml(zone, challenge) {
+  const details = [];
+  if (zone.available_materials && zone.available_materials.length) {
+    details.push(`<p><b>Jawne fakty i materiały:</b></p>${listHtml(zone.available_materials)}`);
+  }
+  if (challenge) {
+    details.push(`<p><b>${esc(challenge.name)}</b></p>`);
+    if (challenge.summary) details.push(`<p>${esc(challenge.summary)}</p>`);
+    details.push(`<p><b>Postęp:</b> ${challenge.current_progress}/${challenge.progress_required}. <b>Hałas:</b> ${challenge.noise}.</p>`);
+    if (challenge.complications && challenge.complications.length) {
+      details.push(`<p><b>Komplikacje:</b> ${challenge.complications.map(esc).join(', ')}</p>`);
+    }
+    if (challenge.options && challenge.options.length) details.push(challengeOptionsHtml(challenge.options));
+    if (challenge.reasonable_approaches && challenge.reasonable_approaches.length) {
+      details.push(`<p><b>Sensowne podejścia:</b></p>${listHtml(challenge.reasonable_approaches)}`);
+    }
+    if (challenge.risk_notes && challenge.risk_notes.length) {
+      details.push(`<p><b>Ukryte ryzyka:</b></p>${listHtml(challenge.risk_notes)}`);
+    }
+  }
+  return `<details class="gm-scene-details debug-panel"><summary>Wskazówki MG i mechanika sceny</summary>${details.join('')}</details>`;
+}
+function sceneConversationHtml() {
+  const entries = (state.conversation && state.conversation.entries) || [];
+  if (!entries.length) return '<p class="muted conversation-empty">Możecie od razu działać albo zapytać MG o szczegóły sceny.</p>';
+  return `<div class="scene-conversation-list">${entries.map(message => `
+    <div class="conversation-entry ${message.role === 'player' ? 'player' : 'gm'}">
+      <b>${esc(message.title)}</b><span>${esc(message.body)}</span>
+    </div>
+  `).join('')}</div>`;
 }
 function challengeOptionsHtml(options) {
   return `
@@ -481,13 +525,6 @@ function challengeOptionBonusesText(option) {
     const spellCost = bonus.source_type === 'spell' ? (spellLevel > 0 ? `, zużywa slot ${spellLevel}. poziomu` : ', cantrip bez slota') : '';
     return `${esc(bonus.label || bonus.source_id)} ${signedNumber(mod)}${spellCost}${breakage}`;
   }).join('; ');
-}
-function toggleHints() {
-  const panel = document.getElementById('gm-hints');
-  if (!panel) return;
-  panel.hidden = !panel.hidden;
-  const button = panel.previousElementSibling;
-  if (button) button.textContent = panel.hidden ? 'Pokaż wskazówki MG' : 'Ukryj wskazówki MG';
 }
 function pendingHtml(pending) {
   if (!pending) return '';
@@ -1856,7 +1893,13 @@ function updateActivePanel() {
     restButton.title = rest.unavailable_reason || '';
   }
 }
-function sendAction() { api('/api/action', {text: document.getElementById('action').value}, 'Czekam na decyzję MG...'); }
+async function sendAction() {
+  const input = document.getElementById('action');
+  const text = input ? input.value.trim() : '';
+  if (!text) return;
+  const result = await api('/api/action', {text}, 'Czekam na odpowiedź MG...');
+  if (result && result.ok && input) input.value = '';
+}
 function startShortRest() { api('/api/rest/short/start', {}, 'Przygotowuję podgląd odpoczynku...'); }
 function confirmShortRest() { api('/api/rest/short/confirm', {}, 'Mija godzina odpoczynku...'); }
 function cancelShortRest() { api('/api/rest/short/cancel', {}, 'Anuluję odpoczynek...'); }

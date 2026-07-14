@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import random
 import uuid
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field, fields, replace
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
@@ -111,6 +111,7 @@ from dnd_board_game.exploration import (
     PartyCheckInput,
     PendingEncounter,
     ShortRestPolicy,
+    TemporaryItem,
     MECHANIC_TOOLS,
     active_option_bonuses_for_actor,
     apply_exploration_effect,
@@ -123,6 +124,7 @@ from dnd_board_game.exploration import (
     exploration_zone_feedback,
     mechanic_payload_for_option,
     matching_resources,
+    create_temporary_item,
     reveal_exploration_points,
     resolve_challenge_option,
     resolve_exploration_check,
@@ -130,6 +132,7 @@ from dnd_board_game.exploration import (
     visible_exploration_points,
     visible_exploration_zones,
     option_roll_modifiers_for_actor,
+    use_temporary_item,
 )
 from dnd_board_game.llm import (
     GmActionFlow,
@@ -138,6 +141,8 @@ from dnd_board_game.llm import (
     GmDeclarationThreadEntry,
     GmClassifierProposal,
     GmPreparationEffect,
+    GmProposalValidationError,
+    PreparationEffectType,
     NpcInteractionProposal,
     build_gm_classifier_request,
     build_npc_interaction_request,
@@ -162,6 +167,12 @@ from dnd_board_game.rules import (
     resolve_d20_roll,
     roll_instruction,
 )
+from dnd_board_game.save import (
+    SNAPSHOT_SCHEMA_VERSION,
+    SessionSnapshot,
+    read_snapshot,
+    write_snapshot,
+)
 from dnd_board_game.scenarios import (
     LoadedEncounter,
     LoadedExploration,
@@ -174,6 +185,7 @@ from dnd_board_game.world import Coordinate, MovementRangeResult, PathResult, mo
 
 from .session_state import UiPendingState
 from .session_view import UiSessionView
+from .conversation import InteractionConversationEntry
 
 
 class PendingKind(StrEnum):
@@ -196,6 +208,24 @@ EXPLORATION_DECISION_ABILITIES = frozenset(
 EXPLORATION_DECISION_DC_MIN = 5
 EXPLORATION_DECISION_DC_MAX = 25
 EXPLORATION_DECISION_MAX_SITUATIONAL_MODIFIERS = 3
+CONVERSATION_GM_TITLES = frozenset(
+    {
+        "Odpowiedź MG",
+        "Deklaracja wymaga doprecyzowania",
+        "Deklaracja wymaga korekty",
+        "Narracja MG",
+        "Odpowiedź NPC",
+        "Przygotowanie",
+        "Propozycja MG",
+        "Poprawiono decyzję MG",
+        "Decyzja",
+        "Wyjaśnienie",
+        "Reinterpretacja",
+        "Utworzono przedmiot sceny",
+        "Użyto przedmiotu sceny",
+        "Wynik podejścia",
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -468,6 +498,7 @@ class ExplorationUiSession:
         debug_point_id: str | None = None,
         session_id: str | None = None,
         observation_dir: str | Path = "data/session_observations",
+        save_dir: str | Path = "data/saves",
     ) -> None:
         self.scenario_path = Path(scenario_path)
         self.gm_client = gm_client
@@ -475,6 +506,7 @@ class ExplorationUiSession:
         self.debug_point_id = debug_point_id or ""
         self._fixed_session_id = session_id
         self.observation_dir = Path(observation_dir)
+        self.save_dir = Path(save_dir)
         self.observer = SessionObserver(session_id or _ui_session_id(), self.observation_dir)
         self.combat_movement_flow = CombatMovementFlowService()
         self.combat_reaction_flow = CombatReactionFlowService()
@@ -517,6 +549,7 @@ class ExplorationUiSession:
         if self.debug_point_id:
             self.state, _revealed = reveal_exploration_points(self.state, (self.debug_point_id,))
         self.messages: list[UiMessage] = []
+        self.conversation_entries: list[InteractionConversationEntry] = []
         self.pending_state = UiPendingState()
         self.declaration_thread: list[GmDeclarationThreadEntry] = []
         self.active_preparation_effects: list[GmPreparationEffect] = []
@@ -752,6 +785,7 @@ class ExplorationUiSession:
                 "session_id": self.observer.session_id,
                 "path": str(self.observer.path),
             },
+            snapshot=self._snapshot_payload(),
             flow={
                 "stage": self.ui_flow_stage.value,
                 "can_start": self.ui_flow_stage == UiFlowStage.READY_TO_START,
@@ -769,12 +803,16 @@ class ExplorationUiSession:
             current_zone_points=[_point_payload(point) for point in current_zone_points],
             active_challenge=_challenge_payload(self.state, active_challenge, self.exploration.actors) if active_challenge else None,
             active_point=_point_payload(self.active_point) if self.active_point else None,
-            resources=[_resource_payload(resource) for resource in self.state.resources if resource.id in self.state.inventory_resource_ids],
+            resources=[
+                *[_resource_payload(resource) for resource in self.state.resources if resource.id in self.state.inventory_resource_ids],
+                *[_temporary_item_payload(item) for item in self.state.temporary_items if item.available],
+            ],
             actors=[_exploration_actor_payload(actor) for actor in self.exploration.actors],
             active_effects=[effect.as_payload() for effect in self.active_combat_effects],
             scene_status=scene_status,
             flags=[{"key": key, "value": value} for key, value in self.state.flags.values],
             messages=[message.as_payload() for message in self.messages],
+            conversation=self._conversation_payload(),
             pending=self.pending.as_payload() if self.pending else None,
             selected_lead_actor_id=self.selected_lead_actor_id,
             selected_helper_actor_id=self.selected_helper_actor_id,
@@ -812,6 +850,179 @@ class ExplorationUiSession:
             board=self._board_payload(),
             required_rolls=self.required_rolls_payload(),
         ).as_payload()
+
+    @property
+    def snapshot_path(self) -> Path:
+        return self.save_dir / f"{self.exploration.scenario_id}.snapshot.json"
+
+    def create_snapshot(self) -> SessionSnapshot:
+        blocker = self._snapshot_blocker()
+        if blocker is not None:
+            raise ValueError(blocker)
+        return SessionSnapshot(
+            scenario_id=self.exploration.scenario_id,
+            ui_stage=self.ui_flow_stage.value,
+            actors=self.exploration.actors,
+            exploration_state=self.state,
+            active_effects=self.active_combat_effects,
+            pending_encounter=self.pending_encounter,
+            combat_state=self.combat_state,
+            resolved_encounter_trigger_ids=tuple(sorted(self.resolved_encounter_trigger_ids)),
+            selected_attack_source_ids=tuple(sorted(self.selected_attack_source_ids.items())),
+            selected_healing_source_ids=tuple(sorted(self.selected_healing_source_ids.items())),
+            selected_lead_actor_id=self.selected_lead_actor_id,
+            selected_helper_actor_id=self.selected_helper_actor_id,
+            active_point_id=self.active_point_id,
+            preview_zone_id=self.preview_zone_id,
+            interaction_result=self.interaction_result,
+            conversation_entries=tuple(self.conversation_entries),
+        )
+
+    def save_snapshot(self) -> dict[str, object]:
+        snapshot = self.create_snapshot()
+        write_snapshot(self.snapshot_path, snapshot)
+        self._record(
+            "ui_snapshot_saved",
+            {"path": str(self.snapshot_path), "schema_version": SNAPSHOT_SCHEMA_VERSION},
+        )
+        self._add_message("Gra zapisana", f"Zapisano stan scenariusza w wersji {SNAPSHOT_SCHEMA_VERSION}.")
+        return self.state_payload()
+
+    def load_snapshot(self) -> dict[str, object]:
+        base_exploration = build_exploration_from_scenario(load_scenario(self.scenario_path))
+        base_state = ExplorationState(
+            base_exploration.zones,
+            base_exploration.points,
+            base_exploration.party_position,
+            SceneFlags(),
+            challenges=base_exploration.challenges,
+            resources=base_exploration.resources,
+            inventory_resource_ids=base_exploration.initial_resource_ids,
+        )
+        snapshot = read_snapshot(self.snapshot_path, base_state=base_state)
+        if snapshot.scenario_id != base_exploration.scenario_id:
+            raise ValueError(
+                f"Zapis dotyczy scenariusza {snapshot.scenario_id}, a nie {base_exploration.scenario_id}."
+            )
+        expected_actor_ids = {str(actor.id) for actor in base_exploration.actors}
+        restored_actor_ids = {str(actor.id) for actor in snapshot.actors}
+        if expected_actor_ids != restored_actor_ids:
+            raise ValueError("Lista bohaterów zapisu nie odpowiada aktualnej wersji scenariusza.")
+        stage = UiFlowStage(snapshot.ui_stage)
+        known_trigger_by_id = {trigger.id: trigger for trigger in base_exploration.encounter_triggers}
+        if set(snapshot.resolved_encounter_trigger_ids) - set(known_trigger_by_id):
+            raise ValueError("Zapis zawiera nieznany trigger rozstrzygniętego encountera.")
+        if snapshot.pending_encounter is not None:
+            trigger = known_trigger_by_id.get(snapshot.pending_encounter.trigger_id)
+            if trigger is None or trigger.encounter_scenario != snapshot.pending_encounter.encounter_scenario:
+                raise ValueError("Oczekujący encounter nie odpowiada aktualnej wersji scenariusza.")
+        point_ids = {point.id for point in base_exploration.points}
+        zone_ids = {zone.id for zone in base_exploration.zones}
+        if snapshot.active_point_id and snapshot.active_point_id not in point_ids:
+            raise ValueError("Zapis odwołuje się do nieznanego aktywnego punktu.")
+        if snapshot.preview_zone_id and snapshot.preview_zone_id not in zone_ids:
+            raise ValueError("Zapis odwołuje się do nieznanej lokacji podglądu.")
+        selection_actor_ids = restored_actor_ids | (
+            {str(actor.id) for actor in snapshot.combat_state.actors} if snapshot.combat_state is not None else set()
+        )
+        selected_actor_ids = {
+            snapshot.selected_lead_actor_id,
+            snapshot.selected_helper_actor_id or "",
+            *(actor_id for actor_id, _source_id in snapshot.selected_attack_source_ids),
+            *(actor_id for actor_id, _source_id in snapshot.selected_healing_source_ids),
+        } - {""}
+        if selected_actor_ids - selection_actor_ids:
+            raise ValueError("Zapis zawiera wybór dla nieznanego aktora.")
+        effect_actor_ids = {
+            actor_id
+            for effect in snapshot.active_effects
+            for actor_id in (effect.actor_id, effect.source_actor_id, effect.target_actor_id)
+            if actor_id
+        }
+        if effect_actor_ids - selection_actor_ids:
+            raise ValueError("Aktywny efekt zapisu odwołuje się do nieznanego aktora.")
+        restored_initiative_flow = None
+        if snapshot.combat_state is not None:
+            if snapshot.pending_encounter is None:
+                raise ValueError("Zapis aktywnej walki nie zawiera identyfikatora encountera.")
+            encounter = build_encounter_from_scenario(load_scenario(snapshot.pending_encounter.encounter_scenario))
+            combat_by_id = {actor.id: actor for actor in snapshot.combat_state.actors}
+            encounter = replace(
+                encounter,
+                actors=tuple(combat_by_id.get(actor.id, actor) for actor in encounter.actors),
+            )
+            combat_ids = {str(actor.id) for actor in snapshot.combat_state.actors}
+            encounter_ids = {str(actor.id) for actor in encounter.actors}
+            if combat_ids != encounter_ids:
+                raise ValueError("Lista aktorów walki nie odpowiada aktualnej wersji encountera.")
+            restored_initiative_flow = EncounterInitiativeFlow(
+                encounter=encounter,
+                prompts=(),
+                entries=list(snapshot.combat_state.initiative_order.entries),
+                completed=True,
+                order=snapshot.combat_state.initiative_order,
+            )
+        self.exploration = replace(base_exploration, actors=snapshot.actors)
+        self.state = snapshot.exploration_state
+        self.active_combat_effects = snapshot.active_effects
+        self.combat_state = snapshot.combat_state
+        self.resolved_encounter_trigger_ids = set(snapshot.resolved_encounter_trigger_ids)
+        self.selected_attack_source_ids = dict(snapshot.selected_attack_source_ids)
+        self.selected_healing_source_ids = dict(snapshot.selected_healing_source_ids)
+        self.selected_lead_actor_id = snapshot.selected_lead_actor_id
+        self.selected_helper_actor_id = snapshot.selected_helper_actor_id
+        self.active_point_id = snapshot.active_point_id
+        self.preview_zone_id = snapshot.preview_zone_id
+        self.interaction_result = dict(snapshot.interaction_result) if snapshot.interaction_result is not None else None
+        self.ui_flow_stage = stage
+        self.pending_state = UiPendingState(encounter=snapshot.pending_encounter)
+        self.declaration_thread = []
+        self.active_preparation_effects = []
+        self.exploration_setup_flow = None
+        self.post_interaction_setup_steps = ()
+        self.selected_combat_movement_path = None
+        self.encounter_setup_flow = None
+        self.encounter_initiative_flow = restored_initiative_flow
+        self.messages = []
+        self.conversation_entries = list(snapshot.conversation_entries)
+        self._record(
+            "ui_snapshot_loaded",
+            {"path": str(self.snapshot_path), "schema_version": SNAPSHOT_SCHEMA_VERSION},
+        )
+        self._add_message("Gra wczytana", "Przywrócono zapisany stan scenariusza.")
+        self.board_message = "Przywrócono zapis gry. Stan planszy zsynchronizowano z sesją."
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def _snapshot_blocker(self) -> str | None:
+        pending_fields = tuple(
+            item.name
+            for item in fields(self.pending_state)
+            if item.name != "encounter" and getattr(self.pending_state, item.name) is not None
+        )
+        if pending_fields:
+            return "Najpierw dokończ albo anuluj rozpoczęty wybór, rzut lub odpoczynek."
+        if self.active_preparation_effects:
+            return "Najpierw rozstrzygnij aktywne przygotowanie do testu."
+        if self.selected_combat_movement_path is not None:
+            return "Najpierw potwierdź albo anuluj podgląd ruchu."
+        if self.exploration_setup_flow is not None and not self.exploration_setup_flow.completed:
+            return "Najpierw zakończ setup eksploracji."
+        if self.encounter_setup_flow is not None and self.combat_state is None:
+            return "Najpierw zakończ setup i inicjatywę encountera."
+        if self.encounter_initiative_flow is not None and self.combat_state is None:
+            return "Najpierw zakończ inicjatywę encountera."
+        return None
+
+    def _snapshot_payload(self) -> dict[str, object]:
+        blocker = self._snapshot_blocker()
+        return {
+            "schema_version": SNAPSHOT_SCHEMA_VERSION,
+            "path": str(self.snapshot_path),
+            "exists": self.snapshot_path.exists(),
+            "can_save": blocker is None,
+            "blocker": blocker,
+        }
 
     def configure_board(
         self,
@@ -989,6 +1200,8 @@ class ExplorationUiSession:
         )
         self.active_combat_effects = expiration.active_effects
         self.active_preparation_effects.clear()
+        expired_temporary_items = tuple(item.id for item in self.state.temporary_items if item.available)
+        self.state = replace(self.state, temporary_items=())
         self.pending_encounter = None
         self.ui_flow_stage = UiFlowStage.SCENARIO_COMPLETE
         self.board_message = "Scenariusz zakończony. Efekty dzienne wygasły."
@@ -997,6 +1210,7 @@ class ExplorationUiSession:
             {
                 "elapsed_minutes": self.state.elapsed_minutes,
                 "expired_effect_ids": [effect.id for effect in expiration.expired_effects],
+                "expired_temporary_item_ids": list(expired_temporary_items),
             },
         )
         self._add_message(
@@ -1208,6 +1422,7 @@ class ExplorationUiSession:
                 "active_challenge_id": self.active_challenge.id if self.active_challenge else None,
             },
         )
+        self._add_message("Gracze", text)
         point = self.active_point
         if point is not None and point.npc_interaction is not None:
             return self._submit_npc_action(point, text)
@@ -3497,22 +3712,41 @@ class ExplorationUiSession:
             scenario_context=self.exploration.llm_context,
             state=self.state,
             player_action=text,
-            declaration_thread=tuple(self.declaration_thread[-8:]),
+            declaration_thread=self._conversation_thread_for_active_interaction(exclude_latest_player=True),
             active_preparation_effects=tuple(self.active_preparation_effects),
             actors=self.exploration.actors,
         )
-        analysis = _analyze(client, request_data)
-        validate_gm_declaration_analysis(analysis, request_data)
+        try:
+            analysis = _analyze(client, request_data)
+            validate_gm_declaration_analysis(analysis, request_data)
+        except GmProposalValidationError as exc:
+            return self._reject_gm_declaration(text, str(exc), challenge)
         if analysis.analysis_type == GmDeclarationAnalysisType.PLAYER_QUESTION:
-            self._add_message("Odpowiedź MG", analysis.player_message or "To pytanie nie zmienia stanu sceny.")
+            answer = analysis.player_message or "To pytanie nie zmienia stanu sceny."
+            self._remember_scene_exchange(text, answer, outcome="player_question")
+            self._record(
+                "ui_gm_question_answered",
+                {
+                    "question": text,
+                    "answer": answer,
+                    "zone_id": self.current_zone.id,
+                    "challenge_id": challenge.id,
+                },
+            )
+            self._add_message("Odpowiedź MG", answer)
             return self.state_payload()
         if analysis.analysis_type in {GmDeclarationAnalysisType.NEEDS_CLARIFICATION, GmDeclarationAnalysisType.UNSUPPORTED}:
-            self._add_message("Deklaracja wymaga doprecyzowania", analysis.player_message or analysis.reason)
+            answer = analysis.player_message or analysis.reason
+            self._remember_scene_exchange(text, answer, outcome=analysis.analysis_type.value)
+            self._add_message("Deklaracja wymaga doprecyzowania", answer)
             return self.state_payload()
         if analysis.normalized_intent:
             request_data = replace(request_data, player_action=analysis.normalized_intent)
-        proposal = client.classify(request_data)
-        validated = validate_gm_classifier_proposal(proposal, request_data)
+        try:
+            proposal = client.classify(request_data)
+            validated = validate_gm_classifier_proposal(proposal, request_data)
+        except GmProposalValidationError as exc:
+            return self._reject_gm_declaration(text, str(exc), challenge)
         self._record(
             "ui_gm_proposal_validated",
             {
@@ -3523,8 +3757,34 @@ class ExplorationUiSession:
         if proposal.action_flow == GmActionFlow.PREPARATION:
             effect = proposal.preparation_effect
             if effect is not None:
-                self.active_preparation_effects.append(effect)
-                self._add_message("Przygotowanie", f"Przygotowanie zapisane: {effect.label}.")
+                if effect.type == PreparationEffectType.CREATE_TEMPORARY_ITEM:
+                    template = next(
+                        template
+                        for template in challenge.llm_policy.temporary_item_templates
+                        if template.id == effect.temporary_item_template_id
+                    )
+                    self.state, item = create_temporary_item(
+                        self.state,
+                        template,
+                        zone_id=self.current_zone.id,
+                        source_materials=effect.source_materials,
+                    )
+                    self._record(
+                        "ui_temporary_item_created",
+                        {
+                            "item_id": item.id,
+                            "template_id": item.template_id,
+                            "uses_remaining": item.uses_remaining,
+                            "source_materials": list(item.source_materials),
+                        },
+                    )
+                    self._add_message(
+                        "Utworzono przedmiot sceny",
+                        f"{item.label}: {item.uses_remaining} użycia. Zniknie po zakończeniu scenariusza.",
+                    )
+                else:
+                    self.active_preparation_effects.append(effect)
+                    self._add_message("Przygotowanie", f"Przygotowanie zapisane: {effect.label}.")
             return self.state_payload()
         option = challenge_option_from_validated_proposal(validated)
         resource = validated.resources[0] if validated.resources else None
@@ -3539,6 +3799,67 @@ class ExplorationUiSession:
         self._add_message("Propozycja MG", _challenge_proposal_text(proposal, option, resource))
         return self.state_payload()
 
+    def _reject_gm_declaration(
+        self,
+        text: str,
+        reason: str,
+        challenge: ExplorationChallenge,
+    ) -> dict[str, object]:
+        answer = f"Nie mogę jeszcze rozstrzygnąć tej deklaracji: {reason}"
+        self._remember_scene_exchange(text, answer, outcome="validation_error")
+        self._record(
+            "ui_gm_declaration_rejected",
+            {
+                "declaration": text,
+                "reason": reason,
+                "zone_id": self.current_zone.id,
+                "challenge_id": challenge.id,
+            },
+        )
+        self._add_message("Deklaracja wymaga korekty", answer)
+        return self.state_payload()
+
+    def _remember_scene_exchange(self, player_text: str, gm_text: str, *, outcome: str) -> None:
+        self.declaration_thread.extend(
+            (
+                GmDeclarationThreadEntry("player", player_text, outcome),
+                GmDeclarationThreadEntry("gm", gm_text, outcome),
+            )
+        )
+        self.declaration_thread = self.declaration_thread[-16:]
+
+    def _active_conversation_id(self) -> str:
+        point = self.active_point
+        if point is not None:
+            return f"point:{point.id}"
+        challenge = challenge_for_zone(self.state, self.current_zone.id)
+        if challenge is not None:
+            return f"challenge:{challenge.id}"
+        return f"zone:{self.current_zone.id}"
+
+    def _conversation_entries_for_active_interaction(self) -> tuple[InteractionConversationEntry, ...]:
+        interaction_id = self._active_conversation_id()
+        return tuple(entry for entry in self.conversation_entries if entry.interaction_id == interaction_id)
+
+    def _conversation_thread_for_active_interaction(
+        self,
+        *,
+        exclude_latest_player: bool = False,
+    ) -> tuple[GmDeclarationThreadEntry, ...]:
+        entries = self._conversation_entries_for_active_interaction()
+        if exclude_latest_player and entries and entries[-1].role == "player":
+            entries = entries[:-1]
+        return tuple(
+            GmDeclarationThreadEntry(entry.role, entry.body, entry.outcome)
+            for entry in entries[-16:]
+        )
+
+    def _conversation_payload(self) -> dict[str, object]:
+        return {
+            "interaction_id": self._active_conversation_id(),
+            "entries": [entry.as_payload() for entry in self._conversation_entries_for_active_interaction()],
+        }
+
     def _submit_npc_action(self, point: ExplorationPoint, text: str) -> dict[str, object]:
         client = self._npc_client()
         zone = next(zone for zone in self.exploration.zones if zone.id == point.zone_id)
@@ -3549,6 +3870,7 @@ class ExplorationUiSession:
             point=point,
             state=self.state,
             player_action=text,
+            conversation_thread=self._conversation_thread_for_active_interaction(exclude_latest_player=True),
         )
         proposal = client.interact_npc(request_data)
         validated = validate_npc_interaction_proposal(proposal, request_data)
@@ -3819,6 +4141,22 @@ class ExplorationUiSession:
             )
             if consumption.changed:
                 self._add_message("Zużyty zasób", f"{resource.label} został zużyty podczas próby.")
+        temporary_item = next(
+            (item for item in self.state.temporary_items if resource is not None and item.id == resource.id),
+            None,
+        )
+        if temporary_item is not None:
+            self.state, updated_item = use_temporary_item(self.state, temporary_item.id)
+            self._record(
+                "ui_temporary_item_used",
+                {"item_id": updated_item.id, "uses_remaining": updated_item.uses_remaining},
+            )
+            status = (
+                f"Pozostałe użycia: {updated_item.uses_remaining}."
+                if updated_item.available
+                else "Przedmiot nie nadaje się już do użycia."
+            )
+            self._add_message("Użyto przedmiotu sceny", f"{updated_item.label}. {status}")
         self._consume_active_exploration_bonuses(check_result.selected_actor, self.pending.option)
         self._record(
             "ui_challenge_resolved",
@@ -4096,6 +4434,20 @@ class ExplorationUiSession:
     def _add_message(self, title: str, body: str) -> None:
         self.messages.append(UiMessage(title, body))
         self._record("ui_message_added", {"title": title, "body": body})
+        if getattr(self, "ui_flow_stage", None) != UiFlowStage.LOCATION_ACTIVE:
+            return
+        point = self.active_point
+        npc_title = point.npc_interaction.name if point is not None and point.npc_interaction is not None else ""
+        if title != "Gracze" and title not in CONVERSATION_GM_TITLES and title != npc_title:
+            return
+        entry = InteractionConversationEntry(
+            interaction_id=self._active_conversation_id(),
+            role="player" if title == "Gracze" else "gm",
+            title=title,
+            body=body,
+        )
+        self.conversation_entries.append(entry)
+        self._record("ui_conversation_entry_added", entry.as_payload())
 
     def _record(self, event_type: str, payload: dict[str, Any] | None = None) -> None:
         self.observer.record(event_type, payload or {})
@@ -5776,6 +6128,14 @@ def _challenge_payload(
         "summary": challenge.llm_context.summary,
         "reasonable_approaches": list(challenge.llm_context.reasonable_approaches),
         "risk_notes": list(challenge.llm_context.risk_notes),
+        "player_hints": [
+            {
+                "id": option.id,
+                "label": option.label,
+                "description": option.description,
+            }
+            for option in options
+        ],
         "progress_required": challenge.progress_required,
         "current_progress": challenge_state.current_progress,
         "noise": challenge_state.noise,
@@ -5938,6 +6298,17 @@ def _resource_payload(resource: ExplorationResource) -> dict[str, object]:
         "mitigates_complications": list(resource.mitigates_complications),
         "mitigates_noise": resource.mitigates_noise,
         "consume_on_use": resource.consume_on_use,
+    }
+
+
+def _temporary_item_payload(item: TemporaryItem) -> dict[str, object]:
+    return {
+        **_resource_payload(item.as_resource()),
+        "temporary": True,
+        "uses_remaining": item.uses_remaining,
+        "description": item.description,
+        "risk": item.risk,
+        "source_materials": list(item.source_materials),
     }
 
 

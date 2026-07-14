@@ -96,6 +96,7 @@ class PreparationEffectType(StrEnum):
     EFFECT_BOOST = "effect_boost"
     UNLOCK_OPTION = "unlock_option"
     GRANT_RESOURCE = "grant_resource"
+    CREATE_TEMPORARY_ITEM = "create_temporary_item"
 
 
 class PreparationEffectDuration(StrEnum):
@@ -127,8 +128,10 @@ class GmPreparationEffect(BaseModel):
     source: str = Field(default="preparation", max_length=80)
     resource_id: str | None = Field(default=None, max_length=80)
     option_id: str | None = Field(default=None, max_length=80)
+    temporary_item_template_id: str | None = Field(default=None, max_length=80)
+    source_materials: tuple[str, ...] = ()
 
-    @field_validator("target_tags")
+    @field_validator("target_tags", "source_materials")
     @classmethod
     def _target_tags_must_be_unique(cls, value: tuple[str, ...]) -> tuple[str, ...]:
         return tuple(dict.fromkeys(tag.strip().lower() for tag in value if tag.strip()))
@@ -279,6 +282,17 @@ class GmClassifierRequest:
             for resource in self.state.resources
             if resource.id in self.state.inventory_resource_ids
         ]
+        resources.extend(
+            {
+                **_resource_payload(item.as_resource()),
+                "temporary": True,
+                "uses_remaining": item.uses_remaining,
+                "risk": item.risk,
+                "source_materials": list(item.source_materials),
+            }
+            for item in self.state.temporary_items
+            if item.available
+        )
         return {
             "scenario": {"id": self.scenario_id, "name": self.scenario_name},
             "scenario_context": self.scenario_context.as_payload(),
@@ -617,11 +631,18 @@ def validate_gm_declaration_analysis(
         return
     if analysis.missing_requirements:
         raise GmProposalValidationError("; ".join(analysis.missing_requirements))
-    if analysis.assumed_new_facts:
+    unsupported_facts = tuple(
+        fact for fact in analysis.assumed_new_facts
+        if not _constructed_fact_is_grounded(fact, request)
+    )
+    if unsupported_facts:
         raise GmProposalValidationError(
-            "Deklaracja zakłada nowe fakty spoza sceny: " + ", ".join(analysis.assumed_new_facts)
+            "Deklaracja zakłada nowe fakty spoza sceny: " + ", ".join(unsupported_facts)
         )
-    unknown_resources = _unknown_declared_resources(analysis, request)
+    unknown_resources = tuple(
+        resource for resource in _unknown_declared_resources(analysis, request)
+        if not _constructed_fact_is_grounded(resource, request)
+    )
     if unknown_resources:
         raise GmProposalValidationError("Drużyna nie ma zadeklarowanych zasobów: " + ", ".join(unknown_resources))
 
@@ -650,6 +671,14 @@ def validate_gm_classifier_proposal(
         raise GmProposalValidationError("Propozycja LLM nie ma nazwy podejścia.")
     if proposal.preparation_effect is not None:
         _validate_preparation_effect(proposal.preparation_effect, policy, request)
+        if (
+            proposal.preparation_effect.type == PreparationEffectType.CREATE_TEMPORARY_ITEM
+            and proposal.action_flow != GmActionFlow.PREPARATION
+        ):
+            raise GmProposalValidationError(
+                "Przedmiot tymczasowy można utworzyć tylko jako osobne przygotowanie; "
+                "złożenie i natychmiastowe użycie jest improvised_tool_check."
+            )
     if proposal.action_flow == GmActionFlow.PREPARATION:
         if proposal.roll_mode != RollMode.NORMAL or proposal.situational_modifiers:
             raise GmProposalValidationError("Przygotowanie bez rzutu nie może mieć modyfikatorów sytuacyjnych obecnego rzutu.")
@@ -772,8 +801,9 @@ def _validate_resources(
     proposal: GmClassifierProposal,
     state: ExplorationState,
 ) -> tuple[ExplorationResource, ...]:
-    owned = set(state.inventory_resource_ids)
+    owned = set(state.inventory_resource_ids) | {item.id for item in state.temporary_items if item.available}
     resources_by_id = {resource.id: resource for resource in state.resources}
+    resources_by_id.update({item.id: item.as_resource() for item in state.temporary_items if item.available})
     approach_tags = set(proposal.approach_tags)
     result: list[ExplorationResource] = []
     for resource_id in proposal.used_resource_ids:
@@ -882,6 +912,39 @@ def _validate_preparation_effect(
         known_option_ids = {option.id for option in request.challenge.options}
         if effect.option_id not in known_option_ids:
             raise GmProposalValidationError(f"Nieznana opcja do odblokowania: {effect.option_id}.")
+    elif effect.type == PreparationEffectType.CREATE_TEMPORARY_ITEM:
+        if not effect.temporary_item_template_id:
+            raise GmProposalValidationError("create_temporary_item wymaga temporary_item_template_id.")
+        templates = {template.id: template for template in policy.temporary_item_templates}
+        template = templates.get(effect.temporary_item_template_id)
+        if template is None:
+            raise GmProposalValidationError(
+                f"Nieznany szablon przedmiotu tymczasowego: {effect.temporary_item_template_id}."
+            )
+        if any(item.template_id == template.id for item in request.state.temporary_items):
+            raise GmProposalValidationError(
+                f"Przedmiot tymczasowy {template.label} został już utworzony w tym scenariuszu."
+            )
+        if not effect.source_materials:
+            raise GmProposalValidationError("create_temporary_item wymaga source_materials.")
+        known_materials = _known_resource_or_material_tokens(request)
+        unknown_materials = {
+            material for material in effect.source_materials
+            if _normalize_fact_token(material) not in known_materials
+        }
+        if unknown_materials:
+            raise GmProposalValidationError(
+                "Przedmiot tymczasowy używa materiałów spoza sceny: " + ", ".join(sorted(unknown_materials))
+            )
+        allowed_materials = {_normalize_fact_token(material) for material in template.allowed_materials}
+        disallowed_materials = {
+            material for material in effect.source_materials
+            if _normalize_fact_token(material) not in allowed_materials
+        }
+        if disallowed_materials:
+            raise GmProposalValidationError(
+                "Szablon przedmiotu nie obsługuje materiałów: " + ", ".join(sorted(disallowed_materials))
+            )
 
 
 def _validate_difficulty_tier(proposal: GmClassifierProposal, policy: LlmChallengePolicy) -> None:
@@ -948,10 +1011,30 @@ def _known_resource_or_material_tokens(request: GmClassifierRequest) -> set[str]
         if resource.id in request.state.inventory_resource_ids:
             tokens.add(_normalize_fact_token(resource.id))
             tokens.add(_normalize_fact_token(resource.label))
+    for item in request.state.temporary_items:
+        if item.available:
+            tokens.add(_normalize_fact_token(item.id))
+            tokens.add(_normalize_fact_token(item.label))
     for context in (request.scenario_context, request.zone.llm_context, request.challenge.llm_context):
         for material in context.available_materials:
             tokens.add(_normalize_fact_token(material))
     return {token for token in tokens if token}
+
+
+def _constructed_fact_is_grounded(fact: str, request: GmClassifierRequest) -> bool:
+    normalized = _normalize_fact_token(fact)
+    template_labels = {
+        _normalize_fact_token(template.label)
+        for template in request.challenge.llm_policy.temporary_item_templates
+    }
+    if any(label in normalized or normalized in label for label in template_labels if label):
+        return True
+    fact_words = {word for word in normalized.split() if len(word) >= 5}
+    return any(
+        entry.role == "gm"
+        and len(fact_words.intersection(_normalize_fact_token(entry.content).split())) >= 2
+        for entry in request.declaration_thread
+    )
 
 
 def _resource_phrase_is_known(normalized_phrase: str, known_tokens: set[str]) -> bool:
@@ -1149,6 +1232,16 @@ def _dynamic_state_payload(state: ExplorationState, challenge: ExplorationChalle
             for point in visible_points
         ],
         "inventory_resource_ids": list(state.inventory_resource_ids),
+        "temporary_items": [
+            {
+                "id": item.id,
+                "label": item.label,
+                "uses_remaining": item.uses_remaining,
+                "source_materials": list(item.source_materials),
+            }
+            for item in state.temporary_items
+            if item.available
+        ],
         "world_notes": _world_notes(state, challenge),
         "attempt_history": _attempt_history_payload(challenge_state),
     }
