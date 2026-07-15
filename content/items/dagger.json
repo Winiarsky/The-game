@@ -2,6 +2,8 @@
   "id": "dagger",
   "name": "Sztylet",
   "kind": "weapon",
+  "description": "Krótki nóż o sztywnym metalowym ostrzu.",
+  "properties": ["short", "rigid", "metallic", "sharp", "cutting"],
   "attacks": [
     {
       "id": "dagger_stab",

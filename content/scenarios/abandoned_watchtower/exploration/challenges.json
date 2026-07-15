@@ -6,9 +6,7 @@
       "name": "Zamknięta brama",
       "progress_required": 3,
       "completed_flag": "gate_passed",
-      "reveals_on_complete": [
-        "wounded_scout"
-      ],
+      "reveals_on_complete": [],
       "llm_policy": {
         "allowed_local_skills": [
           "crafting",
@@ -61,24 +59,6 @@
           "unlock_option",
           "grant_resource",
           "create_temporary_item"
-        ],
-        "temporary_item_templates": [
-          {
-            "id": "improvised_battering_ram",
-            "label": "Prowizoryczny taran",
-            "description": "Ciężka pomoc złożona ze starych desek i metalowych elementów; działa tylko w tej scenie.",
-            "bonus_tags": [
-              "heavy_force",
-              "noise"
-            ],
-            "modifier": 1,
-            "uses": 2,
-            "risk": "Spróchniałe drewno może pęknąć, a uderzenie będzie głośne.",
-            "allowed_materials": [
-              "stare deski",
-              "metalowe okucia"
-            ]
-          }
         ],
         "allowed_grant_resource_ids": [
           "saw"
@@ -144,33 +124,136 @@
       },
       "llm_context": {
         "summary": "Zamknięta, stara drewniana brama blokuje wejście na dziedziniec. Ma metalowe okucia, skorodowane zawiasy, zatarty zamek, kolce na górze i drewniany rygiel po wewnętrznej stronie. Podłoże pod bramą jest twarde, więc szybki podkop nie ma sensu.",
-        "reasonable_approaches": [
-          "wyważenie",
-          "wspinaczka",
-          "podważenie zawiasów",
-          "otwarcie zatartego zamka",
-          "przecięcie drewna",
-          "przejście murem obok",
-          "poszerzenie szpary",
-          "zbadanie słabych punktów",
-          "przedostanie się na drugą stronę i zdjęcie rygla"
-        ],
-        "impossible_approaches": [
-          "przelot na linie bez magii",
-          "zrobienie tarana ze świeżo ściętego drzewa",
-          "otwarcie nieistniejącym magicznym przełącznikiem",
-          "szybki podkop pod bramą przez twarde kamienne albo betonowe podłoże",
-          "magiczne hasło otwierające bramę",
-          "wyrąbanie dużej dziury zwykłą bronią bez odpowiednich narzędzi i czasu",
-          "szybkie spalenie bramy w wilgoci bez dużego dymu i hałasu"
-        ],
-        "risk_notes": [
-          "wyważanie jest głośne",
-          "wspinaczka grozi upadkiem albo skaleczeniem o kolce",
-          "zatarty zamek może się zaklinować",
-          "podważanie zawiasów może zaklinować mechanizm",
-          "duży hałas może zaniepokoić rannego zwiadowcę po drugiej stronie sceny",
-          "emblemat kowala jest informacją, nie zasobem, chyba że późniejszy content pozwoli go fizycznie zabrać"
+        "guidance_facts": [
+          {
+            "id": "gate.rotten_wood",
+            "text": "Drewno bramy jest stare, miejscami popękane i spróchniałe.",
+            "kind": "observation",
+            "visibility": "obvious",
+            "minimum_hint_level": 0
+          },
+          {
+            "id": "gate.corroded_hardware",
+            "text": "Metalowe okucia i zawiasy są mocno skorodowane, a zamek jest zatarty.",
+            "kind": "observation",
+            "visibility": "obvious",
+            "minimum_hint_level": 0
+          },
+          {
+            "id": "gate.force_possible",
+            "text": "Wyważenie wygląda na możliwe podejście.",
+            "kind": "affordance",
+            "visibility": "hint",
+            "minimum_hint_level": 1
+          },
+          {
+            "id": "gate.climb_possible",
+            "text": "Można próbować przejść górą albo wykorzystać niski fragment muru.",
+            "kind": "affordance",
+            "visibility": "hint",
+            "minimum_hint_level": 1
+          },
+          {
+            "id": "gate.hinges_can_be_pried",
+            "text": "Skorodowane zawiasy można próbować podważyć odpowiednią dźwignią.",
+            "kind": "affordance",
+            "visibility": "hint",
+            "minimum_hint_level": 1
+          },
+          {
+            "id": "gate.lock_can_be_picked",
+            "text": "Zatarty zamek można próbować otworzyć precyzyjnymi narzędziami.",
+            "kind": "affordance",
+            "visibility": "hint",
+            "minimum_hint_level": 1
+          },
+          {
+            "id": "gate.gap_can_be_widened",
+            "text": "Spróchniałe drewno przy szczelinie można próbować poszerzyć albo przeciąć odpowiednim narzędziem.",
+            "kind": "affordance",
+            "visibility": "hint",
+            "minimum_hint_level": 1
+          },
+          {
+            "id": "gate.force_is_loud",
+            "text": "Wyważanie bramy wywoła dużo hałasu.",
+            "kind": "risk",
+            "visibility": "hint",
+            "minimum_hint_level": 1
+          },
+          {
+            "id": "gate.climb_is_dangerous",
+            "text": "Wspinaczka grozi upadkiem albo skaleczeniem o kolce.",
+            "kind": "risk",
+            "visibility": "hint",
+            "minimum_hint_level": 2
+          },
+          {
+            "id": "gate.mechanism_can_jam",
+            "text": "Nieudane manipulowanie zamkiem albo zawiasami może zaklinować mechanizm.",
+            "kind": "risk",
+            "visibility": "hint",
+            "minimum_hint_level": 2
+          },
+          {
+            "id": "gate.noise_affects_scout",
+            "text": "Duży hałas może zaniepokoić rannego zwiadowcę po drugiej stronie sceny.",
+            "kind": "risk",
+            "visibility": "hidden",
+            "minimum_hint_level": 2
+          },
+          {
+            "id": "gate.no_rope_flight",
+            "text": "Sama lina nie pozwala przelecieć nad bramą bez magii lub fizycznego punktu oparcia.",
+            "kind": "constraint",
+            "visibility": "obvious",
+            "minimum_hint_level": 0,
+            "match_phrases": [
+              "przelot na linie bez magii",
+              "przelatuję nad bramą na linie"
+            ]
+          },
+          {
+            "id": "gate.no_fresh_tree_ram",
+            "text": "W okolicy nie ma świeżego dużego drzewa, z którego dałoby się szybko zrobić pełny taran.",
+            "kind": "constraint",
+            "visibility": "obvious",
+            "minimum_hint_level": 0,
+            "match_phrases": [
+              "taran ze świeżo ściętego drzewa"
+            ]
+          },
+          {
+            "id": "gate.no_quick_tunnel",
+            "text": "Twarde kamienne podłoże wyklucza szybki podkop pod bramą.",
+            "kind": "constraint",
+            "visibility": "obvious",
+            "minimum_hint_level": 0,
+            "match_phrases": [
+              "szybki podkop pod bramą"
+            ]
+          },
+          {
+            "id": "gate.no_magic_switch",
+            "text": "Brama nie ma magicznego hasła ani ukrytego magicznego przełącznika.",
+            "kind": "constraint",
+            "visibility": "hidden",
+            "minimum_hint_level": 0,
+            "match_phrases": [
+              "magiczne hasło otwierające bramę",
+              "magiczny przełącznik bramy"
+            ]
+          },
+          {
+            "id": "gate.fire_is_slow_and_noisy",
+            "text": "Wilgotnej bramy nie da się szybko spalić bez dużej ilości dymu, czasu i hałasu.",
+            "kind": "constraint",
+            "visibility": "hint",
+            "minimum_hint_level": 1,
+            "match_phrases": [
+              "szybkie spalenie bramy"
+            ]
+          }
         ]
       },
       "options": [

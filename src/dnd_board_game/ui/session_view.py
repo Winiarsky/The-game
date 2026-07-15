@@ -22,6 +22,7 @@ class UiSessionView:
     active_challenge: dict[str, object] | None
     active_point: dict[str, object] | None
     resources: list[dict[str, object]]
+    discovered_sources: list[dict[str, object]]
     actors: list[dict[str, object]]
     active_effects: list[dict[str, object]]
     scene_status: list[dict[str, object]]
@@ -57,6 +58,7 @@ class UiSessionView:
             "active_challenge": self.active_challenge,
             "active_point": self.active_point,
             "resources": self.resources,
+            "discovered_sources": self.discovered_sources,
             "actors": self.actors,
             "active_effects": self.active_effects,
             "scene_status": self.scene_status,

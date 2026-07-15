@@ -1,7 +1,7 @@
 import pytest
 
 from dnd_board_game.actors import Actor, ActorId, Faction
-from dnd_board_game.inventory import InventoryItem, break_inventory_item, consume_inventory_item, has_inventory_quantity
+from dnd_board_game.inventory import InventoryItem, add_inventory_item, break_inventory_item, consume_inventory_item, has_inventory_quantity
 from dnd_board_game.world import Coordinate
 
 
@@ -47,3 +47,11 @@ def test_broken_inventory_item_is_visible_but_unavailable():
     assert updated.inventory[0].broken is True
     assert updated.inventory[0].available is False
     assert has_inventory_quantity(updated, "thieves_tools") is False
+
+
+def test_add_inventory_item_merges_the_same_concrete_instance():
+    actor = _actor_with_inventory(InventoryItem("scene:plank", "Deska", "material", quantity=1))
+
+    updated = add_inventory_item(actor, InventoryItem("scene:plank", "Deska", "material", quantity=2))
+
+    assert updated.inventory[0].quantity == 3

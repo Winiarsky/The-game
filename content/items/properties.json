@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "properties": [
+    {"id": "long", "label": "długie"},
+    {"id": "short", "label": "krótkie"},
+    {"id": "wide", "label": "szerokie"},
+    {"id": "narrow", "label": "wąskie"},
+    {"id": "rigid", "label": "sztywne"},
+    {"id": "flexible", "label": "elastyczne"},
+    {"id": "fragile", "label": "kruche"},
+    {"id": "load_bearing", "label": "nośne"},
+    {"id": "heavy", "label": "ciężkie"},
+    {"id": "light", "label": "lekkie"},
+    {"id": "hard", "label": "twarde"},
+    {"id": "sharp", "label": "ostre"},
+    {"id": "binding", "label": "wiążące"},
+    {"id": "cutting", "label": "tnące"},
+    {"id": "prying", "label": "nadające się do podważania"},
+    {"id": "container", "label": "pojemnik"},
+    {"id": "wooden", "label": "drewniane"},
+    {"id": "metallic", "label": "metalowe"},
+    {"id": "stone", "label": "kamienne"},
+    {"id": "textile", "label": "tekstylne"},
+    {"id": "flammable", "label": "łatwopalne"},
+    {"id": "corroded", "label": "skorodowane"},
+    {"id": "slippery", "label": "śliskie"},
+    {"id": "thorny", "label": "kolczaste"},
+    {"id": "fastener", "label": "element mocujący"}
+  ]
+}

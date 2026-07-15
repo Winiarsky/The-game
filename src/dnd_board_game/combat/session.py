@@ -54,7 +54,10 @@ class CombatState:
         return self.initiative_order.round_number
 
 
-def start_combat(actors: tuple[Actor, ...], initiative_order: InitiativeOrder) -> CombatState:
+def start_combat(
+    actors: tuple[Actor, ...],
+    initiative_order: InitiativeOrder,
+) -> CombatState:
     if not actors:
         raise ValueError("Cannot start combat without actors.")
     state = CombatState(actors=actors, initiative_order=_sync_order_actor_states(initiative_order, actors))

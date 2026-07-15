@@ -25,6 +25,7 @@
       <div id="visible-environment"></div>
     </details>
     <div class="card"><b>Zasoby</b><div id="resources"></div></div>
+    <div class="card"><b>Znalezione w tej lokacji</b><div id="discovered-sources"></div></div>
     <div class="card">
       <b>Plansza</b>
       <div id="board-status" class="muted"></div>
@@ -58,18 +59,53 @@
       <div id="scene-description"></div>
     </div>
     <div class="card scene-action" id="action-panel">
-      <h3 id="action-title">Co robicie lub o co pytacie?</h3>
-      <div id="scene-conversation"></div>
-      <textarea id="action" placeholder="Opiszcie działanie albo zadajcie MG pytanie o scenę..."></textarea>
-      <div class="row" style="margin-top:8px">
-        <button onclick="sendAction()">Powiedz MG</button>
-        <button id="short-rest-button" class="secondary" data-allow-busy="true" onclick="startShortRest()">Krótki odpoczynek</button>
+      <div class="chat-instance-head">
+        <div><span class="muted">Rozmowa z MG</span><h3 id="action-title">Co robicie lub o co pytacie?</h3></div>
+        <button id="leave-interaction-button" class="secondary" data-allow-busy="true" onclick="leaveChatInstance()">Opuść interakcję</button>
+      </div>
+      <div id="chat-stream">
+        <div id="scene-conversation"></div>
+        <div id="chat-typing" class="chat-typing" hidden><span></span><span></span><span></span></div>
+        <div id="result-panel" class="chat-resolution conversation-system-card">
+          <div id="result"></div>
+          <button onclick="ackResult()">Dalej</button>
+        </div>
+        <div id="pending-panel" class="chat-resolution conversation-system-card">
+          <b id="pending-title" class="conversation-system-title">Warunki próby</b>
+          <div id="pending"></div>
+          <div id="lead-actor-choice"></div>
+          <div class="row conversation-system-actions">
+            <button id="pending-accept-button" onclick="decision('accept')">Akceptuj</button>
+            <button id="pending-reject-button" class="danger" onclick="decision('reject')">Odrzuć</button>
+            <button class="secondary" onclick="decision('explain')">Wyjaśnij</button>
+          </div>
+        </div>
+        <div id="roll-panel" class="chat-resolution conversation-system-card">
+          <b class="conversation-system-title">Rzuty</b>
+          <div id="roll-prompt"></div>
+          <div id="rolls"></div>
+          <button onclick="sendRolls()">Rozstrzygnij rzuty</button>
+        </div>
+      </div>
+      <div id="chat-composer">
+        <div class="chat-input-wrap">
+          <div id="slash-command-menu" class="slash-command-menu" role="listbox" aria-label="Komendy" hidden></div>
+          <textarea id="action" placeholder="Napisz wiadomość do MG..." aria-controls="slash-command-menu" aria-expanded="false" autocomplete="off"></textarea>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button onclick="sendAction()">Wyślij</button>
+          <button id="short-rest-button" class="secondary" data-allow-busy="true" onclick="startShortRest()">Krótki odpoczynek</button>
+        </div>
       </div>
     </div>
-    <div class="card" id="result-panel">
-      <h3>Wynik</h3>
-      <div id="result"></div>
-      <button onclick="ackResult()">Dalej</button>
+    <div class="card" id="exploration-menu-panel">
+      <h3>Menu eksploracji</h3>
+      <p>Aktualna lokacja: <b id="exploration-menu-zone"></b></p>
+      <button onclick="openChatInstance()">Wróć do rozmowy</button>
+      <h3 class="menu-section-title">Lokacje sceny</h3>
+      <div id="menu-travel-options"></div>
+      <h3 class="menu-section-title">Odkryte punkty</h3>
+      <div id="menu-point-options"></div>
     </div>
     <div class="card" id="encounter-panel">
       <h3 id="encounter-title">Zaczyna się encounter</h3>
@@ -82,22 +118,6 @@
     <div class="card" id="points-panel">
       <h3>Odkryte punkty</h3>
       <div id="point-options"></div>
-    </div>
-    <div class="card" id="pending-panel">
-      <h3>Decyzja MG</h3>
-      <div id="pending"></div>
-      <div id="lead-actor-choice"></div>
-      <div class="row" style="margin-top:8px">
-        <button onclick="decision('accept')">Akceptuj</button>
-        <button class="danger" onclick="decision('reject')">Odrzuć</button>
-        <button class="secondary" onclick="decision('explain')">Wyjaśnij</button>
-      </div>
-    </div>
-    <div class="card" id="roll-panel">
-      <h3>Rzuty</h3>
-      <div id="roll-prompt"></div>
-      <div id="rolls"></div>
-      <button onclick="sendRolls()">Rozstrzygnij rzuty</button>
     </div>
     <details class="card debug-panel">
       <summary>Historia komunikatów</summary>
@@ -126,6 +146,7 @@
     </details>
   </section>
 </main>
+<script>window.EXPLORATION_SLASH_COMMANDS = {{ slash_commands | tojson }};</script>
 <script src="{{ url_for('static', filename='exploration.js') }}"></script>
 </body>
 </html>

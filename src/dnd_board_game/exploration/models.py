@@ -6,6 +6,7 @@ from enum import StrEnum
 from dnd_board_game.actors import Actor, spell_is_prepared
 from dnd_board_game.combat import SceneAbilityCheck, SceneFlags, SetupVisibility, scene_flag, set_scene_flag
 from dnd_board_game.hardware import LedColor, LedFeedback, LedFrame, LedRole
+from dnd_board_game.inventory import ItemInstance
 from dnd_board_game.rules import (
     D20RollInput,
     D20RollRequest,
@@ -28,6 +29,74 @@ class ExplorationOptionKind(StrEnum):
     MESSAGE = "message"
     SEARCH = "search"
     CHECK = "check"
+
+
+class FixtureOperation(StrEnum):
+    DETACH = "detach"
+    DAMAGE = "damage"
+    DESTROY = "destroy"
+    MOVE = "move"
+    OPEN = "open"
+    CLOSE = "close"
+    REPAIR = "repair"
+
+
+@dataclass(frozen=True, slots=True)
+class FixtureActionPolicy:
+    operation: FixtureOperation
+    result_condition: str
+    ability: str
+    difficulty_tier: str
+    skill: str | None = None
+    allowed_conditions: tuple[str, ...] = ()
+    progress_on_success: int = 1
+    progress_on_failure: int = 0
+    success_noise: int = 0
+    failure_noise: int = 0
+    failure_complication: str | None = None
+    makes_fixture_unavailable: bool = False
+    release_yield_items: bool = False
+
+    def __post_init__(self) -> None:
+        if not self.result_condition.strip() or not self.ability.strip() or not self.difficulty_tier.strip():
+            raise ValueError("Fixture action result, ability and difficulty tier cannot be empty.")
+        if self.progress_on_success < 0 or self.progress_on_failure < 0:
+            raise ValueError("Fixture action progress cannot be negative.")
+        if self.success_noise < 0 or self.failure_noise < 0:
+            raise ValueError("Fixture action noise cannot be negative.")
+
+
+@dataclass(frozen=True, slots=True)
+class SceneFixture:
+    id: str
+    name: str
+    description: str = ""
+    properties: tuple[str, ...] = ()
+    condition: str = "normal"
+    visible: bool = True
+    portable: bool = False
+    detachable: bool = False
+    destructible: bool = False
+    yield_items: tuple[ItemInstance, ...] = ()
+    action_policies: tuple[FixtureActionPolicy, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.id.strip():
+            raise ValueError("Scene fixture id cannot be empty.")
+        if not self.name.strip():
+            raise ValueError("Scene fixture name cannot be empty.")
+        if not self.condition.strip():
+            raise ValueError("Scene fixture condition cannot be empty.")
+        if any(not property_id.strip() for property_id in self.properties):
+            raise ValueError(f"Scene fixture {self.id}.properties cannot contain empty ids.")
+        if len(self.properties) != len(set(self.properties)):
+            raise ValueError(f"Scene fixture {self.id}.properties cannot contain duplicate ids.")
+        yield_ids = tuple(item.id for item in self.yield_items)
+        if len(yield_ids) != len(set(yield_ids)):
+            raise ValueError(f"Scene fixture {self.id}.yield_items cannot contain duplicate ids.")
+        operations = tuple(policy.operation for policy in self.action_policies)
+        if len(operations) != len(set(operations)):
+            raise ValueError(f"Scene fixture {self.id}.action_policies cannot repeat operations.")
 
 
 class RestSafety(StrEnum):
@@ -98,12 +167,103 @@ class EncounterTriggerCondition(StrEnum):
     POINT_REVEALED = "point_revealed"
 
 
+class EncounterOpeningOutcome(StrEnum):
+    PARTY_SURPRISES_ENEMIES = "party_surprises_enemies"
+    NO_SURPRISE = "no_surprise"
+    ENEMIES_SURPRISE_PARTY = "enemies_surprise_party"
+
+
+class LlmGuidanceFactKind(StrEnum):
+    OBSERVATION = "observation"
+    AFFORDANCE = "affordance"
+    RISK = "risk"
+    CONSTRAINT = "constraint"
+
+
+class LlmGuidanceFactVisibility(StrEnum):
+    OBVIOUS = "obvious"
+    HINT = "hint"
+    HIDDEN = "hidden"
+
+
+@dataclass(frozen=True, slots=True)
+class LlmGuidanceFact:
+    id: str
+    text: str
+    kind: LlmGuidanceFactKind
+    visibility: LlmGuidanceFactVisibility
+    minimum_hint_level: int = 0
+    reveal_if_flags: tuple[str, ...] = ()
+    match_phrases: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.id.strip() or not self.text.strip():
+            raise ValueError("LLM guidance fact id and text cannot be empty.")
+        if not 0 <= self.minimum_hint_level <= 3:
+            raise ValueError("LLM guidance fact minimum_hint_level must be between 0 and 3.")
+        if self.visibility == LlmGuidanceFactVisibility.OBVIOUS and self.minimum_hint_level != 0:
+            raise ValueError("Obvious LLM guidance facts must use minimum_hint_level 0.")
+        if self.visibility == LlmGuidanceFactVisibility.HINT and self.minimum_hint_level < 1:
+            raise ValueError("Hint LLM guidance facts must use minimum_hint_level 1 or higher.")
+
+    def is_revealed(self, flags: SceneFlags) -> bool:
+        if self.visibility != LlmGuidanceFactVisibility.HIDDEN:
+            return True
+        return bool(self.reveal_if_flags) and all(
+            bool(scene_flag(flags, flag, False))
+            for flag in self.reveal_if_flags
+        )
+
+    def as_payload(self) -> dict[str, object]:
+        return {
+            "id": self.id,
+            "text": self.text,
+            "kind": self.kind.value,
+            "visibility": self.visibility.value,
+            "minimum_hint_level": self.minimum_hint_level,
+            "reveal_if_flags": list(self.reveal_if_flags),
+            "match_phrases": list(self.match_phrases),
+        }
+
+
 @dataclass(frozen=True, slots=True)
 class EncounterOutcome:
     title: str
     body: str
     effects: tuple[dict[str, object], ...] = ()
     next_instruction: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class EncounterOpeningRule:
+    id: str
+    outcome: EncounterOpeningOutcome
+    title: str
+    narration: str
+    min_noise: int | None = None
+    max_noise: int | None = None
+    required_flags: tuple[str, ...] = ()
+    forbidden_flags: tuple[str, ...] = ()
+    completion_any_tags: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class EncounterOpeningPolicy:
+    challenge_id: str
+    default_outcome: EncounterOpeningOutcome
+    default_title: str
+    default_narration: str
+    rules: tuple[EncounterOpeningRule, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class EncounterOpeningResolution:
+    rule_id: str
+    outcome: EncounterOpeningOutcome
+    title: str
+    narration: str
+    noise: int
+    completion_tags: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,6 +274,7 @@ class LlmContext:
     reasonable_approaches: tuple[str, ...] = ()
     impossible_approaches: tuple[str, ...] = ()
     risk_notes: tuple[str, ...] = ()
+    guidance_facts: tuple[LlmGuidanceFact, ...] = ()
 
     def as_payload(self) -> dict[str, object]:
         return {
@@ -123,6 +284,7 @@ class LlmContext:
             "reasonable_approaches": list(self.reasonable_approaches),
             "impossible_approaches": list(self.impossible_approaches),
             "risk_notes": list(self.risk_notes),
+            "guidance_facts": [fact.as_payload() for fact in self.guidance_facts],
         }
 
 
@@ -138,6 +300,7 @@ class ExplorationEncounterTrigger:
     flag_key: str | None = None
     flag_value: object = True
     point_id: str | None = None
+    opening_policy: EncounterOpeningPolicy | None = None
     outcome_on_victory: EncounterOutcome | None = None
     outcome_on_defeat: EncounterOutcome | None = None
 
@@ -149,6 +312,7 @@ class PendingEncounter:
     description: str
     encounter_scenario: str
     reason: str
+    opening_resolution: EncounterOpeningResolution | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -289,6 +453,8 @@ class ExplorationZone:
     search_failure_flag: str | None = None
     llm_context: LlmContext = LlmContext()
     short_rest_policy: ShortRestPolicy | None = None
+    item_instances: tuple[ItemInstance, ...] = ()
+    fixtures: tuple[SceneFixture, ...] = ()
 
     @property
     def marker_position(self) -> Coordinate:
@@ -474,6 +640,7 @@ class ImprovisedToolUse:
     label: str
     source: ExplorationSituationalModifierSource
     source_detail: str
+    source_id: str | None = None
     effect_modifier: int = 1
     risk: str = ""
     reason: str = ""
@@ -483,6 +650,8 @@ class ImprovisedToolUse:
             raise ValueError("Improvised tool label cannot be empty.")
         if not self.source_detail.strip():
             raise ValueError("Improvised tool source_detail cannot be empty.")
+        if self.source_id is not None and not self.source_id.strip():
+            raise ValueError("Improvised tool source_id cannot be empty.")
         if not -2 <= int(self.effect_modifier) <= 2:
             raise ValueError("Improvised tool effect modifier must be between -2 and +2.")
         if self.effect_modifier == 0:
@@ -503,6 +672,7 @@ class ImprovisedToolUse:
             "label": self.label,
             "source": self.source.value,
             "source_detail": self.source_detail,
+            "source_id": self.source_id,
             "effect_modifier": self.effect_modifier,
             "risk": self.risk,
             "reason": self.reason,
@@ -747,6 +917,8 @@ class ExplorationResource:
     mitigates_noise: int = 0
     unlocks_flags: tuple[str, ...] = ()
     consume_on_use: bool = False
+    properties: tuple[str, ...] = ()
+    portable: bool = True
 
     def as_roll_modifier(self) -> RollModifier | None:
         if self.modifier == 0:
@@ -759,10 +931,34 @@ class ExplorationResource:
         )
 
 
+class CraftingComponentDisposition(StrEnum):
+    CONSUMED = "consumed"
+    RESERVED = "reserved"
+
+
+class TemporaryItemScope(StrEnum):
+    INTERACTION = "interaction"
+    SCENE = "scene"
+    SCENARIO = "scenario"
+
+
+@dataclass(frozen=True, slots=True)
+class CraftingComponentUse:
+    source_id: str
+    quantity: int
+    disposition: CraftingComponentDisposition
+
+    def __post_init__(self) -> None:
+        if not self.source_id.strip():
+            raise ValueError("Crafting component source_id cannot be empty.")
+        if self.quantity < 1:
+            raise ValueError("Crafting component quantity must be positive.")
+
+
 @dataclass(frozen=True, slots=True)
 class TemporaryItem:
     id: str
-    template_id: str
+    template_id: str | None
     label: str
     description: str
     bonus_tags: tuple[str, ...]
@@ -772,10 +968,15 @@ class TemporaryItem:
     created_in_zone_id: str
     source_materials: tuple[str, ...] = ()
     risk: str = ""
+    purpose_id: str | None = None
+    component_uses: tuple[CraftingComponentUse, ...] = ()
+    scope: TemporaryItemScope = TemporaryItemScope.SCENARIO
+    time_cost_minutes: int = 0
+    dismantled: bool = False
 
     @property
     def available(self) -> bool:
-        return self.uses_remaining > 0
+        return self.uses_remaining > 0 and not self.dismantled
 
     def as_resource(self) -> ExplorationResource:
         return ExplorationResource(
@@ -785,6 +986,35 @@ class TemporaryItem:
             modifier=self.modifier,
             advantage=self.advantage,
         )
+
+
+class EncounterEdgeType(StrEnum):
+    INITIATIVE_ADVANTAGE = "initiative_advantage"
+
+
+@dataclass(frozen=True, slots=True)
+class EncounterEdge:
+    id: str
+    edge_type: EncounterEdgeType
+    label: str
+    beneficiary_actor_id: str
+    encounter_trigger_id: str
+    source_observation_id: str
+    source_fact_id: str
+    consumed: bool = False
+
+    def __post_init__(self) -> None:
+        required = {
+            "id": self.id,
+            "label": self.label,
+            "beneficiary_actor_id": self.beneficiary_actor_id,
+            "encounter_trigger_id": self.encounter_trigger_id,
+            "source_observation_id": self.source_observation_id,
+            "source_fact_id": self.source_fact_id,
+        }
+        for field_name, value in required.items():
+            if not value.strip():
+                raise ValueError(f"Encounter edge {field_name} cannot be empty.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -804,6 +1034,61 @@ class ChallengeResult:
 
 
 @dataclass(frozen=True, slots=True)
+class SceneSourceDiscovery:
+    """Player knowledge that a concrete source was found in a scene."""
+
+    source_id: str
+    zone_id: str
+    requested_as: str = ""
+    purpose: str = ""
+    matched_properties: tuple[str, ...] = ()
+    semantic_substitution: bool = False
+
+    def __post_init__(self) -> None:
+        if not self.source_id.strip() or not self.zone_id.strip():
+            raise ValueError("Scene source discovery ids cannot be empty.")
+        if len(self.matched_properties) != len(set(self.matched_properties)):
+            raise ValueError("Scene source discovery properties cannot contain duplicates.")
+
+
+@dataclass(frozen=True, slots=True)
+class SceneSourceCollection:
+    """Persistent transfer of a concrete source out of its exploration location."""
+
+    source_id: str
+    zone_id: str
+    quantity: int
+    destination: str
+    label: str
+    owner_actor_id: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.source_id.strip() or not self.zone_id.strip():
+            raise ValueError("Collected scene source ids cannot be empty.")
+        if self.quantity < 1:
+            raise ValueError("Collected scene source quantity must be positive.")
+        if not self.destination.strip() or not self.label.strip():
+            raise ValueError("Collected scene source destination and label cannot be empty.")
+
+
+@dataclass(frozen=True, slots=True)
+class FixtureRuntimeState:
+    zone_id: str
+    fixture_id: str
+    condition: str
+    unavailable: bool = False
+    detached: bool = False
+    destroyed: bool = False
+    released_item_ids: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.zone_id.strip() or not self.fixture_id.strip() or not self.condition.strip():
+            raise ValueError("Fixture runtime state ids and condition cannot be empty.")
+        if len(self.released_item_ids) != len(set(self.released_item_ids)):
+            raise ValueError("Fixture runtime released item ids cannot contain duplicates.")
+
+
+@dataclass(frozen=True, slots=True)
 class ExplorationState:
     zones: tuple[ExplorationZone, ...]
     points: tuple[ExplorationPoint, ...]
@@ -817,6 +1102,38 @@ class ExplorationState:
     elapsed_minutes: int = 0
     short_rest_counts: tuple[tuple[str, int], ...] = ()
     temporary_items: tuple[TemporaryItem, ...] = ()
+    encounter_edges: tuple[EncounterEdge, ...] = ()
+    source_discoveries: tuple[SceneSourceDiscovery, ...] = ()
+    source_collections: tuple[SceneSourceCollection, ...] = ()
+    fixture_states: tuple[FixtureRuntimeState, ...] = ()
+
+
+def grant_encounter_edge(state: ExplorationState, edge: EncounterEdge) -> ExplorationState:
+    """Add an encounter edge once, keeping repeated observation attempts idempotent."""
+
+    remaining = tuple(item for item in state.encounter_edges if item.id != edge.id)
+    return replace(state, encounter_edges=(*remaining, edge))
+
+
+def available_encounter_edges(
+    state: ExplorationState,
+    encounter_trigger_id: str,
+) -> tuple[EncounterEdge, ...]:
+    return tuple(
+        edge
+        for edge in state.encounter_edges
+        if edge.encounter_trigger_id == encounter_trigger_id and not edge.consumed
+    )
+
+
+def consume_encounter_edge(state: ExplorationState, edge_id: str) -> ExplorationState:
+    return replace(
+        state,
+        encounter_edges=tuple(
+            replace(edge, consumed=True) if edge.id == edge_id else edge
+            for edge in state.encounter_edges
+        ),
+    )
 
 
 def visible_exploration_zones(zones: tuple[ExplorationZone, ...]) -> tuple[ExplorationZone, ...]:
@@ -967,10 +1284,13 @@ def matching_resources(
         if resource.id in owned
         and (option_tags.intersection(resource.bonus_tags) or resource.id == option.unlocks_if_resource_id)
     )
+    collected_source_ids = {item.source_id for item in state.source_collections}
     temporary = tuple(
         item.as_resource()
         for item in state.temporary_items
-        if item.available and option_tags.intersection(item.bonus_tags)
+        if item.available
+        and f"temporary:{item.id}" not in collected_source_ids
+        and option_tags.intersection(item.bonus_tags)
     )
     return (*persistent, *temporary)
 

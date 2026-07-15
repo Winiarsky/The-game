@@ -8,6 +8,44 @@
       "condition": "flag_equals",
       "flag_key": "gate_passed",
       "flag_value": true,
+      "opening_policy": {
+        "challenge_id": "closed_gate",
+        "default_outcome": "no_surprise",
+        "default_title": "Obie strony są gotowe",
+        "default_narration": "Brama ustępuje, a drużyna i gobliny dostrzegają się niemal jednocześnie. Nikt nie rozpoczyna starcia z przewagą zaskoczenia.",
+        "rules": [
+          {
+            "id": "forced_breach",
+            "outcome": "no_surprise",
+            "title": "Głośne wejście",
+            "narration": "Brama ustępuje z trzaskiem. Gobliny wiedzą, że ktoś nadchodzi, ale drużyna wchodzi gotowa na natychmiastowe starcie. Nikt nie jest zaskoczony.",
+            "completion_any_tags": ["heavy_force"]
+          },
+          {
+            "id": "alerted_without_reconnaissance",
+            "outcome": "enemies_surprise_party",
+            "title": "Gobliny przygotowały zasadzkę",
+            "narration": "Hałas uprzedził gobliny, a drużyna nie rozpoznała zagrożenia za bramą. Przeciwnicy wykorzystują pierwsze sekundy starcia.",
+            "min_noise": 3,
+            "forbidden_flags": ["gate_goblins_spotted"]
+          },
+          {
+            "id": "alerted_after_reconnaissance",
+            "outcome": "no_surprise",
+            "title": "Obie strony są przygotowane",
+            "narration": "Gobliny słyszały drużynę, lecz wcześniejsze rozpoznanie zdradziło ich obecność. Obie strony rozpoczynają walkę świadomie.",
+            "min_noise": 3,
+            "required_flags": ["gate_goblins_spotted"]
+          },
+          {
+            "id": "quiet_entry",
+            "outcome": "party_surprises_enemies",
+            "title": "Ciche wejście",
+            "narration": "Brama otwiera się wystarczająco cicho, by gobliny nie zdążyły zareagować. Drużyna zaskakuje przeciwników.",
+            "max_noise": 2
+          }
+        ]
+      },
       "outcome_on_victory": {
         "title": "Przejście zabezpieczone",
         "body": "Dwa gobliny padają albo uciekają w głąb ruin. Drużyna ma chwilę, by rozejrzeć się po dziedzińcu.",
@@ -18,6 +56,12 @@
             "parameters": {
               "key": "gate_skirmish_cleared",
               "value": true
+            }
+          },
+          {
+            "type": "reveal_point",
+            "parameters": {
+              "point_id": "wounded_scout"
             }
           }
         ]
@@ -31,49 +75,6 @@
             "type": "set_flag",
             "parameters": {
               "key": "party_defeated_at_gate",
-              "value": true
-            }
-          }
-        ]
-      }
-    },
-    {
-      "id": "gate_noise_alarm",
-      "name": "Alarm na dziedzińcu",
-      "description": "Hałas przy bramie niesie się po pustej strażnicy. Coś odpowiada ruchem po drugiej stronie murów.",
-      "encounter_scenario": "content/scenarios/multi_actor_skirmish.json",
-      "condition": "noise_at_least",
-      "challenge_id": "closed_gate",
-      "noise": 3,
-      "outcome_on_victory": {
-        "title": "Dziedziniec ucichł",
-        "body": "Po ostatnim ciosie echo walki gaśnie między murami. Wśród przewróconych desek słychać płytki oddech kogoś, kto przeżył alarm.",
-        "next_instruction": "Zakończ wynik, a potem wybierz ujawniony punkt rannego zwiadowcy na planszy.",
-        "effects": [
-          {
-            "type": "set_flag",
-            "parameters": {
-              "key": "courtyard_cleared",
-              "value": true
-            }
-          },
-          {
-            "type": "reveal_point",
-            "parameters": {
-              "point_id": "wounded_scout"
-            }
-          }
-        ]
-      },
-      "outcome_on_defeat": {
-        "title": "Alarm rozbija drużynę",
-        "body": "Przeciwnicy przejmują dziedziniec. Drużyna musi wycofać się z hałasem i zapamiętać koszt tej porażki.",
-        "next_instruction": "Zakończ wynik, żeby wrócić do eksploracji i zdecydować, czy scena wymaga resetu albo konsekwencji MG.",
-        "effects": [
-          {
-            "type": "set_flag",
-            "parameters": {
-              "key": "party_defeated_at_courtyard",
               "value": true
             }
           }

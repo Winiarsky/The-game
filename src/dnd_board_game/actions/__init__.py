@@ -24,6 +24,15 @@ from .catalog import (
 from .healing import CustomHealing, HealingMechanic, ItemHealing, SpellHealing, healing_mechanic_from_source
 from .interactions import ObjectInteraction, SceneInteractionMechanic, object_interaction_mechanic
 from .movement import BasicMove, DashAction, MovementMechanic, basic_move_mechanic, dash_mechanic
+from .player_input import (
+    ParsedPlayerInput,
+    PlayerIntentHint,
+    SLASH_COMMANDS,
+    SlashCommand,
+    parse_player_input,
+    slash_commands_payload,
+    slash_help_message,
+)
 from .resolution import (
     ActionResourceResolution,
     ActionResourceResolver,
@@ -88,6 +97,8 @@ __all__ = [
     "MeleeAttack",
     "MovementMechanic",
     "ObjectInteraction",
+    "ParsedPlayerInput",
+    "PlayerIntentHint",
     "OpportunityAttack",
     "RangedAttack",
     "ReadyAction",
@@ -100,6 +111,8 @@ __all__ = [
     "SpellHealing",
     "SpellSaveAttack",
     "SpellSaveAttackResolver",
+    "SLASH_COMMANDS",
+    "SlashCommand",
     "StrengthPotionAction",
     "SupportAction",
     "TargetingMode",
@@ -116,7 +129,10 @@ __all__ = [
     "help_mechanic",
     "object_interaction_mechanic",
     "opportunity_attack_mechanic",
+    "parse_player_input",
     "ready_attack_mechanic",
     "ready_mechanic",
+    "slash_commands_payload",
+    "slash_help_message",
     "strength_potion_mechanic",
 ]

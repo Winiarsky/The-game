@@ -1,0 +1,50 @@
+{
+  "observations": [
+    {
+      "id": "look_through_gate_gap",
+      "zone_id": "gate",
+      "challenge_id": "closed_gate",
+      "label": "Dokładne rozpoznanie przez szczelinę",
+      "description": "Bohater zagląda przez wąską szczelinę i przez chwilę obserwuje ograniczony fragment dziedzińca, szukając ruchu, sylwetek i śladów obecności.",
+      "ability": "wisdom",
+      "skill": "perception",
+      "participants": "single_actor",
+      "aggregation": "lead_result",
+      "failure_message": "Szczelina daje zbyt wąski i zasłonięty widok. Nie dostrzegasz niczego rozstrzygającego, ale nie możesz stwierdzić, że dziedziniec jest pusty.",
+      "intent_examples": [
+        "zaglądam przez szczelinę w bramie",
+        "zajrzę przez szczelinę i sprawdzę co widać",
+        "sprawdzam czy ktoś stoi za bramą",
+        "zerkam przez szparę w deskach",
+        "sprawdzam przez szparę czy nikt tam nie stoi",
+        "obserwuję dziedziniec przez szparę",
+        "szukam ruchu po drugiej stronie bramy"
+      ],
+      "facts": [
+        {
+          "id": "courtyard_activity_suspected",
+          "minimum_total": 10,
+          "reveal_flag": "courtyard_activity_suspected",
+          "narration": "Na wilgotnych kamieniach dostrzegasz świeże ślady i krótkie poruszenie między zaroślami. Dziedziniec nie wygląda na całkiem opuszczony."
+        },
+        {
+          "id": "gate_goblins_spotted",
+          "minimum_total": 15,
+          "reveal_flag": "gate_goblins_spotted",
+          "narration": "Po chwili zauważasz dwie niewielkie, uzbrojone sylwetki. To gobliny kręcące się po dziedzińcu poza bezpośrednim sąsiedztwem bramy."
+        },
+        {
+          "id": "gate_goblins_positions_known",
+          "minimum_total": 20,
+          "reveal_flag": "gate_goblins_positions_known",
+          "narration": "Rozpoznajesz ich przybliżone pozycje i rytm patrolowania. Możecie wykorzystać tę wiedzę, planując wejście na dziedziniec.",
+          "encounter_edge": {
+            "type": "initiative_advantage",
+            "encounter_trigger_id": "gate_open_skirmish",
+            "label": "Rozpoznane pozycje goblinów"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -2,6 +2,8 @@
   "id": "crossbow",
   "name": "Kusza",
   "kind": "weapon",
+  "description": "Drewniano-metalowa kusza z napiętym mechanizmem.",
+  "properties": ["rigid", "wooden", "metallic"],
   "attacks": [
     {
       "id": "crossbow_shot",

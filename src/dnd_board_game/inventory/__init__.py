@@ -5,6 +5,14 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
+from .catalog import (
+    ItemCollectionDestination,
+    ItemDefinition,
+    ItemInstance,
+    ItemPropertyCatalog,
+    ItemPropertyDefinition,
+)
+
 if TYPE_CHECKING:
     from dnd_board_game.actors import Actor
 
@@ -18,6 +26,9 @@ class InventoryItem:
     equipped: bool = True
     source_ref: str | None = None
     broken: bool = False
+    description: str = ""
+    properties: tuple[str, ...] = ()
+    portable: bool = True
 
     @property
     def available(self) -> bool:
@@ -33,6 +44,9 @@ def inventory_item_payload(item: InventoryItem) -> dict[str, object]:
         "equipped": item.equipped,
         "source_ref": item.source_ref,
         "broken": item.broken,
+        "description": item.description,
+        "properties": list(item.properties),
+        "portable": item.portable,
         "available": item.available,
     }
 
@@ -60,6 +74,34 @@ def consume_inventory_item(actor: Actor, item_id: str, quantity: int = 1) -> Act
     raise ValueError(f"Actor does not have inventory item: {item_id}.")
 
 
+def add_inventory_item(actor: Actor, item: InventoryItem) -> Actor:
+    """Add an item instance or merge another quantity of the same instance."""
+
+    if item.quantity <= 0:
+        raise ValueError("Added inventory quantity must be positive.")
+    items = list(actor.inventory)
+    for index, current in enumerate(items):
+        if current.id != item.id:
+            continue
+        if (
+            current.name,
+            current.kind,
+            current.source_ref,
+            current.properties,
+            current.portable,
+        ) != (
+            item.name,
+            item.kind,
+            item.source_ref,
+            item.properties,
+            item.portable,
+        ):
+            raise ValueError(f"Inventory item id collision: {item.id}.")
+        items[index] = replace(current, quantity=current.quantity + item.quantity)
+        return replace(actor, inventory=tuple(items))
+    return replace(actor, inventory=(*actor.inventory, item))
+
+
 def break_inventory_item(actor: Actor, item_id: str) -> Actor:
     items = list(actor.inventory)
     for index, item in enumerate(items):
@@ -71,7 +113,13 @@ def break_inventory_item(actor: Actor, item_id: str) -> Actor:
 
 
 __all__ = [
+    "ItemDefinition",
+    "ItemCollectionDestination",
+    "ItemInstance",
+    "ItemPropertyCatalog",
+    "ItemPropertyDefinition",
     "InventoryItem",
+    "add_inventory_item",
     "break_inventory_item",
     "consume_inventory_item",
     "has_inventory_quantity",

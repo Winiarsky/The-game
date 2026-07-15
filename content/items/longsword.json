@@ -2,6 +2,8 @@
   "id": "longsword",
   "name": "Miecz",
   "kind": "weapon",
+  "description": "Długi miecz o stalowym ostrzu.",
+  "properties": ["long", "rigid", "metallic", "sharp", "cutting"],
   "attacks": [
     {
       "id": "longsword_slash",

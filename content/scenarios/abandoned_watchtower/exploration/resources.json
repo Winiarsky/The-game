@@ -6,6 +6,13 @@
       "bonus_tags": [
         "climbing"
       ],
+      "properties": [
+        "long",
+        "flexible",
+        "binding",
+        "load_bearing",
+        "textile"
+      ],
       "modifier": 2
     },
     {
@@ -14,6 +21,13 @@
       "bonus_tags": [
         "lever",
         "quiet"
+      ],
+      "properties": [
+        "short",
+        "rigid",
+        "hard",
+        "wooden",
+        "prying"
       ],
       "mitigates_complications": [
         "jammed_gate"
@@ -27,6 +41,12 @@
       "bonus_tags": [
         "saw",
         "picket"
+      ],
+      "properties": [
+        "rigid",
+        "metallic",
+        "cutting",
+        "sharp"
       ],
       "modifier": 2,
       "unlocks_flags": [

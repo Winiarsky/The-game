@@ -20,6 +20,30 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [ ] Lock the first full release to a documented rules baseline; recommended: D&D 5e 2014.
 - [ ] Decide and document the licensing/source-pack strategy for the target content catalog.
 - [ ] Define schema versions, stable content ids, and migration rules for content and save snapshots.
+- [x] Add the versioned material-property catalog and schemas for item definitions, item instances, and scene fixtures.
+- [x] Add a unified crafting-source registry for zone items, fixtures, exploration resources, and party inventory.
+- [x] Add deterministic property-based crafting drafts, component validation, allocation, dismantling, and engine-owned costs.
+- [x] Integrate property-based crafting with the GM classifier and chat confirmation, without a default build roll.
+- [x] Close the exploration MVP with a chat-first GM, grounded scene answers, progressive hints, and persisted reveal context.
+- [x] Add filterable slash-command intent hints to the exploration chat while preserving automatic intent detection.
+- [x] Unify player questions and progressive hint requests under `/pytaj`; infer hint strength from message content.
+- [x] Add deterministic graded observations that reveal cumulative scene facts without advancing the active challenge.
+- [x] Route authored observation intents before generic challenge classification and ground numeric DCs to content tiers.
+- [x] Replace the gate's predefined approach/risk lists with structured guidance facts and update the interaction form.
+- [x] Give `/szukaj` an exact-first and semantic-fallback flow with player-confirmed substitutes and persisted scene findings.
+- [x] Give `/użyj` explicit source resolution, deterministic source binding, and a property/risk preview for scene-item use.
+- [x] Add explicit take/collect policies for portable findings, quest items, and treasure without conflating search with inventory transfer.
+- [x] Let detachable scene fixtures be acquired during confirmed crafting instead of requiring an unavailable technical detachment command.
+- [x] Ground actor-inventory items in generated exploration checks and restrict the test leader to an actor who owns the item.
+- [x] Route visible-source searches and immediate improvised use before observation/crafting, with player-facing validation messages.
+- [x] Carry exact reconnaissance into a one-use initiative advantage for its observer in the matching encounter.
+- [x] Keep the wounded scout hidden until the gate encounter is won instead of revealing it when the gate opens.
+- [x] Add a scenario-driven encounter-opening stage with initiative disadvantage for the surprised side.
+- [ ] [Deferred rules fidelity] Add optional per-creature D&D 5e surprise detection when a scenario needs exact Stealth vs passive Perception.
+- [x] Replace text-only exploration materials and predefined temporary-item templates with deterministic property-based crafting.
+- [x] Persist component reservations and dynamically crafted temporary items in scenario snapshots.
+- [x] Persist runtime fixture state changes once fixture detachment and destruction actions are implemented.
+- [x] Migrate the watchtower gate as the reference fixture/crafting interaction after the generic runtime is ready.
 - [x] Unify effect source, duration, expiration, stacking, and replacement contracts.
 - [x] Add generic actor resources with short-rest and long-rest recovery policies.
 - [x] Implement automatic pre-scenario long rest and content-driven short rest independently from classes.
@@ -146,8 +170,11 @@ obowiązują `Current Roadmap Focus` oraz etapy z `ROADMAP.md`.
 - [x] Add grounded situational modifiers and advantage/disadvantage to exploration rolls.
 - [x] Add improvised tool mechanic validation and explicit GM approval flow.
 - [x] Add scene-scoped temporary items built from grounded materials, with visible uses, snapshot support, and scenario-end expiration.
+- [x] Ground omitted temporary-item template IDs from an unambiguous challenge policy and hide technical validator fields from players.
 - [x] Persist interaction-scoped exploration conversations and restore their LLM context from snapshots.
+- [x] Present exploration interactions as full-screen chat instances with scene intro, typing indicator, and an explicit return to the location menu.
 - [x] Add visible scene-resource effects, correction, and consumption to exploration rolls.
+- [x] Replace hardcoded functional item aliases with LLM property queries and deterministic scene-source matching.
 - [x] Add generic pre-scenario prepared-spell selection and runtime enforcement MVP.
 - [ ] [Deferred K3-K4] Add class-derived spell lists, known-spell profiles, and advanced concentration modifiers.
 - [ ] [Deferred product UX] Add voice input and richer UI for free-form exploration declarations.

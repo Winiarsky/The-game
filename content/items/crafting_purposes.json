@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "max_active_items": 3,
+  "purposes": [
+    {
+      "id": "heavy_force",
+      "label": "Ciężkie uderzenie",
+      "requirements": [
+        {"properties": ["long", "rigid"], "minimum_quantity": 1},
+        {"properties": ["heavy", "hard"], "minimum_quantity": 1}
+      ],
+      "bonus_tags": ["heavy_force", "noise"],
+      "modifier": 1,
+      "uses": 2,
+      "time_cost_minutes": 10,
+      "risk": "Prowizoryczna konstrukcja może pęknąć, a jej użycie będzie głośne."
+    },
+    {
+      "id": "climbing_aid",
+      "label": "Pomoc do wspinaczki",
+      "requirements": [
+        {"properties": ["long", "rigid"], "minimum_quantity": 2},
+        {"properties": ["binding", "load_bearing"], "minimum_quantity": 1}
+      ],
+      "bonus_tags": ["climbing"],
+      "modifier": 1,
+      "uses": 3,
+      "time_cost_minutes": 15,
+      "risk": "Konstrukcja jest prowizoryczna i może nie wytrzymać gwałtownego obciążenia."
+    },
+    {
+      "id": "leverage",
+      "label": "Dźwignia lub podparcie",
+      "requirements": [
+        {"properties": ["long", "rigid"], "minimum_quantity": 1},
+        {"properties": ["prying", "hard"], "minimum_quantity": 1}
+      ],
+      "bonus_tags": ["lever", "quiet"],
+      "modifier": 1,
+      "uses": 2,
+      "time_cost_minutes": 10,
+      "risk": "Źle podparta dźwignia może się ześlizgnąć albo zaklinować mechanizm."
+    },
+    {
+      "id": "precision_tool",
+      "label": "Prowizoryczne narzędzie precyzyjne",
+      "requirements": [
+        {"properties": ["short", "rigid", "metallic"], "minimum_quantity": 1}
+      ],
+      "bonus_tags": ["lockpicking", "rusted_lock"],
+      "modifier": -1,
+      "uses": 1,
+      "time_cost_minutes": 10,
+      "risk": "Prowizoryczny element jest mniej precyzyjny od właściwego zestawu i może zaklinować delikatny mechanizm."
+    }
+  ]
+}

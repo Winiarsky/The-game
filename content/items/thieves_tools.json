@@ -1,5 +1,7 @@
 {
   "id": "thieves_tools",
   "name": "Narzędzia złodziejskie",
-  "kind": "tool"
+  "kind": "tool",
+  "description": "Zestaw niewielkich metalowych wytrychów i precyzyjnych narzędzi.",
+  "properties": ["short", "rigid", "metallic", "prying"]
 }

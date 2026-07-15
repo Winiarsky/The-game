@@ -1,0 +1,9 @@
+{
+  "id": "scrap_metal",
+  "name": "Metalowy element",
+  "kind": "material",
+  "description": "Sztywny metalowy element odzyskany z większej konstrukcji.",
+  "properties": ["short", "rigid", "hard", "metallic", "fastener"],
+  "portable": true,
+  "default_weight_lb": 5
+}

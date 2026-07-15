@@ -18,7 +18,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--board-serial-port", default="")
     parser.add_argument("--wled-url", default="")
     parser.add_argument("--scan-timeout", type=float, default=30.0)
-    parser.add_argument("--debug-point", default="")
+    debug_target = parser.add_mutually_exclusive_group()
+    debug_target.add_argument("--debug-point", default="")
+    debug_target.add_argument("--debug-challenge", default="")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=5200)
     parser.add_argument("--debug", action="store_true", default=False)
@@ -33,6 +35,7 @@ def main(argv: list[str] | None = None) -> int:
         gm_client=gm_client,
         npc_client=npc_client,
         debug_point_id=args.debug_point or None,
+        debug_challenge_id=args.debug_challenge or None,
     )
     if args.board_backend != "none":
         session.configure_board(

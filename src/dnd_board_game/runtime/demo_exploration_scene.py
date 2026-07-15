@@ -783,7 +783,7 @@ def _handle_freeform_action_once(
         )
         client = gm_client or _create_gm_classifier_client(args)
         analysis = _analyze_freeform_declaration(client, request)
-        validate_gm_declaration_analysis(analysis, request)
+        analysis = validate_gm_declaration_analysis(analysis, request)
         observer.record(
             "gm_declaration_analyzed",
             {

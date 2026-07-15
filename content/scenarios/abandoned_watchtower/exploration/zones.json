@@ -136,6 +136,95 @@
           "podłoże pod bramą jest zbyt twarde na szybki podkop"
         ]
       },
+      "available_items": [
+        {
+          "id": "gate_rotten_planks",
+          "definition_id": "wooden_plank",
+          "quantity": 4,
+          "condition": "rotten",
+          "added_properties": ["fragile"]
+        },
+        {
+          "id": "gate_loose_stones",
+          "definition_id": "loose_stone",
+          "quantity": 3,
+          "condition": "weathered"
+        }
+      ],
+      "fixtures": [
+        {
+          "id": "watchtower_gate",
+          "name": "Stara brama",
+          "description": "Ciężkie drewniane skrzydła połączone metalowymi okuciami i zamknięte ryglem od środka.",
+          "properties": ["wide", "rigid", "heavy", "wooden", "metallic"],
+          "condition": "closed",
+          "portable": false,
+          "detachable": false,
+          "destructible": true,
+          "action_policies": [
+            {
+              "operation": "damage",
+              "allowed_conditions": ["closed"],
+              "result_condition": "damaged",
+              "ability": "strength",
+              "skill": "athletics",
+              "difficulty_tier": "medium",
+              "progress_on_success": 3,
+              "progress_on_failure": 1,
+              "success_noise": 2,
+              "failure_noise": 1,
+              "failure_complication": "narastający_hałas"
+            }
+          ]
+        },
+        {
+          "id": "gate_corroded_hinges",
+          "name": "Skorodowane zawiasy",
+          "description": "Metalowe zawiasy mocujące skrzydła bramy do konstrukcji.",
+          "properties": ["short", "rigid", "hard", "metallic", "corroded", "fastener"],
+          "condition": "corroded",
+          "portable": false,
+          "detachable": true,
+          "destructible": true,
+          "action_policies": [
+            {
+              "operation": "detach",
+              "allowed_conditions": ["corroded"],
+              "result_condition": "detached",
+              "ability": "strength",
+              "skill": "athletics",
+              "difficulty_tier": "easy",
+              "progress_on_success": 2,
+              "progress_on_failure": 0,
+              "success_noise": 1,
+              "failure_noise": 1,
+              "failure_complication": "jammed_gate",
+              "makes_fixture_unavailable": true,
+              "release_yield_items": true
+            }
+          ],
+          "yield_items": [
+            {
+              "id": "detached_gate_metal",
+              "definition_id": "scrap_metal",
+              "quantity": 2,
+              "condition": "corroded",
+              "added_properties": ["corroded"],
+              "available": false
+            }
+          ]
+        },
+        {
+          "id": "gate_thorny_brush",
+          "name": "Cierniste zarośla",
+          "description": "Mokre pnącza i ciernie oplatające dolną część bramy.",
+          "properties": ["flexible", "flammable", "thorny"],
+          "condition": "overgrown",
+          "portable": false,
+          "detachable": true,
+          "destructible": true
+        }
+      ],
       "adjacent_zone_ids": [
         "courtyard"
       ],

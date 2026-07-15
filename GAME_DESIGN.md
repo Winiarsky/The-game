@@ -73,10 +73,61 @@ Pytanie o jawny fakt otrzymuje odpowiedź bez rzutu. Poszukiwanie albo przygotow
 może dopiero później prowadzić do testu, zasobu lub komplikacji. System nie może
 tworzyć przedmiotów i faktów tylko dlatego, że gracz o nie zapytał.
 
+Komenda wyszukiwania najpierw sprawdza konkretną nazwę w istniejących elementach
+sceny. Jeśli nazwanego przedmiotu nie ma, LLM może przełożyć potrzebną funkcję na
+właściwości, ale zamiennik wybiera deterministyczny runtime, a gracze muszą go
+zaakceptować. Znaleziony element pozostaje częścią lokacji i jest pokazywany jako
+wiedza drużyny o scenie; nie trafia automatycznie do ekwipunku. Przeniesienie,
+zabranie albo przyznanie przedmiotu zadaniowego jest osobnym efektem gry.
+
+Komenda użycia zawsze wiąże deklarację z jednym istniejącym źródłem ze sceny,
+zasobów albo ekwipunku. LLM rozpoznaje odniesienie językowe i proponuje mechanikę,
+ale runtime sprawdza identyfikator, dostępność oraz zgodność źródła. Bezpośrednie
+użycie elementu sceny pokazuje przed akceptacją jego stan, właściwości, wpływ na
+test i ryzyko. Samo użycie nie przenosi elementu sceny do ekwipunku.
+
+Komenda zabrania jest osobnym, potwierdzanym transferem. Runtime rozpoznaje dokładny
+element, sprawdza jego dostępność i przenośność, a następnie pokazuje ilość, źródłową
+lokację, niosącą postać oraz docelowe miejsce. Zwykłe przedmioty trafiają do ekwipunku
+wybranego bohatera, skarby do wspólnych łupów, a przedmioty fabularne do zasobów
+scenariusza zgodnie z `collection_destination` definicji. Element przytwierdzony nie
+może zostać automatycznie odłączony przez `/weź`; wymaga osobnej akcji i jawnych
+konsekwencji. Znalezienie, użycie i zabranie pozostają trzema różnymi zmianami stanu.
+
+Jawna `/akcja` może trwale zmienić fixture sceny tylko wtedy, gdy content tego
+fixture'a definiuje odpowiednią `action_policy`. LLM wybiera istniejący cel oraz
+operację (`detach`, `damage`, `destroy`, `move`, `open`, `close`, `repair`), ale
+silnik narzuca cechę, umiejętność, poziom trudności, postęp, hałas, komplikację i
+wynikowy stan. Sukces zapisuje runtime state obiektu i może ujawnić authored
+`yield_items`; porażka nie może samodzielnie zmienić stanu fixture'a. Wzmianka o
+obiekcie w opisie działania nie wystarcza do uruchomienia operacji na nim.
+
 Jeśli drużyna nie ma pomysłu, może rozwinąć opcjonalne inspiracje zawierające
 przykładowe działania bez ST i ukrytych konsekwencji. Dokładne parametry testów,
 postęp, hałas i sekretne ryzyka pozostają w osobnej sekcji MG/debug. Mechanika
 pojawia się graczom dopiero po interpretacji ich deklaracji i przed akceptacją rzutu.
+
+Aktywne badanie niepewnego albo ukrytego fragmentu sceny może uruchomić stopniowane
+rozpoznanie. Jeden test ujawnia wszystkie warstwy informacji, których progi osiągnął
+końcowy wynik. Nieosiągnięcie najniższego progu oznacza brak rozstrzygającej informacji,
+a nie potwierdzenie nieobecności zagrożenia. Ujawnione fakty i ich efekty są definiowane
+w contencie oraz rozliczane deterministycznie; LLM wybiera pasującą obserwację i tworzy
+narrację, ale nie ustala wyniku ani nie ujawnia faktów zza kurtyny przed rzutem.
+
+### Rozpoczęcie encountera wynika ze sceny
+
+Przejście z eksploracji do walki ma osobny, jawny etap przed setupem i inicjatywą.
+Silnik obsługuje trzy wyniki: drużyna zaskakuje przeciwników, nikt nie jest
+zaskoczony albo przeciwnicy zaskakują drużynę. Nie próbuje sam wymyślać, co powinno
+dać zaskoczenie: scenariusz definiuje uporządkowane reguły oparte na zapisanym stanie,
+np. poziomie hałasu, ujawnionych faktach i tagach podejścia kończącego przeszkodę.
+
+W scenie bramy głośne wyważenie oznacza gotowość obu stron, wysoki hałas bez
+rozpoznania pozwala goblinom przygotować zasadzkę, rozpoznanie chroni drużynę przed
+tą zasadzką, a ciche wejście zaskakuje gobliny. Jest to uproszczenie D&D 5e 2014:
+zaskoczenie obejmuje całą stronę zamiast osobnego porównania dla każdej postaci,
+a zamiast utraty ruchu, akcji i reakcji daje zaskoczonej stronie utrudnienie do
+inicjatywy. Po ustaleniu kolejności obie strony rozgrywają pełne tury.
 
 W MVP pola z `blocking_terrain` i przeszkodami blokującymi ruch są niewchodzalne. Pola obiektów sceny typu `container`, np. rozbity wóz, mogą być zajmowane, dopóki content nie oznaczy ich jako blokujące.
 
@@ -607,11 +658,14 @@ Minimalny kontrakt:
 * Ogólne słowniki LLM, np. cechy i skille D&D 5e oraz aliasy pilnowanych zasobów, są trzymane w `content/llm/`.
 * Item albo zasób daje efekt tylko wtedy, gdy drużyna go posiada i jego `bonus_tags` pasują do tagów podejścia.
 * Deklarowany zasób spoza inventory albo materiałów sceny nie może działać mechanicznie. Analyzer ma go odrzucić albo poprosić o doprecyzowanie, a silnik robi dodatkową walidację faktów.
-* Pomoc złożona z jawnych materiałów sceny może działać na dwa sposoby: konstrukcja i natychmiastowe użycie to jednorazowe `improvised_tool_check`, natomiast osobne przygotowanie może utworzyć whitelisted `TemporaryItem`.
-* `TemporaryItem` nie jest stałym ekwipunkiem. Ma parametry z contentowego szablonu, jawną liczbę użyć, istnieje tylko w bieżącym scenariuszu i wygasa przy jego zakończeniu.
+* Pomoc złożona z jawnych materiałów sceny może działać na dwa sposoby: konstrukcja i natychmiastowe użycie to jednorazowe `improvised_tool_check`, natomiast jawne `/zbuduj` tworzy dynamiczny `TemporaryItem` do późniejszego użycia.
+* `/zbuduj` wybiera cel funkcjonalny z polityki craftingu, a deterministyczny silnik dobiera brakujące komponenty według właściwości. Gracz przed akceptacją widzi materiały, sposób ich rozliczenia, czas, zastosowania, efekt, ryzyko i zakres konstrukcji.
+* `TemporaryItem` nie jest stałym ekwipunkiem i nie wymaga gotowego szablonu konkretnego przedmiotu. Ma parametry wyliczone z celu funkcjonalnego, jawną liczbę użyć, zakres życia i zapisane komponenty. Starsze template'y pozostają wyłącznie formatem kompatybilności dla historycznego contentu.
 * Freeform `action_flow` obsługuje w MVP: `challenge_attempt`, `preparation` i `combined`.
 * Rozmowa jest przypisana do stabilnego identyfikatora instancji interakcji (`challenge`, punkt albo NPC), a nie do samego ekranu. Powrót do tej instancji odtwarza jej transcript bez mieszania rozmów z innymi obiektami.
 * Snapshot przechowuje pełny transcript. Do LLM trafia ograniczone okno najnowszych wpisów aktualnej interakcji; starsza historia pozostaje dostępna dla UI i przyszłego mechanizmu podsumowań.
+* Aktywna interakcja eksploracyjna jest prezentowana jako osobny, pełnoekranowy czat: opis i opcjonalna ilustracja są pierwszą wiadomością MG, deklaracje graczy są wiadomościami wychodzącymi, a oczekiwanie na LLM ma widoczny wskaźnik pisania.
+* Gracze mogą opuścić czat bez kończenia ani kasowania instancji. Wracają wtedy do menu lokacji i punktów, skąd mogą ponownie otworzyć zachowany wątek albo przejść do innego miejsca.
 * Przygotowanie może dać krótkotrwały efekt `modifier`, `reduce_negative_effect`, `advantage`, `disadvantage`, `effect_boost`, `grant_resource` albo `unlock_option`, jeśli typ jest dopuszczony przez policy aktywnego challenge.
 * `grant_resource` i `unlock_option` mogą dotyczyć tylko istniejących id z contentu i tylko wtedy, gdy id znajduje się w whitelistach `allowed_grant_resource_ids` albo `allowed_unlock_option_ids`.
 * Efekt przygotowania działa tylko przy następnej próbie, której tagi pasują do `target_tags`, i po użyciu wygasa.

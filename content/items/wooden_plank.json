@@ -1,0 +1,9 @@
+{
+  "id": "wooden_plank",
+  "name": "Drewniana deska",
+  "kind": "material",
+  "description": "Długa, sztywna deska, którą można wykorzystać jako materiał konstrukcyjny.",
+  "properties": ["long", "rigid", "wooden", "flammable"],
+  "portable": true,
+  "default_weight_lb": 8
+}

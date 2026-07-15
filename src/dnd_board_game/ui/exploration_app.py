@@ -8,10 +8,13 @@ from pathlib import Path
 from typing import Any
 
 from dnd_board_game.actions import (
+    PlayerIntentHint,
     action_mechanic_payload,
     attack_mechanic_from_source,
     combat_action_mechanic_from_definition,
     healing_mechanic_from_source,
+    parse_player_input,
+    slash_help_message,
 )
 from dnd_board_game.application import (
     CombatMovementFlowService,
@@ -42,6 +45,7 @@ from dnd_board_game.application import (
     SpellPreparationFlowService,
     ShortRestFlowService,
     short_rest_count,
+    resolve_encounter_opening,
 )
 from dnd_board_game.actors import Actor, Faction, spell_is_prepared
 from dnd_board_game.combat import (
@@ -95,7 +99,15 @@ from dnd_board_game.exploration import (
     CheckAggregation,
     CheckParticipants,
     ConsequenceTarget,
+    CollectionPlan,
+    CraftingDraft,
+    CraftingPlan,
+    CraftingSource,
+    CraftingSourceKind,
+    EncounterEdge,
+    EncounterEdgeType,
     EncounterOutcome,
+    EncounterOpeningOutcome,
     ExplorationChallenge,
     ExplorationEncounterTrigger,
     ExplorationChallengeOption,
@@ -104,34 +116,57 @@ from dnd_board_game.exploration import (
     ExplorationResource,
     ExplorationState,
     ExplorationZone,
+    FixtureActionPlan,
+    FixtureOperation,
     ExplorationMechanicId,
+    ExplorationObservation,
     ExplorationSituationalModifier,
     ExplorationSituationalModifierSource,
     ImprovisedToolUse,
     PartyCheckInput,
+    PartyPosition,
     PendingEncounter,
     ShortRestPolicy,
+    SceneSourceMatch,
+    SceneSourceCollection,
     TemporaryItem,
     MECHANIC_TOOLS,
     active_option_bonuses_for_actor,
+    apply_fixture_action,
     apply_exploration_effect,
     actors_matching_challenge_option,
-    available_challenge_options,
+    available_encounter_edges,
     available_exploration_zones,
-    available_challenge_options_for_actors,
+    build_crafting_source_registry,
+    collect_source,
     challenge_for_zone,
     challenge_state_for,
     exploration_zone_feedback,
     mechanic_payload_for_option,
     matching_resources,
+    match_exploration_observation,
+    match_available_sources,
+    match_scene_sources_by_properties,
+    match_visible_scene_sources,
+    is_source_lookup_only,
+    describes_direct_source_use,
     create_temporary_item,
+    discover_scene_source,
+    craft_temporary_item,
+    consume_encounter_edge,
+    dismantle_crafted_item,
+    grant_encounter_edge,
     reveal_exploration_points,
     resolve_challenge_option,
     resolve_exploration_check,
+    resolve_observation,
     validate_mechanic_selection,
+    validate_source_property_query,
     visible_exploration_points,
     visible_exploration_zones,
     option_roll_modifiers_for_actor,
+    plan_source_collection,
+    plan_fixture_action,
     use_temporary_item,
 )
 from dnd_board_game.llm import (
@@ -190,7 +225,11 @@ from .conversation import InteractionConversationEntry
 
 class PendingKind(StrEnum):
     CHALLENGE = "challenge"
+    CRAFTING = "crafting"
     NPC = "npc"
+    OBSERVATION = "observation"
+    SOURCE_SELECTION = "source_selection"
+    COLLECTION = "collection"
 
 
 class PendingStage(StrEnum):
@@ -211,19 +250,23 @@ EXPLORATION_DECISION_MAX_SITUATIONAL_MODIFIERS = 3
 CONVERSATION_GM_TITLES = frozenset(
     {
         "Odpowiedź MG",
+        "Podpowiedź MG",
+        "MG proponuje sprawdzenie",
         "Deklaracja wymaga doprecyzowania",
         "Deklaracja wymaga korekty",
         "Narracja MG",
         "Odpowiedź NPC",
         "Przygotowanie",
-        "Propozycja MG",
         "Poprawiono decyzję MG",
         "Decyzja",
         "Wyjaśnienie",
         "Reinterpretacja",
         "Utworzono przedmiot sceny",
+        "Rozmontowano przedmiot sceny",
         "Użyto przedmiotu sceny",
+        "Znaleziono w scenie",
         "Wynik podejścia",
+        "Wynik rozpoznania",
     }
 )
 
@@ -241,12 +284,21 @@ class UiMessage:
 class PendingInteraction:
     kind: PendingKind
     stage: PendingStage
-    proposal: GmClassifierProposal | NpcInteractionProposal
+    proposal: GmClassifierProposal | GmDeclarationAnalysis | NpcInteractionProposal | None = None
     challenge: ExplorationChallenge | None = None
     option: ExplorationChallengeOption | None = None
     resources: tuple[ExplorationResource, ...] = ()
     point: ExplorationPoint | None = None
     check_plan: ExplorationCheckPlan | None = None
+    crafting_plan: CraftingPlan | None = None
+    crafting_source_labels: tuple[tuple[str, str], ...] = ()
+    observation: ExplorationObservation | None = None
+    source_matches: tuple[SceneSourceMatch, ...] = ()
+    source_search_text: str = ""
+    source_property_labels: tuple[tuple[str, str], ...] = ()
+    use_source: CraftingSource | None = None
+    collection_plan: CollectionPlan | None = None
+    fixture_action_plan: FixtureActionPlan | None = None
     breakage_actor_id: str | None = None
     breakage_item_id: str | None = None
     breakage_item_label: str = ""
@@ -256,7 +308,7 @@ class PendingInteraction:
         payload: dict[str, object] = {
             "kind": self.kind.value,
             "stage": self.stage.value,
-            "proposal": self.proposal.model_dump(mode="json"),
+            "proposal": self.proposal.model_dump(mode="json") if self.proposal is not None else {},
         }
         if self.challenge is not None:
             payload["challenge_id"] = self.challenge.id
@@ -270,6 +322,106 @@ class PendingInteraction:
             payload["point_name"] = self.point.name
         if self.check_plan is not None:
             payload["check_plan"] = self.check_plan.as_payload()
+        if self.observation is not None:
+            payload["observation"] = {
+                "id": self.observation.id,
+                "label": self.observation.label,
+                "description": self.observation.description,
+                "ability": self.observation.ability,
+                "skill": self.observation.skill,
+                "dc": self.observation.dc,
+                "thresholds": [fact.minimum_total for fact in self.observation.facts],
+            }
+        if self.source_matches:
+            property_labels = dict(self.source_property_labels)
+            source_query = (
+                self.proposal.source_query
+                if isinstance(self.proposal, GmDeclarationAnalysis)
+                else None
+            )
+            payload["source_selection"] = {
+                "requested_name": source_query.requested_name if source_query is not None else None,
+                "purpose": source_query.purpose if source_query is not None else "",
+                "candidates": [
+                    {
+                        "id": match.source.id,
+                        "label": match.source.label,
+                        "quantity": match.source.quantity,
+                        "condition": match.source.condition,
+                        "properties": [
+                            {
+                                "id": property_id,
+                                "label": property_labels.get(property_id, property_id),
+                            }
+                            for property_id in match.source.properties
+                        ],
+                        "matched_property_ids": list(match.matched_preferred_properties),
+                        "portable": match.source.portable,
+                        "detachable": match.source.detachable,
+                        "kind": match.source.kind.value,
+                    }
+                    for match in self.source_matches
+                ],
+            }
+        if self.use_source is not None:
+            property_labels = dict(self.source_property_labels)
+            payload["source_use"] = {
+                "id": self.use_source.id,
+                "label": self.use_source.label,
+                "kind": self.use_source.kind.value,
+                "quantity": self.use_source.quantity,
+                "condition": self.use_source.condition,
+                "properties": [
+                    {
+                        "id": property_id,
+                        "label": property_labels.get(property_id, property_id),
+                    }
+                    for property_id in self.use_source.properties
+                ],
+                "portable": self.use_source.portable,
+                "detachable": self.use_source.detachable,
+                "remains_in_scene": self.use_source.kind.value
+                in {"scene_item", "scene_fixture"},
+            }
+        if self.collection_plan is not None:
+            property_labels = dict(self.source_property_labels)
+            payload["collection"] = {
+                **self.collection_plan.as_payload(),
+                "properties": [
+                    {
+                        "id": property_id,
+                        "label": property_labels.get(property_id, property_id),
+                    }
+                    for property_id in self.collection_plan.source.properties
+                ],
+            }
+        if self.fixture_action_plan is not None:
+            payload["fixture_action"] = self.fixture_action_plan.as_payload()
+        if self.crafting_plan is not None:
+            source_labels = dict(self.crafting_source_labels)
+            payload["crafting"] = {
+                "label": self.crafting_plan.draft.label,
+                "description": self.crafting_plan.draft.description,
+                "purpose_id": self.crafting_plan.purpose.id,
+                "purpose_label": self.crafting_plan.purpose.label,
+                "components": [
+                    {
+                        "source_id": component.source_id,
+                        "label": source_labels.get(component.source_id, component.source_id),
+                        "quantity": component.quantity,
+                        "disposition": component.disposition.value,
+                    }
+                    for component in self.crafting_plan.component_uses
+                ],
+                "time_cost_minutes": self.crafting_plan.purpose.time_cost_minutes,
+                "modifier": self.crafting_plan.purpose.modifier,
+                "bonus_tags": list(self.crafting_plan.purpose.bonus_tags),
+                "uses": self.crafting_plan.purpose.uses,
+                "risk": self.crafting_plan.purpose.risk,
+                "scope": self.crafting_plan.draft.scope.value,
+                "auto_selected_components": self.crafting_plan.draft.auto_select_missing_components,
+                "requires_build_roll": False,
+            }
         if self.stage == PendingStage.BREAKAGE:
             payload["breakage"] = {
                 "actor_id": self.breakage_actor_id,
@@ -373,6 +525,7 @@ class EncounterInitiativeFlow:
     current_prompt_index: int = 0
     completed: bool = False
     order: InitiativeOrder | None = None
+    edges_by_actor_id: dict[str, EncounterEdge] = field(default_factory=dict)
 
     @property
     def current_prompt(self) -> InitiativePrompt | None:
@@ -388,7 +541,11 @@ class EncounterInitiativeFlow:
             "status": "completed" if self.completed else "active",
             "current_prompt_index": self.current_prompt_index,
             "prompt_count": len(self.prompts),
-            "current_prompt": _initiative_prompt_payload(prompt) if prompt is not None else None,
+            "current_prompt": (
+                _initiative_prompt_payload(prompt, self.edges_by_actor_id.get(str(prompt.actor.id)))
+                if prompt is not None
+                else None
+            ),
             "entries": [_initiative_entry_payload(entry) for entry in self.entries],
             "order": [_initiative_entry_payload(entry) for entry in self.order.entries] if self.order is not None else [],
         }
@@ -496,6 +653,7 @@ class ExplorationUiSession:
         gm_client: object | None = None,
         npc_client: object | None = None,
         debug_point_id: str | None = None,
+        debug_challenge_id: str | None = None,
         session_id: str | None = None,
         observation_dir: str | Path = "data/session_observations",
         save_dir: str | Path = "data/saves",
@@ -504,6 +662,9 @@ class ExplorationUiSession:
         self.gm_client = gm_client
         self.npc_client = npc_client
         self.debug_point_id = debug_point_id or ""
+        self.debug_challenge_id = debug_challenge_id or ""
+        if self.debug_point_id and self.debug_challenge_id:
+            raise ValueError("Wybierz debug point albo debug challenge, nie oba jednocześnie.")
         self._fixed_session_id = session_id
         self.observation_dir = Path(observation_dir)
         self.save_dir = Path(save_dir)
@@ -548,6 +709,21 @@ class ExplorationUiSession:
         )
         if self.debug_point_id:
             self.state, _revealed = reveal_exploration_points(self.state, (self.debug_point_id,))
+        if self.debug_challenge_id:
+            debug_challenge = next(
+                (
+                    challenge
+                    for challenge in self.state.challenges
+                    if challenge.id == self.debug_challenge_id
+                ),
+                None,
+            )
+            if debug_challenge is None:
+                raise ValueError(f"Unknown exploration challenge: {self.debug_challenge_id}.")
+            self.state = replace(
+                self.state,
+                party_position=PartyPosition(debug_challenge.zone_id),
+            )
         self.messages: list[UiMessage] = []
         self.conversation_entries: list[InteractionConversationEntry] = []
         self.pending_state = UiPendingState()
@@ -579,7 +755,7 @@ class ExplorationUiSession:
             "Plansza niepodłączona. Domyślne ustawienia wczytane z board/config.json "
             f"({self.configured_board_backend})."
         )
-        if self.debug_point_id:
+        if self.debug_point_id or self.debug_challenge_id:
             self.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
         elif self.spell_preparation_flow.pending_actors(self.exploration.actors):
             self.ui_flow_stage = UiFlowStage.SPELL_PREPARATION
@@ -594,6 +770,7 @@ class ExplorationUiSession:
                 "scenario_id": self.exploration.scenario_id,
                 "scenario_name": self.exploration.scenario_name,
                 "debug_point_id": self.debug_point_id,
+                "debug_challenge_id": self.debug_challenge_id,
                 "initial_zone_id": self.state.party_position.zone_id,
                 "initial_resource_ids": list(self.state.inventory_resource_ids),
                 "automatic_long_rest": [
@@ -776,9 +953,35 @@ class ExplorationUiSession:
         current_zone_points = self.current_zone_points() if self.ui_flow_stage == UiFlowStage.LOCATION_ACTIVE else ()
         scene_status = _scene_status_payload(self.state)
         scene_status.append({"label": "Czas scenariusza", "value": _duration_minutes_label(self.state.elapsed_minutes)})
+        fixture_names = {
+            (zone.id, fixture.id): fixture.name
+            for zone in self.state.zones
+            for fixture in zone.fixtures
+        }
+        for fixture_state in self.state.fixture_states:
+            scene_status.append(
+                {
+                    "label": fixture_names.get(
+                        (fixture_state.zone_id, fixture_state.fixture_id),
+                        fixture_state.fixture_id,
+                    ),
+                    "value": fixture_state.condition,
+                }
+            )
+        actor_names = {str(actor.id): actor.name for actor in self.exploration.actors}
+        for edge in self.state.encounter_edges:
+            if edge.consumed:
+                continue
+            scene_status.append(
+                {
+                    "label": "Przewaga na inicjatywę",
+                    "value": f"{actor_names.get(edge.beneficiary_actor_id, edge.beneficiary_actor_id)} — {edge.label}",
+                }
+            )
         if self.pending_encounter is not None:
             scene_status.append({"label": "Encounter", "value": self.pending_encounter.name})
         preview_zone = self._preview_zone()
+        collected_source_ids = {item.source_id for item in self.state.source_collections}
         return UiSessionView(
             scenario={"id": self.exploration.scenario_id, "name": self.exploration.scenario_name},
             session_log={
@@ -805,8 +1008,14 @@ class ExplorationUiSession:
             active_point=_point_payload(self.active_point) if self.active_point else None,
             resources=[
                 *[_resource_payload(resource) for resource in self.state.resources if resource.id in self.state.inventory_resource_ids],
-                *[_temporary_item_payload(item) for item in self.state.temporary_items if item.available],
+                *[
+                    _temporary_item_payload(item)
+                    for item in self.state.temporary_items
+                    if item.available
+                    and f"temporary:{item.id}" not in collected_source_ids
+                ],
             ],
+            discovered_sources=self._discovered_sources_payload(),
             actors=[_exploration_actor_payload(actor) for actor in self.exploration.actors],
             active_effects=[effect.as_payload() for effect in self.active_combat_effects],
             scene_status=scene_status,
@@ -850,6 +1059,53 @@ class ExplorationUiSession:
             board=self._board_payload(),
             required_rolls=self.required_rolls_payload(),
         ).as_payload()
+
+    def _discovered_sources_payload(self) -> list[dict[str, object]]:
+        registry = build_crafting_source_registry(self.state, self.exploration.actors)
+        property_label = self.exploration.crafting_policy.property_label
+        collections_by_source: dict[str, list[SceneSourceCollection]] = {}
+        for collection in self.state.source_collections:
+            collections_by_source.setdefault(collection.source_id, []).append(collection)
+        result: list[dict[str, object]] = []
+        for discovery in self.state.source_discoveries:
+            if discovery.zone_id != self.current_zone.id:
+                continue
+            source = registry.source_by_id(discovery.source_id)
+            if source is None:
+                continue
+            collections = collections_by_source.get(source.id, [])
+            result.append(
+                {
+                    "id": source.id,
+                    "label": source.label,
+                    "kind": source.kind.value,
+                    "quantity": source.quantity,
+                    "condition": source.condition,
+                    "properties": [
+                        {"id": item, "label": property_label(item)}
+                        for item in source.properties
+                    ],
+                    "matched_properties": [
+                        {"id": item, "label": property_label(item)}
+                        for item in discovery.matched_properties
+                    ],
+                    "purpose": discovery.purpose,
+                    "requested_as": discovery.requested_as,
+                    "semantic_substitution": discovery.semantic_substitution,
+                    "available": source.usable,
+                    "portable": source.portable,
+                    "inventory": False,
+                    "collections": [
+                        {
+                            "quantity": item.quantity,
+                            "destination": item.destination,
+                            "owner_actor_id": item.owner_actor_id,
+                        }
+                        for item in collections
+                    ],
+                }
+            )
+        return result
 
     @property
     def snapshot_path(self) -> Path:
@@ -1045,7 +1301,11 @@ class ExplorationUiSession:
         if backend == "none":
             self.board_adapter = None
             self.board_message = "Plansza niepodłączona."
-            if not self.debug_point_id and self.ui_flow_stage != UiFlowStage.SPELL_PREPARATION:
+            if (
+                not self.debug_point_id
+                and not self.debug_challenge_id
+                and self.ui_flow_stage != UiFlowStage.SPELL_PREPARATION
+            ):
                 self.ui_flow_stage = UiFlowStage.WAITING_FOR_BOARD
             self._record("ui_board_configured", {"backend": backend, "connected": False})
             return self.state_payload()
@@ -1376,7 +1636,12 @@ class ExplorationUiSession:
             self.board_message = transition.board_message
             self._refresh_pending_encounter()
             if self.pending_encounter is not None:
-                self.board_message = "Encounter gotowy. Potwierdź rozpoczęcie setupu w UI albo Enterem."
+                trigger = self._trigger_by_id(self.pending_encounter.trigger_id)
+                self.board_message = (
+                    "Encounter gotowy. Rozstrzygnij rozpoczęcie starcia w UI albo Enterem."
+                    if trigger is not None and trigger.opening_policy is not None
+                    else "Encounter gotowy. Potwierdź rozpoczęcie setupu w UI albo Enterem."
+                )
         else:
             flow.current_index = transition.current_index
             self.ui_flow_stage = transition.stage
@@ -1410,23 +1675,32 @@ class ExplorationUiSession:
     def submit_action(self, text: str) -> dict[str, object]:
         if self.ui_flow_stage != UiFlowStage.LOCATION_ACTIVE:
             raise ValueError("Najpierw rozpocznij sesję i potwierdź wejście do lokacji na planszy.")
-        text = text.strip()
-        if not text:
+        raw_text = text.strip()
+        if not raw_text:
             raise ValueError("Deklaracja nie może być pusta.")
+        parsed_input = parse_player_input(raw_text)
         self._record(
             "ui_action_submitted",
             {
-                "text": text,
+                "text": raw_text,
+                "slash_command": parsed_input.command.name if parsed_input.command is not None else None,
+                "intent_hint": parsed_input.intent_hint.value if parsed_input.intent_hint is not None else None,
                 "zone_id": self.current_zone.id,
                 "active_point_id": self.active_point.id if self.active_point else None,
                 "active_challenge_id": self.active_challenge.id if self.active_challenge else None,
             },
         )
-        self._add_message("Gracze", text)
+        self._add_message("Gracze", raw_text)
+        if parsed_input.intent_hint == PlayerIntentHint.HELP:
+            self._add_message("Dostępne komendy", slash_help_message())
+            return self.state_payload()
+        action_text = parsed_input.content
+        if parsed_input.intent_hint == PlayerIntentHint.TAKE:
+            return self._submit_collection_action(action_text, player_display_text=raw_text)
         point = self.active_point
         if point is not None and point.npc_interaction is not None:
-            return self._submit_npc_action(point, text)
-        referenced_point = self._referenced_current_zone_point(text)
+            return self._submit_npc_action(point, action_text)
+        referenced_point = self._referenced_current_zone_point(action_text)
         if referenced_point is not None:
             positions = ", ".join(f"({position.col},{position.row})" for position in referenced_point.positions)
             self._add_message(
@@ -1441,7 +1715,107 @@ class ExplorationUiSession:
         challenge = self.active_challenge
         if challenge is None:
             raise ValueError("W aktualnej lokacji nie ma aktywnego wyzwania ani punktu NPC.")
-        return self._submit_challenge_action(challenge, text)
+        return self._submit_challenge_action(
+            challenge,
+            action_text,
+            player_intent_hint=parsed_input.intent_hint,
+            player_display_text=raw_text,
+        )
+
+    def _submit_collection_action(
+        self,
+        text: str,
+        *,
+        player_display_text: str,
+    ) -> dict[str, object]:
+        registry = build_crafting_source_registry(self.state, self.exploration.actors)
+        allowed_kinds = frozenset(
+            {
+                CraftingSourceKind.SCENE_ITEM,
+                CraftingSourceKind.SCENE_FIXTURE,
+                CraftingSourceKind.TEMPORARY_ITEM,
+            }
+        )
+        direct_matches = match_available_sources(
+            registry,
+            text,
+            allowed_kinds=allowed_kinds,
+        )
+        candidates = tuple(match.source for match in direct_matches)
+        if not candidates:
+            discovered = tuple(
+                source
+                for discovery in self.state.source_discoveries
+                if discovery.zone_id == self.current_zone.id
+                for source in (registry.source_by_id(discovery.source_id),)
+                if source is not None and source.usable and source.kind in allowed_kinds
+            )
+            if len(discovered) == 1:
+                candidates = discovered
+            elif discovered:
+                return self._reject_collection(
+                    player_display_text,
+                    "Nie wiadomo, który znaleziony element chcecie zabrać. Wskażcie jego nazwę po /weź.",
+                )
+        if not candidates:
+            return self._reject_collection(
+                player_display_text,
+                "Nie rozpoznano istniejącego elementu do zabrania. Najpierw znajdźcie go przez /szukaj albo podajcie dokładną nazwę.",
+            )
+        if len(candidates) > 1:
+            labels = ", ".join(source.label for source in candidates)
+            return self._reject_collection(
+                player_display_text,
+                f"Deklaracja wskazuje kilka elementów: {labels}. Przez /weź zabierajcie jeden rodzaj elementu naraz.",
+            )
+        source = candidates[0]
+        owner = next(
+            (
+                actor
+                for actor in self.exploration.actors
+                if str(actor.id) == self.selected_lead_actor_id and actor.faction == Faction.ALLY
+            ),
+            next((actor for actor in self.exploration.actors if actor.faction == Faction.ALLY), None),
+        )
+        try:
+            plan = plan_source_collection(
+                source,
+                quantity=1,
+                owner_actor_id=str(owner.id) if owner is not None else None,
+            )
+        except ValueError as exc:
+            return self._reject_collection(player_display_text, str(exc))
+        self.pending = PendingInteraction(
+            kind=PendingKind.COLLECTION,
+            stage=PendingStage.DECISION,
+            collection_plan=plan,
+            source_property_labels=self.exploration.crafting_policy.property_labels,
+        )
+        destination = {
+            "actor_inventory": f"ekwipunek postaci {owner.name}" if owner is not None else "ekwipunek postaci",
+            "party_treasure": "wspólne łupy drużyny",
+            "scenario_quest": "zasoby fabularne scenariusza",
+        }[plan.destination.value]
+        self._add_message(
+            "MG proponuje zabranie",
+            f"Chcecie zabrać {source.label} z lokacji {self.current_zone.name} i przenieść do: {destination}.",
+        )
+        self._record(
+            "ui_collection_proposed",
+            {
+                "source_id": source.id,
+                "quantity": 1,
+                "destination": plan.destination.value,
+                "owner_actor_id": plan.owner_actor_id,
+            },
+        )
+        return self.state_payload()
+
+    def _reject_collection(self, player_text: str, reason: str) -> dict[str, object]:
+        self._remember_scene_exchange(player_text, reason, outcome="collection_rejected")
+        self._add_message("Nie można zabrać elementu", reason)
+        self._record("ui_collection_rejected", {"player_text": player_text, "reason": reason})
+        return self.state_payload()
 
     def _referenced_current_zone_point(self, text: str) -> ExplorationPoint | None:
         normalized = text.lower()
@@ -1507,6 +1881,13 @@ class ExplorationUiSession:
         self._refresh_pending_encounter()
         if self.pending_encounter is None:
             raise ValueError("Nie ma aktywnego encountera do przygotowania.")
+        trigger = self._trigger_by_id(self.pending_encounter.trigger_id)
+        if (
+            trigger is not None
+            and trigger.opening_policy is not None
+            and self.pending_encounter.opening_resolution is None
+        ):
+            raise ValueError("Najpierw rozstrzygnij rozpoczęcie starcia.")
         encounter = build_encounter_from_scenario(load_scenario(self.pending_encounter.encounter_scenario))
         encounter = _encounter_with_session_spell_state(encounter, self.exploration.actors)
         steps = _build_encounter_setup_steps(encounter)
@@ -1521,6 +1902,32 @@ class ExplorationUiSession:
             "Setup przed walką",
             f"Rozpoczynam setup encountera: {encounter.scenario_name}. Potwierdzajcie kolejne grupy po rozstawieniu figurek.",
         )
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def resolve_encounter_opening(self) -> dict[str, object]:
+        self._refresh_pending_encounter()
+        if self.pending_encounter is None:
+            raise ValueError("Nie ma aktywnego encountera.")
+        if self.pending_encounter.opening_resolution is not None:
+            return self.state_payload()
+        trigger = self._trigger_by_id(self.pending_encounter.trigger_id)
+        if trigger is None or trigger.opening_policy is None:
+            raise ValueError("Ten encounter nie definiuje osobnego rozpoczęcia starcia.")
+        resolution = resolve_encounter_opening(self.state, trigger.opening_policy)
+        self.pending_encounter = replace(self.pending_encounter, opening_resolution=resolution)
+        self._add_message(resolution.title, resolution.narration)
+        self._record(
+            "ui_encounter_opening_resolved",
+            {
+                "trigger_id": trigger.id,
+                "rule_id": resolution.rule_id,
+                "outcome": resolution.outcome.value,
+                "noise": resolution.noise,
+                "completion_tags": list(resolution.completion_tags),
+            },
+        )
+        self.board_message = "Rozpoczęcie starcia rozstrzygnięte. Przejdź do setupu encountera."
         self._sync_board_leds()
         return self.state_payload()
 
@@ -1672,25 +2079,66 @@ class ExplorationUiSession:
         if self.combat_state is not None:
             return self.state_payload()
         encounter = self.encounter_setup_flow.encounter
-        prompts = build_player_initiative_prompts(encounter.actors)
-        self.encounter_initiative_flow = EncounterInitiativeFlow(encounter=encounter, prompts=prompts, entries=[])
+        trigger_id = self.pending_encounter.trigger_id if self.pending_encounter is not None else ""
+        applicable_edges = {
+            edge.beneficiary_actor_id: edge
+            for edge in available_encounter_edges(self.state, trigger_id)
+            if edge.edge_type == EncounterEdgeType.INITIATIVE_ADVANTAGE
+        }
+        opening = self.pending_encounter.opening_resolution if self.pending_encounter is not None else None
+        party_disadvantaged = bool(
+            opening is not None
+            and opening.outcome == EncounterOpeningOutcome.ENEMIES_SURPRISE_PARTY
+        )
+        roll_modes_by_actor_id = {
+            str(actor.id): RollMode.DISADVANTAGE
+            for actor in encounter.actors
+            if party_disadvantaged and actor.faction == Faction.ALLY and not actor.is_defeated()
+        }
+        for actor_id in applicable_edges:
+            roll_modes_by_actor_id[actor_id] = (
+                RollMode.NORMAL
+                if roll_modes_by_actor_id.get(actor_id) == RollMode.DISADVANTAGE
+                else RollMode.ADVANTAGE
+            )
+        prompts = build_player_initiative_prompts(
+            encounter.actors,
+            roll_modes_by_actor_id,
+        )
+        self.encounter_initiative_flow = EncounterInitiativeFlow(
+            encounter=encounter,
+            prompts=prompts,
+            entries=[],
+            edges_by_actor_id=applicable_edges,
+        )
         self._add_message(
             "Inicjatywa",
-            "Rozpoczyna się walka. Bohaterowie wykonują test inicjatywy po kolei; przeciwnicy rzucają automatycznie.",
+            "Rozpoczyna się walka. Bohaterowie wykonują test inicjatywy po kolei; przeciwnicy rzucają automatycznie."
+            + (
+                " Rozpoznanie daje wskazanemu bohaterowi przewagę w tym rzucie."
+                if applicable_edges
+                else ""
+            ),
         )
         if not prompts:
             self._finish_encounter_initiative()
         self._sync_board_leds()
         return self.state_payload()
 
-    def submit_encounter_initiative_roll(self, natural_roll: int) -> dict[str, object]:
+    def submit_encounter_initiative_roll(
+        self,
+        natural_roll: int,
+        natural_roll_2: int | None = None,
+    ) -> dict[str, object]:
         if self.encounter_initiative_flow is None:
             raise ValueError("Inicjatywa encountera nie została rozpoczęta.")
         flow = self.encounter_initiative_flow
         prompt = flow.current_prompt
         if prompt is None:
             return self.state_payload()
-        roll = resolve_d20_roll(D20RollInput(prompt.request, natural_roll))
+        if prompt.request.mode != RollMode.NORMAL and natural_roll_2 is None:
+            raise ValueError("Przewaga albo utrudnienie w inicjatywie wymaga podania wyników obu kości d20.")
+        roll = resolve_d20_roll(D20RollInput(prompt.request, natural_roll, natural_roll_2))
         entry = InitiativeEntry(
             actor=prompt.actor,
             roll=roll,
@@ -1698,9 +2146,22 @@ class ExplorationUiSession:
             stable_order=_actor_stable_order(flow.encounter, prompt.actor),
         )
         flow.entries.append(entry)
+        edge = flow.edges_by_actor_id.get(str(prompt.actor.id))
+        if edge is not None:
+            self.state = consume_encounter_edge(self.state, edge.id)
+            self._record(
+                "ui_encounter_edge_consumed",
+                {
+                    "edge_id": edge.id,
+                    "edge_type": edge.edge_type.value,
+                    "actor_id": edge.beneficiary_actor_id,
+                    "encounter_trigger_id": edge.encounter_trigger_id,
+                },
+            )
         self._add_message(
             "Rzut inicjatywy",
-            f"{prompt.actor.name}: naturalny wynik {roll.natural_roll}, razem {roll.total}.",
+            f"{prompt.actor.name}: naturalny wynik {_d20_roll_result_text(roll)}, razem {roll.total}."
+            + (f" Zużyto: {edge.label}." if edge is not None else ""),
         )
         flow.current_prompt_index += 1
         if flow.current_prompt is None:
@@ -1713,14 +2174,24 @@ class ExplorationUiSession:
             return
         flow = self.encounter_initiative_flow
         known_actor_ids = {entry.actor.id for entry in flow.entries}
+        opening = self.pending_encounter.opening_resolution if self.pending_encounter is not None else None
+        enemies_disadvantaged = bool(
+            opening is not None
+            and opening.outcome == EncounterOpeningOutcome.PARTY_SURPRISES_ENEMIES
+        )
         for actor in flow.encounter.actors:
             if actor.id in known_actor_ids or actor.faction == Faction.ALLY or actor.is_defeated():
                 continue
-            entry = replace(roll_enemy_initiative(actor, self.encounter_rng), stable_order=_actor_stable_order(flow.encounter, actor))
+            enemy_mode = RollMode.DISADVANTAGE if enemies_disadvantaged else RollMode.NORMAL
+            entry = replace(
+                roll_enemy_initiative(actor, self.encounter_rng, enemy_mode),
+                stable_order=_actor_stable_order(flow.encounter, actor),
+            )
             flow.entries.append(entry)
             self._add_message(
                 "Inicjatywa przeciwnika",
-                f"{actor.name}: automatyczny wynik {entry.roll.natural_roll}, razem {entry.roll.total}.",
+                f"{actor.name}: automatyczny wynik {_d20_roll_result_text(entry.roll)}, razem {entry.roll.total}."
+                + (" Utrudnienie za zaskoczenie." if enemy_mode == RollMode.DISADVANTAGE else ""),
             )
         order = build_initiative_order(flow.entries)
         flow.order = order
@@ -3471,10 +3942,20 @@ class ExplorationUiSession:
                 empty_message="Nie ma aktywnego aktora walki.",
             )
         if self.pending_encounter is not None:
+            trigger = self._trigger_by_id(self.pending_encounter.trigger_id)
+            opening_required = (
+                trigger is not None
+                and trigger.opening_policy is not None
+                and self.pending_encounter.opening_resolution is None
+            )
             return BoardScanTarget(
                 positions=(),
                 feedback=LedFeedback(),
-                empty_message="Encounter czeka na rozpoczęcie setupu w UI albo Enterem.",
+                empty_message=(
+                    "Encounter czeka na rozstrzygnięcie rozpoczęcia starcia w UI albo Enterem."
+                    if opening_required
+                    else "Encounter czeka na rozpoczęcie setupu w UI albo Enterem."
+                ),
             )
         if self.exploration_setup_flow is not None and self.exploration_setup_flow.current_step is not None:
             step = self.exploration_setup_flow.current_step
@@ -3704,8 +4185,59 @@ class ExplorationUiSession:
         self._sync_board_leds()
         return self.state_payload()
 
-    def _submit_challenge_action(self, challenge: ExplorationChallenge, text: str) -> dict[str, object]:
+    def _submit_challenge_action(
+        self,
+        challenge: ExplorationChallenge,
+        text: str,
+        *,
+        player_intent_hint: PlayerIntentHint | None = None,
+        player_display_text: str | None = None,
+    ) -> dict[str, object]:
+        conversation_text = player_display_text or text
         client = self._gm_client()
+        crafting_registry = build_crafting_source_registry(self.state, self.exploration.actors)
+        source_matches = (
+            match_available_sources(crafting_registry, text)
+            if player_intent_hint == PlayerIntentHint.USE
+            else match_visible_scene_sources(crafting_registry, text)
+        )
+        discovered_source_ids = tuple(
+            item.source_id
+            for item in self.state.source_discoveries
+            if item.zone_id == self.current_zone.id
+            and crafting_registry.source_by_id(item.source_id) is not None
+        )
+        referenced_source_ids = tuple(
+            dict.fromkeys(
+                (*discovered_source_ids, *(match.source.id for match in source_matches))
+            )
+        )
+        if player_intent_hint == PlayerIntentHint.USE and not referenced_source_ids:
+            return self._reject_gm_declaration(
+                conversation_text,
+                "Nie rozpoznano istniejącego elementu do użycia. Najpierw wskaż dokładny przedmiot albo znajdź go przez /szukaj.",
+                challenge,
+            )
+        if (
+            source_matches
+            and player_intent_hint == PlayerIntentHint.SEARCH
+            and is_source_lookup_only(
+                text,
+                explicit_search=True,
+            )
+        ):
+            return self._answer_visible_source_lookup(
+                challenge,
+                conversation_text,
+                source_matches,
+            )
+        effective_intent_hint = player_intent_hint
+        if (
+            source_matches
+            and describes_direct_source_use(text)
+            and player_intent_hint not in {PlayerIntentHint.BUILD, PlayerIntentHint.QUESTION}
+        ):
+            effective_intent_hint = PlayerIntentHint.USE
         request_data = build_gm_classifier_request(
             scenario_id=self.exploration.scenario_id,
             scenario_name=self.exploration.scenario_name,
@@ -3715,29 +4247,209 @@ class ExplorationUiSession:
             declaration_thread=self._conversation_thread_for_active_interaction(exclude_latest_player=True),
             active_preparation_effects=tuple(self.active_preparation_effects),
             actors=self.exploration.actors,
+            crafting_policy=self.exploration.crafting_policy,
+            player_intent_hint=effective_intent_hint,
+            explicit_player_intent_hint=player_intent_hint,
+            observations=self.exploration.observations,
+            referenced_crafting_source_ids=referenced_source_ids,
         )
+        fixture_action_plan: FixtureActionPlan | None = None
         try:
-            analysis = _analyze(client, request_data)
-            validate_gm_declaration_analysis(analysis, request_data)
+            matched_observation = (
+                match_exploration_observation(
+                    self.exploration.observations,
+                    text,
+                    zone_id=self.current_zone.id,
+                    challenge_id=challenge.id,
+                )
+                if effective_intent_hint not in {PlayerIntentHint.BUILD, PlayerIntentHint.USE}
+                else None
+            )
+            analysis = (
+                GmDeclarationAnalysis.model_validate(
+                    {
+                        "analysis_type": "player_question",
+                        "action_flow": "player_question",
+                        "player_message": (
+                            "To uważna obserwacja, której wynik zależy od testu. "
+                            "MG przygotuje warunki próby."
+                        ),
+                        "normalized_intent": text,
+                        "reason": "Deklaracja pasuje do ustrukturyzowanej obserwacji sceny.",
+                        "confidence": 1.0,
+                        "response_kind": "requires_check",
+                        "requires_check": True,
+                        "suggested_followup": text,
+                        "observation_id": matched_observation.id,
+                    }
+                )
+                if matched_observation is not None
+                else _analyze(client, request_data)
+            )
+            if (
+                player_intent_hint == PlayerIntentHint.USE
+                and analysis.analysis_type == GmDeclarationAnalysisType.PLAUSIBLE
+            ):
+                selected_use_source_id = analysis.use_source_id
+                if selected_use_source_id is None and len(referenced_source_ids) == 1:
+                    selected_use_source_id = referenced_source_ids[0]
+                    analysis = analysis.model_copy(
+                        update={"use_source_id": selected_use_source_id}
+                    )
+                if selected_use_source_id is not None:
+                    if selected_use_source_id not in referenced_source_ids:
+                        raise GmProposalValidationError(
+                            "MG wskazał element, którego nie dopasowano do deklaracji /użyj."
+                        )
+                    request_data = replace(
+                        request_data,
+                        referenced_crafting_source_ids=(selected_use_source_id,),
+                        selected_use_source_id=selected_use_source_id,
+                    )
+            actionable_fixture_ids = tuple(
+                match.source.id
+                for match in source_matches
+                if match.source.kind == CraftingSourceKind.SCENE_FIXTURE
+                and any(
+                    fixture.id == match.source.reference_id and fixture.action_policies
+                    for fixture in self.current_zone.fixtures
+                )
+            )
+            if (
+                player_intent_hint == PlayerIntentHint.ACTION
+                and analysis.analysis_type == GmDeclarationAnalysisType.PLAUSIBLE
+                and analysis.action_target_source_id is None
+                and analysis.fixture_operation is not None
+                and len(actionable_fixture_ids) == 1
+            ):
+                analysis = analysis.model_copy(
+                    update={"action_target_source_id": actionable_fixture_ids[0]}
+                )
+            if (
+                player_intent_hint == PlayerIntentHint.ACTION
+                and analysis.analysis_type == GmDeclarationAnalysisType.PLAUSIBLE
+                and (
+                    analysis.action_target_source_id is not None
+                    or analysis.fixture_operation is not None
+                )
+            ):
+                if analysis.action_target_source_id is None or analysis.fixture_operation is None:
+                    raise GmProposalValidationError(
+                        "Operacja na elemencie sceny wymaga wskazania celu i rodzaju zmiany."
+                    )
+                if analysis.action_target_source_id not in referenced_source_ids:
+                    raise GmProposalValidationError(
+                        "MG wskazał fixture, którego nie dopasowano do deklaracji /akcja."
+                    )
+                try:
+                    fixture_action_plan = plan_fixture_action(
+                        self.state,
+                        source_id=analysis.action_target_source_id,
+                        operation=analysis.fixture_operation,
+                    )
+                except ValueError as exc:
+                    raise GmProposalValidationError(str(exc)) from exc
+                request_data = replace(
+                    request_data,
+                    selected_fixture_source_id=fixture_action_plan.source_id,
+                    selected_fixture_operation=fixture_action_plan.policy.operation,
+                )
+            if analysis.source_query is not None:
+                try:
+                    validate_source_property_query(
+                        required_properties=analysis.source_query.required_properties,
+                        preferred_properties=analysis.source_query.preferred_properties,
+                        allowed_property_ids=self.exploration.crafting_policy.property_ids,
+                    )
+                except ValueError as exc:
+                    raise GmProposalValidationError(str(exc)) from exc
+                semantic_matches = match_scene_sources_by_properties(
+                    crafting_registry,
+                    required_properties=analysis.source_query.required_properties,
+                    preferred_properties=analysis.source_query.preferred_properties,
+                )
+                if not semantic_matches:
+                    return self._answer_missing_scene_source(
+                        challenge,
+                        conversation_text,
+                        analysis.source_query.purpose,
+                    )
+                source_matches = semantic_matches[:3]
+                referenced_source_ids = tuple(match.source.id for match in source_matches)
+                return self._propose_semantic_source_selection(
+                    challenge,
+                    conversation_text,
+                    analysis,
+                    source_matches,
+                )
+            analysis = validate_gm_declaration_analysis(analysis, request_data)
         except GmProposalValidationError as exc:
-            return self._reject_gm_declaration(text, str(exc), challenge)
+            return self._reject_gm_declaration(conversation_text, str(exc), challenge)
         if analysis.analysis_type == GmDeclarationAnalysisType.PLAYER_QUESTION:
-            answer = analysis.player_message or "To pytanie nie zmienia stanu sceny."
-            self._remember_scene_exchange(text, answer, outcome="player_question")
+            observation = next(
+                (
+                    item for item in self.exploration.observations
+                    if analysis.observation_id is not None and item.id == analysis.observation_id
+                ),
+                None,
+            )
+            if observation is not None:
+                answer = (
+                    "Z tego punktu obserwacji nie da się jeszcze uzyskać pewnej odpowiedzi. "
+                    f"MG proponuje próbę: {observation.label}."
+                )
+            else:
+                answer = analysis.player_message or "To pytanie nie zmienia stanu sceny."
+            if observation is None and analysis.requires_check and analysis.suggested_followup.strip():
+                answer = f"{answer} Możecie zadeklarować: {analysis.suggested_followup.strip()}"
+            response_kind = analysis.response_kind.value if analysis.response_kind is not None else "observation"
+            outcome = f"player_question:{response_kind}"
+            self._remember_scene_exchange(
+                conversation_text,
+                answer,
+                outcome=outcome,
+                grounded_fact_ids=analysis.grounded_fact_ids,
+                hint_level=analysis.hint_level,
+            )
             self._record(
                 "ui_gm_question_answered",
                 {
-                    "question": text,
+                    "question": conversation_text,
                     "answer": answer,
                     "zone_id": self.current_zone.id,
                     "challenge_id": challenge.id,
+                    "response_kind": response_kind,
+                    "grounded_fact_ids": list(analysis.grounded_fact_ids),
+                    "hint_level": analysis.hint_level,
+                    "requires_check": analysis.requires_check,
                 },
             )
-            self._add_message("Odpowiedź MG", answer)
+            title = (
+                "Podpowiedź MG"
+                if response_kind in {"gentle_hint", "strong_hint"}
+                else "MG proponuje sprawdzenie"
+                if response_kind == "requires_check"
+                else "Odpowiedź MG"
+            )
+            self._add_message(
+                title,
+                answer,
+                outcome=outcome,
+                grounded_fact_ids=analysis.grounded_fact_ids,
+                hint_level=analysis.hint_level,
+            )
+            if observation is not None:
+                self.pending = PendingInteraction(
+                    kind=PendingKind.OBSERVATION,
+                    stage=PendingStage.DECISION,
+                    proposal=analysis,
+                    challenge=challenge,
+                    observation=observation,
+                )
             return self.state_payload()
         if analysis.analysis_type in {GmDeclarationAnalysisType.NEEDS_CLARIFICATION, GmDeclarationAnalysisType.UNSUPPORTED}:
             answer = analysis.player_message or analysis.reason
-            self._remember_scene_exchange(text, answer, outcome=analysis.analysis_type.value)
+            self._remember_scene_exchange(conversation_text, answer, outcome=analysis.analysis_type.value)
             self._add_message("Deklaracja wymaga doprecyzowania", answer)
             return self.state_payload()
         if analysis.normalized_intent:
@@ -3746,7 +4458,17 @@ class ExplorationUiSession:
             proposal = client.classify(request_data)
             validated = validate_gm_classifier_proposal(proposal, request_data)
         except GmProposalValidationError as exc:
-            return self._reject_gm_declaration(text, str(exc), challenge)
+            return self._reject_gm_declaration(conversation_text, str(exc), challenge)
+        if validated.proposal != proposal:
+            self._record(
+                "ui_gm_proposal_grounded",
+                {
+                    "challenge_id": challenge.id,
+                    "original": proposal.model_dump(mode="json"),
+                    "grounded": validated.proposal.model_dump(mode="json"),
+                },
+            )
+        proposal = validated.proposal
         self._record(
             "ui_gm_proposal_validated",
             {
@@ -3758,6 +4480,26 @@ class ExplorationUiSession:
             effect = proposal.preparation_effect
             if effect is not None:
                 if effect.type == PreparationEffectType.CREATE_TEMPORARY_ITEM:
+                    if effect.crafting_draft is not None:
+                        assert validated.crafting_plan is not None
+                        registry = build_crafting_source_registry(self.state, self.exploration.actors)
+                        self.pending = PendingInteraction(
+                            kind=PendingKind.CRAFTING,
+                            stage=PendingStage.DECISION,
+                            proposal=proposal,
+                            challenge=validated.challenge,
+                            crafting_plan=validated.crafting_plan,
+                            crafting_source_labels=tuple(
+                                (component.source_id, registry.source_by_id(component.source_id).label)
+                                for component in validated.crafting_plan.component_uses
+                                if registry.source_by_id(component.source_id) is not None
+                            ),
+                        )
+                        self._add_message(
+                            "Narracja MG",
+                            proposal.player_narration or "MG przedstawia sposób przygotowania konstrukcji.",
+                        )
+                        return self.state_payload()
                     template = next(
                         template
                         for template in challenge.llm_policy.temporary_item_templates
@@ -3795,8 +4537,135 @@ class ExplorationUiSession:
             challenge=validated.challenge,
             option=option,
             resources=(resource,) if resource is not None else (),
+            use_source=(
+                build_crafting_source_registry(
+                    self.state,
+                    self.exploration.actors,
+                ).source_by_id(request_data.selected_use_source_id)
+                if request_data.selected_use_source_id is not None
+                else None
+            ),
+            source_property_labels=self.exploration.crafting_policy.property_labels,
+            fixture_action_plan=fixture_action_plan,
         )
-        self._add_message("Propozycja MG", _challenge_proposal_text(proposal, option, resource))
+        self._add_message(
+            "Narracja MG",
+            proposal.player_narration or f"MG interpretuje deklarację jako: {option.label}.",
+        )
+        return self.state_payload()
+
+    def _answer_visible_source_lookup(
+        self,
+        challenge: ExplorationChallenge,
+        player_text: str,
+        source_matches: tuple[SceneSourceMatch, ...],
+    ) -> dict[str, object]:
+        sources = tuple(match.source for match in source_matches)
+        for source in sources:
+            self.state = discover_scene_source(
+                self.state,
+                source,
+                requested_as=player_text,
+            )
+        descriptions = ", ".join(
+            f"{source.label} ({source.quantity} szt.)" if source.quantity > 1 else source.label
+            for source in sources
+        )
+        answer = (
+            f"W widocznym otoczeniu znajdują się: {descriptions}. "
+            "Możecie wskazać, jak chcecie wykorzystać wybrany element."
+        )
+        grounded_fact_ids = tuple(f"source:{source.id}" for source in sources)
+        self._remember_scene_exchange(
+            player_text,
+            answer,
+            outcome="visible_source_lookup",
+            grounded_fact_ids=grounded_fact_ids,
+        )
+        self._record(
+            "ui_scene_source_lookup_answered",
+            {
+                "question": player_text,
+                "answer": answer,
+                "zone_id": self.current_zone.id,
+                "challenge_id": challenge.id,
+                "source_ids": [source.id for source in sources],
+            },
+        )
+        self._add_message(
+            "Odpowiedź MG",
+            answer,
+            outcome="visible_source_lookup",
+            grounded_fact_ids=grounded_fact_ids,
+        )
+        return self.state_payload()
+
+    def _propose_semantic_source_selection(
+        self,
+        challenge: ExplorationChallenge,
+        player_text: str,
+        analysis: GmDeclarationAnalysis,
+        source_matches: tuple[SceneSourceMatch, ...],
+    ) -> dict[str, object]:
+        assert analysis.source_query is not None
+        labels = ", ".join(match.source.label for match in source_matches)
+        if analysis.source_query.requested_name:
+            answer = (
+                f"Nie widzę tutaj przedmiotu opisanego dokładnie jako „{analysis.source_query.requested_name}”. "
+                f"Najbliższe funkcjonalnie dostępne elementy to: {labels}. Wybierzcie, czy któryś wam odpowiada."
+            )
+        else:
+            answer = (
+                f"Do opisanego celu mogą pasować: {labels}. "
+                "Wybierzcie element, który chcecie uznać za znaleziony, albo odrzućcie propozycję."
+            )
+        self.pending = PendingInteraction(
+            kind=PendingKind.SOURCE_SELECTION,
+            stage=PendingStage.DECISION,
+            proposal=analysis,
+            challenge=challenge,
+            source_matches=source_matches,
+            source_search_text=player_text,
+            source_property_labels=self.exploration.crafting_policy.property_labels,
+        )
+        self._record(
+            "ui_scene_source_selection_proposed",
+            {
+                "question": player_text,
+                "zone_id": self.current_zone.id,
+                "challenge_id": challenge.id,
+                "requested_name": analysis.source_query.requested_name,
+                "purpose": analysis.source_query.purpose,
+                "source_ids": [match.source.id for match in source_matches],
+            },
+        )
+        self._add_message("Narracja MG", answer, outcome="source_selection_proposed")
+        return self.state_payload()
+
+    def _answer_missing_scene_source(
+        self,
+        challenge: ExplorationChallenge,
+        player_text: str,
+        purpose: str,
+    ) -> dict[str, object]:
+        need = purpose.strip()
+        answer = (
+            f"W widocznym otoczeniu nie ma teraz elementu, który nadawałby się do tego celu: {need}."
+            if need
+            else "W widocznym otoczeniu nie ma teraz elementu o potrzebnych właściwościach."
+        )
+        self._remember_scene_exchange(player_text, answer, outcome="visible_source_lookup:no_match")
+        self._record(
+            "ui_scene_source_lookup_answered",
+            {
+                "question": player_text,
+                "answer": answer,
+                "zone_id": self.current_zone.id,
+                "challenge_id": challenge.id,
+                "source_ids": [],
+            },
+        )
+        self._add_message("Odpowiedź MG", answer, outcome="visible_source_lookup:no_match")
         return self.state_payload()
 
     def _reject_gm_declaration(
@@ -3805,7 +4674,7 @@ class ExplorationUiSession:
         reason: str,
         challenge: ExplorationChallenge,
     ) -> dict[str, object]:
-        answer = f"Nie mogę jeszcze rozstrzygnąć tej deklaracji: {reason}"
+        answer = _player_facing_gm_validation_message(reason)
         self._remember_scene_exchange(text, answer, outcome="validation_error")
         self._record(
             "ui_gm_declaration_rejected",
@@ -3819,11 +4688,25 @@ class ExplorationUiSession:
         self._add_message("Deklaracja wymaga korekty", answer)
         return self.state_payload()
 
-    def _remember_scene_exchange(self, player_text: str, gm_text: str, *, outcome: str) -> None:
+    def _remember_scene_exchange(
+        self,
+        player_text: str,
+        gm_text: str,
+        *,
+        outcome: str,
+        grounded_fact_ids: tuple[str, ...] = (),
+        hint_level: int = 0,
+    ) -> None:
         self.declaration_thread.extend(
             (
                 GmDeclarationThreadEntry("player", player_text, outcome),
-                GmDeclarationThreadEntry("gm", gm_text, outcome),
+                GmDeclarationThreadEntry(
+                    "gm",
+                    gm_text,
+                    outcome,
+                    grounded_fact_ids,
+                    hint_level,
+                ),
             )
         )
         self.declaration_thread = self.declaration_thread[-16:]
@@ -3850,7 +4733,13 @@ class ExplorationUiSession:
         if exclude_latest_player and entries and entries[-1].role == "player":
             entries = entries[:-1]
         return tuple(
-            GmDeclarationThreadEntry(entry.role, entry.body, entry.outcome)
+            GmDeclarationThreadEntry(
+                entry.role,
+                entry.body,
+                entry.outcome,
+                entry.grounded_fact_ids,
+                entry.hint_level,
+            )
             for entry in entries[-16:]
         )
 
@@ -3891,7 +4780,6 @@ class ExplorationUiSession:
             self._add_message("Narracja MG", proposal.player_narration)
         if proposal.npc_response:
             self._add_message("Odpowiedź NPC", proposal.npc_response)
-        self._add_message("Propozycja interakcji", _npc_proposal_text(proposal))
         return self.state_payload()
 
     def update_pending_challenge_decision(self, data: dict[str, object]) -> dict[str, object]:
@@ -3899,6 +4787,10 @@ class ExplorationUiSession:
             raise ValueError("Korekta decyzji MG jest dostępna tylko przed zaakceptowaniem testu eksploracji.")
         if self.pending.option is None:
             raise ValueError("Brak opcji testu do poprawienia.")
+        if self.pending.fixture_action_plan is not None:
+            raise ValueError(
+                "Parametry operacji na fixture wynikają z contentu i nie mogą zostać zmienione korektą MG."
+            )
         option = self.pending.option
         default_mechanic_id = option.mechanic_id or str(mechanic_payload_for_option(option)["id"])
         mechanic_id = ExplorationMechanicId(str(data.get("mechanic_id") or default_mechanic_id))
@@ -3994,7 +4886,14 @@ class ExplorationUiSession:
         )
         return self.state_payload()
 
-    def decide(self, decision: str, *, lead_actor_id: str | None = None) -> dict[str, object]:
+    def decide(
+        self,
+        decision: str,
+        *,
+        lead_actor_id: str | None = None,
+        source_id: str | None = None,
+        quantity: int | None = None,
+    ) -> dict[str, object]:
         if self.pending is None:
             raise ValueError("Brak propozycji oczekującej na decyzję.")
         normalized = decision.strip().lower()
@@ -4005,10 +4904,16 @@ class ExplorationUiSession:
                 "pending_kind": self.pending.kind.value,
                 "pending_stage": self.pending.stage.value,
                 "lead_actor_id": lead_actor_id,
+                "quantity": quantity,
             },
         )
         if normalized in {"reject", "odrzuc", "odrzuć", "-"}:
-            self._add_message("Decyzja", "Odrzucono interpretację. Wpisz deklarację inaczej.")
+            message = (
+                "Nie wybieracie żadnego z zaproponowanych elementów. Możecie doprecyzować dalsze poszukiwania."
+                if self.pending.kind == PendingKind.SOURCE_SELECTION
+                else "Odrzucono interpretację. Wpisz deklarację inaczej."
+            )
+            self._add_message("Decyzja", message)
             self.pending = None
             return self.state_payload()
         if normalized in {"explain", "wyjasnij", "wyjaśnij", "?"}:
@@ -4024,7 +4929,185 @@ class ExplorationUiSession:
             self.selected_lead_actor_id = lead_actor_id
         if self.pending.kind == PendingKind.CHALLENGE:
             return self._accept_challenge()
+        if self.pending.kind == PendingKind.CRAFTING:
+            return self._accept_crafting()
+        if self.pending.kind == PendingKind.OBSERVATION:
+            return self._accept_observation()
+        if self.pending.kind == PendingKind.SOURCE_SELECTION:
+            return self._accept_source_selection(source_id)
+        if self.pending.kind == PendingKind.COLLECTION:
+            return self._accept_collection(lead_actor_id=lead_actor_id, quantity=quantity)
         return self._accept_npc()
+
+    def _accept_collection(
+        self,
+        *,
+        lead_actor_id: str | None,
+        quantity: int | None,
+    ) -> dict[str, object]:
+        assert self.pending is not None and self.pending.collection_plan is not None
+        preview = self.pending.collection_plan
+        selected_quantity = quantity if quantity is not None else preview.quantity
+        owner_actor_id = (
+            lead_actor_id
+            if preview.destination.value == "actor_inventory"
+            else None
+        )
+        plan = plan_source_collection(
+            preview.source,
+            quantity=selected_quantity,
+            owner_actor_id=owner_actor_id,
+        )
+        if plan.source.kind == CraftingSourceKind.SCENE_ITEM:
+            self.state = discover_scene_source(
+                self.state,
+                plan.source,
+                requested_as=f"/weź {plan.source.label}",
+            )
+        result = collect_source(self.state, self.exploration.actors, plan)
+        self.state = result.state
+        self.exploration = replace(self.exploration, actors=result.actors)
+        owner = next(
+            (actor for actor in result.actors if str(actor.id) == result.collection.owner_actor_id),
+            None,
+        )
+        destination = {
+            "actor_inventory": f"ekwipunek postaci {owner.name}" if owner is not None else "ekwipunek postaci",
+            "party_treasure": "wspólne łupy drużyny",
+            "scenario_quest": "zasoby fabularne scenariusza",
+        }[result.collection.destination]
+        self._record(
+            "ui_collection_confirmed",
+            {
+                "source_id": result.collection.source_id,
+                "quantity": selected_quantity,
+                "destination": result.collection.destination,
+                "owner_actor_id": result.collection.owner_actor_id,
+                "inventory_item_id": result.inventory_item.id if result.inventory_item else None,
+            },
+        )
+        self._add_message(
+            "Zabrano przedmiot",
+            f"{result.collection.label} ×{selected_quantity} przeniesiono do: {destination}.",
+        )
+        self.pending = None
+        return self.state_payload()
+
+    def _accept_source_selection(self, source_id: str | None) -> dict[str, object]:
+        assert self.pending is not None and self.pending.kind == PendingKind.SOURCE_SELECTION
+        if not self.pending.source_matches:
+            raise ValueError("Brak elementów do wyboru.")
+        selected_id = source_id.strip() if source_id else self.pending.source_matches[0].source.id
+        selected = next(
+            (match for match in self.pending.source_matches if match.source.id == selected_id),
+            None,
+        )
+        if selected is None:
+            raise ValueError("Wybrany element nie należy do propozycji MG.")
+        analysis = self.pending.proposal
+        assert isinstance(analysis, GmDeclarationAnalysis) and analysis.source_query is not None
+        matched_properties = tuple(
+            dict.fromkeys(
+                (
+                    *analysis.source_query.required_properties,
+                    *selected.matched_preferred_properties,
+                )
+            )
+        )
+        self.state = discover_scene_source(
+            self.state,
+            selected.source,
+            requested_as=analysis.source_query.requested_name or self.pending.source_search_text,
+            purpose=analysis.source_query.purpose,
+            matched_properties=matched_properties,
+            semantic_substitution=True,
+        )
+        property_labels = self.exploration.crafting_policy.property_label
+        features = ", ".join(property_labels(item) for item in selected.source.properties)
+        answer = (
+            f"Znaleźliście: {selected.source.label}. Cechy: {features or 'brak opisanych cech'}. "
+            "Element pozostaje częścią sceny i nie został dodany do ekwipunku."
+        )
+        self._record(
+            "ui_scene_source_selected",
+            {
+                "source_id": selected.source.id,
+                "zone_id": selected.source.zone_id,
+                "requested_name": analysis.source_query.requested_name,
+                "purpose": analysis.source_query.purpose,
+                "matched_properties": list(matched_properties),
+                "added_to_inventory": False,
+            },
+        )
+        self._add_message(
+            "Znaleziono w scenie",
+            answer,
+            outcome="source_selection_accepted",
+            grounded_fact_ids=(f"source:{selected.source.id}",),
+        )
+        self.pending = None
+        return self.state_payload()
+
+    def _accept_crafting(self) -> dict[str, object]:
+        assert self.pending is not None and self.pending.crafting_plan is not None
+        plan = self.pending.crafting_plan
+        self.state, item = craft_temporary_item(
+            self.state,
+            plan.draft,
+            build_crafting_source_registry(self.state, self.exploration.actors),
+            self.exploration.crafting_policy,
+        )
+        self._record(
+            "ui_crafting_confirmed",
+            {
+                "item_id": item.id,
+                "purpose_id": item.purpose_id,
+                "uses_remaining": item.uses_remaining,
+                "time_cost_minutes": item.time_cost_minutes,
+                "component_uses": [
+                    {
+                        "source_id": component.source_id,
+                        "quantity": component.quantity,
+                        "disposition": component.disposition.value,
+                    }
+                    for component in item.component_uses
+                ],
+            },
+        )
+        self._add_message(
+            "Utworzono przedmiot sceny",
+            (
+                f"{item.label}: {item.uses_remaining} użycia, czas budowy {item.time_cost_minutes} min. "
+                "Budowa nie wymagała rzutu; test nastąpi dopiero przy ryzykownym użyciu."
+            ),
+        )
+        self.pending = None
+        return self.state_payload()
+
+    def dismantle_temporary_item(self, item_id: str) -> dict[str, object]:
+        if self.pending is not None:
+            raise ValueError("Najpierw rozstrzygnij oczekującą propozycję MG.")
+        self.state, item = dismantle_crafted_item(self.state, item_id.strip())
+        released = tuple(
+            component.source_id
+            for component in item.component_uses
+            if component.disposition.value == "reserved"
+        )
+        self._record(
+            "ui_crafting_dismantled",
+            {
+                "item_id": item.id,
+                "purpose_id": item.purpose_id,
+                "released_source_ids": list(released),
+            },
+        )
+        release_text = (
+            " Odzyskano zarezerwowane komponenty: " + ", ".join(released) + "."
+            if released
+            else " Zużyte materiały nie wracają do puli."
+        )
+        self._add_message("Rozmontowano przedmiot sceny", f"Rozmontowano: {item.label}.{release_text}")
+        return self.state_payload()
 
     def _accept_challenge(self) -> dict[str, object]:
         assert self.pending is not None and self.pending.option is not None and self.pending.challenge is not None
@@ -4079,6 +5162,14 @@ class ExplorationUiSession:
         self._add_message("Rzut", f"Wpisz wyniki rzutów. {_check_plan_text(self.exploration.actors, plan)}")
         return self.state_payload()
 
+    def _accept_observation(self) -> dict[str, object]:
+        assert self.pending is not None and self.pending.observation is not None
+        observation = self.pending.observation
+        plan = _observation_check_plan(observation, self.lead_actor_id)
+        self.pending = replace(self.pending, stage=PendingStage.ROLL, check_plan=plan)
+        self._add_message("Rzut", f"Wpisz wynik rzutu. {_check_plan_text(self.exploration.actors, plan)}")
+        return self.state_payload()
+
     @property
     def lead_actor_id(self) -> str:
         return self.selected_lead_actor_id
@@ -4105,6 +5196,8 @@ class ExplorationUiSession:
         )
         if self.pending.kind == PendingKind.CHALLENGE:
             self._resolve_challenge_roll(check_result)
+        elif self.pending.kind == PendingKind.OBSERVATION:
+            self._resolve_observation_roll(check_result)
         else:
             self._resolve_npc_roll(check_result)
         if self.pending is not None and self.pending.stage != PendingStage.BREAKAGE:
@@ -4130,6 +5223,58 @@ class ExplorationUiSession:
         )
         self.state = result.state
         self._add_message("Wynik podejścia", result.message)
+        if self.pending.fixture_action_plan is not None:
+            fixture_result = apply_fixture_action(
+                self.state,
+                self.pending.fixture_action_plan,
+                success=result.success,
+            )
+            self.state = fixture_result.state
+            released_labels: list[str] = []
+            if fixture_result.changed and fixture_result.released_item_ids:
+                registry = build_crafting_source_registry(self.state, self.exploration.actors)
+                for item_id in fixture_result.released_item_ids:
+                    source = registry.source_by_id(
+                        f"zone:{fixture_result.plan.zone_id}:item:{item_id}"
+                    )
+                    if source is None:
+                        continue
+                    self.state = discover_scene_source(
+                        self.state,
+                        source,
+                        requested_as=f"rezultat {fixture_result.plan.policy.operation.value}",
+                    )
+                    released_labels.append(source.label)
+            if fixture_result.changed:
+                released_text = (
+                    " Ujawnione elementy: " + ", ".join(released_labels) + "."
+                    if released_labels
+                    else ""
+                )
+                self._add_message(
+                    "Zmiana obiektu",
+                    (
+                        f"{fixture_result.plan.fixture.name}: "
+                        f"{fixture_result.plan.current_condition} → "
+                        f"{fixture_result.plan.policy.result_condition}."
+                        f"{released_text}"
+                    ),
+                )
+            self._record(
+                "ui_fixture_action_resolved",
+                {
+                    "source_id": fixture_result.plan.source_id,
+                    "operation": fixture_result.plan.policy.operation.value,
+                    "success": result.success,
+                    "changed": fixture_result.changed,
+                    "result_condition": (
+                        fixture_result.plan.policy.result_condition
+                        if fixture_result.changed
+                        else fixture_result.plan.current_condition
+                    ),
+                    "released_item_ids": list(fixture_result.released_item_ids),
+                },
+            )
         if resource is not None and resource.consume_on_use:
             raw_effect = {"type": "remove_resource", "parameters": {"resource_id": resource.id}}
             consumption = apply_exploration_effect(self.state, raw_effect)
@@ -4172,6 +5317,7 @@ class ExplorationUiSession:
                 "option_bonuses": list(check_result.plan.option_bonus_payloads),
             },
         )
+
         self._queue_breakage_check_if_needed(result, check_result.selected_actor)
         if result.completed:
             revealed_points = self._reveal_completed_challenge_points(self.pending.challenge)
@@ -4209,6 +5355,72 @@ class ExplorationUiSession:
             }
             self.ui_flow_stage = UiFlowStage.INTERACTION_RESULT
             self.preview_zone_id = ""
+
+    def _resolve_observation_roll(self, check_result) -> None:
+        assert self.pending is not None and self.pending.observation is not None
+        observation = self.pending.observation
+        resolution = resolve_observation(observation, check_result.selected_roll.total)
+        fact_ids: list[str] = []
+        granted_edge_labels: list[str] = []
+        for fact in resolution.reached_facts:
+            fact_ids.append(f"observation:{observation.id}:fact:{fact.id}")
+            flag_effect = {
+                "type": "set_flag",
+                "parameters": {"key": fact.reveal_flag, "value": True},
+            }
+            effect_result = apply_exploration_effect(self.state, flag_effect)
+            self.state = effect_result.state
+            self._record_effect_result(effect_result, source="graded_observation", raw_effect=flag_effect)
+            for effect in fact.effects:
+                effect_result = apply_exploration_effect(self.state, effect)
+                self.state = effect_result.state
+                self._record_effect_result(effect_result, source="graded_observation", raw_effect=effect)
+            if fact.encounter_edge is not None:
+                edge = EncounterEdge(
+                    id=(
+                        f"observation:{observation.id}:fact:{fact.id}:"
+                        f"actor:{check_result.selected_actor.id}"
+                    ),
+                    edge_type=fact.encounter_edge.edge_type,
+                    label=fact.encounter_edge.label,
+                    beneficiary_actor_id=str(check_result.selected_actor.id),
+                    encounter_trigger_id=fact.encounter_edge.encounter_trigger_id,
+                    source_observation_id=observation.id,
+                    source_fact_id=fact.id,
+                )
+                self.state = grant_encounter_edge(self.state, edge)
+                granted_edge_labels.append(edge.label)
+                self._record(
+                    "ui_encounter_edge_granted",
+                    {
+                        "edge_id": edge.id,
+                        "edge_type": edge.edge_type.value,
+                        "actor_id": edge.beneficiary_actor_id,
+                        "encounter_trigger_id": edge.encounter_trigger_id,
+                    },
+                )
+        self._add_message(
+            "Wynik rozpoznania",
+            f"{resolution.message} Wynik testu: {resolution.total}."
+            + (
+                " Nagroda: prowadzący obserwację otrzyma przewagę w inicjatywie "
+                "podczas rozpoznanego starcia."
+                if granted_edge_labels
+                else ""
+            ),
+            outcome=f"observation:{observation.id}",
+            grounded_fact_ids=tuple(fact_ids),
+        )
+        self._record(
+            "ui_observation_resolved",
+            {
+                "observation_id": observation.id,
+                "actor_id": str(check_result.selected_actor.id),
+                "total": resolution.total,
+                "success": resolution.success,
+                "revealed_fact_ids": [fact.id for fact in resolution.reached_facts],
+            },
+        )
 
     def _consume_active_exploration_bonuses(self, actor: Actor, option: ExplorationChallengeOption) -> None:
         current_actor = next((candidate for candidate in self.exploration.actors if candidate.id == actor.id), actor)
@@ -4396,12 +5608,24 @@ class ExplorationUiSession:
     def _pending_encounter_payload(self) -> dict[str, object] | None:
         if self.pending_encounter is None:
             return None
+        trigger = self._trigger_by_id(self.pending_encounter.trigger_id)
+        resolution = self.pending_encounter.opening_resolution
         return {
             "trigger_id": self.pending_encounter.trigger_id,
             "name": self.pending_encounter.name,
             "description": self.pending_encounter.description,
             "encounter_scenario": self.pending_encounter.encounter_scenario,
             "reason": self.pending_encounter.reason,
+            "opening": {
+                "required": bool(trigger is not None and trigger.opening_policy is not None),
+                "resolved": resolution is not None,
+                "rule_id": resolution.rule_id if resolution is not None else None,
+                "outcome": resolution.outcome.value if resolution is not None else None,
+                "outcome_label": _encounter_opening_outcome_label(resolution.outcome) if resolution is not None else "",
+                "title": resolution.title if resolution is not None else "",
+                "narration": resolution.narration if resolution is not None else "",
+                "noise": resolution.noise if resolution is not None else None,
+            },
             "command": (
                 "PYTHONPATH=src python -m dnd_board_game.runtime.demo_mini_combat_loop "
                 f"--scenario {self.pending_encounter.encounter_scenario} --board-backend none --initiative-mode rolled"
@@ -4431,7 +5655,15 @@ class ExplorationUiSession:
             rolls.append(payload)
         return rolls
 
-    def _add_message(self, title: str, body: str) -> None:
+    def _add_message(
+        self,
+        title: str,
+        body: str,
+        *,
+        outcome: str = "",
+        grounded_fact_ids: tuple[str, ...] = (),
+        hint_level: int = 0,
+    ) -> None:
         self.messages.append(UiMessage(title, body))
         self._record("ui_message_added", {"title": title, "body": body})
         if getattr(self, "ui_flow_stage", None) != UiFlowStage.LOCATION_ACTIVE:
@@ -4445,6 +5677,9 @@ class ExplorationUiSession:
             role="player" if title == "Gracze" else "gm",
             title=title,
             body=body,
+            outcome=outcome,
+            grounded_fact_ids=grounded_fact_ids,
+            hint_level=hint_level,
         )
         self.conversation_entries.append(entry)
         self._record("ui_conversation_entry_added", entry.as_payload())
@@ -4646,7 +5881,10 @@ def _setup_color_name(step: SetupStep) -> str:
     return led_color_name_pl(step.color)
 
 
-def _initiative_prompt_payload(prompt: InitiativePrompt | None) -> dict[str, object] | None:
+def _initiative_prompt_payload(
+    prompt: InitiativePrompt | None,
+    edge: EncounterEdge | None = None,
+) -> dict[str, object] | None:
     if prompt is None:
         return None
     return {
@@ -4654,6 +5892,17 @@ def _initiative_prompt_payload(prompt: InitiativePrompt | None) -> dict[str, obj
         "actor_name": prompt.actor.name,
         "message": prompt.message,
         "dexterity_modifier": prompt.dexterity_modifier,
+        "roll_mode": prompt.request.mode.value,
+        "requires_second_roll": prompt.request.mode != RollMode.NORMAL,
+        "encounter_edge": (
+            {
+                "id": edge.id,
+                "type": edge.edge_type.value,
+                "label": edge.label,
+            }
+            if edge is not None
+            else None
+        ),
     }
 
 
@@ -4662,6 +5911,8 @@ def _initiative_entry_payload(entry: InitiativeEntry) -> dict[str, object]:
         "actor_id": str(entry.actor.id),
         "actor_name": entry.actor.name,
         "natural_roll": entry.roll.natural_roll,
+        "natural_rolls": list(entry.roll.natural_rolls),
+        "roll_mode": entry.roll.mode.value,
         "modifier": entry.roll.breakdown.modifier_total,
         "total": entry.roll.total,
         "dexterity_modifier": entry.dexterity_modifier,
@@ -5749,6 +7000,14 @@ def _default_encounter_victory_outcome(name: str) -> EncounterOutcome:
     )
 
 
+def _encounter_opening_outcome_label(outcome: EncounterOpeningOutcome) -> str:
+    return {
+        EncounterOpeningOutcome.PARTY_SURPRISES_ENEMIES: "Przeciwnicy mają utrudnienie do inicjatywy",
+        EncounterOpeningOutcome.NO_SURPRISE: "Nikt nie jest zaskoczony",
+        EncounterOpeningOutcome.ENEMIES_SURPRISE_PARTY: "Drużyna ma utrudnienie do inicjatywy",
+    }[outcome]
+
+
 def _default_encounter_defeat_outcome(name: str) -> EncounterOutcome:
     return EncounterOutcome(
         title="Drużyna pokonana",
@@ -5864,6 +7123,29 @@ def _npc_check_plan(proposal: NpcInteractionProposal, lead_actor_id: str) -> Exp
         dc=proposal.dc or 10,
         lead_actor_id=lead_actor_id,
         reason_for_players=proposal.player_narration,
+    )
+
+
+def _observation_check_plan(
+    observation: ExplorationObservation,
+    lead_actor_id: str,
+) -> ExplorationCheckPlan:
+    return ExplorationCheckPlan(
+        participants=observation.participants,
+        aggregation=observation.aggregation,
+        consequence_targets=(ConsequenceTarget.SCENE,),
+        ability=observation.ability,
+        skill=observation.skill,
+        dc=observation.dc,
+        lead_actor_id=lead_actor_id,
+        reason_for_players=observation.description,
+        roll_mode=observation.roll_mode,
+        mechanic_payload={
+            "id": "graded_observation",
+            "label": "Stopniowane rozpoznanie",
+            "participants": observation.participants.value,
+            "aggregation": observation.aggregation.value,
+        },
     )
 
 
@@ -5994,6 +7276,7 @@ def _improvised_tool_from_payload(
         label=label,
         source=source,
         source_detail=source_detail,
+        source_id=fallback.source_id if fallback is not None else None,
         effect_modifier=effect_modifier,
         risk=risk,
         reason=reason,
@@ -6011,45 +7294,79 @@ def _combined_roll_mode(base_mode: RollMode, modifier_modes: tuple[RollMode, ...
     return RollMode.NORMAL
 
 
-def _challenge_proposal_text(
-    proposal: GmClassifierProposal,
-    option: ExplorationChallengeOption,
-    resource: ExplorationResource | None,
-) -> str:
-    resource_text = f"\nZasób: {resource.label}" if resource else ""
-    modifier_text = ""
-    if option.situational_modifiers:
-        items = ", ".join(
-            f"{modifier.label} {modifier.modifier:+d}/{modifier.roll_mode.value}"
-            for modifier in option.situational_modifiers
+def _player_facing_gm_validation_message(reason: str) -> str:
+    if "temporary_item_template_id" in reason:
+        return (
+            "Nie udało mi się jednoznacznie dopasować przedmiotu do tego, co można zbudować w tej scenie. "
+            "Powiedz, jaki przedmiot chcecie zrobić i z których dostępnych materiałów."
         )
-        modifier_text = f"\nModyfikatory sytuacyjne: {items}."
-    improvised_text = ""
-    if option.improvised_tool is not None:
-        tool = option.improvised_tool
-        risk = f", ryzyko: {tool.risk}" if tool.risk else ""
-        improvised_text = f"\nImprowizowane narzędzie: {tool.label} {tool.effect_modifier:+d} ({tool.source_detail}{risk})."
-    roll_mode_text = f"\nTryb rzutu: {option.roll_mode.value}." if option.roll_mode != RollMode.NORMAL else ""
-    return (
-        f"{proposal.player_narration}\n"
-        f"Podejście: {option.label}. Test: {option.ability_check.ability}/{option.ability_check.skill or '-'}, "
-        f"ST {option.ability_check.dc}. Sukces: +{option.progress_on_success} postępu, "
-        f"porażka: +{option.progress_on_failure} postępu.{resource_text}{roll_mode_text}{modifier_text}{improvised_text}"
-    ).strip()
-
-
-def _npc_proposal_text(proposal: NpcInteractionProposal) -> str:
-    if proposal.requires_roll:
-        skill = f"/{proposal.skill}" if proposal.skill else ""
-        return f"Akcja: {proposal.action_type}. Test: {proposal.ability}{skill}, ST {proposal.dc}."
-    return f"Akcja: {proposal.action_type}. Bez rzutu."
+    if "source_materials" in reason or "materiałów spoza sceny" in reason:
+        return (
+            "Do zbudowania tego przedmiotu potrzebuję wskazania materiałów dostępnych w tej scenie. "
+            "Możecie wcześniej zapytać MG, co leży w pobliżu."
+        )
+    component_marker = "Konstrukcja wymaga komponentów ["
+    if component_marker in reason:
+        raw_properties = reason.split(component_marker, 1)[1].split("]", 1)[0]
+        property_labels = {
+            "binding": "wiążącego",
+            "hard": "twardego",
+            "heavy": "ciężkiego",
+            "load_bearing": "zdolnego utrzymać ciężar",
+            "long": "długiego",
+            "metallic": "metalowego",
+            "prying": "nadającego się do podważania",
+            "rigid": "sztywnego",
+            "short": "krótkiego",
+        }
+        missing = [
+            property_labels.get(property_id.strip(), property_id.strip().replace("_", " "))
+            for property_id in raw_properties.split(",")
+            if property_id.strip()
+        ]
+        missing_text = " i ".join(missing)
+        return (
+            "Wybrane elementy nie wystarczą do zbudowania tej konstrukcji. "
+            f"Brakuje komponentu {missing_text}. Możecie wskazać dodatkowy element albo użyć "
+            "tego materiału bezpośrednio, bez budowania osobnej konstrukcji."
+        )
+    return f"Nie mogę jeszcze rozstrzygnąć tej deklaracji: {reason}"
 
 
 def _pending_explanation(pending: PendingInteraction) -> str:
+    if pending.fixture_action_plan is not None:
+        plan = pending.fixture_action_plan
+        return (
+            f"Operacja {plan.policy.operation.value} na {plan.fixture.name} jest dozwolona "
+            f"dla stanu {plan.current_condition}. Po sukcesie stan zmieni się na "
+            f"{plan.policy.result_condition}; parametry testu pochodzą z contentu fixture'a."
+        )
+    if pending.collection_plan is not None:
+        plan = pending.collection_plan
+        return (
+            f"Silnik sprawdził, że {plan.source.label} jest dostępny i przenośny. "
+            f"Po akceptacji {plan.quantity} szt. trafi do {plan.destination.value}, "
+            "a ta sama liczba przestanie być dostępna w scenie."
+        )
+    if pending.crafting_plan is not None:
+        return _crafting_confirmation_text(pending.crafting_plan)
     notes = getattr(pending.proposal, "gm_notes", "")
     if notes:
         return str(notes)
     return "Ta propozycja jest interpretacją deklaracji graczy zwalidowaną przez deterministyczny silnik."
+
+
+def _crafting_confirmation_text(plan: CraftingPlan) -> str:
+    component_cost = ", ".join(
+        f"{component.source_id} x{component.quantity} ({'zużyte' if component.disposition.value == 'consumed' else 'zarezerwowane'})"
+        for component in plan.component_uses
+    )
+    return (
+        f"{plan.draft.label}: {plan.draft.description} "
+        f"Koszt: {component_cost}; czas {plan.purpose.time_cost_minutes} min. "
+        f"Efekt przy użyciu: {plan.purpose.modifier:+d}, {plan.purpose.uses} użycia. "
+        "Sama budowa nie wymaga testu."
+    )
 
 
 def _check_plan_text(actors: tuple[Actor, ...], plan: ExplorationCheckPlan) -> str:
@@ -6067,7 +7384,6 @@ def _zone_payload(zone: ExplorationZone, asset_root: Path | None = None, state: 
         "name": zone.name,
         "description": zone.description,
         "summary": zone.llm_context.summary,
-        "available_materials": list(zone.llm_context.available_materials),
         "color": led_color_name_pl(zone.color),
         "available": zone_is_ui_available(state, zone) if state is not None else True,
     }
@@ -6120,28 +7436,14 @@ def _challenge_payload(
     if challenge is None:
         return None
     challenge_state = challenge_state_for(state, challenge.id)
-    options = available_challenge_options_for_actors(state, challenge, actors) if actors else available_challenge_options(state, challenge)
     return {
         "id": challenge.id,
         "name": challenge.name,
-        "description": challenge.llm_context.summary,
-        "summary": challenge.llm_context.summary,
-        "reasonable_approaches": list(challenge.llm_context.reasonable_approaches),
-        "risk_notes": list(challenge.llm_context.risk_notes),
-        "player_hints": [
-            {
-                "id": option.id,
-                "label": option.label,
-                "description": option.description,
-            }
-            for option in options
-        ],
         "progress_required": challenge.progress_required,
         "current_progress": challenge_state.current_progress,
         "noise": challenge_state.noise,
         "completed": challenge_state.completed,
         "complications": list(challenge_state.complications),
-        "options": [_challenge_option_payload(option, actors) for option in options],
     }
 
 
@@ -6309,6 +7611,18 @@ def _temporary_item_payload(item: TemporaryItem) -> dict[str, object]:
         "description": item.description,
         "risk": item.risk,
         "source_materials": list(item.source_materials),
+        "purpose_id": item.purpose_id,
+        "time_cost_minutes": item.time_cost_minutes,
+        "scope": item.scope.value,
+        "dismantled": item.dismantled,
+        "component_uses": [
+            {
+                "source_id": component.source_id,
+                "quantity": component.quantity,
+                "disposition": component.disposition.value,
+            }
+            for component in item.component_uses
+        ],
     }
 
 

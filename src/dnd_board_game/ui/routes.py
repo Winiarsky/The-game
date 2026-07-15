@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from flask import Flask, jsonify, render_template, request, send_from_directory
 
+from dnd_board_game.actions import slash_commands_payload
 from dnd_board_game.world import Coordinate
 
 if TYPE_CHECKING:
@@ -15,7 +16,7 @@ def create_app(session: ExplorationUiSession) -> Flask:
 
     @app.get("/")
     def index():
-        return render_template("exploration.html")
+        return render_template("exploration.html", slash_commands=slash_commands_payload())
 
     @app.get("/scenario-assets/<path:filename>")
     def scenario_assets(filename: str):
@@ -121,7 +122,16 @@ def create_app(session: ExplorationUiSession) -> Flask:
         data = request.get_json(silent=True) or {}
         try:
             lead_actor_id = data.get("lead_actor_id")
-            return jsonify(session.decide(str(data.get("decision", "")), lead_actor_id=str(lead_actor_id) if lead_actor_id else None))
+            source_id = data.get("source_id")
+            quantity = data.get("quantity")
+            return jsonify(
+                session.decide(
+                    str(data.get("decision", "")),
+                    lead_actor_id=str(lead_actor_id) if lead_actor_id else None,
+                    source_id=str(source_id) if source_id else None,
+                    quantity=int(quantity) if quantity is not None else None,
+                )
+            )
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
@@ -130,6 +140,14 @@ def create_app(session: ExplorationUiSession) -> Flask:
         data = request.get_json(silent=True) or {}
         try:
             return jsonify(session.update_pending_challenge_decision(data))
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/crafting/dismantle")
+    def api_crafting_dismantle():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(session.dismantle_temporary_item(str(data.get("item_id", ""))))
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
@@ -233,6 +251,13 @@ def create_app(session: ExplorationUiSession) -> Flask:
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
+    @app.post("/api/encounter/opening/resolve")
+    def api_encounter_opening_resolve():
+        try:
+            return jsonify(session.resolve_encounter_opening())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
     @app.post("/api/encounter/setup/confirm")
     def api_encounter_setup_confirm():
         try:
@@ -251,7 +276,13 @@ def create_app(session: ExplorationUiSession) -> Flask:
     def api_encounter_initiative_roll():
         data = request.get_json(silent=True) or {}
         try:
-            return jsonify(session.submit_encounter_initiative_roll(int(data.get("natural_roll", 0))))
+            natural_roll_2 = data.get("natural_roll_2")
+            return jsonify(
+                session.submit_encounter_initiative_roll(
+                    int(data.get("natural_roll", 0)),
+                    int(natural_roll_2) if natural_roll_2 not in (None, "") else None,
+                )
+            )
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 

@@ -42,6 +42,7 @@ from .exploration_flow import (
     SetupStepTransition,
     StartSessionTransition,
 )
+from .encounter_opening_flow import resolve_encounter_opening
 from .player_combat_action_flow import (
     CombatSourceSelectionTransition,
     PendingPlayerAttack,
@@ -101,6 +102,7 @@ __all__ = [
     "ReadyAttackTrigger",
     "ReadyPreparation",
     "EncounterDetection",
+    "resolve_encounter_opening",
     "EnemyTurnFlowService",
     "EnemyTurnIntentTransition",
     "EnemyTurnResolutionTransition",

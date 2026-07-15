@@ -158,7 +158,7 @@ Status: implemented
 Źródło:
 
 - `GAME_DESIGN.md`
-- TODO: zweryfikować względem SRD przed dodaniem zaskoczenia, gotowych akcji i efektów zmieniających kolejkę.
+- D&D 5e 2014 odbiera zaskoczonemu ruch i akcje w pierwszej turze oraz reakcje do końca tej tury. MVP świadomie nie używa tej pełnej kary.
 
 Implementacja MVP:
 
@@ -176,10 +176,11 @@ Implementacja MVP:
 - Runtime debugowy może użyć `--initiative-mode fixed` tylko jako trybu testowego.
 - Po ostatnim aktorze kolejka wraca na początek i zwiększa rundę.
 - Pokonani aktorzy mogą pozostać w kolejce, ale przechodzenie tury może ich pomijać.
+- Między eksploracją a setupem encountera działa jawny etap rozpoczęcia starcia. Content wybiera wynik na podstawie zapisanego stanu sceny, np. hałasu, rozpoznania i tagów kończącego podejścia.
+- W MVP zaskoczona strona zachowuje pełną pierwszą turę, ale wykonuje testy inicjatywy z utrudnieniem. Bohaterowie wpisują dwa rzuty d20, a przeciwnicy mają oba rzuty wykonane automatycznie.
 
 Poza zakresem MVP:
 
-- zaskoczenie,
 - opóźnianie tury,
 - gotowe akcje,
 - reakcje,
@@ -190,6 +191,7 @@ Odstępstwa / decyzje planszowe:
 
 - Klikanie pionka nie jest wymagane do ustalenia, kto rzuca inicjatywę.
 - Jawne elementy setupu są podświetlane LED-ami, ukryte i warunkowe elementy nie są zdradzane graczom.
+- MVP rozstrzyga zaskoczenie dla całej drużyny albo całej strony przeciwników przez reguły scenariusza. Nie wykonuje osobnego porównania Stealth z passive Perception dla każdego stworzenia, a pełną karę D&D zastępuje utrudnieniem do inicjatywy; to świadome uproszczenie tempa gry przy stole.
 
 Testy:
 
@@ -198,6 +200,8 @@ Testy:
 - `tests/unit/test_setup_led_feedback.py`
 - `tests/unit/test_initiative.py`
 - `tests/unit/test_initiative_led_feedback.py`
+- `tests/unit/test_combat_session.py`
+- `tests/unit/test_encounter_opening_flow.py`
 - `tests/unit/test_demo_initiative_setup.py`
 
 ## Atak I Obrażenia
@@ -435,6 +439,10 @@ Implementacja MVP:
 - Proste opcje eksploracyjne typu `message` mogą ustawiać flagi sceny. Dzięki temu rozmowa, odczytanie tablicy albo obejrzenie punktu zainteresowania może domknąć objective bez sztucznego testu cechy.
 - `village_square_mvp` jest pierwszą mini-sceną eksploracji społecznej: kilka jawnych lokacji, setup jawnych NPC/obiektów, ukryty punkt i objective zależne od flagi.
 - LLM może analizować i klasyfikować kreatywne deklaracje graczy do ustrukturyzowanych propozycji challenge, ale nie może samodzielnie zmieniać zasad ani stanu gry.
+- Główny widok aktywnej eksploracji jest rozmową z MG. Obraz i publiczny opis sceny są pierwszą wiadomością, a gotowe listy inspiracji, opcji i ukrytych ryzyk nie są wystawiane w player API.
+- Pytania graczy o otoczenie są odpowiedziami strukturalnymi typu `observation`, `clarification`, `gentle_hint`, `strong_hint`, `requires_check` albo `impossible`. Naturalny tekst MG musi wskazywać identyfikatory faktów, na których został oparty, a runtime odrzuca nieznane fakty.
+- Jawne obiekty i ich właściwości mogą być opisane bez rzutu. Gdy odpowiedź wymaga niepewnej albo ukrytej obserwacji, MG nie ujawnia wyniku, tylko proponuje dalszą deklarację przez `requires_check`.
+- Podpowiedzi mają progresję 1–3: naprowadzenie, użyteczny kierunek i konkretne rozwiązanie. Poziom oraz ujawnione fakty są zapisywane razem z historią rozmowy per instancja i przechodzą przez snapshot.
 - LLM MVP obsługuje opcjonalnych providerów Groq i Gemini oraz ma dwa kroki: analyzer deklaracji oraz classifier mechaniki challenge. Gemini jest domyślnym providerem dla trybu freeform, a zwykła eksploracja bez freeform nadal nie odpala LLM.
 - Prompt LLM składa się z centralnie ładowanych plików w `content/prompts/` oraz warstw kontekstu: scenariusz, lokacja, challenge, dynamiczny stan gry i historia prób.
 - Ogólne słowniki używane przez LLM, np. cechy/skille D&D 5e i pilnowane aliasy zasobów, są trzymane w `content/llm/`, a nie zaszyte bezpośrednio w walidatorze.

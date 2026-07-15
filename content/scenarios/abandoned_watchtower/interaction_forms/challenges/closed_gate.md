@@ -64,6 +64,29 @@ Dla obiektu/lokacji:
 - czy jest zamknięty/uszkodzony/aktywny: zamknieta / stara / zatarty zamek / skorodowane zawiasy / rygiel po wewnetrznej stronie
 - czy jest niebezpieczny: kolce na gorze, wystajace gwozdzie, ryzyko upadku przy wspinaczce
 
+### 7B. Dostępne Przedmioty I Materiały
+
+- `gate_rotten_planks`: 4 spróchniałe deski; widoczne, przenośne; po `/weź`
+  trafiają do ekwipunku wybranego bohatera (`actor_inventory`).
+- `gate_loose_stones`: 3 luźne kamienie; widoczne, przenośne; po `/weź`
+  trafiają do ekwipunku wybranego bohatera (`actor_inventory`).
+- `gate_corroded_hinges`: przytwierdzony fixture; `/weź` nie odłącza go
+  automatycznie. Najpierw potrzebna jest osobna `/akcja`, która rozstrzygnie koszt,
+  hałas i ewentualne pozyskanie `detached_gate_metal`.
+- Samo `/szukaj` zapisuje wiedzę o elemencie, a `/użyj` wykorzystuje go w scenie;
+  żadna z tych komend nie przenosi przedmiotu do ekwipunku.
+
+### 7C. Crafting I Improwizacja
+
+- `/zbuduj` korzysta z globalnych celów funkcjonalnych `heavy_force`,
+  `climbing_aid`, `leverage` i `precision_tool`; scena nie definiuje gotowego taranu.
+- Runtime dobiera brakujące komponenty według właściwości i pokazuje deski, kamienie,
+  linę albo inne faktycznie dostępne źródła przed akceptacją.
+- Jawnie ograniczony zestaw, np. „drabina tylko z kamieni”, nie może zostać po cichu
+  uzupełniony innymi materiałami.
+- Budowa rozlicza czas oraz zużycie/rezerwację komponentów, ale domyślnie nie wymaga
+  rzutu. Ryzykowny test pojawia się dopiero przy późniejszym `/użyj`.
+
 ## 8. Co Gracze Mogą Realnie Próbować
 - wywazenie
 - wspinaczka

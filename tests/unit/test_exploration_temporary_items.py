@@ -1,7 +1,10 @@
 from dnd_board_game.combat import SceneFlags
 from dnd_board_game.exploration import (
+    CraftingComponentSelection,
+    CraftingDraft,
     ExplorationState,
-    create_temporary_item,
+    build_crafting_source_registry,
+    craft_temporary_item,
     matching_resources,
     use_temporary_item,
 )
@@ -20,34 +23,35 @@ def _state_and_gate():
         inventory_resource_ids=exploration.initial_resource_ids,
     )
     challenge = next(item for item in exploration.challenges if item.id == "closed_gate")
-    template = challenge.llm_policy.temporary_item_templates[0]
     option = next(item for item in challenge.options if item.id == "force_gate")
-    return state, template, option
+    draft = CraftingDraft(
+        label="Prowizoryczny taran",
+        description="Długa deska obciążona kamieniem.",
+        purpose_id="heavy_force",
+        components=(
+            CraftingComponentSelection("zone:gate:item:gate_rotten_planks"),
+            CraftingComponentSelection("zone:gate:item:gate_loose_stones"),
+        ),
+    )
+    state, item = craft_temporary_item(
+        state,
+        draft,
+        build_crafting_source_registry(state, exploration.actors),
+        exploration.crafting_policy,
+    )
+    return state, item, option
 
 
 def test_temporary_item_is_available_only_for_its_matching_scene_approach():
-    state, template, option = _state_and_gate()
+    state, item, option = _state_and_gate()
 
-    state, item = create_temporary_item(
-        state,
-        template,
-        zone_id="gate",
-        source_materials=("stare deski", "metalowe okucia"),
-    )
-
-    assert item.id == "temporary:improvised_battering_ram"
+    assert item.id == "temporary:crafted:1"
     assert item.uses_remaining == 2
     assert [resource.id for resource in matching_resources(state, option)] == [item.id]
 
 
 def test_temporary_item_tracks_uses_and_becomes_unavailable():
-    state, template, option = _state_and_gate()
-    state, item = create_temporary_item(
-        state,
-        template,
-        zone_id="gate",
-        source_materials=("stare deski", "metalowe okucia"),
-    )
+    state, item, option = _state_and_gate()
 
     state, first_use = use_temporary_item(state, item.id)
     state, final_use = use_temporary_item(state, item.id)

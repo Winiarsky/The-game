@@ -37,13 +37,23 @@ from dnd_board_game.combat import (
     SetupVisibility,
 )
 from dnd_board_game.exploration import (
+    CheckAggregation,
+    CheckParticipants,
     ExplorationChallenge,
     ExplorationChallengeOption,
     ExplorationEncounterTrigger,
+    ExplorationObservation,
     ExplorationOptionBonus,
     ExplorationSituationalModifier,
     ExplorationSituationalModifierSource,
     EncounterOutcome,
+    EncounterOpeningOutcome,
+    EncounterOpeningPolicy,
+    EncounterOpeningRule,
+    EncounterEdgeType,
+    CraftingPolicy,
+    CraftingPropertyRequirement,
+    CraftingPurpose,
     ExplorationOption,
     ExplorationOptionKind,
     ExplorationPoint,
@@ -53,13 +63,21 @@ from dnd_board_game.exploration import (
     ItemBreakageRisk,
     LlmChallengePolicy,
     LlmContext,
+    LlmGuidanceFact,
+    LlmGuidanceFactKind,
+    LlmGuidanceFactVisibility,
     LlmDcTier,
     NpcInteraction,
     NpcIntentPermission,
     NpcInteractionPolicy,
     NpcLockedInformation,
+    ObservationFact,
+    ObservationEncounterEdge,
     PartyPosition,
     SceneMode,
+    SceneFixture,
+    FixtureActionPolicy,
+    FixtureOperation,
     RestSafety,
     ShortRestPolicy,
     TemporaryItemTemplate,
@@ -67,7 +85,14 @@ from dnd_board_game.exploration import (
     mechanic_tool,
 )
 from dnd_board_game.hardware import LedColor
-from dnd_board_game.inventory import InventoryItem
+from dnd_board_game.inventory import (
+    InventoryItem,
+    ItemCollectionDestination,
+    ItemDefinition,
+    ItemInstance,
+    ItemPropertyCatalog,
+    ItemPropertyDefinition,
+)
 from dnd_board_game.rules import D20RollRequest, RollMode, RollModifier, RollModifierType
 from dnd_board_game.world import BLOCKING_TERRAIN, DIFFICULT_TERRAIN, BoardDimensions, BoardState, Coordinate
 
@@ -218,8 +243,10 @@ class ScenarioDefinition:
     exploration_resources: tuple[ExplorationResource, ...] = ()
     exploration_initial_resources: tuple[str, ...] = ()
     exploration_encounter_triggers: tuple[ExplorationEncounterTrigger, ...] = ()
+    exploration_observations: tuple[ExplorationObservation, ...] = ()
     party_start_zone_id: str | None = None
     llm_context: LlmContext = LlmContext()
+    crafting_policy: CraftingPolicy = CraftingPolicy()
 
 
 @dataclass(frozen=True, slots=True)
@@ -257,9 +284,11 @@ class LoadedExploration:
     initial_resource_ids: tuple[str, ...]
     party_position: PartyPosition
     encounter_triggers: tuple[ExplorationEncounterTrigger, ...] = ()
+    observations: tuple[ExplorationObservation, ...] = ()
     environment: tuple[EnvironmentSetupEntry, ...] = ()
     llm_context: LlmContext = LlmContext()
     objectives: tuple[SceneObjective, ...] = ()
+    crafting_policy: CraftingPolicy = CraftingPolicy()
 
 
 def load_scenario(path: str | Path) -> LoadedScenario:
@@ -379,6 +408,7 @@ def build_exploration_from_scenario(loaded: LoadedScenario) -> LoadedExploration
         resources=definition.exploration_resources,
         initial_resource_ids=definition.exploration_initial_resources,
         encounter_triggers=definition.exploration_encounter_triggers,
+        observations=definition.exploration_observations,
         environment=tuple(
             EnvironmentSetupEntry(
                 id=entry.id,
@@ -393,6 +423,7 @@ def build_exploration_from_scenario(loaded: LoadedScenario) -> LoadedExploration
         party_position=PartyPosition(start_zone.id, start_zone.marker_position),
         llm_context=definition.llm_context,
         objectives=objectives,
+        crafting_policy=definition.crafting_policy,
     )
 
 
@@ -415,28 +446,45 @@ def _parse_scenario(data: dict[str, Any], scenario_path: Path) -> ScenarioDefini
         exploration_data = {}
     if not isinstance(exploration_data, dict):
         raise ValueError("scenario.exploration must be an object.")
+    property_catalog = _load_item_property_catalog(scenario_path)
+    crafting_policy = _load_crafting_policy(scenario_path, property_catalog)
     scene_mode = _enum_value(SceneMode, str(data.get("scene_mode", SceneMode.ENCOUNTER.value)), "scenario.scene_mode")
     return ScenarioDefinition(
         id=str(_required(data, "id", "scenario")),
         name=str(_required(data, "name", "scenario")),
         board_dimensions=BoardDimensions(cols=cols, rows=rows),
         scene_mode=scene_mode,
-        actors=tuple(_parse_actor(actor_data, scenario_path) for actor_data in actors_data),
+        actors=tuple(_parse_actor(actor_data, scenario_path, property_catalog) for actor_data in actors_data),
         environment=tuple(_parse_environment(entry) for entry in environment_data),
         player_start_zones=tuple(_parse_start_zone(zone, "scenario.player_start_zones") for zone in start_zones_data),
         objectives=tuple(_parse_objective(entry) for entry in objectives_data),
-        exploration_zones=tuple(_parse_exploration_zone(entry) for entry in exploration_data.get("zones", [])),
+        exploration_zones=tuple(
+            _parse_exploration_zone(entry, scenario_path, property_catalog)
+            for entry in exploration_data.get("zones", [])
+        ),
         exploration_points=tuple(_parse_exploration_point(entry) for entry in exploration_data.get("points", [])),
         exploration_challenges=tuple(_parse_exploration_challenge(entry) for entry in exploration_data.get("challenges", [])),
-        exploration_resources=tuple(_parse_exploration_resource(entry) for entry in exploration_data.get("resources", [])),
+        exploration_resources=tuple(
+            _parse_exploration_resource(entry, property_catalog)
+            for entry in exploration_data.get("resources", [])
+        ),
         exploration_initial_resources=tuple(str(item) for item in exploration_data.get("initial_resources", [])),
         exploration_encounter_triggers=tuple(_parse_exploration_encounter_trigger(entry) for entry in exploration_data.get("encounter_triggers", [])),
+        exploration_observations=tuple(
+            _parse_exploration_observation(entry)
+            for entry in exploration_data.get("observations", [])
+        ),
         party_start_zone_id=str(exploration_data["party_start_zone"]) if "party_start_zone" in exploration_data else None,
         llm_context=_parse_llm_context(data.get("llm_context", {}), "scenario.llm_context"),
+        crafting_policy=crafting_policy,
     )
 
 
-def _parse_actor(data: dict[str, Any], scenario_path: Path) -> ScenarioActorDefinition:
+def _parse_actor(
+    data: dict[str, Any],
+    scenario_path: Path,
+    property_catalog: ItemPropertyCatalog,
+) -> ScenarioActorDefinition:
     if not isinstance(data, dict):
         raise ValueError("scenario.actors entries must be objects.")
     source_ref = data.get("source_ref")
@@ -465,12 +513,25 @@ def _parse_actor(data: dict[str, Any], scenario_path: Path) -> ScenarioActorDefi
     inventory_items: list[InventoryItem] = []
     for item_ref in item_refs:
         item = _read_json(_content_ref_path(scenario_path, "items", str(item_ref)))
-        inventory_items.append(_inventory_item_from_item_data(item, quantity=1, equipped=True, source_ref=str(item_ref)))
+        inventory_items.append(
+            _inventory_item_from_item_data(
+                item,
+                quantity=1,
+                equipped=True,
+                source_ref=str(item_ref),
+                property_catalog=property_catalog,
+            )
+        )
         attacks_data.extend(item.get("attacks", []))
         healing_data.extend(item.get("healing_sources", []))
         combat_actions_data.extend(_combat_actions_with_item_source(item.get("combat_actions", []), str(item_ref)))
     for item_entry in inventory_data:
-        item, inventory_item = _parse_inventory_entry(item_entry, scenario_path, actor_id=str(merged.get("id", "<unknown>")))
+        item, inventory_item = _parse_inventory_entry(
+            item_entry,
+            scenario_path,
+            actor_id=str(merged.get("id", "<unknown>")),
+            property_catalog=property_catalog,
+        )
         inventory_items.append(inventory_item)
         if inventory_item.equipped:
             attacks_data.extend(item.get("attacks", []))
@@ -596,7 +657,12 @@ def _combat_actions_with_item_source(actions: Any, item_id: str) -> list[dict[st
     return result
 
 
-def _parse_inventory_entry(item_entry: Any, scenario_path: Path, actor_id: str) -> tuple[dict[str, Any], InventoryItem]:
+def _parse_inventory_entry(
+    item_entry: Any,
+    scenario_path: Path,
+    actor_id: str,
+    property_catalog: ItemPropertyCatalog,
+) -> tuple[dict[str, Any], InventoryItem]:
     if not isinstance(item_entry, dict):
         raise ValueError(f"actor {actor_id}.inventory entries must be objects.")
     item_ref = item_entry.get("item_ref", item_entry.get("ref"))
@@ -615,6 +681,22 @@ def _parse_inventory_entry(item_entry: Any, scenario_path: Path, actor_id: str) 
     quantity = int(item_entry.get("quantity", 1))
     if quantity < 0:
         raise ValueError(f"actor {actor_id}.inventory {item_id}.quantity must be non-negative.")
+    base_properties = _parse_string_tuple(
+        item_data.get("properties", []),
+        f"actor {actor_id}.inventory {item_id}.properties",
+    )
+    added_properties = _parse_string_tuple(
+        item_entry.get("added_properties", []),
+        f"actor {actor_id}.inventory {item_id}.added_properties",
+    )
+    removed_properties = _parse_string_tuple(
+        item_entry.get("removed_properties", []),
+        f"actor {actor_id}.inventory {item_id}.removed_properties",
+    )
+    property_catalog.validate(base_properties, f"actor {actor_id}.inventory {item_id}.properties")
+    property_catalog.validate(added_properties, f"actor {actor_id}.inventory {item_id}.added_properties")
+    property_catalog.validate(removed_properties, f"actor {actor_id}.inventory {item_id}.removed_properties")
+    properties = tuple(sorted((set(base_properties) | set(added_properties)) - set(removed_properties)))
     inventory_item = InventoryItem(
         id=item_id,
         name=str(item_entry.get("name", name)),
@@ -623,6 +705,9 @@ def _parse_inventory_entry(item_entry: Any, scenario_path: Path, actor_id: str) 
         equipped=bool(item_entry.get("equipped", True)),
         source_ref=source_ref,
         broken=bool(item_entry.get("broken", False)),
+        description=str(item_entry.get("description", item_data.get("description", ""))),
+        properties=properties,
+        portable=bool(item_entry.get("portable", item_data.get("portable", True))),
     )
     return item_data, inventory_item
 
@@ -633,8 +718,11 @@ def _inventory_item_from_item_data(
     quantity: int,
     equipped: bool,
     source_ref: str | None,
+    property_catalog: ItemPropertyCatalog,
 ) -> InventoryItem:
     item_id = str(_required(item, "id", f"item {source_ref or '<inline>'}"))
+    properties = _parse_string_tuple(item.get("properties", []), f"item {item_id}.properties")
+    property_catalog.validate(properties, f"item {item_id}.properties")
     return InventoryItem(
         id=item_id,
         name=str(item.get("name", item_id)),
@@ -643,6 +731,9 @@ def _inventory_item_from_item_data(
         equipped=equipped,
         source_ref=source_ref,
         broken=bool(item.get("broken", False)),
+        description=str(item.get("description", "")),
+        properties=properties,
+        portable=bool(item.get("portable", True)),
     )
 
 
@@ -791,7 +882,11 @@ def _parse_objective(data: dict[str, Any]) -> ScenarioObjectiveDefinition:
     )
 
 
-def _parse_exploration_zone(data: Any) -> ExplorationZone:
+def _parse_exploration_zone(
+    data: Any,
+    scenario_path: Path,
+    property_catalog: ItemPropertyCatalog | None,
+) -> ExplorationZone:
     if not isinstance(data, dict):
         raise ValueError("scenario.exploration.zones entries must be objects.")
     zone_id = str(_required(data, "id", "exploration zone"))
@@ -801,6 +896,21 @@ def _parse_exploration_zone(data: Any) -> ExplorationZone:
         search_data = {}
     if not isinstance(search_data, dict):
         raise ValueError(f"exploration zone {zone_id}.search must be an object.")
+    item_instances = _parse_scene_item_instances(
+        data.get("available_items", []),
+        scenario_path,
+        property_catalog,
+        f"exploration zone {zone_id}.available_items",
+    )
+    fixtures = _parse_scene_fixtures(
+        data.get("fixtures", []),
+        scenario_path,
+        property_catalog,
+        f"exploration zone {zone_id}.fixtures",
+    )
+    source_ids = tuple(item.id for item in item_instances) + tuple(fixture.id for fixture in fixtures)
+    if len(source_ids) != len(set(source_ids)):
+        raise ValueError(f"exploration zone {zone_id} contains duplicate item or fixture ids.")
     return ExplorationZone(
         id=zone_id,
         name=str(_required(data, "name", f"exploration zone {zone_id}")),
@@ -826,7 +936,251 @@ def _parse_exploration_zone(data: Any) -> ExplorationZone:
         search_failure_flag=str(search_data["failure_flag"]) if "failure_flag" in search_data else None,
         llm_context=_parse_llm_context(data.get("llm_context", {}), f"exploration zone {zone_id}.llm_context"),
         short_rest_policy=_parse_short_rest_policy(data.get("short_rest"), zone_id),
+        item_instances=item_instances,
+        fixtures=fixtures,
     )
+
+
+def _load_item_property_catalog(scenario_path: Path) -> ItemPropertyCatalog:
+    path = _content_ref_path(scenario_path, "items", "properties")
+    data = _read_json(path)
+    schema_version = int(data.get("schema_version", 0))
+    if schema_version != 1:
+        raise ValueError(f"{path}.schema_version must be 1.")
+    raw_properties = data.get("properties")
+    if not isinstance(raw_properties, list):
+        raise ValueError(f"{path}.properties must be a list.")
+    properties: list[ItemPropertyDefinition] = []
+    for index, raw_property in enumerate(raw_properties):
+        field = f"{path}.properties[{index}]"
+        if not isinstance(raw_property, dict):
+            raise ValueError(f"{field} must be an object.")
+        properties.append(
+            ItemPropertyDefinition(
+                id=str(_required(raw_property, "id", field)),
+                label=str(_required(raw_property, "label", field)),
+                description=str(raw_property.get("description", "")),
+            )
+        )
+    return ItemPropertyCatalog(schema_version=schema_version, properties=tuple(properties))
+
+
+def _load_crafting_policy(
+    scenario_path: Path,
+    property_catalog: ItemPropertyCatalog,
+) -> CraftingPolicy:
+    path = _content_ref_path(scenario_path, "items", "crafting_purposes")
+    data = _read_json(path)
+    schema_version = int(data.get("schema_version", 0))
+    raw_purposes = data.get("purposes")
+    if not isinstance(raw_purposes, list):
+        raise ValueError(f"{path}.purposes must be a list.")
+    purposes: list[CraftingPurpose] = []
+    for purpose_index, raw_purpose in enumerate(raw_purposes):
+        purpose_field = f"{path}.purposes[{purpose_index}]"
+        if not isinstance(raw_purpose, dict):
+            raise ValueError(f"{purpose_field} must be an object.")
+        raw_requirements = raw_purpose.get("requirements")
+        if not isinstance(raw_requirements, list):
+            raise ValueError(f"{purpose_field}.requirements must be a list.")
+        requirements: list[CraftingPropertyRequirement] = []
+        for requirement_index, raw_requirement in enumerate(raw_requirements):
+            requirement_field = f"{purpose_field}.requirements[{requirement_index}]"
+            if not isinstance(raw_requirement, dict):
+                raise ValueError(f"{requirement_field} must be an object.")
+            properties = _parse_string_tuple(
+                raw_requirement.get("properties", []),
+                f"{requirement_field}.properties",
+            )
+            property_catalog.validate(properties, f"{requirement_field}.properties")
+            requirements.append(
+                CraftingPropertyRequirement(
+                    properties=properties,
+                    minimum_quantity=int(raw_requirement.get("minimum_quantity", 1)),
+                )
+            )
+        purposes.append(
+            CraftingPurpose(
+                id=str(_required(raw_purpose, "id", purpose_field)),
+                label=str(_required(raw_purpose, "label", purpose_field)),
+                requirements=tuple(requirements),
+                bonus_tags=_parse_string_tuple(raw_purpose.get("bonus_tags", []), f"{purpose_field}.bonus_tags"),
+                modifier=int(raw_purpose.get("modifier", 0)),
+                uses=int(raw_purpose.get("uses", 1)),
+                time_cost_minutes=int(raw_purpose.get("time_cost_minutes", 0)),
+                risk=str(raw_purpose.get("risk", "")),
+            )
+        )
+    return CraftingPolicy(
+        schema_version=schema_version,
+        purposes=tuple(purposes),
+        max_active_items=int(data.get("max_active_items", 3)),
+        property_ids=tuple(sorted(property_catalog.known_ids)),
+        property_labels=tuple(sorted((item.id, item.label) for item in property_catalog.properties)),
+    )
+
+
+def _parse_scene_item_instances(
+    data: Any,
+    scenario_path: Path,
+    property_catalog: ItemPropertyCatalog | None,
+    field: str,
+) -> tuple[ItemInstance, ...]:
+    if not isinstance(data, list):
+        raise ValueError(f"{field} must be a list.")
+    if data and property_catalog is None:
+        raise ValueError(f"{field} requires the item property catalog.")
+    instances = tuple(
+        _parse_scene_item_instance(entry, scenario_path, property_catalog, f"{field}[{index}]")
+        for index, entry in enumerate(data)
+    )
+    ids = tuple(item.id for item in instances)
+    if len(ids) != len(set(ids)):
+        raise ValueError(f"{field} contains duplicate ids.")
+    return instances
+
+
+def _parse_scene_item_instance(
+    data: Any,
+    scenario_path: Path,
+    property_catalog: ItemPropertyCatalog | None,
+    field: str,
+) -> ItemInstance:
+    if not isinstance(data, dict):
+        raise ValueError(f"{field} must be an object.")
+    if property_catalog is None:
+        raise ValueError(f"{field} requires the item property catalog.")
+    definition_ref = data.get("definition_id", data.get("item_ref"))
+    if definition_ref is None:
+        raise ValueError(f"{field}.definition_id is required.")
+    definition_data = _read_json(_content_ref_path(scenario_path, "items", str(definition_ref)))
+    definition = _parse_item_definition(definition_data, property_catalog, f"item definition {definition_ref}")
+    added_properties = _parse_string_tuple(data.get("added_properties", []), f"{field}.added_properties")
+    removed_properties = _parse_string_tuple(data.get("removed_properties", []), f"{field}.removed_properties")
+    property_catalog.validate(added_properties, f"{field}.added_properties")
+    property_catalog.validate(removed_properties, f"{field}.removed_properties")
+    return ItemInstance(
+        id=str(_required(data, "id", field)),
+        definition=definition,
+        quantity=int(data.get("quantity", 1)),
+        condition=str(data.get("condition", "normal")),
+        added_properties=added_properties,
+        removed_properties=removed_properties,
+        owner_id=str(data["owner_id"]) if "owner_id" in data else None,
+        visible=bool(data.get("visible", True)),
+        available=bool(data.get("available", True)),
+    )
+
+
+def _parse_item_definition(
+    data: dict[str, Any],
+    property_catalog: ItemPropertyCatalog,
+    field: str,
+) -> ItemDefinition:
+    properties = _parse_string_tuple(data.get("properties", []), f"{field}.properties")
+    property_catalog.validate(properties, f"{field}.properties")
+    weight = data.get("default_weight_lb")
+    return ItemDefinition(
+        id=str(_required(data, "id", field)),
+        name=str(_required(data, "name", field)),
+        kind=str(data.get("kind", "item")),
+        description=str(data.get("description", "")),
+        properties=properties,
+        portable=bool(data.get("portable", True)),
+        default_weight_lb=float(weight) if weight is not None else None,
+        collection_destination=_enum_value(
+            ItemCollectionDestination,
+            data.get("collection_destination", ItemCollectionDestination.ACTOR_INVENTORY.value),
+            f"{field}.collection_destination",
+        ),
+    )
+
+
+def _parse_scene_fixtures(
+    data: Any,
+    scenario_path: Path,
+    property_catalog: ItemPropertyCatalog | None,
+    field: str,
+) -> tuple[SceneFixture, ...]:
+    if not isinstance(data, list):
+        raise ValueError(f"{field} must be a list.")
+    if data and property_catalog is None:
+        raise ValueError(f"{field} requires the item property catalog.")
+    fixtures: list[SceneFixture] = []
+    for index, raw_fixture in enumerate(data):
+        fixture_field = f"{field}[{index}]"
+        if not isinstance(raw_fixture, dict):
+            raise ValueError(f"{fixture_field} must be an object.")
+        if property_catalog is None:
+            raise ValueError(f"{fixture_field} requires the item property catalog.")
+        properties = _parse_string_tuple(raw_fixture.get("properties", []), f"{fixture_field}.properties")
+        property_catalog.validate(properties, f"{fixture_field}.properties")
+        fixtures.append(
+            SceneFixture(
+                id=str(_required(raw_fixture, "id", fixture_field)),
+                name=str(_required(raw_fixture, "name", fixture_field)),
+                description=str(raw_fixture.get("description", "")),
+                properties=properties,
+                condition=str(raw_fixture.get("condition", "normal")),
+                visible=bool(raw_fixture.get("visible", True)),
+                portable=bool(raw_fixture.get("portable", False)),
+                detachable=bool(raw_fixture.get("detachable", False)),
+                destructible=bool(raw_fixture.get("destructible", False)),
+                yield_items=_parse_scene_item_instances(
+                    raw_fixture.get("yield_items", []),
+                    scenario_path,
+                    property_catalog,
+                    f"{fixture_field}.yield_items",
+                ),
+                action_policies=_parse_fixture_action_policies(
+                    raw_fixture.get("action_policies", []),
+                    fixture_field,
+                ),
+            )
+        )
+    ids = tuple(fixture.id for fixture in fixtures)
+    if len(ids) != len(set(ids)):
+        raise ValueError(f"{field} contains duplicate ids.")
+    return tuple(fixtures)
+
+
+def _parse_fixture_action_policies(data: Any, fixture_field: str) -> tuple[FixtureActionPolicy, ...]:
+    if not isinstance(data, list):
+        raise ValueError(f"{fixture_field}.action_policies must be a list.")
+    policies: list[FixtureActionPolicy] = []
+    for index, raw_policy in enumerate(data):
+        field = f"{fixture_field}.action_policies[{index}]"
+        if not isinstance(raw_policy, dict):
+            raise ValueError(f"{field} must be an object.")
+        policies.append(
+            FixtureActionPolicy(
+                operation=_enum_value(FixtureOperation, _required(raw_policy, "operation", field), f"{field}.operation"),
+                result_condition=str(_required(raw_policy, "result_condition", field)),
+                ability=str(_required(raw_policy, "ability", field)).strip().lower(),
+                skill=(
+                    str(raw_policy["skill"]).strip().lower()
+                    if raw_policy.get("skill") is not None
+                    else None
+                ),
+                difficulty_tier=str(_required(raw_policy, "difficulty_tier", field)).strip().lower(),
+                allowed_conditions=_parse_string_tuple(
+                    raw_policy.get("allowed_conditions", []),
+                    f"{field}.allowed_conditions",
+                ),
+                progress_on_success=int(raw_policy.get("progress_on_success", 1)),
+                progress_on_failure=int(raw_policy.get("progress_on_failure", 0)),
+                success_noise=int(raw_policy.get("success_noise", 0)),
+                failure_noise=int(raw_policy.get("failure_noise", 0)),
+                failure_complication=(
+                    str(raw_policy["failure_complication"])
+                    if raw_policy.get("failure_complication") is not None
+                    else None
+                ),
+                makes_fixture_unavailable=bool(raw_policy.get("makes_fixture_unavailable", False)),
+                release_yield_items=bool(raw_policy.get("release_yield_items", False)),
+            )
+        )
+    return tuple(policies)
 
 
 def _parse_short_rest_policy(data: Any, zone_id: str) -> ShortRestPolicy | None:
@@ -1165,6 +1519,7 @@ def _parse_improvised_tool(data: Any, option_id: str) -> ImprovisedToolUse | Non
         label=str(_required(data, "label", f"exploration challenge option {option_id}.improvised_tool")),
         source=ExplorationSituationalModifierSource(str(data.get("source", "gm"))),
         source_detail=str(_required(data, "source_detail", f"exploration challenge option {option_id}.improvised_tool")),
+        source_id=str(data["source_id"]) if data.get("source_id") else None,
         effect_modifier=int(data.get("effect_modifier", 1)),
         risk=str(data.get("risk", "")),
         reason=str(_required(data, "reason", f"exploration challenge option {option_id}.improvised_tool")),
@@ -1185,10 +1540,15 @@ def _parse_required_ability_scores(data: Any, option_id: str) -> tuple[tuple[str
     return tuple(result)
 
 
-def _parse_exploration_resource(data: Any) -> ExplorationResource:
+def _parse_exploration_resource(
+    data: Any,
+    property_catalog: ItemPropertyCatalog,
+) -> ExplorationResource:
     if not isinstance(data, dict):
         raise ValueError("scenario.exploration.resources entries must be objects.")
     resource_id = str(_required(data, "id", "exploration resource"))
+    properties = _parse_string_tuple(data.get("properties", []), f"exploration resource {resource_id}.properties")
+    property_catalog.validate(properties, f"exploration resource {resource_id}.properties")
     return ExplorationResource(
         id=resource_id,
         label=str(_required(data, "label", f"exploration resource {resource_id}")),
@@ -1199,6 +1559,8 @@ def _parse_exploration_resource(data: Any) -> ExplorationResource:
         mitigates_noise=int(data.get("mitigates_noise", 0)),
         unlocks_flags=tuple(str(item) for item in data.get("unlocks_flags", [])),
         consume_on_use=bool(data.get("consume_on_use", False)),
+        properties=properties,
+        portable=bool(data.get("portable", True)),
     )
 
 
@@ -1222,6 +1584,10 @@ def _parse_exploration_encounter_trigger(data: Any) -> ExplorationEncounterTrigg
         flag_key=str(data["flag_key"]) if "flag_key" in data else None,
         flag_value=data.get("flag_value", True),
         point_id=str(data["point_id"]) if "point_id" in data else None,
+        opening_policy=_parse_encounter_opening_policy(
+            data.get("opening_policy"),
+            f"exploration encounter trigger {trigger_id}.opening_policy",
+        ),
         outcome_on_victory=_parse_encounter_outcome(
             data.get("outcome_on_victory"),
             f"exploration encounter trigger {trigger_id}.outcome_on_victory",
@@ -1230,6 +1596,108 @@ def _parse_exploration_encounter_trigger(data: Any) -> ExplorationEncounterTrigg
             data.get("outcome_on_defeat"),
             f"exploration encounter trigger {trigger_id}.outcome_on_defeat",
         ),
+    )
+
+
+def _parse_encounter_opening_policy(data: Any, field: str) -> EncounterOpeningPolicy | None:
+    if data is None:
+        return None
+    if not isinstance(data, dict):
+        raise ValueError(f"{field} must be an object.")
+    rules_data = data.get("rules", [])
+    if not isinstance(rules_data, list):
+        raise ValueError(f"{field}.rules must be a list.")
+    rules: list[EncounterOpeningRule] = []
+    for index, raw_rule in enumerate(rules_data):
+        rule_field = f"{field}.rules[{index}]"
+        if not isinstance(raw_rule, dict):
+            raise ValueError(f"{rule_field} must be an object.")
+        rules.append(
+            EncounterOpeningRule(
+                id=str(_required(raw_rule, "id", rule_field)),
+                outcome=_enum_value(
+                    EncounterOpeningOutcome,
+                    str(_required(raw_rule, "outcome", rule_field)),
+                    f"{rule_field}.outcome",
+                ),
+                title=str(_required(raw_rule, "title", rule_field)),
+                narration=str(_required(raw_rule, "narration", rule_field)),
+                min_noise=int(raw_rule["min_noise"]) if "min_noise" in raw_rule else None,
+                max_noise=int(raw_rule["max_noise"]) if "max_noise" in raw_rule else None,
+                required_flags=_parse_string_tuple(raw_rule.get("required_flags", []), f"{rule_field}.required_flags"),
+                forbidden_flags=_parse_string_tuple(raw_rule.get("forbidden_flags", []), f"{rule_field}.forbidden_flags"),
+                completion_any_tags=_parse_string_tuple(
+                    raw_rule.get("completion_any_tags", []),
+                    f"{rule_field}.completion_any_tags",
+                ),
+            )
+        )
+    return EncounterOpeningPolicy(
+        challenge_id=str(_required(data, "challenge_id", field)),
+        default_outcome=_enum_value(
+            EncounterOpeningOutcome,
+            str(_required(data, "default_outcome", field)),
+            f"{field}.default_outcome",
+        ),
+        default_title=str(_required(data, "default_title", field)),
+        default_narration=str(_required(data, "default_narration", field)),
+        rules=tuple(rules),
+    )
+
+
+def _parse_exploration_observation(data: Any) -> ExplorationObservation:
+    if not isinstance(data, dict):
+        raise ValueError("scenario.exploration.observations entries must be objects.")
+    observation_id = str(_required(data, "id", "exploration observation"))
+    facts_data = data.get("facts", [])
+    if not isinstance(facts_data, list):
+        raise ValueError(f"exploration observation {observation_id}.facts must be a list.")
+    return ExplorationObservation(
+        id=observation_id,
+        zone_id=str(_required(data, "zone_id", f"exploration observation {observation_id}")),
+        challenge_id=str(data["challenge_id"]) if "challenge_id" in data else None,
+        label=str(_required(data, "label", f"exploration observation {observation_id}")),
+        description=str(_required(data, "description", f"exploration observation {observation_id}")),
+        ability=str(_required(data, "ability", f"exploration observation {observation_id}")),
+        skill=str(data["skill"]) if data.get("skill") else None,
+        failure_message=str(_required(data, "failure_message", f"exploration observation {observation_id}")),
+        participants=CheckParticipants(str(data.get("participants", CheckParticipants.SINGLE_ACTOR.value))),
+        aggregation=CheckAggregation(str(data.get("aggregation", CheckAggregation.LEAD_RESULT.value))),
+        roll_mode=RollMode(str(data.get("roll_mode", RollMode.NORMAL.value))),
+        intent_examples=_parse_string_tuple(
+            data.get("intent_examples", []),
+            f"exploration observation {observation_id}.intent_examples",
+        ),
+        facts=tuple(
+            _parse_observation_fact(entry, observation_id, index)
+            for index, entry in enumerate(facts_data)
+        ),
+    )
+
+
+def _parse_observation_fact(data: Any, observation_id: str, index: int) -> ObservationFact:
+    field = f"exploration observation {observation_id}.facts[{index}]"
+    if not isinstance(data, dict):
+        raise ValueError(f"{field} must be an object.")
+    edge_data = data.get("encounter_edge")
+    encounter_edge = None
+    if edge_data is not None:
+        if not isinstance(edge_data, dict):
+            raise ValueError(f"{field}.encounter_edge must be an object.")
+        encounter_edge = ObservationEncounterEdge(
+            edge_type=EncounterEdgeType(str(_required(edge_data, "type", f"{field}.encounter_edge"))),
+            encounter_trigger_id=str(
+                _required(edge_data, "encounter_trigger_id", f"{field}.encounter_edge")
+            ),
+            label=str(_required(edge_data, "label", f"{field}.encounter_edge")),
+        )
+    return ObservationFact(
+        id=str(_required(data, "id", field)),
+        minimum_total=int(_required(data, "minimum_total", field)),
+        narration=str(_required(data, "narration", field)),
+        reveal_flag=str(_required(data, "reveal_flag", field)),
+        effects=_parse_effects(data.get("effects", []), f"{field}.effects"),
+        encounter_edge=encounter_edge,
     )
 
 
@@ -1251,6 +1719,16 @@ def _parse_llm_context(data: Any, field: str) -> LlmContext:
         return LlmContext()
     if not isinstance(data, dict):
         raise ValueError(f"{field} must be an object.")
+    guidance_facts_data = data.get("guidance_facts", [])
+    if not isinstance(guidance_facts_data, list):
+        raise ValueError(f"{field}.guidance_facts must be a list.")
+    guidance_facts = tuple(
+        _parse_llm_guidance_fact(item, f"{field}.guidance_facts[{index}]")
+        for index, item in enumerate(guidance_facts_data)
+    )
+    fact_ids = tuple(fact.id for fact in guidance_facts)
+    if len(fact_ids) != len(set(fact_ids)):
+        raise ValueError(f"{field}.guidance_facts contains duplicate ids.")
     return LlmContext(
         summary=str(data.get("summary", "")),
         available_materials=_parse_string_tuple(data.get("available_materials", []), f"{field}.available_materials"),
@@ -1258,6 +1736,21 @@ def _parse_llm_context(data: Any, field: str) -> LlmContext:
         reasonable_approaches=_parse_string_tuple(data.get("reasonable_approaches", []), f"{field}.reasonable_approaches"),
         impossible_approaches=_parse_string_tuple(data.get("impossible_approaches", []), f"{field}.impossible_approaches"),
         risk_notes=_parse_string_tuple(data.get("risk_notes", []), f"{field}.risk_notes"),
+        guidance_facts=guidance_facts,
+    )
+
+
+def _parse_llm_guidance_fact(data: Any, field: str) -> LlmGuidanceFact:
+    if not isinstance(data, dict):
+        raise ValueError(f"{field} must be an object.")
+    return LlmGuidanceFact(
+        id=str(_required(data, "id", field)),
+        text=str(_required(data, "text", field)),
+        kind=LlmGuidanceFactKind(str(_required(data, "kind", field))),
+        visibility=LlmGuidanceFactVisibility(str(_required(data, "visibility", field))),
+        minimum_hint_level=int(data.get("minimum_hint_level", 0)),
+        reveal_if_flags=_parse_string_tuple(data.get("reveal_if_flags", []), f"{field}.reveal_if_flags"),
+        match_phrases=_parse_string_tuple(data.get("match_phrases", []), f"{field}.match_phrases"),
     )
 
 
@@ -1736,8 +2229,88 @@ def _validate_exploration(definition: ScenarioDefinition) -> None:
                         f"exploration challenge option {option.id}.bonuses references unknown actor spell: "
                         f"{bonus.source_id}."
                     )
+    challenges_by_zone = {
+        challenge.zone_id: challenge
+        for challenge in definition.exploration_challenges
+    }
+    for zone in definition.exploration_zones:
+        challenge = challenges_by_zone.get(zone.id)
+        for fixture in zone.fixtures:
+            for action in fixture.action_policies:
+                if challenge is None:
+                    raise ValueError(
+                        f"exploration fixture {fixture.id}.action_policies requires a challenge in zone {zone.id}."
+                    )
+                policy = challenge.llm_policy
+                if policy.dc_for_tier(action.difficulty_tier) is None:
+                    raise ValueError(
+                        f"exploration fixture {fixture.id} action {action.operation.value} references unknown "
+                        f"difficulty tier: {action.difficulty_tier}."
+                    )
+                if not policy.progress_success_min <= action.progress_on_success <= policy.progress_success_max:
+                    raise ValueError(
+                        f"exploration fixture {fixture.id} action {action.operation.value} success progress "
+                        "is outside challenge policy."
+                    )
+                if not policy.progress_failure_min <= action.progress_on_failure <= policy.progress_failure_max:
+                    raise ValueError(
+                        f"exploration fixture {fixture.id} action {action.operation.value} failure progress "
+                        "is outside challenge policy."
+                    )
+                if (
+                    action.failure_complication is not None
+                    and action.failure_complication not in policy.allowed_complications
+                ):
+                    raise ValueError(
+                        f"exploration fixture {fixture.id} action {action.operation.value} references disallowed "
+                        f"complication: {action.failure_complication}."
+                    )
+                if action.release_yield_items and not fixture.yield_items:
+                    raise ValueError(
+                        f"exploration fixture {fixture.id} releases yield items but defines none."
+                    )
     challenge_ids = {challenge.id for challenge in definition.exploration_challenges}
+    observation_ids = tuple(observation.id for observation in definition.exploration_observations)
+    if len(observation_ids) != len(set(observation_ids)):
+        raise ValueError("exploration.observations contains duplicate ids.")
+    encounter_trigger_ids = {trigger.id for trigger in definition.exploration_encounter_triggers}
+    for observation in definition.exploration_observations:
+        if observation.zone_id not in zone_ids:
+            raise ValueError(f"exploration observation {observation.id}.zone_id references unknown zone.")
+        if observation.challenge_id is not None and observation.challenge_id not in challenge_ids:
+            raise ValueError(f"exploration observation {observation.id}.challenge_id references unknown challenge.")
+        if observation.challenge_id is not None:
+            challenge = next(item for item in definition.exploration_challenges if item.id == observation.challenge_id)
+            if challenge.zone_id != observation.zone_id:
+                raise ValueError(f"exploration observation {observation.id} must share its challenge zone.")
+        for fact in observation.facts:
+            if (
+                fact.encounter_edge is not None
+                and fact.encounter_edge.encounter_trigger_id not in encounter_trigger_ids
+            ):
+                raise ValueError(
+                    f"exploration observation {observation.id} fact {fact.id}.encounter_edge "
+                    "references unknown encounter trigger."
+                )
     for trigger in definition.exploration_encounter_triggers:
+        if trigger.opening_policy is not None:
+            policy = trigger.opening_policy
+            if policy.challenge_id not in challenge_ids:
+                raise ValueError(
+                    f"exploration encounter trigger {trigger.id}.opening_policy.challenge_id references unknown challenge."
+                )
+            rule_ids = tuple(rule.id for rule in policy.rules)
+            if len(rule_ids) != len(set(rule_ids)):
+                raise ValueError(f"exploration encounter trigger {trigger.id}.opening_policy contains duplicate rule ids.")
+            for rule in policy.rules:
+                if rule.min_noise is not None and rule.min_noise < 0:
+                    raise ValueError(f"encounter opening rule {rule.id}.min_noise must be non-negative.")
+                if rule.max_noise is not None and rule.max_noise < 0:
+                    raise ValueError(f"encounter opening rule {rule.id}.max_noise must be non-negative.")
+                if rule.min_noise is not None and rule.max_noise is not None and rule.min_noise > rule.max_noise:
+                    raise ValueError(f"encounter opening rule {rule.id} has an invalid noise range.")
+                if set(rule.required_flags).intersection(rule.forbidden_flags):
+                    raise ValueError(f"encounter opening rule {rule.id} requires and forbids the same flag.")
         if trigger.condition == EncounterTriggerCondition.NOISE_AT_LEAST:
             if trigger.challenge_id not in challenge_ids:
                 raise ValueError(f"exploration encounter trigger {trigger.id}.challenge_id references unknown challenge.")
@@ -1966,7 +2539,13 @@ def _load_json_value(path: Path) -> Any:
 def _content_ref_path(scenario_path: Path, category: str, ref: str) -> Path:
     root = _content_root_path(scenario_path)
     filename = ref if ref.endswith(".json") else f"{ref}.json"
-    return root / category / filename
+    local_path = root / category / filename
+    if local_path.exists():
+        return local_path
+    bundled_path = Path(__file__).resolve().parents[3] / "content" / category / filename
+    if bundled_path.exists():
+        return bundled_path
+    return local_path
 
 
 def _content_root_path(scenario_path: Path) -> Path:

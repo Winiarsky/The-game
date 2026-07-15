@@ -476,7 +476,7 @@ def test_demo_exploration_scene_zone_travel_preview_uses_only_markers(tmp_path):
     assert not any(len(positions) > 1 and (9, 10) in positions for positions in set_led_positions)
 
 
-def test_demo_exploration_scene_gate_completion_reveals_wounded_scout(tmp_path):
+def test_demo_exploration_scene_gate_completion_keeps_wounded_scout_hidden_until_encounter(tmp_path):
     result = run_demo(
         _args(
             tmp_path,
@@ -499,10 +499,9 @@ def test_demo_exploration_scene_gate_completion_reveals_wounded_scout(tmp_path):
     events = _events(result.observation_path)
     event_types = [event["event_type"] for event in events]
     visible_points = {point.id for point in demo_exploration_scene.visible_exploration_points(result.final_state.points)}
-    assert "wounded_scout" in visible_points
-    assert "exploration_point_revealed" in event_types
-    assert any(event["payload"]["point_ids"] == ["wounded_scout"] for event in events if event["event_type"] == "exploration_point_revealed")
-    assert any("Ranny zwiadowca" in message for message in result.messages)
+    assert "wounded_scout" not in visible_points
+    assert "exploration_point_revealed" not in event_types
+    assert not any("Ranny zwiadowca" in message for message in result.messages)
 
 
 def test_demo_exploration_scene_npc_interaction_sets_flags_and_reveals_info(tmp_path):

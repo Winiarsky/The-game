@@ -223,7 +223,7 @@ def test_spell_option_bonus_requires_leveled_spell_to_be_prepared():
     assert active_option_bonuses_for_actor(cleric, unprepared_spell_option) == ()
 
 
-def test_gate_challenge_reveals_hidden_npc_after_completion():
+def test_gate_challenge_does_not_reveal_hidden_npc_before_encounter_is_won():
     state = _state()
     challenge = next(item for item in state.challenges if item.id == "closed_gate")
     option = next(item for item in challenge.options if item.id == "force_gate")
@@ -233,6 +233,6 @@ def test_gate_challenge_reveals_hidden_npc_after_completion():
 
     updated = challenge_state_for(result.state, challenge.id)
     assert updated.completed is True
-    assert challenge.reveals_on_complete == ("wounded_scout",)
-    assert [point.id for point in revealed] == ["wounded_scout"]
-    assert "wounded_scout" in {point.id for point in visible_exploration_points(revealed_state.points)}
+    assert challenge.reveals_on_complete == ()
+    assert revealed == ()
+    assert "wounded_scout" not in {point.id for point in visible_exploration_points(revealed_state.points)}

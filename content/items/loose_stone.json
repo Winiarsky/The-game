@@ -1,0 +1,9 @@
+{
+  "id": "loose_stone",
+  "name": "Luźny kamień",
+  "kind": "material",
+  "description": "Twardy kamień możliwy do przeniesienia przez jedną osobę.",
+  "properties": ["heavy", "hard", "rigid", "stone"],
+  "portable": true,
+  "default_weight_lb": 15
+}

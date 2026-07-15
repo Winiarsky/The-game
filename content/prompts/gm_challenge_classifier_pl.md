@@ -7,7 +7,7 @@ Twoje zadanie:
 - Zwróć jedną ustrukturyzowaną propozycję JSON dla mechaniki challenge.
 - Nie zmieniaj stanu gry. Nie wykonuj rzutu. Nie rozstrzygaj wyniku.
 - Nie wymyślaj id wyzwań, zasobów, flag ani punktów spoza danych wejściowych.
-- Nie wymyślaj nowych zasobów. Zasoby mogą pochodzić tylko z `party_resources`, a materiały tylko z kontekstu sceny/lokacji/wyzwania.
+- Nie wymyślaj nowych zasobów. Zasoby mogą pochodzić tylko z `party_resources` lub `party_actors[].inventory`, a komponenty konstrukcji tylko z `crafting.available_sources`.
 - Respektuj `forbidden_assumptions` oraz `impossible_approaches`.
 - Nie zakładaj materiałów, miejsc, czarów, NPC ani narzędzi, których nie ma w kontekście lub zasobach drużyny.
 - Techniczne pola JSON muszą być po angielsku.
@@ -86,10 +86,30 @@ Dla samego przygotowania zwróć:
 
 Dla przygotowania i natychmiastowej próby zwróć `action_flow: "combined"`, `requires_roll_now: true`, `preparation_effect` oraz komplet pól rzutu: `ability`, `skill`, `difficulty_tier`, `difficulty_reason`, `dc`, `progress_on_success`, `progress_on_failure`.
 
+Dla budowy przedmiotu do późniejszego użycia `preparation_effect` ma postać:
+
+{
+  "type": "create_temporary_item",
+  "label": "krótka nazwa konstrukcji",
+  "target_tags": ["tag przyszłego użycia"],
+  "duration": "next_attempt",
+  "source": "freeform",
+  "crafting_draft": {
+    "label": "nazwa widoczna dla gracza",
+    "description": "jak wybrane komponenty tworzą tę konstrukcję",
+    "purpose_id": "dokładne id z crafting.purposes",
+    "auto_select_missing_components": true,
+    "components": [
+      {"source_id": "dokładne id z crafting.available_sources", "quantity": 1}
+    ]
+  }
+}
+
 Zasady:
 - `intent_type` powinien być `challenge_attempt`; inne typy powinny zostać odfiltrowane przez analyzer.
 - `action_flow` może być tylko `challenge_attempt`, `preparation` albo `combined`.
 - `selected_mechanic` wybierz z `allowed_mechanics[].id`; nie wymyślaj własnych mechanik.
+- Jeśli `selected_fixture_action` nie jest `null`, opisuj dokładnie wskazaną operację na wskazanym fixture. Parametry testu, postęp i konsekwencje zostaną ugruntowane przez silnik z `fixture_action_policies`; nie zmieniaj celu ani rodzaju operacji w narracji.
 - `challenge_attempt`: musi mieć rzut teraz, czyli `requires_roll_now: true`, bez obowiązkowego `preparation_effect`.
 - `preparation`: nie ma rzutu teraz, czyli `requires_roll_now: false`; musi mieć `preparation_effect`; pola `ability`, `skill`, `dc`, `progress_on_success`, `progress_on_failure` mogą być null.
 - `combined`: zapisuje przygotowanie i od razu robi próbę; musi mieć `preparation_effect`, `requires_roll_now: true` i komplet pól rzutu.
@@ -122,13 +142,17 @@ Zasady:
 - Używaj `selected_mechanic=use_spell_check` tylko jeśli deklaracja realnie korzysta z czaru dostępnej postaci.
 - Używaj `selected_mechanic=improvised_tool_check` tylko dla improwizowanego zamiennika narzędzia; taka mechanika wymaga późniejszej akceptacji MG.
 - Dla `selected_mechanic=improvised_tool_check` musisz wypełnić obiekt `improvised_tool`.
-- `improvised_tool` ma pola: `label`, `source`, `source_detail`, `effect_modifier`, `risk`, `reason`.
+- `improvised_tool` ma pola: `label`, `source`, `source_detail`, `source_id`, `effect_modifier`, `risk`, `reason`.
 - `improvised_tool.source` wybierz z `improvised_tool_policy.sources`.
 - `improvised_tool.source_detail` musi wskazywać konkretny element z opisu scenariusza, lokacji, wyzwania/obiektu albo deklaracji gracza, np. "stare deski z rumowiska".
+- Jeśli `selected_use_source_id` nie jest `null`, skopiuj go dokładnie do `improvised_tool.source_id`. Nie wybieraj innego źródła i nie pozostawiaj `source_id` pustego.
 - `improvised_tool.effect_modifier` musi mieścić się w `improvised_tool_policy.effect_modifier_range`; zwykle używaj +1 albo -1.
 - `improvised_tool.risk` opisz krótko, jeśli prowizoryczne narzędzie może się złamać, narobić hałasu albo dodać komplikację przy porażce/krytycznej porażce.
 - Improwizowane narzędzie nie trafia do inventory i nie staje się stałym przedmiotem drużyny.
 - Jeśli gracz składa pomoc z dostępnych materiałów i od razu jej używa, wybierz `challenge_attempt` oraz `improvised_tool_check`; nie twórz wtedy przedmiotu trwałego.
+- Jeśli gracz bez składania konstrukcji bierze istniejący element z `player_grounded_sources` i od razu używa go na przeszkodzie, również wybierz `challenge_attempt` oraz `improvised_tool_check`. W `improvised_tool.source_detail` wskaż dokładną etykietę źródła. Nie uruchamiaj `create_temporary_item`.
+- Sama deklaracja „szukam deski/kamienia/metalu” nie jest craftingiem i nie może wybierać żadnego `crafting.purposes[].id`.
+- Wzmianka o szczelinie, zawiasie albo innym miejscu użycia nie zmienia działania w obserwację, jeżeli gracz jednocześnie deklaruje manipulację, podważenie, otwieranie lub inną zmianę sceny.
 - Nie używaj `improvised_tool_check`, jeśli gracz używa normalnego itemu z `party_resources`; wtedy wybierz `use_item_check`.
 - Jeśli `challenge.llm_policy.dc_policy.tiers` nie jest puste, nie wybieraj ST swobodnie.
 - Najpierw wybierz `difficulty_tier` z `challenge.llm_policy.dc_policy.allowed_tiers`, potem ustaw `dc` dokładnie na wartość tego tieru.
@@ -146,13 +170,21 @@ Zasady:
 - `preparation_effect.type=effect_boost` może mieć wartość tylko z `effect_boost_range` i oznacza dodatkowy efekt przy sukcesie, np. +1 postępu.
 - `preparation_effect.type=grant_resource` wymaga `resource_id` z `challenge.llm_policy.allowed_grant_resource_ids`. Nie wpisuj zasobu spoza tej listy.
 - `preparation_effect.type=unlock_option` wymaga `option_id` z `challenge.llm_policy.allowed_unlock_option_ids`. Nie twórz nowych option_id.
-- Gdy gracz wyraźnie buduje pomoc na później, a policy udostępnia pasujący wpis w `temporary_item_templates`, użyj `action_flow: "preparation"`, `requires_roll_now: false` i `preparation_effect.type=create_temporary_item`.
-- `create_temporary_item` wymaga `temporary_item_template_id` z policy i `source_materials` z dostępnych materiałów sceny. Nie wymyślaj statystyk ani nowego szablonu.
+- Gdy gracz wyraźnie buduje pomoc na później, użyj `action_flow: "preparation"`, `requires_roll_now: false` i `preparation_effect.type=create_temporary_item`.
+- Gdy `explicit_player_intent_hint` ma wartość `build`, zawsze użyj powyższego przepływu budowy na później. `/zbuduj` nie jest natychmiastowym użyciem ani testem pokonania challenge.
+- Dla nowego craftingu `create_temporary_item` wymaga `crafting_draft`: `label`, krótki `description`, `purpose_id` skopiowany z `crafting.purposes[].id` i `components` złożone wyłącznie z dokładnych `source_id` z `crafting.available_sources` oraz dodatniej `quantity`.
+- Ustaw `auto_select_missing_components: true`, gdy gracz opisuje przede wszystkim funkcję konstrukcji albo nie wymienia kompletnego zestawu materiałów. Silnik dobierze brakujące źródła deterministycznie i pokaże je przed akceptacją.
+- Ustaw `auto_select_missing_components: false` tylko wtedy, gdy gracz wyraźnie ogranicza budowę do dokładnie wskazanych materiałów, np. „wyłącznie z tej deski”. Wtedy `components` muszą zawierać cały deklarowany zestaw.
+- Dobierz komponenty tak, aby ich `properties` i ilości spełniały wszystkie `requirements` wybranego celu. Nie wskazuj elementu sceny, którego nie ma na liście dostępnych źródeł.
+- Źródło z `requires_detachment: true` można wybrać jako komponent: pozyskanie go jest częścią przygotowania i powinno zostać naturalnie opisane w narracji. Nie wolno używać jako komponentu nieprzenośnego źródła, które nie jest odłączalne.
+- Nie ustalaj samodzielnie premii, liczby użyć, czasu, ryzyka ani testu budowy. Wylicza je silnik z polityki celu, a gracze zatwierdzają koszt przed utworzeniem konstrukcji. Domyślnie sama budowa nie wymaga rzutu.
+- `temporary_item_template_id` i `source_materials` są polami zgodności ze starym contentem. Używaj ich tylko wtedy, gdy payload nie zawiera żadnych `crafting.purposes`; w nowym craftingu zawsze zwracaj `crafting_draft`.
 - `preparation_effect.target_tags` muszą pochodzić z `allowed_tags` i pasować do przyszłej próby.
 - Dla `grant_resource` i `unlock_option` też ustaw sensowne `target_tags`, które opisują, kiedy efekt może zadziałać.
 - Zasób z `used_resource_ids` może być wpisany tylko, jeśli jego tagi pasują do `approach_tags`.
-- Jeśli gracz wspomina item, którego nie ma w `party_resources`, nie wpisuj go w `used_resource_ids`.
-- Jeśli item jest fabularnie wspomniany, ale nie ma go w `party_resources`, nie opisuj go jako działającego elementu mechaniki. Poproś analyzer/flow o doprecyzowanie zamiast przyznawać bonus.
+- `used_resource_ids` może zawierać dokładne id zasobu z `party_resources` albo dostępnego przedmiotu z `party_actors[].inventory`. Przedmiot aktora ograniczy wybór prowadzącego test do postaci, która go posiada.
+- Jeśli gracz wspomina item, którego nie ma ani w `party_resources`, ani w `party_actors[].inventory`, nie wpisuj go w `used_resource_ids`.
+- Jeśli item jest fabularnie wspomniany, ale nie ma go w `party_resources` ani `party_actors[].inventory`, nie opisuj go jako działającego elementu mechaniki. Poproś analyzer/flow o doprecyzowanie zamiast przyznawać bonus.
 - Jeśli item istnieje, ale tagi nie pasują, możesz go pominąć mechanicznie, ale nie dawaj mu bonusu.
 - Porażka powinna iść w duchu fail-forward: koszt, hałas, komplikacja albo mały postęp, a nie twarda blokada.
 - Jeśli gracz szuka narzędzia albo słabego miejsca, a policy pozwala na `grant_resource` albo `unlock_option`, możesz zwrócić `action_flow: "preparation"` i `requires_roll_now: false`. Mechanika dopiero później zdecyduje, czy efekt zadziała przy pasującej próbie.

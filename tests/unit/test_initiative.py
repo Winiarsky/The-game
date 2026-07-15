@@ -7,7 +7,7 @@ from dnd_board_game.combat import (
     build_player_initiative_prompts,
     roll_enemy_initiative,
 )
-from dnd_board_game.rules import D20RollInput, resolve_d20_roll
+from dnd_board_game.rules import D20RollInput, RollMode, resolve_d20_roll
 from dnd_board_game.rules import D20RollRequest, RollModifier, RollModifierType
 from dnd_board_game.world import Coordinate
 
@@ -58,6 +58,20 @@ def test_player_initiative_prompts_go_in_party_order_and_skip_enemy():
     assert "Rzuć 1d20" in prompts[0].message
 
 
+def test_player_initiative_prompt_can_receive_advantage_for_one_actor():
+    hero = _actor("hero", "Bohater", Faction.ALLY, 16)
+    rogue = _actor("rogue", "Łotrzyca", Faction.ALLY, 18)
+
+    prompts = build_player_initiative_prompts(
+        (hero, rogue),
+        {"hero": RollMode.ADVANTAGE},
+    )
+
+    assert prompts[0].request.mode == RollMode.ADVANTAGE
+    assert "Rzuć 2d20" in prompts[0].message
+    assert prompts[1].request.mode == RollMode.NORMAL
+
+
 def test_enemy_initiative_uses_injected_rng():
     goblin = _actor("goblin", "Goblin", Faction.ENEMY, 14)
 
@@ -65,6 +79,17 @@ def test_enemy_initiative_uses_injected_rng():
 
     assert entry.roll.natural_roll == 11
     assert entry.roll.total == 13
+
+
+def test_enemy_initiative_can_roll_with_disadvantage():
+    goblin = _actor("goblin", "Goblin", Faction.ENEMY, 14)
+
+    entry = roll_enemy_initiative(goblin, random.Random(7), RollMode.DISADVANTAGE)
+
+    assert entry.roll.natural_rolls == (11, 5)
+    assert entry.roll.natural_roll == 5
+    assert entry.roll.total == 7
+    assert entry.roll.mode == RollMode.DISADVANTAGE
 
 
 def test_initiative_order_sorts_by_total_dexterity_and_stable_order():

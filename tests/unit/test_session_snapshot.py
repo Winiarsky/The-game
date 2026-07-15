@@ -4,7 +4,18 @@ from dataclasses import replace
 import pytest
 
 from dnd_board_game.combat import replace_actor, set_scene_flag
-from dnd_board_game.exploration import create_temporary_item
+from dnd_board_game.exploration import (
+    CraftingComponentSelection,
+    CraftingDraft,
+    EncounterEdge,
+    EncounterEdgeType,
+    build_crafting_source_registry,
+    craft_temporary_item,
+    discover_scene_source,
+    FixtureOperation,
+    apply_fixture_action,
+    plan_fixture_action,
+)
 from dnd_board_game.save import (
     SNAPSHOT_SCHEMA_VERSION,
     SessionSnapshot,
@@ -53,12 +64,134 @@ def test_snapshot_json_round_trip_is_deterministic(tmp_path):
 
 def test_snapshot_round_trip_preserves_temporary_scene_item(tmp_path):
     session = _session(tmp_path)
-    challenge = next(item for item in session.state.challenges if item.id == "closed_gate")
-    session.state, created = create_temporary_item(
+    draft = CraftingDraft(
+        label="Prowizoryczny taran",
+        description="Długa deska obciążona kamieniem.",
+        purpose_id="heavy_force",
+        components=(
+            CraftingComponentSelection("zone:gate:item:gate_rotten_planks"),
+            CraftingComponentSelection("zone:gate:item:gate_loose_stones"),
+        ),
+    )
+    session.state, created = craft_temporary_item(
         session.state,
-        challenge.llm_policy.temporary_item_templates[0],
-        zone_id="gate",
-        source_materials=("stare deski", "metalowe okucia"),
+        draft,
+        build_crafting_source_registry(session.state, session.exploration.actors),
+        session.exploration.crafting_policy,
+    )
+
+    restored = SessionSnapshot.from_dict(session.create_snapshot().as_dict(), base_state=session.state)
+
+    assert restored.exploration_state.temporary_items == (created,)
+
+
+def test_snapshot_round_trip_preserves_unconsumed_encounter_edge(tmp_path):
+    session = _session(tmp_path)
+    edge = EncounterEdge(
+        id="observation:gate:fact:positions:actor:hero",
+        edge_type=EncounterEdgeType.INITIATIVE_ADVANTAGE,
+        label="Rozpoznane pozycje goblinów",
+        beneficiary_actor_id="hero",
+        encounter_trigger_id="gate_open_skirmish",
+        source_observation_id="gate",
+        source_fact_id="positions",
+    )
+    session.state = replace(session.state, encounter_edges=(edge,))
+
+    restored = SessionSnapshot.from_dict(session.create_snapshot().as_dict(), base_state=session.state)
+
+    assert restored.exploration_state.encounter_edges == (edge,)
+
+
+def test_snapshot_round_trip_preserves_encounter_opening_resolution(tmp_path):
+    session = _session(tmp_path)
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.state = replace(
+        session.state,
+        flags=set_scene_flag(session.state.flags, "gate_passed", True),
+    )
+    session.state_payload()
+    session.resolve_encounter_opening()
+
+    restored = SessionSnapshot.from_dict(session.create_snapshot().as_dict(), base_state=session.state)
+
+    assert restored.pending_encounter is not None
+    assert restored.pending_encounter.opening_resolution is not None
+    assert restored.pending_encounter.opening_resolution.outcome.value == "party_surprises_enemies"
+
+
+def test_snapshot_round_trip_preserves_found_scene_source_without_inventory_transfer(tmp_path):
+    session = _session(tmp_path)
+    source = build_crafting_source_registry(session.state, session.exploration.actors).source_by_id(
+        "zone:gate:item:gate_rotten_planks"
+    )
+    assert source is not None
+    session.state = discover_scene_source(
+        session.state,
+        source,
+        requested_as="kij",
+        purpose="dosięgnięcie rygla",
+        matched_properties=("long", "rigid"),
+        semantic_substitution=True,
+    )
+    inventory_before = session.state.inventory_resource_ids
+
+    restored = SessionSnapshot.from_dict(session.create_snapshot().as_dict(), base_state=session.state)
+
+    assert restored.exploration_state.source_discoveries == session.state.source_discoveries
+    assert restored.exploration_state.inventory_resource_ids == inventory_before
+
+
+def test_snapshot_round_trip_preserves_collected_scene_quantity_and_owner_inventory(tmp_path):
+    session = _session(tmp_path)
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.submit_action("/wez drewnianą deskę")
+    session.decide("accept", lead_actor_id="hero", quantity=2)
+
+    restored = SessionSnapshot.from_dict(session.create_snapshot().as_dict(), base_state=session.state)
+
+    assert restored.exploration_state.source_collections == session.state.source_collections
+    hero = next(actor for actor in restored.actors if str(actor.id) == "hero")
+    assert next(item for item in hero.inventory if item.name == "Drewniana deska").quantity == 2
+    remaining = build_crafting_source_registry(restored.exploration_state, restored.actors).source_by_id(
+        "zone:gate:item:gate_rotten_planks"
+    )
+    assert remaining is not None and remaining.quantity == 2
+
+
+def test_snapshot_round_trip_preserves_fixture_state_and_released_items(tmp_path):
+    session = _session(tmp_path)
+    plan = plan_fixture_action(
+        session.state,
+        source_id="zone:gate:fixture:gate_corroded_hinges",
+        operation=FixtureOperation.DETACH,
+    )
+    session.state = apply_fixture_action(session.state, plan, success=True).state
+
+    restored = SessionSnapshot.from_dict(session.create_snapshot().as_dict(), base_state=session.state)
+
+    assert restored.exploration_state.fixture_states == session.state.fixture_states
+    registry = build_crafting_source_registry(restored.exploration_state, restored.actors)
+    assert registry.source_by_id("zone:gate:fixture:gate_corroded_hinges").usable is False
+    assert registry.source_by_id("zone:gate:item:detached_gate_metal").usable is True
+
+
+def test_snapshot_round_trip_preserves_dynamic_crafting_allocations(tmp_path):
+    session = _session(tmp_path)
+    draft = CraftingDraft(
+        label="Prowizoryczna drabina",
+        description="Dwie deski związane liną.",
+        purpose_id="climbing_aid",
+        components=(
+            CraftingComponentSelection("zone:gate:item:gate_rotten_planks", quantity=2),
+            CraftingComponentSelection("resource:rope"),
+        ),
+    )
+    session.state, created = craft_temporary_item(
+        session.state,
+        draft,
+        build_crafting_source_registry(session.state, session.exploration.actors),
+        session.exploration.crafting_policy,
     )
 
     restored = SessionSnapshot.from_dict(session.create_snapshot().as_dict(), base_state=session.state)

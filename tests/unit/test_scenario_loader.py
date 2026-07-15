@@ -231,9 +231,24 @@ def test_load_abandoned_watchtower_builds_exploration_scene():
     assert exploration.board.terrain_at(Coordinate(8, 5)).blocks_movement is False
     assert len(exploration.zones) == 4
     assert len(exploration.challenges) == 2
+    assert len(exploration.observations) == 1
+    gate_observation = exploration.observations[0]
+    assert gate_observation.id == "look_through_gate_gap"
+    assert gate_observation.dc == 10
+    assert [fact.minimum_total for fact in gate_observation.facts] == [10, 15, 20]
+    assert gate_observation.facts[1].reveal_flag == "gate_goblins_spotted"
+    initiative_edge = gate_observation.facts[2].encounter_edge
+    assert initiative_edge is not None
+    assert initiative_edge.encounter_trigger_id == "gate_open_skirmish"
     challenge = next(item for item in exploration.challenges if item.id == "closed_gate")
     assert challenge.completed_flag == "gate_passed"
-    assert challenge.reveals_on_complete == ("wounded_scout",)
+    assert challenge.reveals_on_complete == ()
+    gate_trigger = next(item for item in exploration.encounter_triggers if item.id == "gate_open_skirmish")
+    assert gate_trigger.outcome_on_victory is not None
+    assert any(
+        effect["type"] == "reveal_point" and effect["parameters"]["point_id"] == "wounded_scout"
+        for effect in gate_trigger.outcome_on_victory.effects
+    )
     assert challenge.llm_policy.allowed_local_skills == ("crafting", "lockpicking")
     assert "heavy_force" in challenge.llm_policy.allowed_approach_tags
     assert "bribe" not in challenge.llm_policy.allowed_approach_tags
@@ -245,11 +260,40 @@ def test_load_abandoned_watchtower_builds_exploration_scene():
     gate = next(zone for zone in exploration.zones if zone.id == "gate")
     assert gate.image == "assets/gate_preview.png"
     assert "lina nie pozwala latać" in gate.llm_context.forbidden_assumptions
-    assert "przelot na linie bez magii" in challenge.llm_context.impossible_approaches
+    assert {item.id for item in gate.item_instances} == {"gate_rotten_planks", "gate_loose_stones"}
+    rotten_planks = next(item for item in gate.item_instances if item.id == "gate_rotten_planks")
+    assert rotten_planks.definition_id == "wooden_plank"
+    assert rotten_planks.quantity == 4
+    assert rotten_planks.properties >= {"long", "wooden", "fragile"}
+    assert {fixture.id for fixture in gate.fixtures} == {
+        "watchtower_gate",
+        "gate_corroded_hinges",
+        "gate_thorny_brush",
+    }
+    hinges = next(fixture for fixture in gate.fixtures if fixture.id == "gate_corroded_hinges")
+    assert hinges.detachable is True
+    assert hinges.yield_items[0].definition_id == "scrap_metal"
+    assert hinges.yield_items[0].available is False
+    guidance = {fact.id: fact for fact in challenge.llm_context.guidance_facts}
+    assert guidance["gate.force_possible"].minimum_hint_level == 1
+    assert guidance["gate.force_is_loud"].minimum_hint_level == 1
+    assert guidance["gate.noise_affects_scout"].visibility.value == "hidden"
+    assert guidance["gate.no_rope_flight"].kind.value == "constraint"
     assert {resource.id for resource in exploration.resources} == {"rope", "wedge", "saw"}
     assert next(resource for resource in exploration.resources if resource.id == "wedge").consume_on_use is True
     assert next(resource for resource in exploration.resources if resource.id == "rope").consume_on_use is False
+    assert set(next(resource for resource in exploration.resources if resource.id == "rope").properties) >= {
+        "long",
+        "binding",
+        "load_bearing",
+    }
     assert exploration.initial_resource_ids == ("rope", "wedge")
+    assert {purpose.id for purpose in exploration.crafting_policy.purposes} == {
+        "heavy_force",
+        "climbing_aid",
+        "leverage",
+        "precision_tool",
+    }
     courtyard = next(zone for zone in exploration.zones if zone.id == "courtyard")
     assert courtyard.search_dc == 12
     assert courtyard.search_reveals == ("hidden_cache",)
@@ -305,6 +349,10 @@ def test_load_abandoned_watchtower_folder_keeps_monster_and_item_refs_working():
     rogue = next(actor for actor in exploration.actors if actor.id == "rogue")
     cleric = next(actor for actor in exploration.actors if actor.id == "cleric")
     assert {item.id for item in rogue.inventory} >= {"crossbow", "thieves_tools"}
+    assert set(next(item for item in rogue.inventory if item.id == "thieves_tools").properties) >= {
+        "metallic",
+        "prying",
+    }
     assert "sacred_flame" in cleric.spell_ids
     assert cleric.spell_preparation is not None
     assert cleric.spell_preparation.source_label == "lista czarów kapłana"
@@ -393,14 +441,35 @@ def test_exploration_challenge_llm_policy_rejects_unknown_consequence_type(tmp_p
         load_scenario(scenario_path)
 
 
+def test_exploration_zone_rejects_unknown_structured_item_property(tmp_path):
+    data = _abandoned_watchtower_data_without_refs()
+    gate = next(zone for zone in data["exploration"]["zones"] if zone["id"] == "gate")
+    gate["available_items"][0]["added_properties"] = ["fragile", "magical_unobtainium"]
+    scenario_path = tmp_path / "bad_scene_item_property.json"
+    scenario_path.write_text(json.dumps(data), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="unknown item properties: magical_unobtainium"):
+        load_scenario(scenario_path)
+
+
 def test_load_abandoned_watchtower_builds_exploration_encounter_triggers():
     exploration = build_exploration_from_scenario(load_scenario("content/scenarios/abandoned_watchtower.json"))
 
     triggers = {trigger.id: trigger for trigger in exploration.encounter_triggers}
 
-    assert triggers["gate_noise_alarm"].condition.value == "noise_at_least"
-    assert triggers["gate_noise_alarm"].challenge_id == "closed_gate"
-    assert triggers["gate_noise_alarm"].noise == 3
+    gate = triggers["gate_open_skirmish"]
+    assert gate.condition.value == "flag_equals"
+    assert gate.opening_policy is not None
+    assert gate.opening_policy.challenge_id == "closed_gate"
+    assert [rule.id for rule in gate.opening_policy.rules] == [
+        "forced_breach",
+        "alerted_without_reconnaissance",
+        "alerted_after_reconnaissance",
+        "quiet_entry",
+    ]
+    assert gate.opening_policy.rules[1].min_noise == 3
+    assert gate.opening_policy.rules[1].outcome.value == "enemies_surprise_party"
+    assert "gate_noise_alarm" not in triggers
     assert triggers["scout_panic_alarm"].condition.value == "flag_equals"
     assert triggers["scout_panic_alarm"].flag_key == "scout_panicked"
 

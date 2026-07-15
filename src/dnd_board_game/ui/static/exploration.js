@@ -6,7 +6,96 @@ let boardScanInFlight = false;
 let boardScanToken = 0;
 let sessionLog = null;
 let decisionCorrectionOpen = false;
+let chatInstanceOpen = true;
+let activeInteractionId = null;
+let waitingForGm = false;
+let optimisticPlayerMessage = null;
+const slashCommands = Array.isArray(window.EXPLORATION_SLASH_COMMANDS) ? window.EXPLORATION_SLASH_COMMANDS : [];
+let filteredSlashCommands = [];
+let activeSlashCommandIndex = 0;
 let sidePanelOpen = localStorage.getItem('explorationSidePanelOpen') === 'true';
+
+function closeSlashCommandMenu() {
+  const menu = document.getElementById('slash-command-menu');
+  const input = document.getElementById('action');
+  filteredSlashCommands = [];
+  activeSlashCommandIndex = 0;
+  if (menu) menu.hidden = true;
+  if (input) input.setAttribute('aria-expanded', 'false');
+}
+function slashCommandQuery(value) {
+  if (!value.startsWith('/')) return null;
+  const token = value.slice(1);
+  if (/\s/.test(token)) return null;
+  return token.toLocaleLowerCase('pl');
+}
+function renderSlashCommandMenu() {
+  const menu = document.getElementById('slash-command-menu');
+  const input = document.getElementById('action');
+  if (!menu || !input) return;
+  const query = slashCommandQuery(input.value);
+  if (query === null) {
+    closeSlashCommandMenu();
+    return;
+  }
+  filteredSlashCommands = slashCommands.filter(command => command.name.toLocaleLowerCase('pl').startsWith(query));
+  if (!filteredSlashCommands.length) {
+    closeSlashCommandMenu();
+    return;
+  }
+  activeSlashCommandIndex = Math.min(activeSlashCommandIndex, filteredSlashCommands.length - 1);
+  menu.replaceChildren(...filteredSlashCommands.map((command, index) => {
+    const option = document.createElement('button');
+    option.type = 'button';
+    option.className = `slash-command-option${index === activeSlashCommandIndex ? ' active' : ''}`;
+    option.setAttribute('role', 'option');
+    option.setAttribute('aria-selected', index === activeSlashCommandIndex ? 'true' : 'false');
+    option.innerHTML = `<span class="slash-command-name">/${esc(command.name)}</span><span class="slash-command-copy"><b>${esc(command.label)}</b><span>${esc(command.description)}</span></span>`;
+    option.addEventListener('mousedown', event => event.preventDefault());
+    option.addEventListener('click', () => selectSlashCommand(index));
+    return option;
+  }));
+  menu.hidden = false;
+  input.setAttribute('aria-expanded', 'true');
+}
+function selectSlashCommand(index) {
+  const input = document.getElementById('action');
+  const command = filteredSlashCommands[index];
+  if (!input || !command) return false;
+  input.value = `/${command.name}${command.intent === 'help' ? '' : ' '}`;
+  input.placeholder = command.placeholder || 'Napisz wiadomość do MG...';
+  closeSlashCommandMenu();
+  input.focus();
+  input.setSelectionRange(input.value.length, input.value.length);
+  return true;
+}
+function handleSlashCommandInput() {
+  activeSlashCommandIndex = 0;
+  const input = document.getElementById('action');
+  if (input && !input.value.startsWith('/')) input.placeholder = 'Napisz wiadomość do MG...';
+  renderSlashCommandMenu();
+}
+function handleSlashCommandKeydown(event) {
+  const menu = document.getElementById('slash-command-menu');
+  if (!menu || menu.hidden || !filteredSlashCommands.length) return;
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    const direction = event.key === 'ArrowDown' ? 1 : -1;
+    activeSlashCommandIndex = (activeSlashCommandIndex + direction + filteredSlashCommands.length) % filteredSlashCommands.length;
+    renderSlashCommandMenu();
+    const active = menu.querySelector('.slash-command-option.active');
+    if (active) active.scrollIntoView({block: 'nearest'});
+    event.preventDefault();
+    return;
+  }
+  if (event.key === 'Enter' && !event.shiftKey) {
+    if (selectSlashCommand(activeSlashCommandIndex)) event.preventDefault();
+    return;
+  }
+  if (event.key === 'Escape') {
+    closeSlashCommandMenu();
+    event.preventDefault();
+  }
+}
 function setSidePanelOpen(open) {
   sidePanelOpen = Boolean(open);
   localStorage.setItem('explorationSidePanelOpen', sidePanelOpen ? 'true' : 'false');
@@ -21,9 +110,17 @@ function toggleSidePanel() {
 }
 function setBusy(message) {
   busy = Boolean(message);
+  waitingForGm = Boolean(message && (message.includes('MG') || message.includes('NPC')));
   const status = document.getElementById('status');
   status.hidden = !busy;
   status.textContent = message || '';
+  const typing = document.getElementById('chat-typing');
+  if (typing) typing.hidden = !waitingForGm;
+  const leaveButton = document.getElementById('leave-interaction-button');
+  if (leaveButton) {
+    const unresolved = Boolean(state && state.pending && state.pending.stage) || Boolean(state && state.required_rolls && state.required_rolls.length);
+    leaveButton.disabled = busy || unresolved;
+  }
   document.querySelectorAll('button, textarea, input').forEach(el => {
     if (el.closest('details.debug-panel')) return;
     if (el.dataset.allowBusy === 'true') return;
@@ -31,12 +128,21 @@ function setBusy(message) {
   });
 }
 async function api(path, body, busyMessage) {
+  const previousStage = state && state.flow ? state.flow.stage : null;
+  const previousInteractionId = state && state.conversation ? state.conversation.interaction_id : null;
   setBusy(busyMessage || 'Czekam na odpowiedź...');
   try {
     const res = await fetch(path, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body || {})});
     const data = await res.json();
     if (!res.ok) alert(data.error || 'Błąd');
     state = data.state || data;
+    const nextStage = state && state.flow ? state.flow.stage : null;
+    const nextInteractionId = state && state.conversation ? state.conversation.interaction_id : null;
+    if (nextStage === 'location_active' && (previousStage !== 'location_active' || nextInteractionId !== previousInteractionId)) {
+      chatInstanceOpen = true;
+    }
+    activeInteractionId = nextInteractionId;
+    optimisticPlayerMessage = null;
   if (path === '/api/rolls' && res.ok) {
       resultAck = state.flow && state.flow.stage === 'interaction_result' ? null : latestResultMessage(state);
     } else if (path !== '/api/decision') {
@@ -52,11 +158,19 @@ async function api(path, body, busyMessage) {
 async function loadState() {
   const res = await fetch('/api/state');
   state = await res.json();
+  activeInteractionId = state.conversation ? state.conversation.interaction_id : null;
+  chatInstanceOpen = true;
   render();
   refreshSessionLog();
 }
 function render() {
   const inCombat = Boolean(state.combat);
+  const interactionId = state.conversation ? state.conversation.interaction_id : null;
+  if (activeInteractionId === null) activeInteractionId = interactionId;
+  if (interactionId && interactionId !== activeInteractionId) {
+    activeInteractionId = interactionId;
+    chatInstanceOpen = true;
+  }
   document.getElementById('page-title').textContent = inCombat ? 'Walka' : 'Eksploracja';
   document.getElementById('encounter-title').textContent = inCombat ? 'Walka' : 'Zaczyna się encounter';
   document.getElementById('scenario').textContent = state.scenario.name;
@@ -67,8 +181,12 @@ function render() {
     const kind = r.temporary ? ' · przedmiot sceny' : (r.consume_on_use ? ' · jednorazowy' : '');
     const uses = r.temporary ? ` · użycia ${Number(r.uses_remaining || 0)}` : '';
     const risk = r.risk ? `<br><span class="muted">Ryzyko: ${esc(r.risk)}</span>` : '';
-    return `<div>${esc(r.label)}${kind}${uses}${risk}</div>`;
+    const dismantle = r.temporary && r.purpose_id && !r.dismantled
+      ? `<br><button class="secondary" onclick="dismantleCraftedItem('${esc(r.id)}')">Rozmontuj</button>`
+      : '';
+    return `<div>${esc(r.label)}${kind}${uses}${risk}${dismantle}</div>`;
   }).join('') || 'Brak';
+  document.getElementById('discovered-sources').innerHTML = discoveredSourcesHtml();
   document.getElementById('active-effects').innerHTML = activeEffectsHtml();
   renderSnapshotPanel();
   const finishScenarioButton = document.getElementById('finish-scenario-button');
@@ -81,14 +199,20 @@ function render() {
   document.getElementById('scene-description-card').hidden = !sceneHtml;
   const conversation = document.getElementById('scene-conversation');
   conversation.innerHTML = sceneConversationHtml();
-  conversation.scrollTop = conversation.scrollHeight;
+  document.getElementById('chat-typing').hidden = !waitingForGm;
   document.getElementById('messages').innerHTML = state.messages.map(m => `<div class="message"><b>${m.title}</b><br>${m.body}</div>`).join('');
   document.getElementById('pending').innerHTML = pendingHtml(state.pending);
+  document.getElementById('pending-title').textContent = pendingTitle(state.pending);
+  document.getElementById('pending-accept-button').textContent = state.pending && state.pending.kind === 'source_selection' ? 'Wybierz' : state.pending && state.pending.kind === 'collection' ? 'Zabierz' : 'Akceptuj';
+  document.getElementById('pending-reject-button').textContent = state.pending && state.pending.kind === 'source_selection' ? 'Nie wybieram' : 'Odrzuć';
   document.getElementById('lead-actor-choice').innerHTML = leadActorChoiceHtml();
   document.getElementById('result').innerHTML = resultAck ? `<div class="result"><b>${esc(resultAck.title)}</b><br>${esc(resultAck.body)}</div>` : '';
   document.getElementById('encounter').innerHTML = encounterHtml();
   document.getElementById('travel-options').innerHTML = travelOptionsHtml();
   document.getElementById('point-options').innerHTML = pointOptionsHtml();
+  document.getElementById('exploration-menu-zone').textContent = state.current_zone.name;
+  document.getElementById('menu-travel-options').innerHTML = explorationMenuLocationsHtml();
+  document.getElementById('menu-point-options').innerHTML = pointOptionsHtml();
   document.getElementById('roll-prompt').innerHTML = rollPromptHtml();
   document.getElementById('rolls').innerHTML = state.required_rolls.map(r => {
     const sides = Number(r.die_sides || 20);
@@ -101,10 +225,12 @@ function render() {
   }).join(' ');
   document.getElementById('debug-payload').textContent = JSON.stringify(state, null, 2);
   renderSessionLogMeta();
-  document.getElementById('action-title').textContent = state.active_point && state.active_point.has_npc
-    ? 'Co mówicie lub robicie wobec NPC?'
-    : 'Co robicie lub o co pytacie?';
+  document.getElementById('action-title').textContent = state.active_point
+    ? state.active_point.name
+    : state.current_zone.name;
   updateActivePanel();
+  const chatStream = document.getElementById('chat-stream');
+  chatStream.scrollTop = chatStream.scrollHeight;
 }
 function renderSnapshotPanel() {
   const snapshot = state.snapshot || {};
@@ -208,10 +334,6 @@ function sessionLogSummary(type, payload) {
   if (type === 'ui_effects_expired') return `Wygasłe efekty (${esc(payload.event || '')}): ${esc((payload.effect_ids || []).join(', ') || 'brak')}`;
   if (type === 'ui_scenario_completed') return `Scenariusz zakończony; czas: ${esc(payload.elapsed_minutes || 0)} min; wygasłe efekty: ${esc((payload.expired_effect_ids || []).join(', ') || 'brak')}`;
   return '';
-}
-function listHtml(items) {
-  if (!items || !items.length) return '';
-  return `<ul>${items.map(item => `<li>${esc(item)}</li>`).join('')}</ul>`;
 }
 function sceneStatusHtml() {
   const items = state.scene_status || [];
@@ -418,7 +540,6 @@ function visibleEnvironmentHtml() {
 }
 function sceneDescriptionHtml(state) {
   const zone = state.current_zone || {};
-  const challenge = state.active_challenge;
   const stage = state.flow ? state.flow.stage : 'location_active';
   if (stage !== 'location_active') {
     return '';
@@ -438,101 +559,136 @@ function sceneDescriptionHtml(state) {
       if (point.npc.current_state) parts.push(`<p><b>Stan NPC:</b> ${esc(point.npc.current_state)}</p>`);
     }
   }
-  if (challenge && challenge.player_hints && challenge.player_hints.length) parts.push(playerHintsHtml(challenge.player_hints));
-  if (challenge || (zone.available_materials && zone.available_materials.length)) parts.push(gmSceneDetailsHtml(zone, challenge));
   const html = parts.filter(Boolean).join('');
   return html.trim() ? html : '';
 }
-function playerHintsHtml(hints) {
-  return `
-    <details class="scene-hints">
-      <summary>Nie macie pomysłu? Zobaczcie inspiracje</summary>
-      <p class="muted">To przykłady, a nie zamknięta lista. Nadal możecie zadeklarować własne rozwiązanie.</p>
-      <div class="hint-list">${hints.map(hint => `
-        <div class="hint-item"><b>${esc(hint.label)}</b>${hint.description ? `<span>${esc(hint.description)}</span>` : ''}</div>
-      `).join('')}</div>
-    </details>
-  `;
-}
-function gmSceneDetailsHtml(zone, challenge) {
-  const details = [];
-  if (zone.available_materials && zone.available_materials.length) {
-    details.push(`<p><b>Jawne fakty i materiały:</b></p>${listHtml(zone.available_materials)}`);
-  }
-  if (challenge) {
-    details.push(`<p><b>${esc(challenge.name)}</b></p>`);
-    if (challenge.summary) details.push(`<p>${esc(challenge.summary)}</p>`);
-    details.push(`<p><b>Postęp:</b> ${challenge.current_progress}/${challenge.progress_required}. <b>Hałas:</b> ${challenge.noise}.</p>`);
-    if (challenge.complications && challenge.complications.length) {
-      details.push(`<p><b>Komplikacje:</b> ${challenge.complications.map(esc).join(', ')}</p>`);
-    }
-    if (challenge.options && challenge.options.length) details.push(challengeOptionsHtml(challenge.options));
-    if (challenge.reasonable_approaches && challenge.reasonable_approaches.length) {
-      details.push(`<p><b>Sensowne podejścia:</b></p>${listHtml(challenge.reasonable_approaches)}`);
-    }
-    if (challenge.risk_notes && challenge.risk_notes.length) {
-      details.push(`<p><b>Ukryte ryzyka:</b></p>${listHtml(challenge.risk_notes)}`);
-    }
-  }
-  return `<details class="gm-scene-details debug-panel"><summary>Wskazówki MG i mechanika sceny</summary>${details.join('')}</details>`;
-}
 function sceneConversationHtml() {
-  const entries = (state.conversation && state.conversation.entries) || [];
-  if (!entries.length) return '<p class="muted conversation-empty">Możecie od razu działać albo zapytać MG o szczegóły sceny.</p>';
-  return `<div class="scene-conversation-list">${entries.map(message => `
+  const entries = [...((state.conversation && state.conversation.entries) || [])];
+  if (optimisticPlayerMessage) entries.push(optimisticPlayerMessage);
+  return `<div class="scene-conversation-list">
+    ${sceneIntroMessageHtml()}
+    ${entries.map(message => `
     <div class="conversation-entry ${message.role === 'player' ? 'player' : 'gm'}">
       <b>${esc(message.title)}</b><span>${esc(message.body)}</span>
     </div>
   `).join('')}</div>`;
 }
-function challengeOptionsHtml(options) {
+function sceneIntroMessageHtml() {
+  const zone = state.current_zone || {};
+  const point = state.active_point || null;
+  const title = point ? point.name : zone.name;
+  const descriptions = point
+    ? [point.description, point.npc && point.npc.public_description]
+    : [zone.description, zone.summary];
+  const image = zone.image_url
+    ? `<img class="conversation-scene-image" src="${esc(zone.image_url)}" alt="${esc(title)}">`
+    : '';
   return `
-    <div class="status-list">
-      ${options.map(option => {
-        const skill = option.skill ? `/${esc(option.skill)}` : '';
-        const requirements = challengeOptionRequirementsText(option);
-        const actors = (option.eligible_actors || []).map(actor => actor.name).join(', ');
-        return `
-          <div class="status-item">
-            <b>${esc(option.label)}</b>
-            <div>${esc(option.description || '')}</div>
-            ${option.mechanic ? `<div class="muted">Mechanika: ${esc(option.mechanic.label || option.mechanic.id)}</div>` : ''}
-            <div class="muted">Test: ${esc(option.ability)}${skill}, ST ${esc(option.dc)}. Sukces +${esc(option.progress_on_success)}, porażka +${esc(option.progress_on_failure)}.</div>
-            ${requirements ? `<div class="muted">Wymaga: ${requirements}</div>` : ''}
-            ${challengeOptionBonusesText(option) ? `<div class="muted">Premie: ${challengeOptionBonusesText(option)}</div>` : ''}
-            ${actors ? `<div class="muted">Może wykonać: ${esc(actors)}</div>` : ''}
-          </div>
-        `;
-      }).join('')}
+    <div class="conversation-entry gm scene-intro-message">
+      <b>MG · ${esc(title || 'Eksploracja')}</b>
+      ${image}
+      ${descriptions.filter(Boolean).map(description => `<span>${esc(description)}</span>`).join('')}
     </div>
   `;
-}
-function challengeOptionRequirementsText(option) {
-  const parts = [];
-  if (option.requires_item_ids && option.requires_item_ids.length) parts.push(`item ${option.requires_item_ids.map(esc).join(', ')}`);
-  if (option.requires_spell_ids && option.requires_spell_ids.length) parts.push(`czar ${option.requires_spell_ids.map(esc).join(', ')}`);
-  if (option.requires_ability_scores && option.requires_ability_scores.length) {
-    parts.push(option.requires_ability_scores.map(req => `${esc(req.ability)} ${esc(req.minimum)}`).join(', '));
-  }
-  return parts.join('; ');
-}
-function challengeOptionBonusesText(option) {
-  const bonuses = option.bonuses || [];
-  return bonuses.map(bonus => {
-    const mod = Number(bonus.modifier || 0);
-    const breakage = bonus.breakage_risk ? `, ryzyko uszkodzenia ${esc(bonus.breakage_risk.chance_percent)}% przy krytycznej porażce` : '';
-    const spellLevel = Number(bonus.spell_level || 0);
-    const spellCost = bonus.source_type === 'spell' ? (spellLevel > 0 ? `, zużywa slot ${spellLevel}. poziomu` : ', cantrip bez slota') : '';
-    return `${esc(bonus.label || bonus.source_id)} ${signedNumber(mod)}${spellCost}${breakage}`;
-  }).join('; ');
 }
 function pendingHtml(pending) {
   if (!pending) return '';
   const proposal = pending.proposal || {};
   const option = pending.option || {};
   const lines = [];
-  if (proposal.player_narration) lines.push(`<p>${esc(proposal.player_narration)}</p>`);
-  if (proposal.npc_response) lines.push(`<p><b>NPC:</b> ${esc(proposal.npc_response)}</p>`);
+  if (pending.kind === 'source_selection' && pending.source_selection) {
+    const selection = pending.source_selection;
+    if (selection.requested_name) {
+      lines.push(`<p>Nie znaleziono elementu nazwanego dokładnie <b>${esc(selection.requested_name)}</b>. MG proponuje najbliższe funkcjonalnie możliwości.</p>`);
+    } else if (selection.purpose) {
+      lines.push(`<p><b>Szukana funkcja:</b> ${esc(selection.purpose)}.</p>`);
+    }
+    const candidates = (selection.candidates || []).map((candidate, index) => {
+      const properties = (candidate.properties || []).map(item => `<span class="property-chip">${esc(item.label || item.id)}</span>`).join('');
+      const status = candidate.portable ? 'można przenieść w obrębie sceny' : (candidate.detachable ? 'najpierw trzeba odłączyć' : 'stały element sceny');
+      return `<label class="source-candidate-card">
+        <input type="radio" name="source-selection-choice" value="${esc(candidate.id)}"${index === 0 ? ' checked' : ''}>
+        <span><b>${esc(candidate.label)}</b>${Number(candidate.quantity || 1) > 1 ? ` ×${esc(candidate.quantity)}` : ''}<br>
+        <span class="muted">Stan: ${esc(candidate.condition || 'normal')} · ${esc(status)}</span><br>
+        <span class="property-chip-list">${properties}</span></span>
+      </label>`;
+    }).join('');
+    lines.push(`<div class="source-candidate-list">${candidates}</div>`);
+    lines.push('<p class="muted">Wybór zapisze element jako znaleziony w tej lokacji. Nie trafi on automatycznie do ekwipunku.</p>');
+    return lines.join('');
+  }
+  if (pending.source_use) {
+    const source = pending.source_use;
+    const properties = (source.properties || []).map(item => `<span class="property-chip">${esc(item.label || item.id)}</span>`).join('');
+    const location = source.remains_in_scene ? 'pozostaje elementem sceny' : 'zasób drużyny lub ekwipunku';
+    lines.push(`<div class="source-use-card">
+      <b>Używany element: ${esc(source.label)}</b>${Number(source.quantity || 1) > 1 ? ` ×${esc(source.quantity)}` : ''}<br>
+      <span class="muted">Stan: ${esc(source.condition || 'normal')} · ${esc(location)}</span>
+      <div class="property-chip-list">${properties}</div>
+    </div>`);
+  }
+  if (pending.kind === 'collection' && pending.collection) {
+    const collection = pending.collection;
+    const properties = (collection.properties || []).map(item => `<span class="property-chip">${esc(item.label || item.id)}</span>`).join('');
+    const destination = {
+      actor_inventory: 'ekwipunek wybranego bohatera',
+      party_treasure: 'wspólne łupy drużyny',
+      scenario_quest: 'zasoby fabularne scenariusza'
+    }[collection.destination] || collection.destination;
+    const quantity = Number(collection.available_quantity || 1);
+    lines.push(`<div class="source-use-card">
+      <b>Zabierany element: ${esc(collection.label)}</b><br>
+      <span class="muted">Z lokacji: ${esc(collection.zone_id)} · stan: ${esc(collection.condition || 'normal')}</span>
+      <div class="property-chip-list">${properties}</div>
+      <p><b>Dokąd:</b> ${esc(destination)}.</p>
+      <label><b>Ile?</b> <input id="collection-quantity" type="number" min="1" max="${esc(quantity)}" value="${esc(collection.quantity || 1)}"></label>
+      <p class="muted">Po zatwierdzeniu wybrana liczba zniknie z dostępnych elementów sceny.</p>
+    </div>`);
+    return lines.join('');
+  }
+  if (pending.fixture_action) {
+    const action = pending.fixture_action;
+    const operation = {
+      detach: 'odłączenie', damage: 'uszkodzenie', destroy: 'zniszczenie',
+      move: 'przesunięcie', open: 'otwarcie', close: 'zamknięcie', repair: 'naprawa'
+    }[action.operation] || action.operation;
+    const yields = (action.release_yield_item_ids || []).length
+      ? `<p><b>Po sukcesie pojawią się:</b> ${(action.release_yield_item_ids || []).map(esc).join(', ')}.</p>`
+      : '';
+    lines.push(`<div class="source-use-card">
+      <b>Zmiana obiektu: ${esc(action.fixture_label)}</b><br>
+      <span class="muted">${esc(operation)} · ${esc(action.current_condition)} → ${esc(action.result_condition)}</span>
+      ${yields}
+      <p><b>Trwałość:</b> udany wynik zostanie zapisany w stanie sceny i w zapisie gry.</p>
+    </div>`);
+  }
+  if (pending.kind === 'observation' && pending.observation) {
+    const observation = pending.observation;
+    const skill = observation.skill ? `/${esc(observation.skill)}` : '';
+    const thresholds = (observation.thresholds || []).map(value => esc(value)).join(', ');
+    lines.push(`<p><b>${esc(observation.label)}</b><br>${esc(observation.description)}</p>`);
+    lines.push(`<p><b>Test:</b> ${esc(observation.ability)}${skill}, podstawowe ST ${esc(observation.dc)}.</p>`);
+    lines.push(`<p><b>Stopniowane informacje:</b> jeden rzut; wyższy wynik może ujawnić kolejne warstwy informacji${thresholds ? ` (progi: ${thresholds})` : ''}.</p>`);
+    lines.push('<p>Porażka oznacza brak rozstrzygającej informacji, a nie potwierdzenie, że zagrożenia nie ma.</p>');
+    return lines.join('');
+  }
+  if (pending.kind === 'crafting' && pending.crafting) {
+    const crafting = pending.crafting;
+    const components = (crafting.components || []).map(component => {
+      const disposition = component.disposition === 'consumed' ? 'zużyte' : 'zarezerwowane do rozmontowania';
+      return `${esc(component.label)} ×${esc(component.quantity)} (${disposition})`;
+    }).join('; ');
+    lines.push(`<p><b>${esc(crafting.label)}</b><br>${esc(crafting.description)}</p>`);
+    lines.push(`<p><b>Cel:</b> ${esc(crafting.purpose_label)}.</p>`);
+    lines.push(`<p><b>Materiały:</b> ${components || 'brak'}.</p>`);
+    if (crafting.auto_selected_components) lines.push('<p><b>Dobór:</b> silnik uzupełnił brakujące komponenty z dostępnych elementów sceny.</p>');
+    lines.push(`<p><b>Koszt czasu:</b> ${esc(crafting.time_cost_minutes)} min.</p>`);
+    lines.push(`<p><b>Efekt:</b> ${signedNumber(Number(crafting.modifier || 0))} do pasującego użycia, ${esc(crafting.uses)} użycia.</p>`);
+    lines.push(`<p><b>Zakres:</b> ${crafting.scope === 'scenario' ? 'do końca scenariusza' : 'w tej scenie'}.</p>`);
+    if (crafting.risk) lines.push(`<p><b>Ryzyko przy użyciu:</b> ${esc(crafting.risk)}</p>`);
+    lines.push('<p><b>Budowa:</b> bez rzutu. Test pojawi się dopiero, gdy użycie konstrukcji będzie niepewne.</p>');
+    return lines.join('');
+  }
   if (option.label) {
     const skill = option.skill ? `/${esc(option.skill)}` : '';
     if (option.mechanic) lines.push(`<p><b>Mechanika:</b> ${esc(option.mechanic.label || option.mechanic.id)}.</p>`);
@@ -549,8 +705,8 @@ function pendingHtml(pending) {
     if (selectedResource) {
       lines.push(`<p><b>Zasób sceny:</b> ${resourceSummary(selectedResource)}.</p>`);
     }
-    lines.push(`<p><b>Postęp:</b> sukces +${esc(option.progress_on_success)}, porażka +${esc(option.progress_on_failure)}.</p>`);
-    if (pending.kind === 'challenge' && pending.stage === 'decision') {
+    lines.push(`<p><b>Postęp:</b> sukces +${Number(option.progress_on_success || 0)}, porażka +${Number(option.progress_on_failure || 0)}.</p>`);
+    if (pending.kind === 'challenge' && pending.stage === 'decision' && !pending.fixture_action) {
       lines.push(`<button class="secondary" onclick="toggleDecisionCorrection()">Popraw decyzję MG</button>`);
       if (decisionCorrectionOpen) lines.push(decisionCorrectionHtml(option, pending));
     }
@@ -564,6 +720,38 @@ function pendingHtml(pending) {
   }
   return lines.join('') || '<p>MG proponuje interpretację deklaracji.</p>';
 }
+function pendingTitle(pending) {
+  if (!pending) return 'Warunki próby';
+  if (pending.kind === 'crafting') return 'Warunki konstrukcji';
+  if (pending.kind === 'npc') return 'Warunki interakcji';
+  if (pending.kind === 'observation') return 'Warunki rozpoznania';
+  if (pending.kind === 'source_selection') return 'Wybór znalezionego elementu';
+  if (pending.kind === 'collection') return 'Potwierdzenie zabrania';
+  return 'Warunki próby';
+}
+function discoveredSourcesHtml() {
+  const sources = state.discovered_sources || [];
+  if (!sources.length) return '<span class="muted">Jeszcze niczego nie znaleziono.</span>';
+  return `<div class="discovered-source-list">${sources.map(source => {
+    const properties = (source.properties || []).map(item => `<span class="property-chip">${esc(item.label || item.id)}</span>`).join('');
+    const purpose = source.purpose ? `<div class="muted">Przydatne do: ${esc(source.purpose)}</div>` : '';
+    const status = source.available ? 'dostępny w scenie' : 'obecnie niedostępny';
+    const collections = (source.collections || []).map(item => {
+      const destination = {
+        actor_inventory: 'ekwipunek bohatera',
+        party_treasure: 'łupy drużyny',
+        scenario_quest: 'zasoby fabularne'
+      }[item.destination] || item.destination;
+      return `zabrano ×${esc(item.quantity)} → ${esc(destination)}`;
+    }).join('; ');
+    return `<div class="discovered-source-card${source.available ? '' : ' unavailable'}">
+      <b>${esc(source.label)}</b>${Number(source.quantity || 1) > 1 ? ` ×${esc(source.quantity)}` : ''}
+      <div class="muted">${esc(status)} · poza ekwipunkiem</div>
+      ${collections ? `<div class="muted">${collections}</div>` : ''}
+      ${purpose}<div class="property-chip-list">${properties}</div>
+    </div>`;
+  }).join('')}</div>`;
+}
 function resourceSummary(resource) {
   const effects = [];
   if (Number(resource.modifier || 0) !== 0) effects.push(`rzut ${signedNumber(Number(resource.modifier || 0))}`);
@@ -576,10 +764,12 @@ function resourceSummary(resource) {
   return `${esc(resource.label || resource.id)} (${effects.join(', ')})`;
 }
 function leadActorChoiceHtml() {
-  if (!state.pending || state.pending.stage !== 'decision' || !state.actors || state.actors.length < 2) return '';
+  if (!state.pending || !['challenge', 'observation', 'collection'].includes(state.pending.kind) || state.pending.stage !== 'decision' || !state.actors || !state.actors.length) return '';
+  if (state.pending.kind === 'collection' && state.pending.collection && state.pending.collection.destination !== 'actor_inventory') return '';
   const selectedId = state.selected_lead_actor_id || (state.actors[0] && state.actors[0].id) || '';
   const options = state.actors.map(actor => `<option value="${esc(actor.id)}"${String(actor.id) === String(selectedId) ? ' selected' : ''}>${esc(actor.name)}</option>`).join('');
-  return `<label><b>Kto prowadzi test?</b> <select id="lead-actor">${options}</select></label>`;
+  const label = state.pending.kind === 'collection' ? 'Kto zabiera?' : 'Kto prowadzi test?';
+  return `<label><b>${label}</b> <select id="lead-actor">${options}</select></label>`;
 }
 function decisionCorrectionHtml(option, pending) {
   const mechanicId = option.mechanic && option.mechanic.id ? option.mechanic.id : 'single_actor_check';
@@ -726,13 +916,29 @@ function travelOptionsHtml() {
     </div>
   `).join('');
 }
+function explorationMenuLocationsHtml() {
+  const locations = (state.flow && state.flow.available_locations) || [];
+  const travelIds = new Set((state.travel_options || []).map(zone => String(zone.id)));
+  const currentId = String((state.current_zone || {}).id || '');
+  if (!locations.length) return '<p class="muted">Brak jawnych lokacji.</p>';
+  return `<div class="status-list">${locations.map(zone => {
+    const id = String(zone.id || '');
+    let action = '';
+    if (id === currentId) action = '<button class="secondary" onclick="openChatInstance()">Otwórz rozmowę</button>';
+    else if (travelIds.has(id)) action = `<button onclick="travel('${esc(id)}')">Przejdź</button>`;
+    else if (zone.available === false) action = `<span class="muted">${esc(zone.locked_reason || 'Jeszcze niedostępne.')}</span>`;
+    else action = '<span class="muted">Wybierz tę lokację na planszy.</span>';
+    return `<div class="status-item"><b>${esc(zone.name)}</b><span>${esc(zone.description || zone.summary || '')}</span><div class="row" style="margin-top:7px">${action}</div></div>`;
+  }).join('')}</div><button class="secondary" data-primary-scan="true" onclick="scanBoard()">Wybierz lokację na planszy</button>`;
+}
 function encounterHtml() {
   const encounter = state.pending_encounter;
   if (!encounter) return '';
   if (state.combat) return combatStartHtml();
   const setup = state.encounter_setup;
   const initiative = state.encounter_initiative;
-  const setupHtml = encounterSetupHtml(setup);
+  const opening = encounter.opening || {};
+  const setupHtml = (!opening.required || opening.resolved) ? encounterSetupHtml(setup) : '';
   const initiativeHtml = encounterInitiativeHtml(setup, initiative);
   const combatHtml = combatStartHtml();
   return `
@@ -740,10 +946,28 @@ function encounterHtml() {
     <p>${esc(encounter.description)}</p>
     <p><b>Powód:</b> ${esc(encounter.reason)}</p>
     <p><b>Scenariusz encountera:</b> ${esc(encounter.encounter_scenario)}</p>
+    ${encounterOpeningHtml(opening)}
     ${setupHtml}
     ${initiativeHtml}
     ${combatHtml}
     ${state.combat ? '' : `<details class="debug-panel"><summary>Komenda awaryjna terminala</summary><pre>${esc(encounter.command)}</pre></details>`}
+  `;
+}
+function encounterOpeningHtml(opening) {
+  if (!opening.required) return '';
+  if (!opening.resolved) {
+    return `
+      <div class="message"><b>Rozpoczęcie starcia</b><br>Sprawdźcie, jak działania w eksploracji wpłynęły na gotowość obu stron, zanim rozpocznie się setup i inicjatywa.</div>
+      <button onclick="resolveEncounterOpening()">Rozstrzygnij rozpoczęcie starcia</button>
+    `;
+  }
+  return `
+    <div class="result">
+      <b>${esc(opening.title || 'Rozpoczęcie starcia')}</b><br>
+      ${esc(opening.narration || '')}
+      <p><b>Efekt:</b> ${esc(opening.outcome_label || '')}</p>
+      <p class="muted">Hałas sceny: ${Number(opening.noise || 0)}</p>
+    </div>
   `;
 }
 function encounterSetupHtml(setup) {
@@ -787,13 +1011,17 @@ function encounterInitiativeHtml(setup, initiative) {
   }
   if (initiative.status === 'completed') return '';
   const prompt = initiative.current_prompt || {};
+  const hasSecondRoll = Boolean(prompt.requires_second_roll);
+  const edge = prompt.encounter_edge || null;
   return `
     <div class="message">
       <b>Rzut inicjatywy ${Number(initiative.current_prompt_index) + 1}/${initiative.prompt_count}</b><br>
       ${esc(prompt.message || 'Wpisz naturalny wynik d20.')}
+      ${edge ? `<p><b>Przewaga z eksploracji:</b> ${esc(edge.label || '')}. Rzuć dwiema kośćmi d20; gra wybierze wyższy wynik.</p>` : ''}
     </div>
     <div class="row">
-      <label>Wynik d20: <input id="encounter-initiative-roll" type="number" min="1" max="20" value="10"></label>
+      <label>${hasSecondRoll ? 'Pierwszy wynik d20' : 'Wynik d20'}: <input id="encounter-initiative-roll" type="number" min="1" max="20" value="10"></label>
+      ${hasSecondRoll ? '<label>Drugi wynik d20: <input id="encounter-initiative-roll-2" type="number" min="1" max="20" value="10"></label>' : ''}
       <button onclick="submitEncounterInitiativeRoll()">Zapisz rzut</button>
     </div>
   `;
@@ -1875,17 +2103,25 @@ function updateActivePanel() {
   const hasRolls = state.required_rolls && state.required_rolls.length > 0;
   const hasResult = Boolean(resultAck);
   const hasEncounter = Boolean(state.pending_encounter);
-  const hasTravel = false;
-  const hasPoints = !flowActive && !hasEncounter && !hasResult && !hasPendingDecision && !hasRolls && state.current_zone_points && state.current_zone_points.length > 0;
+  const interactionStage = stage === 'location_active' || stage === 'interaction_result';
+  const chatMode = interactionStage && chatInstanceOpen && !hasEncounter && !state.combat;
+  const menuMode = stage === 'location_active' && !chatInstanceOpen && !hasEncounter && !hasPendingDecision && !hasRolls;
+  document.body.classList.toggle('chat-instance-mode', chatMode);
   const flowPanel = document.getElementById('flow-panel');
-  flowPanel.hidden = hasEncounter || !flowPanel.innerHTML.trim();
+  flowPanel.hidden = chatMode || hasEncounter || !flowPanel.innerHTML.trim();
   document.getElementById('result-panel').hidden = !hasResult;
   document.getElementById('encounter-panel').hidden = !hasEncounter || hasResult;
-  document.getElementById('travel-panel').hidden = !hasTravel;
-  document.getElementById('points-panel').hidden = !hasPoints;
+  document.getElementById('travel-panel').hidden = true;
+  document.getElementById('points-panel').hidden = true;
+  document.getElementById('exploration-menu-panel').hidden = !menuMode;
   document.getElementById('pending-panel').hidden = !hasPendingDecision;
   document.getElementById('roll-panel').hidden = !hasRolls;
-  document.getElementById('action-panel').hidden = flowActive || hasEncounter || hasResult || hasTravel || hasPendingDecision || hasRolls;
+  document.getElementById('action-panel').hidden = !chatMode;
+  document.getElementById('scene-description-card').hidden = interactionStage || !document.getElementById('scene-description').innerHTML.trim();
+  document.getElementById('chat-composer').hidden = stage !== 'location_active' || hasPendingDecision || hasRolls || hasResult;
+  const leaveButton = document.getElementById('leave-interaction-button');
+  leaveButton.textContent = stage === 'interaction_result' ? 'Zakończ interakcję' : 'Opuść interakcję';
+  leaveButton.disabled = hasPendingDecision || hasRolls || busy;
   const restButton = document.getElementById('short-rest-button');
   if (restButton) {
     const rest = state.short_rest || {};
@@ -1893,12 +2129,33 @@ function updateActivePanel() {
     restButton.title = rest.unavailable_reason || '';
   }
 }
+function openChatInstance() {
+  chatInstanceOpen = true;
+  render();
+}
+function leaveChatInstance() {
+  const stage = state.flow ? state.flow.stage : 'location_active';
+  if (stage === 'interaction_result') {
+    finishInteraction();
+    return;
+  }
+  if ((state.pending && state.pending.stage) || (state.required_rolls || []).length) return;
+  chatInstanceOpen = false;
+  render();
+}
 async function sendAction() {
   const input = document.getElementById('action');
   const text = input ? input.value.trim() : '';
   if (!text) return;
+  optimisticPlayerMessage = {role: 'player', title: 'Gracze', body: text};
+  if (input) {
+    input.value = '';
+    input.placeholder = 'Napisz wiadomość do MG...';
+  }
+  closeSlashCommandMenu();
+  render();
   const result = await api('/api/action', {text}, 'Czekam na odpowiedź MG...');
-  if (result && result.ok && input) input.value = '';
+  if (result && !result.ok && input) input.value = text;
 }
 function startShortRest() { api('/api/rest/short/start', {}, 'Przygotowuję podgląd odpoczynku...'); }
 function confirmShortRest() { api('/api/rest/short/confirm', {}, 'Mija godzina odpoczynku...'); }
@@ -1907,6 +2164,9 @@ function finishShortRest() { api('/api/rest/short/finish', {}, 'Wracam do eksplo
 function spendShortRestHitDie(actorId, dieSides) {
   const input = document.getElementById(`short-rest-${actorId}-d${dieSides}`);
   api('/api/rest/short/hit-die', {actor_id: actorId, die_sides: dieSides, natural_roll: Number(input ? input.value : 0)}, 'Rozliczam Hit Die...');
+}
+function dismantleCraftedItem(itemId) {
+  api('/api/crafting/dismantle', {item_id:itemId}, 'Rozmontowuję konstrukcję...');
 }
 function signedNumber(value) {
   const number = Number(value || 0);
@@ -1924,7 +2184,14 @@ function decision(value) {
     explain: 'Proszę MG o wyjaśnienie...'
   };
   const leadActor = document.getElementById('lead-actor');
-  api('/api/decision', {decision:value, lead_actor_id: leadActor ? leadActor.value : null}, labels[value] || 'Czekam na MG...');
+  const selectedSource = document.querySelector('input[name="source-selection-choice"]:checked');
+  const collectionQuantity = document.getElementById('collection-quantity');
+  api('/api/decision', {
+    decision:value,
+    lead_actor_id: leadActor ? leadActor.value : null,
+    source_id: selectedSource ? selectedSource.value : null,
+    quantity: collectionQuantity ? Number(collectionQuantity.value) : null
+  }, labels[value] || 'Czekam na MG...');
 }
 function submitDecisionCorrection() {
   const situational_modifiers = Array.from(document.querySelectorAll('[data-situational-row]')).map(row => ({
@@ -2046,11 +2313,15 @@ async function stopBoardScanLoop() {
 function selectBoardPosition(col, row) { api('/api/board/select', {col, row}, 'Wybieram pole planszy...'); }
 function resetBoardScan() { api('/api/board/reset-scan', {}, 'Resetuję oczekiwanie planszy...'); }
 function startEncounterSetup() { api('/api/encounter/setup/start', {}, 'Przygotowuję kroki setupu encountera...'); }
+function resolveEncounterOpening() { api('/api/encounter/opening/resolve', {}, 'Rozstrzygam rozpoczęcie starcia...'); }
 function confirmEncounterSetup() { api('/api/encounter/setup/confirm', {}, 'Potwierdzam krok setupu...'); }
 function startEncounterInitiative() { api('/api/encounter/initiative/start', {}, 'Rozpoczynam inicjatywę...'); }
 function submitEncounterInitiativeRoll() {
   const input = document.getElementById('encounter-initiative-roll');
-  api('/api/encounter/initiative/roll', {natural_roll: Number(input ? input.value : 0)}, 'Zapisuję rzut inicjatywy...');
+  const input2 = document.getElementById('encounter-initiative-roll-2');
+  const payload = {natural_roll: Number(input ? input.value : 0)};
+  if (input2) payload.natural_roll_2 = Number(input2.value || 0);
+  api('/api/encounter/initiative/roll', payload, 'Zapisuję rzut inicjatywy...');
 }
 function submitPlayerAttackRoll() {
   api('/api/combat/player-attack-roll', d20RollPayload('combat-attack-natural-roll'), 'Rozstrzygam rzut ataku...');
@@ -2169,6 +2440,7 @@ function triggerPrimaryAction() {
   const setup = state.encounter_setup;
   const initiative = state.encounter_initiative;
   const combat = state.combat;
+  const opening = (state.pending_encounter && state.pending_encounter.opening) || {};
     if (isVisible('encounter-panel')) {
     if (combat && combat.status === 'finished') { resolveCombatOutcome(); return true; }
     if (combat && combat.status === 'active') {
@@ -2212,6 +2484,7 @@ function triggerPrimaryAction() {
       if (actor.faction === 'enemy') { resolveEnemyTurn(); return true; }
       return false;
     }
+    if (opening.required && !opening.resolved) { resolveEncounterOpening(); return true; }
     if (initiative && initiative.status !== 'completed') { submitEncounterInitiativeRoll(); return true; }
     if (setup && setup.status === 'completed' && !initiative) { startEncounterInitiative(); return true; }
     if (setup && setup.current_step && setup.current_step.requires_board_assignment) return false;
@@ -2230,6 +2503,7 @@ function triggerPrimaryAction() {
   return false;
 }
 document.addEventListener('keydown', event => {
+  if (event.defaultPrevented) return;
   if (event.key !== 'Enter') return;
   const target = event.target;
   if (target && target.tagName === 'TEXTAREA' && event.shiftKey) return;
@@ -2238,5 +2512,12 @@ document.addEventListener('keydown', event => {
     event.preventDefault();
   }
 });
+const actionInput = document.getElementById('action');
+if (actionInput) {
+  actionInput.addEventListener('input', handleSlashCommandInput);
+  actionInput.addEventListener('focus', renderSlashCommandMenu);
+  actionInput.addEventListener('keydown', handleSlashCommandKeydown);
+  actionInput.addEventListener('blur', () => window.setTimeout(closeSlashCommandMenu, 100));
+}
 setSidePanelOpen(sidePanelOpen);
 loadState();

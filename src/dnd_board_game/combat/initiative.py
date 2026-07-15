@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Iterable, Mapping
 
 from dnd_board_game.actors import Actor, Faction
 from dnd_board_game.hardware import DEFAULT_COLORS, LedFeedback, LedFrame, LedRole
@@ -12,6 +12,7 @@ from dnd_board_game.rules import (
     D20RollResult,
     RollModifier,
     RollModifierType,
+    RollMode,
     dexterity_modifier,
     resolve_d20_roll,
     roll_instruction,
@@ -66,13 +67,17 @@ class InitiativeOrder:
         return InitiativeOrder(self.entries, self.current_index, self.round_number)
 
 
-def build_player_initiative_prompts(actors: Iterable[Actor]) -> tuple[InitiativePrompt, ...]:
+def build_player_initiative_prompts(
+    actors: Iterable[Actor],
+    roll_modes_by_actor_id: Mapping[str, RollMode] | None = None,
+) -> tuple[InitiativePrompt, ...]:
+    roll_modes = roll_modes_by_actor_id or {}
     prompts: list[InitiativePrompt] = []
     for actor in actors:
         if actor.faction != Faction.ALLY or actor.is_defeated():
             continue
         modifier = dexterity_modifier(actor)
-        request = _initiative_request(modifier)
+        request = _initiative_request(modifier, roll_modes.get(str(actor.id), RollMode.NORMAL))
         instruction = roll_instruction(request)
         prompts.append(
             InitiativePrompt(
@@ -86,9 +91,12 @@ def build_player_initiative_prompts(actors: Iterable[Actor]) -> tuple[Initiative
     return tuple(prompts)
 
 
-def build_enemy_initiative_prompt(actor: Actor) -> InitiativePrompt:
+def build_enemy_initiative_prompt(
+    actor: Actor,
+    mode: RollMode = RollMode.NORMAL,
+) -> InitiativePrompt:
     modifier = dexterity_modifier(actor)
-    request = _initiative_request(modifier)
+    request = _initiative_request(modifier, mode)
     return InitiativePrompt(
         actor=actor,
         message=f"Inicjatywa przeciwnika {actor.name} zostanie rzucona automatycznie.",
@@ -98,10 +106,15 @@ def build_enemy_initiative_prompt(actor: Actor) -> InitiativePrompt:
     )
 
 
-def roll_enemy_initiative(actor: Actor, rng: random.Random) -> InitiativeEntry:
-    prompt = build_enemy_initiative_prompt(actor)
+def roll_enemy_initiative(
+    actor: Actor,
+    rng: random.Random,
+    mode: RollMode = RollMode.NORMAL,
+) -> InitiativeEntry:
+    prompt = build_enemy_initiative_prompt(actor, mode)
     natural_roll = rng.randint(1, 20)
-    roll = resolve_d20_roll(D20RollInput(prompt.request, natural_roll))
+    natural_roll_2 = rng.randint(1, 20) if mode != RollMode.NORMAL else None
+    roll = resolve_d20_roll(D20RollInput(prompt.request, natural_roll, natural_roll_2))
     return InitiativeEntry(actor=actor, roll=roll, dexterity_modifier=prompt.dexterity_modifier, stable_order=0)
 
 
@@ -139,7 +152,7 @@ def active_actor_led_feedback(order: InitiativeOrder) -> LedFeedback:
     )
 
 
-def _initiative_request(dex_modifier: int) -> D20RollRequest:
+def _initiative_request(dex_modifier: int, mode: RollMode = RollMode.NORMAL) -> D20RollRequest:
     return D20RollRequest(
         modifiers=(
             RollModifier(
@@ -148,5 +161,6 @@ def _initiative_request(dex_modifier: int) -> D20RollRequest:
                 RollModifierType.ABILITY,
                 stacking_key="initiative_dexterity",
             ),
-        )
+        ),
+        mode=mode,
     )

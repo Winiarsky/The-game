@@ -25,7 +25,7 @@ odstępstwa zapisujemy w `docs/RULES_DECISIONS.md`.
 | Rzuty d20 | stabilne MVP | natural roll, modyfikatory, advantage/disadvantage | pełne proficiency i pasywne wartości |
 | Ability checks | stabilne MVP | testy cech/skilli w eksploracji | actor proficiency/expertise jako dane |
 | Saving throws | częściowe | save dla czarów, efektów i koncentracji | proficiency, warunki, repeated saves |
-| Inicjatywa i tury | stabilne MVP | kolejność, aktywny aktor, rundy | surprise i pełne triggery turn-boundary |
+| Inicjatywa i tury | częściowe | kolejność, aktywny aktor, rundy oraz scenariuszowe utrudnienie inicjatywy dla zaskoczonej strony | indywidualne Stealth vs passive Perception i pełne triggery turn-boundary |
 | Ekonomia akcji | częściowe | action, bonus/reaction placeholders, movement, wybrane akcje | pełne bonus actions i free interaction |
 | Ataki | stabilne MVP | melee/ranged, target selection, crit, save-spell | cover, reach, two-weapon, grapple/shove |
 | Obrażenia i leczenie | częściowe | HP, temp HP, damage, healing, defeat | resistance/immunity/vulnerability, 0 HP, death saves |
@@ -42,9 +42,9 @@ odstępstwa zapisujemy w `docs/RULES_DECISIONS.md`.
 | Koncentracja | częściowe | jeden efekt, wspólne zastępowanie/expiry, save po damage | zaawansowane modyfikatory i pełne czasy czarów |
 | Components, ritual, upcasting | brak | brak | stabilny spell schema i equipment |
 | Eksploracja | stabilne MVP | zones, points, challenges, checks, resources, effects | czas, senses, hazards i trwałe konsekwencje |
-| Freeform/LLM | stabilne MVP | analiza, klasyfikacja, korekta MG i deterministic effects | pełna walidacja branches i parametrów |
+| Freeform/LLM | stabilne MVP | analiza, klasyfikacja, korekta MG, grounded conversation, progresywne podpowiedzi i deterministic effects | pełna walidacja branches i parametrów |
 | NPC i sceny społeczne | częściowe | pierwszy przepływ NPC i lokalne policy | conversation state, attitude i szersze efekty |
-| Encounter setup | stabilne MVP | setup mapy/aktorów, inicjatywa, powrót do eksploracji | szablony encounterów i różne cele |
+| Encounter setup | stabilne MVP | scenariuszowy etap rozpoczęcia, setup mapy/aktorów, inicjatywa, powrót do eksploracji | szablony encounterów i różne cele |
 | Save/load | stabilne MVP | wersjonowany snapshot v1 aktorów, eksploracji, efektów i aktywnej walki; atomowy JSON, walidacja ids, web UI i round-trip | stan kampanii oraz migracje kolejnych wersji |
 | Kampania | brak | scenariusz i pojedyncze przejścia | persistent party/NPC/quest state |
 | Potwory | fixture | kilka lokalnych definicji scenariuszy | monster schema, traits, recharge, katalog |

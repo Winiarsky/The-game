@@ -12,32 +12,46 @@ import requests
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from dnd_board_game.actors import Actor
-from dnd_board_game.combat import SceneAbilityCheck
+from dnd_board_game.combat import SceneAbilityCheck, scene_flag
 from dnd_board_game.exploration import (
     CheckAggregation,
     CheckParticipants,
     ConsequenceTarget,
+    CraftingComponentSelection,
+    CraftingSourceKind,
+    CraftingDraft,
+    CraftingPlan,
+    CraftingPolicy,
+    CraftingValidationError,
     ExplorationChallenge,
     ExplorationChallengeOption,
     ExplorationMechanicId,
+    ExplorationObservation,
     ExplorationResource,
     ExplorationSituationalModifier,
     ExplorationSituationalModifierSource,
     ExplorationState,
     ExplorationZone,
+    FixtureOperation,
     ImprovisedToolUse,
     LlmChallengePolicy,
     LlmContext,
+    LlmGuidanceFactKind,
     MECHANIC_TOOLS,
     available_challenge_options,
+    build_crafting_source_registry,
     challenge_state_for,
     infer_mechanic_id,
     mechanic_payload_for_option,
+    plan_fixture_action,
     validate_mechanic_selection,
+    validate_source_property_query,
     visible_exploration_points,
+    validate_crafting_draft,
 )
 from dnd_board_game.hardware import LedColor
 from dnd_board_game.rules import RollMode
+from dnd_board_game.actions import PlayerIntentHint
 
 from .content_config import load_freeform_grounding_terms, load_llm_core_rules
 from .prompts import PromptId, load_prompt
@@ -59,6 +73,15 @@ class GmDeclarationAnalysisType(StrEnum):
     NEEDS_CLARIFICATION = "needs_clarification"
     UNSUPPORTED = "unsupported"
     PLAYER_QUESTION = "player_question"
+
+
+class GmConversationResponseKind(StrEnum):
+    OBSERVATION = "observation"
+    CLARIFICATION = "clarification"
+    GENTLE_HINT = "gentle_hint"
+    STRONG_HINT = "strong_hint"
+    REQUIRES_CHECK = "requires_check"
+    IMPOSSIBLE = "impossible"
 
 
 class GmActionFlow(StrEnum):
@@ -117,6 +140,51 @@ class GmConsequence(BaseModel):
     value: str | int | bool | None = None
 
 
+class GmCraftingComponent(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    source_id: str = Field(max_length=200)
+    quantity: int = Field(default=1, ge=1)
+
+    @field_validator("source_id")
+    @classmethod
+    def _source_id_must_not_be_empty(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("source_id cannot be empty")
+        return normalized
+
+
+class GmCraftingDraft(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    label: str = Field(max_length=120)
+    description: str = Field(max_length=800)
+    purpose_id: str = Field(max_length=80)
+    components: tuple[GmCraftingComponent, ...] = ()
+    auto_select_missing_components: bool = True
+
+    @field_validator("label", "description", "purpose_id")
+    @classmethod
+    def _text_must_not_be_empty(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("field cannot be empty")
+        return normalized
+
+    def as_domain(self) -> CraftingDraft:
+        return CraftingDraft(
+            label=self.label,
+            description=self.description,
+            purpose_id=self.purpose_id,
+            components=tuple(
+                CraftingComponentSelection(component.source_id, component.quantity)
+                for component in self.components
+            ),
+            auto_select_missing_components=self.auto_select_missing_components,
+        )
+
+
 class GmPreparationEffect(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -130,6 +198,7 @@ class GmPreparationEffect(BaseModel):
     option_id: str | None = Field(default=None, max_length=80)
     temporary_item_template_id: str | None = Field(default=None, max_length=80)
     source_materials: tuple[str, ...] = ()
+    crafting_draft: GmCraftingDraft | None = None
 
     @field_validator("target_tags", "source_materials")
     @classmethod
@@ -170,6 +239,7 @@ class GmImprovisedToolUse(BaseModel):
     label: str = Field(max_length=120)
     source: ExplorationSituationalModifierSource
     source_detail: str = Field(max_length=200)
+    source_id: str | None = Field(default=None, max_length=240)
     effect_modifier: int = Field(default=1, ge=-2, le=2)
     risk: str = Field(default="", max_length=200)
     reason: str = Field(max_length=500)
@@ -187,6 +257,7 @@ class GmImprovisedToolUse(BaseModel):
             label=self.label,
             source=self.source,
             source_detail=self.source_detail,
+            source_id=self.source_id,
             effect_modifier=self.effect_modifier,
             risk=self.risk,
             reason=self.reason,
@@ -252,12 +323,16 @@ class GmDeclarationThreadEntry:
     role: str
     content: str
     outcome: str = ""
+    grounded_fact_ids: tuple[str, ...] = ()
+    hint_level: int = 0
 
-    def as_payload(self) -> dict[str, str]:
+    def as_payload(self) -> dict[str, object]:
         return {
             "role": self.role,
             "content": self.content,
             "outcome": self.outcome,
+            "grounded_fact_ids": list(self.grounded_fact_ids),
+            "hint_level": self.hint_level,
         }
 
 
@@ -273,6 +348,14 @@ class GmClassifierRequest:
     declaration_thread: tuple[GmDeclarationThreadEntry, ...] = ()
     active_preparation_effects: tuple[GmPreparationEffect, ...] = ()
     actors: tuple[Actor, ...] = ()
+    crafting_policy: CraftingPolicy = CraftingPolicy()
+    player_intent_hint: PlayerIntentHint | None = None
+    explicit_player_intent_hint: PlayerIntentHint | None = None
+    observations: tuple[ExplorationObservation, ...] = ()
+    referenced_crafting_source_ids: tuple[str, ...] = ()
+    selected_use_source_id: str | None = None
+    selected_fixture_source_id: str | None = None
+    selected_fixture_operation: FixtureOperation | None = None
 
     def to_prompt_payload(self) -> dict[str, Any]:
         challenge_state = challenge_state_for(self.state, self.challenge.id)
@@ -293,6 +376,14 @@ class GmClassifierRequest:
             for item in self.state.temporary_items
             if item.available
         )
+        crafting_registry = build_crafting_source_registry(self.state, self.actors)
+        referenced_sources = tuple(
+            source
+            for source_id in self.referenced_crafting_source_ids
+            for source in (crafting_registry.source_by_id(source_id),)
+            if source is not None and source.usable
+        )
+        conversation_knowledge = _conversation_knowledge(self, crafting_registry)
         return {
             "scenario": {"id": self.scenario_id, "name": self.scenario_name},
             "scenario_context": self.scenario_context.as_payload(),
@@ -361,6 +452,120 @@ class GmClassifierRequest:
                 "does_not_create_inventory_item": True,
                 "sources": [source.value for source in ExplorationSituationalModifierSource],
             },
+            "crafting": {
+                "available_property_ids": list(self.crafting_policy.property_ids),
+                "purposes": [
+                    {
+                        "id": purpose.id,
+                        "label": purpose.label,
+                        "requirements": [
+                            {
+                                "properties": list(requirement.properties),
+                                "minimum_quantity": requirement.minimum_quantity,
+                            }
+                            for requirement in purpose.requirements
+                        ],
+                        "bonus_tags": list(purpose.bonus_tags),
+                    }
+                    for purpose in self.crafting_policy.purposes
+                ],
+                "available_sources": [
+                    {
+                        "id": source.id,
+                        "kind": source.kind.value,
+                        "label": source.label,
+                        "properties": list(source.properties),
+                        "quantity": source.quantity,
+                        "condition": source.condition,
+                        "owner_actor_id": source.owner_actor_id,
+                        "portable": source.portable,
+                        "detachable": source.detachable,
+                        "requires_detachment": (
+                            source.kind.value == "scene_fixture"
+                            and not source.portable
+                            and source.detachable
+                        ),
+                    }
+                    for source in crafting_registry.available_sources
+                ],
+                "rules": {
+                    "requires_confirmation": True,
+                    "requires_build_roll_by_default": False,
+                    "engine_owns_time_cost_modifier_uses_and_risk": True,
+                    "llm_selects_only_purpose_and_grounded_components": True,
+                    "detachable_fixtures_can_be_acquired_during_crafting": True,
+                },
+            },
+            "player_grounded_sources": [
+                {
+                    "id": source.id,
+                    "kind": source.kind.value,
+                    "label": source.label,
+                    "properties": list(source.properties),
+                    "quantity": source.quantity,
+                    "condition": source.condition,
+                }
+                for source in referenced_sources
+            ],
+            "selected_use_source_id": self.selected_use_source_id,
+            "selected_fixture_action": (
+                {
+                    "source_id": self.selected_fixture_source_id,
+                    "operation": self.selected_fixture_operation.value,
+                }
+                if self.selected_fixture_source_id is not None
+                and self.selected_fixture_operation is not None
+                else None
+            ),
+            "fixture_action_policies": [
+                {
+                    "source_id": f"zone:{self.zone.id}:fixture:{fixture.id}",
+                    "fixture_id": fixture.id,
+                    "label": fixture.name,
+                    "condition": next(
+                        (
+                            runtime.condition
+                            for runtime in self.state.fixture_states
+                            if runtime.zone_id == self.zone.id and runtime.fixture_id == fixture.id
+                        ),
+                        fixture.condition,
+                    ),
+                    "available": not any(
+                        runtime.zone_id == self.zone.id
+                        and runtime.fixture_id == fixture.id
+                        and (runtime.unavailable or runtime.detached or runtime.destroyed)
+                        for runtime in self.state.fixture_states
+                    ),
+                    "operations": [
+                        {
+                            "operation": item.operation.value,
+                            "allowed_conditions": list(item.allowed_conditions),
+                            "result_condition": item.result_condition,
+                        }
+                        for item in fixture.action_policies
+                    ],
+                }
+                for fixture in self.zone.fixtures
+                if fixture.action_policies
+            ],
+            "conversation_knowledge": conversation_knowledge,
+            "available_observations": [
+                observation.as_prompt_payload(self.state.flags)
+                for observation in self.observations
+                if observation.zone_id == self.zone.id
+                and (observation.challenge_id is None or observation.challenge_id == self.challenge.id)
+            ],
+            "conversation_policy": {
+                "next_hint_level": _allowed_hint_level(self),
+                "hint_levels": {
+                    "1": "subtelne naprowadzenie bez podania rozwiązania",
+                    "2": "wskazanie użytecznej właściwości, ryzyka albo kierunku",
+                    "3": "konkretna propozycja rozwiązania na wyraźną prośbę",
+                },
+                "visible_facts_can_be_answered_without_check": True,
+                "hidden_facts_must_not_be_revealed": True,
+                "uncertain_observations_should_use_requires_check": True,
+            },
             "allowed_abilities": sorted(CORE_DND_5E_ABILITIES),
             "allowed_skills": sorted(_allowed_skills(policy)),
             "allowed_tags": sorted(policy.allowed_approach_tags),
@@ -369,6 +574,12 @@ class GmClassifierRequest:
             "allowed_mechanics": [tool.as_payload() for tool in MECHANIC_TOOLS.values()],
             "declaration_thread": [entry.as_payload() for entry in self.declaration_thread],
             "active_preparation_effects": [effect.model_dump(mode="json") for effect in self.active_preparation_effects],
+            "player_intent_hint": self.player_intent_hint.value if self.player_intent_hint is not None else None,
+            "explicit_player_intent_hint": (
+                self.explicit_player_intent_hint.value
+                if self.explicit_player_intent_hint is not None
+                else None
+            ),
             "player_action": self.player_action,
         }
 
@@ -378,6 +589,8 @@ class GmValidatedProposal:
     proposal: GmClassifierProposal
     challenge: ExplorationChallenge
     resources: tuple[ExplorationResource, ...]
+    required_actor_item_ids: tuple[str, ...] = ()
+    crafting_plan: CraftingPlan | None = None
 
 
 class GmProposalValidationError(ValueError):
@@ -600,35 +813,65 @@ def build_gm_classifier_request(
     declaration_thread: tuple[GmDeclarationThreadEntry, ...] = (),
     active_preparation_effects: tuple[GmPreparationEffect, ...] = (),
     actors: tuple[Actor, ...] = (),
+    crafting_policy: CraftingPolicy = CraftingPolicy(),
+    player_intent_hint: PlayerIntentHint | None = None,
+    explicit_player_intent_hint: PlayerIntentHint | None = None,
+    observations: tuple[ExplorationObservation, ...] = (),
+    referenced_crafting_source_ids: tuple[str, ...] = (),
+    selected_use_source_id: str | None = None,
+    selected_fixture_source_id: str | None = None,
+    selected_fixture_operation: FixtureOperation | None = None,
 ) -> GmClassifierRequest:
     zone = next(zone for zone in state.zones if zone.id == state.party_position.zone_id)
     challenge = next((challenge for challenge in state.challenges if challenge.zone_id == zone.id), None)
     if challenge is None:
         raise GmProposalValidationError(f"Strefa {zone.name} nie ma aktywnego wyzwania eksploracyjnego.")
     return GmClassifierRequest(
-        scenario_id,
-        scenario_name,
-        scenario_context,
-        zone,
-        challenge,
-        state,
-        player_action,
-        declaration_thread,
-        active_preparation_effects,
-        actors,
+        scenario_id=scenario_id,
+        scenario_name=scenario_name,
+        scenario_context=scenario_context,
+        zone=zone,
+        challenge=challenge,
+        state=state,
+        player_action=player_action,
+        declaration_thread=declaration_thread,
+        active_preparation_effects=active_preparation_effects,
+        actors=actors,
+        crafting_policy=crafting_policy,
+        player_intent_hint=player_intent_hint,
+        explicit_player_intent_hint=explicit_player_intent_hint,
+        observations=observations,
+        referenced_crafting_source_ids=referenced_crafting_source_ids,
+        selected_use_source_id=selected_use_source_id,
+        selected_fixture_source_id=selected_fixture_source_id,
+        selected_fixture_operation=selected_fixture_operation,
     )
 
 
 def validate_gm_declaration_analysis(
     analysis: GmDeclarationAnalysis,
     request: GmClassifierRequest,
-) -> None:
+) -> GmDeclarationAnalysis:
+    if analysis.source_query is not None:
+        try:
+            validate_source_property_query(
+                required_properties=analysis.source_query.required_properties,
+                preferred_properties=analysis.source_query.preferred_properties,
+                allowed_property_ids=request.crafting_policy.property_ids,
+            )
+        except ValueError as exc:
+            raise GmProposalValidationError(str(exc)) from exc
+    analysis = _normalize_question_response(analysis, request)
+    analysis = _normalize_explicit_build_analysis(analysis, request)
+    _validate_player_intent_hint(analysis, request)
+    if analysis.analysis_type == GmDeclarationAnalysisType.PLAYER_QUESTION:
+        _validate_conversation_response(analysis, request)
+        return analysis
     if analysis.action_flow in {
-        GmActionFlow.PLAYER_QUESTION,
         GmActionFlow.UNSUPPORTED,
         GmActionFlow.NEEDS_CLARIFICATION,
     }:
-        return
+        return analysis
     if analysis.missing_requirements:
         raise GmProposalValidationError("; ".join(analysis.missing_requirements))
     unsupported_facts = tuple(
@@ -645,13 +888,202 @@ def validate_gm_declaration_analysis(
     )
     if unknown_resources:
         raise GmProposalValidationError("Drużyna nie ma zadeklarowanych zasobów: " + ", ".join(unknown_resources))
+    return analysis
+
+
+def _normalize_explicit_build_analysis(
+    analysis: GmDeclarationAnalysis,
+    request: GmClassifierRequest,
+) -> GmDeclarationAnalysis:
+    if (
+        request.explicit_player_intent_hint == PlayerIntentHint.BUILD
+        and analysis.analysis_type == GmDeclarationAnalysisType.PLAUSIBLE
+        and analysis.action_flow != GmActionFlow.PREPARATION
+    ):
+        return analysis.model_copy(update={"action_flow": GmActionFlow.PREPARATION})
+    return analysis
+
+
+def _normalize_question_response(
+    analysis: GmDeclarationAnalysis,
+    request: GmClassifierRequest,
+) -> GmDeclarationAnalysis:
+    """Repair harmless LLM disagreement between response kind and grounded hint facts."""
+
+    if (
+        analysis.analysis_type != GmDeclarationAnalysisType.PLAYER_QUESTION
+        or analysis.response_kind is None
+    ):
+        return analysis
+    knowledge = _conversation_knowledge(
+        request,
+        build_crafting_source_registry(request.state, request.actors),
+    )
+    facts_by_id = {fact["id"]: fact for fact in knowledge["facts"]}
+    known_facts = tuple(
+        facts_by_id[fact_id]
+        for fact_id in analysis.grounded_fact_ids
+        if fact_id in facts_by_id
+    )
+    required_level = max(
+        (int(fact["minimum_hint_level"]) for fact in known_facts),
+        default=0,
+    )
+    hint_kinds = {
+        GmConversationResponseKind.GENTLE_HINT,
+        GmConversationResponseKind.STRONG_HINT,
+    }
+    normalizable_kinds = {
+        GmConversationResponseKind.OBSERVATION,
+        GmConversationResponseKind.CLARIFICATION,
+        *hint_kinds,
+    }
+    if analysis.response_kind not in normalizable_kinds:
+        return analysis
+    declares_hint = analysis.response_kind in hint_kinds or analysis.hint_level > 0 or required_level > 0
+    if not declares_hint:
+        return analysis
+    normalized_level = max(1, analysis.hint_level, required_level)
+    allowed_level = _allowed_hint_level(request)
+    if normalized_level > allowed_level:
+        if analysis.hint_level > allowed_level:
+            return analysis
+        return _downgrade_question_hint(analysis, request, knowledge, allowed_level)
+    response_kind = analysis.response_kind
+    if response_kind not in hint_kinds:
+        response_kind = GmConversationResponseKind.GENTLE_HINT
+    return analysis.model_copy(
+        update={
+            "response_kind": response_kind,
+            "hint_level": normalized_level,
+        }
+    )
+
+
+def _downgrade_question_hint(
+    analysis: GmDeclarationAnalysis,
+    request: GmClassifierRequest,
+    knowledge: dict[str, object],
+    allowed_level: int,
+) -> GmDeclarationAnalysis:
+    """Replace an over-informative answer with the closest safe content fact."""
+
+    action_stems = _hint_matching_stems(request.player_action)
+    candidates = tuple(
+        fact
+        for fact in knowledge["facts"]
+        if fact["kind"] == "gm_hint"
+        and bool(fact.get("revealed", True))
+        and int(fact["minimum_hint_level"]) <= allowed_level
+        and action_stems.intersection(_hint_matching_stems(str(fact["text"])))
+    )
+    if candidates:
+        fact = candidates[0]
+        fact_text = str(fact["text"]).strip()
+        message = (
+            f"{fact_text[:1].upper()}{fact_text[1:]} wygląda na możliwe podejście. "
+            "Jeśli chcecie działać, zadeklarujcie dokładnie kto i w jaki sposób to robi."
+        )
+        return analysis.model_copy(
+            update={
+                "player_message": message,
+                "response_kind": GmConversationResponseKind.GENTLE_HINT,
+                "grounded_fact_ids": (str(fact["id"]),),
+                "hint_level": max(1, int(fact["minimum_hint_level"])),
+                "requires_check": False,
+                "suggested_followup": "",
+                "observation_id": None,
+            }
+        )
+    return analysis.model_copy(
+        update={
+            "player_message": (
+                "To pytanie wymagałoby mocniejszej podpowiedzi, niż wynika z dotychczasowej rozmowy. "
+                "Doprecyzujcie, który element sceny chcecie wykorzystać albo co dokładnie sprawdzacie."
+            ),
+            "response_kind": GmConversationResponseKind.CLARIFICATION,
+            "grounded_fact_ids": (),
+            "hint_level": 0,
+            "requires_check": False,
+            "suggested_followup": "",
+            "observation_id": None,
+        }
+    )
+
+
+def _hint_matching_stems(value: str) -> frozenset[str]:
+    return frozenset(
+        token[:4]
+        for token in _normalize_fact_token(value).split()
+        if len(token) >= 4
+    )
+
+
+def _validate_player_intent_hint(
+    analysis: GmDeclarationAnalysis,
+    request: GmClassifierRequest,
+) -> None:
+    hint = request.player_intent_hint
+    if hint is None or analysis.analysis_type in {
+        GmDeclarationAnalysisType.NEEDS_CLARIFICATION,
+        GmDeclarationAnalysisType.UNSUPPORTED,
+    }:
+        return
+    if hint == PlayerIntentHint.QUESTION:
+        if analysis.analysis_type != GmDeclarationAnalysisType.PLAYER_QUESTION:
+            raise GmProposalValidationError(
+                "Jawna komenda rozmowy musi zostać obsłużona jako odpowiedź MG, bez uruchamiania działania."
+            )
+        return
+    if hint in {PlayerIntentHint.BUILD, PlayerIntentHint.USE, PlayerIntentHint.ACTION}:
+        if analysis.analysis_type == GmDeclarationAnalysisType.PLAYER_QUESTION:
+            if analysis.requires_check and analysis.observation_id is not None:
+                return
+            raise GmProposalValidationError(
+                "Jawna komenda działania nie może zostać obsłużona wyłącznie jako pytanie."
+            )
+    if (
+        request.explicit_player_intent_hint == PlayerIntentHint.USE
+        and analysis.analysis_type == GmDeclarationAnalysisType.PLAUSIBLE
+    ):
+        if not analysis.use_source_id:
+            raise GmProposalValidationError("Komenda /użyj wymaga wskazania istniejącego źródła.")
+        if analysis.use_source_id not in request.referenced_crafting_source_ids:
+            raise GmProposalValidationError(
+                "Komenda /użyj wskazuje źródło, którego nie dopasowano do deklaracji gracza."
+            )
+    if (
+        request.explicit_player_intent_hint == PlayerIntentHint.ACTION
+        and analysis.analysis_type == GmDeclarationAnalysisType.PLAUSIBLE
+        and (analysis.action_target_source_id is not None or analysis.fixture_operation is not None)
+    ):
+        if analysis.action_target_source_id is None or analysis.fixture_operation is None:
+            raise GmProposalValidationError(
+                "Operacja na fixture wymaga action_target_source_id oraz fixture_operation."
+            )
+        if analysis.action_target_source_id not in request.referenced_crafting_source_ids:
+            raise GmProposalValidationError(
+                "Komenda /akcja wskazuje fixture, którego nie dopasowano do deklaracji gracza."
+            )
+        try:
+            plan_fixture_action(
+                request.state,
+                source_id=analysis.action_target_source_id,
+                operation=analysis.fixture_operation,
+            )
+        except ValueError as exc:
+            raise GmProposalValidationError(str(exc)) from exc
 
 
 def validate_gm_classifier_proposal(
     proposal: GmClassifierProposal,
     request: GmClassifierRequest,
 ) -> GmValidatedProposal:
+    proposal = _ground_explicit_build_proposal(proposal, request)
+    proposal = _ground_temporary_item_preparation(proposal, request)
+    proposal = _ground_fixture_action_proposal(proposal, request)
     policy = request.challenge.llm_policy
+    proposal = _ground_proposal_dc(proposal, policy)
     # General guards: LLM may only propose an interpretation for the active
     # challenge; deterministic game code still owns state changes.
     if proposal.intent_type == GmIntentType.UNSUPPORTED:
@@ -669,8 +1101,19 @@ def validate_gm_classifier_proposal(
         raise GmProposalValidationError("To wyzwanie jest już zakończone.")
     if not proposal.approach_label.strip():
         raise GmProposalValidationError("Propozycja LLM nie ma nazwy podejścia.")
+    if request.explicit_player_intent_hint == PlayerIntentHint.BUILD:
+        effect = proposal.preparation_effect
+        if (
+            effect is None
+            or effect.type != PreparationEffectType.CREATE_TEMPORARY_ITEM
+            or effect.crafting_draft is None
+        ):
+            raise GmProposalValidationError(
+                "Komenda /zbuduj wymaga propozycji dynamicznej konstrukcji z dostępnych komponentów."
+            )
+    crafting_plan = None
     if proposal.preparation_effect is not None:
-        _validate_preparation_effect(proposal.preparation_effect, policy, request)
+        crafting_plan = _validate_preparation_effect(proposal.preparation_effect, policy, request)
         if (
             proposal.preparation_effect.type == PreparationEffectType.CREATE_TEMPORARY_ITEM
             and proposal.action_flow != GmActionFlow.PREPARATION
@@ -686,9 +1129,15 @@ def validate_gm_classifier_proposal(
             raise GmProposalValidationError("Przygotowanie wymaga preparation_effect.")
         if proposal.requires_roll_now:
             raise GmProposalValidationError("Przygotowanie bez próby nie może wymagać rzutu teraz.")
-        resources = _validate_resources(proposal, request.state)
+        resources, actor_item_ids = _validate_resources(proposal, request)
         _validate_fact_grounding(proposal, request)
-        return GmValidatedProposal(proposal, request.challenge, resources)
+        return GmValidatedProposal(
+            proposal=proposal,
+            challenge=request.challenge,
+            resources=resources,
+            required_actor_item_ids=actor_item_ids,
+            crafting_plan=crafting_plan,
+        )
     if proposal.action_flow == GmActionFlow.COMBINED:
         if proposal.preparation_effect is None:
             raise GmProposalValidationError("Combined action wymaga preparation_effect.")
@@ -728,7 +1177,7 @@ def validate_gm_classifier_proposal(
     ):
         raise GmProposalValidationError("selected_mechanic dla rzutu wymaga check_participants i check_aggregation.")
     mechanic_id = _proposal_mechanic_id(proposal)
-    _validate_improvised_tool(proposal, mechanic_id)
+    _validate_improvised_tool(proposal, mechanic_id, request)
     try:
         validate_mechanic_selection(
             mechanic_id,
@@ -743,12 +1192,204 @@ def validate_gm_classifier_proposal(
             "Ta polityka wyzwania pozwala użyć maksymalnie "
             f"{policy.max_resources_per_attempt} zasobów naraz."
         )
-    resources = _validate_resources(proposal, request.state)
+    resources, actor_item_ids = _validate_resources(proposal, request)
     _validate_fact_grounding(proposal, request)
     _validate_situational_modifiers(proposal)
     _validate_consequences(proposal, policy)
     _validate_narration_consistency(proposal)
-    return GmValidatedProposal(proposal, request.challenge, resources)
+    return GmValidatedProposal(
+        proposal=proposal,
+        challenge=request.challenge,
+        resources=resources,
+        required_actor_item_ids=actor_item_ids,
+    )
+
+
+def _ground_explicit_build_proposal(
+    proposal: GmClassifierProposal,
+    request: GmClassifierRequest,
+) -> GmClassifierProposal:
+    if request.explicit_player_intent_hint != PlayerIntentHint.BUILD:
+        return proposal
+    effect = proposal.preparation_effect
+    if effect is None:
+        return proposal
+
+    draft = effect.crafting_draft
+    if draft is None:
+        requested_tags = set(effect.target_tags or proposal.approach_tags)
+        purposes = tuple(
+            purpose
+            for purpose in request.crafting_policy.purposes
+            if requested_tags.intersection(purpose.bonus_tags)
+        )
+        if len(purposes) == 1:
+            purpose = purposes[0]
+            label = effect.label.strip() or proposal.approach_label.strip() or purpose.label
+            draft = GmCraftingDraft(
+                label=label,
+                description=proposal.player_narration.strip() or f"Prowizoryczna konstrukcja: {label}.",
+                purpose_id=purpose.id,
+                components=(),
+                auto_select_missing_components=True,
+            )
+            effect = effect.model_copy(
+                update={
+                    "type": PreparationEffectType.CREATE_TEMPORARY_ITEM,
+                    "target_tags": purpose.bonus_tags,
+                    "temporary_item_template_id": None,
+                    "source_materials": (),
+                    "crafting_draft": draft,
+                }
+            )
+    if draft is None or effect.type != PreparationEffectType.CREATE_TEMPORARY_ITEM:
+        return proposal
+
+    purpose = request.crafting_policy.purpose_by_id(draft.purpose_id)
+    target_tags = purpose.bonus_tags if purpose is not None else effect.target_tags
+    grounded_effect = effect.model_copy(
+        update={
+            "target_tags": target_tags,
+            "temporary_item_template_id": None,
+            "source_materials": (),
+        }
+    )
+    return proposal.model_copy(
+        update={
+            "action_flow": GmActionFlow.PREPARATION,
+            "approach_tags": target_tags,
+            "ability": None,
+            "skill": None,
+            "difficulty_tier": None,
+            "difficulty_reason": "",
+            "dc": None,
+            "progress_on_success": None,
+            "progress_on_failure": None,
+            "used_resource_ids": (),
+            "selected_mechanic": ExplorationMechanicId.PREPARATION_EFFECT,
+            "roll_mode": RollMode.NORMAL,
+            "situational_modifiers": (),
+            "improvised_tool": None,
+            "preparation_effect": grounded_effect,
+            "requires_roll_now": False,
+            "check_participants": None,
+            "check_aggregation": None,
+            "consequence_targets": (),
+            "consequences": (),
+        }
+    )
+
+
+def _ground_temporary_item_preparation(
+    proposal: GmClassifierProposal,
+    request: GmClassifierRequest,
+) -> GmClassifierProposal:
+    effect = proposal.preparation_effect
+    if effect is None or effect.type != PreparationEffectType.CREATE_TEMPORARY_ITEM:
+        return proposal
+    if effect.crafting_draft is not None:
+        return proposal
+    templates = request.challenge.llm_policy.temporary_item_templates
+    inferred_template = not bool(effect.temporary_item_template_id)
+    if effect.temporary_item_template_id:
+        candidates = tuple(template for template in templates if template.id == effect.temporary_item_template_id)
+    else:
+        target_tags = set(effect.target_tags)
+        candidates = tuple(
+            template
+            for template in templates
+            if (not target_tags or target_tags.intersection(template.bonus_tags))
+        )
+    if len(candidates) != 1:
+        return proposal
+    template = candidates[0]
+    known_materials = _known_resource_or_material_tokens(request)
+    grounded_template_materials = tuple(
+        material
+        for material in template.allowed_materials
+        if _normalize_fact_token(material) in known_materials
+    )
+    normalized_effect = effect.model_copy(
+        update={
+            "temporary_item_template_id": template.id,
+            "source_materials": (
+                grounded_template_materials
+                if inferred_template
+                else (effect.source_materials or grounded_template_materials)
+            ),
+        }
+    )
+    return proposal.model_copy(update={"preparation_effect": normalized_effect})
+
+
+def _ground_fixture_action_proposal(
+    proposal: GmClassifierProposal,
+    request: GmClassifierRequest,
+) -> GmClassifierProposal:
+    if request.selected_fixture_source_id is None or request.selected_fixture_operation is None:
+        return proposal
+    try:
+        plan = plan_fixture_action(
+            request.state,
+            source_id=request.selected_fixture_source_id,
+            operation=request.selected_fixture_operation,
+        )
+    except ValueError as exc:
+        raise GmProposalValidationError(str(exc)) from exc
+    dc = request.challenge.llm_policy.dc_for_tier(plan.policy.difficulty_tier)
+    if dc is None:
+        raise GmProposalValidationError(
+            f"Fixture action wskazuje nieznany difficulty_tier: {plan.policy.difficulty_tier}."
+        )
+    consequences: list[GmConsequence] = []
+    if plan.policy.success_noise:
+        consequences.append(
+            GmConsequence(
+                trigger=GmConsequenceTrigger.SUCCESS,
+                type=GmConsequenceType.ADD_NOISE,
+                value=plan.policy.success_noise,
+            )
+        )
+    if plan.policy.failure_noise:
+        consequences.extend(
+            GmConsequence(
+                trigger=trigger,
+                type=GmConsequenceType.ADD_NOISE,
+                value=plan.policy.failure_noise,
+            )
+            for trigger in (
+                GmConsequenceTrigger.FAILURE,
+                GmConsequenceTrigger.CRITICAL_FAILURE,
+            )
+        )
+    if plan.policy.failure_complication:
+        consequences.extend(
+            GmConsequence(
+                trigger=trigger,
+                type=GmConsequenceType.ADD_COMPLICATION,
+                value=plan.policy.failure_complication,
+            )
+            for trigger in (
+                GmConsequenceTrigger.FAILURE,
+                GmConsequenceTrigger.CRITICAL_FAILURE,
+            )
+        )
+    return proposal.model_copy(
+        update={
+            "ability": plan.policy.ability,
+            "skill": plan.policy.skill,
+            "difficulty_tier": plan.policy.difficulty_tier,
+            "difficulty_reason": (
+                f"Parametry operacji {plan.policy.operation.value} dla {plan.fixture.name} "
+                "pochodzą z polityki fixture'a."
+            ),
+            "dc": dc,
+            "progress_on_success": plan.policy.progress_on_success,
+            "progress_on_failure": plan.policy.progress_on_failure,
+            "consequences": tuple(consequences),
+            "requires_roll_now": True,
+        }
+    )
 
 
 def challenge_option_from_validated_proposal(validated: GmValidatedProposal) -> ExplorationChallengeOption:
@@ -784,6 +1425,7 @@ def challenge_option_from_validated_proposal(validated: GmValidatedProposal) -> 
         roll_mode=_combined_roll_mode(proposal.roll_mode, tuple(modifier.roll_mode for modifier in proposal.situational_modifiers)),
         situational_modifiers=tuple(modifier.as_domain() for modifier in proposal.situational_modifiers),
         improvised_tool=proposal.improvised_tool.as_domain() if proposal.improvised_tool else None,
+        requires_item_ids=validated.required_actor_item_ids,
     )
 
 
@@ -799,14 +1441,25 @@ def _proposal_mechanic_id(proposal: GmClassifierProposal) -> ExplorationMechanic
 
 def _validate_resources(
     proposal: GmClassifierProposal,
-    state: ExplorationState,
-) -> tuple[ExplorationResource, ...]:
+    request: GmClassifierRequest,
+) -> tuple[tuple[ExplorationResource, ...], tuple[str, ...]]:
+    state = request.state
     owned = set(state.inventory_resource_ids) | {item.id for item in state.temporary_items if item.available}
+    actor_item_ids = {
+        item.id
+        for actor in request.actors
+        for item in actor.inventory
+        if item.available and item.quantity > 0
+    }
     resources_by_id = {resource.id: resource for resource in state.resources}
     resources_by_id.update({item.id: item.as_resource() for item in state.temporary_items if item.available})
     approach_tags = set(proposal.approach_tags)
     result: list[ExplorationResource] = []
+    required_actor_items: list[str] = []
     for resource_id in proposal.used_resource_ids:
+        if resource_id in actor_item_ids:
+            required_actor_items.append(resource_id)
+            continue
         if resource_id not in owned:
             raise GmProposalValidationError(f"Drużyna nie ma zasobu: {resource_id}.")
         resource = resources_by_id.get(resource_id)
@@ -817,7 +1470,7 @@ def _validate_resources(
                 f"Zasób {resource_id} nie pasuje tagami do podejścia: {', '.join(sorted(approach_tags))}."
             )
         result.append(resource)
-    return tuple(result)
+    return tuple(result), tuple(required_actor_items)
 
 
 def _validate_situational_modifiers(proposal: GmClassifierProposal) -> None:
@@ -837,12 +1490,36 @@ def _validate_situational_modifiers(proposal: GmClassifierProposal) -> None:
         seen.add(key)
 
 
-def _validate_improvised_tool(proposal: GmClassifierProposal, mechanic_id: ExplorationMechanicId) -> None:
+def _validate_improvised_tool(
+    proposal: GmClassifierProposal,
+    mechanic_id: ExplorationMechanicId,
+    request: GmClassifierRequest,
+) -> None:
+    if request.selected_use_source_id is not None:
+        selected_source = build_crafting_source_registry(
+            request.state,
+            request.actors,
+        ).source_by_id(request.selected_use_source_id)
+        if selected_source is None or not selected_source.usable:
+            raise GmProposalValidationError("Wybrany element nie jest już dostępny do użycia.")
+        if (
+            selected_source.kind
+            in {CraftingSourceKind.SCENE_ITEM, CraftingSourceKind.SCENE_FIXTURE}
+            and mechanic_id != ExplorationMechanicId.IMPROVISED_TOOL_CHECK
+        ):
+            raise GmProposalValidationError(
+                "Bezpośrednie użycie elementu sceny wymaga mechaniki improvised_tool_check."
+            )
     if mechanic_id == ExplorationMechanicId.IMPROVISED_TOOL_CHECK:
         if proposal.improvised_tool is None:
             raise GmProposalValidationError("improvised_tool_check wymaga pola improvised_tool.")
         if proposal.improvised_tool.effect_modifier == 0:
             raise GmProposalValidationError("Improwizowane narzędzie musi mieć niezerowy efekt mechaniczny.")
+        if request.selected_use_source_id is not None:
+            if proposal.improvised_tool.source_id != request.selected_use_source_id:
+                raise GmProposalValidationError(
+                    "Improwizowane narzędzie musi wskazywać wybrany przez gracza source_id."
+                )
         return
     if proposal.improvised_tool is not None:
         raise GmProposalValidationError("Pole improvised_tool jest dozwolone tylko dla improvised_tool_check.")
@@ -863,7 +1540,7 @@ def _validate_preparation_effect(
     effect: GmPreparationEffect,
     policy: LlmChallengePolicy,
     request: GmClassifierRequest,
-) -> None:
+) -> CraftingPlan | None:
     if effect.type.value not in policy.allowed_preparation_effect_types:
         raise GmProposalValidationError(f"Efekt przygotowania {effect.type.value} nie jest dozwolony w tym wyzwaniu.")
     if effect.duration != PreparationEffectDuration.NEXT_ATTEMPT:
@@ -913,6 +1590,22 @@ def _validate_preparation_effect(
         if effect.option_id not in known_option_ids:
             raise GmProposalValidationError(f"Nieznana opcja do odblokowania: {effect.option_id}.")
     elif effect.type == PreparationEffectType.CREATE_TEMPORARY_ITEM:
+        if effect.crafting_draft is not None:
+            try:
+                draft = effect.crafting_draft.as_domain()
+                plan = validate_crafting_draft(
+                    request.state,
+                    draft,
+                    build_crafting_source_registry(request.state, request.actors),
+                    request.crafting_policy,
+                )
+            except (CraftingValidationError, ValueError) as exc:
+                raise GmProposalValidationError(str(exc)) from exc
+            if not set(effect.target_tags).issubset(plan.purpose.bonus_tags):
+                raise GmProposalValidationError(
+                    "Cel konstrukcji nie obsługuje wszystkich zadeklarowanych target_tags."
+                )
+            return plan
         if not effect.temporary_item_template_id:
             raise GmProposalValidationError("create_temporary_item wymaga temporary_item_template_id.")
         templates = {template.id: template for template in policy.temporary_item_templates}
@@ -945,6 +1638,7 @@ def _validate_preparation_effect(
             raise GmProposalValidationError(
                 "Szablon przedmiotu nie obsługuje materiałów: " + ", ".join(sorted(disallowed_materials))
             )
+    return None
 
 
 def _validate_difficulty_tier(proposal: GmClassifierProposal, policy: LlmChallengePolicy) -> None:
@@ -966,6 +1660,23 @@ def _validate_difficulty_tier(proposal: GmClassifierProposal, policy: LlmChallen
         )
     if not proposal.difficulty_reason.strip():
         raise GmProposalValidationError("Propozycja LLM musi wyjaśnić wybór difficulty_tier.")
+
+
+def _ground_proposal_dc(
+    proposal: GmClassifierProposal,
+    policy: LlmChallengePolicy,
+) -> GmClassifierProposal:
+    """Let the LLM choose a tier while deterministic content owns its numeric DC."""
+
+    if not proposal.difficulty_tier or proposal.dc is None:
+        return proposal
+    allowed_tiers = set(policy.allowed_difficulty_tiers or tuple(tier.id for tier in policy.dc_tiers))
+    if proposal.difficulty_tier not in allowed_tiers:
+        return proposal
+    expected_dc = policy.dc_for_tier(proposal.difficulty_tier)
+    if expected_dc is None or proposal.dc == expected_dc:
+        return proposal
+    return proposal.model_copy(update={"dc": expected_dc})
 
 
 def _validate_fact_grounding(proposal: GmClassifierProposal, request: GmClassifierRequest) -> None:
@@ -1000,7 +1711,12 @@ def _unknown_declared_resources(
             unknown.append(resource_id)
     for resource in analysis.declared_resources:
         normalized = _normalize_fact_token(resource)
-        if normalized and normalized not in known_tokens and not _resource_phrase_is_known(normalized, known_tokens):
+        if (
+            normalized
+            and normalized not in known_tokens
+            and not _resource_phrase_is_known(normalized, known_tokens)
+            and not _phrase_matches_grounded_player_source(normalized, request)
+        ):
             unknown.append(resource)
     return tuple(dict.fromkeys(unknown))
 
@@ -1015,6 +1731,11 @@ def _known_resource_or_material_tokens(request: GmClassifierRequest) -> set[str]
         if item.available:
             tokens.add(_normalize_fact_token(item.id))
             tokens.add(_normalize_fact_token(item.label))
+    for source in build_crafting_source_registry(request.state, request.actors).available_sources:
+        tokens.add(_normalize_fact_token(source.id))
+        tokens.add(_normalize_fact_token(f"source:{source.id}"))
+        tokens.add(_normalize_fact_token(source.reference_id))
+        tokens.add(_normalize_fact_token(source.label))
     for context in (request.scenario_context, request.zone.llm_context, request.challenge.llm_context):
         for material in context.available_materials:
             tokens.add(_normalize_fact_token(material))
@@ -1023,17 +1744,41 @@ def _known_resource_or_material_tokens(request: GmClassifierRequest) -> set[str]
 
 def _constructed_fact_is_grounded(fact: str, request: GmClassifierRequest) -> bool:
     normalized = _normalize_fact_token(fact)
+    if request.explicit_player_intent_hint == PlayerIntentHint.BUILD:
+        fact_stems = _meaningful_word_stems(normalized)
+        action_stems = _meaningful_word_stems(_normalize_fact_token(request.player_action))
+        if fact_stems.intersection(action_stems):
+            return True
     template_labels = {
         _normalize_fact_token(template.label)
         for template in request.challenge.llm_policy.temporary_item_templates
     }
     if any(label in normalized or normalized in label for label in template_labels if label):
         return True
+    if _phrase_matches_grounded_player_source(normalized, request):
+        return True
     fact_words = {word for word in normalized.split() if len(word) >= 5}
     return any(
         entry.role == "gm"
         and len(fact_words.intersection(_normalize_fact_token(entry.content).split())) >= 2
         for entry in request.declaration_thread
+    )
+
+
+def _phrase_matches_grounded_player_source(normalized_phrase: str, request: GmClassifierRequest) -> bool:
+    if not request.referenced_crafting_source_ids:
+        return False
+    phrase_stems = _meaningful_word_stems(normalized_phrase)
+    action_stems = _meaningful_word_stems(_normalize_fact_token(request.player_action))
+    return bool(phrase_stems.intersection(action_stems))
+
+
+def _meaningful_word_stems(value: str) -> frozenset[str]:
+    ignored = {"chce", "tego", "tym", "jako", "ktory", "prowizoryczny", "prowizoryczne"}
+    return frozenset(
+        word[:3]
+        for word in value.split()
+        if len(word) >= 3 and word not in ignored
     )
 
 
@@ -1134,12 +1879,19 @@ def _validate_narration_consistency(proposal: GmClassifierProposal) -> None:
 
 
 def _all_forbidden_assumptions(request: GmClassifierRequest) -> tuple[str, ...]:
+    structured_constraints = tuple(
+        phrase
+        for fact in request.challenge.llm_context.guidance_facts
+        if fact.kind == LlmGuidanceFactKind.CONSTRAINT
+        for phrase in (fact.match_phrases or (fact.text,))
+    )
     return tuple(
         dict.fromkeys(
             (
                 *request.scenario_context.forbidden_assumptions,
                 *request.zone.llm_context.forbidden_assumptions,
                 *request.challenge.llm_context.impossible_approaches,
+                *structured_constraints,
             )
         )
     )
@@ -1267,6 +2019,232 @@ def _attempt_history_payload(challenge_state) -> list[dict[str, Any]]:
     ]
 
 
+def _conversation_knowledge(request: GmClassifierRequest, crafting_registry) -> dict[str, object]:
+    facts: list[dict[str, object]] = []
+
+    def add_fact(
+        fact_id: str,
+        text: str,
+        *,
+        kind: str,
+        minimum_hint_level: int = 0,
+        revealed: bool = True,
+    ) -> None:
+        normalized = text.strip()
+        if normalized:
+            facts.append(
+                {
+                    "id": fact_id,
+                    "text": normalized,
+                    "kind": kind,
+                    "minimum_hint_level": minimum_hint_level,
+                    "revealed": revealed,
+                }
+            )
+
+    add_fact(
+        f"zone:{request.zone.id}:description",
+        request.zone.description,
+        kind="visible_observation",
+    )
+    add_fact(
+        f"zone:{request.zone.id}:summary",
+        request.zone.llm_context.summary,
+        kind="visible_observation",
+    )
+    add_fact(
+        f"challenge:{request.challenge.id}:summary",
+        request.challenge.llm_context.summary,
+        kind="visible_observation",
+    )
+    for source in crafting_registry.available_sources:
+        properties = ", ".join(source.properties)
+        add_fact(
+            f"source:{source.id}",
+            f"{source.label}; ilość {source.quantity}; właściwości: {properties}; stan: {source.condition}.",
+            kind="visible_source",
+        )
+    for point in visible_exploration_points(request.state.points):
+        if point.zone_id == request.zone.id:
+            add_fact(
+                f"point:{point.id}",
+                f"{point.name}: {point.description}",
+                kind="visible_point",
+            )
+    guidance_facts = request.challenge.llm_context.guidance_facts
+    if guidance_facts:
+        fact_kind = {
+            LlmGuidanceFactKind.OBSERVATION: "visible_observation",
+            LlmGuidanceFactKind.AFFORDANCE: "gm_hint",
+            LlmGuidanceFactKind.RISK: "gm_hint",
+            LlmGuidanceFactKind.CONSTRAINT: "world_constraint",
+        }
+        for fact in guidance_facts:
+            add_fact(
+                f"fact:{fact.id}",
+                fact.text,
+                kind=fact_kind[fact.kind],
+                minimum_hint_level=fact.minimum_hint_level,
+                revealed=fact.is_revealed(request.state.flags),
+            )
+    else:
+        for index, approach in enumerate(request.challenge.llm_context.reasonable_approaches, start=1):
+            add_fact(
+                f"challenge:{request.challenge.id}:approach:{index}",
+                approach,
+                kind="gm_hint",
+                minimum_hint_level=1,
+            )
+    for purpose in request.crafting_policy.purposes:
+        add_fact(
+            f"crafting:purpose:{purpose.id}",
+            f"Dostępne materiały mogą zostać ocenione pod kątem celu: {purpose.label}.",
+            kind="gm_hint",
+            minimum_hint_level=2,
+        )
+    if not guidance_facts:
+        for index, risk in enumerate(request.challenge.llm_context.risk_notes, start=1):
+            add_fact(
+                f"challenge:{request.challenge.id}:risk:{index}",
+                risk,
+                kind="gm_hint",
+                minimum_hint_level=2,
+            )
+        for index, impossible in enumerate(request.challenge.llm_context.impossible_approaches, start=1):
+            add_fact(
+                f"challenge:{request.challenge.id}:constraint:{index}",
+                impossible,
+                kind="world_constraint",
+            )
+    for observation in request.observations:
+        if observation.zone_id != request.zone.id:
+            continue
+        if observation.challenge_id is not None and observation.challenge_id != request.challenge.id:
+            continue
+        for fact in observation.facts:
+            add_fact(
+                f"observation:{observation.id}:fact:{fact.id}",
+                fact.narration,
+                kind="graded_observation",
+                revealed=bool(scene_flag(request.state.flags, fact.reveal_flag, False)),
+            )
+    return {
+        "facts": facts,
+        "already_revealed_fact_ids": list(
+            dict.fromkeys(
+                fact_id
+                for entry in request.declaration_thread
+                for fact_id in entry.grounded_fact_ids
+            )
+        ),
+    }
+
+
+def _allowed_hint_level(request: GmClassifierRequest) -> int:
+    normalized_action = _normalize_fact_token(request.player_action)
+    if any(marker in normalized_action for marker in ("wprost", "konkret", "gotowe rozwiazanie", "dokladna podpowiedz")):
+        return 3
+    previous = max((entry.hint_level for entry in request.declaration_thread), default=0)
+    return min(3, max(1, previous + 1))
+
+
+def _validate_conversation_response(
+    analysis: GmDeclarationAnalysis,
+    request: GmClassifierRequest,
+) -> None:
+    if analysis.response_kind is None:
+        # Compatibility with older classifier fixtures and saved integrations.
+        return
+    knowledge = _conversation_knowledge(
+        request,
+        build_crafting_source_registry(request.state, request.actors),
+    )
+    facts_by_id = {fact["id"]: fact for fact in knowledge["facts"]}
+    unknown_fact_ids = set(analysis.grounded_fact_ids) - set(facts_by_id)
+    if unknown_fact_ids:
+        raise GmProposalValidationError(
+            "Odpowiedź MG powołuje się na fakty spoza sceny: " + ", ".join(sorted(unknown_fact_ids))
+        )
+    hint_kinds = {
+        GmConversationResponseKind.GENTLE_HINT,
+        GmConversationResponseKind.STRONG_HINT,
+    }
+    if analysis.response_kind in hint_kinds:
+        if analysis.hint_level < 1:
+            raise GmProposalValidationError("Podpowiedź MG wymaga hint_level od 1 do 3.")
+        if analysis.hint_level > _allowed_hint_level(request):
+            raise GmProposalValidationError("Odpowiedź MG zdradza zbyt silną podpowiedź na tym etapie rozmowy.")
+        if analysis.response_kind == GmConversationResponseKind.STRONG_HINT and analysis.hint_level < 2:
+            raise GmProposalValidationError("Strong hint wymaga hint_level 2 albo 3.")
+    elif analysis.hint_level != 0:
+        raise GmProposalValidationError("Zwykła odpowiedź MG nie może zwiększać poziomu podpowiedzi.")
+    for fact_id in analysis.grounded_fact_ids:
+        if not bool(facts_by_id[fact_id].get("revealed", True)):
+            raise GmProposalValidationError(
+                f"Fakt {fact_id} wymaga najpierw rozstrzygnięcia obserwacji."
+            )
+        required_level = int(facts_by_id[fact_id]["minimum_hint_level"])
+        if required_level > analysis.hint_level:
+            raise GmProposalValidationError(
+                f"Fakt {fact_id} wymaga podpowiedzi poziomu {required_level}."
+            )
+    if analysis.response_kind == GmConversationResponseKind.REQUIRES_CHECK:
+        if not analysis.requires_check or not analysis.suggested_followup.strip():
+            raise GmProposalValidationError(
+                "Odpowiedź requires_check musi wskazywać, co gracze mogą zadeklarować dalej."
+            )
+        if analysis.observation_id is not None:
+            active_observation_ids = {
+                observation.id
+                for observation in request.observations
+                if observation.zone_id == request.zone.id
+                and (observation.challenge_id is None or observation.challenge_id == request.challenge.id)
+            }
+            if analysis.observation_id not in active_observation_ids:
+                raise GmProposalValidationError("MG wskazał obserwację niedostępną w aktualnej scenie.")
+    elif analysis.requires_check:
+        raise GmProposalValidationError("requires_check jest dozwolone tylko dla response_kind=requires_check.")
+    elif analysis.observation_id is not None:
+        raise GmProposalValidationError("observation_id jest dozwolone tylko dla odpowiedzi requires_check.")
+    unknown_mentions = _unsupported_resource_mentions(
+        analysis.player_message,
+        _known_resource_or_material_tokens(request),
+    )
+    if unknown_mentions:
+        raise GmProposalValidationError(
+            "Odpowiedź MG wymyśla zasób spoza sceny: " + ", ".join(sorted(unknown_mentions))
+        )
+
+
+class GmSceneSourceQuery(BaseModel):
+    """Abstract function requested by a player, without selecting a scene object."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    purpose: str = Field(default="", max_length=300)
+    requested_name: str | None = Field(default=None, max_length=120)
+    required_properties: tuple[str, ...] = ()
+    preferred_properties: tuple[str, ...] = ()
+
+    @field_validator("required_properties", "preferred_properties")
+    @classmethod
+    def _property_ids(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        return tuple(dict.fromkeys(item.strip() for item in value if item.strip()))
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.required_properties and not self.preferred_properties:
+            raise ValueError("Source query needs at least one required or preferred property.")
+        required = frozenset(self.required_properties)
+        object.__setattr__(
+            self,
+            "preferred_properties",
+            tuple(item for item in self.preferred_properties if item not in required),
+        )
+        if self.requested_name is not None:
+            normalized_name = self.requested_name.strip()
+            object.__setattr__(self, "requested_name", normalized_name or None)
+
+
 class GmDeclarationAnalysis(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -1280,8 +2258,24 @@ class GmDeclarationAnalysis(BaseModel):
     referenced_existing_resource_ids: tuple[str, ...] = ()
     assumed_new_facts: tuple[str, ...] = ()
     missing_requirements: tuple[str, ...] = ()
+    response_kind: GmConversationResponseKind | None = None
+    grounded_fact_ids: tuple[str, ...] = ()
+    hint_level: int = Field(default=0, ge=0, le=3)
+    suggested_followup: str = Field(default="", max_length=500)
+    requires_check: bool = False
+    observation_id: str | None = Field(default=None, max_length=120)
+    source_query: GmSceneSourceQuery | None = None
+    use_source_id: str | None = Field(default=None, max_length=240)
+    action_target_source_id: str | None = Field(default=None, max_length=240)
+    fixture_operation: FixtureOperation | None = None
 
-    @field_validator("declared_resources", "referenced_existing_resource_ids", "assumed_new_facts", "missing_requirements")
+    @field_validator(
+        "declared_resources",
+        "referenced_existing_resource_ids",
+        "assumed_new_facts",
+        "missing_requirements",
+        "grounded_fact_ids",
+    )
     @classmethod
     def _string_tuple_items(cls, value: tuple[str, ...]) -> tuple[str, ...]:
         return tuple(dict.fromkeys(item.strip() for item in value if item.strip()))

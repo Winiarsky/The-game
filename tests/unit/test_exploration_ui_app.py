@@ -1,4 +1,5 @@
 from dnd_board_game.llm import GmClassifierProposal, GmDeclarationAnalysis, GmDeclarationAnalysisType, NpcInteractionProposal
+from dnd_board_game.exploration import reveal_exploration_points
 from dnd_board_game.ui.exploration_app import ExplorationUiSession, UiFlowStage, create_app
 
 
@@ -123,6 +124,21 @@ def test_exploration_ui_page_includes_session_log_panel():
     assert "/api/session-log" in javascript
 
 
+def test_debug_challenge_opens_gate_interaction_without_setup_flow():
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=FakeGmClient(),
+        debug_challenge_id="closed_gate",
+    )
+
+    state = session.state_payload()
+
+    assert state["flow"]["stage"] == "location_active"
+    assert state["active_challenge"]["id"] == "closed_gate"
+    assert state["active_point"] is None
+    assert state["exploration_setup"] is None
+
+
 def test_exploration_ui_page_includes_spell_preparation_flow():
     client = _client(active=False)
 
@@ -143,7 +159,47 @@ def test_exploration_ui_page_includes_short_rest_flow():
     assert "Krótki odpoczynek" in javascript
     assert "spendShortRestHitDie" in javascript
     assert "/api/rest/short/start" in javascript
+
+
+def test_exploration_ui_page_includes_filterable_slash_command_menu():
+    client = _client()
+
+    html, javascript, stylesheet = _page_assets(client)
+
+    assert 'id="slash-command-menu"' in html
+    assert "EXPLORATION_SLASH_COMMANDS" in html
+    assert '"name": "zbuduj"' in html
+    assert "slashCommandQuery" in javascript
+    assert "startsWith(query)" in javascript
+    assert "ArrowDown" in javascript
+    assert "selectSlashCommand" in javascript
+    assert ".slash-command-menu" in stylesheet
     assert "/api/rest/short/hit-die" in javascript
+
+
+def test_exploration_ui_page_renders_graded_observation_conditions_in_chat():
+    client = _client()
+
+    _html, javascript, _stylesheet = _page_assets(client)
+
+    assert "pending.kind === 'observation'" in javascript
+    assert "Stopniowane informacje" in javascript
+    assert "Warunki rozpoznania" in javascript
+    assert "Porażka oznacza brak rozstrzygającej informacji" in javascript
+
+
+def test_exploration_ui_page_exposes_crafting_confirmation_and_dismantling():
+    client = _client()
+
+    _html, javascript, _stylesheet = _page_assets(client)
+
+    assert "Budowa:</b> bez rzutu" in javascript
+    assert "Rozmontuj" in javascript
+    assert "/api/crafting/dismantle" in javascript
+
+    response = client.post("/api/crafting/dismantle", json={"item_id": "missing"})
+    assert response.status_code == 400
+    assert "Nieznana konstrukcja tymczasowa" in response.get_json()["error"]
 
 
 def test_exploration_ui_page_is_fiction_first_and_accepts_questions():
@@ -153,13 +209,28 @@ def test_exploration_ui_page_is_fiction_first_and_accepts_questions():
 
     assert html.index('id="scene-description-card"') < html.index('id="action-panel"')
     assert 'id="scene-conversation"' in html
+    assert 'id="chat-stream"' in html
+    assert 'id="pending-title"' in html
+    assert html.index('id="chat-stream"') < html.index('id="pending-panel"') < html.index('id="chat-composer"')
+    assert '<h3>Propozycja MG</h3>' not in html
     assert "Co robicie lub o co pytacie?" in html
-    assert "Opiszcie działanie albo zadajcie MG pytanie" in html
-    assert "Nie macie pomysłu? Zobaczcie inspiracje" in javascript
-    assert "Wskazówki MG i mechanika sceny" in javascript
+    assert "Napisz wiadomość do MG" in html
+    assert 'id="chat-typing"' in html
+    assert "Opuść interakcję" in html
+    assert 'id="exploration-menu-panel"' in html
+    assert "Nie macie pomysłu? Zobaczcie inspiracje" not in javascript
+    assert "Wskazówki MG i mechanika sceny" not in javascript
     assert "sceneConversationHtml" in javascript
+    assert "sceneIntroMessageHtml" in javascript
+    assert "waitingForGm" in javascript
+    assert "leaveChatInstance" in javascript
     assert ".scene-image" in stylesheet
     assert ".conversation-entry" in stylesheet
+    assert ".conversation-system-card" in stylesheet
+    assert "function pendingTitle" in javascript
+    assert "if (proposal.player_narration) lines.push" not in javascript
+    assert ".chat-typing" in stylesheet
+    assert "body.chat-instance-mode" in stylesheet
 
 
 def test_exploration_ui_page_includes_snapshot_controls():
@@ -335,8 +406,6 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
     assert "pendingConcentrationCheckDetailsHtml" in html
     assert "submitConcentrationCheck()" in html
     assert "actorInventoryHtml" in html
-    assert "challengeOptionsHtml" in html
-    assert "challengeOptionRequirementsText" in html
     assert "Ten przedmiot został zużyty" in html
     assert "pending_concentration_check" in html
     assert "/api/combat/ready/start" in html
@@ -451,7 +520,7 @@ def test_exploration_ui_prefills_board_settings_from_shared_config():
     assert board["wled_url"] == "http://192.168.0.165"
 
 
-def test_exploration_ui_state_includes_player_facing_scene_description():
+def test_exploration_ui_state_keeps_gm_knowledge_behind_conversation_boundary():
     client = _client()
 
     response = client.get("/api/state")
@@ -459,19 +528,16 @@ def test_exploration_ui_state_includes_player_facing_scene_description():
     data = response.get_json()
     assert "Zarośnięta" in data["current_zone"]["description"]
     assert "stara drewniana brama" in data["current_zone"]["summary"]
-    assert "wspinaczka" in data["active_challenge"]["reasonable_approaches"]
-    assert data["active_challenge"]["risk_notes"]
-    assert {hint["id"] for hint in data["active_challenge"]["player_hints"]} >= {
-        "force_gate",
-        "vault_gate",
-        "lever_gate",
+    assert "available_materials" not in data["current_zone"]
+    assert set(data["active_challenge"]) == {
+        "id",
+        "name",
+        "progress_required",
+        "current_progress",
+        "noise",
+        "completed",
+        "complications",
     }
-    assert all(set(hint) == {"id", "label", "description"} for hint in data["active_challenge"]["player_hints"])
-    options = {option["id"]: option for option in data["active_challenge"]["options"]}
-    assert options["lockpick_gate"]["requires_item_ids"] == ["thieves_tools"]
-    assert options["lockpick_gate"]["eligible_actors"] == [{"id": "rogue", "name": "Łotrzyca"}]
-    assert options["reveal_bolt_with_flame"]["requires_spell_ids"] == ["sacred_flame"]
-    assert options["reveal_bolt_with_flame"]["eligible_actors"] == [{"id": "cleric", "name": "Kapłan"}]
 
 
 def _finish_map_setup(client):
@@ -489,6 +555,14 @@ def _confirm_fallen_gate_setup(client):
     assert state["flow"]["stage"] == "party_setup"
     assert state["exploration_setup"]["current_step"]["label"] == "przewrócona brama"
     return client.post("/api/exploration/setup/confirm", json={}).get_json()
+
+
+def _resolve_encounter_opening(client):
+    response = client.post("/api/encounter/opening/resolve", json={})
+    assert response.status_code == 200
+    state = response.get_json()
+    assert state["pending_encounter"]["opening"]["resolved"] is True
+    return state
 
 
 def _advance_encounter_setup(client, board):
@@ -818,11 +892,13 @@ def test_exploration_ui_can_cancel_location_preview():
 
 
 def test_exploration_ui_reveals_selects_and_resolves_npc_point():
-    client = _client()
+    session = _session()
+    client = create_app(session).test_client()
     client.post("/api/action", json={"text": "Wyważamy bramę."})
     client.post("/api/decision", json={"decision": "accept"})
     client.post("/api/rolls", json={"rolls": {"hero": 16}})
     _confirm_fallen_gate_setup(client)
+    session.state, _ = reveal_exploration_points(session.state, ("wounded_scout",))
     client.post("/api/travel", json={"zone_id": "courtyard"})
 
     point_response = client.post("/api/point", json={"point_id": "wounded_scout"})
@@ -842,11 +918,13 @@ def test_exploration_ui_reveals_selects_and_resolves_npc_point():
 
 
 def test_exploration_ui_points_are_board_first_and_text_redirects_to_point_led():
-    client = _client()
+    session = _session()
+    client = create_app(session).test_client()
     client.post("/api/action", json={"text": "Wyważamy bramę."})
     client.post("/api/decision", json={"decision": "accept"})
     client.post("/api/rolls", json={"rolls": {"hero": 16}})
     _confirm_fallen_gate_setup(client)
+    session.state, _ = reveal_exploration_points(session.state, ("wounded_scout",))
     client.post("/api/travel", json={"zone_id": "courtyard"})
 
     state = client.get("/api/state").get_json()
@@ -885,6 +963,9 @@ def test_exploration_ui_runs_guided_encounter_setup_after_trigger():
     client.post("/api/decision", json={"decision": "accept"})
     client.post("/api/rolls", json={"rolls": {"hero": 16}})
     _confirm_fallen_gate_setup(client)
+    opening = _resolve_encounter_opening(client)
+
+    assert opening["pending_encounter"]["opening"]["outcome"] == "no_surprise"
 
     setup_started = client.post("/api/encounter/setup/start").get_json()
     setup = setup_started["encounter_setup"]
@@ -933,6 +1014,7 @@ def test_exploration_ui_can_assign_player_start_from_ui_position_buttons():
     client.post("/api/decision", json={"decision": "accept"})
     client.post("/api/rolls", json={"rolls": {"hero": 16}})
     _confirm_fallen_gate_setup(client)
+    _resolve_encounter_opening(client)
 
     client.post("/api/encounter/setup/start")
     client.post("/api/encounter/setup/confirm")
@@ -961,6 +1043,7 @@ def test_exploration_ui_starts_combat_after_setup_and_initiative():
     client.post("/api/decision", json={"decision": "accept"})
     client.post("/api/rolls", json={"rolls": {"hero": 16}})
     _confirm_fallen_gate_setup(client)
+    _resolve_encounter_opening(client)
     client.post("/api/encounter/setup/start")
     while True:
         setup_state = _advance_encounter_setup(client, board)
@@ -1029,6 +1112,7 @@ def test_exploration_ui_happy_path_returns_to_player_after_enemy_turns():
 
     setup_ready = _confirm_fallen_gate_setup(client)
     assert setup_ready["pending_encounter"]["trigger_id"] == "gate_open_skirmish"
+    _resolve_encounter_opening(client)
 
     setup_started = client.post("/api/encounter/setup/start", json={}).get_json()
     assert setup_started["encounter_setup"]["status"] == "active"

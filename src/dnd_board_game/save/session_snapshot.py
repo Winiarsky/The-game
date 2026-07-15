@@ -28,12 +28,22 @@ from dnd_board_game.combat.spells import SpellSlotState
 from dnd_board_game.combat.scene import SceneFlags
 from dnd_board_game.combat.setup import SetupVisibility
 from dnd_board_game.exploration import (
+    CraftingComponentDisposition,
+    CraftingComponentUse,
+    EncounterEdge,
+    EncounterEdgeType,
+    EncounterOpeningOutcome,
+    EncounterOpeningResolution,
     ExplorationChallengeAttempt,
     ExplorationChallengeState,
     ExplorationState,
+    SceneSourceDiscovery,
+    SceneSourceCollection,
+    FixtureRuntimeState,
     PartyPosition,
     PendingEncounter,
     TemporaryItem,
+    TemporaryItemScope,
 )
 from dnd_board_game.inventory import InventoryItem
 from dnd_board_game.rules import (
@@ -173,6 +183,11 @@ def _conversation_entry_from_payload(raw: object) -> InteractionConversationEntr
         title=_string(data.get("title"), "conversation_entry.title"),
         body=_string(data.get("body"), "conversation_entry.body"),
         outcome=_string(data.get("outcome", ""), "conversation_entry.outcome", allow_empty=True),
+        grounded_fact_ids=_string_tuple(
+            data.get("grounded_fact_ids", []),
+            "conversation_entry.grounded_fact_ids",
+        ),
+        hint_level=_integer(data.get("hint_level", 0), "conversation_entry.hint_level"),
     )
 
 
@@ -209,7 +224,8 @@ def _actor_payload(actor: Actor) -> dict[str, object]:
         "spell_save_dc": actor.spell_save_dc, "spell_ids": list(actor.spell_ids),
         "inventory": [
             {"id": item.id, "name": item.name, "kind": item.kind, "quantity": item.quantity,
-             "equipped": item.equipped, "source_ref": item.source_ref, "broken": item.broken}
+             "equipped": item.equipped, "source_ref": item.source_ref, "broken": item.broken,
+             "description": item.description, "properties": list(item.properties), "portable": item.portable}
             for item in actor.inventory
         ],
         "spell_preparation": None if prep is None else {
@@ -254,7 +270,7 @@ def _actor_from_payload(raw: object) -> Actor:
         ability_scores=AbilityScores(**{name: _integer(abilities.get(name), f"ability_scores.{name}") for name in _ABILITY_NAMES}),
         spell_slots=tuple(SpellSlotState(_integer(slot.get("level"), "slot.level"), _integer(slot.get("remaining"), "slot.remaining"), _integer(slot.get("maximum"), "slot.maximum")) for value in _sequence(data.get("spell_slots", []), "spell_slots") for slot in (_mapping(value, "slot"),)),
         spell_save_dc=_integer(data.get("spell_save_dc"), "actor.spell_save_dc"),
-        inventory=tuple(InventoryItem(id=_string(item.get("id"), "item.id"), name=_string(item.get("name"), "item.name"), kind=_string(item.get("kind"), "item.kind"), quantity=_integer(item.get("quantity"), "item.quantity"), equipped=_boolean(item.get("equipped"), "item.equipped"), source_ref=_optional_string(item.get("source_ref"), "item.source_ref"), broken=_boolean(item.get("broken"), "item.broken")) for value in _sequence(data.get("inventory", []), "inventory") for item in (_mapping(value, "item"),)),
+        inventory=tuple(InventoryItem(id=_string(item.get("id"), "item.id"), name=_string(item.get("name"), "item.name"), kind=_string(item.get("kind"), "item.kind"), quantity=_integer(item.get("quantity"), "item.quantity"), equipped=_boolean(item.get("equipped"), "item.equipped"), source_ref=_optional_string(item.get("source_ref"), "item.source_ref"), broken=_boolean(item.get("broken"), "item.broken"), description=_string(item.get("description", ""), "item.description", allow_empty=True), properties=_string_tuple(item.get("properties", []), "item.properties"), portable=_boolean(item.get("portable", True), "item.portable")) for value in _sequence(data.get("inventory", []), "inventory") for item in (_mapping(value, "item"),)),
         spell_ids=_string_tuple(data.get("spell_ids", []), "actor.spell_ids"), spell_preparation=prep,
         hit_dice=tuple(HitDicePool(_integer(pool.get("die_sides"), "hit_die.die_sides"), _integer(pool.get("remaining"), "hit_die.remaining"), _integer(pool.get("maximum"), "hit_die.maximum")) for value in _sequence(data.get("hit_dice", []), "hit_dice") for pool in (_mapping(value, "hit_die"),)),
         resource_pools=tuple(ActorResourcePool(id=_string(pool.get("id"), "resource.id"), label=_string(pool.get("label"), "resource.label"), current=_integer(pool.get("current"), "resource.current"), maximum=_integer(pool.get("maximum"), "resource.maximum"), recovery=_enum(RecoveryPeriod, pool.get("recovery"), "resource.recovery")) for value in _sequence(data.get("resource_pools", []), "resource_pools") for pool in (_mapping(value, "resource"),)),
@@ -282,8 +298,67 @@ def _exploration_payload(state: ExplorationState) -> dict[str, object]:
                 "modifier": item.modifier, "advantage": item.advantage,
                 "uses_remaining": item.uses_remaining, "created_in_zone_id": item.created_in_zone_id,
                 "source_materials": list(item.source_materials), "risk": item.risk,
+                "purpose_id": item.purpose_id,
+                "component_uses": [
+                    {
+                        "source_id": component.source_id,
+                        "quantity": component.quantity,
+                        "disposition": component.disposition.value,
+                    }
+                    for component in item.component_uses
+                ],
+                "scope": item.scope.value,
+                "time_cost_minutes": item.time_cost_minutes,
+                "dismantled": item.dismantled,
             }
             for item in state.temporary_items
+        ],
+        "encounter_edges": [
+            {
+                "id": edge.id,
+                "type": edge.edge_type.value,
+                "label": edge.label,
+                "beneficiary_actor_id": edge.beneficiary_actor_id,
+                "encounter_trigger_id": edge.encounter_trigger_id,
+                "source_observation_id": edge.source_observation_id,
+                "source_fact_id": edge.source_fact_id,
+                "consumed": edge.consumed,
+            }
+            for edge in state.encounter_edges
+        ],
+        "source_discoveries": [
+            {
+                "source_id": item.source_id,
+                "zone_id": item.zone_id,
+                "requested_as": item.requested_as,
+                "purpose": item.purpose,
+                "matched_properties": list(item.matched_properties),
+                "semantic_substitution": item.semantic_substitution,
+            }
+            for item in state.source_discoveries
+        ],
+        "source_collections": [
+            {
+                "source_id": item.source_id,
+                "zone_id": item.zone_id,
+                "quantity": item.quantity,
+                "destination": item.destination,
+                "label": item.label,
+                "owner_actor_id": item.owner_actor_id,
+            }
+            for item in state.source_collections
+        ],
+        "fixture_states": [
+            {
+                "zone_id": item.zone_id,
+                "fixture_id": item.fixture_id,
+                "condition": item.condition,
+                "unavailable": item.unavailable,
+                "detached": item.detached,
+                "destroyed": item.destroyed,
+                "released_item_ids": list(item.released_item_ids),
+            }
+            for item in state.fixture_states
         ],
     }
 
@@ -322,7 +397,7 @@ def _exploration_from_payload(base: ExplorationState, raw: object) -> Exploratio
     temporary_items = tuple(
         TemporaryItem(
             id=_string(item.get("id"), "temporary_item.id"),
-            template_id=_string(item.get("template_id"), "temporary_item.template_id"),
+            template_id=_optional_string(item.get("template_id"), "temporary_item.template_id"),
             label=_string(item.get("label"), "temporary_item.label"),
             description=_string(item.get("description"), "temporary_item.description"),
             bonus_tags=_string_tuple(item.get("bonus_tags", []), "temporary_item.bonus_tags"),
@@ -331,13 +406,137 @@ def _exploration_from_payload(base: ExplorationState, raw: object) -> Exploratio
             uses_remaining=_integer(item.get("uses_remaining"), "temporary_item.uses_remaining"),
             created_in_zone_id=_string(item.get("created_in_zone_id"), "temporary_item.created_in_zone_id"),
             source_materials=_string_tuple(item.get("source_materials", []), "temporary_item.source_materials"),
-            risk=_string(item.get("risk"), "temporary_item.risk"),
+            risk=_string(item.get("risk", ""), "temporary_item.risk", allow_empty=True),
+            purpose_id=_optional_string(item.get("purpose_id"), "temporary_item.purpose_id"),
+            component_uses=tuple(
+                CraftingComponentUse(
+                    source_id=_string(component.get("source_id"), "crafting_component.source_id"),
+                    quantity=_integer(component.get("quantity"), "crafting_component.quantity"),
+                    disposition=_enum(
+                        CraftingComponentDisposition,
+                        component.get("disposition"),
+                        "crafting_component.disposition",
+                    ),
+                )
+                for raw_component in _sequence(item.get("component_uses", []), "temporary_item.component_uses")
+                for component in (_mapping(raw_component, "crafting_component"),)
+            ),
+            scope=_enum(
+                TemporaryItemScope,
+                item.get("scope", TemporaryItemScope.SCENARIO.value),
+                "temporary_item.scope",
+            ),
+            time_cost_minutes=_integer(item.get("time_cost_minutes", 0), "temporary_item.time_cost_minutes"),
+            dismantled=_boolean(item.get("dismantled", False), "temporary_item.dismantled"),
         )
         for raw_item in _sequence(data.get("temporary_items", []), "temporary_items")
         for item in (_mapping(raw_item, "temporary_item"),)
     )
     if any(item.created_in_zone_id not in {zone.id for zone in base.zones} for item in temporary_items):
         raise SnapshotValidationError("Zapis zawiera przedmiot tymczasowy z nieznanej lokacji.")
+    encounter_edges = tuple(
+        EncounterEdge(
+            id=_string(item.get("id"), "encounter_edge.id"),
+            edge_type=_enum(EncounterEdgeType, item.get("type"), "encounter_edge.type"),
+            label=_string(item.get("label"), "encounter_edge.label"),
+            beneficiary_actor_id=_string(
+                item.get("beneficiary_actor_id"),
+                "encounter_edge.beneficiary_actor_id",
+            ),
+            encounter_trigger_id=_string(
+                item.get("encounter_trigger_id"),
+                "encounter_edge.encounter_trigger_id",
+            ),
+            source_observation_id=_string(
+                item.get("source_observation_id"),
+                "encounter_edge.source_observation_id",
+            ),
+            source_fact_id=_string(item.get("source_fact_id"), "encounter_edge.source_fact_id"),
+            consumed=_boolean(item.get("consumed", False), "encounter_edge.consumed"),
+        )
+        for raw_item in _sequence(data.get("encounter_edges", []), "encounter_edges")
+        for item in (_mapping(raw_item, "encounter_edge"),)
+    )
+    source_discoveries = tuple(
+        SceneSourceDiscovery(
+            source_id=_string(item.get("source_id"), "source_discovery.source_id"),
+            zone_id=_string(item.get("zone_id"), "source_discovery.zone_id"),
+            requested_as=_string(
+                item.get("requested_as", ""),
+                "source_discovery.requested_as",
+                allow_empty=True,
+            ),
+            purpose=_string(
+                item.get("purpose", ""),
+                "source_discovery.purpose",
+                allow_empty=True,
+            ),
+            matched_properties=_string_tuple(
+                item.get("matched_properties", []),
+                "source_discovery.matched_properties",
+            ),
+            semantic_substitution=_boolean(
+                item.get("semantic_substitution", False),
+                "source_discovery.semantic_substitution",
+            ),
+        )
+        for raw_item in _sequence(data.get("source_discoveries", []), "source_discoveries")
+        for item in (_mapping(raw_item, "source_discovery"),)
+    )
+    known_zone_ids = {zone.id for zone in base.zones}
+    if any(item.zone_id not in known_zone_ids for item in source_discoveries):
+        raise SnapshotValidationError("Zapis zawiera znaleziony element z nieznanej lokacji.")
+    if len({item.source_id for item in source_discoveries}) != len(source_discoveries):
+        raise SnapshotValidationError("Zapis zawiera powtórzone znalezione elementy sceny.")
+    source_collections = tuple(
+        SceneSourceCollection(
+            source_id=_string(item.get("source_id"), "source_collection.source_id"),
+            zone_id=_string(item.get("zone_id"), "source_collection.zone_id"),
+            quantity=_integer(item.get("quantity"), "source_collection.quantity"),
+            destination=_string(item.get("destination"), "source_collection.destination"),
+            label=_string(item.get("label"), "source_collection.label"),
+            owner_actor_id=_optional_string(
+                item.get("owner_actor_id"),
+                "source_collection.owner_actor_id",
+            ),
+        )
+        for raw_item in _sequence(data.get("source_collections", []), "source_collections")
+        for item in (_mapping(raw_item, "source_collection"),)
+    )
+    if any(item.zone_id not in known_zone_ids for item in source_collections):
+        raise SnapshotValidationError("Zapis zawiera zabrany element z nieznanej lokacji.")
+    collection_keys = tuple(
+        (item.source_id, item.destination, item.owner_actor_id)
+        for item in source_collections
+    )
+    if len(collection_keys) != len(set(collection_keys)):
+        raise SnapshotValidationError("Zapis zawiera powtórzone wpisy zabranych elementów.")
+    fixture_states = tuple(
+        FixtureRuntimeState(
+            zone_id=_string(item.get("zone_id"), "fixture_state.zone_id"),
+            fixture_id=_string(item.get("fixture_id"), "fixture_state.fixture_id"),
+            condition=_string(item.get("condition"), "fixture_state.condition"),
+            unavailable=_boolean(item.get("unavailable", False), "fixture_state.unavailable"),
+            detached=_boolean(item.get("detached", False), "fixture_state.detached"),
+            destroyed=_boolean(item.get("destroyed", False), "fixture_state.destroyed"),
+            released_item_ids=_string_tuple(
+                item.get("released_item_ids", []),
+                "fixture_state.released_item_ids",
+            ),
+        )
+        for raw_item in _sequence(data.get("fixture_states", []), "fixture_states")
+        for item in (_mapping(raw_item, "fixture_state"),)
+    )
+    fixture_ids_by_zone = {
+        zone.id: {fixture.id for fixture in zone.fixtures}
+        for zone in base.zones
+    }
+    for fixture_state in fixture_states:
+        if fixture_state.fixture_id not in fixture_ids_by_zone.get(fixture_state.zone_id, set()):
+            raise SnapshotValidationError("Zapis zawiera stan nieznanego fixture'a.")
+    fixture_state_keys = tuple((item.zone_id, item.fixture_id) for item in fixture_states)
+    if len(fixture_state_keys) != len(set(fixture_state_keys)):
+        raise SnapshotValidationError("Zapis zawiera powtórzony stan fixture'a.")
     return replace(
         base, party_position=PartyPosition(zone_id, _optional_coordinate(party.get("marker_position"), "party_position.marker_position")),
         flags=SceneFlags(tuple(flags)), points=tuple(replace(point, visibility=visibility[point.id]) for point in base.points),
@@ -345,6 +544,10 @@ def _exploration_from_payload(base: ExplorationState, raw: object) -> Exploratio
         challenge_states=challenge_states, inventory_resource_ids=resources,
         elapsed_minutes=_integer(data.get("elapsed_minutes"), "elapsed_minutes"), short_rest_counts=short_counts,
         temporary_items=temporary_items,
+        encounter_edges=encounter_edges,
+        source_discoveries=source_discoveries,
+        source_collections=source_collections,
+        fixture_states=fixture_states,
     )
 
 
@@ -445,24 +648,74 @@ def _combat_from_payload(raw: object) -> CombatState | None:
         raise SnapshotValidationError("Zapis zawiera nieprawidłowy indeks inicjatywy.")
     turn = _mapping(data.get("turn_action"), "combat.turn_action")
     return CombatState(
-        actors, InitiativeOrder(tuple(entries), current_index, _integer(initiative.get("round_number"), "initiative.round_number")),
-        TurnActionState(_enum(ActionUse, turn.get("action_use"), "turn_action.action_use"), _enum(ActionUse, turn.get("bonus_action_use"), "turn_action.bonus_action_use"), _boolean(turn.get("reaction_available"), "turn_action.reaction_available"), _integer(turn.get("movement_used_feet"), "turn_action.movement_used_feet"), _integer(turn.get("extra_movement_feet"), "turn_action.extra_movement_feet")),
-        _enum(CombatStatus, data.get("status"), "combat.status"), _optional_enum(Faction, data.get("winner"), "combat.winner"),
-        frozenset(ActorId(item) for item in _string_tuple(data.get("spent_reaction_actor_ids", []), "spent_reaction_actor_ids")),
+        actors=actors,
+        initiative_order=InitiativeOrder(
+            tuple(entries), current_index, _integer(initiative.get("round_number"), "initiative.round_number")
+        ),
+        turn_action=TurnActionState(
+            _enum(ActionUse, turn.get("action_use"), "turn_action.action_use"),
+            _enum(ActionUse, turn.get("bonus_action_use"), "turn_action.bonus_action_use"),
+            _boolean(turn.get("reaction_available"), "turn_action.reaction_available"),
+            _integer(turn.get("movement_used_feet"), "turn_action.movement_used_feet"),
+            _integer(turn.get("extra_movement_feet"), "turn_action.extra_movement_feet"),
+        ),
+        status=_enum(CombatStatus, data.get("status"), "combat.status"),
+        winner=_optional_enum(Faction, data.get("winner"), "combat.winner"),
+        spent_reaction_actor_ids=frozenset(
+            ActorId(item) for item in _string_tuple(data.get("spent_reaction_actor_ids", []), "spent_reaction_actor_ids")
+        ),
     )
 
 
 def _pending_encounter_payload(value: PendingEncounter | None) -> dict[str, object] | None:
     if value is None:
         return None
-    return {"trigger_id": value.trigger_id, "name": value.name, "description": value.description, "encounter_scenario": value.encounter_scenario, "reason": value.reason}
+    opening = value.opening_resolution
+    return {
+        "trigger_id": value.trigger_id,
+        "name": value.name,
+        "description": value.description,
+        "encounter_scenario": value.encounter_scenario,
+        "reason": value.reason,
+        "opening_resolution": (
+            {
+                "rule_id": opening.rule_id,
+                "outcome": opening.outcome.value,
+                "title": opening.title,
+                "narration": opening.narration,
+                "noise": opening.noise,
+                "completion_tags": list(opening.completion_tags),
+            }
+            if opening is not None
+            else None
+        ),
+    }
 
 
 def _pending_encounter_from_payload(raw: object) -> PendingEncounter | None:
     if raw is None:
         return None
     data = _mapping(raw, "pending_encounter")
-    return PendingEncounter(*(_string(data.get(name), f"pending_encounter.{name}", allow_empty=name in {"description", "reason"}) for name in ("trigger_id", "name", "description", "encounter_scenario", "reason")))
+    opening_raw = data.get("opening_resolution")
+    opening = None
+    if opening_raw is not None:
+        item = _mapping(opening_raw, "pending_encounter.opening_resolution")
+        opening = EncounterOpeningResolution(
+            rule_id=_string(item.get("rule_id"), "opening_resolution.rule_id"),
+            outcome=_enum(EncounterOpeningOutcome, item.get("outcome"), "opening_resolution.outcome"),
+            title=_string(item.get("title"), "opening_resolution.title"),
+            narration=_string(item.get("narration"), "opening_resolution.narration"),
+            noise=_integer(item.get("noise"), "opening_resolution.noise"),
+            completion_tags=_string_tuple(item.get("completion_tags", []), "opening_resolution.completion_tags"),
+        )
+    return PendingEncounter(
+        trigger_id=_string(data.get("trigger_id"), "pending_encounter.trigger_id"),
+        name=_string(data.get("name"), "pending_encounter.name"),
+        description=_string(data.get("description"), "pending_encounter.description", allow_empty=True),
+        encounter_scenario=_string(data.get("encounter_scenario"), "pending_encounter.encounter_scenario"),
+        reason=_string(data.get("reason"), "pending_encounter.reason", allow_empty=True),
+        opening_resolution=opening,
+    )
 
 
 _ABILITY_NAMES = ("strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma")

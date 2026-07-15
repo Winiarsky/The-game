@@ -4,9 +4,16 @@ from dataclasses import replace
 import pytest
 
 from dnd_board_game.actors import Faction
-from dnd_board_game.combat import EnemyAutoTurnResult, replace_actor, set_scene_flag
+from dnd_board_game.actions import PlayerIntentHint
+from dnd_board_game.combat import EnemyAutoTurnResult, replace_actor, scene_flag, set_scene_flag
 from dnd_board_game.combat.damage import DamageComponentInput, DamageType, apply_damage_result, resolve_damage
-from dnd_board_game.exploration import create_temporary_item
+from dnd_board_game.exploration import (
+    CraftingComponentSelection,
+    CraftingDraft,
+    ExplorationChallengeState,
+    build_crafting_source_registry,
+    craft_temporary_item,
+)
 from dnd_board_game.hardware import LedColor
 from dnd_board_game.llm import (
     GmClassifierProposal,
@@ -54,6 +61,78 @@ class FakeGmClient:
         return self.proposal
 
 
+class FakeSemanticSourceGmClient(FakeGmClient):
+    def __init__(
+        self,
+        proposal,
+        *,
+        requested_name="kij",
+        required_properties=("long",),
+        preferred_properties=("rigid",),
+    ):
+        super().__init__(proposal)
+        self.requested_name = requested_name
+        self.required_properties = required_properties
+        self.preferred_properties = preferred_properties
+
+    def analyze(self, request):
+        return GmDeclarationAnalysis.model_validate(
+            {
+                "analysis_type": "plausible",
+                "action_flow": "challenge_attempt",
+                "normalized_intent": request.player_action,
+                "reason": "test ogólnego dopasowania funkcjonalnego",
+                "confidence": 1.0,
+                "source_query": {
+                    "purpose": "dosięgnięcie rygla przez szczelinę",
+                    "requested_name": self.requested_name,
+                    "required_properties": list(self.required_properties),
+                    "preferred_properties": list(self.preferred_properties),
+                },
+            }
+        )
+
+
+class FakeUseSourceGmClient(FakeGmClient):
+    def __init__(self, proposal, source_id):
+        super().__init__(proposal)
+        self.source_id = source_id
+        self.analysis_requests = []
+
+    def analyze(self, request):
+        self.analysis_requests.append(request)
+        return GmDeclarationAnalysis.model_validate(
+            {
+                "analysis_type": "plausible",
+                "action_flow": "challenge_attempt",
+                "normalized_intent": request.player_action,
+                "reason": "test jawnego użycia źródła",
+                "confidence": 1.0,
+                "use_source_id": self.source_id,
+            }
+        )
+
+
+class FakeFixtureActionGmClient(FakeGmClient):
+    def __init__(self, proposal, source_id, operation):
+        super().__init__(proposal)
+        self.source_id = source_id
+        self.operation = operation
+
+    def analyze(self, request):
+        return GmDeclarationAnalysis.model_validate(
+            {
+                "analysis_type": "plausible",
+                "action_flow": "challenge_attempt",
+                "normalized_intent": request.player_action,
+                "reason": "test trwałej operacji na fixture",
+                "confidence": 1.0,
+                "action_target_source_id": self.source_id,
+                "fixture_operation": self.operation,
+            }
+        )
+
+
 class FakeNpcClient:
     model = "fake-npc"
 
@@ -79,10 +158,83 @@ class FakeQuestionGmClient:
             player_message="W pobliżu leżą kamienie, ale żaden nie wygląda na wystarczająco duży, by sam zastąpić taran.",
             reason="Odpowiedź oparta na available_materials bez tworzenia nowego zasobu.",
             confidence=1.0,
+            response_kind="observation",
+            grounded_fact_ids=("source:zone:gate:item:gate_loose_stones",),
         )
 
     def classify(self, request):  # noqa: ARG002
         raise AssertionError("Pytanie gracza nie powinno trafiać do klasyfikatora mechaniki.")
+
+
+class FakeHintGmClient:
+    model = "fake-hint-gm"
+
+    def __init__(self):
+        self.requests = []
+
+    def analyze(self, request):
+        self.requests.append(request)
+        level = request.to_prompt_payload()["conversation_policy"]["next_hint_level"]
+        fact_id = (
+            "fact:gate.climb_is_dangerous"
+            if level == 2
+            else "fact:gate.force_possible"
+        )
+        return GmDeclarationAnalysis.model_validate(
+            {
+                "analysis_type": "player_question",
+                "player_message": f"Podpowiedź poziomu {level} oparta na aktualnej scenie.",
+                "reason": "test progresji podpowiedzi",
+                "confidence": 1.0,
+                "response_kind": "strong_hint" if level == 3 else "gentle_hint",
+                "grounded_fact_ids": [fact_id],
+                "hint_level": level,
+            }
+        )
+
+    def classify(self, request):  # noqa: ARG002
+        raise AssertionError("Prośba o podpowiedź nie powinna trafiać do klasyfikatora mechaniki.")
+
+
+class FakeMismatchedQuestionGmClient:
+    model = "fake-mismatched-question-gm"
+
+    def analyze(self, request):  # noqa: ARG002
+        return GmDeclarationAnalysis.model_validate(
+            {
+                "analysis_type": "player_question",
+                "player_message": "Tak, ale wyważanie jest głośne.",
+                "response_kind": "observation",
+                "grounded_fact_ids": ["fact:gate.force_is_loud"],
+                "hint_level": 0,
+            }
+        )
+
+    def classify(self, request):  # noqa: ARG002
+        raise AssertionError("Pytanie gracza nie powinno trafiać do klasyfikatora mechaniki.")
+
+
+class FakeObservationGmClient:
+    model = "fake-observation-gm"
+
+    def __init__(self):
+        self.requests = []
+
+    def analyze(self, request):
+        self.requests.append(request)
+        return GmDeclarationAnalysis.model_validate(
+            {
+                "analysis_type": "player_question",
+                "player_message": "Przez szczelinę widzisz dwa gobliny, ale dokładne rozpoznanie wymaga testu.",
+                "response_kind": "requires_check",
+                "requires_check": True,
+                "suggested_followup": "Przyglądam się przez szczelinę i szukam ruchu.",
+                "observation_id": "look_through_gate_gap",
+            }
+        )
+
+    def classify(self, request):  # noqa: ARG002
+        raise AssertionError("Stopniowana obserwacja nie powinna trafiać do klasyfikatora wyzwania.")
 
 
 class FakeInvalidFactGmClient:
@@ -175,8 +327,18 @@ def _start_combat_from_scout_alarm(session: ExplorationUiSession):
 
 def _start_gate_skirmish(session: ExplorationUiSession):
     session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
-    session.state = replace(session.state, flags=set_scene_flag(session.state.flags, "gate_passed", True))
+    flags = set_scene_flag(session.state.flags, "gate_passed", True)
+    flags = set_scene_flag(flags, "gate_goblins_spotted", True)
+    session.state = replace(
+        session.state,
+        flags=flags,
+        challenge_states=(
+            *tuple(item for item in session.state.challenge_states if item.challenge_id != "closed_gate"),
+            ExplorationChallengeState(challenge_id="closed_gate", noise=3),
+        ),
+    )
     session.state_payload()
+    session.resolve_encounter_opening()
     session.start_encounter_setup()
     while session.encounter_setup_flow is not None and not session.encounter_setup_flow.completed:
         if session.encounter_setup_flow.is_player_start_step:
@@ -258,6 +420,11 @@ def test_exploration_ui_session_resolves_gate_challenge():
     state = session.submit_action("Wyważamy bramę.")
     assert state["pending"]["stage"] == "decision"
     assert state["active_challenge"]["current_progress"] == 0
+    assert state["conversation"]["entries"][-1]["title"] == "Narracja MG"
+    assert state["conversation"]["entries"][-1]["body"] == "Napieracie na skrzydła bramy."
+    assert "Test:" not in state["conversation"]["entries"][-1]["body"]
+    assert state["pending"]["option"]["ability"] == "strength"
+    assert state["pending"]["option"]["dc"] == 15
 
     state = session.decide("accept")
     assert state["pending"]["stage"] == "roll"
@@ -292,6 +459,529 @@ def test_exploration_ui_session_answers_grounded_player_question_without_roll(tm
     assert [entry.role for entry in session.declaration_thread] == ["player", "gm"]
     events = [__import__("json").loads(line) for line in session.observer.path.read_text(encoding="utf-8").splitlines()]
     assert any(event["event_type"] == "ui_gm_question_answered" for event in events)
+
+
+def test_slash_question_strips_command_and_passes_explicit_intent_hint(tmp_path):
+    client = FakeQuestionGmClient()
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=client,
+        session_id="slash_question_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    state = session.submit_action("/pytaj czy te kamienie są ciężkie?")
+
+    assert client.requests[0].player_action == "czy te kamienie są ciężkie?"
+    assert client.requests[0].player_intent_hint == PlayerIntentHint.QUESTION
+    assert state["conversation"]["entries"][-2]["body"] == "/pytaj czy te kamienie są ciężkie?"
+    assert state["messages"][-1]["title"] == "Odpowiedź MG"
+
+
+def test_slash_search_answers_visible_scene_source_without_crafting_or_roll(tmp_path):
+    client = FakeGmClient(_challenge_proposal())
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=client,
+        session_id="visible_source_lookup_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    state = session.submit_action("/szukaj chcę znaleźć jakąś deskę")
+
+    assert state["pending"] is None
+    assert state["messages"][-1]["title"] == "Odpowiedź MG"
+    assert "Drewniana deska (4 szt.)" in state["messages"][-1]["body"]
+    assert state["discovered_sources"][0]["label"] == "Drewniana deska"
+    assert state["discovered_sources"][0]["inventory"] is False
+    assert {item["label"] for item in state["discovered_sources"][0]["properties"]} >= {
+        "długie",
+        "sztywne",
+    }
+    assert all(resource["id"] != "zone:gate:item:gate_rotten_planks" for resource in state["resources"])
+    assert client.requests == []
+    events = [__import__("json").loads(line) for line in session.observer.path.read_text(encoding="utf-8").splitlines()]
+    event = next(item for item in events if item["event_type"] == "ui_scene_source_lookup_answered")
+    assert event["payload"]["source_ids"] == ["zone:gate:item:gate_rotten_planks"]
+
+
+def test_followup_action_receives_previously_found_scene_source_as_context(tmp_path):
+    client = FakeGmClient(_challenge_proposal())
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=client,
+        session_id="found_source_followup_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.submit_action("/szukaj szukam deski")
+
+    state = session.submit_action("/akcja używam jej jako dźwigni przy bramie")
+
+    assert state["pending"]["kind"] == "challenge"
+    grounded = client.requests[0].to_prompt_payload()["player_grounded_sources"]
+    assert "zone:gate:item:gate_rotten_planks" in {item["id"] for item in grounded}
+
+
+def test_use_command_resolves_found_scene_source_and_previews_its_properties(tmp_path):
+    source_id = "zone:gate:item:gate_rotten_planks"
+    proposal = _challenge_proposal(
+        selected_mechanic="improvised_tool_check",
+        approach_label="Podniesienie rygla deską",
+        approach_tags=["lever", "quiet"],
+        ability="dexterity",
+        skill="sleight_of_hand",
+        used_resource_ids=[],
+        improvised_tool={
+            "label": "Drewniana deska",
+            "source": "interaction_object",
+            "source_detail": "Znaleziona drewniana deska",
+            "source_id": source_id,
+            "effect_modifier": -1,
+            "risk": "Spróchniała deska może pęknąć.",
+            "reason": "Deska jest długa i sztywna, ale w złym stanie.",
+        },
+    )
+    client = FakeUseSourceGmClient(proposal, source_id)
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=client,
+        session_id="use_found_source_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.submit_action("/szukaj szukam deski")
+
+    state = session.submit_action("/uzyj używam jej, żeby podnieść rygiel")
+
+    assert state["pending"]["kind"] == "challenge"
+    assert state["pending"]["source_use"]["id"] == source_id
+    assert state["pending"]["source_use"]["remains_in_scene"] is True
+    assert {item["label"] for item in state["pending"]["source_use"]["properties"]} >= {
+        "długie",
+        "sztywne",
+    }
+    assert state["pending"]["option"]["improvised_tool"]["source_id"] == source_id
+    assert client.requests[0].selected_use_source_id == source_id
+
+
+def test_use_command_rejects_unknown_source_before_calling_llm(tmp_path):
+    client = FakeUseSourceGmClient(_challenge_proposal(), "missing")
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=client,
+        session_id="use_unknown_source_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    state = session.submit_action("/uzyj używam kryształowego klucza")
+
+    assert state["pending"] is None
+    assert state["messages"][-1]["title"] == "Deklaracja wymaga korekty"
+    assert "/szukaj" in state["messages"][-1]["body"]
+    assert client.analysis_requests == []
+    assert client.requests == []
+
+
+def test_take_command_previews_and_collects_selected_scene_quantity(tmp_path):
+    client = FakeGmClient(_challenge_proposal())
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=client,
+        session_id="take_scene_item_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    preview = session.submit_action("/wez drewnianą deskę")
+
+    assert preview["pending"]["kind"] == "collection"
+    assert preview["pending"]["collection"]["source_id"] == "zone:gate:item:gate_rotten_planks"
+    assert preview["pending"]["collection"]["available_quantity"] == 4
+    assert preview["pending"]["collection"]["destination"] == "actor_inventory"
+    assert client.requests == []
+
+    accepted = session.decide("accept", lead_actor_id="rogue", quantity=2)
+
+    assert accepted["pending"] is None
+    rogue = next(actor for actor in accepted["actors"] if actor["id"] == "rogue")
+    planks = next(item for item in rogue["inventory"] if item["name"] == "Drewniana deska")
+    assert planks["quantity"] == 2
+    assert accepted["discovered_sources"][0]["quantity"] == 2
+    assert accepted["discovered_sources"][0]["collections"] == [
+        {"quantity": 2, "destination": "actor_inventory", "owner_actor_id": "rogue"}
+    ]
+    assert accepted["messages"][-1]["title"] == "Zabrano przedmiot"
+
+
+def test_take_command_rejects_attached_fixture_without_calling_llm(tmp_path):
+    client = FakeGmClient(_challenge_proposal())
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=client,
+        session_id="take_fixture_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    state = session.submit_action("/wez skorodowane zawiasy")
+
+    assert state["pending"] is None
+    assert state["messages"][-1]["title"] == "Nie można zabrać elementu"
+    assert "Najpierw odłącz" in state["messages"][-1]["body"]
+    assert client.requests == []
+
+
+def test_action_command_persists_fixture_change_and_reveals_yield_items(tmp_path):
+    source_id = "zone:gate:fixture:gate_corroded_hinges"
+    proposal = _challenge_proposal(
+        approach_label="Oderwanie skorodowanych zawiasów",
+        approach_tags=["rusted_hinge", "lever"],
+        ability="dexterity",
+        skill="acrobatics",
+        difficulty_tier="hard",
+        difficulty_reason="Wartości LLM zostaną zastąpione polityką fixture'a.",
+        dc=18,
+        progress_on_success=1,
+        progress_on_failure=1,
+        consequences=[],
+        player_narration="Bohater próbuje oderwać skorodowane zawiasy od bramy.",
+    )
+    client = FakeFixtureActionGmClient(proposal, source_id, "detach")
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=client,
+        session_id="fixture_action_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    preview = session.submit_action("/akcja odrywam skorodowane zawiasy od bramy")
+
+    assert preview["pending"]["fixture_action"]["source_id"] == source_id
+    assert preview["pending"]["fixture_action"]["operation"] == "detach"
+    assert preview["pending"]["option"]["dc"] == 12
+    assert preview["pending"]["option"]["progress_on_success"] == 2
+    assert client.requests[0].selected_fixture_source_id == source_id
+    with pytest.raises(ValueError, match="wynikają z contentu"):
+        session.update_pending_challenge_decision({"dc": 5})
+
+    session.decide("accept", lead_actor_id="hero")
+    resolved = session.resolve_rolls({"hero": 20})
+
+    assert session.state.fixture_states[0].condition == "detached"
+    assert session.state.fixture_states[0].detached is True
+    metal = next(item for item in resolved["discovered_sources"] if item["label"] == "Metalowy element")
+    assert metal["quantity"] == 2
+    registry = build_crafting_source_registry(session.state, session.exploration.actors)
+    assert registry.source_by_id(source_id).usable is False
+    assert resolved["messages"][-1]["title"] == "Zmiana obiektu"
+    assert "corroded → detached" in resolved["messages"][-1]["body"]
+
+
+def test_mixed_search_and_direct_use_routes_to_improvised_action_not_observation(tmp_path):
+    proposal = _challenge_proposal(
+        selected_mechanic="improvised_tool_check",
+        approach_label="Sięgnięcie do rygla deską",
+        approach_tags=["lever", "quiet"],
+        ability="dexterity",
+        skill="sleight_of_hand",
+        player_narration="Bohater wsuwają długą deskę przez szczelinę i próbuje unieść rygiel.",
+        improvised_tool={
+            "label": "Długa deska",
+            "source": "interaction_object",
+            "source_detail": "Drewniana deska leżąca przy bramie",
+            "effect_modifier": -1,
+            "risk": "Spróchniałe drewno może pęknąć.",
+            "reason": "Widoczna długa deska może posłużyć jako prowizoryczny wysięgnik.",
+        },
+    )
+    client = FakeSemanticSourceGmClient(proposal)
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=client,
+        session_id="direct_source_use_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    state = session.submit_action(
+        "/szukaj szukam cienkiej spróchniałej deski i staram się zdjąć rygiel przez szparę"
+    )
+
+    assert state["pending"]["kind"] == "source_selection"
+    assert state["pending"]["source_selection"]["candidates"][0]["label"] == "Drewniana deska"
+    assert state["discovered_sources"] == []
+
+    accepted = session.decide(
+        "accept",
+        source_id="zone:gate:item:gate_rotten_planks",
+    )
+
+    assert accepted["pending"] is None
+    assert accepted["discovered_sources"][0]["label"] == "Drewniana deska"
+    assert accepted["discovered_sources"][0]["inventory"] is False
+    assert all(resource["id"] != "zone:gate:item:gate_rotten_planks" for resource in accepted["resources"])
+    assert client.requests == []
+
+
+def test_semantic_source_query_answers_naturally_when_scene_has_no_match(tmp_path):
+    client = FakeSemanticSourceGmClient(
+        _challenge_proposal(),
+        required_properties=("container", "metallic"),
+        preferred_properties=(),
+    )
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=client,
+        session_id="functional_source_no_match_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    state = session.submit_action("/szukaj szukam metalowego pojemnika na wodę")
+
+    assert state["pending"] is None
+    assert state["messages"][-1]["title"] == "Odpowiedź MG"
+    assert "nie ma teraz elementu" in state["messages"][-1]["body"]
+    assert client.requests == []
+
+
+def test_functional_stick_wording_is_grounded_to_visible_plank_for_direct_use(tmp_path):
+    proposal = _challenge_proposal(
+        selected_mechanic="improvised_tool_check",
+        approach_label="Manipulowanie ryglem prowizorycznym wysięgnikiem",
+        approach_tags=["lever", "quiet"],
+        ability="dexterity",
+        skill="sleight_of_hand",
+        player_narration="Bohater używa długiej deski jak kija i próbuje dosięgnąć rygla.",
+        improvised_tool={
+            "label": "Deska jako wysięgnik",
+            "source": "interaction_object",
+            "source_detail": "Drewniana deska leżąca przy bramie",
+            "effect_modifier": -1,
+            "risk": "Spróchniała deska może się złamać.",
+            "reason": "Długa i sztywna deska może pełnić funkcję kija.",
+        },
+    )
+    client = FakeSemanticSourceGmClient(proposal)
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=client,
+        session_id="functional_source_property_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    state = session.submit_action("szukam jakiegoś kija, którym mógłbym zdjąć rygiel przez szparę")
+
+    assert state["pending"]["kind"] == "source_selection"
+    assert state["pending"]["source_selection"]["requested_name"] == "kij"
+    assert state["pending"]["source_selection"]["candidates"][0]["label"] == "Drewniana deska"
+    assert client.requests == []
+
+
+def test_slash_help_is_answered_locally_without_calling_gm(tmp_path):
+    client = FakeQuestionGmClient()
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=client,
+        session_id="slash_help_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    state = session.submit_action("/pomoc")
+
+    assert client.requests == []
+    assert state["messages"][-1]["title"] == "Dostępne komendy"
+    assert "/zbuduj" in state["messages"][-1]["body"]
+
+
+def test_graded_gate_observation_reveals_only_information_tiers_reached(tmp_path):
+    client = FakeObservationGmClient()
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=client,
+        session_id="graded_observation_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    proposed = session.submit_action("/pytaj chcę zajrzeć przez szczelinę i sprawdzić, czy ktoś stoi za bramą")
+
+    assert proposed["pending"]["kind"] == "observation"
+    assert proposed["pending"]["observation"]["thresholds"] == [10, 15, 20]
+    assert "goblin" not in proposed["messages"][-1]["body"].lower()
+
+    rolling = session.decide("accept", lead_actor_id="hero")
+    assert rolling["pending"]["stage"] == "roll"
+    resolved = session.resolve_rolls({"hero": 18})
+
+    assert resolved["pending"] is None
+    assert scene_flag(session.state.flags, "courtyard_activity_suspected", False) is True
+    assert scene_flag(session.state.flags, "gate_goblins_spotted", False) is True
+    assert scene_flag(session.state.flags, "gate_goblins_positions_known", False) is False
+    assert resolved["messages"][-1]["title"] == "Wynik rozpoznania"
+    assert "dwie niewielkie" in resolved["messages"][-1]["body"]
+    assert resolved["active_challenge"]["current_progress"] == 0
+
+
+def test_action_through_gap_routes_to_authored_observation_before_generic_classifier(tmp_path):
+    client = FakeObservationGmClient()
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=client,
+        session_id="observation_action_routing_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    state = session.submit_action(
+        "/akcja najpierw chcę spróbować zerknąć przez szparę w deskach, "
+        "czy nikt tam nie stoi i co w ogóle widać, robię to cicho"
+    )
+
+    assert state["pending"]["kind"] == "observation"
+    assert state["pending"]["observation"]["id"] == "look_through_gate_gap"
+    assert state["pending"]["observation"]["thresholds"] == [10, 15, 20]
+    assert client.requests == []
+    assert not any("dc_policy" in message["body"] for message in state["messages"])
+
+
+def test_exact_gate_reconnaissance_grants_and_consumes_initiative_advantage(tmp_path):
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=FakeObservationGmClient(),
+        session_id="reconnaissance_initiative_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.submit_action("/pytaj zaglądam przez szczelinę i obserwuję gobliny")
+    session.decide("accept", lead_actor_id="hero")
+    session.resolve_rolls({"hero": 20})
+
+    edge = session.state.encounter_edges[0]
+    assert edge.beneficiary_actor_id == "hero"
+    assert edge.encounter_trigger_id == "gate_open_skirmish"
+    assert edge.consumed is False
+    assert {
+        "label": "Przewaga na inicjatywę",
+        "value": "Bohater — Rozpoznane pozycje goblinów",
+    } in session.state_payload()["scene_status"]
+
+    session.state = replace(
+        session.state,
+        flags=set_scene_flag(session.state.flags, "gate_passed", True),
+    )
+    session.state_payload()
+    opening = session.resolve_encounter_opening()
+    assert opening["pending_encounter"]["opening"]["outcome"] == "party_surprises_enemies"
+    session.start_encounter_setup()
+    while session.encounter_setup_flow is not None and not session.encounter_setup_flow.completed:
+        if session.encounter_setup_flow.is_player_start_step:
+            session.assign_encounter_player_start_position(
+                session.encounter_setup_flow.remaining_player_start_positions()[0]
+            )
+        else:
+            session.confirm_encounter_setup_step()
+
+    state = session.start_encounter_initiative()
+
+    assert state["encounter_initiative"]["current_prompt"]["actor_id"] == "hero"
+    assert state["encounter_initiative"]["current_prompt"]["roll_mode"] == "advantage"
+    assert state["encounter_initiative"]["current_prompt"]["requires_second_roll"] is True
+    assert state["encounter_initiative"]["current_prompt"]["encounter_edge"]["label"] == (
+        "Rozpoznane pozycje goblinów"
+    )
+
+    state = session.submit_encounter_initiative_roll(4, 17)
+
+    assert state["encounter_initiative"]["entries"][0]["natural_roll"] == 17
+    assert session.state.encounter_edges[0].consumed is True
+
+    while session.combat_state is None:
+        session.submit_encounter_initiative_roll(10)
+    for actor in tuple(session.combat_state.actors):
+        if actor.faction == Faction.ENEMY:
+            session.combat_state = replace_actor(session.combat_state, replace(actor, hp=0))
+
+    resolved = session.resolve_active_combat()
+
+    assert any(point["id"] == "wounded_scout" for point in resolved["visible_points"])
+
+
+def test_quiet_gate_opening_gives_enemies_initiative_disadvantage(tmp_path):
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        session_id="quiet_gate_surprise_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.state = replace(
+        session.state,
+        flags=set_scene_flag(session.state.flags, "gate_passed", True),
+    )
+    session.state_payload()
+
+    opening = session.resolve_encounter_opening()
+    assert opening["pending_encounter"]["opening"]["outcome"] == "party_surprises_enemies"
+
+    session.start_encounter_setup()
+    while session.encounter_setup_flow is not None and not session.encounter_setup_flow.completed:
+        if session.encounter_setup_flow.is_player_start_step:
+            session.assign_encounter_player_start_position(
+                session.encounter_setup_flow.remaining_player_start_positions()[0]
+            )
+        else:
+            session.confirm_encounter_setup_step()
+    session.start_encounter_initiative()
+    for roll in (20, 19, 18):
+        session.submit_encounter_initiative_roll(roll)
+
+    state = session.state_payload()
+    enemy_entries = [
+        entry
+        for entry in state["encounter_initiative"]["order"]
+        if entry["actor_id"] in {"goblin_a", "goblin_b"}
+    ]
+    assert len(enemy_entries) == 2
+    assert all(entry["roll_mode"] == "disadvantage" for entry in enemy_entries)
+    assert all(len(entry["natural_rolls"]) == 2 for entry in enemy_entries)
+
+
+def test_enemy_ambush_gives_party_initiative_disadvantage(tmp_path):
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        session_id="gate_party_disadvantage_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.state = replace(
+        session.state,
+        flags=set_scene_flag(session.state.flags, "gate_passed", True),
+        challenge_states=(ExplorationChallengeState(challenge_id="closed_gate", noise=3),),
+    )
+    session.state_payload()
+    opening = session.resolve_encounter_opening()
+    assert opening["pending_encounter"]["opening"]["outcome"] == "enemies_surprise_party"
+
+    session.start_encounter_setup()
+    while session.encounter_setup_flow is not None and not session.encounter_setup_flow.completed:
+        if session.encounter_setup_flow.is_player_start_step:
+            session.assign_encounter_player_start_position(
+                session.encounter_setup_flow.remaining_player_start_positions()[0]
+            )
+        else:
+            session.confirm_encounter_setup_step()
+
+    state = session.start_encounter_initiative()
+
+    assert state["encounter_initiative"]["current_prompt"]["roll_mode"] == "disadvantage"
+    assert state["encounter_initiative"]["current_prompt"]["requires_second_roll"] is True
 
 
 def test_conversation_is_scoped_to_interaction_and_reused_as_gm_context(tmp_path):
@@ -338,6 +1028,55 @@ def test_snapshot_restores_interaction_conversation(tmp_path):
     assert restored["conversation"] == expected
 
 
+def test_conversational_gm_progresses_hints_and_persists_their_context(tmp_path):
+    client = FakeHintGmClient()
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=client,
+        session_id="progressive_hint_test",
+        observation_dir=tmp_path / "observations",
+        save_dir=tmp_path / "saves",
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    first = session.submit_action("Potrzebujemy podpowiedzi.")
+    second = session.submit_action("Możesz podpowiedzieć trochę więcej?")
+    third = session.submit_action("Powiedz nam konkretne rozwiązanie wprost.")
+
+    gm_entries = [entry for entry in third["conversation"]["entries"] if entry["role"] == "gm"]
+    assert [entry["hint_level"] for entry in gm_entries] == [1, 2, 3]
+    assert all(entry["grounded_fact_ids"] for entry in gm_entries)
+    assert first["messages"][-1]["title"] == "Podpowiedź MG"
+    assert second["pending"] is None
+    assert third["required_rolls"] == []
+    assert client.requests[1].declaration_thread[-1].hint_level == 1
+
+    expected = third["conversation"]
+    session.save_snapshot()
+    session.conversation_entries = []
+    restored = session.load_snapshot()
+
+    assert restored["conversation"] == expected
+
+
+def test_pytaj_can_naturally_return_a_grounded_approach_hint(tmp_path):
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=FakeMismatchedQuestionGmClient(),
+        session_id="unified_question_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    state = session.submit_action("/pytaj jaki jest stan bramy, można ją wyważyć?")
+
+    assert state["pending"] is None
+    assert state["messages"][-1]["title"] == "Podpowiedź MG"
+    assert "hint_level" not in state["messages"][-1]["body"]
+    assert state["messages"][-1]["body"] == "Tak, ale wyważanie jest głośne."
+    assert state["conversation"]["entries"][-1]["hint_level"] == 1
+
+
 def test_exploration_ui_session_turns_validation_error_into_visible_gm_message(tmp_path):
     session = ExplorationUiSession(
         "content/scenarios/abandoned_watchtower.json",
@@ -373,8 +1112,15 @@ def test_exploration_ui_session_creates_and_uses_temporary_scene_item(tmp_path):
             "type": "create_temporary_item",
             "label": "Prowizoryczny taran",
             "target_tags": ["heavy_force"],
-            "temporary_item_template_id": "improvised_battering_ram",
-            "source_materials": ["stare deski", "metalowe okucia"],
+            "crafting_draft": {
+                "label": "Prowizoryczny taran",
+                "description": "Długa deska obciążona kamieniem.",
+                "purpose_id": "heavy_force",
+                "components": [
+                    {"source_id": "zone:gate:item:gate_rotten_planks", "quantity": 1},
+                    {"source_id": "zone:gate:item:gate_loose_stones", "quantity": 1},
+                ],
+            },
         },
     )
     session = ExplorationUiSession(
@@ -385,24 +1131,216 @@ def test_exploration_ui_session_creates_and_uses_temporary_scene_item(tmp_path):
     )
     session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
 
-    prepared = session.submit_action("Buduję taran do późniejszego użycia.")
+    prepared = session.submit_action("/zbuduj taran do późniejszego użycia")
 
-    assert prepared["pending"] is None
-    assert prepared["resources"][-1]["id"] == "temporary:improvised_battering_ram"
+    assert prepared["pending"]["kind"] == "crafting"
+    prepared = session.decide("accept")
+    assert prepared["resources"][-1]["id"] == "temporary:crafted:1"
     assert prepared["resources"][-1]["uses_remaining"] == 2
     session.gm_client = FakeGmClient(
-        _challenge_proposal(used_resource_ids=["temporary:improvised_battering_ram"])
+        _challenge_proposal(used_resource_ids=["temporary:crafted:1"])
     )
     session.submit_action("Uderzam przygotowanym taranem w bramę.")
     session.decide("accept")
     resolved = session.resolve_rolls({"hero": 16})
 
-    temporary = next(item for item in session.state.temporary_items if item.id == "temporary:improvised_battering_ram")
+    temporary = next(item for item in session.state.temporary_items if item.id == "temporary:crafted:1")
     assert temporary.uses_remaining == 1
     assert any(message["title"] == "Użyto przedmiotu sceny" for message in resolved["messages"])
     events = [__import__("json").loads(line) for line in session.observer.path.read_text(encoding="utf-8").splitlines()]
-    assert any(event["event_type"] == "ui_temporary_item_created" for event in events)
+    assert any(event["event_type"] == "ui_crafting_confirmed" for event in events)
     assert any(event["event_type"] == "ui_temporary_item_used" for event in events)
+
+
+def test_exploration_ui_session_confirms_dynamic_crafting_before_spending_costs(tmp_path):
+    preparation = _challenge_proposal(
+        action_flow="preparation",
+        requires_roll_now=False,
+        selected_mechanic="preparation_effect",
+        approach_label="Budowa prowizorycznego taranu",
+        approach_tags=["heavy_force"],
+        ability=None,
+        skill=None,
+        dc=None,
+        difficulty_tier=None,
+        progress_on_success=None,
+        progress_on_failure=None,
+        preparation_effect={
+            "type": "create_temporary_item",
+            "label": "Prowizoryczny taran",
+            "target_tags": ["heavy_force"],
+            "crafting_draft": {
+                "label": "Prowizoryczny taran",
+                "description": "Długa deska obciążona luźnym kamieniem.",
+                "purpose_id": "heavy_force",
+                "components": [
+                    {"source_id": "zone:gate:item:gate_rotten_planks", "quantity": 1},
+                    {"source_id": "zone:gate:item:gate_loose_stones", "quantity": 1},
+                ],
+            },
+        },
+    )
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=FakeGmClient(preparation),
+        session_id="dynamic_crafting_confirmation_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    proposed = session.submit_action("Buduję taran z deski i kamienia.")
+
+    assert proposed["pending"]["kind"] == "crafting"
+    assert proposed["pending"]["crafting"]["requires_build_roll"] is False
+    assert proposed["pending"]["crafting"]["time_cost_minutes"] == 10
+    assert proposed["pending"]["crafting"]["uses"] == 2
+    assert session.state.temporary_items == ()
+    assert session.state.elapsed_minutes == 0
+
+    crafted = session.decide("accept")
+
+    assert crafted["pending"] is None
+    assert session.state.elapsed_minutes == 10
+    assert session.state.temporary_items[-1].purpose_id == "heavy_force"
+    assert crafted["resources"][-1]["id"] == "temporary:crafted:1"
+    assert crafted["resources"][-1]["component_uses"][0]["disposition"] == "consumed"
+    assert "Budowa nie wymagała rzutu" in crafted["messages"][-1]["body"]
+    events = [__import__("json").loads(line) for line in session.observer.path.read_text(encoding="utf-8").splitlines()]
+    assert any(event["event_type"] == "ui_crafting_confirmed" for event in events)
+
+    dismantled = session.dismantle_temporary_item("temporary:crafted:1")
+
+    assert all(resource["id"] != "temporary:crafted:1" for resource in dismantled["resources"])
+    assert session.state.temporary_items[-1].dismantled is True
+    events = [__import__("json").loads(line) for line in session.observer.path.read_text(encoding="utf-8").splitlines()]
+    assert any(event["event_type"] == "ui_crafting_dismantled" for event in events)
+
+
+def test_exploration_ui_session_can_reject_dynamic_crafting_without_state_change(tmp_path):
+    preparation = _challenge_proposal(
+        action_flow="preparation",
+        requires_roll_now=False,
+        selected_mechanic="preparation_effect",
+        approach_label="Budowa prowizorycznej dźwigni",
+        approach_tags=["lever"],
+        ability=None,
+        skill=None,
+        dc=None,
+        difficulty_tier=None,
+        progress_on_success=None,
+        progress_on_failure=None,
+        preparation_effect={
+            "type": "create_temporary_item",
+            "label": "Prowizoryczna dźwignia",
+            "target_tags": ["lever"],
+            "crafting_draft": {
+                "label": "Prowizoryczna dźwignia",
+                "description": "Długa deska podparta klinem.",
+                "purpose_id": "leverage",
+                "components": [
+                    {"source_id": "zone:gate:item:gate_rotten_planks", "quantity": 1},
+                    {"source_id": "resource:wedge", "quantity": 1},
+                ],
+            },
+        },
+    )
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=FakeGmClient(preparation),
+        session_id="dynamic_crafting_rejection_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.submit_action("Buduję dźwignię.")
+
+    rejected = session.decide("reject")
+
+    assert rejected["pending"] is None
+    assert session.state.temporary_items == ()
+    assert session.state.elapsed_minutes == 0
+
+
+def test_invalid_crafting_requirements_are_explained_without_technical_property_ids(tmp_path):
+    invalid_preparation = _challenge_proposal(
+        action_flow="preparation",
+        requires_roll_now=False,
+        selected_mechanic="preparation_effect",
+        approach_label="Budowa dźwigni z samej deski",
+        approach_tags=["lever"],
+        ability=None,
+        skill=None,
+        dc=None,
+        difficulty_tier=None,
+        progress_on_success=None,
+        progress_on_failure=None,
+        preparation_effect={
+            "type": "create_temporary_item",
+            "label": "Prowizoryczna dźwignia",
+            "target_tags": ["lever"],
+            "crafting_draft": {
+                "label": "Prowizoryczna dźwignia",
+                "description": "Próba zbudowania dźwigni z samej spróchniałej deski.",
+                "purpose_id": "leverage",
+                "auto_select_missing_components": False,
+                "components": [
+                    {"source_id": "zone:gate:item:gate_rotten_planks", "quantity": 1}
+                ],
+            },
+        },
+    )
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=FakeGmClient(invalid_preparation),
+        session_id="natural_crafting_error_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    state = session.submit_action("/zbuduj robię dźwignię z samej deski")
+
+    message = state["messages"][-1]["body"]
+    assert "[prying, hard]" not in message
+    assert "nadającego się do podważania" in message
+    assert "użyć tego materiału bezpośrednio" in message
+
+
+def test_exploration_ui_session_repairs_legacy_shaped_explicit_build_to_dynamic_crafting(tmp_path):
+    proposal = _challenge_proposal(
+        action_flow="preparation",
+        requires_roll_now=False,
+        selected_mechanic="preparation_effect",
+        approach_label="Budowa prowizorycznego taranu",
+        approach_tags=["heavy_force"],
+        ability=None,
+        skill=None,
+        dc=None,
+        difficulty_tier=None,
+        progress_on_success=None,
+        progress_on_failure=None,
+        preparation_effect={
+            "type": "create_temporary_item",
+            "label": "Prowizoryczny taran",
+            "target_tags": ["heavy_force"],
+            "source_materials": ["stare deski", "metalowe okucia"],
+        },
+    )
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=FakeGmClient(proposal),
+        session_id="temporary_item_grounding_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    state = session.submit_action("/zbuduj prowizoryczny taran")
+
+    assert state["pending"]["kind"] == "crafting"
+    assert state["pending"]["crafting"]["auto_selected_components"] is True
+    state = session.decide("accept")
+    assert state["resources"][-1]["id"] == "temporary:crafted:1"
+    assert state["messages"][-1]["title"] == "Utworzono przedmiot sceny"
+    events = [__import__("json").loads(line) for line in session.observer.path.read_text(encoding="utf-8").splitlines()]
+    assert any(event["event_type"] == "ui_gm_proposal_grounded" for event in events)
 
 
 def test_exploration_ui_session_expires_temporary_items_at_scenario_end(tmp_path):
@@ -413,12 +1351,20 @@ def test_exploration_ui_session_expires_temporary_items_at_scenario_end(tmp_path
         observation_dir=tmp_path,
     )
     session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
-    challenge = next(item for item in session.state.challenges if item.id == "closed_gate")
-    session.state, _item = create_temporary_item(
+    draft = CraftingDraft(
+        label="Prowizoryczny taran",
+        description="Długa deska obciążona kamieniem.",
+        purpose_id="heavy_force",
+        components=(
+            CraftingComponentSelection("zone:gate:item:gate_rotten_planks"),
+            CraftingComponentSelection("zone:gate:item:gate_loose_stones"),
+        ),
+    )
+    session.state, _item = craft_temporary_item(
         session.state,
-        challenge.llm_policy.temporary_item_templates[0],
-        zone_id="gate",
-        source_materials=("stare deski", "metalowe okucia"),
+        draft,
+        build_crafting_source_registry(session.state, session.exploration.actors),
+        session.exploration.crafting_policy,
     )
 
     completed = session.finish_scenario()
@@ -427,7 +1373,7 @@ def test_exploration_ui_session_expires_temporary_items_at_scenario_end(tmp_path
     assert not any(resource.get("temporary") for resource in completed["resources"])
     events = [__import__("json").loads(line) for line in session.observer.path.read_text(encoding="utf-8").splitlines()]
     event = next(item for item in events if item["event_type"] == "ui_scenario_completed")
-    assert event["payload"]["expired_temporary_item_ids"] == ["temporary:improvised_battering_ram"]
+    assert event["payload"]["expired_temporary_item_ids"] == ["temporary:crafted:1"]
 
 
 def test_exploration_ui_session_can_correct_gm_decision_before_roll():
@@ -686,14 +1632,14 @@ def test_exploration_ui_session_pending_encounter_waits_for_ui_setup_not_board_c
     state = session.confirm_exploration_setup_step()
 
     assert state["pending_encounter"]["trigger_id"] == "gate_open_skirmish"
-    assert state["board"]["message"] == "Encounter gotowy. Potwierdź rozpoczęcie setupu w UI albo Enterem."
+    assert state["board"]["message"] == "Encounter gotowy. Rozstrzygnij rozpoczęcie starcia w UI albo Enterem."
     assert board.led_calls[-1] == ("off", None)
 
     client = create_app(session).test_client()
     response = client.post("/api/board/scan", json={})
 
     assert response.status_code == 400
-    assert "Encounter czeka na rozpoczęcie setupu" in response.get_json()["error"]
+    assert "Encounter czeka na rozstrzygnięcie rozpoczęcia starcia" in response.get_json()["error"]
 
 
 def test_exploration_ui_session_starts_with_map_setup_before_location_preview():
