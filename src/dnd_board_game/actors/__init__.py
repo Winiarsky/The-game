@@ -1,6 +1,8 @@
 """Player character, monster, NPC, and actor state models."""
 
 from .damage_affinities import DamageAffinityProfile
+from .auras import ActorAura, AuraEffectKind, AuraTarget
+from .triggers import ActorTrigger, TriggerEffectKind, TriggerEventType
 from .models import AbilityScores, Actor, ActorId, DeathSaveState, Faction, is_ally_or_neutral
 from .size import (
     CREATURE_SIZE_ORDER,
@@ -39,11 +41,17 @@ __all__ = [
     "Actor",
     "ActorId",
     "ActorResourcePool",
+    "ActorAura",
+    "ActorTrigger",
     "DeathSaveState",
     "DamageAffinityProfile",
     "CreatureSize",
     "CREATURE_SIZE_ORDER",
     "Faction",
+    "AuraEffectKind",
+    "AuraTarget",
+    "TriggerEffectKind",
+    "TriggerEventType",
     "HitDicePool",
     "PreparableSpell",
     "ProficiencyProfile",

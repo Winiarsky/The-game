@@ -12,6 +12,7 @@ from dnd_board_game.rules import (
     SavingThrowRequest,
     SavingThrowResult,
     RollModifier,
+    RollMode,
     resolve_d20_roll,
     resolve_saving_throw_request,
     save_damage_multiplier,
@@ -178,8 +179,11 @@ def resolve_spell_save(
     ability: str,
     dc: int,
     natural_roll: int,
+    natural_roll_2: int | None = None,
     damage_on_success: str = "none",
     situational_modifiers: Sequence[RollModifier] = (),
+    condition_states: Sequence = (),
+    combat_actors: Sequence[Actor] = (),
 ) -> SpellSaveResult:
     request = SavingThrowRequest(
         ability=ability,
@@ -192,7 +196,10 @@ def resolve_spell_save(
         actor,
         request,
         natural_roll=natural_roll,
+        natural_roll_2=natural_roll_2,
         situational_modifiers=situational_modifiers,
+        condition_states=condition_states,
+        combat_actors=combat_actors,
     )
 
 
@@ -201,15 +208,38 @@ def resolve_actor_saving_throw(
     saving_throw: SavingThrowRequest,
     *,
     natural_roll: int,
+    natural_roll_2: int | None = None,
     situational_modifiers: Sequence[RollModifier] = (),
+    condition_states: Sequence = (),
+    combat_actors: Sequence[Actor] = (),
 ) -> SavingThrowResult:
+    from .auras import saving_throw_aura_modifiers
+
     roll_request = D20RollRequest(
         modifiers=(
             *saving_throw_roll_modifiers(actor, saving_throw.ability),
+            *saving_throw_aura_modifiers(combat_actors, actor),
             *situational_modifiers,
         )
     )
-    roll = resolve_d20_roll(D20RollInput(roll_request, int(natural_roll)))
+    if condition_states:
+        from .conditions import condition_roll_request
+
+        roll_request = condition_roll_request(
+            roll_request,
+            condition_states,
+            actor,
+            saving_throw_ability=saving_throw.ability,
+        )
+    if roll_request.mode != RollMode.NORMAL and natural_roll_2 is None:
+        raise ValueError("Advantage or disadvantage saving throw requires two d20 rolls.")
+    roll = resolve_d20_roll(
+        D20RollInput(
+            roll_request,
+            int(natural_roll),
+            int(natural_roll_2) if natural_roll_2 is not None else None,
+        )
+    )
     return resolve_saving_throw_request(
         saving_throw,
         actor_id=str(actor.id),

@@ -13,7 +13,8 @@ wznowienia scenariusza:
 - kolejność inicjatywy, rundę, bieżącą turę, ekonomię akcji, darmową interakcję z obiektem i zużyte reakcje,
 - broń upuszczoną podczas aktywnej walki wraz z polem, właścicielem źródłowym i rundą,
 - wynik Stealth oraz listę obserwatorów, przed którymi każdy aktor pozostaje ukryty,
-- jawne stany warunków walki przypisane do aktorów, w tym `prone`,
+- jawne stany warunków walki przypisane do aktorów wraz ze źródłem, czasem trwania
+  i opcjonalnym rzutem kończącym warunek,
 - jawne stany postaci powstałe w eksploracji, przenoszone do następnego encountera,
 - stabilne wybory źródeł ataku/leczenia i stan nawigacji UI potrzebny do wznowienia.
 
@@ -56,6 +57,9 @@ Sekcja eksploracji może zawierać `condition_states`. Stan wskazuje stabilne ID
 i warunek, np. `prone`. Brak pola w starszym snapshotcie v1 oznacza brak aktywnych
 stanów eksploracyjnych. Przy rozpoczęciu encountera warunki znanych aktorów są
 kopiowane do `CombatState`; po walce ich aktualny stan jest synchronizowany z eksploracją.
+Stan może dodatkowo zawierać `source_label`, `duration`, `expiration_actor_id`,
+`save_ability`, `save_dc` i `save_timing`. Aktor zapisuje także listę
+`condition_immunities`. Brak tych pól zachowuje zgodne wartości domyślne v1.
 
 `trap_states` zapisuje wyłącznie runtime'owy stan pułapek zdefiniowanych w aktualnym
 contentcie: `hidden`, `revealed`, `disarmed`, `bypassed` albo `triggered`. Definicja
@@ -89,3 +93,13 @@ Rozmiar nie zmienia jeszcze liczby pól zajmowanych przez figurkę.
 Profil `damage_affinities` zapisuje trzy listy stabilnych typów obrażeń:
 `resistances`, `immunities` i `vulnerabilities`. Brak całego obiektu w starszym
 snapshocie oznacza trzy puste listy i zwykłe przyjmowanie obrażeń.
+
+Aktor może zapisywać listę `auras`. Każda aura zawiera stabilne `id`, etykietę,
+promień, relację celów, typ efektu i wartość. Snapshot nie zapisuje listy objętych
+aktorów: jest ona pochodną aktualnych pozycji, frakcji i stanu źródła. Brak pola
+`auras` w starszym snapshotcie v1 oznacza pustą listę.
+
+Aktor może zapisywać listę `triggers`. Każdy wpis zawiera stabilne `id`, etykietę,
+`event_type`, `effect_kind` i wartość. Sam fakt jednorazowej aktywacji nie jest
+osobnym stanem; jej wynik, np. bieżące temporary HP, znajduje się już w aktorze.
+Brak pola `triggers` w starszym snapshotcie v1 oznacza pustą listę.

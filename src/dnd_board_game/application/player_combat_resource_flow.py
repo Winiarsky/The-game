@@ -31,6 +31,7 @@ from dnd_board_game.rules import (
     expire_active_effects,
     resolve_d20_roll,
 )
+from dnd_board_game.combat.auras import saving_throw_aura_modifiers
 
 
 class CombatActionSpec(Protocol):
@@ -340,7 +341,12 @@ class PlayerCombatResourceFlowService:
         natural_roll: int,
     ) -> CombatResourceTransition:
         actor = _actor_by_id(state, actor_id)
-        request = D20RollRequest(modifiers=saving_throw_roll_modifiers(actor, "constitution"))
+        request = D20RollRequest(
+            modifiers=(
+                *saving_throw_roll_modifiers(actor, "constitution"),
+                *saving_throw_aura_modifiers(state.actors, actor),
+            )
+        )
         roll = resolve_d20_roll(D20RollInput(request, int(natural_roll)))
         success = roll.total >= int(dc)
         effect_labels = tuple(

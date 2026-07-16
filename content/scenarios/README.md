@@ -24,6 +24,40 @@ Opcjonalne listy `damage_resistances`, `damage_immunities` i
 `damage_vulnerabilities` przyjmują identyfikatory typów obrażeń, np. `fire`,
 `slashing` albo `poison`. Brak pól oznacza brak specjalnej relacji z obrażeniami.
 
+Aktor może deklarować data-driven `auras`. Pierwszy obsługiwany efekt to
+`saving_throw_bonus`; `target` przyjmuje `self_and_allies`, `allies`, `enemies`
+albo `all_creatures`. Zasięg jest przeliczany po każdym ruchu, a identyczne `id`
+aur nie sumują się:
+
+```json
+"auras": [{
+  "id": "protective_presence",
+  "label": "Ochronna obecność",
+  "radius_feet": 10,
+  "target": "self_and_allies",
+  "effect_kind": "saving_throw_bonus",
+  "value": 1
+}]
+```
+
+Aktor może również deklarować `triggers`. Schemat przyjmuje zdarzenia
+`attack_hit`, `damage_taken`, `actor_moved`, `turn_start`, `turn_end`,
+`short_rest_completed`, `long_rest_completed` i `encounter_ended`. Pierwszym
+obsługiwanym skutkiem jest `grant_temp_hp`:
+
+```json
+"triggers": [{
+  "id": "runic_guard",
+  "label": "Runiczna osłona",
+  "event_type": "turn_start",
+  "effect_kind": "grant_temp_hp",
+  "value": 2
+}]
+```
+
+Definicja nie oznacza automatycznie, że każde zdarzenie ma już emiter w runtime.
+Aktualny vertical slice wykonuje triggery `turn_start` i `turn_end`.
+
 Źródło ataku może użyć `save_ability`, `save_dc` i
 `save_damage_on_success` (`none` albo `half`). Takie źródło nie wykonuje attack rolla:
 cel wykonuje saving throw, a wynik modyfikuje obrażenia przed profilem odporności.

@@ -18,8 +18,9 @@ from dnd_board_game.combat import (
     CombatCondition,
     CombatState,
     SceneObject,
-    add_condition,
+    apply_condition,
     can_use_attack_action,
+    condition_roll_request,
     current_actor,
     has_condition,
     is_hidden_from,
@@ -103,7 +104,10 @@ class CombatShoveFlowService:
         if not _base_shove_is_legal(state, attacker, target):
             return ()
         modes: list[ShoveMode] = []
-        if not has_condition(state.condition_states, target_id, CombatCondition.PRONE):
+        if (
+            not has_condition(state.condition_states, target_id, CombatCondition.PRONE)
+            and CombatCondition.PRONE.value not in target.condition_immunities
+        ):
             modes.append(ShoveMode.PRONE)
         destination = shove_push_destination(attacker, target)
         if _push_destination_is_available(board, state, target, destination, scene_objects):
@@ -137,8 +141,18 @@ class CombatShoveFlowService:
             target_name=target.name,
             mode=mode,
             defender_skill=defender_skill,
-            attacker_request=D20RollRequest(modifiers=skill_roll_modifiers(attacker, "athletics")),
-            defender_request=D20RollRequest(modifiers=skill_roll_modifiers(target, defender_skill)),
+            attacker_request=condition_roll_request(
+                D20RollRequest(modifiers=skill_roll_modifiers(attacker, "athletics")),
+                state.condition_states,
+                attacker,
+                ability_check=True,
+            ),
+            defender_request=condition_roll_request(
+                D20RollRequest(modifiers=skill_roll_modifiers(target, defender_skill)),
+                state.condition_states,
+                target,
+                ability_check=True,
+            ),
             push_destination=(
                 shove_push_destination(attacker, target)
                 if mode == ShoveMode.PUSH
@@ -194,14 +208,18 @@ class CombatShoveFlowService:
         )
         succeeded = contest.outcome == ContestOutcome.INITIATOR_WINS
         if succeeded and pending.mode == ShoveMode.PRONE:
+            application = apply_condition(
+                updated.condition_states,
+                target,
+                CombatCondition.PRONE,
+                source_actor_id=pending.attacker_id,
+                source_label="Shove",
+            )
             updated = replace(
                 updated,
-                condition_states=add_condition(
-                    updated.condition_states,
-                    pending.target_id,
-                    CombatCondition.PRONE,
-                ),
+                condition_states=application.condition_states,
             )
+            succeeded = application.applied
         elif succeeded and pending.push_destination is not None:
             updated = replace_actor(updated, replace(target, position=pending.push_destination))
         attacker_total = contest.initiator.roll.total

@@ -755,9 +755,13 @@ def create_app(session: ExplorationUiSession) -> Flask:
     def api_combat_enemy_saving_throw():
         data = request.get_json(silent=True) or {}
         try:
+            natural_roll_2 = data.get("natural_roll_2")
             return jsonify(
                 session.submit_enemy_saving_throw(
                     natural_roll=int(data.get("natural_roll", 0)),
+                    natural_roll_2=(
+                        int(natural_roll_2) if natural_roll_2 not in (None, "") else None
+                    ),
                 )
             )
         except Exception as exc:
@@ -775,6 +779,23 @@ def create_app(session: ExplorationUiSession) -> Flask:
         data = request.get_json(silent=True) or {}
         try:
             return jsonify(session.submit_death_save(int(data.get("natural_roll", 0))))
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/condition-save")
+    def api_combat_condition_save():
+        data = request.get_json(silent=True) or {}
+        try:
+            natural_roll_2 = data.get("natural_roll_2")
+            return jsonify(
+                session.submit_combat_condition_save(
+                    condition=str(data.get("condition", "")),
+                    natural_roll=int(data.get("natural_roll", 0)),
+                    natural_roll_2=(
+                        int(natural_roll_2) if natural_roll_2 not in (None, "") else None
+                    ),
+                )
+            )
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 

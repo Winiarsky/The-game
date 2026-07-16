@@ -2,6 +2,7 @@ from dataclasses import replace
 
 import pytest
 
+from dnd_board_game.actors import ActorTrigger, TriggerEffectKind, TriggerEventType
 from dnd_board_game.application import ShortRestFlowService
 from dnd_board_game.exploration import ExplorationState, challenge_state_for
 from dnd_board_game.scenarios import build_exploration_from_scenario, load_scenario
@@ -123,3 +124,34 @@ def test_short_rest_expires_only_effects_bound_to_short_rest() -> None:
 
     assert transition.expired_effects == (short_effect,)
     assert transition.active_effects == (daily_effect,)
+
+
+def test_short_rest_completion_emits_actor_trigger_after_recovery() -> None:
+    exploration = _loaded()
+    state = _state(exploration)
+    gate = next(zone for zone in exploration.zones if zone.id == "gate")
+    trigger = ActorTrigger(
+        id="rest_guard",
+        label="Osłona po odpoczynku",
+        event_type=TriggerEventType.SHORT_REST_COMPLETED,
+        effect_kind=TriggerEffectKind.GRANT_TEMP_HP,
+        value=3,
+    )
+    actors = tuple(
+        replace(actor, triggers=(trigger,)) if str(actor.id) == "hero" else actor
+        for actor in exploration.actors
+    )
+
+    transition = ShortRestFlowService().complete(
+        state=state,
+        actors=actors,
+        pending=ShortRestFlowService().start(
+            state=state,
+            zone=gate,
+            encounter_pending=False,
+        ),
+    )
+
+    hero = next(actor for actor in transition.actors if str(actor.id) == "hero")
+    assert hero.temp_hp == 3
+    assert transition.trigger_activations[0].trigger.id == "rest_guard"

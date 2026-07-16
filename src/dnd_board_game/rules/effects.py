@@ -50,6 +50,8 @@ class EffectStackingPolicy(StrEnum):
 
 
 class EffectEventType(StrEnum):
+    ATTACK_HIT = "attack_hit"
+    DAMAGE_TAKEN = "damage_taken"
     TURN_START = "turn_start"
     TURN_END = "turn_end"
     ROUND_ENDED = "round_ended"

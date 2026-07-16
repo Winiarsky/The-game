@@ -7,6 +7,7 @@ from dnd_board_game.actors import CreatureSize, Faction
 from dnd_board_game.combat import (
     ActionEconomyCost,
     AttackKind,
+    CombatCondition,
     AttackSourceType,
     DamageType,
     EnvironmentSetupType,
@@ -127,6 +128,7 @@ def test_reference_monster_exposes_damage_affinity_fixture(tmp_path):
     assert guardian.damage_affinities.resistances == (DamageType.SLASHING, DamageType.PIERCING)
     assert guardian.damage_affinities.immunities == (DamageType.POISON,)
     assert guardian.damage_affinities.vulnerabilities == (DamageType.THUNDER,)
+    assert guardian.condition_immunities == ("poisoned",)
     source = encounter.attack_sources_by_actor[guardian.id]
     assert source.save_ability == "dexterity"
     assert source.save_dc == 12
@@ -145,6 +147,26 @@ def test_load_scenario_rejects_unknown_damage_affinity(tmp_path):
 
     with pytest.raises(ValueError, match="damage_resistances"):
         load_scenario(scenario_path)
+
+
+def test_poison_vial_exposes_data_driven_poisoned_condition(tmp_path):
+    data = json.loads(Path("content/scenarios/gate_skirmish.json").read_text(encoding="utf-8"))
+    data["actors"][0]["item_refs"].append("poison_vial")
+    scenario_path = tmp_path / "poison_condition.json"
+    scenario_path.write_text(json.dumps(data), encoding="utf-8")
+
+    encounter = build_encounter_from_scenario(load_scenario(scenario_path))
+    hero = next(actor for actor in encounter.actors if str(actor.id) == data["actors"][0]["id"])
+    action = next(
+        item
+        for item in encounter.combat_actions_by_actor[hero.id]
+        if item.id == "splash_poison_vial"
+    )
+
+    assert action.condition == CombatCondition.POISONED
+    assert action.save_ability == "constitution"
+    assert action.save_dc == 12
+    assert action.save_timing == "turn_end"
 
 
 def test_load_scenario_rejects_unknown_save_policy(tmp_path):
@@ -184,6 +206,7 @@ def test_load_gate_skirmish_uses_shared_map_setup_and_ranged_rogue():
     enemies = [actor for actor in encounter.actors if actor.faction == Faction.ENEMY]
     rogue = next(actor for actor in encounter.actors if actor.id == "rogue")
     cleric = next(actor for actor in encounter.actors if actor.id == "cleric")
+    rubble_guard = next(actor for actor in encounter.actors if actor.id == "goblin_b")
 
     assert len(enemies) == 2
     assert encounter.player_start_zones == ((Coordinate(7, 6), Coordinate(8, 6), Coordinate(9, 6)),)
@@ -195,6 +218,9 @@ def test_load_gate_skirmish_uses_shared_map_setup_and_ranged_rogue():
     assert rogue.skill_expertise == ("stealth",)
     assert rogue.proficiencies.saving_throws == ("dexterity", "intelligence")
     assert rogue.proficiencies.weapons == ("crossbow", "dagger")
+    assert rubble_guard.triggers[0].id == "rubble_guard_resolve"
+    assert rubble_guard.triggers[0].event_type.value == "turn_start"
+    assert rubble_guard.triggers[0].effect_kind.value == "grant_temp_hp"
     hero = next(actor for actor in encounter.actors if actor.id == "hero")
     assert {item.id for item in hero.inventory} >= {
         "longsword",
@@ -237,10 +263,16 @@ def test_load_gate_skirmish_uses_shared_map_setup_and_ranged_rogue():
     assert sticky_action.source_item_id == "sticky_flask"
     assert sticky_action.target_faction == "enemy"
     assert sticky_action.range_feet == 5
-    assert sticky_action.effect_kind == "grant_next_attack_penalty"
-    assert sticky_action.value == -2
-    assert sticky_action.duration == "until_next_attack"
+    assert sticky_action.effect_kind == "apply_condition"
+    assert sticky_action.condition == CombatCondition.RESTRAINED
+    assert sticky_action.save_ability == "dexterity"
+    assert sticky_action.save_dc == 12
+    assert sticky_action.save_timing == "turn_end"
+    assert sticky_action.duration == "permanent"
     assert sticky_action.action_cost == ActionEconomyCost.ACTION
+    assert cleric.auras[0].id == "protective_reliquary"
+    assert cleric.auras[0].radius_feet == 10
+    assert cleric.auras[0].effect_kind.value == "saving_throw_bonus"
     cleric_sources = {source.id: source for source in encounter.attack_source_options_by_actor[cleric.id]}
     assert cleric_sources["sacred_flame"].casting_kind == SpellCastingKind.CANTRIP
     assert cleric_sources["sacred_flame"].spell_level == 0

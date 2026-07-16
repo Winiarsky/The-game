@@ -13,6 +13,7 @@ from dnd_board_game.combat import (
     HiddenState,
     SceneObject,
     current_actor,
+    condition_roll_request,
     drop_prone,
     hide_eligibility,
     resolve_hide,
@@ -229,7 +230,7 @@ class CombatTurnActionFlowService:
                 for actor_id in eligibility.blocking_observer_ids
             )
             raise ValueError(f"Nie możesz się ukryć: nadal wyraźnie widzą cię: {names}.")
-        request = _skill_request(actor, "stealth")
+        request = _skill_request(state, actor, "stealth")
         opponents = tuple(
             str(candidate.id)
             for candidate in state.actors
@@ -259,7 +260,7 @@ class CombatTurnActionFlowService:
         eligibility = hide_eligibility(board, actor, state.actors, scene_objects)
         if not eligibility.allowed:
             raise ValueError("Warunki zmieniły się i nie można już wykonać Hide.")
-        result = resolve_d20_roll(D20RollInput(_skill_request(actor, "stealth"), natural_roll))
+        result = resolve_d20_roll(D20RollInput(_skill_request(state, actor, "stealth"), natural_roll))
         hiding = resolve_hide(state.hidden_states, actor, state.actors, result.total)
         updated_state = replace(
             _consume_action(state),
@@ -300,7 +301,7 @@ class CombatTurnActionFlowService:
         )
         if not hidden_actor_ids:
             raise ValueError("Nie ma obecnie ukrytego przeciwnika, którego można aktywnie szukać.")
-        request = _skill_request(actor, "perception")
+        request = _skill_request(state, actor, "perception")
         return PendingCombatSkillCheck(
             actor_id=str(actor.id),
             action="search",
@@ -319,7 +320,7 @@ class CombatTurnActionFlowService:
         active_effects: tuple[ActiveCombatEffect, ...],
     ) -> CombatTurnActionTransition:
         actor = _validate_pending_skill_actor(state, pending, "search")
-        result = resolve_d20_roll(D20RollInput(_skill_request(actor, "perception"), natural_roll))
+        result = resolve_d20_roll(D20RollInput(_skill_request(state, actor, "perception"), natural_roll))
         search = resolve_search(state.hidden_states, actor, result.total)
         updated_state = replace(_consume_action(state), hidden_states=search.hidden_states)
         found_names = _actor_names(state, search.found_actor_ids)
@@ -545,8 +546,13 @@ def _ready_trigger_label(trigger: str) -> str:
     return labels.get(trigger, trigger)
 
 
-def _skill_request(actor: Actor, skill: str) -> D20RollRequest:
-    return D20RollRequest(modifiers=skill_roll_modifiers(actor, skill))
+def _skill_request(state: CombatState, actor: Actor, skill: str) -> D20RollRequest:
+    return condition_roll_request(
+        D20RollRequest(modifiers=skill_roll_modifiers(actor, skill)),
+        state.condition_states,
+        actor,
+        ability_check=True,
+    )
 
 
 def _validate_pending_skill_actor(

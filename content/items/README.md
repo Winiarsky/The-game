@@ -56,17 +56,21 @@ Przedmiot może wystawić akcję skierowaną na aktora przez wpis w `combat_acti
   "action_cost": "action",
   "target_faction": "enemy",
   "range_feet": 5,
-  "effect_kind": "grant_next_attack_penalty",
-  "value": -2,
-  "duration": "until_next_attack"
+  "effect_kind": "apply_condition",
+  "condition": "restrained",
+  "duration": "permanent",
+  "save_ability": "dexterity",
+  "save_dc": 12,
+  "save_timing": "turn_end"
 }
 ```
 
 Runtime pokazuje taką akcję w kategorii przedmiotów tylko dla legalnego celu i
 dostępnego egzemplarza. Przedmiot oraz akcja tury są zużywane dopiero przy wykonaniu,
-nie przy otwarciu menu. Na tym etapie dozwolony jest efekt
-`grant_next_attack_penalty`; kolejne efekty wymagają jawnego resolwera i testów, a nie
-interpretowania dowolnego tekstu z contentu.
+nie przy otwarciu menu. Obsługiwane efekty to `grant_next_attack_penalty` oraz
+`apply_condition`. Drugi wymaga oficjalnego ID warunku i, jeśli warunek kończy się
+rzutem, kompletnego zestawu `save_ability`, `save_dc`, `save_timing`. Kolejne efekty
+wymagają jawnego resolwera i testów, a nie interpretowania dowolnego tekstu z contentu.
 
 `action_cost` korzysta ze wspólnego kontraktu ekonomii tury i przyjmuje `action`,
 `bonus_action`, `reaction`, `object_interaction` albo `free`. Brak pola zachowuje

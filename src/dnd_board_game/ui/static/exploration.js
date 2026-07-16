@@ -1386,6 +1386,8 @@ function combatActorStatusHtml(combat) {
     <p>Runda ${esc(combat.round_number || '-')}, pole (${esc(actor.position ? actor.position[0] : '-')},${esc(actor.position ? actor.position[1] : '-')})</p>
     <p>HP ${esc(actorHpLabel(actor))} / AC ${esc(actorAcLabel(actor))}</p>
     ${damageAffinitiesHtml(actor)}
+    ${combatAurasHtml(combat)}
+    ${combatTriggersHtml(actor)}
     ${actorInventoryHtml(actor)}
     ${actor.faction === 'ally' ? `<p>Akcja: ${actionUsed ? 'zużyta' : 'dostępna'} | Bonus action: ${bonusActionUsed ? 'zużyta' : 'dostępna'} | Darmowa interakcja: ${objectInteractionAvailable ? 'dostępna' : 'zużyta'} | Reakcja: ${reactionAvailable ? 'dostępna' : 'zużyta'} | Ruch: ${esc(remaining)} ft${extraMovement > 0 ? ` (+${esc(extraMovement)} Dash)` : ''}${movement.speed_reduction === 'grappling' ? ` | Grapple: szybkość ${esc(movement.base_speed_feet)} → ${esc(movement.effective_speed_feet)} ft` : ''}</p>${twoWeapon.available ? `<p><b>Atak drugą bronią dostępny:</b> ${(twoWeapon.source_names || []).map(esc).join(', ')} — wybierz przeciwnika.</p>` : ''}` : ''}
     ${statusChipsHtml(combatActorChips(actor), 'Brak statusów aktywnego aktora.')}
@@ -1402,6 +1404,34 @@ function combatActorChips(actor) {
     });
   }
   return chips;
+}
+
+function combatAurasHtml(combat) {
+  const auras = (combat && combat.auras) || [];
+  if (!auras.length) return '';
+  return `<p class="muted"><b>Aktywne aury:</b> ${auras.map(aura => {
+    const sign = Number(aura.value || 0) >= 0 ? '+' : '';
+    const effect = aura.effect_kind === 'saving_throw_bonus'
+      ? `${sign}${esc(aura.value || 0)} do save'ów`
+      : `${sign}${esc(aura.value || 0)} ${esc(aura.effect_kind || '')}`;
+    return `${esc(aura.label)} (${esc(aura.source_actor_name)}, ${esc(aura.radius_feet)} ft, ${effect}; obejmuje ${esc((aura.affected_actor_ids || []).length)})`;
+  }).join(' | ')}</p>`;
+}
+
+function combatTriggersHtml(actor) {
+  const triggers = (actor && actor.triggers) || [];
+  if (!triggers.length) return '';
+  const eventLabels = {
+    attack_hit: 'po trafieniu',
+    damage_taken: 'po otrzymaniu obrażeń',
+    actor_moved: 'po ruchu',
+    turn_start: 'na początku tury',
+    turn_end: 'na końcu tury',
+    short_rest_completed: 'po short reście',
+    long_rest_completed: 'po long reście',
+    encounter_ended: 'po encounterze',
+  };
+  return `<p class="muted"><b>Triggery:</b> ${triggers.map(trigger => `${esc(trigger.label)} (${esc(eventLabels[trigger.event_type] || trigger.event_type)})`).join(', ')}</p>`;
 }
 
 function damageAffinitiesHtml(actor) {
@@ -1553,6 +1583,22 @@ function combatPrimaryActionHtml(combat, isAllyTurn, isEnemyTurn) {
       <div class="row">
         <label>Wynik d20: <input id="combat-death-save-roll" type="number" min="1" max="20" value="10"></label>
         <button data-allow-busy="true" onclick="submitDeathSave()">Rozstrzygnij rzut śmierci</button>
+      </div>
+    `;
+  }
+  const conditionSave = isAllyTurn ? ((combat.condition_saves || [])[0] || null) : null;
+  if (conditionSave) {
+    const timing = conditionSave.timing === 'turn_end' ? 'na końcu tury' : 'na początku tury';
+    const secondRoll = conditionSave.roll_mode === 'normal' ? '' : `
+      <label>Drugi wynik d20: <input id="combat-condition-save-roll-2" type="number" min="1" max="20" value="10"></label>
+    `;
+    return `
+      <p><b>${esc(conditionSave.label)}</b>: wykonaj ${esc(conditionSave.ability)} save ST ${esc(conditionSave.dc)} ${esc(timing)}.</p>
+      <p class="muted">${esc(conditionSave.instruction || '')}</p>
+      <div class="row">
+        <label>Wynik d20: <input id="combat-condition-save-roll" type="number" min="1" max="20" value="10"></label>
+        ${secondRoll}
+        <button data-allow-busy="true" onclick="submitCombatConditionSave('${esc(conditionSave.condition)}')">Rozstrzygnij save</button>
       </div>
     `;
   }
@@ -1956,10 +2002,14 @@ function enemyTurnResultHtml(result) {
 function pendingEnemySavingThrowHtml(pending) {
   const request = pending.request || {};
   const target = pending.target || {};
+  const secondRoll = pending.roll_mode === 'normal' ? '' : `
+    <label>Drugi wynik d20: <input id="enemy-saving-throw-roll-2" type="number" min="1" max="20" value="10"></label>
+  `;
   return `
     <p>${esc(pending.instruction || '')}</p>
     <div class="row">
       <label>Naturalny wynik d20: <input id="enemy-saving-throw-roll" type="number" min="1" max="20" value="10"></label>
+      ${secondRoll}
       <button data-allow-busy="true" onclick="submitEnemySavingThrow()">Rozstrzygnij rzut</button>
     </div>
     <p class="muted">${esc(target.name || 'Bohater')} · ${esc(request.ability_label || abilityLabel(request.ability))} ${esc(signedNumber(pending.modifier || 0))} · ST ${esc(request.dc)}</p>
@@ -2798,6 +2848,15 @@ function submitDeathSave() {
   const roll = document.getElementById('combat-death-save-roll');
   api('/api/combat/death-save', {natural_roll: Number(roll ? roll.value : 0)}, 'Rozstrzygam rzut śmierci...');
 }
+function submitCombatConditionSave(condition) {
+  const roll = document.getElementById('combat-condition-save-roll');
+  const roll2 = document.getElementById('combat-condition-save-roll-2');
+  api('/api/combat/condition-save', {
+    condition,
+    natural_roll: Number(roll ? roll.value : 0),
+    natural_roll_2: roll2 ? Number(roll2.value || 0) : null,
+  }, 'Rozstrzygam rzut przeciw warunkowi...');
+}
 function submitCombatStabilization(method) {
   const target = document.getElementById('combat-stabilization-target');
   const roll = document.getElementById('combat-stabilization-roll');
@@ -2869,7 +2928,11 @@ function submitReadyDamageRoll() {
 function confirmEnemyTurnResult() { api('/api/combat/enemy-turn/confirm', {}, 'Potwierdzam wynik przeciwnika...'); }
 function submitEnemySavingThrow() {
   const roll = document.getElementById('enemy-saving-throw-roll');
-  api('/api/combat/enemy-saving-throw', {natural_roll: Number(roll ? roll.value : 0)}, 'Rozstrzygam rzut obronny...');
+  const roll2 = document.getElementById('enemy-saving-throw-roll-2');
+  api('/api/combat/enemy-saving-throw', {
+    natural_roll: Number(roll ? roll.value : 0),
+    natural_roll_2: roll2 ? Number(roll2.value || 0) : null,
+  }, 'Rozstrzygam rzut obronny...');
 }
 async function finishCombatTurn() {
   await stopBoardScanLoop();

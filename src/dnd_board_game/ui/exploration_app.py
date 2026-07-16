@@ -94,6 +94,7 @@ from dnd_board_game.combat import (
     AttackKind,
     AttackPositioning,
     CombatState,
+    CombatStatus,
     CombatCondition,
     ConditionState,
     CoverLevel,
@@ -128,6 +129,7 @@ from dnd_board_game.combat import (
     expire_combat_effects,
     finish_turn,
     active_actor_led_feedback,
+    active_auras,
     attack_source_with_combat_effects,
     attack_source_with_hidden_advantage,
     attack_source_for_actor,
@@ -144,6 +146,12 @@ from dnd_board_game.combat import (
     legal_area_centers,
     can_consume_spell_resource,
     can_use_attack_action,
+    condition_definition,
+    condition_label,
+    condition_roll_request,
+    ConditionSaveTiming,
+    pending_condition_saves,
+    resolve_condition_save,
     can_use_object_interactions,
     consume_spell_resource,
     direction_anchor_positions,
@@ -160,10 +168,13 @@ from dnd_board_game.combat import (
     doff_shield,
     equip_weapon,
     replace_actor,
+    resolve_actor_trigger_events,
+    resolve_combat_trigger_events,
     pickup_dropped_weapon,
     resolve_death_save,
     roll_enemy_initiative,
     scene_flag,
+    saving_throw_aura_modifiers,
     scene_object_by_id,
     setup_led_feedback,
     start_combat,
@@ -288,6 +299,7 @@ from dnd_board_game.rules import (
     D20RollRequest,
     EffectEvent,
     EffectEventType,
+    EffectDuration,
     RollMode,
     RollModifier,
     RollModifierType,
@@ -830,9 +842,20 @@ class ExplorationUiSession:
             if actor.faction == Faction.ALLY
         )
         rested_actors = {result.actor_after.id: result.actor_after for result in long_rest_results}
+        rested_actor_values = tuple(
+            rested_actors.get(actor.id, actor) for actor in self.exploration.actors
+        )
+        long_rest_triggers = resolve_actor_trigger_events(
+            rested_actor_values,
+            (
+                EffectEvent(EffectEventType.LONG_REST_COMPLETED, actor_id=str(actor.id))
+                for actor in rested_actor_values
+                if actor.faction == Faction.ALLY
+            ),
+        )
         self.exploration = replace(
             self.exploration,
-            actors=tuple(rested_actors.get(actor.id, actor) for actor in self.exploration.actors),
+            actors=long_rest_triggers.actors,
         )
         self.state = ExplorationState(
             self.exploration.zones,
@@ -932,6 +955,7 @@ class ExplorationUiSession:
             "Długi odpoczynek ukończony",
             "Drużyna rozpoczyna scenariusz po long reście. Odnowiono HP, sloty i zasoby; teraz można przygotować czary.",
         )
+        self._add_trigger_activation_notices(long_rest_triggers.activations)
 
     @property
     def pending(self) -> PendingInteraction | None:
@@ -1649,6 +1673,7 @@ class ExplorationUiSession:
         self.exploration = replace(self.exploration, actors=transition.actors)
         self.pending_short_rest = transition.pending
         self.active_combat_effects = transition.active_effects
+        self._add_trigger_activation_notices(transition.trigger_activations)
         for effect, raw_effect in zip(transition.effects, pending.policy.completion_effects, strict=True):
             self._record_effect_result(
                 effect,
@@ -2252,6 +2277,12 @@ class ExplorationUiSession:
             },
         )
         self._add_message(outcome.title or "Wynik encountera", outcome.body or "Encounter został rozstrzygnięty.")
+        self._apply_combat_trigger_events(
+            tuple(
+                EffectEvent(EffectEventType.ENCOUNTER_ENDED, actor_id=str(actor.id))
+                for actor in self.combat_state.actors
+            )
+        )
         self.combat_state, self.active_combat_effects, expired_effects = expire_combat_effects(
             self.combat_state,
             self.active_combat_effects,
@@ -3007,6 +3038,16 @@ class ExplorationUiSession:
             self.board_message = transition.board_message
         self._add_message(transition.message_title, transition.message_body)
         self._record(transition.event_type, dict(transition.event_payload))
+        self._apply_combat_trigger_events(
+            tuple(
+                EffectEvent(
+                    EffectEventType.DAMAGE_TAKEN,
+                    actor_id=str(applied.actor_after.id),
+                )
+                for applied in transition.applied_damages
+                if applied.damage.total_applied > 0
+            )
+        )
         for applied in transition.applied_damages:
             self._maybe_prompt_concentration_check(applied)
             if self.pending_concentration_check is not None:
@@ -3138,6 +3179,40 @@ class ExplorationUiSession:
             self.board_message = transition.board_message
         self._add_message(transition.message_title, transition.message_body)
         self._record(transition.event_type, dict(transition.event_payload))
+        payload = dict(transition.event_payload)
+        attacker_id = str(payload.get("attacker_id", ""))
+        target_id = str(payload.get("target_id", ""))
+        trigger_events = []
+        if transition.event_type == "ui_combat_player_attack_roll" and payload.get("hit"):
+            trigger_events.append(
+                EffectEvent(
+                    EffectEventType.ATTACK_HIT,
+                    actor_id=attacker_id,
+                    target_actor_id=target_id,
+                )
+            )
+        if transition.applied_damage is not None:
+            target_id = str(transition.applied_damage.actor_after.id)
+            if (
+                transition.event_type != "ui_combat_player_damage_roll"
+                and payload.get("saving_throw") is None
+            ):
+                trigger_events.append(
+                    EffectEvent(
+                        EffectEventType.ATTACK_HIT,
+                        actor_id=attacker_id,
+                        target_actor_id=target_id,
+                    )
+                )
+            if transition.applied_damage.damage.total_applied > 0:
+                trigger_events.append(
+                    EffectEvent(
+                        EffectEventType.DAMAGE_TAKEN,
+                        actor_id=target_id,
+                        target_actor_id=attacker_id,
+                    )
+                )
+        self._apply_combat_trigger_events(tuple(trigger_events))
         if transition.applied_damage is not None:
             self._maybe_prompt_concentration_check(transition.applied_damage)
         self._sync_board_leds()
@@ -3264,6 +3339,25 @@ class ExplorationUiSession:
         self._expire_invalid_combat_effects()
         self._add_message(submission.message_title, submission.message_body)
         self._record(submission.event_type, dict(submission.event_payload))
+        movement_events = [
+            EffectEvent(
+                EffectEventType.ACTOR_MOVED,
+                actor_id=submission.actor_id,
+                position=submission.destination,
+            )
+        ]
+        movement_payload = dict(submission.event_payload)
+        dragged_actor_id = movement_payload.get("dragged_actor_id")
+        dragged_destination = movement_payload.get("dragged_destination")
+        if dragged_actor_id and isinstance(dragged_destination, list):
+            movement_events.append(
+                EffectEvent(
+                    EffectEventType.ACTOR_MOVED,
+                    actor_id=str(dragged_actor_id),
+                    position=Coordinate(*dragged_destination),
+                )
+            )
+        self._apply_combat_trigger_events(tuple(movement_events))
         self._sync_board_leds()
         return self.state_payload()
 
@@ -3276,6 +3370,9 @@ class ExplorationUiSession:
         encounter = self._active_encounter()
         if encounter is None:
             raise ValueError("Brak danych encountera dla aktywnej walki.")
+        positions_before = {
+            str(actor.id): actor.position for actor in self.combat_state.actors
+        }
         resolution = self.combat_reaction_flow.resolve_opportunity_movement(
             state=self.combat_state,
             actor_id=pending.actor_id,
@@ -3301,6 +3398,25 @@ class ExplorationUiSession:
                 "threat_actor_ids": list(pending.threat_actor_ids),
             },
         )
+        reaction_events = [
+            EffectEvent(
+                EffectEventType.DAMAGE_TAKEN,
+                actor_id=str(applied.actor_after.id),
+            )
+            for applied in resolution.applied_damages
+            if applied.damage.total_applied > 0
+        ]
+        if resolution.movement_performed:
+            reaction_events.extend(
+                EffectEvent(
+                    EffectEventType.ACTOR_MOVED,
+                    actor_id=str(actor.id),
+                    position=actor.position,
+                )
+                for actor in resolution.state.actors
+                if positions_before.get(str(actor.id)) != actor.position
+            )
+        self._apply_combat_trigger_events(tuple(reaction_events))
         for applied_damage in resolution.applied_damages:
             self._maybe_prompt_concentration_check(applied_damage)
             if self.pending_concentration_check is not None:
@@ -3530,6 +3646,20 @@ class ExplorationUiSession:
         self.board_message = resolution.message_body
         self._add_message(resolution.message_title, resolution.message_body)
         self._record(resolution.event_type, dict(resolution.event_payload))
+        if (
+            resolution.succeeded
+            and pending.mode == ShoveMode.PUSH
+            and pending.push_destination is not None
+        ):
+            self._apply_combat_trigger_events(
+                (
+                    EffectEvent(
+                        EffectEventType.ACTOR_MOVED,
+                        actor_id=pending.target_id,
+                        position=pending.push_destination,
+                    ),
+                )
+            )
         self._sync_board_leds()
         return self.state_payload()
 
@@ -4851,6 +4981,46 @@ class ExplorationUiSession:
             labels = ", ".join(effect.label for effect in notice.effects) or "efekt"
             self._add_message("Efekty", f"{notice.message_prefix}: {labels}.")
 
+    def _add_trigger_activation_notices(self, activations) -> None:
+        for activation in activations:
+            actor = next(
+                (
+                    candidate
+                    for candidate in (
+                        self.combat_state.actors
+                        if self.combat_state is not None
+                        else self.exploration.actors
+                    )
+                    if str(candidate.id) == activation.owner_actor_id
+                ),
+                None,
+            )
+            actor_name = actor.name if actor is not None else activation.owner_actor_id
+            body = (
+                f"{actor_name}: {activation.trigger.label} — temporary HP "
+                f"{activation.previous_temp_hp} → {activation.current_temp_hp}."
+            )
+            self._add_message("Aktywowano cechę", body)
+            self._record(
+                "ui_actor_trigger_activated",
+                {
+                    "actor_id": activation.owner_actor_id,
+                    "trigger_id": activation.trigger.id,
+                    "event_type": activation.trigger.event_type.value,
+                    "effect_kind": activation.trigger.effect_kind.value,
+                    "changed": activation.changed,
+                    "previous_temp_hp": activation.previous_temp_hp,
+                    "current_temp_hp": activation.current_temp_hp,
+                },
+            )
+
+    def _apply_combat_trigger_events(self, events: tuple[EffectEvent, ...]) -> None:
+        if self.combat_state is None or not events:
+            return
+        resolution = resolve_combat_trigger_events(self.combat_state, events)
+        self.combat_state = resolution.state
+        self._add_trigger_activation_notices(resolution.activations)
+
     def resolve_enemy_turn(self) -> dict[str, object]:
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
@@ -4945,12 +5115,48 @@ class ExplorationUiSession:
             self.pending_enemy_saving_throw = None
             self.board_message = transition.board_message
         self._record(transition.event_type, dict(transition.event_payload))
+        trigger_events = []
+        if result.movement_path is not None and result.moved_enemy is not None:
+            trigger_events.append(
+                EffectEvent(
+                    EffectEventType.ACTOR_MOVED,
+                    actor_id=str(result.enemy.id),
+                    position=result.moved_enemy.position,
+                )
+            )
+        if result.applied_damage is not None:
+            target_id = str(result.applied_damage.actor_after.id)
+            if result.attack_resolution is not None and result.attack_resolution.hit:
+                trigger_events.append(
+                    EffectEvent(
+                        EffectEventType.ATTACK_HIT,
+                        actor_id=str(result.enemy.id),
+                        target_actor_id=target_id,
+                    )
+                )
+            if result.applied_damage.damage.total_applied > 0:
+                trigger_events.append(
+                    EffectEvent(
+                        EffectEventType.DAMAGE_TAKEN,
+                        actor_id=target_id,
+                        target_actor_id=str(result.enemy.id),
+                    )
+                )
+        self._apply_combat_trigger_events(tuple(trigger_events))
+        self.pending_enemy_turn_ack_result = replace(
+            transition.result,
+            state=self.combat_state,
+        )
         if result.applied_damage is not None:
             self._maybe_prompt_concentration_check(result.applied_damage)
         self._sync_board_leds()
         return self.state_payload()
 
-    def submit_enemy_saving_throw(self, natural_roll: int) -> dict[str, object]:
+    def submit_enemy_saving_throw(
+        self,
+        natural_roll: int,
+        natural_roll_2: int | None = None,
+    ) -> dict[str, object]:
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
         if self.pending_enemy_saving_throw is None:
@@ -4961,6 +5167,7 @@ class ExplorationUiSession:
         transition = self.enemy_turn_flow.resolve_player_saving_throw(
             result=result,
             natural_roll=natural_roll,
+            natural_roll_2=natural_roll_2,
         )
         self.combat_state = transition.result.state
         self.pending_enemy_turn_ack_result = transition.result
@@ -4969,6 +5176,21 @@ class ExplorationUiSession:
         self._add_message(transition.message_title, transition.message_body)
         self._record(transition.event_type, dict(transition.event_payload))
         if transition.result.applied_damage is not None:
+            applied = transition.result.applied_damage
+            if applied.damage.total_applied > 0:
+                self._apply_combat_trigger_events(
+                    (
+                        EffectEvent(
+                            EffectEventType.DAMAGE_TAKEN,
+                            actor_id=str(applied.actor_after.id),
+                            target_actor_id=str(transition.result.enemy.id),
+                        ),
+                    )
+                )
+                self.pending_enemy_turn_ack_result = replace(
+                    transition.result,
+                    state=self.combat_state,
+                )
             self._maybe_prompt_concentration_check(transition.result.applied_damage)
         self._sync_board_leds()
         return self.state_payload()
@@ -5044,6 +5266,20 @@ class ExplorationUiSession:
         if not reaction.hit:
             self._add_message("Atak okazyjny", reaction.message)
             return self._advance_enemy_opportunity_or_resume_preview()
+        self._apply_combat_trigger_events(
+            (
+                EffectEvent(
+                    EffectEventType.ATTACK_HIT,
+                    actor_id=pending.attacker_id,
+                    target_actor_id=pending.target_id,
+                ),
+            )
+        )
+        if self.pending_enemy_turn_result is not None:
+            self.pending_enemy_turn_result = replace(
+                self.pending_enemy_turn_result,
+                state=self.combat_state,
+            )
         self.pending_enemy_opportunity_attack = replace(
             pending,
             stage="damage_roll",
@@ -5093,6 +5329,21 @@ class ExplorationUiSession:
                 "damage_result": _applied_damage_payload(applied_damage),
             },
         )
+        reaction_events = []
+        if applied_damage.damage.total_applied > 0:
+            reaction_events.append(
+                EffectEvent(
+                    EffectEventType.DAMAGE_TAKEN,
+                    actor_id=pending.target_id,
+                    target_actor_id=pending.attacker_id,
+                )
+            )
+        self._apply_combat_trigger_events(tuple(reaction_events))
+        if self.pending_enemy_turn_result is not None:
+            self.pending_enemy_turn_result = replace(
+                self.pending_enemy_turn_result,
+                state=self.combat_state,
+            )
         if applied_damage.defeated_by_damage:
             self.pending_enemy_opportunity_attack = None
             self.pending_enemy_turn_result = None
@@ -5217,6 +5468,20 @@ class ExplorationUiSession:
             self._add_message("Ready", reaction.message)
             self._resume_enemy_turn_after_reaction_prompt()
             return self.state_payload()
+        self._apply_combat_trigger_events(
+            (
+                EffectEvent(
+                    EffectEventType.ATTACK_HIT,
+                    actor_id=pending.readied_actor_id,
+                    target_actor_id=pending.target_id,
+                ),
+            )
+        )
+        if self.pending_enemy_turn_result is not None:
+            self.pending_enemy_turn_result = replace(
+                self.pending_enemy_turn_result,
+                state=self.combat_state,
+            )
         self.pending_ready_attack = replace(
             pending,
             stage="damage_roll",
@@ -5266,6 +5531,21 @@ class ExplorationUiSession:
                 "damage_result": _applied_damage_payload(applied_damage),
             },
         )
+        ready_events = []
+        if applied_damage.damage.total_applied > 0:
+            ready_events.append(
+                EffectEvent(
+                    EffectEventType.DAMAGE_TAKEN,
+                    actor_id=pending.target_id,
+                    target_actor_id=pending.readied_actor_id,
+                )
+            )
+        self._apply_combat_trigger_events(tuple(ready_events))
+        if self.pending_enemy_turn_result is not None:
+            self.pending_enemy_turn_result = replace(
+                self.pending_enemy_turn_result,
+                state=self.combat_state,
+            )
         self.pending_ready_attack = None
         if applied_damage.defeated_by_damage:
             self.pending_enemy_turn_result = None
@@ -5383,6 +5663,14 @@ class ExplorationUiSession:
     def _finish_pending_enemy_turn(self, result) -> dict[str, object]:
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
+        result = replace(
+            result,
+            state=self._resolve_automatic_condition_saves(
+                result.state,
+                result.enemy,
+                ConditionSaveTiming.TURN_END,
+            ),
+        )
         transition = self.combat_turn_finalization.finalize_enemy_turn(
             result=result,
             active_effects=self.active_combat_effects,
@@ -5390,6 +5678,7 @@ class ExplorationUiSession:
         self.combat_state = transition.state
         self.active_combat_effects = transition.active_effects
         self._add_expired_effect_notices(transition.expired_effects)
+        self._add_trigger_activation_notices(transition.trigger_activations)
         self.selected_combat_movement_path = None
         self.pending_enemy_turn_intent = None
         self.pending_enemy_turn_result = None
@@ -5399,8 +5688,81 @@ class ExplorationUiSession:
         self.pending_enemy_saving_throw = None
         self._add_message(transition.message_title, transition.message_body)
         self._record(transition.event_type, dict(transition.event_payload))
+        self._resolve_starting_enemy_condition_saves()
         self._sync_board_leds()
         return self.state_payload()
+
+    def _resolve_starting_enemy_condition_saves(self) -> None:
+        if self.combat_state is None or self.combat_state.status != CombatStatus.ACTIVE:
+            return
+        actor = combat_current_actor(self.combat_state)
+        if actor.faction != Faction.ENEMY:
+            return
+        self.combat_state = self._resolve_automatic_condition_saves(
+            self.combat_state,
+            actor,
+            ConditionSaveTiming.TURN_START,
+        )
+
+    def _resolve_automatic_condition_saves(
+        self,
+        state: CombatState,
+        actor: Actor,
+        timing: ConditionSaveTiming,
+    ) -> CombatState:
+        condition_states = state.condition_states
+        saves = pending_condition_saves(condition_states, str(actor.id), timing)
+        for condition_state in saves:
+            assert condition_state.save_ability is not None
+            request = condition_roll_request(
+                D20RollRequest(
+                    modifiers=saving_throw_roll_modifiers(
+                        actor,
+                        condition_state.save_ability,
+                    )
+                ),
+                condition_states,
+                actor,
+                saving_throw_ability=condition_state.save_ability,
+            )
+            natural_roll = self.encounter_rng.randint(1, 20)
+            natural_roll_2 = (
+                self.encounter_rng.randint(1, 20)
+                if request.mode != RollMode.NORMAL
+                else None
+            )
+            resolution = resolve_condition_save(
+                condition_states,
+                actor,
+                condition_state,
+                natural_roll=natural_roll,
+                natural_roll_2=natural_roll_2,
+                combat_actors=state.actors,
+            )
+            condition_states = resolution.condition_states
+            result_label = "usunięty" if resolution.removed else "pozostaje"
+            self._add_message(
+                "Rzut przeciw warunkowi",
+                (
+                    f"{actor.name}: {condition_label(condition_state.condition)} — "
+                    f"wynik {resolution.saving_throw.total} "
+                    f"przeciw ST {condition_state.save_dc}; "
+                    f"stan {result_label}."
+                ),
+            )
+            self._record(
+                "ui_combat_condition_save_automatic",
+                {
+                    "actor_id": str(actor.id),
+                    "condition": condition_state.condition.value,
+                    "timing": timing.value,
+                    "natural_roll": natural_roll,
+                    "natural_roll_2": natural_roll_2,
+                    "total": resolution.saving_throw.total,
+                    "removed": resolution.removed,
+                },
+            )
+        return replace(state, condition_states=condition_states)
 
     def reset_board_scan(self) -> dict[str, object]:
         if self.board_adapter is None:
@@ -5416,6 +5778,13 @@ class ExplorationUiSession:
             raise ValueError("Walka nie została rozpoczęta.")
         if combat_current_actor(self.combat_state).needs_death_save():
             raise ValueError("Najpierw wykonaj rzut śmierci aktywnego bohatera.")
+        actor = combat_current_actor(self.combat_state)
+        if pending_condition_saves(
+            self.combat_state.condition_states,
+            str(actor.id),
+            ConditionSaveTiming.TURN_END,
+        ):
+            raise ValueError("Najpierw wykonaj rzut obronny końca tury przeciw aktywnemu warunkowi.")
         transition = self.combat_turn_finalization.finish_active_turn(
             state=self.combat_state,
             active_effects=self.active_combat_effects,
@@ -5425,6 +5794,7 @@ class ExplorationUiSession:
         self.combat_state = transition.state
         self.active_combat_effects = transition.active_effects
         self._add_expired_effect_notices(transition.expired_effects)
+        self._add_trigger_activation_notices(transition.trigger_activations)
         self.selected_combat_movement_path = None
         self.pending_enemy_turn_intent = None
         self.pending_enemy_turn_result = None
@@ -5437,6 +5807,60 @@ class ExplorationUiSession:
         self._clear_player_pending_choices()
         self._add_message(transition.message_title, transition.message_body)
         self._record(transition.event_type, dict(transition.event_payload))
+        self._resolve_starting_enemy_condition_saves()
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def submit_combat_condition_save(
+        self,
+        *,
+        condition: str,
+        natural_roll: int,
+        natural_roll_2: int | None = None,
+    ) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        actor = combat_current_actor(self.combat_state)
+        parsed = CombatCondition(condition)
+        condition_state = next(
+            (
+                item
+                for item in self.combat_state.condition_states
+                if item.actor_id == str(actor.id)
+                and item.condition == parsed
+                and item.save_timing is not None
+            ),
+            None,
+        )
+        if condition_state is None:
+            raise ValueError("Aktywny aktor nie ma takiego rzutu kończącego warunek.")
+        resolution = resolve_condition_save(
+            self.combat_state.condition_states,
+            actor,
+            condition_state,
+            natural_roll=natural_roll,
+            natural_roll_2=natural_roll_2,
+            combat_actors=self.combat_state.actors,
+        )
+        self.combat_state = replace(
+            self.combat_state,
+            condition_states=resolution.condition_states,
+        )
+        outcome = "sukces — warunek usunięty" if resolution.removed else "porażka — warunek pozostaje"
+        self.board_message = (
+            f"{actor.name}: {condition_label(parsed)}, save {resolution.saving_throw.total} "
+            f"przeciw ST {resolution.saving_throw.dc}: {outcome}."
+        )
+        self._add_message("Rzut przeciw warunkowi", self.board_message)
+        self._record(
+            "ui_combat_condition_save",
+            {
+                "actor_id": str(actor.id),
+                "condition": parsed.value,
+                "saving_throw": resolution.saving_throw.as_payload(),
+                "removed": resolution.removed,
+            },
+        )
         self._sync_board_leds()
         return self.state_payload()
 
@@ -5511,6 +5935,7 @@ class ExplorationUiSession:
                 self.combat_state = transition.state
                 self.active_combat_effects = transition.active_effects
                 self._add_expired_effect_notices(transition.expired_effects)
+                self._add_trigger_activation_notices(transition.trigger_activations)
         self.board_message = outcome_text
         self._sync_board_leds()
         return self.state_payload()
@@ -7477,6 +7902,16 @@ class ExplorationUiSession:
             rng=self.encounter_rng,
         )
         self.exploration = self._replace_exploration_actor(resolution.actor_after)
+        if resolution.applied_damage.damage.total_applied > 0:
+            trigger_resolution = resolve_actor_trigger_events(
+                self.exploration.actors,
+                (EffectEvent(EffectEventType.DAMAGE_TAKEN, actor_id=actor_id),),
+            )
+            self.exploration = replace(
+                self.exploration,
+                actors=trigger_resolution.actors,
+            )
+            self._add_trigger_activation_notices(trigger_resolution.activations)
         self._add_message("Wynik zagrożenia", resolution.message)
         challenge_id = self.pending.challenge.id if self.pending.challenge is not None else ""
         if resolution.outcome_effects:
@@ -8415,6 +8850,11 @@ def _combat_payload(
         if encounter is not None and actor.faction == Faction.ALLY and not actor.is_defeated()
         else None
     )
+    condition_saves = tuple(
+        item
+        for item in state.condition_states
+        if item.actor_id == str(actor.id) and item.save_timing is not None
+    )
     return {
         "status": state.status.value,
         "round_number": state.round_number,
@@ -8435,6 +8875,20 @@ def _combat_payload(
             }
             for candidate in state.actors
         ],
+        "auras": [
+            {
+                "id": item.aura.id,
+                "label": item.aura.label,
+                "source_actor_id": str(item.source.id),
+                "source_actor_name": item.source.name,
+                "radius_feet": item.aura.radius_feet,
+                "target": item.aura.target.value,
+                "effect_kind": item.aura.effect_kind.value,
+                "value": item.aura.value,
+                "affected_actor_ids": list(item.affected_actor_ids),
+            }
+            for item in active_auras(state.actors)
+        ],
         "dropped_weapons": [
             {
                 "id": dropped.id,
@@ -8449,6 +8903,9 @@ def _combat_payload(
         ],
         "winner": state.winner.value if state.winner is not None else None,
         "death_save_required": actor.needs_death_save(),
+        "condition_saves": [
+            _condition_save_payload(actor, state, item) for item in condition_saves
+        ],
         "turn_action": {
             "action_use": state.turn_action.action_use.value,
             "bonus_action_use": state.turn_action.bonus_action_use.value,
@@ -8575,6 +9032,17 @@ def _combat_actor_payload(
         "size": actor.size.value,
         "size_label": creature_size_label_pl(actor.size),
         "damage_affinities": _damage_affinities_payload(actor),
+        "condition_immunities": list(actor.condition_immunities),
+        "triggers": [
+            {
+                "id": trigger.id,
+                "label": trigger.label,
+                "event_type": trigger.event_type.value,
+                "effect_kind": trigger.effect_kind.value,
+                "value": trigger.value,
+            }
+            for trigger in actor.triggers
+        ],
         "hp": actor.hp,
         "max_hp": actor.max_hp,
         "temp_hp": actor.temp_hp,
@@ -8656,6 +9124,27 @@ def _combat_actor_payload_with_conditions(
                 title="Ataki aktora mają utrudnienie; wstawanie kosztuje połowę szybkości.",
             ),
         ]
+    for condition in conditions:
+        if condition in {CombatCondition.PRONE, CombatCondition.GRAPPLED}:
+            continue
+        definition = condition_definition(condition)
+        condition_state = next(
+            item
+            for item in state.condition_states
+            if item.actor_id == str(actor.id) and item.condition == condition
+        )
+        details = definition.description
+        if condition_state.source_label:
+            details = f"{details} Źródło: {condition_state.source_label}."
+        if condition_state.save_ability is not None:
+            details = (
+                f"{details} Save: {condition_state.save_ability} ST {condition_state.save_dc} "
+                f"na {condition_state.save_timing.value}."
+            )
+        payload["status_chips"] = [
+            *payload["status_chips"],
+            _status_chip(definition.label, tone="penalty", title=details),
+        ]
     grapple = next(
         (
             condition
@@ -8687,6 +9176,35 @@ def _combat_actor_payload_with_conditions(
             ),
         ]
     return payload
+
+
+def _condition_save_payload(
+    actor: Actor,
+    state: CombatState,
+    condition_state: ConditionState,
+) -> dict[str, object]:
+    ability = condition_state.save_ability or ""
+    request = condition_roll_request(
+        D20RollRequest(
+            modifiers=(
+                *saving_throw_roll_modifiers(actor, ability),
+                *saving_throw_aura_modifiers(state.actors, actor),
+            )
+        ),
+        state.condition_states,
+        actor,
+        saving_throw_ability=ability,
+    )
+    return {
+        "condition": condition_state.condition.value,
+        "label": condition_label(condition_state.condition),
+        "ability": ability,
+        "dc": condition_state.save_dc,
+        "timing": condition_state.save_timing.value if condition_state.save_timing is not None else None,
+        "source_label": condition_state.source_label,
+        "roll_mode": request.mode.value,
+        "instruction": roll_instruction(request).message,
+    }
 
 
 def _hidden_actor_payload(state: CombatState, actor: Actor) -> dict[str, object] | None:
@@ -8834,7 +9352,10 @@ def _pending_concentration_check_payload(
     active_effects: tuple[ActiveCombatEffect, ...],
 ) -> dict[str, object]:
     actor = _actor_by_string_id_from_state(state, pending.actor_id)
-    modifiers = saving_throw_roll_modifiers(actor, "constitution")
+    modifiers = (
+        *saving_throw_roll_modifiers(actor, "constitution"),
+        *saving_throw_aura_modifiers(state.actors, actor),
+    )
     modifier = sum(item.value for item in modifiers)
     effects = tuple(
         effect for effect in active_effects if effect.id in pending.effect_ids
@@ -9648,7 +10169,18 @@ def _pending_enemy_saving_throw_payload(
     )
     if target is None:
         return None
-    modifiers = saving_throw_roll_modifiers(target, pending.request.ability)
+    roll_request = condition_roll_request(
+        D20RollRequest(
+            modifiers=(
+                *saving_throw_roll_modifiers(target, pending.request.ability),
+                *saving_throw_aura_modifiers(state.actors, target),
+            )
+        ),
+        state.condition_states,
+        target,
+        saving_throw_ability=pending.request.ability,
+    )
+    modifiers = roll_request.modifiers
     request_payload = pending.request.as_payload()
     return {
         "target": _combat_actor_payload(target),
@@ -9656,9 +10188,10 @@ def _pending_enemy_saving_throw_payload(
         "request": request_payload,
         "modifier": sum(modifier.value for modifier in modifiers),
         "modifier_components": [_roll_modifier_payload(modifier) for modifier in modifiers],
+        "roll_mode": roll_request.mode.value,
         "instruction": (
-            f"{target.name}: rzuć fizyczne d20 na {request_payload['ability_label']} "
-            f"przeciw ST {pending.request.dc} i wpisz naturalny wynik."
+            f"{target.name}: {roll_instruction(roll_request).message} "
+            f"Rzut na {request_payload['ability_label']} przeciw ST {pending.request.dc}."
         ),
     }
 
@@ -10321,11 +10854,7 @@ def _exploration_actor_payload(
     condition_states: tuple[ConditionState, ...] = (),
 ) -> dict[str, object]:
     conditions = [
-        {
-            "id": condition.condition.value,
-            "label": "Powalony" if condition.condition == CombatCondition.PRONE else condition.condition.value,
-            "recoverable": condition.condition == CombatCondition.PRONE,
-        }
+        _exploration_condition_payload(condition)
         for condition in condition_states
         if condition.actor_id == str(actor.id)
     ]
@@ -10335,6 +10864,7 @@ def _exploration_actor_payload(
         "size": actor.size.value,
         "size_label": creature_size_label_pl(actor.size),
         "damage_affinities": _damage_affinities_payload(actor),
+        "condition_immunities": list(actor.condition_immunities),
         "hp": actor.hp,
         "max_hp": actor.max_hp,
         "conditions": conditions,
@@ -10367,6 +10897,32 @@ def _exploration_actor_payload(
             for pool in actor.resource_pools
         ],
     }
+
+
+def _exploration_condition_payload(condition: ConditionState) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "id": condition.condition.value,
+        "label": condition_label(condition.condition),
+        "recoverable": condition.condition == CombatCondition.PRONE,
+    }
+    if (
+        condition.source_label
+        or condition.duration != EffectDuration.PERMANENT
+        or condition.save_ability is not None
+    ):
+        payload.update(
+            {
+                "description": condition_definition(condition.condition).description,
+                "source_label": condition.source_label,
+                "duration": condition.duration.value,
+                "save_ability": condition.save_ability,
+                "save_dc": condition.save_dc,
+                "save_timing": (
+                    condition.save_timing.value if condition.save_timing is not None else None
+                ),
+            }
+        )
+    return payload
 
 
 def _damage_affinities_payload(actor: Actor) -> dict[str, object]:

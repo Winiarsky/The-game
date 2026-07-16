@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Protocol
 
 from dnd_board_game.actors import Actor, Faction
@@ -8,6 +8,9 @@ from dnd_board_game.combat import (
     ActionEconomyCost,
     ActiveCombatEffect,
     CombatState,
+    CombatCondition,
+    ConditionSaveTiming,
+    apply_condition,
     can_pay_action_economy_cost,
     current_actor,
     replace_actor,
@@ -32,6 +35,10 @@ class TargetedItemActionSpec(Protocol):
     source_item_id: str | None
     range_feet: int
     effect_kind: str | None
+    condition: CombatCondition | None
+    save_ability: str | None
+    save_dc: int | None
+    save_timing: str | None
     action_cost: ActionEconomyCost
 
 
@@ -57,7 +64,7 @@ def targeted_item_action_is_legal(
     item = inventory_item_by_id(actor, action.source_item_id or "")
     return bool(
         action.action_type == "targeted_item_effect"
-        and action.effect_kind in {"grant_next_attack_penalty"}
+        and action.effect_kind in {"grant_next_attack_penalty", "apply_condition"}
         and action.source_item_id
         and item is not None
         and item.available
@@ -85,6 +92,47 @@ def resolve_targeted_item_action(
         raise ValueError(action_use.message)
     consumed_actor = consume_inventory_item(current_actor(action_use.state), action.source_item_id or "")
     updated_state = replace_actor(action_use.state, consumed_actor)
+    if action.effect_kind == "apply_condition":
+        if action.condition is None:
+            raise ValueError("Akcja przedmiotu nie definiuje nakładanego warunku.")
+        application = apply_condition(
+            updated_state.condition_states,
+            target,
+            action.condition,
+            source_actor_id=str(actor.id),
+            source_label=action.label,
+            duration=EffectDuration(action.duration),
+            save_ability=action.save_ability,
+            save_dc=action.save_dc,
+            save_timing=(
+                ConditionSaveTiming(action.save_timing)
+                if action.save_timing is not None
+                else None
+            ),
+        )
+        updated_state = replace(
+            updated_state,
+            condition_states=application.condition_states,
+        )
+        message = f"{actor.name} używa {action.label} na {target.name}. {application.message}"
+        return CombatItemActionResolution(
+            state=updated_state,
+            active_effects=active_effects,
+            actor_id=str(actor.id),
+            target_id=str(target.id),
+            action_id=action.id,
+            message_title="Przedmiot",
+            message_body=message,
+            event_type="ui_combat_targeted_item_used",
+            event_payload=(
+                ("actor_id", str(actor.id)),
+                ("target_id", str(target.id)),
+                ("action_id", action.id),
+                ("source_item_id", action.source_item_id or ""),
+                ("condition", action.condition.value),
+                ("applied", application.applied),
+            ),
+        )
     duration = EffectDuration(action.duration)
     effect = ActiveCombatEffect(
         id=f"item_effect:{actor.id}:{target.id}:{action.id}:{state.round_number}",

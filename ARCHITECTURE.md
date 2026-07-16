@@ -102,6 +102,17 @@ The exploration web surface is split into explicit responsibilities:
   and opportunity-attack threat detection before reactions are resolved,
 - `combat/attack_flow.py` owns the explicit melee-reach versus ranged-range contract;
   targeting, opportunity threats, enemy positioning, and UI payloads consume that contract,
+- `combat/conditions.py` owns condition definitions, immunities, roll consequences,
+  movement restrictions, timed expiry, and repeated saving throws; application services
+  provide dice/input policy but do not duplicate condition rules,
+- `actors/auras.py` defines serializable actor aura data, while `combat/auras.py`
+  derives live coverage and roll modifiers from actor positions, factions, and life state;
+  aura membership is never stored as mutable combat state,
+- `actors/triggers.py` defines serializable feature triggers without importing the rules
+  package; `combat/triggers.py` matches stable event ids to runtime `EffectEvent`s and
+  applies deterministic ordered outcomes to combat or standalone actor collections.
+  Application flows emit events only after the corresponding attack, damage, movement,
+  rest, or encounter transition has been committed; the UI presents and logs activations,
 - `combat/attack_positioning.py` owns cover geometry shared by attack AC and Dexterity
   saves; area flows provide the effect's actual point of origin,
 - `combat/spells.py` owns deterministic radius, line-width and cone geometry,

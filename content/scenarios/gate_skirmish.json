@@ -96,6 +96,16 @@
         "1": 2
       },
       "spell_save_dc": 13,
+      "auras": [
+        {
+          "id": "protective_reliquary",
+          "label": "Aura ochronnego relikwiarza",
+          "radius_feet": 10,
+          "target": "self_and_allies",
+          "effect_kind": "saving_throw_bonus",
+          "value": 1
+        }
+      ],
       "spell_preparation": {
         "source_label": "lista czarów kapłana",
         "preparation_limit": 2,
@@ -195,7 +205,16 @@
       "id": "goblin_b",
       "name": "Goblin przy rumowisku",
       "source_ref": "goblin",
-      "position": [11, 7]
+      "position": [11, 7],
+      "triggers": [
+        {
+          "id": "rubble_guard_resolve",
+          "label": "Upór strażnika rumowiska",
+          "event_type": "turn_start",
+          "effect_kind": "grant_temp_hp",
+          "value": 2
+        }
+      ]
     }
   ],
   "player_start_zones": [

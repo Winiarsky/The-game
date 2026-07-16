@@ -11,6 +11,7 @@
   "damage_resistances": ["slashing", "piercing"],
   "damage_immunities": ["poison"],
   "damage_vulnerabilities": ["thunder"],
+  "condition_immunities": ["poisoned"],
   "ability_scores": {
     "strength": 16,
     "dexterity": 8,

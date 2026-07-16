@@ -11,6 +11,7 @@ from dnd_board_game.combat import (
     AppliedHealingResult,
     AttackSource,
     CombatState,
+    CombatCondition,
     DamageComponentInput,
     DamageType,
     HealingSource,
@@ -19,6 +20,7 @@ from dnd_board_game.combat import (
     apply_healing_result,
     apply_save_damage_amount,
     consume_spell_resource,
+    has_condition,
     replace_actor,
     resolve_damage,
     resolve_spell_save,
@@ -153,8 +155,20 @@ class SpellSaveAttackResolver(AttackActionResolver):
             ability=source.save_ability,
             dc=spell_save_dc(caster_after, source),
             natural_roll=rng.randint(1, 20),
+            natural_roll_2=(
+                rng.randint(1, 20)
+                if source.save_ability == "dexterity"
+                and has_condition(
+                    resource_use.state.condition_states,
+                    str(target_after.id),
+                    CombatCondition.RESTRAINED,
+                )
+                else None
+            ),
             damage_on_success=source.save_damage_on_success,
             situational_modifiers=saving_throw_modifiers,
+            condition_states=resource_use.state.condition_states,
+            combat_actors=resource_use.state.actors,
         )
         return SingleTargetSaveSpellConfirmation(resource_use.state, resource_use, saving_throw)
 
@@ -260,11 +274,23 @@ def roll_spell_saves_for_targets(
                 ability=source.save_ability,
                 dc=spell_save_dc(caster, source),
                 natural_roll=rng.randint(1, 20),
+                natural_roll_2=(
+                    rng.randint(1, 20)
+                    if source.save_ability == "dexterity"
+                    and has_condition(
+                        state.condition_states,
+                        str(target.id),
+                        CombatCondition.RESTRAINED,
+                    )
+                    else None
+                ),
                 damage_on_success=source.save_damage_on_success,
                 situational_modifiers=(saving_throw_modifiers_by_target or {}).get(
                     target_id,
                     (),
                 ),
+                condition_states=state.condition_states,
+                combat_actors=state.actors,
             )
         )
     return tuple(saves)

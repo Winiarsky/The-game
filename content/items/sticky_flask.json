@@ -13,9 +13,12 @@
       "action_cost": "action",
       "target_faction": "enemy",
       "range_feet": 5,
-      "effect_kind": "grant_next_attack_penalty",
-      "value": -2,
-      "duration": "until_next_attack"
+      "effect_kind": "apply_condition",
+      "condition": "restrained",
+      "save_ability": "dexterity",
+      "save_dc": 12,
+      "save_timing": "turn_end",
+      "duration": "permanent"
     }
   ]
 }

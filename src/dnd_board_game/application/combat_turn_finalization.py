@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from dnd_board_game.actors import Actor
 from dnd_board_game.combat import (
@@ -8,11 +8,14 @@ from dnd_board_game.combat import (
     CombatState,
     CombatStatus,
     EnemyAutoTurnResult,
+    TriggerActivation,
     consume_next_attack_effects,
     current_actor,
     expire_turn_end_effects,
     expire_turn_start_effects,
+    expire_condition_states,
     finish_turn,
+    resolve_combat_triggers,
 )
 from dnd_board_game.rules import EffectEvent, EffectEventType, expire_active_effects
 
@@ -41,6 +44,7 @@ class CombatTurnFinalizationTransition:
     active_effects: tuple[ActiveCombatEffect, ...]
     ending_actor: Actor
     expired_effects: tuple[ExpiredCombatEffects, ...]
+    trigger_activations: tuple[TriggerActivation, ...]
     message_title: str
     message_body: str
     event_type: str
@@ -86,7 +90,7 @@ class CombatTurnFinalizationService:
         active_effects: tuple[ActiveCombatEffect, ...],
     ) -> CombatTurnFinalizationTransition:
         message = enemy_turn_message(result)
-        state, effects, expired = _advance_turn(
+        state, effects, expired, triggers = _advance_turn(
             result.state,
             result.enemy,
             active_effects,
@@ -96,6 +100,7 @@ class CombatTurnFinalizationService:
             active_effects=effects,
             ending_actor=result.enemy,
             expired_effects=expired,
+            trigger_activations=triggers,
             message_title="Tura przeciwnika",
             message_body=message,
             event_type="ui_combat_enemy_turn",
@@ -116,7 +121,7 @@ class CombatTurnFinalizationService:
         if state.status != CombatStatus.ACTIVE:
             return None
         actor = current_actor(state)
-        updated_state, updated_effects, expired = _advance_turn(
+        updated_state, updated_effects, expired, triggers = _advance_turn(
             state,
             actor,
             active_effects,
@@ -126,6 +131,7 @@ class CombatTurnFinalizationService:
             active_effects=updated_effects,
             ending_actor=actor,
             expired_effects=expired,
+            trigger_activations=triggers,
             message_title="Koniec tury",
             message_body=f"Zakończono turę: {actor.name}.",
             event_type="ui_combat_turn_finished",
@@ -137,9 +143,23 @@ def _advance_turn(
     state: CombatState,
     ending_actor: Actor,
     active_effects: tuple[ActiveCombatEffect, ...],
-) -> tuple[CombatState, tuple[ActiveCombatEffect, ...], tuple[ExpiredCombatEffects, ...]]:
+) -> tuple[
+    CombatState,
+    tuple[ActiveCombatEffect, ...],
+    tuple[ExpiredCombatEffects, ...],
+    tuple[TriggerActivation, ...],
+]:
+    end_event = EffectEvent(EffectEventType.TURN_END, actor_id=str(ending_actor.id))
+    end_triggers = resolve_combat_triggers(state, end_event)
+    state = end_triggers.state
     after_end = expire_turn_end_effects(active_effects, str(ending_actor.id))
+    condition_states, _ = expire_condition_states(
+        state.condition_states,
+        end_event,
+    )
+    state = replace(state, condition_states=condition_states)
     notices: list[ExpiredCombatEffects] = []
+    trigger_activations = list(end_triggers.activations)
     expired_at_end = _removed_effects(active_effects, after_end)
     if expired_at_end:
         notices.append(
@@ -167,6 +187,11 @@ def _advance_turn(
         updated_effects = after_round
     if updated_state.status == CombatStatus.ACTIVE:
         starting_actor = current_actor(updated_state)
+        condition_states, _ = expire_condition_states(
+            updated_state.condition_states,
+            EffectEvent(EffectEventType.TURN_START, actor_id=str(starting_actor.id)),
+        )
+        updated_state = replace(updated_state, condition_states=condition_states)
         after_start = expire_turn_start_effects(updated_effects, str(starting_actor.id))
         expired_at_start = _removed_effects(updated_effects, after_start)
         if expired_at_start:
@@ -177,7 +202,14 @@ def _advance_turn(
                 )
             )
         updated_effects = after_start
-    return updated_state, updated_effects, tuple(notices)
+        start_event = EffectEvent(
+            EffectEventType.TURN_START,
+            actor_id=str(starting_actor.id),
+        )
+        start_triggers = resolve_combat_triggers(updated_state, start_event)
+        updated_state = start_triggers.state
+        trigger_activations.extend(start_triggers.activations)
+    return updated_state, updated_effects, tuple(notices), tuple(trigger_activations)
 
 
 def _removed_effects(

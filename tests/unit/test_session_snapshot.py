@@ -3,9 +3,18 @@ from dataclasses import replace
 
 import pytest
 
-from dnd_board_game.actors import CreatureSize, DamageAffinityProfile, DeathSaveState, ProficiencyProfile
+from dnd_board_game.actors import (
+    ActorTrigger,
+    CreatureSize,
+    DamageAffinityProfile,
+    DeathSaveState,
+    ProficiencyProfile,
+    TriggerEffectKind,
+    TriggerEventType,
+)
 from dnd_board_game.combat import (
     CombatCondition,
+    ConditionSaveTiming,
     ConditionState,
     HiddenState,
     DamageType,
@@ -78,6 +87,7 @@ def test_snapshot_json_round_trip_is_deterministic(tmp_path):
     assert shield.armor_class_bonus == 2
     assert shield.armor_proficiency == "shield"
     assert len(shield.held_in) == 1
+    assert cleric.auras[0].id == "protective_reliquary"
 
 
 def test_snapshot_round_trip_preserves_exploration_condition(tmp_path):
@@ -120,11 +130,15 @@ def test_older_snapshot_without_actor_size_defaults_to_medium(tmp_path):
     for actor in raw["actors"]:
         actor.pop("size", None)
         actor.pop("damage_affinities", None)
+        actor.pop("auras", None)
+        actor.pop("triggers", None)
 
     restored = SessionSnapshot.from_dict(raw, base_state=session.state)
 
     assert all(actor.size == CreatureSize.MEDIUM for actor in restored.actors)
     assert all(actor.damage_affinities == DamageAffinityProfile() for actor in restored.actors)
+    assert all(actor.auras == () for actor in restored.actors)
+    assert all(actor.triggers == () for actor in restored.actors)
 
 
 def test_snapshot_round_trip_preserves_skill_profile_and_combat_hidden_state(tmp_path):
@@ -143,6 +157,16 @@ def test_snapshot_round_trip_preserves_skill_profile_and_combat_hidden_state(tmp
                 vulnerabilities=(DamageType.COLD,),
             ),
             attacks_per_action=2,
+            condition_immunities=("poisoned",),
+            triggers=(
+                ActorTrigger(
+                    "snapshot_trigger",
+                    "Osłona snapshotu",
+                    TriggerEventType.TURN_START,
+                    TriggerEffectKind.GRANT_TEMP_HP,
+                    2,
+                ),
+            ),
             proficiency_bonus=3,
             proficiencies=ProficiencyProfile(
                 saving_throws=("dexterity",),
@@ -164,7 +188,14 @@ def test_snapshot_round_trip_preserves_skill_profile_and_combat_hidden_state(tmp
         ),
         hidden_states=(HiddenState("hero", 21, ("goblin_a", "goblin_b")),),
         condition_states=(
-            ConditionState("hero", CombatCondition.PRONE),
+            ConditionState(
+                "hero",
+                CombatCondition.POISONED,
+                source_label="Trucizna testowa",
+                save_ability="constitution",
+                save_dc=12,
+                save_timing=ConditionSaveTiming.TURN_END,
+            ),
             ConditionState("goblin_a", CombatCondition.GRAPPLED, "hero"),
         ),
     )
@@ -175,6 +206,8 @@ def test_snapshot_round_trip_preserves_skill_profile_and_combat_hidden_state(tmp
     restored_hero = next(actor for actor in restored.combat_state.actors if str(actor.id) == "hero")
     assert restored_hero.proficiency_bonus == 3
     assert restored_hero.attacks_per_action == 2
+    assert restored_hero.condition_immunities == ("poisoned",)
+    assert restored_hero.triggers[0].id == "snapshot_trigger"
     assert restored_hero.size == CreatureSize.LARGE
     assert restored_hero.damage_affinities == DamageAffinityProfile(
         resistances=(DamageType.FIRE,),
@@ -196,7 +229,14 @@ def test_snapshot_round_trip_preserves_skill_profile_and_combat_hidden_state(tmp
         HiddenState("hero", 21, ("goblin_a", "goblin_b")),
     )
     assert restored.combat_state.condition_states == (
-        ConditionState("hero", CombatCondition.PRONE),
+        ConditionState(
+            "hero",
+            CombatCondition.POISONED,
+            source_label="Trucizna testowa",
+            save_ability="constitution",
+            save_dc=12,
+            save_timing=ConditionSaveTiming.TURN_END,
+        ),
         ConditionState("goblin_a", CombatCondition.GRAPPLED, "hero"),
     )
 

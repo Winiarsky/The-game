@@ -298,6 +298,7 @@ class EnemyTurnFlowService:
         *,
         result: EnemyAutoTurnResult,
         natural_roll: int,
+        natural_roll_2: int | None = None,
     ) -> EnemySavingThrowTransition:
         request = result.saving_throw_request
         source = result.source
@@ -313,6 +314,9 @@ class EnemyTurnFlowService:
             target,
             request,
             natural_roll=int(natural_roll),
+            natural_roll_2=natural_roll_2,
+            condition_states=result.state.condition_states,
+            combat_actors=result.state.actors,
         )
         base_damage = max(0, int(result.base_damage or 0))
         adjusted_damage = apply_save_damage_amount(base_damage, saving_throw)

@@ -286,7 +286,14 @@ def apply_combat_interaction_effects(
                 ability = str(params.get("saving_throw_ability", "dexterity"))
                 dc = int(save_dc)
                 natural_roll = saving_throw_natural_roll(target, saving_throw_rolls, rng)
-                request = D20RollRequest(modifiers=saving_throw_roll_modifiers(target, ability))
+                from .auras import saving_throw_aura_modifiers
+
+                request = D20RollRequest(
+                    modifiers=(
+                        *saving_throw_roll_modifiers(target, ability),
+                        *saving_throw_aura_modifiers(updated_state.actors, target),
+                    )
+                )
                 roll = resolve_d20_roll(D20RollInput(request, natural_roll))
                 check = resolve_saving_throw(roll, dc)
                 saving_throw = CombatInteractionSavingThrow(

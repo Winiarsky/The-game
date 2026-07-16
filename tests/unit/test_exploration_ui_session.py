@@ -3,11 +3,20 @@ from dataclasses import replace
 
 import pytest
 
-from dnd_board_game.actors import CreatureSize, DamageAffinityProfile, DeathSaveState, Faction
+from dnd_board_game.actors import (
+    ActorTrigger,
+    CreatureSize,
+    DamageAffinityProfile,
+    DeathSaveState,
+    Faction,
+    TriggerEffectKind,
+    TriggerEventType,
+)
 from dnd_board_game.actions import PlayerIntentHint
 from dnd_board_game.combat import (
     AttackKind,
     CombatCondition,
+    ConditionSaveTiming,
     ConditionState,
     EnemyAutoTurnResult,
     HiddenState,
@@ -2327,6 +2336,57 @@ def test_exploration_ui_session_player_damage_can_finish_combat_and_remove_targe
     assert any(message["title"] == "Atak" and "Cel zostaje pokonany" in message["body"] for message in state["messages"])
 
 
+def test_player_attack_emits_hit_then_damage_taken_triggers() -> None:
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_combat_from_scout_alarm(session)
+    assert session.combat_state is not None
+    attacker = current_actor(session.combat_state)
+    target_id = session.state_payload()["combat"]["legal_targets"][0]["id"]
+    target = next(actor for actor in session.combat_state.actors if str(actor.id) == target_id)
+    hit_trigger = ActorTrigger(
+        "hit_guard",
+        "Osłona po trafieniu",
+        TriggerEventType.ATTACK_HIT,
+        TriggerEffectKind.GRANT_TEMP_HP,
+        2,
+    )
+    damage_trigger = ActorTrigger(
+        "damage_guard",
+        "Osłona po obrażeniach",
+        TriggerEventType.DAMAGE_TAKEN,
+        TriggerEffectKind.GRANT_TEMP_HP,
+        3,
+    )
+    session.combat_state = replace_actor(
+        session.combat_state,
+        replace(attacker, triggers=(hit_trigger,)),
+    )
+    session.combat_state = replace_actor(
+        session.combat_state,
+        replace(target, triggers=(damage_trigger,)),
+    )
+
+    state = session.submit_player_attack(
+        target_id=target_id,
+        natural_roll=20,
+        natural_roll_2=20,
+        damage=1,
+    )
+
+    actors = {actor["id"]: actor for actor in state["combat"]["actors"]}
+    assert actors[str(attacker.id)]["temp_hp"] == 2
+    assert actors[target_id]["temp_hp"] == 3
+    activation_ids = [
+        record["payload"]["trigger_id"]
+        for record in (
+            __import__("json").loads(line)
+            for line in session.observer.path.read_text(encoding="utf-8").splitlines()
+        )
+        if record["event_type"] == "ui_actor_trigger_activated"
+    ]
+    assert activation_ids[-2:] == ["hit_guard", "damage_guard"]
+
+
 def test_exploration_ui_session_board_scan_shows_feedback_once_before_waiting_for_click():
     session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
     _start_combat_from_scout_alarm(session)
@@ -2359,6 +2419,44 @@ def test_exploration_ui_session_player_movement_updates_position_and_remaining_s
     assert moved["position"] == [destination["col"], destination["row"]]
     assert state["combat"]["movement"]["remaining_feet"] == 25
     assert any(message["title"] == "Ruch" for message in state["messages"])
+
+
+def test_player_movement_emits_actor_moved_trigger_after_position_changes() -> None:
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_combat_from_scout_alarm(session)
+    assert session.combat_state is not None
+    actor = current_actor(session.combat_state)
+    trigger = ActorTrigger(
+        "move_guard",
+        "Osłona po ruchu",
+        TriggerEventType.ACTOR_MOVED,
+        TriggerEffectKind.GRANT_TEMP_HP,
+        4,
+    )
+    session.combat_state = replace_actor(
+        session.combat_state,
+        replace(actor, triggers=(trigger,)),
+    )
+    for index, enemy in enumerate(tuple(session.combat_state.actors)):
+        if enemy.faction == Faction.ENEMY:
+            session.combat_state = replace_actor(
+                session.combat_state,
+                replace(enemy, position=Coordinate(10, index)),
+            )
+    destination = next(
+        tile
+        for tile in session.state_payload()["combat"]["movement"]["destinations"]
+        if tile["cost_feet"] == 5
+    )
+
+    state = session.submit_combat_movement(
+        col=destination["col"],
+        row=destination["row"],
+    )
+
+    moved = next(item for item in state["combat"]["actors"] if item["id"] == str(actor.id))
+    assert moved["temp_hp"] == 4
+    assert moved["position"] == [destination["col"], destination["row"]]
 
 
 def test_exploration_ui_session_board_movement_requires_second_click_confirmation():
@@ -2687,7 +2785,11 @@ def test_exploration_ui_session_concentration_check_failure_removes_attack_bonus
     assert pending["actor"]["id"] == "cleric"
     assert pending["damage"] == 12
     assert pending["dc"] == 10
-    assert pending["modifier"] == 1
+    assert pending["modifier"] == 2
+    assert any(
+        item["label"] == "Aura ochronnego relikwiarza"
+        for item in pending["modifier_components"]
+    )
     assert pending["effects"][0]["kind"] == "concentration_attack_bonus"
 
     resolved = session.submit_concentration_check(natural_roll=1)
@@ -3763,8 +3865,125 @@ def test_exploration_ui_session_targeted_inventory_action_is_contextual_and_cons
     sticky_flask = next(item for item in updated_hero["inventory"] if item["id"] == "sticky_flask")
     updated_goblin = next(actor for actor in resolved["combat"]["actors"] if actor["id"] == str(goblin.id))
     assert sticky_flask["quantity"] == 0
-    assert updated_goblin["effects"][0]["kind"] == "grant_next_attack_penalty"
+    assert updated_goblin["effects"] == []
+    assert "restrained" in updated_goblin["conditions"]
+    assert any(chip["label"] == "Unieruchomiony" for chip in updated_goblin["status_chips"])
     assert resolved["combat"]["turn_action"]["action_use"] == "action_used"
+
+
+def test_combat_condition_save_is_visible_and_blocks_turn_end_until_resolved():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    hero = session.combat_state.initiative_order.current_actor
+    poisoned = ConditionState(
+        str(hero.id),
+        CombatCondition.POISONED,
+        source_label="Trucizna testowa",
+        save_ability="constitution",
+        save_dc=10,
+        save_timing=ConditionSaveTiming.TURN_END,
+    )
+    session.combat_state = replace(
+        session.combat_state,
+        condition_states=(poisoned,),
+    )
+
+    payload = session.state_payload()["combat"]
+
+    assert payload["condition_saves"][0]["condition"] == "poisoned"
+    assert payload["condition_saves"][0]["roll_mode"] == "normal"
+    with pytest.raises(ValueError, match="rzut obronny końca tury"):
+        session.finish_combat_turn()
+
+    resolved = session.submit_combat_condition_save(
+        condition="poisoned",
+        natural_roll=20,
+    )
+
+    assert resolved["combat"]["condition_saves"] == []
+    assert "poisoned" not in resolved["combat"]["current_actor"]["conditions"]
+
+
+def test_combat_payload_exposes_dynamic_aura_coverage():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    cleric = next(actor for actor in session.combat_state.actors if str(actor.id) == "cleric")
+    hero = next(actor for actor in session.combat_state.actors if str(actor.id) == "hero")
+    session.combat_state = replace(
+        session.combat_state,
+        actors=tuple(
+            replace(actor, position=cleric.position)
+            if actor.id == hero.id
+            else actor
+            for actor in session.combat_state.actors
+        ),
+    )
+
+    payload = session.state_payload()["combat"]
+
+    aura = next(item for item in payload["auras"] if item["id"] == "protective_reliquary")
+    assert aura["effect_kind"] == "saving_throw_bonus"
+    assert aura["value"] == 1
+    assert "hero" in aura["affected_actor_ids"]
+
+    session.combat_state = replace(
+        session.combat_state,
+        actors=tuple(replace(actor, hp=0) if actor.id == cleric.id else actor for actor in session.combat_state.actors),
+    )
+    assert session.state_payload()["combat"]["auras"] == []
+
+
+def test_turn_start_trigger_is_visible_and_applied_in_combat_ui():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    entries = session.combat_state.initiative_order.entries
+    guard_index = next(
+        index for index, entry in enumerate(entries) if str(entry.actor.id) == "goblin_b"
+    )
+    previous_index = (guard_index - 1) % len(entries)
+    session.combat_state = replace(
+        session.combat_state,
+        initiative_order=replace(
+            session.combat_state.initiative_order,
+            current_index=previous_index,
+        ),
+    )
+
+    payload = session.finish_combat_turn()["combat"]
+
+    assert payload["current_actor"]["id"] == "goblin_b"
+    assert payload["current_actor"]["temp_hp"] == 2
+    assert payload["current_actor"]["triggers"][0]["event_type"] == "turn_start"
+    assert any(message.title == "Aktywowano cechę" for message in session.messages)
+
+
+def test_enemy_condition_save_is_resolved_automatically_at_turn_boundary():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    enemy = next(actor for actor in session.combat_state.actors if actor.faction == Faction.ENEMY)
+    restrained = ConditionState(
+        str(enemy.id),
+        CombatCondition.RESTRAINED,
+        source_label="Lepka ciecz",
+        save_ability="dexterity",
+        save_dc=0,
+        save_timing=ConditionSaveTiming.TURN_END,
+    )
+    state = replace(session.combat_state, condition_states=(restrained,))
+
+    resolved = session._resolve_automatic_condition_saves(
+        state,
+        enemy,
+        ConditionSaveTiming.TURN_END,
+    )
+
+    assert resolved.condition_states == ()
+    assert session.messages[-1].title == "Rzut przeciw warunkowi"
+    assert "stan usunięty" in session.messages[-1].body
 
 
 def test_exploration_ui_session_can_equip_carried_weapon_and_attack_from_target_menu():

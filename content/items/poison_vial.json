@@ -1,0 +1,24 @@
+{
+  "id": "poison_vial",
+  "name": "Fiolka osłabiającej trucizny",
+  "kind": "consumable",
+  "description": "Jednorazowa fiolka trucizny nakładającej stan Zatruty na trafiony cel.",
+  "properties": ["container", "poisonous"],
+  "combat_actions": [
+    {
+      "id": "splash_poison_vial",
+      "name": "Osłabiająca trucizna",
+      "label": "Oblij trucizną",
+      "action_type": "targeted_item_effect",
+      "action_cost": "action",
+      "target_faction": "enemy",
+      "range_feet": 5,
+      "effect_kind": "apply_condition",
+      "condition": "poisoned",
+      "save_ability": "constitution",
+      "save_dc": 12,
+      "save_timing": "turn_end",
+      "duration": "permanent"
+    }
+  ]
+}

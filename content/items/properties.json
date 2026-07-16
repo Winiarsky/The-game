@@ -24,6 +24,7 @@
     {"id": "flammable", "label": "łatwopalne"},
     {"id": "corroded", "label": "skorodowane"},
     {"id": "slippery", "label": "śliskie"},
+    {"id": "poisonous", "label": "trujące"},
     {"id": "thorny", "label": "kolczaste"},
     {"id": "fastener", "label": "element mocujący"}
   ]

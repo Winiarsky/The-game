@@ -76,6 +76,10 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [x] Unify saving-throw requests/results and add enemy effects that pause for a physical player d20 before applying save-adjusted typed damage.
 - [x] Add data-driven exploration hazards triggered by failed checks, with a visible physical saving throw and save-adjusted typed damage.
 - [x] Add save-dependent exploration hazard effects, persistent actor conditions, snapshot support, and an exploration-to-combat condition bridge.
+- [x] Add the M5 condition-engine vertical slice with Poisoned, Restrained, condition immunities, timed expiry, repeated turn-boundary saves, UI, content, and snapshots.
+- [x] Add data-driven actor auras with dynamic position coverage, non-stacking save modifiers, defeated-source shutdown, UI visibility, and snapshot support.
+- [x] Add the first data-driven trigger-engine vertical slice with shared event ids, deterministic turn-boundary activation, `grant_temp_hp`, UI logs, content validation, and snapshots.
+- [x] Connect the shared trigger engine to attack-hit, damage-taken, movement, rest, and encounter-end emitters, including reactions, forced movement, and exploration hazards.
 - [x] Add data-driven exploration traps with detection, disarm/bypass/trigger actions, hazard activation, snapshots, and an alarm-wire reference fixture.
 - [x] Close the combat turn-economy MVP with explicit action costs, data-driven Use an Object, separate draw/stow interactions, and visible UI costs.
 

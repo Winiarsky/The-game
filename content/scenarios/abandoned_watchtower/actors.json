@@ -118,6 +118,16 @@
         "1": 2
       },
       "spell_save_dc": 13,
+      "auras": [
+        {
+          "id": "protective_reliquary",
+          "label": "Aura ochronnego relikwiarza",
+          "radius_feet": 10,
+          "target": "self_and_allies",
+          "effect_kind": "saving_throw_bonus",
+          "value": 1
+        }
+      ],
       "inventory": [
         {
           "item_ref": "shield",

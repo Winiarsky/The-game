@@ -8,7 +8,13 @@ from typing import Any, Mapping
 from dnd_board_game.actors import (
     AbilityScores,
     Actor,
+    ActorAura,
+    ActorTrigger,
     ActorId,
+    AuraEffectKind,
+    AuraTarget,
+    TriggerEffectKind,
+    TriggerEventType,
     ActorResourcePool,
     DeathSaveState,
     CreatureSize,
@@ -24,6 +30,7 @@ from dnd_board_game.combat import (
     ActionUse,
     CombatState,
     CombatCondition,
+    ConditionSaveTiming,
     ConditionState,
     DroppedWeapon,
     HiddenState,
@@ -239,6 +246,28 @@ def _actor_payload(actor: Actor) -> dict[str, object]:
         },
         "uses_death_saves": actor.uses_death_saves,
         "attacks_per_action": actor.attacks_per_action,
+        "condition_immunities": list(actor.condition_immunities),
+        "auras": [
+            {
+                "id": aura.id,
+                "label": aura.label,
+                "radius_feet": aura.radius_feet,
+                "target": aura.target.value,
+                "effect_kind": aura.effect_kind.value,
+                "value": aura.value,
+            }
+            for aura in actor.auras
+        ],
+        "triggers": [
+            {
+                "id": trigger.id,
+                "label": trigger.label,
+                "event_type": trigger.event_type.value,
+                "effect_kind": trigger.effect_kind.value,
+                "value": trigger.value,
+            }
+            for trigger in actor.triggers
+        ],
         "death_saves": {
             "successes": actor.death_saves.successes,
             "failures": actor.death_saves.failures,
@@ -356,6 +385,45 @@ def _actor_from_payload(raw: object) -> Actor:
             ),
         ),
         attacks_per_action=_integer(data.get("attacks_per_action", 1), "actor.attacks_per_action"),
+        condition_immunities=_string_tuple(
+            data.get("condition_immunities", []),
+            "actor.condition_immunities",
+        ),
+        auras=tuple(
+            ActorAura(
+                id=_string(aura.get("id"), "actor.aura.id"),
+                label=_string(aura.get("label"), "actor.aura.label"),
+                radius_feet=_integer(aura.get("radius_feet"), "actor.aura.radius_feet"),
+                target=_enum(AuraTarget, aura.get("target"), "actor.aura.target"),
+                effect_kind=_enum(
+                    AuraEffectKind,
+                    aura.get("effect_kind"),
+                    "actor.aura.effect_kind",
+                ),
+                value=_integer(aura.get("value"), "actor.aura.value"),
+            )
+            for raw_aura in _sequence(data.get("auras", []), "actor.auras")
+            for aura in (_mapping(raw_aura, "actor.aura"),)
+        ),
+        triggers=tuple(
+            ActorTrigger(
+                id=_string(trigger.get("id"), "actor.trigger.id"),
+                label=_string(trigger.get("label"), "actor.trigger.label"),
+                event_type=_enum(
+                    TriggerEventType,
+                    trigger.get("event_type"),
+                    "actor.trigger.event_type",
+                ),
+                effect_kind=_enum(
+                    TriggerEffectKind,
+                    trigger.get("effect_kind"),
+                    "actor.trigger.effect_kind",
+                ),
+                value=_integer(trigger.get("value"), "actor.trigger.value"),
+            )
+            for raw_trigger in _sequence(data.get("triggers", []), "actor.triggers")
+            for trigger in (_mapping(raw_trigger, "actor.trigger"),)
+        ),
     )
 
 
@@ -447,6 +515,12 @@ def _exploration_payload(state: ExplorationState) -> dict[str, object]:
                 "actor_id": item.actor_id,
                 "condition": item.condition.value,
                 "source_actor_id": item.source_actor_id,
+                "source_label": item.source_label,
+                "duration": item.duration.value,
+                "expiration_actor_id": item.expiration_actor_id,
+                "save_ability": item.save_ability,
+                "save_dc": item.save_dc,
+                "save_timing": item.save_timing.value if item.save_timing is not None else None,
             }
             for item in state.condition_states
         ],
@@ -643,6 +717,30 @@ def _exploration_from_payload(base: ExplorationState, raw: object) -> Exploratio
                 item.get("source_actor_id"),
                 "exploration.condition.source_actor_id",
             ),
+            source_label=_string(
+                item.get("source_label", ""),
+                "exploration.condition.source_label",
+                allow_empty=True,
+            ),
+            duration=_enum(
+                EffectDuration,
+                item.get("duration", EffectDuration.PERMANENT.value),
+                "exploration.condition.duration",
+            ),
+            expiration_actor_id=_optional_string(
+                item.get("expiration_actor_id"),
+                "exploration.condition.expiration_actor_id",
+            ),
+            save_ability=_optional_string(
+                item.get("save_ability"),
+                "exploration.condition.save_ability",
+            ),
+            save_dc=_optional_integer(item.get("save_dc"), "exploration.condition.save_dc"),
+            save_timing=_optional_enum(
+                ConditionSaveTiming,
+                item.get("save_timing"),
+                "exploration.condition.save_timing",
+            ),
         )
         for raw_item in _sequence(data.get("condition_states", []), "condition_states")
         for item in (_mapping(raw_item, "condition_state"),)
@@ -788,6 +886,12 @@ def _combat_payload(state: CombatState | None) -> dict[str, object] | None:
                 "actor_id": condition.actor_id,
                 "condition": condition.condition.value,
                 "source_actor_id": condition.source_actor_id,
+                "source_label": condition.source_label,
+                "duration": condition.duration.value,
+                "expiration_actor_id": condition.expiration_actor_id,
+                "save_ability": condition.save_ability,
+                "save_dc": condition.save_dc,
+                "save_timing": condition.save_timing.value if condition.save_timing is not None else None,
             }
             for condition in state.condition_states
         ],
@@ -906,6 +1010,27 @@ def _combat_from_payload(raw: object) -> CombatState | None:
                     _string(item.get("source_actor_id"), "condition_state.source_actor_id")
                     if item.get("source_actor_id") is not None
                     else None
+                ),
+                source_label=_string(
+                    item.get("source_label", ""),
+                    "condition_state.source_label",
+                    allow_empty=True,
+                ),
+                duration=_enum(
+                    EffectDuration,
+                    item.get("duration", EffectDuration.PERMANENT.value),
+                    "condition_state.duration",
+                ),
+                expiration_actor_id=_optional_string(
+                    item.get("expiration_actor_id"),
+                    "condition_state.expiration_actor_id",
+                ),
+                save_ability=_optional_string(item.get("save_ability"), "condition_state.save_ability"),
+                save_dc=_optional_integer(item.get("save_dc"), "condition_state.save_dc"),
+                save_timing=_optional_enum(
+                    ConditionSaveTiming,
+                    item.get("save_timing"),
+                    "condition_state.save_timing",
                 ),
             )
             for raw_item in _sequence(data.get("condition_states", []), "combat.condition_states")

@@ -17,8 +17,9 @@ from dnd_board_game.combat import (
     ActionUse,
     CombatCondition,
     CombatState,
-    add_condition,
+    apply_condition,
     can_use_attack_action,
+    condition_roll_request,
     current_actor,
     grappled_actor_ids,
     grappled_by,
@@ -125,8 +126,18 @@ class CombatGrappleFlowService:
             mode=mode,
             actor_skill=actor_skill,
             opponent_skill=opponent_skill,
-            actor_request=D20RollRequest(modifiers=skill_roll_modifiers(actor, actor_skill)),
-            opponent_request=D20RollRequest(modifiers=skill_roll_modifiers(target, opponent_skill)),
+            actor_request=condition_roll_request(
+                D20RollRequest(modifiers=skill_roll_modifiers(actor, actor_skill)),
+                state.condition_states,
+                actor,
+                ability_check=True,
+            ),
+            opponent_request=condition_roll_request(
+                D20RollRequest(modifiers=skill_roll_modifiers(target, opponent_skill)),
+                state.condition_states,
+                target,
+                ability_check=True,
+            ),
         )
 
     def resolve(
@@ -173,15 +184,18 @@ class CombatGrappleFlowService:
         )
         succeeded = contest.outcome == ContestOutcome.INITIATOR_WINS
         if succeeded and pending.mode == GrappleMode.START:
+            application = apply_condition(
+                updated.condition_states,
+                opponent,
+                CombatCondition.GRAPPLED,
+                source_actor_id=pending.actor_id,
+                source_label="Grapple",
+            )
             updated = replace(
                 updated,
-                condition_states=add_condition(
-                    updated.condition_states,
-                    pending.opponent_id,
-                    CombatCondition.GRAPPLED,
-                    source_actor_id=pending.actor_id,
-                ),
+                condition_states=application.condition_states,
             )
+            succeeded = application.applied
         elif succeeded:
             updated = replace(
                 updated,
@@ -245,6 +259,7 @@ def _start_is_legal(state: CombatState, actor: Actor, target: Actor) -> bool:
         and _within_five_feet(actor, target)
         and can_grapple_or_shove_size(actor.size, target.size)
         and free_hand_count(actor.inventory) > 0
+        and CombatCondition.GRAPPLED.value not in target.condition_immunities
         and not has_condition(state.condition_states, str(target.id), CombatCondition.GRAPPLED)
         and not grappled_actor_ids(state.condition_states, str(actor.id))
         and not is_hidden_from(state.hidden_states, str(target.id), str(actor.id))
@@ -315,6 +330,8 @@ def _start_unavailable_message(state: CombatState, actor: Actor, target: Actor) 
         )
     if free_hand_count(actor.inventory) <= 0:
         return f"{actor.name} potrzebuje wolnej ręki, aby rozpocząć Grapple."
+    if CombatCondition.GRAPPLED.value in target.condition_immunities:
+        return f"{target.name} ma odporność na stan Chwytany."
     if has_condition(state.condition_states, str(target.id), CombatCondition.GRAPPLED):
         return f"{target.name} już jest chwytany."
     if grappled_actor_ids(state.condition_states, str(actor.id)):

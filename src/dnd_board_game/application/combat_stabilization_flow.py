@@ -4,7 +4,14 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from dnd_board_game.actors import Actor, skill_roll_modifiers
-from dnd_board_game.combat import CombatState, current_actor, replace_actor, stabilize_actor, use_turn_action
+from dnd_board_game.combat import (
+    CombatState,
+    condition_roll_request,
+    current_actor,
+    replace_actor,
+    stabilize_actor,
+    use_turn_action,
+)
 from dnd_board_game.inventory import consume_inventory_item, has_inventory_quantity
 from dnd_board_game.rules import D20RollInput, D20RollRequest, resolve_ability_check, resolve_d20_roll
 
@@ -79,7 +86,12 @@ def resolve_combat_stabilization(
 
     if natural_roll is None:
         raise ValueError("Stabilizacja testem Medicine wymaga wyniku d20.")
-    request = D20RollRequest(modifiers=skill_roll_modifiers(stabilizer, "medicine"))
+    request = condition_roll_request(
+        D20RollRequest(modifiers=skill_roll_modifiers(stabilizer, "medicine")),
+        state.condition_states,
+        stabilizer,
+        ability_check=True,
+    )
     roll = resolve_d20_roll(D20RollInput(request, int(natural_roll)))
     check = resolve_ability_check(roll, MEDICINE_DC)
     updated = action.state

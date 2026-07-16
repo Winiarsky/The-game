@@ -9,7 +9,13 @@ from dnd_board_game.actors import (
     ABILITY_NAMES,
     AbilityScores,
     Actor,
+    ActorAura,
+    ActorTrigger,
     ActorId,
+    AuraEffectKind,
+    AuraTarget,
+    TriggerEffectKind,
+    TriggerEventType,
     CreatureSize,
     DamageAffinityProfile,
     Faction,
@@ -27,6 +33,7 @@ from dnd_board_game.combat import (
     AttackKind,
     AttackSourceType,
     CombatCondition,
+    ConditionSaveTiming,
     DamageType,
     HealingSource,
     HealingSourceType,
@@ -197,6 +204,10 @@ class ScenarioCombatActionDefinition:
     range_feet: int = 0
     effect_kind: str | None = None
     action_cost: ActionEconomyCost = ActionEconomyCost.ACTION
+    condition: CombatCondition | None = None
+    save_ability: str | None = None
+    save_dc: int | None = None
+    save_timing: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -226,6 +237,9 @@ class ScenarioActorDefinition:
     attacks: tuple[ScenarioAttackDefinition, ...]
     attacks_per_action: int = 1
     multiattack: tuple[str, ...] = ()
+    condition_immunities: tuple[str, ...] = ()
+    auras: tuple[ActorAura, ...] = ()
+    triggers: tuple[ActorTrigger, ...] = ()
     healing_sources: tuple[ScenarioHealingDefinition, ...] = ()
     combat_actions: tuple[ScenarioCombatActionDefinition, ...] = ()
     source_ref: str | None = None
@@ -653,6 +667,21 @@ def _parse_actor(
         raise ValueError(f"actor {actor_id}.multiattack is only supported for monsters.")
     proficiencies = _parse_proficiency_profile(merged, actor_id)
     damage_affinities = _parse_damage_affinities(merged, actor_id)
+    condition_immunities_data = merged.get("condition_immunities", [])
+    if not isinstance(condition_immunities_data, list | tuple):
+        raise ValueError(f"actor {actor_id}.condition_immunities must be a list.")
+    condition_immunities = tuple(
+        _enum_value(
+            CombatCondition,
+            str(value),
+            f"actor {actor_id}.condition_immunities",
+        ).value
+        for value in condition_immunities_data
+    )
+    if len(condition_immunities) != len(set(condition_immunities)):
+        raise ValueError(f"actor {actor_id}.condition_immunities cannot contain duplicates.")
+    auras = _parse_actor_auras(merged.get("auras", []), actor_id)
+    triggers = _parse_actor_triggers(merged.get("triggers", []), actor_id)
     return ScenarioActorDefinition(
         id=actor_id,
         name=str(_required(merged, "name", f"actor {actor_id}")),
@@ -690,6 +719,9 @@ def _parse_actor(
         attacks=attacks,
         attacks_per_action=attacks_per_action,
         multiattack=multiattack,
+        condition_immunities=condition_immunities,
+        auras=auras,
+        triggers=triggers,
         healing_sources=healing_sources,
         combat_actions=combat_actions,
         source_ref=str(source_ref) if source_ref is not None else None,
@@ -1057,9 +1089,29 @@ def _parse_combat_action(data: dict[str, Any], actor_id: str) -> ScenarioCombatA
     if action_type == "targeted_item_effect":
         if not data.get("source_item_id"):
             raise ValueError(f"combat action {action_id} requires source_item_id.")
-        if effect_kind not in {"grant_next_attack_penalty"}:
+        if effect_kind not in {"grant_next_attack_penalty", "apply_condition"}:
             raise ValueError(f"combat action {action_id} has unsupported effect_kind.")
         EffectDuration(duration)
+    condition = (
+        _enum_value(CombatCondition, str(data["condition"]), f"combat action {action_id}.condition")
+        if "condition" in data
+        else None
+    )
+    save_ability = str(data["save_ability"]) if "save_ability" in data else None
+    save_dc = int(data["save_dc"]) if "save_dc" in data else None
+    save_timing = str(data["save_timing"]) if "save_timing" in data else None
+    if effect_kind == "apply_condition":
+        if condition is None:
+            raise ValueError(f"combat action {action_id} requires condition.")
+        save_fields = (save_ability, save_dc, save_timing)
+        if any(value is not None for value in save_fields) and not all(
+            value is not None for value in save_fields
+        ):
+            raise ValueError(
+                f"combat action {action_id} condition requires all save fields or none."
+            )
+        if save_timing is not None:
+            ConditionSaveTiming(save_timing)
     source_type = AttackSourceType.SPELL if action_type.startswith("concentration_") else AttackSourceType.CUSTOM
     return ScenarioCombatActionDefinition(
         id=action_id,
@@ -1083,6 +1135,10 @@ def _parse_combat_action(data: dict[str, Any], actor_id: str) -> ScenarioCombatA
         range_feet=range_feet,
         effect_kind=effect_kind,
         action_cost=ActionEconomyCost(str(data.get("action_cost", "action"))),
+        condition=condition,
+        save_ability=save_ability,
+        save_dc=save_dc,
+        save_timing=save_timing,
     )
 
 
@@ -2480,6 +2536,9 @@ def _actor_from_definition(definition: ScenarioActorDefinition) -> Actor:
         uses_death_saves=definition.uses_death_saves,
         damage_affinities=definition.damage_affinities,
         attacks_per_action=definition.attacks_per_action,
+        condition_immunities=definition.condition_immunities,
+        auras=definition.auras,
+        triggers=definition.triggers,
     )
 
 
@@ -3116,6 +3175,71 @@ def _parse_actor_resources(data: Any, actor_id: str) -> tuple[ActorResourcePool,
     if len({pool.id for pool in pools}) != len(pools):
         raise ValueError(f"actor {actor_id}.resource_pools ids must be unique.")
     return tuple(pools)
+
+
+def _parse_actor_auras(data: Any, actor_id: str) -> tuple[ActorAura, ...]:
+    if not isinstance(data, list):
+        raise ValueError(f"actor {actor_id}.auras must be a list.")
+    auras: list[ActorAura] = []
+    for raw_aura in data:
+        if not isinstance(raw_aura, dict):
+            raise ValueError(f"actor {actor_id}.auras entries must be objects.")
+        aura_id = str(_required(raw_aura, "id", f"actor {actor_id}.aura"))
+        auras.append(
+            ActorAura(
+                id=aura_id,
+                label=str(_required(raw_aura, "label", f"actor aura {aura_id}")),
+                radius_feet=int(
+                    _required(raw_aura, "radius_feet", f"actor aura {aura_id}")
+                ),
+                target=_enum_value(
+                    AuraTarget,
+                    str(_required(raw_aura, "target", f"actor aura {aura_id}")),
+                    f"actor aura {aura_id}.target",
+                ),
+                effect_kind=_enum_value(
+                    AuraEffectKind,
+                    str(_required(raw_aura, "effect_kind", f"actor aura {aura_id}")),
+                    f"actor aura {aura_id}.effect_kind",
+                ),
+                value=int(_required(raw_aura, "value", f"actor aura {aura_id}")),
+            )
+        )
+    if len({aura.id for aura in auras}) != len(auras):
+        raise ValueError(f"actor {actor_id}.auras ids must be unique.")
+    return tuple(auras)
+
+
+def _parse_actor_triggers(data: Any, actor_id: str) -> tuple[ActorTrigger, ...]:
+    if not isinstance(data, list):
+        raise ValueError(f"actor {actor_id}.triggers must be a list.")
+    triggers: list[ActorTrigger] = []
+    for raw_trigger in data:
+        if not isinstance(raw_trigger, dict):
+            raise ValueError(f"actor {actor_id}.triggers entries must be objects.")
+        trigger_id = str(_required(raw_trigger, "id", f"actor {actor_id}.trigger"))
+        triggers.append(
+            ActorTrigger(
+                id=trigger_id,
+                label=str(
+                    _required(raw_trigger, "label", f"actor trigger {trigger_id}")
+                ),
+                event_type=_enum_value(
+                    TriggerEventType,
+                    str(_required(raw_trigger, "event_type", f"actor trigger {trigger_id}")),
+                    f"actor trigger {trigger_id}.event_type",
+                ),
+                effect_kind=_enum_value(
+                    TriggerEffectKind,
+                    str(_required(raw_trigger, "effect_kind", f"actor trigger {trigger_id}")),
+                    f"actor trigger {trigger_id}.effect_kind",
+                ),
+                value=int(_required(raw_trigger, "value", f"actor trigger {trigger_id}")),
+            )
+        )
+    if len({trigger.id for trigger in triggers}) != len(triggers):
+        raise ValueError(f"actor {actor_id}.triggers ids must be unique.")
+    return tuple(triggers)
 
 
 def _parse_spell_casting_kind(

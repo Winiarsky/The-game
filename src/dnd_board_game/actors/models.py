@@ -5,6 +5,8 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, NewType
 
 from .damage_affinities import DamageAffinityProfile
+from .auras import ActorAura
+from .triggers import ActorTrigger
 from .proficiency_profile import ProficiencyProfile
 from .size import CreatureSize
 
@@ -75,6 +77,9 @@ class Actor:
     size: CreatureSize = CreatureSize.MEDIUM
     damage_affinities: DamageAffinityProfile = field(default_factory=DamageAffinityProfile)
     attacks_per_action: int = 1
+    condition_immunities: tuple[str, ...] = ()
+    auras: tuple[ActorAura, ...] = ()
+    triggers: tuple[ActorTrigger, ...] = ()
 
     def __post_init__(self) -> None:
         if self.max_hp <= 0:
@@ -83,6 +88,16 @@ class Actor:
             raise ValueError("Proficiency bonus cannot be negative.")
         if self.attacks_per_action < 1:
             raise ValueError("Attacks per action must be at least 1.")
+        if any(not condition.strip() for condition in self.condition_immunities):
+            raise ValueError("Condition immunity ids cannot be empty.")
+        if len(self.condition_immunities) != len(set(self.condition_immunities)):
+            raise ValueError("Condition immunity ids cannot contain duplicates.")
+        aura_ids = tuple(aura.id for aura in self.auras)
+        if len(aura_ids) != len(set(aura_ids)):
+            raise ValueError("Actor aura ids cannot contain duplicates.")
+        trigger_ids = tuple(trigger.id for trigger in self.triggers)
+        if len(trigger_ids) != len(set(trigger_ids)):
+            raise ValueError("Actor trigger ids cannot contain duplicates.")
 
     @property
     def skill_proficiencies(self) -> tuple[str, ...]:

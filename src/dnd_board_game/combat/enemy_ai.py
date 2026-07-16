@@ -19,7 +19,7 @@ from dnd_board_game.world import BoardState, PathResult, find_path, movement_ran
 from .action_economy import ActionUse
 from .attack_flow import AttackDeclaration, AttackResolution, AttackSource, legal_attack_targets, legal_melee_targets, resolve_attack
 from .attack_positioning import AttackPositioning, attack_source_with_positioning, evaluate_attack_positioning
-from .conditions import CombatCondition, attack_source_with_prone, has_condition, path_with_condition_cost
+from .conditions import CombatCondition, attack_source_with_prone, condition_roll_request, has_condition, path_with_condition_cost
 from .scene import SceneObject
 from .stealth import is_hidden_from, resolve_search, reveal_actor
 from .damage import AppliedDamageResult, DamageComponentInput, DamageResult, DamageType, apply_damage_result, resolve_damage
@@ -277,7 +277,12 @@ def resolve_enemy_auto_turn(
             action = use_turn_action(plan.state)
             perception = resolve_d20_roll(
                 D20RollInput(
-                    D20RollRequest(modifiers=skill_roll_modifiers(enemy, "perception")),
+                    condition_roll_request(
+                        D20RollRequest(modifiers=skill_roll_modifiers(enemy, "perception")),
+                        action.state.condition_states,
+                        enemy,
+                        ability_check=True,
+                    ),
                     rng.randint(1, 20),
                 )
             )

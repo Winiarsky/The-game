@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 
 from dnd_board_game.actors import Actor, Faction
+from dnd_board_game.combat import TriggerActivation, resolve_actor_trigger_events
 from dnd_board_game.exploration import (
     ExplorationEffectResult,
     ExplorationState,
@@ -38,6 +39,7 @@ class ShortRestCompletionTransition:
     effects: tuple[ExplorationEffectResult, ...]
     active_effects: tuple[ActiveEffect, ...]
     expired_effects: tuple[ActiveEffect, ...]
+    trigger_activations: tuple[TriggerActivation, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,14 +104,22 @@ class ShortRestFlowService:
             active_effects,
             EffectEvent(EffectEventType.SHORT_REST_COMPLETED),
         )
+        trigger_resolution = resolve_actor_trigger_events(
+            updated_actors,
+            (
+                EffectEvent(EffectEventType.SHORT_REST_COMPLETED, actor_id=str(actor.id))
+                for actor in updated_actors
+            ),
+        )
         return ShortRestCompletionTransition(
             state=updated_state,
-            actors=updated_actors,
+            actors=trigger_resolution.actors,
             pending=replace(pending, completed=True),
             rest_results=rest_results,
             effects=tuple(effects),
             active_effects=expiration.active_effects,
             expired_effects=expiration.expired_effects,
+            trigger_activations=trigger_resolution.activations,
         )
 
     def spend_hit_die(
