@@ -3,14 +3,35 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass, replace
 
-from dnd_board_game.actors import Actor
-from dnd_board_game.rules import D20RollInput, D20RollResult, RollMode, resolve_d20_roll
+from dnd_board_game.actors import Actor, Faction, skill_roll_modifiers
+from dnd_board_game.rules import (
+    D20RollInput,
+    D20RollRequest,
+    D20RollResult,
+    RollMode,
+    SaveDamageOnSuccess,
+    SavingThrowRequest,
+    SavingThrowResult,
+    resolve_d20_roll,
+)
 from dnd_board_game.world import BoardState, PathResult, find_path, movement_range
 
 from .action_economy import ActionUse
-from .attack_flow import AttackDeclaration, AttackResolution, AttackSource, legal_melee_targets, resolve_attack
+from .attack_flow import AttackDeclaration, AttackResolution, AttackSource, legal_attack_targets, legal_melee_targets, resolve_attack
+from .attack_positioning import AttackPositioning, attack_source_with_positioning, evaluate_attack_positioning
+from .conditions import CombatCondition, attack_source_with_prone, has_condition, path_with_condition_cost
+from .scene import SceneObject
+from .stealth import is_hidden_from, resolve_search, reveal_actor
 from .damage import AppliedDamageResult, DamageComponentInput, DamageResult, DamageType, apply_damage_result, resolve_damage
-from .session import CombatState, replace_actor, use_movement, use_turn_action
+from .session import (
+    CombatState,
+    movement_remaining,
+    replace_actor,
+    stand_up,
+    use_attack_action,
+    use_movement,
+    use_turn_action,
+)
 from .targets import CombatTarget
 
 
@@ -26,6 +47,11 @@ class EnemyAutoAttackResult:
     applied_damage: AppliedDamageResult | None = None
     updated_target: Actor | None = None
     action_used: bool = False
+    positioning: AttackPositioning = AttackPositioning()
+    source: AttackSource | None = None
+    saving_throw_request: SavingThrowRequest | None = None
+    saving_throw_result: SavingThrowResult | None = None
+    base_damage: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,6 +68,11 @@ class EnemyAutoTurnResult:
     applied_damage: AppliedDamageResult | None = None
     updated_target: Actor | None = None
     action_used: bool = False
+    positioning: AttackPositioning = AttackPositioning()
+    source: AttackSource | None = None
+    saving_throw_request: SavingThrowRequest | None = None
+    saving_throw_result: SavingThrowResult | None = None
+    base_damage: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,12 +92,21 @@ def resolve_enemy_auto_attack(
     enemy: Actor,
     source: AttackSource,
     rng: random.Random,
+    scene_objects: tuple[SceneObject, ...] = (),
+    *,
+    maximum_attacks: int | None = None,
 ) -> EnemyAutoAttackResult:
-    action_result = use_turn_action(state)
+    action_result = use_attack_action(state, enemy, maximum_attacks=maximum_attacks)
     if not action_result.accepted:
         return EnemyAutoAttackResult(action_result.state, enemy, None, action_result.message, action_used=False)
 
-    targets = legal_melee_targets(board, enemy, action_result.state.actors)
+    targets = legal_attack_targets(
+        board,
+        enemy,
+        action_result.state.actors,
+        source,
+        action_result.state.hidden_states,
+    )
     if not targets:
         return EnemyAutoAttackResult(
             action_result.state,
@@ -77,6 +117,53 @@ def resolve_enemy_auto_attack(
         )
 
     target = _select_enemy_target(enemy, targets)
+    target_actor = _actor_for_target(action_result.state, target)
+    positioning = evaluate_attack_positioning(
+        board,
+        enemy,
+        target_actor,
+        source,
+        action_result.state.actors,
+        scene_objects,
+    )
+    source = attack_source_with_positioning(source, positioning)
+    source = attack_source_with_prone(
+        source,
+        action_result.state.condition_states,
+        enemy,
+        target_actor,
+    )
+    target = replace(target, ac=target.ac + positioning.cover_bonus)
+    if source.save_ability is not None:
+        dc = int(source.save_dc or enemy.spell_save_dc)
+        if dc <= 0:
+            raise ValueError(f"Atak {source.name} wymaga dodatniego ST rzutu obronnego.")
+        base_damage = _enemy_damage_amount(source, rng, critical=False)
+        saving_throw_request = SavingThrowRequest(
+            ability=source.save_ability,
+            dc=dc,
+            source_label=source.name,
+            dc_source_label=f"ST efektu: {source.name}",
+            damage_on_success=SaveDamageOnSuccess(source.save_damage_on_success),
+        )
+        updated_state = replace(
+            action_result.state,
+            hidden_states=reveal_actor(action_result.state.hidden_states, str(enemy.id)),
+        )
+        return EnemyAutoAttackResult(
+            state=updated_state,
+            enemy=enemy,
+            target=target,
+            message=(
+                f"{enemy.name} używa {source.name} przeciwko {target.name}. "
+                f"Cel wykonuje {source.save_ability} save przeciw ST {dc}."
+            ),
+            action_used=True,
+            positioning=positioning,
+            source=source,
+            saving_throw_request=saving_throw_request,
+            base_damage=base_damage,
+        )
     attack_roll = resolve_d20_roll(_roll_input_for_request(source.attack_roll_request, rng))
     declaration = AttackDeclaration(attacker=enemy, target=target, source=source)
     resolution = resolve_attack(declaration, attack_roll, ActionUse.ACTION_AVAILABLE)
@@ -90,22 +177,31 @@ def resolve_enemy_auto_attack(
             damage_amount = source.damage_fixed + source.damage_modifier
         else:
             die_sides = source.damage_die_sides or 6
-            damage_amount = rng.randint(1, die_sides) + source.damage_modifier
+            dice_count = 2 if resolution.critical else 1
+            damage_amount = sum(rng.randint(1, die_sides) for _ in range(dice_count)) + source.damage_modifier
         damage_type = DamageType(source.damage_type)
         damage = resolve_damage((DamageComponentInput(damage_amount, damage_type, source.name),))
-        target_actor = _actor_for_target(action_result.state, target)
-        applied_damage = apply_damage_result(target_actor, damage)
+        applied_damage = apply_damage_result(
+            target_actor,
+            damage,
+            critical=resolution.critical,
+        )
+        damage = applied_damage.damage
         updated_target = applied_damage.actor_after
         updated_state = replace_actor(action_result.state, updated_target)
         defeated_text = " Cel zostaje pokonany." if applied_damage.defeated_by_damage else ""
         message = (
             f"{enemy.name} trafia {target.name}. Wynik ataku: {attack_roll.total}. "
-            f"Obrażenia: {damage.total_applied} {damage_type.value}. "
+            f"Obrażenia: {damage.total_before_reduction} -> {damage.total_applied} {damage_type.value}. "
             f"{target_actor.name}: HP {applied_damage.hp_before} -> {applied_damage.hp_after}.{defeated_text}"
         )
     else:
         message = f"{enemy.name} pudłuje przeciwko {target.name}. Wynik ataku: {attack_roll.total}."
 
+    updated_state = replace(
+        updated_state,
+        hidden_states=reveal_actor(updated_state.hidden_states, str(enemy.id)),
+    )
     return EnemyAutoAttackResult(
         state=updated_state,
         enemy=enemy,
@@ -117,6 +213,8 @@ def resolve_enemy_auto_attack(
         applied_damage=applied_damage,
         updated_target=updated_target,
         action_used=True,
+        positioning=positioning,
+        source=source,
     )
 
 
@@ -133,11 +231,31 @@ def resolve_enemy_auto_turn(
     enemy: Actor,
     source: AttackSource,
     rng: random.Random,
+    scene_objects: tuple[SceneObject, ...] = (),
+    *,
+    maximum_attacks: int | None = None,
 ) -> EnemyAutoTurnResult:
-    plan = plan_enemy_turn(board, state, enemy)
+    plan = plan_enemy_turn(board, state, enemy, source)
+    stood_up = (
+        has_condition(state.condition_states, str(enemy.id), CombatCondition.PRONE)
+        and not has_condition(plan.state.condition_states, str(enemy.id), CombatCondition.PRONE)
+    )
+    movement_message = (
+        f"{enemy.name} wstaje, wydając połowę szybkości. "
+        if stood_up
+        else ""
+    )
     if plan.target is None:
         if plan.movement_path is not None:
-            follow_up = resolve_enemy_auto_attack(board, plan.state, plan.enemy, source, rng)
+            follow_up = resolve_enemy_auto_attack(
+                board,
+                plan.state,
+                plan.enemy,
+                source,
+                rng,
+                scene_objects,
+                maximum_attacks=maximum_attacks,
+            )
             return EnemyAutoTurnResult(
                 follow_up.state,
                 plan.enemy,
@@ -146,6 +264,40 @@ def resolve_enemy_auto_turn(
                 movement_path=plan.movement_path,
                 moved_enemy=plan.moved_enemy,
                 action_used=follow_up.action_used,
+                positioning=follow_up.positioning,
+            )
+        hidden_opponents = tuple(
+            actor
+            for actor in plan.state.actors
+            if actor.faction not in {enemy.faction, Faction.NEUTRAL}
+            and not actor.is_defeated()
+            and is_hidden_from(plan.state.hidden_states, str(actor.id), str(enemy.id))
+        )
+        if hidden_opponents and not plan.action_used:
+            action = use_turn_action(plan.state)
+            perception = resolve_d20_roll(
+                D20RollInput(
+                    D20RollRequest(modifiers=skill_roll_modifiers(enemy, "perception")),
+                    rng.randint(1, 20),
+                )
+            )
+            search = resolve_search(action.state.hidden_states, enemy, perception.total)
+            found_names = ", ".join(
+                actor.name
+                for actor in hidden_opponents
+                if str(actor.id) in search.found_actor_ids
+            )
+            message = (
+                f"{enemy.name} używa Search ({perception.total}) i odnajduje: {found_names}."
+                if found_names
+                else f"{enemy.name} używa Search ({perception.total}), ale nikogo nie odnajduje."
+            )
+            return EnemyAutoTurnResult(
+                replace(action.state, hidden_states=search.hidden_states),
+                enemy,
+                None,
+                message,
+                action_used=action.accepted,
             )
         return EnemyAutoTurnResult(
             plan.state,
@@ -156,7 +308,15 @@ def resolve_enemy_auto_turn(
             moved_enemy=plan.moved_enemy,
             action_used=plan.action_used,
         )
-    attack = resolve_enemy_auto_attack(board, plan.state, plan.enemy, source, rng)
+    attack = resolve_enemy_auto_attack(
+        board,
+        plan.state,
+        plan.enemy,
+        source,
+        rng,
+        scene_objects,
+        maximum_attacks=maximum_attacks,
+    )
     if plan.movement_path is None:
         return _turn_result_from_attack(attack)
     if attack.target is None:
@@ -164,7 +324,7 @@ def resolve_enemy_auto_turn(
             attack.state,
             plan.enemy,
             None,
-            f"{_enemy_movement_message(enemy, plan.movement_path)} Po ruchu nadal nie ma legalnego celu ataku.",
+            f"{movement_message}{_enemy_movement_message(enemy, plan.movement_path)} Po ruchu nadal nie ma legalnego celu ataku.",
             movement_path=plan.movement_path,
             moved_enemy=plan.moved_enemy,
             action_used=attack.action_used,
@@ -173,31 +333,61 @@ def resolve_enemy_auto_turn(
         state=attack.state,
         enemy=plan.enemy,
         target=attack.target,
-        message=f"{_enemy_movement_message(enemy, plan.movement_path)} {attack.message}",
+        message=f"{movement_message}{_enemy_movement_message(enemy, plan.movement_path)} {attack.message}",
         movement_path=plan.movement_path,
         moved_enemy=plan.moved_enemy,
         attack_roll=attack.attack_roll,
         attack_resolution=attack.attack_resolution,
         damage=attack.damage,
+        applied_damage=attack.applied_damage,
         updated_target=attack.updated_target,
         action_used=attack.action_used,
+        positioning=attack.positioning,
+        source=attack.source,
+        saving_throw_request=attack.saving_throw_request,
+        saving_throw_result=attack.saving_throw_result,
+        base_damage=attack.base_damage,
     )
 
 
-def plan_enemy_turn(board: BoardState, state: CombatState, enemy: Actor) -> EnemyTurnPlan:
-    targets = legal_melee_targets(board, enemy, state.actors)
+def plan_enemy_turn(
+    board: BoardState,
+    state: CombatState,
+    enemy: Actor,
+    source: AttackSource | None = None,
+) -> EnemyTurnPlan:
+    opening_message = ""
+    if has_condition(state.condition_states, str(enemy.id), CombatCondition.PRONE):
+        standing = stand_up(state, enemy)
+        if standing.accepted:
+            state = standing.state
+            enemy = _actor_for_id(state, enemy.id)
+            opening_message = f"{standing.message} "
+    targets = (
+        legal_attack_targets(board, enemy, state.actors, source, state.hidden_states)
+        if source is not None
+        else legal_melee_targets(board, enemy, state.actors, state.hidden_states)
+    )
     if targets:
         target = _select_enemy_target(enemy, targets)
-        return EnemyTurnPlan(state, enemy, target, f"{enemy.name} atakuje {target.name}.")
+        return EnemyTurnPlan(state, enemy, target, f"{opening_message}{enemy.name} atakuje {target.name}.")
 
-    movement_path = _best_enemy_movement_path(board, state, enemy)
+    movement_path = _best_enemy_movement_path(board, state, enemy, source)
     if movement_path is not None and movement_path.valid and movement_path.destination != enemy.position:
         movement = use_movement(state, enemy, movement_path)
         moved_state = movement.state
         moved_enemy = _actor_for_id(moved_state, enemy.id)
-        moved_targets = legal_melee_targets(board, moved_enemy, moved_state.actors)
+        moved_targets = (
+            legal_attack_targets(
+                board, moved_enemy, moved_state.actors, source, moved_state.hidden_states
+            )
+            if source is not None
+            else legal_melee_targets(
+                board, moved_enemy, moved_state.actors, moved_state.hidden_states
+            )
+        )
         target = _select_enemy_target(moved_enemy, moved_targets) if moved_targets else None
-        message = _enemy_movement_message(enemy, movement_path)
+        message = f"{opening_message}{_enemy_movement_message(enemy, movement_path)}"
         if target is not None:
             message = f"{message} Po ruchu atakuje {target.name}."
         else:
@@ -211,12 +401,26 @@ def plan_enemy_turn(board: BoardState, state: CombatState, enemy: Actor) -> Enem
             moved_enemy=moved_enemy,
         )
 
+    has_hidden_opponent = any(
+        actor.faction not in {enemy.faction, Faction.NEUTRAL}
+        and not actor.is_defeated()
+        and is_hidden_from(state.hidden_states, str(actor.id), str(enemy.id))
+        for actor in state.actors
+    )
+    if has_hidden_opponent:
+        return EnemyTurnPlan(
+            state,
+            enemy,
+            None,
+            f"{opening_message}{enemy.name} nie widzi celu i zamierza użyć Search.",
+            action_used=False,
+        )
     action_result = use_turn_action(state)
     return EnemyTurnPlan(
         action_result.state,
         enemy,
         None,
-        f"{enemy.name} nie ma legalnego celu ani dostępnego ruchu i kończy akcję.",
+        f"{opening_message}{enemy.name} nie ma legalnego celu ani dostępnego ruchu i kończy akcję.",
         action_used=action_result.accepted,
     )
 
@@ -247,11 +451,24 @@ def _select_enemy_target(enemy: Actor, targets: tuple[CombatTarget, ...]) -> Com
     )
 
 
-def _best_enemy_movement_path(board: BoardState, state: CombatState, enemy: Actor) -> PathResult | None:
-    movement = movement_range(board, enemy, state.actors)
+def _best_enemy_movement_path(
+    board: BoardState,
+    state: CombatState,
+    enemy: Actor,
+    source: AttackSource | None = None,
+) -> PathResult | None:
+    budget = movement_remaining(state, enemy)
+    movement_actor = replace(enemy, speed_feet=budget)
+    movement = movement_range(board, movement_actor, state.actors)
     opponents = tuple(
-        actor for actor in state.actors if actor.faction != enemy.faction and not actor.is_defeated()
+        actor
+        for actor in state.actors
+        if actor.faction not in {enemy.faction, Faction.NEUTRAL}
+        and not actor.is_defeated()
+        and not is_hidden_from(state.hidden_states, str(actor.id), str(enemy.id))
     )
+    if not opponents:
+        return None
     best_path: PathResult | None = None
     best_key: tuple[int, int, int, int, str] | None = None
     for destination in movement.reachable_tiles:
@@ -259,7 +476,22 @@ def _best_enemy_movement_path(board: BoardState, state: CombatState, enemy: Acto
             continue
         candidate_enemy = replace(enemy, position=destination)
         candidate_actors = tuple(candidate_enemy if actor.id == enemy.id else actor for actor in state.actors)
-        candidate_targets = legal_melee_targets(board, candidate_enemy, candidate_actors)
+        candidate_targets = (
+            legal_attack_targets(
+                board,
+                candidate_enemy,
+                candidate_actors,
+                source,
+                state.hidden_states,
+            )
+            if source is not None
+            else legal_melee_targets(
+                board,
+                candidate_enemy,
+                candidate_actors,
+                state.hidden_states,
+            )
+        )
         can_attack_after_move = 0 if candidate_targets else 1
         distance_to_opponent = min(
             (
@@ -268,10 +500,16 @@ def _best_enemy_movement_path(board: BoardState, state: CombatState, enemy: Acto
             ),
             default=999,
         )
-        path = find_path(board, enemy, state.actors, destination)
+        path = find_path(board, movement_actor, state.actors, destination)
+        path = path_with_condition_cost(
+            path,
+            state.condition_states,
+            str(enemy.id),
+            movement_budget_feet=budget,
+        )
         if not path.valid:
             continue
-        key = (can_attack_after_move, distance_to_opponent, path.cost_feet, destination.col, destination.row)
+        key = (can_attack_after_move, path.cost_feet, distance_to_opponent, destination.col, destination.row)
         if best_key is None or key < best_key:
             best_key = key
             best_path = path
@@ -294,4 +532,25 @@ def _turn_result_from_attack(result: EnemyAutoAttackResult) -> EnemyAutoTurnResu
         applied_damage=result.applied_damage,
         updated_target=result.updated_target,
         action_used=result.action_used,
+        positioning=result.positioning,
+        source=result.source,
+        saving_throw_request=result.saving_throw_request,
+        saving_throw_result=result.saving_throw_result,
+        base_damage=result.base_damage,
+    )
+
+
+def _enemy_damage_amount(
+    source: AttackSource,
+    rng: random.Random,
+    *,
+    critical: bool,
+) -> int:
+    if source.damage_fixed is not None:
+        return max(0, source.damage_fixed + source.damage_modifier)
+    die_sides = source.damage_die_sides or 6
+    dice_count = 2 if critical else 1
+    return max(
+        0,
+        sum(rng.randint(1, die_sides) for _ in range(dice_count)) + source.damage_modifier,
     )

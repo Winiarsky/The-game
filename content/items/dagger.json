@@ -2,15 +2,19 @@
   "id": "dagger",
   "name": "Sztylet",
   "kind": "weapon",
+  "hands_required": 1,
+  "light_weapon": true,
   "description": "Krótki nóż o sztywnym metalowym ostrzu.",
-  "properties": ["short", "rigid", "metallic", "sharp", "cutting"],
+  "properties": ["short", "light", "rigid", "metallic", "sharp", "cutting"],
   "attacks": [
     {
       "id": "dagger_stab",
       "name": "Sztylet",
       "source_type": "weapon",
+      "attack_kind": "melee",
+      "ability": "dexterity",
       "range_feet": 5,
-      "attack_modifier": 5,
+      "reach_feet": 5,
       "damage": {
         "dice": "1d4",
         "modifier": 3,

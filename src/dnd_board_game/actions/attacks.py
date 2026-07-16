@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from dnd_board_game.combat.attack_flow import AttackKind, effective_attack_kind
+
 from .base import ActionResource, CombatActionMechanic, MechanicScope, TargetingMode
 
 
@@ -91,7 +93,7 @@ def attack_mechanic_from_source(source: Any) -> AttackMechanic:
             summary="Czar przeciw pojedynczemu celowi rozstrzygany rzutem ataku.",
             tags=tags,
         )
-    if int(getattr(source, "range_feet", 0) or 0) <= 10:
+    if effective_attack_kind(source) == AttackKind.MELEE:
         return MeleeAttack(
             id=f"attack.{source_id}",
             name=name,
@@ -147,7 +149,7 @@ def _attack_tags(source: Any) -> tuple[str, ...]:
         tags.append("saving_throw")
     if getattr(source, "spell_level", 0):
         tags.append("spell_slot")
-    if int(getattr(source, "range_feet", 0) or 0) <= 10:
+    if effective_attack_kind(source) == AttackKind.MELEE:
         tags.append("melee")
     else:
         tags.append("ranged")

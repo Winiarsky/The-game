@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import pytest
 
 from dnd_board_game.actors import Actor, ActorId, Faction
@@ -102,3 +104,20 @@ def test_critical_hit_still_uses_entered_damage_total():
     assert resolution.critical is True
     assert damage.total_applied == 9
     assert applied.hp_after == 1
+
+
+def test_hit_against_adjacent_unconscious_target_is_critical() -> None:
+    attacker = replace(_actor("hero", Faction.ALLY), position=Coordinate(0, 0))
+    target = replace(
+        _actor("target", Faction.ENEMY),
+        hp=0,
+        position=Coordinate(1, 0),
+        uses_death_saves=True,
+    )
+    declaration = AttackDeclaration(attacker, actor_as_combat_target(target), _declaration().source)
+
+    resolution = resolve_attack(declaration, _roll(10, 3), ActionUse.ACTION_AVAILABLE)
+
+    assert resolution.hit is True
+    assert resolution.outcome == AttackRollOutcome.HIT
+    assert resolution.critical is True

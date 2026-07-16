@@ -17,10 +17,14 @@ from dnd_board_game.actions import (
     slash_help_message,
 )
 from dnd_board_game.application import (
+    CombatApproachInteractionPlan,
     CombatMovementFlowService,
     CombatReactionFlowService,
     CombatSceneInteractionFlowService,
     CombatSceneInteractionTransition,
+    CombatGrappleFlowService,
+    CombatShoveFlowService,
+    StabilizationMethod,
     CombatTurnActionFlowService,
     CombatTurnFinalizationService,
     CombatResourceTransition,
@@ -31,8 +35,12 @@ from dnd_board_game.application import (
     ExplorationFlowStage,
     PendingAreaSpell,
     PendingCombatInteraction,
+    PendingCombatSkillCheck,
+    PendingGrapple,
+    PendingShove,
     PendingConcentrationAction,
     PendingConcentrationCheck,
+    PendingEnemySavingThrow,
     PendingPlayerAttack,
     PendingPlayerHealing,
     PendingShortRest,
@@ -45,14 +53,56 @@ from dnd_board_game.application import (
     SpellPreparationFlowService,
     ShortRestFlowService,
     short_rest_count,
+    legal_stabilization_targets,
+    resolve_combat_stabilization,
     resolve_encounter_opening,
+    apply_exploration_hazard_outcome,
+    resolve_exploration_hazard,
+    hidden_states_from_precombat_attempts,
+    precombat_stealth_is_available,
+    precombat_stealth_modifier,
+    resolve_precombat_stealth,
+    resolve_targeted_item_action,
+    targeted_item_action_is_legal,
+    ShoveMode,
+    GrappleMode,
+    automatic_grapple_opponent_roll,
+    automatic_defender_roll,
 )
-from dnd_board_game.actors import Actor, Faction, spell_is_prepared
+from dnd_board_game.application.damage_presentation import (
+    applied_damage_message,
+    applied_damage_payload,
+)
+from dnd_board_game.actors import (
+    Actor,
+    Faction,
+    can_grapple_or_shove_size,
+    creature_size_label_pl,
+    largest_grapple_or_shove_target,
+    ability_check_roll_modifiers,
+    passive_skill_score,
+    saving_throw_roll_modifiers,
+    skill_modifier,
+    spell_is_prepared,
+)
 from dnd_board_game.combat import (
     ActorSetupEntry,
     ActionUse,
+    action_economy_cost_label,
+    attack_action_remaining,
     ActiveCombatEffect,
+    AttackKind,
+    AttackPositioning,
     CombatState,
+    CombatCondition,
+    ConditionState,
+    CoverLevel,
+    CombatContextMenu,
+    CombatMenuAction,
+    CombatMenuCategory,
+    CombatMenuOption,
+    ContextualActionCatalog,
+    DeathSaveOutcome,
     CombatInteractionOption,
     EncounterSetup,
     EnemyAutoTurnResult,
@@ -79,22 +129,50 @@ from dnd_board_game.combat import (
     finish_turn,
     active_actor_led_feedback,
     attack_source_with_combat_effects,
+    attack_source_with_hidden_advantage,
+    attack_source_for_actor,
+    attack_source_with_prone,
+    effective_movement_speed,
+    effective_attack_kind,
+    melee_reach_feet,
+    attack_source_with_positioning,
     attack_source_with_target_combat_effects,
     initiative_prompt_led_feedback,
     movement_remaining,
+    movement_range_with_condition_cost,
     legal_healing_targets,
     legal_area_centers,
     can_consume_spell_resource,
+    can_use_attack_action,
+    can_use_object_interactions,
     consume_spell_resource,
     direction_anchor_positions,
+    evaluate_attack_positioning,
+    attack_sources_with_versatile_variants,
+    eligible_two_weapon_bonus_sources,
+    is_hidden_from,
+    hide_eligibility,
+    has_condition,
+    grappled_by,
+    grappled_actor_ids,
+    drop_weapon,
+    don_shield,
+    doff_shield,
+    equip_weapon,
     replace_actor,
+    pickup_dropped_weapon,
+    resolve_death_save,
     roll_enemy_initiative,
     scene_flag,
     scene_object_by_id,
     setup_led_feedback,
     start_combat,
     start_attack_action,
+    standing_movement_cost,
+    stow_weapon,
+    two_weapon_bonus_attack_source,
 )
+from dnd_board_game.core.damage_types import damage_type_label_pl
 from dnd_board_game.exploration import (
     CheckAggregation,
     CheckParticipants,
@@ -110,6 +188,11 @@ from dnd_board_game.exploration import (
     EncounterOpeningOutcome,
     ExplorationChallenge,
     ExplorationEncounterTrigger,
+    ExplorationHazard,
+    ExplorationHazardTrigger,
+    ExplorationTrap,
+    ExplorationTrapAction,
+    ExplorationTrapStatus,
     ExplorationChallengeOption,
     ExplorationCheckPlan,
     ExplorationPoint,
@@ -144,6 +227,7 @@ from dnd_board_game.exploration import (
     exploration_zone_feedback,
     mechanic_payload_for_option,
     matching_resources,
+    match_revealed_trap_action,
     match_exploration_observation,
     match_available_sources,
     match_scene_sources_by_properties,
@@ -167,6 +251,10 @@ from dnd_board_game.exploration import (
     option_roll_modifiers_for_actor,
     plan_source_collection,
     plan_fixture_action,
+    resolve_trap_action,
+    trap_state_for,
+    trigger_trap,
+    remove_exploration_condition,
     use_temporary_item,
 )
 from dnd_board_game.llm import (
@@ -187,7 +275,14 @@ from dnd_board_game.llm import (
     validate_npc_interaction_proposal,
 )
 from dnd_board_game.hardware import BoardSessionAdapter, LedColor, LedFeedback, LedFrame, LedRole, led_color_name_pl, movement_led_feedback
-from dnd_board_game.inventory import break_inventory_item, consume_inventory_item, inventory_item_payload
+from dnd_board_game.inventory import (
+    break_inventory_item,
+    consume_inventory_item,
+    effective_armor_class,
+    hand_loadout_payload,
+    inventory_item_payload,
+    plan_hand_equip,
+)
 from dnd_board_game.rules import (
     D20RollInput,
     D20RollRequest,
@@ -230,12 +325,14 @@ class PendingKind(StrEnum):
     OBSERVATION = "observation"
     SOURCE_SELECTION = "source_selection"
     COLLECTION = "collection"
+    TRAP = "trap"
 
 
 class PendingStage(StrEnum):
     DECISION = "decision"
     ROLL = "roll"
     BREAKAGE = "breakage"
+    HAZARD_SAVE = "hazard_save"
 
 
 UiFlowStage = ExplorationFlowStage
@@ -267,6 +364,10 @@ CONVERSATION_GM_TITLES = frozenset(
         "Znaleziono w scenie",
         "Wynik podejścia",
         "Wynik rozpoznania",
+        "Zagrożenie",
+        "Wynik zagrożenia",
+        "Pułapka",
+        "Wynik pułapki",
     }
 )
 
@@ -303,6 +404,10 @@ class PendingInteraction:
     breakage_item_id: str | None = None
     breakage_item_label: str = ""
     breakage_chance_percent: int | None = None
+    hazard: ExplorationHazard | None = None
+    hazard_actor_id: str | None = None
+    trap: ExplorationTrap | None = None
+    trap_action: ExplorationTrapAction | None = None
 
     def as_payload(self) -> dict[str, object]:
         payload: dict[str, object] = {
@@ -322,6 +427,28 @@ class PendingInteraction:
             payload["point_name"] = self.point.name
         if self.check_plan is not None:
             payload["check_plan"] = self.check_plan.as_payload()
+        if self.hazard is not None:
+            payload["hazard"] = self.hazard.as_payload()
+            payload["hazard_actor_id"] = self.hazard_actor_id
+        if self.trap is not None:
+            check = (
+                self.trap.disarm_check
+                if self.trap_action == ExplorationTrapAction.DISARM
+                else self.trap.bypass_check
+                if self.trap_action == ExplorationTrapAction.BYPASS
+                else None
+            )
+            payload["trap"] = {
+                "id": self.trap.id,
+                "name": self.trap.name,
+                "description": self.trap.revealed_description,
+                "action": self.trap_action.value if self.trap_action is not None else None,
+                "ability": check.ability if check is not None else None,
+                "skill": check.skill if check is not None else None,
+                "tool": check.tool if check is not None else None,
+                "dc": check.dc if check is not None else None,
+                "required_item_id": self.trap.required_item_id,
+            }
         if self.observation is not None:
             payload["observation"] = {
                 "id": self.observation.id,
@@ -615,6 +742,13 @@ class PendingOpportunityMovement:
 
 
 @dataclass(frozen=True, slots=True)
+class PendingApproachPickup:
+    actor_id: str
+    dropped_weapon_id: str
+    destination: Coordinate
+
+
+@dataclass(frozen=True, slots=True)
 class PendingEnemyOpportunityAttack:
     target_id: str
     threat_actor_ids: tuple[str, ...]
@@ -673,6 +807,8 @@ class ExplorationUiSession:
         self.combat_reaction_flow = CombatReactionFlowService()
         self.combat_scene_interaction_flow = CombatSceneInteractionFlowService()
         self.combat_turn_action_flow = CombatTurnActionFlowService()
+        self.combat_grapple_flow = CombatGrappleFlowService()
+        self.combat_shove_flow = CombatShoveFlowService()
         self.combat_turn_finalization = CombatTurnFinalizationService()
         self.enemy_turn_flow = EnemyTurnFlowService()
         self.player_area_healing_flow = PlayerAreaHealingFlowService()
@@ -706,6 +842,7 @@ class ExplorationUiSession:
             challenges=self.exploration.challenges,
             resources=self.exploration.resources,
             inventory_resource_ids=self.exploration.initial_resource_ids,
+            traps=self.exploration.traps,
         )
         if self.debug_point_id:
             self.state, _revealed = reveal_exploration_points(self.state, (self.debug_point_id,))
@@ -837,6 +974,14 @@ class ExplorationUiSession:
         self.pending_state.enemy_turn_ack_result = value
 
     @property
+    def pending_enemy_saving_throw(self) -> PendingEnemySavingThrow | None:
+        return self.pending_state.enemy_saving_throw
+
+    @pending_enemy_saving_throw.setter
+    def pending_enemy_saving_throw(self, value: PendingEnemySavingThrow | None) -> None:
+        self.pending_state.enemy_saving_throw = value
+
+    @property
     def pending_player_attack(self) -> PendingPlayerAttack | None:
         return self.pending_state.player_attack
 
@@ -869,12 +1014,60 @@ class ExplorationUiSession:
         self.pending_state.combat_interaction = value
 
     @property
+    def pending_combat_context_menu(self) -> CombatContextMenu | None:
+        return self.pending_state.combat_context_menu
+
+    @pending_combat_context_menu.setter
+    def pending_combat_context_menu(self, value: CombatContextMenu | None) -> None:
+        self.pending_state.combat_context_menu = value
+
+    @property
+    def pending_approach_interaction(self) -> CombatApproachInteractionPlan | None:
+        return self.pending_state.approach_interaction
+
+    @pending_approach_interaction.setter
+    def pending_approach_interaction(self, value: CombatApproachInteractionPlan | None) -> None:
+        self.pending_state.approach_interaction = value
+
+    @property
+    def pending_approach_pickup(self) -> PendingApproachPickup | None:
+        return self.pending_state.approach_pickup
+
+    @pending_approach_pickup.setter
+    def pending_approach_pickup(self, value: PendingApproachPickup | None) -> None:
+        self.pending_state.approach_pickup = value
+
+    @property
     def pending_combat_help(self) -> PendingCombatHelp | None:
         return self.pending_state.combat_help
 
     @pending_combat_help.setter
     def pending_combat_help(self, value: PendingCombatHelp | None) -> None:
         self.pending_state.combat_help = value
+
+    @property
+    def pending_combat_skill_check(self) -> PendingCombatSkillCheck | None:
+        return self.pending_state.combat_skill_check
+
+    @pending_combat_skill_check.setter
+    def pending_combat_skill_check(self, value: PendingCombatSkillCheck | None) -> None:
+        self.pending_state.combat_skill_check = value
+
+    @property
+    def pending_combat_shove(self) -> PendingShove | None:
+        return self.pending_state.combat_shove
+
+    @pending_combat_shove.setter
+    def pending_combat_shove(self, value: PendingShove | None) -> None:
+        self.pending_state.combat_shove = value
+
+    @property
+    def pending_combat_grapple(self) -> PendingGrapple | None:
+        return self.pending_state.combat_grapple
+
+    @pending_combat_grapple.setter
+    def pending_combat_grapple(self, value: PendingGrapple | None) -> None:
+        self.pending_state.combat_grapple = value
 
     @property
     def pending_concentration_action(self) -> PendingConcentrationAction | None:
@@ -969,6 +1162,34 @@ class ExplorationUiSession:
                 }
             )
         actor_names = {str(actor.id): actor.name for actor in self.exploration.actors}
+        for condition in self.state.condition_states:
+            condition_label = (
+                "Powalony"
+                if condition.condition == CombatCondition.PRONE
+                else condition.condition.value
+            )
+            scene_status.append(
+                {
+                    "label": f"Stan: {actor_names.get(condition.actor_id, condition.actor_id)}",
+                    "value": condition_label,
+                }
+            )
+        trap_status_labels = {
+            ExplorationTrapStatus.REVEALED: "wykryta — aktywna",
+            ExplorationTrapStatus.DISARMED: "rozbrojona",
+            ExplorationTrapStatus.BYPASSED: "bezpiecznie ominięta",
+            ExplorationTrapStatus.TRIGGERED: "uruchomiona",
+        }
+        for trap in self.state.traps:
+            trap_state = trap_state_for(self.state, trap.id)
+            if trap_state.status == ExplorationTrapStatus.HIDDEN:
+                continue
+            scene_status.append(
+                {
+                    "label": f"Pułapka: {trap.name}",
+                    "value": trap_status_labels[trap_state.status],
+                }
+            )
         for edge in self.state.encounter_edges:
             if edge.consumed:
                 continue
@@ -1016,7 +1237,10 @@ class ExplorationUiSession:
                 ],
             ],
             discovered_sources=self._discovered_sources_payload(),
-            actors=[_exploration_actor_payload(actor) for actor in self.exploration.actors],
+            actors=[
+                _exploration_actor_payload(actor, self.state.condition_states)
+                for actor in self.exploration.actors
+            ],
             active_effects=[effect.as_payload() for effect in self.active_combat_effects],
             scene_status=scene_status,
             flags=[{"key": key, "value": value} for key, value in self.state.flags.values],
@@ -1029,6 +1253,7 @@ class ExplorationUiSession:
             pending_encounter=self._pending_encounter_payload(),
             exploration_setup=self.exploration_setup_flow.as_payload() if self.exploration_setup_flow else None,
             encounter_setup=self.encounter_setup_flow.as_payload() if self.encounter_setup_flow else None,
+            encounter_stealth=self._precombat_stealth_payload(),
             encounter_initiative=(
                 self.encounter_initiative_flow.as_payload() if self.encounter_initiative_flow else None
             ),
@@ -1039,11 +1264,16 @@ class ExplorationUiSession:
                 self.pending_enemy_turn_intent,
                 self.pending_enemy_turn_result,
                 self.pending_enemy_turn_ack_result,
+                self.pending_enemy_saving_throw,
                 self.pending_player_attack,
                 self.pending_player_healing,
                 self.pending_area_spell,
+                self.pending_combat_context_menu,
                 self.pending_combat_interaction,
                 self.pending_combat_help,
+                self.pending_combat_skill_check,
+                self.pending_combat_shove,
+                self.pending_combat_grapple,
                 self.pending_concentration_action,
                 self.pending_concentration_check,
                 self.pending_combat_ready,
@@ -1154,6 +1384,7 @@ class ExplorationUiSession:
             challenges=base_exploration.challenges,
             resources=base_exploration.resources,
             inventory_resource_ids=base_exploration.initial_resource_ids,
+            traps=base_exploration.traps,
         )
         snapshot = read_snapshot(self.snapshot_path, base_state=base_state)
         if snapshot.scenario_id != base_exploration.scenario_id:
@@ -1197,6 +1428,11 @@ class ExplorationUiSession:
         }
         if effect_actor_ids - selection_actor_ids:
             raise ValueError("Aktywny efekt zapisu odwołuje się do nieznanego aktora.")
+        exploration_condition_actor_ids = {
+            condition.actor_id for condition in snapshot.exploration_state.condition_states
+        }
+        if exploration_condition_actor_ids - restored_actor_ids:
+            raise ValueError("Stan eksploracyjny zapisu odwołuje się do nieznanego aktora.")
         restored_initiative_flow = None
         if snapshot.combat_state is not None:
             if snapshot.pending_encounter is None:
@@ -1715,12 +1951,63 @@ class ExplorationUiSession:
         challenge = self.active_challenge
         if challenge is None:
             raise ValueError("W aktualnej lokacji nie ma aktywnego wyzwania ani punktu NPC.")
+        trap_action = match_revealed_trap_action(
+            self.state,
+            action_text,
+            zone_id=self.current_zone.id,
+        )
+        if trap_action is not None:
+            trap, action = trap_action
+            return self._submit_trap_action(trap, action)
         return self._submit_challenge_action(
             challenge,
             action_text,
             player_intent_hint=parsed_input.intent_hint,
             player_display_text=raw_text,
         )
+
+    def _submit_trap_action(
+        self,
+        trap: ExplorationTrap,
+        action: ExplorationTrapAction,
+    ) -> dict[str, object]:
+        if trap_state_for(self.state, trap.id).status != ExplorationTrapStatus.REVEALED:
+            raise ValueError("Najpierw trzeba wykryć pułapkę.")
+        if action == ExplorationTrapAction.DISARM and trap.required_item_id is not None:
+            owner = next(
+                (
+                    actor
+                    for actor in self.exploration.actors
+                    if any(
+                        item.id == trap.required_item_id and item.available
+                        for item in actor.inventory
+                    )
+                ),
+                None,
+            )
+            if owner is not None:
+                self.selected_lead_actor_id = str(owner.id)
+        action_label = {
+            ExplorationTrapAction.DISARM: "rozbroić",
+            ExplorationTrapAction.BYPASS: "bezpiecznie ominąć",
+            ExplorationTrapAction.TRIGGER: "celowo uruchomić",
+        }[action]
+        self.pending = PendingInteraction(
+            kind=PendingKind.TRAP,
+            stage=PendingStage.DECISION,
+            challenge=self.active_challenge,
+            trap=trap,
+            trap_action=action,
+        )
+        self._add_message(
+            "Pułapka",
+            f"Chcecie {action_label} pułapkę: {trap.name}. Potwierdźcie sposób działania.",
+        )
+        self._record(
+            "ui_exploration_trap_action_proposed",
+            {"trap_id": trap.id, "action": action.value},
+        )
+        return self.state_payload()
 
     def _submit_collection_action(
         self,
@@ -1986,6 +2273,23 @@ class ExplorationUiSession:
             self.exploration,
             self.combat_state.actors,
         )
+        exploration_actor_ids = {str(actor.id) for actor in self.exploration.actors}
+        encounter_actor_ids = {str(actor.id) for actor in self.combat_state.actors}
+        preserved_conditions = tuple(
+            condition
+            for condition in self.state.condition_states
+            if condition.actor_id not in encounter_actor_ids
+        )
+        combat_conditions = tuple(
+            condition
+            for condition in self.combat_state.condition_states
+            if condition.actor_id in exploration_actor_ids
+            and condition.condition == CombatCondition.PRONE
+        )
+        self.state = replace(
+            self.state,
+            condition_states=(*preserved_conditions, *combat_conditions),
+        )
         self.interaction_result = {
             "title": outcome.title or "Wynik encountera",
             "body": outcome.body or "Encounter został rozstrzygnięty.",
@@ -2022,7 +2326,7 @@ class ExplorationUiSession:
             flow.completed = True
             self._add_message(
                 "Setup zakończony",
-                "Figurki i jawne elementy encountera są rozstawione. Następny krok to inicjatywa i start walki.",
+                "Figurki i jawne elementy encountera są rozstawione. Następny krok to ewentualne skradanie, inicjatywa i start walki.",
             )
         else:
             flow.current_index += 1
@@ -2066,7 +2370,7 @@ class ExplorationUiSession:
             flow.completed = True
             self._add_message(
                 "Setup zakończony",
-                "Figurki i jawne elementy encountera są rozstawione. Następny krok to inicjatywa i start walki.",
+                "Figurki i jawne elementy encountera są rozstawione. Następny krok to ewentualne skradanie, inicjatywa i start walki.",
             )
         else:
             flow.current_index += 1
@@ -2079,13 +2383,19 @@ class ExplorationUiSession:
         if self.combat_state is not None:
             return self.state_payload()
         encounter = self.encounter_setup_flow.encounter
+        opening = self.pending_encounter.opening_resolution if self.pending_encounter is not None else None
+        if (
+            precombat_stealth_is_available(opening)
+            and self.pending_encounter is not None
+            and not self.pending_encounter.precombat_stealth_completed
+        ):
+            raise ValueError("Najpierw zakończ etap skradania przed walką albo świadomie go pomiń.")
         trigger_id = self.pending_encounter.trigger_id if self.pending_encounter is not None else ""
         applicable_edges = {
             edge.beneficiary_actor_id: edge
             for edge in available_encounter_edges(self.state, trigger_id)
             if edge.edge_type == EncounterEdgeType.INITIATIVE_ADVANTAGE
         }
-        opening = self.pending_encounter.opening_resolution if self.pending_encounter is not None else None
         party_disadvantaged = bool(
             opening is not None
             and opening.outcome == EncounterOpeningOutcome.ENEMIES_SURPRISE_PARTY
@@ -2196,13 +2506,109 @@ class ExplorationUiSession:
         order = build_initiative_order(flow.entries)
         flow.order = order
         flow.completed = True
-        self.combat_state = start_combat(flow.encounter.actors, order)
+        hidden_states = hidden_states_from_precombat_attempts(
+            self.pending_encounter.precombat_stealth_attempts if self.pending_encounter is not None else (),
+            flow.encounter.actors,
+        )
+        self.combat_state = start_combat(
+            flow.encounter.actors,
+            order,
+            hidden_states,
+            self.state.condition_states,
+        )
         order_text = ", ".join(entry.actor.name for entry in order.entries)
         self._add_message(
             "Kolejność inicjatywy",
             f"Kolejność została ustalona: {order_text}. Pierwsza tura: {order.current_actor.name}.",
         )
         self._sync_board_leds()
+
+    def submit_precombat_stealth_roll(
+        self,
+        *,
+        actor_id: str,
+        natural_roll: int,
+    ) -> dict[str, object]:
+        if self.encounter_setup_flow is None or not self.encounter_setup_flow.completed:
+            raise ValueError("Najpierw zakończ setup encountera.")
+        if self.pending_encounter is None:
+            raise ValueError("Nie ma aktywnego encountera.")
+        if self.encounter_initiative_flow is not None or self.combat_state is not None:
+            raise ValueError("Etap skradania zakończył się wraz z rozpoczęciem inicjatywy.")
+        if self.pending_encounter.precombat_stealth_completed:
+            raise ValueError("Etap skradania przed walką został już zakończony.")
+        if not precombat_stealth_is_available(self.pending_encounter.opening_resolution):
+            raise ValueError("Okoliczności rozpoczęcia tego starcia nie pozwalają na skradanie przed walką.")
+
+        resolution = resolve_precombat_stealth(
+            self.encounter_setup_flow.encounter.actors,
+            self.pending_encounter.precombat_stealth_attempts,
+            actor_id=actor_id,
+            natural_roll=natural_roll,
+        )
+        self.pending_encounter = replace(
+            self.pending_encounter,
+            precombat_stealth_attempts=(
+                *self.pending_encounter.precombat_stealth_attempts,
+                resolution.attempt,
+            ),
+        )
+        actor = next(
+            actor
+            for actor in self.encounter_setup_flow.encounter.actors
+            if str(actor.id) == actor_id
+        )
+        hidden_names = _actor_names_from_actors(
+            self.encounter_setup_flow.encounter.actors,
+            resolution.attempt.hidden_from_actor_ids,
+        )
+        detected_names = _actor_names_from_actors(
+            self.encounter_setup_flow.encounter.actors,
+            resolution.attempt.detected_by_actor_ids,
+        )
+        body = f"{actor.name}: wynik Stealth {resolution.attempt.total}."
+        if hidden_names:
+            body += f" Ukryty przed: {', '.join(hidden_names)}."
+        if detected_names:
+            body += f" Wykrywają: {', '.join(detected_names)}."
+        self._add_message("Skradanie przed walką", body)
+        self._record(
+            "ui_precombat_stealth_resolved",
+            {
+                "actor_id": actor_id,
+                "natural_roll": resolution.attempt.natural_roll,
+                "total": resolution.attempt.total,
+                "hidden_from_actor_ids": list(resolution.attempt.hidden_from_actor_ids),
+                "detected_by_actor_ids": list(resolution.attempt.detected_by_actor_ids),
+            },
+        )
+        return self.state_payload()
+
+    def finish_precombat_stealth(self) -> dict[str, object]:
+        if self.encounter_setup_flow is None or not self.encounter_setup_flow.completed:
+            raise ValueError("Najpierw zakończ setup encountera.")
+        if self.pending_encounter is None:
+            raise ValueError("Nie ma aktywnego encountera.")
+        if not precombat_stealth_is_available(self.pending_encounter.opening_resolution):
+            raise ValueError("Ten encounter nie ma etapu skradania przed walką.")
+        self.pending_encounter = replace(
+            self.pending_encounter,
+            precombat_stealth_completed=True,
+        )
+        attempts = self.pending_encounter.precombat_stealth_attempts
+        self._add_message(
+            "Skradanie zakończone",
+            (
+                f"Zapisano próby skradania {len(attempts)} bohaterów. Możecie przejść do inicjatywy."
+                if attempts
+                else "Drużyna pomija skradanie i przechodzi do inicjatywy."
+            ),
+        )
+        self._record(
+            "ui_precombat_stealth_finished",
+            {"attempted_actor_ids": [attempt.actor_id for attempt in attempts]},
+        )
+        return self.state_payload()
 
     def _clear_player_pending_choices(self) -> None:
         self.pending_state.clear_player_choices()
@@ -2211,7 +2617,16 @@ class ExplorationUiSession:
         encounter = self._active_encounter()
         if encounter is None:
             return ()
-        return encounter.attack_source_options_by_actor.get(actor.id, ())
+        reserved_hands = (
+            len(grappled_actor_ids(self.combat_state.condition_states, str(actor.id)))
+            if self.combat_state is not None
+            else 0
+        )
+        return _encounter_attack_sources(
+            encounter,
+            actor,
+            reserved_hands=reserved_hands,
+        )
 
     def _selected_attack_source(self, actor: Actor):
         sources = self._attack_sources_for_actor(actor)
@@ -2220,9 +2635,9 @@ class ExplorationUiSession:
         selected_id = self.selected_attack_source_ids.get(str(actor.id))
         if selected_id:
             selected = next((source for source in sources if source.id == selected_id), None)
-            if selected is not None:
+            if selected is not None and self._actor_can_use_attack_source(actor, selected):
                 return selected
-        return sources[0]
+        return next((source for source in sources if self._actor_can_use_attack_source(actor, source)), sources[0])
 
     def _attack_source_by_id(self, actor: Actor, source_id: str):
         sources = self._attack_sources_for_actor(actor)
@@ -2237,6 +2652,11 @@ class ExplorationUiSession:
             return False
         if not _source_is_prepared(actor, source):
             return False
+        source_item_id = getattr(source, "source_item_id", None)
+        if source_item_id is not None:
+            item = _inventory_item_for_attack_source(actor, source_item_id)
+            if item is None or not item.available or not item.equipped:
+                return False
         return can_consume_spell_resource(actor, getattr(source, "spell_level", 0))
 
     def _actor_can_use_healing_source(self, actor: Actor, source: HealingSource | None) -> bool:
@@ -2318,6 +2738,38 @@ class ExplorationUiSession:
             action=action,
         )
         return self._apply_combat_resource_transition(transition)
+
+    def use_targeted_combat_item(self, *, action_id: str, target_id: str) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        actor = combat_current_actor(self.combat_state)
+        encounter = self._active_encounter()
+        if encounter is None:
+            raise ValueError("Brak danych encountera dla aktywnej walki.")
+        action = next(
+            (
+                candidate
+                for candidate in encounter.combat_actions_by_actor.get(actor.id, ())
+                if candidate.id == action_id
+            ),
+            None,
+        )
+        if action is None:
+            raise ValueError("Nieznana akcja przedmiotu.")
+        resolution = resolve_targeted_item_action(
+            state=self.combat_state,
+            active_effects=self.active_combat_effects,
+            action=action,
+            target_id=target_id,
+        )
+        self.combat_state = resolution.state
+        self.active_combat_effects = resolution.active_effects
+        self._clear_player_pending_choices()
+        self.board_message = resolution.message_body
+        self._add_message(resolution.message_title, resolution.message_body)
+        self._record(resolution.event_type, dict(resolution.event_payload))
+        self._sync_board_leds()
+        return self.state_payload()
 
     def start_combat_concentration_action(self, action_id: str) -> dict[str, object]:
         if self.combat_state is None:
@@ -2406,7 +2858,13 @@ class ExplorationUiSession:
             dc=pending.dc,
             natural_roll=int(natural_roll),
         )
-        return self._apply_combat_resource_transition(transition)
+        result = self._apply_combat_resource_transition(transition)
+        if (
+            (self.pending_approach_interaction is not None or self.pending_approach_pickup is not None)
+            and self.pending_concentration_check is None
+        ):
+            return self._resume_pending_approach_action()
+        return result
 
     def _apply_combat_resource_transition(
         self,
@@ -2457,6 +2915,7 @@ class ExplorationUiSession:
             natural_roll=natural_roll,
             natural_roll_2=natural_roll_2,
             damage=damage,
+            scene_objects=encounter.scene_objects,
         )
         return self._apply_player_attack_transition(transition)
 
@@ -2475,6 +2934,7 @@ class ExplorationUiSession:
             board=encounter.board,
             source=source,
             position=position,
+            scene_objects=encounter.scene_objects,
         )
         self.combat_state = transition.state
         self.pending_area_spell = transition.pending
@@ -2554,7 +3014,12 @@ class ExplorationUiSession:
         self._sync_board_leds()
         return self.state_payload()
 
-    def select_player_attack_target_at_position(self, position: Coordinate) -> dict[str, object]:
+    def select_player_attack_target_at_position(
+        self,
+        position: Coordinate,
+        *,
+        two_weapon_bonus: bool = False,
+    ) -> dict[str, object]:
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
         encounter = self._active_encounter()
@@ -2570,6 +3035,8 @@ class ExplorationUiSession:
             source=source,
             position=position,
             active_effects=self.active_combat_effects,
+            scene_objects=encounter.scene_objects,
+            two_weapon_bonus=two_weapon_bonus,
         )
         return self._apply_player_attack_transition(transition)
 
@@ -2593,6 +3060,7 @@ class ExplorationUiSession:
             pending=pending,
             active_effects=self.active_combat_effects,
             rng=self.encounter_rng,
+            scene_objects=encounter.scene_objects,
         )
         return self._apply_player_attack_transition(transition)
 
@@ -2630,6 +3098,7 @@ class ExplorationUiSession:
             active_effects=self.active_combat_effects,
             natural_roll=natural_roll,
             natural_roll_2=natural_roll_2,
+            scene_objects=encounter.scene_objects,
         )
         return self._apply_player_attack_transition(transition)
 
@@ -2773,6 +3242,7 @@ class ExplorationUiSession:
             attack_sources_by_actor=encounter.attack_sources_by_actor,
             active_effects=self.active_combat_effects,
             destination=Coordinate(int(col), int(row)),
+            scene_objects=encounter.scene_objects,
         )
         if submission.requires_opportunity_confirmation:
             self.pending_opportunity_movement = PendingOpportunityMovement(
@@ -2835,6 +3305,8 @@ class ExplorationUiSession:
             self._maybe_prompt_concentration_check(applied_damage)
             if self.pending_concentration_check is not None:
                 break
+        if self.pending_approach_interaction is not None or self.pending_approach_pickup is not None:
+            return self._resume_pending_approach_action()
         self._sync_board_leds()
         return self.state_payload()
 
@@ -2843,6 +3315,8 @@ class ExplorationUiSession:
         if pending is None:
             raise ValueError("Nie ma ruchu z atakiem okazyjnym do anulowania.")
         self.pending_opportunity_movement = None
+        self.pending_approach_interaction = None
+        self.pending_approach_pickup = None
         self.selected_combat_movement_path = None
         self.board_message = "Anulowano ryzykowny ruch. Kliknij Skanuj planszę, żeby wybrać inne pole."
         self._add_message("Atak okazyjny", "Anulowano ruch prowokujący atak okazyjny.")
@@ -2898,6 +3372,228 @@ class ExplorationUiSession:
         self.selected_combat_movement_path = None
         self._add_message(transition.message_title, transition.message_body)
         self._record(transition.event_type, dict(transition.event_payload))
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def drop_combat_prone(self) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        transition = self.combat_turn_action_flow.drop_prone(
+            state=self.combat_state,
+            active_effects=self.active_combat_effects,
+        )
+        self.combat_state = transition.state
+        self.active_combat_effects = transition.active_effects
+        self._clear_player_pending_choices()
+        self.selected_combat_movement_path = None
+        self._add_message(transition.message_title, transition.message_body)
+        self._record(transition.event_type, dict(transition.event_payload))
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def stand_combat_up(self) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        transition = self.combat_turn_action_flow.stand_up(
+            state=self.combat_state,
+            active_effects=self.active_combat_effects,
+        )
+        self.combat_state = transition.state
+        self.active_combat_effects = transition.active_effects
+        self._clear_player_pending_choices()
+        self.selected_combat_movement_path = None
+        self._add_message(transition.message_title, transition.message_body)
+        self._record(transition.event_type, dict(transition.event_payload))
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def start_combat_hide(self) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        encounter = self._active_encounter()
+        if encounter is None:
+            raise ValueError("Brak danych encountera dla aktywnej walki.")
+        pending = self.combat_turn_action_flow.prepare_hide(
+            state=self.combat_state,
+            board=encounter.board,
+            scene_objects=encounter.scene_objects,
+        )
+        self._clear_player_pending_choices()
+        self.pending_combat_skill_check = pending
+        self.board_message = "Rzuć Dexterity (Stealth) i wpisz naturalny wynik d20."
+        self._add_message("Hide", "Warunki pozwalają spróbować się ukryć.")
+        self._record("ui_combat_hide_started", pending.as_payload())
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def start_combat_search(self) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        pending = self.combat_turn_action_flow.prepare_search(state=self.combat_state)
+        self._clear_player_pending_choices()
+        self.pending_combat_skill_check = pending
+        self.board_message = "Rzuć Wisdom (Perception) i wpisz naturalny wynik d20."
+        self._add_message("Search", "Aktywnie szukasz ukrytego przeciwnika.")
+        self._record("ui_combat_search_started", pending.as_payload())
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def submit_combat_skill_check(self, *, natural_roll: int) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        pending = self.pending_combat_skill_check
+        if pending is None:
+            raise ValueError("Nie ma oczekującego testu Hide ani Search.")
+        if pending.action == "hide":
+            encounter = self._active_encounter()
+            if encounter is None:
+                raise ValueError("Brak danych encountera dla aktywnej walki.")
+            transition = self.combat_turn_action_flow.resolve_hide(
+                state=self.combat_state,
+                board=encounter.board,
+                pending=pending,
+                natural_roll=natural_roll,
+                active_effects=self.active_combat_effects,
+                scene_objects=encounter.scene_objects,
+            )
+        elif pending.action == "search":
+            transition = self.combat_turn_action_flow.resolve_search(
+                state=self.combat_state,
+                pending=pending,
+                natural_roll=natural_roll,
+                active_effects=self.active_combat_effects,
+            )
+        else:
+            raise ValueError("Nieznany rodzaj oczekującego testu walki.")
+        self.combat_state = transition.state
+        self.active_combat_effects = transition.active_effects
+        self.pending_combat_skill_check = None
+        self.board_message = transition.message_body
+        self._add_message(transition.message_title, transition.message_body)
+        self._record(transition.event_type, dict(transition.event_payload))
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def cancel_combat_skill_check(self) -> dict[str, object]:
+        pending = self.pending_combat_skill_check
+        if pending is None:
+            raise ValueError("Nie ma oczekującego testu Hide ani Search.")
+        self.pending_combat_skill_check = None
+        self.board_message = "Anulowano test. Akcja nie została zużyta."
+        self._record("ui_combat_skill_check_cancelled", pending.as_payload())
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def start_combat_shove(self, *, target_id: str, mode: str) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        encounter = self._active_encounter()
+        if encounter is None:
+            raise ValueError("Brak danych encountera dla aktywnej walki.")
+        pending = self.combat_shove_flow.prepare(
+            state=self.combat_state,
+            board=encounter.board,
+            target_id=target_id,
+            mode=ShoveMode(mode),
+            scene_objects=encounter.scene_objects,
+        )
+        self._clear_player_pending_choices()
+        self.pending_combat_shove = pending
+        self.board_message = (
+            f"Rzuć Strength (Athletics) dla {pending.attacker_name}. "
+            f"{pending.target_name} broni się automatycznie przez "
+            f"{'Athletics' if pending.defender_skill == 'athletics' else 'Acrobatics'}."
+        )
+        self._add_message("Shove", self.board_message)
+        self._record("ui_combat_shove_started", pending.as_payload())
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def submit_combat_shove(self, *, attacker_natural_roll: int) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        encounter = self._active_encounter()
+        pending = self.pending_combat_shove
+        if encounter is None or pending is None:
+            raise ValueError("Nie ma oczekującego Shove.")
+        defender_natural_roll = automatic_defender_roll(pending, self.encounter_rng)
+        resolution = self.combat_shove_flow.resolve(
+            state=self.combat_state,
+            board=encounter.board,
+            pending=pending,
+            attacker_natural_roll=attacker_natural_roll,
+            defender_natural_roll=defender_natural_roll,
+            scene_objects=encounter.scene_objects,
+        )
+        self.combat_state = resolution.state
+        self.pending_combat_shove = None
+        self.board_message = resolution.message_body
+        self._add_message(resolution.message_title, resolution.message_body)
+        self._record(resolution.event_type, dict(resolution.event_payload))
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def cancel_combat_shove(self) -> dict[str, object]:
+        pending = self.pending_combat_shove
+        if pending is None:
+            raise ValueError("Nie ma oczekującego Shove.")
+        self.pending_combat_shove = None
+        self.board_message = "Anulowano Shove. Akcja nie została zużyta."
+        self._record("ui_combat_shove_cancelled", pending.as_payload())
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def start_combat_grapple(self, *, target_id: str, mode: str) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        pending = self.combat_grapple_flow.prepare(
+            state=self.combat_state,
+            mode=GrappleMode(mode),
+            target_id=target_id,
+        )
+        self._clear_player_pending_choices()
+        self.pending_combat_grapple = pending
+        self.board_message = (
+            f"Rzuć {_skill_label_pl(pending.actor_skill)} dla {pending.actor_name}. "
+            f"{pending.opponent_name} odpowiada automatycznie przez "
+            f"{_skill_label_pl(pending.opponent_skill)}."
+        )
+        self._add_message("Grapple", self.board_message)
+        self._record("ui_combat_grapple_started", pending.as_payload())
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def submit_combat_grapple(self, *, actor_natural_roll: int) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        pending = self.pending_combat_grapple
+        if pending is None:
+            raise ValueError("Nie ma oczekującego Grapple.")
+        opponent_natural_roll = automatic_grapple_opponent_roll(
+            pending,
+            self.encounter_rng,
+        )
+        resolution = self.combat_grapple_flow.resolve(
+            state=self.combat_state,
+            pending=pending,
+            actor_natural_roll=actor_natural_roll,
+            opponent_natural_roll=opponent_natural_roll,
+        )
+        self.combat_state = resolution.state
+        self.pending_combat_grapple = None
+        self.board_message = resolution.message_body
+        self._add_message(resolution.message_title, resolution.message_body)
+        self._record(resolution.event_type, dict(resolution.event_payload))
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def cancel_combat_grapple(self) -> dict[str, object]:
+        pending = self.pending_combat_grapple
+        if pending is None:
+            raise ValueError("Nie ma oczekującego Grapple.")
+        self.pending_combat_grapple = None
+        self.board_message = "Anulowano Grapple. Akcja nie została zużyta."
+        self._record("ui_combat_grapple_cancelled", pending.as_payload())
         self._sync_board_leds()
         return self.state_payload()
 
@@ -3089,6 +3785,993 @@ class ExplorationUiSession:
             position=position,
         )
 
+    def _combat_context_options(self, actor: Actor, position: Coordinate) -> tuple[CombatMenuOption, ...]:
+        if self.combat_state is None:
+            return ()
+        encounter = self._active_encounter()
+        if encounter is None:
+            return ()
+        action_available = self.combat_state.turn_action.action_use == ActionUse.ACTION_AVAILABLE
+        attack_available = can_use_attack_action(self.combat_state, actor)
+        object_interaction_available = self.combat_state.turn_action.object_interaction_available
+        options: list[CombatMenuOption] = []
+        dropped_weapons = tuple(item for item in self.combat_state.dropped_weapons if item.position == position)
+        interactions = self._available_combat_interaction_options(encounter, actor, position)
+        if interactions:
+            first = interactions[0]
+            label = first.label if len(interactions) == 1 else f"Interakcja: {first.object_name}"
+            options.append(
+                CombatMenuOption(
+                    id=f"interact:{first.object_id}",
+                    label=label,
+                    description=(
+                        (first.description or "Wybierz dostępną interakcję z obiektem na tym polu.")
+                        + f" Koszt: {action_economy_cost_label(first.action_cost)}."
+                    ),
+                    category=CombatMenuCategory.FIELD,
+                    action=CombatMenuAction.INTERACT,
+                    position=position,
+                )
+            )
+        else:
+            approach = self.combat_scene_interaction_flow.plan_approach(
+                state=self.combat_state,
+                board=encounter.board,
+                scene_objects=encounter.scene_objects,
+                actor=actor,
+                position=position,
+            )
+            if approach is not None and approach.path.cost_feet > 0:
+                first = approach.options[0]
+                interaction_label = first.label if len(approach.options) == 1 else f"użyj: {approach.object_name}"
+                options.append(
+                    CombatMenuOption(
+                        id=f"approach-interact:{approach.object_id}",
+                        label=f"Podejdź i {interaction_label.lower()}",
+                        description=(
+                            f"Ruch {approach.path.cost_feet} ft na pole "
+                            f"{approach.destination.as_tuple()}, następnie interakcja; "
+                            f"koszt: {action_economy_cost_label(first.action_cost)}."
+                        ),
+                        category=CombatMenuCategory.FIELD,
+                        action=CombatMenuAction.APPROACH_AND_INTERACT,
+                        position=position,
+                        destination=approach.destination,
+                        movement_cost_feet=approach.path.cost_feet,
+                    )
+                )
+
+        if position == actor.position:
+            if object_interaction_available or action_available:
+                for dropped in dropped_weapons:
+                    cost = "Darmowa interakcja z obiektem." if object_interaction_available else "Zużyje akcję."
+                    options.append(
+                        CombatMenuOption(
+                            id=f"pickup:{dropped.id}",
+                            label=f"Podnieś: {dropped.weapon.name}",
+                            description=f"Podnieś broń z aktualnego pola. {cost} Broń pozostanie niewyposażona.",
+                            category=CombatMenuCategory.FIELD,
+                            action=CombatMenuAction.PICK_UP,
+                            position=position,
+                            dropped_weapon_id=dropped.id,
+                        )
+                    )
+            for weapon in actor.inventory:
+                if weapon.kind != "weapon" or not weapon.available:
+                    continue
+                if weapon.equipped:
+                    options.append(
+                        CombatMenuOption(
+                            id=f"stow-weapon:{weapon.id}",
+                            label=f"Schowaj: {weapon.name}",
+                            description=(
+                                "Schowaj broń w ekwipunku; zużyje darmową interakcję "
+                                "z obiektem albo akcję, jeśli interakcja została już wykorzystana."
+                            ),
+                            category=CombatMenuCategory.EQUIPMENT,
+                            action=CombatMenuAction.STOW_WEAPON,
+                            item_id=weapon.id,
+                        )
+                    )
+                    options.append(
+                        CombatMenuOption(
+                            id=f"drop-weapon:{weapon.id}",
+                            label=f"Upuść: {weapon.name}",
+                            description="Połóż wyposażoną broń na aktualnym polu bez zużywania akcji ani interakcji.",
+                            category=CombatMenuCategory.EQUIPMENT,
+                            action=CombatMenuAction.DROP_WEAPON,
+                            item_id=weapon.id,
+                        )
+                    )
+                    continue
+                if not (object_interaction_available or action_available):
+                    continue
+                hand_plan = plan_hand_equip(actor.inventory, weapon.id)
+                replaced = tuple(
+                    item.name for item in actor.inventory if item.id in hand_plan.replaced_item_ids
+                )
+                interaction_count = 1 + len(replaced)
+                if not can_use_object_interactions(self.combat_state, interaction_count):
+                    continue
+                cost = (
+                    "darmową interakcję i akcję"
+                    if interaction_count == 2
+                    else "darmową interakcję z obiektem"
+                    if object_interaction_available
+                    else "akcję"
+                )
+                replacing = bool(replaced)
+                hand_label = (
+                    "obie ręce"
+                    if len(hand_plan.occupied_slots) == 2
+                    else "drugą rękę"
+                    if hand_plan.occupied_slots[0].value == "off_hand"
+                    else "główną rękę"
+                )
+                options.append(
+                    CombatMenuOption(
+                        id=f"equip-weapon:{weapon.id}",
+                        label=f"{'Zamień na' if replacing else 'Wyposaż'}: {weapon.name}",
+                        description=(
+                            f"{'Schowaj ' + ', '.join(replaced) + ' i wyposaż' if replacing else 'Wyposaż'} "
+                            f"{weapon.name}, zajmując {hand_label}; "
+                            f"zużyje {cost}."
+                        ),
+                        category=CombatMenuCategory.EQUIPMENT,
+                        action=CombatMenuAction.EQUIP_WEAPON,
+                        item_id=weapon.id,
+                    )
+                )
+            for shield in actor.inventory:
+                if shield.kind != "shield" or not shield.available or not action_available:
+                    continue
+                if shield.equipped:
+                    options.append(
+                        CombatMenuOption(
+                            id=f"doff-shield:{shield.id}",
+                            label=f"Zdejmij: {shield.name}",
+                            description=(
+                                f"Zwolnij rękę i strać premię +{shield.armor_class_bonus} KP; "
+                                "zużywa akcję."
+                            ),
+                            category=CombatMenuCategory.EQUIPMENT,
+                            action=CombatMenuAction.DOFF_SHIELD,
+                            item_id=shield.id,
+                        )
+                    )
+                    continue
+                proficiency_id = shield.armor_proficiency or "shield"
+                if not actor.proficiencies.is_armor_proficient(proficiency_id):
+                    continue
+                options.append(
+                    CombatMenuOption(
+                        id=f"don-shield:{shield.id}",
+                        label=f"Załóż: {shield.name}",
+                        description=(
+                            f"Zajmij jedną rękę i zyskaj +{shield.armor_class_bonus} KP; "
+                            "zużywa akcję i może schować przedmiot z tej ręki."
+                        ),
+                        category=CombatMenuCategory.EQUIPMENT,
+                        action=CombatMenuAction.DON_SHIELD,
+                        item_id=shield.id,
+                    )
+                )
+            if attack_available and not action_available:
+                for source in self._attack_sources_for_actor(actor):
+                    if source.source_type.value != "weapon":
+                        continue
+                    effective = self._effective_attack_source(actor, source)
+                    if not self._actor_can_use_attack_source(actor, effective):
+                        continue
+                    options.append(
+                        CombatMenuOption(
+                            id=f"attack-source:{source.id}",
+                            label=f"Atak: {source.name}",
+                            description="Wybierz źródło kolejnego ataku, a następnie wskaż cel.",
+                            category=_attack_context_category(source),
+                            action=CombatMenuAction.SELECT_ATTACK_SOURCE,
+                            source_id=source.id,
+                            provider="attack_source",
+                        )
+                    )
+            if action_available:
+                grappler_id = grappled_by(self.combat_state.condition_states, str(actor.id))
+                if grappler_id is not None and self.combat_grapple_flow.can_escape(self.combat_state):
+                    grappler = next(
+                        candidate
+                        for candidate in self.combat_state.actors
+                        if str(candidate.id) == grappler_id
+                    )
+                    options.append(
+                        CombatMenuOption(
+                            id=f"grapple:escape:{grappler.id}",
+                            label="Uwolnij się z chwytu",
+                            description=(
+                                f"Zużyj akcję i wykonaj lepszy Athletics/Acrobatics przeciw Athletics {grappler.name}."
+                            ),
+                            category=CombatMenuCategory.MANEUVER,
+                            action=CombatMenuAction.GRAPPLE,
+                            target_actor_id=str(grappler.id),
+                            grapple_mode=GrappleMode.ESCAPE.value,
+                            provider="maneuver",
+                        )
+                    )
+                for source in self._attack_sources_for_actor(actor):
+                    effective = self._effective_attack_source(actor, source)
+                    if not self._actor_can_use_attack_source(actor, effective):
+                        continue
+                    is_spell = source.source_type.value == "spell"
+                    options.append(
+                        CombatMenuOption(
+                            id=f"attack-source:{source.id}",
+                            label=f"{'Rzuć czar' if is_spell else 'Atak'}: {source.name}",
+                            description="Wybierz źródło, a następnie wskaż cel lub obszar na planszy.",
+                            category=_attack_context_category(source),
+                            action=CombatMenuAction.SELECT_ATTACK_SOURCE,
+                            source_id=source.id,
+                            provider="attack_source",
+                        )
+                    )
+                for source in self._healing_sources_for_actor(actor):
+                    if not self._actor_can_use_healing_source(actor, source):
+                        continue
+                    options.append(
+                        CombatMenuOption(
+                            id=f"healing-source:{source.id}",
+                            label=f"Leczenie: {source.name}",
+                            description="Wybierz źródło leczenia, a następnie wskaż sojusznika na planszy.",
+                            category=CombatMenuCategory.SUPPORT,
+                            action=CombatMenuAction.SELECT_HEALING_SOURCE,
+                            source_id=source.id,
+                            provider="healing_source",
+                        )
+                    )
+                for action in encounter.combat_actions_by_actor.get(actor.id, ()):
+                    if action.action_type == "targeted_item_effect":
+                        continue
+                    action_payload = _combat_action_payload(action, actor)
+                    if not action_payload["available"]:
+                        continue
+                    options.append(
+                        CombatMenuOption(
+                            id=f"combat-action:{action.id}",
+                            label=action.label or action.name,
+                            description=f"Użyj: {action.name}.",
+                            category=(CombatMenuCategory.ITEM if action.source_item_id else CombatMenuCategory.MAGIC),
+                            action=CombatMenuAction.COMBAT_ACTION,
+                            action_id=action.id,
+                            item_id=action.source_item_id,
+                            provider="item_action" if action.source_item_id else "combat_action",
+                        )
+                    )
+                options.extend(
+                    (
+                        CombatMenuOption("basic:dash", "Dash", "Zużyj akcję, aby zyskać dodatkowy ruch.", CombatMenuCategory.BASIC, CombatMenuAction.DASH),
+                        CombatMenuOption("basic:dodge", "Unik", "Ataki przeciw tobie mają utrudnienie do początku następnej tury.", CombatMenuCategory.BASIC, CombatMenuAction.DODGE),
+                        CombatMenuOption("basic:disengage", "Odwrót", "Ruch w tej turze nie prowokuje ataków okazyjnych.", CombatMenuCategory.BASIC, CombatMenuAction.DISENGAGE),
+                        CombatMenuOption("basic:help", "Help", "Pomóż sojusznikowi w następnym ataku.", CombatMenuCategory.BASIC, CombatMenuAction.HELP),
+                        CombatMenuOption("basic:ready", "Ready", "Przygotuj atak na wybrany warunek.", CombatMenuCategory.BASIC, CombatMenuAction.READY),
+                    )
+                )
+                hiding = hide_eligibility(encounter.board, actor, self.combat_state.actors, encounter.scene_objects)
+                if hiding.allowed:
+                    options.append(
+                        CombatMenuOption("basic:hide", "Hide", "Spróbuj ukryć się przed przeciwnikami, którzy nie widzą cię wyraźnie.", CombatMenuCategory.BASIC, CombatMenuAction.HIDE)
+                    )
+                if any(str(actor.id) in hidden.hidden_from_actor_ids for hidden in self.combat_state.hidden_states):
+                    options.append(
+                        CombatMenuOption("basic:search", "Search", "Użyj Perception, aby odnaleźć ukrytego przeciwnika.", CombatMenuCategory.BASIC, CombatMenuAction.SEARCH)
+                    )
+            is_prone = has_condition(
+                self.combat_state.condition_states,
+                str(actor.id),
+                CombatCondition.PRONE,
+            )
+            if is_prone:
+                stand_cost = standing_movement_cost(actor)
+                if movement_remaining(self.combat_state, actor) >= stand_cost:
+                    options.append(
+                        CombatMenuOption(
+                            "basic:stand-up",
+                            "Wstań",
+                            f"Usuń Powalenie, wydając {stand_cost} ft ruchu.",
+                            CombatMenuCategory.BASIC,
+                            CombatMenuAction.STAND_UP,
+                        )
+                    )
+            else:
+                options.append(
+                    CombatMenuOption(
+                        "basic:drop-prone",
+                        "Padnij",
+                        "Przyjmij stan Powalony bez zużywania akcji ani ruchu.",
+                        CombatMenuCategory.BASIC,
+                        CombatMenuAction.DROP_PRONE,
+                    )
+                )
+            options.append(
+                CombatMenuOption(
+                    "turn:end",
+                    "Zakończ turę",
+                    "Przekaż turę następnemu aktorowi.",
+                    CombatMenuCategory.TURN,
+                    CombatMenuAction.END_TURN,
+                )
+            )
+            return ContextualActionCatalog.collect(tuple(options)).options
+
+        movement = _remaining_movement_range(encounter.board, self.combat_state, actor)
+        if position in movement.reachable_tiles:
+            options.append(
+                CombatMenuOption(
+                    id=f"move:{position.col}:{position.row}",
+                    label="Podejdź na pole",
+                    description="Pokaż ścieżkę ruchu; ponowne kliknięcie pola ją zatwierdzi.",
+                    category=CombatMenuCategory.FIELD,
+                    action=CombatMenuAction.MOVE,
+                    position=position,
+                )
+            )
+        if position in movement.reachable_tiles and (object_interaction_available or action_available):
+            for dropped in dropped_weapons:
+                movement_cost = movement.costs_by_tile.get(position, 0)
+                interaction_cost = "darmowa interakcja" if object_interaction_available else "akcja"
+                options.append(
+                    CombatMenuOption(
+                        id=f"approach-pickup:{dropped.id}",
+                        label=f"Podejdź i podnieś: {dropped.weapon.name}",
+                        description=(
+                            f"Ruch {movement_cost} ft na pole {position.as_tuple()}, następnie {interaction_cost}. "
+                            "Broń pozostanie niewyposażona."
+                        ),
+                        category=CombatMenuCategory.FIELD,
+                        action=CombatMenuAction.APPROACH_AND_PICK_UP,
+                        position=position,
+                        destination=position,
+                        movement_cost_feet=movement_cost,
+                        dropped_weapon_id=dropped.id,
+                    )
+                )
+        if action_available or attack_available:
+            shove_target = next(
+                (
+                    candidate
+                    for candidate in self.combat_state.actors
+                    if candidate.position == position
+                    and candidate.faction not in {actor.faction, Faction.NEUTRAL}
+                    and not candidate.is_defeated()
+                ),
+                None,
+            )
+            if shove_target is not None and attack_available:
+                if self.combat_grapple_flow.can_start(
+                    self.combat_state,
+                    str(shove_target.id),
+                ):
+                    options.append(
+                        CombatMenuOption(
+                            id=f"grapple:start:{shove_target.id}",
+                            label=f"Grapple: {shove_target.name}",
+                            description=(
+                                "Zużyj jeden atak i wykonaj Athletics przeciw lepszemu "
+                                "Athletics/Acrobatics celu. Sukces ustawia jego szybkość na 0."
+                            ),
+                            category=CombatMenuCategory.MANEUVER,
+                            action=CombatMenuAction.GRAPPLE,
+                            position=position,
+                            target_actor_id=str(shove_target.id),
+                            grapple_mode=GrappleMode.START.value,
+                            provider="maneuver",
+                        )
+                    )
+                for shove_mode in self.combat_shove_flow.available_modes(
+                    state=self.combat_state,
+                    board=encounter.board,
+                    target_id=str(shove_target.id),
+                    scene_objects=encounter.scene_objects,
+                ):
+                    is_prone_shove = shove_mode == ShoveMode.PRONE
+                    options.append(
+                        CombatMenuOption(
+                            id=f"shove:{shove_mode.value}:{shove_target.id}",
+                            label=(
+                                f"Shove — powal: {shove_target.name}"
+                                if is_prone_shove
+                                else f"Shove — odepchnij: {shove_target.name}"
+                            ),
+                            description=(
+                                "Zużyj jeden atak i wykonaj Athletics przeciw Athletics/Acrobatics celu. "
+                                + (
+                                    "Sukces nakłada stan Powalony."
+                                    if is_prone_shove
+                                    else "Sukces odpycha cel o 5 ft."
+                                )
+                            ),
+                            category=CombatMenuCategory.MANEUVER,
+                            action=CombatMenuAction.SHOVE,
+                            position=position,
+                            target_actor_id=str(shove_target.id),
+                            shove_mode=shove_mode.value,
+                            provider="maneuver",
+                        )
+                    )
+            for source in self._attack_sources_for_actor(actor):
+                if source.source_type.value == "weapon":
+                    if not attack_available:
+                        continue
+                elif not action_available:
+                    continue
+                attack_source = self._effective_attack_source(actor, source, shove_target)
+                source_item = (
+                    _inventory_item_for_attack_source(actor, source.source_item_id)
+                    if source.source_item_id
+                    else None
+                )
+                usable_now = self._actor_can_use_attack_source(actor, attack_source)
+                can_equip_and_attack = bool(
+                    source.source_type.value == "weapon"
+                    and source_item is not None
+                    and source_item.available
+                    and not source_item.equipped
+                    and object_interaction_available
+                    and not plan_hand_equip(actor.inventory, source_item.id).replaced_item_ids
+                )
+                if not usable_now and not can_equip_and_attack:
+                    continue
+                if attack_source.area is not None:
+                    if not usable_now:
+                        continue
+                    if position in _area_spell_selection_positions(encounter.board, actor, attack_source):
+                        options.append(
+                            CombatMenuOption(
+                                f"area:{attack_source.id}",
+                                f"Rzuć: {attack_source.name}",
+                                "Ustaw środek lub kierunek czaru na tym polu.",
+                                CombatMenuCategory.MAGIC,
+                                CombatMenuAction.AREA_SPELL,
+                                position=position,
+                                source_id=attack_source.id,
+                                provider="attack_source",
+                            )
+                        )
+                elif _combat_target_at_position(encounter, self.combat_state, actor, position, attack_source) is not None:
+                    label_prefix = "Wyposaż i zaatakuj" if can_equip_and_attack else "Atak"
+                    options.append(
+                        CombatMenuOption(
+                            (
+                                f"equip-attack:{attack_source.id}:{source_item.id}"
+                                if can_equip_and_attack and source_item is not None
+                                else f"attack:{attack_source.id}"
+                            ),
+                            f"{label_prefix}: {attack_source.name}",
+                            (
+                                "Użyj darmowej interakcji, aby zmienić broń, a następnie wykonaj atak."
+                                if can_equip_and_attack
+                                else "Zaatakuj przeciwnika stojącego na tym polu."
+                            ),
+                            _attack_context_category(source),
+                            (
+                                CombatMenuAction.EQUIP_AND_ATTACK
+                                if can_equip_and_attack
+                                else CombatMenuAction.ATTACK
+                            ),
+                            position=position,
+                            source_id=attack_source.id,
+                            item_id=source_item.id if can_equip_and_attack and source_item is not None else None,
+                            provider="attack_source",
+                        )
+                    )
+            for healing_source in self._healing_sources_for_actor(actor):
+                if not action_available:
+                    continue
+                if not self._actor_can_use_healing_source(actor, healing_source):
+                    continue
+                if any(
+                    target.position == position
+                    for target in legal_healing_targets(encounter.board, actor, self.combat_state.actors, healing_source)
+                ):
+                    options.append(
+                        CombatMenuOption(
+                            f"heal:{healing_source.id}",
+                            f"Lecz: {healing_source.name}",
+                            "Użyj leczenia na sojuszniku stojącym na tym polu.",
+                            CombatMenuCategory.SUPPORT,
+                            CombatMenuAction.HEAL,
+                            position=position,
+                            source_id=healing_source.id,
+                            provider="healing_source",
+                        )
+                    )
+            clicked_actor = next(
+                (
+                    candidate
+                    for candidate in self.combat_state.actors
+                    if candidate.position == position and not candidate.is_defeated()
+                ),
+                None,
+            )
+            if clicked_actor is not None:
+                for action in encounter.combat_actions_by_actor.get(actor.id, ()):
+                    if not action_available:
+                        continue
+                    if not targeted_item_action_is_legal(self.combat_state, action, clicked_actor):
+                        continue
+                    options.append(
+                        CombatMenuOption(
+                            id=f"item-action:{action.id}:{clicked_actor.id}",
+                            label=action.label or action.name,
+                            description=(
+                                f"Użyj {action.name} na {clicked_actor.name}; koszt: "
+                                f"{action_economy_cost_label(action.action_cost)}; zużywa jedną sztukę przedmiotu."
+                            ),
+                            category=CombatMenuCategory.ITEM,
+                            action=CombatMenuAction.TARGETED_ITEM_ACTION,
+                            position=position,
+                            action_id=action.id,
+                            item_id=action.source_item_id,
+                            target_actor_id=str(clicked_actor.id),
+                            provider="item_action",
+                        )
+                    )
+        if self.combat_state.turn_action.bonus_action_use == ActionUse.ACTION_AVAILABLE:
+            bonus_sources = eligible_two_weapon_bonus_sources(
+                actor,
+                self.combat_state.turn_action.two_weapon_trigger_item_id,
+                self._attack_sources_for_actor(actor),
+            )
+            for source in bonus_sources:
+                attack_source = self._effective_attack_source(
+                    actor,
+                    two_weapon_bonus_attack_source(actor, source),
+                )
+                if _combat_target_at_position(
+                    encounter,
+                    self.combat_state,
+                    actor,
+                    position,
+                    attack_source,
+                    require_action=False,
+                ) is None:
+                    continue
+                options.append(
+                    CombatMenuOption(
+                        id=f"two-weapon:{source.id}",
+                        label=f"Atak drugą bronią: {source.name}",
+                        description=(
+                            "Zużyj bonus action. Do obrażeń nie dodawaj dodatniego "
+                            "modyfikatora cechy."
+                        ),
+                        category=CombatMenuCategory.ATTACK,
+                        action=CombatMenuAction.TWO_WEAPON_ATTACK,
+                        position=position,
+                        source_id=source.id,
+                        provider="two_weapon",
+                    )
+                )
+        return ContextualActionCatalog.collect(tuple(options)).options
+
+    def _open_combat_context_menu(self, actor: Actor, position: Coordinate, options: tuple[CombatMenuOption, ...]) -> dict[str, object]:
+        self._clear_player_pending_choices()
+        target = (
+            next(
+                (
+                    candidate
+                    for candidate in self.combat_state.actors
+                    if candidate.position == position
+                    and candidate.id != actor.id
+                    and candidate.faction not in {actor.faction, Faction.NEUTRAL}
+                    and not candidate.is_defeated()
+                ),
+                None,
+            )
+            if self.combat_state is not None
+            else None
+        )
+        notice = ""
+        if target is not None and not can_grapple_or_shove_size(actor.size, target.size):
+            maximum = largest_grapple_or_shove_target(actor.size)
+            notice = (
+                f"{target.name} ma rozmiar {creature_size_label_pl(target.size)}. "
+                f"Grapple i Shove są niedostępne: {actor.name} może wybrać cel najwyżej "
+                f"rozmiaru {creature_size_label_pl(maximum)}."
+            )
+        self.pending_combat_context_menu = CombatContextMenu(
+            actor_id=str(actor.id),
+            position=position,
+            title="Akcje bohatera" if position == actor.position else f"Opcje pola ({position.col}, {position.row})",
+            options=options,
+            is_self_menu=position == actor.position,
+            notice=notice,
+        )
+        self.board_message = "Wybierz opcję strzałkami i potwierdź Enterem. Escape zamyka menu."
+        self._record(
+            "ui_combat_context_menu_opened",
+            {"actor_id": str(actor.id), "position": [position.col, position.row], "option_ids": [option.id for option in options]},
+        )
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def move_combat_context_menu_selection(self, delta: int) -> dict[str, object]:
+        if self.pending_combat_context_menu is None:
+            raise ValueError("Nie ma otwartego menu akcji.")
+        self.pending_combat_context_menu = self.pending_combat_context_menu.move_selection(int(delta))
+        return self.state_payload()
+
+    def cancel_combat_context_menu(self) -> dict[str, object]:
+        if self.pending_combat_context_menu is None:
+            raise ValueError("Nie ma otwartego menu akcji.")
+        self.pending_combat_context_menu = None
+        self.board_message = "Menu zamknięte. Wybierz pole na planszy."
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def confirm_combat_context_menu(self, option_id: str = "") -> dict[str, object]:
+        menu = self.pending_combat_context_menu
+        if menu is None:
+            raise ValueError("Nie ma otwartego menu akcji.")
+        if option_id:
+            menu = menu.select(option_id)
+        option = menu.selected_option
+        self.pending_combat_context_menu = None
+        return self._execute_combat_context_option(option)
+
+    def _execute_combat_context_option(self, option: CombatMenuOption) -> dict[str, object]:
+        if option.action == CombatMenuAction.MOVE and option.position is not None:
+            return self.preview_combat_movement(col=option.position.col, row=option.position.row)
+        if option.action == CombatMenuAction.ATTACK and option.position is not None:
+            if option.source_id:
+                actor = combat_current_actor(self.combat_state)
+                self.selected_attack_source_ids[str(actor.id)] = option.source_id
+            return self.select_player_attack_target_at_position(option.position)
+        if option.action == CombatMenuAction.TWO_WEAPON_ATTACK and option.position is not None:
+            if option.source_id:
+                actor = combat_current_actor(self.combat_state)
+                self.selected_attack_source_ids[str(actor.id)] = option.source_id
+            return self.select_player_attack_target_at_position(
+                option.position,
+                two_weapon_bonus=True,
+            )
+        if (
+            option.action == CombatMenuAction.EQUIP_AND_ATTACK
+            and option.position is not None
+            and option.source_id
+            and option.item_id
+        ):
+            if self.combat_state is None or not self.combat_state.turn_action.object_interaction_available:
+                raise ValueError("Zmiana broni i atak wymagają dostępnej darmowej interakcji z obiektem.")
+            self._equip_combat_weapon(option.item_id)
+            actor = combat_current_actor(self.combat_state)
+            self.selected_attack_source_ids[str(actor.id)] = option.source_id
+            return self.select_player_attack_target_at_position(option.position)
+        if option.action == CombatMenuAction.AREA_SPELL and option.position is not None:
+            return self.select_player_area_spell_at_position(option.position)
+        if option.action == CombatMenuAction.HEAL and option.position is not None:
+            if option.source_id:
+                actor = combat_current_actor(self.combat_state)
+                self.selected_healing_source_ids[str(actor.id)] = option.source_id
+            return self.select_player_healing_target_at_position(option.position)
+        if option.action == CombatMenuAction.INTERACT and option.position is not None:
+            return self.select_combat_interaction_at_position(option.position)
+        if option.action == CombatMenuAction.APPROACH_AND_INTERACT and option.position is not None:
+            return self._start_approach_interaction(option.position)
+        if option.action == CombatMenuAction.PICK_UP and option.dropped_weapon_id:
+            return self._pickup_dropped_weapon(option.dropped_weapon_id)
+        if option.action == CombatMenuAction.APPROACH_AND_PICK_UP and option.position is not None and option.dropped_weapon_id:
+            return self._start_approach_pickup(option.dropped_weapon_id, option.position)
+        if option.action == CombatMenuAction.EQUIP_WEAPON and option.item_id:
+            return self._equip_combat_weapon(option.item_id)
+        if option.action == CombatMenuAction.STOW_WEAPON and option.item_id:
+            return self._stow_combat_weapon(option.item_id)
+        if option.action == CombatMenuAction.DROP_WEAPON and option.item_id:
+            return self._drop_combat_weapon(option.item_id)
+        if option.action == CombatMenuAction.DON_SHIELD and option.item_id:
+            return self._don_combat_shield(option.item_id)
+        if option.action == CombatMenuAction.DOFF_SHIELD and option.item_id:
+            return self._doff_combat_shield(option.item_id)
+        if option.action == CombatMenuAction.SELECT_ATTACK_SOURCE and option.source_id:
+            return self.select_combat_attack_source(option.source_id)
+        if option.action == CombatMenuAction.SELECT_HEALING_SOURCE and option.source_id:
+            return self.select_combat_healing_source(option.source_id)
+        if (
+            option.action == CombatMenuAction.TARGETED_ITEM_ACTION
+            and option.action_id
+            and option.target_actor_id
+        ):
+            return self.use_targeted_combat_item(
+                action_id=option.action_id,
+                target_id=option.target_actor_id,
+            )
+        if option.action == CombatMenuAction.COMBAT_ACTION and option.action_id:
+            actor = combat_current_actor(self.combat_state)
+            action = _combat_action_by_id(self._active_encounter(), actor, option.action_id)
+            if action is None:
+                raise ValueError("Wybrana akcja nie jest już dostępna.")
+            if action.action_type == "strength_potion":
+                return self.use_combat_strength_potion(option.action_id)
+            if action.action_type == "concentration_attack_bonus":
+                return self.start_combat_concentration_action(option.action_id)
+            raise ValueError("Ten typ akcji nie ma jeszcze wykonawcy w menu walki.")
+        if option.action == CombatMenuAction.DASH:
+            return self.use_combat_dash()
+        if option.action == CombatMenuAction.DODGE:
+            return self.use_combat_dodge()
+        if option.action == CombatMenuAction.DISENGAGE:
+            return self.use_combat_disengage()
+        if option.action == CombatMenuAction.HELP:
+            return self.start_combat_help()
+        if option.action == CombatMenuAction.READY:
+            return self.start_combat_ready()
+        if option.action == CombatMenuAction.HIDE:
+            return self.start_combat_hide()
+        if option.action == CombatMenuAction.SEARCH:
+            return self.start_combat_search()
+        if option.action == CombatMenuAction.SHOVE and option.target_actor_id and option.shove_mode:
+            return self.start_combat_shove(
+                target_id=option.target_actor_id,
+                mode=option.shove_mode,
+            )
+        if option.action == CombatMenuAction.GRAPPLE and option.grapple_mode:
+            return self.start_combat_grapple(
+                target_id=option.target_actor_id or "",
+                mode=option.grapple_mode,
+            )
+        if option.action == CombatMenuAction.DROP_PRONE:
+            return self.drop_combat_prone()
+        if option.action == CombatMenuAction.STAND_UP:
+            return self.stand_combat_up()
+        if option.action == CombatMenuAction.END_TURN:
+            return self.finish_combat_turn()
+        raise ValueError("Wybrana opcja menu nie jest obsługiwana.")
+
+    def _start_approach_interaction(self, position: Coordinate) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        encounter = self._active_encounter()
+        if encounter is None:
+            raise ValueError("Brak danych encountera dla aktywnej walki.")
+        actor = combat_current_actor(self.combat_state)
+        plan = self.combat_scene_interaction_flow.plan_approach(
+            state=self.combat_state,
+            board=encounter.board,
+            scene_objects=encounter.scene_objects,
+            actor=actor,
+            position=position,
+        )
+        if plan is None or plan.path.cost_feet <= 0:
+            raise ValueError("Nie można teraz podejść do wybranej interakcji.")
+        self.pending_approach_interaction = plan
+        self._record(
+            "ui_combat_approach_interaction_started",
+            {
+                "actor_id": plan.actor_id,
+                "object_id": plan.object_id,
+                "interaction_position": [position.col, position.row],
+                "destination": [plan.destination.col, plan.destination.row],
+                "cost_feet": plan.path.cost_feet,
+            },
+        )
+        result = self.submit_combat_movement(col=plan.destination.col, row=plan.destination.row)
+        if self.pending_opportunity_movement is not None:
+            return result
+        return self._resume_approach_interaction()
+
+    def _resume_approach_interaction(self) -> dict[str, object]:
+        plan = self.pending_approach_interaction
+        if plan is None:
+            return self.state_payload()
+        if self.combat_state is None:
+            self.pending_approach_interaction = None
+            return self.state_payload()
+        actor = combat_current_actor(self.combat_state)
+        if str(actor.id) != plan.actor_id or actor.position != plan.destination or actor.is_defeated():
+            self.pending_approach_interaction = None
+            self.board_message = "Nie udało się dotrzeć do obiektu, więc interakcja nie została wykonana."
+            self._add_message("Interakcja", self.board_message)
+            self._sync_board_leds()
+            return self.state_payload()
+        if self.pending_concentration_check is not None:
+            self.board_message = "Najpierw rozstrzygnij koncentrację; potem bohater dokończy interakcję."
+            self._sync_board_leds()
+            return self.state_payload()
+        self.pending_approach_interaction = None
+        return self.select_combat_interaction_at_position(plan.interaction_position)
+
+    def _start_approach_pickup(self, dropped_weapon_id: str, position: Coordinate) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        actor = combat_current_actor(self.combat_state)
+        dropped = next(
+            (
+                item
+                for item in self.combat_state.dropped_weapons
+                if item.id == dropped_weapon_id and item.position == position
+            ),
+            None,
+        )
+        if dropped is None:
+            raise ValueError("Broń nie leży już na wybranym polu.")
+        self.pending_approach_pickup = PendingApproachPickup(
+            actor_id=str(actor.id),
+            dropped_weapon_id=dropped.id,
+            destination=position,
+        )
+        self._record(
+            "ui_combat_approach_pickup_started",
+            {
+                "actor_id": str(actor.id),
+                "dropped_weapon_id": dropped.id,
+                "destination": [position.col, position.row],
+            },
+        )
+        result = self.submit_combat_movement(col=position.col, row=position.row)
+        if self.pending_opportunity_movement is not None:
+            return result
+        return self._resume_approach_pickup()
+
+    def _resume_approach_pickup(self) -> dict[str, object]:
+        pending = self.pending_approach_pickup
+        if pending is None:
+            return self.state_payload()
+        if self.combat_state is None:
+            self.pending_approach_pickup = None
+            return self.state_payload()
+        actor = combat_current_actor(self.combat_state)
+        if str(actor.id) != pending.actor_id or actor.position != pending.destination or actor.is_defeated():
+            self.pending_approach_pickup = None
+            self.board_message = "Nie udało się dotrzeć do broni, więc nie została podniesiona."
+            self._add_message("Ekwipunek", self.board_message)
+            self._sync_board_leds()
+            return self.state_payload()
+        if self.pending_concentration_check is not None:
+            self.board_message = "Najpierw rozstrzygnij koncentrację; potem bohater podniesie broń."
+            self._sync_board_leds()
+            return self.state_payload()
+        self.pending_approach_pickup = None
+        return self._pickup_dropped_weapon(pending.dropped_weapon_id)
+
+    def _resume_pending_approach_action(self) -> dict[str, object]:
+        if self.pending_approach_interaction is not None:
+            return self._resume_approach_interaction()
+        if self.pending_approach_pickup is not None:
+            return self._resume_approach_pickup()
+        return self.state_payload()
+
+    def _pickup_dropped_weapon(self, dropped_weapon_id: str) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        result = pickup_dropped_weapon(self.combat_state, dropped_weapon_id)
+        if not result.accepted:
+            raise ValueError(result.message)
+        self.combat_state = result.state
+        self.selected_combat_movement_path = None
+        self.board_message = result.message
+        self._add_message("Ekwipunek", result.message)
+        self._record(
+            "ui_combat_dropped_weapon_picked_up",
+            {
+                "actor_id": str(result.actor.id),
+                "dropped_weapon_id": dropped_weapon_id,
+                "weapon_id": result.weapon.id if result.weapon is not None else None,
+                "used_action": result.used_action,
+            },
+        )
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def _equip_combat_weapon(self, weapon_id: str) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        result = equip_weapon(self.combat_state, weapon_id)
+        if not result.accepted:
+            raise ValueError(result.message)
+        self.combat_state = result.state
+        if result.weapon is not None:
+            actor_sources = self._attack_sources_for_actor(result.actor)
+            source_keys = {result.weapon.id, result.weapon.source_ref}
+            selected = next(
+                (source for source in actor_sources if source.source_item_id in source_keys),
+                None,
+            )
+            if selected is not None:
+                self.selected_attack_source_ids[str(result.actor.id)] = selected.id
+        self.board_message = result.message
+        self._add_message("Ekwipunek", result.message)
+        self._record(
+            "ui_combat_weapon_equipped",
+            {
+                "actor_id": str(result.actor.id),
+                "weapon_id": weapon_id,
+                "replaced_weapon_ids": [item.id for item in result.replaced_weapons],
+                "used_action": result.used_action,
+            },
+        )
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def _drop_combat_weapon(self, weapon_id: str) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        result = drop_weapon(self.combat_state, weapon_id)
+        if not result.accepted:
+            raise ValueError(result.message)
+        self.combat_state = result.state
+        self.selected_attack_source_ids.pop(str(result.actor.id), None)
+        self.board_message = result.message
+        self._add_message("Ekwipunek", result.message)
+        self._record(
+            "ui_combat_weapon_dropped",
+            {
+                "actor_id": str(result.actor.id),
+                "weapon_id": weapon_id,
+                "dropped_weapon_id": result.dropped_weapon.id if result.dropped_weapon is not None else None,
+            },
+        )
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def _stow_combat_weapon(self, weapon_id: str) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        result = stow_weapon(self.combat_state, weapon_id)
+        if not result.accepted:
+            raise ValueError(result.message)
+        self.combat_state = result.state
+        self.selected_attack_source_ids.pop(str(result.actor.id), None)
+        self.board_message = result.message
+        self._add_message("Ekwipunek", result.message)
+        self._record(
+            "ui_combat_weapon_stowed",
+            {
+                "actor_id": str(result.actor.id),
+                "weapon_id": weapon_id,
+                "used_action": result.used_action,
+            },
+        )
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def _don_combat_shield(self, shield_id: str) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        result = don_shield(self.combat_state, shield_id)
+        if not result.accepted:
+            raise ValueError(result.message)
+        self.combat_state = result.state
+        self.selected_attack_source_ids.pop(str(result.actor.id), None)
+        self.board_message = result.message
+        self._add_message("Ekwipunek", result.message)
+        self._record(
+            "ui_combat_shield_donned",
+            {
+                "actor_id": str(result.actor.id),
+                "shield_id": shield_id,
+                "replaced_item_ids": [item.id for item in result.replaced_items],
+                "armor_class": effective_armor_class(result.actor),
+            },
+        )
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def _doff_combat_shield(self, shield_id: str) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        result = doff_shield(self.combat_state, shield_id)
+        if not result.accepted:
+            raise ValueError(result.message)
+        self.combat_state = result.state
+        self.board_message = result.message
+        self._add_message("Ekwipunek", result.message)
+        self._record(
+            "ui_combat_shield_doffed",
+            {
+                "actor_id": str(result.actor.id),
+                "shield_id": shield_id,
+                "armor_class": effective_armor_class(result.actor),
+            },
+        )
+        self._sync_board_leds()
+        return self.state_payload()
+
     def _combat_interaction_positions(self, encounter: LoadedEncounter, actor: Actor) -> tuple[Coordinate, ...]:
         if self.combat_state is None:
             return ()
@@ -3179,6 +4862,8 @@ class ExplorationUiSession:
                 state=self.combat_state,
                 board=encounter.board,
                 attack_sources_by_actor=encounter.attack_sources_by_actor,
+                multiattack_sources_by_actor=encounter.multiattack_sources_by_actor,
+                scene_objects=encounter.scene_objects,
             )
             self.pending_enemy_turn_intent = transition.intent
             self.board_message = transition.board_message
@@ -3193,8 +4878,10 @@ class ExplorationUiSession:
             intent=intent,
             board=encounter.board,
             attack_sources_by_actor=encounter.attack_sources_by_actor,
+            multiattack_sources_by_actor=encounter.multiattack_sources_by_actor,
             active_effects=self.active_combat_effects,
             rng=self.encounter_rng,
+            scene_objects=encounter.scene_objects,
         )
         result = transition.result
         if transition.kind == EnemyTurnTransitionKind.FINISHED:
@@ -3239,11 +4926,50 @@ class ExplorationUiSession:
         self.pending_enemy_turn_result = None
         self.pending_enemy_opportunity_attack = None
         self.pending_ready_attack = None
+        self.pending_approach_interaction = None
+        self.pending_approach_pickup = None
         self.pending_enemy_turn_ack_result = transition.result
-        self.board_message = transition.board_message
+        if transition.result.saving_throw_request is not None and transition.result.target is not None:
+            request = transition.result.saving_throw_request
+            self.pending_enemy_saving_throw = PendingEnemySavingThrow(
+                target_id=transition.result.target.id,
+                source_id=transition.result.source.id if transition.result.source is not None else "",
+                request=request,
+            )
+            self.board_message = (
+                f"{transition.result.target.name}: rzuć fizyczne d20 na "
+                f"{request.as_payload()['ability_label']} przeciw ST {request.dc} i wpisz wynik."
+            )
+            self._add_message("Rzut obronny", self.board_message)
+        else:
+            self.pending_enemy_saving_throw = None
+            self.board_message = transition.board_message
         self._record(transition.event_type, dict(transition.event_payload))
         if result.applied_damage is not None:
             self._maybe_prompt_concentration_check(result.applied_damage)
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def submit_enemy_saving_throw(self, natural_roll: int) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        if self.pending_enemy_saving_throw is None:
+            raise ValueError("Brak oczekującego rzutu obronnego przeciw efektowi przeciwnika.")
+        result = self.pending_enemy_turn_ack_result
+        if result is None:
+            raise ValueError("Brak wyniku tury przeciwnika dla rzutu obronnego.")
+        transition = self.enemy_turn_flow.resolve_player_saving_throw(
+            result=result,
+            natural_roll=natural_roll,
+        )
+        self.combat_state = transition.result.state
+        self.pending_enemy_turn_ack_result = transition.result
+        self.pending_enemy_saving_throw = None
+        self.board_message = transition.board_message
+        self._add_message(transition.message_title, transition.message_body)
+        self._record(transition.event_type, dict(transition.event_payload))
+        if transition.result.applied_damage is not None:
+            self._maybe_prompt_concentration_check(transition.result.applied_damage)
         self._sync_board_leds()
         return self.state_payload()
 
@@ -3350,6 +5076,7 @@ class ExplorationUiSession:
             attack_sources_by_actor=encounter.attack_sources_by_actor,
             active_effects=self.active_combat_effects,
             damage=damage,
+            critical=pending.critical,
         )
         applied_damage = damage_resolution.applied_damage
         updated_target = applied_damage.actor_after
@@ -3522,6 +5249,7 @@ class ExplorationUiSession:
             attack_sources_by_actor=encounter.attack_sources_by_actor,
             active_effects=self.active_combat_effects,
             damage=damage,
+            critical=pending.critical,
         )
         applied_damage = damage_resolution.applied_damage
         updated_target = applied_damage.actor_after
@@ -3579,7 +5307,12 @@ class ExplorationUiSession:
         result_actor = next((actor for actor in result.state.actors if actor.id == updated_actor.id), None)
         if result_actor is None:
             return result
-        merged_actor = replace(result_actor, hp=updated_actor.hp, temp_hp=updated_actor.temp_hp)
+        merged_actor = replace(
+            result_actor,
+            hp=updated_actor.hp,
+            temp_hp=updated_actor.temp_hp,
+            death_saves=updated_actor.death_saves,
+        )
         updated_state = replace_actor(result.state, merged_actor)
         if self.combat_state is not None:
             updated_state = replace(updated_state, spent_reaction_actor_ids=self.combat_state.spent_reaction_actor_ids)
@@ -3628,6 +5361,23 @@ class ExplorationUiSession:
         result = self.pending_enemy_turn_ack_result
         if result is None:
             raise ValueError("Brak wyniku tury przeciwnika do potwierdzenia.")
+        if self.pending_enemy_saving_throw is not None:
+            raise ValueError("Najpierw wpisz naturalny wynik rzutu obronnego gracza.")
+        remaining = attack_action_remaining(self.combat_state, result.enemy)
+        if self.combat_state.status.value == "active" and remaining > 0:
+            self.pending_enemy_turn_ack_result = None
+            self.pending_enemy_turn_intent = None
+            self.board_message = (
+                f"{result.enemy.name}: pozostało ataków w Multiattack: {remaining}. "
+                "Potwierdź, aby zaplanować kolejny atak."
+            )
+            self._add_message("Multiattack", self.board_message)
+            self._record(
+                "ui_combat_enemy_multiattack_continues",
+                {"enemy_id": str(result.enemy.id), "attacks_remaining": remaining},
+            )
+            self._sync_board_leds()
+            return self.state_payload()
         return self._finish_pending_enemy_turn(result)
 
     def _finish_pending_enemy_turn(self, result) -> dict[str, object]:
@@ -3646,6 +5396,7 @@ class ExplorationUiSession:
         self.pending_enemy_opportunity_attack = None
         self.pending_ready_attack = None
         self.pending_enemy_turn_ack_result = None
+        self.pending_enemy_saving_throw = None
         self._add_message(transition.message_title, transition.message_body)
         self._record(transition.event_type, dict(transition.event_payload))
         self._sync_board_leds()
@@ -3663,6 +5414,8 @@ class ExplorationUiSession:
     def finish_combat_turn(self) -> dict[str, object]:
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
+        if combat_current_actor(self.combat_state).needs_death_save():
+            raise ValueError("Najpierw wykonaj rzut śmierci aktywnego bohatera.")
         transition = self.combat_turn_finalization.finish_active_turn(
             state=self.combat_state,
             active_effects=self.active_combat_effects,
@@ -3676,11 +5429,134 @@ class ExplorationUiSession:
         self.pending_enemy_turn_intent = None
         self.pending_enemy_turn_result = None
         self.pending_enemy_turn_ack_result = None
+        self.pending_enemy_saving_throw = None
         self.pending_enemy_opportunity_attack = None
         self.pending_ready_attack = None
+        self.pending_approach_interaction = None
+        self.pending_approach_pickup = None
         self._clear_player_pending_choices()
         self._add_message(transition.message_title, transition.message_body)
         self._record(transition.event_type, dict(transition.event_payload))
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def recover_exploration_condition(
+        self,
+        *,
+        actor_id: str,
+        condition: str,
+    ) -> dict[str, object]:
+        if self.combat_state is not None:
+            raise ValueError("W czasie walki użyj akcji właściwej dla danego stanu.")
+        parsed_condition = CombatCondition(condition)
+        if parsed_condition != CombatCondition.PRONE:
+            raise ValueError("Tego stanu nie można usunąć prostą czynnością w eksploracji.")
+        actor = next(
+            (candidate for candidate in self.exploration.actors if str(candidate.id) == actor_id),
+            None,
+        )
+        if actor is None:
+            raise ValueError(f"Nieznany aktor: {actor_id}.")
+        if not has_condition(self.state.condition_states, actor_id, parsed_condition):
+            raise ValueError(f"{actor.name} nie jest powalony.")
+        self.state = remove_exploration_condition(self.state, actor_id, parsed_condition)
+        self._add_message("Powrót na nogi", f"{actor.name} wstaje i usuwa stan Powalony.")
+        self._record(
+            "ui_exploration_condition_recovered",
+            {"actor_id": actor_id, "condition": parsed_condition.value},
+        )
+        return self.state_payload()
+
+    def submit_death_save(self, natural_roll: int) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        actor = combat_current_actor(self.combat_state)
+        resolution = resolve_death_save(actor, int(natural_roll))
+        self.combat_state = replace_actor(self.combat_state, resolution.actor_after)
+        saves = resolution.actor_after.death_saves
+        outcome_text = {
+            DeathSaveOutcome.SUCCESS: "Sukces rzutu śmierci.",
+            DeathSaveOutcome.FAILURE: "Porażka rzutu śmierci.",
+            DeathSaveOutcome.STABILIZED: "Trzeci sukces: bohater jest stabilny.",
+            DeathSaveOutcome.DIED: "Trzecia porażka: bohater umiera.",
+            DeathSaveOutcome.REVIVED: "Naturalne 20: bohater odzyskuje 1 HP i może kontynuować turę.",
+        }[resolution.outcome]
+        self._add_message(
+            "Rzut śmierci",
+            f"{actor.name}: d20 = {resolution.natural_roll}. {outcome_text} "
+            f"Sukcesy: {saves.successes}/3, porażki: {saves.failures}/3.",
+        )
+        self._record(
+            "ui_combat_death_save",
+            {
+                "actor_id": str(actor.id),
+                "natural_roll": resolution.natural_roll,
+                "outcome": resolution.outcome.value,
+                "successes": saves.successes,
+                "failures": saves.failures,
+            },
+        )
+        self._clear_player_pending_choices()
+        if resolution.outcome == DeathSaveOutcome.REVIVED:
+            self.combat_state = replace(self.combat_state, turn_action=TurnActionState())
+            self.board_message = f"{actor.name} odzyskuje przytomność i może rozegrać turę."
+            self._sync_board_leds()
+            return self.state_payload()
+        if self.combat_state.status.value == "active":
+            transition = self.combat_turn_finalization.finish_active_turn(
+                state=self.combat_state,
+                active_effects=self.active_combat_effects,
+            )
+            if transition is not None:
+                self.combat_state = transition.state
+                self.active_combat_effects = transition.active_effects
+                self._add_expired_effect_notices(transition.expired_effects)
+        self.board_message = outcome_text
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def stabilize_combat_actor(
+        self,
+        *,
+        target_id: str,
+        method: str,
+        natural_roll: int | None = None,
+    ) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        stabilization_method = StabilizationMethod(method)
+        result = resolve_combat_stabilization(
+            self.combat_state,
+            target_id=target_id,
+            method=stabilization_method,
+            natural_roll=natural_roll,
+        )
+        self.combat_state = result.state
+        if result.method == StabilizationMethod.HEALERS_KIT:
+            detail = f"Zestaw uzdrowiciela: bez rzutu. Pozostałe użycia: {result.kit_remaining}."
+        else:
+            outcome = "sukces" if result.success else "porażka"
+            detail = f"Medicine ST 10: d20 {result.natural_roll}, wynik {result.total} — {outcome}."
+        effect = (
+            f"{result.target.name} jest stabilny."
+            if result.success
+            else f"{result.target.name} nadal wykonuje rzuty śmierci."
+        )
+        self.board_message = f"{detail} {effect}"
+        self._add_message("Stabilizacja", f"{result.stabilizer.name} pomaga {result.target.name}. {detail} {effect}")
+        self._record(
+            "ui_combat_stabilization",
+            {
+                "stabilizer_id": str(result.stabilizer.id),
+                "target_id": str(result.target.id),
+                "method": result.method.value,
+                "natural_roll": result.natural_roll,
+                "total": result.total,
+                "success": result.success,
+                "kit_remaining": result.kit_remaining,
+            },
+        )
+        self._clear_player_pending_choices()
         self._sync_board_leds()
         return self.state_payload()
 
@@ -3796,6 +5672,12 @@ class ExplorationUiSession:
         if self.combat_state is not None:
             encounter = self._active_encounter()
             actor = combat_current_actor(self.combat_state)
+            if self.pending_combat_context_menu is not None:
+                return BoardScanTarget(
+                    positions=(),
+                    feedback=active_actor_led_feedback(self.combat_state.initiative_order),
+                    empty_message="Menu akcji czeka na wybór strzałkami i potwierdzenie Enterem.",
+                )
             if self.pending_enemy_turn_intent is not None:
                 return BoardScanTarget(
                     positions=(),
@@ -3823,6 +5705,12 @@ class ExplorationUiSession:
                     positions=(),
                     feedback=feedback,
                     empty_message="Przygotowana akcja czeka na decyzję albo rzut w UI.",
+                )
+            if self.pending_enemy_saving_throw is not None:
+                return BoardScanTarget(
+                    positions=(),
+                    feedback=active_actor_led_feedback(self.combat_state.initiative_order),
+                    empty_message="Efekt przeciwnika czeka na fizyczny rzut obronny i wpisanie wyniku w UI.",
                 )
             if self.pending_enemy_turn_result is not None:
                 target_positions = _pending_enemy_turn_target_positions(self.pending_enemy_turn_result)
@@ -3902,6 +5790,25 @@ class ExplorationUiSession:
                     attack_source = None
                 area_positions = _area_spell_selection_positions(encounter.board, actor, attack_source)
                 attack_targets = () if area_positions else _legal_combat_targets(encounter, self.combat_state, actor, attack_source)
+                bonus_sources = eligible_two_weapon_bonus_sources(
+                    actor,
+                    self.combat_state.turn_action.two_weapon_trigger_item_id,
+                    self._attack_sources_for_actor(actor),
+                ) if self.combat_state.turn_action.bonus_action_use == ActionUse.ACTION_AVAILABLE else ()
+                bonus_targets = tuple(
+                    target
+                    for source in bonus_sources
+                    for target in _legal_combat_targets(
+                        encounter,
+                        self.combat_state,
+                        actor,
+                        two_weapon_bonus_attack_source(actor, source),
+                        require_action=False,
+                    )
+                )
+                attack_targets = tuple(
+                    {target.id: target for target in (*attack_targets, *bonus_targets)}.values()
+                )
                 healing_source = self._selected_healing_source(actor)
                 healing_targets = (
                     legal_healing_targets(encounter.board, actor, self.combat_state.actors, healing_source)
@@ -3917,6 +5824,7 @@ class ExplorationUiSession:
                     positions=tuple(
                         sorted(
                             movement.reachable_tiles
+                            | frozenset((actor.position,))
                             | frozenset(target.position for target in attack_targets)
                             | frozenset(area_positions)
                             | frozenset(target.position for target in healing_targets)
@@ -3932,6 +5840,10 @@ class ExplorationUiSession:
                         encounter.board,
                         highlighted_interactions,
                         area_positions,
+                        _dragged_destination(
+                            self.combat_state,
+                            self.selected_combat_movement_path,
+                        ),
                     ),
                     empty_message="Aktywny bohater nie ma dostępnych pól ruchu ani celów ataku.",
                 )
@@ -4045,6 +5957,9 @@ class ExplorationUiSession:
             if self.pending_concentration_check is not None:
                 self.board_message = "Najpierw wpisz rzut na koncentrację w UI."
                 return self.state_payload()
+            if self.pending_enemy_saving_throw is not None:
+                self.board_message = "Najpierw wpisz naturalny wynik rzutu obronnego gracza w UI."
+                return self.state_payload()
             if self.pending_enemy_turn_result is not None:
                 expected = _pending_enemy_turn_target_positions(self.pending_enemy_turn_result)
                 if not expected:
@@ -4073,34 +5988,6 @@ class ExplorationUiSession:
                             return self.confirm_combat_concentration_action(target_id=str(target.id))
                         self.board_message = "Kliknij podświetlonego sojusznika dla czaru koncentracyjnego."
                         return self.state_payload()
-                    attack_source = self._selected_attack_source(actor) if encounter is not None else None
-                    attack_source = self._effective_attack_source(actor, attack_source) if attack_source is not None else None
-                    if attack_source is not None and not self._actor_can_use_attack_source(actor, attack_source):
-                        attack_source = None
-                    if (
-                        encounter is not None
-                        and attack_source is not None
-                        and attack_source.area is not None
-                        and selected in _area_spell_selection_positions(encounter.board, actor, attack_source)
-                    ):
-                        self.board_message = f"Czar obszarowy: {actor.name} -> {selected.as_tuple()}."
-                        return self.select_player_area_spell_at_position(selected)
-                    if encounter is not None and _combat_target_at_position(encounter, self.combat_state, actor, selected, attack_source) is not None:
-                        self.board_message = f"Atak bohatera: {actor.name} -> {selected.as_tuple()}."
-                        return self.select_player_attack_target_at_position(selected)
-                    healing_source = self._selected_healing_source(actor) if encounter is not None else None
-                    if (
-                        encounter is not None
-                        and healing_source is not None
-                        and any(
-                            target.position == selected
-                            for target in legal_healing_targets(encounter.board, actor, self.combat_state.actors, healing_source)
-                        )
-                    ):
-                        self.board_message = f"Leczenie: {actor.name} -> {selected.as_tuple()}."
-                        return self.select_player_healing_target_at_position(selected)
-                    if encounter is not None and self._available_combat_interaction_options(encounter, actor, selected):
-                        return self.select_combat_interaction_at_position(selected)
                     if (
                         self.selected_combat_movement_path is not None
                         and self.selected_combat_movement_path.valid
@@ -4108,6 +5995,13 @@ class ExplorationUiSession:
                     ):
                         self.board_message = f"Ruch bohatera: {actor.name} -> {selected.as_tuple()}."
                         return self.submit_combat_movement(col=selected.col, row=selected.row)
+                    options = self._combat_context_options(actor, selected)
+                    if selected == actor.position:
+                        return self._open_combat_context_menu(actor, selected, options)
+                    if len(options) > 1:
+                        return self._open_combat_context_menu(actor, selected, options)
+                    if len(options) == 1:
+                        return self._execute_combat_context_option(options[0])
                     return self.preview_combat_movement(col=selected.col, row=selected.row)
                 except ValueError as exc:
                     self.board_message = str(exc)
@@ -4218,9 +6112,20 @@ class ExplorationUiSession:
                 "Nie rozpoznano istniejącego elementu do użycia. Najpierw wskaż dokładny przedmiot albo znajdź go przez /szukaj.",
                 challenge,
             )
+        authored_observation = (
+            match_exploration_observation(
+                self.exploration.observations,
+                text,
+                zone_id=self.current_zone.id,
+                challenge_id=challenge.id,
+            )
+            if player_intent_hint not in {PlayerIntentHint.BUILD, PlayerIntentHint.USE}
+            else None
+        )
         if (
             source_matches
             and player_intent_hint == PlayerIntentHint.SEARCH
+            and authored_observation is None
             and is_source_lookup_only(
                 text,
                 explicit_search=True,
@@ -4256,12 +6161,7 @@ class ExplorationUiSession:
         fixture_action_plan: FixtureActionPlan | None = None
         try:
             matched_observation = (
-                match_exploration_observation(
-                    self.exploration.observations,
-                    text,
-                    zone_id=self.current_zone.id,
-                    challenge_id=challenge.id,
-                )
+                authored_observation
                 if effective_intent_hint not in {PlayerIntentHint.BUILD, PlayerIntentHint.USE}
                 else None
             )
@@ -4933,6 +6833,8 @@ class ExplorationUiSession:
             return self._accept_crafting()
         if self.pending.kind == PendingKind.OBSERVATION:
             return self._accept_observation()
+        if self.pending.kind == PendingKind.TRAP:
+            return self._accept_trap_action()
         if self.pending.kind == PendingKind.SOURCE_SELECTION:
             return self._accept_source_selection(source_id)
         if self.pending.kind == PendingKind.COLLECTION:
@@ -5170,11 +7072,61 @@ class ExplorationUiSession:
         self._add_message("Rzut", f"Wpisz wynik rzutu. {_check_plan_text(self.exploration.actors, plan)}")
         return self.state_payload()
 
+    def _accept_trap_action(self) -> dict[str, object]:
+        assert self.pending is not None and self.pending.trap is not None
+        assert self.pending.trap_action is not None
+        trap = self.pending.trap
+        action = self.pending.trap_action
+        if action == ExplorationTrapAction.TRIGGER:
+            result = resolve_trap_action(self.state, trap, action)
+            self.state = result.state
+            self._record_trap_action_result(result, actor_id=self.lead_actor_id)
+            self._queue_trap_hazard(trap, self.lead_actor_id)
+            return self.state_payload()
+        check = (
+            trap.disarm_check
+            if action == ExplorationTrapAction.DISARM
+            else trap.bypass_check
+        )
+        if check is None:
+            result = resolve_trap_action(self.state, trap, action)
+            self.state = result.state
+            self._record_trap_action_result(result, actor_id=self.lead_actor_id)
+            self._add_message("Wynik pułapki", result.message)
+            self.pending = None
+            return self.state_payload()
+        actor = next(
+            (item for item in self.exploration.actors if str(item.id) == self.lead_actor_id),
+            None,
+        )
+        if actor is None:
+            raise ValueError("Nie znaleziono postaci prowadzącej próbę.")
+        if action == ExplorationTrapAction.DISARM and trap.required_item_id is not None:
+            if not any(
+                item.id == trap.required_item_id and item.available
+                for item in actor.inventory
+            ):
+                raise ValueError(
+                    f"{actor.name} nie ma wymaganego przedmiotu: {trap.required_item_id}."
+                )
+        plan = _trap_check_plan(trap, action, self.lead_actor_id)
+        self.pending = replace(self.pending, stage=PendingStage.ROLL, check_plan=plan)
+        self._add_message("Rzut", f"Wpisz wynik rzutu. {_check_plan_text(self.exploration.actors, plan)}")
+        return self.state_payload()
+
     @property
     def lead_actor_id(self) -> str:
         return self.selected_lead_actor_id
 
     def resolve_rolls(self, raw_rolls: dict[str, object]) -> dict[str, object]:
+        if self.pending is not None and self.pending.stage == PendingStage.HAZARD_SAVE:
+            self._resolve_exploration_hazard_save(raw_rolls)
+            if self.pending is not None and self.pending.stage == PendingStage.HAZARD_SAVE:
+                self.pending = None
+            if self.pending is None:
+                self._refresh_pending_encounter()
+            self._sync_board_leds()
+            return self.state_payload()
         if self.pending is not None and self.pending.stage == PendingStage.BREAKAGE:
             self._resolve_breakage_roll(raw_rolls)
             self.pending = None
@@ -5198,16 +7150,23 @@ class ExplorationUiSession:
             self._resolve_challenge_roll(check_result)
         elif self.pending.kind == PendingKind.OBSERVATION:
             self._resolve_observation_roll(check_result)
+        elif self.pending.kind == PendingKind.TRAP:
+            self._resolve_trap_roll(check_result)
         else:
             self._resolve_npc_roll(check_result)
-        if self.pending is not None and self.pending.stage != PendingStage.BREAKAGE:
+        if self.pending is not None and self.pending.stage not in {
+            PendingStage.BREAKAGE,
+            PendingStage.HAZARD_SAVE,
+        }:
             self.pending = None
-        self._refresh_pending_encounter()
+        if self.pending is None or self.pending.stage != PendingStage.HAZARD_SAVE:
+            self._refresh_pending_encounter()
         self._sync_board_leds()
         return self.state_payload()
 
     def _resolve_challenge_roll(self, check_result) -> None:
         assert self.pending is not None and self.pending.challenge is not None and self.pending.option is not None
+        option = self.pending.option
         resource = self.pending.resources[0] if self.pending.resources else None
         challenge = self.pending.challenge
         available_before = {zone.id for zone in available_exploration_zones(self.state)}
@@ -5319,16 +7278,17 @@ class ExplorationUiSession:
         )
 
         self._queue_breakage_check_if_needed(result, check_result.selected_actor)
+        self._queue_exploration_hazard_if_needed(result, check_result.selected_actor)
         if result.completed:
-            revealed_points = self._reveal_completed_challenge_points(self.pending.challenge)
+            revealed_points = self._reveal_completed_challenge_points(challenge)
             available_after = {zone.id for zone in available_exploration_zones(self.state)}
             visible_points_after = {point.id for point in visible_exploration_points(self.state.points)}
             unlocked_zone_ids = tuple(sorted(available_after - available_before))
             revealed_point_ids = tuple(sorted((visible_points_after - visible_points_before) | {point.id for point in revealed_points}))
-            if self.pending.option.id == "force_gate" or "heavy_force" in self.pending.option.tags:
+            if option.id == "force_gate" or "heavy_force" in option.tags:
                 self.post_interaction_setup_steps = (_fallen_gate_setup_step(),)
                 self.interaction_result = {
-                    "title": f"Zakończono: {self.pending.challenge.name}",
+                    "title": f"Zakończono: {challenge.name}",
                     "body": result.message,
                     "unlocked_zones": [
                         _zone_payload(zone, self._scenario_asset_root()) for zone in self.state.zones if zone.id in unlocked_zone_ids
@@ -5344,9 +7304,11 @@ class ExplorationUiSession:
                     "Nowy element mapy",
                     "Wyważona brama przewraca się na dziedziniec. Po potwierdzeniu wyniku ustaw przewrócone skrzydło na podświetlonych polach.",
                 )
+                if result.success:
+                    self._queue_completed_challenge_trap(challenge, check_result.selected_actor)
                 return
             self.interaction_result = {
-                "title": f"Zakończono: {self.pending.challenge.name}",
+                "title": f"Zakończono: {challenge.name}",
                 "body": result.message,
                 "unlocked_zones": [_zone_payload(zone, self._scenario_asset_root()) for zone in self.state.zones if zone.id in unlocked_zone_ids],
                 "revealed_points": [_point_payload(point) for point in self.state.points if point.id in revealed_point_ids],
@@ -5355,6 +7317,206 @@ class ExplorationUiSession:
             }
             self.ui_flow_stage = UiFlowStage.INTERACTION_RESULT
             self.preview_zone_id = ""
+            if result.success:
+                self._queue_completed_challenge_trap(challenge, check_result.selected_actor)
+
+    def _queue_exploration_hazard_if_needed(self, result, actor: Actor) -> None:
+        if self.pending is None or self.pending.option is None:
+            return
+        trigger = (
+            ExplorationHazardTrigger.CRITICAL_FAILURE
+            if result.critical_failure
+            else ExplorationHazardTrigger.FAILURE
+            if not result.success
+            else None
+        )
+        if trigger is None:
+            return
+        hazard = next(
+            (item for item in self.pending.option.hazards if item.trigger == trigger),
+            None,
+        )
+        if hazard is None:
+            return
+        self.pending = replace(
+            self.pending,
+            stage=PendingStage.HAZARD_SAVE,
+            hazard=hazard,
+            hazard_actor_id=str(actor.id),
+        )
+        narration = hazard.narration or f"Uruchamia się zagrożenie: {hazard.label}."
+        self._add_message(
+            "Zagrożenie",
+            f"{narration} {actor.name} musi wykonać "
+            f"{hazard.saving_throw.as_payload()['ability_label']} save przeciw "
+            f"ST {hazard.saving_throw.dc}.",
+        )
+        self._record(
+            "ui_exploration_hazard_queued",
+            {
+                "hazard_id": hazard.id,
+                "actor_id": str(actor.id),
+                "trigger": trigger.value,
+                "saving_throw": hazard.saving_throw.as_payload(),
+            },
+        )
+
+    def _queue_completed_challenge_trap(
+        self,
+        challenge: ExplorationChallenge,
+        actor: Actor,
+    ) -> None:
+        if self.pending is not None and self.pending.stage in {
+            PendingStage.BREAKAGE,
+            PendingStage.HAZARD_SAVE,
+        }:
+            return
+        trap = next(
+            (
+                item
+                for item in self.state.traps
+                if item.zone_id == challenge.zone_id
+                and item.activation_challenge_id == challenge.id
+                and trap_state_for(self.state, item.id).status
+                in {ExplorationTrapStatus.HIDDEN, ExplorationTrapStatus.REVEALED}
+            ),
+            None,
+        )
+        if trap is None:
+            return
+        self.state = trigger_trap(self.state, trap)
+        self._queue_trap_hazard(trap, str(actor.id))
+
+    def _queue_trap_hazard(self, trap: ExplorationTrap, actor_id: str) -> None:
+        if trap_state_for(self.state, trap.id).status != ExplorationTrapStatus.TRIGGERED:
+            self.state = trigger_trap(self.state, trap)
+        challenge = self.pending.challenge if self.pending is not None else self.active_challenge
+        self.pending = PendingInteraction(
+            kind=PendingKind.TRAP,
+            stage=PendingStage.HAZARD_SAVE,
+            challenge=challenge,
+            trap=trap,
+            trap_action=ExplorationTrapAction.TRIGGER,
+            hazard=trap.hazard,
+            hazard_actor_id=actor_id,
+        )
+        actor = next(
+            (item for item in self.exploration.actors if str(item.id) == actor_id),
+            None,
+        )
+        actor_name = actor.name if actor is not None else actor_id
+        self._add_message(
+            "Zagrożenie",
+            f"{trap.hazard.narration} {actor_name} wykonuje "
+            f"{trap.hazard.saving_throw.as_payload()['ability_label']} save przeciw "
+            f"ST {trap.hazard.saving_throw.dc}.",
+        )
+        self._record(
+            "ui_exploration_trap_triggered",
+            {
+                "trap_id": trap.id,
+                "actor_id": actor_id,
+                "hazard_id": trap.hazard.id,
+            },
+        )
+
+    def _resolve_trap_roll(self, check_result) -> None:
+        assert self.pending is not None and self.pending.trap is not None
+        assert self.pending.trap_action is not None
+        trap = self.pending.trap
+        result = resolve_trap_action(
+            self.state,
+            trap,
+            self.pending.trap_action,
+            total=check_result.selected_roll.total,
+        )
+        self.state = result.state
+        actor_id = str(check_result.selected_actor.id)
+        self._record_trap_action_result(result, actor_id=actor_id)
+        self._add_message(
+            "Wynik pułapki",
+            f"{result.message} Wynik testu: {check_result.selected_roll.total}.",
+        )
+        if result.triggered:
+            self._queue_trap_hazard(trap, actor_id)
+
+    def _record_trap_action_result(self, result, *, actor_id: str) -> None:
+        self._record(
+            "ui_exploration_trap_action_resolved",
+            {
+                "trap_id": result.trap.id,
+                "action": result.action.value,
+                "actor_id": actor_id,
+                "success": result.success,
+                "triggered": result.triggered,
+                "status": trap_state_for(self.state, result.trap.id).status.value,
+            },
+        )
+
+    def _resolve_exploration_hazard_save(self, raw_rolls: dict[str, object]) -> None:
+        assert self.pending is not None
+        hazard = self.pending.hazard
+        actor_id = self.pending.hazard_actor_id
+        if hazard is None or actor_id is None:
+            raise ValueError("Brak danych oczekującego zagrożenia eksploracyjnego.")
+        if actor_id not in raw_rolls:
+            raise ValueError("Brakuje naturalnego wyniku d20 dla rzutu obronnego.")
+        raw_roll = raw_rolls[actor_id]
+        if isinstance(raw_roll, dict):
+            raw_roll = raw_roll.get("natural_roll", 0)
+        actor = next(
+            (candidate for candidate in self.exploration.actors if str(candidate.id) == actor_id),
+            None,
+        )
+        if actor is None:
+            raise ValueError(f"Nieznany aktor zagrożenia: {actor_id}.")
+        resolution = resolve_exploration_hazard(
+            actor,
+            hazard,
+            natural_roll=int(raw_roll),
+            rng=self.encounter_rng,
+        )
+        self.exploration = self._replace_exploration_actor(resolution.actor_after)
+        self._add_message("Wynik zagrożenia", resolution.message)
+        challenge_id = self.pending.challenge.id if self.pending.challenge is not None else ""
+        if resolution.outcome_effects:
+            outcome_state, effect_results = apply_exploration_hazard_outcome(
+                self.state,
+                resolution.outcome_effects,
+                actor_id=actor_id,
+                challenge_id=challenge_id,
+            )
+            for effect_result, raw_effect in zip(effect_results, resolution.outcome_effects):
+                self.state = effect_result.state
+                self._record_effect_result(
+                    effect_result,
+                    source="exploration_hazard",
+                    raw_effect=raw_effect,
+                )
+            self.state = outcome_state
+            changed_messages = [result.message for result in effect_results if result.changed]
+            if changed_messages:
+                self._add_message("Skutek zagrożenia", " ".join(changed_messages))
+        self._record(
+            "ui_exploration_hazard_resolved",
+            {
+                "hazard_id": hazard.id,
+                "actor_id": actor_id,
+                "saving_throw": resolution.saving_throw.as_payload(),
+                "base_damage": resolution.base_damage,
+                "damage_result": applied_damage_payload(resolution.applied_damage),
+                "outcome_effects": list(resolution.outcome_effects),
+            },
+        )
+        if self.pending.breakage_actor_id is not None:
+            self.pending = replace(
+                self.pending,
+                stage=PendingStage.BREAKAGE,
+                hazard=None,
+                hazard_actor_id=None,
+            )
+        else:
+            self.pending = None
 
     def _resolve_observation_roll(self, check_result) -> None:
         assert self.pending is not None and self.pending.observation is not None
@@ -5632,7 +7794,119 @@ class ExplorationUiSession:
             ),
         }
 
+    def _precombat_stealth_payload(self) -> dict[str, object] | None:
+        if self.pending_encounter is None:
+            return None
+        if not precombat_stealth_is_available(self.pending_encounter.opening_resolution):
+            return None
+        encounter = (
+            self.encounter_setup_flow.encounter
+            if self.encounter_setup_flow is not None
+            else None
+        )
+        if encounter is None:
+            return {
+                "status": "waiting_for_setup",
+                "completed": self.pending_encounter.precombat_stealth_completed,
+                "actors": [],
+            }
+        attempts = {
+            attempt.actor_id: attempt
+            for attempt in self.pending_encounter.precombat_stealth_attempts
+        }
+        actors_by_id = {str(actor.id): actor for actor in encounter.actors}
+        return {
+            "status": (
+                "completed"
+                if self.pending_encounter.precombat_stealth_completed
+                else "active"
+                if self.encounter_setup_flow.completed
+                else "waiting_for_setup"
+            ),
+            "completed": self.pending_encounter.precombat_stealth_completed,
+            "instruction": (
+                "Każdy bohater może wykonać jedną próbę Stealth. Wynik zostanie porównany "
+                "osobno z Passive Perception każdego przeciwnika i przejdzie do pierwszej rundy."
+            ),
+            "actors": [
+                {
+                    "actor_id": str(actor.id),
+                    "actor_name": actor.name,
+                    "modifier": precombat_stealth_modifier(actor),
+                    "attempted": str(actor.id) in attempts,
+                    "can_attempt": (
+                        self.encounter_setup_flow.completed
+                        and not self.pending_encounter.precombat_stealth_completed
+                        and str(actor.id) not in attempts
+                        and not actor.is_defeated()
+                    ),
+                    "result": (
+                        {
+                            "natural_roll": attempts[str(actor.id)].natural_roll,
+                            "total": attempts[str(actor.id)].total,
+                            "hidden_from": [
+                                {
+                                    "actor_id": observer_id,
+                                    "actor_name": actors_by_id[observer_id].name,
+                                }
+                                for observer_id in attempts[str(actor.id)].hidden_from_actor_ids
+                                if observer_id in actors_by_id
+                            ],
+                            "detected_by": [
+                                {
+                                    "actor_id": observer_id,
+                                    "actor_name": actors_by_id[observer_id].name,
+                                }
+                                for observer_id in attempts[str(actor.id)].detected_by_actor_ids
+                                if observer_id in actors_by_id
+                            ],
+                        }
+                        if str(actor.id) in attempts
+                        else None
+                    ),
+                }
+                for actor in encounter.actors
+                if actor.faction == Faction.ALLY
+            ],
+        }
+
     def required_rolls_payload(self) -> list[dict[str, object]]:
+        if (
+            self.pending is not None
+            and self.pending.stage == PendingStage.HAZARD_SAVE
+            and self.pending.hazard is not None
+            and self.pending.hazard_actor_id is not None
+        ):
+            actor = next(
+                (
+                    candidate
+                    for candidate in self.exploration.actors
+                    if str(candidate.id) == self.pending.hazard_actor_id
+                ),
+                None,
+            )
+            if actor is None:
+                return []
+            request = self.pending.hazard.saving_throw
+            modifiers = saving_throw_roll_modifiers(actor, request.ability)
+            request_payload = request.as_payload()
+            return [
+                {
+                    "actor_id": str(actor.id),
+                    "actor_name": actor.name,
+                    "die_sides": 20,
+                    "label": f"d20 {request_payload['ability_label']} save",
+                    "modifier_total": sum(modifier.value for modifier in modifiers),
+                    "active_modifiers": [
+                        _roll_modifier_payload(modifier) for modifier in modifiers
+                    ],
+                    "ignored_modifiers": [],
+                    "instruction": (
+                        f"Rzuć fizyczne d20 na {request_payload['ability_label']} "
+                        f"przeciw ST {request.dc}."
+                    ),
+                }
+            ]
         if self.pending is not None and self.pending.stage == PendingStage.BREAKAGE and self.pending.breakage_actor_id is not None:
             actor = next((candidate for candidate in self.exploration.actors if str(candidate.id) == self.pending.breakage_actor_id), None)
             return [
@@ -5648,7 +7922,23 @@ class ExplorationUiSession:
         plan = self.pending.check_plan
         rolls: list[dict[str, object]] = []
         for actor in _actors_for_plan(self.exploration.actors, plan):
-            payload: dict[str, object] = {"actor_id": str(actor.id), "actor_name": actor.name, "die_sides": 20, "label": "d20"}
+            instruction = roll_instruction(_actor_check_request(actor, plan))
+            payload: dict[str, object] = {
+                "actor_id": str(actor.id),
+                "actor_name": actor.name,
+                "die_sides": 20,
+                "label": "d20",
+                "modifier_total": instruction.breakdown.modifier_total,
+                "active_modifiers": [
+                    _roll_modifier_payload(modifier)
+                    for modifier in instruction.breakdown.active_modifiers
+                ],
+                "ignored_modifiers": [
+                    _roll_modifier_payload(modifier)
+                    for modifier in instruction.breakdown.ignored_modifiers
+                ],
+                "instruction": instruction.message,
+            }
             if plan.roll_mode != RollMode.NORMAL:
                 payload["roll_mode"] = plan.roll_mode.value
                 payload["requires_second_roll"] = True
@@ -5942,6 +8232,7 @@ def _encounter_with_session_spell_state(
             spell_preparation=session_by_id[str(actor.id)].spell_preparation,
             hit_dice=session_by_id[str(actor.id)].hit_dice,
             resource_pools=session_by_id[str(actor.id)].resource_pools,
+            death_saves=session_by_id[str(actor.id)].death_saves,
         )
         if str(actor.id) in session_by_id
         else actor
@@ -5965,6 +8256,7 @@ def _exploration_with_combat_actor_state(
             hit_dice=combat_by_id[str(actor.id)].hit_dice,
             resource_pools=combat_by_id[str(actor.id)].resource_pools,
             inventory=combat_by_id[str(actor.id)].inventory,
+            death_saves=combat_by_id[str(actor.id)].death_saves,
         )
         if str(actor.id) in combat_by_id
         else actor
@@ -5993,11 +8285,16 @@ def _combat_payload(
     pending_enemy_turn_intent=None,
     pending_enemy_turn_result=None,
     pending_enemy_turn_ack_result=None,
+    pending_enemy_saving_throw: PendingEnemySavingThrow | None = None,
     pending_player_attack: PendingPlayerAttack | None = None,
     pending_player_healing: PendingPlayerHealing | None = None,
     pending_area_spell: PendingAreaSpell | None = None,
+    pending_combat_context_menu: CombatContextMenu | None = None,
     pending_combat_interaction: PendingCombatInteraction | None = None,
     pending_combat_help: PendingCombatHelp | None = None,
+    pending_combat_skill_check: PendingCombatSkillCheck | None = None,
+    pending_combat_shove: PendingShove | None = None,
+    pending_combat_grapple: PendingGrapple | None = None,
     pending_concentration_action: PendingConcentrationAction | None = None,
     pending_concentration_check: PendingConcentrationCheck | None = None,
     pending_combat_ready: PendingCombatReady | None = None,
@@ -6013,11 +8310,42 @@ def _combat_payload(
     actor = combat_current_actor(state)
     selected_attack_source_ids = selected_attack_source_ids or {}
     selected_healing_source_ids = selected_healing_source_ids or {}
-    attack_sources = encounter.attack_source_options_by_actor.get(actor.id, ()) if encounter is not None else ()
+    attack_sources = (
+        _encounter_attack_sources(
+            encounter,
+            actor,
+            reserved_hands=len(grappled_actor_ids(state.condition_states, str(actor.id))),
+        )
+        if encounter is not None
+        else ()
+    )
+    two_weapon_sources = (
+        eligible_two_weapon_bonus_sources(
+            actor,
+            state.turn_action.two_weapon_trigger_item_id,
+            attack_sources,
+        )
+        if state.turn_action.bonus_action_use == ActionUse.ACTION_AVAILABLE
+        else ()
+    )
     selected_attack_source_id = selected_attack_source_ids.get(str(actor.id))
     attack_source = next((source for source in attack_sources if source.id == selected_attack_source_id), None) or (
         attack_sources[0] if attack_sources else None
     )
+    if state.turn_action.attack_action_active and attack_source is not None:
+        attack_source = next(
+            (
+                source
+                for source in attack_sources
+                if source.source_type.value == "weapon" and source.area is None
+            ),
+            attack_source,
+        )
+    if attack_source is not None and _attack_source_unavailable_reason(actor, attack_source) is not None:
+        attack_source = next(
+            (source for source in attack_sources if _attack_source_unavailable_reason(actor, source) is None),
+            attack_source,
+        )
     if attack_source is not None:
         attack_source = _effective_attack_source_for_effects(actor, attack_source, active_combat_effects)
     healing_sources = encounter.healing_sources_by_actor.get(actor.id, ()) if encounter is not None else ()
@@ -6027,20 +8355,46 @@ def _combat_payload(
     )
     targets = ()
     healing_targets = ()
+    stabilization_targets = ()
     area_positions = ()
     movement = None
     if (
         encounter is not None
         and attack_source is not None
         and state.status.value == "active"
-        and state.turn_action.action_use == ActionUse.ACTION_AVAILABLE
+        and (
+            can_use_attack_action(state, actor)
+            if attack_source.source_type.value == "weapon" and attack_source.area is None
+            else state.turn_action.action_use == ActionUse.ACTION_AVAILABLE
+        )
         and _source_is_prepared(actor, attack_source)
         and can_consume_spell_resource(actor, attack_source.spell_level)
     ):
         if attack_source.area is not None:
             area_positions = _area_spell_selection_positions(encounter.board, actor, attack_source)
         else:
-            targets = start_attack_action(encounter.board, actor, state.actors, attack_source).legal_targets
+            targets = start_attack_action(
+                encounter.board,
+                actor,
+                state.actors,
+                attack_source,
+                state.hidden_states,
+            ).legal_targets
+    if encounter is not None and two_weapon_sources:
+        bonus_targets = tuple(
+            target
+            for source in two_weapon_sources
+            for target in start_attack_action(
+                encounter.board,
+                actor,
+                state.actors,
+                two_weapon_bonus_attack_source(actor, source),
+                state.hidden_states,
+            ).legal_targets
+        )
+        targets = tuple(
+            {target.id: target for target in (*targets, *bonus_targets)}.values()
+        )
     if (
         encounter is not None
         and healing_source is not None
@@ -6053,23 +8407,67 @@ def _combat_payload(
         healing_targets = legal_healing_targets(encounter.board, actor, state.actors, healing_source)
     if encounter is not None and actor.faction == Faction.ALLY and state.status.value == "active":
         movement = _remaining_movement_range(encounter.board, state, actor)
+        if state.turn_action.action_use == ActionUse.ACTION_AVAILABLE:
+            stabilization_targets = legal_stabilization_targets(state, actor)
+    healers_kit = next((item for item in actor.inventory if item.id == "healers_kit" and item.available), None)
+    hiding = (
+        hide_eligibility(encounter.board, actor, state.actors, encounter.scene_objects)
+        if encounter is not None and actor.faction == Faction.ALLY and not actor.is_defeated()
+        else None
+    )
     return {
         "status": state.status.value,
         "round_number": state.round_number,
-        "current_actor": _combat_actor_payload(
-            actor,
-            active_combat_effects,
-            turn_action=state.turn_action,
-            movement_remaining_feet=movement_remaining(state, actor) if movement is not None else None,
-        ),
-        "actors": [_combat_actor_payload(candidate, active_combat_effects) for candidate in state.actors],
+        "current_actor": {
+            **_combat_actor_payload_with_conditions(
+                actor,
+                state,
+                active_combat_effects,
+                turn_action=state.turn_action,
+                movement_remaining_feet=movement_remaining(state, actor) if movement is not None else None,
+            ),
+            "hidden": _hidden_actor_payload(state, actor),
+        },
+        "actors": [
+            {
+                **_combat_actor_payload_with_conditions(candidate, state, active_combat_effects),
+                "hidden": _hidden_actor_payload(state, candidate),
+            }
+            for candidate in state.actors
+        ],
+        "dropped_weapons": [
+            {
+                "id": dropped.id,
+                "source_actor_id": str(dropped.source_actor_id),
+                "name": dropped.weapon.name,
+                "item_id": dropped.weapon.id,
+                "position": [dropped.position.col, dropped.position.row],
+                "dropped_round": dropped.dropped_round,
+                "item": inventory_item_payload(dropped.weapon),
+            }
+            for dropped in state.dropped_weapons
+        ],
         "winner": state.winner.value if state.winner is not None else None,
+        "death_save_required": actor.needs_death_save(),
         "turn_action": {
             "action_use": state.turn_action.action_use.value,
             "bonus_action_use": state.turn_action.bonus_action_use.value,
             "reaction_available": state.turn_action.reaction_available,
             "movement_used_feet": state.turn_action.movement_used_feet,
             "extra_movement_feet": state.turn_action.extra_movement_feet,
+            "object_interaction_available": state.turn_action.object_interaction_available,
+            "free_object_interaction_available": state.turn_action.object_interaction_available,
+            "two_weapon_trigger_item_id": state.turn_action.two_weapon_trigger_item_id,
+            "attack_action_active": state.turn_action.attack_action_active,
+            "attacks_used": state.turn_action.attacks_used,
+            "attacks_maximum": state.turn_action.attacks_maximum,
+            "attacks_remaining": attack_action_remaining(state, actor),
+        },
+        "two_weapon": {
+            "available": bool(two_weapon_sources),
+            "trigger_item_id": state.turn_action.two_weapon_trigger_item_id,
+            "source_ids": [source.id for source in two_weapon_sources],
+            "source_names": [source.name for source in two_weapon_sources],
         },
         "available_attack": _attack_source_payload(attack_source, actor) if attack_source is not None else None,
         "available_attack_sources": [_attack_source_payload(source, actor) for source in attack_sources],
@@ -6077,6 +8475,26 @@ def _combat_payload(
         "available_healing_sources": [_healing_source_payload(source, actor) for source in healing_sources],
         "selected_healing_source_id": healing_source.id if healing_source is not None else None,
         "legal_healing_targets": [_combat_target_payload(target) for target in healing_targets],
+        "stabilization": {
+            "dc": 10,
+            "medicine_modifier": skill_modifier(actor, "medicine"),
+            "healers_kit_uses": healers_kit.quantity if healers_kit is not None else 0,
+            "targets": [_combat_actor_payload(target, active_combat_effects) for target in stabilization_targets],
+        },
+        "stealth": {
+            "hide_available": bool(
+                hiding is not None
+                and hiding.allowed
+                and state.turn_action.action_use == ActionUse.ACTION_AVAILABLE
+            ),
+            "hide_blocking_actor_ids": list(hiding.blocking_observer_ids) if hiding is not None else [],
+            "stealth_modifier": skill_modifier(actor, "stealth"),
+            "passive_perception": passive_skill_score(actor, "perception"),
+            "search_available": any(
+                str(actor.id) in hidden.hidden_from_actor_ids
+                for hidden in state.hidden_states
+            ) and state.turn_action.action_use == ActionUse.ACTION_AVAILABLE,
+        },
         "combat_actions": [
             _combat_action_payload(action, actor)
             for action in (encounter.combat_actions_by_actor.get(actor.id, ()) if encounter is not None else ())
@@ -6084,15 +8502,23 @@ def _combat_payload(
         "legal_targets": [_combat_target_payload(target) for target in targets],
         "legal_area_positions": [[position.col, position.row] for position in area_positions],
         "movement": _movement_payload(movement, state, actor) if movement is not None else None,
-        "movement_preview": _movement_preview_payload(selected_movement_path),
+        "movement_preview": _movement_preview_payload(selected_movement_path, state),
         "enemy_turn_intent": _enemy_turn_intent_payload(pending_enemy_turn_intent, encounter, active_combat_effects),
         "enemy_turn_preview": _enemy_turn_preview_payload(pending_enemy_turn_result, encounter, active_combat_effects),
         "enemy_turn_result": _enemy_turn_result_payload(pending_enemy_turn_ack_result, encounter, active_combat_effects),
+        "pending_enemy_saving_throw": _pending_enemy_saving_throw_payload(
+            pending_enemy_saving_throw,
+            state,
+        ),
         "pending_player_attack": _pending_player_attack_payload(pending_player_attack, state, encounter, active_combat_effects),
         "pending_player_healing": _pending_player_healing_payload(pending_player_healing, state, encounter),
         "pending_area_spell": _pending_area_spell_payload(pending_area_spell, state, encounter, active_combat_effects),
+        "context_menu": pending_combat_context_menu.as_payload() if pending_combat_context_menu is not None else None,
         "pending_combat_interaction": pending_combat_interaction.as_payload() if pending_combat_interaction is not None else None,
         "pending_combat_help": pending_combat_help.as_payload(state, active_combat_effects) if pending_combat_help is not None else None,
+        "pending_combat_skill_check": pending_combat_skill_check.as_payload() if pending_combat_skill_check is not None else None,
+        "pending_combat_shove": pending_combat_shove.as_payload() if pending_combat_shove is not None else None,
+        "pending_combat_grapple": pending_combat_grapple.as_payload() if pending_combat_grapple is not None else None,
         "pending_concentration_action": (
             _pending_concentration_action_payload(
                 pending_concentration_action,
@@ -6146,18 +8572,42 @@ def _combat_actor_payload(
         "id": str(actor.id),
         "name": actor.name,
         "faction": actor.faction.value,
+        "size": actor.size.value,
+        "size_label": creature_size_label_pl(actor.size),
+        "damage_affinities": _damage_affinities_payload(actor),
         "hp": actor.hp,
         "max_hp": actor.max_hp,
         "temp_hp": actor.temp_hp,
-        "ac": actor.ac,
+        "ac": effective_armor_class(actor),
+        "base_ac": actor.ac,
+        "equipment_ac_bonus": effective_armor_class(actor) - actor.ac,
         "position": [actor.position.col, actor.position.row],
         "defeated": actor.is_defeated(),
+        "dead": actor.is_dead(),
+        "unconscious": actor.is_unconscious(),
+        "death_save_required": actor.needs_death_save(),
+        "death_saves": {
+            "successes": actor.death_saves.successes,
+            "failures": actor.death_saves.failures,
+            "stable": actor.death_saves.stable,
+            "dead": actor.death_saves.dead,
+        },
         "spell_slots": [
             {"level": slot.level, "remaining": slot.remaining, "maximum": slot.maximum}
             for slot in actor.spell_slots
         ],
         "spell_save_dc": actor.spell_save_dc,
+        "proficiency_bonus": actor.proficiency_bonus,
+        "proficiencies": {
+            "saving_throws": list(actor.proficiencies.saving_throws),
+            "skills": list(actor.proficiencies.skills),
+            "expertise": list(actor.proficiencies.expertise),
+            "weapons": list(actor.proficiencies.weapons),
+            "armor": list(actor.proficiencies.armor),
+            "tools": list(actor.proficiencies.tools),
+        },
         "inventory": [inventory_item_payload(item) for item in actor.inventory],
+        "hands": hand_loadout_payload(actor.inventory),
         "effects": actor_effects,
         "concentration": concentration_effects[0] if concentration_effects else None,
         "status_chips": _combat_actor_status_chips(
@@ -6167,6 +8617,88 @@ def _combat_actor_payload(
             turn_action=turn_action,
             movement_remaining_feet=movement_remaining_feet,
         ),
+    }
+
+
+def _combat_actor_payload_with_conditions(
+    actor: Actor,
+    state: CombatState,
+    active_combat_effects: tuple[ActiveCombatEffect, ...] = (),
+    *,
+    turn_action: TurnActionState | None = None,
+    movement_remaining_feet: int | None = None,
+) -> dict[str, object]:
+    payload = _combat_actor_payload(
+        actor,
+        active_combat_effects,
+        turn_action=turn_action,
+        movement_remaining_feet=movement_remaining_feet,
+    )
+    conditions = tuple(
+        condition.condition
+        for condition in state.condition_states
+        if condition.actor_id == str(actor.id)
+    )
+    payload["conditions"] = [condition.value for condition in conditions]
+    reserved_hands = sum(
+        1
+        for condition in state.condition_states
+        if condition.condition == CombatCondition.GRAPPLED
+        and condition.source_actor_id == str(actor.id)
+    )
+    payload["hands"] = hand_loadout_payload(actor.inventory, reserved_hands=reserved_hands)
+    if CombatCondition.PRONE in conditions:
+        payload["status_chips"] = [
+            *payload["status_chips"],
+            _status_chip(
+                "Powalony",
+                tone="penalty",
+                title="Ataki aktora mają utrudnienie; wstawanie kosztuje połowę szybkości.",
+            ),
+        ]
+    grapple = next(
+        (
+            condition
+            for condition in state.condition_states
+            if condition.actor_id == str(actor.id)
+            and condition.condition == CombatCondition.GRAPPLED
+        ),
+        None,
+    )
+    if grapple is not None:
+        source = next(
+            (
+                candidate
+                for candidate in state.actors
+                if str(candidate.id) == grapple.source_actor_id
+            ),
+            None,
+        )
+        payload["status_chips"] = [
+            *payload["status_chips"],
+            _status_chip(
+                "Chwytany",
+                tone="penalty",
+                title=(
+                    f"Szybkość 0; chwyt utrzymuje {source.name}."
+                    if source is not None
+                    else "Szybkość 0 do zakończenia chwytu."
+                ),
+            ),
+        ]
+    return payload
+
+
+def _hidden_actor_payload(state: CombatState, actor: Actor) -> dict[str, object] | None:
+    hidden = next(
+        (hidden for hidden in state.hidden_states if hidden.actor_id == str(actor.id)),
+        None,
+    )
+    if hidden is None:
+        return None
+    return {
+        "stealth_total": hidden.stealth_total,
+        "hidden_from_actor_ids": list(hidden.hidden_from_actor_ids),
     }
 
 
@@ -6183,9 +8715,36 @@ def _combat_actor_status_chips(
     movement_remaining_feet: int | None = None,
 ) -> list[dict[str, str]]:
     chips: list[dict[str, str]] = []
-    if actor.is_defeated():
+    if actor.death_saves.dead:
+        chips.append(_status_chip("Martwy", tone="danger"))
+    elif actor.death_saves.stable and actor.hp <= 0:
+        chips.append(_status_chip("Stabilny (0 HP)", tone="ready"))
+    elif actor.needs_death_save():
+        chips.append(_status_chip("Nieprzytomny", tone="danger"))
+        chips.append(
+            _status_chip(
+                f"Death saves {actor.death_saves.successes}✓ / {actor.death_saves.failures}✗",
+                tone="danger",
+            )
+        )
+    elif actor.is_defeated():
         chips.append(_status_chip("Pokonany", tone="danger"))
     if turn_action is not None:
+        chips.append(
+            _status_chip(
+                "Darmowa interakcja dostępna" if turn_action.object_interaction_available else "Darmowa interakcja zużyta",
+                tone="ready" if turn_action.object_interaction_available else "spent",
+            )
+        )
+        if turn_action.attack_action_active:
+            remaining = max(0, turn_action.attacks_maximum - turn_action.attacks_used)
+            chips.append(
+                _status_chip(
+                    f"Ataki {remaining}/{turn_action.attacks_maximum}",
+                    tone="ready" if remaining else "spent",
+                    title="Pozostałe ataki w bieżącej akcji Attack.",
+                )
+            )
         chips.append(
             _status_chip(
                 "Akcja zużyta" if turn_action.action_use == ActionUse.ACTION_USED else "Akcja dostępna",
@@ -6241,6 +8800,14 @@ def _actor_by_string_id_from_state(state: CombatState, actor_id: str) -> Actor:
     return actor
 
 
+def _actor_names_from_actors(
+    actors: tuple[Actor, ...],
+    actor_ids: tuple[str, ...],
+) -> tuple[str, ...]:
+    names_by_id = {str(actor.id): actor.name for actor in actors}
+    return tuple(names_by_id[actor_id] for actor_id in actor_ids if actor_id in names_by_id)
+
+
 def _pending_concentration_action_payload(
     pending: PendingConcentrationAction,
     state: CombatState,
@@ -6267,7 +8834,8 @@ def _pending_concentration_check_payload(
     active_effects: tuple[ActiveCombatEffect, ...],
 ) -> dict[str, object]:
     actor = _actor_by_string_id_from_state(state, pending.actor_id)
-    modifier = ability_modifier(actor.ability_scores.constitution)
+    modifiers = saving_throw_roll_modifiers(actor, "constitution")
+    modifier = sum(item.value for item in modifiers)
     effects = tuple(
         effect for effect in active_effects if effect.id in pending.effect_ids
     )
@@ -6278,6 +8846,7 @@ def _pending_concentration_check_payload(
         "damage": pending.damage,
         "dc": pending.dc,
         "modifier": modifier,
+        "modifier_components": [_roll_modifier_payload(item) for item in modifiers],
         "instruction": (
             f"{actor.name} otrzymał {pending.damage} obrażeń. "
             f"Rzuć CON save przeciw ST {pending.dc}."
@@ -6295,11 +8864,15 @@ def _ready_trigger_label(trigger: str) -> str:
 
 def _attack_source_payload(source, actor: Actor | None = None) -> dict[str, object]:
     prepared = _source_is_prepared(actor, source)
+    unavailable_reason = _attack_source_unavailable_reason(actor, source)
+    attack_kind = effective_attack_kind(source)
     return {
         "id": source.id,
         "name": source.name,
         "source_type": source.source_type.value,
+        "attack_kind": attack_kind.value,
         "range_feet": source.range_feet,
+        "reach_feet": melee_reach_feet(source) if attack_kind == AttackKind.MELEE else None,
         "damage_hint": source.damage_hint,
         "damage_fixed": source.damage_fixed,
         "damage_die_sides": source.damage_die_sides,
@@ -6309,10 +8882,9 @@ def _attack_source_payload(source, actor: Actor | None = None) -> dict[str, obje
         "spell_level": source.spell_level,
         "casting_kind": source.casting_kind.value,
         "prepared": prepared,
-        "available": prepared and (
-            actor is None or can_consume_spell_resource(actor, source.spell_level)
-        ),
-        "unavailable_reason": _spell_source_unavailable_reason(actor, source),
+        "available": unavailable_reason is None,
+        "unavailable_reason": unavailable_reason,
+        "source_item_id": source.source_item_id,
         "resource_label": _source_resource_label(source),
         "area": _spell_area_payload(source.area),
         "save_ability": source.save_ability,
@@ -6387,6 +8959,53 @@ def _spell_source_unavailable_reason(actor: Actor | None, source) -> str | None:
     return None
 
 
+def _attack_source_unavailable_reason(actor: Actor | None, source) -> str | None:
+    spell_reason = _spell_source_unavailable_reason(actor, source)
+    if spell_reason is not None:
+        return spell_reason
+    source_item_id = getattr(source, "source_item_id", None)
+    if actor is not None and source_item_id is not None:
+        item = _inventory_item_for_attack_source(actor, source_item_id)
+        if item is None or not item.available or not item.equipped:
+            return "Broń leży na polu lub pozostaje niewyposażona w ekwipunku."
+    return None
+
+
+def _inventory_item_for_attack_source(actor: Actor, source_item_id: str):
+    matches = tuple(
+        item
+        for item in actor.inventory
+        if item.id == source_item_id or item.source_ref == source_item_id
+    )
+    return next((item for item in matches if item.equipped and item.available), matches[0] if matches else None)
+
+
+def _encounter_attack_sources(
+    encounter: LoadedEncounter,
+    actor: Actor,
+    *,
+    reserved_hands: int = 0,
+) -> tuple:
+    sources = list(encounter.attack_source_options_by_actor.get(actor.id, ()))
+    known_ids = {source.id for source in sources}
+    for item in actor.inventory:
+        if item.kind != "weapon":
+            continue
+        source_keys = tuple(dict.fromkeys(key for key in (item.id, item.source_ref) if key))
+        for key in source_keys:
+            for source in encounter.weapon_attack_sources_by_item_id.get(key, ()):
+                if source.id in known_ids:
+                    continue
+                sources.append(source)
+                known_ids.add(source.id)
+    bound_sources = tuple(attack_source_for_actor(source, actor) for source in sources)
+    return attack_sources_with_versatile_variants(
+        actor,
+        bound_sources,
+        reserved_hands=reserved_hands,
+    )
+
+
 def _spell_area_payload(area) -> dict[str, object] | None:
     if area is None:
         return None
@@ -6395,11 +9014,25 @@ def _spell_area_payload(area) -> dict[str, object] | None:
         "radius_feet": area.radius_feet,
         "length_feet": area.length_feet,
         "width_feet": area.width_feet,
+        "target_mode": area.target_mode.value,
     }
 
 
 def _format_signed(value: int) -> str:
     return f"+{value}" if value >= 0 else str(value)
+
+
+def _skill_label_pl(skill: str) -> str:
+    return "Athletics" if skill == "athletics" else "Acrobatics"
+
+
+def _attack_context_category(source) -> CombatMenuCategory:
+    source_type = getattr(getattr(source, "source_type", None), "value", "")
+    if source_type == "spell":
+        return CombatMenuCategory.MAGIC
+    if source_type == "item":
+        return CombatMenuCategory.ITEM
+    return CombatMenuCategory.ATTACK
 
 
 def _combat_action_payload(action, actor: Actor | None = None) -> dict[str, object]:
@@ -6421,6 +9054,10 @@ def _combat_action_payload(action, actor: Actor | None = None) -> dict[str, obje
         "prepared": prepared,
         "concentration": action.concentration,
         "source_item_id": action.source_item_id,
+        "range_feet": action.range_feet,
+        "effect_kind": action.effect_kind,
+        "action_cost": action.action_cost.value,
+        "action_cost_label": action_economy_cost_label(action.action_cost),
         "source_item_quantity": quantity,
         "available": available,
         "unavailable_reason": _combat_action_unavailable_reason(
@@ -6466,16 +9103,36 @@ def _pending_player_attack_payload(
     target = next((actor for actor in state.actors if str(actor.id) == pending.target_id), None)
     if attacker is None or target is None:
         return None
-    sources = encounter.attack_source_options_by_actor.get(attacker.id, ())
+    sources = _encounter_attack_sources(
+        encounter,
+        attacker,
+        reserved_hands=len(grappled_actor_ids(state.condition_states, str(attacker.id))),
+    )
     source = next((candidate for candidate in sources if candidate.id == pending.source_id), None) or (
         sources[0] if sources else None
     )
     if source is None:
         return None
+    if pending.two_weapon_bonus:
+        source = two_weapon_bonus_attack_source(attacker, source)
     source = attack_source_with_target_combat_effects(attacker, target, source, active_combat_effects)
+    source = attack_source_with_hidden_advantage(
+        source,
+        is_hidden_from(state.hidden_states, str(attacker.id), str(target.id)),
+    )
+    positioning = AttackPositioning(
+        cover_level=CoverLevel(pending.cover_level),
+        cover_bonus=pending.cover_bonus,
+        cover_sources=pending.cover_sources,
+        ranged_threat_actor_ids=pending.ranged_threat_actor_ids,
+        flanking_ally_ids=pending.flanking_ally_ids,
+    )
+    source = attack_source_with_positioning(source, positioning)
+    source = attack_source_with_prone(source, state.condition_states, attacker, target)
     instruction = roll_instruction(source.attack_roll_request)
     return {
         "stage": pending.stage,
+        "two_weapon_bonus": pending.two_weapon_bonus,
         "attacker": _combat_actor_payload(attacker, active_combat_effects),
         "target": _combat_actor_payload(target, active_combat_effects),
         "source": _attack_source_payload(source),
@@ -6488,7 +9145,16 @@ def _pending_player_attack_payload(
         "natural_roll": pending.natural_roll,
         "natural_rolls": list(pending.natural_rolls),
         "total": pending.total,
-        "target_ac": target.ac,
+        "target_ac": effective_armor_class(target) + pending.cover_bonus,
+        "positioning": {
+            "cover_level": pending.cover_level,
+            "cover_bonus": pending.cover_bonus,
+            "cover_sources": list(pending.cover_sources),
+            "ranged_in_melee": bool(pending.ranged_threat_actor_ids),
+            "ranged_threat_actor_ids": list(pending.ranged_threat_actor_ids),
+            "flanking": bool(pending.flanking_ally_ids),
+            "flanking_ally_ids": list(pending.flanking_ally_ids),
+        },
         "hit": pending.hit,
         "critical": pending.critical,
         "saving_throws": [save.as_payload() for save in pending.saving_throws],
@@ -6552,6 +9218,15 @@ def _pending_area_spell_payload(
             if str(actor.id) in pending.target_ids
         ],
         "saving_throws": [save.as_payload() for save in pending.saving_throws],
+        "target_cover": [
+            {
+                "actor_id": actor_id,
+                "cover_level": positioning.cover_level.value,
+                "cover_bonus": positioning.cover_bonus,
+                "cover_sources": list(positioning.cover_sources),
+            }
+            for actor_id, positioning in pending.target_positioning
+        ],
         "spell_save_dc": source.save_dc or caster.spell_save_dc,
         "damage_instruction": _damage_roll_instruction(source),
     }
@@ -6671,23 +9346,56 @@ def _remaining_movement_range(board, state: CombatState, actor: Actor) -> Moveme
     remaining = movement_remaining(state, actor)
     movement_actor = replace(actor, speed_feet=remaining)
     result = movement_range(board, movement_actor, state.actors)
-    reachable = frozenset(tile for tile in result.reachable_tiles if result.costs_by_tile.get(tile, 999) <= remaining)
-    costs = {tile: cost for tile, cost in result.costs_by_tile.items() if tile in reachable}
-    paths = {tile: path for tile, path in result.paths_by_tile.items() if tile in reachable}
-    return MovementRangeResult(origin=result.origin, reachable_tiles=reachable, costs_by_tile=costs, paths_by_tile=paths)
+    return movement_range_with_condition_cost(
+        result,
+        state.condition_states,
+        str(actor.id),
+        movement_budget_feet=remaining,
+    )
 
 
-def _legal_combat_targets(encounter: LoadedEncounter, state: CombatState, actor: Actor, source=None):
-    if state.turn_action.action_use != ActionUse.ACTION_AVAILABLE:
-        return ()
+def _legal_combat_targets(
+    encounter: LoadedEncounter,
+    state: CombatState,
+    actor: Actor,
+    source=None,
+    *,
+    require_action: bool = True,
+):
     source = source or encounter.attack_sources_by_actor.get(actor.id)
     if source is None:
         return ()
-    return start_attack_action(encounter.board, actor, state.actors, source).legal_targets
+    if require_action:
+        if source.source_type.value == "weapon" and source.area is None:
+            if not can_use_attack_action(state, actor):
+                return ()
+        elif state.turn_action.action_use != ActionUse.ACTION_AVAILABLE:
+            return ()
+    return start_attack_action(
+        encounter.board,
+        actor,
+        state.actors,
+        source,
+        state.hidden_states,
+    ).legal_targets
 
 
-def _combat_target_at_position(encounter: LoadedEncounter, state: CombatState, actor: Actor, position: Coordinate, source=None):
-    for target in _legal_combat_targets(encounter, state, actor, source):
+def _combat_target_at_position(
+    encounter: LoadedEncounter,
+    state: CombatState,
+    actor: Actor,
+    position: Coordinate,
+    source=None,
+    *,
+    require_action: bool = True,
+):
+    for target in _legal_combat_targets(
+        encounter,
+        state,
+        actor,
+        source,
+        require_action=require_action,
+    ):
         if target.position == position:
             return target
     return None
@@ -6709,6 +9417,7 @@ def _combat_choice_led_feedback(
     board=None,
     interaction_positions: tuple[Coordinate, ...] = (),
     area_spell_positions: tuple[Coordinate, ...] = (),
+    dragged_destination: Coordinate | None = None,
 ) -> LedFeedback:
     frames = list(movement_led_feedback(movement).frames)
     if board is not None:
@@ -6732,6 +9441,14 @@ def _combat_choice_led_feedback(
         frames.append(LedFrame(tuple(sorted(interaction_positions)), LedColor.INTERACTIVE_OBJECT, LedRole.DESTINATION))
     if area_spell_positions:
         frames.append(LedFrame(tuple(sorted(area_spell_positions)), LedColor.MARKER, LedRole.DESTINATION))
+    if dragged_destination is not None:
+        frames.append(
+            LedFrame(
+                (dragged_destination,),
+                LedColor.MENU_PINK,
+                LedRole.ENEMY,
+            )
+        )
     return LedFeedback(tuple(frames))
 
 
@@ -6811,6 +9528,23 @@ def _enemy_turn_intent_payload(
             if target_actor is not None
             else _effective_attack_source_for_effects(intent.enemy, source, active_combat_effects)
         )
+        if target_actor is not None and encounter is not None:
+            positioning = evaluate_attack_positioning(
+                encounter.board,
+                intent.enemy,
+                target_actor,
+                source,
+                intent.state.actors,
+                encounter.scene_objects,
+            )
+            source = attack_source_with_positioning(source, positioning)
+            source = attack_source_with_prone(
+                source,
+                intent.state.condition_states,
+                intent.enemy,
+                target_actor,
+            )
+            payload["positioning"] = _attack_positioning_payload(positioning)
     elif source is not None:
         source = _effective_attack_source_for_effects(intent.enemy, source, active_combat_effects)
     if intent.target is not None:
@@ -6843,7 +9577,9 @@ def _enemy_turn_preview_payload(
     if result is None:
         return None
     payload: dict[str, object] = {"enemy_id": str(result.enemy.id), "enemy_name": result.enemy.name}
-    source = encounter.attack_sources_by_actor.get(result.enemy.id) if encounter is not None else None
+    source = result.source or (
+        encounter.attack_sources_by_actor.get(result.enemy.id) if encounter is not None else None
+    )
     if source is not None and result.target is not None:
         target_actor = next((actor for actor in result.state.actors if str(actor.id) == result.target.id), None)
         source = (
@@ -6851,6 +9587,16 @@ def _enemy_turn_preview_payload(
             if target_actor is not None
             else _effective_attack_source_for_effects(result.enemy, source, active_combat_effects)
         )
+        positioning = getattr(result, "positioning", AttackPositioning())
+        source = attack_source_with_positioning(source, positioning)
+        if target_actor is not None:
+            source = attack_source_with_prone(
+                source,
+                result.state.condition_states,
+                result.enemy,
+                target_actor,
+            )
+        payload["positioning"] = _attack_positioning_payload(positioning)
     elif source is not None:
         source = _effective_attack_source_for_effects(result.enemy, source, active_combat_effects)
     if result.target is not None:
@@ -6871,6 +9617,11 @@ def _enemy_turn_preview_payload(
         payload["hit"] = result.attack_resolution.hit
         payload["critical"] = result.attack_resolution.critical
         payload["target_ac"] = result.attack_resolution.attack_roll_result.target_ac
+    if result.saving_throw_request is not None:
+        payload["saving_throw_request"] = result.saving_throw_request.as_payload()
+        payload["base_damage"] = result.base_damage
+    if result.saving_throw_result is not None:
+        payload["saving_throw_result"] = result.saving_throw_result.as_payload()
     if result.damage is not None:
         payload["damage"] = result.damage.total_applied
     if getattr(result, "applied_damage", None) is not None:
@@ -6883,6 +9634,45 @@ def _enemy_turn_preview_payload(
     elif result.target is not None:
         payload["kind"] = "attack"
     return payload
+
+
+def _pending_enemy_saving_throw_payload(
+    pending: PendingEnemySavingThrow | None,
+    state: CombatState,
+) -> dict[str, object] | None:
+    if pending is None:
+        return None
+    target = next(
+        (actor for actor in state.actors if str(actor.id) == pending.target_id),
+        None,
+    )
+    if target is None:
+        return None
+    modifiers = saving_throw_roll_modifiers(target, pending.request.ability)
+    request_payload = pending.request.as_payload()
+    return {
+        "target": _combat_actor_payload(target),
+        "source_id": pending.source_id,
+        "request": request_payload,
+        "modifier": sum(modifier.value for modifier in modifiers),
+        "modifier_components": [_roll_modifier_payload(modifier) for modifier in modifiers],
+        "instruction": (
+            f"{target.name}: rzuć fizyczne d20 na {request_payload['ability_label']} "
+            f"przeciw ST {pending.request.dc} i wpisz naturalny wynik."
+        ),
+    }
+
+
+def _attack_positioning_payload(positioning: AttackPositioning) -> dict[str, object]:
+    return {
+        "cover_level": positioning.cover_level.value,
+        "cover_bonus": positioning.cover_bonus,
+        "cover_sources": list(positioning.cover_sources),
+        "ranged_in_melee": bool(positioning.ranged_threat_actor_ids),
+        "ranged_threat_actor_ids": list(positioning.ranged_threat_actor_ids),
+        "flanking": bool(positioning.flanking_ally_ids),
+        "flanking_ally_ids": list(positioning.flanking_ally_ids),
+    }
 
 
 def _enemy_turn_result_payload(
@@ -6899,6 +9689,17 @@ def _enemy_turn_result_payload(
 
 
 def _enemy_roll_summary(result) -> str:
+    if result.saving_throw_result is not None:
+        save = result.saving_throw_result
+        outcome = "sukces" if save.success else "porażka"
+        parts = [
+            f"Rzut obronny d20: {save.natural_roll}",
+            f"modyfikator: {save.modifier:+d}",
+            f"wynik końcowy: {save.total} przeciw ST {save.dc}: {outcome}",
+        ]
+        if result.damage is not None:
+            parts.append(f"obrażenia: {result.damage.total_applied}")
+        return ". ".join(parts) + "."
     if result.attack_roll is None or result.target is None:
         return ""
     parts = [
@@ -6936,21 +9737,29 @@ def _enemy_turn_message(result) -> str:
     return f"{result.message} {summary}"
 
 
-def _movement_preview_payload(path) -> dict[str, object] | None:
+def _movement_preview_payload(path, state: CombatState) -> dict[str, object] | None:
     if path is None or not path.valid:
         return None
-    return {
+    payload = {
         "destination": [path.destination.col, path.destination.row],
         "cost_feet": path.cost_feet,
         "path": [[position.col, position.row] for position in path.path],
     }
+    dragged = _dragged_movement_preview(state, path)
+    if dragged is not None:
+        payload["dragged_actor"] = dragged
+    return payload
 
 
 def _movement_payload(result, state: CombatState, actor: Actor) -> dict[str, object]:
     remaining = movement_remaining(state, actor)
+    effective_speed = effective_movement_speed(actor, state.condition_states)
     destinations = tuple(sorted(tile for tile in result.reachable_tiles if tile != result.origin))
     return {
         "remaining_feet": remaining,
+        "base_speed_feet": actor.speed_feet,
+        "effective_speed_feet": effective_speed,
+        "speed_reduction": "grappling" if effective_speed < actor.speed_feet and effective_speed > 0 else None,
         "extra_movement_feet": state.turn_action.extra_movement_feet,
         "destinations": [
             {
@@ -6964,32 +9773,52 @@ def _movement_payload(result, state: CombatState, actor: Actor) -> dict[str, obj
     }
 
 
-def _damage_application_message(result) -> str:
-    defeated_text = " Cel zostaje pokonany." if result.defeated_by_damage else ""
-    temp_text = ""
-    if result.temp_hp_before > 0 or result.absorbed_by_temp_hp > 0:
-        temp_text = f" Temp HP {result.temp_hp_before} -> {result.temp_hp_after}, pochłonięto {result.absorbed_by_temp_hp}."
-    return (
-        f"Obrażenia: {result.damage.total_applied}. "
-        f"{result.actor_before.name}: HP {result.hp_before} -> {result.hp_after} / {result.actor_after.max_hp}."
-        f"{temp_text}{defeated_text}"
+def _dragged_destination(
+    state: CombatState,
+    path,
+) -> Coordinate | None:
+    preview = _dragged_movement_preview(state, path)
+    if preview is None:
+        return None
+    col, row = preview["destination"]
+    return Coordinate(col, row)
+
+
+def _dragged_movement_preview(
+    state: CombatState,
+    path,
+) -> dict[str, object] | None:
+    if path is None or not path.valid or len(path.path) < 2:
+        return None
+    actor = combat_current_actor(state)
+    dragged_ids = tuple(
+        condition.actor_id
+        for condition in state.condition_states
+        if condition.condition == CombatCondition.GRAPPLED
+        and condition.source_actor_id == str(actor.id)
     )
+    if not dragged_ids:
+        return None
+    dragged = next(
+        (candidate for candidate in state.actors if str(candidate.id) == dragged_ids[0]),
+        None,
+    )
+    if dragged is None:
+        return None
+    destination = path.path[-2]
+    return {
+        "id": str(dragged.id),
+        "name": dragged.name,
+        "destination": [destination.col, destination.row],
+    }
+
+
+def _damage_application_message(result) -> str:
+    return applied_damage_message(result)
 
 
 def _applied_damage_payload(result) -> dict[str, object] | None:
-    if result is None:
-        return None
-    return {
-        "damage": result.damage.total_applied,
-        "hp_before": result.hp_before,
-        "hp_after": result.hp_after,
-        "temp_hp_before": result.temp_hp_before,
-        "temp_hp_after": result.temp_hp_after,
-        "absorbed_by_temp_hp": result.absorbed_by_temp_hp,
-        "applied_to_hp": result.applied_to_hp,
-        "defeated": result.defeated,
-        "defeated_by_damage": result.defeated_by_damage,
-    }
+    return applied_damage_payload(result)
 
 
 def _default_encounter_victory_outcome(name: str) -> EncounterOutcome:
@@ -7093,6 +9922,8 @@ def _challenge_check_plan(
         consequence_targets=option.consequence_targets or (ConsequenceTarget.LEAD_ACTOR, ConsequenceTarget.SCENE),
         ability=option.ability_check.ability,
         skill=option.ability_check.skill,
+        tool=option.ability_check.tool,
+        tool_label=_tool_label_for_check(option.ability_check.tool, option, actors),
         dc=option.ability_check.dc,
         lead_actor_id=lead_actor_id,
         helper_actor_id=helper_actor_id,
@@ -7149,6 +9980,40 @@ def _observation_check_plan(
     )
 
 
+def _trap_check_plan(
+    trap: ExplorationTrap,
+    action: ExplorationTrapAction,
+    lead_actor_id: str,
+) -> ExplorationCheckPlan:
+    check = (
+        trap.disarm_check
+        if action == ExplorationTrapAction.DISARM
+        else trap.bypass_check
+    )
+    if check is None:
+        raise ValueError("Ta akcja na pułapce nie wymaga testu.")
+    action_label = "Rozbrojenie pułapki" if action == ExplorationTrapAction.DISARM else "Ominięcie pułapki"
+    return ExplorationCheckPlan(
+        participants=CheckParticipants.SINGLE_ACTOR,
+        aggregation=CheckAggregation.LEAD_RESULT,
+        consequence_targets=(ConsequenceTarget.LEAD_ACTOR,),
+        ability=check.ability,
+        skill=check.skill,
+        tool=check.tool,
+        tool_label="Narzędzia złodziejskie" if check.tool == "thieves_tools" else (check.tool or ""),
+        dc=check.dc,
+        lead_actor_id=lead_actor_id,
+        reason_for_players=f"{action_label}: {trap.name}.",
+        roll_modifiers_by_actor_id=((lead_actor_id, check.modifiers),),
+        mechanic_payload={
+            "id": "exploration_trap_action",
+            "label": action_label,
+            "trap_id": trap.id,
+            "action": action.value,
+        },
+    )
+
+
 def _check_inputs_from_payload(
     actors: tuple[Actor, ...],
     plan: ExplorationCheckPlan,
@@ -7160,15 +10025,24 @@ def _check_inputs_from_payload(
         if actor_id not in raw_rolls:
             raise ValueError(f"Brakuje wyniku rzutu dla: {actor.name}.")
         natural_roll, natural_roll_2 = _manual_rolls_from_payload(raw_rolls[actor_id], plan.roll_mode)
-        request = D20RollRequest(
-            mode=plan.roll_mode,
-            modifiers=(
-                *_ability_roll_modifiers(actor, plan.ability, plan.skill),
-                *_plan_roll_modifiers(actor, plan),
-            ),
-        )
+        request = _actor_check_request(actor, plan)
         result.append(PartyCheckInput(actor, natural_roll, request, natural_roll_2))
     return tuple(result)
+
+
+def _actor_check_request(actor: Actor, plan: ExplorationCheckPlan) -> D20RollRequest:
+    return D20RollRequest(
+        mode=plan.roll_mode,
+        modifiers=(
+            *ability_check_roll_modifiers(
+                actor,
+                plan.ability,
+                skill=plan.skill,
+                tool=plan.tool,
+            ),
+            *_plan_roll_modifiers(actor, plan),
+        ),
+    )
 
 
 def _manual_rolls_from_payload(raw_roll: object, roll_mode: RollMode) -> tuple[int, int | None]:
@@ -7196,14 +10070,6 @@ def _actors_for_plan(actors: tuple[Actor, ...], plan: ExplorationCheckPlan) -> t
         if helper is not None and helper != lead:
             return (lead, helper)
     return (lead,)
-
-
-def _ability_roll_modifiers(actor: Actor, ability: str, skill: str | None = None) -> tuple[RollModifier, ...]:
-    score = getattr(actor.ability_scores, ability)
-    label = f"Modyfikator {ability}"
-    if skill:
-        label = f"Modyfikator {ability}/{skill}"
-    return (RollModifier(label, ability_modifier(score), RollModifierType.ABILITY, stacking_key=f"ability:{ability}"),)
 
 
 def _plan_roll_modifiers(actor: Actor, plan: ExplorationCheckPlan) -> tuple[RollModifier, ...]:
@@ -7371,7 +10237,10 @@ def _crafting_confirmation_text(plan: CraftingPlan) -> str:
 
 def _check_plan_text(actors: tuple[Actor, ...], plan: ExplorationCheckPlan) -> str:
     names = ", ".join(actor.name for actor in _actors_for_plan(actors, plan))
+    skill_text = f"/{plan.skill}" if plan.skill else ""
+    tool_text = f", narzędzie {plan.tool}" if plan.tool else ""
     return (
+        f"Test: {plan.ability}{skill_text}{tool_text}, ST {plan.dc}. "
         f"Uczestnicy: {plan.participants.value} ({names}). "
         f"Agregacja: {plan.aggregation.value}. Tryb rzutu: {plan.roll_mode.value}. Konsekwencje: "
         f"{', '.join(target.value for target in plan.consequence_targets)}."
@@ -7447,12 +10316,28 @@ def _challenge_payload(
     }
 
 
-def _exploration_actor_payload(actor: Actor) -> dict[str, object]:
+def _exploration_actor_payload(
+    actor: Actor,
+    condition_states: tuple[ConditionState, ...] = (),
+) -> dict[str, object]:
+    conditions = [
+        {
+            "id": condition.condition.value,
+            "label": "Powalony" if condition.condition == CombatCondition.PRONE else condition.condition.value,
+            "recoverable": condition.condition == CombatCondition.PRONE,
+        }
+        for condition in condition_states
+        if condition.actor_id == str(actor.id)
+    ]
     return {
         "id": str(actor.id),
         "name": actor.name,
+        "size": actor.size.value,
+        "size_label": creature_size_label_pl(actor.size),
+        "damage_affinities": _damage_affinities_payload(actor),
         "hp": actor.hp,
         "max_hp": actor.max_hp,
+        "conditions": conditions,
         "ability_scores": {
             "strength": actor.ability_scores.strength,
             "dexterity": actor.ability_scores.dexterity,
@@ -7481,6 +10366,20 @@ def _exploration_actor_payload(actor: Actor) -> dict[str, object]:
             }
             for pool in actor.resource_pools
         ],
+    }
+
+
+def _damage_affinities_payload(actor: Actor) -> dict[str, object]:
+    def values(items) -> list[dict[str, str]]:
+        return [
+            {"id": damage_type.value, "label": damage_type_label_pl(damage_type)}
+            for damage_type in items
+        ]
+
+    return {
+        "resistances": values(actor.damage_affinities.resistances),
+        "immunities": values(actor.damage_affinities.immunities),
+        "vulnerabilities": values(actor.damage_affinities.vulnerabilities),
     }
 
 
@@ -7603,6 +10502,30 @@ def _resource_payload(resource: ExplorationResource) -> dict[str, object]:
     }
 
 
+def _tool_label_for_check(
+    tool_id: str | None,
+    option: ExplorationChallengeOption,
+    actors: tuple[Actor, ...],
+) -> str:
+    if tool_id is None:
+        return ""
+    bonus = next((item for item in option.bonuses if item.source_id == tool_id), None)
+    if bonus is not None and bonus.label:
+        return bonus.label
+    for actor in actors:
+        item = next(
+            (
+                candidate
+                for candidate in actor.inventory
+                if candidate.id == tool_id or candidate.source_ref == tool_id
+            ),
+            None,
+        )
+        if item is not None:
+            return item.name
+    return tool_id.replace("_", " ")
+
+
 def _temporary_item_payload(item: TemporaryItem) -> dict[str, object]:
     return {
         **_resource_payload(item.as_resource()),
@@ -7634,6 +10557,8 @@ def _challenge_option_payload(option: ExplorationChallengeOption, actors: tuple[
         "description": option.description,
         "ability": option.ability_check.ability,
         "skill": option.ability_check.skill,
+        "tool": option.ability_check.tool,
+        "tool_label": _tool_label_for_check(option.ability_check.tool, option, actors),
         "dc": option.ability_check.dc,
         "progress_on_success": option.progress_on_success,
         "progress_on_failure": option.progress_on_failure,

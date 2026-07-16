@@ -119,6 +119,11 @@ details.debug-panel summary { cursor: pointer; color: #a9a298; }
 .combat-stage { display: grid; gap: 12px; margin: 0 0 12px; }
 .combat-action-card { border: 1px solid #34383d; border-radius: 6px; padding: 10px; background: #171b20; }
 .combat-action-card p { margin: 0 0 8px; }
+.combat-context-menu { display: grid; gap: 6px; margin: 10px 0; max-height: 48vh; overflow-y: auto; }
+.combat-context-category { margin-top: 6px; color: #9aa7b5; font-size: .78rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.combat-context-option { display: grid; gap: 3px; width: 100%; padding: 9px 11px; text-align: left; border: 1px solid #343c45; background: #1d242c; }
+.combat-context-option span { color: #aeb8c2; font-size: .88rem; font-weight: 400; }
+.combat-context-option.selected { border-color: #55a7ff; background: #17304a; box-shadow: inset 3px 0 #55a7ff; }
 .combat-last-result { border-left: 3px solid #3fb950; padding: 10px 12px; background: #132018; }
 .combat-last-result h4 { margin: 0 0 6px; color: #d7f6df; }
 .combat-effects { border: 1px solid #34383d; border-radius: 6px; padding: 10px 12px; background: #151a20; }
@@ -153,4 +158,10 @@ pre { white-space: pre-wrap; overflow: auto; }
   .chat-instance-head { align-items: center; }
   .chat-instance-head button { padding: 7px 9px; }
   .slash-command-option { grid-template-columns: 92px 1fr; gap: 7px; padding: 8px; }
+}
+.combat-warning {
+  border-left: 3px solid #d69e2e;
+  padding: 0.5rem 0.75rem;
+  color: #f6d365;
+  background: rgba(214, 158, 46, 0.1);
 }

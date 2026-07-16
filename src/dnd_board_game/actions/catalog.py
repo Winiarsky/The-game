@@ -13,6 +13,7 @@ from .turn_actions import (
     help_mechanic,
     ready_mechanic,
     strength_potion_mechanic,
+    targeted_item_effect_mechanic,
 )
 
 
@@ -39,6 +40,11 @@ def combat_action_mechanic_from_definition(action: Any) -> ActionMechanic:
         return concentration_attack_bonus_mechanic(
             str(getattr(action, "id", "concentration_attack_bonus")),
             str(getattr(action, "label", "Czar koncentracyjny")),
+        )
+    if action_type == "targeted_item_effect":
+        return targeted_item_effect_mechanic(
+            str(getattr(action, "id", "targeted_item_effect")),
+            str(getattr(action, "label", "Użyj przedmiotu")),
         )
     raise ValueError(f"Unknown combat action mechanic: {action_type}")
 

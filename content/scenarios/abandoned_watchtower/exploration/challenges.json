@@ -299,6 +299,36 @@
           "failure_noise": 1,
           "failure_complication": "ryzyko_upadku",
           "critical_failure_complication": "kolce_na_bramie",
+          "hazards": [
+            {
+              "id": "fall_from_gate",
+              "label": "Upadek z bramy",
+              "trigger": "critical_failure",
+              "narration": "Stopa ześlizguje się ze spróchniałej deski i bohater spada w stronę kamieni pod bramą.",
+              "saving_throw": {
+                "ability": "dexterity",
+                "dc": 12,
+                "damage_on_success": "half",
+                "success_effect_label": "kontrolowany upadek i połowa obrażeń",
+                "failure_effect_label": "pełne obrażenia od upadku"
+              },
+              "damage": {
+                "dice": "1d6",
+                "modifier": 0,
+                "damage_type": "bludgeoning"
+              },
+              "success_message": "Bohater chwyta krawędź i spada znacznie łagodniej.",
+              "failure_message": "Bohater nie odzyskuje równowagi i uderza o twarde podłoże.",
+              "failure_effects": [
+                {
+                  "type": "apply_condition",
+                  "parameters": {
+                    "condition": "prone"
+                  }
+                }
+              ]
+            }
+          ],
           "tags": [
             "climbing",
             "quiet",
@@ -361,7 +391,7 @@
           "description": "Spróbujcie otworzyć zatarty, zardzewiały zamek narzędziami złodziejskimi albo podobnym precyzyjnym sposobem.",
           "ability_check": {
             "ability": "dexterity",
-            "skill": "sleight_of_hand",
+            "tool": "thieves_tools",
             "dc": 15
           },
           "progress_on_success": 2,
@@ -384,7 +414,7 @@
               "source": "item",
               "id": "thieves_tools",
               "label": "Narzędzia złodziejskie",
-              "modifier": 2,
+              "modifier": 0,
               "breakage": {
                 "trigger": "critical_failure",
                 "chance_percent": 25

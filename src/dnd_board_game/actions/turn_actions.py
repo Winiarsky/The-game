@@ -50,6 +50,11 @@ class StrengthPotionAction(ItemAction):
     pass
 
 
+@dataclass(frozen=True, slots=True)
+class TargetedItemEffectAction(ItemAction):
+    pass
+
+
 def dodge_mechanic() -> DodgeAction:
     return DodgeAction(
         id="action.dodge",
@@ -122,4 +127,21 @@ def strength_potion_mechanic(action_id: str = "drink_strength_potion", label: st
         targeting=TargetingMode.SELF,
         summary="Przedmiot zużywa akcję i nakłada premię do ataku oraz obrażeń z Siły.",
         tags=("item", "buff", "strength"),
+    )
+
+
+def targeted_item_effect_mechanic(
+    action_id: str,
+    label: str,
+    *,
+    targeting: TargetingMode = TargetingMode.ENEMY,
+) -> TargetedItemEffectAction:
+    return TargetedItemEffectAction(
+        id=f"item.{action_id}",
+        name=label,
+        scope=MechanicScope.COMBAT,
+        resource=ActionResource.ACTION,
+        targeting=targeting,
+        summary="Przedmiot zużywa akcję i jedną sztukę, a następnie nakłada jawny efekt na legalny cel.",
+        tags=("item", "targeted", "effect"),
     )

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from enum import StrEnum
 
-from dnd_board_game.actors import Actor, ActorResourcePool, HitDicePool, RecoveryPeriod
+from dnd_board_game.actors import Actor, ActorResourcePool, DeathSaveState, HitDicePool, RecoveryPeriod
 
 from .abilities import ability_modifier
 
@@ -57,6 +57,7 @@ def complete_long_rest(actor: Actor) -> RestResult:
         spell_preparation=preparation,
         hit_dice=hit_dice,
         resource_pools=resources,
+        death_saves=DeathSaveState(),
     )
     return RestResult(
         actor,
@@ -86,7 +87,12 @@ def spend_hit_die(actor: Actor, *, die_sides: int, natural_roll: int) -> HitDieS
     healing_total = max(0, natural_roll + modifier)
     hp_after = min(actor.max_hp, actor.hp + healing_total)
     pools[pool_index] = replace(pools[pool_index], remaining=pools[pool_index].remaining - 1)
-    updated = replace(actor, hp=hp_after, hit_dice=tuple(pools))
+    updated = replace(
+        actor,
+        hp=hp_after,
+        hit_dice=tuple(pools),
+        death_saves=DeathSaveState() if hp_after > 0 else actor.death_saves,
+    )
     return HitDieSpendResult(
         actor,
         updated,

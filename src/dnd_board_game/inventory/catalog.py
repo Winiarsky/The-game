@@ -68,6 +68,11 @@ class ItemDefinition:
     portable: bool = True
     default_weight_lb: float | None = None
     collection_destination: ItemCollectionDestination = ItemCollectionDestination.ACTOR_INVENTORY
+    hands_required: int = 0
+    light_weapon: bool = False
+    versatile_damage_dice: str | None = None
+    armor_class_bonus: int = 0
+    armor_proficiency: str | None = None
 
     def __post_init__(self) -> None:
         if not self.id.strip():
@@ -79,6 +84,12 @@ class ItemDefinition:
         _validated_ids(self.properties, f"Item definition {self.id}.properties")
         if self.default_weight_lb is not None and self.default_weight_lb < 0:
             raise ValueError("Item definition default_weight_lb cannot be negative.")
+        if self.hands_required not in {0, 1, 2}:
+            raise ValueError("Item definition hands_required must be 0, 1, or 2.")
+        if self.versatile_damage_dice is not None and self.hands_required != 1:
+            raise ValueError("Only one-handed equipment can define versatile damage.")
+        if self.armor_class_bonus < 0:
+            raise ValueError("Item definition armor_class_bonus cannot be negative.")
 
 
 @dataclass(frozen=True, slots=True)

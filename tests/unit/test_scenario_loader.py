@@ -3,8 +3,10 @@ from pathlib import Path
 
 import pytest
 
-from dnd_board_game.actors import Faction
+from dnd_board_game.actors import CreatureSize, Faction
 from dnd_board_game.combat import (
+    ActionEconomyCost,
+    AttackKind,
     AttackSourceType,
     DamageType,
     EnvironmentSetupType,
@@ -13,6 +15,7 @@ from dnd_board_game.combat import (
     SpellCastingKind,
 )
 from dnd_board_game.exploration import SceneMode
+from dnd_board_game.inventory import HandSlot, effective_armor_class
 from dnd_board_game.scenarios import build_encounter_from_scenario, build_exploration_from_scenario, load_scenario
 from dnd_board_game.world import Coordinate, find_path
 
@@ -61,26 +64,98 @@ def test_load_scenario_builds_actors_and_attack_sources():
     goblin = next(actor for actor in encounter.actors if actor.id == "goblin")
     assert hero.name == "Bohater"
     assert hero.faction == Faction.ALLY
+    assert hero.size == CreatureSize.MEDIUM
     assert hero.ac == 14
     assert hero.hp == 20
     assert hero.position == Coordinate(0, 0)
     assert hero.ability_scores.strength == 16
     assert goblin.name == "Goblin"
     assert goblin.faction == Faction.ENEMY
+    assert goblin.size == CreatureSize.SMALL
     assert goblin.position == Coordinate(1, 0)
+    assert goblin.damage_affinities.resistances == ()
 
     hero_source = encounter.attack_sources_by_actor[hero.id]
     assert hero_source.name == "Miecz"
     assert hero_source.source_type == AttackSourceType.WEAPON
-    assert hero_source.attack_roll_request.modifiers[0].value == 5
-    assert hero_source.damage_die_sides == 6
+    assert [(item.label, item.value) for item in hero_source.attack_roll_request.modifiers] == [
+        ("Siła", 3),
+        ("Biegłość", 2),
+    ]
+    assert hero_source.damage_die_sides == 8
+    assert next(item for item in hero.inventory if item.id == "longsword").versatile_damage_dice == "1d10"
     assert hero_source.damage_type == DamageType.SLASHING.value
 
     goblin_source = encounter.attack_sources_by_actor[goblin.id]
     assert goblin_source.name == "Szabla"
-    assert goblin_source.attack_roll_request.modifiers[0].value == 4
+    assert [(item.label, item.value) for item in goblin_source.attack_roll_request.modifiers] == [
+        ("Zręczność", 2),
+        ("Biegłość", 2),
+    ]
     assert goblin_source.damage_die_sides == 6
     assert goblin_source.damage_modifier == 2
+
+
+def test_load_scenario_parses_actor_damage_affinities(tmp_path):
+    data = json.loads(Path("content/scenarios/goblin_ambush.json").read_text(encoding="utf-8"))
+    actor = data["actors"][1]
+    actor["damage_resistances"] = ["fire", "cold"]
+    actor["damage_immunities"] = ["poison"]
+    actor["damage_vulnerabilities"] = ["radiant"]
+    scenario_path = tmp_path / "damage_affinities.json"
+    scenario_path.write_text(json.dumps(data), encoding="utf-8")
+
+    encounter = build_encounter_from_scenario(load_scenario(scenario_path))
+    loaded_actor = next(item for item in encounter.actors if str(item.id) == actor["id"])
+
+    assert loaded_actor.damage_affinities.resistances == (DamageType.FIRE, DamageType.COLD)
+    assert loaded_actor.damage_affinities.immunities == (DamageType.POISON,)
+    assert loaded_actor.damage_affinities.vulnerabilities == (DamageType.RADIANT,)
+
+
+def test_reference_monster_exposes_damage_affinity_fixture(tmp_path):
+    data = json.loads(Path("content/scenarios/goblin_ambush.json").read_text(encoding="utf-8"))
+    monster = data["actors"][1]
+    monster["id"] = "stone_guardian"
+    monster["source_ref"] = "stone_guardian"
+    scenario_path = tmp_path / "stone_guardian_encounter.json"
+    scenario_path.write_text(json.dumps(data), encoding="utf-8")
+
+    encounter = build_encounter_from_scenario(load_scenario(scenario_path))
+    guardian = next(actor for actor in encounter.actors if str(actor.id) == "stone_guardian")
+
+    assert guardian.damage_affinities.resistances == (DamageType.SLASHING, DamageType.PIERCING)
+    assert guardian.damage_affinities.immunities == (DamageType.POISON,)
+    assert guardian.damage_affinities.vulnerabilities == (DamageType.THUNDER,)
+    source = encounter.attack_sources_by_actor[guardian.id]
+    assert source.save_ability == "dexterity"
+    assert source.save_dc == 12
+    assert source.save_damage_on_success == "half"
+    assert [item.id for item in encounter.multiattack_sources_by_actor[guardian.id]] == [
+        "stone_slam",
+        "stone_slam",
+    ]
+
+
+def test_load_scenario_rejects_unknown_damage_affinity(tmp_path):
+    data = json.loads(Path("content/scenarios/goblin_ambush.json").read_text(encoding="utf-8"))
+    data["actors"][1]["damage_resistances"] = ["sunlight"]
+    scenario_path = tmp_path / "bad_damage_affinity.json"
+    scenario_path.write_text(json.dumps(data), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="damage_resistances"):
+        load_scenario(scenario_path)
+
+
+def test_load_scenario_rejects_unknown_save_policy(tmp_path):
+    data = _abandoned_watchtower_data_without_refs()
+    data["actors"][1]["attacks"][0]["save_ability"] = "dexterity"
+    data["actors"][1]["attacks"][0]["save_damage_on_success"] = "quarter"
+    scenario_path = tmp_path / "bad_save_policy.json"
+    scenario_path.write_text(json.dumps(data), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="save_damage_on_success"):
+        load_scenario(scenario_path)
 
 
 def test_load_multi_actor_scenario_builds_separate_actors_and_sources():
@@ -100,6 +175,7 @@ def test_load_multi_actor_scenario_builds_separate_actors_and_sources():
     assert goblin_a.position == Coordinate(1, 0)
     assert goblin_b.position == Coordinate(1, 1)
     assert encounter.attack_sources_by_actor[rogue.id].name == "Kusza"
+    assert encounter.attack_sources_by_actor[rogue.id].source_item_id == "crossbow"
 
 
 def test_load_gate_skirmish_uses_shared_map_setup_and_ranged_rogue():
@@ -113,18 +189,67 @@ def test_load_gate_skirmish_uses_shared_map_setup_and_ranged_rogue():
     assert encounter.player_start_zones == ((Coordinate(7, 6), Coordinate(8, 6), Coordinate(9, 6)),)
     assert encounter.attack_sources_by_actor[rogue.id].name == "Kusza"
     assert encounter.attack_sources_by_actor[rogue.id].range_feet == 80
+    assert encounter.attack_sources_by_actor[rogue.id].attack_kind == AttackKind.RANGED
+    assert rogue.proficiency_bonus == 2
+    assert rogue.skill_proficiencies == ("stealth", "sleight_of_hand", "perception")
+    assert rogue.skill_expertise == ("stealth",)
+    assert rogue.proficiencies.saving_throws == ("dexterity", "intelligence")
+    assert rogue.proficiencies.weapons == ("crossbow", "dagger")
     hero = next(actor for actor in encounter.actors if actor.id == "hero")
-    assert {item.id for item in hero.inventory} >= {"longsword", "crossbow", "strength_potion"}
+    assert {item.id for item in hero.inventory} >= {
+        "longsword",
+        "crossbow",
+        "strength_potion",
+        "sticky_flask",
+    }
+    longsword = next(item for item in hero.inventory if item.id == "longsword")
+    dagger = next(item for item in hero.inventory if item.id == "dagger")
+    crossbow = next(item for item in hero.inventory if item.id == "crossbow")
+    assert longsword.equipped is True
+    longsword_source = next(
+        source
+        for source in encounter.attack_source_options_by_actor[hero.id]
+        if source.id == "longsword_slash"
+    )
+    assert longsword_source.attack_kind == AttackKind.MELEE
+    assert longsword_source.reach_feet == 5
+    assert longsword.held_in == (HandSlot.MAIN_HAND,)
+    assert dagger.equipped is True
+    assert dagger.held_in == (HandSlot.OFF_HAND,)
+    assert crossbow.equipped is False
+    assert crossbow.hands_required == 2
+    assert {source.id for source in encounter.weapon_attack_sources_by_item_id["crossbow"]} == {"crossbow_shot"}
+    assert "crossbow_shot" in {
+        source.id for source in encounter.attack_source_options_by_actor[hero.id]
+    }
     strength_potion = next(item for item in hero.inventory if item.id == "strength_potion")
     assert strength_potion.name == "Magiczny napój siły"
     strength_action = next(action for action in encounter.combat_actions_by_actor[hero.id] if action.id == "drink_strength_potion")
     assert strength_action.action_type == "strength_potion"
     assert strength_action.source_item_id == "strength_potion"
+    assert strength_action.action_cost == ActionEconomyCost.ACTION
+    sticky_action = next(
+        action
+        for action in encounter.combat_actions_by_actor[hero.id]
+        if action.id == "splash_sticky_flask"
+    )
+    assert sticky_action.action_type == "targeted_item_effect"
+    assert sticky_action.source_item_id == "sticky_flask"
+    assert sticky_action.target_faction == "enemy"
+    assert sticky_action.range_feet == 5
+    assert sticky_action.effect_kind == "grant_next_attack_penalty"
+    assert sticky_action.value == -2
+    assert sticky_action.duration == "until_next_attack"
+    assert sticky_action.action_cost == ActionEconomyCost.ACTION
     cleric_sources = {source.id: source for source in encounter.attack_source_options_by_actor[cleric.id]}
     assert cleric_sources["sacred_flame"].casting_kind == SpellCastingKind.CANTRIP
     assert cleric_sources["sacred_flame"].spell_level == 0
+    assert cleric_sources["sacred_flame"].attack_kind == AttackKind.RANGED
+    assert cleric_sources["sacred_flame"].reach_feet is None
     assert cleric_sources["radiant_line"].casting_kind == SpellCastingKind.LEVELED
     assert cleric_sources["radiant_line"].spell_level == 1
+    assert cleric_sources["radiant_line"].area is not None
+    assert cleric_sources["radiant_line"].area.target_mode.value == "all_creatures"
     assert encounter.healing_sources_by_actor[cleric.id][0].casting_kind == SpellCastingKind.LEVELED
     bless = next(action for action in encounter.combat_actions_by_actor[cleric.id] if action.id == "bless_attack_bonus")
     assert bless.action_type == "concentration_attack_bonus"
@@ -202,6 +327,7 @@ def test_load_gate_skirmish_parses_combat_interaction_conditions_and_effects():
     ]
     assert take_cover.effects[0].effect_type == "grant_ac_bonus_until_move"
     assert ("value", 2) in take_cover.effects[0].parameters
+    assert cart.projectile_cover_bonus == 2
     assert [effect.effect_type for effect in climb.effects] == [
         "move_actor_to_tile",
         "grant_attack_bonus_while_on_object",
@@ -231,8 +357,10 @@ def test_load_abandoned_watchtower_builds_exploration_scene():
     assert exploration.board.terrain_at(Coordinate(8, 5)).blocks_movement is False
     assert len(exploration.zones) == 4
     assert len(exploration.challenges) == 2
-    assert len(exploration.observations) == 1
-    gate_observation = exploration.observations[0]
+    assert len(exploration.observations) == 2
+    gate_observation = next(
+        item for item in exploration.observations if item.id == "look_through_gate_gap"
+    )
     assert gate_observation.id == "look_through_gate_gap"
     assert gate_observation.dc == 10
     assert [fact.minimum_total for fact in gate_observation.facts] == [10, 15, 20]
@@ -243,6 +371,18 @@ def test_load_abandoned_watchtower_builds_exploration_scene():
     challenge = next(item for item in exploration.challenges if item.id == "closed_gate")
     assert challenge.completed_flag == "gate_passed"
     assert challenge.reveals_on_complete == ()
+    vault = next(option for option in challenge.options if option.id == "vault_gate")
+    assert len(vault.hazards) == 1
+    assert vault.hazards[0].id == "fall_from_gate"
+    assert vault.hazards[0].saving_throw.ability == "dexterity"
+    assert vault.hazards[0].saving_throw.dc == 12
+    assert vault.hazards[0].damage.damage_type == "bludgeoning"
+    assert vault.hazards[0].failure_effects == (
+        {"type": "apply_condition", "parameters": {"condition": "prone"}},
+    )
+    assert exploration.traps[0].id == "gate_alarm_wire"
+    assert exploration.traps[0].detection_observation_id == "search_gate_traps"
+    assert exploration.traps[0].hazard.failure_effects[0]["type"] == "add_noise"
     gate_trigger = next(item for item in exploration.encounter_triggers if item.id == "gate_open_skirmish")
     assert gate_trigger.outcome_on_victory is not None
     assert any(
@@ -354,6 +494,13 @@ def test_load_abandoned_watchtower_folder_keeps_monster_and_item_refs_working():
         "prying",
     }
     assert "sacred_flame" in cleric.spell_ids
+    shield = next(item for item in cleric.inventory if item.id == "shield")
+    assert shield.equipped is True
+    assert shield.armor_class_bonus == 2
+    assert shield.armor_proficiency == "shield"
+    assert effective_armor_class(cleric) == cleric.ac + 2
+    healers_kit = next(item for item in cleric.inventory if item.id == "healers_kit")
+    assert healers_kit.quantity == 10
     assert cleric.spell_preparation is not None
     assert cleric.spell_preparation.source_label == "lista czarów kapłana"
     assert cleric.spell_preparation.preparation_limit == 2
@@ -374,8 +521,10 @@ def test_load_abandoned_watchtower_folder_keeps_monster_and_item_refs_working():
     lockpick = next(option for option in gate.options if option.id == "lockpick_gate")
     flame = next(option for option in gate.options if option.id == "reveal_bolt_with_flame")
     assert lockpick.requires_item_ids == ("thieves_tools",)
+    assert lockpick.ability_check.skill is None
+    assert lockpick.ability_check.tool == "thieves_tools"
     assert lockpick.bonuses[0].source_id == "thieves_tools"
-    assert lockpick.bonuses[0].modifier == 2
+    assert lockpick.bonuses[0].modifier == 0
     assert lockpick.bonuses[0].breakage_risk is not None
     assert lockpick.bonuses[0].breakage_risk.chance_percent == 25
     assert flame.requires_spell_ids == ("sacred_flame",)

@@ -19,29 +19,29 @@ odstępstwa zapisujemy w `docs/RULES_DECISIONS.md`.
 
 | Rodzina | Status | Co obecnie istnieje | Następna zależność |
 |---|---|---|---|
-| Plansza i współrzędne | stabilne MVP | siatka 20x30, teren, przeszkody, ściany, adapter planszy | rozmiary aktorów, wysokość |
-| Pathfinding i ruch | częściowe | budżet ruchu, difficult terrain, ruch dzielony, LED | prone, grapple, forced movement, special movement |
-| Linia widzenia i zasięg | częściowe | Bresenham LOS i podstawowy range | cover, senses, darkness, line of effect |
-| Rzuty d20 | stabilne MVP | natural roll, modyfikatory, advantage/disadvantage | pełne proficiency i pasywne wartości |
-| Ability checks | stabilne MVP | testy cech/skilli w eksploracji | actor proficiency/expertise jako dane |
-| Saving throws | częściowe | save dla czarów, efektów i koncentracji | proficiency, warunki, repeated saves |
-| Inicjatywa i tury | częściowe | kolejność, aktywny aktor, rundy oraz scenariuszowe utrudnienie inicjatywy dla zaskoczonej strony | indywidualne Stealth vs passive Perception i pełne triggery turn-boundary |
-| Ekonomia akcji | częściowe | action, bonus/reaction placeholders, movement, wybrane akcje | pełne bonus actions i free interaction |
-| Ataki | stabilne MVP | melee/ranged, target selection, crit, save-spell | cover, reach, two-weapon, grapple/shove |
-| Obrażenia i leczenie | częściowe | HP, temp HP, damage, healing, defeat | resistance/immunity/vulnerability, 0 HP, death saves |
-| Reakcje | częściowe | opportunity attack i Ready | generyczna kolejka reakcji i wiele triggerów |
-| Akcje tury | częściowe | Dash, Dodge, Disengage, Help, Ready | Hide, Search, Use an Object i warianty zasad |
-| Warunki | brak | pojedyncze efekty zachowują się podobnie do warunków | wspólny condition/effect framework |
+| Plansza i współrzędne | stabilne MVP | siatka 20x30, teren, przeszkody, ściany, adapter planszy oraz kategorie rozmiaru aktorów reprezentowanych przez jedno pole | wielopolowe footprinty, wysokość |
+| Pathfinding i ruch | częściowe | budżet ruchu, difficult terrain, ruch dzielony, LED, prone, wymuszony ruch Shove oraz przeciąganie Grappled z szybkością zmniejszoną o połowę | pozostały forced movement, special movement, reguły przechodzenia zależne od rozmiaru |
+| Linia widzenia i zasięg | częściowe | Bresenham LOS, jawne rozdzielenie melee `reach` i ranged `range`, half/three-quarters/total cover na linii pocisku | senses, darkness, dokładna geometria rogów i wysokości |
+| Rzuty d20 | stabilne MVP | natural roll, modyfikatory, advantage/disadvantage oraz osobne składniki cechy, proficiency i expertise | modyfikatory cech i efektów klasowych |
+| Ability checks | stabilne MVP | testy cech/skilli/narzędzi, alternatywna cecha skilla, proficiency/expertise, passive skill score, generyczne contesty oraz Athletics vs Athletics/Acrobatics dla Shove i Grapple | dalsze contesty |
+| Saving throws | częściowe | wspólny request/result dla czarów i efektów, profil biegłości, fizyczny rzut gracza przeciw efektom przeciwnika, automatyczny rzut potwora przeciw czarom gracza, `none`/`half`, integracja z typed damage oraz osłona `+2/+5` dla Dex save czarów | auto-fail STR/DEX z warunków, repeated saves |
+| Inicjatywa i tury | częściowe | kolejność, aktywny aktor, rundy, scenariuszowe utrudnienie inicjatywy oraz precombat Stealth vs passive Perception przenoszone do walki | pełny per-creature surprised condition i triggery turn-boundary |
+| Ekonomia akcji | stabilne MVP | action, budżet pojedynczych ataków w Attack action, bonus action, reaction, dzielony movement, darmowa interakcja z obiektem, jawne koszty contentu oraz fallback drugiej interakcji do akcji | generyczna kolejka reakcji i cechy przyznające dodatkowe akcje |
+| Ataki | stabilne MVP | melee/ranged, jawny reach źródła melee, cecha i biegłość broni z profilu aktora, grupowany katalog źródeł, target selection, crit, save-spell z osłoną dla Dex save, osłona AC, zwarcie, domyślne flankowanie, Extra Attack-ready `attacks_per_action`, Shove/Grapple zastępujące atak, bonusowy atak drugą lekką bronią oraz data-driven Multiattack potworów | zaawansowane właściwości broni |
+| Obrażenia i leczenie | częściowe | HP, temp HP, typed damage components, resistance/immunity/vulnerability, healing, 0 HP, death saves, stabilization, massive damage, Medicine i healer's kit | wieloskładnikowe źródła obrażeń w schemacie ataku, redukcje płaskie |
+| Reakcje | częściowe | opportunity attack opuszczający faktyczny reach źródła melee i Ready | generyczna kolejka reakcji i wiele triggerów |
+| Akcje tury | stabilne MVP | Dash, Dodge, Disengage, Help, Ready, Hide, Search i data-driven Use an Object | warianty zasad i bardziej złożone przedmioty |
+| Warunki | częściowe | wspólny `ConditionState`, źródłowy Grappled, prone z ruchem i modyfikatorami ataków oraz nieprzytomność blokująca turę i reakcje | auto-fail STR/DEX saves i pozostałe warunki |
 | Efekty i czas trwania | stabilne MVP | wspólny ActiveEffect, źródło, stacking oraz expiry dla tur, rund, akcji, ruchu, koncentracji, odpoczynku i scenariusza; stan trafia do snapshotu v1 | pełny condition framework |
 | Odpoczynki i dzień przygody | stabilne MVP | short rest z Hit Dice i contentowym ryzykiem; automatyczny long rest przed scenariuszem; scenario-end lifecycle i snapshot v1 | przerwania |
-| Ekwipunek | częściowe | inventory, quantity, broken, consumables, item actions | equipment, armor, weight, attunement, charges |
+| Ekwipunek | częściowe | inventory, quantity, equipped, broken, consumables, contentowe akcje przedmiotów na wskazanym celu, upuszczanie i podnoszenie broni, jawne sloty obu rąk, broń jedno- i dwuręczna, wolna ręka dla Grapple, Two-Weapon Fighting, versatile oraz tarcza zajmująca rękę i dająca efektywne KP | pozostałe armor, weight, attunement, charges |
 | Spell slots | stabilne MVP | poziomy slotów i zużycie | upcasting, recovery profiles, multiclass slots |
 | Przygotowanie czarów | stabilne MVP | wybór po automatycznym long reście, limit, always prepared | class-derived profile |
 | Znane czary i spellbook | brak | brak osobnych profili | generic spell access profiles |
-| Targeting czarów | częściowe | single target, radius, line, cone, save i healing | pełny range/target/line-of-effect |
+| Targeting czarów | stabilne MVP | single target, radius, line z szerokością, rosnący cone w 8 kierunkach, line-of-effect, jawny target mode, friendly fire, save i healing | wysokość, nietypowe bryły i dokładne warianty geometrii rogów |
 | Koncentracja | częściowe | jeden efekt, wspólne zastępowanie/expiry, save po damage | zaawansowane modyfikatory i pełne czasy czarów |
 | Components, ritual, upcasting | brak | brak | stabilny spell schema i equipment |
-| Eksploracja | stabilne MVP | zones, points, challenges, checks, resources, effects | czas, senses, hazards i trwałe konsekwencje |
+| Eksploracja | stabilne MVP | zones, points, challenges, checks, resources, effects, data-driven hazards oraz ukryte pułapki z wykrywaniem, rozbrojeniem, ominięciem, aktywacją i snapshotem | pełne senses, rozbudowane pułapki mapowe i wykorzystanie pułapek przeciw przeciwnikom |
 | Freeform/LLM | stabilne MVP | analiza, klasyfikacja, korekta MG, grounded conversation, progresywne podpowiedzi i deterministic effects | pełna walidacja branches i parametrów |
 | NPC i sceny społeczne | częściowe | pierwszy przepływ NPC i lokalne policy | conversation state, attitude i szersze efekty |
 | Encounter setup | stabilne MVP | scenariuszowy etap rozpoczęcia, setup mapy/aktorów, inicjatywa, powrót do eksploracji | szablony encounterów i różne cele |

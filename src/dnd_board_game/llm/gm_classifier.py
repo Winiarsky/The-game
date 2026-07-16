@@ -409,6 +409,7 @@ class GmClassifierRequest:
                         "label": option.label,
                         "ability": option.ability_check.ability,
                         "skill": option.ability_check.skill,
+                        "tool": option.ability_check.tool,
                         "dc": option.ability_check.dc,
                         "progress_on_success": option.progress_on_success,
                         "progress_on_failure": option.progress_on_failure,

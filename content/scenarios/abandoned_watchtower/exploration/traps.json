@@ -1,0 +1,85 @@
+{
+  "traps": [
+    {
+      "id": "gate_alarm_wire",
+      "zone_id": "gate",
+      "name": "Goblińska linka alarmowa",
+      "revealed_description": "Tuż za bramą biegnie nisko cienka, zabrudzona linka połączona z metalowymi blaszkami. Jej poruszenie zaalarmuje gobliny na dziedzińcu.",
+      "detection_observation_id": "search_gate_traps",
+      "activation_challenge_id": "closed_gate",
+      "required_item_id": "thieves_tools",
+      "disarm_check": {
+        "ability": "dexterity",
+        "skill": "sleight_of_hand",
+        "tool": "thieves_tools",
+        "dc": 12
+      },
+      "bypass_check": {
+        "ability": "dexterity",
+        "skill": "acrobatics",
+        "dc": 10
+      },
+      "disarm_intent_examples": [
+        "rozbrajam linkę alarmową",
+        "przecinam linkę tak żeby nie zadzwoniła",
+        "unieszkodliwiam mechanizm pułapki",
+        "używam narzędzi złodziejskich do rozbrojenia pułapki"
+      ],
+      "bypass_intent_examples": [
+        "ostrożnie omijam linkę",
+        "przechodzimy nad pułapką",
+        "pokazuję drużynie bezpieczne przejście obok linki"
+      ],
+      "trigger_intent_examples": [
+        "celowo uruchamiam linkę alarmową",
+        "pociągam za linkę żeby uruchomić alarm"
+      ],
+      "disarm_success_message": "Łotrzyca blokuje blaszki i przecina linkę bez najmniejszego brzęku. Alarm nie zadziała.",
+      "bypass_success_message": "Drużyna zapamiętuje położenie linki i ostrożnie przechodzi nad nią bez uruchamiania alarmu.",
+      "hazard": {
+        "id": "gate_alarm_wire_trigger",
+        "label": "Uruchomienie linki alarmowej",
+        "trigger": "failure",
+        "narration": "Linka napręża się, a metalowe blaszki zaczynają podnosić. Bohater próbuje złapać mechanizm, zanim rozlegnie się alarm.",
+        "saving_throw": {
+          "ability": "dexterity",
+          "dc": 12,
+          "damage_on_success": "none",
+          "success_effect_label": "alarm zatrzymany w ostatniej chwili",
+          "failure_effect_label": "głośny alarm"
+        },
+        "damage": {
+          "fixed": 0,
+          "damage_type": "bludgeoning"
+        },
+        "success_message": "Bohater chwyta blaszki, zanim zdążą o siebie uderzyć.",
+        "failure_message": "Metaliczne brzęczenie niesie się po całym dziedzińcu.",
+        "success_effects": [
+          {
+            "type": "set_flag",
+            "parameters": {
+              "key": "gate_alarm_caught",
+              "value": true
+            }
+          }
+        ],
+        "failure_effects": [
+          {
+            "type": "add_noise",
+            "parameters": {
+              "challenge_id": "closed_gate",
+              "value": 3
+            }
+          },
+          {
+            "type": "set_flag",
+            "parameters": {
+              "key": "gate_alarm_triggered",
+              "value": true
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "id": "healers_kit",
+  "name": "Zestaw uzdrowiciela",
+  "kind": "tool",
+  "description": "Bandaże, maści i szyny pozwalające ustabilizować nieprzytomną istotę bez testu Medicine. Jedna sztuka w ekwipunku oznacza jedno użycie.",
+  "properties": [],
+  "portable": true
+}

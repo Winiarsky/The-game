@@ -2,6 +2,7 @@
   "id": "crossbow",
   "name": "Kusza",
   "kind": "weapon",
+  "hands_required": 2,
   "description": "Drewniano-metalowa kusza z napiętym mechanizmem.",
   "properties": ["rigid", "wooden", "metallic"],
   "attacks": [
@@ -9,9 +10,9 @@
       "id": "crossbow_shot",
       "name": "Kusza",
       "source_type": "weapon",
+      "attack_kind": "ranged",
       "ability": "dexterity",
       "range_feet": 80,
-      "attack_modifier": 5,
       "damage": {
         "dice": "1d8",
         "modifier": 3,

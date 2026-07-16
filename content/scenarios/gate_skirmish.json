@@ -24,7 +24,18 @@
         "wisdom": 12,
         "charisma": 10
       },
-      "item_refs": ["longsword", "crossbow", "strength_potion"]
+      "proficiency_bonus": 2,
+      "proficiencies": {
+        "saving_throws": ["strength", "constitution"],
+        "skills": ["athletics", "perception"],
+        "weapons": ["longsword", "dagger", "crossbow"],
+        "armor": ["light", "medium", "heavy", "shield"],
+        "tools": []
+      },
+      "item_refs": ["longsword", "dagger", "strength_potion", "sticky_flask"],
+      "inventory": [
+        {"item_ref": "crossbow", "equipped": false}
+      ]
     },
     {
       "id": "rogue",
@@ -44,7 +55,16 @@
         "wisdom": 14,
         "charisma": 12
       },
-      "item_refs": ["crossbow"]
+      "proficiency_bonus": 2,
+      "proficiencies": {
+        "saving_throws": ["dexterity", "intelligence"],
+        "skills": ["stealth", "sleight_of_hand", "perception"],
+        "expertise": ["stealth"],
+        "weapons": ["crossbow", "dagger"],
+        "armor": ["light"],
+        "tools": ["thieves_tools"]
+      },
+      "item_refs": ["crossbow", "dagger", "sticky_flask"]
     },
     {
       "id": "cleric",
@@ -63,6 +83,14 @@
         "intelligence": 10,
         "wisdom": 16,
         "charisma": 14
+      },
+      "proficiency_bonus": 2,
+      "proficiencies": {
+        "saving_throws": ["wisdom", "charisma"],
+        "skills": ["medicine", "religion"],
+        "weapons": [],
+        "armor": ["light", "medium", "shield"],
+        "tools": []
       },
       "spell_slots": {
         "1": 2
@@ -87,11 +115,11 @@
           "id": "sacred_flame",
           "name": "Święty płomień",
           "source_type": "spell",
+          "attack_kind": "ranged",
           "casting_kind": "cantrip",
           "prepared": true,
           "ability": "wisdom",
           "range_feet": 60,
-          "attack_modifier": 0,
           "save_ability": "dexterity",
           "save_damage_on_success": "none",
           "damage": {
@@ -104,18 +132,19 @@
           "id": "radiant_line",
           "name": "Smuga światła",
           "source_type": "spell",
+          "attack_kind": "ranged",
           "casting_kind": "leveled",
           "prepared": true,
           "ability": "wisdom",
           "range_feet": 30,
           "spell_level": 1,
-          "attack_modifier": 0,
           "save_ability": "dexterity",
           "save_damage_on_success": "half",
           "area": {
             "shape": "line",
             "length_feet": 30,
-            "width_feet": 5
+            "width_feet": 5,
+            "target_mode": "all_creatures"
           },
           "damage": {
             "dice": "1d8",
@@ -144,6 +173,7 @@
           "id": "bless_attack_bonus",
           "name": "Błogosławieństwo",
           "action_type": "concentration_attack_bonus",
+          "action_cost": "action",
           "label": "Błogosławieństwo",
           "value": 1,
           "target_faction": "ally",
@@ -190,6 +220,7 @@
       "interaction_label": "Użyj rozbitego wozu",
       "blocks_movement": false,
       "cover_bonus": 2,
+      "projectile_cover_bonus": 2,
       "interactions": [
         {
           "id": "take_cover_cart",

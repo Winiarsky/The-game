@@ -1,0 +1,10 @@
+{
+  "id": "shield",
+  "name": "Tarcza",
+  "kind": "shield",
+  "hands_required": 1,
+  "armor_class_bonus": 2,
+  "armor_proficiency": "shield",
+  "description": "Metalowa tarcza zajmująca jedną rękę i zapewniająca +2 do KP.",
+  "properties": ["rigid", "hard", "metallic"]
+}

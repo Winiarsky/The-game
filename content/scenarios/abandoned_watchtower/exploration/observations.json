@@ -1,6 +1,41 @@
 {
   "observations": [
     {
+      "id": "search_gate_traps",
+      "zone_id": "gate",
+      "challenge_id": "closed_gate",
+      "label": "Sprawdzenie przejścia pod kątem pułapek",
+      "description": "Bohater uważnie ogląda dół bramy, szczeliny i podłoże po drugiej stronie, szukając linek, nacisków oraz prowizorycznych alarmów.",
+      "ability": "wisdom",
+      "skill": "perception",
+      "participants": "single_actor",
+      "aggregation": "lead_result",
+      "failure_message": "Nie dostrzegasz niczego rozstrzygającego. Nie oznacza to jednak, że przejście na pewno jest bezpieczne.",
+      "intent_examples": [
+        "szukam pułapek przy bramie",
+        "sprawdzam przejście pod kątem pułapek",
+        "oglądam ziemię za bramą czy nie ma linki",
+        "szukam mechanizmu alarmowego",
+        "ostrożnie badam czy wejście jest zabezpieczone"
+      ],
+      "facts": [
+        {
+          "id": "gate_alarm_wire_found",
+          "minimum_total": 13,
+          "reveal_flag": "gate_alarm_wire_found",
+          "narration": "W cieniu tuż za bramą zauważasz cienką, zabrudzoną linkę połączoną z metalowymi blaszkami. To prosty gobliński alarm.",
+          "effects": [
+            {
+              "type": "reveal_trap",
+              "parameters": {
+                "trap_id": "gate_alarm_wire"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "look_through_gate_gap",
       "zone_id": "gate",
       "challenge_id": "closed_gate",

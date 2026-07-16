@@ -36,6 +36,7 @@ class UiSessionView:
     pending_encounter: dict[str, object] | None
     exploration_setup: dict[str, object] | None
     encounter_setup: dict[str, object] | None
+    encounter_stealth: dict[str, object] | None
     encounter_initiative: dict[str, object] | None
     combat: dict[str, object] | None
     board: dict[str, object]
@@ -72,6 +73,7 @@ class UiSessionView:
             "pending_encounter": self.pending_encounter,
             "exploration_setup": self.exploration_setup,
             "encounter_setup": self.encounter_setup,
+            "encounter_stealth": self.encounter_stealth,
             "encounter_initiative": self.encounter_initiative,
             "combat": self.combat,
             "board": self.board,

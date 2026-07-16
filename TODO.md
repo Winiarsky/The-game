@@ -17,7 +17,7 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 
 - [x] Replace the historical milestone roadmap with the mechanics-first master roadmap.
 - [x] Add a living D&D implementation matrix separating stable MVP, partial, fixture, and missing systems.
-- [ ] Lock the first full release to a documented rules baseline; recommended: D&D 5e 2014.
+- [x] Lock the first full release rules baseline to D&D 5e 2014.
 - [ ] Decide and document the licensing/source-pack strategy for the target content catalog.
 - [ ] Define schema versions, stable content ids, and migration rules for content and save snapshots.
 - [x] Add the versioned material-property catalog and schemas for item definitions, item instances, and scene fixtures.
@@ -39,7 +39,8 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [x] Carry exact reconnaissance into a one-use initiative advantage for its observer in the matching encounter.
 - [x] Keep the wounded scout hidden until the gate encounter is won instead of revealing it when the gate opens.
 - [x] Add a scenario-driven encounter-opening stage with initiative disadvantage for the surprised side.
-- [ ] [Deferred rules fidelity] Add optional per-creature D&D 5e surprise detection when a scenario needs exact Stealth vs passive Perception.
+- [x] Bridge scenario-driven quiet encounter openings into optional per-character Stealth vs passive Perception before initiative.
+- [ ] [Deferred rules fidelity] Replace side-wide initiative disadvantage with the full per-creature D&D 5e 2014 surprised condition when a scenario needs exact rules fidelity.
 - [x] Replace text-only exploration materials and predefined temporary-item templates with deterministic property-based crafting.
 - [x] Persist component reservations and dynamically crafted temporary items in scenario snapshots.
 - [x] Persist runtime fixture state changes once fixture detachment and destruction actions are implemented.
@@ -49,7 +50,34 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [x] Implement automatic pre-scenario long rest and content-driven short rest independently from classes.
 - [x] Extend the duration/recovery model with scenario-end expiration and recovery policies.
 - [x] Add a versioned actor/scenario snapshot and deterministic round-trip test.
-- [ ] Complete actor fundamentals: proficiency profiles, skills, 0 HP, stabilization, and death saves.
+- [x] Add actor life states at 0 HP, death saves, stabilization, massive damage, and recovery through healing.
+- [x] Add unconscious attack consequences and combat stabilization with Medicine or a healer's kit.
+- [x] Represent equipped weapons dropped at 0 HP as scene-positioned combat objects persisted in snapshots.
+- [x] Add contextual combat field/self-action menus for overlapping field intents with arrow/Enter/Escape control.
+- [x] Add compound approach-and-interact plans with path cost, range validation, and opportunity-attack interruption.
+- [x] Route the watchtower cart and rubble through contextual combat interactions while keeping the fallen gate non-interactive.
+- [x] Implement dropped-weapon pickup as the first inventory interaction using the contextual field menu.
+- [x] Add explicit equip/swap/drop weapon actions to the self-action equipment menu.
+- [x] Add geometric projectile cover and ranged-attack-in-melee disadvantage with visible combat previews.
+- [x] Add D&D 5e 2014 Hide/Search with per-observer detection, passive Perception, movement/attack reveal, and enemy Search.
+- [x] Add a shared combat condition state and D&D 5e 2014 Prone rules for movement, attacks, AI, UI, and snapshots.
+- [x] Complete the actor proficiency-profile vertical slice for skills, expertise, saves, weapons, armor, and tools.
+- [x] Add tool proficiency checks and a generic opposed-check resolver as groundwork for Grapple and Shove.
+- [x] Implement D&D 5e 2014 Shove with Athletics contest, prone/push modes, forced movement validation, and combat UI.
+- [x] Implement D&D 5e 2014 Grapple with sourced condition state, escape action, zero target speed, dragging, snapshots, and combat UI.
+- [x] Enable D&D 5e 2014 optional flanking by default for player and enemy melee attacks, with visible advantage context.
+- [x] Add creature-size categories with Medium defaults, content/snapshot/UI support, and D&D 5e size eligibility for Grapple and Shove while keeping all actors one-tile.
+- [x] Add a grouped contextual combat action catalog with every legal weapon source, maneuvers, spells, support actions, and content-defined targeted item actions.
+- [x] Add explicit main/off-hand slots, one- and two-handed equipment plans, visible hand occupancy, and free-hand validation for Grapple.
+- [x] Add D&D 5e 2014 two-weapon bonus-action rules with light melee weapon validation, a per-turn trigger, visible contextual UI, bonus-action consumption, and off-hand damage rules.
+- [x] Add D&D 5e 2014 versatile-weapon attack variants that require a free second hand and expose the stronger damage die in combat UI.
+- [x] Add shields as held equipment with don/doff action cost, proficiency validation, effective AC, hand conflicts, UI, content, and snapshots.
+- [x] Add typed damage components with D&D 5e 2014 resistance, immunity, vulnerability, content/snapshot support, and visible damage breakdowns.
+- [x] Unify saving-throw requests/results and add enemy effects that pause for a physical player d20 before applying save-adjusted typed damage.
+- [x] Add data-driven exploration hazards triggered by failed checks, with a visible physical saving throw and save-adjusted typed damage.
+- [x] Add save-dependent exploration hazard effects, persistent actor conditions, snapshot support, and an exploration-to-combat condition bridge.
+- [x] Add data-driven exploration traps with detection, disarm/bypass/trigger actions, hazard activation, snapshots, and an alarm-wire reference fixture.
+- [x] Close the combat turn-economy MVP with explicit action costs, data-driven Use an Object, separate draw/stow interactions, and visible UI costs.
 
 ## Completed Work And Deferred Backlog
 
@@ -134,6 +162,10 @@ obowiązują `Current Roadmap Focus` oraz etapy z `ROADMAP.md`.
 - [x] Add Disengage player combat action as a turn-end status effect.
 - [x] Add opportunity attack reaction tracking and player movement confirmation.
 - [x] Add hero opportunity attack choice during enemy movement preview.
+- [x] Add explicit melee reach to attack sources, legal targeting, opportunity threats, enemy positioning, UI, and reference content.
+- [x] Apply half and three-quarters cover to Dexterity saves for single-target and area spells, using each effect's point of origin.
+- [x] Complete area-spell MVP geometry with line width, expanding cones, line of effect, data-driven target modes, and visible friendly fire.
+- [x] Add Attack action budgets, Extra Attack-ready actors, attack-replacing Shove/Grapple, split movement between attacks, and data-driven monster Multiattack.
 - [x] Add combat Help action with ally advantage against a chosen target.
 - [x] Add combat Ready action for prepared attacks triggered during enemy turns.
 - [x] Add full advantage/disadvantage d20 input and resolution for combat attacks.

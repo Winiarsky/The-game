@@ -5,8 +5,9 @@ from random import Random
 from typing import Protocol
 
 from dnd_board_game.actions import ActionResourceResolver
-from dnd_board_game.actors import Actor, Faction, spell_is_prepared
+from dnd_board_game.actors import Actor, Faction, saving_throw_roll_modifiers, spell_is_prepared
 from dnd_board_game.combat import (
+    ActionEconomyCost,
     ActiveCombatEffect,
     AppliedDamageResult,
     CombatState,
@@ -14,7 +15,7 @@ from dnd_board_game.combat import (
     can_consume_spell_resource,
     current_actor,
     replace_actor,
-    use_turn_action,
+    use_action_economy_cost,
 )
 from dnd_board_game.inventory import consume_inventory_item, has_inventory_quantity
 from dnd_board_game.rules import (
@@ -26,9 +27,7 @@ from dnd_board_game.rules import (
     EffectSource,
     EffectSourceType,
     RollModifier,
-    RollModifierType,
     apply_active_effect,
-    ability_modifier,
     expire_active_effects,
     resolve_d20_roll,
 )
@@ -43,6 +42,7 @@ class CombatActionSpec(Protocol):
     spell_level: int
     prepared: bool
     source_item_id: str | None
+    action_cost: ActionEconomyCost
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,7 +98,7 @@ class PlayerCombatResourceFlowService:
             action.source_item_id,
         ):
             raise ValueError("Ten przedmiot został już zużyty.")
-        action_result = use_turn_action(state)
+        action_result = use_action_economy_cost(state, _action_cost(action))
         if not action_result.accepted:
             raise ValueError(action_result.message)
         updated_state = action_result.state
@@ -203,6 +203,7 @@ class PlayerCombatResourceFlowService:
             state,
             caster,
             spell_level=action.spell_level,
+            action_cost=_action_cost(action),
         )
         effect = ActiveCombatEffect(
             id=f"concentration_attack_bonus:{caster.id}:{target.id}:{action.id}",
@@ -339,17 +340,7 @@ class PlayerCombatResourceFlowService:
         natural_roll: int,
     ) -> CombatResourceTransition:
         actor = _actor_by_id(state, actor_id)
-        modifier = ability_modifier(actor.ability_scores.constitution)
-        request = D20RollRequest(
-            modifiers=(
-                RollModifier(
-                    "Modyfikator Kondycji",
-                    modifier,
-                    RollModifierType.ABILITY,
-                    stacking_key="ability:constitution",
-                ),
-            )
-        )
+        request = D20RollRequest(modifiers=saving_throw_roll_modifiers(actor, "constitution"))
         roll = resolve_d20_roll(D20RollInput(request, int(natural_roll)))
         success = roll.total >= int(dc)
         effect_labels = tuple(
@@ -369,7 +360,8 @@ class PlayerCombatResourceFlowService:
             else f"koncentracja przerwana: {', '.join(effect_labels) or 'efekt'}"
         )
         message = (
-            f"{actor.name}: CON save {roll.natural_roll} + {modifier} = {roll.total} / "
+            f"{actor.name}: CON save {roll.natural_roll} "
+            f"{_modifier_breakdown_text(roll.breakdown.active_modifiers)} = {roll.total} / "
             f"ST {dc}; {result_text}."
         )
         return CombatResourceTransition(
@@ -386,12 +378,21 @@ class PlayerCombatResourceFlowService:
                 ("damage", damage),
                 ("dc", dc),
                 ("natural_roll", roll.natural_roll),
-                ("modifier", modifier),
+                ("modifier", roll.breakdown.modifier_total),
                 ("total", roll.total),
                 ("success", success),
             ),
             clear_pending_check=True,
         )
+
+
+def _modifier_breakdown_text(modifiers: tuple[RollModifier, ...]) -> str:
+    if not modifiers:
+        return "+ 0"
+    return " ".join(
+        f"{'+' if modifier.value >= 0 else '-'} {abs(modifier.value)} {modifier.label}"
+        for modifier in modifiers
+    )
 
 
 def concentration_effects_for_actor(
@@ -423,6 +424,10 @@ def _active_hero(state: CombatState) -> Actor:
     if actor.faction != Faction.ALLY:
         raise ValueError("To nie jest tura bohatera.")
     return actor
+
+
+def _action_cost(action: CombatActionSpec) -> ActionEconomyCost:
+    return ActionEconomyCost(getattr(action, "action_cost", ActionEconomyCost.ACTION))
 
 
 def _require_usable_action(actor: Actor, action: CombatActionSpec) -> None:

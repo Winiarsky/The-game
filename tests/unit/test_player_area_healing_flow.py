@@ -1,3 +1,4 @@
+from dataclasses import replace
 from random import Random
 
 import pytest
@@ -13,13 +14,15 @@ from dnd_board_game.combat import (
     HealingSourceType,
     InitiativeEntry,
     InitiativeOrder,
+    SceneObject,
     SpellArea,
     SpellAreaShape,
     current_actor,
     start_combat,
 )
+from dnd_board_game.combat.setup import SetupVisibility
 from dnd_board_game.rules import D20RollInput, D20RollRequest, resolve_d20_roll
-from dnd_board_game.world import BoardState, Coordinate
+from dnd_board_game.world import BLOCKING_TERRAIN, BoardState, Coordinate
 
 
 def _actor(
@@ -84,6 +87,17 @@ def _line_spell() -> AttackSource:
         save_ability="dexterity",
         save_dc=1,
         save_damage_on_success="half",
+    )
+
+
+def _cover(position: Coordinate, bonus: int = 2) -> SceneObject:
+    return SceneObject(
+        id="cover",
+        name="Osłona",
+        positions=(position,),
+        interaction_label="",
+        visibility=SetupVisibility.VISIBLE,
+        projectile_cover_bonus=bonus,
     )
 
 
@@ -173,6 +187,95 @@ def test_area_spell_flow_previews_confirms_and_applies_save_adjusted_damage() ->
     assert damaged.pending is None
     assert len(damaged.applied_damages) == 1
     assert dict(damaged.event_payload)["base_damage"] == 5
+
+
+def test_area_spell_includes_allies_in_friendly_fire_targets() -> None:
+    service = PlayerAreaHealingFlowService()
+    caster = _actor("caster", Faction.ALLY, Coordinate(0, 0))
+    ally = _actor("ally", Faction.ALLY, Coordinate(1, 0))
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(2, 0))
+    state = _state(caster, ally, enemy)
+
+    selected = service.select_area_spell(
+        state=state,
+        board=BoardState(),
+        source=_line_spell(),
+        position=Coordinate(1, 0),
+    )
+
+    assert selected.pending is not None
+    assert selected.pending.target_ids == ("ally", "enemy")
+
+    confirmed = service.confirm_area_spell(
+        state=state,
+        source=_line_spell(),
+        pending=selected.pending,
+        rng=Random(1),
+    )
+    assert confirmed.pending is not None
+    assert {save.actor_id for save in confirmed.pending.saving_throws} == {
+        "ally",
+        "enemy",
+    }
+
+
+def test_area_spell_applies_visible_half_cover_bonus_to_dexterity_save() -> None:
+    service = PlayerAreaHealingFlowService()
+    caster = _actor("caster", Faction.ALLY, Coordinate(0, 0))
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(2, 0))
+    state = _state(caster, enemy)
+    source = replace(_line_spell(), save_dc=9)
+
+    selected = service.select_area_spell(
+        state=state,
+        board=BoardState(),
+        source=source,
+        position=Coordinate(1, 0),
+        scene_objects=(_cover(Coordinate(1, 0)),),
+    )
+    assert selected.pending is not None
+    positioning = dict(selected.pending.target_positioning)["enemy"]
+    assert positioning.cover_bonus == 2
+
+    confirmed = service.confirm_area_spell(
+        state=state,
+        source=source,
+        pending=selected.pending,
+        rng=Random(1),
+    )
+
+    assert confirmed.pending is not None
+    save = confirmed.pending.saving_throws[0]
+    assert save.natural_roll == 5
+    assert save.total == 9
+    assert save.success is True
+    assert [(modifier.label, modifier.value) for modifier in save.modifiers][-1] == (
+        "Połowa osłony",
+        2,
+    )
+
+
+def test_radius_spell_excludes_target_with_total_cover_from_effect_origin() -> None:
+    service = PlayerAreaHealingFlowService()
+    caster = _actor("caster", Faction.ALLY, Coordinate(0, 0))
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(4, 0))
+    board = BoardState()
+    board.set_terrain(Coordinate(3, 0), BLOCKING_TERRAIN)
+    source = replace(
+        _line_spell(),
+        area=SpellArea(SpellAreaShape.RADIUS, radius_feet=10),
+    )
+
+    selected = service.select_area_spell(
+        state=_state(caster, enemy),
+        board=board,
+        source=source,
+        position=Coordinate(2, 0),
+    )
+
+    assert selected.pending is not None
+    assert enemy.position not in selected.pending.area_positions
+    assert selected.pending.target_ids == ("caster",)
 
 
 def test_cancel_transitions_leave_combat_state_unchanged() -> None:

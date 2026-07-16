@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from dnd_board_game.actors import Actor
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from dnd_board_game.actors import Actor
 
 
 def ability_modifier(score: int) -> int:

@@ -8,7 +8,17 @@ from dnd_board_game.llm.content_config import load_llm_condition_catalog, load_l
 def test_load_llm_effect_catalog_contains_known_primitives():
     catalog = load_llm_effect_catalog()
 
-    assert {"set_flag", "grant_resource", "remove_resource", "unlock_option", "reveal_point", "add_noise"}.issubset(catalog.ids)
+    assert {
+        "set_flag",
+        "grant_resource",
+        "remove_resource",
+        "unlock_option",
+        "reveal_point",
+        "add_noise",
+        "add_complication",
+        "move_party",
+        "reveal_trap",
+    }.issubset(catalog.ids)
     assert catalog.definition("grant_resource").parameters == {"resource_id": "string"}
 
 

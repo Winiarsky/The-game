@@ -4,7 +4,7 @@ from dataclasses import dataclass, replace
 from random import Random
 from typing import Mapping
 
-from dnd_board_game.actors import Actor, Faction
+from dnd_board_game.actors import Actor, Faction, saving_throw_roll_modifiers
 from dnd_board_game.rules import (
     ActiveEffect as ActiveCombatEffect,
     D20RollInput,
@@ -18,7 +18,6 @@ from dnd_board_game.rules import (
     RollModifier,
     RollModifierType,
     apply_active_effect,
-    ability_modifier,
     effect_expiration_label,
     effect_summary_label,
     effect_value_label,
@@ -29,7 +28,8 @@ from dnd_board_game.rules import (
 from dnd_board_game.world import Coordinate
 
 from .scene import SceneInteraction, SceneObject, available_scene_interactions, visible_scene_objects
-from .session import ActionUse, CombatState, replace_actor
+from .action_economy import ActionEconomyCost, action_economy_cost_label
+from .session import ActionUse, CombatState, can_pay_action_economy_cost, replace_actor
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +41,7 @@ class CombatInteractionOption:
     object_name: str
     target_position: Coordinate
     conditions: tuple[str, ...] = ()
+    action_cost: ActionEconomyCost = ActionEconomyCost.ACTION
 
     def as_payload(self) -> dict[str, object]:
         return {
@@ -51,6 +52,8 @@ class CombatInteractionOption:
             "object_name": self.object_name,
             "target_position": [self.target_position.col, self.target_position.row],
             "conditions": list(self.conditions),
+            "action_cost": self.action_cost.value,
+            "action_cost_label": action_economy_cost_label(self.action_cost),
         }
 
 
@@ -72,6 +75,7 @@ class CombatInteractionSavingThrow:
     modifier: int
     total: int
     success: bool
+    modifiers: tuple[RollModifier, ...] = ()
 
     def as_payload(self) -> dict[str, object]:
         return {
@@ -83,6 +87,14 @@ class CombatInteractionSavingThrow:
             "modifier": self.modifier,
             "total": self.total,
             "success": self.success,
+            "modifier_components": [
+                {
+                    "label": modifier.label,
+                    "value": modifier.value,
+                    "modifier_type": modifier.modifier_type.value,
+                }
+                for modifier in self.modifiers
+            ],
         }
 
 
@@ -92,7 +104,7 @@ def available_combat_interaction_options(
     actor: Actor,
     position: Coordinate,
 ) -> tuple[CombatInteractionOption, ...]:
-    if actor.faction != Faction.ALLY or state.turn_action.action_use != ActionUse.ACTION_AVAILABLE:
+    if actor.faction != Faction.ALLY:
         return ()
     scene_object = scene_object_at_position(scene_objects, position)
     if scene_object is None:
@@ -100,6 +112,8 @@ def available_combat_interaction_options(
     options: list[CombatInteractionOption] = []
     for interaction in available_scene_interactions(scene_object):
         if not interaction_conditions_met(interaction, scene_object, state, actor, position):
+            continue
+        if not can_pay_action_economy_cost(state, interaction.action_cost):
             continue
         options.append(
             CombatInteractionOption(
@@ -110,6 +124,7 @@ def available_combat_interaction_options(
                 object_name=scene_object.name,
                 target_position=position,
                 conditions=tuple(condition_label(condition.condition_type) for condition in interaction.conditions),
+                action_cost=interaction.action_cost,
             )
         )
     return tuple(options)
@@ -135,15 +150,20 @@ def combat_interaction_hint_positions(
     actor: Actor,
     reachable_tiles: frozenset[Coordinate] = frozenset(),
 ) -> tuple[Coordinate, ...]:
-    if actor.faction != Faction.ALLY or state.turn_action.action_use != ActionUse.ACTION_AVAILABLE:
+    if actor.faction != Faction.ALLY:
         return ()
-    positions = {
-        position
-        for scene_object in visible_scene_objects(scene_objects)
-        if available_scene_interactions(scene_object)
-        for position in scene_object.positions
-        if position in reachable_tiles or available_combat_interaction_options(scene_objects, state, actor, position)
-    }
+    candidate_actor_positions = frozenset((*reachable_tiles, actor.position))
+    positions: set[Coordinate] = set()
+    for scene_object in visible_scene_objects(scene_objects):
+        if not available_scene_interactions(scene_object):
+            continue
+        for position in scene_object.positions:
+            for candidate in candidate_actor_positions:
+                moved_actor = replace(actor, position=candidate)
+                moved_state = replace_actor(state, moved_actor)
+                if available_combat_interaction_options(scene_objects, moved_state, moved_actor, position):
+                    positions.add(position)
+                    break
     return tuple(sorted(positions))
 
 
@@ -266,17 +286,7 @@ def apply_combat_interaction_effects(
                 ability = str(params.get("saving_throw_ability", "dexterity"))
                 dc = int(save_dc)
                 natural_roll = saving_throw_natural_roll(target, saving_throw_rolls, rng)
-                modifier = ability_modifier_for_actor(target, ability)
-                request = D20RollRequest(
-                    modifiers=(
-                        RollModifier(
-                            f"Modyfikator {_ability_label_pl(ability)}",
-                            modifier,
-                            RollModifierType.ABILITY,
-                            stacking_key=f"ability:{ability}",
-                        ),
-                    )
-                )
+                request = D20RollRequest(modifiers=saving_throw_roll_modifiers(target, ability))
                 roll = resolve_d20_roll(D20RollInput(request, natural_roll))
                 check = resolve_saving_throw(roll, dc)
                 saving_throw = CombatInteractionSavingThrow(
@@ -285,13 +295,15 @@ def apply_combat_interaction_effects(
                     ability=ability,
                     dc=dc,
                     natural_roll=roll.natural_roll,
-                    modifier=modifier,
+                    modifier=roll.breakdown.modifier_total,
                     total=roll.total,
                     success=check.success,
+                    modifiers=roll.breakdown.active_modifiers,
                 )
                 roll_message = (
                     f"{target.name} wykonuje rzut obronny na {_ability_label_pl(ability)}: "
-                    f"d20 {roll.natural_roll}, modyfikator {format_signed(modifier)}, razem {roll.total} przeciw ST {dc}."
+                    f"d20 {roll.natural_roll}, modyfikator {format_signed(roll.breakdown.modifier_total)}, "
+                    f"razem {roll.total} przeciw ST {dc}."
                 )
                 if check.success:
                     messages.append(f"{roll_message} Sukces: gruz nie nakłada kary.")
@@ -426,6 +438,8 @@ def attack_source_with_target_combat_effects(
             and effect.target_actor_id == str(target.id)
         ):
             mode = _with_advantage(mode)
+    if target.is_unconscious():
+        mode = _with_advantage(mode)
     if not modifiers and mode == source.attack_roll_request.mode:
         return source
     return replace(
@@ -567,12 +581,6 @@ def saving_throw_natural_roll(actor: Actor, saving_throw_rolls: Mapping[str, int
     if rng is not None:
         return rng.randint(1, 20)
     raise ValueError("Brak wyniku rzutu obronnego przeciwnika dla interakcji.")
-
-
-def ability_modifier_for_actor(actor: Actor, ability: str) -> int:
-    if not hasattr(actor.ability_scores, ability):
-        raise ValueError(f"Nieznana cecha rzutu obronnego: {ability}.")
-    return ability_modifier(int(getattr(actor.ability_scores, ability)))
 
 
 def format_signed(value: int) -> str:

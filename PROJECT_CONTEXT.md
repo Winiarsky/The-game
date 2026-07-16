@@ -159,4 +159,4 @@ Na tym etapie nie robimy:
 - Strategia licencji i źródła danych D&D 5e pozostaje do ustalenia przed budową docelowego katalogu.
 - Snapshot pojedynczego scenariusza ma wersjonowany format v1 opisany w `docs/SAVE_FORMAT.md`;
   stan kampanii oraz migracje przyszłych wersji pozostają do zaprojektowania w M9.
-- Bazowa wersja zasad dla pierwszego pełnego wydania wymaga formalnego zatwierdzenia; `ROADMAP.md` rekomenduje D&D 5e 2014 ze względu na obecny kierunek implementacji.
+- Bazową wersją zasad dla pierwszego pełnego wydania jest D&D 5e 2014. Odstępstwa wymagane przez fizyczną planszę albo tempo gry zapisujemy jawnie w `GAME_DESIGN.md` i `docs/RULES_DECISIONS.md`.

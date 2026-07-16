@@ -3,19 +3,32 @@ from dataclasses import replace
 
 import pytest
 
-from dnd_board_game.combat import replace_actor, set_scene_flag
+from dnd_board_game.actors import CreatureSize, DamageAffinityProfile, DeathSaveState, ProficiencyProfile
+from dnd_board_game.combat import (
+    CombatCondition,
+    ConditionState,
+    HiddenState,
+    DamageType,
+    replace_actor,
+    set_scene_flag,
+)
 from dnd_board_game.exploration import (
     CraftingComponentSelection,
     CraftingDraft,
     EncounterEdge,
     EncounterEdgeType,
+    PrecombatStealthAttempt,
     build_crafting_source_registry,
     craft_temporary_item,
     discover_scene_source,
     FixtureOperation,
     apply_fixture_action,
     plan_fixture_action,
+    add_exploration_condition,
+    ExplorationTrapStatus,
+    set_trap_status,
 )
+from dnd_board_game.inventory import HandSlot
 from dnd_board_game.save import (
     SNAPSHOT_SCHEMA_VERSION,
     SessionSnapshot,
@@ -60,6 +73,132 @@ def test_snapshot_json_round_trip_is_deterministic(tmp_path):
 
     assert restored.as_dict() == snapshot.as_dict()
     assert restored.as_dict()["schema_version"] == SNAPSHOT_SCHEMA_VERSION
+    cleric = next(actor for actor in restored.actors if str(actor.id) == "cleric")
+    shield = next(item for item in cleric.inventory if item.id == "shield")
+    assert shield.armor_class_bonus == 2
+    assert shield.armor_proficiency == "shield"
+    assert len(shield.held_in) == 1
+
+
+def test_snapshot_round_trip_preserves_exploration_condition(tmp_path):
+    session = _session(tmp_path)
+    session.state = add_exploration_condition(
+        session.state,
+        "hero",
+        CombatCondition.PRONE,
+    )
+
+    restored = SessionSnapshot.from_dict(
+        session.create_snapshot().as_dict(),
+        base_state=session.state,
+    )
+
+    assert restored.exploration_state.condition_states == (
+        ConditionState("hero", CombatCondition.PRONE),
+    )
+
+
+def test_snapshot_round_trip_preserves_exploration_trap_state(tmp_path):
+    session = _session(tmp_path)
+    session.state = set_trap_status(
+        session.state,
+        "gate_alarm_wire",
+        ExplorationTrapStatus.REVEALED,
+    )
+
+    restored = SessionSnapshot.from_dict(
+        session.create_snapshot().as_dict(),
+        base_state=session.state,
+    )
+
+    assert restored.exploration_state.trap_states == session.state.trap_states
+
+
+def test_older_snapshot_without_actor_size_defaults_to_medium(tmp_path):
+    session = _session(tmp_path)
+    raw = session.create_snapshot().as_dict()
+    for actor in raw["actors"]:
+        actor.pop("size", None)
+        actor.pop("damage_affinities", None)
+
+    restored = SessionSnapshot.from_dict(raw, base_state=session.state)
+
+    assert all(actor.size == CreatureSize.MEDIUM for actor in restored.actors)
+    assert all(actor.damage_affinities == DamageAffinityProfile() for actor in restored.actors)
+
+
+def test_snapshot_round_trip_preserves_skill_profile_and_combat_hidden_state(tmp_path):
+    session = _session(tmp_path)
+    _start_scout_combat(session)
+    assert session.combat_state is not None
+    hero = next(actor for actor in session.combat_state.actors if str(actor.id) == "hero")
+    session.combat_state = replace_actor(
+        session.combat_state,
+        replace(
+            hero,
+            size=CreatureSize.LARGE,
+            damage_affinities=DamageAffinityProfile(
+                resistances=(DamageType.FIRE,),
+                immunities=(DamageType.POISON,),
+                vulnerabilities=(DamageType.COLD,),
+            ),
+            attacks_per_action=2,
+            proficiency_bonus=3,
+            proficiencies=ProficiencyProfile(
+                saving_throws=("dexterity",),
+                skills=("stealth",),
+                expertise=("stealth",),
+                weapons=("longsword",),
+                tools=("thieves_tools",),
+            ),
+        ),
+    )
+    session.combat_state = replace(
+        session.combat_state,
+        turn_action=replace(
+            session.combat_state.turn_action,
+            two_weapon_trigger_item_id="longsword",
+            attack_action_active=True,
+            attacks_used=1,
+            attacks_maximum=2,
+        ),
+        hidden_states=(HiddenState("hero", 21, ("goblin_a", "goblin_b")),),
+        condition_states=(
+            ConditionState("hero", CombatCondition.PRONE),
+            ConditionState("goblin_a", CombatCondition.GRAPPLED, "hero"),
+        ),
+    )
+
+    restored = SessionSnapshot.from_dict(session.create_snapshot().as_dict(), base_state=session.state)
+
+    assert restored.combat_state is not None
+    restored_hero = next(actor for actor in restored.combat_state.actors if str(actor.id) == "hero")
+    assert restored_hero.proficiency_bonus == 3
+    assert restored_hero.attacks_per_action == 2
+    assert restored_hero.size == CreatureSize.LARGE
+    assert restored_hero.damage_affinities == DamageAffinityProfile(
+        resistances=(DamageType.FIRE,),
+        immunities=(DamageType.POISON,),
+        vulnerabilities=(DamageType.COLD,),
+    )
+    assert restored_hero.skill_expertise == ("stealth",)
+    assert restored_hero.proficiencies.saving_throws == ("dexterity",)
+    assert restored_hero.proficiencies.weapons == ("longsword",)
+    assert restored_hero.proficiencies.tools == ("thieves_tools",)
+    restored_longsword = next(item for item in restored_hero.inventory if item.id == "longsword")
+    assert restored_longsword.hands_required == 1
+    assert restored_longsword.held_in == (HandSlot.MAIN_HAND,)
+    assert restored.combat_state.turn_action.two_weapon_trigger_item_id == "longsword"
+    assert restored.combat_state.turn_action.attack_action_active is True
+    assert restored.combat_state.turn_action.attacks_used == 1
+    assert restored.combat_state.turn_action.attacks_maximum == 2
+    assert restored.combat_state.hidden_states == (
+        HiddenState("hero", 21, ("goblin_a", "goblin_b")),
+    )
+    assert restored.combat_state.condition_states == (
+        ConditionState("hero", CombatCondition.PRONE),
+        ConditionState("goblin_a", CombatCondition.GRAPPLED, "hero"),
+    )
 
 
 def test_snapshot_round_trip_preserves_temporary_scene_item(tmp_path):
@@ -112,12 +251,28 @@ def test_snapshot_round_trip_preserves_encounter_opening_resolution(tmp_path):
     )
     session.state_payload()
     session.resolve_encounter_opening()
+    assert session.pending_encounter is not None
+    session.pending_encounter = replace(
+        session.pending_encounter,
+        precombat_stealth_completed=True,
+        precombat_stealth_attempts=(
+            PrecombatStealthAttempt(
+                "rogue",
+                15,
+                20,
+                ("goblin_a", "goblin_b"),
+                (),
+            ),
+        ),
+    )
 
     restored = SessionSnapshot.from_dict(session.create_snapshot().as_dict(), base_state=session.state)
 
     assert restored.pending_encounter is not None
     assert restored.pending_encounter.opening_resolution is not None
     assert restored.pending_encounter.opening_resolution.outcome.value == "party_surprises_enemies"
+    assert restored.pending_encounter.precombat_stealth_completed is True
+    assert restored.pending_encounter.precombat_stealth_attempts[0].total == 20
 
 
 def test_snapshot_round_trip_preserves_found_scene_source_without_inventory_transfer(tmp_path):
@@ -242,6 +397,43 @@ def test_session_save_and_load_restores_active_combat(tmp_path):
     assert session.encounter_initiative_flow is not None
     assert session._active_encounter() is not None
     assert session.create_snapshot().as_dict() == expected
+
+
+def test_snapshot_round_trip_preserves_death_save_state(tmp_path):
+    session = _session(tmp_path)
+    _start_scout_combat(session)
+    assert session.combat_state is not None
+    active = session.combat_state.initiative_order.current_actor
+    dying = replace(
+        active,
+        hp=0,
+        uses_death_saves=True,
+        death_saves=DeathSaveState(successes=1, failures=2),
+    )
+    session.combat_state = replace_actor(session.combat_state, dying)
+
+    restored = SessionSnapshot.from_dict(session.create_snapshot().as_dict(), base_state=session.state)
+    restored_actor = next(actor for actor in restored.combat_state.actors if actor.id == active.id)
+
+    assert restored_actor.uses_death_saves is True
+    assert restored_actor.death_saves == DeathSaveState(successes=1, failures=2)
+
+
+def test_snapshot_round_trip_preserves_dropped_weapon(tmp_path):
+    session = _session(tmp_path)
+    _start_scout_combat(session)
+    assert session.combat_state is not None
+    armed = next(actor for actor in session.combat_state.actors if actor.inventory)
+    session.combat_state = replace_actor(session.combat_state, replace(armed, hp=0, uses_death_saves=True))
+
+    restored = SessionSnapshot.from_dict(session.create_snapshot().as_dict(), base_state=session.state)
+
+    assert restored.combat_state is not None
+    assert len(restored.combat_state.dropped_weapons) == 1
+    dropped = restored.combat_state.dropped_weapons[0]
+    assert dropped.source_actor_id == armed.id
+    assert dropped.weapon.equipped is False
+    assert dropped.position == armed.position
 
 
 def test_snapshot_rejects_unknown_version(tmp_path):

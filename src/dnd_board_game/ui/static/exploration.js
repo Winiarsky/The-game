@@ -337,10 +337,19 @@ function sessionLogSummary(type, payload) {
 }
 function sceneStatusHtml() {
   const items = state.scene_status || [];
-  if (!items.length) return '<span class="muted">Brak zmian.</span>';
+  const recoverable = (state.actors || []).flatMap(actor =>
+    (actor.conditions || [])
+      .filter(condition => condition.recoverable)
+      .map(condition => `<button class="secondary" onclick="recoverExplorationCondition('${esc(actor.id)}','${esc(condition.id)}')">${esc(actor.name)}: wstań</button>`)
+  );
+  if (!items.length && !recoverable.length) return '<span class="muted">Brak zmian.</span>';
   return `<div class="status-list">${items.map(item => `
     <div class="status-item"><b>${esc(item.label)}</b><span>${esc(item.value)}</span></div>
-  `).join('')}</div>`;
+  `).join('')}</div>${recoverable.length ? `<div class="row">${recoverable.join('')}</div>` : ''}`;
+}
+
+async function recoverExplorationCondition(actorId, condition) {
+  await api('/api/exploration/condition/recover', {actor_id: actorId, condition}, 'Usuwanie stanu...');
 }
 function flowPanelHtml() {
   const flow = state.flow || {};
@@ -672,6 +681,32 @@ function pendingHtml(pending) {
     lines.push('<p>Porażka oznacza brak rozstrzygającej informacji, a nie potwierdzenie, że zagrożenia nie ma.</p>');
     return lines.join('');
   }
+  if (pending.kind === 'trap' && pending.trap) {
+    const trap = pending.trap;
+    if (pending.stage === 'hazard_save' && pending.hazard) {
+      const save = pending.hazard.saving_throw || {};
+      return `<p><b>${esc(trap.name)} została uruchomiona.</b><br>${esc(pending.hazard.narration || '')}</p>
+        <p><b>Rzut obronny:</b> ${esc(save.ability_label || save.ability || '')}, ST ${esc(save.dc || '')}.</p>
+        <p>Wpisz fizyczny wynik d20, aby rozstrzygnąć alarm.</p>`;
+    }
+    const actionLabel = {
+      disarm: 'Rozbrojenie',
+      bypass: 'Bezpieczne ominięcie',
+      trigger: 'Celowe uruchomienie'
+    }[trap.action] || trap.action;
+    lines.push(`<p><b>${esc(trap.name)}</b><br>${esc(trap.description)}</p>`);
+    lines.push(`<p><b>Działanie:</b> ${esc(actionLabel)}.</p>`);
+    if (trap.dc != null) {
+      const skill = trap.skill ? `/${esc(trap.skill)}` : '';
+      const tool = trap.tool ? `, narzędzie: ${esc(trap.tool)}` : '';
+      lines.push(`<p><b>Test:</b> ${esc(trap.ability)}${skill}${tool}, ST ${esc(trap.dc)}.</p>`);
+      lines.push('<p><b>Porażka:</b> mechanizm zostanie uruchomiony i pojawi się osobny rzut obronny.</p>');
+    } else {
+      lines.push('<p>Ta decyzja nie wymaga testu, ale uruchomi mechanizm pułapki.</p>');
+    }
+    if (trap.required_item_id) lines.push(`<p><b>Wymaga:</b> ${esc(trap.required_item_id)}.</p>`);
+    return lines.join('');
+  }
   if (pending.kind === 'crafting' && pending.crafting) {
     const crafting = pending.crafting;
     const components = (crafting.components || []).map(component => {
@@ -691,8 +726,9 @@ function pendingHtml(pending) {
   }
   if (option.label) {
     const skill = option.skill ? `/${esc(option.skill)}` : '';
+    const toolProficiency = option.tool ? `, narzędzie: ${esc(option.tool_label || option.tool)}` : '';
     if (option.mechanic) lines.push(`<p><b>Mechanika:</b> ${esc(option.mechanic.label || option.mechanic.id)}.</p>`);
-    lines.push(`<p><b>Podejście:</b> ${esc(option.label)}. Test: ${esc(option.ability)}${skill}, ST ${esc(option.dc)}.</p>`);
+    lines.push(`<p><b>Podejście:</b> ${esc(option.label)}. Test: ${esc(option.ability)}${skill}${toolProficiency}, ST ${esc(option.dc)}.</p>`);
     if (option.roll_mode && option.roll_mode !== 'normal') lines.push(`<p><b>Tryb rzutu:</b> ${esc(option.roll_mode)}.</p>`);
     if (option.situational_modifiers && option.situational_modifiers.length) {
       lines.push(`<p><b>Modyfikatory sytuacyjne:</b> ${option.situational_modifiers.map(mod => `${esc(mod.label)} ${signedNumber(Number(mod.modifier || 0))}${mod.roll_mode && mod.roll_mode !== 'normal' ? `, ${esc(mod.roll_mode)}` : ''} (${esc(mod.source)}: ${esc(mod.reason)})`).join('; ')}</p>`);
@@ -725,6 +761,7 @@ function pendingTitle(pending) {
   if (pending.kind === 'crafting') return 'Warunki konstrukcji';
   if (pending.kind === 'npc') return 'Warunki interakcji';
   if (pending.kind === 'observation') return 'Warunki rozpoznania';
+  if (pending.kind === 'trap') return 'Interakcja z pułapką';
   if (pending.kind === 'source_selection') return 'Wybór znalezionego elementu';
   if (pending.kind === 'collection') return 'Potwierdzenie zabrania';
   return 'Warunki próby';
@@ -764,7 +801,7 @@ function resourceSummary(resource) {
   return `${esc(resource.label || resource.id)} (${effects.join(', ')})`;
 }
 function leadActorChoiceHtml() {
-  if (!state.pending || !['challenge', 'observation', 'collection'].includes(state.pending.kind) || state.pending.stage !== 'decision' || !state.actors || !state.actors.length) return '';
+  if (!state.pending || !['challenge', 'observation', 'collection', 'trap'].includes(state.pending.kind) || state.pending.stage !== 'decision' || !state.actors || !state.actors.length) return '';
   if (state.pending.kind === 'collection' && state.pending.collection && state.pending.collection.destination !== 'actor_inventory') return '';
   const selectedId = state.selected_lead_actor_id || (state.actors[0] && state.actors[0].id) || '';
   const options = state.actors.map(actor => `<option value="${esc(actor.id)}"${String(actor.id) === String(selectedId) ? ' selected' : ''}>${esc(actor.name)}</option>`).join('');
@@ -857,6 +894,21 @@ function toggleDecisionCorrection() {
 }
 function rollPromptHtml() {
   if (!state.pending) return '';
+  if (state.pending.stage === 'hazard_save') {
+    const hazard = state.pending.hazard || {};
+    const save = hazard.saving_throw || {};
+    const damage = hazard.damage || {};
+    const required = (state.required_rolls || [])[0] || {};
+    const modifiers = required.active_modifiers || [];
+    return `
+      <p><b>Zagrożenie: ${esc(hazard.label || '-')}</b></p>
+      <p>${esc(hazard.narration || '')}</p>
+      <p><b>Rzut obronny:</b> ${esc(save.ability_label || abilityLabel(save.ability))} przeciw ST ${esc(save.dc)}.</p>
+      <p><b>Modyfikator:</b> ${esc(signedNumber(required.modifier_total || 0))} — ${modifiers.map(mod => `${esc(mod.label)} ${esc(signedNumber(mod.value || 0))}`).join(', ') || 'bez premii'}.</p>
+      <p><b>Sukces:</b> ${esc(save.success_effect_label || 'brak efektu')}. <b>Porażka:</b> ${esc(save.failure_effect_label || 'pełny efekt')}.</p>
+      <p><b>Ryzyko obrażeń:</b> ${esc(damage.dice || damage.fixed || 0)}${Number(damage.modifier || 0) ? ` ${esc(signedNumber(damage.modifier))}` : ''} ${esc(damage.damage_type || '')}.</p>
+    `;
+  }
   if (state.pending.stage === 'breakage') {
     const info = state.pending.breakage || {};
     return `<p><b>Test trwałości:</b> rzuć k100 dla ${esc(info.item_label || info.item_id || 'przedmiotu')}. Wynik ${esc(info.chance_percent || 0)} lub mniej oznacza uszkodzenie.</p>`;
@@ -876,6 +928,14 @@ function rollPromptHtml() {
     majority: 'sukces, jeśli zda co najmniej połowa'
   }[plan.aggregation] || plan.aggregation || '';
   const names = (state.required_rolls || []).map(r => r.actor_name).join(', ');
+  const rollBreakdowns = (state.required_rolls || []).map(required => {
+    const active = required.active_modifiers || [];
+    const ignored = required.ignored_modifiers || [];
+    const ignoredText = ignored.length
+      ? `; nie sumuje się: ${ignored.map(mod => `${esc(mod.label)} ${esc(signedNumber(mod.value))}`).join(', ')}`
+      : '';
+    return `<li><b>${esc(required.actor_name)}:</b> ${esc(signedNumber(required.modifier_total || 0))} — ${active.map(mod => `${esc(mod.label)} ${esc(signedNumber(mod.value))}`).join(', ') || 'bez premii'}${ignoredText}</li>`;
+  }).join('');
   const mechanic = plan.mechanic || {};
   const mechanicHtml = mechanic.id ? `<p><b>Mechanika:</b> ${esc(mechanic.label || mechanic.id)}</p>` : '';
   const rollModeHtml = plan.roll_mode && plan.roll_mode !== 'normal' ? `<p><b>Tryb rzutu:</b> ${esc(plan.roll_mode)}.</p>` : '';
@@ -897,7 +957,8 @@ function rollPromptHtml() {
         return `${esc(bonus.actor_name || '')}: ${esc(bonus.label || bonus.source_id)} ${signedNumber(Number(bonus.modifier || 0))}${spellCost}`;
       }).join('; ')}</p>`
     : '';
-  return `${mechanicHtml}${rollModeHtml}<p><b>Format rzutu:</b> ${esc(participants)}${aggregation ? `, ${esc(aggregation)}` : ''}.</p><p><b>Rzucają:</b> ${esc(names || '-')}</p>${resourceHtml}${situationalHtml}${improvisedHtml}${bonusHtml}`;
+  const toolProficiencyHtml = plan.tool ? `<p><b>Biegłość narzędzia:</b> ${esc(plan.tool_label || plan.tool)}.</p>` : '';
+  return `${mechanicHtml}${rollModeHtml}<p><b>Format rzutu:</b> ${esc(participants)}${aggregation ? `, ${esc(aggregation)}` : ''}.</p><p><b>Rzucają:</b> ${esc(names || '-')}</p>${toolProficiencyHtml}${rollBreakdowns ? `<ul>${rollBreakdowns}</ul>` : ''}${resourceHtml}${situationalHtml}${improvisedHtml}${bonusHtml}`;
 }
 function latestResultMessage(state) {
   const messages = state.messages || [];
@@ -936,10 +997,10 @@ function encounterHtml() {
   if (!encounter) return '';
   if (state.combat) return combatStartHtml();
   const setup = state.encounter_setup;
+  const stealth = state.encounter_stealth;
   const initiative = state.encounter_initiative;
   const opening = encounter.opening || {};
   const setupHtml = (!opening.required || opening.resolved) ? encounterSetupHtml(setup) : '';
-  const initiativeHtml = encounterInitiativeHtml(setup, initiative);
   const combatHtml = combatStartHtml();
   return `
     <p><b>${esc(encounter.name)}</b></p>
@@ -948,7 +1009,8 @@ function encounterHtml() {
     <p><b>Scenariusz encountera:</b> ${esc(encounter.encounter_scenario)}</p>
     ${encounterOpeningHtml(opening)}
     ${setupHtml}
-    ${initiativeHtml}
+    ${encounterStealthHtml(setup, stealth)}
+    ${encounterInitiativeHtml(setup, initiative, stealth)}
     ${combatHtml}
     ${state.combat ? '' : `<details class="debug-panel"><summary>Komenda awaryjna terminala</summary><pre>${esc(encounter.command)}</pre></details>`}
   `;
@@ -1001,8 +1063,31 @@ function encounterSetupHtml(setup) {
       : '<button onclick="confirmEncounterSetup()">Potwierdź krok setupu</button>'}
   `;
 }
-function encounterInitiativeHtml(setup, initiative) {
+function encounterStealthHtml(setup, stealth) {
+  if (!setup || setup.status !== 'completed' || !stealth || state.combat) return '';
+  if (stealth.completed) {
+    const attempts = (stealth.actors || []).filter(actor => actor.attempted).length;
+    return `<div class="result"><b>Skradanie przed walką zakończone</b><br>Zapisane próby: ${attempts}. Wyniki przejdą do pierwszej rundy.</div>`;
+  }
+  const actors = (stealth.actors || []).map(actor => {
+    const result = actor.result || null;
+    if (result) {
+      const hidden = (result.hidden_from || []).map(item => item.actor_name).join(', ') || 'nikt';
+      const detected = (result.detected_by || []).map(item => item.actor_name).join(', ') || 'nikt';
+      return `<div class="status-item"><b>${esc(actor.actor_name)}</b><span>Stealth ${Number(result.total)} — ukryty przed: ${esc(hidden)}; wykrywają: ${esc(detected)}.</span></div>`;
+    }
+    return `<div class="status-item"><b>${esc(actor.actor_name)}</b><span>Modyfikator Stealth: ${signed(Number(actor.modifier || 0))}</span>${actor.can_attempt ? `<div class="row"><label>Wynik d20: <input id="precombat-stealth-${esc(actor.actor_id)}" type="number" min="1" max="20" value="10"></label><button onclick="submitPrecombatStealth('${esc(actor.actor_id)}')">Spróbuj się ukryć</button></div>` : ''}</div>`;
+  }).join('');
+  return `
+    <div class="message"><b>Skradanie przed walką</b><br>${esc(stealth.instruction || '')}</div>
+    <div class="status-list">${actors}</div>
+    <button class="secondary" onclick="finishPrecombatStealth()">Zakończ etap i przejdź do inicjatywy</button>
+    <p class="muted">Niewykorzystane próby przepadają po zakończeniu tego etapu.</p>
+  `;
+}
+function encounterInitiativeHtml(setup, initiative, stealth) {
   if (!setup || setup.status !== 'completed' || state.combat) return '';
+  if (stealth && !stealth.completed) return '';
   if (!initiative) {
     return `
       <div class="message"><b>Inicjatywa</b><br>Setup zakończony. Teraz ustalcie kolejność tur.</div>
@@ -1038,6 +1123,7 @@ function combatStartHtml() {
   return `
     <div class="combat-stage">
       ${combatCurrentStepHtml(combat, finished, isAllyTurn, isEnemyTurn)}
+      ${combatDroppedWeaponsHtml(combat)}
       ${combatActiveEffectsHtml(combat)}
       ${combatLastResultHtml()}
     </div>
@@ -1060,12 +1146,24 @@ function combatStartHtml() {
         ${actors.map(actor => `
           <div class="status-item${actor.defeated ? ' defeated' : ''}">
             <b>${esc(actor.name)} ${actor.id === combat.current_actor.id ? '(tura)' : ''}</b>
-            <span>${esc(actor.faction)} | HP ${esc(actorHpLabel(actor))} / AC ${esc(actor.ac)} | pole (${esc(actor.position[0])},${esc(actor.position[1])})</span>
-            ${statusChipsHtml(actor.status_chips || actorEffectChips(actor), 'Brak aktywnych statusów.')}
+            <span>${esc(actor.faction)} | rozmiar ${esc(actor.size_label || actor.size || '-')} | HP ${esc(actorHpLabel(actor))} / AC ${esc(actorAcLabel(actor))} | pole (${esc(actor.position[0])},${esc(actor.position[1])})</span>
+            ${damageAffinitiesHtml(actor)}
+            ${statusChipsHtml(combatActorChips(actor), 'Brak aktywnych statusów.')}
           </div>
         `).join('')}
       </div>
     </details>
+  `;
+}
+function combatDroppedWeaponsHtml(combat) {
+  const dropped = combat.dropped_weapons || [];
+  if (!dropped.length) return '';
+  return `
+    <div class="combat-last-result">
+      <h4>Broń na planszy</h4>
+      ${dropped.map(item => `<p><b>${esc(item.name)}</b> — pole (${esc(item.position[0])},${esc(item.position[1])}), upuszczono w rundzie ${esc(item.dropped_round)}</p>`).join('')}
+      <p class="muted">Podnoszenie i interakcję z tym polem dodamy po ustaleniu docelowego modelu interakcji.</p>
+    </div>
   `;
 }
 function combatCurrentStepHtml(combat, finished, isAllyTurn, isEnemyTurn) {
@@ -1090,6 +1188,7 @@ function combatMainPromptHtml(combat, finished, isAllyTurn, isEnemyTurn) {
 function combatPromptTitle(combat, finished, isAllyTurn, isEnemyTurn) {
   if (finished) return 'Walka zakończona';
   const actor = combat.current_actor || {};
+  if (combat.death_save_required) return `${actor.name || 'Bohater'}: rzut śmierci`;
   if (combat.pending_concentration_check) {
     const pendingActor = combat.pending_concentration_check.actor || {};
     return `${pendingActor.name || 'Bohater'}: test koncentracji`;
@@ -1097,6 +1196,7 @@ function combatPromptTitle(combat, finished, isAllyTurn, isEnemyTurn) {
   if (isEnemyTurn) {
     if (combat.pending_ready_attack) return `Tura ${actor.name || 'przeciwnika'}: Ready`;
     if (combat.pending_enemy_opportunity_attack) return `Tura ${actor.name || 'przeciwnika'}: reakcja bohatera`;
+    if (combat.pending_enemy_saving_throw) return `${(combat.pending_enemy_saving_throw.target || {}).name || 'Bohater'}: rzut obronny`;
     if (combat.enemy_turn_result) return `Tura ${actor.name || 'przeciwnika'}: potwierdź wynik`;
     if (combat.enemy_turn_intent) return `Tura ${actor.name || 'przeciwnika'}: zamiar`;
     if (combat.enemy_turn_preview) return `Tura ${actor.name || 'przeciwnika'}: potwierdź planszą`;
@@ -1114,8 +1214,14 @@ function combatPromptTitle(combat, finished, isAllyTurn, isEnemyTurn) {
       ? `Tura ${actor.name || 'gracza'}: obrażenia obszarowe`
       : `Tura ${actor.name || 'gracza'}: potwierdź obszar`;
   }
+  if (isAllyTurn && combat.context_menu) return `Tura ${actor.name || 'gracza'}: wybierz akcję`;
   if (isAllyTurn && combat.pending_opportunity_movement) return `Tura ${actor.name || 'gracza'}: atak okazyjny`;
   if (isAllyTurn && combat.pending_combat_help) return `Tura ${actor.name || 'gracza'}: Help`;
+  if (isAllyTurn && combat.pending_combat_shove) return `Tura ${actor.name || 'gracza'}: Shove`;
+  if (isAllyTurn && combat.pending_combat_grapple) return `Tura ${actor.name || 'gracza'}: Grapple`;
+  if (isAllyTurn && combat.pending_combat_skill_check) {
+    return `Tura ${actor.name || 'gracza'}: ${combat.pending_combat_skill_check.action === 'hide' ? 'Hide' : 'Search'}`;
+  }
   if (isAllyTurn && combat.pending_concentration_action) return `Tura ${actor.name || 'gracza'}: koncentracja`;
   if (isAllyTurn && combat.pending_combat_ready) return `Tura ${actor.name || 'gracza'}: Ready`;
   if (isAllyTurn && combat.pending_combat_interaction) return `Tura ${actor.name || 'gracza'}: wybierz interakcję`;
@@ -1126,6 +1232,10 @@ function combatPromptTitle(combat, finished, isAllyTurn, isEnemyTurn) {
 function combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn) {
   if (finished) return 'Zastosuj wynik walki, żeby wrócić do eksploracji.';
   const actor = combat.current_actor || {};
+  if (combat.death_save_required) {
+    const saves = actor.death_saves || {};
+    return `Rzuć d20. Wynik 10 lub więcej to sukces. Sukcesy: ${saves.successes || 0}/3, porażki: ${saves.failures || 0}/3.`;
+  }
   if (combat.pending_concentration_check) {
     return combat.pending_concentration_check.instruction || 'Rzuć CON save, żeby utrzymać koncentrację.';
   }
@@ -1146,6 +1256,9 @@ function combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn) {
       if (pendingOpportunity.stage === 'damage_roll') return `Trafienie atakiem okazyjnym. Rzuć obrażenia ${pendingOpportunity.damage_instruction || ''} i wpisz wynik.`;
       return `${attacker.name || 'Bohater'} wykonuje atak okazyjny. Rzuć d20 i wpisz naturalny wynik.`;
     }
+    if (combat.pending_enemy_saving_throw) {
+      return combat.pending_enemy_saving_throw.instruction || 'Rzuć fizyczne d20 i wpisz naturalny wynik rzutu obronnego.';
+    }
     if (combat.enemy_turn_result) return 'Przeczytaj wynik tury przeciwnika i potwierdź go Enterem albo przyciskiem.';
     const intent = combat.enemy_turn_intent || null;
     if (intent) return `${intent.message || 'Przeciwnik deklaruje zamiar.'} Potwierdź, żeby przejść do wykonania na planszy.`;
@@ -1159,6 +1272,9 @@ function combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn) {
     return 'Naciśnij Enter albo przycisk, żeby gra pokazała zamiar przeciwnika.';
   }
   if (!isAllyTurn) return 'Ten aktor nie ma automatycznych kontrolek w MVP. Możesz zakończyć turę.';
+  if (combat.context_menu) {
+    return 'Wybierz opcję strzałkami góra/dół i potwierdź Enterem. Escape wraca do wyboru pola.';
+  }
   if (combat.pending_opportunity_movement) {
     const pendingOpportunity = combat.pending_opportunity_movement;
     const names = (pendingOpportunity.threats || []).map(actor => actor.name).join(', ') || 'wróg';
@@ -1166,6 +1282,17 @@ function combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn) {
   }
   if (combat.pending_combat_help) {
     return 'Wybierz sojusznika i przeciwnika. Sojusznik dostanie przewagę na następny atak przeciw temu celowi.';
+  }
+  if (combat.pending_combat_shove) {
+    const shove = combat.pending_combat_shove;
+    return `${shove.attacker_name || 'Bohater'} wykonuje Strength (Athletics), a ${shove.target_name || 'cel'} broni się automatycznie przez ${(shove.defender_check || {}).label || 'Athletics/Acrobatics'}.`;
+  }
+  if (combat.pending_combat_grapple) {
+    const grapple = combat.pending_combat_grapple;
+    return `${grapple.actor_name || 'Bohater'} wykonuje ${(grapple.actor_check || {}).label || 'Athletics'}, a ${grapple.opponent_name || 'przeciwnik'} odpowiada automatycznie przez ${(grapple.opponent_check || {}).label || 'Athletics/Acrobatics'}.`;
+  }
+  if (combat.pending_combat_skill_check) {
+    return combat.pending_combat_skill_check.instruction || 'Rzuć d20 i wpisz naturalny wynik.';
   }
   if (combat.pending_concentration_action) {
     return 'Wybierz sojusznika. Czar zużyje akcję i slot, a wcześniejsza koncentracja tego aktora zostanie zakończona.';
@@ -1211,7 +1338,11 @@ function combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn) {
   const extraMovement = Number((combat.turn_action && combat.turn_action.extra_movement_feet) || 0);
   const actionUsed = combat.turn_action && combat.turn_action.action_use === 'action_used';
   if (preview) {
-    return `Wybrano ruch na (${preview.destination[0]},${preview.destination[1]}). Uruchom skan i kliknij pole docelowe, żeby zatwierdzić.`;
+    const dragged = preview.dragged_actor || null;
+    const draggedInstruction = dragged
+      ? ` Następnie przestaw ${dragged.name || 'chwytaną figurkę'} na różowe pole (${dragged.destination[0]},${dragged.destination[1]}).`
+      : '';
+    return `Wybrano ruch na (${preview.destination[0]},${preview.destination[1]}). Uruchom skan i kliknij pole docelowe, żeby zatwierdzić.${draggedInstruction}`;
   }
   if (actionUsed && remaining > 0) return `Akcja zużyta. Możesz jeszcze ruszyć się (${remaining} ft) albo zakończyć turę.`;
   if (actionUsed) return 'Akcja zużyta. Możesz zakończyć turę.';
@@ -1226,39 +1357,77 @@ function combatMiniStatusHtml(combat) {
   const actionUsed = combat.turn_action && combat.turn_action.action_use === 'action_used';
   const bonusActionUsed = combat.turn_action && combat.turn_action.bonus_action_use === 'action_used';
   const reactionAvailable = !combat.turn_action || combat.turn_action.reaction_available !== false;
+  const twoWeapon = combat.two_weapon || {};
+  const objectInteractionAvailable = !combat.turn_action || combat.turn_action.object_interaction_available !== false;
   const position = actor.position || ['-', '-'];
   return `
     <div class="combat-mini-status">
       <span>Runda ${esc(combat.round_number || '-')}</span>
       <span>${esc(actor.name || '-')}</span>
-      <span>HP ${esc(actorHpLabel(actor))} / AC ${esc(actor.ac)}</span>
+      <span>HP ${esc(actorHpLabel(actor))} / AC ${esc(actorAcLabel(actor))}</span>
       <span>Pole (${esc(position[0])},${esc(position[1])})</span>
-      ${actor.faction === 'ally' ? `<span>Akcja: ${actionUsed ? 'zużyta' : 'dostępna'}</span><span>Bonus: ${bonusActionUsed ? 'zużyta' : 'dostępna'}</span><span>Reakcja: ${reactionAvailable ? 'dostępna' : 'zużyta'}</span><span>Ruch: ${esc(remaining)} ft${extraMovement > 0 ? ` (+${esc(extraMovement)} Dash)` : ''}</span>` : ''}
+      ${actor.faction === 'ally' ? `<span>Akcja: ${actionUsed ? 'zużyta' : 'dostępna'}</span><span>Bonus: ${bonusActionUsed ? 'zużyta' : 'dostępna'}</span><span>Darmowa interakcja: ${objectInteractionAvailable ? 'dostępna' : 'zużyta'}</span><span>Reakcja: ${reactionAvailable ? 'dostępna' : 'zużyta'}</span><span>Ruch: ${esc(remaining)} ft${extraMovement > 0 ? ` (+${esc(extraMovement)} Dash)` : ''}${movement.speed_reduction === 'grappling' ? ` · Grapple ${esc(movement.base_speed_feet)}→${esc(movement.effective_speed_feet)} ft` : ''}</span>` : ''}
     </div>
-    ${statusChipsHtml(actor.status_chips || [], 'Brak statusów aktywnego aktora.')}
+    ${statusChipsHtml(combatActorChips(actor), 'Brak statusów aktywnego aktora.')}
   `;
 }
 function combatActorStatusHtml(combat) {
   const actor = combat.current_actor || {};
   const movement = combat.movement || {};
   const remaining = Number(movement.remaining_feet || 0);
+  const objectInteractionAvailable = !combat.turn_action || combat.turn_action.object_interaction_available !== false;
   const extraMovement = Number((combat.turn_action && combat.turn_action.extra_movement_feet) || 0);
   const actionUsed = combat.turn_action && combat.turn_action.action_use === 'action_used';
   const bonusActionUsed = combat.turn_action && combat.turn_action.bonus_action_use === 'action_used';
   const reactionAvailable = !combat.turn_action || combat.turn_action.reaction_available !== false;
+  const twoWeapon = combat.two_weapon || {};
   return `
-    <p><b>${esc(actor.name || '-')}</b> (${esc(actor.faction || '-')})</p>
+    <p><b>${esc(actor.name || '-')}</b> (${esc(actor.faction || '-')}, rozmiar ${esc(actor.size_label || actor.size || '-')})</p>
     <p>Runda ${esc(combat.round_number || '-')}, pole (${esc(actor.position ? actor.position[0] : '-')},${esc(actor.position ? actor.position[1] : '-')})</p>
-    <p>HP ${esc(actorHpLabel(actor))} / AC ${esc(actor.ac)}</p>
+    <p>HP ${esc(actorHpLabel(actor))} / AC ${esc(actorAcLabel(actor))}</p>
+    ${damageAffinitiesHtml(actor)}
     ${actorInventoryHtml(actor)}
-    ${actor.faction === 'ally' ? `<p>Akcja: ${actionUsed ? 'zużyta' : 'dostępna'} | Bonus action: ${bonusActionUsed ? 'zużyta' : 'dostępna'} | Reakcja: ${reactionAvailable ? 'dostępna' : 'zużyta'} | Ruch: ${esc(remaining)} ft${extraMovement > 0 ? ` (+${esc(extraMovement)} Dash)` : ''}</p>` : ''}
-    ${statusChipsHtml(actor.status_chips || [], 'Brak statusów aktywnego aktora.')}
+    ${actor.faction === 'ally' ? `<p>Akcja: ${actionUsed ? 'zużyta' : 'dostępna'} | Bonus action: ${bonusActionUsed ? 'zużyta' : 'dostępna'} | Darmowa interakcja: ${objectInteractionAvailable ? 'dostępna' : 'zużyta'} | Reakcja: ${reactionAvailable ? 'dostępna' : 'zużyta'} | Ruch: ${esc(remaining)} ft${extraMovement > 0 ? ` (+${esc(extraMovement)} Dash)` : ''}${movement.speed_reduction === 'grappling' ? ` | Grapple: szybkość ${esc(movement.base_speed_feet)} → ${esc(movement.effective_speed_feet)} ft` : ''}</p>${twoWeapon.available ? `<p><b>Atak drugą bronią dostępny:</b> ${(twoWeapon.source_names || []).map(esc).join(', ')} — wybierz przeciwnika.</p>` : ''}` : ''}
+    ${statusChipsHtml(combatActorChips(actor), 'Brak statusów aktywnego aktora.')}
   `;
+}
+function combatActorChips(actor) {
+  const chips = [...((actor && actor.status_chips) || actorEffectChips(actor || {}))];
+  if (actor && actor.hidden) {
+    const observers = (actor.hidden.hidden_from_actor_ids || []).join(', ');
+    chips.push({
+      label: `Ukryty (${actor.hidden.stealth_total})`,
+      tone: 'ready',
+      title: observers ? `Ukryty przed: ${observers}` : 'Ukryty',
+    });
+  }
+  return chips;
+}
+
+function damageAffinitiesHtml(actor) {
+  const profile = (actor && actor.damage_affinities) || {};
+  const rows = [
+    ['Odporności', profile.resistances || []],
+    ['Niewrażliwości', profile.immunities || []],
+    ['Podatności', profile.vulnerabilities || []],
+  ].filter(([, values]) => values.length);
+  if (!rows.length) return '';
+  return `<p class="muted">${rows.map(([label, values]) => `${esc(label)}: ${values.map(value => esc(value.label || value.id)).join(', ')}`).join(' | ')}</p>`;
 }
 function actorInventoryHtml(actor) {
   const items = actor && actor.inventory ? actor.inventory : [];
-  if (!items.length) return '';
-  return `<p><b>Ekwipunek:</b> ${items.map(item => `${esc(item.name || item.id)}${item.quantity !== undefined ? ` x${esc(item.quantity)}` : ''}${item.equipped === false ? ' (niezałożone)' : ''}`).join(', ')}</p>`;
+  const hands = (actor && actor.hands) || {};
+  const handItem = slot => slot && slot.item_name ? esc(slot.item_name) : 'wolna';
+  const heldLabel = item => {
+    const slots = item.held_in || [];
+    if (slots.length === 2) return ' (obie ręce)';
+    if (slots[0] === 'main_hand') return ' (główna ręka)';
+    if (slots[0] === 'off_hand') return ' (druga ręka)';
+    return item.equipped === false ? ' (niezałożone)' : '';
+  };
+  const handsHtml = `<p><b>Ręce:</b> główna — ${handItem(hands.main_hand)}, druga — ${handItem(hands.off_hand)}${Number(hands.reserved_hands || 0) > 0 ? `; chwyt: ${esc(hands.reserved_hands)} ręka` : ''}. Wolne: ${esc(hands.free_hands === undefined ? '-' : hands.free_hands)}.</p>`;
+  if (!items.length) return handsHtml;
+  return `${handsHtml}<p><b>Ekwipunek:</b> ${items.map(item => `${esc(item.name || item.id)}${item.quantity !== undefined ? ` x${esc(item.quantity)}` : ''}${heldLabel(item)}`).join(', ')}</p>`;
 }
 function statusChipsHtml(chips, emptyText) {
   const items = chips || [];
@@ -1345,7 +1514,19 @@ function actorHpLabel(actor) {
   if (!actor) return '-';
   const maxHp = actor.max_hp !== null && actor.max_hp !== undefined ? actor.max_hp : actor.hp;
   const temp = Number(actor.temp_hp || 0);
-  return `${actor.hp} / ${maxHp}${temp > 0 ? ` + ${temp} temp` : ''}${actor.defeated ? ' (pokonany)' : ''}`;
+  let stateLabel = '';
+  if (actor.dead) stateLabel = ' (martwy)';
+  else if (actor.death_saves && actor.death_saves.stable && actor.hp <= 0) stateLabel = ' (stabilny)';
+  else if (actor.death_save_required) stateLabel = ' (nieprzytomny)';
+  else if (actor.defeated) stateLabel = ' (pokonany)';
+  return `${actor.hp} / ${maxHp}${temp > 0 ? ` + ${temp} temp` : ''}${stateLabel}`;
+}
+function actorAcLabel(actor) {
+  if (!actor) return '-';
+  const ac = Number(actor.ac || 0);
+  const base = Number(actor.base_ac === undefined ? ac : actor.base_ac);
+  const equipmentBonus = Number(actor.equipment_ac_bonus || 0);
+  return equipmentBonus > 0 ? `${ac} (${base} + ekwipunek ${equipmentBonus})` : `${ac}`;
 }
 function combatLastResultHtml() {
   return `
@@ -1356,7 +1537,7 @@ function combatLastResultHtml() {
   `;
 }
 function latestCombatMessageHtml() {
-  const combatTitles = new Set(['Atak', 'Obrażenia', 'Ruch', 'Koniec tury', 'Atak przeciwnika', 'Obrażenia przeciwnika', 'Ruch przeciwnika', 'Tura przeciwnika', 'Atak okazyjny', 'Pomoc', 'Ready', 'Leczenie', 'Eliksir']);
+  const combatTitles = new Set(['Atak', 'Obrażenia', 'Ruch', 'Koniec tury', 'Atak przeciwnika', 'Efekt przeciwnika', 'Obrażenia przeciwnika', 'Ruch przeciwnika', 'Tura przeciwnika', 'Rzut obronny', 'Atak okazyjny', 'Pomoc', 'Ready', 'Leczenie', 'Eliksir', 'Rzut śmierci', 'Stabilizacja']);
   const messages = state.messages || [];
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     if (!combatTitles.has(messages[i].title)) continue;
@@ -1365,6 +1546,16 @@ function latestCombatMessageHtml() {
   return '<p class="combat-empty">Brak rezultatu w tej walce.</p>';
 }
 function combatPrimaryActionHtml(combat, isAllyTurn, isEnemyTurn) {
+  if (combat.death_save_required) {
+    const saves = (combat.current_actor && combat.current_actor.death_saves) || {};
+    return `
+      <p>Sukcesy: ${esc(saves.successes || 0)}/3 | Porażki: ${esc(saves.failures || 0)}/3</p>
+      <div class="row">
+        <label>Wynik d20: <input id="combat-death-save-roll" type="number" min="1" max="20" value="10"></label>
+        <button data-allow-busy="true" onclick="submitDeathSave()">Rozstrzygnij rzut śmierci</button>
+      </div>
+    `;
+  }
   if (combat.pending_concentration_check) {
     return pendingConcentrationCheckHtml(combat.pending_concentration_check);
   }
@@ -1374,6 +1565,9 @@ function combatPrimaryActionHtml(combat, isAllyTurn, isEnemyTurn) {
     }
     if (combat.pending_enemy_opportunity_attack) {
       return pendingEnemyOpportunityAttackHtml(combat.pending_enemy_opportunity_attack);
+    }
+    if (combat.pending_enemy_saving_throw) {
+      return pendingEnemySavingThrowHtml(combat.pending_enemy_saving_throw);
     }
     if (combat.enemy_turn_intent) {
       return enemyTurnIntentHtml(combat.enemy_turn_intent);
@@ -1401,11 +1595,23 @@ function combatPrimaryActionHtml(combat, isAllyTurn, isEnemyTurn) {
   if (!isAllyTurn) {
     return '<p class="muted">Ten aktor nie ma automatycznych kontrolek w MVP.</p><button data-allow-busy="true" onclick="finishCombatTurn()">Zakończ turę</button>';
   }
+  if (combat.context_menu) {
+    return combatContextMenuHtml(combat.context_menu);
+  }
   if (combat.pending_opportunity_movement) {
     return pendingOpportunityMovementHtml(combat.pending_opportunity_movement);
   }
   if (combat.pending_combat_help) {
     return pendingCombatHelpHtml(combat.pending_combat_help);
+  }
+  if (combat.pending_combat_shove) {
+    return pendingCombatShoveHtml(combat.pending_combat_shove);
+  }
+  if (combat.pending_combat_grapple) {
+    return pendingCombatGrappleHtml(combat.pending_combat_grapple);
+  }
+  if (combat.pending_combat_skill_check) {
+    return pendingCombatSkillCheckHtml(combat.pending_combat_skill_check);
   }
   if (combat.pending_concentration_action) {
     return pendingConcentrationActionHtml(combat.pending_concentration_action);
@@ -1428,18 +1634,99 @@ function combatPrimaryActionHtml(combat, isAllyTurn, isEnemyTurn) {
   const movement = combat.movement || {remaining_feet: 0, destinations: []};
   const preview = combat.movement_preview || null;
   const actionUsed = combat.turn_action && combat.turn_action.action_use === 'action_used';
+  const stealth = combat.stealth || {};
   return `
     ${preview ? `<p>Potwierdź pole: (${esc(preview.destination[0])},${esc(preview.destination[1])}), koszt ${esc(preview.cost_feet)} ft.</p>` : `<p>Ruch dostępny: ${esc(movement.remaining_feet || 0)} ft.</p>`}
+    ${!actionUsed ? combatStabilizationHtml(combat) : ''}
     <div class="row">
       <button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>
       ${!actionUsed ? combatSourceButtonsHtml(combat) : ''}
-      ${!actionUsed ? '<button class="secondary" data-allow-busy="true" onclick="startCombatReady()">Ready</button><button class="secondary" data-allow-busy="true" onclick="startCombatHelp()">Help</button><button class="secondary" data-allow-busy="true" onclick="useCombatDash()">Dash</button><button class="secondary" data-allow-busy="true" onclick="useCombatDodge()">Unik</button><button class="secondary" data-allow-busy="true" onclick="useCombatDisengage()">Odwrót</button>' : ''}
+      ${!actionUsed ? '<button class="secondary" data-allow-busy="true" onclick="startCombatReady()">Ready</button><button class="secondary" data-allow-busy="true" onclick="startCombatHelp()">Help</button>' : ''}
+      ${!actionUsed && stealth.hide_available ? '<button class="secondary" data-allow-busy="true" onclick="startCombatHide()">Hide</button>' : ''}
+      ${!actionUsed && stealth.search_available ? '<button class="secondary" data-allow-busy="true" onclick="startCombatSearch()">Search</button>' : ''}
+      ${!actionUsed ? '<button class="secondary" data-allow-busy="true" onclick="useCombatDash()">Dash</button><button class="secondary" data-allow-busy="true" onclick="useCombatDodge()">Unik</button><button class="secondary" data-allow-busy="true" onclick="useCombatDisengage()">Odwrót</button>' : ''}
       <button class="secondary" data-allow-busy="true" onclick="finishCombatTurn()">Zakończ turę</button>
     </div>
   `;
 }
+function combatStabilizationHtml(combat) {
+  const stabilization = combat.stabilization || {};
+  const targets = stabilization.targets || [];
+  if (!targets.length) return '';
+  const options = targets.map(target => `<option value="${esc(target.id)}">${esc(target.name)} (${esc(target.hp)} HP)</option>`).join('');
+  const kitUses = Number(stabilization.healers_kit_uses || 0);
+  const modifier = Number(stabilization.medicine_modifier || 0);
+  const modifierLabel = modifier >= 0 ? `+${modifier}` : `${modifier}`;
+  return `
+    <div class="combat-action-box">
+      <p><b>Stabilizacja nieprzytomnego sojusznika w zasięgu 5 ft</b></p>
+      <div class="row">
+        <select id="combat-stabilization-target">${options}</select>
+        <label>d20 Medicine: <input id="combat-stabilization-roll" type="number" min="1" max="20" value="10"></label>
+        <button class="secondary" data-allow-busy="true" onclick="submitCombatStabilization('medicine')">Medicine ${esc(modifierLabel)} · ST ${esc(stabilization.dc || 10)}</button>
+        ${kitUses > 0 ? `<button class="secondary" data-allow-busy="true" onclick="submitCombatStabilization('healers_kit')">Zestaw uzdrowiciela (${esc(kitUses)})</button>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function pendingCombatSkillCheckHtml(pending) {
+  const label = pending.action === 'hide' ? 'Stealth' : 'Perception';
+  return `
+    <div class="combat-action-box">
+      <p><b>${esc(pending.action === 'hide' ? 'Hide' : 'Search')}:</b> ${esc(pending.instruction || '')}</p>
+      <div class="row">
+        <label>d20 ${esc(label)}: <input id="combat-skill-check-roll" type="number" min="1" max="20" value="10"></label>
+        <button onclick="submitCombatSkillCheck()">Rozstrzygnij</button>
+        <button class="secondary" onclick="cancelCombatSkillCheck()">Anuluj</button>
+      </div>
+    </div>
+  `;
+}
+function pendingCombatShoveHtml(pending) {
+  const attacker = pending.attacker_check || {};
+  const defender = pending.defender_check || {};
+  const activeModifiers = (attacker.active_modifiers || [])
+    .map(mod => `${esc(mod.label)} ${signedNumber(Number(mod.value || 0))}`)
+    .join(', ');
+  return `
+    <div class="combat-action-box">
+      <p><b>Shove — ${esc(pending.mode_label || pending.mode)}:</b> ${esc(pending.attacker_name)} przeciw ${esc(pending.target_name)}.</p>
+      <p><b>Atakujący:</b> Strength (Athletics) ${signedNumber(Number(attacker.modifier_total || 0))}${activeModifiers ? ` (${activeModifiers})` : ''}.</p>
+      <p><b>Obrońca:</b> ${esc(defender.label || 'Athletics/Acrobatics')} ${signedNumber(Number(defender.modifier_total || 0))}; rzut wykona silnik.</p>
+      ${pending.push_destination ? `<p><b>Planowane pole po odepchnięciu:</b> (${esc(pending.push_destination[0])}, ${esc(pending.push_destination[1])}).</p>` : ''}
+      <div class="row">
+        <label>d20 Athletics: <input id="combat-shove-roll" type="number" min="1" max="20" value="10"></label>
+        <button onclick="submitCombatShove()">Rozstrzygnij</button>
+        <button class="secondary" onclick="cancelCombatShove()">Anuluj</button>
+      </div>
+    </div>
+  `;
+}
+function pendingCombatGrappleHtml(pending) {
+  const actor = pending.actor_check || {};
+  const opponent = pending.opponent_check || {};
+  const activeModifiers = (actor.active_modifiers || [])
+    .map(mod => `${esc(mod.label)} ${signedNumber(Number(mod.value || 0))}`)
+    .join(', ');
+  return `
+    <div class="combat-action-box">
+      <p><b>Grapple — ${esc(pending.mode_label || pending.mode)}:</b> ${esc(pending.actor_name)} przeciw ${esc(pending.opponent_name)}.</p>
+      <p><b>Aktywny bohater:</b> ${esc(actor.label || 'Athletics')} ${signedNumber(Number(actor.modifier_total || 0))}${activeModifiers ? ` (${activeModifiers})` : ''}.</p>
+      <p><b>Przeciwnik:</b> ${esc(opponent.label || 'Athletics/Acrobatics')} ${signedNumber(Number(opponent.modifier_total || 0))}; rzut wykona silnik.</p>
+      <div class="row">
+        <label>d20 ${esc(actor.label || 'Athletics')}: <input id="combat-grapple-roll" type="number" min="1" max="20" value="10"></label>
+        <button onclick="submitCombatGrapple()">Rozstrzygnij</button>
+        <button class="secondary" onclick="cancelCombatGrapple()">Anuluj</button>
+      </div>
+    </div>
+  `;
+}
 function combatActionDetailsHtml(combat, isAllyTurn, isEnemyTurn) {
+  if (combat.death_save_required) return '<p>Naturalne 1 daje dwie porażki. Naturalne 20 przywraca 1 HP. Trzy sukcesy stabilizują, a trzy porażki oznaczają śmierć.</p>';
+  if (combat.context_menu) return combatContextMenuDetailsHtml(combat.context_menu);
   if (combat.pending_concentration_check) return pendingConcentrationCheckDetailsHtml(combat.pending_concentration_check);
+  if (isEnemyTurn && combat.pending_enemy_saving_throw) return pendingEnemySavingThrowDetailsHtml(combat.pending_enemy_saving_throw);
   if (isEnemyTurn) return enemyTurnDetailsHtml(combat);
   if (!isAllyTurn) return '<p class="muted">Brak dodatkowych szczegółów dla tego aktora.</p>';
   if (combat.pending_opportunity_movement) return pendingOpportunityMovementDetailsHtml(combat.pending_opportunity_movement);
@@ -1517,8 +1804,16 @@ function sourceSummaryText(source) {
   if (source.resource_label) parts.push(source.resource_label);
   if (source.prepared === false) parts.push('nieprzygotowany');
   if (source.save_ability) parts.push(`save ${abilityLabel(source.save_ability)} ST ${source.save_dc || '-'}`);
-  if (source.area) parts.push(`obszar ${areaShapeLabel(source.area.shape)}`);
-  if (source.range_feet) parts.push(`${source.range_feet} ft`);
+  if (source.area) {
+    const area = source.area;
+    const dimensions = area.shape === 'radius'
+      ? `promień ${area.radius_feet} ft`
+      : `${area.length_feet} ft${area.shape === 'line' ? ` × ${area.width_feet} ft` : ''}`;
+    parts.push(`obszar ${areaShapeLabel(area.shape)} ${dimensions}`);
+    if (area.target_mode === 'all_creatures') parts.push('friendly fire');
+  }
+  if (source.attack_kind === 'melee' && source.reach_feet) parts.push(`reach ${source.reach_feet} ft`);
+  else if (source.range_feet) parts.push(`${source.range_feet} ft`);
   return parts.join(' · ');
 }
 function playerTurnDetailsHtml(combat) {
@@ -1534,6 +1829,7 @@ function playerTurnDetailsHtml(combat) {
   const actionUsed = combat.turn_action && combat.turn_action.action_use === 'action_used';
   const bonusActionUsed = combat.turn_action && combat.turn_action.bonus_action_use === 'action_used';
   const reactionAvailable = !combat.turn_action || combat.turn_action.reaction_available !== false;
+  const objectInteractionAvailable = !combat.turn_action || combat.turn_action.object_interaction_available !== false;
   const remaining = Number(movement.remaining_feet || 0);
   const extraMovement = Number((combat.turn_action && combat.turn_action.extra_movement_feet) || 0);
   const moveCount = (movement.destinations || []).length;
@@ -1545,11 +1841,11 @@ function playerTurnDetailsHtml(combat) {
     : 'brak';
   return `
     <p><b>Tura gracza:</b> ${esc(actor.name || '-')}</p>
-    <p><b>Akcja:</b> ${actionUsed ? 'zużyta' : 'dostępna'} | <b>Bonus action:</b> ${bonusActionUsed ? 'zużyta' : 'dostępna'} | <b>Reakcja:</b> ${reactionAvailable ? 'dostępna' : 'zużyta'} | <b>Ruch:</b> ${esc(remaining)} ft${extraMovement > 0 ? ` (+${esc(extraMovement)} Dash)` : ''}</p>
+    <p><b>Akcja:</b> ${actionUsed ? 'zużyta' : 'dostępna'} | <b>Bonus action:</b> ${bonusActionUsed ? 'zużyta' : 'dostępna'} | <b>Darmowa interakcja:</b> ${objectInteractionAvailable ? 'dostępna' : 'zużyta'} | <b>Reakcja:</b> ${reactionAvailable ? 'dostępna' : 'zużyta'} | <b>Ruch:</b> ${esc(remaining)} ft${extraMovement > 0 ? ` (+${esc(extraMovement)} Dash)` : ''}${movement.speed_reduction === 'grappling' ? ` | <b>Grapple:</b> szybkość ${esc(movement.base_speed_feet)} → ${esc(movement.effective_speed_feet)} ft` : ''}</p>
     ${inventory}
     ${slotSummary || concentration ? `<p><b>Magia:</b> ${slotSummary ? `ST czarów ${esc(actor.spell_save_dc || '-')}; ${slotSummary}` : ''}${concentration ? ` | Koncentracja: ${esc(concentration.label || '-')}` : ''}</p>` : ''}
     <p>Niebieskie pola: ruch (${esc(moveCount)} pól). Czerwone pola: legalne cele ataku. Turkusowe pola: legalne cele leczenia. Zielone pola: interakcje sceny. Żółte pola: środek albo kierunek czaru obszarowego.</p>
-    ${preview ? `<p>Wybrana ścieżka: (${esc(preview.destination[0])},${esc(preview.destination[1])}), koszt ${esc(preview.cost_feet)} ft.</p>` : ''}
+    ${preview ? `<p>Wybrana ścieżka: (${esc(preview.destination[0])},${esc(preview.destination[1])}), koszt ${esc(preview.cost_feet)} ft.${preview.dragged_actor ? ` Przestaw ${esc(preview.dragged_actor.name)} na różowe pole (${esc(preview.dragged_actor.destination[0])},${esc(preview.dragged_actor.destination[1])}).` : ''}</p>` : ''}
     <p><b>Atak:</b> ${esc(source.name || '-')}${source.damage_hint ? `, po trafieniu rzuć ${esc(source.damage_hint)}` : ''}</p>
     <p><b>Źródła ataku:</b> ${attackSources.map(sourceSummaryText).map(esc).join(', ') || 'brak'}</p>
     <p><b>Leczenie:</b> ${healingSources.map(item => `${sourceSummaryText(item)}${item.healing_hint ? ` · ${item.healing_hint}` : ''}`).map(esc).join(', ') || 'brak'}</p>
@@ -1575,7 +1871,7 @@ function enemyTurnDetailsHtml(combat) {
       ? `<p><b>Ruch:</b> (${esc(intent.destination[0])},${esc(intent.destination[1])}), koszt ${esc(intent.cost_feet)} ft.</p>`
       : '';
     const attackText = intent.target_name
-      ? `<p><b>Atak:</b> ${esc(source.name || '-')} ${targetText}. Premia do rzutu: ${esc(signedNumber(intent.attack_modifier || 0))}.</p>`
+      ? `<p><b>Atak:</b> ${esc(source.name || '-')} ${targetText}. Premia do rzutu: ${esc(signedNumber(intent.attack_modifier || 0))}.</p>${attackPositioningText(intent.positioning)}`
       : '';
     return `
       <p><b>Zamiar przeciwnika:</b> ${esc(intent.message || '')}</p>
@@ -1587,7 +1883,8 @@ function enemyTurnDetailsHtml(combat) {
   const result = combat.enemy_turn_result || null;
   if (result) {
     const target = result.target_name ? ` przeciwko ${esc(result.target_name)}` : '';
-    const hitText = result.hit === true ? (result.critical ? 'TRAFIENIE KRYTYCZNE' : 'TRAFIENIE') : (result.hit === false ? 'PUDŁO' : 'BRAK ATAKU');
+    const save = result.saving_throw_result || null;
+    const hitText = save ? (save.success ? 'SUKCES RZUTU OBRONNEGO' : 'PORAŻKA RZUTU OBRONNEGO') : (result.hit === true ? (result.critical ? 'TRAFIENIE KRYTYCZNE' : 'TRAFIENIE') : (result.hit === false ? 'PUDŁO' : 'BRAK ATAKU'));
     const rollHtml = result.natural_roll !== null && result.natural_roll !== undefined
       ? `<p><b>Rzut d20:</b> ${d20RollResultText(result)} | <b>Wynik końcowy:</b> ${esc(result.total)}</p>`
       : '';
@@ -1595,6 +1892,7 @@ function enemyTurnDetailsHtml(combat) {
       ? `<p><b>Obrażenia:</b> ${esc(result.damage)}</p>`
       : '';
     const damageResult = result.damage_result || null;
+    const damageBreakdown = damageResult ? damageBreakdownHtml(damageResult) : '';
     const hpHtml = damageResult
       ? `<p><b>HP celu:</b> ${esc(damageResult.hp_before)} -> ${esc(damageResult.hp_after)}${damageResult.defeated_by_damage ? ' | cel pokonany' : ''}</p>`
       : '';
@@ -1602,7 +1900,10 @@ function enemyTurnDetailsHtml(combat) {
       <p><b>Wynik tury przeciwnika:</b> ${hitText}</p>
       <p>${esc(result.enemy_name || 'Przeciwnik')}${target}</p>
       ${rollHtml}
+      ${save ? spellSavesHtml([save]) : ''}
+      ${attackPositioningText(result.positioning)}
       ${damageHtml}
+      ${damageBreakdown}
       ${hpHtml}
       <p class="muted">${esc(result.message || '')}</p>
     `;
@@ -1616,6 +1917,32 @@ function enemyTurnDetailsHtml(combat) {
   }
   return '<p>Enter albo przycisk wyliczy zamiar przeciwnika. Potem potwierdzisz ruch lub atak kliknięciem na planszy.</p>';
 }
+function attackPositioningText(positioning) {
+  if (!positioning) return '';
+  const coverNames = {none: 'brak', half: 'połowa', three_quarters: '3/4', total: 'pełna'};
+  const sources = positioning.cover_sources || [];
+  return `<p><b>Warunki pozycyjne:</b> osłona ${esc(coverNames[positioning.cover_level] || positioning.cover_level || 'brak')}${Number(positioning.cover_bonus || 0) ? ` (AC +${esc(positioning.cover_bonus)})` : ''}${sources.length ? ` — ${sources.map(esc).join(', ')}` : ''}; atak dystansowy w zwarciu: ${positioning.ranged_in_melee ? 'tak, utrudnienie' : 'nie'}; flankowanie: ${positioning.flanking ? 'tak, przewaga' : 'nie'}.</p>`;
+}
+function damageBreakdownHtml(result) {
+  const breakdown = (result && result.damage_breakdown) || {};
+  const components = breakdown.components || [];
+  if (!components.length) return '';
+  const adjustmentLabels = {
+    normal: 'bez modyfikacji',
+    resistance: 'odporność',
+    immunity: 'niewrażliwość',
+    vulnerability: 'podatność',
+    resistance_and_vulnerability: 'odporność i podatność',
+  };
+  const rows = components.map(component => {
+    const changed = Number(component.amount_before) !== Number(component.amount_applied);
+    const amounts = changed
+      ? `${esc(component.amount_before)} → ${esc(component.amount_applied)}`
+      : `${esc(component.amount_applied)}`;
+    return `${amounts} ${esc(component.damage_type_label || component.damage_type)}${component.adjustment !== 'normal' ? ` (${esc(adjustmentLabels[component.adjustment] || component.adjustment)})` : ''}`;
+  });
+  return `<p><b>Rozliczenie obrażeń:</b> ${rows.join(', ')}; razem ${esc(breakdown.total_before_reduction)} → ${esc(breakdown.total_applied)}.</p>`;
+}
 function enemyTurnIntentHtml(intent) {
   return `
     <button data-allow-busy="true" onclick="resolveEnemyTurn()">Potwierdź zamiar przeciwnika</button>
@@ -1624,6 +1951,28 @@ function enemyTurnIntentHtml(intent) {
 function enemyTurnResultHtml(result) {
   return `
     <button data-allow-busy="true" onclick="confirmEnemyTurnResult()">Potwierdź wynik przeciwnika</button>
+  `;
+}
+function pendingEnemySavingThrowHtml(pending) {
+  const request = pending.request || {};
+  const target = pending.target || {};
+  return `
+    <p>${esc(pending.instruction || '')}</p>
+    <div class="row">
+      <label>Naturalny wynik d20: <input id="enemy-saving-throw-roll" type="number" min="1" max="20" value="10"></label>
+      <button data-allow-busy="true" onclick="submitEnemySavingThrow()">Rozstrzygnij rzut</button>
+    </div>
+    <p class="muted">${esc(target.name || 'Bohater')} · ${esc(request.ability_label || abilityLabel(request.ability))} ${esc(signedNumber(pending.modifier || 0))} · ST ${esc(request.dc)}</p>
+  `;
+}
+function pendingEnemySavingThrowDetailsHtml(pending) {
+  const request = pending.request || {};
+  const components = pending.modifier_components || [];
+  return `
+    <p><b>Źródło:</b> ${esc(request.source_label || '-')}</p>
+    <p><b>Rzut:</b> ${esc(request.ability_label || abilityLabel(request.ability))} przeciw ST ${esc(request.dc)}.</p>
+    <p><b>Modyfikatory:</b> ${components.map(item => `${esc(item.label)} ${esc(signedNumber(item.value || 0))}`).join(', ') || esc(signedNumber(pending.modifier || 0))}.</p>
+    <p><b>Sukces:</b> ${esc(request.success_effect_label || 'brak efektu')}. <b>Porażka:</b> ${esc(request.failure_effect_label || 'pełny efekt')}.</p>
   `;
 }
 function pendingEnemyOpportunityAttackHtml(pending) {
@@ -1724,13 +2073,14 @@ function pendingConcentrationActionDetailsHtml(pending) {
 function pendingConcentrationCheckHtml(pending) {
   const actor = pending.actor || {};
   const modifier = Number(pending.modifier || 0);
+  const components = pending.modifier_components || [];
   return `
     <p>${esc(actor.name || 'Bohater')} utrzymuje koncentrację: ST ${esc(pending.dc)}.</p>
     <div class="row">
       <label>Wynik d20: <input id="concentration-check-roll" type="number" min="1" max="20" value="10"></label>
       <button onclick="submitConcentrationCheck()">Zapisz rzut</button>
     </div>
-    <p class="muted">Premia CON: ${esc(signedNumber(modifier))}. Sukces utrzymuje efekt, porażka go kończy.</p>
+    <p class="muted">Premia CON: ${esc(signedNumber(modifier))}${components.length ? ` (${components.map(item => `${esc(item.label)} ${esc(signedNumber(item.value))}`).join(', ')})` : ''}. Sukces utrzymuje efekt, porażka go kończy.</p>
   `;
 }
 function pendingConcentrationCheckDetailsHtml(pending) {
@@ -1739,6 +2089,7 @@ function pendingConcentrationCheckDetailsHtml(pending) {
   return `
     <p><b>Koncentrujący:</b> ${esc(actor.name || '-')}</p>
     <p><b>Obrażenia:</b> ${esc(pending.damage)} | <b>ST:</b> ${esc(pending.dc)} | <b>Premia CON:</b> ${esc(signedNumber(pending.modifier || 0))}</p>
+    <p><b>Składniki:</b> ${(pending.modifier_components || []).map(item => `${esc(item.label)} ${esc(signedNumber(item.value))}`).join(', ') || 'brak'}</p>
     <p><b>Efekty zagrożone:</b> ${effects.map(effect => esc(effect.label || effect.kind || effect.id)).join(', ') || 'brak'}</p>
   `;
 }
@@ -1828,8 +2179,10 @@ function pendingPlayerAttackHtml(pending) {
   if (pending.stage === 'confirm_attack') {
     const modifierLabel = signedNumber(pending.attack_modifier || 0);
     if (source.save_ability) {
+      const coverBonus = source.save_ability === 'dexterity' ? Number((pending.positioning || {}).cover_bonus || 0) : 0;
       return `
         <p>Cel: ${esc(target.name || '-')} | rzut obronny ${esc(abilityLabel(source.save_ability))} przeciw ST ${esc(pending.spell_save_dc || source.save_dc || '-')}</p>
+        ${coverBonus ? `<p>Osłona celu: +${esc(coverBonus)} do tego rzutu obronnego.</p>` : ''}
         <div class="row">
           <button data-allow-busy="true" onclick="confirmPlayerAttackTarget()">Potwierdź czar</button>
           <button class="secondary" data-allow-busy="true" onclick="cancelPlayerAttackTarget()">Anuluj wybór celu</button>
@@ -1888,10 +2241,12 @@ function pendingAreaSpellHtml(pending) {
   const source = pending.source || {};
   const targets = pending.targets || [];
   const targetText = targets.map(target => `${target.name} (${target.position[0]},${target.position[1]})`).join(', ') || 'brak celów';
+  const friendlyFire = areaSpellFriendlyFireHtml(pending);
   if (pending.stage === 'damage_roll') {
     return `
       <p>${esc(pending.damage_instruction || 'Wpisz obrażenia czaru obszarowego.')}</p>
       <p>Cele w obszarze: ${esc(targetText)}</p>
+      ${friendlyFire}
       ${spellSavesHtml(pending.saving_throws || [])}
       <div class="row">
         <label>Obrażenia: <input id="area-spell-damage-roll" type="number" min="0" value="${esc(defaultDamageValue(source))}"></label>
@@ -1903,6 +2258,8 @@ function pendingAreaSpellHtml(pending) {
   return `
     <p>Obszar: ${esc((pending.area_positions || []).map(position => `(${position[0]},${position[1]})`).join(', ') || '-')}</p>
     <p>Cele w obszarze: ${esc(targetText)}</p>
+    ${friendlyFire}
+    ${areaSpellCoverHtml(pending)}
     ${source.save_ability ? `<p>Rzut obronny: ${esc(abilityLabel(source.save_ability))} przeciw ST ${esc(pending.spell_save_dc || source.save_dc || '-')} | ${esc(saveSuccessLabel(source.save_damage_on_success))}</p>` : ''}
     <div class="row">
       <button data-allow-busy="true" onclick="confirmAreaSpell()">Potwierdź czar</button>
@@ -1918,8 +2275,28 @@ function pendingAreaSpellDetailsHtml(pending) {
     <p><b>Zakotwiczenie:</b> (${esc(pending.anchor ? pending.anchor[0] : '-')},${esc(pending.anchor ? pending.anchor[1] : '-')})</p>
     <p><b>Obszar:</b> ${esc((pending.area_positions || []).map(position => `(${position[0]},${position[1]})`).join(', ') || '-')}</p>
     <p><b>Cele:</b> ${targets.map(target => `${esc(target.name)} (${esc(target.position[0])},${esc(target.position[1])})`).join(', ') || 'brak'}</p>
+    ${areaSpellFriendlyFireHtml(pending)}
+    ${areaSpellCoverHtml(pending)}
     ${spellSavesHtml(pending.saving_throws || [])}
   `;
+}
+function areaSpellFriendlyFireHtml(pending) {
+  const caster = pending.caster || {};
+  const allies = (pending.targets || []).filter(target => target.faction === caster.faction);
+  if (!allies.length) return '';
+  return `<p class="combat-warning"><b>Friendly fire:</b> czar obejmie także ${allies.map(target => esc(target.name)).join(', ')}.</p>`;
+}
+function areaSpellCoverHtml(pending) {
+  if (!pending.source || pending.source.save_ability !== 'dexterity') return '';
+  const entries = pending.target_cover || [];
+  const targets = pending.targets || [];
+  const covered = entries.filter(entry => Number(entry.cover_bonus || 0) > 0);
+  if (!covered.length) return '';
+  const names = new Map(targets.map(target => [String(target.id), target.name]));
+  return `<p><b>Osłona do rzutu na Zręczność:</b> ${covered.map(entry => {
+    const sources = (entry.cover_sources || []).length ? ` (${entry.cover_sources.map(esc).join(', ')})` : '';
+    return `${esc(names.get(String(entry.actor_id)) || entry.actor_id)} +${esc(entry.cover_bonus)}${sources}`;
+  }).join('; ')}</p>`;
 }
 function pendingPlayerHealingHtml(pending) {
   const target = pending.target || {};
@@ -1955,6 +2332,36 @@ function pendingCombatInteractionHtml(pending) {
     <div class="row">${buttons}<button class="secondary" data-allow-busy="true" onclick="cancelCombatInteraction()">Anuluj</button></div>
   `;
 }
+
+function combatMenuCategoryLabel(category) {
+  return ({field: 'Pole', attack: 'Ataki bronią', maneuver: 'Manewry', magic: 'Czary', item: 'Przedmioty', support: 'Wsparcie i leczenie', equipment: 'Ekwipunek', basic: 'Akcje podstawowe', turn: 'Tura'})[category] || 'Inne';
+}
+function combatContextMenuHtml(menu) {
+  const options = menu.options || [];
+  if (!options.length) {
+    return `<p>Brak dostępnych akcji.</p><button class="secondary" data-allow-busy="true" onclick="cancelCombatContextMenu()">Wróć</button>`;
+  }
+  let previousCategory = '';
+  const rows = options.map((option, index) => {
+    const heading = option.category !== previousCategory
+      ? `<div class="combat-context-category">${esc(combatMenuCategoryLabel(option.category))}</div>`
+      : '';
+    previousCategory = option.category;
+    const selected = index === Number(menu.selected_index || 0);
+    return `${heading}<button class="combat-context-option${selected ? ' selected' : ''}" data-allow-busy="true" onclick="confirmCombatContextMenu('${esc(option.id)}')" aria-current="${selected ? 'true' : 'false'}"><b>${esc(option.label)}</b><span>${esc(option.description || '')}</span></button>`;
+  }).join('');
+  return `
+    <p><b>${esc(menu.title || 'Dostępne akcje')}</b> · pole (${esc(menu.position ? menu.position[0] : '-')},${esc(menu.position ? menu.position[1] : '-')})</p>
+    ${menu.notice ? `<p class="combat-warning"><b>Ograniczenie rozmiaru:</b> ${esc(menu.notice)}</p>` : ''}
+    <div class="combat-context-menu">${rows}</div>
+    <div class="row"><button data-allow-busy="true" onclick="confirmCombatContextMenu('')">Potwierdź</button><button class="secondary" data-allow-busy="true" onclick="cancelCombatContextMenu()">Anuluj</button></div>
+  `;
+}
+function combatContextMenuDetailsHtml(menu) {
+  const selected = (menu.options || [])[Number(menu.selected_index || 0)] || null;
+  if (!selected) return '<p>Brak wybranej akcji.</p>';
+  return `<p><b>${esc(selected.label)}</b></p><p>${esc(selected.description || '')}</p><p><b>Kategoria:</b> ${esc(combatMenuCategoryLabel(selected.category))}</p>`;
+}
 function pendingCombatInteractionDetailsHtml(pending) {
   const options = pending.options || [];
   if (!options.length) return '<p>Brak szczegółów interakcji.</p>';
@@ -1967,14 +2374,28 @@ function pendingCombatInteractionDetailsHtml(pending) {
 function pendingPlayerAttackDetailsHtml(pending) {
   const target = pending.target || {};
   const source = pending.source || {};
+  const positioning = pending.positioning || {};
+  const coverNames = {none: 'brak', half: 'połowa osłony', three_quarters: '3/4 osłony', total: 'pełna osłona'};
   if (pending.stage === 'confirm_attack') {
+    if (source.save_ability) {
+      const coverBonus = source.save_ability === 'dexterity' ? Number(positioning.cover_bonus || 0) : 0;
+      return `
+        <p><b>Potwierdzenie czaru</b></p>
+        <p><b>Cel:</b> ${esc(target.name || '-')} | <b>Rzut obronny:</b> ${esc(abilityLabel(source.save_ability))} przeciw ST ${esc(pending.spell_save_dc || source.save_dc || '-')}</p>
+        <p><b>Osłona:</b> ${esc(coverNames[positioning.cover_level] || positioning.cover_level || 'brak')}${coverBonus ? `, do rzutu +${esc(coverBonus)}` : ' — bez wpływu na ten rzut'}${(positioning.cover_sources || []).length ? ` (${(positioning.cover_sources || []).map(esc).join(', ')})` : ''}</p>
+        <p><b>Przy sukcesie:</b> ${esc(saveSuccessLabel(source.save_damage_on_success))}</p>
+      `;
+    }
     const active = pending.active_modifiers || [];
     const ignored = pending.ignored_modifiers || [];
     const modifierLabel = signedNumber(pending.attack_modifier || 0);
     return `
-      <p><b>Potwierdzenie ataku</b></p>
-      <p><b>Cel:</b> ${esc(target.name || '-')} | <b>AC celu:</b> ${esc(target.ac || '-')} | <b>Pole:</b> (${esc(target.position ? target.position[0] : '-')},${esc(target.position ? target.position[1] : '-')})</p>
-      <p><b>Atak:</b> ${esc(source.name || '-')} | <b>Zasięg:</b> ${esc(source.range_feet || 0)} ft | <b>Premia końcowa:</b> ${esc(modifierLabel)}</p>
+      <p><b>${pending.two_weapon_bonus ? 'Potwierdzenie ataku drugą bronią' : 'Potwierdzenie ataku'}</b></p>
+      <p><b>Cel:</b> ${esc(target.name || '-')} | <b>Efektywne AC:</b> ${esc(pending.target_ac || target.ac || '-')} | <b>Pole:</b> (${esc(target.position ? target.position[0] : '-')},${esc(target.position ? target.position[1] : '-')})</p>
+      <p><b>Atak:</b> ${esc(source.name || '-')} | <b>${source.attack_kind === 'melee' ? 'Reach' : 'Zasięg'}:</b> ${esc(source.attack_kind === 'melee' ? (source.reach_feet || source.range_feet || 0) : (source.range_feet || 0))} ft | <b>Premia końcowa:</b> ${esc(modifierLabel)}</p>
+      <p><b>Osłona:</b> ${esc(coverNames[positioning.cover_level] || positioning.cover_level || 'brak')}${Number(positioning.cover_bonus || 0) ? `, AC +${esc(positioning.cover_bonus)}` : ''}${(positioning.cover_sources || []).length ? ` (${(positioning.cover_sources || []).map(esc).join(', ')})` : ''}</p>
+      <p><b>Atak dystansowy w zwarciu:</b> ${positioning.ranged_in_melee ? 'tak — utrudnienie' : 'nie'}</p>
+      <p><b>Flankowanie:</b> ${positioning.flanking ? 'tak — przewaga' : 'nie'}</p>
       <p><b>Aktywne premie/kary:</b> ${active.length ? active.map(mod => `${esc(mod.label)} ${esc(signedNumber(mod.value))}`).join(', ') : 'brak'}</p>
       ${attackEffectsDetailsHtml(pending)}
       ${ignored.length ? `<p><b>Odrzucone duplikaty:</b> ${ignored.map(mod => `${esc(mod.label)} ${esc(signedNumber(mod.value))}`).join(', ')}</p>` : ''}
@@ -2033,11 +2454,18 @@ function spellSavesHtml(saves) {
     <div class="combat-effect-list">
       ${saves.map(save => `
         <span class="combat-effect">
-          ${esc(save.actor_name || save.actor_id)}: ${esc(abilityLabel(save.ability))} d20 ${esc(save.natural_roll)}, mod ${esc(signedNumber(save.modifier || 0))}, razem ${esc(save.total)} / ST ${esc(save.dc)} - ${save.success ? 'sukces' : 'porażka'}${save.success ? `, ${esc(saveSuccessLabel(save.damage_multiplier === 0.5 ? 'half' : 'none'))}` : ', pełne obrażenia'}
+          ${esc(save.actor_name || save.actor_id)}: ${esc(abilityLabel(save.ability))} d20 ${esc(save.natural_roll)}, ${saveModifierComponentsHtml(save)}, razem ${esc(save.total)} / ST ${esc(save.dc)} - ${save.success ? 'sukces' : 'porażka'}${save.success ? `, ${esc(saveSuccessLabel(save.damage_multiplier === 0.5 ? 'half' : 'none'))}` : ', pełne obrażenia'}
         </span>
       `).join('')}
     </div>
   `;
+}
+function saveModifierComponentsHtml(save) {
+  const components = save.modifier_components || [];
+  if (!components.length) return `mod ${esc(signedNumber(save.modifier || 0))}`;
+  return components
+    .map(component => `${esc(component.label)} ${esc(signedNumber(component.value || 0))}`)
+    .join(', ');
 }
 function abilityLabel(ability) {
   const labels = {
@@ -2262,7 +2690,7 @@ function startSession() { api('/api/start', {}, 'Rozpoczynam sesję...'); }
 function isAllyCombatTurnActive() {
   const combat = state && state.combat ? state.combat : null;
   const actor = combat && combat.current_actor ? combat.current_actor : {};
-  return Boolean(combat && combat.status === 'active' && actor.faction === 'ally' && !combat.enemy_turn_preview && !combat.pending_player_attack && !combat.pending_player_healing && !combat.pending_area_spell && !combat.pending_combat_interaction && !combat.pending_combat_help && !combat.pending_concentration_action && !combat.pending_concentration_check && !combat.pending_combat_ready);
+  return Boolean(combat && combat.status === 'active' && actor.faction === 'ally' && !combat.context_menu && !combat.enemy_turn_preview && !combat.pending_player_attack && !combat.pending_player_healing && !combat.pending_area_spell && !combat.pending_combat_interaction && !combat.pending_combat_help && !combat.pending_concentration_action && !combat.pending_concentration_check && !combat.pending_combat_ready);
 }
 async function scanBoard() {
   if (boardScanInFlight) return;
@@ -2316,6 +2744,11 @@ function startEncounterSetup() { api('/api/encounter/setup/start', {}, 'Przygoto
 function resolveEncounterOpening() { api('/api/encounter/opening/resolve', {}, 'Rozstrzygam rozpoczęcie starcia...'); }
 function confirmEncounterSetup() { api('/api/encounter/setup/confirm', {}, 'Potwierdzam krok setupu...'); }
 function startEncounterInitiative() { api('/api/encounter/initiative/start', {}, 'Rozpoczynam inicjatywę...'); }
+function submitPrecombatStealth(actorId) {
+  const input = document.getElementById(`precombat-stealth-${actorId}`);
+  api('/api/encounter/stealth/roll', {actor_id: actorId, natural_roll: Number(input ? input.value : 0)}, 'Rozstrzygam skradanie przed walką...');
+}
+function finishPrecombatStealth() { api('/api/encounter/stealth/finish', {}, 'Kończę etap skradania...'); }
 function submitEncounterInitiativeRoll() {
   const input = document.getElementById('encounter-initiative-roll');
   const input2 = document.getElementById('encounter-initiative-roll-2');
@@ -2332,6 +2765,9 @@ function confirmPlayerAttackTarget() { api('/api/combat/player-attack-confirm', 
 function cancelPlayerAttackTarget() { api('/api/combat/player-attack-cancel', {}, 'Anuluję wybór celu...'); }
 function confirmCombatInteraction(interactionId) { api('/api/combat/interaction/confirm', {interaction_id: interactionId}, 'Potwierdzam interakcję...'); }
 function cancelCombatInteraction() { api('/api/combat/interaction/cancel', {}, 'Anuluję interakcję...'); }
+function moveCombatContextMenu(delta) { api('/api/combat/context-menu/select', {delta}, ''); }
+function confirmCombatContextMenu(optionId) { api('/api/combat/context-menu/confirm', {option_id: optionId || ''}, 'Wykonuję wybraną akcję...'); }
+function cancelCombatContextMenu() { api('/api/combat/context-menu/cancel', {}, ''); }
 function submitPlayerDamageRoll() {
   const damage = document.getElementById('combat-damage-roll');
   api('/api/combat/player-damage', {damage: Number(damage ? damage.value : 0)}, 'Zapisuję obrażenia...');
@@ -2358,6 +2794,19 @@ function submitConcentrationCheck() {
   const roll = document.getElementById('concentration-check-roll');
   api('/api/combat/concentration-check', {natural_roll: Number(roll ? roll.value : 0)}, 'Rozstrzygam koncentrację...');
 }
+function submitDeathSave() {
+  const roll = document.getElementById('combat-death-save-roll');
+  api('/api/combat/death-save', {natural_roll: Number(roll ? roll.value : 0)}, 'Rozstrzygam rzut śmierci...');
+}
+function submitCombatStabilization(method) {
+  const target = document.getElementById('combat-stabilization-target');
+  const roll = document.getElementById('combat-stabilization-roll');
+  api('/api/combat/stabilize', {
+    target_id: target ? target.value : '',
+    method,
+    natural_roll: method === 'medicine' ? Number(roll ? roll.value : 0) : null,
+  }, 'Stabilizuję sojusznika...');
+}
 function submitCombatMove() {
   const destination = document.getElementById('combat-move-destination');
   const parts = destination && destination.value ? destination.value.split(',') : ['0', '0'];
@@ -2368,6 +2817,23 @@ function cancelOpportunityMovement() { api('/api/combat/opportunity-movement/can
 function useCombatDash() { api('/api/combat/dash', {}, 'Wykonuję Dash...'); }
 function useCombatDodge() { api('/api/combat/dodge', {}, 'Wykonuję Unik...'); }
 function useCombatDisengage() { api('/api/combat/disengage', {}, 'Wykonuję Odwrót...'); }
+function startCombatHide() { api('/api/combat/hide/start', {}, 'Przygotowuję Hide...'); }
+function startCombatSearch() { api('/api/combat/search/start', {}, 'Przygotowuję Search...'); }
+function submitCombatSkillCheck() {
+  const roll = document.getElementById('combat-skill-check-roll');
+  api('/api/combat/skill-check', {natural_roll: Number(roll ? roll.value : 0)}, 'Rozstrzygam test...');
+}
+function cancelCombatSkillCheck() { api('/api/combat/skill-check/cancel', {}, 'Anuluję test...'); }
+function submitCombatShove() {
+  const roll = document.getElementById('combat-shove-roll');
+  api('/api/combat/shove/resolve', {natural_roll: Number(roll ? roll.value : 0)}, 'Rozstrzygam Shove...');
+}
+function cancelCombatShove() { api('/api/combat/shove/cancel', {}, 'Anuluję Shove...'); }
+function submitCombatGrapple() {
+  const roll = document.getElementById('combat-grapple-roll');
+  api('/api/combat/grapple/resolve', {natural_roll: Number(roll ? roll.value : 0)}, 'Rozstrzygam Grapple...');
+}
+function cancelCombatGrapple() { api('/api/combat/grapple/cancel', {}, 'Anuluję Grapple...'); }
 function startCombatHelp() { api('/api/combat/help/start', {}, 'Przygotowuję Help...'); }
 function confirmCombatHelp() {
   const ally = document.getElementById('combat-help-ally');
@@ -2401,6 +2867,10 @@ function submitReadyDamageRoll() {
   api('/api/combat/ready-attack/damage', {damage: Number(damage ? damage.value : 0)}, 'Zapisuję obrażenia przygotowanej akcji...');
 }
 function confirmEnemyTurnResult() { api('/api/combat/enemy-turn/confirm', {}, 'Potwierdzam wynik przeciwnika...'); }
+function submitEnemySavingThrow() {
+  const roll = document.getElementById('enemy-saving-throw-roll');
+  api('/api/combat/enemy-saving-throw', {natural_roll: Number(roll ? roll.value : 0)}, 'Rozstrzygam rzut obronny...');
+}
 async function finishCombatTurn() {
   await stopBoardScanLoop();
   api('/api/combat/end-turn', {}, 'Kończę turę...');
@@ -2438,13 +2908,17 @@ function triggerPrimaryAction() {
   const scanButton = visiblePrimaryScanButton();
   if (scanButton) { scanButton.click(); return true; }
   const setup = state.encounter_setup;
+  const stealth = state.encounter_stealth;
   const initiative = state.encounter_initiative;
   const combat = state.combat;
   const opening = (state.pending_encounter && state.pending_encounter.opening) || {};
     if (isVisible('encounter-panel')) {
     if (combat && combat.status === 'finished') { resolveCombatOutcome(); return true; }
     if (combat && combat.status === 'active') {
+      if (combat.context_menu) { confirmCombatContextMenu(''); return true; }
+      if (combat.death_save_required) { submitDeathSave(); return true; }
       if (combat.pending_concentration_check) { submitConcentrationCheck(); return true; }
+      if (combat.pending_enemy_saving_throw) { submitEnemySavingThrow(); return true; }
       if (combat.enemy_turn_result) { confirmEnemyTurnResult(); return true; }
       if (combat.pending_ready_attack) {
         if (combat.pending_ready_attack.stage === 'choice') startReadyAttack();
@@ -2460,6 +2934,9 @@ function triggerPrimaryAction() {
       }
       if (combat.pending_opportunity_movement) { confirmOpportunityMovement(); return true; }
       if (combat.pending_combat_help) { confirmCombatHelp(); return true; }
+      if (combat.pending_combat_shove) { submitCombatShove(); return true; }
+      if (combat.pending_combat_grapple) { submitCombatGrapple(); return true; }
+      if (combat.pending_combat_skill_check) { submitCombatSkillCheck(); return true; }
       if (combat.pending_concentration_action) { confirmConcentrationAction(); return true; }
       if (combat.pending_combat_ready) { confirmCombatReady(); return true; }
       if (combat.pending_combat_interaction) {
@@ -2486,6 +2963,7 @@ function triggerPrimaryAction() {
     }
     if (opening.required && !opening.resolved) { resolveEncounterOpening(); return true; }
     if (initiative && initiative.status !== 'completed') { submitEncounterInitiativeRoll(); return true; }
+    if (setup && setup.status === 'completed' && stealth && !stealth.completed) return false;
     if (setup && setup.status === 'completed' && !initiative) { startEncounterInitiative(); return true; }
     if (setup && setup.current_step && setup.current_step.requires_board_assignment) return false;
     if (setup && setup.status === 'active') { confirmEncounterSetup(); return true; }
@@ -2504,8 +2982,20 @@ function triggerPrimaryAction() {
 }
 document.addEventListener('keydown', event => {
   if (event.defaultPrevented) return;
-  if (event.key !== 'Enter') return;
   const target = event.target;
+  const combatMenu = state && state.combat ? state.combat.context_menu : null;
+  const typing = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT');
+  if (combatMenu && !typing && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+    moveCombatContextMenu(event.key === 'ArrowDown' ? 1 : -1);
+    event.preventDefault();
+    return;
+  }
+  if (combatMenu && !typing && event.key === 'Escape') {
+    cancelCombatContextMenu();
+    event.preventDefault();
+    return;
+  }
+  if (event.key !== 'Enter') return;
   if (target && target.tagName === 'TEXTAREA' && event.shiftKey) return;
   if (target && target.closest && target.closest('details.debug-panel')) return;
   if (triggerPrimaryAction()) {

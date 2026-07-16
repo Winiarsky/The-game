@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from random import Random
 from typing import Mapping
@@ -13,15 +13,25 @@ from dnd_board_game.combat import (
     CombatStatus,
     EnemyAutoTurnResult,
     EnemyTurnPlan,
+    SceneObject,
+    DamageComponentInput,
+    DamageType,
+    apply_damage_result,
+    apply_save_damage_amount,
     attack_source_with_target_combat_effects,
     current_actor,
     opportunity_attackers_for_movement,
     plan_enemy_turn,
     resolve_enemy_auto_turn,
+    resolve_actor_saving_throw,
+    resolve_damage,
+    replace_actor,
 )
+from dnd_board_game.rules import SavingThrowRequest, SavingThrowResult
 from dnd_board_game.world import BoardState, Coordinate
 
 from .combat_reaction_flow import PlayerReactionFlowService, ReadyAttackTrigger
+from .damage_presentation import applied_damage_message, applied_damage_payload
 
 
 class EnemyTurnTransitionKind(StrEnum):
@@ -56,6 +66,24 @@ class EnemyTurnResolutionTransition:
     event_payload: tuple[tuple[str, object], ...] = ()
 
 
+@dataclass(frozen=True, slots=True)
+class PendingEnemySavingThrow:
+    target_id: str
+    source_id: str
+    request: SavingThrowRequest
+
+
+@dataclass(frozen=True, slots=True)
+class EnemySavingThrowTransition:
+    result: EnemyAutoTurnResult
+    saving_throw: SavingThrowResult
+    board_message: str
+    message_title: str
+    message_body: str
+    event_type: str
+    event_payload: tuple[tuple[str, object], ...]
+
+
 class EnemyTurnFlowService:
     """Plan and classify enemy turns before UI and board confirmation."""
 
@@ -68,11 +96,19 @@ class EnemyTurnFlowService:
         state: CombatState,
         board: BoardState,
         attack_sources_by_actor: Mapping[ActorId, AttackSource],
+        multiattack_sources_by_actor: Mapping[ActorId, tuple[AttackSource, ...]] | None = None,
+        scene_objects: tuple[SceneObject, ...] = (),
     ) -> EnemyTurnIntentTransition:
         enemy = _active_enemy(state)
-        if attack_sources_by_actor.get(enemy.id) is None:
+        source = _enemy_attack_source(
+            state,
+            enemy,
+            attack_sources_by_actor,
+            multiattack_sources_by_actor,
+        )
+        if source is None:
             raise ValueError(f"Aktor {enemy.name} nie ma zdefiniowanego ataku.")
-        intent = plan_enemy_turn(board, state, enemy)
+        intent = plan_enemy_turn(board, state, enemy, source)
         return EnemyTurnIntentTransition(
             intent=intent,
             enemy_id=str(enemy.id),
@@ -94,11 +130,18 @@ class EnemyTurnFlowService:
         intent: EnemyTurnPlan,
         board: BoardState,
         attack_sources_by_actor: Mapping[ActorId, AttackSource],
+        multiattack_sources_by_actor: Mapping[ActorId, tuple[AttackSource, ...]] | None = None,
         active_effects: tuple[ActiveCombatEffect, ...],
         rng: Random,
+        scene_objects: tuple[SceneObject, ...] = (),
     ) -> EnemyTurnResolutionTransition:
         enemy = _active_enemy(state)
-        source = attack_sources_by_actor.get(enemy.id)
+        source = _enemy_attack_source(
+            state,
+            enemy,
+            attack_sources_by_actor,
+            multiattack_sources_by_actor,
+        )
         if source is None:
             raise ValueError(f"Aktor {enemy.name} nie ma zdefiniowanego ataku.")
         target_actor = None
@@ -114,7 +157,20 @@ class EnemyTurnFlowService:
                 source,
                 active_effects,
             )
-        result = resolve_enemy_auto_turn(board, state, enemy, source, rng)
+        result = resolve_enemy_auto_turn(
+            board,
+            state,
+            enemy,
+            source,
+            rng,
+            scene_objects,
+            maximum_attacks=(
+                len(multiattack_sources_by_actor.get(enemy.id, ()))
+                if multiattack_sources_by_actor
+                and multiattack_sources_by_actor.get(enemy.id)
+                else None
+            ),
+        )
         ready = self._player_reactions.detect_ready_attack(
             state=state,
             enemy_result=result,
@@ -199,6 +255,23 @@ class EnemyTurnFlowService:
                 ),
             )
         if result.target is not None:
+            if result.saving_throw_request is not None:
+                request = result.saving_throw_request
+                ability_label = request.as_payload()["ability_label"]
+                return EnemyTurnResolutionTransition(
+                    result=result,
+                    kind=EnemyTurnTransitionKind.ATTACK,
+                    board_message=(
+                        f"{enemy.name} używa {source.name} przeciw {result.target.name}. "
+                        "Kliknij podświetlone pole celu, żeby potwierdzić efekt."
+                    ),
+                    message_title="Efekt przeciwnika",
+                    message_body=(
+                        f"{enemy.name} używa {source.name} przeciw {result.target.name}. "
+                        f"Po potwierdzeniu celu {result.target.name} wykona "
+                        f"{ability_label} save przeciw ST {request.dc}."
+                    ),
+                )
             return EnemyTurnResolutionTransition(
                 result=result,
                 kind=EnemyTurnTransitionKind.ATTACK,
@@ -219,6 +292,89 @@ class EnemyTurnFlowService:
             message_title="",
             message_body="",
         )
+
+    def resolve_player_saving_throw(
+        self,
+        *,
+        result: EnemyAutoTurnResult,
+        natural_roll: int,
+    ) -> EnemySavingThrowTransition:
+        request = result.saving_throw_request
+        source = result.source
+        if request is None or source is None or result.target is None:
+            raise ValueError("Tura przeciwnika nie oczekuje rzutu obronnego gracza.")
+        target = next(
+            (actor for actor in result.state.actors if str(actor.id) == result.target.id),
+            None,
+        )
+        if target is None:
+            raise ValueError("Nie znaleziono celu oczekującego rzutu obronnego.")
+        saving_throw = resolve_actor_saving_throw(
+            target,
+            request,
+            natural_roll=int(natural_roll),
+        )
+        base_damage = max(0, int(result.base_damage or 0))
+        adjusted_damage = apply_save_damage_amount(base_damage, saving_throw)
+        damage = resolve_damage(
+            (
+                DamageComponentInput(
+                    adjusted_damage,
+                    DamageType(source.damage_type),
+                    source.name,
+                ),
+            )
+        )
+        applied = apply_damage_result(target, damage)
+        updated_state = replace_actor(result.state, applied.actor_after)
+        outcome = "sukces" if saving_throw.success else "porażka"
+        message = (
+            f"{target.name}: {request.ability} save d20 {saving_throw.natural_roll}, "
+            f"modyfikator {saving_throw.modifier:+d}, razem {saving_throw.total} przeciw "
+            f"ST {request.dc}: {outcome}. {applied_damage_message(applied)}"
+        )
+        updated_result = replace(
+            result,
+            state=updated_state,
+            message=f"{result.message} {message}",
+            damage=applied.damage,
+            applied_damage=applied,
+            updated_target=applied.actor_after,
+            saving_throw_result=saving_throw,
+        )
+        return EnemySavingThrowTransition(
+            result=updated_result,
+            saving_throw=saving_throw,
+            board_message="Rzut obronny rozstrzygnięty. Potwierdź wynik tury przeciwnika.",
+            message_title="Rzut obronny",
+            message_body=message,
+            event_type="ui_combat_enemy_saving_throw",
+            event_payload=(
+                ("enemy_id", str(result.enemy.id)),
+                ("target_id", str(target.id)),
+                ("source_id", source.id),
+                ("saving_throw", saving_throw.as_payload()),
+                ("base_damage", base_damage),
+                ("damage_result", applied_damage_payload(applied)),
+            ),
+        )
+
+
+def _enemy_attack_source(
+    state: CombatState,
+    enemy: Actor,
+    attack_sources_by_actor: Mapping[ActorId, AttackSource],
+    multiattack_sources_by_actor: Mapping[ActorId, tuple[AttackSource, ...]] | None,
+) -> AttackSource | None:
+    sequence = (
+        multiattack_sources_by_actor.get(enemy.id, ())
+        if multiattack_sources_by_actor is not None
+        else ()
+    )
+    if not sequence:
+        return attack_sources_by_actor.get(enemy.id)
+    used = state.turn_action.attacks_used if state.turn_action.attack_action_active else 0
+    return sequence[min(used, len(sequence) - 1)]
 
 
 def _active_enemy(state: CombatState) -> Actor:
@@ -246,6 +402,17 @@ def _ready_trigger_label(trigger: str) -> str:
 
 
 def _enemy_roll_summary(result: EnemyAutoTurnResult) -> str:
+    if result.saving_throw_result is not None:
+        save = result.saving_throw_result
+        outcome = "sukces" if save.success else "porażka"
+        parts = [
+            f"Rzut obronny d20: {save.natural_roll}",
+            f"modyfikator: {save.modifier:+d}",
+            f"wynik końcowy: {save.total} przeciw ST {save.dc}: {outcome}",
+        ]
+        if result.damage is not None:
+            parts.append(f"obrażenia: {result.damage.total_applied}")
+        return ". ".join(parts) + "."
     if result.attack_roll is None or result.target is None:
         return ""
     natural_rolls = result.attack_roll.natural_rolls

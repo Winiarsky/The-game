@@ -1,0 +1,21 @@
+{
+  "id": "sticky_flask",
+  "name": "Fiolka lepkiej cieczy",
+  "kind": "consumable",
+  "description": "Jednorazowa fiolka z gęstą cieczą, którą można oblać przeciwnika stojącego w zwarciu.",
+  "properties": ["container", "slippery"],
+  "combat_actions": [
+    {
+      "id": "splash_sticky_flask",
+      "name": "Fiolka lepkiej cieczy",
+      "label": "Oblij lepką cieczą",
+      "action_type": "targeted_item_effect",
+      "action_cost": "action",
+      "target_faction": "enemy",
+      "range_feet": 5,
+      "effect_kind": "grant_next_attack_penalty",
+      "value": -2,
+      "duration": "until_next_attack"
+    }
+  ]
+}

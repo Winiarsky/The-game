@@ -164,6 +164,7 @@ Dla jakich sytuacji:
 - ciche obejście: medium
 - podważanie/narzędzia: medium
 - otwieranie zatartego zamka: hard, chyba ze gracze najpierw odkryja stan mechanizmu albo uzyja dobrego narzedzia
+- mechanicznie otwieranie zamka to Dexterity check z `thieves_tools`; zestaw jest wymaganym itemem, a biegłość wynika z profilu aktora (bez dodatkowej premii za samo posiadanie)
 - wspinaczka: medium, ale z ryzykiem kolcow/upadku
 - badanie słabości: easy
 - wejscie murem obok: easy
@@ -183,6 +184,8 @@ Krytyczny sukces: wyjatkowo dobrze otwieracie brame
 
 Krytyczna porażka: brama okazuje sie bardziej stabilna niz sie wydaje
 - co się pogarsza: brak albo redukcja progress pointow, powazniejsze konsekwencje, np. zaklinowanie zamka, upadek, skaleczenie albo duzy halas
+- wspinaczka `vault_gate`: uruchamia data-driven hazard `fall_from_gate`; prowadzący próbę wykonuje fizyczny Dexterity save ST 12, sukces redukuje `1d6 bludgeoning` o połowę, porażka stosuje pełne obrażenia
+- formularz nowej opcji powinien jawnie podać: trigger hazardu, narrację, ability/ST save'a, skutek sukcesu, skutek porażki oraz typ i kość obrażeń; zagrożenie nie może istnieć wyłącznie w opisie dla LLM
   
 
 ## 15. Limity I Parametry

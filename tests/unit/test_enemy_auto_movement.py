@@ -1,9 +1,12 @@
 import random
+from dataclasses import replace
 
 from dnd_board_game.actors import AbilityScores, Actor, ActorId, Faction
 from dnd_board_game.combat import (
     AttackSource,
     AttackSourceType,
+    CombatCondition,
+    ConditionState,
     InitiativeEntry,
     InitiativeOrder,
     resolve_enemy_auto_turn,
@@ -75,3 +78,20 @@ def test_enemy_without_reachable_target_still_moves_without_stack_trace():
     assert result.target is None
     assert result.action_used is True
     assert "nadal nie ma legalnego celu" in result.message
+
+
+def test_prone_enemy_stands_before_moving_and_spends_half_speed() -> None:
+    enemy = _actor("goblin", Faction.ENEMY, Coordinate(0, 0))
+    hero = _actor("hero", Faction.ALLY, Coordinate(4, 0), hp=20)
+    state = replace(
+        start_combat((enemy, hero), _order(enemy, hero)),
+        condition_states=(ConditionState("goblin", CombatCondition.PRONE),),
+    )
+
+    result = resolve_enemy_auto_turn(BoardState(), state, enemy, _source(), random.Random(7))
+
+    assert result.movement_path is not None
+    assert result.movement_path.cost_feet == 15
+    assert result.state.turn_action.movement_used_feet == 30
+    assert result.state.condition_states == ()
+    assert "wstaje" in result.message

@@ -1,0 +1,51 @@
+{
+  "id": "stone_guardian",
+  "name": "Kamienny strażnik",
+  "kind": "monster",
+  "faction": "enemy",
+  "size": "medium",
+  "ac": 15,
+  "hp": 18,
+  "temp_hp": 0,
+  "speed_feet": 20,
+  "damage_resistances": ["slashing", "piercing"],
+  "damage_immunities": ["poison"],
+  "damage_vulnerabilities": ["thunder"],
+  "ability_scores": {
+    "strength": 16,
+    "dexterity": 8,
+    "constitution": 14,
+    "intelligence": 5,
+    "wisdom": 10,
+    "charisma": 5
+  },
+  "proficiency_bonus": 2,
+  "multiattack": ["stone_slam", "stone_slam"],
+  "proficiencies": {
+    "saving_throws": [],
+    "skills": [],
+    "expertise": [],
+    "weapons": ["stone_slam"],
+    "armor": [],
+    "tools": []
+  },
+  "attacks": [
+    {
+      "id": "stone_slam",
+      "name": "Kamienne uderzenie",
+      "source_type": "weapon",
+      "attack_kind": "melee",
+      "ability": "strength",
+      "range_feet": 5,
+      "reach_feet": 5,
+      "save_ability": "dexterity",
+      "save_dc": 12,
+      "save_damage_on_success": "half",
+      "damage": {
+        "dice": "1d8",
+        "modifier": 3,
+        "damage_type": "bludgeoning"
+      }
+    }
+  ]
+}

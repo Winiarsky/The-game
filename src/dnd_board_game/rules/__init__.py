@@ -3,6 +3,13 @@
 from .attacks import AttackRollOutcome, AttackRollResult, resolve_attack_roll
 from .abilities import ability_modifier, dexterity_modifier
 from .checks import CheckResult, resolve_ability_check, resolve_saving_throw
+from .contests import (
+    ContestantRoll,
+    ContestantRollInput,
+    ContestOutcome,
+    ContestResult,
+    resolve_contest,
+)
 from .dice import (
     D20RollInput,
     D20RollInstruction,
@@ -41,6 +48,14 @@ from .resting import (
     complete_short_rest,
     spend_hit_die,
 )
+from .saving_throws import (
+    SaveDamageOnSuccess,
+    SavingThrowRequest,
+    SavingThrowResult,
+    ability_label_pl,
+    resolve_saving_throw_request,
+    save_damage_multiplier,
+)
 
 __all__ = [
     "AttackRollOutcome",
@@ -48,6 +63,10 @@ __all__ = [
     "ActiveEffect",
     "AdditionalEffectExpiration",
     "CheckResult",
+    "ContestantRoll",
+    "ContestantRollInput",
+    "ContestOutcome",
+    "ContestResult",
     "D20RollInput",
     "D20RollInstruction",
     "D20RollRequest",
@@ -67,6 +86,9 @@ __all__ = [
     "RollModifierType",
     "RestResult",
     "RestType",
+    "SaveDamageOnSuccess",
+    "SavingThrowRequest",
+    "SavingThrowResult",
     "ability_modifier",
     "apply_active_effect",
     "build_modifier_breakdown",
@@ -78,9 +100,13 @@ __all__ = [
     "effect_value_label",
     "expire_active_effects",
     "resolve_ability_check",
+    "resolve_contest",
     "resolve_attack_roll",
     "resolve_d20_roll",
     "resolve_saving_throw",
+    "resolve_saving_throw_request",
     "roll_instruction",
+    "save_damage_multiplier",
     "spend_hit_die",
+    "ability_label_pl",
 ]

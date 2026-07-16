@@ -6,6 +6,7 @@ import pytest
 from dnd_board_game.actors import AbilityScores, Actor, ActorId, Faction
 from dnd_board_game.application import CombatSceneInteractionFlowService
 from dnd_board_game.combat import (
+    ActionEconomyCost,
     ActionUse,
     CombatState,
     InitiativeEntry,
@@ -18,7 +19,7 @@ from dnd_board_game.combat import (
     start_combat,
 )
 from dnd_board_game.rules import D20RollInput, D20RollRequest, resolve_d20_roll
-from dnd_board_game.world import Coordinate
+from dnd_board_game.world import BoardState, Coordinate
 
 
 def _actor(
@@ -101,6 +102,28 @@ def test_scene_interaction_selection_returns_pending_options_and_event() -> None
     assert transition.clear_player_attack is True
 
 
+def test_scene_interaction_plans_shortest_approach_before_interaction() -> None:
+    service = CombatSceneInteractionFlowService()
+    hero = _actor("hero", Faction.ALLY, Coordinate(0, 0))
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(5, 5))
+    state = _state(hero, enemy)
+    cart = replace(_cart(), positions=(Coordinate(3, 0),))
+
+    plan = service.plan_approach(
+        state=state,
+        board=BoardState(),
+        scene_objects=(cart,),
+        actor=hero,
+        position=Coordinate(3, 0),
+    )
+
+    assert plan is not None
+    assert plan.interaction_position == Coordinate(3, 0)
+    assert plan.destination == Coordinate(2, 0)
+    assert plan.path.cost_feet == 10
+    assert [option.id for option in plan.options] == ["take_cover"]
+
+
 def test_scene_interaction_confirmation_spends_action_and_applies_cover() -> None:
     service = CombatSceneInteractionFlowService()
     hero = _actor("hero", Faction.ALLY, Coordinate(0, 0), ac=14)
@@ -129,6 +152,46 @@ def test_scene_interaction_confirmation_spends_action_and_applies_cover() -> Non
     assert confirmed.active_effects[0].kind == "grant_ac_bonus_until_move"
     assert confirmed.pending is None
     assert confirmed.event_type == "ui_combat_interaction_confirmed"
+
+
+def test_scene_object_interaction_uses_free_interaction_before_action() -> None:
+    service = CombatSceneInteractionFlowService()
+    hero = _actor("hero", Faction.ALLY, Coordinate(0, 0))
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(5, 5))
+    state = _state(hero, enemy)
+    lever = SceneObject(
+        id="lever",
+        name="Dźwignia",
+        positions=(Coordinate(1, 0),),
+        interaction_label="Przestaw dźwignię",
+        interactions=(
+            SceneInteraction(
+                id="pull_lever",
+                label="Przestaw dźwignię",
+                conditions=(SceneInteractionCondition("actor_adjacent_to_object"),),
+                action_cost=ActionEconomyCost.OBJECT_INTERACTION,
+            ),
+        ),
+    )
+    selected = service.select(
+        state=state,
+        scene_objects=(lever,),
+        position=Coordinate(1, 0),
+        active_effects=(),
+    )
+    assert selected.pending is not None
+
+    confirmed = service.confirm(
+        state=state,
+        scene_objects=(lever,),
+        active_effects=(),
+        pending=selected.pending,
+        interaction_id="pull_lever",
+        rng=Random(1),
+    )
+
+    assert confirmed.state.turn_action.object_interaction_available is False
+    assert confirmed.state.turn_action.action_use == ActionUse.ACTION_AVAILABLE
 
 
 def test_invalid_position_effect_expiration_restores_actor_state() -> None:

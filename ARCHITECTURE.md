@@ -90,18 +90,37 @@ This keeps board communication consistent when one tile can represent multiple i
 The exploration web surface is split into explicit responsibilities:
 
 - `application/exploration_flow.py` owns deterministic exploration flow transitions,
+- `application/exploration_hazard_flow.py` owns hazard saving throws, typed damage,
+  save-dependent effects, and actor-condition consequences,
+- `exploration/traps.py` owns pure trap-state transitions and action outcomes; detection
+  remains an exploration observation and activation delegates to the hazard flow,
 - `application/spell_preparation_flow.py` owns the pre-scenario confirmation sequence for
   actors with generic prepared-spell profiles,
 - `application/short_rest_flow.py` owns content-driven short-rest preview, completion,
   exploration consequences, and sequential Hit Dice spending,
 - `application/combat_movement_flow.py` owns player movement planning, movement application,
   and opportunity-attack threat detection before reactions are resolved,
+- `combat/attack_flow.py` owns the explicit melee-reach versus ranged-range contract;
+  targeting, opportunity threats, enemy positioning, and UI payloads consume that contract,
+- `combat/attack_positioning.py` owns cover geometry shared by attack AC and Dexterity
+  saves; area flows provide the effect's actual point of origin,
+- `combat/spells.py` owns deterministic radius, line-width and cone geometry,
+  line-of-effect filtering, and data-driven area target modes; UI only previews
+  and confirms the returned positions and affected actors,
+- `application/combat_shove_flow.py` and `application/combat_grapple_flow.py` own the
+  visible opposed-check previews and deterministic results of special melee maneuvers,
 - `application/combat_reaction_flow.py` owns opportunity-attack reaction consumption,
   manual hero reaction attacks, Ready trigger detection, attack and damage resolution,
   and the final movement decision,
 - `application/combat_turn_action_flow.py` owns common player turn actions and their
   deterministic combat effects (`Dash`, `Dodge`, `Disengage`, `Help`, and Ready preparation),
-- `application/enemy_turn_flow.py` owns enemy-turn validation, intent planning, automatic
+- `combat/action_economy.py` defines shared action costs, while `combat/session.py`
+  consumes action, individual attacks within the Attack action, bonus action, reaction
+  and free object-interaction resources; movement remains available between attacks,
+  and Shove or Grapple can replace one attack,
+  content and UI only declare or display those costs,
+- `application/enemy_turn_flow.py` owns enemy-turn validation, data-driven Multiattack
+  source sequencing, intent planning, automatic
   resolution orchestration, and classification into Ready, opportunity, movement, attack,
   or immediate-finish transitions,
 - `application/combat_turn_finalization.py` owns enemy-result commits, turn advancement,

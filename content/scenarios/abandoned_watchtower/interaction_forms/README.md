@@ -29,6 +29,10 @@ Wypełnij pliki Markdown po ludzku. Na podstawie tych formularzy kolejny etap po
 
 - `zones/gate_inspect_area.md` - badanie okolicy bramy.
 
+### Pułapki
+
+- `traps/gate_alarm_wire.md` - goblińska linka alarmowa za bramą.
+
 ## Zasada
 
 Nie musisz od razu wpisywać JSON-a. Opisz intencje, ograniczenia, informacje, konsekwencje i przykładowe deklaracje. Implementacja ma przełożyć to na mechanikę zgodną z `docs/SCENARIO_INTERACTION_FORM.md`.

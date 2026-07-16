@@ -2,10 +2,11 @@ import random
 from dataclasses import replace
 
 from dnd_board_game.actions import AreaSpellResolver, HealingActionResolver, SpellSaveAttackResolver
-from dnd_board_game.actors import AbilityScores, Actor, ActorId, Faction
+from dnd_board_game.actors import AbilityScores, Actor, ActorId, DamageAffinityProfile, Faction
 from dnd_board_game.combat import (
     AttackSource,
     AttackSourceType,
+    DamageType,
     HealingSource,
     HealingSourceType,
     InitiativeEntry,
@@ -93,7 +94,10 @@ def test_spell_save_attack_resolver_consumes_action_and_applies_damage():
 
 def test_area_spell_resolver_applies_save_adjusted_damage_to_targets():
     caster = _actor("wizard", Faction.ALLY, 0)
-    first = _actor("goblin_a", Faction.ENEMY, 1)
+    first = replace(
+        _actor("goblin_a", Faction.ENEMY, 1),
+        damage_affinities=DamageAffinityProfile(resistances=(DamageType.RADIANT,)),
+    )
     second = _actor("goblin_b", Faction.ENEMY, 2)
     state = _state(caster, first, second)
     source = AttackSource(
@@ -116,9 +120,10 @@ def test_area_spell_resolver_applies_save_adjusted_damage_to_targets():
     )
 
     hp_by_id = {str(actor.id): actor.hp for actor in result.state.actors}
-    assert hp_by_id[str(first.id)] == 6
+    assert hp_by_id[str(first.id)] == 8
     assert hp_by_id[str(second.id)] == 1
-    assert [target.applied_damage.damage.total_applied for target in result.targets] == [4, 9]
+    assert [target.applied_damage.damage.total_applied for target in result.targets] == [2, 9]
+    assert result.targets[0].applied_damage.damage.total_before_reduction == 4
 
 
 def test_healing_action_resolver_consumes_spell_slot_and_caps_hp():

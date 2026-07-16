@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from random import Random
 
 from dnd_board_game.actors import Actor, Faction
 from dnd_board_game.combat import (
+    ActionUse,
     ActiveCombatEffect,
     CombatInteractionOption,
     CombatState,
@@ -20,8 +21,11 @@ from dnd_board_game.combat import (
     scene_object_at_position,
     scene_object_by_id,
     use_turn_action,
+    use_action_economy_cost,
+    movement_remaining,
+    replace_actor,
 )
-from dnd_board_game.world import Coordinate
+from dnd_board_game.world import BoardState, Coordinate, PathResult, find_path, movement_range
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +44,27 @@ class PendingCombatInteraction:
             "target_position": [self.target_position.col, self.target_position.row],
             "options": [option.as_payload() for option in self.options],
         }
+
+
+@dataclass(frozen=True, slots=True)
+class CombatApproachInteractionPlan:
+    actor_id: str
+    interaction_position: Coordinate
+    destination: Coordinate
+    path: PathResult
+    options: tuple[CombatInteractionOption, ...]
+
+    @property
+    def object_id(self) -> str:
+        if not self.options:
+            raise ValueError("Plan podejścia nie ma interakcji.")
+        return self.options[0].object_id
+
+    @property
+    def object_name(self) -> str:
+        if not self.options:
+            raise ValueError("Plan podejścia nie ma interakcji.")
+        return self.options[0].object_name
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,7 +161,7 @@ class CombatSceneInteractionFlowService:
         )
         if option is None:
             raise ValueError("Nieznana opcja interakcji.")
-        action_result = use_turn_action(state)
+        action_result = use_action_economy_cost(state, option.action_cost)
         if not action_result.accepted:
             raise ValueError(action_result.message)
         scene_object = scene_object_by_id(scene_objects, option.object_id)
@@ -226,6 +251,55 @@ class CombatSceneInteractionFlowService:
             state,
             actor,
             position,
+        )
+
+    def plan_approach(
+        self,
+        *,
+        state: CombatState,
+        board: BoardState,
+        scene_objects: tuple[SceneObject, ...],
+        actor: Actor,
+        position: Coordinate,
+    ) -> CombatApproachInteractionPlan | None:
+        if state.status != CombatStatus.ACTIVE or actor.faction != Faction.ALLY:
+            return None
+        scene_object = scene_object_at_position(scene_objects, position)
+        if scene_object is None or not available_scene_interactions(scene_object):
+            return None
+
+        remaining = movement_remaining(state, actor)
+        movement_actor = replace(actor, speed_feet=remaining)
+        reachable = movement_range(board, movement_actor, state.actors)
+        candidates: list[CombatApproachInteractionPlan] = []
+        for destination in sorted(reachable.reachable_tiles):
+            path = find_path(board, movement_actor, state.actors, destination)
+            if not path.valid:
+                continue
+            moved_actor = replace(actor, position=destination)
+            moved_state = replace_actor(state, moved_actor)
+            options = available_combat_interaction_options(
+                scene_objects,
+                moved_state,
+                moved_actor,
+                position,
+            )
+            if not options:
+                continue
+            candidates.append(
+                CombatApproachInteractionPlan(
+                    actor_id=str(actor.id),
+                    interaction_position=position,
+                    destination=destination,
+                    path=path,
+                    options=options,
+                )
+            )
+        if not candidates:
+            return None
+        return min(
+            candidates,
+            key=lambda plan: (plan.path.cost_feet, plan.destination.col, plan.destination.row),
         )
 
     def positions(

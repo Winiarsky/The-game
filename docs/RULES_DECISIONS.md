@@ -61,7 +61,7 @@ Status: partial
 Źródło:
 
 - `GAME_DESIGN.md`
-- TODO: zweryfikować względem SRD / zasad ruchu na siatce przed rozbudową o reakcje, rozmiary istot i ruch wymuszony.
+- TODO: zweryfikować względem SRD / zasad ruchu na siatce przed rozbudową o wielopolowe footprinty i wyjątki przechodzenia zależne od rozmiaru.
 
 Implementacja MVP:
 
@@ -82,7 +82,7 @@ Implementacja MVP:
 
 Poza zakresem MVP:
 
-- rozmiary istot,
+- wielopolowe footprinty i przeciskanie zależne od rozmiaru,
 - przeciskanie się,
 - skakanie,
 - wspinaczka,
@@ -178,6 +178,8 @@ Implementacja MVP:
 - Pokonani aktorzy mogą pozostać w kolejce, ale przechodzenie tury może ich pomijać.
 - Między eksploracją a setupem encountera działa jawny etap rozpoczęcia starcia. Content wybiera wynik na podstawie zapisanego stanu sceny, np. hałasu, rozpoznania i tagów kończącego podejścia.
 - W MVP zaskoczona strona zachowuje pełną pierwszą turę, ale wykonuje testy inicjatywy z utrudnieniem. Bohaterowie wpisują dwa rzuty d20, a przeciwnicy mają oba rzuty wykonane automatycznie.
+- Jeżeli scenariusz rozstrzygnął ciche podejście drużyny, po setupie i przed inicjatywą pojawia się opcjonalny etap skradania. Każdy przytomny bohater ma jedną próbę Dexterity (Stealth), porównywaną osobno z passive Perception każdego przeciwnika.
+- Zakończenie etapu, również bez wykonywania prób, jest jawną decyzją. Udane relacje ukrycia przechodzą do `CombatState` i obowiązują od pierwszej rundy bez ponownego rzutu.
 
 Poza zakresem MVP:
 
@@ -191,7 +193,7 @@ Odstępstwa / decyzje planszowe:
 
 - Klikanie pionka nie jest wymagane do ustalenia, kto rzuca inicjatywę.
 - Jawne elementy setupu są podświetlane LED-ami, ukryte i warunkowe elementy nie są zdradzane graczom.
-- MVP rozstrzyga zaskoczenie dla całej drużyny albo całej strony przeciwników przez reguły scenariusza. Nie wykonuje osobnego porównania Stealth z passive Perception dla każdego stworzenia, a pełną karę D&D zastępuje utrudnieniem do inicjatywy; to świadome uproszczenie tempa gry przy stole.
+- MVP nadal rozstrzyga bazowe zaskoczenie całej strony przez reguły scenariusza i zastępuje pełną karę D&D utrudnieniem do inicjatywy. Indywidualne Stealth vs passive Perception określa natomiast, przed którymi konkretnie przeciwnikami bohater zaczyna walkę ukryty; nie zastępuje jeszcze oficjalnego per-creature surprised condition.
 
 Testy:
 
@@ -218,10 +220,20 @@ Implementacja MVP:
 - MVP obsługuje prosty melee weapon attack oraz prosty ranged weapon attack.
 - Aplikacja pokazuje legalne cele ataku LED-ami.
 - Gracz wybiera cel przez planszę albo fallback runtime.
-- Legalny cel ataku musi mieścić się w `range_feet` źródła ataku.
+- Źródło ataku jawnie rozróżnia `attack_kind`: melee korzysta z `reach_feet`, a ranged z `range_feet`. Zwykły atak wręcz ma reach 5 feet; nowy content podaje oba pola jawnie zamiast polegać na nazwie albo heurystyce.
+- Legalny cel ataku musi mieścić się w efektywnym zasięgu właściwym dla rodzaju źródła.
 - Dystans na siatce liczony jest w uproszczony sposób: `max(abs(dc), abs(dr)) * 5 feet`.
 - Ranged line of sight / line of effect używa prostego algorytmu Bresenhama na siatce.
 - Linia jest blokowana przez ściany/krawędzie, zamknięte drzwi i blokujący terrain na polach pośrednich.
+- Żywa postać znajdująca się na polu pośrednim daje celowi half cover (`+2 AC`) przeciw rzutowi ataku.
+- Obiekt sceny może deklarować `projectile_cover_bonus` równy `2` albo `5`, odpowiednio dla half cover i three-quarters cover. Premie osłony nie sumują się; działa najwyższa osłona na linii pocisku.
+- Pełna blokada linii widzenia oznacza total cover i wyklucza cel z legalnych celów ataku.
+- Atak dystansowy ma utrudnienie, jeśli w odległości 5 feet od atakującego znajduje się żywy, widzący go przeciwnik. Jak zwykle jedna przewaga i jedno utrudnienie wzajemnie się znoszą.
+- Opcjonalna reguła flankowania z D&D 5e 2014 jest domyślnie włączona. Atak wręcz z sąsiedniego pola ma przewagę, gdy żywy sojusznik atakującego stoi na dokładnie przeciwległym polu albo rogu względem jednopolowego celu i ma do niego linię widzenia.
+- Flankowanie nie działa dla ataków dystansowych, save-spelli ani efektów obszarowych. Pokonany sojusznik nie zapewnia flankowania. Preview i log zdarzenia zapisują flankujących aktorów, a `Flankowanie` jest jawnym modyfikatorem sytuacyjnym rzutu.
+- Half cover dodaje `+2`, a three-quarters cover `+5` również do rzutów obronnych na Zręczność przeciw czarom. Premia jest jawnym `RollModifier` i pojawia się w preview oraz rozbiciu wyniku save'a; save oparty na innej cesze nie otrzymuje premii.
+- Dla czaru obszarowego osłona jest liczona od punktu pochodzenia efektu: wskazanego środka dla `radius` oraz pozycji rzucającego dla `line` i `cone`. Pełna przeszkoda między punktem pochodzenia a aktorem wyklucza go z celów obszaru.
+- Te zasady dotyczą obecnie czarów single-target i obszarowych. Hazardy eksploracyjne bez pozycji źródła nie zgadują osłony.
 - Atak porównuje wynik ataku z AC celu.
 - Naturalne `20` przy ataku oznacza trafienie krytyczne.
 - Naturalne `1` przy ataku oznacza automatyczne pudło.
@@ -233,19 +245,69 @@ Implementacja MVP:
 - HP nie spada poniżej `0`.
 - Wynik aplikacji obrażeń zapisuje HP i temporary HP przed/po, ile obrażeń pochłonęło temporary HP, ile weszło w HP oraz czy cios pokonał cel.
 - Komunikaty UI po trafieniu muszą pokazywać obrażenia oraz zmianę HP celu.
-- Stan pokonania/śmierci jest uproszczony w MVP.
+- Bohater z cechą `uses_death_saves` po zejściu do 0 HP traci przytomność i pozostaje w inicjatywie, aby wykonywać rzuty śmierci; przeciwnik bez tej cechy jest pokonany przy 0 HP.
 - `hp > 0` nie oznacza automatycznie, że obiekt jest legalnym celem ataku.
 - Cel ataku musi być `attackable=True` i `visible`.
 - `RollMode.ADVANTAGE` i `RollMode.DISADVANTAGE` rozstrzygają pełne `2d20`: zapisujemy oba wyniki, a wybrana kość to wyższa przy przewadze i niższa przy utrudnieniu.
 - Przy ręcznych rzutach ataku UI wymaga wpisania obu wyników d20, jeśli rzut ma przewagę albo utrudnienie; przeciwnicy rzucają oba d20 automatycznie.
 - Mini-pętla walki obsługuje start tury, zużycie akcji, koniec tury, przejście inicjatywy i zakończenie walki.
 - Tura śledzi osobno akcję główną, akcję bonusową, reakcję i zużyty ruch.
+- Pierwszy weapon attack rozpoczyna Attack action i zużywa jeden wpis z budżetu
+  `attacks_per_action` aktywnego aktora. Między kolejnymi atakami można wykorzystać
+  pozostały ruch, zmienić cel i wybrać inne legalne źródło broni.
+- Spell attack i save-spell zużywają Cast a Spell action, więc nie korzystają z
+  budżetu Extra Attack. Bonusowy atak drugą bronią nadal zużywa bonus action.
+- Potwory mogą deklarować osobną, uporządkowaną listę `multiattack`; runtime wykonuje
+  każde źródło po kolei i po każdym wyniku wraca do planowania, dzięki czemu może
+  ponownie wybrać legalny cel lub wykorzystać pozostały ruch.
 - Reakcja jest śledzona per aktor, również poza jego własną turą, i odświeża się na początku jego następnej tury.
 - `Dash` zużywa akcję główną i dodaje aktorowi dodatkową pulę ruchu równą jego `speed_feet` do końca bieżącej tury.
 - `Dodge/Unik` zużywa akcję główną i daje efekt `Unik`: ataki przeciwko aktorowi mają utrudnienie; efekt wygasa na początku następnej tury tego aktora.
 - `Disengage/Odwrót` zużywa akcję główną i w MVP daje efekt `Odwrót`: bezpieczne odejście do końca tury, blokujące ataki okazyjne.
-- Atak okazyjny może zostać sprowokowany, gdy aktor dobrowolnie opuszcza zasięg wręcz żywego wroga z dostępną reakcją i zdefiniowanym atakiem wręcz/reach.
-- W MVP zasięg okazyjnego bierze `range_feet` ataku do 10 feet, żeby obsłużyć zwykły zasięg 5 ft i broń z reach 10 ft, ale wykluczyć broń dystansową typu kusza.
+- Warunki walki mają osobny, serializowany `ConditionState`; nie są kodowane jako chwilowy komunikat UI ani zwykły `ActiveEffect`.
+- `Prone/Powalony` używa zasad D&D 5e 2014: aktor może paść bez zużywania akcji ani ruchu, a wstanie kosztuje połowę jego bazowej szybkości i jest możliwe tylko przy wystarczającym pozostałym ruchu.
+- Powalony aktor czołga się: każdy foot drogi kosztuje dodatkowy foot ruchu. Koszt ten kumuluje się z difficult terrain, więc krok 5 feet po trudnym terenie kosztuje 15 feet.
+- Powalony atakujący ma utrudnienie. Atak przeciw powalonemu celowi ma przewagę z odległości do 5 feet, a z większej odległości ma utrudnienie; przewagi i utrudnienia znoszą się standardowo.
+- UI pokazuje stan `Powalony` jako status aktora. Padnięcie i wstanie wybiera się z menu własnego pola; AI wstaje na początku swojej tury, jeśli ma wystarczający ruch.
+- `Actor` przechowuje jeden `ProficiencyProfile` dla saving throwów, skilli, expertise, broni, pancerzy i narzędzi. `proficiency_bonus` pozostaje wartością aktora, niezależną od konkretnej klasy.
+- Ability check, saving throw i attack roll składają osobne `RollModifier`: cechę, proficiency albo expertise oraz modyfikatory sytuacyjne. UI pokazuje te składniki zamiast anonimowej premii końcowej.
+- Biegłość w broni jest wiązana ze stabilnym id itemu, a dla naturalnego ataku potwora z id źródła ataku. Atak bronią wskazujący `ability` wylicza premię z cechy i dodaje proficiency wyłącznie przy pasującej biegłości aktora. Historyczne `attack_modifier` pozostaje fallbackiem dla starszego contentu bez `ability`.
+- Saving throwy czarów, efektów sceny i koncentracji korzystają z tego samego profilu. Samo posiadanie wysokiej cechy nie oznacza biegłości.
+- Wszystkie nowe save'y opisuje wspólny `SavingThrowRequest`: cecha, ST, źródło oraz skutek sukcesu. `SavingThrowResult` zachowuje naturalny d20, jawne składniki modyfikatora, sumę i mnożnik obrażeń.
+- Save wymuszony przez przeciwnika na bohaterze jest rzutem fizycznym gracza. Po potwierdzeniu celu tura przeciwnika zatrzymuje się, UI pokazuje cechę, ST i modyfikatory, a wpisany naturalny d20 rozstrzyga pełne, połowę albo brak obrażeń.
+- Mnożnik wynikający z save'a stosuje się przed resistance/immunity/vulnerability i przed temporary HP. Rzut obronny potwora przeciw efektowi gracza pozostaje automatyczny.
+- Zagrożenie eksploracyjne może po porażce albo krytycznej porażce wywołać osobny fizyczny saving throw. Nie zmienia HP przed rozstrzygnięciem tego rzutu i korzysta z tego samego typed-damage pipeline co walka.
+- Standardowy upadek D&D 5e 2014 zadaje `1d6 bludgeoning` za każde 10 ft i nie daje domyślnie save'a redukującego obrażenia. Dexterity save ST 12 przy wspinaczce po bramie jest jawnym rozstrzygnięciem scenariuszowym: reprezentuje odzyskanie kontroli i redukuje obrażenia o połowę.
+- Test narzędzia jest ability checkiem z cechą wybraną przez sytuację i stabilnym id narzędzia. Biegłość narzędziowa dodaje jeden proficiency bonus; biegłość skilla i narzędzia w tej samej próbie nie sumują proficiency podwójnie, a expertise ma pierwszeństwo przed zwykłą biegłością.
+- Test przeciwstawny porównuje końcowe wyniki dwóch niezależnych ability checków. Wyższy wynik wygrywa, a remis zachowuje stan sprzed próby. Resolver jest neutralny wobec konkretnej akcji i stanowi wspólną podstawę Shove oraz Grapple.
+- Shove bazuje na zasadach D&D 5e 2014: wymaga celu w zasięgu 5 ft, atakujący rzuca Strength (Athletics), a cel broni się korzystniejszym Strength (Athletics) albo Dexterity (Acrobatics). Remis oznacza skuteczną obronę.
+- Przed rzutem gracz wybiera powalenie albo odepchnięcie o 5 ft. Powalenie używa wspólnego `Prone`; odepchnięcie przesuwa cel bez zużywania jego movement i bez ataków okazyjnych. Niedostępne pole docelowe blokuje wariant odepchnięcia, ale nie wariant powalenia.
+- Shove zastępuje jeden atak w ramach Attack action. Cel Shove może być najwyżej o jedną kategorię rozmiaru większy od atakującego.
+- Grapple używa zasad D&D 5e 2014: sąsiedni cel broni się lepszym Athletics/Acrobatics przed Strength (Athletics) chwytającego, a remis oznacza obronę. Rozpoczęcie Grapple zastępuje jeden atak Attack action; ucieczka z chwytu nadal zużywa całą akcję.
+- `Grappled` jest źródłowym `ConditionState`: wskazuje chwytającego i ustawia ruch celu na 0. Chwytany bohater może zużyć akcję na lepsze Athletics/Acrobatics przeciw Athletics chwytającego; sukces usuwa konkretną relację chwytu.
+- Chwytający przeciąga jeden cel na swoje poprzednie pole z efektywną szybkością zmniejszoną o połowę. Ta redukcja jest stosowana przed Dash i niezależnie od kosztu difficult terrain; UI pokazuje skrócony zasięg, wartość bazową/efektywną oraz różowe pole docelowe chwytanej figurki. Przymusowe przesunięcie celu nie prowokuje jego ataków okazyjnych. Pokonanie jednej strony albo rozdzielenie ich poza 5 ft automatycznie kończy chwyt.
+- Grapple wymaga co najmniej jednej wolnej ręki po uwzględnieniu trzymanego wyposażenia. Cel może być najwyżej o jedną kategorię rozmiaru większy; obecne MVP nadal pozwala jednemu aktorowi utrzymywać najwyżej jeden chwyt.
+- `CreatureSize` obejmuje Tiny, Small, Medium, Large, Huge i Gargantuan. Brak pola w starszym contentcie oznacza Medium. Wszystkie rozmiary nadal używają jednej figurki i jednego pola; footprinty wielopolowe są osobnym przyszłym etapem.
+- Obrażenia używają trzynastu bazowych typów D&D 5e 2014. Składniki jednego zdarzenia są sumowane według typu przed zastosowaniem resistance, immunity albo vulnerability, aby zaokrąglenie nie zależało od technicznego podziału źródła.
+- Resistance dzieli obrażenia danego typu przez dwa z zaokrągleniem w dół, vulnerability je podwaja, a immunity redukuje do zera. Wielokrotna ta sama relacja nie kumuluje się. Jeśli resistance i vulnerability dotyczą tego samego typu, stosowana jest kolejność z zasad 2014: najpierw resistance, potem vulnerability; immunity ma pierwszeństwo.
+- Saving throw i pozostałe modyfikatory źródła są rozliczane przed profilem odporności celu. Temporary HP pochłania dopiero końcową wartość obrażeń.
+- Obecny profil jest zależny wyłącznie od typu obrażeń. Kwalifikatory typu „od niemagicznych ataków”, srebrzona broń oraz wyjątki omijające odporność wymagają przyszłego kontraktu cech źródła obrażeń i nie są zgadywane z nazwy broni.
+- Otwieranie zamka bramy jest Dexterity check z `thieves_tools`, nie Dexterity (Sleight of Hand). Posiadanie zestawu pozostaje wymogiem, biegłość pochodzi z profilu aktora, a scenariuszowe ryzyko uszkodzenia jest osobną konsekwencją.
+- Bazą Hide i Search jest D&D 5e 2014. Stealth oraz Perception korzystają ze wspólnego wyliczenia ability modifier + proficiency/expertise.
+- Hide zużywa akcję dopiero po wpisaniu rzutu Dexterity (Stealth). Próba jest legalna, jeśli żaden żywy przeciwnik nie widzi aktora wyraźnie.
+- Dla deterministycznej planszy „nie widzi wyraźnie” oznacza zablokowaną linię widzenia albo co najmniej three-quarters cover na linii. Half cover nie wystarcza. Jest to jawne doprecyzowanie pozostawionej MG oceny okoliczności z zasad 2014.
+- Wynik Stealth jest porównywany osobno z passive Perception każdego przeciwnika. Remis oznacza wykrycie; aktor może pozostawać ukryty przed jednym obserwatorem, a widoczny dla innego.
+- Stan ukrycia przechowuje wynik Stealth i listę obserwatorów. Search zużywa akcję i wykonuje Wisdom (Perception) przeciw zapisanemu wynikowi; sukces ujawnia cel tylko szukającemu.
+- Wejście na pole, z którego obserwator znowu widzi aktora wyraźnie, kończy ukrycie względem tego obserwatora. Utrata przytomności albo wykonanie attack roll ujawnia aktora wszystkim.
+- Atakujący ukryty przed celem ma przewagę do rzutu ataku. Przewaga nadal znosi się z pojedynczym utrudnieniem według zwykłych reguł d20.
+- Przeciwnik nie wybiera celu ukrytego przed nim i nie podąża do jego pozycji na podstawie wiedzy UI. Gdy nie widzi żadnego celu, automatycznie używa Search.
+- Ukrycie może powstać również przed inicjatywą, ale tylko gdy scenariuszowe rozpoczęcie starcia potwierdziło, że drużyna podeszła niezauważona. Każdy bohater ma jedną próbę, a wynik i relacje per obserwator są zapisywane w oczekującym encounterze i przenoszone do walki.
+- Board MVP nie obsługuje jeszcze zgadywania pola ukrytego celu i ataku z utrudnieniem. Ukryty cel nie jest legalnie podświetlany, nawet jeśli obserwator mógł wcześniej znać jego pozycję. Dźwięk, czary z komponentem Verbal, invisible i specjalne senses pozostają kolejnymi rozszerzeniami.
+- Atak okazyjny może zostać sprowokowany, gdy aktor dobrowolnie opuszcza `reach_feet` żywego wroga z dostępną reakcją i aktywnym źródłem ataku wręcz. Sam ruch wewnątrz tego zasięgu nie prowokuje.
+- Źródła dystansowe nie tworzą strefy zagrożenia niezależnie od ich krótkiego `range_feet`. Dzięki temu krótki ranged attack nie jest omyłkowo traktowany jak broń wręcz, a melee reach może przekraczać 10 feet bez specjalnej heurystyki.
+- AI przeciwnika uwzględnia reach wybranego źródła i zatrzymuje się na pierwszym osiągalnym polu, z którego może zaatakować, zamiast zawsze podchodzić do sąsiedniego pola.
+- Shove i Grapple pozostają manewrami o stałym zasięgu 5 feet; reach trzymanej broni ich nie rozszerza.
+- Loader zachowuje kompatybilność ze starszym contentem: przy braku `attack_kind` źródło z `range_feet > 10` jest interpretowane jako ranged, a krótsze jako melee. Jest to wyłącznie fallback migracyjny; nowy content ma deklarować rodzaj i reach jawnie.
 - UI gracza zatrzymuje ruch prowokujący, pokazuje zagrożenia i wymaga Entera albo przycisku przed rozstrzygnięciem reakcji i wykonaniem ruchu.
 - Wykrywanie ataku okazyjnego jest symetryczne dla bohaterów i przeciwników.
 - Gdy przeciwnik opuszcza zasięg bohatera podczas zapowiedzianego ruchu, UI pozwala wykonać albo pominąć reakcję bohatera; przy wykonaniu gracz wpisuje rzut d20 i, po trafieniu, obrażenia.
@@ -292,7 +354,11 @@ Implementacja MVP:
 - MVP testu koncentracji nie uwzględnia jeszcze proficiency, advantage/disadvantage, featów ani klasowych premii do concentration save.
 - Aktor rzucający czary może mieć `spell_save_dc`; źródło czaru może nadpisać DC własnym `save_dc`.
 - `AttackSource` może być save-spellem przez `save_ability`; wtedy przeciwnik wykonuje automatyczny rzut obronny, a UI pokazuje naturalny d20, modyfikator cechy, sumę, ST i sukces/porażkę.
-- `AttackSource` może mieć obszar (`area`) typu `radius`, `line` albo `cone`; plansza wybiera środek obszaru albo sąsiednie pole kierunku, UI pokazuje preview LED i wymaga Entera/przycisku przed wykonaniem.
+- `AttackSource` może mieć obszar (`area`) typu `radius`, `line` albo `cone`; plansza wybiera środek obszaru albo jedno z ośmiu sąsiednich pól kierunku, UI pokazuje pełny preview LED i wymaga Entera/przycisku przed wykonaniem.
+- Wszystkie wymiary obszaru są dodatnimi wielokrotnościami 5 feet. `line` respektuje `length_feet` i `width_feet`, tworząc równoległe tory pól. `cone` rośnie warstwami o szerokości 1, 2, 3... pól do `length_feet`; parzysta warstwa ma deterministyczne przesunięcie widoczne w preview.
+- Każde pole obszaru wymaga line-of-effect od punktu pochodzenia. Ściany, zamknięte krawędzie i blocking terrain odcinają pola znajdujące się za przeszkodą; dla radiusa punktem pochodzenia jest środek, a dla line/cone rzucający.
+- `area.target_mode` jest data-driven: `all_creatures` obejmuje każdą żywą istotę w obszarze i stanowi domyślne friendly fire, `enemies` ogranicza efekt do przeciwników, a `allies` do sojuszników. Rzucający również może być celem `all_creatures` albo `allies`, jeżeli jego pole faktycznie znajduje się w obszarze.
+- UI ostrzega przed potwierdzeniem, jeśli obszar obejmuje rzucającego albo jego sojusznika, i nadal pokazuje osobny save oraz osłonę dla każdego celu.
 - W MVP czary obszarowe i save-spelle aplikują wpisany przez gracza końcowy wynik obrażeń po wyniku save’a: `none` oznacza brak obrażeń przy sukcesie, `half` oznacza połowę obrażeń przy sukcesie.
 - Leczenie w combacie jest osobnym źródłem akcji (`HealingSource`), a nie atakiem; legalnym celem jest ranny sojusznik w zasięgu i linii widzenia.
 - Gracz wpisuje końcowy wynik leczenia z fizycznego rzutu, a aplikacja ogranicza HP do `max_hp`.
@@ -309,7 +375,7 @@ Implementacja MVP:
 - Magiczny napój siły w MVP jest akcją walki pochodzącą z itemu aktora: zużywa akcję główną, zmniejsza `quantity` itemu o 1 i daje efekt `strength_potion` do początku następnej tury aktora.
 - `strength_potion` daje premię do ataku i obrażeń tylko źródłom opartym o Siłę.
 - Nie implementujemy jeszcze attunement, pełnych ładunków/odnawiania itemów, klasowo wyliczanych list czarów, profili casterów znanych czarów, zaawansowanych modyfikatorów testu koncentracji ani zaawansowanych efektów czarów poza obrażeniami/lekkim leczeniem i prostym buffem do ataku.
-- Jawne obiekty sceny mogą oferować deterministyczne interakcje walki zużywające akcję główną.
+- Jawne obiekty sceny deklarują jawny `action_cost`: `action`, `bonus_action`, `reaction`, `object_interaction` albo `free`. `object_interaction` najpierw zużywa jedną darmową interakcję w turze, a po jej wykorzystaniu może zużyć akcję główną.
 - Interakcje walki są data-driven: `SceneInteraction` może deklarować listę `conditions` oraz listę `effects`.
 - Warunki interakcji MVP obejmują dostępną akcję, sąsiedztwo obiektu, stanie na obiekcie, sąsiedniego przeciwnika oraz wolne pole docelowe.
 - Efekty interakcji MVP obejmują `grant_ac_bonus_until_move`, `move_actor_to_tile`, `grant_attack_bonus_while_on_object` i `grant_next_attack_penalty`.
@@ -334,7 +400,7 @@ Poza zakresem MVP:
 - czary, area effects i złożone itemy,
 - pełne zasady osłony dla ranged attacks,
 - odporności i podatności,
-- pełne death saving throws,
+- automatyczne trafienia krytyczne przeciw nieprzytomnemu celowi atakowanemu z 5 feet,
 - destrukcja obiektów i przeszkód.
 - pełne AI ruchu przeciwników,
 - ruch w turze podczas multi-actor MVP,
@@ -344,32 +410,47 @@ Poza zakresem MVP:
 
 Odstępstwa / decyzje planszowe:
 
-- Szczegółowe zasady śmierci i umierania zostają odłożone, dopóki nie będą potrzebne w pierwszej scenie.
+- Profil death saves jest cechą aktora, a nie klasy ani frakcji; content MVP włącza go bohaterom i wyłącza zwykłym przeciwnikom.
 - Obiekty atakowalne są przewidziane w modelu targetowania, ale pełny flow niszczenia obiektów zostaje później.
 - Komunikat aplikacji i LED-y muszą być zsynchronizowane: legalne cele, wybrany cel, wynik ataku.
-- W board-first MVP gracz nie wybiera najpierw akcji z menu: klika pole na planszy, a aplikacja interpretuje intencję jako ruch albo atak.
+- W board-first MVP gracz nie wybiera najpierw akcji z globalnego menu: klika pole na planszy, a aplikacja buduje katalog wszystkich legalnych intencji dla tego pola lub aktora.
 - Pierwsze kliknięcie pola pokazuje podgląd intencji, drugie kliknięcie tego samego pola potwierdza.
 - Kliknięcie innego legalnego pola przed potwierdzeniem zmienia podgląd.
 - Kliknięcie pola aktywnego aktora pokazuje podstawowe opcje aktora; w MVP obsługiwana jest opcja zakończenia tury.
 - Zakończenie tury przed wykorzystaniem całego ruchu jest legalne; niewykorzystany ruch przepada na końcu tury.
 - Przeciwnicy w MVP mogą wykonać ruch w stronę najbliższego celu, a potem zaatakować, jeśli cel stał się legalny.
+
 - Ruch przeciwnika jest wizualizowany jako czerwona ścieżka i pomarańczowe pole docelowe.
 - Pole może mieć wiele dostępnych intencji, np. przeciwnik stojący na obiekcie interaktywnym.
 - W takim przypadku plansza pokazuje kolor `multi-option`, kliknięcie tego samego pola przełącza opcję, a Enter potwierdza aktualną opcję.
-- Obiekty sceny mogą deklarować `blocks_movement`, `allow_interaction_when_occupied_by_enemy` i `cover_bonus`.
+- Obiekty sceny mogą deklarować `blocks_movement`, `allow_interaction_when_occupied_by_enemy`, efekt interakcji `cover_bonus` oraz niezależne geometryczne `projectile_cover_bonus`.
 - Jeśli cel ataku stoi na obiekcie z `cover_bonus`, runtime dodaje jawny modyfikator osłony do instrukcji rzutu ataku.
 - W web UI walki efekty interakcji obiektu są przypięte do pozycji aktora: osłona wygasa po ruchu z pola, a premia z wozu wygasa po zejściu z pól wozu.
+- W encounterze strażnicy przewrócona brama pozostaje nieinteraktywnym `blocking_terrain`: blokuje ruch i linię widzenia, ale nie generuje menu akcji.
+- Rozbity wóz udostępnia pełnoakcyjne zajęcie osłony albo wejście na wolne pole wozu. Rumowisko udostępnia pełnoakcyjne sypnięcie gruzem tylko aktorowi stojącemu na rumowisku, gdy obok znajduje się przeciwnik.
 - UI walki nie rozpoznaje już efektów wozu po ID interakcji; wykonuje znane prymitywy efektów z contentu.
 - Zielone LED-y oznaczają legalne pola interakcji sceny; jeśli pole jest jednocześnie ruchem i interakcją, kliknięcie z dostępną akcją otwiera wybór interakcji.
 - Interakcja przy przeciwniku może wywołać uproszczony atak okazyjny jako decyzję planszowego MVP.
 - Pierwsza scena grywalna może zakończyć się przez spełnienie celu sceny, a nie tylko przez pokonanie wszystkich przeciwników.
+- Broń podniesiona z pola pozostaje niewyposażona. Menu własnego pola pokazuje osobne opcje dobycia, schowania i upuszczenia broni wraz z kosztem. Dobycie i schowanie są osobnymi interakcjami z obiektem: pierwsza w turze jest darmowa, druga wymaga akcji, a trzecia nie mieści się w zwykłej turze. Upuszczenie jest darmowe i pozostawia broń na aktualnym polu.
+- Sloty `main_hand` i `off_hand` są jawnym, serializowanym stanem instancji przedmiotu przez `held_in`. UI pokazuje zawartość obu dłoni, liczbę wolnych rąk oraz rękę zarezerwowaną przez trwający Grapple.
+- Ataki broni są katalogowane przez źródłowy item niezależnie od pierwotnego właściciela, dzięki czemu broń podniesiona od innego aktora zachowuje swoje akcje ataku po wyposażeniu.
+- Kontekstowy katalog celu grupuje opcje jako ataki bronią, manewry, czary, przedmioty, wsparcie/leczenie, ekwipunek, akcje podstawowe i akcje tury. Każdy provider dostarcza tylko legalne opcje, a katalog gwarantuje stabilną kolejność i unikalne identyfikatory.
+- Wszystkie legalne źródła ataku są widoczne równocześnie. Niewyposażona niesiona broń może udostępnić opcję „wyposaż i zaatakuj” tylko przy wolnej wymaganej dłoni; opcja zużywa darmową interakcję, a następnie przechodzi do zwykłego podglądu ataku. Zmiana wymagająca schowania trzymanej broni nie może zostać połączona z atakiem, ponieważ zużywa również akcję.
+- Zwykły atak lekką bronią do walki wręcz trzymaną w jednej dłoni otwiera do końca tury bonusowy atak inną lekką bronią do walki wręcz trzymaną w przeciwnej dłoni. Trafienie pierwszym atakiem nie jest wymagane.
+- Drugi atak zużywa akcję bonusową. Do rzutu ataku stosuje zwykłe modyfikatory, natomiast do obrażeń nie dodaje dodatniego modyfikatora cechy; ujemny modyfikator i premie niezależne od cechy pozostają. Stan triggera jest serializowany i zerowany wraz ze stanem następnej tury.
+- Broń versatile ma równocześnie jawny wariant jednoręczny i oburęczny. Wariant oburęczny jest legalny tylko przy wolnej drugiej ręce, używa `versatile_damage_dice` i nie tworzy trwałego stanu chwytu między atakami. Ręka zarezerwowana przez Grapple blokuje ten wariant.
+- Założona tarcza zajmuje jedną rękę i dodaje `+2` do efektywnego KP. Bazowe `Actor.ac` nie jest mutowane; ataki, podgląd celu i UI korzystają ze wspólnego `effective_armor_class()`.
+- Założenie albo zdjęcie tarczy zużywa akcję. Aktor może korzystać najwyżej z jednej tarczy, a zajęta dłoń automatycznie blokuje niezgodne warianty Two-Weapon Fighting, versatile i Grapple.
+- Pełne zasady 2014 pozwalają użyć tarczy bez biegłości kosztem zestawu kar. Do czasu wdrożenia kompletnego frameworka pancerzy MVP odrzuca założenie tarczy bez wymaganej biegłości, żeby nie tworzyć stanu z brakującymi konsekwencjami.
+- Akcja `targeted_item_effect` jest definiowana w contentowym itemie, ale jej `effect_kind` musi należeć do jawnie obsługiwanych efektów. Runtime sprawdza dostępność przedmiotu, frakcję i zasięg celu, a akcję tury oraz ilość przedmiotu zużywa dopiero podczas wykonania. Pierwszy efekt MVP, `grant_next_attack_penalty`, nakłada karę do następnego ataku celu.
 - Interakcja z jawnym obiektem jest akcją główną: kliknięcie obiektu pokazuje podgląd, drugie kliknięcie potwierdza i zużywa akcję.
 - Interakcja może mieć test cechy `d20`; aplikacja pokazuje cechę, skill, ST, aktywne modyfikatory i końcowy modyfikator przed wpisaniem wyniku.
 - Wynik eksploracyjnej interakcji może ustawić flagę sceny, np. `crate_secured` albo `crate_trap_missed`.
 - Objective może używać warunku `flag_equals`, więc scena może zakończyć się dopiero po konkretnym skutku interakcji, a nie samym kliknięciu obiektu.
 - Setup startowy pokazuje pola, na których gracze mogą ustawić figurki, ale MVP nie skanuje automatycznie poprawności ustawienia.
-- Ranged MVP nie implementuje jeszcze cover bonus, half cover, three-quarters cover ani disadvantage za strzał w zwarciu.
-- Uproszczony LOS traktuje blokujące pola pośrednie jako pełną blokadę, ale nie modeluje rogów, precyzyjnej geometrii miniaturek ani wysokości.
+- Ranged MVP pokazuje w preview half/three-quarters cover, źródło osłony, efektywne AC oraz utrudnienie za strzał w zwarciu. Ten sam kontrakt obowiązuje ataki graczy i automatyczne ataki przeciwników.
+- Uproszczony LOS i osłona używają jednego promienia Bresenhama. Model nie rozstrzyga jeszcze rogów, części miniaturek, wysokości ani wielu promieni do różnych części pola.
 
 Testy:
 
@@ -395,6 +476,53 @@ Testy:
 - `tests/unit/test_interaction_intent.py`
 - `tests/unit/test_turn_led_feedback.py`
 - `tests/unit/test_exploration_ui_session.py`
+
+## Zero HP, Rzuty Śmierci I Stabilizacja
+
+Status: implemented
+
+Źródło:
+
+- D&D 5e 2014 / SRD 5.1, zasady dropping to 0 hit points i death saving throws.
+
+Implementacja MVP:
+
+- Aktor z `uses_death_saves=True` przy 0 HP jest nieprzytomny, nie może działać, poruszać się ani używać reakcji, ale pozostaje w kolejce inicjatywy.
+- Na początku swojej tury wykonuje jawny rzut d20 bez modyfikatora. Wynik 10–20 daje sukces, 1–9 porażkę; trzy sukcesy stabilizują, a trzy porażki oznaczają śmierć.
+- Naturalne 1 daje dwie porażki. Naturalne 20 przywraca 1 HP, zeruje liczniki i pozwala rozegrać bieżącą turę.
+- Stabilizacja zeruje sukcesy i porażki. Otrzymanie obrażeń przy 0 HP kończy stabilizację i daje jedną porażkę albo dwie, jeśli obrażenia pochodzą z trafienia krytycznego.
+- Obrażenia pozostałe po zejściu do 0 HP zabijają natychmiast, jeśli są co najmniej równe maksymalnym HP aktora. Taka sama granica obowiązuje dla pojedynczej porcji obrażeń otrzymanej już przy 0 HP.
+- Dowolne leczenie podnoszące HP powyżej 0 zeruje stan rzutów śmierci i przywraca przytomność.
+- Stabilny bohater nie wykonuje tur. Jeśli po jednej stronie pozostają wyłącznie stabilne lub martwe postacie, walka kończy się na korzyść strony zdolnej działać.
+- Stan jest widoczny w UI, zapisywany w snapshotach i logowany po każdym rzucie.
+- Ataki przeciw nieprzytomnemu aktorowi mają przewagę. Trafienie wykonane przez atakującego znajdującego się nie dalej niż 5 feet od celu jest krytyczne; wpisane obrażenia krytyczne powodują przy 0 HP dwie porażki rzutu śmierci.
+- Stabilizacja w walce zużywa akcję i wymaga sąsiedniego, nieprzytomnego sojusznika. Test Wisdom (Medicine) ma ST 10; sukces stabilizuje, a porażka nadal zużywa akcję.
+- Jedno użycie zestawu uzdrowiciela stabilizuje bez rzutu. Liczba użyć jest przechowywana jako `quantity` przedmiotu i zmniejszana deterministycznie.
+- Medicine korzysta ze wspólnego profilu skilli i dolicza proficiency albo expertise stabilizującego aktora.
+- Przy pierwszym zejściu z dodatnich HP do 0 aktor upuszcza wszystkie dostępne, wyposażone elementy inventory typu `weapon`. Broń otrzymuje osobny identyfikator, pozycję aktora i numer rundy, a jej wpis w inventory staje się niewyposażony.
+- Upuszczona broń jest widoczna w UI, zachowywana w snapshotcie i nie może być użyta po odzyskaniu przytomności, dopóki pozostaje niewyposażona.
+- Pierwsze proste podniesienie przedmiotu w turze zużywa darmową interakcję z obiektem. Kolejna taka interakcja zużywa akcję, jeśli jest jeszcze dostępna.
+- Podniesienie wymaga stania na polu broni. Menu może połączyć dojście i podniesienie w jedną intencję, ale ruch oraz ewentualne ataki okazyjne są rozstrzygane przed zmianą ekwipunku.
+- Podniesiona broń znika z pola, przechodzi do ekwipunku podnoszącego i pozostaje niewyposażona.
+
+Poza zakresem MVP:
+
+- odzyskanie 1 HP po `1d4` godzinach stabilności,
+- automatyczne niezdawanie rzutów obronnych na Strength i Dexterity,
+- przekazywanie i wyposażanie broni,
+- rozróżnienie jednej ręki, dwóch rąk, tarczy oraz innych trzymanych przedmiotów,
+- osobna reprezentacja prone,
+
+Testy:
+
+- `tests/unit/test_death_saves.py`
+- `tests/unit/test_damage.py`
+- `tests/unit/test_combat_session.py`
+- `tests/unit/test_exploration_ui_session.py`
+- `tests/unit/test_session_snapshot.py`
+- `tests/unit/test_attack_resolution.py`
+- `tests/unit/test_scene_interactions.py`
+- `tests/unit/test_combat_stabilization_flow.py`
 
 ## Eksploracja
 
@@ -466,6 +594,12 @@ Implementacja MVP:
 - Terminalowy flow akceptacji interpretacji używa `+` do akceptacji, `-` do odrzucenia i korekty, `?` do wyjaśnienia mechanicznego oraz `r` do reinterpretacji tej samej deklaracji bez wpisywania nowej.
 - Wyjaśnienie interpretacji nie wykonuje rzutu i nie zmienia stanu gry.
 - Historia prób challenge jest częścią deterministycznego stanu eksploracji i trafia do payloadu LLM.
+- Opcja wyzwania może uruchomić data-driven hazard po porażce albo krytycznej porażce. Hazard zatrzymuje flow na jawny fizyczny saving throw, rozstrzyga typowane obrażenia i wybiera osobne `success_effects` albo `failure_effects`.
+- Skutki hazardu korzystają ze znanych prymitywów eksploracji (`set_flag`, `add_noise`, `add_complication`, `move_party`) albo nakładają wspólny stan aktora. Pierwszy pionowy slice to `Prone` po nieudanym Dexterity save przy upadku z bramy.
+- `Prone` powstałe w eksploracji jest jawne, zapisywane w snapshotcie i przechodzi do encountera. Poza inicjatywą gracz może po prostu zadeklarować wstanie; w UI jest to jawna akcja bez kosztu ruchu. W walce obowiązuje zwykły koszt wstania.
+- Pułapka eksploracyjna jest contentem z trwałym stanem `hidden`, `revealed`, `disarmed`, `bypassed` albo `triggered`. Wykrycie korzysta z istniejącego systemu obserwacji, a mechaniczny efekt `reveal_trap` ujawnia pułapkę dopiero po osiągnięciu progu.
+- Ujawniona pułapka może oferować data-driven test rozbrojenia, test ominięcia albo świadome uruchomienie. Nieudane rozbrojenie lub ominięcie i scenariuszowy trigger przechodzą do wspólnego hazardu z fizycznym saving throwem.
+- Referencyjna linka alarmowa przy bramie dodaje hałas zamiast obrażeń. Dzięki temu stan pułapki wpływa na istniejące reguły rozpoczęcia encounteru bez osobnego systemu zaskoczenia.
 - Odrzucone lub niejasne deklaracje tworzą lokalny `declaration_thread` dla aktywnego challenge. Dzięki temu korekta gracza może odnosić się do poprzedniej deklaracji, ale nie tworzymy jeszcze globalnego czatu całej kampanii.
 - `gm_classifier.py` zawiera mechanikę integracji, parsowania i walidacji. Content konkretnej przeszkody powinien pochodzić z `llm_policy` oraz `llm_context`; domyślna policy w kodzie jest celowo minimalna, żeby nie przemycać szczegółowego contentu poza scenariuszem.
 

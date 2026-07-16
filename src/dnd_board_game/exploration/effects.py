@@ -15,7 +15,9 @@ from .models import (
     grant_resource,
     remove_resource,
     reveal_exploration_points,
+    set_party_zone,
 )
+from .traps import reveal_trap, trap_state_for
 
 if TYPE_CHECKING:
     from dnd_board_game.llm.content_config import LlmPrimitiveCatalog
@@ -57,6 +59,16 @@ def validate_exploration_effect(
         challenge_id = _require_string(parameters, "challenge_id", effect_type)
         _require_challenge(state, challenge_id, effect_type)
         _require_non_negative_int(parameters, "value", effect_type)
+    elif effect_type == "add_complication":
+        challenge_id = _require_string(parameters, "challenge_id", effect_type)
+        _require_challenge(state, challenge_id, effect_type)
+        _require_string(parameters, "value", effect_type)
+    elif effect_type == "move_party":
+        zone_id = _require_string(parameters, "zone_id", effect_type)
+        _require_zone(state, zone_id, effect_type)
+    elif effect_type == "reveal_trap":
+        trap_id = _require_string(parameters, "trap_id", effect_type)
+        _require_trap(state, trap_id, effect_type)
     else:
         raise ValueError(f"Unsupported exploration effect: {effect_type}.")
 
@@ -103,6 +115,28 @@ def apply_exploration_effect(
         value = _require_non_negative_int(parameters, "value", effect_type)
         updated = _add_challenge_noise(state, challenge_id, value)
         return ExplorationEffectResult(updated, effect_type, value > 0, f"Hałas dodany: {challenge_id} +{value}.")
+    if effect_type == "add_complication":
+        challenge_id = _require_string(parameters, "challenge_id", effect_type)
+        value = _require_string(parameters, "value", effect_type)
+        updated = _add_challenge_complication(state, challenge_id, value)
+        changed = updated != state
+        return ExplorationEffectResult(updated, effect_type, changed, f"Komplikacja dodana: {value}.")
+    if effect_type == "move_party":
+        zone_id = _require_string(parameters, "zone_id", effect_type)
+        zone = _require_zone(state, zone_id, effect_type)
+        updated = set_party_zone(state, zone)
+        return ExplorationEffectResult(updated, effect_type, updated != state, f"Drużyna przesunięta: {zone.name}.")
+    if effect_type == "reveal_trap":
+        trap_id = _require_string(parameters, "trap_id", effect_type)
+        trap = _require_trap(state, trap_id, effect_type)
+        before = trap_state_for(state, trap_id)
+        updated = reveal_trap(state, trap_id)
+        return ExplorationEffectResult(
+            updated,
+            effect_type,
+            updated != state,
+            f"Wykryto pułapkę: {trap.name}." if updated != state else f"Pułapka już była znana: {before.trap_id}.",
+        )
     raise ValueError(f"Unsupported exploration effect: {effect_type}.")
 
 
@@ -151,6 +185,22 @@ def _add_challenge_noise(state: ExplorationState, challenge_id: str, value: int)
     if not replaced:
         challenge_states.append(updated)
     return replace(state, challenge_states=tuple(sorted(challenge_states, key=lambda item: item.challenge_id)))
+
+
+def _add_challenge_complication(
+    state: ExplorationState,
+    challenge_id: str,
+    value: str,
+) -> ExplorationState:
+    current = challenge_state_for(state, challenge_id)
+    if value in current.complications:
+        return state
+    updated = replace(current, complications=(*current.complications, value))
+    entries = tuple(item for item in state.challenge_states if item.challenge_id != challenge_id)
+    return replace(
+        state,
+        challenge_states=tuple(sorted((*entries, updated), key=lambda item: item.challenge_id)),
+    )
 
 
 def _effect_parts(effect: dict[str, Any], catalog: "LlmPrimitiveCatalog") -> tuple[str, dict[str, Any]]:
@@ -210,3 +260,17 @@ def _require_challenge(state: ExplorationState, challenge_id: str, effect_type: 
     if challenge is None:
         raise ValueError(f"{effect_type}.challenge_id is unknown: {challenge_id}.")
     return challenge
+
+
+def _require_zone(state: ExplorationState, zone_id: str, effect_type: str):
+    zone = next((item for item in state.zones if item.id == zone_id), None)
+    if zone is None:
+        raise ValueError(f"{effect_type}.zone_id is unknown: {zone_id}.")
+    return zone
+
+
+def _require_trap(state: ExplorationState, trap_id: str, effect_type: str):
+    trap = next((item for item in state.traps if item.id == trap_id), None)
+    if trap is None:
+        raise ValueError(f"{effect_type}.trap_id is unknown: {trap_id}.")
+    return trap

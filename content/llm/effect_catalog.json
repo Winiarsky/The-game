@@ -44,6 +44,28 @@
         "challenge_id": "string",
         "value": "integer"
       }
+    },
+    "add_complication": {
+      "label": "Dodaj komplikację",
+      "description": "Dodaje nazwaną komplikację do wskazanego wyzwania eksploracyjnego.",
+      "parameters": {
+        "challenge_id": "string",
+        "value": "string"
+      }
+    },
+    "move_party": {
+      "label": "Przesuń drużynę",
+      "description": "Przenosi znacznik drużyny do istniejącej lokacji eksploracyjnej.",
+      "parameters": {
+        "zone_id": "string"
+      }
+    },
+    "reveal_trap": {
+      "label": "Ujawnij pułapkę",
+      "description": "Zmienia znaną pułapkę z ukrytej na wykrytą.",
+      "parameters": {
+        "trap_id": "string"
+      }
     }
   }
 }

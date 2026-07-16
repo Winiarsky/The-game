@@ -4,6 +4,10 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING, NewType
 
+from .damage_affinities import DamageAffinityProfile
+from .proficiency_profile import ProficiencyProfile
+from .size import CreatureSize
+
 if TYPE_CHECKING:
     from dnd_board_game.actors.resources import ActorResourcePool, HitDicePool
     from dnd_board_game.actors.spell_preparation import SpellPreparationProfile
@@ -32,6 +36,20 @@ class AbilityScores:
 
 
 @dataclass(frozen=True, slots=True)
+class DeathSaveState:
+    successes: int = 0
+    failures: int = 0
+    stable: bool = False
+    dead: bool = False
+
+    def __post_init__(self) -> None:
+        if not 0 <= self.successes <= 3 or not 0 <= self.failures <= 3:
+            raise ValueError("Death save successes and failures must be between 0 and 3.")
+        if self.stable and self.dead:
+            raise ValueError("An actor cannot be both stable and dead.")
+
+
+@dataclass(frozen=True, slots=True)
 class Actor:
     id: ActorId
     name: str
@@ -50,13 +68,44 @@ class Actor:
     spell_preparation: SpellPreparationProfile | None = None
     hit_dice: tuple[HitDicePool, ...] = ()
     resource_pools: tuple[ActorResourcePool, ...] = ()
+    proficiency_bonus: int = 2
+    proficiencies: ProficiencyProfile = field(default_factory=ProficiencyProfile)
+    uses_death_saves: bool = False
+    death_saves: DeathSaveState = field(default_factory=DeathSaveState)
+    size: CreatureSize = CreatureSize.MEDIUM
+    damage_affinities: DamageAffinityProfile = field(default_factory=DamageAffinityProfile)
+    attacks_per_action: int = 1
 
     def __post_init__(self) -> None:
         if self.max_hp <= 0:
             object.__setattr__(self, "max_hp", max(0, self.hp))
+        if self.proficiency_bonus < 0:
+            raise ValueError("Proficiency bonus cannot be negative.")
+        if self.attacks_per_action < 1:
+            raise ValueError("Attacks per action must be at least 1.")
+
+    @property
+    def skill_proficiencies(self) -> tuple[str, ...]:
+        return self.proficiencies.skills
+
+    @property
+    def skill_expertise(self) -> tuple[str, ...]:
+        return self.proficiencies.expertise
 
     def is_defeated(self) -> bool:
         return self.hp <= 0
+
+    def is_dead(self) -> bool:
+        return self.death_saves.dead or (self.hp <= 0 and not self.uses_death_saves)
+
+    def is_unconscious(self) -> bool:
+        return self.uses_death_saves and self.hp <= 0 and not self.death_saves.dead
+
+    def needs_death_save(self) -> bool:
+        return self.is_unconscious() and not self.death_saves.stable
+
+    def can_take_combat_turn(self) -> bool:
+        return self.hp > 0 or self.needs_death_save()
 
 
 def is_ally_or_neutral(mover: Actor, other: Actor) -> bool:

@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass
+from typing import Mapping
 
 from dnd_board_game.actors import Actor
 from dnd_board_game.combat import (
+    ActionEconomyCost,
     AppliedDamageResult,
     AppliedHealingResult,
     AttackSource,
@@ -20,8 +22,9 @@ from dnd_board_game.combat import (
     replace_actor,
     resolve_damage,
     resolve_spell_save,
-    use_turn_action,
+    use_action_economy_cost,
 )
+from dnd_board_game.rules import RollModifier
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,8 +88,9 @@ class ActionResourceResolver:
         actor: Actor,
         *,
         spell_level: int = 0,
+        action_cost: ActionEconomyCost = ActionEconomyCost.ACTION,
     ) -> ActionResourceResolution:
-        action_result = use_turn_action(state)
+        action_result = use_action_economy_cost(state, action_cost)
         if not action_result.accepted:
             raise ValueError(action_result.message)
         state_after_action = action_result.state
@@ -113,11 +117,12 @@ class AttackActionResolver(ActionResourceResolver):
         source: AttackSource,
         base_damage: int,
         saving_throw: SpellSaveResult | None = None,
+        critical: bool = False,
     ) -> SingleTargetDamageResolution:
         target = _actor_by_id(state, target_id)
         applied_amount = apply_save_damage_amount(max(0, int(base_damage)), saving_throw)
         damage = resolve_damage((DamageComponentInput(applied_amount, DamageType(source.damage_type), source.name),))
-        applied = apply_damage_result(target, damage)
+        applied = apply_damage_result(target, damage, critical=critical)
         return SingleTargetDamageResolution(
             state=replace_actor(state, applied.actor_after),
             target_id=target_id,
@@ -136,6 +141,7 @@ class SpellSaveAttackResolver(AttackActionResolver):
         target: Actor,
         source: AttackSource,
         rng: random.Random,
+        saving_throw_modifiers: tuple[RollModifier, ...] = (),
     ) -> SingleTargetSaveSpellConfirmation:
         if not source.save_ability:
             raise ValueError(f"Czar {source.name} nie ma zdefiniowanego rzutu obronnego.")
@@ -148,6 +154,7 @@ class SpellSaveAttackResolver(AttackActionResolver):
             dc=spell_save_dc(caster_after, source),
             natural_roll=rng.randint(1, 20),
             damage_on_success=source.save_damage_on_success,
+            situational_modifiers=saving_throw_modifiers,
         )
         return SingleTargetSaveSpellConfirmation(resource_use.state, resource_use, saving_throw)
 
@@ -161,9 +168,17 @@ class AreaSpellResolver(ActionResourceResolver):
         source: AttackSource,
         target_ids: tuple[str, ...],
         rng: random.Random,
+        saving_throw_modifiers_by_target: Mapping[str, tuple[RollModifier, ...]] | None = None,
     ) -> AreaSpellConfirmation:
         resource_use = self.consume_action_and_source_resource(state, caster, spell_level=source.spell_level)
-        saves = roll_spell_saves_for_targets(resource_use.state, caster_id=str(caster.id), source=source, target_ids=target_ids, rng=rng)
+        saves = roll_spell_saves_for_targets(
+            resource_use.state,
+            caster_id=str(caster.id),
+            source=source,
+            target_ids=target_ids,
+            rng=rng,
+            saving_throw_modifiers_by_target=saving_throw_modifiers_by_target,
+        )
         return AreaSpellConfirmation(resource_use.state, resource_use, saves)
 
     def apply_area_damage(
@@ -226,6 +241,7 @@ def roll_spell_saves_for_targets(
     source: AttackSource,
     target_ids: tuple[str, ...],
     rng: random.Random,
+    saving_throw_modifiers_by_target: Mapping[str, tuple[RollModifier, ...]] | None = None,
 ) -> tuple[SpellSaveResult, ...]:
     if not source.save_ability:
         return ()
@@ -245,6 +261,10 @@ def roll_spell_saves_for_targets(
                 dc=spell_save_dc(caster, source),
                 natural_roll=rng.randint(1, 20),
                 damage_on_success=source.save_damage_on_success,
+                situational_modifiers=(saving_throw_modifiers_by_target or {}).get(
+                    target_id,
+                    (),
+                ),
             )
         )
     return tuple(saves)

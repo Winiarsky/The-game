@@ -9,9 +9,13 @@ from dnd_board_game.combat import (
     AttackSource,
     CombatState,
     CombatStatus,
+    SceneObject,
     current_actor,
+    grappled_actor_ids,
     movement_remaining,
     opportunity_attackers_for_movement,
+    path_with_condition_cost,
+    refresh_hidden_after_movement,
     use_movement,
 )
 from dnd_board_game.world import BoardState, Coordinate, PathResult, find_path
@@ -59,6 +63,12 @@ class CombatMovementFlowService:
             destination=destination,
             invalid_path_message="Nie można dojść do wskazanego pola.",
         )
+        dragged = _dragged_actor_for_path(state, actor, path)
+        dragged_message = (
+            f" Po ruchu przestaw {dragged.name} na {path.path[-2].as_tuple()}."
+            if dragged is not None
+            else ""
+        )
         return CombatMovementPreview(
             actor_id=str(actor.id),
             destination=destination,
@@ -66,9 +76,13 @@ class CombatMovementFlowService:
             board_message=(
                 f"Wybrano ścieżkę ruchu {actor.name} -> {destination.as_tuple()} "
                 f"({path.cost_feet} ft). Kliknij to pole ponownie, żeby zatwierdzić."
+                f"{dragged_message}"
             ),
             event_type="ui_combat_movement_previewed",
-            event_payload=_movement_event_payload(actor, destination, path),
+            event_payload=(
+                *_movement_event_payload(actor, destination, path),
+                *(_dragged_event_payload(dragged, path) if dragged is not None else ()),
+            ),
         )
 
     def submit(
@@ -79,6 +93,7 @@ class CombatMovementFlowService:
         attack_sources_by_actor: Mapping[ActorId, AttackSource],
         active_effects: tuple[ActiveCombatEffect, ...],
         destination: Coordinate,
+        scene_objects: tuple[SceneObject, ...] = (),
     ) -> CombatMovementSubmission:
         actor, path = self._plan_path(
             state=state,
@@ -122,11 +137,21 @@ class CombatMovementFlowService:
                 ),
             )
 
+        dragged = _dragged_actor_for_path(state, actor, path)
         movement = use_movement(state, actor, path)
         if not movement.accepted:
             raise ValueError(movement.message)
+        moved_actor = current_actor(movement.state)
+        hidden = refresh_hidden_after_movement(
+            board,
+            moved_actor,
+            movement.state.actors,
+            movement.state.hidden_states,
+            scene_objects,
+        )
+        updated_state = replace(movement.state, hidden_states=hidden.hidden_states)
         return CombatMovementSubmission(
-            state=movement.state,
+            state=updated_state,
             actor_id=str(actor.id),
             destination=destination,
             path=path,
@@ -139,7 +164,9 @@ class CombatMovementFlowService:
             event_type="ui_combat_player_moved",
             event_payload=(
                 *_movement_event_payload(actor, destination, path),
+                *(_dragged_event_payload(dragged, path) if dragged is not None else ()),
                 ("movement_remaining_feet", movement.movement_remaining_feet),
+                ("revealed_to_actor_ids", list(hidden.revealed_to_actor_ids)),
             ),
         )
 
@@ -158,6 +185,12 @@ class CombatMovementFlowService:
             raise ValueError("To nie jest tura bohatera.")
         movement_actor = replace(actor, speed_feet=movement_remaining(state, actor))
         path = find_path(board, movement_actor, state.actors, destination)
+        path = path_with_condition_cost(
+            path,
+            state.condition_states,
+            str(actor.id),
+            movement_budget_feet=movement_remaining(state, actor),
+        )
         if not path.valid:
             raise ValueError(invalid_path_message)
         return actor, path
@@ -173,4 +206,31 @@ def _movement_event_payload(
         ("destination", [destination.col, destination.row]),
         ("path", [[position.col, position.row] for position in path.path]),
         ("cost_feet", path.cost_feet),
+    )
+
+
+def _dragged_actor_for_path(
+    state: CombatState,
+    actor: Actor,
+    path: PathResult,
+) -> Actor | None:
+    if len(path.path) < 2:
+        return None
+    dragged_ids = grappled_actor_ids(state.condition_states, str(actor.id))
+    if not dragged_ids:
+        return None
+    return next(
+        (candidate for candidate in state.actors if str(candidate.id) == dragged_ids[0]),
+        None,
+    )
+
+
+def _dragged_event_payload(
+    dragged: Actor,
+    path: PathResult,
+) -> tuple[tuple[str, object], ...]:
+    destination = path.path[-2]
+    return (
+        ("dragged_actor_id", str(dragged.id)),
+        ("dragged_destination", [destination.col, destination.row]),
     )

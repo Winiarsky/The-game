@@ -10,18 +10,27 @@ from dnd_board_game.actors import (
     Actor,
     ActorId,
     ActorResourcePool,
+    DeathSaveState,
+    CreatureSize,
+    DamageAffinityProfile,
     Faction,
     HitDicePool,
     PreparableSpell,
+    ProficiencyProfile,
     RecoveryPeriod,
     SpellPreparationProfile,
 )
 from dnd_board_game.combat import (
     ActionUse,
     CombatState,
+    CombatCondition,
+    ConditionState,
+    DroppedWeapon,
+    HiddenState,
     InitiativeEntry,
     InitiativeOrder,
     TurnActionState,
+    DamageType,
 )
 from dnd_board_game.combat.session import CombatStatus
 from dnd_board_game.combat.spells import SpellSlotState
@@ -37,15 +46,18 @@ from dnd_board_game.exploration import (
     ExplorationChallengeAttempt,
     ExplorationChallengeState,
     ExplorationState,
+    ExplorationTrapState,
+    ExplorationTrapStatus,
     SceneSourceDiscovery,
     SceneSourceCollection,
     FixtureRuntimeState,
     PartyPosition,
     PendingEncounter,
+    PrecombatStealthAttempt,
     TemporaryItem,
     TemporaryItemScope,
 )
-from dnd_board_game.inventory import InventoryItem
+from dnd_board_game.inventory import HandSlot, InventoryItem
 from dnd_board_game.rules import (
     ActiveEffect,
     AdditionalEffectExpiration,
@@ -219,13 +231,39 @@ def _actor_payload(actor: Actor) -> dict[str, object]:
         "id": str(actor.id), "name": actor.name, "ac": actor.ac, "hp": actor.hp,
         "temp_hp": actor.temp_hp, "max_hp": actor.max_hp, "speed_feet": actor.speed_feet,
         "position": _coordinate_payload(actor.position), "faction": actor.faction.value,
+        "size": actor.size.value,
+        "damage_affinities": {
+            "resistances": [value.value for value in actor.damage_affinities.resistances],
+            "immunities": [value.value for value in actor.damage_affinities.immunities],
+            "vulnerabilities": [value.value for value in actor.damage_affinities.vulnerabilities],
+        },
+        "uses_death_saves": actor.uses_death_saves,
+        "attacks_per_action": actor.attacks_per_action,
+        "death_saves": {
+            "successes": actor.death_saves.successes,
+            "failures": actor.death_saves.failures,
+            "stable": actor.death_saves.stable,
+            "dead": actor.death_saves.dead,
+        },
         "ability_scores": {name: getattr(actor.ability_scores, name) for name in _ABILITY_NAMES},
+        "proficiency_bonus": actor.proficiency_bonus,
+        "proficiencies": {
+            "saving_throws": list(actor.proficiencies.saving_throws),
+            "skills": list(actor.proficiencies.skills),
+            "expertise": list(actor.proficiencies.expertise),
+            "weapons": list(actor.proficiencies.weapons),
+            "armor": list(actor.proficiencies.armor),
+            "tools": list(actor.proficiencies.tools),
+        },
         "spell_slots": [{"level": slot.level, "remaining": slot.remaining, "maximum": slot.maximum} for slot in actor.spell_slots],
         "spell_save_dc": actor.spell_save_dc, "spell_ids": list(actor.spell_ids),
         "inventory": [
             {"id": item.id, "name": item.name, "kind": item.kind, "quantity": item.quantity,
              "equipped": item.equipped, "source_ref": item.source_ref, "broken": item.broken,
-             "description": item.description, "properties": list(item.properties), "portable": item.portable}
+             "description": item.description, "properties": list(item.properties), "portable": item.portable,
+             "hands_required": item.hands_required, "held_in": [slot.value for slot in item.held_in],
+             "light_weapon": item.light_weapon, "versatile_damage_dice": item.versatile_damage_dice,
+             "armor_class_bonus": item.armor_class_bonus, "armor_proficiency": item.armor_proficiency}
             for item in actor.inventory
         ],
         "spell_preparation": None if prep is None else {
@@ -246,6 +284,9 @@ def _actor_from_payload(raw: object) -> Actor:
     data = _mapping(raw, "actor")
     abilities = _mapping(data.get("ability_scores"), "actor.ability_scores")
     prep_raw = data.get("spell_preparation")
+    death_raw = _mapping(data.get("death_saves", {}), "actor.death_saves")
+    proficiency_raw = _mapping(data.get("proficiencies", {}), "actor.proficiencies")
+    affinities_raw = _mapping(data.get("damage_affinities", {}), "actor.damage_affinities")
     prep = None
     if prep_raw is not None:
         item = _mapping(prep_raw, "actor.spell_preparation")
@@ -267,13 +308,54 @@ def _actor_from_payload(raw: object) -> Actor:
         temp_hp=_integer(data.get("temp_hp"), "actor.temp_hp"), max_hp=_integer(data.get("max_hp"), "actor.max_hp"),
         speed_feet=_integer(data.get("speed_feet"), "actor.speed_feet"), position=_coordinate(data.get("position"), "actor.position"),
         faction=_enum(Faction, data.get("faction"), "actor.faction"),
+        size=_enum(CreatureSize, data.get("size", CreatureSize.MEDIUM.value), "actor.size"),
         ability_scores=AbilityScores(**{name: _integer(abilities.get(name), f"ability_scores.{name}") for name in _ABILITY_NAMES}),
         spell_slots=tuple(SpellSlotState(_integer(slot.get("level"), "slot.level"), _integer(slot.get("remaining"), "slot.remaining"), _integer(slot.get("maximum"), "slot.maximum")) for value in _sequence(data.get("spell_slots", []), "spell_slots") for slot in (_mapping(value, "slot"),)),
         spell_save_dc=_integer(data.get("spell_save_dc"), "actor.spell_save_dc"),
-        inventory=tuple(InventoryItem(id=_string(item.get("id"), "item.id"), name=_string(item.get("name"), "item.name"), kind=_string(item.get("kind"), "item.kind"), quantity=_integer(item.get("quantity"), "item.quantity"), equipped=_boolean(item.get("equipped"), "item.equipped"), source_ref=_optional_string(item.get("source_ref"), "item.source_ref"), broken=_boolean(item.get("broken"), "item.broken"), description=_string(item.get("description", ""), "item.description", allow_empty=True), properties=_string_tuple(item.get("properties", []), "item.properties"), portable=_boolean(item.get("portable", True), "item.portable")) for value in _sequence(data.get("inventory", []), "inventory") for item in (_mapping(value, "item"),)),
+        inventory=tuple(InventoryItem(id=_string(item.get("id"), "item.id"), name=_string(item.get("name"), "item.name"), kind=_string(item.get("kind"), "item.kind"), quantity=_integer(item.get("quantity"), "item.quantity"), equipped=_boolean(item.get("equipped"), "item.equipped"), source_ref=_optional_string(item.get("source_ref"), "item.source_ref"), broken=_boolean(item.get("broken"), "item.broken"), description=_string(item.get("description", ""), "item.description", allow_empty=True), properties=_string_tuple(item.get("properties", []), "item.properties"), portable=_boolean(item.get("portable", True), "item.portable"), hands_required=_integer(item.get("hands_required", 0), "item.hands_required"), held_in=tuple(_enum(HandSlot, slot, "item.held_in") for slot in _sequence(item.get("held_in", []), "item.held_in")), light_weapon=_boolean(item.get("light_weapon", False), "item.light_weapon"), versatile_damage_dice=_optional_string(item.get("versatile_damage_dice"), "item.versatile_damage_dice"), armor_class_bonus=_integer(item.get("armor_class_bonus", 0), "item.armor_class_bonus"), armor_proficiency=_optional_string(item.get("armor_proficiency"), "item.armor_proficiency")) for value in _sequence(data.get("inventory", []), "inventory") for item in (_mapping(value, "item"),)),
         spell_ids=_string_tuple(data.get("spell_ids", []), "actor.spell_ids"), spell_preparation=prep,
         hit_dice=tuple(HitDicePool(_integer(pool.get("die_sides"), "hit_die.die_sides"), _integer(pool.get("remaining"), "hit_die.remaining"), _integer(pool.get("maximum"), "hit_die.maximum")) for value in _sequence(data.get("hit_dice", []), "hit_dice") for pool in (_mapping(value, "hit_die"),)),
         resource_pools=tuple(ActorResourcePool(id=_string(pool.get("id"), "resource.id"), label=_string(pool.get("label"), "resource.label"), current=_integer(pool.get("current"), "resource.current"), maximum=_integer(pool.get("maximum"), "resource.maximum"), recovery=_enum(RecoveryPeriod, pool.get("recovery"), "resource.recovery")) for value in _sequence(data.get("resource_pools", []), "resource_pools") for pool in (_mapping(value, "resource"),)),
+        proficiency_bonus=_integer(data.get("proficiency_bonus", 2), "actor.proficiency_bonus"),
+        proficiencies=ProficiencyProfile(
+            saving_throws=_string_tuple(
+                proficiency_raw.get("saving_throws", []),
+                "actor.proficiencies.saving_throws",
+            ),
+            skills=_string_tuple(
+                proficiency_raw.get("skills", data.get("skill_proficiencies", [])),
+                "actor.proficiencies.skills",
+            ),
+            expertise=_string_tuple(
+                proficiency_raw.get("expertise", data.get("skill_expertise", [])),
+                "actor.proficiencies.expertise",
+            ),
+            weapons=_string_tuple(proficiency_raw.get("weapons", []), "actor.proficiencies.weapons"),
+            armor=_string_tuple(proficiency_raw.get("armor", []), "actor.proficiencies.armor"),
+            tools=_string_tuple(proficiency_raw.get("tools", []), "actor.proficiencies.tools"),
+        ),
+        uses_death_saves=_boolean(data.get("uses_death_saves", False), "actor.uses_death_saves"),
+        death_saves=DeathSaveState(
+            successes=_integer(death_raw.get("successes", 0), "death_saves.successes"),
+            failures=_integer(death_raw.get("failures", 0), "death_saves.failures"),
+            stable=_boolean(death_raw.get("stable", False), "death_saves.stable"),
+            dead=_boolean(death_raw.get("dead", False), "death_saves.dead"),
+        ),
+        damage_affinities=DamageAffinityProfile(
+            resistances=tuple(
+                _enum(DamageType, value, "damage_affinities.resistances")
+                for value in _sequence(affinities_raw.get("resistances", []), "damage_affinities.resistances")
+            ),
+            immunities=tuple(
+                _enum(DamageType, value, "damage_affinities.immunities")
+                for value in _sequence(affinities_raw.get("immunities", []), "damage_affinities.immunities")
+            ),
+            vulnerabilities=tuple(
+                _enum(DamageType, value, "damage_affinities.vulnerabilities")
+                for value in _sequence(affinities_raw.get("vulnerabilities", []), "damage_affinities.vulnerabilities")
+            ),
+        ),
+        attacks_per_action=_integer(data.get("attacks_per_action", 1), "actor.attacks_per_action"),
     )
 
 
@@ -359,6 +441,18 @@ def _exploration_payload(state: ExplorationState) -> dict[str, object]:
                 "released_item_ids": list(item.released_item_ids),
             }
             for item in state.fixture_states
+        ],
+        "condition_states": [
+            {
+                "actor_id": item.actor_id,
+                "condition": item.condition.value,
+                "source_actor_id": item.source_actor_id,
+            }
+            for item in state.condition_states
+        ],
+        "trap_states": [
+            {"trap_id": item.trap_id, "status": item.status.value}
+            for item in state.trap_states
         ],
     }
 
@@ -537,6 +631,39 @@ def _exploration_from_payload(base: ExplorationState, raw: object) -> Exploratio
     fixture_state_keys = tuple((item.zone_id, item.fixture_id) for item in fixture_states)
     if len(fixture_state_keys) != len(set(fixture_state_keys)):
         raise SnapshotValidationError("Zapis zawiera powtórzony stan fixture'a.")
+    condition_states = tuple(
+        ConditionState(
+            actor_id=_string(item.get("actor_id"), "exploration.condition.actor_id"),
+            condition=_enum(
+                CombatCondition,
+                item.get("condition"),
+                "exploration.condition.condition",
+            ),
+            source_actor_id=_optional_string(
+                item.get("source_actor_id"),
+                "exploration.condition.source_actor_id",
+            ),
+        )
+        for raw_item in _sequence(data.get("condition_states", []), "condition_states")
+        for item in (_mapping(raw_item, "condition_state"),)
+    )
+    trap_states = tuple(
+        ExplorationTrapState(
+            trap_id=_string(item.get("trap_id"), "exploration.trap_state.trap_id"),
+            status=_enum(
+                ExplorationTrapStatus,
+                item.get("status"),
+                "exploration.trap_state.status",
+            ),
+        )
+        for raw_item in _sequence(data.get("trap_states", []), "trap_states")
+        for item in (_mapping(raw_item, "trap_state"),)
+    )
+    unknown_trap_ids = {item.trap_id for item in trap_states} - {item.id for item in base.traps}
+    if unknown_trap_ids:
+        raise SnapshotValidationError("Zapis zawiera stan nieznanej pułapki.")
+    if len({item.trap_id for item in trap_states}) != len(trap_states):
+        raise SnapshotValidationError("Zapis zawiera powtórzony stan pułapki.")
     return replace(
         base, party_position=PartyPosition(zone_id, _optional_coordinate(party.get("marker_position"), "party_position.marker_position")),
         flags=SceneFlags(tuple(flags)), points=tuple(replace(point, visibility=visibility[point.id]) for point in base.points),
@@ -548,6 +675,8 @@ def _exploration_from_payload(base: ExplorationState, raw: object) -> Exploratio
         source_discoveries=source_discoveries,
         source_collections=source_collections,
         fixture_states=fixture_states,
+        condition_states=condition_states,
+        trap_states=trap_states,
     )
 
 
@@ -616,9 +745,52 @@ def _combat_payload(state: CombatState | None) -> dict[str, object] | None:
             "current_index": state.initiative_order.current_index, "round_number": state.initiative_order.round_number,
             "entries": [{"actor_id": str(entry.actor.id), "natural_roll": entry.roll.natural_roll, "natural_rolls": list(entry.roll.natural_rolls), "total": entry.roll.total, "mode": entry.roll.mode.value, "dexterity_modifier": entry.dexterity_modifier, "stable_order": entry.stable_order} for entry in state.initiative_order.entries],
         },
-        "turn_action": {"action_use": state.turn_action.action_use.value, "bonus_action_use": state.turn_action.bonus_action_use.value, "reaction_available": state.turn_action.reaction_available, "movement_used_feet": state.turn_action.movement_used_feet, "extra_movement_feet": state.turn_action.extra_movement_feet},
+        "turn_action": {"action_use": state.turn_action.action_use.value, "bonus_action_use": state.turn_action.bonus_action_use.value, "reaction_available": state.turn_action.reaction_available, "movement_used_feet": state.turn_action.movement_used_feet, "extra_movement_feet": state.turn_action.extra_movement_feet, "object_interaction_available": state.turn_action.object_interaction_available, "two_weapon_trigger_item_id": state.turn_action.two_weapon_trigger_item_id, "attack_action_active": state.turn_action.attack_action_active, "attacks_used": state.turn_action.attacks_used, "attacks_maximum": state.turn_action.attacks_maximum},
         "status": state.status.value, "winner": state.winner.value if state.winner else None,
         "spent_reaction_actor_ids": sorted(str(item) for item in state.spent_reaction_actor_ids),
+        "dropped_weapons": [
+            {
+                "id": dropped.id,
+                "source_actor_id": str(dropped.source_actor_id),
+                "position": _coordinate_payload(dropped.position),
+                "dropped_round": dropped.dropped_round,
+                "weapon": {
+                    "id": dropped.weapon.id,
+                    "name": dropped.weapon.name,
+                    "kind": dropped.weapon.kind,
+                    "quantity": dropped.weapon.quantity,
+                    "equipped": dropped.weapon.equipped,
+                    "source_ref": dropped.weapon.source_ref,
+                    "broken": dropped.weapon.broken,
+                    "description": dropped.weapon.description,
+                    "properties": list(dropped.weapon.properties),
+                    "portable": dropped.weapon.portable,
+                    "hands_required": dropped.weapon.hands_required,
+                    "held_in": [slot.value for slot in dropped.weapon.held_in],
+                    "light_weapon": dropped.weapon.light_weapon,
+                    "versatile_damage_dice": dropped.weapon.versatile_damage_dice,
+                    "armor_class_bonus": dropped.weapon.armor_class_bonus,
+                    "armor_proficiency": dropped.weapon.armor_proficiency,
+                },
+            }
+            for dropped in state.dropped_weapons
+        ],
+        "hidden_states": [
+            {
+                "actor_id": hidden.actor_id,
+                "stealth_total": hidden.stealth_total,
+                "hidden_from_actor_ids": list(hidden.hidden_from_actor_ids),
+            }
+            for hidden in state.hidden_states
+        ],
+        "condition_states": [
+            {
+                "actor_id": condition.actor_id,
+                "condition": condition.condition.value,
+                "source_actor_id": condition.source_actor_id,
+            }
+            for condition in state.condition_states
+        ],
     }
 
 
@@ -658,11 +830,86 @@ def _combat_from_payload(raw: object) -> CombatState | None:
             _boolean(turn.get("reaction_available"), "turn_action.reaction_available"),
             _integer(turn.get("movement_used_feet"), "turn_action.movement_used_feet"),
             _integer(turn.get("extra_movement_feet"), "turn_action.extra_movement_feet"),
+            _boolean(turn.get("object_interaction_available", True), "turn_action.object_interaction_available"),
+            _optional_string(turn.get("two_weapon_trigger_item_id"), "turn_action.two_weapon_trigger_item_id"),
+            _boolean(turn.get("attack_action_active", False), "turn_action.attack_action_active"),
+            _integer(turn.get("attacks_used", 0), "turn_action.attacks_used"),
+            _integer(turn.get("attacks_maximum", 0), "turn_action.attacks_maximum"),
         ),
         status=_enum(CombatStatus, data.get("status"), "combat.status"),
         winner=_optional_enum(Faction, data.get("winner"), "combat.winner"),
         spent_reaction_actor_ids=frozenset(
             ActorId(item) for item in _string_tuple(data.get("spent_reaction_actor_ids", []), "spent_reaction_actor_ids")
+        ),
+        dropped_weapons=tuple(
+            DroppedWeapon(
+                id=_string(item.get("id"), "dropped_weapon.id"),
+                source_actor_id=ActorId(_string(item.get("source_actor_id"), "dropped_weapon.source_actor_id")),
+                weapon=InventoryItem(
+                    id=_string(weapon.get("id"), "dropped_weapon.weapon.id"),
+                    name=_string(weapon.get("name"), "dropped_weapon.weapon.name"),
+                    kind=_string(weapon.get("kind"), "dropped_weapon.weapon.kind"),
+                    quantity=_integer(weapon.get("quantity"), "dropped_weapon.weapon.quantity"),
+                    equipped=_boolean(weapon.get("equipped"), "dropped_weapon.weapon.equipped"),
+                    source_ref=_optional_string(weapon.get("source_ref"), "dropped_weapon.weapon.source_ref"),
+                    broken=_boolean(weapon.get("broken"), "dropped_weapon.weapon.broken"),
+                    description=_string(weapon.get("description", ""), "dropped_weapon.weapon.description", allow_empty=True),
+                    properties=_string_tuple(weapon.get("properties", []), "dropped_weapon.weapon.properties"),
+                    portable=_boolean(weapon.get("portable", True), "dropped_weapon.weapon.portable"),
+                    hands_required=_integer(weapon.get("hands_required", 0), "dropped_weapon.weapon.hands_required"),
+                    held_in=tuple(
+                        _enum(HandSlot, slot, "dropped_weapon.weapon.held_in")
+                        for slot in _sequence(weapon.get("held_in", []), "dropped_weapon.weapon.held_in")
+                    ),
+                    light_weapon=_boolean(weapon.get("light_weapon", False), "dropped_weapon.weapon.light_weapon"),
+                    versatile_damage_dice=_optional_string(
+                        weapon.get("versatile_damage_dice"),
+                        "dropped_weapon.weapon.versatile_damage_dice",
+                    ),
+                    armor_class_bonus=_integer(
+                        weapon.get("armor_class_bonus", 0),
+                        "dropped_weapon.weapon.armor_class_bonus",
+                    ),
+                    armor_proficiency=_optional_string(
+                        weapon.get("armor_proficiency"),
+                        "dropped_weapon.weapon.armor_proficiency",
+                    ),
+                ),
+                position=_coordinate(item.get("position"), "dropped_weapon.position"),
+                dropped_round=_integer(item.get("dropped_round"), "dropped_weapon.dropped_round"),
+            )
+            for raw_item in _sequence(data.get("dropped_weapons", []), "combat.dropped_weapons")
+            for item in (_mapping(raw_item, "dropped_weapon"),)
+            for weapon in (_mapping(item.get("weapon"), "dropped_weapon.weapon"),)
+        ),
+        hidden_states=tuple(
+            HiddenState(
+                actor_id=_string(item.get("actor_id"), "hidden_state.actor_id"),
+                stealth_total=_integer(item.get("stealth_total"), "hidden_state.stealth_total"),
+                hidden_from_actor_ids=_string_tuple(
+                    item.get("hidden_from_actor_ids", []),
+                    "hidden_state.hidden_from_actor_ids",
+                ),
+            )
+            for raw_item in _sequence(data.get("hidden_states", []), "combat.hidden_states")
+            for item in (_mapping(raw_item, "hidden_state"),)
+        ),
+        condition_states=tuple(
+            ConditionState(
+                actor_id=_string(item.get("actor_id"), "condition_state.actor_id"),
+                condition=_enum(
+                    CombatCondition,
+                    item.get("condition"),
+                    "condition_state.condition",
+                ),
+                source_actor_id=(
+                    _string(item.get("source_actor_id"), "condition_state.source_actor_id")
+                    if item.get("source_actor_id") is not None
+                    else None
+                ),
+            )
+            for raw_item in _sequence(data.get("condition_states", []), "combat.condition_states")
+            for item in (_mapping(raw_item, "condition_state"),)
         ),
     )
 
@@ -689,6 +936,17 @@ def _pending_encounter_payload(value: PendingEncounter | None) -> dict[str, obje
             if opening is not None
             else None
         ),
+        "precombat_stealth_completed": value.precombat_stealth_completed,
+        "precombat_stealth_attempts": [
+            {
+                "actor_id": attempt.actor_id,
+                "natural_roll": attempt.natural_roll,
+                "total": attempt.total,
+                "hidden_from_actor_ids": list(attempt.hidden_from_actor_ids),
+                "detected_by_actor_ids": list(attempt.detected_by_actor_ids),
+            }
+            for attempt in value.precombat_stealth_attempts
+        ],
     }
 
 
@@ -715,6 +973,30 @@ def _pending_encounter_from_payload(raw: object) -> PendingEncounter | None:
         encounter_scenario=_string(data.get("encounter_scenario"), "pending_encounter.encounter_scenario"),
         reason=_string(data.get("reason"), "pending_encounter.reason", allow_empty=True),
         opening_resolution=opening,
+        precombat_stealth_completed=_boolean(
+            data.get("precombat_stealth_completed", False),
+            "pending_encounter.precombat_stealth_completed",
+        ),
+        precombat_stealth_attempts=tuple(
+            PrecombatStealthAttempt(
+                actor_id=_string(item.get("actor_id"), "precombat_stealth.actor_id"),
+                natural_roll=_integer(item.get("natural_roll"), "precombat_stealth.natural_roll"),
+                total=_integer(item.get("total"), "precombat_stealth.total"),
+                hidden_from_actor_ids=_string_tuple(
+                    item.get("hidden_from_actor_ids", []),
+                    "precombat_stealth.hidden_from_actor_ids",
+                ),
+                detected_by_actor_ids=_string_tuple(
+                    item.get("detected_by_actor_ids", []),
+                    "precombat_stealth.detected_by_actor_ids",
+                ),
+            )
+            for raw_attempt in _sequence(
+                data.get("precombat_stealth_attempts", []),
+                "pending_encounter.precombat_stealth_attempts",
+            )
+            for item in (_mapping(raw_attempt, "precombat_stealth"),)
+        ),
     )
 
 

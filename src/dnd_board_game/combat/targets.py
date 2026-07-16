@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from dnd_board_game.actors import Actor
+from dnd_board_game.inventory import effective_armor_class
 from dnd_board_game.world import Coordinate
 
 
@@ -33,6 +34,7 @@ class CombatTarget:
     max_hp: int = 0
     temp_hp: int = 0
     defeated: bool = False
+    unconscious: bool = False
 
     def __post_init__(self) -> None:
         if self.max_hp <= 0:
@@ -44,14 +46,15 @@ def actor_as_combat_target(actor: Actor) -> CombatTarget:
         id=str(actor.id),
         name=actor.name,
         position=actor.position,
-        ac=actor.ac,
+        ac=effective_armor_class(actor),
         hp=actor.hp,
         target_type=CombatTargetType.ACTOR,
         visibility=CombatTargetVisibility.VISIBLE,
-        attackable=not actor.is_defeated(),
+        attackable=not actor.is_dead(),
         max_hp=actor.max_hp,
         temp_hp=actor.temp_hp,
         defeated=actor.is_defeated(),
+        unconscious=actor.is_unconscious(),
     )
 
 
@@ -60,4 +63,4 @@ def target_is_defeated(target: CombatTarget) -> bool:
 
 
 def is_public_attack_target(target: CombatTarget) -> bool:
-    return target.attackable and target.visibility == CombatTargetVisibility.VISIBLE and not target_is_defeated(target)
+    return target.attackable and target.visibility == CombatTargetVisibility.VISIBLE

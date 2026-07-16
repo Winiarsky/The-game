@@ -15,6 +15,7 @@ from dnd_board_game.rules import (
 )
 from dnd_board_game.world import Coordinate
 
+from .action_economy import ActionEconomyCost
 from .session import CombatState, combat_winner
 from .setup import SetupVisibility
 
@@ -53,6 +54,7 @@ class SceneAbilityCheck:
     ability: str
     dc: int
     skill: str | None = None
+    tool: str | None = None
     modifiers: tuple[RollModifier, ...] = ()
 
 
@@ -80,6 +82,7 @@ class SceneInteraction:
     failure_message: str = ""
     conditions: tuple[SceneInteractionCondition, ...] = ()
     effects: tuple[SceneInteractionEffect, ...] = ()
+    action_cost: ActionEconomyCost = ActionEconomyCost.ACTION
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,6 +109,7 @@ class SceneObject:
     blocks_movement: bool = False
     allow_interaction_when_occupied_by_enemy: bool = False
     cover_bonus: int = 0
+    projectile_cover_bonus: int = 0
 
     @property
     def primary_position(self) -> Coordinate:

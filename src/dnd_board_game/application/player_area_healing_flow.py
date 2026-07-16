@@ -7,10 +7,12 @@ from dnd_board_game.actions import AreaSpellResolver, HealingActionResolver
 from dnd_board_game.actors import Actor, Faction, spell_is_prepared
 from dnd_board_game.combat import (
     AppliedDamageResult,
+    AttackPositioning,
     AttackSource,
     CombatState,
     CombatStatus,
     HealingSource,
+    SceneObject,
     SpellAreaShape,
     SpellSaveResult,
     actors_in_area,
@@ -19,10 +21,14 @@ from dnd_board_game.combat import (
     can_consume_spell_resource,
     current_actor,
     direction_anchor_positions,
+    dexterity_save_cover_modifiers,
+    evaluate_cover_from_origin,
     legal_area_centers,
     legal_healing_targets,
 )
 from dnd_board_game.world import BoardState, Coordinate
+
+from .damage_presentation import applied_damage_payload
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +47,7 @@ class PendingAreaSpell:
     anchor: Coordinate
     area_positions: tuple[Coordinate, ...]
     target_ids: tuple[str, ...]
+    target_positioning: tuple[tuple[str, AttackPositioning], ...] = ()
     stage: str = "confirm_area"
     saving_throws: tuple[SpellSaveResult, ...] = ()
 
@@ -187,6 +194,7 @@ class PlayerAreaHealingFlowService:
         board: BoardState,
         source: AttackSource,
         position: Coordinate,
+        scene_objects: tuple[SceneObject, ...] = (),
     ) -> PlayerAreaSpellTransition:
         caster = _active_hero(state)
         if source.area is None:
@@ -207,7 +215,38 @@ class PlayerAreaHealingFlowService:
                 position,
                 source.area,
             )
-        targets = actors_in_area(state.actors, area_positions, caster)
+        effect_origin = (
+            position
+            if source.area.shape == SpellAreaShape.RADIUS
+            else caster.position
+        )
+        area_targets = actors_in_area(
+            state.actors,
+            area_positions,
+            caster,
+            source.area.target_mode,
+        )
+        positioned_targets = tuple(
+            (
+                target,
+                evaluate_cover_from_origin(
+                    board,
+                    effect_origin,
+                    target,
+                    state.actors,
+                    scene_objects,
+                ),
+            )
+            for target in area_targets
+        )
+        targets = tuple(
+            target for target, positioning in positioned_targets if not positioning.total_cover
+        )
+        target_positioning = tuple(
+            (str(target.id), positioning)
+            for target, positioning in positioned_targets
+            if not positioning.total_cover
+        )
         pending = PendingAreaSpell(
             caster_id=str(caster.id),
             source_id=source.id,
@@ -215,6 +254,7 @@ class PlayerAreaHealingFlowService:
             anchor=position,
             area_positions=area_positions,
             target_ids=tuple(str(target.id) for target in targets),
+            target_positioning=target_positioning,
         )
         target_names = ", ".join(target.name for target in targets) or "brak celów"
         return PlayerAreaSpellTransition(
@@ -239,6 +279,10 @@ class PlayerAreaHealingFlowService:
                     [[tile.col, tile.row] for tile in area_positions],
                 ),
                 ("target_ids", [str(target.id) for target in targets]),
+                (
+                    "target_cover",
+                    [_target_cover_payload(actor_id, positioning) for actor_id, positioning in target_positioning],
+                ),
             ),
         )
 
@@ -262,6 +306,13 @@ class PlayerAreaHealingFlowService:
             source=source,
             target_ids=pending.target_ids,
             rng=rng,
+            saving_throw_modifiers_by_target={
+                actor_id: dexterity_save_cover_modifiers(
+                    source.save_ability,
+                    positioning,
+                )
+                for actor_id, positioning in pending.target_positioning
+            },
         )
         saves = confirmation.saving_throws
         updated_pending = replace(pending, stage="damage_roll", saving_throws=saves)
@@ -400,6 +451,18 @@ def _spell_save_message(save: SpellSaveResult) -> str:
     )
 
 
+def _target_cover_payload(
+    actor_id: str,
+    positioning: AttackPositioning,
+) -> dict[str, object]:
+    return {
+        "actor_id": actor_id,
+        "cover_level": positioning.cover_level.value,
+        "cover_bonus": positioning.cover_bonus,
+        "cover_sources": list(positioning.cover_sources),
+    }
+
+
 def _format_signed(value: int) -> str:
     return f"+{value}" if value >= 0 else str(value)
 
@@ -411,14 +474,6 @@ def _save_damage_on_success_label(value: str) -> str:
 
 
 def _applied_damage_payload(result: AppliedDamageResult) -> dict[str, object]:
-    return {
-        "damage": result.damage.total_applied,
-        "hp_before": result.hp_before,
-        "hp_after": result.hp_after,
-        "temp_hp_before": result.temp_hp_before,
-        "temp_hp_after": result.temp_hp_after,
-        "absorbed_by_temp_hp": result.absorbed_by_temp_hp,
-        "applied_to_hp": result.applied_to_hp,
-        "defeated": result.defeated,
-        "defeated_by_damage": result.defeated_by_damage,
-    }
+    payload = applied_damage_payload(result)
+    assert payload is not None
+    return payload

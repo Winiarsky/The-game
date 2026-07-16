@@ -176,6 +176,7 @@ def _is_observation_focused_action(value: str) -> bool:
         "ogla",
         "patr",
         "spra",
+        "szuk",
         "zagl",
         "zerk",
     }

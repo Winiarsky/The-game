@@ -24,6 +24,14 @@
         "wisdom": 10,
         "charisma": 10
       },
+      "proficiency_bonus": 2,
+      "proficiencies": {
+        "saving_throws": ["strength", "constitution"],
+        "skills": ["athletics", "perception"],
+        "weapons": ["longsword"],
+        "armor": ["light", "medium", "heavy", "shield"],
+        "tools": []
+      },
       "item_refs": ["longsword"]
     },
     {

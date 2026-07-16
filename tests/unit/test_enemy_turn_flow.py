@@ -2,7 +2,9 @@ from random import Random
 
 import pytest
 
-from dnd_board_game.actors import AbilityScores, Actor, ActorId, Faction
+from dataclasses import replace
+
+from dnd_board_game.actors import AbilityScores, Actor, ActorId, DamageAffinityProfile, Faction
 from dnd_board_game.application import EnemyTurnFlowService, EnemyTurnTransitionKind
 from dnd_board_game.combat import (
     ActiveCombatEffect,
@@ -11,6 +13,7 @@ from dnd_board_game.combat import (
     CombatState,
     InitiativeEntry,
     InitiativeOrder,
+    DamageType,
     start_combat,
 )
 from dnd_board_game.rules import D20RollInput, D20RollRequest, resolve_d20_roll
@@ -102,6 +105,96 @@ def test_adjacent_enemy_result_is_classified_as_attack_confirmation() -> None:
     assert transition.result.target is not None
     assert transition.result.target.id == "hero"
     assert transition.message_title == "Atak przeciwnika"
+
+
+def test_enemy_multiattack_uses_next_data_driven_source() -> None:
+    service = EnemyTurnFlowService()
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(0, 0))
+    hero = _actor("hero", Faction.ALLY, Coordinate(1, 0))
+    first_source = replace(_source(), name="Pierwszy", id="first")
+    second_source = replace(_source(), name="Drugi", id="second")
+    sources = {enemy.id: first_source}
+    sequence = {enemy.id: (first_source, second_source)}
+    state = _state(enemy, hero)
+
+    first_intent = service.plan(
+        state=state,
+        board=BoardState(),
+        attack_sources_by_actor=sources,
+        multiattack_sources_by_actor=sequence,
+    )
+    first = service.resolve(
+        state=state,
+        intent=first_intent.intent,
+        board=BoardState(),
+        attack_sources_by_actor=sources,
+        multiattack_sources_by_actor=sequence,
+        active_effects=(),
+        rng=Random(1),
+    )
+    second_intent = service.plan(
+        state=first.result.state,
+        board=BoardState(),
+        attack_sources_by_actor=sources,
+        multiattack_sources_by_actor=sequence,
+    )
+    second = service.resolve(
+        state=first.result.state,
+        intent=second_intent.intent,
+        board=BoardState(),
+        attack_sources_by_actor=sources,
+        multiattack_sources_by_actor=sequence,
+        active_effects=(),
+        rng=Random(2),
+    )
+
+    assert first.result.source is not None and first.result.source.id == "first"
+    assert first.result.state.turn_action.attacks_used == 1
+    assert second.result.source is not None and second.result.source.id == "second"
+    assert second.result.state.turn_action.attacks_used == 2
+
+
+def test_enemy_save_flow_applies_manual_roll_then_damage_affinity() -> None:
+    service = EnemyTurnFlowService()
+    enemy = _actor("guardian", Faction.ENEMY, Coordinate(0, 0))
+    hero = replace(
+        _actor("hero", Faction.ALLY, Coordinate(1, 0)),
+        damage_affinities=DamageAffinityProfile(resistances=(DamageType.SLASHING,)),
+    )
+    state = _state(enemy, hero)
+    source = replace(
+        _source(),
+        name="Kamienny podmuch",
+        damage_fixed=8,
+        damage_type="slashing",
+        save_ability="dexterity",
+        save_dc=12,
+        save_damage_on_success="half",
+    )
+    sources = {enemy.id: source}
+    intent = service.plan(state=state, board=BoardState(), attack_sources_by_actor=sources)
+    pending = service.resolve(
+        state=state,
+        intent=intent.intent,
+        board=BoardState(),
+        attack_sources_by_actor=sources,
+        active_effects=(),
+        rng=Random(1),
+    )
+
+    resolved = service.resolve_player_saving_throw(
+        result=pending.result,
+        natural_roll=10,
+    )
+
+    assert pending.result.saving_throw_request is not None
+    assert pending.message_title == "Efekt przeciwnika"
+    assert resolved.saving_throw.success is True  # 10 + DEX 2 = ST 12
+    assert resolved.result.damage is not None
+    assert resolved.result.damage.total_before_reduction == 4  # save halves first
+    assert resolved.result.damage.total_applied == 2  # resistance halves again
+    assert resolved.result.updated_target is not None
+    assert resolved.result.updated_target.hp == 8
 
 
 def test_enemy_approach_is_classified_as_movement_confirmation() -> None:

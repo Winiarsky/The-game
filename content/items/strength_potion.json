@@ -7,6 +7,7 @@
       "id": "drink_strength_potion",
       "name": "Magiczny napój siły",
       "action_type": "strength_potion",
+      "action_cost": "action",
       "label": "Wypij napój siły",
       "ability": "strength",
       "value": 2,

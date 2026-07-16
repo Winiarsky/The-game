@@ -3,6 +3,7 @@
   "name": "Goblin",
   "kind": "monster",
   "faction": "enemy",
+  "size": "small",
   "ac": 13,
   "hp": 10,
   "temp_hp": 0,
@@ -15,13 +16,24 @@
     "wisdom": 8,
     "charisma": 8
   },
+  "proficiency_bonus": 2,
+  "proficiencies": {
+    "saving_throws": [],
+    "skills": ["stealth"],
+    "expertise": ["stealth"],
+    "weapons": ["goblin_scimitar"],
+    "armor": ["light", "shield"],
+    "tools": []
+  },
   "attacks": [
     {
       "id": "goblin_scimitar",
       "name": "Szabla",
       "source_type": "weapon",
+      "attack_kind": "melee",
+      "ability": "dexterity",
       "range_feet": 5,
-      "attack_modifier": 4,
+      "reach_feet": 5,
       "damage": {
         "dice": "1d6",
         "modifier": 2,

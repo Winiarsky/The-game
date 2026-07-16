@@ -12,7 +12,7 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 from pathlib import Path
 
-from dnd_board_game.actors import Actor
+from dnd_board_game.actors import Actor, ability_check_roll_modifiers
 from dnd_board_game.combat import SceneFlags, SetupVisibility, objective_status_after_flags, scene_flag, set_scene_flag
 from dnd_board_game.exploration import (
     CheckAggregation,
@@ -52,7 +52,6 @@ from dnd_board_game.rules import (
     RollMode,
     RollModifier,
     RollModifierType,
-    ability_modifier,
     resolve_d20_roll,
     roll_instruction,
 )
@@ -853,6 +852,7 @@ def _handle_freeform_action_once(
                 "label": option.label,
                 "ability": option.ability_check.ability,
                 "skill": option.ability_check.skill,
+                "tool": option.ability_check.tool,
                 "dc": option.ability_check.dc,
                 "difficulty_tier": proposal.difficulty_tier,
                 "difficulty_reason": proposal.difficulty_reason,
@@ -893,6 +893,7 @@ def _handle_freeform_action_once(
     summary = (
         f"Propozycja MG: {option.label}. Test: {option.ability_check.ability}"
         f"{'/' + option.ability_check.skill if option.ability_check.skill else ''}, "
+        f"{'narzędzie ' + option.ability_check.tool + ', ' if option.ability_check.tool else ''}"
         f"ST {option.ability_check.dc}, postęp przy sukcesie: +{option.progress_on_success}, "
         f"postęp przy porażce: +{option.progress_on_failure}."
     )
@@ -2243,7 +2244,7 @@ def _check_inputs_for_plan(
         natural_roll = _read_int_or_default(args, f"Wpisz naturalny wynik testu dla {actor.name} albo Enter dla {default_roll}: ", default_roll)
         actor_request = D20RollRequest(
             mode=request.mode,
-            modifiers=(*_ability_roll_modifiers(actor, plan.ability, plan.skill), *request.modifiers),
+            modifiers=(*_ability_roll_modifiers(actor, plan.ability, plan.skill, plan.tool), *request.modifiers),
         )
         result.append(PartyCheckInput(actor, natural_roll, actor_request))
     return tuple(result)
@@ -2262,6 +2263,7 @@ def _default_challenge_check_plan(
         selected_actor_ids=tuple(args.selected_actor),
         ability=option.ability_check.ability,
         skill=option.ability_check.skill,
+        tool=option.ability_check.tool,
         dc=option.ability_check.dc,
         reason_for_players=option.description,
     )
@@ -2323,7 +2325,7 @@ def _check_plan_instruction(actors: tuple[Actor, ...], plan: ExplorationCheckPla
     }[plan.aggregation]
     consequence_text = ", ".join(target.value for target in plan.consequence_targets) or "brak"
     modifier_text = ", ".join(
-        f"{actor.name} {_format_modifier(_ability_roll_modifiers(actor, plan.ability, plan.skill)[0].value)}"
+        f"{actor.name} {_format_modifier(roll_instruction(D20RollRequest(modifiers=_ability_roll_modifiers(actor, plan.ability, plan.skill, plan.tool))).breakdown.modifier_total)}"
         for actor in _check_actors_for_plan(actors, plan)
     )
     return (
@@ -2332,19 +2334,18 @@ def _check_plan_instruction(actors: tuple[Actor, ...], plan: ExplorationCheckPla
     )
 
 
-def _ability_roll_modifiers(actor: Actor, ability: str, skill: str | None = None) -> tuple[RollModifier, ...]:
-    score = getattr(actor.ability_scores, ability)
-    ability_label = _ABILITY_LABELS.get(ability, ability)
-    skill_label = _SKILL_LABELS.get(skill or "", skill)
-    label = f"Modyfikator z cechy {ability_label}"
-    if skill:
-        label = f"Modyfikator {ability_label}/{skill_label}"
-    return (RollModifier(label, ability_modifier(score), RollModifierType.ABILITY, stacking_key=f"ability:{ability}"),)
+def _ability_roll_modifiers(
+    actor: Actor,
+    ability: str,
+    skill: str | None = None,
+    tool: str | None = None,
+) -> tuple[RollModifier, ...]:
+    return ability_check_roll_modifiers(actor, ability, skill=skill, tool=tool)
 
 
 def _party_check_instruction(actors: tuple[Actor, ...], ability: str, skill: str | None = None) -> str:
     modifier_text = ", ".join(
-        f"{actor.name} {_format_modifier(_ability_roll_modifiers(actor, ability, skill)[0].value)}"
+        f"{actor.name} {_format_modifier(roll_instruction(D20RollRequest(modifiers=_ability_roll_modifiers(actor, ability, skill))).breakdown.modifier_total)}"
         for actor in actors
     )
     return f"Każdy bohater rzuca 1d20. Liczy się najwyższy wynik po modyfikatorach. Modyfikatory: {modifier_text}."

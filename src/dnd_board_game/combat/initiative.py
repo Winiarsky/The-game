@@ -62,7 +62,7 @@ class InitiativeOrder:
             if index >= len(self.entries):
                 index = 0
                 round_number += 1
-            if not skip_defeated or not self.entries[index].actor.is_defeated():
+            if not skip_defeated or self.entries[index].actor.can_take_combat_turn():
                 return InitiativeOrder(self.entries, index, round_number)
         return InitiativeOrder(self.entries, self.current_index, self.round_number)
 

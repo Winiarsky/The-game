@@ -4,7 +4,17 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 
 from dnd_board_game.actors import Actor, spell_is_prepared
-from dnd_board_game.combat import SceneAbilityCheck, SceneFlags, SetupVisibility, scene_flag, set_scene_flag
+from dnd_board_game.combat import (
+    CombatCondition,
+    ConditionState,
+    SceneAbilityCheck,
+    SceneFlags,
+    SetupVisibility,
+    add_condition,
+    remove_condition,
+    scene_flag,
+    set_scene_flag,
+)
 from dnd_board_game.hardware import LedColor, LedFeedback, LedFrame, LedRole
 from dnd_board_game.inventory import ItemInstance
 from dnd_board_game.rules import (
@@ -14,6 +24,7 @@ from dnd_board_game.rules import (
     RollMode,
     RollModifier,
     RollModifierType,
+    SavingThrowRequest,
     resolve_ability_check,
     resolve_d20_roll,
 )
@@ -267,6 +278,21 @@ class EncounterOpeningResolution:
 
 
 @dataclass(frozen=True, slots=True)
+class PrecombatStealthAttempt:
+    actor_id: str
+    natural_roll: int
+    total: int
+    hidden_from_actor_ids: tuple[str, ...] = ()
+    detected_by_actor_ids: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.actor_id:
+            raise ValueError("Precombat stealth actor id cannot be empty.")
+        if not 1 <= self.natural_roll <= 20:
+            raise ValueError("Precombat stealth natural roll must be between 1 and 20.")
+
+
+@dataclass(frozen=True, slots=True)
 class LlmContext:
     summary: str = ""
     available_materials: tuple[str, ...] = ()
@@ -313,6 +339,8 @@ class PendingEncounter:
     encounter_scenario: str
     reason: str
     opening_resolution: EncounterOpeningResolution | None = None
+    precombat_stealth_completed: bool = False
+    precombat_stealth_attempts: tuple[PrecombatStealthAttempt, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -696,6 +724,8 @@ class ExplorationCheckPlan:
     ability: str
     dc: int
     skill: str | None = None
+    tool: str | None = None
+    tool_label: str = ""
     lead_actor_id: str | None = None
     helper_actor_id: str | None = None
     selected_actor_ids: tuple[str, ...] = ()
@@ -718,6 +748,8 @@ class ExplorationCheckPlan:
             "selected_actor_ids": list(self.selected_actor_ids),
             "ability": self.ability,
             "skill": self.skill,
+            "tool": self.tool,
+            "tool_label": self.tool_label,
             "dc": self.dc,
             "reason_for_players": self.reason_for_players,
             "roll_mode": self.roll_mode.value,
@@ -823,6 +855,117 @@ class ExplorationOptionBonus:
         }
 
 
+class ExplorationHazardTrigger(StrEnum):
+    FAILURE = "failure"
+    CRITICAL_FAILURE = "critical_failure"
+
+
+@dataclass(frozen=True, slots=True)
+class ExplorationHazardDamage:
+    damage_type: str
+    fixed: int | None = None
+    die_sides: int | None = None
+    modifier: int = 0
+
+    def __post_init__(self) -> None:
+        if self.fixed is None and self.die_sides is None:
+            raise ValueError("Exploration hazard damage requires fixed damage or one die.")
+        if self.fixed is not None and self.die_sides is not None:
+            raise ValueError("Exploration hazard damage cannot define both fixed and dice.")
+        if self.fixed is not None and self.fixed < 0:
+            raise ValueError("Exploration hazard fixed damage cannot be negative.")
+        if self.die_sides is not None and self.die_sides < 2:
+            raise ValueError("Exploration hazard damage die must have at least two sides.")
+
+    def as_payload(self) -> dict[str, object]:
+        return {
+            "damage_type": self.damage_type,
+            "fixed": self.fixed,
+            "dice": f"1d{self.die_sides}" if self.die_sides is not None else None,
+            "modifier": self.modifier,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ExplorationHazard:
+    id: str
+    label: str
+    trigger: ExplorationHazardTrigger
+    saving_throw: SavingThrowRequest
+    damage: ExplorationHazardDamage
+    narration: str = ""
+    success_message: str = ""
+    failure_message: str = ""
+    success_effects: tuple[dict[str, object], ...] = ()
+    failure_effects: tuple[dict[str, object], ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.id.strip() or not self.label.strip():
+            raise ValueError("Exploration hazard id and label cannot be empty.")
+
+    def as_payload(self) -> dict[str, object]:
+        return {
+            "id": self.id,
+            "label": self.label,
+            "trigger": self.trigger.value,
+            "saving_throw": self.saving_throw.as_payload(),
+            "damage": self.damage.as_payload(),
+            "narration": self.narration,
+            "success_message": self.success_message,
+            "failure_message": self.failure_message,
+            "success_effects": list(self.success_effects),
+            "failure_effects": list(self.failure_effects),
+        }
+
+
+class ExplorationTrapStatus(StrEnum):
+    HIDDEN = "hidden"
+    REVEALED = "revealed"
+    DISARMED = "disarmed"
+    BYPASSED = "bypassed"
+    TRIGGERED = "triggered"
+
+
+class ExplorationTrapAction(StrEnum):
+    DISARM = "disarm"
+    BYPASS = "bypass"
+    TRIGGER = "trigger"
+
+
+@dataclass(frozen=True, slots=True)
+class ExplorationTrap:
+    id: str
+    zone_id: str
+    name: str
+    revealed_description: str
+    detection_observation_id: str
+    hazard: ExplorationHazard
+    activation_challenge_id: str | None = None
+    disarm_check: SceneAbilityCheck | None = None
+    bypass_check: SceneAbilityCheck | None = None
+    required_item_id: str | None = None
+    disarm_intent_examples: tuple[str, ...] = ()
+    bypass_intent_examples: tuple[str, ...] = ()
+    trigger_intent_examples: tuple[str, ...] = ()
+    disarm_success_message: str = "Pułapka została rozbrojona."
+    bypass_success_message: str = "Drużyna bezpiecznie omija pułapkę."
+
+    def __post_init__(self) -> None:
+        if not self.id.strip() or not self.zone_id.strip() or not self.name.strip():
+            raise ValueError("Exploration trap id, zone_id and name cannot be empty.")
+        if not self.revealed_description.strip() or not self.detection_observation_id.strip():
+            raise ValueError(f"Exploration trap {self.id} requires reveal text and detection observation.")
+
+
+@dataclass(frozen=True, slots=True)
+class ExplorationTrapState:
+    trap_id: str
+    status: ExplorationTrapStatus = ExplorationTrapStatus.HIDDEN
+
+    def __post_init__(self) -> None:
+        if not self.trap_id.strip():
+            raise ValueError("Exploration trap state id cannot be empty.")
+
 @dataclass(frozen=True, slots=True)
 class SearchResult:
     state: ExplorationState
@@ -865,6 +1008,7 @@ class ExplorationChallengeOption:
     roll_mode: RollMode = RollMode.NORMAL
     situational_modifiers: tuple[ExplorationSituationalModifier, ...] = ()
     improvised_tool: ImprovisedToolUse | None = None
+    hazards: tuple[ExplorationHazard, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -1106,6 +1250,31 @@ class ExplorationState:
     source_discoveries: tuple[SceneSourceDiscovery, ...] = ()
     source_collections: tuple[SceneSourceCollection, ...] = ()
     fixture_states: tuple[FixtureRuntimeState, ...] = ()
+    condition_states: tuple[ConditionState, ...] = ()
+    traps: tuple[ExplorationTrap, ...] = ()
+    trap_states: tuple[ExplorationTrapState, ...] = ()
+
+
+def add_exploration_condition(
+    state: ExplorationState,
+    actor_id: str,
+    condition: CombatCondition,
+) -> ExplorationState:
+    return replace(
+        state,
+        condition_states=add_condition(state.condition_states, actor_id, condition),
+    )
+
+
+def remove_exploration_condition(
+    state: ExplorationState,
+    actor_id: str,
+    condition: CombatCondition,
+) -> ExplorationState:
+    return replace(
+        state,
+        condition_states=remove_condition(state.condition_states, actor_id, condition),
+    )
 
 
 def grant_encounter_edge(state: ExplorationState, edge: EncounterEdge) -> ExplorationState:

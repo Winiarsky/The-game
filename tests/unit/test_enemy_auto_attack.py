@@ -1,13 +1,20 @@
 import random
+from dataclasses import replace
 
-from dnd_board_game.actors import AbilityScores, Actor, ActorId, Faction
+from dnd_board_game.actors import AbilityScores, Actor, ActorId, DamageAffinityProfile, DeathSaveState, Faction
 from dnd_board_game.combat import (
+    AttackKind,
     AttackSource,
     AttackSourceType,
+    CombatCondition,
+    ConditionState,
+    DamageType,
+    HiddenState,
     InitiativeEntry,
     InitiativeOrder,
     finish_turn,
     resolve_enemy_auto_attack,
+    resolve_enemy_auto_turn,
     start_combat,
 )
 from dnd_board_game.rules import D20RollInput, D20RollRequest, RollMode, RollModifier, RollModifierType, resolve_d20_roll
@@ -74,6 +81,47 @@ def test_enemy_auto_attack_hits_with_deterministic_rng_and_applies_damage():
     assert "HP 20 -> 16" in result.message
 
 
+def test_enemy_auto_attack_reports_damage_after_target_resistance():
+    enemy = _actor("goblin", Faction.ENEMY, Coordinate(1, 0))
+    hero = replace(
+        _actor("hero", Faction.ALLY, Coordinate(0, 0), hp=20),
+        damage_affinities=DamageAffinityProfile(resistances=(DamageType.SLASHING,)),
+    )
+    state = start_combat((enemy, hero), _order(enemy, hero))
+
+    result = resolve_enemy_auto_attack(BoardState(), state, enemy, _source(), random.Random(7))
+
+    assert result.damage is not None
+    assert result.damage.total_before_reduction == 4
+    assert result.damage.total_applied == 2
+    assert result.applied_damage is not None
+    assert result.applied_damage.hp_after == 18
+    assert "4 -> 2 slashing" in result.message
+
+
+def test_enemy_save_attack_waits_for_manual_player_roll_before_damage() -> None:
+    enemy = _actor("guardian", Faction.ENEMY, Coordinate(1, 0))
+    hero = _actor("hero", Faction.ALLY, Coordinate(0, 0), hp=20)
+    state = start_combat((enemy, hero), _order(enemy, hero))
+    source = replace(
+        _source(),
+        name="Kamienny podmuch",
+        save_ability="dexterity",
+        save_dc=12,
+        save_damage_on_success="half",
+    )
+
+    result = resolve_enemy_auto_attack(BoardState(), state, enemy, source, random.Random(7))
+
+    assert result.attack_roll is None
+    assert result.saving_throw_request is not None
+    assert result.saving_throw_request.ability == "dexterity"
+    assert result.saving_throw_request.dc == 12
+    assert result.base_damage == 5
+    assert result.applied_damage is None
+    assert next(actor for actor in result.state.actors if actor.id == hero.id).hp == 20
+
+
 def test_enemy_auto_attack_rolls_two_d20_for_disadvantage():
     enemy = _actor("goblin", Faction.ENEMY, Coordinate(1, 0))
     hero = _actor("hero", Faction.ALLY, Coordinate(0, 0), hp=20)
@@ -94,6 +142,60 @@ def test_enemy_auto_attack_rolls_two_d20_for_disadvantage():
     assert result.attack_roll is not None
     assert result.attack_roll.natural_rolls == (11, 5)
     assert result.attack_roll.natural_roll == 5
+
+
+def test_enemy_ranged_attack_in_melee_gains_disadvantage_automatically():
+    enemy = _actor("goblin", Faction.ENEMY, Coordinate(1, 0))
+    hero = _actor("hero", Faction.ALLY, Coordinate(0, 0), hp=20)
+    state = start_combat((enemy, hero), _order(enemy, hero))
+    source = replace(
+        _source(),
+        name="Łuk",
+        range_feet=80,
+        attack_kind=AttackKind.RANGED,
+    )
+
+    result = resolve_enemy_auto_attack(BoardState(), state, enemy, source, random.Random(7))
+
+    assert result.attack_roll is not None
+    assert result.attack_roll.mode == RollMode.DISADVANTAGE
+    assert result.attack_roll.natural_rolls == (11, 5)
+    assert result.positioning.ranged_threat_actor_ids == ("hero",)
+
+
+def test_enemy_melee_attack_uses_default_flanking_advantage():
+    enemy = _actor("goblin", Faction.ENEMY, Coordinate(1, 2))
+    hero = _actor("hero", Faction.ALLY, Coordinate(2, 2), hp=20)
+    ally = _actor("goblin_ally", Faction.ENEMY, Coordinate(3, 2))
+    state = start_combat((enemy, hero, ally), _order(enemy, hero))
+
+    result = resolve_enemy_auto_attack(
+        BoardState(), state, enemy, _source(), random.Random(7)
+    )
+
+    assert result.attack_roll is not None
+    assert result.attack_roll.mode == RollMode.ADVANTAGE
+    assert result.attack_roll.natural_rolls == (11, 5)
+    assert result.attack_roll.natural_roll == 11
+    assert result.positioning.flanking_ally_ids == ("goblin_ally",)
+
+
+def test_enemy_close_hit_against_unconscious_target_rolls_critical_damage_dice():
+    enemy = _actor("goblin", Faction.ENEMY, Coordinate(1, 0))
+    hero = replace(
+        _actor("hero", Faction.ALLY, Coordinate(0, 0), hp=20),
+        hp=0,
+        uses_death_saves=True,
+        death_saves=DeathSaveState(),
+    )
+    state = start_combat((enemy, hero), _order(enemy, hero))
+
+    result = resolve_enemy_auto_attack(BoardState(), state, enemy, _source(), random.Random(7))
+
+    assert result.attack_resolution is not None and result.attack_resolution.critical is True
+    assert result.damage is not None and result.damage.total_applied == 8
+    assert result.applied_damage is not None
+    assert result.applied_damage.death_save_failures_added == 2
 
 
 def test_enemy_auto_attack_skips_when_no_legal_target():
@@ -142,6 +244,40 @@ def test_enemy_auto_attack_action_is_not_available_twice_in_turn():
     assert first.action_used is True
     assert second.action_used is False
     assert "już zużyta" in second.message
+
+
+def test_enemy_has_advantage_against_adjacent_prone_target() -> None:
+    enemy = _actor("goblin", Faction.ENEMY, Coordinate(1, 0))
+    hero = _actor("hero", Faction.ALLY, Coordinate(0, 0), hp=20)
+    state = replace(
+        start_combat((enemy, hero), _order(enemy, hero)),
+        condition_states=(ConditionState("hero", CombatCondition.PRONE),),
+    )
+
+    result = resolve_enemy_auto_attack(BoardState(), state, enemy, _source(), random.Random(7))
+
+    assert result.attack_roll is not None
+    assert result.attack_roll.mode == RollMode.ADVANTAGE
+    assert len(result.attack_roll.natural_rolls) == 2
+
+
+def test_enemy_uses_search_instead_of_moving_toward_hidden_target() -> None:
+    enemy = _actor("goblin", Faction.ENEMY, Coordinate(1, 0))
+    hero = _actor("hero", Faction.ALLY, Coordinate(5, 5), hp=20)
+    state = replace(
+        start_combat((enemy, hero), _order(enemy, hero)),
+        hidden_states=(HiddenState("hero", 10, ("goblin",)),),
+    )
+
+    result = resolve_enemy_auto_turn(
+        BoardState(), state, enemy, _source(), random.Random(7)
+    )
+
+    assert result.movement_path is None
+    assert result.attack_roll is None
+    assert result.action_used is True
+    assert result.state.hidden_states == ()
+    assert "Search (11)" in result.message
 
 
 def test_finish_turn_after_enemy_attack_advances_to_hero():

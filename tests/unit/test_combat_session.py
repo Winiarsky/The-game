@@ -1,28 +1,41 @@
 from dataclasses import replace
 
-from dnd_board_game.actors import AbilityScores, Actor, ActorId, Faction
+from dnd_board_game.actors import AbilityScores, Actor, ActorId, DeathSaveState, Faction
 from dnd_board_game.combat import (
+    ActionEconomyCost,
     ActiveCombatEffect,
     AttackSource,
     AttackSourceType,
     CombatStatus,
+    CombatCondition,
+    ConditionState,
     InitiativeEntry,
     InitiativeOrder,
     current_actor,
+    drop_weapon,
+    equip_weapon,
     finish_turn,
     movement_remaining,
+    pickup_dropped_weapon,
     opportunity_attackers_for_movement,
     reaction_available_for,
     replace_actor,
     start_combat,
+    attack_action_remaining,
+    can_use_attack_action,
+    stow_weapon,
     use_bonus_action,
+    use_action_economy_cost,
     use_dash,
     use_actor_reaction,
     use_movement,
+    use_object_interaction,
     use_reaction,
     use_turn_action,
+    use_attack_action,
 )
 from dnd_board_game.rules import D20RollInput, D20RollRequest, resolve_d20_roll
+from dnd_board_game.inventory import HandSlot, InventoryItem
 from dnd_board_game.world import BoardState, Coordinate, find_path
 
 
@@ -59,6 +72,24 @@ def test_start_combat_selects_first_initiative_actor():
     assert state.round_number == 1
 
 
+def test_start_combat_carries_known_exploration_conditions() -> None:
+    hero = _actor("hero", Faction.ALLY, 0)
+    goblin = _actor("goblin", Faction.ENEMY, 1)
+
+    state = start_combat(
+        (hero, goblin),
+        _order(hero, goblin),
+        condition_states=(
+            ConditionState("hero", CombatCondition.PRONE),
+            ConditionState("someone_else", CombatCondition.PRONE),
+        ),
+    )
+
+    assert state.condition_states == (
+        ConditionState("hero", CombatCondition.PRONE),
+    )
+
+
 def test_turn_action_can_only_be_used_once():
     hero = _actor("hero", Faction.ALLY, 0)
     goblin = _actor("goblin", Faction.ENEMY, 1)
@@ -70,6 +101,51 @@ def test_turn_action_can_only_be_used_once():
     assert first.accepted is True
     assert second.accepted is False
     assert "już zużyta" in second.message
+
+
+def test_attack_action_budget_allows_multiple_attacks_and_resets_next_turn():
+    hero = replace(_actor("hero", Faction.ALLY, 0), attacks_per_action=2)
+    goblin = _actor("goblin", Faction.ENEMY, 1)
+    state = start_combat((hero, goblin), _order(hero, goblin))
+
+    first = use_attack_action(state, hero)
+    second = use_attack_action(first.state, hero)
+    third = use_attack_action(second.state, hero)
+
+    assert first.accepted is True
+    assert first.state.turn_action.action_use.value == "action_used"
+    assert attack_action_remaining(first.state, hero) == 1
+    assert can_use_attack_action(first.state, hero) is True
+    assert second.accepted is True
+    assert attack_action_remaining(second.state, hero) == 0
+    assert third.accepted is False
+    assert finish_turn(second.state).turn_action.attack_action_active is False
+
+
+def test_attack_action_does_not_unlock_after_another_main_action():
+    hero = replace(_actor("hero", Faction.ALLY, 0), attacks_per_action=2)
+    goblin = _actor("goblin", Faction.ENEMY, 1)
+    state = use_turn_action(start_combat((hero, goblin), _order(hero, goblin))).state
+
+    result = use_attack_action(state, hero)
+
+    assert result.accepted is False
+    assert attack_action_remaining(state, hero) == 0
+
+
+def test_remaining_movement_can_be_spent_between_attacks():
+    hero = replace(_actor("hero", Faction.ALLY, 0), attacks_per_action=2)
+    goblin = _actor("goblin", Faction.ENEMY, 4)
+    board = BoardState()
+    state = start_combat((hero, goblin), _order(hero, goblin))
+    after_first = use_attack_action(state, hero).state
+    path = find_path(board, hero, after_first.actors, Coordinate(1, 0))
+
+    movement = use_movement(after_first, hero, path)
+
+    assert movement.accepted is True
+    assert movement.movement_remaining_feet == 25
+    assert can_use_attack_action(movement.state, current_actor(movement.state)) is True
 
 
 def test_finish_turn_advances_actor_and_resets_action():
@@ -98,6 +174,110 @@ def test_bonus_action_can_only_be_used_once_and_resets_on_next_turn():
     assert second.accepted is False
     assert "Akcja bonusowa" in second.message
     assert next_turn.turn_action.bonus_action_use.value == "action_available"
+
+
+def test_first_object_interaction_is_free_and_second_uses_action() -> None:
+    hero = _actor("hero", Faction.ALLY, 0)
+    goblin = _actor("goblin", Faction.ENEMY, 1)
+    state = start_combat((hero, goblin), _order(hero, goblin))
+
+    first = use_object_interaction(state)
+    second = use_object_interaction(first.state)
+
+    assert first.accepted is True
+    assert first.used_action is False
+    assert first.state.turn_action.object_interaction_available is False
+    assert first.state.turn_action.action_use.value == "action_available"
+    assert second.accepted is True
+    assert second.used_action is True
+    assert second.state.turn_action.action_use.value == "action_used"
+
+
+def test_equipping_one_handed_weapon_uses_free_off_hand_and_object_interaction() -> None:
+    sword = InventoryItem("sword", "Miecz", "weapon", equipped=True)
+    axe = InventoryItem("axe", "Topór", "weapon", equipped=False)
+    hero = replace(_actor("hero", Faction.ALLY, 0), inventory=(sword, axe))
+    goblin = _actor("goblin", Faction.ENEMY, 1)
+    state = start_combat((hero, goblin), _order(hero, goblin))
+
+    result = equip_weapon(state, "axe")
+
+    equipped_actor = current_actor(result.state)
+    assert result.accepted is True
+    assert result.used_action is False
+    assert result.replaced_weapons == ()
+    assert {item.id: item.equipped for item in equipped_actor.inventory} == {"sword": True, "axe": True}
+    assert next(item for item in equipped_actor.inventory if item.id == "sword").held_in == (HandSlot.MAIN_HAND,)
+    assert next(item for item in equipped_actor.inventory if item.id == "axe").held_in == (HandSlot.OFF_HAND,)
+    assert result.state.turn_action.object_interaction_available is False
+    assert result.state.turn_action.action_use.value == "action_available"
+
+
+def test_weapon_swap_cannot_fit_after_free_interaction_was_already_spent() -> None:
+    sword = InventoryItem("sword", "Miecz", "weapon", equipped=True)
+    axe = InventoryItem("axe", "Topór", "weapon", equipped=False)
+    hammer = InventoryItem("hammer", "Młot", "weapon", equipped=False)
+    hero = replace(_actor("hero", Faction.ALLY, 0), inventory=(sword, axe, hammer))
+    goblin = _actor("goblin", Faction.ENEMY, 1)
+    state = start_combat((hero, goblin), _order(hero, goblin))
+
+    first = equip_weapon(state, "axe")
+    second = equip_weapon(first.state, "hammer")
+
+    assert second.accepted is False
+    assert "Brak darmowej interakcji" in second.message
+    assert {item.id: item.equipped for item in current_actor(second.state).inventory} == {
+        "sword": True,
+        "axe": True,
+        "hammer": False,
+    }
+
+
+def test_action_economy_cost_dispatches_action_bonus_and_free_costs() -> None:
+    hero = _actor("hero", Faction.ALLY, 0)
+    goblin = _actor("goblin", Faction.ENEMY, 1)
+    state = start_combat((hero, goblin), _order(hero, goblin))
+
+    free = use_action_economy_cost(state, ActionEconomyCost.FREE)
+    bonus = use_action_economy_cost(free.state, ActionEconomyCost.BONUS_ACTION)
+    action = use_action_economy_cost(bonus.state, ActionEconomyCost.ACTION)
+
+    assert free.accepted and free.spent_cost == ActionEconomyCost.FREE
+    assert bonus.accepted and bonus.state.turn_action.bonus_action_use.value == "action_used"
+    assert action.accepted and action.state.turn_action.action_use.value == "action_used"
+
+
+def test_dropping_equipped_weapon_is_free_and_places_it_on_current_tile() -> None:
+    sword = InventoryItem("sword", "Miecz", "weapon", equipped=True)
+    hero = replace(_actor("hero", Faction.ALLY, 0), inventory=(sword,))
+    goblin = _actor("goblin", Faction.ENEMY, 1)
+    state = start_combat((hero, goblin), _order(hero, goblin))
+
+    result = drop_weapon(state, "sword")
+
+    assert result.accepted is True
+    assert current_actor(result.state).inventory[0].equipped is False
+    assert result.dropped_weapon is not None
+    assert result.dropped_weapon.position == hero.position
+    assert result.state.dropped_weapons == (result.dropped_weapon,)
+    assert result.state.turn_action.object_interaction_available is True
+    assert result.state.turn_action.action_use.value == "action_available"
+
+
+def test_stowing_weapon_uses_free_interaction_then_action() -> None:
+    sword = InventoryItem("sword", "Miecz", "weapon", equipped=True)
+    axe = InventoryItem("axe", "Topór", "weapon", equipped=True)
+    hero = replace(_actor("hero", Faction.ALLY, 0), inventory=(sword, axe))
+    goblin = _actor("goblin", Faction.ENEMY, 1)
+    state = start_combat((hero, goblin), _order(hero, goblin))
+
+    first = stow_weapon(state, "sword")
+    second = stow_weapon(first.state, "axe")
+
+    assert first.accepted and first.used_action is False
+    assert second.accepted and second.used_action is True
+    assert second.state.turn_action.action_use.value == "action_used"
+    assert not any(item.equipped for item in current_actor(second.state).inventory)
 
 
 def test_reaction_can_only_be_used_once_and_resets_on_next_turn():
@@ -285,3 +465,80 @@ def test_defeated_side_finishes_combat():
 
     assert state.status == CombatStatus.FINISHED
     assert state.winner == Faction.ALLY
+
+
+def test_dying_hero_remains_in_initiative_for_death_save() -> None:
+    hero = replace(_actor("hero", Faction.ALLY, 0), uses_death_saves=True)
+    goblin = _actor("goblin", Faction.ENEMY, 1)
+    state = start_combat((hero, goblin), _order(hero, goblin))
+
+    state = replace_actor(state, replace(hero, hp=0))
+    goblin_turn = finish_turn(state)
+    hero_turn = finish_turn(goblin_turn)
+
+    assert state.status == CombatStatus.ACTIVE
+    assert current_actor(hero_turn).id == hero.id
+    assert current_actor(hero_turn).needs_death_save() is True
+    assert hero_turn.turn_action.action_use.value == "action_used"
+    assert movement_remaining(hero_turn, current_actor(hero_turn)) == 0
+
+
+def test_stable_last_hero_no_longer_keeps_combat_active() -> None:
+    hero = replace(
+        _actor("hero", Faction.ALLY, 0),
+        hp=0,
+        uses_death_saves=True,
+        death_saves=DeathSaveState(stable=True),
+    )
+    goblin = _actor("goblin", Faction.ENEMY, 1)
+
+    state = start_combat((hero, goblin), _order(hero, goblin))
+
+    assert state.status == CombatStatus.FINISHED
+    assert state.winner == Faction.ENEMY
+
+
+def test_actor_drops_equipped_weapon_once_when_reduced_to_zero_hp() -> None:
+    sword = InventoryItem("sword", "Miecz", "weapon", equipped=True)
+    hero = replace(
+        _actor("hero", Faction.ALLY, 0),
+        uses_death_saves=True,
+        inventory=(sword,),
+    )
+    goblin = _actor("goblin", Faction.ENEMY, 1)
+    state = start_combat((hero, goblin), _order(hero, goblin))
+
+    dropped = replace_actor(state, replace(hero, hp=0))
+    repeated = replace_actor(dropped, next(actor for actor in dropped.actors if actor.id == hero.id))
+
+    updated_hero = next(actor for actor in dropped.actors if actor.id == hero.id)
+    assert updated_hero.inventory[0].equipped is False
+    assert len(dropped.dropped_weapons) == 1
+    assert dropped.dropped_weapons[0].weapon.name == "Miecz"
+    assert dropped.dropped_weapons[0].position == hero.position
+    assert repeated.dropped_weapons == dropped.dropped_weapons
+
+
+def test_active_hero_picks_up_dropped_weapon_from_own_tile_without_equipping_it() -> None:
+    picker = _actor("picker", Faction.ALLY, 0)
+    sword = InventoryItem("sword", "Miecz", "weapon", equipped=True)
+    owner = replace(
+        _actor("owner", Faction.ALLY, 0),
+        uses_death_saves=True,
+        inventory=(sword,),
+    )
+    goblin = _actor("goblin", Faction.ENEMY, 4)
+    state = start_combat((picker, owner, goblin), _order(picker, owner, goblin))
+    dropped = replace_actor(state, replace(owner, hp=0))
+
+    result = pickup_dropped_weapon(dropped, dropped.dropped_weapons[0].id)
+
+    updated_picker = next(actor for actor in result.state.actors if actor.id == picker.id)
+    updated_owner = next(actor for actor in result.state.actors if actor.id == owner.id)
+    assert result.accepted is True
+    assert result.used_action is False
+    assert result.state.dropped_weapons == ()
+    assert updated_picker.inventory[-1].name == "Miecz"
+    assert updated_picker.inventory[-1].equipped is False
+    assert updated_owner.inventory == ()
+    assert result.state.turn_action.action_use.value == "action_available"

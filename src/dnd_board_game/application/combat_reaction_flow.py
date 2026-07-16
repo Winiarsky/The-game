@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Callable, Mapping
 
 from dnd_board_game.actors import Actor, ActorId
@@ -17,9 +17,13 @@ from dnd_board_game.combat import (
     EnemyAutoTurnResult,
     apply_damage_result,
     attack_source_with_target_combat_effects,
+    attack_source_with_hidden_advantage,
+    attack_source_with_prone,
     actor_as_combat_target,
     consume_next_attack_effects,
     replace_actor,
+    reveal_actor,
+    is_hidden_from,
     resolve_attack,
     resolve_damage,
     reaction_available_for,
@@ -38,6 +42,8 @@ from dnd_board_game.rules import (
     resolve_d20_roll,
 )
 from dnd_board_game.world import BoardState, PathResult
+
+from .damage_presentation import applied_damage_message
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,6 +127,16 @@ class CombatReactionFlowService:
             updated_state = reaction.state
             actor = next(candidate for candidate in updated_state.actors if str(candidate.id) == actor_id)
             source = attack_source_with_target_combat_effects(attacker, actor, source, updated_effects)
+            source = attack_source_with_hidden_advantage(
+                source,
+                is_hidden_from(updated_state.hidden_states, str(attacker.id), str(actor.id)),
+            )
+            source = attack_source_with_prone(
+                source,
+                updated_state.condition_states,
+                attacker,
+                actor,
+            )
             rolled_input = roll_d20(source.attack_roll_request)
             attack_roll = resolve_d20_roll(
                 D20RollInput(
@@ -135,6 +151,10 @@ class CombatReactionFlowService:
                 source=source,
             )
             resolution = resolve_attack(declaration, attack_roll, ActionUse.ACTION_AVAILABLE)
+            updated_state = replace(
+                updated_state,
+                hidden_states=reveal_actor(updated_state.hidden_states, str(attacker.id)),
+            )
             updated_effects = consume_next_attack_effects(
                 updated_effects,
                 str(attacker.id),
@@ -145,7 +165,7 @@ class CombatReactionFlowService:
                 damage_result = resolve_damage(
                     (DamageComponentInput(damage_amount, DamageType(source.damage_type), source.name),)
                 )
-                applied_damage = apply_damage_result(actor, damage_result)
+                applied_damage = apply_damage_result(actor, damage_result, critical=resolution.critical)
                 applied_damages.append(applied_damage)
                 updated_state = replace_actor(updated_state, applied_damage.actor_after)
                 defeated_text = " Cel zostaje pokonany." if applied_damage.defeated_by_damage else ""
@@ -217,6 +237,16 @@ class PlayerReactionFlowService:
             source,
             active_effects,
         )
+        source = attack_source_with_hidden_advantage(
+            source,
+            is_hidden_from(updated_state.hidden_states, str(attacker.id), str(target.id)),
+        )
+        source = attack_source_with_prone(
+            source,
+            updated_state.condition_states,
+            attacker,
+            target,
+        )
         attack_roll = resolve_d20_roll(
             _manual_d20_input(source.attack_roll_request, natural_roll, natural_roll_2)
         )
@@ -226,6 +256,10 @@ class PlayerReactionFlowService:
             source=source,
         )
         resolution = resolve_attack(declaration, attack_roll, ActionUse.ACTION_AVAILABLE)
+        updated_state = replace(
+            updated_state,
+            hidden_states=reveal_actor(updated_state.hidden_states, str(attacker.id)),
+        )
         updated_effects = active_effects
         if consumed_effect_id is not None:
             updated_effects = expire_active_effects(
@@ -265,6 +299,7 @@ class PlayerReactionFlowService:
         attack_sources_by_actor: Mapping[ActorId, AttackSource],
         active_effects: tuple[ActiveCombatEffect, ...],
         damage: int,
+        critical: bool = False,
     ) -> PlayerReactionDamageResolution:
         attacker = _actor_by_string_id(state, attacker_id)
         target = _actor_by_string_id(state, target_id)
@@ -286,7 +321,7 @@ class PlayerReactionFlowService:
                 ),
             )
         )
-        applied_damage = apply_damage_result(target, damage_result)
+        applied_damage = apply_damage_result(target, damage_result, critical=critical)
         return PlayerReactionDamageResolution(
             state=replace_actor(state, applied_damage.actor_after),
             applied_damage=applied_damage,
@@ -399,15 +434,4 @@ def _player_attack_message(
 
 
 def _damage_application_message(result: AppliedDamageResult) -> str:
-    defeated_text = " Cel zostaje pokonany." if result.defeated_by_damage else ""
-    temp_text = ""
-    if result.temp_hp_before > 0 or result.absorbed_by_temp_hp > 0:
-        temp_text = (
-            f" Temp HP {result.temp_hp_before} -> {result.temp_hp_after}, "
-            f"pochłonięto {result.absorbed_by_temp_hp}."
-        )
-    return (
-        f"Obrażenia: {result.damage.total_applied}. "
-        f"{result.actor_before.name}: HP {result.hp_before} -> {result.hp_after} / "
-        f"{result.actor_after.max_hp}.{temp_text}{defeated_text}"
-    )
+    return applied_damage_message(result)

@@ -6,9 +6,10 @@ from typing import Mapping
 from dnd_board_game.actors import Actor, ActorId, Faction
 from dnd_board_game.world import Coordinate
 
-from .attack_flow import AttackSource
+from .attack_flow import AttackKind, AttackSource, effective_attack_kind, melee_reach_feet
 from .scene_interactions import ActiveCombatEffect
 from .session import CombatState, reaction_available_for
+from .stealth import is_hidden_from
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,10 +36,12 @@ def opportunity_attackers_for_movement(
             continue
         if attacker.is_defeated() or not reaction_available_for(state, attacker):
             continue
-        source = attack_sources_by_actor.get(attacker.id)
-        if source is None or source.range_feet > 10:
+        if is_hidden_from(state.hidden_states, str(mover.id), str(attacker.id)):
             continue
-        reach_tiles = source.range_feet // 5
+        source = attack_sources_by_actor.get(attacker.id)
+        if source is None or effective_attack_kind(source) != AttackKind.MELEE:
+            continue
+        reach_tiles = melee_reach_feet(source) // 5
         if _in_melee_reach(attacker.position, origin, reach_tiles) and not _in_melee_reach(
             attacker.position,
             destination,

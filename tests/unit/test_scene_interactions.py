@@ -338,6 +338,20 @@ def test_help_effect_cancels_disadvantage_and_expires_on_helper_turn_start():
     assert expire_turn_start_effects((effect,), str(helper.id)) == ()
 
 
+def test_unconscious_target_grants_attack_advantage():
+    attacker = _actor("attacker", Faction.ALLY, Coordinate(0, 0))
+    target = replace(
+        _actor("target", Faction.ENEMY, Coordinate(1, 0)),
+        hp=0,
+        uses_death_saves=True,
+    )
+    source = AttackSource("Miecz", AttackSourceType.WEAPON, 5, D20RollRequest())
+
+    effective = attack_source_with_target_combat_effects(attacker, target, source, ())
+
+    assert effective.attack_roll_request.mode == RollMode.ADVANTAGE
+
+
 def test_rubble_interaction_resolves_enemy_dexterity_save_before_penalty():
     hero = _actor("hero", Faction.ALLY, Coordinate(1, 1))
     enemy = _actor("goblin", Faction.ENEMY, Coordinate(2, 1), dexterity=14)

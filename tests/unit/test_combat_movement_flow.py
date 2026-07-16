@@ -1,4 +1,5 @@
 import pytest
+from dataclasses import replace
 
 from dnd_board_game.actors import AbilityScores, Actor, ActorId, Faction
 from dnd_board_game.application import CombatMovementFlowService
@@ -7,6 +8,8 @@ from dnd_board_game.combat import (
     AttackSource,
     AttackSourceType,
     CombatState,
+    CombatCondition,
+    ConditionState,
     InitiativeEntry,
     InitiativeOrder,
     start_combat,
@@ -89,6 +92,32 @@ def test_submit_applies_safe_movement_and_tracks_remaining_speed() -> None:
     assert submission.movement_remaining_feet == 25
     assert not submission.requires_opportunity_confirmation
     assert submission.event_type == "ui_combat_player_moved"
+
+
+def test_prone_actor_crawls_at_double_normal_movement_cost() -> None:
+    service = CombatMovementFlowService()
+    hero = _actor("hero", Faction.ALLY, Coordinate(0, 0))
+    goblin = _actor("goblin", Faction.ENEMY, Coordinate(5, 0))
+    state = replace(
+        _state(hero, goblin),
+        condition_states=(ConditionState("hero", CombatCondition.PRONE),),
+    )
+
+    preview = service.preview(
+        state=state,
+        board=BoardState(),
+        destination=Coordinate(2, 0),
+    )
+    submission = service.submit(
+        state=state,
+        board=BoardState(),
+        attack_sources_by_actor={goblin.id: _melee_source()},
+        active_effects=(),
+        destination=Coordinate(2, 0),
+    )
+
+    assert preview.path.cost_feet == 20
+    assert submission.movement_remaining_feet == 10
 
 
 def test_submit_exposes_opportunity_threat_without_moving() -> None:

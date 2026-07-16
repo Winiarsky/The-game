@@ -1,16 +1,23 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Mapping
 
-from dnd_board_game.actors import Actor, ActorId, Faction
+from dnd_board_game.actors import Actor, ActorId, Faction, skill_modifier, skill_roll_modifiers
 from dnd_board_game.combat import (
     ActionUse,
     ActiveCombatEffect,
     AttackSource,
     CombatState,
     CombatStatus,
+    HiddenState,
+    SceneObject,
     current_actor,
+    drop_prone,
+    hide_eligibility,
+    resolve_hide,
+    resolve_search,
+    stand_up,
     use_dash,
     use_turn_action,
 )
@@ -20,7 +27,12 @@ from dnd_board_game.rules import (
     EffectSource,
     EffectSourceType,
     apply_active_effect,
+    D20RollInput,
+    D20RollRequest,
+    resolve_d20_roll,
+    roll_instruction,
 )
+from dnd_board_game.world import BoardState
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +67,26 @@ class ReadyPreparation:
     message_body: str
     event_type: str
     event_payload: tuple[tuple[str, object], ...]
+
+
+@dataclass(frozen=True, slots=True)
+class PendingCombatSkillCheck:
+    actor_id: str
+    action: str
+    skill: str
+    modifier: int
+    instruction: str
+    opposing_actor_ids: tuple[str, ...]
+
+    def as_payload(self) -> dict[str, object]:
+        return {
+            "actor_id": self.actor_id,
+            "action": self.action,
+            "skill": self.skill,
+            "modifier": self.modifier,
+            "instruction": self.instruction,
+            "opposing_actor_ids": list(self.opposing_actor_ids),
+        }
 
 
 class CombatTurnActionFlowService:
@@ -137,6 +169,179 @@ class CombatTurnActionFlowService:
             event_payload=(("actor_id", str(actor.id)),),
         )
 
+    def drop_prone(
+        self,
+        *,
+        state: CombatState,
+        active_effects: tuple[ActiveCombatEffect, ...],
+    ) -> CombatTurnActionTransition:
+        actor = _active_hero(state)
+        result = drop_prone(state, actor)
+        if not result.accepted:
+            raise ValueError(result.message)
+        return CombatTurnActionTransition(
+            state=result.state,
+            active_effects=active_effects,
+            actor_id=str(actor.id),
+            message_title="Powalenie",
+            message_body=result.message,
+            event_type="ui_combat_prone_applied",
+            event_payload=(("actor_id", str(actor.id)),),
+        )
+
+    def stand_up(
+        self,
+        *,
+        state: CombatState,
+        active_effects: tuple[ActiveCombatEffect, ...],
+    ) -> CombatTurnActionTransition:
+        actor = _active_hero(state)
+        result = stand_up(state, actor)
+        if not result.accepted:
+            raise ValueError(result.message)
+        return CombatTurnActionTransition(
+            state=result.state,
+            active_effects=active_effects,
+            actor_id=str(actor.id),
+            message_title="Wstawanie",
+            message_body=result.message,
+            event_type="ui_combat_prone_removed",
+            event_payload=(
+                ("actor_id", str(actor.id)),
+                ("movement_cost_feet", result.movement_cost_feet),
+            ),
+        )
+
+    def prepare_hide(
+        self,
+        *,
+        state: CombatState,
+        board: BoardState,
+        scene_objects: tuple[SceneObject, ...] = (),
+    ) -> PendingCombatSkillCheck:
+        actor = _active_hero(state)
+        if state.turn_action.action_use != ActionUse.ACTION_AVAILABLE:
+            raise ValueError("Akcja w tej turze została już zużyta.")
+        eligibility = hide_eligibility(board, actor, state.actors, scene_objects)
+        if not eligibility.allowed:
+            names = ", ".join(
+                _actor_by_string_id(state, actor_id).name
+                for actor_id in eligibility.blocking_observer_ids
+            )
+            raise ValueError(f"Nie możesz się ukryć: nadal wyraźnie widzą cię: {names}.")
+        request = _skill_request(actor, "stealth")
+        opponents = tuple(
+            str(candidate.id)
+            for candidate in state.actors
+            if candidate.faction not in {actor.faction, Faction.NEUTRAL}
+            and not candidate.is_defeated()
+        )
+        return PendingCombatSkillCheck(
+            actor_id=str(actor.id),
+            action="hide",
+            skill="stealth",
+            modifier=skill_modifier(actor, "stealth"),
+            instruction=roll_instruction(request).message,
+            opposing_actor_ids=opponents,
+        )
+
+    def resolve_hide(
+        self,
+        *,
+        state: CombatState,
+        board: BoardState,
+        pending: PendingCombatSkillCheck,
+        natural_roll: int,
+        active_effects: tuple[ActiveCombatEffect, ...],
+        scene_objects: tuple[SceneObject, ...] = (),
+    ) -> CombatTurnActionTransition:
+        actor = _validate_pending_skill_actor(state, pending, "hide")
+        eligibility = hide_eligibility(board, actor, state.actors, scene_objects)
+        if not eligibility.allowed:
+            raise ValueError("Warunki zmieniły się i nie można już wykonać Hide.")
+        result = resolve_d20_roll(D20RollInput(_skill_request(actor, "stealth"), natural_roll))
+        hiding = resolve_hide(state.hidden_states, actor, state.actors, result.total)
+        updated_state = replace(
+            _consume_action(state),
+            hidden_states=hiding.hidden_states,
+        )
+        hidden_names = _actor_names(state, hiding.hidden_state.hidden_from_actor_ids) if hiding.hidden_state else ()
+        detected_names = _actor_names(state, hiding.detected_by_actor_ids)
+        if hidden_names:
+            body = f"{actor.name} ukrywa się z wynikiem {result.total} przed: {', '.join(hidden_names)}."
+            if detected_names:
+                body += f" Nadal wykrywają go: {', '.join(detected_names)}."
+        else:
+            body = f"{actor.name} uzyskuje {result.total}, ale każdy przeciwnik go wykrywa."
+        return CombatTurnActionTransition(
+            state=updated_state,
+            active_effects=active_effects,
+            actor_id=str(actor.id),
+            message_title="Hide",
+            message_body=body,
+            event_type="ui_combat_hide_resolved",
+            event_payload=(
+                ("actor_id", str(actor.id)),
+                ("natural_roll", result.natural_roll),
+                ("total", result.total),
+                ("hidden_from_actor_ids", list(hiding.hidden_state.hidden_from_actor_ids) if hiding.hidden_state else []),
+                ("detected_by_actor_ids", list(hiding.detected_by_actor_ids)),
+            ),
+        )
+
+    def prepare_search(self, *, state: CombatState) -> PendingCombatSkillCheck:
+        actor = _active_hero(state)
+        if state.turn_action.action_use != ActionUse.ACTION_AVAILABLE:
+            raise ValueError("Akcja w tej turze została już zużyta.")
+        hidden_actor_ids = tuple(
+            hidden.actor_id
+            for hidden in state.hidden_states
+            if str(actor.id) in hidden.hidden_from_actor_ids
+        )
+        if not hidden_actor_ids:
+            raise ValueError("Nie ma obecnie ukrytego przeciwnika, którego można aktywnie szukać.")
+        request = _skill_request(actor, "perception")
+        return PendingCombatSkillCheck(
+            actor_id=str(actor.id),
+            action="search",
+            skill="perception",
+            modifier=skill_modifier(actor, "perception"),
+            instruction=roll_instruction(request).message,
+            opposing_actor_ids=hidden_actor_ids,
+        )
+
+    def resolve_search(
+        self,
+        *,
+        state: CombatState,
+        pending: PendingCombatSkillCheck,
+        natural_roll: int,
+        active_effects: tuple[ActiveCombatEffect, ...],
+    ) -> CombatTurnActionTransition:
+        actor = _validate_pending_skill_actor(state, pending, "search")
+        result = resolve_d20_roll(D20RollInput(_skill_request(actor, "perception"), natural_roll))
+        search = resolve_search(state.hidden_states, actor, result.total)
+        updated_state = replace(_consume_action(state), hidden_states=search.hidden_states)
+        found_names = _actor_names(state, search.found_actor_ids)
+        body = (
+            f"{actor.name} uzyskuje {result.total} i odnajduje: {', '.join(found_names)}."
+            if found_names
+            else f"{actor.name} uzyskuje {result.total}, ale nie odnajduje ukrytego przeciwnika."
+        )
+        return CombatTurnActionTransition(
+            state=updated_state,
+            active_effects=active_effects,
+            actor_id=str(actor.id),
+            message_title="Search",
+            message_body=body,
+            event_type="ui_combat_search_resolved",
+            event_payload=(
+                ("actor_id", str(actor.id)),
+                ("natural_roll", result.natural_roll),
+                ("total", result.total),
+                ("found_actor_ids", list(search.found_actor_ids)),
+            ),
+        )
     def prepare_help(self, *, state: CombatState) -> HelpPreparation:
         actor = _active_hero(state)
         if state.turn_action.action_use != ActionUse.ACTION_AVAILABLE:
@@ -338,3 +543,25 @@ def _ready_trigger_label(trigger: str) -> str:
         "enemy_attacks": "gdy przeciwnik zaatakuje",
     }
     return labels.get(trigger, trigger)
+
+
+def _skill_request(actor: Actor, skill: str) -> D20RollRequest:
+    return D20RollRequest(modifiers=skill_roll_modifiers(actor, skill))
+
+
+def _validate_pending_skill_actor(
+    state: CombatState,
+    pending: PendingCombatSkillCheck,
+    action: str,
+) -> Actor:
+    actor = _active_hero(state)
+    if pending.action != action or pending.actor_id != str(actor.id):
+        raise ValueError("Oczekujący test nie należy do tej akcji ani aktywnego aktora.")
+    return actor
+
+
+def _actor_names(state: CombatState, actor_ids: tuple[str, ...]) -> tuple[str, ...]:
+    names: list[str] = []
+    for actor_id in actor_ids:
+        names.append(_actor_by_string_id(state, actor_id).name)
+    return tuple(names)

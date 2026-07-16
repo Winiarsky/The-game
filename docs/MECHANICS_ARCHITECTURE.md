@@ -39,6 +39,9 @@ ActionMechanic
 │   │   ├── HelpAction
 │   │   ├── ConcentrationAction
 │   │   └── ReadyAction
+│   ├── AwarenessAction
+│   │   ├── HideAction
+│   │   └── SearchAction
 │   ├── HealingMechanic
 │   │   ├── SpellHealing
 │   │   ├── ItemHealing
@@ -75,6 +78,25 @@ Modyfikatory sytuacyjne eksploracji są częścią planu rzutu, nie osobną mech
 `improvised_tool_check` używa dodatkowego payloadu `ImprovisedToolUse`: etykieta, źródło, szczegół źródła, mały modyfikator, ryzyko i powód. To jest jednorazowy element planu rzutu, a nie nowy wpis w inventory. UI wymaga jawnej akceptacji MG, bo LLM nie może samodzielnie stworzyć trwałego narzędzia ani zasobu drużyny.
 
 Zasoby sceny są odrębnymi, istniejącymi wpisami `ExplorationResource`. Wybrany posiadany zasób dokłada do deterministycznego planu rzutu premię i ewentualną przewagę, a resolver wyzwania stosuje redukcję hałasu oraz komplikacji. Zasób z `consume_on_use` jest po rzucie usuwany przez `apply_exploration_effect(remove_resource)`, dzięki czemu zmiana trafia do tego samego kontraktu obserwowalności co pozostałe efekty eksploracji. Korekta MG pokazuje i waliduje wybór przed rzutem.
+
+Wspólny builder ability check składa modyfikator cechy, skilla i narzędzia. Skill
+i narzędzie używają jednego klucza stackingowego proficiency, dzięki czemu ich
+biegłości nie są doliczane podwójnie. `rules/contests.py` porównuje dwa gotowe
+rzuty bez zależności od eksploracji, UI i konkretnej akcji; Grapple/Shove składają
+własne deklaracje i skutki na tym resolverze.
+
+Pierwszym konsumentem contestu jest `application/combat_shove_flow.py`. Serwis
+oddziela przygotowanie widocznego preview od rozstrzygnięcia, ponownie sprawdza
+zasięg i pole wymuszonego ruchu przed zużyciem akcji, a następnie deleguje
+powalenie do wspólnego `ConditionState`. UI przechowuje `PendingShove`, dzięki
+czemu anulowanie przed rzutem nie zużywa akcji.
+
+`application/combat_grapple_flow.py` korzysta z tego samego resolvera contestu, ale
+zapisuje relację źródłową `Grappled(target <- source)`. `combat/conditions.py`
+odpowiada za zerowy ruch celu, połowę efektywnej szybkości chwytającego, normalizację zerwanych
+relacji oraz serializowalne źródło warunku. `combat/session.py` wykonuje przesunięcie
+chwytającego i celu jako jedną domenową operację ruchu. UI przechowuje
+`PendingGrapple`, więc także próba chwytu i ucieczki nie zużywa akcji przed rzutem.
 
 Walidator ma pilnować spójności:
 
@@ -117,6 +139,20 @@ prowadzi sekwencję aktorów przed scenariuszem. Te same reguły dostępności s
 sprawdzane przez combat, eksplorację i payload UI przed zużyciem slotu.
 - `HealingActionResolver`: zużywa akcję/slot i aplikuje leczenie.
 
+## Kontekstowy katalog akcji walki
+
+`combat/context_menu.py` definiuje prezentacyjny kontrakt opcji oraz
+`ContextualActionCatalog`. Poszczególne providery — broń, manewry, czary, przedmioty,
+leczenie i interakcje sceny — dostarczają wyłącznie legalne `CombatMenuOption`.
+Katalog scala je, odrzuca powtórzone identyfikatory i nadaje stabilną kolejność
+kategorii. Nie wykonuje zasad i nie zużywa zasobów.
+
+Wybór opcji deleguje wykonanie do istniejącego flow konkretnej mechaniki. Przykładowo
+`application/combat_item_action_flow.py` waliduje contentową akcję przedmiotu na
+wskazanym celu, zużywa akcję oraz egzemplarz itemu i nakłada jawny `ActiveCombatEffect`.
+Dodanie nowej kategorii efektu przedmiotu wymaga rozszerzenia allowlisty, osobnego
+rozstrzygnięcia i testu domenowego; opis contentu nie jest wykonywalnym skryptem.
+
 Kolejne refaktory powinny przenosić podobne orkiestracje do tej warstwy, jeśli zaczynają łączyć więcej niż jeden element zasad. Przykłady: flankowanie z modyfikatorem ataku, koncentracja po rzuceniu czaru, efekty warunków po trafieniu.
 
 ## Reguły Dodawania Feature'a
@@ -146,13 +182,85 @@ Kolejne refaktory powinny przenosić podobne orkiestracje do tej warstwy, jeśli
 8. **Dokumenty są częścią implementacji.**
    Przy nowej mechanice aktualizuj `docs/RULES_DECISIONS.md`, `TODO.md` i w razie nowej gałęzi klas ten plik.
 
-## Jak Dodać Flankowanie
+## Flankowanie
 
-1. Dodać klasę, np. `FlankingModifier` albo `PositionalAttackModifier`, jeśli flankowanie będzie modyfikatorem ataku, a nie akcją.
-2. Dodać czystą funkcję w `combat/` albo `world/`, która wykrywa pozycję względem celu.
-3. Podpiąć wynik do istniejącego `AttackSource` przez modyfikatory rzutu, bez zmian w UI poza komunikatem.
-4. Dodać test: dwóch sojuszników po przeciwnych stronach celu daje premię/przewagę zgodnie z przyjętą decyzją.
-5. Zapisać decyzję w `docs/RULES_DECISIONS.md`, bo flankowanie w 5e jest regułą opcjonalną.
+`combat/attack_positioning.py` oblicza osłonę, zagrożenie dla ataku dystansowego i
+flankowanie w jednym czystym `AttackPositioning`. Flankowanie jest modyfikatorem
+rzutu, nie osobną akcją: evaluator zapisuje `flanking_ally_ids`, a
+`attack_source_with_positioning()` dodaje przewagę i jawny `RollModifier`.
+
+Geometria dla jednopolowych aktorów wymaga przeciwnych wektorów względem celu,
+łącznie z przeciwnymi rogami. Domyślny argument `flanking_enabled=True` ustanawia
+regułę dla runtime; testy mogą ją jawnie wyłączyć bez zależności od UI lub contentu.
+
+## Rozmiar stworzeń
+
+`actors/size.py` definiuje uporządkowane kategorie `CreatureSize` i czystą regułę
+celu Grapple/Shove. `Actor.size` domyślnie przyjmuje `Medium`, dzięki czemu starszy
+content pozostaje zgodny. Przepływy manewrów walidują rozmiar przed utworzeniem
+pending action i ponownie przed rozstrzygnięciem. Rozmiar jest obecnie cechą zasad,
+nie geometrii: każdy aktor nadal zajmuje dokładnie jedno pole.
+
+## Ręce i wyposażenie
+
+`inventory/hands.py` jest czystą warstwą reguł dla dwóch slotów dłoni. Normalizuje
+starsze `equipped=True` do `held_in`, buduje widok `HandLoadout` i przygotowuje
+`HandEquipPlan` bez zależności od UI, walki ani plików contentu. `combat/session.py`
+zużywa interakcję z obiektem, stosuje plan i dopiero potem emituje komunikat.
+
+Mechaniki potrzebujące wolnej ręki, obecnie Grapple, korzystają z
+`free_hand_count()` zamiast samodzielnie interpretować inventory. Rezerwacje rąk
+wynikające z warunków walki są nakładane w payloadzie aktora, dzięki czemu UI pokazuje
+zarówno przedmioty w dłoniach, jak i ręce zajęte przez aktywną mechanikę.
+
+## Typy obrażeń i profile odporności
+
+`core/damage_types.py` udostępnia stabilne identyfikatory trzynastu bazowych typów
+obrażeń, a `Actor.damage_affinities` przechowuje resistance, immunity i vulnerability
+bez zależności aktora od modułu walki. `combat/damage.py` grupuje składniki tego samego
+typu, rozlicza profil celu i zwraca surową oraz końcową wartość każdego składnika.
+
+`apply_damage_result()` zawsze ponownie rozlicza wejściowe składniki względem aktualnego
+profilu celu. Dzięki temu ataki gracza, AI, reakcje i czary obszarowe nie mogą ominąć
+odporności przez zastosowanie wcześniejszego, nierozliczonego `DamageResult`. Warstwa
+aplikacji dodaje ten sam breakdown do komunikatu i payloadu UI.
+
+## Rzuty obronne
+
+`rules/saving_throws.py` definiuje neutralne `SavingThrowRequest` i
+`SavingThrowResult`. Źródło efektu podaje cechę, ST oraz skutek sukcesu (`none` albo
+`half`), a resolver aktora dokłada modyfikator cechy i biegłość z jednego profilu.
+Spelle gracza nadal mogą rozstrzygać rzuty przeciwników automatycznie, natomiast efekt
+przeciwnika skierowany w bohatera zatrzymuje turę w `EnemyTurnFlowService`. UI pokazuje
+ST i składniki modyfikatora, przyjmuje naturalny wynik fizycznego d20, a dopiero potem
+stosuje kolejno wynik save'a, typ obrażeń, affinity celu i temporary HP.
+
+## Zagrożenia eksploracyjne
+
+`ExplorationHazard` jest niezależnym, data-driven opisem zagrożenia: triggerem
+`failure` albo `critical_failure`, neutralnym `SavingThrowRequest`, obrażeniami oraz
+narracją obu wyników. Opcja challenge może wskazać najwyżej jedno zagrożenie danego
+triggera. `application/exploration_hazard_flow.py` rozstrzyga fizyczny save i stosuje
+ten sam typed-damage pipeline co walka. `ExplorationUiSession` jedynie kolejkuje etap,
+aktualizuje aktora po resolverze i zapisuje pełny wynik w logu sesji.
+
+`combat/two_weapon.py` jest czystą warstwą reguł Two-Weapon Fighting: rozpoznaje
+kwalifikujący atak lekką bronią do walki wręcz, wybiera legalne źródła z przeciwnej
+dłoni i buduje wariant źródła obrażeń bez dodatniego modyfikatora cechy. Stan tury
+przechowuje wyłącznie stabilny identyfikator broni otwierającej bonusowy atak;
+`application/player_combat_action_flow.py` waliduje go ponownie i zużywa akcję
+bonusową podczas rzutu ataku.
+
+`combat/weapon_grip.py` buduje pochodne źródła ataku zależne od aktualnego układu
+dłoni. Dla broni versatile zachowuje źródło jednoręczne i dokłada wariant oburącz ze
+stabilnym sufiksem id oraz kością z contentu. Wariant powstaje tylko przy wolnej,
+niezarezerwowanej drugiej ręce i jest ponownie walidowany przed rozstrzygnięciem.
+
+`inventory/armor.py` oblicza premię wyposażenia i efektywne KP bez mutowania bazowego
+`Actor.ac`. `combat/targets.py`, payload UI i podgląd ataku korzystają z tej samej
+funkcji. Tarcza pozostaje zwykłym itemem zajmującym slot dłoni, natomiast
+`combat/session.py` odpowiada za pełnoakcyjne `don_shield`/`doff_shield`, walidację
+biegłości i zastosowanie planu dłoni.
 
 ## Jak Dodać Nowy Czar
 

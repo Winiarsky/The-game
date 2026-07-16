@@ -21,6 +21,7 @@ def _state():
         challenges=exploration.challenges,
         resources=exploration.resources,
         inventory_resource_ids=exploration.initial_resource_ids,
+        traps=exploration.traps,
     )
 
 
@@ -83,6 +84,40 @@ def test_apply_exploration_effect_adds_challenge_noise():
         result.state,
         {"type": "challenge_noise_at_least", "parameters": {"challenge_id": "closed_gate", "value": 2}},
     )
+
+
+def test_apply_exploration_effect_adds_challenge_complication_once():
+    effect = {
+        "type": "add_complication",
+        "parameters": {"challenge_id": "closed_gate", "value": "zawalona_droga"},
+    }
+
+    first = apply_exploration_effect(_state(), effect)
+    second = apply_exploration_effect(first.state, effect)
+
+    assert challenge_state_for(second.state, "closed_gate").complications == ("zawalona_droga",)
+    assert first.changed is True
+    assert second.changed is False
+
+
+def test_apply_exploration_effect_moves_party_to_known_zone():
+    result = apply_exploration_effect(
+        _state(),
+        {"type": "move_party", "parameters": {"zone_id": "courtyard"}},
+    )
+
+    assert result.changed is True
+    assert result.state.party_position.zone_id == "courtyard"
+
+
+def test_apply_exploration_effect_reveals_known_trap():
+    result = apply_exploration_effect(
+        _state(),
+        {"type": "reveal_trap", "parameters": {"trap_id": "gate_alarm_wire"}},
+    )
+
+    assert result.changed is True
+    assert result.state.trap_states[0].status.value == "revealed"
 
 
 def test_apply_exploration_effect_unlocks_option_flag():

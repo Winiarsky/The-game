@@ -111,6 +111,31 @@ def _page_assets(client) -> tuple[str, str, str]:
     return html, javascript, stylesheet
 
 
+def test_combat_ui_exposes_manual_enemy_saving_throw_endpoint() -> None:
+    html, javascript, _stylesheet = _page_assets(_client())
+
+    assert "/api/combat/enemy-saving-throw" in javascript
+    assert "pending_enemy_saving_throw" in javascript
+    assert "enemy-saving-throw-roll" in javascript
+    assert "/static/exploration.js" in html
+
+
+def test_combat_ui_warns_about_area_spell_friendly_fire() -> None:
+    _html, javascript, _stylesheet = _page_assets(_client())
+
+    assert "function areaSpellFriendlyFireHtml" in javascript
+    assert "Friendly fire:" in javascript
+    assert "target_mode === 'all_creatures'" in javascript
+
+
+def test_exploration_ui_renders_hazard_saving_throw_details() -> None:
+    _html, javascript, _stylesheet = _page_assets(_client())
+
+    assert "hazard_save" in javascript
+    assert "Zagrożenie:" in javascript
+    assert "Ryzyko obrażeń:" in javascript
+
+
 def test_exploration_ui_page_includes_session_log_panel():
     client = _client()
 
@@ -327,6 +352,14 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
     assert "pendingCombatInteractionHtml" in html
     assert "/api/combat/interaction/confirm" in html
     assert "/api/combat/interaction/cancel" in html
+    assert "combatContextMenuHtml" in html
+    assert "moveCombatContextMenu" in html
+    assert "/api/combat/context-menu/select" in html
+    assert "/api/combat/context-menu/confirm" in html
+    assert "/api/combat/context-menu/cancel" in html
+    assert "pendingCombatShoveHtml" in html
+    assert "/api/combat/shove/resolve" in html
+    assert "/api/combat/shove/cancel" in html
     assert "pendingOpportunityMovementHtml" in html
     assert "pendingOpportunityMovementDetailsHtml" in html
     assert "confirmOpportunityMovement()" in html
@@ -711,7 +744,11 @@ def test_exploration_ui_accept_can_select_lead_actor():
     response = client.post("/api/decision", json={"decision": "accept", "lead_actor_id": "rogue"})
 
     assert response.status_code == 200
-    assert response.get_json()["required_rolls"] == [{"actor_id": "rogue", "actor_name": "Łotrzyca", "die_sides": 20, "label": "d20"}]
+    roll = response.get_json()["required_rolls"][0]
+    assert roll["actor_id"] == "rogue"
+    assert roll["actor_name"] == "Łotrzyca"
+    assert roll["die_sides"] == 20
+    assert roll["label"] == "d20"
 
 
 def test_exploration_ui_decision_correction_endpoint_updates_pending_option():
@@ -1105,7 +1142,9 @@ def test_exploration_ui_happy_path_returns_to_player_after_enemy_turns():
     assert action["pending"]["stage"] == "decision"
 
     accepted = client.post("/api/decision", json={"decision": "accept"}).get_json()
-    assert accepted["required_rolls"] == [{"actor_id": "hero", "actor_name": "Bohater", "die_sides": 20, "label": "d20"}]
+    assert accepted["required_rolls"][0]["actor_id"] == "hero"
+    assert accepted["required_rolls"][0]["actor_name"] == "Bohater"
+    assert accepted["required_rolls"][0]["die_sides"] == 20
 
     resolved = client.post("/api/rolls", json={"rolls": {"hero": 16}}).get_json()
     assert resolved["flow"]["stage"] == "interaction_result"

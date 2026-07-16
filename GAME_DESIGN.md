@@ -58,8 +58,28 @@ W walce aplikacja powinna komunikować dostępne intencje przez LED:
 Gracz powinien wskazywać intencję przez kliknięcie podświetlonego pola na planszy:
 
 * kliknięcie niebieskiego pola wykonuje ruch,
-* kliknięcie pola z legalnym przeciwnikiem wykonuje atak,
-* kliknięcie pola interakcji wykonuje albo otwiera odpowiednią interakcję sceny.
+* kliknięcie pola z legalnym przeciwnikiem pokazuje wszystkie legalne działania
+  wobec niego, a pojedyncza jednoznaczna intencja może przejść bezpośrednio do podglądu,
+* kliknięcie pola interakcji wykonuje albo otwiera odpowiednią interakcję sceny,
+* gdy pole ma jedną legalną intencję, aplikacja przechodzi bezpośrednio do jej podglądu lub wykonania,
+* gdy pole ma kilka legalnych intencji, monitor pokazuje kontekstowe menu wybierane strzałkami i Enterem,
+* kliknięcie aktualnego pola bohatera zawsze otwiera menu własne: lokalne interakcje, ataki i czary,
+  ekwipunek, akcje podstawowe oraz zakończenie tury.
+
+Kontekstowe menu celu jest wspólnym katalogiem składanym z niezależnych źródeł.
+Grupuje ataki każdą dostępną bronią, manewry, czary, przedmioty oraz wsparcie i
+leczenie. Broń niesiona, ale niewyposażona, może wystawić złożoną opcję „wyposaż i
+zaatakuj”, jeżeli bohater ma jeszcze darmową interakcję z obiektem oraz wolną
+wymaganą dłoń; schowanie innego przedmiotu byłoby drugą interakcją i zużyłoby akcję. Po wykonaniu
+zwykłego ataku lekką bronią do walki wręcz menu celu może wystawić osobną opcję ataku
+inną lekką bronią trzymaną w drugiej dłoni. Opcja zużywa akcję bonusową.
+
+Opcja interakcji wskazana poza aktualnym zasięgiem obsługi jest intencją złożoną, a nie
+zdalnym użyciem obiektu. Silnik wybiera najtańsze osiągalne pole spełniające warunki
+interakcji, pokazuje ścieżkę i koszt ruchu, wykonuje ruch, a dopiero potem otwiera
+interakcję. Obiekt może wymagać stania obok (np. dźwignia) albo na jego polu
+(np. podnoszony przedmiot). Atak okazyjny jest rozstrzygany przed interakcją; jeśli
+bohater nie dotrze na zaplanowane pole, dalsza część intencji zostaje anulowana.
 
 Panele web UI mogą pokazywać stan, koszty ruchu, cele i awaryjne kontrolki, ale nie powinny być podstawowym sposobem wyboru ruchu albo celu ataku w grywalnym przepływie.
 
@@ -124,9 +144,11 @@ np. poziomie hałasu, ujawnionych faktach i tagach podejścia kończącego przes
 
 W scenie bramy głośne wyważenie oznacza gotowość obu stron, wysoki hałas bez
 rozpoznania pozwala goblinom przygotować zasadzkę, rozpoznanie chroni drużynę przed
-tą zasadzką, a ciche wejście zaskakuje gobliny. Jest to uproszczenie D&D 5e 2014:
-zaskoczenie obejmuje całą stronę zamiast osobnego porównania dla każdej postaci,
-a zamiast utraty ruchu, akcji i reakcji daje zaskoczonej stronie utrudnienie do
+tą zasadzką, a ciche wejście zaskakuje gobliny. Przy cichym wejściu po setupie i
+przed inicjatywą każdy bohater może wykonać jedną próbę Stealth. Wynik jest
+porównywany osobno z passive Perception przeciwników i określa, przed kim bohater
+zaczyna walkę ukryty. Bazowa kara zaskoczenia nadal obejmuje całą stronę i jest
+uproszczeniem D&D 5e 2014: zamiast utraty ruchu, akcji i reakcji daje utrudnienie do
 inicjatywy. Po ustaleniu kolejności obie strony rozgrywają pełne tury.
 
 W MVP pola z `blocking_terrain` i przeszkodami blokującymi ruch są niewchodzalne. Pola obiektów sceny typu `container`, np. rozbity wóz, mogą być zajmowane, dopóki content nie oznaczy ich jako blokujące.
@@ -259,7 +281,7 @@ Aplikacja musi obsługiwać następujące typy rzutów:
 * rzut obronny,
 * rzut inicjatywy,
 * rzut leczenia,
-* rzut śmierci w późniejszej iteracji.
+* rzut śmierci, gdy aktywny bohater ma 0 HP i nie jest stabilny.
 
 ### Rzuty d20
 
@@ -299,12 +321,14 @@ Aplikacja powinna przechowywać oba wyniki, wybrany wynik oraz końcowy rezultat
 
 Aplikacja musi przechowywać naturalny wynik rzutu, ponieważ naturalne `20` i naturalne `1` mogą mieć specjalne znaczenie.
 
-W MVP specjalne rozstrzyganie naturalnego `20` i naturalnego `1` dotyczy tylko rzutów ataku.
+W MVP specjalne rozstrzyganie naturalnego `20` i naturalnego `1` dotyczy rzutów ataku oraz rzutów śmierci.
 
 Dla MVP:
 
 * naturalne `20` przy rzucie ataku oznacza trafienie krytyczne,
 * naturalne `1` przy rzucie ataku oznacza automatyczne pudło,
+* naturalne `20` przy rzucie śmierci przywraca 1 HP,
+* naturalne `1` przy rzucie śmierci daje dwie porażki,
 * naturalne `20` i naturalne `1` przy testach cech nie powinny automatycznie oznaczać sukcesu albo porażki, chyba że późniejsza reguła projektu zdecyduje inaczej.
 
 ### Rzuty Obrażeń
@@ -340,6 +364,27 @@ Preferowany wariant MVP:
 * gracz wpisuje końcowy wynik obrażeń po samodzielnym rzucie wszystkimi wymaganymi kośćmi.
 
 Bardziej szczegółowe rozbijanie kości obrażeń można dodać później.
+
+### Nieprzytomność I Stabilizacja
+
+Bohater przy 0 HP pozostaje w inicjatywie dla rzutów śmierci, ale nie może wykonywać
+zwykłej tury ani reakcji. Ataki przeciw niemu mają przewagę, a trafienie z odległości
+nie większej niż 5 feet jest krytyczne. Sąsiedni sojusznik może zużyć akcję na test
+Wisdom (Medicine) ST 10 albo jedno użycie zestawu uzdrowiciela, aby go ustabilizować.
+Przy zejściu do 0 HP wyposażona broń zostaje niewyposażona i pojawia się jako prosty
+obiekt na aktualnym polu aktora. Podniesienie wymaga stania na jej polu i korzysta
+z darmowej interakcji z obiektem, a po jej wykorzystaniu z akcji. Podniesiona broń
+pozostaje niewyposażona. Bohater wyposaża albo zamienia broń przez kategorię
+`Ekwipunek` w menu własnego pola; obowiązuje ten sam koszt interakcji. Uproszczona
+zamiana nie łączy już schowania i dobycia w jedną czynność: każda obsługa osobnego
+przedmiotu jest oddzielną interakcją. Pierwsza jest darmowa, druga zużywa akcję, a
+czynność wymagająca trzech interakcji nie mieści się w zwykłej turze. Jawne upuszczenie
+wyposażonej broni nie zużywa akcji ani interakcji i tworzy obiekt na aktualnym polu.
+Jawny model obu dłoni oraz lekkich broni obsługuje walkę dwiema broniami. Tarcza
+zajmuje jedną dłoń, daje premię do efektywnego KP oraz wymaga akcji do założenia i
+zdjęcia. Opcja „wyposaż i zaatakuj” jest dostępna tylko wtedy, gdy dobycie nie wymaga
+wcześniejszego schowania innego przedmiotu; gracz może zamiast tego upuścić trzymaną
+broń, dobrać nową i zaatakować.
 
 ### Cyfrowe Rzuty Kośćmi
 
@@ -402,6 +447,7 @@ Wszystkie istoty powinny używać wspólnego modelu `Actor`.
 * placeholder klasy
 * cechy
 * premia z biegłości
+* wspólny profil biegłości w saving throwach, skillach, broniach, pancerzach i narzędziach
 * klasa pancerza
 * punkty życia
 * tymczasowe punkty życia
@@ -422,6 +468,99 @@ Wszystkie istoty powinny używać wspólnego modelu `Actor`.
 * akcje
 * modyfikator inicjatywy
 * pozycja
+
+### Profil biegłości aktora
+
+Każdy typ aktora korzysta z tego samego `ProficiencyProfile`. Profil przechowuje
+biegłości w saving throwach, skillach, broniach, pancerzach i narzędziach oraz
+expertise w skillach. Klasa, rasa albo statblock będą później składać ten profil,
+ale resolvery nie sprawdzają nazwy klasy ani typu aktora.
+
+Ability check, saving throw i attack roll budują wspólny `D20RollRequest` z osobnych
+składników. Premia ataku bronią wynika z wybranej cechy oraz biegłości aktora w id
+broni; nie jest przepisywana jako gotowa liczba do każdego aktora. Saving throw
+dodaje proficiency tylko wtedy, gdy dana cecha znajduje się w profilu. Wszystkie
+składniki są widoczne w instrukcji i podglądzie rzutu.
+
+Test narzędzia jest nadal ability checkiem: content wskazuje cechę i stabilne id
+narzędzia, a profil aktora decyduje, czy doliczyć premię z biegłości. Jeśli jedna
+próba sensownie korzysta równocześnie ze skilla i narzędzia, premia z biegłości
+nie sumuje się drugi raz; expertise może zastąpić zwykłą biegłość.
+
+Test przeciwstawny rozstrzyga dwa kompletne rzuty ability check. Wyższy wynik
+wygrywa, a remis zachowuje stan sprzed próby. Ten resolver jest wspólną podstawą
+dla akcji takich jak Shove i przyszły Grapple, ale sam nie narzuca ich ekonomii
+akcji, zasięgu ani skutków.
+
+### Typy obrażeń i odporności
+
+Każde obrażenia mają jawny typ. Jedno zdarzenie może zawierać kilka składników,
+na przykład obrażenia cięte i od ognia; silnik rozlicza każdy typ osobno. Aktor ma
+generyczny profil resistance, immunity i vulnerability niezależny od klasy, rasy
+czy konkretnego statblocku.
+
+UI zawsze pokazuje wartość przed profilem celu, zastosowaną relację i końcowe
+obrażenia. Resistance, immunity ani vulnerability nie mogą być ukrytym modyfikatorem
+widocznym wyłącznie w logach. Temporary HP pochłania obrażenia dopiero po tym
+rozliczeniu.
+
+### Shove
+
+Gracz wybiera sąsiedniego przeciwnika bezpośrednio na jego polu, a następnie
+decyduje, czy chce go powalić, czy odepchnąć o 5 ft. Atakujący wykonuje Strength
+(Athletics), cel broni się korzystniejszym Strength (Athletics) albo Dexterity
+(Acrobatics). Wyłącznie wyższy wynik atakującego daje sukces; remis broni celu.
+
+Powalenie nakłada wspólny stan `Prone`. Odepchnięcie jest ruchem wymuszonym i nie
+zużywa ruchu celu ani nie prowokuje ataków okazyjnych. Opcja odepchnięcia nie jest
+pokazywana, gdy pole bezpośrednio za celem jest poza planszą, zajęte lub blokowane
+przez teren, ścianę albo obiekt sceny.
+
+### Grapple
+
+Gracz wybiera sąsiedniego przeciwnika z kontekstowego menu celu. Chwytający wykonuje
+Strength (Athletics), a cel broni się lepszym Strength (Athletics) albo Dexterity
+(Acrobatics). Wyłącznie wyższy wynik chwytającego nakłada `Grappled`; remis broni
+celu. W obecnym modelu manewr zużywa całą akcję, dopóki Attack action nie obsługuje
+wielu ataków.
+
+`Grappled` przechowuje id chwytającego i ustawia pozostały ruch celu na 0. Chwytany
+bohater może z menu własnego pola zużyć akcję na ucieczkę: wybiera automatycznie
+lepsze Athletics/Acrobatics przeciw Athletics chwytającego. Chwyt kończy się również,
+gdy chwytający albo cel zostaje pokonany lub zostają rozdzieleni na więcej niż 5 ft.
+
+Chwytający może poruszać się z celem, ale jego efektywna szybkość zostaje zmniejszona
+o połowę, np. z 30 do 15 ft. UI od razu ogranicza zasięg podświetlonych pól i pokazuje
+redukcję szybkości. Cel trafia na poprzednie pole chwytającego; preview wskazuje to
+pole różowym LED-em i podaje, którą figurkę trzeba przestawić. Wymuszony ruch celu nie
+prowokuje ataku okazyjnego. Rozpoczęcie chwytu wymaga wolnej ręki; UI pokazuje rękę
+zarezerwowaną przez trwający chwyt. Cel Grapple może być najwyżej o jedną kategorię
+rozmiaru większy od chwytającego. Jedna postać nadal może utrzymywać tylko jeden
+chwyt.
+
+### Ręce i trzymane wyposażenie
+
+Każdy aktor ma dwa jawne sloty: `main_hand` i `off_hand`. Przedmiot jednoręczny
+zajmuje jeden slot, a dwuręczny oba. Wyposażenie jednoręcznej broni wykorzystuje
+najpierw wolną dłoń; jeśli obie są zajęte, zastępuje domyślnie przedmiot w drugiej
+ręce. Wyposażenie broni dwuręcznej zwalnia obie dłonie. Upuszczenie zwalnia wszystkie
+sloty zajmowane przez przedmiot.
+
+Stan dłoni jest widoczny w panelu aktywnego aktora i zapisywany w snapshocie.
+Atak lekką bronią do walki wręcz ustawia do końca tury jawny trigger. Jeśli w drugiej
+dłoni znajduje się inna lekka broń do walki wręcz, można nią zaatakować w ramach akcji
+bonusowej. Do obrażeń tego ataku nie dodaje się dodatniego modyfikatora cechy, ale
+pozostają inne premie oraz ujemny modyfikator cechy. Broń z
+`versatile_damage_dice` wystawia dodatkowy wariant ataku oburącz, jeżeli druga ręka
+jest wolna i nie została zarezerwowana przez trwający Grapple. Wariant zmienia kość
+obrażeń tylko dla wybranego ataku; nie zapisujemy sztucznego trwałego stanu chwytu.
+
+Tarcza jest trzymanym wyposażeniem z `hands_required=1`, `armor_class_bonus` oraz
+`armor_proficiency`. Założona tarcza blokuje użycie tej samej ręki przez broń,
+wariant versatile i Grapple. Runtime pokazuje bazowe KP oraz premię ekwipunku.
+Zakładanie i zdejmowanie zużywa akcję zgodnie z tabelą czasu zakładania pancerza 5e
+2014. Obecne MVP nie pozwala założyć tarczy bez biegłości, zamiast implementować cały
+pakiet kar za niebiegły pancerz oraz blokadę rzucania czarów.
 
 ### NPC
 
@@ -999,7 +1138,8 @@ Na potrzeby MVP:
 * aktor nie może przechodzić przez pole zajmowane przez przeciwnika,
 * aktor nie może zakończyć ruchu na polu zajmowanym przez przeciwnika.
 
-Wyjątki wynikające z różnicy rozmiarów istot należy dodać w późniejszej iteracji.
+Kategorie rozmiaru istnieją już w modelu, ale wyjątki dotyczące przechodzenia przez
+pola mniejszych i większych istot pozostają odłożone do etapu geometrii rozmiarów.
 
 #### Neutralni Aktorzy
 
@@ -1088,6 +1228,102 @@ Każda tura aktora zawiera:
 * opcjonalną akcję dodatkową,
 * opcjonalne śledzenie reakcji.
 
+### Ataki dystansowe i osłona
+
+Źródło ataku rozdziela rodzaj ataku od jego odległości. Ataki wręcz deklarują
+`attack_kind: melee` i `reach_feet` (domyślnie 5 feet w contentcie), natomiast
+ataki dystansowe deklarują `attack_kind: ranged` oraz `range_feet`. Legalne cele,
+podświetlenie planszy i podgląd akcji korzystają z tej samej wartości efektywnej.
+
+Reach wyznacza również strefę zagrożenia: dobrowolne opuszczenie jej może uruchomić
+atak okazyjny, ale przesunięcie między polami nadal znajdującymi się w reach nie.
+Krótki atak dystansowy nigdy nie tworzy takiej strefy. AI z atakiem o wydłużonym
+reach zatrzymuje ruch, gdy osiągnie pierwsze legalne pole ataku. Shove i Grapple
+pozostają osobnymi manewrami wymagającymi odległości 5 feet.
+
+Atak dystansowy ma utrudnienie, jeżeli żywy przeciwnik znajduje się nie dalej niż
+5 feet od atakującego i ma do niego linię widzenia. Przewaga i utrudnienie nadal
+znoszą się zgodnie ze zwykłym kontraktem rzutu d20.
+
+Dla rzutów ataku linia pocisku może zapewniać celowi half cover (`+2 AC`) albo
+three-quarters cover (`+5 AC`). Żywa postać na polu pośrednim zapewnia half cover,
+a obiekty sceny deklarują osłonę przez `projectile_cover_bonus`. Osłony nie sumują
+się: obowiązuje najwyższa wartość. Całkowicie zablokowana linia widzenia oznacza
+total cover i wyklucza cel. Preview ataku pokazuje rodzaj i źródło osłony,
+efektywne AC oraz ewentualne utrudnienie za zwarcie.
+
+Osłona działa także dla rzutów obronnych na Zręczność przeciw czarom: half cover
+daje `+2`, a three-quarters cover `+5`. UI pokazuje premię przed potwierdzeniem oraz
+jako osobny składnik wyniku save'a. Dla obszaru liczymy ją od środka `radius` albo
+od rzucającego dla `line` i `cone`; pełna przeszkoda wyklucza cel z efektu.
+
+### Czary obszarowe
+
+Gracz wskazuje środek `radius` albo jedno z ośmiu sąsiednich pól wyznaczających
+kierunek `line` lub `cone`. Linia wykorzystuje długość i szerokość z contentu;
+stożek rośnie warstwami 1, 2, 3... pól. Wszystkie pola są widoczne na planszy
+przed potwierdzeniem.
+
+Obszar nie przechodzi przez ściany, zamknięte krawędzie ani blocking terrain.
+Content jawnie wybiera `target_mode`: wszystkie istoty, przeciwników albo
+sojuszników. Wariant `all_creatures` oznacza friendly fire. UI pokazuje objętych
+sojuszników i rzucającego jako ostrzeżenie, zanim zostanie zużyta akcja oraz slot.
+
+Geometria jest deterministyczną interpretacją jednopolowej siatki. Dokładne bryły
+3D, wysokość oraz alternatywne sposoby rozstrzygania pól dotkniętych na krawędzi
+pozostają poza zakresem board MVP.
+
+### Flankowanie
+
+Opcjonalna reguła flankowania z D&D 5e 2014 jest domyślnie włączona. Atak wręcz
+otrzymuje przewagę, jeśli atakujący stoi na polu sąsiadującym z celem, a żywy
+sojusznik zdolny do walki zajmuje dokładnie przeciwległe pole lub róg i widzi cel.
+Flankowanie nie działa dla ataków dystansowych, save-spelli ani efektów obszarowych.
+
+Preview ataku jawnie pokazuje `Flankowanie: tak — przewaga` oraz id sojuszników,
+którzy spełniają geometrię. Przewaga i utrudnienie znoszą się przez standardowy
+kontrakt `RollMode`. Czysty evaluator dopuszcza wyłączenie reguły parametrem, ale
+runtime gry korzysta z wartości domyślnej `flanking_enabled=True`.
+
+### Hide, Search i wykrywanie
+
+Walka używa modelu D&D 5e 2014. Hide jest akcją i wymaga, aby żaden przeciwnik nie
+widział postaci wyraźnie. Na deterministycznej planszy spełnia to zablokowana linia
+widzenia albo three-quarters/total cover; half cover nie wystarcza. Wynik Dexterity
+(Stealth) jest porównywany osobno z passive Perception każdego przeciwnika, dlatego
+postać może być ukryta przed częścią encountera, ale wykryta przez pozostałych.
+
+Search jest akcją Wisdom (Perception) przeciw zapisanemu wynikowi Stealth i ujawnia
+cel wyłącznie szukającemu. Ruch na pole widoczne dla danego obserwatora kończy tę
+relację ukrycia. Atak z ukrycia ma przewagę, po czym atakujący ujawnia się wszystkim.
+AI bez widocznego celu używa Search i nie może korzystać z pozycji figurki jako
+wiedzy postaci.
+
+Jeżeli rozstrzygnięcie eksploracji potwierdzi ciche, niezauważone podejście drużyny,
+po setupie i przed inicjatywą pojawia się opcjonalny etap skradania. Każdy przytomny
+bohater może wykonać jedną próbę albo ją pominąć. Relacje ukrycia uzyskane przeciw
+poszczególnym obserwatorom przechodzą bezpośrednio do pierwszej rundy walki.
+
+Fizyczna plansza nie obsługuje jeszcze oficjalnej możliwości zgadywania pozycji
+ukrytego celu i atakowania wskazanego pola z utrudnieniem. Do czasu osobnego modelu
+wiedzy o ostatniej znanej pozycji ukryty aktor nie jest legalnym celem ani celem LED.
+
+### Warunki walki i prone
+
+Trwałe warunki mechaniczne aktywnej walki są przechowywane w osobnym
+`ConditionState` przypisanym do aktora i zapisywanym w snapshocie. Pierwszym
+obsługiwanym warunkiem jest D&D 5e 2014 `Prone/Powalony`.
+
+Padnięcie jest darmowym wyborem z menu własnego pola. Wstanie nie zużywa akcji,
+ale wymaga i zużywa połowę bazowej szybkości aktora. Powalony aktor może poruszać
+się tylko przez czołganie: każdy odcinek kosztuje dwukrotnie, a difficult terrain
+dodaje swój koszt osobno. UI pokazuje stan oraz rzeczywisty pozostały budżet ruchu.
+
+Powalony atakujący ma utrudnienie do ataku. Atak przeciw powalonemu celowi z 5 feet
+ma przewagę, a z większej odległości utrudnienie. Modyfikatory przechodzą przez
+wspólny kontrakt advantage/disadvantage i są widoczne w podglądzie rzutu. AI przed
+planowaniem ruchu próbuje wstać i płaci ten sam koszt co gracz.
+
 Silnik musi wspierać przyszłe rozszerzenia dla:
 
 * ataków okazyjnych,
@@ -1165,6 +1401,20 @@ Adaptery sprzętowe nie wymagają testów jednostkowych w MVP.
 
 ---
 
+## Zagrożenia Eksploracyjne
+
+Niebezpieczne podejście eksploracyjne może uruchomić hazard z osobnym fizycznym
+saving throwem. Wynik save'a wybiera skutki sukcesu albo porażki; skutkami mogą być
+obrażenia, hałas, komplikacja, flaga sceny, przesunięcie drużyny lub stan postaci.
+Stan aktora nie jest wyłącznie narracją: pozostaje jawny, jest zapisywany i przechodzi
+do encountera. `Prone` można usunąć bez kosztu poza inicjatywą przez zwykłe wstanie,
+natomiast po rozpoczęciu walki obowiązują zasady ruchu D&D 5e 2014.
+
+Pułapki są osobnymi, początkowo ukrytymi elementami contentu. Wykrycie nie może
+wynikać wyłącznie z narracyjnego domysłu LLM: wymaga ustrukturyzowanej obserwacji i
+efektu `reveal_trap`. Po ujawnieniu gracz widzi dozwolone działania oraz warunki
+rzutu. Aktywacja deleguje konsekwencje do ogólnego silnika hazardów.
+
 ## Poza Zakresem Pierwszej Wersji
 
 Pierwsza wersja nie obejmuje:
@@ -1194,7 +1444,7 @@ Najważniejsze przyszłe obszary rozwoju:
 * koncentracja,
 * ekwipunek,
 * pełniejsze bloki statystyk potworów,
-* rozmiary istot,
+* wielopolowe footprinty dużych istot,
 * zaawansowany ruch,
 * kampanie,
 * opcjonalny cyfrowy roller kości,

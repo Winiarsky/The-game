@@ -167,8 +167,7 @@ def test_gate_challenge_item_bonus_is_active_only_for_unbroken_item():
     modifiers = option_roll_modifiers_for_actor(rogue, lockpick)
 
     assert [bonus.source_id for bonus in bonuses] == ["thieves_tools"]
-    assert modifiers[0].label == "Narzędzia złodziejskie"
-    assert modifiers[0].value == 2
+    assert modifiers == ()  # biegłość narzędzia jest częścią check request, nie item bonusem
 
     broken_rogue = break_inventory_item(rogue, "thieves_tools")
 

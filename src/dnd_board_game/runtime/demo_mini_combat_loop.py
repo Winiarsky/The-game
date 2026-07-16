@@ -787,6 +787,7 @@ def _resolve_confirmed_interaction(
                 "interaction_id": interaction.id,
                 "ability": interaction.ability_check.ability,
                 "skill": interaction.ability_check.skill,
+                "tool": interaction.ability_check.tool,
                 "dc": interaction.ability_check.dc,
                 "instruction": instruction.message,
             },
