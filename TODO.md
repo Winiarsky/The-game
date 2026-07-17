@@ -25,6 +25,7 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [x] Add deterministic property-based crafting drafts, component validation, allocation, dismantling, and engine-owned costs.
 - [x] Integrate property-based crafting with the GM classifier and chat confirmation, without a default build roll.
 - [x] Close the exploration MVP with a chat-first GM, grounded scene answers, progressive hints, and persisted reveal context.
+- [x] Add persistent NpcRuntimeState with attitude, physical/emotional state, revealed information, used attempts, relationship events, content-driven updates, UI, LLM context, and snapshot compatibility.
 - [x] Add filterable slash-command intent hints to the exploration chat while preserving automatic intent detection.
 - [x] Unify player questions and progressive hint requests under `/pytaj`; infer hint strength from message content.
 - [x] Add deterministic graded observations that reveal cumulative scene facts without advancing the active challenge.
@@ -81,6 +82,7 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [x] Add the first data-driven trigger-engine vertical slice with shared event ids, deterministic turn-boundary activation, `grant_temp_hp`, UI logs, content validation, and snapshots.
 - [x] Connect the shared trigger engine to attack-hit, damage-taken, movement, rest, and encounter-end emitters, including reactions, forced movement, and exploration hazards.
 - [x] Add resource-backed limited attacks with short/long-rest recovery, deterministic monster Recharge rolls at turn start, UI availability/logs, content validation, and snapshots.
+- [x] Close M5 with versioned FeatureDefinition/FeatureGrant composition for resources, actions, triggers, and auras, including provenance, collision validation, UI, snapshots, and two content fixtures.
 - [x] Add data-driven exploration traps with detection, disarm/bypass/trigger actions, hazard activation, snapshots, and an alarm-wire reference fixture.
 - [x] Close the combat turn-economy MVP with explicit action costs, data-driven Use an Object, separate draw/stow interactions, and visible UI costs.
 
@@ -139,11 +141,15 @@ obowiązują `Current Roadmap Focus` oraz etapy z `ROADMAP.md`.
 - [x] Add per-session web UI JSONL debug logs for actions, LLM proposals, rolls, and effects.
 - [x] Add web UI session log panel backed by `/api/session-log`.
 - [x] Make exploration presentation fiction-first with freeform questions, optional player inspiration, and separate GM mechanics.
-- [ ] [Deferred M8] Integrate exploration effect executor with NPC/freeform runtime validation for intent parameters, limits, and branches.
+- [x] Integrate the exploration effect executor with NPC runtime and load-time validation for intent parameters, limits, outcome branches, and scene transitions.
 - [x] Extend preparation effects with advantage/disadvantage, effect boost, unlock option, and grant resource.
 - [x] Show consequence preview before accepted freeform challenge rolls.
 - [x] Add second exploration challenge in abandoned watchtower and reveal first hidden NPC hook.
 - [x] Add first NPC interaction MVP after exploration point reveal.
+- [x] Add persistent visible NPC attitude and deterministic 2014 social reaction thresholds for content-marked intents.
+- [x] Add content-driven NPC attempt limits, retry unlock flags, natural blocking, and persisted roll history.
+- [x] Add structured NPC intent targets with limits, deterministic checks, four outcome branches, preview, and effect execution.
+- [x] Add persisted content-driven NPC escalation stages with state-aware variants and explicit player reactions before dialogue closure or encounter start.
 - [x] Add exploration check plans for actor selection, result aggregation, and consequence targets.
 - [x] Add simple local web UI for exploration and LLM playtesting.
 - [x] Add content-driven exploration encounter triggers and pending encounter UI.

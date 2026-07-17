@@ -617,6 +617,30 @@ Implementacja MVP:
 - Recharge wykonuje jawny, deterministycznie wstrzykiwany rzut po rozpoczęciu tury, przed triggerami `turn_start`. Sukces odnawia pulę do maksimum; pełna pula nie wykonuje rzutu.
 - Runtime zapisuje wynik recharge w historii sesji i pokazuje graczom wynik, próg oraz aktualną dostępność. Snapshot przechowuje zarówno bieżącą wartość puli, jak i definicję recharge.
 
+## Ogólny mechanizm cech
+
+- `FeatureDefinition` nie wprowadza osobnego wykonawcy zasad. Składa istniejące zasoby, ataki, akcje, triggery i aury, które nadal rozstrzygają ich właściwe deterministyczne resolvery.
+- Aktor przechowuje lekki `FeatureGrant` z identyfikatorem cechy, źródłem i listą przyznanych prymitywów. Dzięki temu runtime i UI potrafią wyjaśnić pochodzenie mechaniki bez sprawdzania klasy lub rodzaju potwora.
+- Loader odrzuca powtórzone cechy oraz kolizje identyfikatorów między bazowym aktorem i grantami. Cecha nie może być pustym opisem bez mechanicznego grantu.
+- Snapshot zachowuje grant i aktualny stan przyznanych prymitywów; definicja pozostaje wersjonowanym contentem. Mechanizm jest fundamentem dla przyszłych ras, klas, featów i magicznych przedmiotów, ale sam ich jeszcze nie implementuje.
+
+## Trwały stan NPC
+
+- Opis, osobowość i wiedza NPC są definicją contentu, natomiast zmieniające się nastawienie, kondycja fizyczna i emocjonalna, ujawnione informacje, wykorzystane próby oraz zdarzenia relacji należą do `NpcRuntimeState`.
+- Zaakceptowana interakcja zawsze dopisuje uporządkowane zdarzenie relacji. Interakcja wymagająca rzutu zapisuje stabilny identyfikator wykorzystanej próby; blokowanie ponowień będzie osobnym etapem reguł społecznych.
+- Zmiana stanu wynika z `state_on_success` albo `state_on_failure` właściwej polityki intencji. LLM tworzy narrację i klasyfikuje zamiar, ale nie może samodzielnie ustawić dowolnego nastawienia poza contentowym kontraktem.
+- Kolejne wywołanie NPC otrzymuje zarówno lokalną historię rozmowy, jak i aktualny runtime state. Snapshot zapisuje oba elementy osobno.
+- Intencja oznaczona `uses_social_reaction` korzysta z tabeli Conversation Reaction z DMG 2014. LLM klasyfikuje wyłącznie koszt prośby dla NPC (`no_risk`, `minor_risk`, `significant_risk`), a deterministyczny silnik łączy go z nastawieniem: friendly 0/10/20, indifferent 10/20/brak możliwości, hostile 20/brak możliwości/brak możliwości.
+- ST, automatyczna zgoda i odmowa wynikają z tej tabeli, nie z propozycji LLM. UI pokazuje aktualne nastawienie, poziom ryzyka i warunek reakcji przed akceptacją; każda contentowa zmiana nastawienia pojawia się również jako wpis rozmowy.
+- Powtarzalne testy NPC mogą mieć contentowe `attempt_policy`. Runtime liczy wyłącznie zaakceptowane i rozstrzygnięte rzuty oznaczone stabilnym `attempt_id`; rozmowa bez rzutu, odmowa i odrzucony preview nie zużywają limitu.
+- `max_attempts` jest limitem bezwzględnym, a `retry_requires_any_flags` wymaga, aby przed ponowieniem zaszła co najmniej jedna wskazana zmiana świata. Blokada oraz wyczerpanie zwracają naturalne teksty contentowe i nigdy nie uruchamiają efektów sukcesu ani porażki.
+- Intencje NPC o zamkniętej stawce używają contentowych `targets`. LLM klasyfikuje istniejący cel i ilość, natomiast cel narzuca limit, test oraz cztery gałęzie wyniku. Propozycja LLM zawierająca własne flagi, efekty albo ujawniane informacje dla strukturalnego celu jest odrzucana.
+- Gałąź krytycznego sukcesu wymaga udanego testu i naturalnego 20; gałąź krytycznej porażki wymaga nieudanego testu i naturalnego 1. Skrajny wynik nie zmienia sam w sobie zasad sukcesu testu cechy 5e.
+- Executor gałęzi używa wspólnego `apply_exploration_effect`, aktualizuje trwały stan NPC, zapisuje próbę i emituje osobne logi efektów. Referencyjne cele zwiadowcy to kradzież meldunków i wymuszenie informacji.
+- Gałąź wyniku może wskazać `transition_id`. Runtime wybiera pierwszy pasujący wariant z contentu na podstawie flag i rozstrzygniętych encounterów, po czym zatrzymuje automatyczne triggery do jawnej reakcji drużyny. Reakcja może wznowić dialog, trwale zamknąć interakcję albo uruchomić nazwany istniejący encounter; LLM jedynie narracyjnie opisuje scenę.
+- Efekty propozycji LLM, strukturalnych wyników NPC, ujawnianej wiedzy i reakcji przejścia korzystają z jednego walidatora. Loader sprawdza typ prymitywu, wymagane parametry, referencje do zasobów/punktów/challenge'y/stref/pułapek oraz lokalne `allowed_effect_types` i `allowed_flags`, zwracając pełną ścieżkę błędnego wpisu przed rozpoczęciem sesji.
+- `village_square_mvp` zawiera drugi fixture tego kontraktu: krytycznie nieudane negocjacje z sołtysem prowadzą do przeprosin i wznowienia dialogu albo jego zamknięcia, bez encountera. Potwierdza to, że transition router nie jest mechaniką specyficzną dla walki lub rannego zwiadowcy.
+
 Poza zakresem MVP:
 
 - pełny UI point-and-click,

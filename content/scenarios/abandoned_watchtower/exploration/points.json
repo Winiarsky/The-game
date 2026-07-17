@@ -42,11 +42,15 @@
       "visibility": "hidden",
       "description": "Pod zawalonym wozem leży ranny zwiadowca. Jest przytomny, ale osłabiony.",
       "npc_interaction": {
+        "id": "wounded_scout",
         "name": "Ranny zwiadowca",
         "public_description": "Pod zawalonym wozem leży ranny zwiadowca w rozdartej opończy. Oddycha płytko, ściska bok i reaguje nerwowo na każdy gwałtowny ruch.",
         "gm_context": "Prawda scenariusza: zwiadowca został ranny przez bestię grasującą w okolicy strażnicy. Bestią jest przeklęty komendant strażnicy, który przemienia się w sowoniedźwiedzia. Rany nie wyglądają jak zadane zwykłą bronią. Zwiadowca widział, że coś ciężkiego przeciągnięto w stronę wieży obserwacyjnej. Ma torbę z meldunkami, cenną dla niego, ale o niewielkiej wartości rynkowej. W rękawie ukrywa mały nóż i użyje go tylko w desperacji. Zasady prowadzenia: nie ujawniaj wszystkich tropów od razu; łagodne podejście i realna pomoc powinny budować zaufanie; zastraszanie i kradzież są możliwe, ale ryzykowne; informacje są zablokowane flagami; podpowiedzi dawaj dopiero, gdy gracze pytają albo robią coś, co naturalnie odsłania trop. Wiedza i ograniczenia: zwiadowca nie zna pełnej prawdy o klątwie komendanta, nie ma dużej ilości złota ani magicznego przedmiotu, nie może zostać aktywnym towarzyszem drużyny, a improwizowane materiały opatrunkowe pojawiają się jako użyteczny zasób tylko wtedy, gdy gracze ich szukają.",
         "personality": "Zmęczony, podejrzliwy, mówi krótkimi zdaniami. Po okazaniu pomocy staje się wdzięczny i konkretny.",
         "current_state": "Ranny, przestraszony, podejrzliwy i przygnieciony lekkimi deskami. Może rozmawiać, ale łatwo wpada w panikę. Ściska torbę z meldunkami i próbuje nie zdradzać, że ma ukryty nóż.",
+        "initial_attitude": "indifferent",
+        "initial_physical_state": "Ranny i przygnieciony lekkimi deskami; oddycha płytko i ściska bok.",
+        "initial_emotional_state": "Przestraszony i podejrzliwy; łatwo wpada w panikę.",
         "dialogue_intro": "Zwiadowca syczy z bólu: 'Nie podchodźcie tak nagle... kto tam?'",
         "capabilities": [
           "can_talk",
@@ -124,14 +128,41 @@
           "intent_permissions": {
             "social": {
               "status": "allowed",
-              "notes": "Uspokajanie, rozmowa i budowanie zaufania."
+              "notes": "Uspokajanie, rozmowa i budowanie zaufania.",
+              "uses_social_reaction": true,
+              "attempt_policy": {
+                "attempt_id": "scout_build_trust",
+                "max_attempts": 2,
+                "retry_requires_any_flags": [
+                  "scout_treated",
+                  "scout_stabilized"
+                ],
+                "retry_locked_message": "Zwiadowca zamyka się w sobie. Najpierw pokażcie czynami, że chcecie mu pomóc — na przykład opatrzcie jego rany.",
+                "exhausted_message": "Zwiadowca podjął już decyzję i dalsze przekonywanie go tym samym sposobem nic nie zmieni."
+              },
+              "state_on_success": {
+                "attitude": "friendly",
+                "emotional_state": "Spokojniejszy i gotowy wysłuchać drużyny."
+              },
+              "state_on_failure": {
+                "emotional_state": "Nadal przestraszony i podejrzliwy."
+              }
             },
             "medical": {
               "status": "allowed",
-              "notes": "Opatrywanie, stabilizacja i badanie ran."
+              "notes": "Opatrywanie, stabilizacja i badanie ran.",
+              "state_on_success": {
+                "physical_state": "Opatrzony i ustabilizowany; nadal osłabiony, ale bez bezpośredniego zagrożenia.",
+                "emotional_state": "Wdzięczny za udzieloną pomoc."
+              },
+              "state_on_failure": {
+                "physical_state": "Nadal ranny i osłabiony.",
+                "emotional_state": "Zaniepokojony nieudaną próbą pomocy."
+              }
             },
             "information": {
               "status": "locked",
+              "uses_social_reaction": true,
               "unlock_if_flags": [
                 "scout_calmed",
                 "scout_stabilized",
@@ -150,24 +181,68 @@
             },
             "theft": {
               "status": "allowed_with_consequence",
-              "limits": {
-                "max_loot": "meldunki i drobiazgi osobiste",
-                "no_significant_gold": true
+              "attempt_policy": {
+                "attempt_id": "steal_scout_reports",
+                "max_attempts": 1,
+                "exhausted_message": "Torba jest już poza zasięgiem albo zwiadowca pilnuje jej zbyt uważnie. Tego samego podejścia nie można powtórzyć."
               },
-              "consequences": {
-                "on_success": [
-                  "scout_robbed",
-                  "trust_lost"
-                ],
-                "on_failure": [
-                  "scout_panicked",
-                  "noise_added"
-                ],
-                "on_critical_failure": [
-                  "hidden_knife_response",
-                  "noise_added"
-                ]
-              }
+              "targets": [
+                {
+                  "id": "scout_reports",
+                  "label": "Torba z meldunkami",
+                  "description": "Spróbuj niepostrzeżenie zabrać torbę, którą zwiadowca mocno ściska.",
+                  "reward_label": "Meldunki zwiadowcy jako zasób scenariusza",
+                  "risk_summary": "Wykrycie niszczy zaufanie, zwiększa hałas i może wywołać gwałtowną reakcję zwiadowcy.",
+                  "max_quantity": 1,
+                  "ability": "dexterity",
+                  "skill": "sleight_of_hand",
+                  "dc": 14,
+                  "outcomes": {
+                    "critical_success": {
+                      "preview": "Zdobycie meldunków bez wykrycia i bez natychmiastowego pogorszenia relacji.",
+                      "message": "Łotrzyca zabiera torbę tak czysto, że zwiadowca nie zauważa jej zniknięcia.",
+                      "effects": [
+                        {"type": "grant_resource", "parameters": {"resource_id": "scout_reports"}},
+                        {"type": "set_flag", "parameters": {"key": "scout_reports_taken", "value": true}}
+                      ],
+                      "state_update": {"emotional_state": "Nadal nieświadomy utraty meldunków."}
+                    },
+                    "success": {
+                      "preview": "Zdobycie meldunków, ale utrata zaufania i wrogie nastawienie zwiadowcy.",
+                      "message": "Torba trafia do drużyny, ale zwiadowca orientuje się, że ktoś przy niej majstrował.",
+                      "effects": [
+                        {"type": "grant_resource", "parameters": {"resource_id": "scout_reports"}},
+                        {"type": "set_flag", "parameters": {"key": "scout_reports_taken", "value": true}},
+                        {"type": "set_flag", "parameters": {"key": "scout_robbed", "value": true}},
+                        {"type": "set_flag", "parameters": {"key": "trust_lost", "value": true}}
+                      ],
+                      "state_update": {"attitude": "hostile", "emotional_state": "Czuje się zdradzony i okradziony."}
+                    },
+                    "failure": {
+                      "preview": "Brak meldunków, utrata zaufania, panika i dodatkowy hałas.",
+                      "message": "Zwiadowca przyciska torbę do piersi i krzyczy, gdy dostrzega próbę kradzieży.",
+                      "effects": [
+                        {"type": "set_flag", "parameters": {"key": "scout_panicked", "value": true}},
+                        {"type": "set_flag", "parameters": {"key": "trust_lost", "value": true}},
+                        {"type": "add_noise", "parameters": {"challenge_id": "closed_gate", "value": 1}}
+                      ],
+                      "state_update": {"attitude": "hostile", "emotional_state": "Spanikowany po próbie kradzieży."}
+                    },
+                    "critical_failure": {
+                      "preview": "Brak meldunków oraz poważna eskalacja sytuacji i większy hałas.",
+                      "message": "Zwiadowca łapie złodzieja za rękę, wyciąga ukryty nóż i woła o pomoc.",
+                      "effects": [
+                        {"type": "set_flag", "parameters": {"key": "scout_panicked", "value": true}},
+                        {"type": "set_flag", "parameters": {"key": "trust_lost", "value": true}},
+                        {"type": "set_flag", "parameters": {"key": "hidden_knife_response", "value": true}},
+                        {"type": "add_noise", "parameters": {"challenge_id": "closed_gate", "value": 2}}
+                      ],
+                      "state_update": {"attitude": "hostile", "emotional_state": "Przerażony, wrogi i gotowy bronić się nożem."},
+                      "transition_id": "scout_knife_escalation"
+                    }
+                  }
+                }
+              ]
             },
             "harm": {
               "status": "allowed_with_consequence",
@@ -179,11 +254,71 @@
                 "on_kill": [
                   "scout_dead"
                 ]
+              },
+              "state_on_success": {
+                "attitude": "hostile",
+                "physical_state": "Dodatkowo zraniony przez drużynę.",
+                "emotional_state": "Wrogi i przerażony."
               }
             },
             "intimidation": {
               "status": "allowed_with_consequence",
-              "notes": "Możliwe, ale trudne i ryzykowne; porażka powinna pogarszać panikę albo hałas."
+              "uses_social_reaction": true,
+              "attempt_policy": {
+                "attempt_id": "scout_intimidation",
+                "max_attempts": 1,
+                "exhausted_message": "Zwiadowca nie reaguje już na kolejne groźby; jest tylko bardziej przerażony i wrogi."
+              },
+              "notes": "Możliwe, ale trudne i ryzykowne; porażka powinna pogarszać panikę albo hałas.",
+              "targets": [
+                {
+                  "id": "scout_information",
+                  "label": "Wymuszenie informacji",
+                  "description": "Groźbami zmusić zwiadowcę, żeby powiedział, co zaatakowało go przy strażnicy.",
+                  "reward_label": "Trop o bestii",
+                  "risk_summary": "Niezależnie od wyniku zwiadowca zapamięta groźby; porażka wywoła panikę i hałas.",
+                  "outcomes": {
+                    "critical_success": {
+                      "preview": "Pełny trop o bestii, ale trwałe pogorszenie relacji.",
+                      "message": "Zwiadowca łamie się i dokładnie opisuje wielkie pazury, dziób oraz sowią głowę bestii.",
+                      "effects": [
+                        {"type": "set_flag", "parameters": {"key": "scout_coerced", "value": true}},
+                        {"type": "set_flag", "parameters": {"key": "beast_hint_learned", "value": true}}
+                      ],
+                      "state_update": {"attitude": "hostile", "emotional_state": "Zastraszony i chwilowo posłuszny."}
+                    },
+                    "success": {
+                      "preview": "Częściowy trop o bestii i wrogie nastawienie zwiadowcy.",
+                      "message": "Zwiadowca mamrocze, że napastnik miał ogromne szpony i nieludzki kształt, ale odmawia dalszych szczegółów.",
+                      "effects": [
+                        {"type": "set_flag", "parameters": {"key": "scout_coerced", "value": true}},
+                        {"type": "set_flag", "parameters": {"key": "beast_hint_learned", "value": true}}
+                      ],
+                      "state_update": {"attitude": "hostile", "emotional_state": "Zastraszony i wrogo nastawiony."}
+                    },
+                    "failure": {
+                      "preview": "Brak informacji, panika i dodatkowy hałas.",
+                      "message": "Groźby pogłębiają panikę. Zwiadowca krzyczy i nie przekazuje żadnej użytecznej informacji.",
+                      "effects": [
+                        {"type": "set_flag", "parameters": {"key": "scout_panicked", "value": true}},
+                        {"type": "add_noise", "parameters": {"challenge_id": "closed_gate", "value": 1}}
+                      ],
+                      "state_update": {"attitude": "hostile", "emotional_state": "Spanikowany i wrogo nastawiony."}
+                    },
+                    "critical_failure": {
+                      "preview": "Brak informacji oraz poważna eskalacja sytuacji i większy hałas.",
+                      "message": "Zwiadowca wpada w desperację, wyciąga ukryty nóż i głośno wzywa pomocy.",
+                      "effects": [
+                        {"type": "set_flag", "parameters": {"key": "scout_panicked", "value": true}},
+                        {"type": "set_flag", "parameters": {"key": "hidden_knife_response", "value": true}},
+                        {"type": "add_noise", "parameters": {"challenge_id": "closed_gate", "value": 2}}
+                      ],
+                      "state_update": {"attitude": "hostile", "emotional_state": "Przerażony, zdesperowany i gotowy użyć noża."},
+                      "transition_id": "scout_knife_escalation"
+                    }
+                  }
+                }
+              ]
             },
             "magic": {
               "status": "allowed_with_context",
@@ -207,12 +342,19 @@
             "trust_lost",
             "noise_added",
             "hidden_knife_response",
+            "scout_reports_taken",
+            "scout_coerced",
             "medical_complication",
             "beast_attention",
             "tower_hint_learned",
             "beast_hint_learned",
             "commander_curse_suspected",
             "cache_hint_learned"
+          ],
+          "allowed_effect_types": [
+            "set_flag",
+            "grant_resource",
+            "add_noise"
           ],
           "allowed_abilities": [
             "charisma",
@@ -235,7 +377,7 @@
           ],
           "dc_range": [
             10,
-            16
+            20
           ]
         }
       }

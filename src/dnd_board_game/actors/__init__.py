@@ -2,6 +2,7 @@
 
 from .damage_affinities import DamageAffinityProfile
 from .auras import ActorAura, AuraEffectKind, AuraTarget
+from .features import FeatureDefinition, FeatureGrant, FeatureSourceKind
 from .triggers import ActorTrigger, TriggerEffectKind, TriggerEventType
 from .models import AbilityScores, Actor, ActorId, DeathSaveState, Faction, is_ally_or_neutral
 from .size import (
@@ -62,6 +63,9 @@ __all__ = [
     "CreatureSize",
     "CREATURE_SIZE_ORDER",
     "Faction",
+    "FeatureDefinition",
+    "FeatureGrant",
+    "FeatureSourceKind",
     "AuraEffectKind",
     "AuraTarget",
     "TriggerEffectKind",

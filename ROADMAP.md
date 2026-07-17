@@ -194,14 +194,12 @@ odpornością i potwora wymuszającego save.
 
 ## Etap M5: Warunki I Ogólny Silnik Cech
 
-Stan: punkty 1-4 mają działający vertical slice dla `Poisoned` i `Restrained`,
-łącznie z odpornościami, czasem trwania, save-at-start/save-at-end, automatycznymi
-rzutami przeciwników i jawnymi rzutami graczy. Punkt 5 ma pierwszy data-driven
-vertical slice aury modyfikującej save według aktualnej pozycji. Punkt 6 ma wspólny
-katalog zdarzeń, contentowe definicje triggerów, skutek `grant_temp_hp` i komplet
-emiterów runtime. Punkt 7 ma resource-backed ograniczone użycia, odnowienie przez
-odpoczynek i potworowe `Recharge X–Y` na początku tury. Pozostałe oficjalne
-warunki, kolejne rodzaje aur oraz punkt 8 nadal są do wdrożenia.
+Status: ukończony jako content-ready vertical slice. Warunki, odporności, czas
+trwania, save-at-start/save-at-end, aury pozycyjne, wspólne triggery, ograniczone
+użycia i `Recharge X–Y` korzystają z jednego zestawu prymitywów. Punkt 8 zapewnia
+wersjonowane `FeatureDefinition`, runtime `FeatureGrant`, walidację kolizji,
+pochodzenie cechy, UI i snapshot. Specjalne ataki bohatera oraz goblina są
+referencyjnymi cechami z katalogu, a nie wyjątkami w kodzie.
 
 Kolejność:
 

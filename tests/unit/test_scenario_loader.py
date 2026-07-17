@@ -15,7 +15,7 @@ from dnd_board_game.combat import (
     SetupVisibility,
     SpellCastingKind,
 )
-from dnd_board_game.exploration import SceneMode
+from dnd_board_game.exploration import NpcOutcomeTier, SceneMode
 from dnd_board_game.inventory import HandSlot, effective_armor_class
 from dnd_board_game.scenarios import build_encounter_from_scenario, build_exploration_from_scenario, load_scenario
 from dnd_board_game.world import Coordinate, find_path
@@ -34,6 +34,7 @@ def _abandoned_watchtower_data_without_refs():
         "points": json.loads((base / "exploration/points.json").read_text(encoding="utf-8"))["points"],
         "challenges": json.loads((base / "exploration/challenges.json").read_text(encoding="utf-8"))["challenges"],
         "encounter_triggers": json.loads((base / "exploration/encounter_triggers.json").read_text(encoding="utf-8"))["encounter_triggers"],
+        "npc_transitions": json.loads((base / "exploration/npc_transitions.json").read_text(encoding="utf-8"))["npc_transitions"],
         "resources": json.loads((base / "exploration/resources.json").read_text(encoding="utf-8"))["resources"],
         "initial_resources": json.loads((base / "exploration/initial_resources.json").read_text(encoding="utf-8"))["initial_resources"],
     }
@@ -48,6 +49,23 @@ def _abandoned_watchtower_data_without_refs():
     for actor in data["actors"]:
         actor.pop("item_refs", None)
         actor.pop("spell_preparation", None)
+        actor["attacks"] = [attack]
+    return data
+
+
+def _village_square_data_without_refs():
+    path = Path("content/scenarios/village_square_mvp.json")
+    data = json.loads(path.read_text(encoding="utf-8"))
+    attack = {
+        "id": "test_attack",
+        "name": "Test Attack",
+        "source_type": "weapon",
+        "range_feet": 5,
+        "attack_modifier": 1,
+        "damage": {"fixed": 1, "damage_type": "bludgeoning"},
+    }
+    for actor in data["actors"]:
+        actor.pop("item_refs", None)
         actor["attacks"] = [attack]
     return data
 
@@ -115,10 +133,41 @@ def test_gate_skirmish_loads_rest_and_recharge_limited_attack_sources() -> None:
     )
 
     assert heroic_strike.resource_pool_id == "heroic_strike_uses"
+    assert hero.features[0].feature_id == "heroic_strike"
+    assert hero.features[0].action_ids == ("heroic_strike",)
     assert hero.resource_pools[0].recovery.value == "short_rest"
     assert frenzied_lunge.resource_pool_id == "frenzied_lunge_charge"
     assert goblin.resource_pools[0].recharge is not None
     assert goblin.resource_pools[0].recharge.minimum_roll == 5
+    assert goblin.features[0].feature_id == "goblin_frenzied_lunge"
+    assert goblin.features[0].source_ref == "goblin"
+
+
+def test_actor_rejects_duplicate_feature_references(tmp_path) -> None:
+    data = json.loads(Path("content/scenarios/gate_skirmish.json").read_text(encoding="utf-8"))
+    data["actors"][0]["feature_refs"] = ["heroic_strike", "heroic_strike"]
+    scenario_path = tmp_path / "duplicate_feature.json"
+    scenario_path.write_text(json.dumps(data), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="duplicate features"):
+        load_scenario(scenario_path)
+
+
+def test_feature_grant_rejects_component_id_collision_with_actor(tmp_path) -> None:
+    data = json.loads(Path("content/scenarios/gate_skirmish.json").read_text(encoding="utf-8"))
+    data["actors"][0]["resource_pools"] = [
+        {
+            "id": "heroic_strike_uses",
+            "label": "Kolizja",
+            "maximum": 1,
+            "recovery": "never",
+        }
+    ]
+    scenario_path = tmp_path / "feature_collision.json"
+    scenario_path.write_text(json.dumps(data), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="resource_pools ids must be unique"):
+        load_scenario(scenario_path)
 
 
 def test_load_scenario_parses_actor_damage_affinities(tmp_path):
@@ -475,7 +524,12 @@ def test_load_abandoned_watchtower_builds_exploration_scene():
     assert guidance["gate.force_is_loud"].minimum_hint_level == 1
     assert guidance["gate.noise_affects_scout"].visibility.value == "hidden"
     assert guidance["gate.no_rope_flight"].kind.value == "constraint"
-    assert {resource.id for resource in exploration.resources} == {"rope", "wedge", "saw"}
+    assert {resource.id for resource in exploration.resources} == {
+        "rope",
+        "wedge",
+        "saw",
+        "scout_reports",
+    }
     assert next(resource for resource in exploration.resources if resource.id == "wedge").consume_on_use is True
     assert next(resource for resource in exploration.resources if resource.id == "rope").consume_on_use is False
     assert set(next(resource for resource in exploration.resources if resource.id == "rope").properties) >= {
@@ -504,11 +558,46 @@ def test_load_abandoned_watchtower_builds_exploration_scene():
     assert wounded_scout.visibility == SetupVisibility.HIDDEN
     assert wounded_scout.npc_interaction is not None
     assert wounded_scout.npc_interaction.name == "Ranny zwiadowca"
+    assert wounded_scout.npc_interaction.id == "wounded_scout"
+    transition = next(item for item in exploration.npc_transitions if item.id == "scout_knife_escalation")
+    assert transition.npc_id == "wounded_scout"
+    assert [variant.id for variant in transition.variants] == [
+        "gate_secured",
+        "courtyard_secured",
+        "danger_nearby",
+    ]
+    theft = next(
+        permission
+        for permission in wounded_scout.npc_interaction.policy.intent_permissions
+        if permission.intent == "theft"
+    )
+    reports = theft.target("scout_reports")
+    assert reports is not None
+    assert reports.branch(NpcOutcomeTier.CRITICAL_FAILURE).transition_id == "scout_knife_escalation"
+    assert wounded_scout.npc_interaction.initial_attitude.value == "indifferent"
+    assert "przygnieciony" in wounded_scout.npc_interaction.initial_physical_state
     assert "scout_stabilized" in wounded_scout.npc_interaction.policy.allowed_flags
     policy = wounded_scout.npc_interaction.policy
     assert policy.intent_permission("medical") is not None
+    assert policy.intent_permission("medical").state_on_success is not None
+    assert "ustabilizowany" in policy.intent_permission("medical").state_on_success.physical_state
     assert policy.intent_permission("information") is not None
     assert policy.intent_permission("information").status == "locked"
+    assert policy.intent_permission("social").uses_social_reaction is True
+    assert policy.intent_permission("social").attempt_policy is not None
+    assert policy.intent_permission("social").attempt_policy.max_attempts == 2
+    assert policy.intent_permission("social").attempt_policy.retry_requires_any_flags == (
+        "scout_treated",
+        "scout_stabilized",
+    )
+    assert policy.intent_permission("intimidation").attempt_policy.max_attempts == 1
+    theft_target = policy.intent_permission("theft").target("scout_reports")
+    assert theft_target is not None
+    assert theft_target.ability == "dexterity"
+    assert theft_target.skill == "sleight_of_hand"
+    assert theft_target.dc == 14
+    assert len(theft_target.outcome_branches) == 4
+    assert policy.intent_permission("intimidation").target("scout_information") is not None
     assert policy.intent_permission("trade").status == "blocked"
     assert "sleight_of_hand" in policy.allowed_skills
     assert {info.id for info in wounded_scout.npc_interaction.locked_information} == {
@@ -701,6 +790,53 @@ def test_load_village_square_mvp_builds_exploration_locations_setup_points_and_o
     hidden_point = next(point for point in exploration.points if point.id == "lost_pouch")
     assert hidden_point.visibility == SetupVisibility.HIDDEN
     assert hidden_point.requires_setup is False
+    elder = next(point for point in exploration.points if point.id == "elder_npc")
+    assert elder.npc_interaction is not None
+    assert elder.npc_interaction.id == "elder_bren"
+    demand = elder.npc_interaction.policy.intent_permission("social").target(
+        "demand_advance_payment"
+    )
+    assert demand is not None
+    assert demand.branch(NpcOutcomeTier.CRITICAL_FAILURE).transition_id == "elder_negotiation_breakdown"
+    transition = next(item for item in exploration.npc_transitions if item.id == "elder_negotiation_breakdown")
+    assert [variant.id for variant in transition.variants] == ["notice_read", "default"]
+    assert all(
+        reaction.encounter_trigger_id is None
+        for variant in transition.variants
+        for reaction in variant.reactions
+    )
+
+
+def test_loader_rejects_npc_branch_effect_with_precise_content_path(tmp_path):
+    data = _village_square_data_without_refs()
+    elder = next(point for point in data["exploration"]["points"] if point["id"] == "elder_npc")
+    elder["npc_interaction"]["policy"]["intent_permissions"]["social"]["targets"][0]["outcomes"]["success"]["effects"] = [
+        {"type": "grant_resource", "parameters": {"resource_id": "missing_reports"}}
+    ]
+    scenario_path = tmp_path / "bad_npc_branch_effect.json"
+    scenario_path.write_text(json.dumps(data), encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=r"NPC elder_bren\.intent_permissions\.social\.targets\.demand_advance_payment\.outcomes\.success\.effects\[0\].*missing_reports",
+    ):
+        load_scenario(scenario_path)
+
+
+def test_loader_rejects_npc_transition_effect_outside_local_flag_policy(tmp_path):
+    data = _village_square_data_without_refs()
+    reaction = data["exploration"]["npc_transitions"][0]["variants"][-1]["reactions"][0]
+    reaction["effects"] = [
+        {"type": "set_flag", "parameters": {"key": "undeclared_transition_flag", "value": True}}
+    ]
+    scenario_path = tmp_path / "bad_npc_transition_effect.json"
+    scenario_path.write_text(json.dumps(data), encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=r"NPC transition elder_negotiation_breakdown\.variants\.default\.reactions\.apologize\.effects\[0\].*undeclared_transition_flag",
+    ):
+        load_scenario(scenario_path)
 
 
 def test_exploration_point_requires_setup_can_be_disabled(tmp_path):

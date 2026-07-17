@@ -513,6 +513,318 @@ class NpcLockedInformation:
         }
 
 
+class NpcAttitude(StrEnum):
+    HOSTILE = "hostile"
+    INDIFFERENT = "indifferent"
+    FRIENDLY = "friendly"
+
+
+class NpcInteractionStatus(StrEnum):
+    ACTIVE = "active"
+    CLOSED = "closed"
+
+
+@dataclass(frozen=True, slots=True)
+class NpcStateUpdate:
+    attitude: NpcAttitude | None = None
+    physical_state: str | None = None
+    emotional_state: str | None = None
+
+
+def _npc_state_update_payload(update: NpcStateUpdate) -> dict[str, object]:
+    payload: dict[str, object] = {}
+    if update.attitude is not None:
+        payload["attitude"] = update.attitude.value
+    if update.physical_state is not None:
+        payload["physical_state"] = update.physical_state
+    if update.emotional_state is not None:
+        payload["emotional_state"] = update.emotional_state
+    return payload
+
+
+@dataclass(frozen=True, slots=True)
+class NpcRelationshipEvent:
+    sequence: int
+    intent: str
+    outcome: str
+    summary: str
+    attempt_id: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.sequence < 1:
+            raise ValueError("NPC relationship event sequence must be positive.")
+        if not self.intent.strip() or self.outcome not in {"success", "failure"}:
+            raise ValueError("NPC relationship event requires an intent and outcome.")
+        if not self.summary.strip():
+            raise ValueError("NPC relationship event summary cannot be empty.")
+        if self.attempt_id is not None and not self.attempt_id.strip():
+            raise ValueError("NPC relationship event attempt id cannot be empty.")
+
+    def as_payload(self) -> dict[str, object]:
+        return {
+            "sequence": self.sequence,
+            "intent": self.intent,
+            "outcome": self.outcome,
+            "summary": self.summary,
+            "attempt_id": self.attempt_id,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class NpcRuntimeState:
+    npc_id: str
+    attitude: NpcAttitude = NpcAttitude.INDIFFERENT
+    physical_state: str = ""
+    emotional_state: str = ""
+    revealed_information_ids: tuple[str, ...] = ()
+    used_attempt_ids: tuple[str, ...] = ()
+    relationship_events: tuple[NpcRelationshipEvent, ...] = ()
+    interaction_status: NpcInteractionStatus = NpcInteractionStatus.ACTIVE
+    closure_reason: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.npc_id.strip():
+            raise ValueError("NPC runtime state requires an id.")
+        for field_name, values in (
+            ("revealed_information_ids", self.revealed_information_ids),
+            ("used_attempt_ids", self.used_attempt_ids),
+        ):
+            if any(not value.strip() for value in values):
+                raise ValueError(f"NPC {field_name} cannot contain empty ids.")
+            if len(values) != len(set(values)):
+                raise ValueError(f"NPC {field_name} cannot contain duplicates.")
+        expected_sequences = tuple(range(1, len(self.relationship_events) + 1))
+        if tuple(event.sequence for event in self.relationship_events) != expected_sequences:
+            raise ValueError("NPC relationship event sequence must be contiguous.")
+
+    def as_payload(self) -> dict[str, object]:
+        return {
+            "npc_id": self.npc_id,
+            "attitude": self.attitude.value,
+            "physical_state": self.physical_state,
+            "emotional_state": self.emotional_state,
+            "revealed_information_ids": list(self.revealed_information_ids),
+            "used_attempt_ids": list(self.used_attempt_ids),
+            "relationship_events": [event.as_payload() for event in self.relationship_events],
+            "interaction_status": self.interaction_status.value,
+            "closure_reason": self.closure_reason,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class NpcAttemptPolicy:
+    attempt_id: str
+    max_attempts: int = 1
+    retry_requires_any_flags: tuple[str, ...] = ()
+    retry_locked_message: str = "NPC nie zgadza się ponownie rozmawiać o tym bez zmiany sytuacji."
+    exhausted_message: str = "To podejście zostało wyczerpane."
+
+    def __post_init__(self) -> None:
+        if not self.attempt_id.strip():
+            raise ValueError("NPC attempt policy requires an id.")
+        if self.max_attempts < 1:
+            raise ValueError("NPC attempt policy max_attempts must be positive.")
+        if any(not flag.strip() for flag in self.retry_requires_any_flags):
+            raise ValueError("NPC retry flags cannot contain empty ids.")
+        if len(self.retry_requires_any_flags) != len(set(self.retry_requires_any_flags)):
+            raise ValueError("NPC retry flags cannot contain duplicates.")
+        if not self.retry_locked_message.strip() or not self.exhausted_message.strip():
+            raise ValueError("NPC attempt policy messages cannot be empty.")
+
+    def as_payload(self) -> dict[str, object]:
+        return {
+            "attempt_id": self.attempt_id,
+            "max_attempts": self.max_attempts,
+            "retry_requires_any_flags": list(self.retry_requires_any_flags),
+            "retry_locked_message": self.retry_locked_message,
+            "exhausted_message": self.exhausted_message,
+        }
+
+
+class NpcOutcomeTier(StrEnum):
+    CRITICAL_SUCCESS = "critical_success"
+    SUCCESS = "success"
+    FAILURE = "failure"
+    CRITICAL_FAILURE = "critical_failure"
+
+
+@dataclass(frozen=True, slots=True)
+class NpcOutcomeBranch:
+    outcome: NpcOutcomeTier
+    message: str
+    preview: str = ""
+    effects: tuple[dict[str, object], ...] = ()
+    state_update: NpcStateUpdate | None = None
+    revealed_information_ids: tuple[str, ...] = ()
+    transition_id: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.message.strip():
+            raise ValueError("NPC outcome branch requires a player-facing message.")
+        if self.transition_id is not None and not self.transition_id.strip():
+            raise ValueError("NPC outcome branch transition id cannot be empty.")
+
+    def as_payload(self) -> dict[str, object]:
+        payload: dict[str, object] = {
+            "message": self.message,
+            "preview": self.preview or self.message,
+            "effects": list(self.effects),
+            "revealed_information_ids": list(self.revealed_information_ids),
+            "transition_id": self.transition_id,
+        }
+        if self.state_update is not None:
+            payload["state_update"] = _npc_state_update_payload(self.state_update)
+        return payload
+
+
+@dataclass(frozen=True, slots=True)
+class NpcIntentTarget:
+    id: str
+    label: str
+    description: str
+    reward_label: str = ""
+    risk_summary: str = ""
+    max_quantity: int = 1
+    requires_flags: tuple[str, ...] = ()
+    ability: str | None = None
+    skill: str | None = None
+    dc: int | None = None
+    outcome_branches: tuple[NpcOutcomeBranch, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.id.strip() or not self.label.strip() or not self.description.strip():
+            raise ValueError("NPC intent target requires id, label, and description.")
+        if self.max_quantity < 1:
+            raise ValueError("NPC intent target max_quantity must be positive.")
+        if (self.ability is None) != (self.dc is None):
+            raise ValueError("NPC intent target fixed check requires both ability and DC.")
+        if self.ability is not None and self.ability not in {
+            "strength",
+            "dexterity",
+            "constitution",
+            "intelligence",
+            "wisdom",
+            "charisma",
+        }:
+            raise ValueError(f"NPC intent target uses unknown ability: {self.ability}.")
+        if self.dc is not None and not 5 <= self.dc <= 30:
+            raise ValueError("NPC intent target DC must be in range 5..30.")
+        outcomes = tuple(branch.outcome for branch in self.outcome_branches)
+        if self.outcome_branches and set(outcomes) != set(NpcOutcomeTier):
+            raise ValueError("NPC intent target must define all four outcome branches.")
+        if len(outcomes) != len(set(outcomes)):
+            raise ValueError("NPC intent target cannot repeat outcome branches.")
+
+    def branch(self, outcome: NpcOutcomeTier) -> NpcOutcomeBranch:
+        branch = next((item for item in self.outcome_branches if item.outcome == outcome), None)
+        if branch is None:
+            raise ValueError(f"NPC target {self.id} has no branch for {outcome.value}.")
+        return branch
+
+    def as_payload(self) -> dict[str, object]:
+        return {
+            "id": self.id,
+            "label": self.label,
+            "description": self.description,
+            "reward_label": self.reward_label,
+            "risk_summary": self.risk_summary,
+            "max_quantity": self.max_quantity,
+            "requires_flags": list(self.requires_flags),
+            "ability": self.ability,
+            "skill": self.skill,
+            "dc": self.dc,
+            "outcomes": {
+                branch.outcome.value: branch.as_payload()
+                for branch in self.outcome_branches
+            },
+        }
+
+
+class NpcTransitionResultType(StrEnum):
+    RESUME_DIALOGUE = "resume_dialogue"
+    END_INTERACTION = "end_interaction"
+    START_ENCOUNTER = "start_encounter"
+
+
+@dataclass(frozen=True, slots=True)
+class NpcTransitionReaction:
+    id: str
+    label: str
+    description: str
+    result_type: NpcTransitionResultType
+    narration: str
+    effects: tuple[dict[str, object], ...] = ()
+    suppress_encounter_trigger_ids: tuple[str, ...] = ()
+    encounter_trigger_id: str | None = None
+    npc_status: NpcInteractionStatus | None = None
+
+    def __post_init__(self) -> None:
+        if not self.id.strip() or not self.label.strip() or not self.description.strip():
+            raise ValueError("NPC transition reaction requires id, label, and description.")
+        if not self.narration.strip():
+            raise ValueError("NPC transition reaction narration cannot be empty.")
+        if self.result_type == NpcTransitionResultType.START_ENCOUNTER and not self.encounter_trigger_id:
+            raise ValueError("NPC start-encounter reaction requires encounter_trigger_id.")
+        if self.result_type != NpcTransitionResultType.START_ENCOUNTER and self.encounter_trigger_id is not None:
+            raise ValueError("Only NPC start-encounter reaction can define encounter_trigger_id.")
+
+    def as_payload(self) -> dict[str, object]:
+        return {
+            "id": self.id,
+            "label": self.label,
+            "description": self.description,
+            "result_type": self.result_type.value,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class NpcTransitionVariant:
+    id: str
+    title: str
+    narration: str
+    reactions: tuple[NpcTransitionReaction, ...]
+    required_flags: tuple[str, ...] = ()
+    forbidden_flags: tuple[str, ...] = ()
+    required_resolved_encounter_trigger_ids: tuple[str, ...] = ()
+    forbidden_resolved_encounter_trigger_ids: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.id.strip() or not self.title.strip() or not self.narration.strip():
+            raise ValueError("NPC transition variant requires id, title, and narration.")
+        if not self.reactions:
+            raise ValueError("NPC transition variant requires at least one reaction.")
+        reaction_ids = tuple(reaction.id for reaction in self.reactions)
+        if len(reaction_ids) != len(set(reaction_ids)):
+            raise ValueError("NPC transition variant cannot repeat reaction ids.")
+        if set(self.required_flags).intersection(self.forbidden_flags):
+            raise ValueError("NPC transition variant cannot require and forbid the same flag.")
+
+    def reaction(self, reaction_id: str) -> NpcTransitionReaction | None:
+        normalized = reaction_id.strip().lower()
+        return next((reaction for reaction in self.reactions if reaction.id == normalized), None)
+
+
+@dataclass(frozen=True, slots=True)
+class NpcSceneTransition:
+    id: str
+    npc_id: str
+    variants: tuple[NpcTransitionVariant, ...]
+
+    def __post_init__(self) -> None:
+        if not self.id.strip() or not self.npc_id.strip() or not self.variants:
+            raise ValueError("NPC scene transition requires id, npc_id, and variants.")
+        variant_ids = tuple(variant.id for variant in self.variants)
+        if len(variant_ids) != len(set(variant_ids)):
+            raise ValueError("NPC scene transition cannot repeat variant ids.")
+
+
+@dataclass(frozen=True, slots=True)
+class PendingNpcTransition:
+    transition_id: str
+    variant_id: str
+    npc_id: str
+
+
 @dataclass(frozen=True, slots=True)
 class NpcIntentPermission:
     intent: str
@@ -522,6 +834,20 @@ class NpcIntentPermission:
     limits: dict[str, object] | None = None
     consequences: dict[str, object] | None = None
     reveals: tuple[str, ...] = ()
+    state_on_success: NpcStateUpdate | None = None
+    state_on_failure: NpcStateUpdate | None = None
+    uses_social_reaction: bool = False
+    attempt_policy: NpcAttemptPolicy | None = None
+    targets: tuple[NpcIntentTarget, ...] = ()
+
+    def __post_init__(self) -> None:
+        target_ids = tuple(target.id for target in self.targets)
+        if len(target_ids) != len(set(target_ids)):
+            raise ValueError(f"NPC intent {self.intent} cannot repeat target ids.")
+
+    def target(self, target_id: str) -> NpcIntentTarget | None:
+        normalized = target_id.strip().lower()
+        return next((target for target in self.targets if target.id == normalized), None)
 
     def as_payload(self) -> dict[str, object]:
         payload: dict[str, object] = {
@@ -529,11 +855,20 @@ class NpcIntentPermission:
             "notes": self.notes,
             "unlock_if_flags": list(self.unlock_if_flags),
             "reveals": list(self.reveals),
+            "uses_social_reaction": self.uses_social_reaction,
         }
         if self.limits:
             payload["limits"] = self.limits
         if self.consequences:
             payload["consequences"] = self.consequences
+        if self.attempt_policy is not None:
+            payload["attempt_policy"] = self.attempt_policy.as_payload()
+        if self.targets:
+            payload["targets"] = [target.as_payload() for target in self.targets]
+        if self.state_on_success is not None:
+            payload["state_on_success"] = _npc_state_update_payload(self.state_on_success)
+        if self.state_on_failure is not None:
+            payload["state_on_failure"] = _npc_state_update_payload(self.state_on_failure)
         return payload
 
 
@@ -576,11 +911,15 @@ class NpcInteractionPolicy:
 
 @dataclass(frozen=True, slots=True)
 class NpcInteraction:
+    id: str
     name: str
     public_description: str
     gm_context: str = ""
     personality: str = ""
     current_state: str = ""
+    initial_attitude: NpcAttitude = NpcAttitude.INDIFFERENT
+    initial_physical_state: str = ""
+    initial_emotional_state: str = ""
     dialogue_intro: str = ""
     capabilities: tuple[str, ...] = ()
     locked_information: tuple[NpcLockedInformation, ...] = ()
@@ -588,11 +927,17 @@ class NpcInteraction:
 
     def as_payload(self) -> dict[str, object]:
         return {
+            "id": self.id,
             "name": self.name,
             "public_description": self.public_description,
             "gm_context": self.gm_context,
             "personality": self.personality,
             "current_state": self.current_state,
+            "initial_runtime_state": {
+                "attitude": self.initial_attitude.value,
+                "physical_state": self.initial_physical_state,
+                "emotional_state": self.initial_emotional_state,
+            },
             "dialogue_intro": self.dialogue_intro,
             "capabilities": list(self.capabilities),
             "locked_information": [info.as_payload() for info in self.locked_information],
@@ -1253,6 +1598,33 @@ class ExplorationState:
     condition_states: tuple[ConditionState, ...] = ()
     traps: tuple[ExplorationTrap, ...] = ()
     trap_states: tuple[ExplorationTrapState, ...] = ()
+    npc_states: tuple[NpcRuntimeState, ...] = ()
+
+    def __post_init__(self) -> None:
+        known_npcs = {
+            point.npc_interaction.id: point.npc_interaction
+            for point in self.points
+            if point.npc_interaction is not None
+        }
+        if not self.npc_states and known_npcs:
+            object.__setattr__(
+                self,
+                "npc_states",
+                tuple(
+                    NpcRuntimeState(
+                        npc_id=npc.id,
+                        attitude=npc.initial_attitude,
+                        physical_state=npc.initial_physical_state or npc.current_state,
+                        emotional_state=npc.initial_emotional_state,
+                    )
+                    for npc in known_npcs.values()
+                ),
+            )
+        npc_ids = tuple(state.npc_id for state in self.npc_states)
+        if len(npc_ids) != len(set(npc_ids)):
+            raise ValueError("Exploration NPC runtime state ids must be unique.")
+        if set(npc_ids) - set(known_npcs):
+            raise ValueError("Exploration state contains an unknown NPC runtime state.")
 
 
 def add_exploration_condition(

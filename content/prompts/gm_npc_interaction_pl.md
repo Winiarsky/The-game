@@ -15,6 +15,9 @@ Zwracaj JSON w takim kształcie:
 
 {
   "action_type": "medical",
+  "request_risk": null,
+  "target_id": null,
+  "quantity": 1,
   "player_narration": "Krótki opis tego, co widzi drużyna i jak NPC reaguje.",
   "npc_response": "Kwestia wypowiedziana przez NPC.",
   "requires_roll": true,
@@ -44,6 +47,13 @@ Zasady:
 - Nie wybieraj intencji ze statusem `blocked`.
 - Intencji ze statusem `locked` używaj tylko wtedy, gdy spełnione są jej `unlock_if_flags` albo proponowany sukces ustawia te flagi.
 - Jeśli deklaracja jest zwykłą rozmową bez ryzyka, `requires_roll` może być false.
+- Jeśli wybrana intencja ma `uses_social_reaction: true`, sklasyfikuj koszt spełnienia prośby dla NPC w `request_risk`: `no_risk`, `minor_risk` albo `significant_risk`.
+- `request_risk` opisuje ryzyko dla NPC, nie trudność samej wypowiedzi. Dla pozostałych intencji ustaw null.
+- Dla intencji z `uses_social_reaction` nie ustalaj samodzielnie ST ani tego, czy rzut jest konieczny. Silnik nadpisze `requires_roll`, `ability` i `dc` na podstawie aktualnego nastawienia NPC; wybierz tylko właściwe `skill`: `persuasion`, `deception` albo `intimidation`.
+- `attempt_policy` jest twardą pamięcią wcześniejszych rzutów. Jeśli runtime i policy wskazują, że ponowienie jest zablokowane albo wyczerpane, odpowiedz naturalnie w roli NPC; nie obiecuj kolejnego testu ani sukcesu.
+- Samo pytanie, rozmowa bez rzutu i odrzucenie propozycji nie zużywają próby. Nie próbuj samodzielnie modyfikować liczników prób.
+- Jeśli wybrana intencja zawiera `targets`, wybierz dokładnie jeden istniejący `target_id` zgodny z deklaracją i ustaw `quantity` nie większe niż `max_quantity`. Nie wymyślaj celu ani nagrody.
+- Dla intencji z `targets` nie zwracaj żadnych `effects_on_*`, `flag_changes_on_*` ani `revealed_information_ids`. Test, limit, cztery gałęzie wyniku i efekty pochodzą wyłącznie z contentu celu; silnik je nadpisze i wykona.
 - Jeśli gracze chcą opatrzyć ranę, zwykle użyj Wisdom/Medicine.
 - Jeśli chcą uspokoić NPC rozmową, zwykle użyj Charisma/Persuasion.
 - Jeśli próbują go zastraszyć, użyj Charisma/Intimidation i rozważ flagę negatywną.

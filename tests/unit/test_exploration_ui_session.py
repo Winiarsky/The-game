@@ -30,6 +30,7 @@ from dnd_board_game.exploration import (
     CraftingComponentSelection,
     CraftingDraft,
     ExplorationChallengeState,
+    challenge_state_for,
     add_exploration_condition,
     ExplorationTrapStatus,
     trap_state_for,
@@ -2034,10 +2035,11 @@ def test_exploration_ui_session_rejects_pending_interpretation():
     assert any("Odrzucono interpretację" in message["body"] for message in state["messages"])
 
 
-def test_exploration_ui_session_debug_npc_sets_flags_without_roll():
+def test_exploration_ui_session_social_reaction_sets_flags_and_changes_attitude():
     proposal = NpcInteractionProposal.model_validate(
         {
             "action_type": "social",
+            "request_risk": "no_risk",
             "player_narration": "Mówicie spokojnie i trzymacie ręce widocznie.",
             "npc_response": "Zwiadowca oddycha wolniej.",
             "requires_roll": False,
@@ -2056,15 +2058,282 @@ def test_exploration_ui_session_debug_npc_sets_flags_without_roll():
     assert state["pending"]["kind"] == "npc"
 
     state = session.decide("accept")
+    assert state["pending"]["check_plan"]["dc"] == 10
+    state = session.resolve_rolls({"hero": 20})
 
     assert state["pending"] is None
     assert {"key": "scout_calmed", "value": True} in state["flags"]
+    runtime = state["active_point"]["npc"]["runtime_state"]
+    assert runtime["attitude"] == "friendly"
+    assert "Spokojniejszy" in runtime["emotional_state"]
+    assert runtime["relationship_events"][0]["intent"] == "social"
+    assert any(message["title"] == "Zmiana nastawienia" for message in state["messages"])
+
+
+def test_exploration_ui_session_refuses_request_beyond_current_npc_attitude():
+    proposal = NpcInteractionProposal.model_validate(
+        {
+            "action_type": "social",
+            "request_risk": "significant_risk",
+            "npc_response": "Nie mogę tego dla was zrobić.",
+            "requires_roll": True,
+            "ability": "charisma",
+            "skill": "persuasion",
+            "dc": 15,
+            "effects_on_success": [
+                {"type": "set_flag", "parameters": {"key": "scout_calmed", "value": True}},
+            ],
+        }
+    )
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        npc_client=FakeNpcClient(proposal),
+        debug_point_id="wounded_scout",
+    )
+
+    pending = session.submit_action("Zaryzykuj życie i wróć sam do wieży.")
+    assert pending["pending"]["social_plan"] == {
+        "attitude": "indifferent",
+        "request_risk": "significant_risk",
+        "possible": False,
+        "requires_roll": False,
+        "dc": None,
+    }
+
+    state = session.decide("accept")
+
+    assert state["pending"] is None
+    assert {"key": "scout_calmed", "value": True} not in state["flags"]
+    assert any(message["title"] == "Reakcja NPC" for message in state["messages"])
+
+
+def test_exploration_ui_session_blocks_retry_until_context_changes_then_exhausts_it():
+    proposal = NpcInteractionProposal.model_validate(
+        {
+            "action_type": "social",
+            "request_risk": "no_risk",
+            "npc_response": "Zwiadowca nie jest jeszcze przekonany.",
+            "requires_roll": False,
+            "failure_message": "Zwiadowca nadal wam nie ufa.",
+        }
+    )
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        npc_client=FakeNpcClient(proposal),
+        debug_point_id="wounded_scout",
+    )
+
+    first = session.submit_action("Próbujemy zdobyć jego zaufanie.")
+    assert first["pending"]["attempt_plan"]["attempts_used"] == 0
+    session.decide("accept")
+    failed = session.resolve_rolls({"hero": 1})
+    assert failed["active_point"]["npc"]["runtime_state"]["used_attempt_ids"] == [
+        "scout_build_trust"
+    ]
+
+    blocked = session.submit_action("Próbujemy przekonać go jeszcze raz.")
+    assert blocked["pending"]["attempt_plan"]["available"] is False
+    assert blocked["pending"]["attempt_plan"]["attempts_used"] == 1
+    after_block = session.decide("accept")
+    assert len(after_block["active_point"]["npc"]["runtime_state"]["relationship_events"]) == 1
+    assert any(
+        message["title"] == "Reakcja NPC" and "Najpierw pokażcie czynami" in message["body"]
+        for message in after_block["messages"]
+    )
+
+    session.state = replace(
+        session.state,
+        flags=set_scene_flag(session.state.flags, "scout_stabilized", True),
+    )
+    retry = session.submit_action("Po opatrzeniu ran wracamy do rozmowy.")
+    assert retry["pending"]["attempt_plan"]["available"] is True
+    assert retry["pending"]["attempt_plan"]["is_retry"] is True
+    assert retry["pending"]["attempt_plan"]["attempts_remaining"] == 1
+    session.decide("accept")
+    session.resolve_rolls({"hero": 1})
+
+    exhausted = session.submit_action("Naciskamy na niego po raz trzeci.")
+    assert exhausted["pending"]["attempt_plan"]["available"] is False
+    assert exhausted["pending"]["attempt_plan"]["attempts_remaining"] == 0
+    assert "podjął już decyzję" in exhausted["pending"]["attempt_plan"]["blocked_reason"]
+
+
+def test_exploration_ui_session_executes_critical_success_npc_target_branch():
+    proposal = NpcInteractionProposal.model_validate(
+        {
+            "action_type": "theft",
+            "target_id": "scout_reports",
+            "quantity": 1,
+            "player_narration": "Łotrzyca sięga w stronę torby zwiadowcy.",
+            "requires_roll": False,
+        }
+    )
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        npc_client=FakeNpcClient(proposal),
+        debug_point_id="wounded_scout",
+    )
+
+    pending = session.submit_action("Próbuję ukraść jego torbę z meldunkami.")
+    action_plan = pending["pending"]["npc_action_plan"]
+    assert action_plan["target_id"] == "scout_reports"
+    assert action_plan["max_quantity"] == 1
+    assert set(action_plan["outcomes"]) == {
+        "critical_success",
+        "success",
+        "failure",
+        "critical_failure",
+    }
+    assert "nóż" not in action_plan["outcomes"]["critical_failure"]["preview"]
+    roll_pending = session.decide("accept")
+    assert roll_pending["pending"]["check_plan"]["dc"] == 14
+
+    state = session.resolve_rolls({"hero": 20})
+
+    assert "scout_reports" in session.state.inventory_resource_ids
+    assert scene_flag(session.state.flags, "scout_reports_taken", False) is True
+    assert scene_flag(session.state.flags, "scout_robbed", False) is False
+    assert state["active_point"]["npc"]["runtime_state"]["attitude"] == "indifferent"
+    assert any(
+        message["title"] == "Wynik interakcji NPC" and "nie zauważa" in message["body"]
+        for message in state["messages"]
+    )
+
+
+def test_exploration_ui_session_executes_critical_failure_npc_target_branch():
+    proposal = NpcInteractionProposal.model_validate(
+        {
+            "action_type": "theft",
+            "target_id": "scout_reports",
+            "requires_roll": False,
+        }
+    )
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        npc_client=FakeNpcClient(proposal),
+        debug_point_id="wounded_scout",
+    )
+
+    session.submit_action("Próbuję ukraść meldunki.")
+    session.decide("accept")
+    state = session.resolve_rolls({"hero": 1})
+
+    assert "scout_reports" not in session.state.inventory_resource_ids
+    assert scene_flag(session.state.flags, "hidden_knife_response", False) is True
+    assert challenge_state_for(session.state, "closed_gate").noise == 2
+    assert state["active_point"]["npc"]["runtime_state"]["attitude"] == "hostile"
+    assert state["active_point"]["npc"]["runtime_state"]["relationship_events"][-1]["outcome"] == "failure"
+    assert state["pending_encounter"] is None
+    assert state["pending_npc_transition"]["variant_id"] == "danger_nearby"
+
+
+def test_npc_escalation_can_resume_dialogue_without_automatic_encounter():
+    proposal = NpcInteractionProposal.model_validate(
+        {"action_type": "theft", "target_id": "scout_reports", "requires_roll": False}
+    )
+    client = FakeNpcClient(proposal)
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        npc_client=client,
+        debug_point_id="wounded_scout",
+    )
+    session.submit_action("Próbuję ukraść meldunki.")
+    session.decide("accept")
+    session.resolve_rolls({"hero": 1})
+
+    state = session.resolve_npc_transition("try_to_calm")
+
+    assert state["pending_npc_transition"] is None
+    assert state["pending_encounter"] is None
+    assert state["active_point"]["id"] == "wounded_scout"
+    assert state["active_point"]["npc"]["runtime_state"]["interaction_status"] == "active"
+    assert scene_flag(session.state.flags, "scout_panicked", True) is False
+    assert "scout_panic_alarm" not in session.resolved_encounter_trigger_ids
+
+
+def test_npc_escalation_can_start_content_encounter_only_after_player_choice():
+    proposal = NpcInteractionProposal.model_validate(
+        {"action_type": "theft", "target_id": "scout_reports", "requires_roll": False}
+    )
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        npc_client=FakeNpcClient(proposal),
+        debug_point_id="wounded_scout",
+    )
+    session.submit_action("Próbuję ukraść meldunki.")
+    session.decide("accept")
+    session.resolve_rolls({"hero": 1})
+
+    state = session.resolve_npc_transition("hold_your_ground")
+
+    assert state["pending_npc_transition"] is None
+    assert state["pending_encounter"]["trigger_id"] == "scout_panic_alarm"
+    assert state["active_point"] is None
+
+
+def test_npc_escalation_can_close_reusable_interaction_without_calling_llm_again():
+    proposal = NpcInteractionProposal.model_validate(
+        {"action_type": "theft", "target_id": "scout_reports", "requires_roll": False}
+    )
+    client = FakeNpcClient(proposal)
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        npc_client=client,
+        debug_point_id="wounded_scout",
+    )
+    session.submit_action("Próbuję ukraść meldunki.")
+    session.decide("accept")
+    session.resolve_rolls({"hero": 1})
+    session.resolve_npc_transition("back_off")
+    assert len(client.requests) == 1
+
+    session.active_point_id = "wounded_scout"
+    state = session.submit_action("Czy teraz porozmawiasz?")
+
+    assert len(client.requests) == 1
+    assert state["active_point"]["npc"]["runtime_state"]["interaction_status"] == "closed"
+    assert any(
+        message["title"] == "Odpowiedź NPC" and "nie chce już" in message["body"]
+        for message in state["messages"]
+    )
+
+
+def test_second_npc_fixture_uses_transition_without_starting_combat():
+    proposal = NpcInteractionProposal.model_validate(
+        {
+            "action_type": "social",
+            "target_id": "demand_advance_payment",
+            "quantity": 1,
+            "requires_roll": False,
+        }
+    )
+    session = ExplorationUiSession(
+        "content/scenarios/village_square_mvp.json",
+        npc_client=FakeNpcClient(proposal),
+        debug_point_id="elder_npc",
+    )
+    session.submit_action("Żądamy zapłaty z góry.")
+    session.decide("accept")
+
+    escalated = session.resolve_rolls({"hero": 1})
+
+    assert escalated["pending_npc_transition"]["transition_id"] == "elder_negotiation_breakdown"
+    assert escalated["pending_npc_transition"]["variant_id"] == "default"
+    assert escalated["pending_encounter"] is None
+
+    resumed = session.resolve_npc_transition("apologize")
+
+    assert resumed["pending_npc_transition"] is None
+    assert resumed["pending_encounter"] is None
+    assert resumed["active_point"]["npc"]["runtime_state"]["interaction_status"] == "active"
+    assert scene_flag(session.state.flags, "elder_argument", True) is False
 
 
 def test_npc_request_receives_only_that_npc_interaction_history():
     proposal = NpcInteractionProposal.model_validate(
         {
             "action_type": "social",
+            "request_risk": "no_risk",
             "player_narration": "Zwiadowca obserwuje drużynę.",
             "npc_response": "Słucham was.",
             "requires_roll": False,
@@ -2079,12 +2348,14 @@ def test_npc_request_receives_only_that_npc_interaction_history():
 
     session.submit_action("Pytamy zwiadowcę o bramę.")
     session.decide("accept")
+    session.resolve_rolls({"hero": 20})
     session.submit_action("Wracamy do wcześniejszego pytania.")
 
     assert len(client.requests) == 2
     assert client.requests[0].conversation_thread == ()
-    assert [entry.role for entry in client.requests[1].conversation_thread] == ["player", "gm", "gm"]
+    assert [entry.role for entry in client.requests[1].conversation_thread] == ["player", "gm", "gm", "gm"]
     assert client.requests[1].conversation_thread[0].content == "Pytamy zwiadowcę o bramę."
+    assert client.requests[1].to_prompt_payload()["npc_runtime_state"]["relationship_events"][0]["intent"] == "social"
 
 
 def test_exploration_ui_session_npc_information_sets_flags_without_roll():
@@ -2110,12 +2381,50 @@ def test_exploration_ui_session_npc_information_sets_flags_without_roll():
     assert {"key": "scout_stabilized", "value": True} in state["flags"]
     assert {"key": "tower_hint_learned", "value": True} in state["flags"]
     assert any(message["title"] == "Informacja: Wskazówka o wieży" for message in state["messages"])
+    runtime = state["active_point"]["npc"]["runtime_state"]
+    assert runtime["revealed_information_ids"] == ["tower_hint"]
+    assert "ustabilizowany" in runtime["physical_state"]
+
+
+def test_failed_npc_roll_records_attempt_without_revealing_success_information():
+    proposal = NpcInteractionProposal.model_validate(
+        {
+            "action_type": "medical",
+            "player_narration": "Próbujecie opatrzyć zwiadowcę.",
+            "npc_response": "Zwiadowca krzywi się z bólu.",
+            "requires_roll": True,
+            "ability": "wisdom",
+            "skill": "medicine",
+            "dc": 16,
+            "success_message": "Rana została opatrzona.",
+            "failure_message": "Nie udaje się ustabilizować rany.",
+            "flag_changes_on_success": [{"key": "scout_stabilized", "value": True}],
+            "revealed_information_ids": ["tower_hint"],
+        }
+    )
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        npc_client=FakeNpcClient(proposal),
+        debug_point_id="wounded_scout",
+    )
+
+    session.submit_action("Próbujemy opatrzyć ranę.")
+    session.decide("accept")
+    state = session.resolve_rolls({"hero": 1})
+
+    runtime = state["active_point"]["npc"]["runtime_state"]
+    assert runtime["used_attempt_ids"] == ["medical"]
+    assert runtime["revealed_information_ids"] == []
+    assert runtime["relationship_events"][0]["outcome"] == "failure"
+    assert "Nadal ranny" in runtime["physical_state"]
+    assert {"key": "tower_hint_learned", "value": True} not in state["flags"]
 
 
 def test_exploration_ui_session_writes_debug_log_for_npc_effects(tmp_path):
     proposal = NpcInteractionProposal.model_validate(
         {
             "action_type": "social",
+            "request_risk": "no_risk",
             "player_narration": "Mówicie spokojnie.",
             "npc_response": "Zwiadowca przestaje się szarpać.",
             "requires_roll": False,
@@ -2134,6 +2443,7 @@ def test_exploration_ui_session_writes_debug_log_for_npc_effects(tmp_path):
 
     session.submit_action("Uspokajamy zwiadowcę.")
     session.decide("accept")
+    session.resolve_rolls({"hero": 20})
 
     events = [__import__("json").loads(line) for line in session.observer.path.read_text(encoding="utf-8").splitlines()]
     event_types = [event["event_type"] for event in events]
@@ -2142,6 +2452,7 @@ def test_exploration_ui_session_writes_debug_log_for_npc_effects(tmp_path):
     assert event_types[:1] == ["ui_session_started"]
     assert "ui_action_submitted" in event_types
     assert "ui_npc_proposal_validated" in event_types
+    assert "ui_npc_runtime_updated" in event_types
     assert effect_event["payload"]["source"] == "npc_proposal"
     assert effect_event["payload"]["effect"]["parameters"]["key"] == "scout_calmed"
     assert {"key": "scout_calmed", "value": True} in effect_event["payload"]["flags"]
@@ -2581,6 +2892,8 @@ def test_limited_attack_consumes_resource_and_becomes_unavailable_in_ui() -> Non
     )
 
     hero = next(actor for actor in resolved["combat"]["actors"] if actor["id"] == "hero")
+    assert hero["features"][0]["id"] == "heroic_strike"
+    assert hero["features"][0]["source_kind"] == "scenario"
     resource = next(pool for pool in hero["resource_pools"] if pool["id"] == "heroic_strike_uses")
     source = next(
         item

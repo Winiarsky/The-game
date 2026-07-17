@@ -30,6 +30,14 @@ def create_app(session: ExplorationUiSession) -> Flask:
     def api_session_log():
         return jsonify(_session_log_payload(session))
 
+    @app.post("/api/npc-transition/resolve")
+    def api_npc_transition_resolve():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(session.resolve_npc_transition(str(data.get("reaction_id", ""))))
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
     @app.post("/api/snapshot/save")
     def api_snapshot_save():
         try:

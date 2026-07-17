@@ -16,7 +16,15 @@ from dnd_board_game.exploration import (
     ExplorationPoint,
     ExplorationState,
     ExplorationZone,
-    validate_exploration_effect,
+    NpcAttemptPlan,
+    NpcIntentActionPlan,
+    SocialInteractionPlan,
+    SocialRequestRisk,
+    npc_runtime_state_for,
+    plan_npc_attempt,
+    plan_npc_intent_action,
+    plan_social_interaction,
+    validate_policy_exploration_effect,
 )
 from dnd_board_game.combat import scene_flag
 
@@ -56,6 +64,9 @@ class NpcInteractionProposal(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     action_type: str = Field(max_length=80)
+    request_risk: SocialRequestRisk | None = None
+    target_id: str | None = Field(default=None, max_length=120)
+    quantity: int = Field(default=1, ge=1)
     player_narration: str = Field(default="", max_length=1000)
     npc_response: str = Field(default="", max_length=1000)
     requires_roll: bool = False
@@ -74,7 +85,7 @@ class NpcInteractionProposal(BaseModel):
     revealed_information_ids: tuple[str, ...] = ()
     gm_notes: str = Field(default="", max_length=1000)
 
-    @field_validator("action_type", "ability", "skill")
+    @field_validator("action_type", "ability", "skill", "target_id")
     @classmethod
     def _lower_optional(cls, value: str | None) -> str | None:
         return value.strip().lower() if value else value
@@ -104,6 +115,7 @@ class NpcInteractionRequest:
         npc = self.point.npc_interaction
         if npc is None:
             raise ValueError(f"Exploration point {self.point.id} has no npc_interaction.")
+        runtime_state = npc_runtime_state_for(self.state, npc.id)
         return {
             "scenario": {"id": self.scenario_id, "name": self.scenario_name},
             "zone": {
@@ -117,6 +129,9 @@ class NpcInteractionRequest:
                 "description": self.point.description,
             },
             "npc": npc.as_payload(),
+            "npc_runtime_state": (
+                runtime_state.as_payload() if runtime_state is not None else None
+            ),
             "scene_flags": dict(self.state.flags.values),
             "conversation_thread": [entry.as_payload() for entry in self.conversation_thread],
             "player_action": self.player_action,
@@ -127,6 +142,9 @@ class NpcInteractionRequest:
 class NpcValidatedInteraction:
     proposal: NpcInteractionProposal
     point: ExplorationPoint
+    social_plan: SocialInteractionPlan | None = None
+    attempt_plan: NpcAttemptPlan | None = None
+    action_plan: NpcIntentActionPlan | None = None
 
 
 class NpcInteractionClient(Protocol):
@@ -284,6 +302,68 @@ def validate_npc_interaction_proposal(
                 )
     elif policy.allowed_actions and proposal.action_type not in policy.allowed_actions:
         raise ValueError(f"NPC action is not allowed here: {proposal.action_type}.")
+    social_plan = None
+    if permission is not None and permission.uses_social_reaction:
+        if proposal.request_risk is None:
+            raise ValueError(
+                f"NPC intent {proposal.action_type} requires request_risk classification."
+            )
+        runtime_state = npc_runtime_state_for(request.state, npc.id)
+        attitude = runtime_state.attitude if runtime_state is not None else npc.initial_attitude
+        social_plan = plan_social_interaction(attitude, proposal.request_risk)
+        if social_plan.requires_roll:
+            social_skill = proposal.skill or "persuasion"
+            if social_skill not in {"persuasion", "deception", "intimidation"}:
+                raise ValueError(
+                    "A social reaction check must use persuasion, deception, or intimidation."
+                )
+            proposal = proposal.model_copy(
+                update={
+                    "requires_roll": True,
+                    "ability": "charisma",
+                    "skill": social_skill,
+                    "dc": social_plan.dc,
+                }
+            )
+        else:
+            proposal = proposal.model_copy(
+                update={"requires_roll": False, "ability": None, "skill": None, "dc": None}
+            )
+    action_plan = None
+    if permission is not None and permission.targets:
+        if proposal.target_id is None:
+            raise ValueError(
+                f"NPC intent {proposal.action_type} requires target_id classification."
+            )
+        action_plan = plan_npc_intent_action(
+            request.state,
+            permission=permission,
+            target_id=proposal.target_id,
+            quantity=proposal.quantity,
+        )
+        target = action_plan.target
+        if target.ability is not None and not permission.uses_social_reaction:
+            proposal = proposal.model_copy(
+                update={
+                    "requires_roll": True,
+                    "ability": target.ability,
+                    "skill": target.skill,
+                    "dc": target.dc,
+                }
+            )
+        if any(
+            (
+                proposal.effects_on_success,
+                proposal.effects_on_failure,
+                proposal.flag_changes_on_success,
+                proposal.flag_changes_on_failure,
+                proposal.revealed_information_ids,
+            )
+        ):
+            raise ValueError(
+                "NPC interaction with a structured target cannot define LLM-owned outcomes."
+            )
+        _validate_npc_action_plan(action_plan, request)
     if proposal.requires_roll:
         if proposal.ability is None or proposal.ability not in CORE_DND_5E_ABILITIES:
             raise ValueError(f"NPC interaction uses unknown ability: {proposal.ability}.")
@@ -298,6 +378,17 @@ def validate_npc_interaction_proposal(
     else:
         if proposal.dc is not None:
             raise ValueError("NPC interaction without roll cannot define DC.")
+    attempt_plan = None
+    if (
+        permission is not None
+        and permission.attempt_policy is not None
+        and proposal.requires_roll
+    ):
+        attempt_plan = plan_npc_attempt(
+            request.state,
+            npc_id=npc.id,
+            policy=permission.attempt_policy,
+        )
     allowed_flags = set(policy.allowed_flags)
     for change in (*proposal.flag_changes_on_success, *proposal.flag_changes_on_failure):
         if allowed_flags and change.key not in allowed_flags:
@@ -314,7 +405,13 @@ def validate_npc_interaction_proposal(
             raise ValueError(
                 f"NPC information {info_id} is still locked by flags: {', '.join(missing_after_success)}."
             )
-    return NpcValidatedInteraction(proposal=proposal, point=request.point)
+    return NpcValidatedInteraction(
+        proposal=proposal,
+        point=request.point,
+        social_plan=social_plan,
+        attempt_plan=attempt_plan,
+        action_plan=action_plan,
+    )
 
 
 def _validate_npc_effects(
@@ -325,17 +422,44 @@ def _validate_npc_effects(
     npc = request.point.npc_interaction
     if npc is None:
         raise ValueError(f"Exploration point {request.point.id} has no npc_interaction.")
-    allowed_effect_types = set(npc.policy.allowed_effect_types)
-    allowed_flags = set(npc.policy.allowed_flags)
-    for effect in effects:
-        if allowed_effect_types and effect.type not in allowed_effect_types:
-            raise ValueError(f"NPC effect is not allowed here: {effect.type}.")
+    for index, effect in enumerate(effects):
         payload = effect.as_effect_payload()
-        validate_exploration_effect(payload, request.state)
-        if effect.type == "set_flag":
-            key = str(effect.parameters.get("key", ""))
-            if allowed_flags and key not in allowed_flags:
-                raise ValueError(f"NPC effect flag is not allowed here: {key}.")
+        validate_policy_exploration_effect(
+            payload,
+            request.state,
+            allowed_effect_types=npc.policy.allowed_effect_types,
+            allowed_flags=npc.policy.allowed_flags,
+            field=f"NPC {field}[{index}]",
+        )
+
+
+def _validate_npc_action_plan(
+    plan: NpcIntentActionPlan,
+    request: NpcInteractionRequest,
+) -> None:
+    npc = request.point.npc_interaction
+    if npc is None:
+        raise ValueError(f"Exploration point {request.point.id} has no npc_interaction.")
+    known_information_ids = {item.id for item in npc.locked_information}
+    for branch in plan.target.outcome_branches:
+        unknown_information = set(branch.revealed_information_ids) - known_information_ids
+        if unknown_information:
+            raise ValueError(
+                f"NPC target {plan.target.id} reveals unknown information: "
+                + ", ".join(sorted(unknown_information))
+                + "."
+            )
+        for index, effect in enumerate(branch.effects):
+            validate_policy_exploration_effect(
+                effect,
+                request.state,
+                allowed_effect_types=npc.policy.allowed_effect_types,
+                allowed_flags=npc.policy.allowed_flags,
+                field=(
+                    f"NPC target {plan.target.id}.outcomes."
+                    f"{branch.outcome.value}.effects[{index}]"
+                ),
+            )
 
 
 def _true_set_flag_keys(effects: tuple[NpcEffect, ...]) -> set[str]:

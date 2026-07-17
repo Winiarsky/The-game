@@ -76,6 +76,7 @@ from dnd_board_game.application.damage_presentation import (
 from dnd_board_game.actors import (
     Actor,
     Faction,
+    FeatureGrant,
     actor_resource_pool,
     can_spend_actor_resource,
     can_grapple_or_shove_size,
@@ -221,6 +222,15 @@ from dnd_board_game.exploration import (
     ImprovisedToolUse,
     PartyCheckInput,
     PartyPosition,
+    NpcAttemptPlan,
+    NpcInteractionStatus,
+    NpcIntentActionPlan,
+    NpcRuntimeState,
+    NpcOutcomeTier,
+    NpcTransitionPlan,
+    NpcTransitionResultType,
+    NpcStateUpdate,
+    SocialInteractionPlan,
     PendingEncounter,
     ShortRestPolicy,
     SceneSourceMatch,
@@ -262,9 +272,17 @@ from dnd_board_game.exploration import (
     visible_exploration_points,
     visible_exploration_zones,
     option_roll_modifiers_for_actor,
+    npc_runtime_state_for,
     plan_source_collection,
     plan_fixture_action,
     resolve_trap_action,
+    resolve_npc_runtime_interaction,
+    npc_outcome_for_check,
+    resolve_npc_outcome,
+    plan_npc_transition,
+    resolve_npc_transition_reaction,
+    restore_npc_transition_plan,
+    set_npc_interaction_status,
     trap_state_for,
     trigger_trap,
     remove_exploration_condition,
@@ -382,6 +400,8 @@ CONVERSATION_GM_TITLES = frozenset(
         "Wynik zagrożenia",
         "Pułapka",
         "Wynik pułapki",
+        "Zmiana nastawienia",
+        "Reakcja NPC",
     }
 )
 
@@ -422,6 +442,9 @@ class PendingInteraction:
     hazard_actor_id: str | None = None
     trap: ExplorationTrap | None = None
     trap_action: ExplorationTrapAction | None = None
+    social_plan: SocialInteractionPlan | None = None
+    attempt_plan: NpcAttemptPlan | None = None
+    action_plan: NpcIntentActionPlan | None = None
 
     def as_payload(self) -> dict[str, object]:
         payload: dict[str, object] = {
@@ -441,6 +464,12 @@ class PendingInteraction:
             payload["point_name"] = self.point.name
         if self.check_plan is not None:
             payload["check_plan"] = self.check_plan.as_payload()
+        if self.social_plan is not None:
+            payload["social_plan"] = self.social_plan.as_payload()
+        if self.attempt_plan is not None:
+            payload["attempt_plan"] = self.attempt_plan.as_payload()
+        if self.action_plan is not None:
+            payload["npc_action_plan"] = self.action_plan.as_payload()
         if self.hazard is not None:
             payload["hazard"] = self.hazard.as_payload()
             payload["hazard_actor_id"] = self.hazard_actor_id
@@ -976,6 +1005,14 @@ class ExplorationUiSession:
         self.pending_state.encounter = value
 
     @property
+    def pending_npc_transition(self) -> NpcTransitionPlan | None:
+        return self.pending_state.npc_transition
+
+    @pending_npc_transition.setter
+    def pending_npc_transition(self, value: NpcTransitionPlan | None) -> None:
+        self.pending_state.npc_transition = value
+
+    @property
     def pending_enemy_turn_intent(self) -> EnemyTurnPlan | None:
         return self.pending_state.enemy_turn_intent
 
@@ -1166,7 +1203,8 @@ class ExplorationUiSession:
             UiFlowStage.SHORT_REST,
             UiFlowStage.SCENARIO_COMPLETE,
         }:
-            self._refresh_pending_encounter()
+            if self.pending_npc_transition is None:
+                self._refresh_pending_encounter()
         self._expire_invalid_combat_effects()
         active_challenge = self.active_challenge if self.ui_flow_stage == UiFlowStage.LOCATION_ACTIVE else None
         current_zone_points = self.current_zone_points() if self.ui_flow_stage == UiFlowStage.LOCATION_ACTIVE else ()
@@ -1249,10 +1287,14 @@ class ExplorationUiSession:
             available_zones=[_zone_payload(zone, self._scenario_asset_root()) for zone in visible_exploration_zones(self.state.zones) if zone_is_ui_available(self.state, zone)],
             visible_environment=[_environment_entry_payload(entry) for entry in self.exploration.environment if entry.visibility == SetupVisibility.VISIBLE],
             travel_options=[_zone_payload(zone, self._scenario_asset_root()) for zone in self.travel_options()],
-            visible_points=[_point_payload(point) for point in visible_exploration_points(self.state.points)],
-            current_zone_points=[_point_payload(point) for point in current_zone_points],
+            visible_points=[_point_payload(point, _npc_state_for_point(self.state, point)) for point in visible_exploration_points(self.state.points)],
+            current_zone_points=[_point_payload(point, _npc_state_for_point(self.state, point)) for point in current_zone_points],
             active_challenge=_challenge_payload(self.state, active_challenge, self.exploration.actors) if active_challenge else None,
-            active_point=_point_payload(self.active_point) if self.active_point else None,
+            active_point=(
+                _point_payload(self.active_point, _npc_state_for_point(self.state, self.active_point))
+                if self.active_point
+                else None
+            ),
             resources=[
                 *[_resource_payload(resource) for resource in self.state.resources if resource.id in self.state.inventory_resource_ids],
                 *[
@@ -1273,6 +1315,11 @@ class ExplorationUiSession:
             messages=[message.as_payload() for message in self.messages],
             conversation=self._conversation_payload(),
             pending=self.pending.as_payload() if self.pending else None,
+            pending_npc_transition=(
+                self.pending_npc_transition.as_payload()
+                if self.pending_npc_transition is not None
+                else None
+            ),
             selected_lead_actor_id=self.selected_lead_actor_id,
             selected_helper_actor_id=self.selected_helper_actor_id,
             allowed_mechanics=[tool.as_payload() for tool in MECHANIC_TOOLS.values()],
@@ -1378,6 +1425,11 @@ class ExplorationUiSession:
             exploration_state=self.state,
             active_effects=self.active_combat_effects,
             pending_encounter=self.pending_encounter,
+            pending_npc_transition=(
+                self.pending_npc_transition.pending
+                if self.pending_npc_transition is not None
+                else None
+            ),
             combat_state=self.combat_state,
             resolved_encounter_trigger_ids=tuple(sorted(self.resolved_encounter_trigger_ids)),
             selected_attack_source_ids=tuple(sorted(self.selected_attack_source_ids.items())),
@@ -1493,7 +1545,15 @@ class ExplorationUiSession:
         self.preview_zone_id = snapshot.preview_zone_id
         self.interaction_result = dict(snapshot.interaction_result) if snapshot.interaction_result is not None else None
         self.ui_flow_stage = stage
-        self.pending_state = UiPendingState(encounter=snapshot.pending_encounter)
+        restored_npc_transition = (
+            restore_npc_transition_plan(base_exploration.npc_transitions, snapshot.pending_npc_transition)
+            if snapshot.pending_npc_transition is not None
+            else None
+        )
+        self.pending_state = UiPendingState(
+            encounter=snapshot.pending_encounter,
+            npc_transition=restored_npc_transition,
+        )
         self.declaration_thread = []
         self.active_preparation_effects = []
         self.exploration_setup_flow = None
@@ -1516,7 +1576,8 @@ class ExplorationUiSession:
         pending_fields = tuple(
             item.name
             for item in fields(self.pending_state)
-            if item.name != "encounter" and getattr(self.pending_state, item.name) is not None
+            if item.name not in {"encounter", "npc_transition"}
+            and getattr(self.pending_state, item.name) is not None
         )
         if pending_fields:
             return "Najpierw dokończ albo anuluj rozpoczęty wybór, rzut lub odpoczynek."
@@ -7116,6 +7177,16 @@ class ExplorationUiSession:
         }
 
     def _submit_npc_action(self, point: ExplorationPoint, text: str) -> dict[str, object]:
+        npc = point.npc_interaction
+        assert npc is not None
+        runtime_state = npc_runtime_state_for(self.state, npc.id)
+        if runtime_state is not None and runtime_state.interaction_status == NpcInteractionStatus.CLOSED:
+            self._add_message(
+                "Odpowiedź NPC",
+                runtime_state.closure_reason
+                or f"{npc.name} nie chce już kontynuować tej rozmowy.",
+            )
+            return self.state_payload()
         client = self._npc_client()
         zone = next(zone for zone in self.exploration.zones if zone.id == point.zone_id)
         request_data = build_npc_interaction_request(
@@ -7141,11 +7212,67 @@ class ExplorationUiSession:
             stage=PendingStage.DECISION,
             proposal=validated.proposal,
             point=point,
+            social_plan=validated.social_plan,
+            attempt_plan=validated.attempt_plan,
+            action_plan=validated.action_plan,
         )
-        if proposal.player_narration:
-            self._add_message("Narracja MG", proposal.player_narration)
-        if proposal.npc_response:
-            self._add_message("Odpowiedź NPC", proposal.npc_response)
+        if validated.proposal.player_narration:
+            self._add_message("Narracja MG", validated.proposal.player_narration)
+        if validated.proposal.npc_response:
+            self._add_message("Odpowiedź NPC", validated.proposal.npc_response)
+        return self.state_payload()
+
+    def resolve_npc_transition(self, reaction_id: str) -> dict[str, object]:
+        plan = self.pending_npc_transition
+        if plan is None:
+            raise ValueError("Brak oczekującej decyzji w eskalacji sceny NPC.")
+        resolution = resolve_npc_transition_reaction(self.state, plan, reaction_id)
+        for effect, result in zip(resolution.reaction.effects, resolution.effect_results):
+            self.state = result.state
+            self._record_effect_result(result, source="npc_scene_transition", raw_effect=effect)
+        self.state = resolution.state
+        self.resolved_encounter_trigger_ids.update(
+            resolution.reaction.suppress_encounter_trigger_ids
+        )
+        status = resolution.reaction.npc_status
+        if status is not None:
+            self.state = set_npc_interaction_status(
+                self.state,
+                npc_id=plan.definition.npc_id,
+                status=status,
+                closure_reason=(
+                    "Po tej eskalacji NPC nie chce już kontynuować rozmowy."
+                    if status == NpcInteractionStatus.CLOSED
+                    else ""
+                ),
+            )
+        self._add_message(plan.variant.title, plan.variant.narration)
+        self._add_message("Reakcja drużyny", resolution.reaction.label)
+        self._add_message("Narracja MG", resolution.reaction.narration)
+        self._record(
+            "ui_npc_transition_resolved",
+            {
+                "transition_id": plan.definition.id,
+                "variant_id": plan.variant.id,
+                "reaction_id": resolution.reaction.id,
+                "result_type": resolution.reaction.result_type.value,
+                "suppressed_encounter_trigger_ids": list(
+                    resolution.reaction.suppress_encounter_trigger_ids
+                ),
+            },
+        )
+        self.pending_npc_transition = None
+        if resolution.reaction.result_type == NpcTransitionResultType.END_INTERACTION:
+            self.active_point_id = ""
+        elif resolution.reaction.result_type == NpcTransitionResultType.START_ENCOUNTER:
+            self.active_point_id = ""
+            self._refresh_pending_encounter()
+            expected_trigger_id = resolution.reaction.encounter_trigger_id
+            if self.pending_encounter is None or self.pending_encounter.trigger_id != expected_trigger_id:
+                raise ValueError(
+                    "Wybrana eskalacja nie uruchomiła oczekiwanego encountera; sprawdź warunek triggera."
+                )
+        self._sync_board_leds()
         return self.state_payload()
 
     def update_pending_challenge_decision(self, data: dict[str, object]) -> dict[str, object]:
@@ -7519,9 +7646,26 @@ class ExplorationUiSession:
         assert self.pending is not None
         proposal = self.pending.proposal
         assert isinstance(proposal, NpcInteractionProposal)
+        if self.pending.attempt_plan is not None and not self.pending.attempt_plan.available:
+            self._add_message("Reakcja NPC", self.pending.attempt_plan.blocked_reason)
+            self.pending = None
+            return self.state_payload()
+        if self.pending.social_plan is not None and not self.pending.social_plan.possible:
+            self._update_npc_runtime(proposal, success=False, revealed_information_ids=())
+            self._add_message(
+                "Reakcja NPC",
+                "Przy obecnym nastawieniu NPC odmawia podjęcia takiego ryzyka. Ta prośba nie wymaga rzutu.",
+            )
+            self.pending = None
+            return self.state_payload()
+        if self.pending.action_plan is not None and not proposal.requires_roll:
+            self._resolve_structured_npc_outcome(proposal, NpcOutcomeTier.SUCCESS)
+            self.pending = None
+            return self.state_payload()
         if not proposal.requires_roll:
             self._apply_npc_flags(proposal, success=True)
-            self._reveal_npc_information(proposal)
+            revealed = self._reveal_npc_information(proposal)
+            self._update_npc_runtime(proposal, success=True, revealed_information_ids=revealed)
             self._add_message("Wynik interakcji NPC", "Interakcja nie wymagała rzutu.")
             self.pending = None
             return self.state_payload()
@@ -8156,12 +8300,73 @@ class ExplorationUiSession:
         assert self.pending is not None
         proposal = self.pending.proposal
         assert isinstance(proposal, NpcInteractionProposal)
+        if self.pending.action_plan is not None:
+            outcome = npc_outcome_for_check(
+                success=check_result.success,
+                natural_roll=check_result.selected_roll.natural_roll,
+            )
+            self._resolve_structured_npc_outcome(proposal, outcome)
+            return
         success = check_result.success
         message = proposal.success_message if success else proposal.failure_message
         self._add_message("Wynik interakcji NPC", message or ("Sukces." if success else "Porażka."))
         self._record("ui_npc_roll_resolved", {"success": success, "message": message})
         self._apply_npc_flags(proposal, success=success)
-        self._reveal_npc_information(proposal)
+        revealed = self._reveal_npc_information(proposal) if success else ()
+        self._update_npc_runtime(
+            proposal,
+            success=success,
+            revealed_information_ids=revealed,
+        )
+
+    def _resolve_structured_npc_outcome(
+        self,
+        proposal: NpcInteractionProposal,
+        outcome: NpcOutcomeTier,
+    ) -> None:
+        assert self.pending is not None and self.pending.action_plan is not None
+        plan = self.pending.action_plan
+        resolution = resolve_npc_outcome(self.state, plan, outcome)
+        for effect, result in zip(resolution.branch.effects, resolution.effect_results):
+            self.state = result.state
+            self._record_effect_result(result, source="npc_outcome_branch", raw_effect=effect)
+        self.state = resolution.state
+        revealed = self._reveal_npc_information(
+            proposal,
+            information_ids=resolution.branch.revealed_information_ids,
+        )
+        success = outcome in {NpcOutcomeTier.CRITICAL_SUCCESS, NpcOutcomeTier.SUCCESS}
+        self._add_message("Wynik interakcji NPC", resolution.branch.message)
+        self._record(
+            "ui_npc_outcome_resolved",
+            {
+                "intent": plan.intent,
+                "target_id": plan.target.id,
+                "outcome": outcome.value,
+                "quantity": plan.quantity,
+                "effects": list(resolution.branch.effects),
+            },
+        )
+        self._update_npc_runtime(
+            proposal,
+            success=success,
+            revealed_information_ids=revealed,
+            state_update_override=resolution.branch.state_update,
+            summary_override=resolution.branch.message,
+            use_permission_update=False,
+        )
+        if resolution.branch.transition_id is not None:
+            transition_plan = plan_npc_transition(
+                self.exploration.npc_transitions,
+                transition_id=resolution.branch.transition_id,
+                state=self.state,
+                resolved_encounter_trigger_ids=self.resolved_encounter_trigger_ids,
+            )
+            self.pending_npc_transition = transition_plan
+            self._record(
+                "ui_npc_transition_started",
+                transition_plan.as_payload(),
+            )
 
     def _apply_npc_flags(self, proposal: NpcInteractionProposal, *, success: bool) -> None:
         effects = proposal.effects_on_success if success else proposal.effects_on_failure
@@ -8184,14 +8389,28 @@ class ExplorationUiSession:
                 raw_effect={"type": "set_flag", "parameters": {"key": change.key, "value": change.value}},
             )
 
-    def _reveal_npc_information(self, proposal: NpcInteractionProposal) -> None:
+    def _reveal_npc_information(
+        self,
+        proposal: NpcInteractionProposal,
+        *,
+        information_ids: tuple[str, ...] | None = None,
+    ) -> tuple[str, ...]:
         if self.pending is None or self.pending.point is None or self.pending.point.npc_interaction is None:
-            return
+            return ()
         npc = self.pending.point.npc_interaction
         known = {info.id: info for info in npc.locked_information}
-        for info_id in proposal.revealed_information_ids:
+        runtime_state = npc_runtime_state_for(self.state, npc.id)
+        already_revealed = set(
+            runtime_state.revealed_information_ids if runtime_state is not None else ()
+        )
+        revealed: list[str] = []
+        for info_id in (
+            proposal.revealed_information_ids
+            if information_ids is None
+            else information_ids
+        ):
             info = known.get(info_id)
-            if info is None:
+            if info is None or info.id in already_revealed:
                 continue
             if all(scene_flag(self.state.flags, flag, False) for flag in info.reveal_if_flags):
                 effects = info.effects_on_reveal or tuple(
@@ -8204,6 +8423,71 @@ class ExplorationUiSession:
                     self._record_effect_result(result, source="npc_information", raw_effect=effect)
                 self._add_message(f"Informacja: {info.label}", info.text)
                 self._record("ui_npc_information_revealed", {"information_id": info.id, "label": info.label})
+                revealed.append(info.id)
+        return tuple(revealed)
+
+    def _update_npc_runtime(
+        self,
+        proposal: NpcInteractionProposal,
+        *,
+        success: bool,
+        revealed_information_ids: tuple[str, ...],
+        state_update_override: NpcStateUpdate | None = None,
+        summary_override: str | None = None,
+        use_permission_update: bool = True,
+    ) -> None:
+        if self.pending is None or self.pending.point is None:
+            return
+        npc = self.pending.point.npc_interaction
+        if npc is None:
+            return
+        permission = npc.policy.intent_permission(proposal.action_type)
+        update = None
+        if permission is not None and use_permission_update:
+            update = permission.state_on_success if success else permission.state_on_failure
+        if not use_permission_update:
+            update = state_update_override
+        summary = (
+            summary_override
+            or (proposal.success_message if success else proposal.failure_message)
+        ) or proposal.npc_response or proposal.player_narration
+        resolution = resolve_npc_runtime_interaction(
+            self.state,
+            npc_id=npc.id,
+            intent=proposal.action_type,
+            success=success,
+            summary=summary,
+            update=update,
+            revealed_information_ids=revealed_information_ids,
+            attempt_id=(
+                permission.attempt_policy.attempt_id
+                if proposal.requires_roll
+                and permission is not None
+                and permission.attempt_policy is not None
+                else proposal.action_type
+                if proposal.requires_roll
+                else None
+            ),
+        )
+        self.state = resolution.state
+        if resolution.npc_before.attitude != resolution.npc_after.attitude:
+            attitude_labels = {
+                "hostile": "wrogi",
+                "indifferent": "obojętny",
+                "friendly": "przyjazny",
+            }
+            before = attitude_labels[resolution.npc_before.attitude.value]
+            after = attitude_labels[resolution.npc_after.attitude.value]
+            self._add_message("Zmiana nastawienia", f"{npc.name}: {before} → {after}.")
+        self._record(
+            "ui_npc_runtime_updated",
+            {
+                "npc_id": npc.id,
+                "before": resolution.npc_before.as_payload(),
+                "after": resolution.npc_after.as_payload(),
+                "event": resolution.event.as_payload(),
+            },
+        )
 
     def _reveal_completed_challenge_points(self, challenge: ExplorationChallenge) -> tuple[ExplorationPoint, ...]:
         if not challenge.reveals_on_complete or not challenge_state_for(self.state, challenge.id).completed:
@@ -8228,6 +8512,8 @@ class ExplorationUiSession:
         return tuple(revealed)
 
     def _refresh_pending_encounter(self) -> None:
+        if self.pending_npc_transition is not None:
+            return
         detection = self.exploration_flow.detect_encounter(
             state=self.state,
             triggers=self.exploration.encounter_triggers,
@@ -9084,6 +9370,7 @@ def _combat_actor_payload(
             }
             for trigger in actor.triggers
         ],
+        "features": [_feature_grant_payload(feature) for feature in actor.features],
         "hp": actor.hp,
         "max_hp": actor.max_hp,
         "temp_hp": actor.temp_hp,
@@ -10815,6 +11102,15 @@ def _player_facing_gm_validation_message(reason: str) -> str:
 
 
 def _pending_explanation(pending: PendingInteraction) -> str:
+    if pending.attempt_plan is not None:
+        plan = pending.attempt_plan
+        if not plan.available:
+            return plan.blocked_reason
+        attempt_number = plan.attempts_used + 1
+        return (
+            f"To próba {attempt_number}/{plan.max_attempts} dla tego podejścia. "
+            "Licznik zwiększy się dopiero po zaakceptowaniu i rozstrzygnięciu rzutu."
+        )
     if pending.fixture_action_plan is not None:
         plan = pending.fixture_action_plan
         return (
@@ -10890,7 +11186,19 @@ def _zone_markers_feedback(zones: tuple[ExplorationZone, ...]) -> LedFeedback:
     return LedFeedback(tuple(LedFrame((zone.marker_position,), zone.color, LedRole.DESTINATION) for zone in zones))
 
 
-def _point_payload(point: ExplorationPoint | None) -> dict[str, object] | None:
+def _npc_state_for_point(
+    state: ExplorationState,
+    point: ExplorationPoint,
+) -> NpcRuntimeState | None:
+    if point.npc_interaction is None:
+        return None
+    return npc_runtime_state_for(state, point.npc_interaction.id)
+
+
+def _point_payload(
+    point: ExplorationPoint | None,
+    npc_state: NpcRuntimeState | None = None,
+) -> dict[str, object] | None:
     if point is None:
         return None
     payload: dict[str, object] = {
@@ -10908,6 +11216,7 @@ def _point_payload(point: ExplorationPoint | None) -> dict[str, object] | None:
             "public_description": point.npc_interaction.public_description,
             "current_state": point.npc_interaction.current_state,
             "dialogue_intro": point.npc_interaction.dialogue_intro,
+            "runtime_state": npc_state.as_payload() if npc_state is not None else None,
         }
     return payload
 
@@ -10986,6 +11295,21 @@ def _exploration_actor_payload(
             }
             for pool in actor.resource_pools
         ],
+        "features": [_feature_grant_payload(feature) for feature in actor.features],
+    }
+
+
+def _feature_grant_payload(feature: FeatureGrant) -> dict[str, object]:
+    return {
+        "id": feature.feature_id,
+        "label": feature.label,
+        "description": feature.description,
+        "source_kind": feature.source_kind.value,
+        "source_ref": feature.source_ref,
+        "resource_ids": list(feature.resource_ids),
+        "action_ids": list(feature.action_ids),
+        "trigger_ids": list(feature.trigger_ids),
+        "aura_ids": list(feature.aura_ids),
     }
 
 

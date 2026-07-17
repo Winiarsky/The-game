@@ -275,6 +275,41 @@ Zużyta pula z `recharge` wykonuje rzut na początku tury właściciela i odnawi
 się do maksimum po osiągnięciu progu. Atak wskazujący nieistniejącą pulę jest
 odrzucany podczas ładowania scenariusza.
 
+## Cechy aktorów
+
+Aktor może składać istniejące mechaniki przez `feature_refs`:
+
+```json
+{"feature_refs": ["goblin_frenzied_lunge"]}
+```
+
+Referencja wskazuje plik `content/features/<id>.json`. Schemat v1 cechy ma postać:
+
+```json
+{
+  "schema_version": 1,
+  "id": "goblin_frenzied_lunge",
+  "label": "Szarżujący wypad",
+  "description": "Specjalny atak potwora.",
+  "source_kind": "monster",
+  "source_ref": "goblin",
+  "grants": {
+    "resource_pools": [],
+    "attacks": [],
+    "healing_sources": [],
+    "combat_actions": [],
+    "triggers": [],
+    "auras": []
+  }
+}
+```
+
+`source_kind` przyjmuje `monster`, `item`, `race`, `species`, `background`, `class`,
+`subclass`, `feat` albo `scenario`. Cecha musi przyznawać co najmniej jeden
+prymityw. Loader rozwija granty do tych samych modeli co bezpośrednie dane aktora,
+odrzuca nieznane referencje i kolizje ID, a runtime zachowuje `FeatureGrant`, aby UI
+i snapshot mogły pokazać pochodzenie mechaniki.
+
 Lokacja eksploracyjna udostępnia short rest wyłącznie przez jawną politykę:
 
 ```json
@@ -305,6 +340,109 @@ Stary płaski plik może zostać aliasem:
 ```
 
 Dzięki temu stare komendy runtime nadal działają, a edycja większego scenariusza odbywa się w mniejszych plikach.
+
+## Trwały stan NPC
+
+`npc_interaction` może określić początkowy stan niezależny od tekstu narracyjnego:
+
+```json
+{
+  "id": "wounded_scout",
+  "initial_attitude": "indifferent",
+  "initial_physical_state": "Ranny i osłabiony.",
+  "initial_emotional_state": "Przestraszony.",
+  "policy": {
+    "intent_permissions": {
+      "medical": {
+        "status": "allowed",
+        "state_on_success": {
+          "physical_state": "Opatrzony i ustabilizowany.",
+          "emotional_state": "Wdzięczny za pomoc."
+        },
+        "state_on_failure": {
+          "emotional_state": "Zaniepokojony nieudaną próbą."
+        }
+      },
+      "social": {
+        "status": "allowed",
+        "uses_social_reaction": true,
+        "attempt_policy": {
+          "attempt_id": "scout_build_trust",
+          "max_attempts": 2,
+          "retry_requires_any_flags": ["scout_stabilized"],
+          "retry_locked_message": "Najpierw pokażcie, że chcecie pomóc.",
+          "exhausted_message": "NPC nie zmieni już zdania tym sposobem."
+        },
+        "state_on_success": {"attitude": "friendly"}
+      }
+    }
+  }
+}
+```
+
+Nastawienie przyjmuje `hostile`, `indifferent` albo `friendly`. Pola pominięte w
+`state_on_success`/`state_on_failure` nie zmieniają poprzedniego stanu. Runtime
+automatycznie zapisuje historię zaakceptowanych interakcji, wykorzystane intencje
+wymagające rzutu oraz faktycznie ujawnione `locked_information`.
+
+`uses_social_reaction: true` oznacza prośbę rozstrzyganą tabelą reakcji D&D 5e
+zależną od bieżącego nastawienia. LLM klasyfikuje `request_risk` jako
+`no_risk`, `minor_risk` albo `significant_risk`, natomiast silnik wyznacza ST
+0/10/20 lub odmowę. Aktualne nastawienie i warunki reakcji są jawne w UI.
+
+Opcjonalne `attempt_policy` dotyczy wyłącznie faktycznie wykonanych rzutów.
+`attempt_id` jest stabilnym kluczem licznika, `max_attempts` ustala limit, a
+`retry_requires_any_flags` wymaga zmiany sytuacji przed drugą i kolejną próbą.
+Zablokowana deklaracja pokazuje `retry_locked_message`; wyczerpany limit pokazuje
+`exhausted_message`. Samo pytanie, podgląd mechaniki i odrzucenie interpretacji
+nie zużywają próby.
+
+Ryzykowna intencja może definiować zamknięty katalog `targets`. Każdy cel ma
+stabilne `id`, opis, maksymalną ilość, opcjonalny stały test oraz dokładnie
+cztery gałęzie `outcomes`: `critical_success`, `success`, `failure` i
+`critical_failure`. Gałąź zawiera tekst dla gracza, deterministyczne efekty,
+opcjonalną zmianę stanu NPC i identyfikatory ujawnianych informacji. LLM wybiera
+wyłącznie istniejący `target_id` i `quantity`; nie może dostarczać własnych
+efektów dla takiej intencji. UI pokazuje nagrodę, ryzyko i wszystkie cztery
+możliwe rezultaty przed zaakceptowaniem rzutu.
+
+Przykładowy skrót:
+
+```json
+{
+  "status": "allowed_with_consequence",
+  "targets": [{
+    "id": "scout_reports",
+    "label": "Torba z meldunkami",
+    "description": "Spróbuj zabrać torbę.",
+    "max_quantity": 1,
+    "ability": "dexterity",
+    "skill": "sleight_of_hand",
+    "dc": 14,
+    "outcomes": {
+      "critical_success": {"message": "Niezauważona kradzież.", "effects": []},
+      "success": {"message": "Zdobyto torbę.", "effects": []},
+      "failure": {"message": "NPC zauważa próbę.", "effects": []},
+      "critical_failure": {"message": "NPC wszczyna alarm.", "effects": []}
+    }
+  }]
+}
+```
+
+Gałąź wyniku może dodatkowo podać `transition_id`. Definicje z
+`exploration.npc_transitions` są krótkimi, deterministycznymi etapami pomiędzy
+wynikiem rozmowy a dalszą sceną. Warianty są sprawdzane kolejno i mogą wymagać
+flag albo wcześniej rozstrzygniętych triggerów encountera; ostatni wariant musi
+być bezwarunkowym fallbackiem. Każda jawna dla gracza reakcja kończy się jednym
+z rezultatów: `resume_dialogue`, `end_interaction` albo `start_encounter`.
+Reakcja może stosować zwykłe efekty eksploracji i wyciszyć wskazany trigger.
+`start_encounter` zawsze wskazuje istniejący `encounter_trigger_id`; definicja
+przejścia nie tworzy własnej walki ani nie pozwala LLM wybrać konsekwencji.
+Podczas ładowania scenariusza wszystkie efekty wiedzy NPC, outcome branches i
+reakcji przejścia przechodzą ten sam walidator co propozycje LLM w runtime.
+Walidowane są parametry i referencje prymitywu oraz lokalne
+`allowed_effect_types`/`allowed_flags`. Błąd wskazuje pełną ścieżkę wpisu, dzięki
+czemu wadliwy content nie może rozpocząć sesji.
 
 Pułapka eksploracyjna łączy wykrycie przez istniejącą obserwację z własnym stanem
 oraz hazardem uruchamianym po nieudanej interakcji albo ukończeniu wskazanego challenge'a:

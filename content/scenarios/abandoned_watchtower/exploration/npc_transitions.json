@@ -1,0 +1,108 @@
+{
+  "npc_transitions": [
+    {
+      "id": "scout_knife_escalation",
+      "npc_id": "wounded_scout",
+      "variants": [
+        {
+          "id": "gate_secured",
+          "title": "Nóż w drżącej dłoni",
+          "narration": "Zwiadowca cofa się i unosi nóż, ale po zabezpieczonym dziedzińcu nie nadciąga już żadna odsiecz. To nadal groźna chwila, lecz drużyna ma czas zdecydować, czy odpuścić, czy spróbować go uspokoić.",
+          "required_flags": ["gate_skirmish_cleared"],
+          "reactions": [
+            {
+              "id": "back_off",
+              "label": "Wycofajcie się",
+              "description": "Przerwijcie rozmowę i zostawcie zwiadowcę w spokoju.",
+              "result_type": "end_interaction",
+              "narration": "Drużyna opuszcza broń i odchodzi kilka kroków. Zwiadowca nie rusza za wami, ale nie chce już rozmawiać.",
+              "effects": [
+                {"type": "set_flag", "parameters": {"key": "scout_panicked", "value": false}}
+              ],
+              "npc_status": "closed"
+            },
+            {
+              "id": "try_to_calm",
+              "label": "Spróbujcie go uspokoić",
+              "description": "Wróćcie do rozmowy z wrogim i przestraszonym zwiadowcą.",
+              "result_type": "resume_dialogue",
+              "narration": "Drużyna nieruchomieje i mówi spokojniej. Nóż pozostaje w dłoni zwiadowcy, ale krzyk zamiera; możecie zadeklarować, jak próbujecie odzyskać kontrolę nad rozmową.",
+              "effects": [
+                {"type": "set_flag", "parameters": {"key": "scout_panicked", "value": false}}
+              ],
+              "npc_status": "active"
+            }
+          ]
+        },
+        {
+          "id": "courtyard_secured",
+          "title": "Nóż w drżącej dłoni",
+          "narration": "Zwiadowca unosi nóż, lecz dziedziniec został już oczyszczony i jego wołanie nie ściąga nowych przeciwników. Drużyna może przerwać scenę albo spróbować ją uspokoić.",
+          "required_flags": ["courtyard_cleared"],
+          "reactions": [
+            {
+              "id": "back_off",
+              "label": "Wycofajcie się",
+              "description": "Przerwijcie rozmowę i zostawcie zwiadowcę w spokoju.",
+              "result_type": "end_interaction",
+              "narration": "Drużyna odchodzi. Zwiadowca pozostaje sam i nie chce już odpowiadać na pytania.",
+              "effects": [
+                {"type": "set_flag", "parameters": {"key": "scout_panicked", "value": false}}
+              ],
+              "npc_status": "closed"
+            },
+            {
+              "id": "try_to_calm",
+              "label": "Spróbujcie go uspokoić",
+              "description": "Wróćcie do rozmowy z wrogim i przestraszonym zwiadowcą.",
+              "result_type": "resume_dialogue",
+              "narration": "Spokojny ton powstrzymuje kolejny krzyk. Zwiadowca nadal wam nie ufa, ale możecie powiedzieć, co robicie dalej.",
+              "effects": [
+                {"type": "set_flag", "parameters": {"key": "scout_panicked", "value": false}}
+              ],
+              "npc_status": "active"
+            }
+          ]
+        },
+        {
+          "id": "danger_nearby",
+          "title": "Krzyk może ściągnąć przeciwników",
+          "narration": "Zwiadowca mierzy w najbliższą postać nożem i woła o pomoc. W ruinach odpowiada mu poruszenie — macie tylko chwilę, by zdecydować, jak reagujecie.",
+          "reactions": [
+            {
+              "id": "back_off",
+              "label": "Wycofajcie się",
+              "description": "Przerwijcie eskalację, zanim krzyk przerodzi się w alarm.",
+              "result_type": "end_interaction",
+              "narration": "Drużyna natychmiast się cofa. Zwiadowca milknie, ale zamyka się na dalszą rozmowę.",
+              "effects": [
+                {"type": "set_flag", "parameters": {"key": "scout_panicked", "value": false}}
+              ],
+              "npc_status": "closed"
+            },
+            {
+              "id": "try_to_calm",
+              "label": "Spróbujcie go uspokoić",
+              "description": "Zatrzymajcie alarm i kontynuujcie trudną rozmowę.",
+              "result_type": "resume_dialogue",
+              "narration": "Przestajecie naciskać i dajecie zwiadowcy przestrzeń. Krzyk urywa się; nadal jest wrogi, lecz możecie spróbować przemówić mu do rozsądku.",
+              "effects": [
+                {"type": "set_flag", "parameters": {"key": "scout_panicked", "value": false}}
+              ],
+              "npc_status": "active"
+            },
+            {
+              "id": "hold_your_ground",
+              "label": "Nie ustępujcie",
+              "description": "Pozwólcie, by alarm przeszedł w encounter.",
+              "result_type": "start_encounter",
+              "narration": "Nie cofacie się. Wołanie zwiadowcy niesie się po ruinach, a z dziedzińca odpowiadają mu szybkie kroki goblinów.",
+              "encounter_trigger_id": "scout_panic_alarm",
+              "npc_status": "closed"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -35,6 +35,13 @@ from dnd_board_game.exploration import (
     plan_fixture_action,
     add_exploration_condition,
     ExplorationTrapStatus,
+    NpcAttitude,
+    NpcAttemptPolicy,
+    NpcStateUpdate,
+    npc_runtime_state_for,
+    plan_npc_attempt,
+    plan_npc_transition,
+    resolve_npc_runtime_interaction,
     set_trap_status,
 )
 from dnd_board_game.inventory import HandSlot
@@ -88,6 +95,96 @@ def test_snapshot_json_round_trip_is_deterministic(tmp_path):
     assert shield.armor_proficiency == "shield"
     assert len(shield.held_in) == 1
     assert cleric.auras[0].id == "protective_reliquary"
+
+
+def test_snapshot_round_trip_preserves_pending_npc_scene_transition(tmp_path):
+    session = _session(tmp_path)
+    session.pending_npc_transition = plan_npc_transition(
+        session.exploration.npc_transitions,
+        transition_id="scout_knife_escalation",
+        state=session.state,
+        resolved_encounter_trigger_ids=session.resolved_encounter_trigger_ids,
+    )
+
+    restored = SessionSnapshot.from_dict(session.create_snapshot().as_dict(), base_state=session.state)
+
+    assert restored.pending_npc_transition is not None
+    assert restored.pending_npc_transition.transition_id == "scout_knife_escalation"
+    assert restored.pending_npc_transition.variant_id == "danger_nearby"
+
+
+def test_snapshot_round_trip_preserves_npc_runtime_state(tmp_path):
+    session = _session(tmp_path)
+    resolution = resolve_npc_runtime_interaction(
+        session.state,
+        npc_id="wounded_scout",
+        intent="medical",
+        success=True,
+        summary="Zwiadowca został opatrzony.",
+        update=NpcStateUpdate(
+            attitude=NpcAttitude.FRIENDLY,
+            physical_state="Ustabilizowany",
+            emotional_state="Wdzięczny",
+        ),
+        revealed_information_ids=("tower_hint",),
+        attempt_id="medical",
+    )
+    session.state = resolution.state
+
+    restored = SessionSnapshot.from_dict(
+        session.create_snapshot().as_dict(),
+        base_state=ExplorationUiSession(
+            "content/scenarios/abandoned_watchtower.json",
+            session_id="snapshot_base",
+            observation_dir=tmp_path / "base_observations",
+            save_dir=tmp_path / "base_saves",
+        ).state,
+    )
+
+    npc = npc_runtime_state_for(restored.exploration_state, "wounded_scout")
+    assert npc is not None
+    assert npc.attitude == NpcAttitude.FRIENDLY
+    assert npc.revealed_information_ids == ("tower_hint",)
+    assert npc.used_attempt_ids == ("medical",)
+    assert npc.relationship_events[0].summary == "Zwiadowca został opatrzony."
+    assert npc.relationship_events[0].attempt_id == "medical"
+
+
+def test_older_snapshot_without_npc_states_uses_content_defaults(tmp_path):
+    session = _session(tmp_path)
+    raw = session.create_snapshot().as_dict()
+    raw["exploration"].pop("npc_states")
+
+    restored = SessionSnapshot.from_dict(raw, base_state=session.state)
+
+    npc = npc_runtime_state_for(restored.exploration_state, "wounded_scout")
+    assert npc is not None
+    assert npc.attitude == NpcAttitude.INDIFFERENT
+    assert "przygnieciony" in npc.physical_state
+
+
+def test_older_npc_event_without_attempt_id_uses_unique_attempt_fallback(tmp_path):
+    session = _session(tmp_path)
+    resolution = resolve_npc_runtime_interaction(
+        session.state,
+        npc_id="wounded_scout",
+        intent="social",
+        success=False,
+        summary="Nieudana próba.",
+        attempt_id="scout_build_trust",
+    )
+    session.state = resolution.state
+    raw = session.create_snapshot().as_dict()
+    raw["exploration"]["npc_states"][0]["relationship_events"][0].pop("attempt_id")
+
+    restored = SessionSnapshot.from_dict(raw, base_state=session.state)
+    plan = plan_npc_attempt(
+        restored.exploration_state,
+        npc_id="wounded_scout",
+        policy=NpcAttemptPolicy(attempt_id="scout_build_trust", max_attempts=2),
+    )
+
+    assert plan.attempts_used == 1
 
 
 def test_snapshot_round_trip_preserves_exploration_condition(tmp_path):
@@ -213,6 +310,8 @@ def test_snapshot_round_trip_preserves_skill_profile_and_combat_hidden_state(tmp
     )
     assert restored_goblin.resource_pools[0].recharge is not None
     assert restored_goblin.resource_pools[0].recharge.minimum_roll == 5
+    assert restored_goblin.features[0].feature_id == "goblin_frenzied_lunge"
+    assert restored_goblin.features[0].resource_ids == ("frenzied_lunge_charge",)
     assert restored_hero.size == CreatureSize.LARGE
     assert restored_hero.damage_affinities == DamageAffinityProfile(
         resistances=(DamageType.FIRE,),

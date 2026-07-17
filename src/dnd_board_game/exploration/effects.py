@@ -73,6 +73,30 @@ def validate_exploration_effect(
         raise ValueError(f"Unsupported exploration effect: {effect_type}.")
 
 
+def validate_policy_exploration_effect(
+    effect: dict[str, Any],
+    state: ExplorationState,
+    *,
+    allowed_effect_types: tuple[str, ...] = (),
+    allowed_flags: tuple[str, ...] = (),
+    field: str = "exploration effect",
+) -> None:
+    """Validate a grounded effect and the local content policy that authorizes it."""
+
+    try:
+        validate_exploration_effect(effect, state)
+        effect_type = str(effect.get("type", "")).strip().lower()
+        if allowed_effect_types and effect_type not in set(allowed_effect_types):
+            raise ValueError(f"effect type is not allowed here: {effect_type}.")
+        if effect_type == "set_flag" and allowed_flags:
+            parameters = effect.get("parameters", {})
+            key = str(parameters.get("key", "")).strip() if isinstance(parameters, dict) else ""
+            if key not in set(allowed_flags):
+                raise ValueError(f"effect flag is not allowed here: {key}.")
+    except ValueError as exc:
+        raise ValueError(f"{field}: {exc}") from exc
+
+
 def apply_exploration_effect(
     state: ExplorationState,
     effect: dict[str, Any],

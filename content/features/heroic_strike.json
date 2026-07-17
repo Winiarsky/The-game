@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "id": "heroic_strike",
+  "label": "Potężne uderzenie",
+  "description": "Bohater może wykonać silniejsze uderzenie raz na krótki odpoczynek.",
+  "source_kind": "scenario",
+  "source_ref": "heroic_strike_fixture",
+  "grants": {
+    "resource_pools": [
+      {
+        "id": "heroic_strike_uses",
+        "label": "Potężne uderzenie",
+        "maximum": 1,
+        "recovery": "short_rest"
+      }
+    ],
+    "attacks": [
+      {
+        "id": "heroic_strike",
+        "name": "Potężne uderzenie",
+        "source_type": "weapon",
+        "attack_kind": "melee",
+        "ability": "strength",
+        "proficiency_id": "longsword",
+        "range_feet": 5,
+        "reach_feet": 5,
+        "resource_pool_id": "heroic_strike_uses",
+        "damage": {
+          "dice": "1d10",
+          "modifier": 3,
+          "damage_type": "slashing"
+        }
+      }
+    ]
+  }
+}

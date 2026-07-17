@@ -17,6 +17,7 @@
       "points": "exploration/points.json",
       "challenges": "exploration/challenges.json",
       "encounter_triggers": "exploration/encounter_triggers.json",
+      "npc_transitions": "exploration/npc_transitions.json",
       "observations": "exploration/observations.json",
       "traps": "exploration/traps.json",
       "resources": "exploration/resources.json",

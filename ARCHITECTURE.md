@@ -113,6 +113,28 @@ The exploration web surface is split into explicit responsibilities:
   applies deterministic ordered outcomes to combat or standalone actor collections.
   Application flows emit events only after the corresponding attack, damage, movement,
   rest, or encounter transition has been committed; the UI presents and logs activations,
+- `actors/features.py` owns source-neutral `FeatureDefinition` metadata and runtime
+  `FeatureGrant` provenance. Scenario loading expands feature content into the existing
+  resource, attack, action, trigger, and aura models; feature execution never bypasses
+  their deterministic resolvers,
+- `exploration/npc_state.py` owns deterministic updates of persistent NPC runtime
+  state. The LLM classifies and narrates an interaction, while content permissions
+  select success/failure state updates; conversation history and NPC state remain
+  separate persisted concerns. `exploration/social_interactions.py` maps current
+  NPC attitude and content-classified request risk to the deterministic 2014
+  conversation reaction threshold; the LLM cannot choose this DC. Both are
+  separate persisted inputs to later interactions. `exploration/npc_state.py`
+  also plans content-limited NPC attempts from persisted relationship events
+  and current scene flags; the UI cannot consume an attempt before a roll.
+  `exploration/npc_outcomes.py` validates structured intent targets, selects one
+  of four check-result branches, and applies its effects through the shared
+  exploration effect executor. `exploration/npc_transitions.py` resolves the
+  optional content-authored stage between an NPC outcome and its next scene;
+  ordered variants inspect only deterministic flags/encounter history, while
+  explicit player reactions resume dialogue, close it, or start a named trigger,
+  and `exploration/effects.py::validate_policy_exploration_effect` is the shared
+  authorization boundary used by both LLM proposal validation and scenario
+  load-time validation. Content errors retain the full NPC/branch/reaction path,
 - `combat/attack_positioning.py` owns cover geometry shared by attack AC and Dexterity
   saves; area flows provide the effect's actual point of origin,
 - `combat/spells.py` owns deterministic radius, line-width and cone geometry,

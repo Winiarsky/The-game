@@ -32,32 +32,7 @@
         "armor": ["light", "medium", "heavy", "shield"],
         "tools": []
       },
-      "resource_pools": [
-        {
-          "id": "heroic_strike_uses",
-          "label": "Potężne uderzenie",
-          "maximum": 1,
-          "recovery": "short_rest"
-        }
-      ],
-      "attacks": [
-        {
-          "id": "heroic_strike",
-          "name": "Potężne uderzenie",
-          "source_type": "weapon",
-          "attack_kind": "melee",
-          "ability": "strength",
-          "proficiency_id": "longsword",
-          "range_feet": 5,
-          "reach_feet": 5,
-          "resource_pool_id": "heroic_strike_uses",
-          "damage": {
-            "dice": "1d10",
-            "modifier": 3,
-            "damage_type": "slashing"
-          }
-        }
-      ],
+      "feature_refs": ["heroic_strike"],
       "item_refs": ["longsword", "dagger", "strength_potion", "sticky_flask"],
       "inventory": [
         {"item_ref": "crossbow", "equipped": false}

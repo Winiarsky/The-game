@@ -82,6 +82,7 @@ def test_npc_interaction_proposal_accepts_null_optional_messages():
     proposal = NpcInteractionProposal.model_validate(
         {
             "action_type": "social",
+            "request_risk": "no_risk",
             "player_narration": None,
             "npc_response": None,
             "requires_roll": False,
@@ -625,6 +626,7 @@ def test_demo_exploration_scene_debug_point_starts_npc_interaction_without_map_f
     proposal = NpcInteractionProposal.model_validate(
         {
             "action_type": "social",
+            "request_risk": "no_risk",
             "player_narration": "Mówicie spokojnie i pokazujecie puste dłonie.",
             "npc_response": "Zwiadowca oddycha wolniej i opuszcza rękę.",
             "requires_roll": False,

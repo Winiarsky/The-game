@@ -217,7 +217,81 @@
         "color": "interactive",
         "visibility": "visible",
         "description": "Sołtys czeka przy rynku i nerwowo wypatruje pomocy.",
-        "requires_setup": true
+        "requires_setup": true,
+        "npc_interaction": {
+          "id": "elder_bren",
+          "name": "Sołtys Bren",
+          "public_description": "Starszy mężczyzna ściska zwiniętą mapę i uważnie ocenia przybyszów.",
+          "gm_context": "Bren potrzebuje pomocy przy strażnicy, ale nie toleruje gróźb ani żądania zapłaty z góry. Jeśli gracze znają ostrzeżenie z tablicy, łatwiej mu uwierzyć, że potraktowali sprawę poważnie.",
+          "personality": "Rzeczowy, ostrożny i odpowiedzialny za mieszkańców. Po przeprosinach potrafi wrócić do rozmowy.",
+          "current_state": "Zaniepokojony sytuacją przy strażnicy, ale gotowy rozmawiać.",
+          "initial_attitude": "indifferent",
+          "initial_emotional_state": "Zaniepokojony i ostrożny.",
+          "dialogue_intro": "Bren kiwa głową: 'Jeśli naprawdę chcecie pomóc, wysłuchajcie najpierw, co wiemy.'",
+          "capabilities": ["can_talk", "can_offer_quest", "can_refuse"],
+          "policy": {
+            "intent_permissions": {
+              "social": {
+                "status": "allowed_with_consequence",
+                "targets": [
+                  {
+                    "id": "demand_advance_payment",
+                    "label": "Zażądaj zapłaty z góry",
+                    "description": "Naciskaj, aby Bren zapłacił, zanim drużyna wyruszy pod strażnicę.",
+                    "reward_label": "Obietnica wynagrodzenia i informacje o strażnicy",
+                    "risk_summary": "Nieudany nacisk może zakończyć rozmowę z sołtysem.",
+                    "max_quantity": 1,
+                    "ability": "charisma",
+                    "skill": "persuasion",
+                    "dc": 12,
+                    "outcomes": {
+                      "critical_success": {
+                        "preview": "Bren uznaje warunki i przekazuje najważniejsze informacje.",
+                        "message": "Bren zgadza się zagwarantować zapłatę i dokładnie opisuje drogę do strażnicy.",
+                        "effects": [
+                          {"type": "set_flag", "parameters": {"key": "quest_hook_found", "value": true}}
+                        ]
+                      },
+                      "success": {
+                        "preview": "Bren obiecuje zapłatę po wykonaniu zadania.",
+                        "message": "Bren nie płaci z góry, ale składa wiążącą obietnicę nagrody i wskazuje drogę.",
+                        "effects": [
+                          {"type": "set_flag", "parameters": {"key": "quest_hook_found", "value": true}}
+                        ]
+                      },
+                      "failure": {
+                        "preview": "Rozmowa staje się napięta, lecz można ją jeszcze kontynuować.",
+                        "message": "Bren marszczy brwi i odmawia zapłaty z góry.",
+                        "effects": [
+                          {"type": "set_flag", "parameters": {"key": "elder_argument", "value": true}}
+                        ]
+                      },
+                      "critical_failure": {
+                        "preview": "Nacisk doprowadza rozmowę do punktu zerwania.",
+                        "message": "Bren uznaje żądanie za próbę wykorzystania wioski i zwija mapę.",
+                        "effects": [
+                          {"type": "set_flag", "parameters": {"key": "elder_argument", "value": true}}
+                        ],
+                        "transition_id": "elder_negotiation_breakdown"
+                      }
+                    }
+                  }
+                ]
+              },
+              "information": {
+                "status": "allowed",
+                "notes": "Bren może opowiedzieć o ostrzeżeniu i drodze do strażnicy."
+              },
+              "harm": {"status": "blocked"},
+              "theft": {"status": "blocked"}
+            },
+            "allowed_flags": ["quest_hook_found", "elder_argument", "elder_refuses_party"],
+            "allowed_effect_types": ["set_flag"],
+            "allowed_abilities": ["charisma", "wisdom"],
+            "allowed_skills": ["persuasion", "insight"],
+            "dc_range": [10, 20]
+          }
+        }
       },
       {
         "id": "notice_board",
@@ -248,6 +322,73 @@
         "visibility": "hidden",
         "description": "Pod ławą leży mała sakiewka z inicjałami mieszkańca.",
         "requires_setup": false
+      }
+    ],
+    "npc_transitions": [
+      {
+        "id": "elder_negotiation_breakdown",
+        "npc_id": "elder_bren",
+        "variants": [
+          {
+            "id": "notice_read",
+            "title": "Bren rozpoznaje ostrzeżenie",
+            "narration": "Sołtys dostrzega, że znacie treść ostrzeżenia z tablicy. Nadal jest urażony, ale nie uważa was za zupełnie obojętnych na los wioski.",
+            "required_flags": ["notice_read"],
+            "reactions": [
+              {
+                "id": "apologize",
+                "label": "Przeproście i wróćcie do sprawy",
+                "description": "Wycofajcie żądanie i kontynuujcie rozmowę.",
+                "result_type": "resume_dialogue",
+                "narration": "Bren przyjmuje krótkie przeprosiny. Nie jest przyjazny, ale ponownie rozwija mapę i czeka na wasze pytania.",
+                "effects": [
+                  {"type": "set_flag", "parameters": {"key": "elder_argument", "value": false}}
+                ],
+                "npc_status": "active"
+              },
+              {
+                "id": "leave",
+                "label": "Zakończcie rozmowę",
+                "description": "Odejdźcie bez dalszych negocjacji.",
+                "result_type": "end_interaction",
+                "narration": "Odchodzicie od sołtysa. Bren chowa mapę i nie zamierza ponownie negocjować.",
+                "effects": [
+                  {"type": "set_flag", "parameters": {"key": "elder_refuses_party", "value": true}}
+                ],
+                "npc_status": "closed"
+              }
+            ]
+          },
+          {
+            "id": "default",
+            "title": "Rozmowa na krawędzi zerwania",
+            "narration": "Bren zwija mapę i odwraca się od drużyny. Możecie jeszcze wycofać żądanie albo zakończyć rozmowę.",
+            "reactions": [
+              {
+                "id": "apologize",
+                "label": "Przeproście",
+                "description": "Wycofajcie żądanie i spróbujcie kontynuować rozmowę.",
+                "result_type": "resume_dialogue",
+                "narration": "Po chwili milczenia Bren ponownie zwraca się do drużyny. Rozmowa może trwać dalej, choć zaufanie pozostaje kruche.",
+                "effects": [
+                  {"type": "set_flag", "parameters": {"key": "elder_argument", "value": false}}
+                ],
+                "npc_status": "active"
+              },
+              {
+                "id": "leave",
+                "label": "Odejdźcie",
+                "description": "Zakończcie rozmowę bez porozumienia.",
+                "result_type": "end_interaction",
+                "narration": "Drużyna odchodzi. Bren nie chce już wracać do negocjacji.",
+                "effects": [
+                  {"type": "set_flag", "parameters": {"key": "elder_refuses_party", "value": true}}
+                ],
+                "npc_status": "closed"
+              }
+            ]
+          }
+        ]
       }
     ]
   }

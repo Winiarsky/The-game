@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, NewType
 
 from .damage_affinities import DamageAffinityProfile
 from .auras import ActorAura
+from .features import FeatureGrant, validate_unique_feature_grants
 from .triggers import ActorTrigger
 from .proficiency_profile import ProficiencyProfile
 from .size import CreatureSize
@@ -80,6 +81,7 @@ class Actor:
     condition_immunities: tuple[str, ...] = ()
     auras: tuple[ActorAura, ...] = ()
     triggers: tuple[ActorTrigger, ...] = ()
+    features: tuple[FeatureGrant, ...] = ()
 
     def __post_init__(self) -> None:
         if self.max_hp <= 0:
@@ -98,6 +100,7 @@ class Actor:
         trigger_ids = tuple(trigger.id for trigger in self.triggers)
         if len(trigger_ids) != len(set(trigger_ids)):
             raise ValueError("Actor trigger ids cannot contain duplicates.")
+        validate_unique_feature_grants(self.features)
 
     @property
     def skill_proficiencies(self) -> tuple[str, ...]:

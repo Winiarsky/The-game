@@ -38,6 +38,10 @@ h1, h2, h3 { margin: 0 0 10px; }
 .conversation-entry b { margin-bottom: 3px; font-size: 12px; color: #a9a298; }
 .conversation-entry.player { margin-left: auto; background: #122035; border-right: 3px solid #58a6ff; }
 .conversation-entry.gm { margin-right: auto; background: #182018; border-left: 3px solid #3fb950; }
+.npc-transition-card { width: min(760px, 92%); }
+.npc-transition-reactions { display: grid; gap: 8px; margin-top: 10px; }
+.npc-transition-reactions button { text-align: left; }
+.npc-transition-reactions small { display: block; margin-top: 3px; opacity: .78; font-weight: normal; }
 .conversation-scene-image { display: block; width: min(680px, 100%); max-height: 380px; object-fit: cover; border-radius: 10px; margin: 7px 0 10px; }
 .scene-intro-message { width: min(760px, 92%); }
 .scene-intro-message span + span { margin-top: 7px; }

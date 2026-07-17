@@ -20,6 +20,8 @@ from dnd_board_game.actors import (
     CreatureSize,
     DamageAffinityProfile,
     Faction,
+    FeatureGrant,
+    FeatureSourceKind,
     HitDicePool,
     PreparableSpell,
     ProficiencyProfile,
@@ -56,11 +58,16 @@ from dnd_board_game.exploration import (
     ExplorationState,
     ExplorationTrapState,
     ExplorationTrapStatus,
+    NpcAttitude,
+    NpcInteractionStatus,
+    NpcRelationshipEvent,
+    NpcRuntimeState,
     SceneSourceDiscovery,
     SceneSourceCollection,
     FixtureRuntimeState,
     PartyPosition,
     PendingEncounter,
+    PendingNpcTransition,
     PrecombatStealthAttempt,
     TemporaryItem,
     TemporaryItemScope,
@@ -97,6 +104,7 @@ class SessionSnapshot:
     exploration_state: ExplorationState
     active_effects: tuple[ActiveEffect, ...] = ()
     pending_encounter: PendingEncounter | None = None
+    pending_npc_transition: PendingNpcTransition | None = None
     combat_state: CombatState | None = None
     resolved_encounter_trigger_ids: tuple[str, ...] = ()
     selected_attack_source_ids: tuple[tuple[str, str], ...] = ()
@@ -125,6 +133,15 @@ class SessionSnapshot:
             "exploration": _exploration_payload(self.exploration_state),
             "active_effects": [_effect_payload(effect) for effect in self.active_effects],
             "pending_encounter": _pending_encounter_payload(self.pending_encounter),
+            "pending_npc_transition": (
+                None
+                if self.pending_npc_transition is None
+                else {
+                    "transition_id": self.pending_npc_transition.transition_id,
+                    "variant_id": self.pending_npc_transition.variant_id,
+                    "npc_id": self.pending_npc_transition.npc_id,
+                }
+            ),
             "combat": _combat_payload(self.combat_state),
             "resolved_encounter_trigger_ids": list(self.resolved_encounter_trigger_ids),
             "selected_attack_source_ids": dict(self.selected_attack_source_ids),
@@ -148,6 +165,15 @@ class SessionSnapshot:
         state = _exploration_from_payload(base_state, data.get("exploration"))
         effects = tuple(_effect_from_payload(item) for item in _sequence(data.get("active_effects", []), "active_effects"))
         pending = _pending_encounter_from_payload(data.get("pending_encounter"))
+        pending_npc_raw = data.get("pending_npc_transition")
+        pending_npc = None
+        if pending_npc_raw is not None:
+            item = _mapping(pending_npc_raw, "pending_npc_transition")
+            pending_npc = PendingNpcTransition(
+                transition_id=_string(item.get("transition_id"), "pending_npc_transition.transition_id"),
+                variant_id=_string(item.get("variant_id"), "pending_npc_transition.variant_id"),
+                npc_id=_string(item.get("npc_id"), "pending_npc_transition.npc_id"),
+            )
         combat = _combat_from_payload(data.get("combat"))
         interaction = ui.get("interaction_result")
         if interaction is not None:
@@ -179,6 +205,7 @@ class SessionSnapshot:
             exploration_state=state,
             active_effects=effects,
             pending_encounter=pending,
+            pending_npc_transition=pending_npc,
             combat_state=combat,
             resolved_encounter_trigger_ids=_string_tuple(data.get("resolved_encounter_trigger_ids", []), "resolved_encounter_trigger_ids"),
             selected_attack_source_ids=_string_map(data.get("selected_attack_source_ids", {}), "selected_attack_source_ids"),
@@ -268,6 +295,20 @@ def _actor_payload(actor: Actor) -> dict[str, object]:
                 "value": trigger.value,
             }
             for trigger in actor.triggers
+        ],
+        "features": [
+            {
+                "feature_id": feature.feature_id,
+                "label": feature.label,
+                "description": feature.description,
+                "source_kind": feature.source_kind.value,
+                "source_ref": feature.source_ref,
+                "resource_ids": list(feature.resource_ids),
+                "action_ids": list(feature.action_ids),
+                "trigger_ids": list(feature.trigger_ids),
+                "aura_ids": list(feature.aura_ids),
+            }
+            for feature in actor.features
         ],
         "death_saves": {
             "successes": actor.death_saves.successes,
@@ -462,6 +503,29 @@ def _actor_from_payload(raw: object) -> Actor:
             for raw_trigger in _sequence(data.get("triggers", []), "actor.triggers")
             for trigger in (_mapping(raw_trigger, "actor.trigger"),)
         ),
+        features=tuple(
+            FeatureGrant(
+                feature_id=_string(feature.get("feature_id"), "actor.feature.feature_id"),
+                label=_string(feature.get("label"), "actor.feature.label"),
+                description=_string(
+                    feature.get("description", ""),
+                    "actor.feature.description",
+                    allow_empty=True,
+                ),
+                source_kind=_enum(
+                    FeatureSourceKind,
+                    feature.get("source_kind"),
+                    "actor.feature.source_kind",
+                ),
+                source_ref=_string(feature.get("source_ref"), "actor.feature.source_ref"),
+                resource_ids=_string_tuple(feature.get("resource_ids", []), "actor.feature.resource_ids"),
+                action_ids=_string_tuple(feature.get("action_ids", []), "actor.feature.action_ids"),
+                trigger_ids=_string_tuple(feature.get("trigger_ids", []), "actor.feature.trigger_ids"),
+                aura_ids=_string_tuple(feature.get("aura_ids", []), "actor.feature.aura_ids"),
+            )
+            for raw_feature in _sequence(data.get("features", []), "actor.features")
+            for feature in (_mapping(raw_feature, "actor.feature"),)
+        ),
     )
 
 
@@ -566,6 +630,7 @@ def _exploration_payload(state: ExplorationState) -> dict[str, object]:
             {"trap_id": item.trap_id, "status": item.status.value}
             for item in state.trap_states
         ],
+        "npc_states": [item.as_payload() for item in state.npc_states],
     }
 
 
@@ -800,6 +865,78 @@ def _exploration_from_payload(base: ExplorationState, raw: object) -> Exploratio
         raise SnapshotValidationError("Zapis zawiera stan nieznanej pułapki.")
     if len({item.trap_id for item in trap_states}) != len(trap_states):
         raise SnapshotValidationError("Zapis zawiera powtórzony stan pułapki.")
+    npc_states = base.npc_states
+    if "npc_states" in data:
+        npc_states = tuple(
+            NpcRuntimeState(
+                npc_id=_string(item.get("npc_id"), "exploration.npc_state.npc_id"),
+                attitude=_enum(
+                    NpcAttitude,
+                    item.get("attitude"),
+                    "exploration.npc_state.attitude",
+                ),
+                physical_state=_string(
+                    item.get("physical_state", ""),
+                    "exploration.npc_state.physical_state",
+                    allow_empty=True,
+                ),
+                emotional_state=_string(
+                    item.get("emotional_state", ""),
+                    "exploration.npc_state.emotional_state",
+                    allow_empty=True,
+                ),
+                interaction_status=_enum(
+                    NpcInteractionStatus,
+                    item.get("interaction_status", NpcInteractionStatus.ACTIVE.value),
+                    "exploration.npc_state.interaction_status",
+                ),
+                closure_reason=_string(
+                    item.get("closure_reason", ""),
+                    "exploration.npc_state.closure_reason",
+                    allow_empty=True,
+                ),
+                revealed_information_ids=_string_tuple(
+                    item.get("revealed_information_ids", []),
+                    "exploration.npc_state.revealed_information_ids",
+                ),
+                used_attempt_ids=_string_tuple(
+                    item.get("used_attempt_ids", []),
+                    "exploration.npc_state.used_attempt_ids",
+                ),
+                relationship_events=tuple(
+                    NpcRelationshipEvent(
+                        sequence=_integer(event.get("sequence"), "npc_relationship_event.sequence"),
+                        intent=_string(event.get("intent"), "npc_relationship_event.intent"),
+                        outcome=_string(event.get("outcome"), "npc_relationship_event.outcome"),
+                        summary=_string(event.get("summary"), "npc_relationship_event.summary"),
+                        attempt_id=_optional_string(
+                            event.get("attempt_id"),
+                            "npc_relationship_event.attempt_id",
+                        ),
+                    )
+                    for raw_event in _sequence(
+                        item.get("relationship_events", []),
+                        "exploration.npc_state.relationship_events",
+                    )
+                    for event in (_mapping(raw_event, "npc_relationship_event"),)
+                ),
+            )
+            for raw_item in _sequence(data.get("npc_states", []), "npc_states")
+            for item in (_mapping(raw_item, "npc_state"),)
+        )
+        known_npcs = {
+            point.npc_interaction.id: point.npc_interaction
+            for point in base.points
+            if point.npc_interaction is not None
+        }
+        if {item.npc_id for item in npc_states} != set(known_npcs):
+            raise SnapshotValidationError("Lista stanów NPC nie odpowiada aktualnej wersji scenariusza.")
+        for npc_state in npc_states:
+            known_information_ids = {
+                info.id for info in known_npcs[npc_state.npc_id].locked_information
+            }
+            if set(npc_state.revealed_information_ids) - known_information_ids:
+                raise SnapshotValidationError("Zapis zawiera nieznaną informację NPC.")
     return replace(
         base, party_position=PartyPosition(zone_id, _optional_coordinate(party.get("marker_position"), "party_position.marker_position")),
         flags=SceneFlags(tuple(flags)), points=tuple(replace(point, visibility=visibility[point.id]) for point in base.points),
@@ -813,6 +950,7 @@ def _exploration_from_payload(base: ExplorationState, raw: object) -> Exploratio
         fixture_states=fixture_states,
         condition_states=condition_states,
         trap_states=trap_states,
+        npc_states=npc_states,
     )
 
 

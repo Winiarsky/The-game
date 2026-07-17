@@ -81,6 +81,7 @@ class FakeNpcClient:
         return NpcInteractionProposal.model_validate(
             {
                 "action_type": "social",
+                "request_risk": "no_risk",
                 "player_narration": "Podchodzicie spokojnie i mówicie, że chcecie pomóc.",
                 "npc_response": "Zwiadowca oddycha płycej, ale przestaje się szarpać.",
                 "requires_roll": False,
@@ -249,6 +250,9 @@ def test_exploration_ui_page_is_fiction_first_and_accepts_questions():
     assert "sceneIntroMessageHtml" in javascript
     assert "waitingForGm" in javascript
     assert "leaveChatInstance" in javascript
+    assert "resolveNpcTransition" in javascript
+    assert "/api/npc-transition/resolve" in javascript
+    assert ".npc-transition-reactions" in stylesheet
     assert ".scene-image" in stylesheet
     assert ".conversation-entry" in stylesheet
     assert ".conversation-system-card" in stylesheet
@@ -949,7 +953,9 @@ def test_exploration_ui_reveals_selects_and_resolves_npc_point():
     assert action_response.status_code == 200
     assert action_response.get_json()["pending"]["kind"] == "npc"
 
-    accepted = client.post("/api/decision", json={"decision": "accept"}).get_json()
+    roll_pending = client.post("/api/decision", json={"decision": "accept"}).get_json()
+    assert roll_pending["pending"]["check_plan"]["dc"] == 10
+    accepted = client.post("/api/rolls", json={"rolls": {"hero": 20}}).get_json()
     assert {"key": "scout_calmed", "value": True} in accepted["flags"]
     assert {"label": "Ranny zwiadowca", "value": "uspokojony"} in accepted["scene_status"]
 

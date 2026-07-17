@@ -19,6 +19,9 @@ from dnd_board_game.actors import (
     CreatureSize,
     DamageAffinityProfile,
     Faction,
+    FeatureDefinition,
+    FeatureGrant,
+    FeatureSourceKind,
     PreparableSpell,
     ActorResourcePool,
     HitDicePool,
@@ -53,6 +56,7 @@ from dnd_board_game.combat import (
     SceneObjectiveCondition,
     SceneObject,
     SetupVisibility,
+    SceneFlags,
 )
 from dnd_board_game.exploration import (
     CheckAggregation,
@@ -80,6 +84,7 @@ from dnd_board_game.exploration import (
     ExplorationOptionKind,
     ExplorationPoint,
     ExplorationResource,
+    ExplorationState,
     ExplorationZone,
     ImprovisedToolUse,
     ItemBreakageRisk,
@@ -90,9 +95,20 @@ from dnd_board_game.exploration import (
     LlmGuidanceFactVisibility,
     LlmDcTier,
     NpcInteraction,
+    NpcAttitude,
+    NpcAttemptPolicy,
+    NpcIntentTarget,
     NpcIntentPermission,
     NpcInteractionPolicy,
     NpcLockedInformation,
+    NpcOutcomeBranch,
+    NpcOutcomeTier,
+    NpcInteractionStatus,
+    NpcSceneTransition,
+    NpcTransitionReaction,
+    NpcTransitionResultType,
+    NpcTransitionVariant,
+    NpcStateUpdate,
     ObservationFact,
     ObservationEncounterEdge,
     PartyPosition,
@@ -105,6 +121,7 @@ from dnd_board_game.exploration import (
     TemporaryItemTemplate,
     EncounterTriggerCondition,
     mechanic_tool,
+    validate_policy_exploration_effect,
 )
 from dnd_board_game.hardware import LedColor
 from dnd_board_game.rules import EffectDuration, SaveDamageOnSuccess, SavingThrowRequest
@@ -243,9 +260,21 @@ class ScenarioActorDefinition:
     condition_immunities: tuple[str, ...] = ()
     auras: tuple[ActorAura, ...] = ()
     triggers: tuple[ActorTrigger, ...] = ()
+    features: tuple[FeatureGrant, ...] = ()
     healing_sources: tuple[ScenarioHealingDefinition, ...] = ()
     combat_actions: tuple[ScenarioCombatActionDefinition, ...] = ()
     source_ref: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ScenarioFeatureDefinition:
+    definition: FeatureDefinition
+    resource_pools: tuple[ActorResourcePool, ...] = ()
+    attacks: tuple[ScenarioAttackDefinition, ...] = ()
+    healing_sources: tuple[ScenarioHealingDefinition, ...] = ()
+    combat_actions: tuple[ScenarioCombatActionDefinition, ...] = ()
+    auras: tuple[ActorAura, ...] = ()
+    triggers: tuple[ActorTrigger, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -292,6 +321,7 @@ class ScenarioDefinition:
     exploration_resources: tuple[ExplorationResource, ...] = ()
     exploration_initial_resources: tuple[str, ...] = ()
     exploration_encounter_triggers: tuple[ExplorationEncounterTrigger, ...] = ()
+    exploration_npc_transitions: tuple[NpcSceneTransition, ...] = ()
     exploration_observations: tuple[ExplorationObservation, ...] = ()
     exploration_traps: tuple[ExplorationTrap, ...] = ()
     party_start_zone_id: str | None = None
@@ -336,6 +366,7 @@ class LoadedExploration:
     initial_resource_ids: tuple[str, ...]
     party_position: PartyPosition
     encounter_triggers: tuple[ExplorationEncounterTrigger, ...] = ()
+    npc_transitions: tuple[NpcSceneTransition, ...] = ()
     observations: tuple[ExplorationObservation, ...] = ()
     traps: tuple[ExplorationTrap, ...] = ()
     environment: tuple[EnvironmentSetupEntry, ...] = ()
@@ -501,6 +532,7 @@ def build_exploration_from_scenario(loaded: LoadedScenario) -> LoadedExploration
         resources=definition.exploration_resources,
         initial_resource_ids=definition.exploration_initial_resources,
         encounter_triggers=definition.exploration_encounter_triggers,
+        npc_transitions=definition.exploration_npc_transitions,
         observations=definition.exploration_observations,
         traps=definition.exploration_traps,
         environment=tuple(
@@ -564,6 +596,10 @@ def _parse_scenario(data: dict[str, Any], scenario_path: Path) -> ScenarioDefini
         ),
         exploration_initial_resources=tuple(str(item) for item in exploration_data.get("initial_resources", [])),
         exploration_encounter_triggers=tuple(_parse_exploration_encounter_trigger(entry) for entry in exploration_data.get("encounter_triggers", [])),
+        exploration_npc_transitions=tuple(
+            _parse_npc_scene_transition(entry)
+            for entry in exploration_data.get("npc_transitions", [])
+        ),
         exploration_observations=tuple(
             _parse_exploration_observation(entry)
             for entry in exploration_data.get("observations", [])
@@ -591,17 +627,37 @@ def _parse_actor(
         merged.update(_read_json(_content_ref_path(scenario_path, "monsters", str(source_ref))))
     merged.update(data)
 
+    actor_id = str(_required(merged, "id", "actor"))
+    feature_refs = merged.get("feature_refs", [])
+    if not isinstance(feature_refs, list) or not all(
+        isinstance(feature_ref, str) and feature_ref.strip()
+        for feature_ref in feature_refs
+    ):
+        raise ValueError(f"actor {actor_id}.feature_refs must be a list of non-empty ids.")
+    feature_definitions = tuple(
+        _parse_feature_definition(
+            _read_json(_content_ref_path(scenario_path, "features", feature_ref)),
+            actor_id,
+        )
+        for feature_ref in feature_refs
+    )
+    if len({feature.definition.id for feature in feature_definitions}) != len(feature_definitions):
+        raise ValueError(f"actor {actor_id}.feature_refs cannot contain duplicate features.")
+
     attacks_data = merged.get("attacks")
     if attacks_data is None:
         attacks_data = []
     if not isinstance(attacks_data, list):
         raise ValueError(f"actor {merged.get('id', '<unknown>')}.attacks must be a list.")
+    attacks_data = list(attacks_data)
     healing_data = merged.get("healing_sources", [])
     if not isinstance(healing_data, list):
         raise ValueError(f"actor {merged.get('id', '<unknown>')}.healing_sources must be a list.")
+    healing_data = list(healing_data)
     combat_actions_data = merged.get("combat_actions", [])
     if not isinstance(combat_actions_data, list):
         raise ValueError(f"actor {merged.get('id', '<unknown>')}.combat_actions must be a list.")
+    combat_actions_data = list(combat_actions_data)
     item_refs = merged.get("item_refs", [])
     if not isinstance(item_refs, list):
         raise ValueError(f"actor {merged.get('id', '<unknown>')}.item_refs must be a list.")
@@ -647,12 +703,26 @@ def _parse_actor(
             healing_data.extend(item.get("healing_sources", []))
         combat_actions_data.extend(_combat_actions_with_item_source(item.get("combat_actions", []), inventory_item.id))
 
-    actor_id = str(_required(merged, "id", "actor"))
-    attacks = tuple(_parse_attack(attack, actor_id) for attack in attacks_data)
+    attacks = tuple(_parse_attack(attack, actor_id) for attack in attacks_data) + tuple(
+        attack
+        for feature in feature_definitions
+        for attack in feature.attacks
+    )
     if not attacks:
         raise ValueError(f"actor {actor_id}.attacks must contain at least one attack.")
-    healing_sources = tuple(_parse_healing_source(source, actor_id) for source in healing_data)
-    combat_actions = tuple(_parse_combat_action(action, actor_id) for action in combat_actions_data)
+    healing_sources = tuple(_parse_healing_source(source, actor_id) for source in healing_data) + tuple(
+        source
+        for feature in feature_definitions
+        for source in feature.healing_sources
+    )
+    combat_actions = tuple(_parse_combat_action(action, actor_id) for action in combat_actions_data) + tuple(
+        action
+        for feature in feature_definitions
+        for action in feature.combat_actions
+    )
+    _validate_unique_ids(attacks, f"actor {actor_id}.attacks")
+    _validate_unique_ids(healing_sources, f"actor {actor_id}.healing_sources")
+    _validate_unique_ids(combat_actions, f"actor {actor_id}.combat_actions")
     spell_slots = _parse_spell_slots(merged.get("spell_slots", {}), actor_id)
     actor_kind = str(_required(merged, "kind", f"actor {actor_id}"))
     attacks_per_action = int(merged.get("attacks_per_action", 1))
@@ -688,9 +758,18 @@ def _parse_actor(
     )
     if len(condition_immunities) != len(set(condition_immunities)):
         raise ValueError(f"actor {actor_id}.condition_immunities cannot contain duplicates.")
-    auras = _parse_actor_auras(merged.get("auras", []), actor_id)
-    triggers = _parse_actor_triggers(merged.get("triggers", []), actor_id)
-    resource_pools = _parse_actor_resources(merged.get("resource_pools", []), actor_id)
+    auras = _parse_actor_auras(merged.get("auras", []), actor_id) + tuple(
+        aura for feature in feature_definitions for aura in feature.auras
+    )
+    triggers = _parse_actor_triggers(merged.get("triggers", []), actor_id) + tuple(
+        trigger for feature in feature_definitions for trigger in feature.triggers
+    )
+    resource_pools = _parse_actor_resources(merged.get("resource_pools", []), actor_id) + tuple(
+        pool for feature in feature_definitions for pool in feature.resource_pools
+    )
+    _validate_unique_ids(auras, f"actor {actor_id}.auras")
+    _validate_unique_ids(triggers, f"actor {actor_id}.triggers")
+    _validate_unique_ids(resource_pools, f"actor {actor_id}.resource_pools")
     resource_ids = {pool.id for pool in resource_pools}
     for attack in attacks:
         if attack.resource_cost < 1:
@@ -740,6 +819,7 @@ def _parse_actor(
         condition_immunities=condition_immunities,
         auras=auras,
         triggers=triggers,
+        features=tuple(feature.definition.grant() for feature in feature_definitions),
         healing_sources=healing_sources,
         combat_actions=combat_actions,
         source_ref=str(source_ref) if source_ref is not None else None,
@@ -1626,11 +1706,19 @@ def _parse_npc_interaction(data: Any, point_id: str) -> NpcInteraction | None:
     if dc_min > dc_max:
         raise ValueError(f"exploration point {point_id}.npc_interaction.policy.dc_range min cannot exceed max.")
     return NpcInteraction(
+        id=str(data.get("id", point_id)),
         name=str(data.get("name", data.get("public_name", point_id))),
         public_description=str(_required(data, "public_description", f"npc interaction {point_id}")),
         gm_context=str(data.get("gm_context", "")),
         personality=str(data.get("personality", "")),
         current_state=str(data.get("current_state", "")),
+        initial_attitude=_enum_value(
+            NpcAttitude,
+            str(data.get("initial_attitude", NpcAttitude.INDIFFERENT.value)),
+            f"npc interaction {point_id}.initial_attitude",
+        ),
+        initial_physical_state=str(data.get("initial_physical_state", "")),
+        initial_emotional_state=str(data.get("initial_emotional_state", "")),
         dialogue_intro=str(data.get("dialogue_intro", "")),
         capabilities=tuple(str(item) for item in data.get("capabilities", [])),
         locked_information=tuple(
@@ -1641,7 +1729,11 @@ def _parse_npc_interaction(data: Any, point_id: str) -> NpcInteraction | None:
             allowed_actions=tuple(str(item) for item in policy_data.get("allowed_actions", [])),
             intent_permissions=_parse_npc_intent_permissions(policy_data.get("intent_permissions", {}), point_id),
             allowed_flags=tuple(str(item) for item in policy_data.get("allowed_flags", [])),
-            allowed_effect_types=tuple(str(item).strip() for item in policy_data.get("allowed_effect_types", ["set_flag"]) if str(item).strip()),
+            allowed_effect_types=tuple(
+                str(item).strip().lower()
+                for item in policy_data.get("allowed_effect_types", ["set_flag"])
+                if str(item).strip()
+            ),
             allowed_abilities=tuple(str(item) for item in policy_data.get("allowed_abilities", [])),
             allowed_skills=tuple(str(item) for item in policy_data.get("allowed_skills", [])),
             dc_min=dc_min,
@@ -1692,9 +1784,243 @@ def _parse_npc_intent_permissions(data: Any, point_id: str) -> tuple[NpcIntentPe
                 limits=limits,
                 consequences=consequences,
                 reveals=tuple(str(item) for item in permission_data.get("reveals", [])),
+                state_on_success=_parse_npc_state_update(
+                    permission_data.get("state_on_success"),
+                    f"exploration point {point_id}.npc_interaction.policy.intent_permissions.{intent}.state_on_success",
+                ),
+                state_on_failure=_parse_npc_state_update(
+                    permission_data.get("state_on_failure"),
+                    f"exploration point {point_id}.npc_interaction.policy.intent_permissions.{intent}.state_on_failure",
+                ),
+                uses_social_reaction=bool(permission_data.get("uses_social_reaction", False)),
+                attempt_policy=_parse_npc_attempt_policy(
+                    permission_data.get("attempt_policy"),
+                    f"exploration point {point_id}.npc_interaction.policy.intent_permissions.{intent}.attempt_policy",
+                ),
+                targets=_parse_npc_intent_targets(
+                    permission_data.get("targets"),
+                    f"exploration point {point_id}.npc_interaction.policy.intent_permissions.{intent}.targets",
+                ),
             )
         )
     return tuple(permissions)
+
+
+def _parse_npc_attempt_policy(data: Any, field: str) -> NpcAttemptPolicy | None:
+    if data is None:
+        return None
+    if not isinstance(data, dict):
+        raise ValueError(f"{field} must be an object.")
+    attempt_id = str(data.get("attempt_id", "")).strip().lower()
+    if not attempt_id:
+        raise ValueError(f"{field}.attempt_id is required.")
+    raw_max_attempts = data.get("max_attempts", 1)
+    if not isinstance(raw_max_attempts, int) or isinstance(raw_max_attempts, bool):
+        raise ValueError(f"{field}.max_attempts must be an integer.")
+    retry_flags = data.get("retry_requires_any_flags", [])
+    if not isinstance(retry_flags, list):
+        raise ValueError(f"{field}.retry_requires_any_flags must be an array.")
+    return NpcAttemptPolicy(
+        attempt_id=attempt_id,
+        max_attempts=raw_max_attempts,
+        retry_requires_any_flags=tuple(
+            str(item).strip()
+            for item in retry_flags
+        ),
+        retry_locked_message=str(
+            data.get(
+                "retry_locked_message",
+                "NPC nie zgadza się ponownie rozmawiać o tym bez zmiany sytuacji.",
+            )
+        ),
+        exhausted_message=str(
+            data.get("exhausted_message", "To podejście zostało wyczerpane.")
+        ),
+    )
+
+
+def _parse_npc_intent_targets(data: Any, field: str) -> tuple[NpcIntentTarget, ...]:
+    if data is None:
+        return ()
+    if not isinstance(data, list):
+        raise ValueError(f"{field} must be an array.")
+    targets: list[NpcIntentTarget] = []
+    for index, raw_target in enumerate(data):
+        target_field = f"{field}[{index}]"
+        if not isinstance(raw_target, dict):
+            raise ValueError(f"{target_field} must be an object.")
+        outcomes = raw_target.get("outcomes")
+        if not isinstance(outcomes, dict):
+            raise ValueError(f"{target_field}.outcomes must be an object.")
+        branches: list[NpcOutcomeBranch] = []
+        for outcome in NpcOutcomeTier:
+            raw_branch = outcomes.get(outcome.value)
+            if not isinstance(raw_branch, dict):
+                raise ValueError(f"{target_field}.outcomes.{outcome.value} must be an object.")
+            raw_effects = raw_branch.get("effects", [])
+            if not isinstance(raw_effects, list) or any(not isinstance(item, dict) for item in raw_effects):
+                raise ValueError(f"{target_field}.outcomes.{outcome.value}.effects must be an array of objects.")
+            raw_revealed = raw_branch.get("revealed_information_ids", [])
+            if not isinstance(raw_revealed, list):
+                raise ValueError(
+                    f"{target_field}.outcomes.{outcome.value}.revealed_information_ids must be an array."
+                )
+            branches.append(
+                NpcOutcomeBranch(
+                    outcome=outcome,
+                    message=str(raw_branch.get("message", "")),
+                    preview=str(raw_branch.get("preview", "")),
+                    effects=tuple(dict(item) for item in raw_effects),
+                    state_update=_parse_npc_state_update(
+                        raw_branch.get("state_update"),
+                        f"{target_field}.outcomes.{outcome.value}.state_update",
+                    ),
+                    revealed_information_ids=tuple(
+                        str(item).strip()
+                        for item in raw_revealed
+                    ),
+                    transition_id=(
+                        str(raw_branch["transition_id"]).strip().lower()
+                        if raw_branch.get("transition_id")
+                        else None
+                    ),
+                )
+            )
+        raw_max_quantity = raw_target.get("max_quantity", 1)
+        if not isinstance(raw_max_quantity, int) or isinstance(raw_max_quantity, bool):
+            raise ValueError(f"{target_field}.max_quantity must be an integer.")
+        raw_dc = raw_target.get("dc")
+        if raw_dc is not None and (not isinstance(raw_dc, int) or isinstance(raw_dc, bool)):
+            raise ValueError(f"{target_field}.dc must be an integer.")
+        raw_requires_flags = raw_target.get("requires_flags", [])
+        if not isinstance(raw_requires_flags, list):
+            raise ValueError(f"{target_field}.requires_flags must be an array.")
+        targets.append(
+            NpcIntentTarget(
+                id=str(raw_target.get("id", "")).strip().lower(),
+                label=str(raw_target.get("label", "")),
+                description=str(raw_target.get("description", "")),
+                reward_label=str(raw_target.get("reward_label", "")),
+                risk_summary=str(raw_target.get("risk_summary", "")),
+                max_quantity=raw_max_quantity,
+                requires_flags=tuple(str(item).strip() for item in raw_requires_flags),
+                ability=(str(raw_target["ability"]).strip().lower() if raw_target.get("ability") else None),
+                skill=(str(raw_target["skill"]).strip().lower() if raw_target.get("skill") else None),
+                dc=raw_dc,
+                outcome_branches=tuple(branches),
+            )
+        )
+    return tuple(targets)
+
+
+def _parse_npc_scene_transition(data: Any) -> NpcSceneTransition:
+    if not isinstance(data, dict):
+        raise ValueError("exploration.npc_transitions entries must be objects.")
+    transition_id = str(_required(data, "id", "NPC scene transition")).strip().lower()
+    raw_variants = data.get("variants")
+    if not isinstance(raw_variants, list):
+        raise ValueError(f"NPC scene transition {transition_id}.variants must be an array.")
+    variants: list[NpcTransitionVariant] = []
+    for variant_index, raw_variant in enumerate(raw_variants):
+        field = f"NPC scene transition {transition_id}.variants[{variant_index}]"
+        if not isinstance(raw_variant, dict):
+            raise ValueError(f"{field} must be an object.")
+        raw_reactions = raw_variant.get("reactions")
+        if not isinstance(raw_reactions, list):
+            raise ValueError(f"{field}.reactions must be an array.")
+        reactions: list[NpcTransitionReaction] = []
+        for reaction_index, raw_reaction in enumerate(raw_reactions):
+            reaction_field = f"{field}.reactions[{reaction_index}]"
+            if not isinstance(raw_reaction, dict):
+                raise ValueError(f"{reaction_field} must be an object.")
+            raw_effects = raw_reaction.get("effects", [])
+            if not isinstance(raw_effects, list) or any(not isinstance(item, dict) for item in raw_effects):
+                raise ValueError(f"{reaction_field}.effects must be an array of objects.")
+            for array_field in ("suppress_encounter_trigger_ids",):
+                if not isinstance(raw_reaction.get(array_field, []), list):
+                    raise ValueError(f"{reaction_field}.{array_field} must be an array.")
+            reactions.append(
+                NpcTransitionReaction(
+                    id=str(_required(raw_reaction, "id", reaction_field)).strip().lower(),
+                    label=str(_required(raw_reaction, "label", reaction_field)),
+                    description=str(_required(raw_reaction, "description", reaction_field)),
+                    result_type=NpcTransitionResultType(
+                        str(_required(raw_reaction, "result_type", reaction_field))
+                    ),
+                    narration=str(_required(raw_reaction, "narration", reaction_field)),
+                    effects=tuple(dict(item) for item in raw_effects),
+                    suppress_encounter_trigger_ids=tuple(
+                        str(item).strip()
+                        for item in raw_reaction.get("suppress_encounter_trigger_ids", [])
+                    ),
+                    encounter_trigger_id=(
+                        str(raw_reaction["encounter_trigger_id"]).strip()
+                        if raw_reaction.get("encounter_trigger_id")
+                        else None
+                    ),
+                    npc_status=(
+                        NpcInteractionStatus(str(raw_reaction["npc_status"]))
+                        if raw_reaction.get("npc_status")
+                        else None
+                    ),
+                )
+            )
+        for array_field in (
+            "required_flags",
+            "forbidden_flags",
+            "required_resolved_encounter_trigger_ids",
+            "forbidden_resolved_encounter_trigger_ids",
+        ):
+            if not isinstance(raw_variant.get(array_field, []), list):
+                raise ValueError(f"{field}.{array_field} must be an array.")
+        variants.append(
+            NpcTransitionVariant(
+                id=str(_required(raw_variant, "id", field)).strip().lower(),
+                title=str(_required(raw_variant, "title", field)),
+                narration=str(_required(raw_variant, "narration", field)),
+                reactions=tuple(reactions),
+                required_flags=tuple(str(item).strip() for item in raw_variant.get("required_flags", [])),
+                forbidden_flags=tuple(str(item).strip() for item in raw_variant.get("forbidden_flags", [])),
+                required_resolved_encounter_trigger_ids=tuple(
+                    str(item).strip()
+                    for item in raw_variant.get("required_resolved_encounter_trigger_ids", [])
+                ),
+                forbidden_resolved_encounter_trigger_ids=tuple(
+                    str(item).strip()
+                    for item in raw_variant.get("forbidden_resolved_encounter_trigger_ids", [])
+                ),
+            )
+        )
+    return NpcSceneTransition(
+        transition_id,
+        str(_required(data, "npc_id", f"NPC scene transition {transition_id}")),
+        tuple(variants),
+    )
+
+
+def _parse_npc_state_update(data: Any, field: str) -> NpcStateUpdate | None:
+    if data is None:
+        return None
+    if not isinstance(data, dict):
+        raise ValueError(f"{field} must be an object.")
+    attitude = data.get("attitude")
+    return NpcStateUpdate(
+        attitude=(
+            _enum_value(NpcAttitude, str(attitude), f"{field}.attitude")
+            if attitude is not None
+            else None
+        ),
+        physical_state=(
+            str(data["physical_state"])
+            if data.get("physical_state") is not None
+            else None
+        ),
+        emotional_state=(
+            str(data["emotional_state"])
+            if data.get("emotional_state") is not None
+            else None
+        ),
+    )
 
 
 def _parse_npc_locked_information(data: Any, point_id: str) -> NpcLockedInformation:
@@ -2559,6 +2885,7 @@ def _actor_from_definition(definition: ScenarioActorDefinition) -> Actor:
         condition_immunities=definition.condition_immunities,
         auras=definition.auras,
         triggers=definition.triggers,
+        features=definition.features,
     )
 
 
@@ -2899,6 +3226,159 @@ def _validate_exploration(definition: ScenarioDefinition) -> None:
         elif trigger.condition == EncounterTriggerCondition.POINT_REVEALED:
             if trigger.point_id not in point_ids:
                 raise ValueError(f"exploration encounter trigger {trigger.id}.point_id references unknown point.")
+    transition_ids = tuple(item.id for item in definition.exploration_npc_transitions)
+    if len(transition_ids) != len(set(transition_ids)):
+        raise ValueError("exploration.npc_transitions contains duplicate ids.")
+    transition_id_set = set(transition_ids)
+    npc_ids = {
+        point.npc_interaction.id
+        for point in definition.exploration_points
+        if point.npc_interaction is not None
+    }
+    for transition in definition.exploration_npc_transitions:
+        if transition.npc_id not in npc_ids:
+            raise ValueError(
+                f"exploration NPC transition {transition.id}.npc_id references unknown NPC."
+            )
+        if not _npc_transition_variant_is_fallback(transition.variants[-1]):
+            raise ValueError(
+                f"exploration NPC transition {transition.id} must end with an unconditional fallback variant."
+            )
+        for variant in transition.variants:
+            for reaction in variant.reactions:
+                referenced_triggers = set(reaction.suppress_encounter_trigger_ids)
+                if reaction.encounter_trigger_id is not None:
+                    referenced_triggers.add(reaction.encounter_trigger_id)
+                unknown = referenced_triggers - encounter_trigger_ids
+                if unknown:
+                    raise ValueError(
+                        f"exploration NPC transition {transition.id} references unknown encounter trigger: "
+                        + ", ".join(sorted(unknown))
+                        + "."
+                    )
+    _validate_npc_content_effects(definition)
+    for point in definition.exploration_points:
+        if point.npc_interaction is None:
+            continue
+        for permission in point.npc_interaction.policy.intent_permissions:
+            for target in permission.targets:
+                for branch in target.outcome_branches:
+                    if branch.transition_id is not None and branch.transition_id not in transition_id_set:
+                        raise ValueError(
+                            f"NPC target {target.id} references unknown scene transition: {branch.transition_id}."
+                        )
+
+
+def _validate_npc_content_effects(definition: ScenarioDefinition) -> None:
+    state = ExplorationState(
+        zones=definition.exploration_zones,
+        points=definition.exploration_points,
+        party_position=PartyPosition(str(definition.party_start_zone_id)),
+        flags=SceneFlags(),
+        challenges=definition.exploration_challenges,
+        resources=definition.exploration_resources,
+        traps=definition.exploration_traps,
+    )
+    npc_by_id: dict[str, NpcInteraction] = {}
+    for point in definition.exploration_points:
+        npc = point.npc_interaction
+        if npc is None:
+            continue
+        if npc.id in npc_by_id:
+            raise ValueError(f"exploration NPC id is duplicated: {npc.id}.")
+        npc_by_id[npc.id] = npc
+        policy = npc.policy
+        if len(policy.allowed_flags) != len(set(policy.allowed_flags)):
+            raise ValueError(f"NPC {npc.id}.policy.allowed_flags contains duplicates.")
+        if len(policy.allowed_effect_types) != len(set(policy.allowed_effect_types)):
+            raise ValueError(f"NPC {npc.id}.policy.allowed_effect_types contains duplicates.")
+        information_ids = tuple(item.id for item in npc.locked_information)
+        if len(information_ids) != len(set(information_ids)):
+            raise ValueError(f"NPC {npc.id}.locked_information contains duplicate ids.")
+        known_information_ids = set(information_ids)
+        allowed_flags = set(policy.allowed_flags)
+        for info in npc.locked_information:
+            unknown_set_flags = set(info.sets_flags) - allowed_flags if allowed_flags else set()
+            if unknown_set_flags:
+                raise ValueError(
+                    f"NPC {npc.id}.locked_information.{info.id}.sets_flags contains disallowed flags: "
+                    + ", ".join(sorted(unknown_set_flags))
+                    + "."
+                )
+            _validate_npc_effect_sequence(
+                info.effects_on_reveal,
+                state=state,
+                npc=npc,
+                field=f"NPC {npc.id}.locked_information.{info.id}.effects_on_reveal",
+            )
+        for permission in policy.intent_permissions:
+            unknown_permission_information = set(permission.reveals) - known_information_ids
+            if unknown_permission_information:
+                raise ValueError(
+                    f"NPC {npc.id}.intent_permissions.{permission.intent}.reveals references unknown information: "
+                    + ", ".join(sorted(unknown_permission_information))
+                    + "."
+                )
+            for target in permission.targets:
+                for branch in target.outcome_branches:
+                    unknown_branch_information = (
+                        set(branch.revealed_information_ids) - known_information_ids
+                    )
+                    if unknown_branch_information:
+                        raise ValueError(
+                            f"NPC {npc.id}.intent_permissions.{permission.intent}.targets.{target.id}."
+                            f"outcomes.{branch.outcome.value}.revealed_information_ids references unknown information: "
+                            + ", ".join(sorted(unknown_branch_information))
+                            + "."
+                        )
+                    _validate_npc_effect_sequence(
+                        branch.effects,
+                        state=state,
+                        npc=npc,
+                        field=(
+                            f"NPC {npc.id}.intent_permissions.{permission.intent}.targets.{target.id}."
+                            f"outcomes.{branch.outcome.value}.effects"
+                        ),
+                    )
+    for transition in definition.exploration_npc_transitions:
+        npc = npc_by_id[transition.npc_id]
+        for variant in transition.variants:
+            for reaction in variant.reactions:
+                _validate_npc_effect_sequence(
+                    reaction.effects,
+                    state=state,
+                    npc=npc,
+                    field=(
+                        f"NPC transition {transition.id}.variants.{variant.id}."
+                        f"reactions.{reaction.id}.effects"
+                    ),
+                )
+
+
+def _validate_npc_effect_sequence(
+    effects: tuple[dict[str, object], ...],
+    *,
+    state: ExplorationState,
+    npc: NpcInteraction,
+    field: str,
+) -> None:
+    for index, effect in enumerate(effects):
+        validate_policy_exploration_effect(
+            effect,
+            state,
+            allowed_effect_types=npc.policy.allowed_effect_types,
+            allowed_flags=npc.policy.allowed_flags,
+            field=f"{field}[{index}]",
+        )
+
+
+def _npc_transition_variant_is_fallback(variant: NpcTransitionVariant) -> bool:
+    return not (
+        variant.required_flags
+        or variant.forbidden_flags
+        or variant.required_resolved_encounter_trigger_ids
+        or variant.forbidden_resolved_encounter_trigger_ids
+    )
 
 
 def _validate_llm_challenge_policy(challenge: ExplorationChallenge, resource_ids: set[str]) -> None:
@@ -3211,6 +3691,88 @@ def _parse_actor_resources(data: Any, actor_id: str) -> tuple[ActorResourcePool,
     if len({pool.id for pool in pools}) != len(pools):
         raise ValueError(f"actor {actor_id}.resource_pools ids must be unique.")
     return tuple(pools)
+
+
+def _parse_feature_definition(
+    data: dict[str, Any],
+    actor_id: str,
+) -> ScenarioFeatureDefinition:
+    feature_id = str(_required(data, "id", f"actor {actor_id}.feature"))
+    schema_version = int(data.get("schema_version", 1))
+    if schema_version != 1:
+        raise ValueError(
+            f"feature {feature_id}.schema_version must be 1, got {schema_version}."
+        )
+    grants = data.get("grants", {})
+    if not isinstance(grants, dict):
+        raise ValueError(f"feature {feature_id}.grants must be an object.")
+    resource_pools = _parse_actor_resources(
+        grants.get("resource_pools", []),
+        f"{actor_id}.feature.{feature_id}",
+    )
+    attacks_data = grants.get("attacks", [])
+    healing_data = grants.get("healing_sources", [])
+    combat_actions_data = grants.get("combat_actions", [])
+    for field_name, values in (
+        ("attacks", attacks_data),
+        ("healing_sources", healing_data),
+        ("combat_actions", combat_actions_data),
+    ):
+        if not isinstance(values, list):
+            raise ValueError(f"feature {feature_id}.grants.{field_name} must be a list.")
+    attacks = tuple(_parse_attack(value, actor_id) for value in attacks_data)
+    healing_sources = tuple(_parse_healing_source(value, actor_id) for value in healing_data)
+    combat_actions = tuple(_parse_combat_action(value, actor_id) for value in combat_actions_data)
+    auras = _parse_actor_auras(
+        grants.get("auras", []),
+        f"{actor_id}.feature.{feature_id}",
+    )
+    triggers = _parse_actor_triggers(
+        grants.get("triggers", []),
+        f"{actor_id}.feature.{feature_id}",
+    )
+    action_ids = (
+        tuple(attack.id for attack in attacks)
+        + tuple(source.id for source in healing_sources)
+        + tuple(action.id for action in combat_actions)
+    )
+    definition = FeatureDefinition(
+        id=feature_id,
+        label=str(_required(data, "label", f"feature {feature_id}")),
+        description=str(data.get("description", "")),
+        source_kind=_enum_value(
+            FeatureSourceKind,
+            str(_required(data, "source_kind", f"feature {feature_id}")),
+            f"feature {feature_id}.source_kind",
+        ),
+        source_ref=str(data.get("source_ref", feature_id)),
+        resource_ids=tuple(pool.id for pool in resource_pools),
+        action_ids=action_ids,
+        trigger_ids=tuple(trigger.id for trigger in triggers),
+        aura_ids=tuple(aura.id for aura in auras),
+    )
+    if not (
+        definition.resource_ids
+        or definition.action_ids
+        or definition.trigger_ids
+        or definition.aura_ids
+    ):
+        raise ValueError(f"feature {feature_id} must grant at least one mechanic.")
+    return ScenarioFeatureDefinition(
+        definition=definition,
+        resource_pools=resource_pools,
+        attacks=attacks,
+        healing_sources=healing_sources,
+        combat_actions=combat_actions,
+        auras=auras,
+        triggers=triggers,
+    )
+
+
+def _validate_unique_ids(values: tuple[Any, ...], field: str) -> None:
+    ids = tuple(str(value.id) for value in values)
+    if len(ids) != len(set(ids)):
+        raise ValueError(f"{field} ids must be unique.")
 
 
 def _parse_actor_auras(data: Any, actor_id: str) -> tuple[ActorAura, ...]:

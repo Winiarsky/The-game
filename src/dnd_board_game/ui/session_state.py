@@ -19,7 +19,7 @@ if TYPE_CHECKING:
         PendingShortRest,
     )
     from dnd_board_game.combat import CombatContextMenu, EnemyAutoTurnResult, EnemyTurnPlan
-    from dnd_board_game.exploration import PendingEncounter
+    from dnd_board_game.exploration import NpcTransitionPlan, PendingEncounter
 
     from .exploration_app import (
         PendingCombatHelp,
@@ -43,6 +43,7 @@ class UiPendingState:
 
     interaction: PendingInteraction | None = None
     encounter: PendingEncounter | None = None
+    npc_transition: NpcTransitionPlan | None = None
     enemy_turn_intent: EnemyTurnPlan | None = None
     enemy_turn_result: EnemyAutoTurnResult | None = None
     enemy_turn_ack_result: EnemyAutoTurnResult | None = None

@@ -107,3 +107,23 @@ Brak pola `triggers` w starszym snapshotcie v1 oznacza pustą listę.
 Każdy wpis `resource_pools` zapisuje bieżącą i maksymalną wartość oraz recovery.
 Opcjonalny obiekt `recharge` zawiera `die_sides` i `minimum_roll`; brak tego pola
 oznacza zasób bez recharge i zachowuje zgodność ze starszymi snapshotami v1.
+
+Aktor może zapisywać listę `features`. Snapshot przechowuje grant cechy: stabilne
+`feature_id`, etykietę, opis, `source_kind`, `source_ref` oraz identyfikatory
+przyznanych zasobów, akcji, triggerów i aur. Definicje mechaniki pozostają w
+wersjonowanym contentcie; snapshot zapisuje ich pochodzenie i aktualny stan
+przyznanych prymitywów. Brak pola `features` oznacza pustą listę.
+
+Eksploracja zapisuje `npc_states` dla każdego NPC znanego aktualnej wersji
+scenariusza. Wpis zawiera `npc_id`, nastawienie, stan fizyczny i emocjonalny,
+ujawnione informacje, wykorzystane próby oraz uporządkowaną historię ważnych
+zdarzeń relacji. Brak pola w starszym snapshotcie v1 odtwarza stan początkowy z
+contentu. Nieznane NPC albo identyfikatory informacji powodują odrzucenie zapisu.
+Zdarzenie powstałe po rzucie może zawierać `attempt_id`, używany do liczenia
+contentowych limitów prób. Starsze zdarzenie bez tego pola korzysta z
+`used_attempt_ids` jako zgodnego wstecznie potwierdzenia co najmniej jednej próby.
+Stan NPC zapisuje też `interaction_status` i `closure_reason`, dzięki czemu ponowne
+wejście do zamkniętej rozmowy nie wywołuje LLM. Opcjonalne
+`pending_npc_transition` przechowuje stabilne identyfikatory przejścia, wariantu i
+NPC; po wczytaniu wariant jest odtwarzany z aktualnego contentu, a nie kopiowany
+do snapshotu.

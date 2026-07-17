@@ -30,6 +30,7 @@ class UiSessionView:
     messages: list[dict[str, object]]
     conversation: dict[str, object]
     pending: dict[str, object] | None
+    pending_npc_transition: dict[str, object] | None
     selected_lead_actor_id: str
     selected_helper_actor_id: str | None
     allowed_mechanics: list[dict[str, object]]
@@ -67,6 +68,7 @@ class UiSessionView:
             "messages": self.messages,
             "conversation": self.conversation,
             "pending": self.pending,
+            "pending_npc_transition": self.pending_npc_transition,
             "selected_lead_actor_id": self.selected_lead_actor_id,
             "selected_helper_actor_id": self.selected_helper_actor_id,
             "allowed_mechanics": self.allowed_mechanics,

@@ -188,6 +188,7 @@ Flagi informacji:
 
 Zasoby możliwe do uzyskania:
 - `scout_reports` / meldunki zwiadowcy
+- implementacja: `theft/scout_reports` ma stały test i cztery wykonywalne gałęzie wyniku; `intimidation/scout_information` łączy te gałęzie z tabelą reakcji społecznej.
 - `cache_key` albo `cache_hint`
 - opcjonalnie `field_bandage_materials`, jeśli gracze znajdą i przygotują improwizowany opatrunek
 
@@ -247,12 +248,17 @@ Krytyczny sukces:
 Krytyczna porażka:
 - NPC krzyczy, szarpie się, doznaje większego bólu albo próbuje bronić się ukrytym nożem.
 - Mechanicznie: większy hałas, utrata zaufania, możliwa komplikacja `hidden_knife_response`.
+- Implementacja: kradzież meldunków i zastraszanie prowadzą do
+  `scout_knife_escalation`. UI zatrzymuje automatyczny alarm i pokazuje w czacie
+  reakcje drużyny: wycofanie, próbę uspokojenia albo — gdy teren nie jest jeszcze
+  zabezpieczony — pozostanie na miejscu i uruchomienie `scout_panic_alarm`.
 
 ## 15. Limity I Parametry
 - maksymalna nagroda informacyjna: trop o wieży, trop o bestii, trop o przeklętym komendancie, trop o skrytce
 - maksymalna nagroda materialna: meldunki, drobiazgi osobiste, ewentualny dostęp do skrytki
 - brak dużego złota
 - liczba prób: rozmowa może trwać kilka wymian, ale brutalne akcje szybko pogarszają stan NPC
+- implementacja: test budowania zaufania ma dwie próby; druga wymaga wcześniejszego opatrzenia albo ustabilizowania zwiadowcy. Zastraszanie ma jedną próbę.
 - koszt czasu: dłuższa pomoc medyczna może zwiększać ryzyko nadejścia bestii, jeśli hałas/scena to uzasadnia
 - poziom hałasu: docelowo istotny globalny zasób sceny
 - limit zasobów: zasoby medyczne tylko jeśli drużyna je ma albo znajdzie improwizowane materiały

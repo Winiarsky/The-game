@@ -565,7 +565,25 @@ function sceneDescriptionHtml(state) {
     parts.push(point.description ? `<p>${esc(point.description)}</p>` : '');
     if (point.npc) {
       parts.push(`<p>${esc(point.npc.public_description)}</p>`);
-      if (point.npc.current_state) parts.push(`<p><b>Stan NPC:</b> ${esc(point.npc.current_state)}</p>`);
+      const runtime = point.npc.runtime_state || null;
+      if (runtime) {
+        const attitudeLabels = { hostile: 'wrogi', indifferent: 'obojętny', friendly: 'przyjazny' };
+        parts.push(`<p><b>Nastawienie:</b> ${esc(attitudeLabels[runtime.attitude] || runtime.attitude || '-')}</p>`);
+        if (runtime.physical_state) parts.push(`<p><b>Stan fizyczny:</b> ${esc(runtime.physical_state)}</p>`);
+        if (runtime.emotional_state) parts.push(`<p><b>Stan emocjonalny:</b> ${esc(runtime.emotional_state)}</p>`);
+        if ((runtime.relationship_events || []).length) {
+          const lastEvent = runtime.relationship_events[runtime.relationship_events.length - 1];
+          parts.push(`<p class="muted"><b>Ostatnia ważna interakcja:</b> ${esc(lastEvent.summary)}</p>`);
+        }
+        if ((runtime.used_attempt_ids || []).length) {
+          parts.push(`<p class="muted"><b>Wykorzystane próby:</b> ${runtime.used_attempt_ids.map(esc).join(', ')}</p>`);
+        }
+        if ((runtime.revealed_information_ids || []).length) {
+          parts.push(`<p class="muted"><b>Zdobyte informacje:</b> ${esc(runtime.revealed_information_ids.length)}</p>`);
+        }
+      } else if (point.npc.current_state) {
+        parts.push(`<p><b>Stan NPC:</b> ${esc(point.npc.current_state)}</p>`);
+      }
     }
   }
   const html = parts.filter(Boolean).join('');
@@ -574,13 +592,30 @@ function sceneDescriptionHtml(state) {
 function sceneConversationHtml() {
   const entries = [...((state.conversation && state.conversation.entries) || [])];
   if (optimisticPlayerMessage) entries.push(optimisticPlayerMessage);
+  const transition = state.pending_npc_transition;
+  const transitionHtml = transition ? `
+    <div class="conversation-entry gm npc-transition-card">
+      <b>${esc(transition.title)}</b>
+      <span>${esc(transition.narration)}</span>
+      <div class="npc-transition-reactions">
+        ${(transition.reactions || []).map(reaction => `
+          <button onclick="resolveNpcTransition('${esc(reaction.id)}')">
+            ${esc(reaction.label)}
+            <small>${esc(reaction.description)}</small>
+          </button>
+        `).join('')}
+      </div>
+    </div>` : '';
   return `<div class="scene-conversation-list">
     ${sceneIntroMessageHtml()}
     ${entries.map(message => `
     <div class="conversation-entry ${message.role === 'player' ? 'player' : 'gm'}">
       <b>${esc(message.title)}</b><span>${esc(message.body)}</span>
     </div>
-  `).join('')}</div>`;
+  `).join('')}${transitionHtml}</div>`;
+}
+function resolveNpcTransition(reactionId) {
+  api('/api/npc-transition/resolve', {reaction_id: reactionId}, 'Rozstrzygam reakcję drużyny...');
 }
 function sceneIntroMessageHtml() {
   const zone = state.current_zone || {};
@@ -747,10 +782,46 @@ function pendingHtml(pending) {
       if (decisionCorrectionOpen) lines.push(decisionCorrectionHtml(option, pending));
     }
   } else if (proposal.action_type) {
-    if (proposal.requires_roll) {
+    const attemptBlocked = pending.attempt_plan && !pending.attempt_plan.available;
+    if (pending.npc_action_plan) {
+      const action = pending.npc_action_plan;
+      const outcomes = action.outcomes || {};
+      lines.push(`<p><b>Cel:</b> ${esc(action.target_label)}${Number(action.quantity || 1) > 1 ? ` ×${esc(action.quantity)}` : ''}. ${esc(action.description || '')}</p>`);
+      if (action.reward_label) lines.push(`<p><b>Możliwy efekt:</b> ${esc(action.reward_label)}.</p>`);
+      if (action.risk_summary) lines.push(`<p><b>Ryzyko:</b> ${esc(action.risk_summary)}</p>`);
+      const outcomeLabels = { critical_success: 'Krytyczny sukces', success: 'Sukces', failure: 'Porażka', critical_failure: 'Krytyczna porażka' };
+      const outcomeOrder = ['critical_success', 'success', 'failure', 'critical_failure'];
+      lines.push(`<div class="npc-outcome-preview">${outcomeOrder.filter(key => outcomes[key]).map(key => `<p><b>${esc(outcomeLabels[key])}:</b> ${esc(outcomes[key].preview)}</p>`).join('')}</div>`);
+    }
+    if (pending.attempt_plan) {
+      const attempt = pending.attempt_plan;
+      if (!attempt.available) {
+        lines.push(`<p><b>Dostępność podejścia:</b> ${esc(attempt.blocked_reason)}</p>`);
+      } else {
+        const attemptNumber = Number(attempt.attempts_used || 0) + 1;
+        const retryLabel = attempt.is_retry ? 'Ponowienie próby' : 'Pierwsza próba';
+        const lastLabel = attemptNumber === Number(attempt.max_attempts || 0) ? ' To ostatnia dostępna próba tego podejścia.' : '';
+        lines.push(`<p><b>${esc(retryLabel)}:</b> ${esc(attemptNumber)}/${esc(attempt.max_attempts)}.${esc(lastLabel)}</p>`);
+      }
+    }
+    if (!attemptBlocked && pending.social_plan) {
+      const social = pending.social_plan;
+      const attitudeLabels = { hostile: 'wrogi', indifferent: 'obojętny', friendly: 'przyjazny' };
+      const riskLabels = { no_risk: 'bez ryzyka', minor_risk: 'niewielkie ryzyko', significant_risk: 'znaczące ryzyko' };
+      lines.push(`<p><b>Nastawienie NPC:</b> ${esc(attitudeLabels[social.attitude] || social.attitude)}.</p>`);
+      lines.push(`<p><b>Zakres prośby:</b> ${esc(riskLabels[social.request_risk] || social.request_risk)} dla NPC.</p>`);
+      if (!social.possible) {
+        lines.push('<p><b>Reakcja:</b> przy obecnym nastawieniu NPC odmówi. Zmiana podejścia lub nastawienia może otworzyć tę możliwość.</p>');
+      } else if (social.requires_roll) {
+        const skill = proposal.skill ? `/${esc(proposal.skill)}` : '';
+        lines.push(`<p><b>Test społeczny:</b> ${esc(proposal.ability)}${skill}, ST ${esc(social.dc)}.</p>`);
+      } else {
+        lines.push('<p><b>Reakcja:</b> NPC zgodzi się bez rzutu.</p>');
+      }
+    } else if (!attemptBlocked && proposal.requires_roll) {
       const skill = proposal.skill ? `/${esc(proposal.skill)}` : '';
       lines.push(`<p><b>Akcja:</b> ${esc(proposal.action_type)}. Test: ${esc(proposal.ability)}${skill}, ST ${esc(proposal.dc)}.</p>`);
-    } else {
+    } else if (!attemptBlocked) {
       lines.push(`<p><b>Akcja:</b> ${esc(proposal.action_type)}. Bez rzutu.</p>`);
     }
   }
@@ -1388,6 +1459,7 @@ function combatActorStatusHtml(combat) {
     ${damageAffinitiesHtml(actor)}
     ${combatAurasHtml(combat)}
     ${combatTriggersHtml(actor)}
+    ${combatFeaturesHtml(actor)}
     ${actorInventoryHtml(actor)}
     ${actor.faction === 'ally' ? `<p>Akcja: ${actionUsed ? 'zużyta' : 'dostępna'} | Bonus action: ${bonusActionUsed ? 'zużyta' : 'dostępna'} | Darmowa interakcja: ${objectInteractionAvailable ? 'dostępna' : 'zużyta'} | Reakcja: ${reactionAvailable ? 'dostępna' : 'zużyta'} | Ruch: ${esc(remaining)} ft${extraMovement > 0 ? ` (+${esc(extraMovement)} Dash)` : ''}${movement.speed_reduction === 'grappling' ? ` | Grapple: szybkość ${esc(movement.base_speed_feet)} → ${esc(movement.effective_speed_feet)} ft` : ''}</p>${twoWeapon.available ? `<p><b>Atak drugą bronią dostępny:</b> ${(twoWeapon.source_names || []).map(esc).join(', ')} — wybierz przeciwnika.</p>` : ''}` : ''}
     ${statusChipsHtml(combatActorChips(actor), 'Brak statusów aktywnego aktora.')}
@@ -1432,6 +1504,37 @@ function combatTriggersHtml(actor) {
     encounter_ended: 'po encounterze',
   };
   return `<p class="muted"><b>Triggery:</b> ${triggers.map(trigger => `${esc(trigger.label)} (${esc(eventLabels[trigger.event_type] || trigger.event_type)})`).join(', ')}</p>`;
+}
+
+function combatFeaturesHtml(actor) {
+  const features = (actor && actor.features) || [];
+  if (!features.length) return '';
+  const sourceLabels = {
+    monster: 'potwór',
+    item: 'przedmiot',
+    race: 'rasa',
+    species: 'rasa/gatunek',
+    background: 'pochodzenie',
+    class: 'klasa',
+    subclass: 'podklasa',
+    feat: 'feat',
+    scenario: 'scenariusz',
+  };
+  const resourceById = new Map(((actor && actor.resource_pools) || []).map(pool => [pool.id, pool]));
+  return `<div class="actor-features"><b>Cechy:</b>${features.map(feature => {
+    const mechanics = [];
+    if ((feature.resource_ids || []).length) mechanics.push(`zasoby: ${(feature.resource_ids || []).map(resourceId => {
+      const pool = resourceById.get(resourceId);
+      if (!pool) return esc(resourceId);
+      const recharge = pool.recharge ? `, Recharge ${esc(pool.recharge.minimum_roll)}–${esc(pool.recharge.die_sides)}` : '';
+      return `${esc(pool.label)} ${esc(pool.current)}/${esc(pool.maximum)}${recharge}`;
+    }).join(', ')}`);
+    if ((feature.action_ids || []).length) mechanics.push(`akcje: ${(feature.action_ids || []).map(esc).join(', ')}`);
+    if ((feature.trigger_ids || []).length) mechanics.push(`triggery: ${(feature.trigger_ids || []).map(esc).join(', ')}`);
+    if ((feature.aura_ids || []).length) mechanics.push(`aury: ${(feature.aura_ids || []).map(esc).join(', ')}`);
+    const source = sourceLabels[feature.source_kind] || feature.source_kind || '-';
+    return `<p class="muted"><b>${esc(feature.label)}</b> — ${esc(feature.description || 'Brak opisu.')} <span>Źródło: ${esc(source)} (${esc(feature.source_ref || '-')})${mechanics.length ? `; ${mechanics.join('; ')}` : ''}.</span></p>`;
+  }).join('')}</div>`;
 }
 
 function damageAffinitiesHtml(actor) {
@@ -2578,6 +2681,7 @@ function updateActivePanel() {
   const stage = state.flow ? state.flow.stage : 'location_active';
   const flowActive = stage !== 'location_active';
   const hasPendingDecision = state.pending && state.pending.stage === 'decision';
+  const hasNpcTransition = Boolean(state.pending_npc_transition);
   const hasRolls = state.required_rolls && state.required_rolls.length > 0;
   const hasResult = Boolean(resultAck);
   const hasEncounter = Boolean(state.pending_encounter);
@@ -2596,10 +2700,10 @@ function updateActivePanel() {
   document.getElementById('roll-panel').hidden = !hasRolls;
   document.getElementById('action-panel').hidden = !chatMode;
   document.getElementById('scene-description-card').hidden = interactionStage || !document.getElementById('scene-description').innerHTML.trim();
-  document.getElementById('chat-composer').hidden = stage !== 'location_active' || hasPendingDecision || hasRolls || hasResult;
+  document.getElementById('chat-composer').hidden = stage !== 'location_active' || hasPendingDecision || hasNpcTransition || hasRolls || hasResult;
   const leaveButton = document.getElementById('leave-interaction-button');
   leaveButton.textContent = stage === 'interaction_result' ? 'Zakończ interakcję' : 'Opuść interakcję';
-  leaveButton.disabled = hasPendingDecision || hasRolls || busy;
+  leaveButton.disabled = hasPendingDecision || hasNpcTransition || hasRolls || busy;
   const restButton = document.getElementById('short-rest-button');
   if (restButton) {
     const rest = state.short_rest || {};
