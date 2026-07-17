@@ -103,3 +103,7 @@ Aktor może zapisywać listę `triggers`. Każdy wpis zawiera stabilne `id`, ety
 `event_type`, `effect_kind` i wartość. Sam fakt jednorazowej aktywacji nie jest
 osobnym stanem; jej wynik, np. bieżące temporary HP, znajduje się już w aktorze.
 Brak pola `triggers` w starszym snapshotcie v1 oznacza pustą listę.
+
+Każdy wpis `resource_pools` zapisuje bieżącą i maksymalną wartość oraz recovery.
+Opcjonalny obiekt `recharge` zawiera `die_sides` i `minimum_roll`; brak tego pola
+oznacza zasób bez recharge i zachowuje zgodność ze starszymi snapshotami v1.

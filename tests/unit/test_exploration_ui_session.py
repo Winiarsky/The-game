@@ -2542,6 +2542,56 @@ def test_exploration_ui_session_can_select_attack_source_and_strength_potion_mod
     assert modified.damage_modifier == base_source.damage_modifier + 2
 
 
+def test_limited_attack_consumes_resource_and_becomes_unavailable_in_ui() -> None:
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    while str(session.combat_state.initiative_order.current_actor.id) != "hero":
+        session.finish_combat_turn()
+    hero_actor = current_actor(session.combat_state)
+    enemies = [actor for actor in session.combat_state.actors if actor.faction == Faction.ENEMY]
+    session.combat_state = replace_actor(
+        session.combat_state,
+        replace(
+            enemies[0],
+            position=Coordinate(hero_actor.position.col, hero_actor.position.row + 1),
+        ),
+    )
+    for index, enemy in enumerate(enemies[1:], start=1):
+        session.combat_state = replace_actor(
+            session.combat_state,
+            replace(enemy, position=Coordinate(15, index)),
+        )
+
+    selected = session.select_combat_attack_source("heroic_strike")
+    source = next(
+        item
+        for item in selected["combat"]["available_attack_sources"]
+        if item["id"] == "heroic_strike"
+    )
+    assert source["available"] is True
+    assert source["resource_pool_id"] == "heroic_strike_uses"
+    target_id = selected["combat"]["legal_targets"][0]["id"]
+
+    resolved = session.submit_player_attack(
+        target_id=target_id,
+        natural_roll=20,
+        natural_roll_2=20,
+        damage=1,
+    )
+
+    hero = next(actor for actor in resolved["combat"]["actors"] if actor["id"] == "hero")
+    resource = next(pool for pool in hero["resource_pools"] if pool["id"] == "heroic_strike_uses")
+    source = next(
+        item
+        for item in resolved["combat"]["available_attack_sources"]
+        if item["id"] == "heroic_strike"
+    )
+    assert resource["current"] == 0
+    assert source["available"] is False
+    assert "Brak dostępnych użyć" in source["unavailable_reason"]
+
+
 def test_exploration_ui_session_crossbow_preview_shows_cart_half_cover() -> None:
     session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
     _start_gate_skirmish(session)
@@ -3958,6 +4008,44 @@ def test_turn_start_trigger_is_visible_and_applied_in_combat_ui():
     assert payload["current_actor"]["temp_hp"] == 2
     assert payload["current_actor"]["triggers"][0]["event_type"] == "turn_start"
     assert any(message.title == "Aktywowano cechę" for message in session.messages)
+
+
+def test_turn_start_recharge_is_applied_and_logged_in_combat_ui():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    entries = session.combat_state.initiative_order.entries
+    goblin_index = next(
+        index for index, entry in enumerate(entries) if str(entry.actor.id) == "goblin_a"
+    )
+    previous_index = (goblin_index - 1) % len(entries)
+    goblin = next(actor for actor in session.combat_state.actors if str(actor.id) == "goblin_a")
+    depleted = replace(
+        goblin,
+        resource_pools=(replace(goblin.resource_pools[0], current=0),),
+    )
+    session.combat_state = replace_actor(session.combat_state, depleted)
+    session.combat_state = replace(
+        session.combat_state,
+        initiative_order=replace(
+            session.combat_state.initiative_order,
+            current_index=previous_index,
+        ),
+    )
+    session.encounter_rng = type(
+        "FixedRechargeRandom",
+        (),
+        {"randint": lambda self, _minimum, _maximum: 6},
+    )()
+
+    payload = session.finish_combat_turn()["combat"]
+
+    current = payload["current_actor"]
+    resource = next(pool for pool in current["resource_pools"] if pool["id"] == "frenzied_lunge_charge")
+    assert current["id"] == "goblin_a"
+    assert resource["current"] == 1
+    assert resource["recharge"] == {"die_sides": 6, "minimum_roll": 5}
+    assert any(message.title == "Recharge" and "d6 6" in message.body for message in session.messages)
 
 
 def test_enemy_condition_save_is_resolved_automatically_at_turn_boundary():

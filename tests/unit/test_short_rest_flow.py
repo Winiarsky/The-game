@@ -36,7 +36,11 @@ def test_short_rest_preview_and_completion_apply_time_policy_and_effects() -> No
     state = _state(exploration)
     gate = next(zone for zone in exploration.zones if zone.id == "gate")
     actors = tuple(
-        replace(actor, hp=max(1, actor.hp - 5))
+        replace(
+            actor,
+            hp=max(1, actor.hp - 5),
+            resource_pools=tuple(replace(pool, current=0) for pool in actor.resource_pools),
+        )
         if str(actor.id) == "hero"
         else actor
         for actor in exploration.actors
@@ -52,6 +56,7 @@ def test_short_rest_preview_and_completion_apply_time_policy_and_effects() -> No
     assert transition.state.short_rest_counts == (("short_rest:gate", 1),)
     assert challenge_state_for(transition.state, "closed_gate").noise == 2
     assert transition.actors[0].hp == actors[0].hp
+    assert transition.actors[0].resource_pools[0].current == 1
     assert transition.effects[0].effect_type == "add_noise"
 
 

@@ -609,6 +609,14 @@ Implementacja MVP:
 - Odrzucone lub niejasne deklaracje tworzą lokalny `declaration_thread` dla aktywnego challenge. Dzięki temu korekta gracza może odnosić się do poprzedniej deklaracji, ale nie tworzymy jeszcze globalnego czatu całej kampanii.
 - `gm_classifier.py` zawiera mechanikę integracji, parsowania i walidacji. Content konkretnej przeszkody powinien pochodzić z `llm_policy` oraz `llm_context`; domyślna policy w kodzie jest celowo minimalna, żeby nie przemycać szczegółowego contentu poza scenariuszem.
 
+## Ograniczone użycia i Recharge
+
+- Ograniczone użycie nie posiada osobnego licznika w definicji ataku. Atak wskazuje `resource_pool_id` oraz koszt, a stan pozostaje w istniejącym `ActorResourcePool`.
+- Akcja lub atak zużywa zasób w momencie zatwierdzenia użycia, także gdy późniejszy attack roll pudłuje. Brak zasobu blokuje źródło przed zużyciem ekonomii tury.
+- `RecoveryPeriod.SHORT_REST` oraz `LONG_REST` pozostają jedyną regułą odnowienia odpoczynkowego. `ResourceRechargeRule` jest niezależną regułą początku tury dla zdolności w stylu potworowego `Recharge 5–6`.
+- Recharge wykonuje jawny, deterministycznie wstrzykiwany rzut po rozpoczęciu tury, przed triggerami `turn_start`. Sukces odnawia pulę do maksimum; pełna pula nie wykonuje rzutu.
+- Runtime zapisuje wynik recharge w historii sesji i pokazuje graczom wynik, próg oraz aktualną dostępność. Snapshot przechowuje zarówno bieżącą wartość puli, jak i definicję recharge.
+
 Poza zakresem MVP:
 
 - pełny UI point-and-click,

@@ -63,6 +63,8 @@ class AttackSource:
     attack_kind: AttackKind = AttackKind.MELEE
     proficiency_id: str | None = None
     reach_feet: int | None = None
+    resource_pool_id: str | None = None
+    resource_cost: int = 1
 
     def __post_init__(self) -> None:
         if self.range_feet <= 0:
@@ -71,6 +73,10 @@ class AttackSource:
             self.reach_feet <= 0 or self.reach_feet % 5 != 0
         ):
             raise ValueError("Melee reach_feet must be a positive multiple of 5.")
+        if self.resource_pool_id is not None and not self.resource_pool_id.strip():
+            raise ValueError("Attack resource_pool_id cannot be empty.")
+        if self.resource_cost < 1:
+            raise ValueError("Attack resource_cost must be positive.")
 
 
 @dataclass(frozen=True, slots=True)

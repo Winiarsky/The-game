@@ -97,6 +97,30 @@ def test_load_scenario_builds_actors_and_attack_sources():
     assert goblin_source.damage_modifier == 2
 
 
+def test_gate_skirmish_loads_rest_and_recharge_limited_attack_sources() -> None:
+    encounter = build_encounter_from_scenario(
+        load_scenario("content/scenarios/gate_skirmish.json")
+    )
+    hero = next(actor for actor in encounter.actors if str(actor.id) == "hero")
+    goblin = next(actor for actor in encounter.actors if str(actor.id) == "goblin_b")
+    heroic_strike = next(
+        source
+        for source in encounter.attack_source_options_by_actor[hero.id]
+        if source.id == "heroic_strike"
+    )
+    frenzied_lunge = next(
+        source
+        for source in encounter.attack_source_options_by_actor[goblin.id]
+        if source.id == "goblin_frenzied_lunge"
+    )
+
+    assert heroic_strike.resource_pool_id == "heroic_strike_uses"
+    assert hero.resource_pools[0].recovery.value == "short_rest"
+    assert frenzied_lunge.resource_pool_id == "frenzied_lunge_charge"
+    assert goblin.resource_pools[0].recharge is not None
+    assert goblin.resource_pools[0].recharge.minimum_roll == 5
+
+
 def test_load_scenario_parses_actor_damage_affinities(tmp_path):
     data = json.loads(Path("content/scenarios/goblin_ambush.json").read_text(encoding="utf-8"))
     actor = data["actors"][1]

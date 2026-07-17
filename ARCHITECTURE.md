@@ -135,7 +135,8 @@ The exploration web surface is split into explicit responsibilities:
   resolution orchestration, and classification into Ready, opportunity, movement, attack,
   or immediate-finish transitions,
 - `application/combat_turn_finalization.py` owns enemy-result commits, turn advancement,
-  turn-boundary effect expiration, and the observation payloads for completed turns,
+  turn-boundary effect expiration, injected deterministic resource recharge rolls, and
+  the observation payloads for completed turns,
 - `application/player_combat_action_flow.py` owns combat source selection and the
   single-target player attack flow from target preview through attack and damage resolution,
 - `application/player_area_healing_flow.py` owns player healing and area-spell targeting,
@@ -171,7 +172,9 @@ exploration resolvers consult the same profile before consuming a spell slot.
 Rest data is actor domain state in `actors/resources.py`; D&D recovery decisions live in
 `rules/resting.py`. Scenario zones may provide a `ShortRestPolicy`, but they do not implement
 healing or resource recovery themselves. Starting an exploration session automatically applies
-a long rest to allied actors before the spell-preparation stage.
+a long rest to allied actors before the spell-preparation stage. Limited attacks reference the
+same actor resource pools; optional recharge rules are resolved at turn start and never create a
+parallel counter inside attack or monster definitions.
 
 Runtime effects use the transport-neutral `rules/effects.py` contract. `ActiveEffect` carries
 its mechanical source, duration, stacking policy/key and optional secondary expiration points.

@@ -1,6 +1,14 @@
 from dataclasses import replace
 
-from dnd_board_game.actors import AbilityScores, Actor, ActorId, Faction
+from dnd_board_game.actors import (
+    AbilityScores,
+    Actor,
+    ActorId,
+    ActorResourcePool,
+    Faction,
+    RecoveryPeriod,
+    ResourceRechargeRule,
+)
 from dnd_board_game.application import CombatTurnFinalizationService
 from dnd_board_game.combat import (
     ActiveCombatEffect,
@@ -67,6 +75,36 @@ def _effect(
     )
 
 
+def test_turn_start_rolls_and_applies_recharge_before_turn_triggers() -> None:
+    hero = _actor("hero", Faction.ALLY)
+    enemy = replace(
+        _actor("enemy", Faction.ENEMY),
+        resource_pools=(
+            ActorResourcePool(
+                "special",
+                "Atak specjalny",
+                0,
+                1,
+                RecoveryPeriod.NEVER,
+                ResourceRechargeRule(6, 5),
+            ),
+        ),
+    )
+
+    transition = CombatTurnFinalizationService().finish_active_turn(
+        state=_state(hero, enemy),
+        active_effects=(),
+        roll_recharge=lambda _die: 6,
+    )
+
+    assert transition is not None
+    current = current_actor(transition.state)
+    assert current.id == enemy.id
+    assert current.resource_pools[0].current == 1
+    assert transition.recharge_results[0].natural_roll == 6
+    assert transition.recharge_results[0].recharged is True
+
+
 def test_commit_enemy_result_consumes_only_effects_for_the_resolved_attack() -> None:
     service = CombatTurnFinalizationService()
     enemy = _actor("enemy", Faction.ENEMY)
@@ -102,6 +140,9 @@ def test_commit_enemy_result_consumes_only_effects_for_the_resolved_attack() -> 
         "enemy_id": "enemy",
         "target_id": "hero",
         "message": "Enemy atakuje Hero. Rzut d20: 14. wynik końcowy: 14.",
+        "source_id": None,
+        "resource_pool_id": None,
+        "resource_cost": 0,
     }
 
 

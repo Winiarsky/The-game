@@ -33,6 +33,14 @@
       "hit_dice": {
         "d10": 2
       },
+      "resource_pools": [
+        {
+          "id": "heroic_strike_uses",
+          "label": "Potężne uderzenie",
+          "maximum": 1,
+          "recovery": "short_rest"
+        }
+      ],
       "item_refs": [
         "longsword",
         "dagger",

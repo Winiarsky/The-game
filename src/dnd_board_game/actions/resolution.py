@@ -4,7 +4,7 @@ import random
 from dataclasses import dataclass
 from typing import Mapping
 
-from dnd_board_game.actors import Actor
+from dnd_board_game.actors import Actor, spend_actor_resource
 from dnd_board_game.combat import (
     ActionEconomyCost,
     AppliedDamageResult,
@@ -36,6 +36,8 @@ class ActionResourceResolution:
     actor_after: Actor
     spell_level: int
     spell_resource_consumed: bool
+    actor_resource_id: str | None = None
+    actor_resource_cost: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,6 +93,8 @@ class ActionResourceResolver:
         *,
         spell_level: int = 0,
         action_cost: ActionEconomyCost = ActionEconomyCost.ACTION,
+        resource_pool_id: str | None = None,
+        resource_cost: int = 1,
     ) -> ActionResourceResolution:
         action_result = use_action_economy_cost(state, action_cost)
         if not action_result.accepted:
@@ -101,12 +105,23 @@ class ActionResourceResolver:
         state_after_resource = state_after_action
         if resource_result.consumed:
             state_after_resource = replace_actor(state_after_action, resource_result.actor_after)
+        actor_after_resource = resource_result.actor_after
+        if resource_pool_id is not None:
+            usage = spend_actor_resource(
+                actor_after_resource,
+                resource_pool_id,
+                resource_cost,
+            )
+            actor_after_resource = usage.actor_after
+            state_after_resource = replace_actor(state_after_resource, actor_after_resource)
         return ActionResourceResolution(
             state=state_after_resource,
             actor_before=actor,
-            actor_after=resource_result.actor_after,
+            actor_after=actor_after_resource,
             spell_level=int(spell_level),
             spell_resource_consumed=resource_result.consumed,
+            actor_resource_id=resource_pool_id,
+            actor_resource_cost=resource_cost if resource_pool_id is not None else 0,
         )
 
 
@@ -147,7 +162,13 @@ class SpellSaveAttackResolver(AttackActionResolver):
     ) -> SingleTargetSaveSpellConfirmation:
         if not source.save_ability:
             raise ValueError(f"Czar {source.name} nie ma zdefiniowanego rzutu obronnego.")
-        resource_use = self.consume_action_and_source_resource(state, caster, spell_level=source.spell_level)
+        resource_use = self.consume_action_and_source_resource(
+            state,
+            caster,
+            spell_level=source.spell_level,
+            resource_pool_id=source.resource_pool_id,
+            resource_cost=source.resource_cost,
+        )
         caster_after = _actor_by_id(resource_use.state, str(caster.id))
         target_after = _actor_by_id(resource_use.state, str(target.id))
         saving_throw = resolve_spell_save(
@@ -184,7 +205,13 @@ class AreaSpellResolver(ActionResourceResolver):
         rng: random.Random,
         saving_throw_modifiers_by_target: Mapping[str, tuple[RollModifier, ...]] | None = None,
     ) -> AreaSpellConfirmation:
-        resource_use = self.consume_action_and_source_resource(state, caster, spell_level=source.spell_level)
+        resource_use = self.consume_action_and_source_resource(
+            state,
+            caster,
+            spell_level=source.spell_level,
+            resource_pool_id=source.resource_pool_id,
+            resource_cost=source.resource_cost,
+        )
         saves = roll_spell_saves_for_targets(
             resource_use.state,
             caster_id=str(caster.id),

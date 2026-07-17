@@ -1,8 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from collections.abc import Callable
 
-from dnd_board_game.actors import Actor
+from dnd_board_game.actors import (
+    Actor,
+    ActorResourceRechargeResult,
+    actor_resource_pool,
+    depleted_recharge_resource_ids,
+    resolve_actor_resource_recharge,
+)
 from dnd_board_game.combat import (
     ActiveCombatEffect,
     CombatState,
@@ -16,6 +23,7 @@ from dnd_board_game.combat import (
     expire_condition_states,
     finish_turn,
     resolve_combat_triggers,
+    replace_actor,
 )
 from dnd_board_game.rules import EffectEvent, EffectEventType, expire_active_effects
 
@@ -45,6 +53,7 @@ class CombatTurnFinalizationTransition:
     ending_actor: Actor
     expired_effects: tuple[ExpiredCombatEffects, ...]
     trigger_activations: tuple[TriggerActivation, ...]
+    recharge_results: tuple[ActorResourceRechargeResult, ...]
     message_title: str
     message_body: str
     event_type: str
@@ -80,6 +89,17 @@ class CombatTurnFinalizationService:
                 ("enemy_id", str(result.enemy.id)),
                 ("target_id", result.target.id if result.target is not None else None),
                 ("message", message),
+                ("source_id", result.source.id if result.source is not None else None),
+                (
+                    "resource_pool_id",
+                    result.source.resource_pool_id if result.source is not None else None,
+                ),
+                (
+                    "resource_cost",
+                    result.source.resource_cost
+                    if result.source is not None and result.source.resource_pool_id is not None
+                    else 0,
+                ),
             ),
         )
 
@@ -88,12 +108,14 @@ class CombatTurnFinalizationService:
         *,
         result: EnemyAutoTurnResult,
         active_effects: tuple[ActiveCombatEffect, ...],
+        roll_recharge: Callable[[int], int] | None = None,
     ) -> CombatTurnFinalizationTransition:
         message = enemy_turn_message(result)
-        state, effects, expired, triggers = _advance_turn(
+        state, effects, expired, triggers, recharges = _advance_turn(
             result.state,
             result.enemy,
             active_effects,
+            roll_recharge,
         )
         return CombatTurnFinalizationTransition(
             state=state,
@@ -101,6 +123,7 @@ class CombatTurnFinalizationService:
             ending_actor=result.enemy,
             expired_effects=expired,
             trigger_activations=triggers,
+            recharge_results=recharges,
             message_title="Tura przeciwnika",
             message_body=message,
             event_type="ui_combat_enemy_turn",
@@ -117,14 +140,16 @@ class CombatTurnFinalizationService:
         *,
         state: CombatState,
         active_effects: tuple[ActiveCombatEffect, ...],
+        roll_recharge: Callable[[int], int] | None = None,
     ) -> CombatTurnFinalizationTransition | None:
         if state.status != CombatStatus.ACTIVE:
             return None
         actor = current_actor(state)
-        updated_state, updated_effects, expired, triggers = _advance_turn(
+        updated_state, updated_effects, expired, triggers, recharges = _advance_turn(
             state,
             actor,
             active_effects,
+            roll_recharge,
         )
         return CombatTurnFinalizationTransition(
             state=updated_state,
@@ -132,6 +157,7 @@ class CombatTurnFinalizationService:
             ending_actor=actor,
             expired_effects=expired,
             trigger_activations=triggers,
+            recharge_results=recharges,
             message_title="Koniec tury",
             message_body=f"Zakończono turę: {actor.name}.",
             event_type="ui_combat_turn_finished",
@@ -143,11 +169,13 @@ def _advance_turn(
     state: CombatState,
     ending_actor: Actor,
     active_effects: tuple[ActiveCombatEffect, ...],
+    roll_recharge: Callable[[int], int] | None,
 ) -> tuple[
     CombatState,
     tuple[ActiveCombatEffect, ...],
     tuple[ExpiredCombatEffects, ...],
     tuple[TriggerActivation, ...],
+    tuple[ActorResourceRechargeResult, ...],
 ]:
     end_event = EffectEvent(EffectEventType.TURN_END, actor_id=str(ending_actor.id))
     end_triggers = resolve_combat_triggers(state, end_event)
@@ -160,6 +188,7 @@ def _advance_turn(
     state = replace(state, condition_states=condition_states)
     notices: list[ExpiredCombatEffects] = []
     trigger_activations = list(end_triggers.activations)
+    recharge_results: list[ActorResourceRechargeResult] = []
     expired_at_end = _removed_effects(active_effects, after_end)
     if expired_at_end:
         notices.append(
@@ -202,6 +231,18 @@ def _advance_turn(
                 )
             )
         updated_effects = after_start
+        if roll_recharge is not None:
+            for resource_id in depleted_recharge_resource_ids(starting_actor):
+                pool = actor_resource_pool(starting_actor, resource_id)
+                assert pool is not None and pool.recharge is not None
+                recharge = resolve_actor_resource_recharge(
+                    starting_actor,
+                    resource_id,
+                    roll_recharge(pool.recharge.die_sides),
+                )
+                recharge_results.append(recharge)
+                starting_actor = recharge.actor_after
+                updated_state = replace_actor(updated_state, starting_actor)
         start_event = EffectEvent(
             EffectEventType.TURN_START,
             actor_id=str(starting_actor.id),
@@ -209,7 +250,13 @@ def _advance_turn(
         start_triggers = resolve_combat_triggers(updated_state, start_event)
         updated_state = start_triggers.state
         trigger_activations.extend(start_triggers.activations)
-    return updated_state, updated_effects, tuple(notices), tuple(trigger_activations)
+    return (
+        updated_state,
+        updated_effects,
+        tuple(notices),
+        tuple(trigger_activations),
+        tuple(recharge_results),
+    )
 
 
 def _removed_effects(

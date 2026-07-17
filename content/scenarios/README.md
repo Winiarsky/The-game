@@ -251,11 +251,29 @@ Aktor może posiadać Hit Dice i generyczne zasoby odpoczynku:
       "label": "Skupienie",
       "current": 0,
       "maximum": 2,
-      "recovery": "short_rest"
+      "recovery": "short_rest",
+      "recharge": null
     }
   ]
 }
 ```
+
+Atak może zużywać taki zasób przez `resource_pool_id` i opcjonalny
+`resource_cost` (domyślnie `1`). Potworowe `Recharge 5–6` zapisujemy na puli:
+
+```json
+{
+  "id": "breath_charge",
+  "label": "Oddech",
+  "maximum": 1,
+  "recovery": "never",
+  "recharge": {"die_sides": 6, "minimum_roll": 5}
+}
+```
+
+Zużyta pula z `recharge` wykonuje rzut na początku tury właściciela i odnawia
+się do maksimum po osiągnięciu progu. Atak wskazujący nieistniejącą pulę jest
+odrzucany podczas ładowania scenariusza.
 
 Lokacja eksploracyjna udostępnia short rest wyłącznie przez jawną politykę:
 

@@ -1,7 +1,16 @@
 import random
 from dataclasses import replace
 
-from dnd_board_game.actors import AbilityScores, Actor, ActorId, DamageAffinityProfile, DeathSaveState, Faction
+from dnd_board_game.actors import (
+    AbilityScores,
+    Actor,
+    ActorId,
+    ActorResourcePool,
+    DamageAffinityProfile,
+    DeathSaveState,
+    Faction,
+    RecoveryPeriod,
+)
 from dnd_board_game.combat import (
     AttackKind,
     AttackSource,
@@ -244,6 +253,34 @@ def test_enemy_auto_attack_action_is_not_available_twice_in_turn():
     assert first.action_used is True
     assert second.action_used is False
     assert "już zużyta" in second.message
+
+
+def test_enemy_limited_attack_consumes_pool_and_blocks_reuse_until_recharge() -> None:
+    enemy = replace(
+        _actor("goblin", Faction.ENEMY, Coordinate(1, 0)),
+        resource_pools=(
+            ActorResourcePool("special", "Atak specjalny", 1, 1, RecoveryPeriod.NEVER),
+        ),
+    )
+    hero = _actor("hero", Faction.ALLY, Coordinate(0, 0), hp=20)
+    state = start_combat((enemy, hero), _order(enemy, hero))
+    source = replace(_source(), resource_pool_id="special")
+
+    first = resolve_enemy_auto_attack(BoardState(), state, enemy, source, random.Random(7))
+    spent_enemy = next(actor for actor in first.state.actors if actor.id == enemy.id)
+    next_turn_state = finish_turn(finish_turn(first.state))
+    second = resolve_enemy_auto_attack(
+        BoardState(),
+        next_turn_state,
+        spent_enemy,
+        source,
+        random.Random(7),
+    )
+
+    assert spent_enemy.resource_pools[0].current == 0
+    assert first.action_used is True
+    assert second.action_used is False
+    assert "oczekuje na recharge" in second.message
 
 
 def test_enemy_has_advantage_against_adjacent_prone_target() -> None:

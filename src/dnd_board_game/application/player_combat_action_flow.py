@@ -4,7 +4,13 @@ from dataclasses import dataclass, replace
 from random import Random
 
 from dnd_board_game.actions import ActionResourceResolver, SpellSaveAttackResolver
-from dnd_board_game.actors import Actor, Faction, spell_is_prepared
+from dnd_board_game.actors import (
+    Actor,
+    Faction,
+    can_spend_actor_resource,
+    spend_actor_resource,
+    spell_is_prepared,
+)
 from dnd_board_game.combat import (
     ActiveCombatEffect,
     ActionUse,
@@ -31,6 +37,7 @@ from dnd_board_game.combat import (
     grappled_actor_ids,
     is_hidden_from,
     reveal_actor,
+    replace_actor,
     resolve_attack,
     set_two_weapon_trigger,
     select_attack_target,
@@ -428,11 +435,19 @@ class PlayerCombatActionFlowService:
                     state,
                     attacker,
                     spell_level=effective_source.spell_level,
+                    resource_pool_id=effective_source.resource_pool_id,
+                    resource_cost=effective_source.resource_cost,
                 )
                 state_after_resource = resource_use.state
             state_after_resource = set_two_weapon_trigger(
                 state_after_resource,
                 two_weapon_trigger_item_id(attacker, source),
+            )
+        if pending.two_weapon_bonus or _uses_attack_action(effective_source):
+            state_after_resource = _consume_attack_source_resource(
+                state_after_resource,
+                str(attacker.id),
+                effective_source,
             )
         resolution = resolve_attack(
             AttackDeclaration(attacker, selected.selected_target, effective_source),
@@ -465,6 +480,8 @@ class PlayerCombatActionFlowService:
             ("cover_sources", list(positioning.cover_sources)),
             ("ranged_in_melee", bool(positioning.ranged_threat_actor_ids)),
             ("two_weapon_bonus", pending.two_weapon_bonus),
+            ("resource_pool_id", effective_source.resource_pool_id),
+            ("resource_cost", effective_source.resource_cost if effective_source.resource_pool_id else 0),
         )
         revealed_state = replace(
             state_after_resource,
@@ -611,8 +628,16 @@ class PlayerCombatActionFlowService:
                 state,
                 attacker,
                 spell_level=effective_source.spell_level,
+                resource_pool_id=effective_source.resource_pool_id,
+                resource_cost=effective_source.resource_cost,
             )
             state_after_resource = resource_use.state
+        if _uses_attack_action(effective_source):
+            state_after_resource = _consume_attack_source_resource(
+                state_after_resource,
+                str(attacker.id),
+                effective_source,
+            )
         resolution = resolve_attack(
             AttackDeclaration(attacker, selected.selected_target, effective_source),
             attack_roll,
@@ -673,6 +698,8 @@ class PlayerCombatActionFlowService:
                 ("cover_sources", list(positioning.cover_sources)),
                 ("ranged_in_melee", bool(positioning.ranged_threat_actor_ids)),
                 ("damage_result", _applied_damage_payload(applied)),
+                ("resource_pool_id", effective_source.resource_pool_id),
+                ("resource_cost", effective_source.resource_cost if effective_source.resource_pool_id else 0),
             ),
             clear_combat_help=True,
             clear_movement_preview=True,
@@ -708,6 +735,26 @@ def _require_usable_source(actor: Actor, source: AttackSource | HealingSource) -
         raise ValueError(f"Czar {source.name} nie został przygotowany.")
     if not can_consume_spell_resource(actor, getattr(source, "spell_level", 0)):
         raise ValueError(f"Brak slotów czaru dla {source.name}.")
+    resource_pool_id = getattr(source, "resource_pool_id", None)
+    resource_cost = int(getattr(source, "resource_cost", 1))
+    if resource_pool_id is not None and not can_spend_actor_resource(
+        actor,
+        resource_pool_id,
+        resource_cost,
+    ):
+        raise ValueError(f"Brak dostępnych użyć: {source.name}.")
+
+
+def _consume_attack_source_resource(
+    state: CombatState,
+    actor_id: str,
+    source: AttackSource,
+) -> CombatState:
+    if source.resource_pool_id is None:
+        return state
+    actor = _actor_by_id(state, actor_id)
+    usage = spend_actor_resource(actor, source.resource_pool_id, source.resource_cost)
+    return replace_actor(state, usage.actor_after)
 
 
 def _validated_attack(

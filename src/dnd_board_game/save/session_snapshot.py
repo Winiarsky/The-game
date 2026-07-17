@@ -24,6 +24,7 @@ from dnd_board_game.actors import (
     PreparableSpell,
     ProficiencyProfile,
     RecoveryPeriod,
+    ResourceRechargeRule,
     SpellPreparationProfile,
 )
 from dnd_board_game.combat import (
@@ -303,10 +304,47 @@ def _actor_payload(actor: Actor) -> dict[str, object]:
         },
         "hit_dice": [{"die_sides": pool.die_sides, "remaining": pool.remaining, "maximum": pool.maximum} for pool in actor.hit_dice],
         "resource_pools": [
-            {"id": pool.id, "label": pool.label, "current": pool.current, "maximum": pool.maximum, "recovery": pool.recovery.value}
+            {
+                "id": pool.id,
+                "label": pool.label,
+                "current": pool.current,
+                "maximum": pool.maximum,
+                "recovery": pool.recovery.value,
+                "recharge": (
+                    None
+                    if pool.recharge is None
+                    else {
+                        "die_sides": pool.recharge.die_sides,
+                        "minimum_roll": pool.recharge.minimum_roll,
+                    }
+                ),
+            }
             for pool in actor.resource_pools
         ],
     }
+
+
+def _resource_pool_from_payload(raw: object) -> ActorResourcePool:
+    pool = _mapping(raw, "resource")
+    recharge_raw = pool.get("recharge")
+    recharge = None
+    if recharge_raw is not None:
+        item = _mapping(recharge_raw, "resource.recharge")
+        recharge = ResourceRechargeRule(
+            die_sides=_integer(item.get("die_sides", 6), "resource.recharge.die_sides"),
+            minimum_roll=_integer(
+                item.get("minimum_roll"),
+                "resource.recharge.minimum_roll",
+            ),
+        )
+    return ActorResourcePool(
+        id=_string(pool.get("id"), "resource.id"),
+        label=_string(pool.get("label"), "resource.label"),
+        current=_integer(pool.get("current"), "resource.current"),
+        maximum=_integer(pool.get("maximum"), "resource.maximum"),
+        recovery=_enum(RecoveryPeriod, pool.get("recovery"), "resource.recovery"),
+        recharge=recharge,
+    )
 
 
 def _actor_from_payload(raw: object) -> Actor:
@@ -344,7 +382,7 @@ def _actor_from_payload(raw: object) -> Actor:
         inventory=tuple(InventoryItem(id=_string(item.get("id"), "item.id"), name=_string(item.get("name"), "item.name"), kind=_string(item.get("kind"), "item.kind"), quantity=_integer(item.get("quantity"), "item.quantity"), equipped=_boolean(item.get("equipped"), "item.equipped"), source_ref=_optional_string(item.get("source_ref"), "item.source_ref"), broken=_boolean(item.get("broken"), "item.broken"), description=_string(item.get("description", ""), "item.description", allow_empty=True), properties=_string_tuple(item.get("properties", []), "item.properties"), portable=_boolean(item.get("portable", True), "item.portable"), hands_required=_integer(item.get("hands_required", 0), "item.hands_required"), held_in=tuple(_enum(HandSlot, slot, "item.held_in") for slot in _sequence(item.get("held_in", []), "item.held_in")), light_weapon=_boolean(item.get("light_weapon", False), "item.light_weapon"), versatile_damage_dice=_optional_string(item.get("versatile_damage_dice"), "item.versatile_damage_dice"), armor_class_bonus=_integer(item.get("armor_class_bonus", 0), "item.armor_class_bonus"), armor_proficiency=_optional_string(item.get("armor_proficiency"), "item.armor_proficiency")) for value in _sequence(data.get("inventory", []), "inventory") for item in (_mapping(value, "item"),)),
         spell_ids=_string_tuple(data.get("spell_ids", []), "actor.spell_ids"), spell_preparation=prep,
         hit_dice=tuple(HitDicePool(_integer(pool.get("die_sides"), "hit_die.die_sides"), _integer(pool.get("remaining"), "hit_die.remaining"), _integer(pool.get("maximum"), "hit_die.maximum")) for value in _sequence(data.get("hit_dice", []), "hit_dice") for pool in (_mapping(value, "hit_die"),)),
-        resource_pools=tuple(ActorResourcePool(id=_string(pool.get("id"), "resource.id"), label=_string(pool.get("label"), "resource.label"), current=_integer(pool.get("current"), "resource.current"), maximum=_integer(pool.get("maximum"), "resource.maximum"), recovery=_enum(RecoveryPeriod, pool.get("recovery"), "resource.recovery")) for value in _sequence(data.get("resource_pools", []), "resource_pools") for pool in (_mapping(value, "resource"),)),
+        resource_pools=tuple(_resource_pool_from_payload(value) for value in _sequence(data.get("resource_pools", []), "resource_pools")),
         proficiency_bonus=_integer(data.get("proficiency_bonus", 2), "actor.proficiency_bonus"),
         proficiencies=ProficiencyProfile(
             saving_throws=_string_tuple(

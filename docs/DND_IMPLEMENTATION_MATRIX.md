@@ -32,7 +32,7 @@ odstępstwa zapisujemy w `docs/RULES_DECISIONS.md`.
 | Reakcje | częściowe | opportunity attack opuszczający faktyczny reach źródła melee i Ready | generyczna kolejka reakcji i wiele triggerów |
 | Akcje tury | stabilne MVP | Dash, Dodge, Disengage, Help, Ready, Hide, Search i data-driven Use an Object | warianty zasad i bardziej złożone przedmioty |
 | Warunki | częściowe | wspólny `ConditionState`, źródłowy Grappled, Prone, Poisoned i Restrained; odporności, modyfikatory ataków/testów/save'ów, blokada ruchu, timed expiry, repeated saves, UI i snapshot v1 | pozostałe oficjalne warunki i ich szczególne konsekwencje |
-| Efekty i czas trwania | stabilne MVP | wspólny ActiveEffect, źródło, stacking oraz expiry; warunki współdzielą duration; aktor może wystawić pozycyjną aurę save'ów; data-driven triggery używają wspólnych event ids, wykonują `grant_temp_hp` na granicach tury i są widoczne w UI/snapshotach | emitery triggerów hit/damage/move/rest/encounter, kolejne skutki aur i feature definitions |
+| Efekty i czas trwania | stabilne MVP | wspólny ActiveEffect, źródło, stacking oraz expiry; warunki współdzielą duration; aktor może wystawić pozycyjną aurę save'ów; data-driven triggery używają wspólnych event ids i emiterów hit/damage/move/turn/rest/encounter; ograniczone ataki zużywają wspólne pule z recovery albo Recharge | kolejne skutki aur i feature definitions |
 | Odpoczynki i dzień przygody | stabilne MVP | short rest z Hit Dice i contentowym ryzykiem; automatyczny long rest przed scenariuszem; scenario-end lifecycle i snapshot v1 | przerwania |
 | Ekwipunek | częściowe | inventory, quantity, equipped, broken, consumables, contentowe akcje przedmiotów na wskazanym celu, upuszczanie i podnoszenie broni, jawne sloty obu rąk, broń jedno- i dwuręczna, wolna ręka dla Grapple, Two-Weapon Fighting, versatile oraz tarcza zajmująca rękę i dająca efektywne KP | pozostałe armor, weight, attunement, charges |
 | Spell slots | stabilne MVP | poziomy slotów i zużycie | upcasting, recovery profiles, multiclass slots |
@@ -47,7 +47,7 @@ odstępstwa zapisujemy w `docs/RULES_DECISIONS.md`.
 | Encounter setup | stabilne MVP | scenariuszowy etap rozpoczęcia, setup mapy/aktorów, inicjatywa, powrót do eksploracji | szablony encounterów i różne cele |
 | Save/load | stabilne MVP | wersjonowany snapshot v1 aktorów, eksploracji, efektów i aktywnej walki; atomowy JSON, walidacja ids, web UI i round-trip | stan kampanii oraz migracje kolejnych wersji |
 | Kampania | brak | scenariusz i pojedyncze przejścia | persistent party/NPC/quest state |
-| Potwory | fixture | kilka lokalnych definicji scenariuszy | monster schema, traits, recharge, katalog |
+| Potwory | fixture | kilka lokalnych definicji scenariuszy, w tym specjalny atak z Recharge 5–6 | monster schema, traits i katalog |
 | Przedmioty | fixture | kilka broni, narzędzi i consumables | pełny schema i katalog rodzinami |
 | Czary | fixture | kilka czarów bojowych i utility | spell schema i katalog rodzinami |
 | Rasy/species i backgroundy | brak | anonimowi aktorzy testowi | feature composition framework |

@@ -3,7 +3,13 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass, replace
 
-from dnd_board_game.actors import Actor, Faction, skill_roll_modifiers
+from dnd_board_game.actors import (
+    Actor,
+    Faction,
+    can_spend_actor_resource,
+    skill_roll_modifiers,
+    spend_actor_resource,
+)
 from dnd_board_game.rules import (
     D20RollInput,
     D20RollRequest,
@@ -96,9 +102,33 @@ def resolve_enemy_auto_attack(
     *,
     maximum_attacks: int | None = None,
 ) -> EnemyAutoAttackResult:
+    if source.resource_pool_id is not None and not can_spend_actor_resource(
+        enemy,
+        source.resource_pool_id,
+        source.resource_cost,
+    ):
+        return EnemyAutoAttackResult(
+            state,
+            enemy,
+            None,
+            f"{source.name} nie jest jeszcze dostępne — oczekuje na recharge.",
+            action_used=False,
+            source=source,
+        )
     action_result = use_attack_action(state, enemy, maximum_attacks=maximum_attacks)
     if not action_result.accepted:
         return EnemyAutoAttackResult(action_result.state, enemy, None, action_result.message, action_used=False)
+    if source.resource_pool_id is not None:
+        usage = spend_actor_resource(
+            _actor_for_id(action_result.state, enemy.id),
+            source.resource_pool_id,
+            source.resource_cost,
+        )
+        action_result = replace(
+            action_result,
+            state=replace_actor(action_result.state, usage.actor_after),
+        )
+        enemy = usage.actor_after
 
     targets = legal_attack_targets(
         board,

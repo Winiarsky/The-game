@@ -76,6 +76,8 @@ from dnd_board_game.application.damage_presentation import (
 from dnd_board_game.actors import (
     Actor,
     Faction,
+    actor_resource_pool,
+    can_spend_actor_resource,
     can_grapple_or_shove_size,
     creature_size_label_pl,
     largest_grapple_or_shove_target,
@@ -2688,6 +2690,13 @@ class ExplorationUiSession:
             item = _inventory_item_for_attack_source(actor, source_item_id)
             if item is None or not item.available or not item.equipped:
                 return False
+        resource_pool_id = getattr(source, "resource_pool_id", None)
+        if resource_pool_id is not None and not can_spend_actor_resource(
+            actor,
+            resource_pool_id,
+            int(getattr(source, "resource_cost", 1)),
+        ):
+            return False
         return can_consume_spell_resource(actor, getattr(source, "spell_level", 0))
 
     def _actor_can_use_healing_source(self, actor: Actor, source: HealingSource | None) -> bool:
@@ -5021,6 +5030,32 @@ class ExplorationUiSession:
         self.combat_state = resolution.state
         self._add_trigger_activation_notices(resolution.activations)
 
+    def _add_recharge_notices(self, results) -> None:
+        for result in results:
+            pool = actor_resource_pool(result.actor_after, result.resource_id)
+            if pool is None or pool.recharge is None:
+                continue
+            outcome = "odnowiona" if result.recharged else "nadal niedostępna"
+            self._add_message(
+                "Recharge",
+                (
+                    f"{result.actor_after.name}: {pool.label} — d{pool.recharge.die_sides} "
+                    f"{result.natural_roll}, wymaga {pool.recharge.minimum_roll}+; {outcome}."
+                ),
+            )
+            self._record(
+                "ui_actor_resource_recharge_rolled",
+                {
+                    "actor_id": str(result.actor_after.id),
+                    "resource_id": result.resource_id,
+                    "natural_roll": result.natural_roll,
+                    "minimum_roll": pool.recharge.minimum_roll,
+                    "recharged": result.recharged,
+                    "current": pool.current,
+                    "maximum": pool.maximum,
+                },
+            )
+
     def resolve_enemy_turn(self) -> dict[str, object]:
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
@@ -5674,11 +5709,13 @@ class ExplorationUiSession:
         transition = self.combat_turn_finalization.finalize_enemy_turn(
             result=result,
             active_effects=self.active_combat_effects,
+            roll_recharge=lambda die_sides: self.encounter_rng.randint(1, die_sides),
         )
         self.combat_state = transition.state
         self.active_combat_effects = transition.active_effects
         self._add_expired_effect_notices(transition.expired_effects)
         self._add_trigger_activation_notices(transition.trigger_activations)
+        self._add_recharge_notices(transition.recharge_results)
         self.selected_combat_movement_path = None
         self.pending_enemy_turn_intent = None
         self.pending_enemy_turn_result = None
@@ -5788,6 +5825,7 @@ class ExplorationUiSession:
         transition = self.combat_turn_finalization.finish_active_turn(
             state=self.combat_state,
             active_effects=self.active_combat_effects,
+            roll_recharge=lambda die_sides: self.encounter_rng.randint(1, die_sides),
         )
         if transition is None:
             return self.state_payload()
@@ -5795,6 +5833,7 @@ class ExplorationUiSession:
         self.active_combat_effects = transition.active_effects
         self._add_expired_effect_notices(transition.expired_effects)
         self._add_trigger_activation_notices(transition.trigger_activations)
+        self._add_recharge_notices(transition.recharge_results)
         self.selected_combat_movement_path = None
         self.pending_enemy_turn_intent = None
         self.pending_enemy_turn_result = None
@@ -5930,12 +5969,14 @@ class ExplorationUiSession:
             transition = self.combat_turn_finalization.finish_active_turn(
                 state=self.combat_state,
                 active_effects=self.active_combat_effects,
+                roll_recharge=lambda die_sides: self.encounter_rng.randint(1, die_sides),
             )
             if transition is not None:
                 self.combat_state = transition.state
                 self.active_combat_effects = transition.active_effects
                 self._add_expired_effect_notices(transition.expired_effects)
                 self._add_trigger_activation_notices(transition.trigger_activations)
+                self._add_recharge_notices(transition.recharge_results)
         self.board_message = outcome_text
         self._sync_board_leds()
         return self.state_payload()
@@ -9065,6 +9106,24 @@ def _combat_actor_payload(
             for slot in actor.spell_slots
         ],
         "spell_save_dc": actor.spell_save_dc,
+        "resource_pools": [
+            {
+                "id": pool.id,
+                "label": pool.label,
+                "current": pool.current,
+                "maximum": pool.maximum,
+                "recovery": pool.recovery.value,
+                "recharge": (
+                    None
+                    if pool.recharge is None
+                    else {
+                        "die_sides": pool.recharge.die_sides,
+                        "minimum_roll": pool.recharge.minimum_roll,
+                    }
+                ),
+            }
+            for pool in actor.resource_pools
+        ],
         "proficiency_bonus": actor.proficiency_bonus,
         "proficiencies": {
             "saving_throws": list(actor.proficiencies.saving_throws),
@@ -9406,7 +9465,9 @@ def _attack_source_payload(source, actor: Actor | None = None) -> dict[str, obje
         "available": unavailable_reason is None,
         "unavailable_reason": unavailable_reason,
         "source_item_id": source.source_item_id,
-        "resource_label": _source_resource_label(source),
+        "resource_label": _source_resource_label(source, actor),
+        "resource_pool_id": source.resource_pool_id,
+        "resource_cost": source.resource_cost,
         "area": _spell_area_payload(source.area),
         "save_ability": source.save_ability,
         "save_dc": source.save_dc,
@@ -9441,7 +9502,18 @@ def _healing_source_payload(
     }
 
 
-def _source_resource_label(source) -> str:
+def _source_resource_label(source, actor: Actor | None = None) -> str:
+    resource_pool_id = getattr(source, "resource_pool_id", None)
+    if resource_pool_id is not None:
+        pool = actor_resource_pool(actor, resource_pool_id) if actor is not None else None
+        if pool is not None:
+            recharge = (
+                f", Recharge {pool.recharge.minimum_roll}–{pool.recharge.die_sides}"
+                if pool.recharge is not None
+                else ""
+            )
+            return f"{pool.label} {pool.current}/{pool.maximum}{recharge}"
+        return f"zasób: {resource_pool_id}"
     casting_kind = getattr(source, "casting_kind", None)
     casting_value = getattr(casting_kind, "value", str(casting_kind or "none"))
     if casting_value == "cantrip":
@@ -9489,6 +9561,16 @@ def _attack_source_unavailable_reason(actor: Actor | None, source) -> str | None
         item = _inventory_item_for_attack_source(actor, source_item_id)
         if item is None or not item.available or not item.equipped:
             return "Broń leży na polu lub pozostaje niewyposażona w ekwipunku."
+    resource_pool_id = getattr(source, "resource_pool_id", None)
+    resource_cost = int(getattr(source, "resource_cost", 1))
+    if actor is not None and resource_pool_id is not None and not can_spend_actor_resource(
+        actor,
+        resource_pool_id,
+        resource_cost,
+    ):
+        pool = actor_resource_pool(actor, resource_pool_id)
+        label = pool.label if pool is not None else resource_pool_id
+        return f"Brak dostępnych użyć: {label}."
     return None
 
 
@@ -10893,6 +10975,14 @@ def _exploration_actor_payload(
                 "current": pool.current,
                 "maximum": pool.maximum,
                 "recovery": pool.recovery.value,
+                "recharge": (
+                    None
+                    if pool.recharge is None
+                    else {
+                        "die_sides": pool.recharge.die_sides,
+                        "minimum_roll": pool.recharge.minimum_roll,
+                    }
+                ),
             }
             for pool in actor.resource_pools
         ],

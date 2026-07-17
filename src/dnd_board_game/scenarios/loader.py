@@ -24,6 +24,7 @@ from dnd_board_game.actors import (
     HitDicePool,
     ProficiencyProfile,
     RecoveryPeriod,
+    ResourceRechargeRule,
     SpellPreparationProfile,
     attack_roll_modifiers,
 )
@@ -167,6 +168,8 @@ class ScenarioAttackDefinition:
     save_damage_on_success: str = "none"
     casting_kind: SpellCastingKind = SpellCastingKind.NONE
     prepared: bool = True
+    resource_pool_id: str | None = None
+    resource_cost: int = 1
     source_item_id: str | None = None
     attack_kind: AttackKind = AttackKind.MELEE
     proficiency_id: str | None = None
@@ -357,12 +360,17 @@ def build_encounter_from_scenario(loaded: LoadedScenario) -> LoadedEncounter:
     actors_by_id = {str(actor.id): actor for actor in actors}
     attack_source_options_by_actor = {
         ActorId(actor.id): tuple(
-            _attack_source_from_definition(
-                attack,
-                f"attack_{actor.id}:{attack.id}",
-                actors_by_id[actor.id],
+            sorted(
+                (
+                    _attack_source_from_definition(
+                        attack,
+                        f"attack_{actor.id}:{attack.id}",
+                        actors_by_id[actor.id],
+                    )
+                    for attack in actor.attacks
+                ),
+                key=lambda source: source.resource_pool_id is not None,
             )
-            for attack in actor.attacks
         )
         for actor in definition.actors
     }
@@ -682,6 +690,16 @@ def _parse_actor(
         raise ValueError(f"actor {actor_id}.condition_immunities cannot contain duplicates.")
     auras = _parse_actor_auras(merged.get("auras", []), actor_id)
     triggers = _parse_actor_triggers(merged.get("triggers", []), actor_id)
+    resource_pools = _parse_actor_resources(merged.get("resource_pools", []), actor_id)
+    resource_ids = {pool.id for pool in resource_pools}
+    for attack in attacks:
+        if attack.resource_cost < 1:
+            raise ValueError(f"attack {attack.id}.resource_cost must be positive.")
+        if attack.resource_pool_id is not None and attack.resource_pool_id not in resource_ids:
+            raise ValueError(
+                f"attack {attack.id}.resource_pool_id references unknown actor resource: "
+                f"{attack.resource_pool_id}."
+            )
     return ScenarioActorDefinition(
         id=actor_id,
         name=str(_required(merged, "name", f"actor {actor_id}")),
@@ -711,7 +729,7 @@ def _parse_actor(
             spell_slots=spell_slots,
         ),
         hit_dice=_parse_hit_dice(merged.get("hit_dice", {}), actor_id),
-        resource_pools=_parse_actor_resources(merged.get("resource_pools", []), actor_id),
+        resource_pools=resource_pools,
         proficiency_bonus=int(merged.get("proficiency_bonus", 2)),
         proficiencies=proficiencies,
         uses_death_saves=bool(merged.get("uses_death_saves", actor_kind == "player_character")),
@@ -1042,6 +1060,8 @@ def _parse_attack(data: dict[str, Any], actor_id: str) -> ScenarioAttackDefiniti
         source_item_id=str(data["source_item_id"]) if "source_item_id" in data else None,
         attack_kind=attack_kind,
         proficiency_id=str(data["proficiency_id"]) if "proficiency_id" in data else None,
+        resource_pool_id=str(data["resource_pool_id"]) if "resource_pool_id" in data else None,
+        resource_cost=int(data.get("resource_cost", 1)),
     )
 
 
@@ -2593,6 +2613,8 @@ def _attack_source_from_definition(
         attack_kind=definition.attack_kind,
         proficiency_id=proficiency_id,
         reach_feet=definition.reach_feet,
+        resource_pool_id=definition.resource_pool_id,
+        resource_cost=definition.resource_cost,
     )
 
 
@@ -3159,6 +3181,19 @@ def _parse_actor_resources(data: Any, actor_id: str) -> tuple[ActorResourcePool,
             raise ValueError(f"actor {actor_id}.resource_pools entries must be objects.")
         resource_id = str(_required(entry, "id", f"actor {actor_id}.resource_pool"))
         maximum = int(_required(entry, "maximum", f"actor resource {resource_id}"))
+        recharge_data = entry.get("recharge")
+        recharge = None
+        if recharge_data is not None:
+            if not isinstance(recharge_data, dict):
+                raise ValueError(f"actor resource {resource_id}.recharge must be an object.")
+            recharge = ResourceRechargeRule(
+                die_sides=int(recharge_data.get("die_sides", 6)),
+                minimum_roll=int(_required(
+                    recharge_data,
+                    "minimum_roll",
+                    f"actor resource {resource_id}.recharge",
+                )),
+            )
         pools.append(
             ActorResourcePool(
                 id=resource_id,
@@ -3170,6 +3205,7 @@ def _parse_actor_resources(data: Any, actor_id: str) -> tuple[ActorResourcePool,
                     str(entry.get("recovery", RecoveryPeriod.NEVER.value)),
                     f"actor resource {resource_id}.recovery",
                 ),
+                recharge=recharge,
             )
         )
     if len({pool.id for pool in pools}) != len(pools):

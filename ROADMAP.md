@@ -198,9 +198,10 @@ Stan: punkty 1-4 mają działający vertical slice dla `Poisoned` i `Restrained`
 łącznie z odpornościami, czasem trwania, save-at-start/save-at-end, automatycznymi
 rzutami przeciwników i jawnymi rzutami graczy. Punkt 5 ma pierwszy data-driven
 vertical slice aury modyfikującej save według aktualnej pozycji. Punkt 6 ma wspólny
-katalog zdarzeń, contentowe definicje triggerów, skutek `grant_temp_hp` i wykonanie
-na początku oraz końcu tury. Pozostałe oficjalne warunki, kolejne rodzaje aur,
-pozostałe emitery triggerów oraz punkty 7-8 nadal są do wdrożenia.
+katalog zdarzeń, contentowe definicje triggerów, skutek `grant_temp_hp` i komplet
+emiterów runtime. Punkt 7 ma resource-backed ograniczone użycia, odnowienie przez
+odpoczynek i potworowe `Recharge X–Y` na początku tury. Pozostałe oficjalne
+warunki, kolejne rodzaje aur oraz punkt 8 nadal są do wdrożenia.
 
 Kolejność:
 

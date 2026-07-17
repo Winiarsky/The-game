@@ -25,6 +25,18 @@
     "armor": ["light", "shield"],
     "tools": []
   },
+  "resource_pools": [
+    {
+      "id": "frenzied_lunge_charge",
+      "label": "Szarżujący wypad",
+      "maximum": 1,
+      "recovery": "never",
+      "recharge": {
+        "die_sides": 6,
+        "minimum_roll": 5
+      }
+    }
+  ],
   "attacks": [
     {
       "id": "goblin_scimitar",
@@ -36,6 +48,22 @@
       "reach_feet": 5,
       "damage": {
         "dice": "1d6",
+        "modifier": 2,
+        "damage_type": "slashing"
+      }
+    },
+    {
+      "id": "goblin_frenzied_lunge",
+      "name": "Szarżujący wypad (Recharge 5–6)",
+      "source_type": "weapon",
+      "attack_kind": "melee",
+      "ability": "dexterity",
+      "proficiency_id": "goblin_scimitar",
+      "range_feet": 5,
+      "reach_feet": 5,
+      "resource_pool_id": "frenzied_lunge_charge",
+      "damage": {
+        "dice": "1d8",
         "modifier": 2,
         "damage_type": "slashing"
       }

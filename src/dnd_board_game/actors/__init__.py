@@ -13,7 +13,19 @@ from .size import (
     largest_grapple_or_shove_target,
 )
 from .proficiency_profile import ABILITY_NAMES, ProficiencyProfile
-from .resources import ActorResourcePool, HitDicePool, RecoveryPeriod
+from .resources import (
+    ActorResourcePool,
+    ActorResourceRechargeResult,
+    ActorResourceUseResult,
+    HitDicePool,
+    RecoveryPeriod,
+    ResourceRechargeRule,
+    actor_resource_pool,
+    can_spend_actor_resource,
+    depleted_recharge_resource_ids,
+    resolve_actor_resource_recharge,
+    spend_actor_resource,
+)
 from .proficiencies import (
     ability_roll_modifier,
     attack_roll_modifiers,
@@ -41,6 +53,8 @@ __all__ = [
     "Actor",
     "ActorId",
     "ActorResourcePool",
+    "ActorResourceRechargeResult",
+    "ActorResourceUseResult",
     "ActorAura",
     "ActorTrigger",
     "DeathSaveState",
@@ -56,10 +70,12 @@ __all__ = [
     "PreparableSpell",
     "ProficiencyProfile",
     "RecoveryPeriod",
+    "ResourceRechargeRule",
     "SKILL_ABILITIES",
     "SpellPreparationProfile",
     "is_ally_or_neutral",
     "ability_roll_modifier",
+    "actor_resource_pool",
     "ability_check_roll_modifiers",
     "attack_roll_modifiers",
     "passive_skill_score",
@@ -71,7 +87,11 @@ __all__ = [
     "skill_modifier",
     "skill_roll_modifiers",
     "can_grapple_or_shove_size",
+    "can_spend_actor_resource",
     "creature_size_label_pl",
     "creature_size_rank",
     "largest_grapple_or_shove_target",
+    "depleted_recharge_resource_ids",
+    "resolve_actor_resource_recharge",
+    "spend_actor_resource",
 ]

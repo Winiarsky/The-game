@@ -208,6 +208,11 @@ def test_snapshot_round_trip_preserves_skill_profile_and_combat_hidden_state(tmp
     assert restored_hero.attacks_per_action == 2
     assert restored_hero.condition_immunities == ("poisoned",)
     assert restored_hero.triggers[0].id == "snapshot_trigger"
+    restored_goblin = next(
+        actor for actor in restored.combat_state.actors if str(actor.id) == "goblin_a"
+    )
+    assert restored_goblin.resource_pools[0].recharge is not None
+    assert restored_goblin.resource_pools[0].recharge.minimum_roll == 5
     assert restored_hero.size == CreatureSize.LARGE
     assert restored_hero.damage_affinities == DamageAffinityProfile(
         resistances=(DamageType.FIRE,),

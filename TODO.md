@@ -80,6 +80,7 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [x] Add data-driven actor auras with dynamic position coverage, non-stacking save modifiers, defeated-source shutdown, UI visibility, and snapshot support.
 - [x] Add the first data-driven trigger-engine vertical slice with shared event ids, deterministic turn-boundary activation, `grant_temp_hp`, UI logs, content validation, and snapshots.
 - [x] Connect the shared trigger engine to attack-hit, damage-taken, movement, rest, and encounter-end emitters, including reactions, forced movement, and exploration hazards.
+- [x] Add resource-backed limited attacks with short/long-rest recovery, deterministic monster Recharge rolls at turn start, UI availability/logs, content validation, and snapshots.
 - [x] Add data-driven exploration traps with detection, disarm/bypass/trigger actions, hazard activation, snapshots, and an alarm-wire reference fixture.
 - [x] Close the combat turn-economy MVP with explicit action costs, data-driven Use an Object, separate draw/stow interactions, and visible UI costs.
 
